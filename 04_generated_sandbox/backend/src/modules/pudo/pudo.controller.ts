@@ -108,7 +108,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyRecordDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, BookDepartureDto, DeclareDepartureDto, DepartureStatusDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto } from './pudo.dto';
+  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, BookDepartureDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto } from './pudo.dto';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
@@ -4251,7 +4251,7 @@ export class SbgController {
   /** What this load would cost on that departure, and which axis of it the load fills — BEFORE booking. */
   @Post('departures/:departureId/quote')
   quoteDeparture(@Param('departureId') departureId: string, @Body() dto: BookDepartureDto) {
-    return this.departures.quote(departureId, { weightKg: dto.weightKg, volumeM3: dto.volumeM3, hours: dto.hours });
+    return this.departures.quote(departureId, { weightKg: dto.weightKg, volumeM3: dto.volumeM3 });
   }
 
   /** Take space on it. The actor is the shipper — their own DID, never one they name. */
@@ -4269,6 +4269,80 @@ export class SbgController {
     const who = actingDid(actor);
     if (!who) throw new GlosError('FORBIDDEN', 'Sign in first');
     return this.departures.cancelBooking(departureId, bookingId, who);
+  }
+
+  /* ---- waiting time: the one clock in freight that really does run by the hour ---- */
+
+  /**
+   * The fleet says who is driving this run.
+   *
+   * Separate from declaring it, because space is sold before a roster exists. It has to happen at all,
+   * though: the waiting clock is started by the person standing at the gate, and until somebody is named
+   * there is nobody holding a phone who is allowed to touch it.
+   */
+  @Post('fleet/managers/:did/departures/:departureId/driver')
+  assignDepartureDriver(
+    @Param('did') did: string,
+    @Param('departureId') departureId: string,
+    @Body() dto: AssignDepartureDriverDto,
+    @Actor() actor: IntrospectionResult,
+  ) {
+    this.assertFleetSelf(did, actor);
+    const driver = this.drivers.get(dto.driverDid);
+    // Their own driver, or the roster becomes a way to put another fleet's courier on the hook for a wait.
+    if (driver.managerDid !== did) throw new GlosError('FORBIDDEN', 'That driver does not drive for you');
+    return this.departures.assignDriver(departureId, did, { did: driver.did, name: driver.displayName });
+  }
+
+  /** The runs this driver is rostered on. Theirs alone — a roster is not a public document. */
+  @Get('fleet/drivers/:did/departures')
+  driverDepartures(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    this.assertDriverInFleet(did, actor);
+    return { items: this.departures.forDriver(did) };
+  }
+
+  /**
+   * ARRIVED AT THE GATE, and LOADED / UNLOADED — the two taps the whole charge rests on.
+   *
+   * The time is the server's. A driver typing a time is making a claim in a dispute they have a stake in;
+   * a driver tapping when it happens is making a record, and that difference is what lets a shipper accept
+   * the number afterwards.
+   */
+  @Post('departures/:departureId/bookings/:bookingId/arrived')
+  departureArrived(
+    @Param('departureId') departureId: string,
+    @Param('bookingId') bookingId: string,
+    @Body() dto: WaitingStopDto,
+    @Actor() actor: IntrospectionResult,
+  ) {
+    const who = actingDid(actor);
+    if (!who) throw new GlosError('FORBIDDEN', 'Sign in first');
+    return this.departures.arrive(departureId, bookingId, dto.where, who).record;
+  }
+
+  @Post('departures/:departureId/bookings/:bookingId/free-to-go')
+  departureFreeToGo(
+    @Param('departureId') departureId: string,
+    @Param('bookingId') bookingId: string,
+    @Body() dto: WaitingStopDto,
+    @Actor() actor: IntrospectionResult,
+  ) {
+    const who = actingDid(actor);
+    if (!who) throw new GlosError('FORBIDDEN', 'Sign in first');
+    return this.departures.freeToGo(departureId, bookingId, dto.where, who).record;
+  }
+
+  /** The fleet lets a waiting charge go, with a reason. The record stays; only the amount goes to zero. */
+  @Post('fleet/managers/:did/departures/:departureId/bookings/:bookingId/waive-waiting')
+  waiveDepartureWaiting(
+    @Param('did') did: string,
+    @Param('departureId') departureId: string,
+    @Param('bookingId') bookingId: string,
+    @Body() dto: WaiveWaitingDto,
+    @Actor() actor: IntrospectionResult,
+  ) {
+    this.assertFleetSelf(did, actor);
+    return this.departures.waiveWaiting(departureId, bookingId, dto.where, did, dto.reason);
   }
 
   /** Heavy registry: upload ID + licence copy → KYC_PENDING. */

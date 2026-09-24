@@ -5,7 +5,17 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { CorridorService } from './corridor.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { catalogueEntry } from '../../foundation/countries/catalogue';
-import { Departure, DepartureBooking, DepartureOffer, RATE_BASES, type RateBasis } from './departure.types';
+import {
+  Departure,
+  DepartureBooking,
+  DepartureOffer,
+  DELAY_PLACES,
+  RATE_BASES,
+  type DelayPlace,
+  type RateBasis,
+  type WaitingRecord,
+  type WaitingTerms,
+} from './departure.types';
 
 /**
  * F3 — SELLING THE SPACE ON A RUN THAT IS HAPPENING ANYWAY.
@@ -23,7 +33,12 @@ import { Departure, DepartureBooking, DepartureOffer, RATE_BASES, type RateBasis
  *
  * THE PRICE BASIS IS DECLARED, NOT ASSUMED. Per kilogram is the basis an engineer reaches for and the one
  * that quietly loses money on exactly the loads that fill a truck. Real road freight is priced per trip,
- * per kilometre, per hour, and sometimes per kilogram — so the fleet says which, and this only applies it.
+ * per kilometre, and sometimes per kilogram — so the fleet says which, and this only applies it.
+ *
+ * AND THE TRIP PRICE NEVER MOVES; THE WAITING DOES. A departure is planned: it leaves at a stated time and
+ * runs a known distance, so it is quoted up front and the number agreed before anything rolls. What is not
+ * planned is being told to wait at the gate, and that is the one clock in this file that runs by the hour —
+ * against the side that caused it, which is the whole reason a waiting record carries a PLACE.
  */
 @Injectable()
 export class DepartureService {
@@ -49,6 +64,8 @@ export class DepartureService {
     basis: string;
     amount: number;
     minCharge?: number;
+    freeMin?: number;
+    waitingPerHour?: number;
     km?: number;
     note?: string;
   }): Departure {
@@ -77,6 +94,24 @@ export class DepartureService {
     const amount = Number(input.amount);
     if (!Number.isFinite(amount) || amount <= 0) throw new GlosError('INVALID_INPUT', 'Say what you charge');
 
+    /*
+     * THE WAITING TERMS, and both halves or neither.
+     *
+     * A rate with no free window bills a shipper from the moment the truck arrives, which is not a delay
+     * charge, it is a surcharge on loading. A free window with no rate is a promise with nothing behind it.
+     * So a fleet that wants to charge for waiting states what it allows AND what it costs, and one that
+     * says neither does not charge — which is a real answer, not a missing setting.
+     */
+    const perHour = Number(input.waitingPerHour);
+    const freeMin = Number(input.freeMin);
+    let waiting: WaitingTerms | undefined;
+    if (Number.isFinite(perHour) && perHour > 0) {
+      if (!Number.isFinite(freeMin) || freeMin < 0) {
+        throw new GlosError('INVALID_INPUT', 'Charging for waiting needs the free time first — how long is loading simply expected to take?');
+      }
+      waiting = { freeMin: Math.round(freeMin), perHour: Math.round(perHour * 100) / 100 };
+    }
+
     const km = Number(input.km);
     const distance = Number.isFinite(km) && km > 0 ? Math.round(km) : undefined;
     // Per-kilometre with no distance prices every booking at zero. Asked for here rather than discovered
@@ -100,6 +135,7 @@ export class DepartureService {
         ...(Number(input.minCharge) > 0 ? { minCharge: Math.round(Number(input.minCharge) * 100) / 100 } : {}),
         currency: this.currencyFor(manager.jurisdiction),
       },
+      ...(waiting ? { waiting } : {}),
       ...(distance ? { km: distance } : {}),
       ...(input.note?.trim() ? { note: input.note.trim() } : {}),
       status: 'open',
@@ -119,14 +155,30 @@ export class DepartureService {
    */
   static priceOf(
     rate: { basis: RateBasis; amount: number; minCharge?: number },
-    load: { weightKg: number; volumeM3?: number; km?: number; hours?: number },
+    load: { weightKg: number; volumeM3?: number; km?: number },
   ): { price: number; units: number } {
-    const units =
-      rate.basis === 'per_trip' ? 1 : rate.basis === 'per_km' ? Math.max(0, load.km ?? 0) : rate.basis === 'per_hour' ? Math.max(0, load.hours ?? 0) : Math.max(0, load.weightKg);
+    const units = rate.basis === 'per_trip' ? 1 : rate.basis === 'per_km' ? Math.max(0, load.km ?? 0) : Math.max(0, load.weightKg);
     const raw = rate.amount * units;
     // The floor matters most on the bases that can price a real stop at almost nothing.
     const price = Math.max(raw, rate.minCharge ?? 0);
     return { price: Math.round(price * 100) / 100, units: Math.round(units * 100) / 100 };
+  }
+
+  /**
+   * WHAT A WAIT COST — the only hourly arithmetic in this file, and the free window comes off first.
+   *
+   * Pro rata by the minute, deliberately. Per-started-hour is what the trade often does and it is the rule
+   * that makes a fair charge feel like a penalty: eleven minutes over becomes a full hour, and the shipper
+   * who was nearly on time pays the same as the one who was not. A fleet that wants more can raise `perHour`
+   * where a shipper can see it before booking.
+   *
+   * No terms means no charge. Not "unlimited waiting" — nobody agreed to a clock nobody published.
+   */
+  static waitingCharge(terms: WaitingTerms | undefined, waitedMin: number): { billableMin: number; amount: number } {
+    const waited = Math.max(0, Math.round(waitedMin));
+    if (!terms || terms.perHour <= 0) return { billableMin: 0, amount: 0 };
+    const billableMin = Math.max(0, waited - terms.freeMin);
+    return { billableMin, amount: Math.round((billableMin / 60) * terms.perHour * 100) / 100 };
   }
 
   /**
@@ -159,21 +211,29 @@ export class DepartureService {
   }
 
   /** The quote, before anything is taken. Refuses for the same reasons `book` would, so a screen can say why. */
-  quote(departureId: string, load: { weightKg: number; volumeM3?: number; hours?: number }): { price: number; units: number; binds: 'weight' | 'space'; currency: string } {
+  quote(departureId: string, load: { weightKg: number; volumeM3?: number }): {
+    price: number;
+    units: number;
+    binds: 'weight' | 'space';
+    currency: string;
+    waiting?: WaitingTerms;
+  } {
     const departure = this.require(departureId);
     this.assertBookable(departure, load);
     const { binds } = DepartureService.bindsOn(departure, load);
     const { price, units } = DepartureService.priceOf(departure.rate, { ...load, km: departure.km });
-    return { price, units, binds, currency: departure.rate.currency };
+    // The waiting terms travel WITH the quote: a price that hides the one charge that can appear afterwards
+    // is not a quote, and a shipper reading it is the person who can still do something about a slow bay.
+    return { price, units, binds, currency: departure.rate.currency, ...(departure.waiting ? { waiting: departure.waiting } : {}) };
   }
 
   /** Take space on a departure. */
   book(
     departureId: string,
-    input: { shipperDid: string; description: string; weightKg: number; volumeM3?: number; hours?: number; freightId?: string },
+    input: { shipperDid: string; description: string; weightKg: number; volumeM3?: number; freightId?: string },
   ): { departure: Departure; booking: DepartureBooking } {
     const departure = this.require(departureId);
-    const load = { weightKg: Number(input.weightKg), volumeM3: Number(input.volumeM3) || undefined, hours: input.hours };
+    const load = { weightKg: Number(input.weightKg), volumeM3: Number(input.volumeM3) || undefined };
     this.assertBookable(departure, load);
     if (!input.description?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say what you are sending — the carrier is loading it');
 
@@ -192,6 +252,7 @@ export class DepartureService {
       units,
       at: new Date().toISOString(),
       status: 'booked',
+      waiting: [],
     };
     departure.bookings = [...departure.bookings, booking];
     this.departures.set(departure.departureId, departure);
@@ -210,6 +271,133 @@ export class DepartureService {
     departure.bookings = departure.bookings.map((b) => (b.bookingId === bookingId ? { ...b, status: 'cancelled' as const } : b));
     this.departures.set(departure.departureId, departure);
     return departure;
+  }
+
+  /**
+   * Say who is running it. The fleet's call, and it can change until the run leaves.
+   *
+   * Space is sold before a roster exists — that is the ordinary way round, not an omission — so this is a
+   * separate act rather than a field on `declare`. Nothing can be clocked until it has happened.
+   */
+  assignDriver(departureId: string, managerDid: string, driver: { did: string; name: string }): Departure {
+    const departure = this.require(departureId);
+    if (departure.managerDid !== managerDid) throw new GlosError('FORBIDDEN', 'That is not your departure');
+    if (departure.status === 'cancelled') throw new GlosError('INVALID_STATE', 'That run was called off');
+    departure.driverDid = driver.did;
+    departure.driverName = driver.name;
+    this.departures.set(departure.departureId, departure);
+    return departure;
+  }
+
+  /** The runs a driver is rostered on, soonest first — what the driver app shows them. */
+  forDriver(driverDid: string): Departure[] {
+    return this.list()
+      .filter((d) => d.driverDid === driverDid && d.status !== 'cancelled')
+      .sort((a, b) => a.leavesAt.localeCompare(b.leavesAt));
+  }
+
+  /**
+   * THE TRUCK IS AT THE GATE. The clock starts here and not a moment earlier.
+   *
+   * The time is the server's, taken now. A driver typing "I got here at 08:00" is making a claim in a
+   * dispute they have an interest in; a driver tapping when they arrive is making a record. That costs us
+   * the driver who forgets — answered by `waiveWaiting`, not by accepting typed times.
+   *
+   * Arriving twice at the same stop is not an error and must not restart the clock: a tap that lands twice
+   * (a flaky signal, a double press) would otherwise erase a real wait, which is the one failure mode a
+   * shipper can never detect. The first arrival stands.
+   */
+  arrive(departureId: string, bookingId: string, where: DelayPlace, by: string): { departure: Departure; record: WaitingRecord } {
+    const { departure, booking } = this.requireClockable(departureId, bookingId, where, by);
+    const existing = booking.waiting.find((w) => w.where === where);
+    if (existing) return { departure, record: existing };
+
+    const record: WaitingRecord = {
+      where,
+      arrivedAt: new Date().toISOString(),
+      waitedMin: 0,
+      billableMin: 0,
+      amount: 0,
+      bearer: where === 'loading' ? 'shipper' : 'consignee',
+    };
+    booking.waiting = [...booking.waiting, record];
+    this.departures.set(departure.departureId, departure);
+    return { departure, record };
+  }
+
+  /**
+   * LOADED, AND FREE TO GO. The clock stops, the free window comes off, and what is left is owed.
+   *
+   * Refuses without an arrival rather than inventing one: a stop with an end and no beginning would price
+   * at whatever the default was, which is how a shipper gets billed for a wait nobody witnessed.
+   */
+  freeToGo(departureId: string, bookingId: string, where: DelayPlace, by: string): { departure: Departure; record: WaitingRecord } {
+    const { departure, booking } = this.requireClockable(departureId, bookingId, where, by);
+    const record = booking.waiting.find((w) => w.where === where);
+    if (!record) {
+      throw new GlosError('INVALID_STATE', `Nothing was clocked at ${where} — record the arrival first, or there is no wait to end`);
+    }
+    if (record.freeAt) return { departure, record }; // already ended; a second tap is not a second wait
+
+    record.freeAt = new Date().toISOString();
+    record.waitedMin = Math.max(0, Math.round((Date.parse(record.freeAt) - Date.parse(record.arrivedAt)) / 60_000));
+    const { billableMin, amount } = DepartureService.waitingCharge(departure.waiting, record.waitedMin);
+    record.billableMin = billableMin;
+    record.amount = amount;
+    this.departures.set(departure.departureId, departure);
+    return { departure, record };
+  }
+
+  /**
+   * The fleet lets a waiting charge go, and says why.
+   *
+   * This is the pressure valve for a rule enforced by taps: the driver who clocked in and went for lunch,
+   * the bay that was genuinely ours to blame. The record STAYS — the wait happened and both sides can still
+   * read it — and only the amount goes to zero, because deleting it would make the charge unarguable in the
+   * other direction.
+   */
+  waiveWaiting(departureId: string, bookingId: string, where: DelayPlace, managerDid: string, reason: string): Departure {
+    const departure = this.require(departureId);
+    if (departure.managerDid !== managerDid) throw new GlosError('FORBIDDEN', 'That is not your departure');
+    if (!reason?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say why you are letting it go — a waived charge without a reason is not a decision');
+    const booking = departure.bookings.find((b) => b.bookingId === bookingId);
+    if (!booking) throw new GlosError('NOT_FOUND', 'No such booking');
+    const record = booking.waiting.find((w) => w.where === where);
+    if (!record) throw new GlosError('NOT_FOUND', `Nothing was clocked at ${where}`);
+    record.amount = 0;
+    record.waivedReason = reason.trim();
+    this.departures.set(departure.departureId, departure);
+    return departure;
+  }
+
+  /** What one booking owes for standing time, and where it was incurred. Zero is a real answer. */
+  waitingOwed(booking: DepartureBooking): { total: number; byPlace: { where: DelayPlace; bearer: string; amount: number }[] } {
+    const byPlace = booking.waiting.map((w) => ({ where: w.where, bearer: w.bearer, amount: w.amount }));
+    return { total: Math.round(byPlace.reduce((n, w) => n + w.amount, 0) * 100) / 100, byPlace };
+  }
+
+  /**
+   * Everything that has to be true before a clock may be touched, in the order a person would ask it.
+   *
+   * WHO is the guard that matters. The driver standing at the gate, or the fleet that sold the run — and
+   * nobody else, because the shipper being charged would otherwise hold the stopwatch that bills them.
+   */
+  private requireClockable(
+    departureId: string,
+    bookingId: string,
+    where: DelayPlace,
+    by: string,
+  ): { departure: Departure; booking: DepartureBooking } {
+    if (!DELAY_PLACES.includes(where)) throw new GlosError('INVALID_INPUT', `Say where: ${DELAY_PLACES.join(' or ')}`);
+    const departure = this.require(departureId);
+    if (departure.status === 'cancelled') throw new GlosError('INVALID_STATE', 'That run was called off');
+    if (by !== departure.driverDid && by !== departure.managerDid) {
+      throw new GlosError('FORBIDDEN', 'Only the driver on this run or the fleet that sold it can record waiting time');
+    }
+    const booking = departure.bookings.find((b) => b.bookingId === bookingId);
+    if (!booking) throw new GlosError('NOT_FOUND', 'No such booking');
+    if (booking.status !== 'booked') throw new GlosError('INVALID_STATE', 'That booking was cancelled — there is nobody to charge for waiting');
+    return { departure, booking };
   }
 
   /** Stop selling, mark it gone, or call it off. The fleet's own call. */
@@ -250,6 +438,7 @@ export class DepartureService {
           destZone: d.destZone,
           leavesAt: d.leavesAt,
           rate: d.rate,
+          ...(d.waiting ? { waiting: d.waiting } : {}),
           ...(d.km ? { km: d.km } : {}),
           ...(d.note ? { note: d.note } : {}),
           remainingKg: left.kg,

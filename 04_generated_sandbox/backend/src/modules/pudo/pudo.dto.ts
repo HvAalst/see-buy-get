@@ -1,7 +1,7 @@
 import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { INCOTERM_CODES } from '../../foundation/incoterms/catalogue';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE } from '../../foundation/interest/interest.service';
-import { RATE_BASES } from './departure.types';
+import { DELAY_PLACES, RATE_BASES, type DelayPlace } from './departure.types';
 import { PRESENCE_LEVELS, type PresenceLevel } from '../../foundation/presence/presence.types';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
@@ -1401,9 +1401,31 @@ export class DeclareDepartureDto {
   @IsNumber() @Min(0.01) amount!: number;
   /** The least the run will take. What stopping and strapping down already cost. */
   @IsOptional() @IsNumber() @Min(0) minCharge?: number;
+  /**
+   * Waiting time, and it is both or neither. `waitingPerHour` without `freeMin` is refused by the service:
+   * billing from the moment the truck arrives is a surcharge on loading, not a charge for a delay.
+   */
+  @IsOptional() @IsNumber() @Min(0) freeMin?: number;
+  @IsOptional() @IsNumber() @Min(0.01) waitingPerHour?: number;
   /** Required when charging by the kilometre — otherwise every booking prices at nothing. */
   @IsOptional() @IsNumber() @Min(1) km?: number;
   @IsOptional() @IsString() @MaxLength(240) note?: string;
+}
+
+/** Who is running this departure. Rostered after the space is sold, which is the ordinary way round. */
+export class AssignDepartureDriverDto {
+  @IsString() driverDid!: string;
+}
+
+/** Clocking a stop: the time is the server's, so all this carries is WHERE. */
+export class WaitingStopDto {
+  @IsIn(DELAY_PLACES) @ApiProperty({ enum: DELAY_PLACES }) where!: DelayPlace;
+}
+
+/** Letting a waiting charge go. The reason is required — see waiveWaiting. */
+export class WaiveWaitingDto {
+  @IsIn(DELAY_PLACES) @ApiProperty({ enum: DELAY_PLACES }) where!: DelayPlace;
+  @IsString() @MaxLength(240) reason!: string;
 }
 
 /** Taking some of that space. */
@@ -1411,8 +1433,6 @@ export class BookDepartureDto {
   @IsString() @MaxLength(160) description!: string;
   @IsNumber() @Min(0.1) weightKg!: number;
   @IsOptional() @IsNumber() @Min(0.01) volumeM3?: number;
-  /** Only read when the departure charges by the hour. */
-  @IsOptional() @IsNumber() @Min(0.25) hours?: number;
   /** A load already on the board, where this is space for one. */
   @IsOptional() @IsString() freightId?: string;
 }

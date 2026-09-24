@@ -19,7 +19,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
  * weight that run is nearly free, and the fleet has paid for the diesel, the driver and the day. (The
  * user's own example, 2026-09-24, and the reason this is a declared enum rather than a number.)
  *
- * So the fleet says which basis it is selling on, from the four road freight actually uses:
+ * So the fleet says which basis it is selling on, from the three that a PLANNED run can honestly use:
  *
  *  - `per_trip`  a flat price, per booking, whatever is in it. The honest default for a scheduled line —
  *                and note what it means on a SHARED run: three shippers on one truck each pay it, because
@@ -27,11 +27,98 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
  *                WHOLE vehicle expresses that by declaring the capacity it actually has, so one booking
  *                fills it and no second one can be taken.
  *  - `per_km`    distance — what a long haul is really priced on, and what vehicles already publish.
- *  - `per_hour`  time — city work, waiting, a tail-lift and two flights of stairs. Cost the clock, not the cargo.
  *  - `per_kg`    weight, for the loads where weight genuinely is what costs: steel, grain, liquids.
+ *
+ * `per_hour` WAS HERE AND IS GONE, and the reason is worth keeping.
+ *
+ * It looked like the fourth real basis — city work, a tail-lift, two flights of stairs. But a departure is
+ * a run that is already planned: it leaves at a stated time and goes a known distance, so the driver names
+ * the price up front and the shipper agrees to it before anything moves. Nobody sells a scheduled line by
+ * the hour, because neither side knows the number until it is over. (The user, 2026-09-24: *"this usually
+ * is settled upfront. The driver names his price, the distance is known and so is the expected price for
+ * the trip."*)
+ *
+ * What is genuinely hourly is the thing that goes WRONG — see `WaitingTerms` below.
  */
-export const RATE_BASES = ['per_trip', 'per_km', 'per_hour', 'per_kg'] as const;
+export const RATE_BASES = ['per_trip', 'per_km', 'per_kg'] as const;
 export type RateBasis = (typeof RATE_BASES)[number];
+
+/**
+ * WAITING TIME — the one clock in freight that really does run by the hour.
+ *
+ * A truck arrives at the appointed hour to load and is told to wait. The trip price does not move, because
+ * the trip has not changed; what has been spent is the driver's day, and the trade's own answer is that the
+ * side who caused the delay pays for it. (The user, 2026-09-24: *"it happens pretty often that a truck comes
+ * at an appointed time for loading and is then told to wait. It is usually acceptable that the place where
+ * the delay happens has to pay for the waiting time."*)
+ *
+ * Two numbers, and both matter:
+ *
+ *  - `freeMin`  loading is EXPECTED to take a while, and a carrier who starts billing at minute one is not
+ *               charging for a delay, they are charging for the job. The free window is what makes the rest
+ *               of this defensible: nothing is owed until the wait stops being ordinary.
+ *  - `perHour`  what is owed after that, pro rata by the minute. Not per started hour: rounding eleven
+ *               minutes up to a whole one is the move that turns a fair rule into a grievance, and a fleet
+ *               that wants a bigger number can raise the rate in the open.
+ *
+ * Optional on a departure, and absent means FREE: a fleet that has not said it charges for waiting has not
+ * charged for waiting, and no clock runs against a shipper who was never told about one.
+ */
+export class WaitingTerms {
+  /** Minutes at each stop that are simply part of the job. */
+  @ApiProperty()
+  freeMin: number;
+  /** Per hour beyond the free window, pro rata, in the departure's currency. */
+  @ApiProperty()
+  perHour: number;
+}
+
+/**
+ * WHERE THE DELAY HAPPENED — which is the same question as who pays for it.
+ *
+ * The whole point of demurrage is that it does not land on whoever happens to be holding the contract. A
+ * truck kept standing at the collection gate was kept there by the shipper; one kept standing at the
+ * delivery gate was kept there by the consignee. Recording the PLACE is what makes the charge attributable,
+ * and a model that only knew "this booking waited 90 minutes" would have to guess, which in practice means
+ * billing the shipper for the receiver's warehouse.
+ */
+export const DELAY_PLACES = ['loading', 'delivery'] as const;
+export type DelayPlace = (typeof DELAY_PLACES)[number];
+
+/**
+ * One stop's clock, as the driver actually recorded it.
+ *
+ * Both timestamps are the SERVER's, taken when the driver taps. A typed time is a claim and would make this
+ * a bargaining chip; a tap is a record. The cost of that choice is a driver who forgets to tap, which is why
+ * the fleet can waive a charge with a reason rather than argue about a number nobody can check.
+ */
+export class WaitingRecord {
+  @ApiProperty({ enum: DELAY_PLACES })
+  where: DelayPlace;
+  /** When the vehicle presented itself. Until this exists there is no clock and nothing is owed. */
+  arrivedAt: string;
+  /** When it was free to go. Absent while the driver is still standing there. */
+  @ApiPropertyOptional()
+  freeAt?: string;
+  /** Total minutes on site, free window included. Kept so the charge can be re-read rather than trusted. */
+  @ApiProperty()
+  waitedMin: number;
+  /** Minutes beyond the free window — the only ones that cost anything. */
+  @ApiProperty()
+  billableMin: number;
+  /** What those minutes came to. Zero while the wait is still ordinary, and zero when waived. */
+  @ApiProperty()
+  amount: number;
+  /**
+   * WHO IT LANDS ON, spelled out rather than inferred at reading time: `shipper` for a delay at loading,
+   * `consignee` for one at delivery. Stored because the attribution is the feature.
+   */
+  @ApiProperty({ enum: ['shipper', 'consignee'] })
+  bearer: 'shipper' | 'consignee';
+  /** Set when the fleet let it go, with their reason. A waived charge stays visible: it happened. */
+  @ApiPropertyOptional()
+  waivedReason?: string;
+}
 
 export class DepartureRate {
   @ApiProperty({ enum: RATE_BASES })
@@ -76,11 +163,20 @@ export class DepartureBooking {
   /** What it was quoted at, on the departure's basis, in the departure's currency. */
   @ApiProperty()
   price: number;
-  /** What the basis was applied to — kilometres, hours, kilograms, or 1 for a trip. Kept so the price can be re-read. */
+  /** What the basis was applied to — kilometres, kilograms, or 1 for a trip. Kept so the price can be re-read. */
   @ApiProperty()
   units: number;
   at: string;
   status: 'booked' | 'cancelled';
+  /**
+   * THE CLOCKS, one per stop, and empty on a run where nothing went wrong.
+   *
+   * Kept on the BOOKING rather than the departure because a shared truck waits for one shipper at a time:
+   * three loads on the same run, and the two-hour stand at the second collection belongs to the second
+   * shipper alone. A departure-level total would be exactly the unattributable number this exists to avoid.
+   */
+  @ApiProperty({ type: [WaitingRecord] })
+  waiting: WaitingRecord[];
 }
 
 export class Departure {
@@ -110,9 +206,26 @@ export class Departure {
   capacityM3?: number;
   @ApiProperty({ type: DepartureRate })
   rate: DepartureRate;
+  /**
+   * What happens when the truck is kept standing. Absent means the fleet does not charge for waiting —
+   * see `WaitingTerms`, and note that absent is FREE rather than unlimited-and-unspoken.
+   */
+  @ApiPropertyOptional({ type: WaitingTerms })
+  waiting?: WaitingTerms;
   /** The distance the line runs, where it is known — what `per_km` is multiplied by. */
   @ApiPropertyOptional()
   km?: number;
+  /**
+   * WHO IS DRIVING IT, once the fleet has said.
+   *
+   * Not decoration: the waiting clock is recorded by the person standing at the gate, so without this there
+   * is no one holding a phone who is allowed to start it. A departure with no driver yet is ordinary — the
+   * fleet sells the space first and rosters later — and nothing about it can be clocked until there is one.
+   */
+  @ApiPropertyOptional()
+  driverDid?: string;
+  @ApiPropertyOptional()
+  driverName?: string;
   /** What the fleet wants a shipper to know: a tail-lift, a reefer, "no hazmat". */
   @ApiPropertyOptional()
   note?: string;
@@ -139,6 +252,14 @@ export class DepartureOffer {
   leavesAt: string;
   @ApiProperty({ type: DepartureRate })
   rate: DepartureRate;
+  /**
+   * The waiting terms, on the SHIPPER's side of the glass — because the one thing worse than being charged
+   * for keeping a truck standing is being charged for it by surprise. A shipper who can see "60 minutes
+   * free, then 40 an hour" before booking can plan a loading bay around it; one who learns it afterwards
+   * has been billed for a rule they were never told.
+   */
+  @ApiPropertyOptional({ type: WaitingTerms })
+  waiting?: WaitingTerms;
   @ApiPropertyOptional()
   km?: number;
   @ApiPropertyOptional()
