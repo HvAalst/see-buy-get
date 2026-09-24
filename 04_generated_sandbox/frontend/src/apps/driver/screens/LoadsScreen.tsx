@@ -5,6 +5,7 @@ import { hasInstructions } from '../../../shared/instructions';
 import { useT } from '../../../shared/i18n';
 import { canLoadBag, capacitySubLine, claimControl, isFull, loadsSummary, money, usedPercent } from '../logic';
 import { vehicleWord } from '../vehicle-words';
+import { RunSection } from './RunSection';
 import type { Claimable } from '../types';
 import type { DriverActions, DriverState } from '../useDriverApp';
 
@@ -26,6 +27,11 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
       <h1 class="scr__title">{t('driver.nav.loads')}</h1>
 
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
+
+      {/* F3 — the runs the fleet rostered this driver onto. Here rather than on the home screen because a
+          booked consignment on a scheduled run IS a load, and this is the tab called My loads. Renders
+          nothing at all for a courier who is on no line, which is most of them. */}
+      <RunSection state={state} actions={actions} />
 
       {v ? (
         <GlanceNumber

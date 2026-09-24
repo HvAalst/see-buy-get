@@ -731,3 +731,30 @@
 .road__pick:disabled {
   opacity: 0.5;
 }
+
+/* ------------------------------------------------------------- F3: a gate --
+   One stop's clock inside a load row: what it is, where it stands, and the tap.
+   Wraps, because "Waiting since 08:14" and a button do not share a phone line. */
+.run__gate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 8px;
+}
+/* Always its own line. Without this the two gates wrap differently — COLLECTION stacks because it also
+   carries a pill, DELIVERY sits inline because it does not — and two stops on one load stop looking alike. */
+.run__where {
+  flex-basis: 100%;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--tx-soft);
+}
+/* The outcome sits on its own line under the pill — it is a sentence, not a label. */
+.run__owed {
+  flex-basis: 100%;
+  font-size: 14px;
+  color: var(--tx-soft);
+}

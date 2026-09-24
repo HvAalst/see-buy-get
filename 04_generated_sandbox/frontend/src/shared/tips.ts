@@ -34,6 +34,8 @@ export type TipId =
   | 'driver.shift.how'
   /** Off shift — the three things scanning one actually does. The tallest teaching block in the app. */
   | 'driver.shift.what'
+  /** My loads — that the two gate taps ARE the record, so nobody has to remember a time afterwards. */
+  | 'driver.run.what'
   /* THE SHOP'S COUNTER. Four screens a shopkeeper works every day, each opening with the same sentence
      about how that counter job goes. Learned in a week; paid for in screen space for years. */
   | 'agent.accept.how'

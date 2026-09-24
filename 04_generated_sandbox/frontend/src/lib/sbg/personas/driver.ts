@@ -99,6 +99,27 @@ export function createDriverApi(sbg: SbgClient) {
     /** The roads this driver has run before — offered instead of naming two places every morning. */
     driverLegs: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/legs', { params: { path: { did } } })),
 
+    /* ---- F3: the scheduled runs this driver is rostered on, and the waiting clock at each gate ---- */
+
+    /** The departures the fleet has put this driver on, soonest first, with who is aboard each. */
+    driverDepartures: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/departures' as never, { params: { path: { did } } } as never)),
+
+    /**
+     * AT THE GATE, and FREE TO GO. The two taps a demurrage charge rests on.
+     *
+     * No time is sent. The server takes its own clock when the tap lands, because a typed time is a claim
+     * in a dispute the driver has a stake in and a tap is a record — and that difference is what lets the
+     * shipper accept the number afterwards.
+     */
+    departureArrived: (departureId: string, bookingId: string, where: 'loading' | 'delivery') =>
+      sbg.request((c) =>
+        c.POST('/v1/sbg/departures/{departureId}/bookings/{bookingId}/arrived' as never, { params: { path: { departureId, bookingId } }, body: { where } } as never),
+      ),
+    departureFreeToGo: (departureId: string, bookingId: string, where: 'loading' | 'delivery') =>
+      sbg.request((c) =>
+        c.POST('/v1/sbg/departures/{departureId}/bookings/{bookingId}/free-to-go' as never, { params: { path: { departureId, bookingId } }, body: { where } } as never),
+      ),
+
     /** Resolve a typed place to a point — for a road end that is a market or a junction, not a PUDO. */
     geocode: (q: string) => sbg.request((c) => c.GET('/v1/sbg/geocode', { params: { query: { q } } })),
 

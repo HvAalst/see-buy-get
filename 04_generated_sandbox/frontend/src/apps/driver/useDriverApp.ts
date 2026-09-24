@@ -26,6 +26,7 @@ import type {
   SuggestView,
   VehicleView,
 } from './types';
+import type { DepartureView } from './types';
 import { boardOriginPin, DEFAULT_WORK_RADIUS_KM, defaultWorkMode, lastReadingBreached, minEarnFilter, nodeOptions, originReady } from './logic';
 import { pinAfterRename, type GeoPoint, type PinSource } from '../../shared/geo';
 import { currentPosition, watchPosition } from '../../shared/position';
@@ -90,6 +91,8 @@ export interface DriverState {
   route: SavedRoute | null;
   /** The roads this driver has declared before, newest first — offered instead of naming two places daily. */
   legs: DeclaredLegView[];
+  /** F3 — the scheduled runs the fleet has put this driver on. Empty for a driver on no line. */
+  departures: DepartureView[];
   /** The vehicles this driver has driven before — so the day can start over a coffee, not at the bus. */
   vehicles: RecentVehicleView[];
   /** R5 — the driver jobs + earnings register (a filtered/paged page + the current view's totals). */
@@ -196,6 +199,7 @@ const INITIAL: DriverState = {
   offerIndex: 0,
   route: null,
   legs: [],
+  departures: [],
   vehicles: [],
   jobs: [],
   jobsTotal: 0,
@@ -415,12 +419,19 @@ export function useDriverApp() {
       if (superseded()) return;
       const vehicles = !vehR || vehR.error ? [] : narrow<{ vehicles: RecentVehicleView[] }>(vehR.data)?.vehicles ?? [];
 
+      // F3 — the runs this driver is rostered on. Soft-fail like the rest of the history: an independent
+      // courier is on no line at all, and a fleet that has not rostered anybody is the ordinary case.
+      const depR = await client.api.driverDepartures(did);
+      if (superseded()) return;
+      const departures = depR.error ? [] : narrow<{ items: DepartureView[] }>(depR.data)?.items ?? [];
+
       setState((s) => ({
         ...s,
         phase: 'ready',
         driver,
         session,
         vehicle,
+        departures,
         remaining,
         remainingTotes,
         claims,
@@ -1121,6 +1132,33 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
     [client, run, fail, pushToast, refresh],
   );
 
+  /**
+   * F3 — THE WAITING CLOCK, started and stopped at the gate.
+   *
+   * No time is sent: the server takes its own when the tap lands. A typed time is a claim in a dispute
+   * the driver has a stake in; a tap is a record, and that is what lets the shipper accept the number.
+   *
+   * Refreshes afterwards rather than patching the row locally, because what comes back is not just the
+   * timestamp — it is the minutes, the free window deducted, and the amount. Guessing any of those on the
+   * phone would mean the driver and the fleet reading different numbers off the same wait.
+   */
+  const clockGate = useCallback(
+    async (departureId: string, bookingId: string, where: 'loading' | 'delivery', arrived: boolean) => {
+      if (!client || !did) return;
+      await run(`${arrived ? 'arrive' : 'free'}:${bookingId}:${where}`, async () => {
+        const r = arrived
+          ? await client.api.departureArrived(departureId, bookingId, where)
+          : await client.api.departureFreeToGo(departureId, bookingId, where);
+        if (r.error) {
+          setState((s) => ({ ...s, error: r.error }));
+          return;
+        }
+        await refresh();
+      });
+    },
+    [client, did, run, refresh],
+  );
+
   const runSuggest = useCallback(
     async (from: { lat: number; lng: number }, to: { lat: number; lng: number }, minEarn?: number) => {
       if (!client || !did) return;
@@ -1504,6 +1542,7 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
       /** The same controls, inside actions so a SCREEN can ask for permission where somebody sees the ask. */
       notifications: client?.notifications ?? null,
       refresh,
+      clockGate,
       signIn,
       sendPinCode,
       setPinAndSignIn,

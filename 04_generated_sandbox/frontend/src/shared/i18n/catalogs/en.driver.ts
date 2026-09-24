@@ -33,6 +33,28 @@ export const enDriver = {
   'driver.nav.home': 'My {vehicle}',
   'driver.nav.route': 'Find work',
   'driver.nav.loads': 'My loads',
+
+  /* F3 — A SCHEDULED RUN, AND THE CLOCK AT EACH GATE.
+     The fleet sells the space on a line it already runs; the only part that belongs on a phone is the
+     one thing nobody else can witness — the truck standing at a gate, waiting. */
+  'driver.run.title': 'Your scheduled runs',
+  'driver.run.teach': 'Tap when you arrive and again when you are loaded. The times are taken here, so nobody has to remember them later.',
+  'driver.run.leaves': 'Leaves {when} · {from} to {to}',
+  'driver.run.terms': 'This fleet allows {minutes} minutes at each stop. After that it charges {rate} {currency} an hour to whoever kept you.',
+  'driver.run.noTerms': 'This fleet does not charge for waiting.',
+  'driver.run.empty': 'Nothing booked on this run yet.',
+  'driver.run.load': '{kg} kg',
+  'driver.run.atLoading': 'Collection',
+  'driver.run.atDelivery': 'Delivery',
+  'driver.run.arrived': 'I have arrived',
+  'driver.run.waitingSince': 'Waiting since {at}',
+  'driver.run.loaded': 'Loaded — I can go',
+  'driver.run.unloaded': 'Unloaded — I can go',
+  'driver.run.done': 'Waited {minutes} min',
+  'driver.run.nothingOwed': 'Inside the free time — nothing owed.',
+  'driver.run.owedByShipper': '{minutes} min over. {amount} {currency} owed by the sender, who kept you.',
+  'driver.run.owedByConsignee': '{minutes} min over. {amount} {currency} owed by the receiver, who kept you.',
+  'driver.run.waived': 'Your fleet let this one go.',
   'driver.nav.earnings': 'Earnings',
   'driver.backToVan': 'Back to my {vehicle}',
   'driver.onShift': 'On shift',

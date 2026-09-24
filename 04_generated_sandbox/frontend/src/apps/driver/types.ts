@@ -419,3 +419,44 @@ export interface RoadAccount {
   /** A media id. Fetchable by any signed-in driver now that the photo has been posted to the map. */
   photoRef?: string;
 }
+
+/* ------------------------------------------------------------ F3: the run --
+   A scheduled departure the fleet has rostered this driver onto, and the clock at each gate. */
+
+/** One stop's clock, as the driver recorded it. Both times are the SERVER's — see the persona. */
+export interface WaitingRecordView {
+  where: 'loading' | 'delivery';
+  arrivedAt: string;
+  /** Absent while the driver is still standing there. */
+  freeAt?: string;
+  waitedMin: number;
+  /** Minutes past the free window — the only ones that cost anything. */
+  billableMin: number;
+  amount: number;
+  /** Who it lands on: the shipper at the collection gate, the consignee at delivery. */
+  bearer: 'shipper' | 'consignee';
+  waivedReason?: string;
+}
+
+export interface DepartureBookingView {
+  bookingId: string;
+  description: string;
+  weightKg: number;
+  volumeM3?: number;
+  status: 'booked' | 'cancelled';
+  waiting: WaitingRecordView[];
+}
+
+export interface DepartureView {
+  departureId: string;
+  lineName: string;
+  company: string;
+  originZone: string;
+  destZone: string;
+  leavesAt: string;
+  status: 'open' | 'closed' | 'departed' | 'cancelled';
+  /** What the fleet charges for being kept waiting. Absent means it does not charge. */
+  waiting?: { freeMin: number; perHour: number };
+  rate: { basis: string; amount: number; currency: string; minCharge?: number };
+  bookings: DepartureBookingView[];
+}
