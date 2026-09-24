@@ -10,7 +10,7 @@ import type { EntityPricing, EntityRow } from './money';
 import type { ApprovalRow, ClaimDecision, ClaimRow, DisposalRow, DriverApplication, FreightClaimRow, StalledRow } from './queues';
 import { EMPTY_CORRIDOR_FORM, corridorName, type CorridorForm, type CorridorRow, type CouplingRow } from './corridors';
 import type { DisputeReportRow, ReportRow } from './reports';
-import { EMPTY_COUNTRY_FORM, newCountryCode, overridesOf, type CatalogueCountry, type NewCountryForm, type PresenceLevel, type PresenceProposalRow, type PresenceRow } from './presence';
+import { EMPTY_COUNTRY_FORM, newCountryCode, overridesOf, type CatalogueCountry, type InterestCountry, type NewCountryForm, type PresenceLevel, type PresenceProposalRow, type PresenceRow } from './presence';
 import type { ExpiringItem } from './company';
 import type { AgentRow, CoverageCounts, FlagRow, HubRow, ToteRow } from './network';
 import { runSummary, type FundingAction, type FundingRow, type PayoutAction, type PayoutRow, type RunResult, type UnmatchedRow } from './settlement';
@@ -90,6 +90,8 @@ export interface TowerState {
   /* ---- presence: how established the network is, country by country ---- */
   /** Every country with a company, plus every one an operator has decided about. Null while unread. */
   presence: PresenceRow[] | null;
+  /** CA — who is waiting for a country we do not reach, by country. The evidence a switch-on is made on. */
+  interest: InterestCountry[] | null;
   /** The row being changed. `level` empty means 'whatever that country already stands at'. */
   presenceForm: { level: PresenceLevel | ''; note: string; incoterms?: { origin: string[]; destination: string[] } };
   /** Recording a country that is not on the map yet — the only way the FIRST country we are not in gets one. */
@@ -313,6 +315,7 @@ const INITIAL: TowerState = {
   stalled: null,
   driverApplications: null,
   presence: null,
+  interest: null,
   presenceForm: { level: '', note: '' },
   countryForm: { ...EMPTY_COUNTRY_FORM },
   catalogue: null,
@@ -640,7 +643,13 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
   const loadPresence = useCallback(async (client: TowerClient) => {
     setState((s) => ({ ...s, loading: true }));
     // CA1 + CA2 — the map, the countries it may grow into, and the changes waiting for a second person, read together.
-    const [map, catalogue, proposals] = await Promise.all([client.api.presence(), client.api.countryCatalogue(), client.api.presenceProposals()]);
+    // …and who is waiting in the countries it has not reached, which is the evidence the decision needs.
+    const [map, catalogue, proposals, interest] = await Promise.all([
+      client.api.presence(),
+      client.api.countryCatalogue(),
+      client.api.presenceProposals(),
+      client.api.interest(),
+    ]);
     const error = map.error ?? catalogue.error ?? proposals.error;
     setState((s) => ({
       ...s,
@@ -648,6 +657,9 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       presence: map.error ? null : (narrow<{ items: PresenceRow[] }>(map.data)?.items ?? []),
       catalogue: catalogue.error ? s.catalogue : (narrow<{ items: CatalogueCountry[] }>(catalogue.data)?.items ?? []),
       proposals: proposals.error ? s.proposals : (narrow<{ items: PresenceProposalRow[] }>(proposals.data)?.items ?? []),
+      // Soft-failed on purpose: the map and the proposals are what this screen is FOR, and losing the
+      // waiting list must not take them down with it.
+      interest: interest.error ? s.interest : (narrow<{ items: InterestCountry[] }>(interest.data)?.items ?? []),
       queueError: error ? error.detail || error.title : null,
       readAt: Date.now(),
     }));

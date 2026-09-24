@@ -27,6 +27,9 @@ export const ERROR_CODES = {
   INVALID_INPUT: { status: 400, title: 'Invalid input' },
   AMOUNT_INVALID: { status: 400, title: 'Amount is not valid' },
   EMAIL_INVALID: { status: 400, title: 'A valid email is required' },
+  // Somebody asking to be told when a country opens, about one that is already open. Not a failure on
+  // their part: the right answer is a link to the sign-up, which is what the caller turns this into.
+  ALREADY_OPEN: { status: 400, title: 'The network already reaches that country' },
   PASSWORD_TOO_SHORT: { status: 400, title: 'Password is too short' },
   PHONE_REQUIRED: { status: 400, title: 'A phone number is required' },
   PHONE_INVALID: { status: 400, title: 'Phone number is not valid' },

@@ -1,5 +1,6 @@
 import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { INCOTERM_CODES } from '../../foundation/incoterms/catalogue';
+import { INTEREST_KINDS, MAX_INTEREST_MESSAGE } from '../../foundation/interest/interest.service';
 import { PRESENCE_LEVELS, type PresenceLevel } from '../../foundation/presence/presence.types';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
@@ -1367,6 +1368,20 @@ export class SignupDto {
   @IsString() password!: string;
   @IsString() phone!: string;
   @IsObject() profile!: Record<string, unknown>;
+}
+
+/**
+ * Somebody in a country the network has not reached, asking to be told when it does.
+ *
+ * No name, no address, no identity document, no phone. It holds an email and a sentence from somebody
+ * with no account in a country we do not operate in, so it holds as little as it can and nothing that
+ * would identify them beyond the address they would be written to.
+ */
+export class InterestDto {
+  @IsIn(INTEREST_KINDS) @ApiProperty({ enum: INTEREST_KINDS }) kind!: string;
+  @IsString() @MaxLength(160) email!: string;
+  /** Why they are asking. The motivation is the evidence a switch-on decision is made on. */
+  @IsString() @MaxLength(MAX_INTEREST_MESSAGE) message!: string;
 }
 
 export class PhoneRequestDto {

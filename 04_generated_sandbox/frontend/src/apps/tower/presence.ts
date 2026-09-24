@@ -326,3 +326,25 @@ export function toggleTerm(list: string[], code: string): string[] {
   const next = list.includes(code) ? list.filter((c) => c !== code) : [...list, code];
   return INCOTERMS.map((t) => t.code).filter((c) => next.includes(c));
 }
+
+/**
+ * WHO IS WAITING FOR A COUNTRY THE NETWORK HAS NOT REACHED — one row per country, not per message.
+ *
+ * The question this screen asks is "should we switch on the Netherlands", never "should I reply to this
+ * person". A flat list of messages makes staff do the counting, and counting is the part a computer
+ * should already have done — so the row arrives decided-shaped: how many, what they would be, what the
+ * country speaks (which is the translation this would imply) and what it settles in.
+ *
+ * The messages come with it, underneath, because the motivation is the evidence. A count alone says only
+ * that ten people tapped a button.
+ */
+export interface InterestCountry {
+  country: string;
+  name: string;
+  languages: string[];
+  currency: string;
+  /** Still waiting — the ones a switch-on has not yet reached. */
+  waiting: number;
+  kinds: Record<string, number>;
+  notes: Array<{ noteId: string; kind: string; email: string; message: string; at: string; toldAt?: string; toldLevel?: string }>;
+}

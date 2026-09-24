@@ -676,6 +676,9 @@ export function createOperatorApi(sbg: SbgClient) {
     /** CA2 — changes waiting for a second person, and the ones already decided. */
     presenceProposals: () => sbg.request((c) => c.GET('/v1/sbg/presence/proposals', {})),
 
+    /** Who is waiting for a country we do not reach, grouped by country — the evidence a switch-on needs. */
+    interest: () => sbg.request((c) => c.GET('/v1/sbg/interest', {})),
+
     approvePresence: (proposalId: string, by?: string) =>
       sbg.request((c) => c.POST('/v1/sbg/presence/proposals/{proposalId}/approve', { params: { path: { proposalId } }, body: { ...(by ? { by } : {}) } })),
 

@@ -6,6 +6,8 @@ import { SiteService, SITE_BASIS, type Site } from './site.service';
 import { TransitAuthorityService, TRANSIT_BASIS } from './transit-authority.service';
 import { FieldObservationService, OBSERVATION_BASIS } from './field-observation.service';
 import { MailService } from '../../foundation/mail/mail.service';
+import { appUrl } from '../../foundation/mail/mail.templates';
+import { InterestService } from '../../foundation/interest/interest.service';
 import { isSandbox } from '../../foundation/runtime/sandbox';
 import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Res, StreamableFile, Optional } from '@nestjs/common';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
@@ -105,7 +107,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyRecordDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto } from './pudo.dto';
+  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto } from './pudo.dto';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
@@ -225,6 +227,7 @@ export class SbgController {
     // A company's own entry: how to reach them. One card, read by every directory.
     private readonly contacts: ContactCardService,
     @Inject(GEOCODER) private readonly geocoder: Geocoder,
+    private readonly interest: InterestService,
     @Optional() private readonly mail?: MailService,
     @Optional() private readonly papers?: PapersWatchService,
   ) {}
@@ -378,6 +381,41 @@ export class SbgController {
         joinable: this.presence.resolve(c.code).capabilities.takeIn,
       };
     });
+  }
+
+  /**
+   * ASK TO BE TOLD WHEN THE NETWORK REACHES YOUR COUNTRY.
+   *
+   * Public, and unverified on purpose: this is evidence for a decision, not an account. A bad address
+   * costs one person their answer and nothing else, and making somebody prove a phone before they may
+   * say "I would carry freight here" is friction on the cheapest, most useful thing they can give us.
+   *
+   * A country that is ALREADY open is refused by name rather than thanked for waiting — there is nothing
+   * to wait for, and the right answer is the sign-up.
+   */
+  @Public()
+  @Post('countries/:code/interest')
+  registerInterest(@Param('code') code: string, @Body() dto: InterestDto) {
+    const open = this.presence.resolve(code.trim().toUpperCase()).capabilities.takeIn;
+    const note = this.interest.add({ country: code, kind: dto.kind, email: dto.email, message: dto.message }, open);
+    const country = catalogueEntry(note.country)?.name ?? note.country;
+    void this.mail?.send('interest-received', { address: note.email }, { country, kind: note.kind }).catch(() => undefined);
+    return { noteId: note.noteId, country: note.country, name: country };
+  }
+
+  /** Who is waiting, by country, biggest first — the shape the switch-on decision is actually made in. */
+  @Roles('operator')
+  @Get('interest')
+  interestQueue() {
+    return { items: this.interest.byCountry() };
+  }
+
+  /** Take a note back. Removed, not flagged: somebody withdrawing has withdrawn. */
+  @Roles('operator')
+  @Delete('interest/:noteId')
+  withdrawInterest(@Param('noteId') noteId: string) {
+    this.interest.withdraw(noteId);
+    return { noteId, withdrawn: true };
   }
 
   /**
@@ -578,7 +616,34 @@ export class SbgController {
     this.requirePriceableSwitchOn(proposal.jurisdiction, proposal.level);
     const company = this.requireReadyCompanyFor(proposal.jurisdiction, proposal.level);
     if (company) this.entities.activate(company.entityId, by);
-    return this.presence.approve(proposalId, by);
+    // The one promise the waiting list makes, kept by the approval rather than by anybody remembering.
+    // After the refusals above and before the change, so a switch-on that is about to be rejected never
+    // sends mail — and the list is read now, while the people on it are still marked as waiting.
+    /*
+     * THE ONE PROMISE THE WAITING LIST MAKES, kept by the approval rather than by anybody remembering.
+     *
+     * Read BEFORE the change and sent AFTER it. Before, because every refusal above has already had its
+     * say and the list must still show these people as waiting; after, because a country is not open
+     * until it is, and an email that arrives ahead of the fact is the same false note as a form promising
+     * a company that does not exist.
+     */
+    const waiting = this.interest.waitingFor(proposal.jurisdiction);
+    const decided = this.presence.approve(proposalId, by);
+
+    if (waiting.length && this.presence.resolve(proposal.jurisdiction).capabilities.takeIn) {
+      const name = catalogueEntry(proposal.jurisdiction)?.name ?? proposal.jurisdiction;
+      const sister = this.entities.forJurisdiction(proposal.jurisdiction);
+      for (const note of waiting) {
+        void this.mail
+          ?.send('country-open', { address: note.email }, { country: name, settles: Boolean(sister), ...(sister ? { company: sister.name } : {}), joinUrl: appUrl('home') })
+          .catch(() => undefined);
+      }
+      // Marked told so a later raise — matched to established — does not repeat the same sentence. The
+      // second change deserves its own message, and that is a slice of its own, named in the doc.
+      this.interest.told(waiting.map((n) => n.noteId), proposal.level);
+    }
+
+    return decided;
   }
 
   /** CA2 — anyone declines (the proposer withdrawing included), always with a reason. */

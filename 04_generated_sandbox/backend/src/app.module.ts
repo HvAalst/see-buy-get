@@ -9,6 +9,7 @@ import { EntityModule } from './foundation/entity/entity.module';
 import { HandleModule } from './foundation/handle/handle.module';
 import { MailModule } from './foundation/mail/mail.module';
 import { PresenceModule } from './foundation/presence/presence.module';
+import { InterestModule } from './foundation/interest/interest.module';
 import { BooksModule } from './foundation/books/books.module';
 import { PayoutsModule } from './foundation/payouts/payouts.module';
 import { FundingModule } from './foundation/funding/funding.module';
@@ -45,6 +46,7 @@ import { SseModule } from './modules/sse/sse.module';
     EntityModule,
     HandleModule,
     PresenceModule,
+    InterestModule,
     BooksModule,
     PayoutsModule,
     FundingModule,

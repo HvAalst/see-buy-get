@@ -1566,6 +1566,26 @@ export const enTowerQueues = {
   'tower.approvals.refused': 'Refused.',
 
   // ---- presence: how established the network is, country by country ----
+  /* WHO IS WAITING for a country we have not reached — the evidence "which country next" never had.
+     One row per country, already counted, because the question is about the country and not the person. */
+  'tower.interest.title': 'Who is waiting for a country we do not reach',
+  'tower.interest.hint': 'Left on the join form by people in countries the network has not switched on. Most waiting first.',
+  'tower.interest.col.country': 'Country',
+  'tower.interest.col.waiting': 'Waiting',
+  'tower.interest.col.who': 'Who they would be',
+  'tower.interest.col.implies': 'What it would mean',
+  'tower.interest.ofTotal': 'of {n}',
+  'tower.interest.kind.carrier': 'carrier',
+  'tower.interest.kind.shop': 'shop',
+  'tower.interest.kind.hub': 'hub',
+  'tower.interest.kind.store': 'store',
+  'tower.interest.kind.other': 'other',
+  // The translation and the rate book, said on the row rather than looked up per country.
+  'tower.interest.speaks': 'Speaks {languages} · settles in {currency}',
+  'tower.interest.read': 'Read the {n}',
+  'tower.interest.told': 'told when it became {level}',
+  'tower.interest.promise': 'Everyone here was promised one thing and nothing else: that we write to them the day their country is switched on, and say which of the two it became. Approving a change below sends that, to everybody still waiting in it.',
+
   'tower.presence.title': 'Where we operate',
   'tower.presence.lede':
     'What the network is allowed to do in each country. Matching, custody and proof work everywhere; charging, holding money and answering for goods need a company on the ground.',

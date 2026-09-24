@@ -4149,6 +4149,73 @@
         }
       }
     },
+    "/v1/sbg/countries/{code}/interest": {
+      "post": {
+        "operationId": "Sbg.registerInterest",
+        "summary": "",
+        "description": "ASK TO BE TOLD WHEN THE NETWORK REACHES YOUR COUNTRY.\n\nPublic, and unverified on purpose: this is evidence for a decision, not an account. A bad address\ncosts one person their answer and nothing else, and making somebody prove a phone before they may\nsay \"I would carry freight here\" is friction on the cheapest, most useful thing they can give us.\n\nA country that is ALREADY open is refused by name rather than thanked for waiting — there is nothing\nto wait for, and the right answer is the sign-up.",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InterestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/interest": {
+      "get": {
+        "operationId": "Sbg.interestQueue",
+        "summary": "",
+        "description": "Who is waiting, by country, biggest first — the shape the switch-on decision is actually made in.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/interest/{noteId}": {
+      "delete": {
+        "operationId": "Sbg.withdrawInterest",
+        "summary": "",
+        "description": "Take a note back. Removed, not flagged: somebody withdrawing has withdrawn.",
+        "parameters": [
+          {
+            "name": "noteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/country-catalogue": {
       "get": {
         "operationId": "Sbg.countryCatalogue",
@@ -19487,6 +19554,35 @@
         },
         "required": [
           "approve"
+        ]
+      },
+      "InterestDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "carrier",
+              "shop",
+              "hub",
+              "store",
+              "other"
+            ]
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "message": {
+            "type": "string",
+            "description": "Why they are asking. The motivation is the evidence a switch-on decision is made on.",
+            "maxLength": 600
+          }
+        },
+        "required": [
+          "kind",
+          "email",
+          "message"
         ]
       },
       "SetFxRateDto": {

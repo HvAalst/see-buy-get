@@ -101,6 +101,21 @@ export function fetchTruckSubtypes(): Promise<Result<Array<{ id: string; label: 
   return publicRequest<Array<{ id: string; label: string }>>(homeConfig(), '/v1/sbg/vehicles/truck-subtypes');
 }
 
+/** What somebody would be, if the network reached them. Mirrors INTEREST_KINDS on the server. */
+export const INTEREST_KINDS = ['carrier', 'shop', 'hub', 'store', 'other'] as const;
+export type InterestKind = (typeof INTEREST_KINDS)[number];
+export const MAX_INTEREST_MESSAGE = 600;
+
+/**
+ * Ask to be told when the network reaches a country it does not.
+ *
+ * Public and unverified on purpose: this is evidence for a decision, not an account. The only thing it
+ * promises back is the switch-on itself, which is automatic — see the interest-received mail.
+ */
+export function leaveInterest(country: string, body: { kind: string; email: string; message: string }): Promise<Result<{ noteId: string; name: string }>> {
+  return publicRequest<{ noteId: string; name: string }>(homeConfig(), `/v1/sbg/countries/${encodeURIComponent(country)}/interest`, { body });
+}
+
 /* ------------------------------------------------------- FB3b: the market -- */
 
 /** One load as the public market publishes it. Mirrors backend MarketRow — note what is NOT here: no

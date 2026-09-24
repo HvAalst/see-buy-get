@@ -4,6 +4,7 @@ import { toPlaceWords } from '../../../shared/placewords';
 import { useT } from '../../../shared/i18n';
 
 import { DRIVER_CLASSES, joinSpoken, needsLicence, pickedClasses, pickedVehicle, roleMeta, stepBlocker, stepsFor, vehicleClassFor } from '../logic';
+import { INTEREST_KINDS, MAX_INTEREST_MESSAGE, leaveInterest, type OperatingCountry } from '../api';
 import type { HomeActions, HomeState } from '../useHomeApp';
 
 export interface JoinScreenProps {
@@ -190,12 +191,15 @@ function CountryField({ id, state, actions }: JoinScreenProps & { id: string }) 
       {!chosenCountry ? (
         <p class="card__note">{t('home.join.country.activeNote')}</p>
       ) : chosenCountry.joinable === false ? (
-        <Note
-          tone="warn"
-          icon="info"
-          title={t('home.join.country.notHereTitle', { name: chosenCountry.name })}
-          detail={t('home.join.country.notHereBody', { name: chosenCountry.name })}
-        />
+        <>
+          <Note
+            tone="warn"
+            icon="info"
+            title={t('home.join.country.notHereTitle', { name: chosenCountry.name })}
+            detail={t('home.join.country.notHereBody', { name: chosenCountry.name })}
+          />
+          <InterestForm country={chosenCountry} />
+        </>
       ) : chosenCountry.settles === false ? (
         <Note
           tone="warn"
@@ -207,6 +211,88 @@ function CountryField({ id, state, actions }: JoinScreenProps & { id: string }) 
         <p class="card__note">{t('home.join.country.activeNote')}</p>
       )}
     </div>
+  );
+}
+
+/**
+ * ASKING TO BE TOLD WHEN THE NETWORK REACHES YOU — the way out of the only dead end on this form.
+ *
+ * Every country is on the list now, and most of them answer "we do not reach here yet". That is honest
+ * and it is still a dead end, and the dead end is the part worth fixing: somebody who would carry freight
+ * in a country we have never been to is EVIDENCE, and switching a country on is a decision that had none.
+ *
+ * WHAT IT ASKS FOR IS THE SHORTEST THING THAT IS ACTUALLY USEFUL. An address to write to, what they would
+ * be, and WHY — the reason is the half a count cannot give, and the half a decision is made on. No name,
+ * no phone, no identity: this is somebody with no account in a country we do not operate in.
+ *
+ * WHAT IT PROMISES IS ONLY WHAT THE SYSTEM CAN KEEP. Not "we will get back to you" — the first country
+ * with three interested people and no plan is where that breaks, leaving a broken promise where an honest
+ * "not yet" used to be. It promises the switch-on itself, which is sent by the approval and by nothing
+ * else, and it says which of the two the country became.
+ */
+function InterestForm({ country }: { country: OperatingCountry }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState<string>('carrier');
+  const [email, setEmail] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  // Asking again about the same country replaces the earlier note rather than adding one, so there is no
+  // harm in a second go — but the thank-you stands until they change country, because it is the answer.
+  if (sent) return <Note tone="ok" icon="check" title={t('home.join.interest.thanksTitle')} detail={t('home.join.interest.thanksBody', { name: country.name })} />;
+
+  if (!open) {
+    return (
+      <Button variant="outline" full={false} onClick={() => setOpen(true)}>
+        {t('home.join.interest.open')}
+      </Button>
+    );
+  }
+
+  const ready = email.includes('@') && message.trim().length > 0 && !busy;
+  const send = async () => {
+    setBusy(true);
+    setFailed(null);
+    const r = await leaveInterest(country.country, { kind, email: email.trim(), message: message.trim() });
+    setBusy(false);
+    if (r.error) return setFailed(r.error.detail || r.error.title);
+    setSent(true);
+  };
+
+  return (
+    <Card title={t('home.join.interest.title', { name: country.name })}>
+      <p class="card__note">{t('home.join.interest.lede')}</p>
+      <div class="chips">
+        {INTEREST_KINDS.map((k) => (
+          <button key={k} type="button" class={`chip chip--tap${kind === k ? ' chip--on' : ''}`} aria-pressed={kind === k} onClick={() => setKind(k)}>
+            {t(`home.join.interest.kind.${k}` as 'home.join.interest.kind.carrier')}
+          </button>
+        ))}
+      </div>
+      <div class="field" style="margin-top:12px">
+        <label class="field__label" for="int-email">
+          {t('home.join.interest.email')}
+        </label>
+        <input id="int-email" class="input" type="email" inputMode="email" autocomplete="email" value={email} onInput={(e) => setEmail(e.currentTarget.value)} />
+      </div>
+      <div class="field" style="margin-top:12px">
+        <label class="field__label" for="int-msg">
+          {t('home.join.interest.message')}
+        </label>
+        <textarea id="int-msg" class="input" rows={4} maxLength={MAX_INTEREST_MESSAGE} value={message} onInput={(e) => setMessage(e.currentTarget.value)} />
+        <p class="card__note">{t('home.join.interest.messageHint')}</p>
+      </div>
+      {failed ? <p class="hint">{failed}</p> : null}
+      <Button chevron={false} disabled={!ready} busy={busy} onClick={() => void send()}>
+        {t('home.join.interest.send')}
+      </Button>
+      <Button variant="link" full={false} onClick={() => setOpen(false)}>
+        {t('home.goBack')}
+      </Button>
+    </Card>
   );
 }
 

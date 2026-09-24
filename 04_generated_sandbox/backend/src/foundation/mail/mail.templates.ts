@@ -78,6 +78,10 @@ export interface MailParams {
   'order-on-its-way': { store: string; orderRef?: string; shop: string; trackingUrl: string };
   'ready-for-collection': { shop: string; address?: string; collectBy: string; openUrl?: string };
   'freight-delivered': { code: string; description: string; destination: string; deliveredAt: string; carrier: string; driver?: string; receiverName?: string; amount?: number; currency?: string; noteNumber: string };
+  /** Somebody asked to be told when the network reaches their country. Sent the moment they ask. */
+  'interest-received': { country: string; kind: string };
+  /** Two members of staff switched that country on. Sent by the approval itself, not by anybody remembering. */
+  'country-open': { country: string; settles: boolean; company?: string; joinUrl: string };
 }
 
 export type MailTemplateId = keyof MailParams;
@@ -101,7 +105,77 @@ const WELCOME_INTRO: Record<MailParams['welcome']['role'], string> = {
 };
 const WELCOME_APP: Record<MailParams['welcome']['role'], MailApp> = { shop: 'agent', hub: 'mdp', driver: 'driver' };
 
+const WOULD_BE: Record<string, string> = {
+  carrier: 'carry freight',
+  shop: 'take parcels in at your counter',
+  hub: 'sort parcels between routes',
+  store: 'ship your orders through us',
+  other: 'work with us',
+};
+
 export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]> } = {
+  /*
+   * THE ONLY THING THIS PROMISES IS THE ONE THE SYSTEM CAN KEEP.
+   *
+   * "We will get back to you" is a promise a person has to keep, and the first country with three
+   * interested people and no plan is where it breaks — leaving a broken promise where an honest "not yet"
+   * used to be. So it promises the switch-on itself, which is automatic, and says plainly that it may be
+   * a long wait. Nobody is told a decision is coming.
+   */
+  'interest-received': {
+    title: 'Thanks for asking about your country',
+    sentWhen: 'Somebody leaves a message from a country the network does not reach yet.',
+    wired: true,
+    sample: { country: 'the Netherlands', kind: 'carrier' },
+    build: (p) => ({
+      subject: `Thanks — we have your note about ${p.country}`,
+      preheader: `We will write again the day SeeBuyGet is switched on in ${p.country}.`,
+      blocks: [
+        { kind: 'heading', text: 'Thank you' },
+        { kind: 'paragraph', text: `You told us you would ${WOULD_BE[p.kind] ?? WOULD_BE.other} in ${p.country}, and why. That is the thing we could not work out on our own, and it is what the decision gets made on.` },
+        { kind: 'paragraph', text: 'Countries are switched on one at a time, deliberately, by two members of SeeBuyGet staff. It means a company, a tax registration and a way to pay people — so it is not quick, and we will not pretend a date we do not have.' },
+        {
+          kind: 'paragraph',
+          text: `What we will do is write to you the day ${p.country} is switched on, and tell you which of two things it became: a country where a SeeBuyGet company contracts and pays you, or one where we match you with loads and you settle the money yourself with whoever you carry for.`,
+        },
+        { kind: 'paragraph', text: 'You do not need to do anything else, and you will not hear from us in between.' },
+      ],
+      reason: 'You are getting this email because you asked to be told when SeeBuyGet reaches your country.',
+    }),
+  },
+
+  /*
+   * THE PROMISE BEING KEPT — and it names WHICH of the two, because the difference is who handles the
+   * money and who carries responsibility for it. Telling somebody "we are live" and letting them find out
+   * afterwards that nobody there pays them would be the same false note the join form was just fixed for.
+   */
+  'country-open': {
+    title: 'Your country is switched on',
+    sentWhen: 'Two members of staff switch on a country somebody had asked about.',
+    wired: true,
+    sample: { country: 'the Netherlands', settles: false, joinUrl: 'https://seebuyget.com/' },
+    build: (p) => ({
+      subject: `SeeBuyGet is now in ${p.country}`,
+      preheader: p.settles ? `${p.company ?? 'A SeeBuyGet company'} contracts and pays you there.` : `We match loads there; the money stays between you and whoever you carry for.`,
+      blocks: [
+        { kind: 'heading', text: `We have reached ${p.country}` },
+        { kind: 'paragraph', text: 'You asked to be told, so here it is. You can register now.' },
+        p.settles
+          ? {
+              kind: 'paragraph' as const,
+              text: `${p.company ?? 'A SeeBuyGet company'} is the company you would be contracted by and paid by. Prices, invoices and payouts all run through it.`,
+            }
+          : {
+              kind: 'warning' as const,
+              title: 'Loads yes, money no — not yet',
+              text: `We can match you with loads in ${p.country}, and you can register today. What we cannot do there is handle the money: there is no SeeBuyGet company in ${p.country}, so nobody of ours invoices, pays you, or carries any responsibility for what you are owed. You agree the price with whoever you carry for and settle it with them. When a company is established there, that changes and we will write again.`,
+            },
+        { kind: 'button', label: 'Register now', href: p.joinUrl },
+      ],
+      reason: 'You are getting this email because you asked to be told when SeeBuyGet reaches your country.',
+    }),
+  },
+
   'password-reset': {
     title: 'Password reset code',
     sentWhen: 'Somebody taps “I forgot my password” in the Shop or Hub app.',

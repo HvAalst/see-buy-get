@@ -304,6 +304,25 @@ export const enHome = {
   'home.join.country.notActiveBody':
     'We can match you with loads here, and you can register today. What we cannot do is handle the money: there is no SeeBuyGet company in {name}, so nobody of ours invoices, pays you, or carries any responsibility for what you are owed. You agree the price with whoever you carry for and you settle it with them directly. When a company is established here, that changes and you will be told.',
   'home.join.country.activeNote': 'This is the company you will be paid by, so it has to be where you really are.',
+  /* THE WAY OUT OF THE ONLY DEAD END ON THIS FORM. Most of the world answers "we do not reach here yet",
+     and somebody who would carry freight there is the evidence a switch-on decision never had. The copy
+     promises the switch-on and nothing else — a reply somebody has to remember is the promise that breaks. */
+  'home.join.interest.open': 'Leave us a message',
+  'home.join.interest.title': 'Tell us about {name}',
+  'home.join.interest.lede': 'We choose the next country from who is waiting in it and what they would do there. Both halves matter — the number tells us where, and the reason tells us whether it would work.',
+  'home.join.interest.kind.carrier': 'I would carry freight',
+  'home.join.interest.kind.shop': 'I have a shop',
+  'home.join.interest.kind.hub': 'I would sort parcels',
+  'home.join.interest.kind.store': 'I sell things online',
+  'home.join.interest.kind.other': 'Something else',
+  'home.join.interest.email': 'Email to write back to',
+  'home.join.interest.message': 'What would you do here?',
+  'home.join.interest.messageHint': 'A few lines is plenty. What you move or sell, where, and what is hard about it today.',
+  'home.join.interest.send': 'Send it',
+  'home.join.interest.thanksTitle': 'Thank you — we have it',
+  'home.join.interest.thanksBody':
+    'We will write to you the day {name} is switched on, and say which of two things it became: a country where a SeeBuyGet company contracts and pays you, or one where we match you with loads and the money stays between you and whoever you carry for. Countries are switched on deliberately, by two members of staff, so it may be a while — and you will not hear from us in between.',
+
   'home.join.country.unavailable': 'We could not load the countries just now — try again in a moment.',
   'home.join.about.fullName': 'Your full name',
   'home.join.about.fullNamePh': 'As on your ID',

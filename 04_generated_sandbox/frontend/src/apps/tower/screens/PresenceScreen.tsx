@@ -40,6 +40,106 @@ import type { TowerActions, TowerState } from '../useTowerApp';
  * CA1 + CA2: a country is chosen from the catalogue, never typed, and a change that gives a country anything it
  * cannot do now is only a PROPOSAL until a different named person approves it.
  */
+/**
+ * WHO IS WAITING FOR A COUNTRY WE HAVE NOT REACHED — the evidence this screen's decision never had.
+ *
+ * Every country is on the join form, and most of them answer "we do not reach here yet". Somebody who
+ * says they would carry freight there, and why, is the only real input to "which country next" — and
+ * until this panel the decision was made on nothing but instinct and a map.
+ *
+ * ONE ROW PER COUNTRY, not per message. The question is "should we switch on the Netherlands", never
+ * "should I reply to this person", so the row arrives already counted: how many are waiting, what they
+ * would be, what the country SPEAKS — which is the translation this would imply, and is otherwise worked
+ * out by hand — and what it settles in. The messages sit underneath because the motivation is the
+ * evidence; a count alone says only that ten people tapped a button.
+ *
+ * It sits directly above the map it informs, so the country you have just read about is the country you
+ * then switch on.
+ */
+function WhoIsWaiting({ state }: { state: TowerState }) {
+  const t = useT();
+  const [open, setOpen] = useState<string | null>(null);
+  const rows = state.interest;
+  // Nothing waiting is not a failure and gets no empty panel: this screen has a job without it.
+  if (!rows || rows.length === 0) return null;
+
+  return (
+    <section class="cons__panel" style="margin-bottom:18px">
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t('tower.interest.title')}</span>
+        <span class="ctbl__sub">{t('tower.interest.hint')}</span>
+      </div>
+      <table class="ctbl ctbl--stack">
+        <thead>
+          <tr>
+            <th>{t('tower.interest.col.country')}</th>
+            <th class="ctbl__num">{t('tower.interest.col.waiting')}</th>
+            <th>{t('tower.interest.col.who')}</th>
+            <th>{t('tower.interest.col.implies')}</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const showing = open === row.country;
+            return (
+              <>
+                <tr key={row.country} class={showing ? 'is-open' : undefined}>
+                  <td class="ctbl__strong">
+                    {row.name} <span class="ctbl__sub">({row.country})</span>
+                  </td>
+                  <td class="ctbl__num ctbl__strong">
+                    <span class="ctbl__lbl">{t('tower.interest.col.waiting')}</span>
+                    {row.waiting}
+                    {row.waiting !== row.notes.length ? <span class="ctbl__sub"> {t('tower.interest.ofTotal', { n: row.notes.length })}</span> : null}
+                  </td>
+                  <td class="ctbl__sub">
+                    <span class="ctbl__lbl">{t('tower.interest.col.who')}</span>
+                    {Object.entries(row.kinds)
+                      .map(([kind, n]) => `${n} × ${t(`tower.interest.kind.${kind}` as 'tower.interest.kind.carrier')}`)
+                      .join(' · ')}
+                  </td>
+                  {/* What switching this country on would actually cost us, said rather than looked up. */}
+                  <td class="ctbl__sub">
+                    <span class="ctbl__lbl">{t('tower.interest.col.implies')}</span>
+                    {t('tower.interest.speaks', { languages: row.languages.join(', ').toUpperCase() || '—', currency: row.currency || '—' })}
+                  </td>
+                  <td class="ctbl__num">
+                    <button type="button" class="cbtn cbtn--ghost cbtn--sm" aria-expanded={showing} onClick={() => setOpen(showing ? null : row.country)}>
+                      {showing ? t('common.close') : t('tower.interest.read', { n: row.notes.length })}
+                    </button>
+                  </td>
+                </tr>
+                {showing ? (
+                  <tr class="is-open ctbl__editor">
+                    <td colSpan={5}>
+                      <div class="twr-knobs">
+                        {row.notes.map((n) => (
+                          <p key={n.noteId} class="twr-clear__b" style="margin:0 0 10px">
+                            <b>{t(`tower.interest.kind.${n.kind}` as 'tower.interest.kind.carrier')}</b>
+                            <span class="ctbl__sub">
+                              {' '}
+                              · {n.email} · {new Date(n.at).toLocaleDateString()}
+                              {n.toldAt ? ` · ${t('tower.interest.told', { level: n.toldLevel ?? '' })}` : ''}
+                            </span>
+                            <br />
+                            {n.message}
+                          </p>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ) : null}
+              </>
+            );
+          })}
+        </tbody>
+      </table>
+      <p class="chint" style="padding:8px 0 12px">{t('tower.interest.promise')}</p>
+    </section>
+  );
+}
+
 export function PresenceScreen({ state, actions }: { state: TowerState; actions: TowerActions }) {
   const t = useT();
   const rows = state.presence ? presenceRows(state.presence) : null;
@@ -73,6 +173,7 @@ export function PresenceScreen({ state, actions }: { state: TowerState; actions:
       ) : null}
 
       <Waiting state={state} actions={actions} />
+      <WhoIsWaiting state={state} />
 
       <section class="cons__panel">
         <div class="cons__panelhead">
