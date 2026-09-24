@@ -1892,6 +1892,9 @@ export function useAgentApp() {
 
   return {
     state,
+    // The raw client, for the shared account menu — the account is the PERSON, so the surface behind it
+    // is the same one every other app talks to and this app holds no opinion about it.
+    sbg: client?.client.sbg ?? null,
     did,
     // The Web Push controls (N1b) — surfaced for the TopBar NotificationBell; null while signed out.
     notifications: client?.notifications ?? null,

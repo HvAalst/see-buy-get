@@ -154,9 +154,22 @@ export class AccountService implements OnApplicationBootstrap {
     return { accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account) };
   }
 
-  /** Mint the shift-length actor token an app carries after sign-in/up. */
+  /**
+   * Mint the shift-length actor token an app carries after sign-in/up.
+   *
+   * IT NAMES THE PERSON where the account knows one. A shopkeeper signing in with an email and password is
+   * still a human being with a photo, a PIN and an address, and the account has carried their phone hash
+   * since S20 precisely so this join can be made — without it their app would have an account menu that
+   * answered 403 to everything.
+   */
   private mint(account: Account): AccessToken {
-    return this.auth.mintActorToken({ role: actorRoleForAccount(account.role), did: account.did, tenant: account.tenant });
+    const person = account.phoneHash ? this.persons.findByHash(account.phoneHash) : undefined;
+    return this.auth.mintActorToken({
+      role: actorRoleForAccount(account.role),
+      did: account.did,
+      tenant: account.tenant,
+      ...(person ? { personDid: person.personDid } : {}),
+    });
   }
 
   /** Issue a password-reset token (returned for the sandbox — would be emailed in production). */

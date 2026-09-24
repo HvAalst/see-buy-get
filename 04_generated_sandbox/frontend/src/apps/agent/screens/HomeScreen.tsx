@@ -1,8 +1,5 @@
-import { HelpLink } from '../../../shared/guide/HelpLink';
-import { agentConfig } from '../api';
-import { ChangePasswordSheet } from '../../../shared/account/ChangePasswordSheet';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { AuthImage, Button, Card, ErrorNote, ExplainerReset, GlanceNumber, Icon, Note, Pill, PlaceMap, PushPrompt, ReadAloud, Sheet, TopUpCostNote, type IconName } from '../../../shared/ui';
+import { AuthImage, Button, Card, ErrorNote, GlanceNumber, Icon, Note, Pill, PlaceMap, PushPrompt, ReadAloud, Sheet, TopUpCostNote, type IconName } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { fromPlaceWords, toPlaceWords } from '../../../shared/placewords';
 import { canAccept, gateNotice, homeSummary, money, statusNotice } from '../logic';
@@ -197,13 +194,10 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
         </div>
       </Card>
 
+      {/* Help, "stop showing me this" and sign out moved to the account menu in the bar — they belong
+          to the person, not to this screen. Read aloud stays: it reads out what is on THIS screen. */}
       <div class="scr__foot">
         <ReadAloud text={() => homeSummary(state.agent, state.gate, t)} label={t('agent.readAloud')} />
-        <HelpLink app="agent" />
-        <ExplainerReset who={state.agent?.did} />
-        <Button variant="link" full={false} onClick={actions.signOut}>
-          {t('agent.home.signOut')}
-        </Button>
       </div>
 
       <TopUpSheet open={sheet === 'topup'} onClose={() => setSheet(null)} state={state} actions={actions} />
@@ -211,7 +205,6 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
       <PhotoSheet open={sheet === 'photo'} onClose={() => setSheet(null)} state={state} actions={actions} />
       <LocationSheet open={sheet === 'location'} onClose={() => setSheet(null)} state={state} actions={actions} />
       <HoursSheet open={sheet === 'hours'} onClose={() => setSheet(null)} state={state} actions={actions} />
-      <ChangePasswordSheet open={sheet === 'password'} onClose={() => setSheet(null)} config={agentConfig()} email={actions.readEmail()} onChanged={actions.adoptToken} />
 
       <Sheet open={sheet === 'close'} onClose={() => setSheet(null)} title={t('agent.home.closeSheetTitle')}>
         <p class="t-body">{t('agent.home.closeSheetBody')}</p>

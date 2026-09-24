@@ -1,7 +1,8 @@
 import { EarningsScreen } from './screens/EarningsScreen';
-import { HelpLink } from '../../shared/guide/HelpLink';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { ConnectivityNote, BottomNav, Button, Checklist, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { AccountMenu } from '../../shared/account/AccountMenu';
+import { useAccount } from '../../shared/account/useAccount';
 import { useT } from '../../shared/i18n';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { DriversScreen } from './screens/DriversScreen';
@@ -17,7 +18,10 @@ import { fleetWorkLine } from './logic';
 
 export function App() {
   const t = useT();
-  const { state, actions } = useFleetApp();
+  const { state, actions , sbg } = useFleetApp();
+  // The person behind this account — their photo, PIN, address and page. The menu is ABSENT where the
+  // sign-in is not a person at all (a store's shared secret), rather than opening onto a refusal.
+  const account = useAccount(sbg, state.phase === 'ready');
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
 
@@ -70,6 +74,8 @@ export function App() {
             <Pill tone={onShift ? 'ok' : 'idle'} dot>
               {t('fleet.onShift', { count: onShift })}
             </Pill>
+            {/* Last in the bar: live state first, the place you visit last. */}
+            <AccountMenu api={account} app="fleet" onSignOut={actions.signOut} />
           </>
         }
       />
@@ -77,12 +83,6 @@ export function App() {
       <main class="app__scroll">
         <ConnectivityNote stale={state.stale} />
         <ScreenRouter screen={state.screen} state={state} actions={actions} />
-        <div class="scr__foot" style="padding:8px 0 4px">
-          <HelpLink app="fleet" />
-          <Button variant="link" full={false} onClick={actions.signOut}>
-            {t('fleet.signOut')}
-          </Button>
-        </div>
       </main>
 
       <BottomNav<Screen> items={tabs} active={state.screen} onSelect={(key) => actions.go(key)} labels={false} />

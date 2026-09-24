@@ -818,6 +818,9 @@ export function useFleetApp() {
 
   return {
     state,
+    // The raw client, for the shared account menu — the account is the PERSON, so the surface behind it
+    // is the same one every other app talks to and this app holds no opinion about it.
+    sbg: client?.client.sbg ?? null,
     actions: {
       refresh,
       signIn,

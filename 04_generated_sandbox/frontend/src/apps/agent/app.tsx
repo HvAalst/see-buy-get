@@ -1,5 +1,10 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { ConnectivityNote, BottomNav, Button, Checklist, FeedbackFlash, Icon, NotificationBell, OutboxNote, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { useState } from 'preact/hooks';
+import { AccountMenu } from '../../shared/account/AccountMenu';
+import { ChangePasswordSheet } from '../../shared/account/ChangePasswordSheet';
+import { agentConfig } from './api';
+import { useAccount } from '../../shared/account/useAccount';
 import { useT } from '../../shared/i18n';
 import { AcceptScreen } from './screens/AcceptScreen';
 import { ConsignmentsScreen } from './screens/ConsignmentsScreen';
@@ -24,7 +29,13 @@ type Tab = 'home' | 'accept' | 'release' | 'records';
 
 export function App() {
   const t = useT();
-  const { state, actions, notifications } = useAgentApp();
+  const { state, actions, notifications , sbg } = useAgentApp();
+  // The person behind this account — their photo, PIN, address and page. The menu is ABSENT where the
+  // sign-in is not a person at all (a store's shared secret), rather than opening onto a refusal.
+  const account = useAccount(sbg, state.phase === 'ready');
+  // A shop signs in with an email and a password, not a PIN — so the menu offers THAT credential, and
+  // the sheet lives here beside the row that opens it rather than at the foot of one screen.
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
 
@@ -78,6 +89,8 @@ export function App() {
             <Pill tone={open ? 'ok' : 'idle'} dot>
               {open ? t('agent.open') : t('agent.closed')}
             </Pill>
+            {/* Last in the bar: live state first, the place you visit last. */}
+            <AccountMenu api={account} app="agent" onSignOut={actions.signOut} onChangePassword={() => setPasswordOpen(true)} />
           </>
         }
       />
@@ -94,6 +107,7 @@ export function App() {
       <RateDriverSheet key={state.driverRating?.driverDid ?? 'none'} state={state} actions={actions} />
 
       <Toasts state={state} actions={actions} />
+      <ChangePasswordSheet open={passwordOpen} onClose={() => setPasswordOpen(false)} config={agentConfig()} email={actions.readEmail()} onChanged={actions.adoptToken} />
       <FeedbackFlash />
     </div>
   );

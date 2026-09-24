@@ -1,5 +1,10 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { OutboxNote, ConnectivityNote, BottomNav, Button, Checklist, FeedbackFlash, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { useState } from 'preact/hooks';
+import { AccountMenu } from '../../shared/account/AccountMenu';
+import { ChangePasswordSheet } from '../../shared/account/ChangePasswordSheet';
+import { mdpConfig } from './api';
+import { useAccount } from '../../shared/account/useAccount';
 import { useT } from '../../shared/i18n';
 import { fillingBags, homeSummary, unsortedAt } from './logic';
 import { DropScreen } from './screens/DropScreen';
@@ -17,7 +22,12 @@ type Tab = 'home' | 'sort' | 'load';
 
 export function App() {
   const t = useT();
-  const { state, actions } = useMdpApp();
+  const { state, actions , sbg } = useMdpApp();
+  // The person behind this account — their photo, PIN, address and page. The menu is ABSENT where the
+  // sign-in is not a person at all (a store's shared secret), rather than opening onto a refusal.
+  const account = useAccount(sbg, state.phase === 'ready');
+  // A hub signs in with an email and a password, not a PIN — the menu offers that credential instead.
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
 
@@ -71,6 +81,8 @@ export function App() {
             <Pill tone="ok" dot>
               {state.hub ? (state.hub.zones.length === 1 ? t('mdp.zoneOne', { count: state.hub.zones.length }) : t('mdp.zoneMany', { count: state.hub.zones.length })) : '…'}
             </Pill>
+            {/* Last in the bar: live state first, the place you visit last. */}
+            <AccountMenu api={account} app="mdp" onSignOut={actions.signOut} onChangePassword={() => setPasswordOpen(true)} />
           </>
         }
       />
@@ -83,6 +95,7 @@ export function App() {
 
       <BottomNav<Tab> items={tabs} active={tab} onSelect={(key) => actions.go(key as Screen)} labels={false} />
 
+      <ChangePasswordSheet open={passwordOpen} onClose={() => setPasswordOpen(false)} config={mdpConfig()} email={actions.readEmail()} onChanged={actions.adoptToken} />
       <Toasts state={state} actions={actions} />
       <FeedbackFlash />
     </div>

@@ -29,6 +29,16 @@ export interface AccountMenuProps {
   onOpenHandle?: (handle: string) => void;
   /** An app with its own invite flow passes it; the row is omitted where there is none. */
   onInvite?: () => void;
+  /**
+   * TWO CREDENTIALS, AND THEY ARE NOT THE SAME THING.
+   *
+   * A driver reopens their app with a 4-digit PIN held against the person. A shopkeeper and a hub sign in
+   * with an email and a password held against the ACCOUNT. Both are real, some people have both, and a
+   * menu that offered a PIN change to somebody who has never set one would send them to a sheet that can
+   * only refuse them. So the PIN row appears when there is a PIN, and an app whose sign-in is a password
+   * passes this to put its own change-password sheet in the same place.
+   */
+  onChangePassword?: () => void;
   /** Anything the app wants at the foot of the menu — a read-aloud control, a shift-specific link. */
   extra?: ComponentChildren;
 }
@@ -49,7 +59,7 @@ export interface AccountMenuProps {
  * them — not a greyed one. An app with no invite flow shows no invite row. A disabled row is a promise
  * the product is not keeping, and a menu of them reads as a list of things you are not allowed to do.
  */
-export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, extra }: AccountMenuProps) {
+export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onChangePassword, extra }: AccountMenuProps) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [sheet, setSheet] = useState<'profile' | 'pin' | 'address' | null>(null);
@@ -75,6 +85,20 @@ export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, extra
 
   const me = api.account;
   const name = me?.displayName?.trim() || t('account.menu.you');
+
+  /*
+   * NO PERSON, NO MENU — the omission rule applied to the whole thing rather than to a row.
+   *
+   * Not every sign-in is a human being. A store signs in with a vendor id and a shared secret, which is a
+   * machine credential whoever is at the counter uses; there is no photo, no PIN and no address behind it,
+   * and the account surface says so with a 403. An avatar that opens onto "You are not allowed to do that"
+   * is worse than no avatar: it tells somebody the product has an account for them and then refuses it.
+   *
+   * Only on FORBIDDEN, which is the server saying "this token is nobody". A network failure or an expired
+   * token leaves the menu in place, because those are temporary and the sign-out inside it is exactly what
+   * the person needs.
+   */
+  if (api.error?.code === 'FORBIDDEN' && !me) return null;
   const handleHref = me?.handle ? publicPageUrl(me.handle) : null;
   const openPage = () => {
     if (!me?.handle) return;
@@ -116,9 +140,16 @@ export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, extra
 
           <MenuRow icon="camera" label={t('account.menu.photo')} sub={me?.avatarMediaId ? t('account.menu.photoSet') : t('account.menu.photoNone')} onClick={() => { setOpen(false); setSheet('profile'); }} />
           <MenuRow icon="pin" label={t('account.menu.address')} sub={me?.address || t('account.menu.addressNone')} onClick={() => { setOpen(false); setSheet('address'); }} />
-          <MenuRow icon="keypad" label={t('account.menu.pin')} sub={me?.pinChangedAt ? undefined : t('account.menu.pinSub')} onClick={() => { setOpen(false); setSheet('pin'); }}>
-            {me?.pinChangedAt ? <CredentialAge iso={me.pinChangedAt} class="row__s" /> : null}
-          </MenuRow>
+          {/* Only where a PIN exists. Somebody who signed up with an email has never set one, and the
+              sheet behind this row could do nothing for them but refuse. */}
+          {me?.hasPin ? (
+            <MenuRow icon="keypad" label={t('account.menu.pin')} sub={me.pinChangedAt ? undefined : t('account.menu.pinSub')} onClick={() => { setOpen(false); setSheet('pin'); }}>
+              {me.pinChangedAt ? <CredentialAge iso={me.pinChangedAt} class="row__s" /> : null}
+            </MenuRow>
+          ) : null}
+          {onChangePassword ? (
+            <MenuRow icon="lock" label={t('account.menu.password')} sub={t('account.menu.passwordSub')} onClick={() => { setOpen(false); onChangePassword(); }} />
+          ) : null}
           {/*
             * THEIR PUBLIC PAGE — and only for somebody who HAS one.
             *

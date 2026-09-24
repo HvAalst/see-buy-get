@@ -1,5 +1,7 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { ConnectivityNote, BottomNav, Button, Checklist, Icon, NotificationBell, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { AccountMenu } from '../../shared/account/AccountMenu';
+import { useAccount } from '../../shared/account/useAccount';
 import { useT } from '../../shared/i18n';
 import { money, vendorWorkLine } from './logic';
 import { BooksScreen } from './screens/BooksScreen';
@@ -14,7 +16,10 @@ import './vendor.css';
 
 export function App() {
   const t = useT();
-  const { state, actions } = useVendorApp();
+  const { state, actions, sbg } = useVendorApp();
+  // The person behind this account — their photo, PIN, address and page. The menu is ABSENT where the
+  // sign-in is not a person at all (a store signs in with a shared secret), rather than opening onto a refusal.
+  const account = useAccount(sbg, state.phase === 'ready');
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
 
@@ -70,6 +75,8 @@ export function App() {
                 {money(state.vendor?.balance)}
               </Pill>
             )}
+            {/* Last in the bar: live state first, the place you visit last. */}
+            <AccountMenu api={account} app="vendor" onSignOut={actions.signOut} />
           </>
         }
       />

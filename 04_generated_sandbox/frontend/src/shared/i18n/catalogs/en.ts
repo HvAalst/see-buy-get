@@ -623,6 +623,8 @@ export const en = {
   'account.menu.currentPin': 'Your current PIN',
   'account.menu.newPin': 'New PIN',
   'account.menu.savePin': 'Change my PIN',
+  'account.menu.password': 'Change your password',
+  'account.menu.passwordSub': 'The password you sign in with',
   'account.menu.page': 'Your public page',
   'account.menu.invite': 'Invite someone',
   'account.menu.inviteSub': 'A colleague, or a friend',
