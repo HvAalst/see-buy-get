@@ -2,7 +2,7 @@ import { HelpLink } from '../../../shared/guide/HelpLink';
 import { agentConfig } from '../api';
 import { ChangePasswordSheet } from '../../../shared/account/ChangePasswordSheet';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { AuthImage, Button, Card, ErrorNote, GlanceNumber, Icon, Note, Pill, PlaceMap, PushPrompt, ReadAloud, Sheet, TopUpCostNote, type IconName } from '../../../shared/ui';
+import { AuthImage, Button, Card, ErrorNote, ExplainerReset, GlanceNumber, Icon, Note, Pill, PlaceMap, PushPrompt, ReadAloud, Sheet, TopUpCostNote, type IconName } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { fromPlaceWords, toPlaceWords } from '../../../shared/placewords';
 import { canAccept, gateNotice, homeSummary, money, statusNotice } from '../logic';
@@ -200,6 +200,7 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
       <div class="scr__foot">
         <ReadAloud text={() => homeSummary(state.agent, state.gate, t)} label={t('agent.readAloud')} />
         <HelpLink app="agent" />
+        <ExplainerReset who={state.agent?.did} />
         <Button variant="link" full={false} onClick={actions.signOut}>
           {t('agent.home.signOut')}
         </Button>

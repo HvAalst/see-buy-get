@@ -1,4 +1,4 @@
-import { Button, Card, ErrorNote, Pill, ReadAloud } from '../../../shared/ui';
+import { Button, Card, ErrorNote, Explainer, Pill, ReadAloud } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { lineBlocker, lineZones, ownLines } from '../logic';
 import type { FleetActions, FleetState } from '../useFleetApp';
@@ -25,7 +25,7 @@ export function LinesScreen({ state, actions }: { state: FleetState; actions: Fl
   return (
     <div class="scr">
       <h1 class="scr__title">{t('fleet.lines.title')}</h1>
-      <p class="scr__lede">{t('fleet.lines.lede')}</p>
+      <Explainer who={state.manager?.did} id="fleet.lines.how" text={t('fleet.lines.lede')} />
 
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
 

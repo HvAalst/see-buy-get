@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, CodeCard, ErrorNote, Icon, Note, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { Button, Card, CodeCard, ErrorNote, Explainer, Icon, Note, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import type { AgentActions, AgentState } from '../useAgentApp';
 
@@ -47,7 +47,7 @@ export function BagScreen({ state, actions }: BagScreenProps) {
   return (
     <div class="scr">
       <h1 class="scr__title">{t('agent.bag.title')}</h1>
-      <p class="scr__lede">{t('agent.bag.lede')}</p>
+      <Explainer who={state.agent?.did} id="agent.bag.how" text={t('agent.bag.lede')} />
 
       {state.error ? <ErrorNote error={state.error} /> : null}
 

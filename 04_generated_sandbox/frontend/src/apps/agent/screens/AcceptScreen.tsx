@@ -1,6 +1,6 @@
 const INCOTERM_OPTIONS = ['EXW', 'FCA', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP', 'FAS', 'FOB', 'CFR', 'CIF'];
 
-import { Button, Card, Chip, CodeCard, ErrorNote, GlanceNumber, Icon, Note, OptionPicker, PlaceMap, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { Button, Card, Chip, CodeCard, ErrorNote, Explainer, GlanceNumber, Icon, Note, OptionPicker, Pill, PlaceMap, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { agentConfig } from '../api';
 import { useT, type Translate } from '../../../shared/i18n';
 import { BODY_HINTS, EXCLUDABLE_BODIES, NATURES, PACKAGING_HELP, acceptMissing, bookFreightMissing, chooseBodyHint, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, takeInTermsNotice, termsBlock, toggleExcludedBody, type BodyHint, type PackagingChoice } from '../logic';
@@ -69,7 +69,7 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
   return (
     <div class="scr">
       <h1 class="scr__title">{t('agent.accept.title')}</h1>
-      <p class="scr__lede">{t('agent.accept.lede')}</p>
+      <Explainer who={state.agent?.did} id="agent.accept.how" text={t('agent.accept.lede')} />
 
       {state.error ? <ErrorNote error={state.error} /> : null}
 

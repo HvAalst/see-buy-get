@@ -1,4 +1,4 @@
-import { Button, Card, Checklist, ErrorNote, ReadAloud, ScanField } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, Explainer, ReadAloud, ScanField } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import type { MdpActions, MdpState } from '../useMdpApp';
 
@@ -15,7 +15,7 @@ export function DropScreen({ state, actions }: DropScreenProps) {
   return (
     <div class="scr">
       <h1 class="scr__title">{t('mdp.drop.title')}</h1>
-      <p class="scr__lede">{t('mdp.drop.lede')}</p>
+      <Explainer who={state.hub?.did} id="mdp.drop.how" text={t('mdp.drop.lede')} />
 
       {state.error ? <ErrorNote error={state.error} /> : null}
 

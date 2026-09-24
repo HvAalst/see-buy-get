@@ -1,4 +1,4 @@
-import { Button, Card, ErrorNote, ReadAloud, ScanField } from '../../../shared/ui';
+import { Button, Card, ErrorNote, Explainer, ReadAloud, ScanField } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { bagLine, fillPercent, fillingBags, placeLine, sortSummary, swatchIndex } from '../logic';
 import type { MdpActions, MdpState } from '../useMdpApp';
@@ -21,7 +21,7 @@ export function SortScreen({ state, actions }: SortScreenProps) {
   return (
     <div class="scr">
       <h1 class="scr__title">{t('mdp.sort.title')}</h1>
-      <p class="scr__lede">{t('mdp.sort.lede')}</p>
+      <Explainer who={state.hub?.did} id="mdp.sort.how" text={t('mdp.sort.lede')} />
 
       {state.error ? <ErrorNote error={state.error} /> : null}
 

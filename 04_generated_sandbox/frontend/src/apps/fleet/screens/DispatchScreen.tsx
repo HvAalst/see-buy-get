@@ -1,4 +1,4 @@
-import { Button, Card, ErrorNote, Icon, Pill, ReadAloud } from '../../../shared/ui';
+import { Button, Card, ErrorNote, Explainer, Icon, Pill, ReadAloud } from '../../../shared/ui';
 import { formatDate, formatMoney, useT } from '../../../shared/i18n';
 import { blockerTone } from '../../../shared/board';
 import { boardVsMarket } from '../../../shared/market';
@@ -38,7 +38,7 @@ export function DispatchScreen({ state, actions }: { state: FleetState; actions:
         </Button>
       </div>
       <h1 class="scr__title">{t('fleet.dispatch.title')}</h1>
-      <p class="scr__lede">{t('fleet.dispatch.lede')}</p>
+      <Explainer who={state.manager?.did} id="fleet.dispatch.how" text={t('fleet.dispatch.lede')} />
       {state.error ? <ErrorNote error={state.error} onRetry={() => actions.openDispatch()} /> : null}
 
       <Card label={t('fleet.dispatch.who')}>

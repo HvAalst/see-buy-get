@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, ErrorNote, GlanceNumber, Note, PlaceMap, Sheet } from '../../../shared/ui';
+import { Button, Card, ErrorNote, Explainer, GlanceNumber, Note, PlaceMap, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { dockBlockers, stagingTone } from '../logic';
 import type { VendorActions, VendorState } from '../useVendorApp';
@@ -45,7 +45,7 @@ function DockOffer({ state, actions }: { state: VendorState; actions: VendorActi
   return (
     <>
       <h1 class="scr__title">{t('vendor.dock.offerTitle')}</h1>
-      <p class="scr__lede">{t('vendor.dock.offerLede')}</p>
+      <Explainer who={state.vendor?.did} id="vendor.dock.how" text={t('vendor.dock.offerLede')} />
 
       <Card title={t('vendor.dock.whatTitle')}>
         <ul class="bullets">

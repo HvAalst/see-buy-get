@@ -1,7 +1,7 @@
 import { CredentialAge } from '../../../shared/account/CredentialAge';
 import { pinChangeBlocker } from '../../../shared/account/password';
 import { useState, useEffect } from 'preact/hooks';
-import { Button, Card, ErrorNote, Icon, PlaceMap, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, ErrorNote, ExplainerReset, Icon, PlaceMap, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { ageWords, signalState, dashboardSummary, hoursLabel, paperLine, paperLineClass, papersAloud, vehiclePins } from '../logic';
 import type { PapersReport } from '../types';
@@ -151,6 +151,8 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
           text={() => (d ? dashboardSummary(d, t) + papersAloud(d.papers, t) : t('fleet.dash.aloudLoading'))}
           label={t('fleet.readAloud')}
         />
+        {/* The way back for anything put away on the other screens — invisible until there is something. */}
+        <ExplainerReset who={state.manager?.did} />
       </div>
     </div>
   );

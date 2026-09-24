@@ -1,4 +1,4 @@
-import { Button, Card, ErrorNote, Icon, ReadAloud, ScanField } from '../../../shared/ui';
+import { Button, Card, ErrorNote, Explainer, Icon, ReadAloud, ScanField } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { bagLine, fillPercent, loadableBags, swatchIndex } from '../logic';
 import type { MdpActions, MdpState } from '../useMdpApp';
@@ -20,7 +20,7 @@ export function LoadScreen({ state, actions }: LoadScreenProps) {
   return (
     <div class="scr">
       <h1 class="scr__title">{t('mdp.load.title')}</h1>
-      <p class="scr__lede">{t('mdp.load.lede')}</p>
+      <Explainer who={state.hub?.did} id="mdp.load.how" text={t('mdp.load.lede')} />
 
       {state.error ? <ErrorNote error={state.error} /> : null}
 

@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { DocumentButton, Button, Card, Checklist, ErrorNote, Icon, PhotoField, Pill, QrBlock, Sheet } from '../../../shared/ui';
+import { Button, Card, Checklist, DocumentButton, ErrorNote, Explainer, Icon, PhotoField, Pill, QrBlock, Sheet } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
 import { InstructionsBlock } from '../../../shared/InstructionsBlock';
 import { hasInstructions } from '../../../shared/instructions';
@@ -60,7 +60,7 @@ function PostedList({ state, actions }: FreightScreenProps) {
   return (
     <>
       <h1 class="scr__title">{t('agent.freight.title')}</h1>
-      <p class="scr__lede">{t('agent.freight.lede')}</p>
+      <Explainer who={state.agent?.did} id="agent.freight.how" text={t('agent.freight.lede')} />
       {state.error ? <ErrorNote error={state.error} /> : null}
 
       {loading ? (

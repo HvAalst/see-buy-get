@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Checkbox, Chip, CodeCard, ErrorNote, GlanceNumber, Icon, Note, Pager, Pill, ReadAloud, PushPrompt, SearchInput, SelectionBar, Sheet, TopUpCostNote } from '../../../shared/ui';
+import { Button, Card, Checkbox, Chip, CodeCard, ErrorNote, GlanceNumber, Icon, Note, Pager, Pill, ReadAloud, PushPrompt, SearchInput, ExplainerReset, SelectionBar, Sheet, TopUpCostNote } from '../../../shared/ui';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { triggerDownload } from '../../../shared/download';
 import { toggleAll, toggleId } from '../../../shared/register';
@@ -278,6 +278,7 @@ export function OrdersScreen({ state, actions }: OrdersScreenProps) {
 
       <div class="scr__foot">
         <ReadAloud text={() => (statsKnown ? ordersSummary(state.vendor?.balance ?? 0, moving, unpaid, t) : t('vendor.orders.countsUpdating', { balance: money(state.vendor?.balance ?? 0) }))} label={t('vendor.readAloud')} />
+        <ExplainerReset who={state.vendor?.did} />
       </div>
 
       <SelectionBar count={selectedRows.length} onClear={() => setSelected(new Set())}>

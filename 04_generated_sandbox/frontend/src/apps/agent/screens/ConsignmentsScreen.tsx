@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, ErrorNote, Note, Pill, PlacePicker, type PlaceNote } from '../../../shared/ui';
+import { Button, Card, ErrorNote, Explainer, Note, Pill, PlacePicker, type PlaceNote } from '../../../shared/ui';
 import { useT, type Translate } from '../../../shared/i18n';
 import { DURABLE_NATURES, consignmentProgress, natureLabel } from '../logic';
 import { pinAfterRename, type GeoPoint, type PinSource } from '../../../shared/geo';
@@ -22,7 +22,7 @@ export function ConsignmentsScreen({ state, actions }: ConsignmentsScreenProps) 
   return (
     <div class="scr">
       <h1 class="scr__title">{t('agent.consignments.title')}</h1>
-      <p class="scr__lede">{t('agent.consignments.lede')}</p>
+      <Explainer who={state.agent?.did} id="agent.lots.how" text={t('agent.consignments.lede')} />
 
       {state.error ? <ErrorNote error={state.error} /> : null}
 

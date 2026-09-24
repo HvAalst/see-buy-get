@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Chip, DocumentButton, ErrorNote, GlanceNumber, Icon, Pager, Pill, ReadAloud, SearchInput, Sheet } from '../../../shared/ui';
+import { Button, Card, Chip, DocumentButton, ErrorNote, Explainer, GlanceNumber, Icon, Pager, Pill, ReadAloud, SearchInput, Sheet } from '../../../shared/ui';
 import { useDebounced } from '../../../shared/useDebounced';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { EARN_LIMIT, type EarningsQuery, type FleetActions, type FleetState } from '../useFleetApp';
@@ -72,7 +72,7 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
         </Button>
       </div>
       <h1 class="scr__title">{t('fleet.earn.title')}</h1>
-      <p class="scr__lede">{t('fleet.earn.lede')}</p>
+      <Explainer who={state.manager?.did} id="fleet.earnings.how" text={t('fleet.earn.lede')} />
       {state.error ? <ErrorNote error={state.error} onRetry={() => actions.queryEarnings({ offset: q.offset })} /> : null}
 
       <GlanceNumber

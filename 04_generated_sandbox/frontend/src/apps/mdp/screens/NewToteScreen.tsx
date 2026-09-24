@@ -1,4 +1,4 @@
-import { Button, Card, Checklist, ErrorNote, QrBlock, ReadAloud } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, Explainer, QrBlock, ReadAloud } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { qrPayload } from '../../../shared/qr';
 import type { MdpActions, MdpState } from '../useMdpApp';
@@ -16,7 +16,7 @@ export function NewToteScreen({ state, actions }: NewToteScreenProps) {
   return (
     <div class="scr">
       <h1 class="scr__title">{t('mdp.newtote.title')}</h1>
-      <p class="scr__lede">{t('mdp.newtote.lede')}</p>
+      <Explainer who={state.hub?.did} id="mdp.tote.how" text={t('mdp.newtote.lede')} />
 
       {state.error ? <ErrorNote error={state.error} /> : null}
 

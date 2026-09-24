@@ -33,7 +33,26 @@ export type TipId =
   /** Off shift — that a shift starts by scanning the sticker on the dashboard. */
   | 'driver.shift.how'
   /** Off shift — the three things scanning one actually does. The tallest teaching block in the app. */
-  | 'driver.shift.what';
+  | 'driver.shift.what'
+  /* THE SHOP'S COUNTER. Four screens a shopkeeper works every day, each opening with the same sentence
+     about how that counter job goes. Learned in a week; paid for in screen space for years. */
+  | 'agent.accept.how'
+  | 'agent.bag.how'
+  | 'agent.freight.how'
+  | 'agent.lots.how'
+  /* THE HUB. Five screens, and every one of them is a scan-and-be-told loop that never changes. */
+  | 'mdp.sort.how'
+  | 'mdp.drop.how'
+  | 'mdp.load.how'
+  | 'mdp.tote.how'
+  | 'mdp.rates.how'
+  /* THE FLEET OFFICE — read on a desk, all day, by somebody who knows what a line is by Tuesday. */
+  | 'fleet.lines.how'
+  | 'fleet.dispatch.how'
+  | 'fleet.earnings.how'
+  /* THE STORE. Only the dock: what a collection from your own address IS. The rest of the store's
+     ledes carry a live value — a zone, a balance — and a fact about today is not teaching. */
+  | 'vendor.dock.how';
 
 const PREFIX = 'sbg.tips.v1:';
 

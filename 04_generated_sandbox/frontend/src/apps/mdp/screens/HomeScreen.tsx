@@ -2,7 +2,7 @@ import { HelpLink } from '../../../shared/guide/HelpLink';
 import { mdpConfig } from '../api';
 import { ChangePasswordSheet } from '../../../shared/account/ChangePasswordSheet';
 import { useState } from 'preact/hooks';
-import { Button, Card, ErrorNote, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, ErrorNote, ExplainerReset, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { toPlaceWords } from '../../../shared/placewords';
 import { bagLine, fillPercent, fillingBags, freeBags, homeSummary, money, swatchIndex, unsortedAt } from '../logic';
@@ -120,6 +120,7 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
       <div class="scr__foot">
         <ReadAloud text={() => homeSummary(unsorted.length, filling.length, t)} label={t('mdp.readAloud')} />
         <HelpLink app="mdp" />
+        <ExplainerReset who={state.hub?.did} />
         <Button variant="link" full={false} onClick={() => setPasswordOpen(true)}>
           {t('mdp.home.changePassword')}
         </Button>

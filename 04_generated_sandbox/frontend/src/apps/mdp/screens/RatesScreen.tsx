@@ -1,4 +1,4 @@
-import { BandScale, Button, Card, ErrorNote, ReadAloud } from '../../../shared/ui';
+import { BandScale, Button, Card, ErrorNote, Explainer, ReadAloud } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { money, priceBand } from '../logic';
 import type { MdpActions, MdpState } from '../useMdpApp';
@@ -19,7 +19,7 @@ export function RatesScreen({ state, actions }: RatesScreenProps) {
   return (
     <div class="scr">
       <h1 class="scr__title">{t('mdp.rates.title')}</h1>
-      <p class="scr__lede">{t('mdp.rates.lede')}</p>
+      <Explainer who={state.hub?.did} id="mdp.rates.how" text={t('mdp.rates.lede')} />
 
       {state.error ? <ErrorNote error={state.error} onRetry={() => actions.go('rates')} /> : null}
 
