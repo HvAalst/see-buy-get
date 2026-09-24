@@ -927,17 +927,35 @@ describe('PUDO Light', () => {
     expect((controller.networkPoints() as any[]).some((p) => p.did === store.did)).toBe(false);
   });
 
-  it('publishes where the network operates, and nothing more than that', () => {
-    // The first question anybody asks before signing up, and the list a country picker is built from. It is
-    // DERIVED from the presence: every country where somebody may register, and whether money is ours there.
-    expect(controller.countries().map((c) => c.country).sort()).toEqual(['ET', 'KE']);
-    expect(controller.countries().find((c) => c.country === 'KE')).toEqual({ country: 'KE', name: 'SeeBuyGet Kenya', currency: 'KES', settles: true });
-    // A country we only match is offered — by its own name, with no currency, and saying no money is ours there.
+  it('publishes EVERY country, and where the network stands in each', () => {
+    /*
+     * This used to publish only the countries goods may be taken in, so a picker built from it simply
+     * omitted everywhere else. A driver in the Netherlands could not find their own country and concluded
+     * the product could only be joined through a fleet — which is the honest reading of an absence. A
+     * country you can pick and be answered about teaches you where you stand; one that is missing does not.
+     */
     presence.set({ jurisdiction: 'DE', level: 'matched' });
     presence.set({ jurisdiction: 'ZM', level: 'observed' }); // recorded, but the network does not operate there
     const countries = controller.countries();
-    expect(countries.map((c) => c.country).sort()).toEqual(['DE', 'ET', 'KE']);
-    expect(countries.find((c) => c.country === 'DE')).toEqual({ country: 'DE', name: 'Germany', settles: false });
+    const at = (code: string) => countries.find((c) => c.country === code);
+
+    expect(countries.length).toBeGreaterThan(200); // the atlas, not the operating list
+
+    // THREE STATES, and the picker shows all three rather than collapsing two of them into silence.
+    expect(at('KE')).toEqual({ country: 'KE', name: 'Kenya', currency: 'KES', settles: true, settlesAs: 'SeeBuyGet Kenya', joinable: true });
+    expect(at('DE')).toEqual({ country: 'DE', name: 'Germany', settles: false, joinable: true });
+    expect(at('ZM')).toEqual({ country: 'ZM', name: 'Zambia', settles: false, joinable: false });
+
+    // The COUNTRY's name, for all of them. It was the sister's ("SeeBuyGet Kenya"), which reads as a
+    // company in a list of places and is unscannable among two hundred entries; who would contract you
+    // is a different fact and has its own field.
+    expect(at('KE')!.name).toBe('Kenya');
+    expect(at('ZM')!.settlesAs).toBeUndefined();
+
+    // Nothing is loosened by saying more: joinable is read off the same presence the server enforces.
+    expect(at('DE')!.joinable).toBe(presence.resolve('DE').capabilities.takeIn);
+    expect(at('ZM')!.joinable).toBe(presence.resolve('ZM').capabilities.takeIn);
+
     // The entity's own id is the shape of the business and stays behind the operator-only /entities.
     expect(countries.every((c) => !('entityId' in c))).toBe(true);
   });

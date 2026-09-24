@@ -289,10 +289,17 @@ export const enHome = {
   'home.join.country.label': 'Country',
   'home.join.country.choose': 'Choose a country',
   'home.join.country.noMoney': 'not active yet',
+  'home.join.country.notHere': 'we are not here yet',
   'home.join.country.note': 'This is the company you will be paid by, so it has to be where you really are.',
   /* A country the network MATCHES but does not stand in. The suffix in the list is not enough — money and
      responsibility are the whole difference, and somebody joining deserves to read it in full before they
      do, not discover it when their first load is delivered. */
+  /* THE THIRD STATE, and the reason every country is on the list. Most of the world is one we have not
+     reached; saying so beats leaving somebody off the list to conclude the form is broken. */
+  'home.join.country.notHereTitle': 'SeeBuyGet does not reach {name} yet',
+  'home.join.country.notHereBody':
+    'We have no drivers, shops or hubs there, so there is nothing yet for you to join. Countries are switched on one at a time, deliberately, by two members of SeeBuyGet staff — and this one has not been. Pick a country we do reach, or come back when we have.',
+  'home.block.countryNotActive': 'We do not reach that country yet. Pick one we do.',
   'home.join.country.notActiveTitle': 'SeeBuyGet is not active in {name} yet',
   'home.join.country.notActiveBody':
     'We can match you with loads here, and you can register today. What we cannot do is handle the money: there is no SeeBuyGet company in {name}, so nobody of ours invoices, pays you, or carries any responsibility for what you are owed. You agree the price with whoever you carry for and you settle it with them directly. When a company is established here, that changes and you will be told.',

@@ -26,7 +26,7 @@ export function JoinScreen({ state, actions }: JoinScreenProps) {
 
   const steps = stepsFor(role.kind);
   const at = steps.indexOf(state.step) + 1;
-  const blocker = stepBlocker(role, state.step, state.form, t);
+  const blocker = stepBlocker(role, state.step, state.form, t, notJoinable(state));
 
   return (
     <div class="scr">
@@ -146,6 +146,11 @@ function CodeStep({ state, actions }: JoinScreenProps) {
  * With one country the control is not rendered at all — a select with a single option is a decision nobody
  * is making. The hook has already put that country on the form, so the sign-up still names it.
  */
+/** The countries nobody may register in — read off the same presence the server enforces. */
+function notJoinable(state: HomeState): string[] {
+  return state.countries.filter((c) => c.joinable === false).map((c) => c.country);
+}
+
 function CountryField({ id, state, actions }: JoinScreenProps & { id: string }) {
   const t = useT();
   const { countries, countriesState, form } = state;
@@ -161,7 +166,8 @@ function CountryField({ id, state, actions }: JoinScreenProps & { id: string }) 
         <option value="">{t('home.join.country.choose')}</option>
         {countries.map((c) => (
           <option key={c.country} value={c.country}>
-            {c.name} ({c.country}){c.settles === false ? ` · ${t('home.join.country.noMoney')}` : ''}
+            {c.name} ({c.country})
+            {c.joinable === false ? ` · ${t('home.join.country.notHere')}` : c.settles === false ? ` · ${t('home.join.country.noMoney')}` : ''}
           </option>
         ))}
       </select>
@@ -175,7 +181,22 @@ function CountryField({ id, state, actions }: JoinScreenProps & { id: string }) 
        * load delivered. Chosen deliberately as a Note and not a parenthesis: it is the most consequential
        * sentence on this screen for anybody outside the two countries with a company behind them.
        */}
-      {chosenCountry && chosenCountry.settles === false ? (
+      {/*
+       * THREE STATES, because there are three, and collapsing them is what sent a driver away believing
+       * the product was broken. A country with a company behind it; one we match in but do not stand in,
+       * where the money is theirs to settle and ours to stay out of; and the rest of the world, which we
+       * have not reached and should say so rather than quietly omit.
+       */}
+      {!chosenCountry ? (
+        <p class="card__note">{t('home.join.country.activeNote')}</p>
+      ) : chosenCountry.joinable === false ? (
+        <Note
+          tone="warn"
+          icon="info"
+          title={t('home.join.country.notHereTitle', { name: chosenCountry.name })}
+          detail={t('home.join.country.notHereBody', { name: chosenCountry.name })}
+        />
+      ) : chosenCountry.settles === false ? (
         <Note
           tone="warn"
           icon="info"
@@ -363,7 +384,7 @@ function WhereStep({ state, actions }: JoinScreenProps) {
   const t = useT();
   const role = state.role!;
   const f = state.form;
-  const blocker = stepBlocker(role, 'where', f, t);
+  const blocker = stepBlocker(role, 'where', f, t, notJoinable(state));
   // Suggest the areas of the country being joined, not every area on the network — a Kenyan zone code is
   // no help to somebody opening in Addis, and offering it invites picking one.
   const zones = [...new Set(state.points.filter((p) => !f.country || !p.country || p.country === f.country).map((p) => p.zone).filter(Boolean))].sort();

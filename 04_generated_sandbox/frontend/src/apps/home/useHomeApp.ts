@@ -27,7 +27,7 @@ import {
   type SignupView,
   type VendorRegisteredView,
 } from './api';
-import { EMPTY_JOIN, nextStep, normalizePhone, prevStep, roleById, signupBody, stepBlocker, type JoinForm, type JoinStep, type RoleSpec } from './logic';
+import { EMPTY_JOIN, nextStep, normalizePhone, onlyJoinable, prevStep, roleById, signupBody, stepBlocker, type JoinForm, type JoinStep, type RoleSpec } from './logic';
 
 export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents';
 
@@ -169,7 +169,9 @@ export function useHomeApp() {
       ...s,
       countries,
       countriesState: 'ready',
-      form: s.form.country ? s.form : { ...s.form, country: countries.length === 1 ? countries[0].country : '' },
+      // Preselect only when there is genuinely one answer — counted over the countries somebody may
+      // actually join in, not over the atlas, which is always long.
+      form: s.form.country ? s.form : { ...s.form, country: onlyJoinable(countries) },
     }));
   }, []);
 
@@ -303,7 +305,7 @@ export function useHomeApp() {
       }));
       if (stateRef.current.pointsState !== 'ready') void loadPoints();
       if (stateRef.current.countriesState !== 'ready') void loadCountries();
-      else if (stateRef.current.countries.length === 1) setState((s) => ({ ...s, form: { ...s.form, country: stateRef.current.countries[0].country } }));
+      else setState((s) => (s.form.country ? s : { ...s, form: { ...s.form, country: onlyJoinable(stateRef.current.countries) } }));
     },
     [loadPoints, loadCountries],
   );

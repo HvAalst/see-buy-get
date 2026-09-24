@@ -21,6 +21,7 @@ import {
   roleMeta,
   servedPct,
   needsLicence,
+  onlyJoinable,
   pickedClasses,
   pickedVehicle,
   signupBody,
@@ -200,6 +201,39 @@ describe('stepBlocker', () => {
     };
     expect(body.profile.driver.licenceNumber).toBeUndefined();
     expect(body.profile.driver.licenceExpiresAt).toBeUndefined();
+  });
+
+  /*
+   * EVERY COUNTRY IS ON THE LIST, and the three states are the reason it can be.
+   *
+   * The list used to hold only the countries goods may be taken in — nine of two hundred and forty-three.
+   * A driver in the Netherlands could not find their own and concluded the product could only be joined
+   * through a fleet, which is the honest reading of a country that is simply absent. Absence teaches
+   * nobody anything; a country you can pick and be answered about teaches you exactly where you stand.
+   */
+  it('refuses a country the network does not reach, at the country step rather than at the end', () => {
+    const where = { ...filled(), country: 'NL' };
+    // Offered, and refused here — with the reason on screen beside it, not by the server after sign-up.
+    expect(stepBlocker(role('pudo'), 'where', where, t, ['NL', 'FR'])).toContain('do not reach that country');
+    // A country we DO reach passes, whether or not a company of ours settles money there.
+    expect(stepBlocker(role('pudo'), 'where', where, t, ['FR'])).toBeNull();
+    // And with nothing said about reach at all, nothing is refused — the caller decides.
+    expect(stepBlocker(role('pudo'), 'where', where, t)).toBeNull();
+  });
+
+  it('preselects a country only when there is genuinely one to join, not when the list is short', () => {
+    const atlas = [
+      { country: 'KE', joinable: true },
+      { country: 'NL', joinable: false },
+      { country: 'FR', joinable: false },
+    ];
+    expect(onlyJoinable(atlas)).toBe('KE');
+    // Two open ones is a real question and must be asked.
+    expect(onlyJoinable([...atlas, { country: 'ET', joinable: true }])).toBe('');
+    // None open must never silently choose one somebody cannot register in.
+    expect(onlyJoinable([{ country: 'NL', joinable: false }])).toBe('');
+    // An older payload with no flag at all is treated as joinable — the field is additive.
+    expect(onlyJoinable([{ country: 'KE' }])).toBe('KE');
   });
 
   it('a store needs its name and the country that will invoice it', () => {

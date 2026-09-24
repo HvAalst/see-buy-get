@@ -73,6 +73,15 @@ export interface OperatingCountry {
   currency?: string;
   /** False where the network operates but no company of ours handles money: you settle with the carrier. */
   settles?: boolean;
+  /** The company that would contract and pay you, where there is one. */
+  settlesAs?: string;
+  /**
+   * Whether anybody may register here at all — false for most of the world.
+   *
+   * Every country is listed now. One that is simply ABSENT teaches nobody anything: you cannot tell "we
+   * are not there yet" from "this form is broken", and a driver in the Netherlands read it as the second.
+   */
+  joinable?: boolean;
 }
 
 /**

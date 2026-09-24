@@ -4140,21 +4140,11 @@
       "get": {
         "operationId": "Sbg.countries",
         "summary": "",
-        "description": "Where this network can actually operate — one entry per country with a daughter company behind it.\n\nPublic on purpose, and the counterpart of the open-data rates: a shop deciding whether to sign up, a\nstore wondering whether we reach its customers, and (soon) a vendor integrating the shipping API all\nask the same question first — and the sign-up wizard needs it before anyone can choose. It is derived\nfrom the presence rather than listed: every country where the network operates (goods may be taken in),\nwhich is exactly where a shop, store, hub, fleet or courier may register. `settles` says whether a sister\nof ours handles money there — where it does not, the form says so before anybody joins. Structural only:\nwhich country, what it is called, what it settles in. The entity's own id is the shape of the business and\nstays behind GET /entities, which is operator-only.",
+        "description": "EVERY COUNTRY, AND WHERE THE NETWORK STANDS IN IT.\n\nThis used to return only the countries goods may be taken in — nine of the two hundred and forty-three\nthat exist — on the reasoning that a list should not offer a dead end. A driver in the Netherlands\nshowed why that is the wrong reading: a country that is simply ABSENT teaches nobody anything. You\ncannot tell \"we are not there yet\" from \"this form is broken\", and the conclusion they reached was\nthat the product could only be joined through a fleet.\n\nSo the list is the atlas, and each entry carries its own answer. `joinable` says whether anybody may\nregister there at all; `settles` whether a company of ours handles the money, and `settlesAs` names\nit. Three states, and a form that shows all three tells somebody exactly where they stand at the\ncountry step — which is far earlier, and far kinder, than discovering it at the end of a wizard or,\nworse, never finding themselves on the list and assuming the fault is theirs.\n\nNothing is loosened by saying more: `joinable` is read off the same presence the server enforces, and\nregistering in a country where it is false is refused exactly as it was before.\n\n`name` is the COUNTRY's name for all of them — it was the sister's (\"SeeBuyGet Kenya\") where one\nexisted, which reads as a company in a list of places and is unscannable among two hundred entries.\nWho would contract you is a different fact, and it has its own field.",
         "parameters": [],
         "responses": {
           "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object"
-                  }
-                }
-              }
-            }
+            "description": ""
           }
         }
       }

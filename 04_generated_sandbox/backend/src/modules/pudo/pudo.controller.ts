@@ -343,29 +343,41 @@ export class SbgController {
   }
 
   /**
-   * Where this network can actually operate — one entry per country with a daughter company behind it.
+   * EVERY COUNTRY, AND WHERE THE NETWORK STANDS IN IT.
    *
-   * Public on purpose, and the counterpart of the open-data rates: a shop deciding whether to sign up, a
-   * store wondering whether we reach its customers, and (soon) a vendor integrating the shipping API all
-   * ask the same question first — and the sign-up wizard needs it before anyone can choose. It is derived
-   * from the presence rather than listed: every country where the network operates (goods may be taken in),
-   * which is exactly where a shop, store, hub, fleet or courier may register. `settles` says whether a sister
-   * of ours handles money there — where it does not, the form says so before anybody joins. Structural only:
-   * which country, what it is called, what it settles in. The entity's own id is the shape of the business and
-   * stays behind GET /entities, which is operator-only.
+   * This used to return only the countries goods may be taken in — nine of the two hundred and forty-three
+   * that exist — on the reasoning that a list should not offer a dead end. A driver in the Netherlands
+   * showed why that is the wrong reading: a country that is simply ABSENT teaches nobody anything. You
+   * cannot tell "we are not there yet" from "this form is broken", and the conclusion they reached was
+   * that the product could only be joined through a fleet.
+   *
+   * So the list is the atlas, and each entry carries its own answer. `joinable` says whether anybody may
+   * register there at all; `settles` whether a company of ours handles the money, and `settlesAs` names
+   * it. Three states, and a form that shows all three tells somebody exactly where they stand at the
+   * country step — which is far earlier, and far kinder, than discovering it at the end of a wizard or,
+   * worse, never finding themselves on the list and assuming the fault is theirs.
+   *
+   * Nothing is loosened by saying more: `joinable` is read off the same presence the server enforces, and
+   * registering in a country where it is false is refused exactly as it was before.
+   *
+   * `name` is the COUNTRY's name for all of them — it was the sister's ("SeeBuyGet Kenya") where one
+   * existed, which reads as a company in a list of places and is unscannable among two hundred entries.
+   * Who would contract you is a different fact, and it has its own field.
    */
   @Public()
   @Get('countries')
   countries() {
-    return this.presence
-      .list()
-      .filter((p) => p.capabilities.takeIn)
-      .map((p) => {
-        const sister = this.entities.forJurisdiction(p.jurisdiction);
-        return sister
-          ? { country: p.jurisdiction, name: sister.name, currency: sister.currency, settles: true }
-          : { country: p.jurisdiction, name: catalogueEntry(p.jurisdiction)?.name ?? p.jurisdiction, settles: false };
-      });
+    return COUNTRY_CATALOGUE.map((c) => {
+      const sister = this.entities.forJurisdiction(c.code);
+      return {
+        country: c.code,
+        name: c.name,
+        ...(sister?.currency ? { currency: sister.currency } : {}),
+        settles: Boolean(sister),
+        ...(sister ? { settlesAs: sister.name } : {}),
+        joinable: this.presence.resolve(c.code).capabilities.takeIn,
+      };
+    });
   }
 
   /**

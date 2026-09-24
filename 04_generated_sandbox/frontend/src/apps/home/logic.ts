@@ -117,6 +117,18 @@ export function expired(isoDay: string): boolean {
   return Number.isFinite(when) ? when < Date.now() : false;
 }
 
+/**
+ * The one country somebody could be joining in, or nothing.
+ *
+ * The list is every country that exists, so its LENGTH says nothing about how many are open. A deployment
+ * standing in exactly one place should still skip the question; one standing in none must not silently
+ * preselect a country nobody can register in.
+ */
+export function onlyJoinable(countries: Array<{ country: string; joinable?: boolean }>): string {
+  const open = countries.filter((c) => c.joinable !== false);
+  return open.length === 1 ? open[0].country : '';
+}
+
 /* ------------------------------------------------------------------ phone -- */
 
 /**
@@ -221,7 +233,7 @@ export function prevStep(kind: JoinKind, step: JoinStep): JoinStep {
  * What still blocks THIS step. Returning the blocker (not a boolean) lets the CTA say the
  * next thing to do — the pattern every wizard in this product uses.
  */
-export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Translate): string | null {
+export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Translate, notJoinable?: string[]): string | null {
   switch (step) {
     case 'phone':
       return phoneLooksValid(f.phone) ? null : t('home.block.phone');
@@ -251,6 +263,9 @@ export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Tran
       return null;
     case 'where':
       if (!f.country.trim()) return t('home.block.country');
+      // Every country is offered, so the one we are not in has to be refused HERE — where the answer is
+      // on screen beside it — rather than by the server at the end of a sign-up.
+      if (notJoinable?.includes(f.country)) return t('home.block.countryNotActive');
       if (!f.location) return t('home.block.location');
       if (!f.zone.trim()) return t('home.block.zone');
       return null;
