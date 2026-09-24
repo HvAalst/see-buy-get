@@ -130,6 +130,10 @@ export const enDriver = {
   'driver.home.stickerTitle': 'The sticker for {plate}',
   'driver.home.stickerBody': 'Print this and put it on the dashboard, where it can be scanned from the driver’s seat. Anyone who scans it and is cleared for this vehicle can start a shift on it — so it belongs inside the cab, not on the outside of the van.',
   'driver.home.stickerQrLabel': 'Dashboard code for {plate}',
+  'driver.home.stickerPrint': 'Print it',
+  // What goes on the printed sheet itself — the person reading it there is not holding the app.
+  'driver.home.stickerPrintNote': 'Stick this inside the cab, where it can be scanned from the driver seat. Scanning it starts a shift on this vehicle for anyone cleared to drive it.',
+  'driver.home.stickerPrintBlocked': 'Your browser blocked the print window. Allow pop-ups for this site, or take a screenshot of the code above.',
 
   'driver.home.notActivated': 'Not activated yet',
 

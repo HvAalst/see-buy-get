@@ -88,7 +88,7 @@ export function App() {
         <ScreenRouter screen={state.screen} state={state} actions={actions} />
       </main>
 
-      <BottomNav<Tab> items={tabs} active={tab} onSelect={(key) => actions.go(key as Screen)} />
+      <BottomNav<Tab> items={tabs} active={tab} onSelect={(key) => actions.go(key as Screen)} labels={false} />
 
       {/* REP2 — the "rate the driver" prompt (after a handover / bag-receipt); keyed so the form resets per driver. */}
       <RateDriverSheet key={state.driverRating?.driverDid ?? 'none'} state={state} actions={actions} />

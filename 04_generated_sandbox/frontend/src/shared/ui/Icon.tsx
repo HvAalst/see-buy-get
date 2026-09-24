@@ -31,6 +31,7 @@ export type IconName =
   | 'speakerOff'
   | 'close'
   | 'badge'
+  | 'printer'
   | 'weight'
   | 'power'
   | 'star'
@@ -66,6 +67,14 @@ const PATHS: Record<IconName, JSX.Element> = {
     </>
   ),
   check: <path d="m5 12.6 4.6 4.6L19 7.5" />,
+  // A desk printer: the paper going in at the top, the body, and the sheet coming out at the front.
+  printer: (
+    <>
+      <path d="M7 9V3.6h10V9" />
+      <path d="M7 17.5H5.2A2.2 2.2 0 0 1 3 15.3v-4.1A2.2 2.2 0 0 1 5.2 9h13.6A2.2 2.2 0 0 1 21 11.2v4.1a2.2 2.2 0 0 1-2.2 2.2H17" />
+      <path d="M7 14h10v6.4H7z" />
+    </>
+  ),
   speaker: <path d="M4 9.5h3.2L12 5.5v13L7.2 14.5H4a.9.9 0 0 1-.9-.9v-3.2a.9.9 0 0 1 .9-.9ZM15.6 9.2a4 4 0 0 1 0 5.6M18.2 6.6a7.6 7.6 0 0 1 0 10.8" />,
   speakerOff: <path d="M4 9.5h3.2L12 5.5v13L7.2 14.5H4a.9.9 0 0 1-.9-.9v-3.2a.9.9 0 0 1 .9-.9ZM16 10l4 4m0-4-4 4" />,
   close: <path d="M6 6l12 12M18 6 6 18" />,

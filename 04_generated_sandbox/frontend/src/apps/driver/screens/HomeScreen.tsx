@@ -5,6 +5,7 @@ import { Button, Card, Checklist, ErrorNote, Explainer, ExplainerBlock, Explaine
 import { formatDate, useT } from '../../../shared/i18n';
 import { paperDay } from '../../../shared/papers';
 import { qrPayload } from '../../../shared/qr';
+import { printQrSheet } from '../../../shared/print-qr';
 import {
   canStartShift,
   capacitySubLine,
@@ -84,6 +85,7 @@ function OffShift({ state, actions }: HomeScreenProps) {
   // "which are mine" and "which stickers am I allowed to see" in one read.
   const mine = state.vehicles.filter((v) => Boolean(v.qr));
   const [sticker, setSticker] = useState<RecentVehicleView | null>(null);
+  const [printBlocked, setPrintBlocked] = useState(false);
 
   return (
     <div class="scr">
@@ -181,7 +183,32 @@ function OffShift({ state, actions }: HomeScreenProps) {
       {sticker ? (
         <Sheet open onClose={() => setSticker(null)} title={t('driver.home.stickerTitle', { plate: sticker.plate })}>
           <p class="t-body">{t('driver.home.stickerBody')}</p>
-          <QrBlock value={qrPayload('vehicle', sticker.qr!)} size={196} caption={sticker.qr} label={t('driver.home.stickerQrLabel', { plate: sticker.plate })} />
+          <div class="stickerqr">
+            <QrBlock value={qrPayload('vehicle', sticker.qr!)} size={196} caption={sticker.qr} label={t('driver.home.stickerQrLabel', { plate: sticker.plate })} />
+          </div>
+          {/* A code meant to live on a dashboard is not finished until it is on paper. Prints ONE clean
+              sheet — the code at a fixed 62mm, the plate above it, the instruction below — rather than
+              the app around it. A blocked pop-up says so rather than looking like a dead button. */}
+          <Button
+            variant="outline"
+            chevron={false}
+            onClick={() => {
+              const svg = document.querySelector('.stickerqr svg');
+              const ok = printQrSheet({
+                title: sticker.plate,
+                caption: sticker.qr,
+                note: t('driver.home.stickerPrintNote'),
+                svg: svg as SVGElement | null,
+              });
+              setPrintBlocked(!ok);
+            }}
+          >
+            <span class="btn__row">
+              <Icon name="printer" size={20} />
+              {t('driver.home.stickerPrint')}
+            </span>
+          </Button>
+          {printBlocked ? <p class="hint">{t('driver.home.stickerPrintBlocked')}</p> : null}
           {mine.length > 1 ? (
             <div class="rows" role="list">
               {mine.map((v) => (

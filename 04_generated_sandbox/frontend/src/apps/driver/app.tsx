@@ -89,6 +89,7 @@ export function App() {
         items={tabs}
         active={tab}
         onSelect={(key) => actions.go(key === 'route' && state.offers.length ? 'offers' : (key as Screen))}
+        labels={false}
       />
 
       <Toasts state={state} actions={actions} />

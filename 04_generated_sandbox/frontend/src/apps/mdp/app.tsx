@@ -81,7 +81,7 @@ export function App() {
         <ScreenRouter screen={state.screen} state={state} actions={actions} />
       </main>
 
-      <BottomNav<Tab> items={tabs} active={tab} onSelect={(key) => actions.go(key as Screen)} />
+      <BottomNav<Tab> items={tabs} active={tab} onSelect={(key) => actions.go(key as Screen)} labels={false} />
 
       <Toasts state={state} actions={actions} />
       <FeedbackFlash />

@@ -79,7 +79,7 @@ export function App() {
         <ScreenRouter screen={state.screen} state={state} actions={actions} />
       </main>
 
-      <BottomNav<Screen> items={tabs} active={state.screen} onSelect={(key) => (key === 'mint' ? actions.startMint() : actions.go(key))} />
+      <BottomNav<Screen> items={tabs} active={state.screen} onSelect={(key) => (key === 'mint' ? actions.startMint() : actions.go(key))} labels={false} />
 
       <Toasts state={state} actions={actions} />
     </div>

@@ -61,7 +61,7 @@ export function App() {
         <Router state={state} actions={actions} />
       </main>
 
-      <BottomNav<Screen> items={tabs} active={state.screen} onSelect={(key) => actions.go(key)} />
+      <BottomNav<Screen> items={tabs} active={state.screen} onSelect={(key) => actions.go(key)} labels={false} />
     </div>
   );
 }

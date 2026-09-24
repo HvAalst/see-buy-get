@@ -85,7 +85,7 @@ export function App() {
         </div>
       </main>
 
-      <BottomNav<Screen> items={tabs} active={state.screen} onSelect={(key) => actions.go(key)} />
+      <BottomNav<Screen> items={tabs} active={state.screen} onSelect={(key) => actions.go(key)} labels={false} />
 
       <Toasts state={state} actions={actions} />
     </div>

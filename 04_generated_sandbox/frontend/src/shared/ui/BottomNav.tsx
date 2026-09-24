@@ -26,13 +26,22 @@ export interface BottomNavProps<K extends string = string> {
  * That bar is the second and last sanctioned use of orange in the system.
  */
 /**
- * `labels` is TRUE by default and the seven field apps keep it that way: they are read at arm's length,
- * in the sun, by somebody who may use the app once a week, and a bare icon is a guess.
+ * `labels` is off everywhere now — the console first, then every field app (user, 2026-09-24).
  *
- * The CONSOLE turns it off. Four groups of one word each, under four icons, on a surface somebody works
- * in all day — the words stop being read after the first morning and go on taking the room. The label
- * does not disappear: it becomes the button's accessible NAME, so a screen reader still says "Money"
- * where a sighted reader now sees a wallet.
+ * The argument FOR them was that a field app is read at arm's length, in the sun, by somebody who may
+ * open it once a week, and that a bare icon is a guess. What that argument missed is that the tab bar is
+ * the one part of these apps nobody reads twice: five words, on every screen, above the thumb, costing a
+ * line of height on a phone where the whole design problem is height. And a word is the weaker of the
+ * two signals for the people this network is built for — a van, a magnifier, a box and a wallet survive
+ * a reader who is not confident in English, which the words do not.
+ *
+ * THE LABEL DOES NOT DISAPPEAR. It becomes the button's accessible NAME and its title, so a screen
+ * reader still says "Earnings" where a sighted reader now sees a wallet, and a long press still names
+ * it. The active tab stays marked twice over — blue icon plus the orange indicator bar — because with
+ * the words gone, which tab you are on has to be unmistakable from the icon alone.
+ *
+ * `labels` stays as a prop rather than being deleted: it is the seam that made this one change instead
+ * of eight, and the argument above may be right again on a surface we have not built yet.
  */
 export function BottomNav<K extends string>({ items, active, onSelect, labels = true }: BottomNavProps<K>) {
   return (

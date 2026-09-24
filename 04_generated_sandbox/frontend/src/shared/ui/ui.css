@@ -21,6 +21,14 @@
   transition: background-color 0.14s ease, border-color 0.14s ease, transform 0.08s ease;
 }
 
+/* An icon beside the label INSIDE a button. The button is already a flex row, but its children go
+   into one inline span, so an icon and a word in there stack — the svg is block-level. */
+.btn__row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .btn--full {
   display: flex;
   width: 100%;
