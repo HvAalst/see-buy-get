@@ -4,6 +4,7 @@ import { InstructionsBlock } from '../../../shared/InstructionsBlock';
 import { hasInstructions } from '../../../shared/instructions';
 import { useT } from '../../../shared/i18n';
 import { canLoadBag, capacitySubLine, claimControl, isFull, loadsSummary, money, usedPercent } from '../logic';
+import { vehicleWord } from '../vehicle-words';
 import type { Claimable } from '../types';
 import type { DriverActions, DriverState } from '../useDriverApp';
 
@@ -28,12 +29,12 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
 
       {v ? (
         <GlanceNumber
-          label={t('driver.home.spaceLabel')}
+          label={t('driver.home.spaceLabel', { vehicle: vehicleWord(v.vehicleClass, t) })}
           value={state.remaining}
           unit="kg"
           percent={usedPercent(v.capacityKg, state.remaining)}
           alert={isFull(state.remaining)}
-          sub={capacitySubLine(state.remaining, v.capacityKg, state.claims.length, t)}
+          sub={capacitySubLine(state.remaining, v.capacityKg, state.claims.length, t, undefined, vehicleWord(v.vehicleClass, t))}
         />
       ) : null}
 
@@ -166,7 +167,7 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
         {pick ? (
           <>
             <p class="t-body">{t('driver.loads.pickBody', { ref: pick.ref, kg: pick.weightKg, dest: pick.destLabel })}</p>
-            <Checklist items={[t('driver.loads.pick1'), t('driver.loads.pick2'), t('driver.loads.pick3')]} />
+            <Checklist items={[t('driver.loads.pick1', { vehicle: vehicleWord(v?.vehicleClass, t) }), t('driver.loads.pick2'), t('driver.loads.pick3')]} />
             <Button
               chevron={false}
               busy={state.busy === `load:${pick.ref}`}

@@ -12,6 +12,7 @@ import { useDriverApp, type DriverActions, type DriverState, type Screen } from 
 import '../../shared/screens.css';
 import './driver.css';
 import { driverWorkLine } from './logic';
+import { isRidden, namedVehicleClass, vehicleWord } from './vehicle-words';
 
 type Tab = 'home' | 'route' | 'board' | 'loads' | 'earnings';
 
@@ -39,9 +40,13 @@ export function App() {
   const onShift = state.session.active;
   const tab: Tab = state.screen === 'offers' ? 'route' : (state.screen as Tab);
 
+  // "My bike" for somebody on a bicycle. The word is derived from what is registered, so nobody sets it
+  // and nobody can set it wrong — see vehicle-words.ts.
+  const vehicle = vehicleWord(namedVehicleClass(state.vehicle, state.vehicles), t);
 
   const tabs: NavItem<Tab>[] = [
-    { key: 'home', label: t('driver.nav.home'), icon: 'truck' },
+    // The glyph follows the word: a truck tab above "My bike" would just move the lie into the icon.
+    { key: 'home', label: t('driver.nav.home', { vehicle }), icon: isRidden(namedVehicleClass(state.vehicle, state.vehicles)) ? 'bike' : 'truck' },
     { key: 'route', label: t('driver.nav.route'), icon: 'route', disabled: !onShift },
     // FB2 — deliberately NOT gated on the shift. Deciding whether to buy a tail-lift, or whether this
     // corridor is worth running at all, is a thing an operator does at the coffee table with the engine off.
@@ -57,7 +62,7 @@ export function App() {
         subtitle={driverWorkLine(state.session, state.route, state.remainingTotes, t)}
         subtitleHint={state.driver?.displayName}
         onBack={state.screen === 'home' ? undefined : () => actions.go('home')}
-        backLabel={t('driver.backToVan')}
+        backLabel={t('driver.backToVan', { vehicle })}
         end={
           <>
             <NotificationBell api={notifications} />

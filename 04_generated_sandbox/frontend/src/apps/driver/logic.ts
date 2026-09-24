@@ -56,9 +56,11 @@ export function isFull(remainingKg: number): boolean {
  * 400 kg free whose boot holds no more bags is full in every way that matters to the driver standing at it,
  * so when the bags run out first the line says so instead of advertising kilos they cannot use.
  */
-export function capacitySubLine(remainingKg: number, capacityKg: number, claimCount: number, t: Translate, remainingTotes?: number): string {
+export function capacitySubLine(remainingKg: number, capacityKg: number, claimCount: number, t: Translate, remainingTotes?: number, vehicle?: string): string {
   const loads = claimCount === 1 ? t('driver.logic.loadClaimedOne') : t('driver.logic.loadClaimedMany', { count: claimCount });
-  if (remainingKg <= 0) return t('driver.logic.vanFull', { loads });
+  // The word for what they are actually driving — "Your bike is full". Falls back to the plain noun, which
+  // is what a caller with no coupled vehicle honestly has.
+  if (remainingKg <= 0) return t('driver.logic.vanFull', { loads, vehicle: vehicle ?? t('driver.vehicleWord.generic') });
   if (remainingTotes != null && remainingTotes <= 0) return t('driver.logic.bagsFull', { loads });
   if (remainingTotes != null) {
     return t(remainingTotes === 1 ? 'driver.logic.freeSpaceBagsOne' : 'driver.logic.freeSpaceBags', { kg: capacityKg, bags: remainingTotes, loads });

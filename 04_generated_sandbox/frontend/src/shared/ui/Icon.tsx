@@ -26,6 +26,7 @@ export type IconName =
   | 'repeat'
   | 'home'
   | 'truck'
+  | 'bike'
   | 'check'
   | 'speaker'
   | 'speakerOff'
@@ -64,6 +65,16 @@ const PATHS: Record<IconName, JSX.Element> = {
       <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H14v10H4.5A1.5 1.5 0 0 1 3 14.5v-7ZM14 9.5h3.6l2.4 3V16h-6" />
       <circle cx="7.5" cy="18" r="1.9" />
       <circle cx="17" cy="18" r="1.9" />
+    </>
+  ),
+  /* Two wheels, a diamond frame, handlebars and a saddle. The home tab used the truck for everybody, which
+     is the same "My van" problem in a glyph: a courier on a bicycle should see their own machine there.
+     Wheels at the truck's r=1.9 scaled up to 3.4, so the two icons sit at the same visual weight. */
+  bike: (
+    <>
+      <circle cx="5.6" cy="16.4" r="3.4" />
+      <circle cx="18.4" cy="16.4" r="3.4" />
+      <path d="M5.6 16.4h4.1l4-7.1 4.7 7.1M9.7 16.4 14 9.3m-1.1 0h3.2M8 9.3h3.4" />
     </>
   ),
   check: <path d="m5 12.6 4.6 4.6L19 7.5" />,

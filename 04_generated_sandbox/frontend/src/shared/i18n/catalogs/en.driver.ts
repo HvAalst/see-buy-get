@@ -15,11 +15,26 @@ export const enDriver = {
   'driver.bar.heading': 'To {place}',
   'driver.bar.bagsFree': '{count} bags free',
   'driver.signinSubtitle': 'Sign in',
-  'driver.nav.home': 'My van',
+  /* WHAT THE DRIVER ACTUALLY RIDES. The class is registered against the vehicle, so the word is derived
+     rather than fixed — see vehicle-words.ts. The map there is complete by compilation: an eighth class
+     on the server stops this app building until somebody writes its noun. */
+  'driver.vehicleWord.bike': 'bike',
+  'driver.vehicleWord.motorcycle': 'motorbike',
+  'driver.vehicleWord.tuktuk': 'tuk-tuk',
+  'driver.vehicleWord.car': 'car',
+  'driver.vehicleWord.van': 'van',
+  'driver.vehicleWord.bus': 'bus',
+  'driver.vehicleWord.truck': 'truck',
+  /* For a class this build has never heard of. Slightly generic beats confidently wrong. */
+  'driver.vehicleWord.generic': 'vehicle',
+  /* WHERE THE STICKER GOES, and a bicycle has no dashboard. */
+  'driver.stickerPlace.dashboard': 'dashboard',
+  'driver.stickerPlace.frame': 'frame',
+  'driver.nav.home': 'My {vehicle}',
   'driver.nav.route': 'Find work',
   'driver.nav.loads': 'My loads',
   'driver.nav.earnings': 'Earnings',
-  'driver.backToVan': 'Back to my van',
+  'driver.backToVan': 'Back to my {vehicle}',
   'driver.onShift': 'On shift',
   'driver.offDuty': 'Off duty',
   'driver.offline': 'No signal — showing what we last knew.',
@@ -107,7 +122,7 @@ export const enDriver = {
   // dismissible — a reader who dismissed one would still have been reading the other.
   'driver.route.submit': 'Show shipments on my way',
   'driver.route.retryPlaces': 'Try loading the places again',
-  'driver.route.aloud': 'Choose where you are starting from and where you are heading. We will only offer you loads that are on your way and fit in your van.',
+  'driver.route.aloud': 'Choose where you are starting from and where you are heading. We will only offer you loads that are on your way and fit in your {vehicle}.',
 
   /* Asking for notifications, where somebody will see the ask — see shared/ui/PushPrompt. The reason names
      what this driver would actually be told, because a permission prompt with no reason attached is the one
@@ -119,20 +134,24 @@ export const enDriver = {
 
   // Home screen — off shift.
   'driver.home.startTitle': 'Start your shift',
-  'driver.home.startLede': 'Scan the QR sticker on the dashboard of the vehicle you are driving today.',
+  'driver.home.startLede': 'Scan the QR sticker on the {place} of the vehicle you are riding today.',
   /* THE DASHBOARD STICKER, for a van the driver owns. A fleet prints these for its vehicles; a courier
      who registered their own at signup had nowhere to get one — the code was on the record and on no
      screen they could reach. They can start by tapping the van, so this is not the way IN; it is how the
      sticker gets onto the dashboard, for the mornings when scanning is quicker and for anyone else who
      ever drives it. Offered only for a vehicle no fleet owns — the server withholds the rest. */
-  'driver.home.stickerOne': 'Show my van’s sticker',
+  'driver.home.stickerOne': 'Show my {vehicle}’s sticker',
   'driver.home.stickerMany': 'Show a vehicle’s sticker',
   'driver.home.stickerTitle': 'The sticker for {plate}',
-  'driver.home.stickerBody': 'Print this and put it on the dashboard, where it can be scanned from the driver’s seat. Anyone who scans it and is cleared for this vehicle can start a shift on it — so it belongs inside the cab, not on the outside of the van.',
-  'driver.home.stickerQrLabel': 'Dashboard code for {plate}',
+  'driver.home.stickerBody': 'Print this and put it on the dashboard, where it can be scanned from the driver’s seat. Anyone who scans it and is cleared for this vehicle can start a shift on it — so it belongs inside the cab, where a passer-by cannot reach it.',
+  /* THE SAME STICKER ON SOMETHING RIDDEN. There is no cab to put it in and no driver's seat to scan it
+     from, so the instruction becomes weather and reach — which is what "inside the cab" was really doing. */
+  'driver.home.stickerBodyRidden': 'Print this and fix it to the frame, somewhere you can reach it and the rain cannot. Anyone who scans it and is cleared for this vehicle can start a shift on it, so keep it out of sight when you are parked up.',
+  'driver.home.stickerQrLabel': 'Coupling code for {plate}',
   'driver.home.stickerPrint': 'Print it',
   // What goes on the printed sheet itself — the person reading it there is not holding the app.
   'driver.home.stickerPrintNote': 'Stick this inside the cab, where it can be scanned from the driver seat. Scanning it starts a shift on this vehicle for anyone cleared to drive it.',
+  'driver.home.stickerPrintNoteRidden': 'Fix this to the frame, out of the rain and out of sight when you are parked. Scanning it starts a shift on this vehicle for anyone cleared to ride it.',
   'driver.home.stickerPrintBlocked': 'Your browser blocked the print window. Allow pop-ups for this site, or take a screenshot of the code above.',
 
   'driver.home.notActivated': 'Not activated yet',
@@ -151,8 +170,8 @@ export const enDriver = {
   'driver.clearance.sent': 'Documents sent',
   'driver.clearance.refused': 'Could not send those',
   'driver.home.qrLabel': 'Vehicle QR',
-  'driver.home.qrPlaceholder': 'Scan the code on the dashboard',
-  'driver.home.qrNote': 'Scanning the dashboard sticker couples you to that vehicle for the day.',
+  'driver.home.qrPlaceholder': 'Scan the code on the {place}',
+  'driver.home.qrNote': 'Scanning the sticker couples you to that vehicle for the day.',
   'driver.home.startShift': 'Start shift',
   // Which vehicle today — answered before the driver walks to the yard.
   'driver.home.whichVehicle': 'Which vehicle today?',
@@ -233,16 +252,16 @@ export const enDriver = {
   'driver.home.snoozedNote': 'Loads you already have are still yours — hand them over and deliver as normal.',
   'driver.home.resumeNow': 'Start taking work again',
   'driver.home.whatHappens': 'What happens when you scan',
-  'driver.home.scan1': 'This van becomes yours for the day',
+  'driver.home.scan1': 'This {vehicle} becomes yours for the day',
   'driver.home.scan2': 'You can pick up loads on your route',
-  'driver.home.scan3': 'End the shift to hand the van back',
+  'driver.home.scan3': 'End the shift to hand the {vehicle} back',
   'driver.home.notYou': 'Not you? Sign out',
   'driver.home.darkTitle': 'You were out of reach',
   'driver.home.darkBody': 'No signal from {from} to {to}. Any load offered in that time went to another driver. Anything you recorded is being sent.',
   'driver.home.darkOk': 'OK',
 
   // Home screen — on shift.
-  'driver.home.spaceLabel': 'Space left on the van',
+  'driver.home.spaceLabel': 'Space left on the {vehicle}',
   'driver.home.yourVehicle': 'Your vehicle',
   'driver.home.checked': 'Checked',
   'driver.home.notChecked': 'Not checked',
@@ -275,17 +294,17 @@ export const enDriver = {
 
   // Loads screen.
   'driver.loads.noBadgeTitle': 'No badge on your record',
-  'driver.loads.noBadgeDetail': 'You cannot scan bags onto the van until the office adds your badge number.',
+  'driver.loads.noBadgeDetail': 'You cannot scan bags on board until the office adds your badge number.',
   'driver.loads.emptyTitle': 'Nothing claimed yet',
   'driver.loads.empty1': 'Pick a route',
   'driver.loads.empty2': 'Claim the loads on your way',
-  'driver.loads.empty3': 'Scan each bag onto the van',
+  'driver.loads.empty3': 'Scan each bag on board',
   'driver.loads.youEarn': 'You earn {amount}',
   'driver.loads.meta': '{pickup} → {dest} · {kg} kg',
   // FP5 — a load the fleet office put on the driver.
   'driver.loads.assignedBy': 'Put on you by {name}',
   'driver.loads.theOffice': 'your fleet office',
-  'driver.loads.loadAria': 'Load {ref} onto the van',
+  'driver.loads.loadAria': 'Load {ref} on board',
   'driver.loads.loadOn': 'Load on',
   'driver.loads.pickupAria': 'Pick up freight {ref}',
   'driver.loads.deliverAria': 'Deliver freight {ref}',
@@ -294,9 +313,9 @@ export const enDriver = {
   'driver.loads.onBoard': 'On board',
   'driver.loads.inProgress': 'In progress',
   'driver.loads.findMore': 'Find more work',
-  'driver.loads.pickSheetTitle': 'Put this bag on the van?',
+  'driver.loads.pickSheetTitle': 'Take this bag on board?',
   'driver.loads.pickBody': '{ref} — {kg} kg, going to {dest}.',
-  'driver.loads.pick1': 'Every parcel inside moves to your van',
+  'driver.loads.pick1': 'Every parcel inside moves to your {vehicle}',
   'driver.loads.pick2': 'The shop is told it has left',
   'driver.loads.pick3': 'Your delivery is booked against your badge',
   'driver.loads.pickConfirm': 'Yes, it is on board',
@@ -329,7 +348,7 @@ export const enDriver = {
   'driver.loads.addReceiver': 'Type the name of the person who received the goods.',
   'driver.loads.addPodPhoto': 'Add a photo of the goods as delivered.',
   'driver.loads.couldNotDeliver': 'I could not deliver',
-  'driver.loads.failBody': 'The goods stay on your van. The sender is told what happened and can ring the receiver or tell you where to take them.',
+  'driver.loads.failBody': 'The goods stay with you. The sender is told what happened and can ring the receiver or tell you where to take them.',
   'driver.loads.failWhatLabel': 'What happened at the door?',
   'driver.loads.failAbsent': 'Nobody there to receive it',
   'driver.loads.failRefused': 'The receiver refused it',
@@ -461,7 +480,7 @@ export const enDriver = {
   // logic.ts sentence builders (each takes `t` and returns the finished string).
   'driver.logic.loadClaimedOne': '1 load claimed',
   'driver.logic.loadClaimedMany': '{count} loads claimed',
-  'driver.logic.vanFull': 'Your van is full — {loads}. Deliver something to free up space.',
+  'driver.logic.vanFull': 'Your {vehicle} is full — {loads}. Deliver something to free up space.',
   'driver.logic.freeSpace': 'Free space out of {kg} kg — {loads}.',
   // "bag", never "bag(s)" — the same rule the licence countdown follows ("in 1 day", never "in 1 day(s)").
   // A parenthesised plural is a sentence nobody finished, under the biggest number on the driver's screen.
@@ -480,7 +499,7 @@ export const enDriver = {
   // The same fact for somebody with no fleet: it names who actually clears them, and what they can do now.
   'driver.logic.statusNoticeOwn': 'Your driver account is {status}. Send your ID and your licence below — SeeBuyGet staff check them, and you can start once they have.',
   'driver.logic.shiftSummary': 'On shift with {plate}. Remaining capacity {kg} kilograms. {count} claimed loads.',
-  'driver.logic.offShiftSummary': 'Scan the vehicle QR on the dashboard to start your shift.',
+  'driver.logic.offShiftSummary': 'Scan the vehicle QR to start your shift.',
   'driver.logic.offersNone': 'No shipments waiting on this route right now.',
   'driver.logic.offersOne': 'One shipment on your way. Swipe to see it, then claim it.',
   'driver.logic.offersMany': '{count} shipments on your way. Swipe through them, then claim the ones you want.',
@@ -601,9 +620,9 @@ export const enDriver = {
   'driver.toast.freightPickedUp': 'Freight picked up',
   'driver.toast.freightPickedUpDetail': 'Drive it to the destination, then mark it delivered.',
   'driver.toast.freightDelivered': 'Freight delivered',
-  'driver.toast.freightDeliveredDetail': 'Your van capacity is freed.',
+  'driver.toast.freightDeliveredDetail': 'Your capacity is freed.',
   'driver.toast.attemptRecorded': 'Attempt recorded',
-  'driver.toast.attemptRecordedDetail': 'The sender has been told. The load stays on your van until it is delivered.',
+  'driver.toast.attemptRecordedDetail': 'The sender has been told. The load stays with you until it is delivered.',
   'driver.toast.handedBack': 'Load handed back',
   'driver.toast.handedBackDetail': 'It is back on the market. The sender has been told why.',
   'driver.toast.tempOutOfRange': 'Temperature out of range',

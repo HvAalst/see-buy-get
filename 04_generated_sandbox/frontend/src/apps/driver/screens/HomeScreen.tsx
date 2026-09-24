@@ -6,6 +6,7 @@ import { formatDate, useT } from '../../../shared/i18n';
 import { paperDay } from '../../../shared/papers';
 import { qrPayload } from '../../../shared/qr';
 import { printQrSheet } from '../../../shared/print-qr';
+import { isRidden, namedVehicleClass, stickerPlace, vehicleWord } from '../vehicle-words';
 import {
   canStartShift,
   capacitySubLine,
@@ -84,13 +85,24 @@ function OffShift({ state, actions }: HomeScreenProps) {
   // The vehicles no fleet owns — the server sends a dashboard code only for those, so this is both
   // "which are mine" and "which stickers am I allowed to see" in one read.
   const mine = state.vehicles.filter((v) => Boolean(v.qr));
+  /*
+   * WHAT THIS DRIVER ACTUALLY RIDES, and the sticker instruction that follows from it.
+   *
+   * "Put it on the dashboard, where it can be scanned from the driver's seat" is good instruction in a
+   * truck and nonsense on a bicycle. The sticker sheet is per-VEHICLE (a courier can own more than one),
+   * so its copy follows the vehicle being shown; everything else on this screen follows the one the app
+   * is named after. The user spotted this one before it was built.
+   */
+  const namedClass = namedVehicleClass(state.vehicle, state.vehicles);
+  const vehicle = vehicleWord(namedClass, t);
   const [sticker, setSticker] = useState<RecentVehicleView | null>(null);
   const [printBlocked, setPrintBlocked] = useState(false);
+  const stickerRidden = isRidden(sticker?.vehicleClass);
 
   return (
     <div class="scr">
       <h1 class="scr__title">{t('driver.home.startTitle')}</h1>
-      <Explainer who={state.driver?.did} id="driver.shift.how" text={t('driver.home.startLede')} />
+      <Explainer who={state.driver?.did} id="driver.shift.how" text={t('driver.home.startLede', { place: stickerPlace(namedClass, t) })} />
 
       {notice ? <Note tone="warn" icon="clock" title={t('driver.home.notActivated')} detail={notice} /> : null}
       <Clearance state={state} actions={actions} />
@@ -133,7 +145,8 @@ function OffShift({ state, actions }: HomeScreenProps) {
                 onClick={() => setVehicleId(vehicleId === v.vehicleId ? null : v.vehicleId)}
               >
                 <span class="row__ic">
-                  <Icon name={vehicleId === v.vehicleId ? 'check' : 'truck'} size={24} />
+                  {/* The glyph follows the CLASS, so a bicycle in this list looks like one. */}
+                  <Icon name={vehicleId === v.vehicleId ? 'check' : isRidden(v.vehicleClass) ? 'bike' : 'truck'} size={24} />
                 </span>
                 <span class="row__body">
                   <span class="row__t">{v.plate}</span>
@@ -174,7 +187,7 @@ function OffShift({ state, actions }: HomeScreenProps) {
             */}
           {mine.length ? (
             <Button variant="link" full={false} onClick={() => setSticker(mine[0])}>
-              {t(mine.length === 1 ? 'driver.home.stickerOne' : 'driver.home.stickerMany')}
+              {t(mine.length === 1 ? 'driver.home.stickerOne' : 'driver.home.stickerMany', { vehicle })}
             </Button>
           ) : null}
         </Card>
@@ -182,7 +195,7 @@ function OffShift({ state, actions }: HomeScreenProps) {
 
       {sticker ? (
         <Sheet open onClose={() => setSticker(null)} title={t('driver.home.stickerTitle', { plate: sticker.plate })}>
-          <p class="t-body">{t('driver.home.stickerBody')}</p>
+          <p class="t-body">{t(stickerRidden ? 'driver.home.stickerBodyRidden' : 'driver.home.stickerBody')}</p>
           <div class="stickerqr">
             <QrBlock value={qrPayload('vehicle', sticker.qr!)} size={196} caption={sticker.qr} label={t('driver.home.stickerQrLabel', { plate: sticker.plate })} />
           </div>
@@ -197,7 +210,7 @@ function OffShift({ state, actions }: HomeScreenProps) {
               const ok = printQrSheet({
                 title: sticker.plate,
                 caption: sticker.qr,
-                note: t('driver.home.stickerPrintNote'),
+                note: t(stickerRidden ? 'driver.home.stickerPrintNoteRidden' : 'driver.home.stickerPrintNote'),
                 svg: svg as SVGElement | null,
               });
               setPrintBlocked(!ok);
@@ -214,7 +227,7 @@ function OffShift({ state, actions }: HomeScreenProps) {
               {mine.map((v) => (
                 <button key={v.vehicleId} type="button" class={`row${v.vehicleId === sticker.vehicleId ? ' row--on' : ''}`} onClick={() => setSticker(v)}>
                   <span class="row__ic">
-                    <Icon name="truck" size={24} />
+                    <Icon name={isRidden(v.vehicleClass) ? 'bike' : 'truck'} size={24} />
                   </span>
                   <span class="row__body">
                     <span class="row__t">{v.plate}</span>
@@ -239,7 +252,7 @@ function OffShift({ state, actions }: HomeScreenProps) {
             if (v.trim()) setVehicleId(null); // a scanned dashboard wins over a remembered plate
           }}
           expect="vehicle"
-          placeholder={t('driver.home.qrPlaceholder')}
+          placeholder={t('driver.home.qrPlaceholder', { place: stickerPlace(namedClass, t) })}
           enterKeyHint="go"
         />
         <p class="card__note">{t('driver.home.qrNote')}</p>
@@ -286,9 +299,9 @@ function OffShift({ state, actions }: HomeScreenProps) {
         <Card title={t('driver.home.whatHappens')} tone="soft">
           <Checklist
             items={[
-              t('driver.home.scan1'),
+              t('driver.home.scan1', { vehicle }),
               t('driver.home.scan2'),
-              t('driver.home.scan3'),
+              t('driver.home.scan3', { vehicle }),
             ]}
           />
         </Card>
@@ -633,12 +646,12 @@ function OnShift({ state, actions }: HomeScreenProps) {
 
       {/* The one big number: how much room is left, readable at arm's length. */}
       <GlanceNumber
-        label={t('driver.home.spaceLabel')}
+        label={t('driver.home.spaceLabel', { vehicle: vehicleWord(v.vehicleClass, t) })}
         value={state.remaining}
         unit="kg"
         percent={pct}
         alert={isFull(state.remaining) || state.remainingTotes === 0}
-        sub={capacitySubLine(state.remaining, v.capacityKg, state.claims.length, t, state.remainingTotes ?? undefined)}
+        sub={capacitySubLine(state.remaining, v.capacityKg, state.claims.length, t, state.remainingTotes ?? undefined, vehicleWord(v.vehicleClass, t))}
       />
 
       <Card

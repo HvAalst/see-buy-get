@@ -1,5 +1,6 @@
 import { Button, Card, ErrorNote, Explainer, ExplainerReset, Icon, Note, PlacePicker, ReadAloud, type PlaceNote } from '../../../shared/ui';
 import { useT, type Translate } from '../../../shared/i18n';
+import { vehicleWord } from '../vehicle-words';
 import { MAX_WORK_RADIUS_KM } from '../logic';
 import { CUSTOM_PLACE, type CustomPlace, type DriverActions, type DriverState } from '../useDriverApp';
 import { RoadSection } from './RoadSection';
@@ -250,7 +251,7 @@ function RouteSearch({ state, actions, loading, empty }: RouteScreenProps & { lo
       ) : null}
 
       <div class="scr__foot">
-        <ReadAloud text={() => t('driver.route.aloud')} label={t('driver.readAloud')} />
+        <ReadAloud text={() => t('driver.route.aloud', { vehicle: vehicleWord(state.vehicle?.vehicleClass, t) })} label={t('driver.readAloud')} />
         <ExplainerReset who={state.driver?.did} />
       </div>
     </>

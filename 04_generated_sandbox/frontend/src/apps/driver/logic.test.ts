@@ -67,7 +67,10 @@ describe('usedPercent — the capacity bar', () => {
   it('says how much room is left in plain language', () => {
     expect(capacitySubLine(600, 800, 1, t)).toBe('Free space out of 800 kg — 1 load claimed.');
     expect(capacitySubLine(600, 800, 3, t)).toBe('Free space out of 800 kg — 3 loads claimed.');
-    expect(capacitySubLine(0, 800, 2, t)).toContain('Your van is full');
+    // NAMED AFTER WHAT THEY ACTUALLY RIDE. A caller who passes no word gets the plain noun rather than
+    // "van", because a bicycle courier reading "your van is full" is being told the app is for somebody else.
+    expect(capacitySubLine(0, 800, 2, t)).toContain('Your vehicle is full');
+    expect(capacitySubLine(0, 800, 2, t, undefined, 'bike')).toContain('Your bike is full');
   });
 
   it('leads with BAG spaces when those run out first — the constraint kilos cannot express', () => {
@@ -79,7 +82,7 @@ describe('usedPercent — the capacity bar', () => {
     // under the biggest number on the driver's screen, which is the worst place to leave a plural unfinished.
     expect(capacitySubLine(400, 800, 1, t, 1)).toBe('Free space out of 800 kg · room for 1 more bag — 1 load claimed.');
     // Weight still wins when it is the one that has actually run out.
-    expect(capacitySubLine(0, 800, 2, t, 5)).toContain('Your van is full');
+    expect(capacitySubLine(0, 800, 2, t, 5, 'truck')).toContain('Your truck is full');
   });
 });
 
