@@ -9,6 +9,7 @@ import { M4Module } from '../m4/m4.module';
 import { M7Module } from '../m7/m7.module';
 import { SbgController } from './pudo.controller';
 import { IdentityController } from './identity.controller';
+import { AccountController } from './account.controller';
 import { MediaController } from './media.controller';
 import { HelpController } from './help.controller';
 import { HelpMediaService } from './help-media.service';
@@ -85,7 +86,7 @@ import { IdempotencyService } from '../../foundation/http/idempotency.service';
  */
 @Module({
   imports: [M1Module, M4Module, M7Module],
-  controllers: [SbgController, IdentityController, MediaController, HelpController, NotificationsController, ShippingApiController, ConversationController],
+  controllers: [SbgController, IdentityController, AccountController, MediaController, HelpController, NotificationsController, ShippingApiController, ConversationController],
   providers: [DepartureService, AgentService, PayeeStandingRegistrar, FundingPayerRegistrar, ConversationService, WalletGateService, CorridorService, ParcelService, ReturnService, UnclaimedService, MerchantRatingService, RouteConstraintService, MonitorService, RatingService, GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagPlanService, ForthcomingService, DockService, ShippingApiService, QuoteBookService, ApiKeyService, ApiKeyGuard, RateLimitGuard, ToteService, ConsignmentService, ImportService, SiteService, TransitAuthorityService, FieldObservationService, ContainerBoxService, ContainerClockService, EmptyDepotService, ContactCardService, VehicleService, DriverService, FleetService, DispatchService, BorderRuleService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, HelpMediaService, CargoService, NotificationService, NotificationDispatcher, CredentialReminderService, PapersWatchService, HandleDirectory, ConsignmentNoteService, OutboxPushSender, { provide: PUSH_SENDER, useExisting: OutboxPushSender }, GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder }, HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter }],
   exports: [AgentService, ParcelService, ReturnService, UnclaimedService, MerchantRatingService, RouteConstraintService, MonitorService, RatingService, MdpService, BagPlanService, ForthcomingService, DockService, ToteService, ImportService, VehicleService, DriverService, FleetService, DispatchService, BorderRuleService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, NotificationService, OutboxPushSender],
 })

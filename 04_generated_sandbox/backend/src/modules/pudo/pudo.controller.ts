@@ -3715,7 +3715,7 @@ export class SbgController {
     // Not FORBIDDEN: telling somebody "right PIN, wrong company" confirms both the account and the code.
     if (!holds) throw new GlosError('AUTH_FAILED', 'That account cannot manage this fleet');
     // Carries the PERSON: every manager of this fleet shares its DID, and a PIN change must end only this person's sessions.
-    const token = this.auth.mintActorToken({ role: 'fleet_manager', did: m.did, tenant: m.did, revocationKey: person.personDid });
+    const token = this.auth.mintActorToken({ role: 'fleet_manager', did: m.did, tenant: m.did, revocationKey: person.personDid, personDid: person.personDid });
     return { ...m, person: this.persons.view(person), token };
   }
 
@@ -4046,7 +4046,7 @@ export class SbgController {
       });
     if (!held.length) throw new GlosError('ROLE_NOT_HELD', 'This phone is not registered to a driver. Ask your fleet to check the number they registered.');
     const { link, driver } = held[held.length - 1]; // the most recent registration, when a phone drove for several
-    const token = this.auth.mintActorToken({ role: 'driver', did: driver.did, tenant: link.tenant, revocationKey: person.personDid });
+    const token = this.auth.mintActorToken({ role: 'driver', did: driver.did, tenant: link.tenant, revocationKey: person.personDid, personDid: person.personDid });
     return { did: driver.did, displayName: driver.displayName, status: driver.status, person: this.persons.view(person), token };
   }
 

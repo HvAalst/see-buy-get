@@ -40,6 +40,30 @@ export function auditActor(actor: IntrospectionResult | undefined, override?: st
 }
 
 /**
+ * THE PERSON BEHIND THE TOKEN — for the surfaces that belong to a human rather than to a role.
+ *
+ * A driver's avatar, their PIN, their address and the invites they have sent are not facts about the
+ * driver RECORD; they are facts about the person holding the phone, who may also keep a shop and manage a
+ * fleet. Every role in this network signs in through the same identity spine, so the token knows — and
+ * this is the one question the account surface has to ask of it.
+ *
+ * Throws rather than falling back to `did`. A machine credential and the shared operator key are not
+ * anybody, and quietly treating the acting DID as a person would let a client_credentials token write a
+ * profile onto whatever record its id happened to name.
+ *
+ * NO OPERATOR OVERRIDE, deliberately, and it is the difference between this and `actingDid`. An operator
+ * acting on behalf of a shop is ordinary administration; an operator setting a person's PIN or reading
+ * their address is impersonation. Staff who need to help somebody into their account have the rotation
+ * paths built for exactly that, which leave a record.
+ */
+export function actingPerson(actor: IntrospectionResult | undefined): string {
+  if (!actor?.personDid) {
+    throw new ForbiddenException('This is your own account — sign in with your phone and PIN to reach it');
+  }
+  return actor.personDid;
+}
+
+/**
  * The tenant boundary a request is scoped to. A fleet_manager sees only their own tenant; an operator
  * may target any tenant (or all) via an explicit override. Returns undefined for "all" (operator, no
  * override) so callers can list across tenants.

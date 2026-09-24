@@ -45,6 +45,20 @@ export interface IssueTokenInput {
   actorName?: string;
   /** Assurance level; gates which scopes may be granted (@MinTier). */
   tier?: Tier;
+  /**
+   * THE PERSON BEHIND THIS TOKEN, when a person opened it.
+   *
+   * Every role in this network signs in through the same identity spine: a driver, a shopkeeper and a
+   * fleet's office all prove a phone and a PIN against `PersonService`, and the role token is minted after
+   * that. Until now the person was carried only as `revocationKey` — enough to sign them out, and useless
+   * for anything else, because a revocation key is an opaque string that may also be an admin id or an
+   * operator's name.
+   *
+   * Saying it plainly is what lets one account surface serve every app: the avatar, the PIN, the address
+   * and the invites belong to the PERSON, not to the driver record or the shop record they happen to be
+   * acting as. Absent on a machine credential and on the shared operator key — neither is anybody.
+   */
+  personDid?: string;
   /** Revocation counter, copied from the actor's profile at mint; compared on introspect. */
   tokenVersion?: number;
   /**
@@ -83,6 +97,8 @@ export interface IntrospectionResult {
   /** The named human behind this token, when there is one. See IssueTokenInput.actorName. */
   actorName?: string;
   tier?: Tier;
+  /** The person who signed in, when a person did. See IssueTokenInput.personDid. */
+  personDid?: string;
 }
 
 export interface TokenClaims {
@@ -99,6 +115,8 @@ export interface TokenClaims {
   tenant?: string;
   actorName?: string;
   tier?: Tier;
+  /** The person who signed in. See IssueTokenInput.personDid. */
+  personDid?: string;
   tokenVersion?: number;
   revocationKey?: string;
   revocationVersion?: number;

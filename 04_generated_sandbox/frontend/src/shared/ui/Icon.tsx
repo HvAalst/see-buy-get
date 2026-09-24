@@ -19,6 +19,8 @@ export type IconName =
   | ErrorIconName // wallet, lock, keypad, camera, search, pin, clock, scale, block, box, key, edit, offline, refresh, warning
   | 'chevronRight'
   | 'chevronLeft'
+  | 'chevronDown'
+  | 'chevronUp'
   | 'arrowLeft'
   | 'arrowUp'
   | 'scan'
@@ -47,6 +49,9 @@ export type IconName =
 const PATHS: Record<IconName, JSX.Element> = {
   chevronRight: <path d="m9 5 7 7-7 7" />,
   chevronLeft: <path d="m15 5-7 7 7 7" />,
+  // The account drop-down's own arrow, and the same stroke turned through a right angle.
+  chevronDown: <path d="m5 9 7 7 7-7" />,
+  chevronUp: <path d="m5 15 7-7 7 7" />,
   arrowLeft: <path d="M20 12H4m0 0 6-6m-6 6 6 6" />,
   arrowUp: <path d="M12 20V4.6m0 0-6.4 6.4M12 4.6 18.4 11" />,
   scan: <path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M4 16v2.5A1.5 1.5 0 0 0 5.5 20H8m8-16h2.5A1.5 1.5 0 0 1 20 5.5V8m0 8v2.5a1.5 1.5 0 0 1-1.5 1.5H16M7 12h10" />,

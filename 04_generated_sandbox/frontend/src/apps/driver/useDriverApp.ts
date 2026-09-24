@@ -1497,6 +1497,9 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
     state,
     // The Web Push controls (N1b) — surfaced for the TopBar NotificationBell; null while signed out.
     notifications: client?.notifications ?? null,
+    // The raw client, for the shared account menu — the account is the PERSON, so the surface behind it
+    // is the same one every other app talks to and the driver app holds no opinion about it.
+    sbg: client?.client.sbg ?? null,
     actions: {
       /** The same controls, inside actions so a SCREEN can ask for permission where somebody sees the ask. */
       notifications: client?.notifications ?? null,

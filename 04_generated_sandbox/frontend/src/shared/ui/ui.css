@@ -2208,3 +2208,145 @@
   gap: 8px 12px;
   margin-top: 12px;
 }
+
+/* ------------------------------------------------------------ account menu --
+   The avatar in the top bar, and the drop-down that holds everything belonging to the PERSON rather
+   than to the job: their photo, where they live, their PIN, their page, sign out.
+
+   It replaced a foot of loose links at the bottom of two different screens. The tab bar is icons-only,
+   so this is the one place in the chrome where a name can appear at all. */
+.acct {
+  position: relative;
+  flex: none;
+}
+
+.acct__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  /* --tap: the whole control is a thumb target, not just the 32px circle inside it. */
+  min-height: var(--tap, 48px);
+  padding: 0 2px 0 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+}
+
+.acct__pic {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--blue-light);
+  color: var(--blue-dark);
+}
+.acct__pic--lg {
+  width: 48px;
+  height: 48px;
+}
+.acct__pic .authimg,
+.acct__pic img {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.acct__caret {
+  flex: none;
+  opacity: 0.7;
+}
+
+/* Anchored to the bar's right edge and capped at the viewport, so a long handle cannot push it
+   off-screen on a 360px phone. Scrolls internally rather than growing past the fold. */
+.acct__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  width: 300px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+  padding: 10px;
+  background: var(--white, #fff);
+  border: 1px solid var(--line, #e4e6ef);
+  border-radius: 16px;
+  box-shadow: 0 18px 40px rgba(16, 20, 50, 0.16);
+}
+
+.acct__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 6px 12px;
+  border-bottom: 1px solid var(--line, #e4e6ef);
+  margin-bottom: 6px;
+}
+.acct__who {
+  min-width: 0;
+}
+.acct__name {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--blue-dark);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.acct__handle {
+  display: block;
+  font-size: 13px;
+  color: var(--ink-soft, #5d6180);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The links that are not rows: help, restore-teaching, sign out. Wraps, because three of them do not
+   fit on one 300px line and a clipped "Sign out" is the worst one to lose. */
+.acct__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 8px 6px 2px;
+  border-top: 1px solid var(--line, #e4e6ef);
+  margin-top: 6px;
+}
+
+/* The menu's rows are the app's rows, made compact. A 300px drop-down is not a list screen: at the
+   full .row size the chevron wrapped onto its own line and three items filled 400px, so the menu ran
+   past the fold and the thing under it — sign out — was the first casualty. No card chrome either;
+   the menu is already a card. */
+.acct__menu .row {
+  min-height: 0;
+  gap: 12px;
+  padding: 10px 6px;
+  flex-wrap: nowrap;
+  background: none;
+  border: 0;
+  border-radius: 10px;
+  box-shadow: none;
+}
+.acct__menu .row + .row {
+  margin-top: 0;
+}
+.acct__menu .row__ic {
+  flex: none;
+}
+.acct__menu .row__body {
+  min-width: 0;
+  flex: 1;
+}
+.acct__menu .row__end {
+  flex: none;
+  opacity: 0.55;
+}

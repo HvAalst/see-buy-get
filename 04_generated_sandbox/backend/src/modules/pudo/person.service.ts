@@ -122,18 +122,48 @@ export class PersonService {
    * purge the previous avatar's bytes so a person keeps exactly one. Both fields are optional and
    * independent (a caller may set just the name, just the avatar, or both).
    */
-  setProfile(personDid: string, input: { displayName?: string; avatarMediaId?: string }): Person {
+  setProfile(personDid: string, input: { displayName?: string; avatarMediaId?: string; address?: string }): Person {
     const person = this.requireByDid(personDid);
 
-    if (input.displayName !== undefined) {
-      const name = input.displayName.trim();
-      if (!name) throw new GlosError('FIELD_REQUIRED', 'A display name cannot be empty');
-      if (name.length > 80) throw new GlosError('INVALID_INPUT', 'That name is too long');
-      // Update in place when the vault entry still exists; otherwise (re)create it. The vault store is
-      // in-memory while person.vaultRef is persisted, so after a restart a stale ref must re-seed rather
-      // than throw NotFoundException out of vault.update() — see profile() for the read side of this.
-      if (person.vaultRef && this.vault.exists(person.vaultRef)) this.vault.update(person.vaultRef, { fullName: name });
-      else person.vaultRef = this.vault.store({ fullName: name }, { region: 'local' }).vaultRef;
+    /*
+     * THE VAULT FIELDS, WRITTEN ONCE AND MERGED — and the merge is not tidiness, it is the bug.
+     *
+     * `IdentityVault.update` REPLACES the record: it re-encrypts whatever object it is handed, with no
+     * notion of a partial write. While the person's record held one field that was invisible; the moment it
+     * holds two, writing a name and an address in the same breath means the second call silently erases
+     * what the first just stored. Caught by the end-to-end test setting both and reading back neither.
+     *
+     * So: read the current record, apply only what was asked for, write the whole thing back.
+     *
+     * WHERE THEY LIVE goes here beside the name for the same reason the name does. A home address is the
+     * most sensitive field a courier hands this product — it is what turns "a driver who was near the
+     * warehouse" into a person somebody can be sent to — so the operational core keeps an opaque ref and
+     * never the street, and every read is an audited consent receipt.
+     *
+     * The address is CLEARABLE: an empty string removes it. Somebody who typed their address and thought
+     * better of it must be able to take it back, and a field that can only ever be set is one nobody
+     * should fill in. A display name is not clearable, because it is what other people see you as.
+     */
+    if (input.displayName !== undefined || input.address !== undefined) {
+      const name = input.displayName?.trim();
+      if (input.displayName !== undefined) {
+        if (!name) throw new GlosError('FIELD_REQUIRED', 'A display name cannot be empty');
+        if (name.length > 80) throw new GlosError('INVALID_INPUT', 'That name is too long');
+      }
+      const address = input.address?.trim();
+      if (address !== undefined && address.length > 240) throw new GlosError('INVALID_INPUT', 'That address is too long');
+
+      // The vault store is in-memory while person.vaultRef is persisted, so after a restart a stale ref
+      // must re-seed rather than throw NotFoundException out of update() — see profile() for the read side.
+      const live = Boolean(person.vaultRef && this.vault.exists(person.vaultRef));
+      const held = live ? this.vault.reveal(person.vaultRef as string, { purpose: 'self-profile-update', requesterDid: person.personDid }) : undefined;
+      const next = {
+        ...(held ?? {}),
+        fullName: name ?? held?.fullName ?? '',
+        ...(input.address !== undefined ? { address: address || undefined } : {}),
+      };
+      if (live) this.vault.update(person.vaultRef as string, next);
+      else person.vaultRef = this.vault.store(next, { region: 'local' }).vaultRef;
     }
 
     if (input.avatarMediaId !== undefined) {
@@ -167,11 +197,13 @@ export class PersonService {
    * so a person enrolled before that holds a ref to nothing, and it must degrade to "no name" rather than
    * throw and 404 the whole authenticated surface (this method is on the hot path of me/enroll/login/setProfile).
    */
-  profile(person: Person): { displayName?: string; avatarMediaId?: string } {
-    const displayName = person.vaultRef && this.vault.exists(person.vaultRef)
-      ? this.vault.reveal(person.vaultRef, { purpose: 'self-profile', requesterDid: person.personDid }).fullName
+  profile(person: Person): { displayName?: string; avatarMediaId?: string; address?: string } {
+    const held = person.vaultRef && this.vault.exists(person.vaultRef)
+      ? this.vault.reveal(person.vaultRef, { purpose: 'self-profile', requesterDid: person.personDid })
       : undefined;
-    return { displayName, avatarMediaId: person.avatarMediaId };
+    // One reveal for both fields rather than two: each call writes a consent receipt, and a log that says
+    // this person's record was opened twice to draw one screen makes the audit trail harder to read, not safer.
+    return { displayName: held?.fullName || undefined, avatarMediaId: person.avatarMediaId, ...(held?.address ? { address: held.address } : {}) };
   }
 
   /** The full self-view: the PII-free projection plus the revealed profile. For the acting person ONLY. */
@@ -243,6 +275,40 @@ export class PersonService {
    * Change your PIN — proven with the CURRENT PIN, through the same check sign-in uses, so a wrong guess here counts
    * toward the lockout exactly as it would at the door. Every other session is signed out; this device gets a fresh one.
    */
+  /**
+   * Change the PIN of the person who is SIGNED IN, proven with their current PIN.
+   *
+   * The same check, reached by who the token says they are rather than by a phone number in the body. That
+   * matters: `changePin(phone, …)` will change the PIN of whatever account that number names, so an app
+   * calling it on behalf of a signed-in person is one typo — or one hostile body — away from changing
+   * somebody else's credential, and checking afterwards is too late because the change has happened.
+   *
+   * The wrong-PIN counter and the lockout are the door's, unchanged: an open session is not proof of who
+   * is holding the phone, and a session left open at a counter must not become an unlimited guessing seat.
+   */
+  changePinForPerson(personDid: string, currentPin: string, newPin: string): { person: Person; token: AccessToken } {
+    const person = this.requireByDid(personDid);
+    if (person.pinLockedUntil && person.pinLockedUntil > Date.now()) {
+      throw new GlosError('PIN_LOCKED', 'Too many wrong PINs. Verify your phone by code to sign in.');
+    }
+    if (person.pinLockedUntil) {
+      person.pinAttempts = 0;
+      person.pinLockedUntil = undefined;
+      this.save(person);
+    }
+    if (!person.pinHash || !person.pinSalt || !this.verifyPin(currentPin, person)) {
+      person.pinAttempts = (person.pinAttempts ?? 0) + 1;
+      if (person.pinAttempts >= MAX_PIN_ATTEMPTS) person.pinLockedUntil = Date.now() + PIN_LOCK_MS;
+      this.save(person);
+      throw new GlosError('AUTH_FAILED', 'That is not your current PIN');
+    }
+    if (currentPin === newPin) throw new GlosError('PIN_INVALID', 'Choose a PIN different from the current one');
+    this.setPin(person.personDid, newPin);
+    this.auth.revokeAll(person.personDid);
+    const updated = this.requireByDid(person.personDid);
+    return { person: updated, token: this.mintConsumerToken(updated) };
+  }
+
   changePin(phone: string, currentPin: string, newPin: string): { person: Person; token: AccessToken } {
     const { person } = this.loginWithPin(phone, currentPin);
     if (currentPin === newPin) throw new GlosError('PIN_INVALID', 'Choose a PIN different from the current one');
@@ -256,7 +322,10 @@ export class PersonService {
 
   /** The person's default identity token — acting as themselves (the consumer surface). */
   mintConsumerToken(person: Person): AccessToken {
-    return this.auth.mintActorToken({ role: 'consumer', did: person.personDid });
+    // `did` and `personDid` are the same string here — a consumer acts as themselves — and it is still
+    // stated, so the account surface can ask one question ("who is the person?") of every token it sees
+    // rather than special-casing the one role where the answer happens to sit in another field.
+    return this.auth.mintActorToken({ role: 'consumer', did: person.personDid, personDid: person.personDid });
   }
 
   /**
@@ -270,7 +339,7 @@ export class PersonService {
     const token = role === 'consumer'
       ? this.mintConsumerToken(person)
       : // Carries the person, so changing their PIN also ends the role sessions that PIN opened.
-        this.auth.mintActorToken({ role: ROLE_TO_ACTOR[role], did: link.entityDid, tenant: link.tenant, revocationKey: person.personDid });
+        this.auth.mintActorToken({ role: ROLE_TO_ACTOR[role], did: link.entityDid, tenant: link.tenant, revocationKey: person.personDid, personDid: person.personDid });
     return { role, entityDid: link.entityDid, token };
   }
 

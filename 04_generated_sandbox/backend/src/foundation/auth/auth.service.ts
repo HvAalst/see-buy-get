@@ -107,6 +107,7 @@ export class AuthService {
       tenant: input.tenant,
       actorName: input.actorName,
       tier: input.tier,
+      personDid: input.personDid,
       tokenVersion: input.tokenVersion,
       revocationKey: input.revocationKey,
       revocationVersion: input.revocationVersion,
@@ -158,7 +159,7 @@ export class AuthService {
    * replacement for the ?agent=<did> URL-param "session" — the token now carries who you are and
    * what you may do, verifiably. The DID must already be registered (issueToken enforces it).
    */
-  mintActorToken(input: { role: ActorRole; did: string; tenant?: string; tier?: Tier; actorName?: string; revocationKey?: string }): AccessToken {
+  mintActorToken(input: { role: ActorRole; did: string; tenant?: string; tier?: Tier; actorName?: string; revocationKey?: string; personDid?: string }): AccessToken {
     const profile = this.profiles.get(input.did);
     return this.issueToken({
       sub: input.did,
@@ -169,6 +170,7 @@ export class AuthService {
       tenant: input.tenant,
       actorName: input.actorName,
       tier: input.tier ?? profile?.tier,
+      personDid: input.personDid,
       tokenVersion: this.versionOf(input.did),
       ...(input.revocationKey ? { revocationKey: input.revocationKey, revocationVersion: this.revocations.get(input.revocationKey) ?? 0 } : {}),
       ttlSeconds: SHIFT_TTL_SECONDS,
@@ -217,6 +219,7 @@ export class AuthService {
       tenant: claims.tenant,
       actorName: claims.actorName,
       tier: claims.tier,
+      personDid: claims.personDid,
     };
   }
 

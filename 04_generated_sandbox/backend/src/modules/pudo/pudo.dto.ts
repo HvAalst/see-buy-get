@@ -1524,6 +1524,24 @@ export class ProfileDto {
   @IsOptional() @IsString() avatarMediaId?: string;
 }
 
+/**
+ * The account, as any app may set it — the person's own name, photo and address.
+ *
+ * `address` allows the empty string on purpose: it is how somebody takes theirs back. A field that can
+ * only ever be filled in is a field nobody should fill in.
+ */
+export class AccountProfileDto {
+  @IsOptional() @IsString() @MaxLength(80) displayName?: string;
+  @IsOptional() @IsString() avatarMediaId?: string;
+  @IsOptional() @IsString() @MaxLength(240) address?: string;
+}
+
+/** Changing your own PIN. No phone: the account being changed is the one the token signed in as. */
+export class AccountPinDto {
+  @IsString() currentPin!: string;
+  @IsString() newPin!: string;
+}
+
 /** The receiver's delivered-state proof photo (S23). */
 export class PodDto {
   @IsString() photoRef!: string;

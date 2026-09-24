@@ -12,13 +12,18 @@ import { useDriverApp, type DriverActions, type DriverState, type Screen } from 
 import '../../shared/screens.css';
 import './driver.css';
 import { driverWorkLine } from './logic';
+import { AccountMenu } from '../../shared/account/AccountMenu';
+import { useAccount } from '../../shared/account/useAccount';
 import { isRidden, namedVehicleClass, vehicleWord } from './vehicle-words';
 
 type Tab = 'home' | 'route' | 'board' | 'loads' | 'earnings';
 
 export function App() {
   const t = useT();
-  const { state, actions, notifications } = useDriverApp();
+  const { state, actions, notifications, sbg } = useDriverApp();
+  // The person behind the driver record — their photo, PIN, address and page. Loaded once the token
+  // exists, which is also exactly when there is a bar to put the avatar in.
+  const account = useAccount(sbg, state.phase === 'ready');
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
 
@@ -80,6 +85,9 @@ export function App() {
             <Pill tone={onShift ? 'ok' : 'idle'} dot>
               {onShift ? t('driver.onShift') : t('driver.offDuty')}
             </Pill>
+            {/* Last in the bar on purpose: the pill is live state a driver checks constantly, the menu
+                is a place they visit. Reading order ends on the thing tapped least. */}
+            <AccountMenu api={account} app="driver" onSignOut={actions.signOut} />
           </>
         }
       />

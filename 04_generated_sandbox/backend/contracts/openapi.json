@@ -13421,6 +13421,220 @@
         }
       }
     },
+    "/v1/sbg/fleet/managers/{did}/departures/{departureId}/driver": {
+      "post": {
+        "operationId": "Sbg.assignDepartureDriver",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "departureId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignDepartureDriverDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Departure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/departures": {
+      "get": {
+        "operationId": "Sbg.driverDepartures",
+        "summary": "",
+        "description": "The runs this driver is rostered on. Theirs alone — a roster is not a public document.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/departures/{departureId}/bookings/{bookingId}/arrived": {
+      "post": {
+        "operationId": "Sbg.departureArrived",
+        "summary": "",
+        "description": "ARRIVED AT THE GATE, and LOADED / UNLOADED — the two taps the whole charge rests on.\n\nThe time is the server's. A driver typing a time is making a claim in a dispute they have a stake in;\na driver tapping when it happens is making a record, and that difference is what lets a shipper accept\nthe number afterwards.",
+        "parameters": [
+          {
+            "name": "departureId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bookingId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WaitingStopDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WaitingRecord"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/departures/{departureId}/bookings/{bookingId}/free-to-go": {
+      "post": {
+        "operationId": "Sbg.departureFreeToGo",
+        "parameters": [
+          {
+            "name": "departureId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bookingId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WaitingStopDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WaitingRecord"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/departures/{departureId}/bookings/{bookingId}/waive-waiting": {
+      "post": {
+        "operationId": "Sbg.waiveDepartureWaiting",
+        "summary": "",
+        "description": "The fleet lets a waiting charge go, with a reason. The record stays; only the amount goes to zero.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "departureId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bookingId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WaiveWaitingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Departure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/submit-kyc": {
       "post": {
         "operationId": "Sbg.driverSubmitKyc",
@@ -16391,6 +16605,72 @@
         ],
         "responses": {
           "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/me": {
+      "get": {
+        "operationId": "Account.me",
+        "summary": "",
+        "description": "Who is signed in, as the menu needs them: name, photo, address, when the PIN last changed, and the\nhandle of the role they are acting as, where that role has one.\n\nNote what it does NOT do: invent a handle. `handleOf` looks up the acting DID and answers nothing for\na fleet driver, who has no public page by design — the menu simply omits the row.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/profile": {
+      "patch": {
+        "operationId": "Account.setProfile",
+        "summary": "",
+        "description": "Set the person's own name, photo or address. Each field independent; an empty address clears it.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountProfileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/pin/change": {
+      "post": {
+        "operationId": "Account.changePin",
+        "summary": "",
+        "description": "Change the PIN, proven with the current one.\n\nKEYED TO THE TOKEN, never to a phone number in the body — the whole account is, and this is the field\nwhere it matters most. A route that took a phone would change the PIN of whatever account that number\nnamed, so one hostile body would be enough, and checking afterwards is no check at all because the\ncredential has already moved.\n\nThe wrong-PIN counter is the door's, so a guess here costs the same as a guess at sign-in: an open\nsession is not proof of who is holding the phone.\n\nEvery other session that PIN opened is ended — including, necessarily, the one that made this call,\nbecause the token carries the person as its revocation key. So the app that calls this signs the\nperson back in rather than carrying on; the response deliberately hands back no token, since the\nconsumer one the spine mints is not the role token the caller came in with.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountPinDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
             "description": ""
           }
         }
@@ -29179,7 +29459,6 @@
             "enum": [
               "per_trip",
               "per_km",
-              "per_hour",
               "per_kg"
             ]
           },
@@ -29207,6 +29486,15 @@
             "description": "The least the run will take. What stopping and strapping down already cost.",
             "minimum": 0
           },
+          "freeMin": {
+            "type": "number",
+            "description": "Waiting time, and it is both or neither. `waitingPerHour` without `freeMin` is refused by the service:\nbilling from the moment the truck arrives is a surcharge on loading, not a charge for a delay.",
+            "minimum": 0
+          },
+          "waitingPerHour": {
+            "type": "number",
+            "minimum": 0.01
+          },
           "km": {
             "type": "number",
             "description": "Required when charging by the kilometre — otherwise every booking prices at nothing.",
@@ -29233,7 +29521,6 @@
             "enum": [
               "per_trip",
               "per_km",
-              "per_hour",
               "per_kg"
             ]
           },
@@ -29253,6 +29540,75 @@
           "basis",
           "amount",
           "currency"
+        ]
+      },
+      "WaitingTerms": {
+        "type": "object",
+        "properties": {
+          "freeMin": {
+            "type": "number",
+            "description": "Minutes at each stop that are simply part of the job."
+          },
+          "perHour": {
+            "type": "number",
+            "description": "Per hour beyond the free window, pro rata, in the departure's currency."
+          }
+        },
+        "required": [
+          "freeMin",
+          "perHour"
+        ]
+      },
+      "WaitingRecord": {
+        "type": "object",
+        "properties": {
+          "where": {
+            "type": "string",
+            "enum": [
+              "loading",
+              "delivery"
+            ]
+          },
+          "freeAt": {
+            "type": "string",
+            "description": "When it was free to go. Absent while the driver is still standing there."
+          },
+          "waitedMin": {
+            "type": "number",
+            "description": "Total minutes on site, free window included. Kept so the charge can be re-read rather than trusted."
+          },
+          "billableMin": {
+            "type": "number",
+            "description": "Minutes beyond the free window — the only ones that cost anything."
+          },
+          "amount": {
+            "type": "number",
+            "description": "What those minutes came to. Zero while the wait is still ordinary, and zero when waived."
+          },
+          "bearer": {
+            "type": "string",
+            "description": "WHO IT LANDS ON, spelled out rather than inferred at reading time: `shipper` for a delay at loading,\n`consignee` for one at delivery. Stored because the attribution is the feature.",
+            "enum": [
+              "shipper",
+              "consignee"
+            ]
+          },
+          "waivedReason": {
+            "type": "string",
+            "description": "Set when the fleet let it go, with their reason. A waived charge stays visible: it happened."
+          },
+          "arrivedAt": {
+            "type": "string",
+            "description": "When the vehicle presented itself. Until this exists there is no clock and nothing is owed."
+          }
+        },
+        "required": [
+          "where",
+          "waitedMin",
+          "billableMin",
+          "amount",
+          "bearer",
+          "arrivedAt"
         ]
       },
       "DepartureBooking": {
@@ -29280,7 +29636,14 @@
           },
           "units": {
             "type": "number",
-            "description": "What the basis was applied to — kilometres, hours, kilograms, or 1 for a trip. Kept so the price can be re-read."
+            "description": "What the basis was applied to — kilometres, kilograms, or 1 for a trip. Kept so the price can be re-read."
+          },
+          "waiting": {
+            "description": "THE CLOCKS, one per stop, and empty on a run where nothing went wrong.\n\nKept on the BOOKING rather than the departure because a shared truck waits for one shipper at a time:\nthree loads on the same run, and the two-hour stand at the second collection belongs to the second\nshipper alone. A departure-level total would be exactly the unattributable number this exists to avoid.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WaitingRecord"
+            }
           },
           "bookingId": {
             "type": "string"
@@ -29306,6 +29669,7 @@
           "binds",
           "price",
           "units",
+          "waiting",
           "bookingId",
           "shipperDid",
           "description",
@@ -29323,9 +29687,24 @@
           "rate": {
             "$ref": "#/components/schemas/DepartureRate"
           },
+          "waiting": {
+            "description": "What happens when the truck is kept standing. Absent means the fleet does not charge for waiting —\nsee `WaitingTerms`, and note that absent is FREE rather than unlimited-and-unspoken.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WaitingTerms"
+              }
+            ]
+          },
           "km": {
             "type": "number",
             "description": "The distance the line runs, where it is known — what `per_km` is multiplied by."
+          },
+          "driverDid": {
+            "type": "string",
+            "description": "WHO IS DRIVING IT, once the fleet has said.\n\nNot decoration: the waiting clock is recorded by the person standing at the gate, so without this there\nis no one holding a phone who is allowed to start it. A departure with no driver yet is ordinary — the\nfleet sells the space first and rosters later — and nothing about it can be clocked until there is one."
+          },
+          "driverName": {
+            "type": "string"
           },
           "note": {
             "type": "string",
@@ -29429,11 +29808,6 @@
             "type": "number",
             "minimum": 0.01
           },
-          "hours": {
-            "type": "number",
-            "description": "Only read when the departure charges by the hour.",
-            "minimum": 0.25
-          },
           "freightId": {
             "type": "string",
             "description": "A load already on the board, where this is space for one."
@@ -29442,6 +29816,52 @@
         "required": [
           "description",
           "weightKg"
+        ]
+      },
+      "AssignDepartureDriverDto": {
+        "type": "object",
+        "properties": {
+          "driverDid": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "driverDid"
+        ]
+      },
+      "WaitingStopDto": {
+        "type": "object",
+        "properties": {
+          "where": {
+            "type": "string",
+            "enum": [
+              "loading",
+              "delivery"
+            ]
+          }
+        },
+        "required": [
+          "where"
+        ]
+      },
+      "WaiveWaitingDto": {
+        "type": "object",
+        "properties": {
+          "where": {
+            "type": "string",
+            "enum": [
+              "loading",
+              "delivery"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 240
+          }
+        },
+        "required": [
+          "where",
+          "reason"
         ]
       },
       "DriverKycDto": {
@@ -31970,6 +32390,37 @@
             }
           }
         }
+      },
+      "AccountProfileDto": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "avatarMediaId": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 240
+          }
+        }
+      },
+      "AccountPinDto": {
+        "type": "object",
+        "properties": {
+          "currentPin": {
+            "type": "string"
+          },
+          "newPin": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "currentPin",
+          "newPin"
+        ]
       },
       "UploadMediaDto": {
         "type": "object",
