@@ -169,10 +169,27 @@ export function createFleetApi(sbg: SbgClient) {
         c.POST('/v1/sbg/fleet/managers/{did}/departures/{departureId}/driver' as never, { params: { path: { did, departureId } }, body: { driverDid } } as never),
       ),
 
-    /** Stop selling, mark it gone, or call it off. */
-    setDepartureStatus: (did: string, departureId: string, status: 'open' | 'closed' | 'departed' | 'cancelled') =>
+    /**
+     * Stop selling, mark it gone, or call it off — and the last of those carries a reason.
+     *
+     * Everybody with goods on the run is about to be told, and the reason is the only part of that message
+     * they can act on. The server requires it once anybody is aboard.
+     */
+    setDepartureStatus: (did: string, departureId: string, status: 'open' | 'closed' | 'departed' | 'cancelled', reason?: string) =>
       sbg.request((c) =>
-        c.POST('/v1/sbg/fleet/managers/{did}/departures/{departureId}/status' as never, { params: { path: { did, departureId } }, body: { status } } as never),
+        c.POST('/v1/sbg/fleet/managers/{did}/departures/{departureId}/status' as never, {
+          params: { path: { did, departureId } },
+          body: { status, ...(reason ? { reason } : {}) },
+        } as never),
+      ),
+
+    /** Handed over. The office recording what its driver did at the door. */
+    markDelivered: (departureId: string, bookingId: string, receivedBy?: string) =>
+      sbg.request((c) =>
+        c.POST('/v1/sbg/departures/{departureId}/bookings/{bookingId}/delivered' as never, {
+          params: { path: { departureId, bookingId } },
+          body: { ...(receivedBy ? { receivedBy } : {}) },
+        } as never),
       ),
 
     /** Let a waiting charge go, with a reason. The record stays; only the amount goes to zero. */

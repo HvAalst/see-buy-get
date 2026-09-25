@@ -5,6 +5,7 @@ import { InstructionsBlock } from '../../../shared/InstructionsBlock';
 import { hasInstructions } from '../../../shared/instructions';
 import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
 import type { ChatThread } from '../../../shared/conversation/logic';
+import { MyBookingsSection } from './MyBookingsSection';
 import { OffersSection } from './OffersSection';
 import type { AgentActions, AgentState, FreightClaim, FreightPrice, PostedFreight } from '../useAgentApp';
 
@@ -85,6 +86,10 @@ function PostedList({ state, actions }: FreightScreenProps) {
           The two belong in one place: a shop choosing between them should not have to know the product
           thinks of them as different markets. */}
       <OffersSection state={state} actions={actions} />
+
+      {/* Under the offers, because it is the same conversation: what is going, and what I already put on
+          one. A shop that has just booked scrolls down and sees it there. */}
+      <MyBookingsSection state={state} actions={actions} />
     </>
   );
 }

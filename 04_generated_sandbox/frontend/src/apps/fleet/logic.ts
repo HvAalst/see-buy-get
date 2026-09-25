@@ -539,7 +539,10 @@ export function runRemaining(run: DepartureRow): { kg: number; m3?: number } {
  * or the reason it is not — and a single number would hide exactly that.
  */
 export function runMoney(run: DepartureRow): { sold: number; own: number; waiting: number; currency: string } {
-  const live = run.bookings.filter((b) => b.status === 'booked');
+  // EVERYTHING BUT CANCELLED. Filtering on 'booked' made a delivered load's money vanish from the run
+  // sheet the moment the driver said it had arrived — the one point at which the fleet has definitely
+  // earned it. Only a booking somebody took back is worth nothing.
+  const live = run.bookings.filter((b) => b.status !== 'cancelled');
   const sum = (rows: DepartureBookingRow[]) => Math.round(rows.reduce((n, b) => n + b.price, 0) * 100) / 100;
   // Waiting is kept APART from the trip price on purpose: the trip was quoted and agreed, the waiting was
   // not, and a fleet reading one number would never see which of its runs keep being held up.
@@ -550,6 +553,18 @@ export function runMoney(run: DepartureRow): { sold: number; own: number; waitin
     waiting: Math.round(waiting * 100) / 100,
     currency: run.rate.currency,
   };
+}
+
+/**
+ * WHAT THIS RUN IS CARRYING, or carried — the manifest rather than the load plan.
+ *
+ * Delivered loads stay. They leave `runRemaining` (the space is genuinely free again) and they leave the
+ * "N aboard" count (nothing of theirs is on the truck), and both of those are facts about the vehicle. The
+ * manifest is a fact about the JOB, and a run sheet that erases each drop as it happens ends the day
+ * empty, which is the opposite of what a fleet wants to read at the end of a day.
+ */
+export function runManifest(run: DepartureRow): DepartureBookingRow[] {
+  return run.bookings.filter((b) => b.status !== 'cancelled');
 }
 
 /**

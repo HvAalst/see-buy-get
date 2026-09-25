@@ -3,9 +3,14 @@ import { randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { CorridorService } from './corridor.service';
+import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
+import { PresenceService } from '../../foundation/presence/presence.service';
+import { EventBus } from '../../foundation/events/event-bus.service';
+import { GlosEvent } from '../../foundation/events/glos-events';
 import { catalogueEntry } from '../../foundation/countries/catalogue';
 import {
+  MyDepartureBooking,
   Departure,
   DepartureBooking,
   DepartureOffer,
@@ -47,6 +52,9 @@ export class DepartureService {
   constructor(
     private readonly corridors: CorridorService,
     private readonly managers: FleetManagerService,
+    private readonly drivers: DriverService,
+    private readonly presence: PresenceService,
+    private readonly events: EventBus,
   ) {}
 
   /**
@@ -71,6 +79,12 @@ export class DepartureService {
   }): Departure {
     const manager = this.managers.get(input.managerDid);
     const corridor = this.corridors.requireCorridor(input.corridorId);
+    // THE DOOR, asked here rather than assumed from registration. Fleet registration already refuses a
+    // country we do not reach, so this looks redundant — and is not, because a country can be WOUND DOWN
+    // after a fleet is standing in it. A lapsed licence switches capabilities off, and the run declared
+    // the morning after would otherwise be sold as if nothing had changed. Same reason the held quote is
+    // re-asked at the mint instead of trusted.
+    this.requireOperating(manager.jurisdiction);
 
     if (corridor.owner?.managerDid !== input.managerDid) {
       throw new GlosError('FORBIDDEN', `${corridor.name} is not your line — you can only sell space on a line you run`);
@@ -257,6 +271,14 @@ export class DepartureService {
     };
     departure.bookings = [...departure.bookings, booking];
     this.departures.set(departure.departureId, departure);
+    // The fleet office learns its space went, without having to sit on the screen watching for it.
+    void this.events
+      .publish(
+        GlosEvent.Pudo.DepartureBooked,
+        { departureId: departure.departureId, bookingId: booking.bookingId, managerDid: departure.managerDid, lineName: departure.lineName, shipperDid: input.shipperDid, description: booking.description, weightKg: booking.weightKg, price: booking.price, currency: departure.rate.currency },
+        { source: 'pudo' },
+      )
+      .catch(() => undefined);
     return { departure, booking };
   }
 
@@ -322,6 +344,47 @@ export class DepartureService {
     return { departure, booking };
   }
 
+  /**
+   * HANDED OVER. The ending this model did not have.
+   *
+   * A run went open → departed and then stopped. The goods reached a door, somebody took them, and no
+   * record of it existed — while the rest of this product is meticulous about custody. The waiting clock
+   * made it worse by looking finished: the driver taps at the DELIVERY gate, which proves the truck got
+   * there and says nothing about whether the load came off it.
+   *
+   * RECORDED BY THE DRIVER OR THE FLEET, never the shipper: this is the carrier saying what they did, and
+   * a delivery a shipper can mark themselves is not a record of anything. The time is the server's, for
+   * the same reason the gate taps are — a typed time is a claim in a dispute.
+   *
+   * Idempotent. A second tap is not a second delivery, and the first one stands.
+   */
+  deliver(departureId: string, bookingId: string, by: string, receivedBy?: string): { departure: Departure; booking: DepartureBooking } {
+    const departure = this.require(departureId);
+    if (by !== departure.driverDid && by !== departure.managerDid) {
+      throw new GlosError('FORBIDDEN', 'Only the driver on this run or the fleet that sold it can say a load was handed over');
+    }
+    if (departure.status === 'cancelled') throw new GlosError('INVALID_STATE', 'That run was called off — nothing on it was delivered');
+    const booking = departure.bookings.find((b) => b.bookingId === bookingId);
+    if (!booking) throw new GlosError('NOT_FOUND', 'No such booking');
+    if (booking.status === 'cancelled') throw new GlosError('INVALID_STATE', 'That booking was cancelled — it was never aboard');
+    if (booking.status === 'delivered') return { departure, booking };
+
+    booking.status = 'delivered';
+    booking.deliveredAt = new Date().toISOString();
+    const named = receivedBy?.trim();
+    if (named) booking.receivedBy = named;
+    this.departures.set(departure.departureId, departure);
+
+    void this.events
+      .publish(
+        GlosEvent.Pudo.DepartureDelivered,
+        { departureId: departure.departureId, bookingId, managerDid: departure.managerDid, company: departure.company, lineName: departure.lineName, shipperDid: booking.shipperDid, kind: booking.kind, description: booking.description, destZone: departure.destZone, deliveredAt: booking.deliveredAt, ...(named ? { receivedBy: named } : {}) },
+        { source: 'pudo' },
+      )
+      .catch(() => undefined);
+    return { departure, booking };
+  }
+
   /** Give the space back. The shipper who took it, or the fleet that sold it. */
   cancelBooking(departureId: string, bookingId: string, by: string): Departure {
     const departure = this.require(departureId);
@@ -330,9 +393,18 @@ export class DepartureService {
     if (booking.shipperDid !== by && departure.managerDid !== by) {
       throw new GlosError('FORBIDDEN', 'Only the shipper who booked it or the fleet that sold it can cancel this');
     }
+    if (booking.status === 'delivered') throw new GlosError('INVALID_STATE', 'That load was handed over — it cannot be given back');
     if (departure.status === 'departed') throw new GlosError('INVALID_STATE', 'That run has gone — the goods are on it');
     departure.bookings = departure.bookings.map((b) => (b.bookingId === bookingId ? { ...b, status: 'cancelled' as const } : b));
     this.departures.set(departure.departureId, departure);
+    // The space is for sale again, and the fleet is the one who can do something about that.
+    void this.events
+      .publish(
+        GlosEvent.Pudo.DepartureBookingCancelled,
+        { departureId: departure.departureId, bookingId, managerDid: departure.managerDid, lineName: departure.lineName, shipperDid: booking.shipperDid, by, description: booking.description },
+        { source: 'pudo' },
+      )
+      .catch(() => undefined);
     return departure;
   }
 
@@ -346,6 +418,21 @@ export class DepartureService {
     const departure = this.require(departureId);
     if (departure.managerDid !== managerDid) throw new GlosError('FORBIDDEN', 'That is not your departure');
     if (departure.status === 'cancelled') throw new GlosError('INVALID_STATE', 'That run was called off');
+    /*
+     * THE PAPERS, WHICH THIS USED TO SKIP.
+     *
+     * Every other way a driver gets behind a wheel here asks canOperate() first — the coupling refuses a
+     * lapsed licence by name. A departure roster is NOT a coupling, so it asked nothing, and a driver
+     * whose licence expired last month could be put on a run and stand at a gate recording a charge.
+     *
+     * The refusal names the paper for the same reason the coupling does: "off the road: Insurance lapsed
+     * 3 Sep 2026" is something an office can act on before the truck is due out; "cannot be rostered" is
+     * a thing to ring somebody about.
+     */
+    if (!this.drivers.canOperate(driver.did)) {
+      const why = this.drivers.offRoadReasons(driver.did);
+      throw new GlosError('CANNOT_COUPLE', why.length ? `${driver.name} cannot drive this run: ${why.join('; ')}` : `${driver.name} is not an active driver`);
+    }
     departure.driverDid = driver.did;
     departure.driverName = driver.name;
     this.departures.set(departure.departureId, departure);
@@ -479,13 +566,70 @@ export class DepartureService {
     return { departure, booking };
   }
 
-  /** Stop selling, mark it gone, or call it off. The fleet's own call. */
-  setStatus(departureId: string, status: Departure['status'], managerDid: string): Departure {
+  /**
+   * Stop selling, mark it gone, or call it off. The fleet's own call — and the last of the three is not
+   * like the other two.
+   *
+   * CALLING OFF A LOADED RUN NEEDS A REASON. Closing and departing are housekeeping that change nothing
+   * anybody planned around; cancelling breaks a promise to every shipper who arranged their week around
+   * a truck. The reason exists because it is the thing they are owed and the only part of the message
+   * they can act on — "the run is off" leaves somebody ringing round for a lorry with nothing to tell
+   * the next carrier. It is required only when somebody is actually aboard: a fleet tidying away an
+   * empty run it declared by mistake is not making a decision about anybody.
+   */
+  setStatus(departureId: string, status: Departure['status'], managerDid: string, reason?: string): Departure {
     const departure = this.require(departureId);
     if (departure.managerDid !== managerDid) throw new GlosError('FORBIDDEN', 'That is not your departure');
+
+    const aboard = this.shippersAboard(departure);
+    const said = reason?.trim();
+    if (status === 'cancelled' && aboard.length > 0 && !said) {
+      throw new GlosError('FIELD_REQUIRED', 'Say why you are calling it off — everybody with goods on this run is about to be told, and the reason is the only part they can act on');
+    }
+
+    const was = departure.status;
     departure.status = status;
+    if (status === 'cancelled' && said) departure.cancelledReason = said;
     this.departures.set(departure.departureId, departure);
+
+    // Announced AFTER the write, so nothing downstream can read a run that has not been saved yet.
+    if (status !== was) this.announce(departure, status, aboard, said);
     return departure;
+  }
+
+  /**
+   * Tell the world what happened to a run.
+   *
+   * `departed` and `cancelled` are both worth saying out loud and for opposite reasons: one is the moment
+   * after which nothing can be changed, and the other is the moment somebody has to find another truck.
+   * Every publish is fire-and-forget — a notification that fails must never roll back a fleet's decision.
+   */
+  private announce(departure: Departure, status: Departure['status'], shippers: string[], reason?: string): void {
+    const base = {
+      departureId: departure.departureId,
+      lineName: departure.lineName,
+      company: departure.company,
+      managerDid: departure.managerDid,
+      originZone: departure.originZone,
+      destZone: departure.destZone,
+      leavesAt: departure.leavesAt,
+      shippers,
+    };
+    if (status === 'cancelled') {
+      void this.events.publish(GlosEvent.Pudo.DepartureCancelled, { ...base, reason: reason ?? '' }, { source: 'pudo' }).catch(() => undefined);
+    } else if (status === 'departed') {
+      void this.events.publish(GlosEvent.Pudo.DepartureDeparted, base, { source: 'pudo' }).catch(() => undefined);
+    }
+  }
+
+  /**
+   * The parties with goods on this run, each once.
+   *
+   * The fleet's OWN loads are excluded even though they carry a shipperDid: it is the fleet's own, they
+   * are the ones doing the telling, and a cancellation notice about your own decision is noise.
+   */
+  private shippersAboard(departure: Departure): string[] {
+    return [...new Set(departure.bookings.filter((b) => b.status === 'booked' && b.kind === 'sold').map((b) => b.shipperDid))];
   }
 
   /** One fleet's own departures, soonest first. */
@@ -529,6 +673,50 @@ export class DepartureService {
       .sort((a, b) => a.leavesAt.localeCompare(b.leavesAt));
   }
 
+  /**
+   * EVERYTHING THIS SHIPPER HAS BOOKED, newest departure first.
+   *
+   * Cancelled bookings and finished runs stay in the list. A shipper's own history is the one place that
+   * must not be tidied: "did I book that Tuesday truck or only think about it" is a real question, and a
+   * list that only shows live rows answers it wrongly and confidently.
+   *
+   * The fleet's OWN loads are excluded by construction — they carry the fleet as shipperDid, and a fleet
+   * manager opening a shipper's screen should not find their own customers filed as things they booked.
+   */
+  forShipper(shipperDid: string): MyDepartureBooking[] {
+    return this.list()
+      .flatMap((d) =>
+        d.bookings
+          .filter((b) => b.kind === 'sold' && b.shipperDid === shipperDid)
+          .map((b) => ({
+            bookingId: b.bookingId,
+            departureId: d.departureId,
+            company: d.company,
+            lineName: d.lineName,
+            originZone: d.originZone,
+            destZone: d.destZone,
+            leavesAt: d.leavesAt,
+            description: b.description,
+            weightKg: b.weightKg,
+            ...(b.volumeM3 != null ? { volumeM3: b.volumeM3 } : {}),
+            price: b.price,
+            currency: d.rate.currency,
+            bookingStatus: b.status,
+            runStatus: d.status,
+            ...(d.cancelledReason ? { cancelledReason: d.cancelledReason } : {}),
+            ...(b.deliveredAt ? { deliveredAt: b.deliveredAt } : {}),
+            ...(b.receivedBy ? { receivedBy: b.receivedBy } : {}),
+            ...(d.waiting ? { waiting: d.waiting } : {}),
+            waits: b.waiting,
+            // The same rule cancelBooking enforces, said here so a screen can hide a button that
+            // could only ever produce a refusal.
+            cancellable: b.status === 'booked' && d.status !== 'departed' && d.status !== 'cancelled',
+            at: b.at,
+          })),
+      )
+      .sort((a, b) => b.leavesAt.localeCompare(a.leavesAt));
+  }
+
   list(): Departure[] {
     return [...this.departures.values()];
   }
@@ -549,6 +737,9 @@ export class DepartureService {
    * and the other is not happening.
    */
   private assertBookable(departure: Departure, load: { weightKg: number; volumeM3?: number }, by: 'shipper' | 'fleet' = 'shipper'): void {
+    // Asked on every booking, not only at declaration: a run sold last week is still being booked onto
+    // today, and the country it runs in can have been wound down in between.
+    this.requireOperating(this.managers.get(departure.managerDid)?.jurisdiction);
     const takesLoads: Departure['status'][] = by === 'fleet' ? ['open', 'closed'] : ['open'];
     if (!takesLoads.includes(departure.status)) throw new GlosError('INVALID_STATE', `That departure is ${departure.status}`);
     if (new Date(departure.leavesAt).getTime() <= Date.now()) throw new GlosError('INVALID_STATE', 'That departure has already left');
@@ -581,6 +772,35 @@ export class DepartureService {
     const jurisdiction = this.managers.get(managerDid)?.jurisdiction;
     const known = jurisdiction ? catalogueEntry(jurisdiction)?.currency : undefined;
     return known ? { currency: known, assumed: false } : { currency: 'USD', assumed: true };
+  }
+
+  /**
+   * May this fleet move goods where it stands?
+   *
+   * `takeIn` and not `merchantOfRecord`, deliberately. Selling space on a truck settles between the fleet
+   * and the shipper — we are not the merchant of record for it and take no cut — so the question is the
+   * one the freight doors ask: may goods move here at all. A country where we only MATCH is exactly where
+   * this feature is most valuable, and gating it on a sister company would lock it out of them.
+   */
+  private requireOperating(jurisdiction: string | undefined): void {
+    /*
+     * A FLEET WITH NO COUNTRY ON ITS RECORD IS NOT A FLEET IN A COUNTRY WE REFUSE.
+     *
+     * Found by driving this: jurisdiction is optional at registration, so plenty of real fleets have
+     * none — and presence answers `observed` for an unknown country, which grants nothing. The gate as
+     * first written therefore refused them all, with "the network does not operate in undefined", which
+     * is both untrue and unactionable.
+     *
+     * This gate is about countries we have DECIDED not to reach. Where nobody has said which country it
+     * is we have not decided anything, so there is nothing here to enforce — the incomplete record is a
+     * real problem and it is already surfaced where it bites, on the price field, which says out loud
+     * that the currency is a guess. Refusing the run instead would be the wrong screen and the wrong
+     * sentence for the same defect.
+     */
+    if (!jurisdiction) return;
+    if (!this.presence.can(jurisdiction, 'takeIn')) {
+      throw new GlosError('FORBIDDEN', `The network does not operate in ${jurisdiction} yet, so space cannot be sold on a run there`);
+    }
   }
 
   /** The country's own currency — always answerable, including where no company of ours stands. */

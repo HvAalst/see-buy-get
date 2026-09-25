@@ -871,17 +871,44 @@ export function useFleetApp() {
     [client, managerDid, run, fail, refresh],
   );
 
-  /** Stop selling, mark it gone, or call it off. */
+  /**
+   * Stop selling, mark it gone, or call it off — the last of which carries the reason the shippers are owed.
+   *
+   * Resolves TRUE only when it went through, so the confirmation sheet can stay open on a refusal with
+   * everything typed into it still there.
+   */
   const setRunStatus = useCallback(
-    async (departureId: string, status: 'open' | 'closed' | 'departed' | 'cancelled') => {
-      if (!client || !managerDid) return;
+    async (departureId: string, status: 'open' | 'closed' | 'departed' | 'cancelled', reason?: string): Promise<boolean> => {
+      if (!client || !managerDid) return false;
+      let ok = false;
       await run(`run-status:${departureId}`, async () => {
-        const r = await client.api.setDepartureStatus(managerDid, departureId, status);
+        const r = await client.api.setDepartureStatus(managerDid, departureId, status, reason);
+        if (r.error) return fail(r.error);
+        ok = true;
+        await refresh();
+      });
+      return ok;
+    },
+    [client, managerDid, run, fail, refresh],
+  );
+
+  /**
+   * The office recording what its driver did at the door.
+   *
+   * The driver's own app is the ordinary place for this — they are the one standing there — but a run
+   * finished on a phone with no signal has to be closable from a desk, and the office is already trusted
+   * with the waiting clock for exactly that reason.
+   */
+  const markDelivered = useCallback(
+    async (departureId: string, bookingId: string) => {
+      if (!client) return;
+      await run(`deliver:${bookingId}`, async () => {
+        const r = await client.api.markDelivered(departureId, bookingId);
         if (r.error) return fail(r.error);
         await refresh();
       });
     },
-    [client, managerDid, run, fail, refresh],
+    [client, run, fail, refresh],
   );
 
   /**
@@ -985,6 +1012,7 @@ export function useFleetApp() {
       declareRun,
       assignRunDriver,
       setRunStatus,
+      markDelivered,
       addOwnLoad,
       waiveWait,
       queryEarnings,

@@ -137,6 +137,21 @@ export const enFleet = {
   'fleet.runs.aloud': '{count} runs on the board, {open} still taking bookings.',
 
   'fleet.runs.ownPill': 'Yours',
+
+  /* THE ENDING A RUN DID NOT HAVE. It went open → departed and stopped: the goods reached a door,
+     somebody took them, and no record of it existed anywhere. */
+  'fleet.runs.markDelivered': 'Handed over',
+  'fleet.runs.deliveredPill': 'Delivered',
+  'fleet.runs.deliveredTo': 'Handed to {who}, {when}',
+  'fleet.runs.deliveredAt': 'Handed over {when}',
+
+  /* CALLING A RUN OFF. Everybody aboard is about to be told, and the reason is the only part of that
+     message they can act on — "the run is off" leaves somebody ringing round for a lorry with nothing
+     to tell the next carrier. */
+  'fleet.runs.cancelTold': 'We will tell the {count} shipper(s) with goods on this run.',
+  'fleet.runs.cancelWhy': 'Why it is off',
+  'fleet.runs.cancelWhyPh': 'The truck threw a rod',
+  'fleet.runs.calledOff': 'You called this run off',
   'fleet.runs.ownRow': 'For {customer} — your own customer, at your price',
   'fleet.runs.ownRowNoPrice': 'For {customer} — your own customer',
 

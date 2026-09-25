@@ -206,7 +206,26 @@ export class DepartureBooking {
   @ApiProperty()
   units: number;
   at: string;
-  status: 'booked' | 'cancelled';
+  /**
+   * WHERE THIS LOAD GOT TO, and the third state is the one the model was missing.
+   *
+   * A run used to go open → departed and then stop. The goods reached a door, somebody took them, and no
+   * record of that existed anywhere — while the rest of this product is meticulous about custody. The
+   * waiting clock even had the driver standing at the DELIVERY gate tapping, which proved the truck got
+   * there and never that the load came off it.
+   *
+   *  `booked`     aboard, or going to be
+   *  `delivered`  handed over, by the driver who was standing there
+   *  `cancelled`  given back before it travelled, by the shipper or the fleet
+   */
+  @ApiProperty({ enum: ['booked', 'delivered', 'cancelled'] })
+  status: 'booked' | 'delivered' | 'cancelled';
+  /** When it was handed over. The server's clock, like the gate taps, and for the same reason. */
+  @ApiPropertyOptional()
+  deliveredAt?: string;
+  /** Who took it, in the words the driver was given at the door. Absent where nobody was named. */
+  @ApiPropertyOptional()
+  receivedBy?: string;
   /**
    * THE CLOCKS, one per stop, and empty on a run where nothing went wrong.
    *
@@ -276,6 +295,14 @@ export class Departure {
    */
   @ApiProperty({ enum: ['open', 'closed', 'departed', 'cancelled'] })
   status: 'open' | 'closed' | 'departed' | 'cancelled';
+  /**
+   * Why it was called off, kept rather than only announced.
+   *
+   * The notice goes out once, the day it happens; the shipper looking at the wreckage of their week a
+   * fortnight later is reading this screen, not their notifications. Required when anybody was aboard.
+   */
+  @ApiPropertyOptional()
+  cancelledReason?: string;
   @ApiProperty({ type: [DepartureBooking] })
   bookings: DepartureBooking[];
   createdAt: string;
@@ -315,4 +342,61 @@ export class DepartureOffer {
    * is the fleet's business and stays on the fleet's screens.
    */
   booked: number;
+}
+
+/**
+ * WHAT A SHIPPER BOOKED, AS THE SHIPPER READS IT — the view this feature shipped without.
+ *
+ * There were three ways to read a departure and none of them was this one: the fleet's own runs, the
+ * public offer list, and the driver's roster. So a shop took space, saw a toast, and the booking left
+ * their world — they could not check when it leaves, show it to anybody, or find out it had been called
+ * off. The route to give the space back existed and no screen could reach it.
+ *
+ * It is the run and the booking flattened together on purpose. A shipper does not think "my booking on
+ * departure dep_a3f"; they think "the pallet going to Mombasa on Tuesday", and every field they need to
+ * think that is here. What is NOT here is anybody else's load: how full the truck is belongs to the
+ * offer list, and who else is on it belongs to nobody.
+ */
+export class MyDepartureBooking {
+  bookingId: string;
+  departureId: string;
+  company: string;
+  lineName: string;
+  originZone: string;
+  destZone: string;
+  leavesAt: string;
+  /** What they sent, what it weighed, what it cost — their own row, read back. */
+  description: string;
+  weightKg: number;
+  @ApiPropertyOptional()
+  volumeM3?: number;
+  price: number;
+  currency: string;
+  @ApiProperty({ enum: ['booked', 'delivered', 'cancelled'] })
+  bookingStatus: 'booked' | 'delivered' | 'cancelled';
+  /**
+   * THE RUN's state, which is a different fact from the booking's and the one that usually matters.
+   *
+   * A booking still reading `booked` on a run reading `cancelled` is not a contradiction: it is the
+   * difference between goods somebody gave back and goods stranded by a fleet, and a shipper looking at
+   * the wreckage of their week needs to see which happened to them.
+   */
+  @ApiProperty({ enum: ['open', 'closed', 'departed', 'cancelled'] })
+  runStatus: 'open' | 'closed' | 'departed' | 'cancelled';
+  /** Why the run was called off. The notice went out once; this screen is read afterwards. */
+  @ApiPropertyOptional()
+  cancelledReason?: string;
+  @ApiPropertyOptional()
+  deliveredAt?: string;
+  @ApiPropertyOptional()
+  receivedBy?: string;
+  /** The waiting terms they agreed to, so a charge is never the first they hear of the rule. */
+  @ApiPropertyOptional({ type: WaitingTerms })
+  waiting?: WaitingTerms;
+  /** What standing time has cost THEM — their own rows only, never another shipper's on the same truck. */
+  @ApiProperty({ type: [WaitingRecord] })
+  waits: WaitingRecord[];
+  /** Whether they can still take it off. False once the truck has gone, and once it has been handed over. */
+  cancellable: boolean;
+  at: string;
 }

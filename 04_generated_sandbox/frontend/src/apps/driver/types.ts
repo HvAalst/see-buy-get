@@ -443,7 +443,10 @@ export interface DepartureBookingView {
   description: string;
   weightKg: number;
   volumeM3?: number;
-  status: 'booked' | 'cancelled';
+  /** `delivered` is the ending: the goods came off the truck and the driver said so. */
+  status: 'booked' | 'delivered' | 'cancelled';
+  deliveredAt?: string;
+  receivedBy?: string;
   waiting: WaitingRecordView[];
 }
 

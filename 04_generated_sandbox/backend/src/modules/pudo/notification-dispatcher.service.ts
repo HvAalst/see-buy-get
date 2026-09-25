@@ -154,6 +154,16 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ freightId: string; code: string; driverDid: string; amended: boolean; text?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string }>(GlosEvent.Pudo.FreightInstructed, (e) => this.onFreightInstructed(e.payload));
     // FP3 (driver) — a load they had claimed was withdrawn by its sender: their day just changed, tell them why.
     this.events.subscribe<{ freightId: string; code: string; driverDid?: string; reason: string; destLabel?: string }>(GlosEvent.Pudo.FreightCancelled, (e) => this.onFreightCancelled(e.payload));
+    /*
+     * F3/F4 (shippers) — a run they have goods on was called off, or their goods arrived.
+     *
+     * The first of these is the one that had to exist. A departure could be cancelled with five shippers
+     * aboard and nothing reached any of them: the type said in as many words that everybody booked on it
+     * has to be told, and nobody was. It is also the worst possible thing to be silent about — a shipper
+     * who does not know has not started looking for another truck.
+     */
+    this.events.subscribe<{ departureId: string; company: string; lineName: string; originZone: string; destZone: string; leavesAt: string; shippers: string[]; reason: string }>(GlosEvent.Pudo.DepartureCancelled, (e) => this.onDepartureCancelled(e.payload));
+    this.events.subscribe<{ departureId: string; company: string; shipperDid: string; kind: 'sold' | 'own'; description: string; destZone: string; receivedBy?: string }>(GlosEvent.Pudo.DepartureDelivered, (e) => this.onDepartureDelivered(e.payload));
     // FP3b (sender) — the driver is at the door and cannot hand over: the sender is the one who can fix it.
     this.events.subscribe<{ freightId: string; code: string; posterDid?: string; outcome: string; note?: string; destLabel?: string; attempts: number }>(GlosEvent.Pudo.FreightDeliveryFailed, (e) => this.onFreightDeliveryFailed(e.payload));
     // FP3b (claimant) — their claim was decided; they are shown the reason.
@@ -279,6 +289,51 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       });
     } catch (err) {
       this.logger.warn(`freight-cancelled notify failed for ${payload.freightId}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * A run somebody's goods were on is not happening.
+   *
+   * Every shipper aboard, each once — the event already de-duplicates them and leaves the fleet's own
+   * customers out, because the fleet is the one doing the telling. THE REASON IS IN THE BODY and is the
+   * only part they can act on: "the run is off" leaves somebody ringing round for a lorry with nothing
+   * to tell the next carrier.
+   *
+   * One failure does not stop the rest. Five shippers and a bad DID among them must not mean four
+   * people never hear.
+   */
+  private async onDepartureCancelled(payload: { departureId: string; company: string; lineName: string; originZone: string; destZone: string; leavesAt: string; shippers: string[]; reason: string }): Promise<void> {
+    for (const shipperDid of payload.shippers) {
+      try {
+        await this.notifications.notify(shipperDid, {
+          kind: 'load_cancelled',
+          title: `${payload.company} called off the ${payload.originZone} → ${payload.destZone} run`,
+          body: `The run you booked space on is not happening${payload.reason ? `: ${payload.reason}` : ''}. Your goods were not collected — you will need another truck.`,
+          link: '/',
+          tag: `departure:${payload.departureId}:cancelled`,
+          data: { departureId: payload.departureId },
+        });
+      } catch (err) {
+        this.logger.warn(`departure-cancelled notify failed for ${shipperDid}: ${(err as Error).message}`);
+      }
+    }
+  }
+
+  /** Their goods reached the other end. The fleet's own customers are not ours to write to. */
+  private async onDepartureDelivered(payload: { departureId: string; company: string; shipperDid: string; kind: 'sold' | 'own'; description: string; destZone: string; receivedBy?: string }): Promise<void> {
+    if (payload.kind === 'own') return;
+    try {
+      await this.notifications.notify(payload.shipperDid, {
+        kind: 'freight_delivered',
+        title: `Delivered in ${payload.destZone}`,
+        body: `${payload.company} handed over ${payload.description}${payload.receivedBy ? ` to ${payload.receivedBy}` : ''}.`,
+        link: '/',
+        tag: `departure:${payload.departureId}:delivered`,
+        data: { departureId: payload.departureId },
+      });
+    } catch (err) {
+      this.logger.warn(`departure-delivered notify failed for ${payload.shipperDid}: ${(err as Error).message}`);
     }
   }
 

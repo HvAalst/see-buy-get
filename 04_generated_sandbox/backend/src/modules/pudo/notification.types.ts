@@ -80,6 +80,15 @@ export const NOTIFICATION_KINDS = [
    * was recorded and one that was refused: what a reader wants is the outcome, not a taxonomy.
    */
   'money_in',
+  /**
+   * GOODS A SHIPPER SENT REACHED THE OTHER END.
+   *
+   * Its own kind rather than folded into `freight_problem`, because it is the only message in this list
+   * that is unambiguously good news — and because until F3's ending existed there was nothing to send:
+   * a run went departed and simply stopped, so the last thing a shipper ever heard about their load was
+   * that they had booked it.
+   */
+  'freight_delivered',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

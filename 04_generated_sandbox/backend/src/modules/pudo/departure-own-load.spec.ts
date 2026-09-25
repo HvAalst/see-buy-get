@@ -1,6 +1,15 @@
 import { DepartureService } from './departure.service';
 import { CorridorService } from './corridor.service';
+import type { DriverService } from './driver.service';
 import type { FleetManagerService } from './fleet-manager.service';
+import type { PresenceService } from '../../foundation/presence/presence.service';
+import type { EventBus } from '../../foundation/events/event-bus.service';
+
+/** Papers and the country are their own tests (departure-gates.spec.ts); here they simply say yes. */
+const clearDrivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
+const openEverywhere = { can: () => true } as unknown as PresenceService;
+/** Events are their own test (departure-events.spec.ts); here they go nowhere. */
+const silentBus = { publish: async () => undefined } as unknown as EventBus;
 
 /**
  * F4 — THE WORK THE FLEET ALREADY HAD.
@@ -38,7 +47,7 @@ describe('a fleet’s own customers, on a fleet’s own run', () => {
 
   const setUp = (capacity: { capacityKg: number; capacityM3?: number } = { capacityKg: 6000, capacityM3: 40 }) => {
     const corridors = new CorridorService();
-    const service = new DepartureService(corridors, managers);
+    const service = new DepartureService(corridors, managers, clearDrivers, openEverywhere, silentBus);
     const corridor = line(corridors);
     const departure = service.declare({
       managerDid: MANAGER,

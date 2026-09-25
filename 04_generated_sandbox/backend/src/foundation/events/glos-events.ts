@@ -106,6 +106,13 @@ export const GlosEvent = {
     FreightClaimOpened: 'pudo.freight_claim_opened', // FP3b — the sender says the goods arrived damaged, short, or not at all
     FreightClaimDecided: 'pudo.freight_claim_decided', // FP3b — an operator decided it, with a reason the claimant is shown
     LoadClaimed: 'pudo.load_claimed', // a driver claimed a tote/freight along their route
+    // F3/F4 — a fleet's own departure. Until these existed DepartureService published nothing at all, so a
+    // run could be called off with five shippers aboard and not one of them could be told.
+    DepartureBooked: 'pudo.departure_booked', // a shipper took space on a run; the fleet office is told
+    DepartureBookingCancelled: 'pudo.departure_booking_cancelled', // a shipper gave the space back; it is for sale again
+    DepartureDeparted: 'pudo.departure_departed', // the truck has gone — the last moment anything could change
+    DepartureDelivered: 'pudo.departure_delivered', // one booking reached its destination and was handed over
+    DepartureCancelled: 'pudo.departure_cancelled', // the run is not happening, and everybody aboard has to be told
     FreightTempBreach: 'pudo.freight_temp_breach', // S33b — a cold-chain freight logged an out-of-band temperature
     FleetManagerActivated: 'pudo.fleet_manager_activated', // operator vetted + bonded → may build a fleet
   },

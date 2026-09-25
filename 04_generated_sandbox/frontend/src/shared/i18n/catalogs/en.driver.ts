@@ -50,6 +50,19 @@ export const enDriver = {
   'driver.run.waitingSince': 'Waiting since {at}',
   'driver.run.loaded': 'Loaded — I can go',
   'driver.run.unloaded': 'Unloaded — I can go',
+  /* THE ENDING. Clocking out of the delivery gate proves the truck arrived and says nothing about
+     whether the load came off it — so the goods reached a door, somebody took them, and no record
+     of that existed. The name is asked for and never demanded: a required field at a gate in the
+     rain is how a driver learns to type "x". */
+  'driver.run.handOver': 'Hand it over',
+  'driver.run.handOverTitle': 'Handed over?',
+  'driver.run.handOverLede': 'You are recording that {what} came off the truck and somebody took it. This is what the sender is told.',
+  'driver.run.whoTook': 'Who took it',
+  'driver.run.whoTookPh': 'Joseph at the gate',
+  'driver.run.whoTookHint': 'If nobody gave a name, leave it blank — the delivery still counts.',
+  'driver.run.handOverCta': 'Yes, it is handed over',
+  'driver.run.handedTo': 'Handed to {who}',
+  'driver.run.handedOver': 'Handed over',
   'driver.run.done': 'Waited {minutes} min',
   'driver.run.nothingOwed': 'Inside the free time — nothing owed.',
   'driver.run.owedByShipper': '{minutes} min over. {amount} {currency} owed by the sender, who kept you.',

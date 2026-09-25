@@ -1,6 +1,15 @@
 import { DepartureService } from './departure.service';
 import { CorridorService } from './corridor.service';
+import type { DriverService } from './driver.service';
 import type { FleetManagerService } from './fleet-manager.service';
+import type { PresenceService } from '../../foundation/presence/presence.service';
+import type { EventBus } from '../../foundation/events/event-bus.service';
+
+/** Papers and the country are their own tests (departure-gates.spec.ts); here they simply say yes. */
+const clearDrivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
+const openEverywhere = { can: () => true } as unknown as PresenceService;
+/** Events are their own test (departure-events.spec.ts); here they go nowhere. */
+const silentBus = { publish: async () => undefined } as unknown as EventBus;
 
 /**
  * WAITING TIME, DRIVEN THROUGH THE SERVICE — because the arithmetic being right proves nothing on its own.
@@ -38,7 +47,7 @@ describe('the waiting clock, from arrival to a charge somebody owes', () => {
 
   const setUp = () => {
     const corridors = new CorridorService();
-    const service = new DepartureService(corridors, managers);
+    const service = new DepartureService(corridors, managers, clearDrivers, openEverywhere, silentBus);
     const corridor = line(corridors);
 
     const departure = service.declare({
@@ -107,7 +116,7 @@ describe('the waiting clock, from arrival to a charge somebody owes', () => {
   it('charges nothing at all on a departure whose fleet never published waiting terms', () => {
     // The same ninety-minute wait, on a run where nobody was told about a clock. Absent means free.
     const corridors = new CorridorService();
-    const service = new DepartureService(corridors, managers);
+    const service = new DepartureService(corridors, managers, clearDrivers, openEverywhere, silentBus);
     const corridor = line(corridors);
     const departure = service.declare({
       managerDid: MANAGER, corridorId: corridor.corridorId, leavesAt: new Date(Date.now() + 86_400_000).toISOString(),

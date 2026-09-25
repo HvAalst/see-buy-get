@@ -384,3 +384,33 @@ export interface OfferQuote {
   currency: string;
   waiting?: { freeMin: number; perHour: number };
 }
+
+/* ------------------------------------------------------------- F3: what I booked --
+   The read the shipper's side shipped without: a shop took space, saw a toast, and the booking left
+   their world. No time, no company, no way to give it back, and no way to learn it had been called off. */
+
+export interface MyBookingRow {
+  bookingId: string;
+  departureId: string;
+  company: string;
+  lineName: string;
+  originZone: string;
+  destZone: string;
+  leavesAt: string;
+  description: string;
+  weightKg: number;
+  volumeM3?: number;
+  price: number;
+  currency: string;
+  bookingStatus: 'booked' | 'delivered' | 'cancelled';
+  /** The RUN's state, which is a different fact: goods given back and goods stranded are not the same. */
+  runStatus: 'open' | 'closed' | 'departed' | 'cancelled';
+  cancelledReason?: string;
+  deliveredAt?: string;
+  receivedBy?: string;
+  waiting?: { freeMin: number; perHour: number };
+  /** Their own standing time only — never another shipper's on the same truck. */
+  waits: Array<{ where: 'loading' | 'delivery'; arrivedAt: string; freeAt?: string; waitedMin: number; billableMin: number; amount: number; bearer: 'shipper' | 'consignee'; waivedReason?: string }>;
+  cancellable: boolean;
+  at: string;
+}

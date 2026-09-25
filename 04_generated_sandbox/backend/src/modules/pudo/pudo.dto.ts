@@ -1439,6 +1439,20 @@ export class BookDepartureDto {
 
 export class DepartureStatusDto {
   @IsIn(['open', 'closed', 'departed', 'cancelled']) status!: 'open' | 'closed' | 'departed' | 'cancelled';
+  /**
+   * Why, and required by the SERVICE when anybody is aboard rather than by this class.
+   *
+   * Optional here because the same route closes a run and marks it gone, and neither of those owes
+   * anybody an explanation. Calling off a loaded run does, and that is a rule about the run's state —
+   * which a DTO cannot see.
+   */
+  @IsOptional() @IsString() @MaxLength(240) reason?: string;
+}
+
+/** The driver, or the office, saying a load came off the truck. */
+export class DeliverDepartureDto {
+  /** Who took it, in the words the driver was given at the door. Optional: often nobody gives a name. */
+  @IsOptional() @IsString() @MaxLength(120) receivedBy?: string;
 }
 
 /**

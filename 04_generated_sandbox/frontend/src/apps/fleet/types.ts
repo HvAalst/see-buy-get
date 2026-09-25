@@ -282,7 +282,10 @@ interface DepartureBookingBase {
   price: number;
   units: number;
   at: string;
-  status: 'booked' | 'cancelled';
+  /** `delivered` is the ending a run used to lack — the goods came off, and somebody recorded it. */
+  status: 'booked' | 'delivered' | 'cancelled';
+  deliveredAt?: string;
+  receivedBy?: string;
   waiting: WaitingRow[];
 }
 
@@ -319,6 +322,8 @@ export interface DepartureRow {
   driverName?: string;
   note?: string;
   status: 'open' | 'closed' | 'departed' | 'cancelled';
+  /** Why it was called off. Required by the server once anybody is aboard. */
+  cancelledReason?: string;
   bookings: DepartureBookingRow[];
   createdAt: string;
 }

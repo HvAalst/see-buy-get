@@ -120,6 +120,20 @@ export function createDriverApi(sbg: SbgClient) {
         c.POST('/v1/sbg/departures/{departureId}/bookings/{bookingId}/free-to-go' as never, { params: { path: { departureId, bookingId } }, body: { where } } as never),
       ),
 
+    /**
+     * HANDED OVER, and who took it.
+     *
+     * Clocking out of the delivery gate proves the truck got there and says nothing about whether the load
+     * came off it — which is the gap this closes. The name is optional because often nobody gives one.
+     */
+    handOver: (departureId: string, bookingId: string, receivedBy?: string) =>
+      sbg.request((c) =>
+        c.POST('/v1/sbg/departures/{departureId}/bookings/{bookingId}/delivered' as never, {
+          params: { path: { departureId, bookingId } },
+          body: { ...(receivedBy ? { receivedBy } : {}) },
+        } as never),
+      ),
+
     /** Resolve a typed place to a point — for a road end that is a market or a junction, not a PUDO. */
     geocode: (q: string) => sbg.request((c) => c.GET('/v1/sbg/geocode', { params: { query: { q } } })),
 

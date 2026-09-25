@@ -13360,6 +13360,19 @@
         }
       }
     },
+    "/v1/sbg/departures/mine": {
+      "get": {
+        "operationId": "Sbg.myDepartureBookings",
+        "summary": "",
+        "description": "WHAT I BOOKED — the read this feature shipped without.\n\nThere were three ways to read a departure and none of them was the shipper's: the fleet's own runs,\nthe public offer list, and the driver's roster. A shop took space, saw a toast, and the booking left\ntheir world. This is the door back to it, and the only one that answers \"was my truck called off\".",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/departures/{departureId}/quote": {
       "post": {
         "operationId": "Sbg.quoteDeparture",
@@ -13506,6 +13519,53 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Departure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/departures/{departureId}/bookings/{bookingId}/delivered": {
+      "post": {
+        "operationId": "Sbg.deliverDepartureBooking",
+        "summary": "",
+        "description": "HANDED OVER — the ending a run did not have.\n\nThe driver standing at the door, or the office on their behalf. Never the shipper: this is the\ncarrier saying what they did, and a delivery the receiving side can mark itself records nothing.",
+        "parameters": [
+          {
+            "name": "departureId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bookingId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeliverDepartureDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartureBooking"
                 }
               }
             }
@@ -29697,6 +29757,23 @@
             "type": "number",
             "description": "What the basis was applied to — kilometres, kilograms, or 1 for a trip. Kept so the price can be re-read."
           },
+          "status": {
+            "type": "string",
+            "description": "WHERE THIS LOAD GOT TO, and the third state is the one the model was missing.\n\nA run used to go open → departed and then stop. The goods reached a door, somebody took them, and no\nrecord of that existed anywhere — while the rest of this product is meticulous about custody. The\nwaiting clock even had the driver standing at the DELIVERY gate tapping, which proved the truck got\nthere and never that the load came off it.\n\n `booked`     aboard, or going to be\n `delivered`  handed over, by the driver who was standing there\n `cancelled`  given back before it travelled, by the shipper or the fleet",
+            "enum": [
+              "booked",
+              "delivered",
+              "cancelled"
+            ]
+          },
+          "deliveredAt": {
+            "type": "string",
+            "description": "When it was handed over. The server's clock, like the gate taps, and for the same reason."
+          },
+          "receivedBy": {
+            "type": "string",
+            "description": "Who took it, in the words the driver was given at the door. Absent where nobody was named."
+          },
           "waiting": {
             "description": "THE CLOCKS, one per stop, and empty on a run where nothing went wrong.\n\nKept on the BOOKING rather than the departure because a shared truck waits for one shipper at a time:\nthree loads on the same run, and the two-hour stand at the second collection belongs to the second\nshipper alone. A departure-level total would be exactly the unattributable number this exists to avoid.",
             "type": "array",
@@ -29719,9 +29796,6 @@
           },
           "at": {
             "type": "string"
-          },
-          "status": {
-            "type": "object"
           }
         },
         "required": [
@@ -29729,13 +29803,13 @@
           "binds",
           "price",
           "units",
+          "status",
           "waiting",
           "bookingId",
           "shipperDid",
           "description",
           "weightKg",
-          "at",
-          "status"
+          "at"
         ]
       },
       "Departure": {
@@ -29779,6 +29853,10 @@
               "departed",
               "cancelled"
             ]
+          },
+          "cancelledReason": {
+            "type": "string",
+            "description": "Why it was called off, kept rather than only announced.\n\nThe notice goes out once, the day it happens; the shipper looking at the wreckage of their week a\nfortnight later is reading this screen, not their notifications. Required when anybody was aboard."
           },
           "bookings": {
             "type": "array",
@@ -29879,6 +29957,11 @@
               "departed",
               "cancelled"
             ]
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why, and required by the SERVICE when anybody is aboard rather than by this class.\n\nOptional here because the same route closes a run and marks it gone, and neither of those owes\nanybody an explanation. Calling off a loaded run does, and that is a rule about the run's state —\nwhich a DTO cannot see.",
+            "maxLength": 240
           }
         },
         "required": [
@@ -29920,6 +30003,16 @@
         "required": [
           "driverDid"
         ]
+      },
+      "DeliverDepartureDto": {
+        "type": "object",
+        "properties": {
+          "receivedBy": {
+            "type": "string",
+            "description": "Who took it, in the words the driver was given at the door. Optional: often nobody gives a name.",
+            "maxLength": 120
+          }
+        }
       },
       "WaitingStopDto": {
         "type": "object",

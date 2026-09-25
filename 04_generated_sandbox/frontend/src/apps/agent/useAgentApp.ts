@@ -44,6 +44,7 @@ import type {
   ReputationProfileView,
   ShelfGrid,
   OfferQuote,
+  MyBookingRow,
   OfferRow,
 } from './types';
 
@@ -183,6 +184,9 @@ export interface AgentState {
   /** F3 — runs with space on them, soonest first. Loaded on demand, like the posted loads. */
   offers: OfferRow[];
   offersState: 'idle' | 'loading' | 'ready' | 'error';
+  /** F3 — what this shop has booked, which until now it could not read back at all. */
+  myBookings: MyBookingRow[];
+  myBookingsState: 'idle' | 'loading' | 'ready' | 'error';
   /** The run being taken, and what it would cost — quoted BEFORE anything is committed. */
   offerFor: OfferRow | null;
   offerQuote: OfferQuote | null;
@@ -301,6 +305,8 @@ const INITIAL: AgentState = {
   postedState: 'idle',
   offers: [],
   offersState: 'idle',
+  myBookings: [],
+  myBookingsState: 'idle',
   offerFor: null,
   offerQuote: null,
   offerQuoteError: null,
@@ -1019,6 +1025,39 @@ export function useAgentApp() {
   }, [client, fail]);
 
   /**
+   * WHAT THIS SHOP HAS BOOKED — the read the shipper's side shipped without.
+   *
+   * Reloaded after every booking and every cancellation, because this list is the only place either of
+   * those becomes visible: a toast is gone in five seconds and the thing it announced lived nowhere.
+   */
+  const loadMyBookings = useCallback(async () => {
+    if (!client) return;
+    setState((s) => ({ ...s, myBookingsState: s.myBookingsState === 'ready' ? s.myBookingsState : 'loading' }));
+    const r = await client.api.myDepartureBookings();
+    if (r.error) {
+      setState((s) => ({ ...s, myBookingsState: 'error' }));
+      return fail(r.error);
+    }
+    const page = narrow<{ items?: MyBookingRow[] }>(r.data);
+    setState((s) => ({ ...s, myBookings: page.items ?? [], myBookingsState: 'ready' }));
+  }, [client, fail]);
+
+  /** Give the space back. Offered only where the server says it is still possible. */
+  const cancelMyBooking = useCallback(
+    async (departureId: string, bookingId: string) => {
+      if (!client) return;
+      await run(`unbook:${bookingId}`, async () => {
+        const r = await client.api.cancelDepartureBooking(departureId, bookingId);
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'ok', icon: 'truck', title: t('agent.mine.gaveBack'), detail: t('agent.mine.gaveBackDetail') });
+        // Both lists move: the space is on the market again, and this row is now history.
+        await Promise.all([loadMyBookings(), loadOffers()]);
+      });
+    },
+    [client, run, fail, pushToast, loadMyBookings, loadOffers],
+  );
+
+  /**
    * Forget the quote, because the load it was for has changed.
    *
    * Not cosmetic. A shop could otherwise quote 40 kg, edit the weight to 4000, and press Take it against a
@@ -1073,11 +1112,13 @@ export function useAgentApp() {
         ok = true;
         setState((s) => ({ ...s, offerFor: null, offerQuote: null, offerQuoteError: null }));
         pushToast({ tone: 'ok', icon: 'truck', title: t('agent.offers.tookTitle'), detail: t('agent.offers.tookDetail', { company: offer.company }) });
-        await loadOffers();
+        // BOTH lists. The toast is gone in five seconds, and until this reloaded there was nowhere at all
+        // the thing it announced could be seen afterwards.
+        await Promise.all([loadOffers(), loadMyBookings()]);
       });
       return ok;
     },
-    [client, run, pushToast, loadOffers],
+    [client, run, pushToast, loadOffers, loadMyBookings],
   );
 
   /** Export the whole current-filter parcel history (every page) as a CSV download — server-rendered. */
@@ -2042,6 +2083,8 @@ export function useAgentApp() {
       dismissBookedFreight,
       loadPosted,
       loadOffers,
+      loadMyBookings,
+      cancelMyBooking,
       openOffer,
       clearOfferQuote,
       quoteOffer,

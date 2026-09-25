@@ -1159,6 +1159,31 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
     [client, did, run, refresh],
   );
 
+  /**
+   * HANDED OVER at the door — the ending a run did not have.
+   *
+   * Resolves TRUE only when it went through, so the sheet stays open on a refusal with the name still in
+   * it: re-typing "the man at the loading bay" in the rain is the kind of small cruelty that teaches a
+   * driver to skip the field entirely.
+   */
+  const handOver = useCallback(
+    async (departureId: string, bookingId: string, receivedBy?: string): Promise<boolean> => {
+      if (!client || !did) return false;
+      let ok = false;
+      await run(`deliver:${bookingId}`, async () => {
+        const r = await client.api.handOver(departureId, bookingId, receivedBy || undefined);
+        if (r.error) {
+          setState((s) => ({ ...s, error: r.error }));
+          return;
+        }
+        ok = true;
+        await refresh();
+      });
+      return ok;
+    },
+    [client, did, run, refresh],
+  );
+
   const runSuggest = useCallback(
     async (from: { lat: number; lng: number }, to: { lat: number; lng: number }, minEarn?: number) => {
       if (!client || !did) return;
@@ -1543,6 +1568,7 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
       notifications: client?.notifications ?? null,
       refresh,
       clockGate,
+      handOver,
       signIn,
       sendPinCode,
       setPinAndSignIn,

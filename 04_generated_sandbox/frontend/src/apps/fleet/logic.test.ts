@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import type { DepartureBookingRow, DepartureRow } from './types';
-import { EMPTY_OWN_LOAD, ownLoadBlocker, runMoney, runRemaining, runWaits, type OwnLoadForm } from './logic';
+import { EMPTY_OWN_LOAD, ownLoadBlocker, runManifest, runMoney, runRemaining, runWaits, type OwnLoadForm } from './logic';
 import { ageWords, signalState, shiftHours, overShiftLimit,
   EMPTY_DRIVER,
   EMPTY_VEHICLE,
@@ -403,5 +403,42 @@ describe('F4 — a fleet’s own customers on its own run', () => {
     it('says nothing about space on a run whose hold was never measured', () => {
       expect(ownLoadBlocker(form({ weightKg: '40', volumeM3: '999' }), runWith([], 6000, null))).toBeNull();
     });
+  });
+});
+
+/**
+ * The gaps found by reading F1–F4 back, on the fleet's side.
+ *
+ * Both of these were caught by driving rather than by anything failing: a delivered load VANISHED from
+ * the run sheet the moment the driver said it had arrived, taking its money with it — at the one point
+ * where the fleet has definitely earned it.
+ */
+describe('a run sheet that survives its own deliveries', () => {
+  const b = (over: Partial<DepartureBookingRow> & Pick<DepartureBookingRow, 'kind'>): DepartureBookingRow =>
+    ({ bookingId: 'b' + Math.random(), shipperDid: 'did:x', description: 'Load', weightKg: 100, binds: 'weight', price: 450, units: 1, at: 'x', status: 'booked', waiting: [], ...over }) as DepartureBookingRow;
+  const runOf = (bookings: DepartureBookingRow[]): DepartureRow =>
+    ({ departureId: 'd', corridorId: 'c', lineName: 'L', originZone: 'A', destZone: 'B', leavesAt: 'x', capacityKg: 6000, capacityM3: 40, rate: { basis: 'per_trip', amount: 450, currency: 'KES' }, status: 'open', bookings, createdAt: 'x' }) as DepartureRow;
+
+  it('keeps a delivered load on the manifest and drops a cancelled one', () => {
+    const run = runOf([b({ kind: 'sold' }), b({ kind: 'sold', status: 'delivered' }), b({ kind: 'sold', status: 'cancelled' })]);
+    // A run sheet that erases each drop as it happens ends the day empty, which is the opposite of what
+    // a fleet wants to read at the end of a day.
+    expect(runManifest(run)).toHaveLength(2);
+  });
+
+  it('still counts a delivered load’s money', () => {
+    const run = runOf([b({ kind: 'sold', status: 'delivered', price: 450 }), b({ kind: 'own', customer: 'Kariuki', status: 'delivered', price: 380 })]);
+    expect(runMoney(run)).toMatchObject({ sold: 450, own: 380 });
+  });
+
+  it('does not count a booking somebody took back', () => {
+    expect(runMoney(runOf([b({ kind: 'sold', status: 'cancelled', price: 450 })])).sold).toBe(0);
+  });
+
+  it('gives the space back on delivery, because the goods are off the truck', () => {
+    // The manifest and the capacity answer different questions, and this is where they part company.
+    const run = runOf([b({ kind: 'sold', status: 'delivered', weightKg: 2000 })]);
+    expect(runRemaining(run).kg).toBe(6000);
+    expect(runManifest(run)).toHaveLength(1);
   });
 });

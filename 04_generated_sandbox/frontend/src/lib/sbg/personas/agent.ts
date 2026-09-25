@@ -377,6 +377,14 @@ export function createAgentApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/departures/{departureId}/book' as never, { params: { path: { departureId } }, body: load } as never)),
 
     /** Give the space back — the shipper who took it, or the fleet that sold it. */
+    /**
+     * WHAT I BOOKED — the read this side shipped without.
+     *
+     * A shop took space, saw a toast, and the booking left their world: no time, no company, no way to
+     * give it back, and no way to learn the run had been called off.
+     */
+    myDepartureBookings: () => sbg.request((c) => c.GET('/v1/sbg/departures/mine' as never, {} as never)),
+
     cancelDepartureBooking: (departureId: string, bookingId: string) =>
       sbg.request((c) =>
         c.POST('/v1/sbg/departures/{departureId}/bookings/{bookingId}/cancel' as never, { params: { path: { departureId, bookingId } } } as never),

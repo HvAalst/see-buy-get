@@ -1,4 +1,5 @@
-import { Button, Card, Icon, Pill } from '../../../shared/ui';
+import { useState } from 'preact/hooks';
+import { Button, Card, Icon, Pill, Sheet } from '../../../shared/ui';
 import { Explainer } from '../../../shared/ui/Explainer';
 import { formatDate, useT } from '../../../shared/i18n';
 import type { DepartureBookingView, DepartureView, WaitingRecordView } from '../types';
@@ -90,8 +91,69 @@ function Gate({ run, booking, state, actions }: { run: DepartureView; booking: D
         {(['loading', 'delivery'] as const).map((where) => (
           <GateControl key={where} run={run} booking={booking} where={where} state={state} actions={actions} />
         ))}
+        {/* THE ENDING. Clocking out of the delivery gate proves the truck got there and says nothing about
+            whether the load came off it — which is the whole gap: the goods reached a door, somebody took
+            them, and no record of that existed. This is the driver saying what they did, at the door. */}
+        {booking.status === 'delivered' ? (
+          <span class="run__gate">
+            <Pill tone="ok" dot>
+              {booking.receivedBy
+                ? t('driver.run.handedTo', { who: booking.receivedBy })
+                : t('driver.run.handedOver')}
+            </Pill>
+          </span>
+        ) : (
+          <HandOver run={run} booking={booking} state={state} actions={actions} />
+        )}
       </span>
     </div>
+  );
+}
+
+/**
+ * Handed over, and who took it.
+ *
+ * The name is OPTIONAL and asked for rather than demanded: often nobody gives one, and a required field
+ * at a gate in the rain is how a driver learns to type "x". When it is there it is the single most useful
+ * thing on the whole record two weeks later.
+ */
+function HandOver({ run, booking, state, actions }: { run: DepartureView; booking: DepartureBookingView; state: DriverState; actions: DriverActions }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [who, setWho] = useState('');
+
+  return (
+    <span class="run__gate">
+      <Button variant="outline" full={false} chevron={false} onClick={() => setOpen(true)}>
+        {t('driver.run.handOver')}
+      </Button>
+
+      <Sheet open={open} onClose={() => setOpen(false)} title={t('driver.run.handOverTitle')}>
+        <p class="hint">{t('driver.run.handOverLede', { what: booking.description })}</p>
+        <div class="field">
+          <label class="field__label" for={`who-${booking.bookingId}`}>
+            {t('driver.run.whoTook')}
+          </label>
+          <input id={`who-${booking.bookingId}`} class="input" value={who} placeholder={t('driver.run.whoTookPh')} onInput={(e) => setWho(e.currentTarget.value)} />
+        </div>
+        <p class="hint">{t('driver.run.whoTookHint')}</p>
+        <Button
+          chevron={false}
+          busy={state.busy === `deliver:${booking.bookingId}`}
+          onClick={async () => {
+            if (await actions.handOver(run.departureId, booking.bookingId, who.trim())) {
+              setWho('');
+              setOpen(false);
+            }
+          }}
+        >
+          {t('driver.run.handOverCta')}
+        </Button>
+        <Button variant="link" onClick={() => setOpen(false)}>
+          {t('common.cancel')}
+        </Button>
+      </Sheet>
+    </span>
   );
 }
 

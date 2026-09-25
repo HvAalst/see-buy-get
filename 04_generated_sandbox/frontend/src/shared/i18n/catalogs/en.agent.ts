@@ -522,6 +522,33 @@ export const enAgent = {
   'agent.offers.needWhat': 'Say what you are sending — the carrier is loading it.',
   'agent.offers.needKg': 'Say what it weighs.',
 
+  /* WHAT I BOOKED — the half of F3 that was missing.
+
+     Space could be taken and never seen again: no time, no company, no way to give it back, and no way
+     to learn the run had been called off. Nothing errored, which is why it looked finished. */
+  'agent.mine.title': 'Space you have taken',
+  'agent.mine.lede': 'Every run you have booked onto, including the ones that are over. Nothing is tidied away — what you sent last month is still the answer to what you sent last month.',
+  'agent.mine.with': '{company} · {from} → {to}',
+  'agent.mine.leaves': 'Leaves {when}',
+  'agent.mine.paid': '{kg} kg for {amount} {currency}',
+
+  'agent.mine.booked': 'Booked',
+  'agent.mine.onTheRoad': 'On the road',
+  'agent.mine.delivered': 'Delivered',
+  'agent.mine.youCancelled': 'You gave it back',
+  'agent.mine.calledOff': 'Run called off',
+
+  /* The notice went out once, the day it happened. A shipper looking at the wreckage of their week a
+     fortnight later is reading this screen, so the reason lives here too. */
+  'agent.mine.strandedTitle': '{company} called this run off',
+  'agent.mine.noReason': 'They gave no reason. Your goods were not collected — you will need another truck.',
+  'agent.mine.deliveredTo': 'Handed to {who}, {when}',
+  'agent.mine.deliveredAt': 'Handed over {when}',
+  'agent.mine.waitOwed': 'You kept them waiting: {amount} {currency}',
+  'agent.mine.giveBack': 'Give it back',
+  'agent.mine.gaveBack': 'Space given back',
+  'agent.mine.gaveBackDetail': 'It is on offer again for somebody else.',
+
   'agent.offers.tookTitle': 'Space taken',
   'agent.offers.tookDetail': 'You are on {company}’s run.',
   'agent.freight.title': 'Freight you posted',

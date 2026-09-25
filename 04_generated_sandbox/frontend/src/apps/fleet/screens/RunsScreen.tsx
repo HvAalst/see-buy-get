@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Explainer, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
-import { EMPTY_OWN_LOAD, RUN_BASES, ownLines, ownLoadBlocker, runBlocker, runMoney, runRemaining, runWaits, type OwnLoadForm, type RunBasis } from '../logic';
+import { EMPTY_OWN_LOAD, RUN_BASES, ownLines, ownLoadBlocker, runBlocker, runManifest, runMoney, runRemaining, runWaits, type OwnLoadForm, type RunBasis } from '../logic';
 import type { DepartureBookingRow, DepartureRow, WaitingRow } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
 
@@ -76,13 +76,19 @@ const STATUS: Record<DepartureRow['status'], { key: MessageKey; tone: 'ok' | 'in
 function Run({ run, state, actions }: { run: DepartureRow; state: FleetState; actions: FleetActions }) {
   const t = useT();
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
   const left = runRemaining(run);
   const money = runMoney(run);
+  // Two different lists on purpose. `aboard` is what is physically on the truck and drives the count
+  // and the capacity; `manifest` is the job, and keeps a delivered load rather than erasing it at the
+  // moment the fleet most wants to see it.
   const aboard = run.bookings.filter((b) => b.status === 'booked');
+  const manifest = runManifest(run);
   const waits = runWaits(run);
   const status = STATUS[run.status];
-  // Anybody this fleet could put on it. A driver whose papers have lapsed is refused at the coupling
-  // anyway, so the roster is deliberately not a second place to re-litigate that.
+  // Anybody this fleet could put on it. The server refuses a driver whose papers have lapsed and names
+  // the paper, so the list stays open and the refusal does the teaching — this used to say the coupling
+  // caught it, which was wrong: a roster is not a coupling, and for a while nothing checked at all.
   const drivers = state.drivers;
 
   return (
@@ -114,6 +120,7 @@ function Run({ run, state, actions }: { run: DepartureRow; state: FleetState; ac
         {aboard.length === 0 ? t('fleet.runs.nobody') : aboard.length === 1 ? t('fleet.runs.aboardOne') : t('fleet.runs.aboard', { count: aboard.length })}
       </p>
       {run.note ? <p class="card__note">{run.note}</p> : null}
+      {run.cancelledReason ? <Note tone="warn" icon="info" title={t('fleet.runs.calledOff')} detail={run.cancelledReason} /> : null}
 
       {/* WHO IS DRIVING, and why it is not optional in practice: the waiting clock is started by the person
           standing at the gate, so until somebody is named there is nobody holding a phone who may touch it. */}
@@ -146,7 +153,7 @@ function Run({ run, state, actions }: { run: DepartureRow; state: FleetState; ac
           closed the offer because it is filling the rest itself is the ordinary case. */}
       {run.status === 'open' || run.status === 'closed' ? <OwnLoad run={run} state={state} actions={actions} /> : null}
 
-      {aboard.length ? (
+      {manifest.length ? (
         <>
           <h3 class="scr__section">{t('fleet.runs.moneyTitle')}</h3>
           {/* THREE FIGURES THAT ARE NEVER ADDED UP. What we sold, what the fleet charges its own people,
@@ -159,15 +166,15 @@ function Run({ run, state, actions }: { run: DepartureRow; state: FleetState; ac
               are no bookings, which is a different fact and the one worth reading. */}
           <p class="card__note">
             {[
-              aboard.some((b) => b.kind !== 'own') ? t('fleet.runs.sold', { amount: money.sold, currency: money.currency }) : null,
-              aboard.some((b) => b.kind === 'own') ? t('fleet.runs.ownMoney', { amount: money.own, currency: money.currency }) : null,
+              manifest.some((b) => b.kind !== 'own') ? t('fleet.runs.sold', { amount: money.sold, currency: money.currency }) : null,
+              manifest.some((b) => b.kind === 'own') ? t('fleet.runs.ownMoney', { amount: money.own, currency: money.currency }) : null,
               money.waiting > 0 ? t('fleet.runs.waitingOwed', { amount: money.waiting, currency: money.currency }) : null,
             ]
               .filter(Boolean)
               .join(' · ')}
           </p>
           <div class="rows" role="list">
-            {aboard.map((b) => (
+            {manifest.map((b) => (
               <div key={b.bookingId} class="row row--static" role="listitem">
                 <span class="row__body">
                   <span class="row__t">{b.description}</span>
@@ -185,11 +192,31 @@ function Run({ run, state, actions }: { run: DepartureRow; state: FleetState; ac
                     <span class="row__s">{b.price > 0 ? t('fleet.runs.ownRow', { customer: b.customer }) : t('fleet.runs.ownRowNoPrice', { customer: b.customer })}</span>
                   ) : null}
                 </span>
-                {b.kind === 'own' ? (
-                  <span class="row__end">
-                    <Pill tone="idle">{t('fleet.runs.ownPill')}</Pill>
-                  </span>
-                ) : null}
+                  {/* The ending a run did not have. Shown once the load is delivered rather than hidden,
+                      because "handed over to Joseph at 14:20" is the answer to the only question anybody
+                      asks about a finished run. */}
+                  {b.status === 'delivered' ? (
+                    <span class="row__s">
+                      {b.receivedBy
+                        ? t('fleet.runs.deliveredTo', { who: b.receivedBy, when: formatDate(b.deliveredAt ?? '', { dateStyle: 'medium', timeStyle: 'short' }) })
+                        : t('fleet.runs.deliveredAt', { when: formatDate(b.deliveredAt ?? '', { dateStyle: 'medium', timeStyle: 'short' }) })}
+                    </span>
+                  ) : null}
+                <span class="row__end">
+                  {b.kind === 'own' ? <Pill tone="idle">{t('fleet.runs.ownPill')}</Pill> : null}
+                  {b.status === 'delivered' ? (
+                    <Pill tone="ok">{t('fleet.runs.deliveredPill')}</Pill>
+                  ) : run.status !== 'cancelled' ? (
+                    <Button
+                      variant="link"
+                      full={false}
+                      busy={state.busy === `deliver:${b.bookingId}`}
+                      onClick={() => void actions.markDelivered(run.departureId, b.bookingId)}
+                    >
+                      {t('fleet.runs.markDelivered')}
+                    </Button>
+                  ) : null}
+                </span>
               </div>
             ))}
           </div>
@@ -231,15 +258,40 @@ function Run({ run, state, actions }: { run: DepartureRow; state: FleetState; ac
       </div>
 
       {/* Calling a run off strands everyone booked on it, so it asks — unlike closing, which only stops
-          new bookings and is the thing most managers actually mean. */}
+          new bookings and is the thing most managers actually mean.
+
+          AND IT ASKS WHY, once anybody is aboard. Every shipper on this truck is about to be told, and the
+          reason is the only part of that message they can act on: "the run is off" leaves somebody ringing
+          round for a lorry with nothing to tell the next carrier. Empty runs skip it — nobody planned
+          anything around a departure declared by mistake. */}
       <Sheet open={confirmCancel} onClose={() => setConfirmCancel(false)} title={t('fleet.runs.cancelConfirm')}>
         <p class="t-body">{t('fleet.runs.cancelBody')}</p>
+        {aboard.some((b) => b.kind !== 'own') ? (
+          <>
+            <Note tone="warn" icon="info" title={t('fleet.runs.cancelTold', { count: aboard.filter((b) => b.kind !== 'own').length })} />
+            <div class="field" style="margin-top:12px">
+              <label class="field__label" for={`why-${run.departureId}`}>
+                {t('fleet.runs.cancelWhy')}
+              </label>
+              <input
+                id={`why-${run.departureId}`}
+                class="input"
+                value={cancelReason}
+                placeholder={t('fleet.runs.cancelWhyPh')}
+                onInput={(e) => setCancelReason(e.currentTarget.value)}
+              />
+            </div>
+          </>
+        ) : null}
         <Button
           chevron={false}
+          disabled={aboard.some((b) => b.kind !== 'own') && !cancelReason.trim()}
           busy={state.busy === `run-status:${run.departureId}`}
           onClick={async () => {
-            await actions.setRunStatus(run.departureId, 'cancelled');
-            setConfirmCancel(false);
+            if (await actions.setRunStatus(run.departureId, 'cancelled', cancelReason.trim() || undefined)) {
+              setCancelReason('');
+              setConfirmCancel(false);
+            }
           }}
         >
           {t('fleet.runs.cancelCta')}
