@@ -117,6 +117,57 @@ export function createFleetApi(sbg: SbgClient) {
     proposeLine: (body: { originZone: string; destZone: string; name?: string; vehicleType?: 'bus' | 'truck'; schedule?: string; note?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/lines', { body: body as never })),
 
+    /* ------------------------------------------------- F3: selling the space on a run -------- */
+
+    /**
+     * Put a departure on one of this fleet's own published lines.
+     *
+     * This is the market running the other way: everything else here is a shipper posting a load and
+     * carriers bidding, and the cheapest capacity in the network is a truck leaving anyway with air in
+     * the back. The manager DID is in the path because these routes are addressed per fleet; the token's
+     * tenant is still what authorises it.
+     */
+    declareDeparture: (
+      did: string,
+      body: {
+        corridorId: string;
+        leavesAt: string;
+        capacityKg: number;
+        capacityM3?: number;
+        basis: string;
+        amount: number;
+        minCharge?: number;
+        freeMin?: number;
+        waitingPerHour?: number;
+        km?: number;
+        note?: string;
+      },
+    ) => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/departures' as never, { params: { path: { did } }, body } as never)),
+
+    /** This fleet's own departures, soonest first, with who is aboard each and every wait recorded. */
+    departures: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/departures' as never, { params: { path: { did } } } as never)),
+
+    /** Who is driving it. Rostered after the space is sold, which is the ordinary way round. */
+    assignDepartureDriver: (did: string, departureId: string, driverDid: string) =>
+      sbg.request((c) =>
+        c.POST('/v1/sbg/fleet/managers/{did}/departures/{departureId}/driver' as never, { params: { path: { did, departureId } }, body: { driverDid } } as never),
+      ),
+
+    /** Stop selling, mark it gone, or call it off. */
+    setDepartureStatus: (did: string, departureId: string, status: 'open' | 'closed' | 'departed' | 'cancelled') =>
+      sbg.request((c) =>
+        c.POST('/v1/sbg/fleet/managers/{did}/departures/{departureId}/status' as never, { params: { path: { did, departureId } }, body: { status } } as never),
+      ),
+
+    /** Let a waiting charge go, with a reason. The record stays; only the amount goes to zero. */
+    waiveWaiting: (did: string, departureId: string, bookingId: string, where: 'loading' | 'delivery', reason: string) =>
+      sbg.request((c) =>
+        c.POST('/v1/sbg/fleet/managers/{did}/departures/{departureId}/bookings/{bookingId}/waive-waiting' as never, {
+          params: { path: { did, departureId, bookingId } },
+          body: { where, reason },
+        } as never),
+      ),
+
     /**
      * Put a shift ALREADY RUNNING onto a corridor, or move it to another one.
      *

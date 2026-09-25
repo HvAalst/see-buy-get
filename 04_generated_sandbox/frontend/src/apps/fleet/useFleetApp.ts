@@ -7,18 +7,19 @@ import { t } from '../../shared/i18n';
 import { downscaleImage } from '../../shared/media';
 import type { IconName } from '../../shared/ui/Icon';
 import { clearManager, createFleetClient, managerLookup, managerSession, managerChoices, managerSessionByFleet, changeManagerPin, purgeFleetTokens, readManager, saveManager } from './api';
-import { EMPTY_DRIVER, EMPTY_LINE, EMPTY_VEHICLE, isHeavySelection, lineBlocker, type DriverForm, type LineForm, type VehicleForm } from './logic';
+import { EMPTY_DRIVER, EMPTY_LINE, EMPTY_RUN, EMPTY_VEHICLE, isHeavySelection, lineBlocker, runBlocker, type DriverForm, type LineForm, type RunForm, type VehicleForm } from './logic';
 import type { FleetEarningsSummary, FleetJobRow,
   DispatchView,
   AssignmentRow,
   CorridorRow,
+  DepartureRow,
   DashboardView,
   DriverRow,
   SubtypeRow,
   VehicleRow,
 } from './types';
 
-export type Screen = 'dash' | 'vehicles' | 'drivers' | 'sessions' | 'lines' | 'earnings' | 'dispatch';
+export type Screen = 'dash' | 'vehicles' | 'drivers' | 'sessions' | 'lines' | 'runs' | 'earnings' | 'dispatch';
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
 
 export interface Toast {
@@ -42,6 +43,17 @@ export interface FleetState {
   drivers: DriverRow[];
   assignments: AssignmentRow[];
   corridors: CorridorRow[];
+  /** F3 — the departures this fleet has put on its own lines, soonest first. */
+  departures: DepartureRow[];
+  /**
+   * The currency this fleet's prices are in, and whether the server had to guess it.
+   *
+   * A fleet's country is optional at registration, so "nobody said" is a real state and the fallback to
+   * USD is a real guess. A Kenyan fleet typing 450 and publishing 450 USD is the money bug this exists to
+   * prevent, so the form names the currency it is asking in and says when it is assumed.
+   */
+  runCurrency: string;
+  runCurrencyAssumed: boolean;
   subtypes: SubtypeRow[];
   error: SbgError | null;
   toasts: Toast[];
@@ -53,6 +65,8 @@ export interface FleetState {
   cForm: { driverDid: string; vehicleId: string; corridorId: string };
   /** F1 — the line this fleet is about to propose. */
   lForm: LineForm;
+  /** The departure being declared. */
+  rForm: RunForm;
   /* FP1 — the earnings register. */
   earnRows: FleetJobRow[];
   earnTotal: number;
@@ -113,6 +127,9 @@ const INITIAL: FleetState = {
   drivers: [],
   assignments: [],
   corridors: [],
+  departures: [],
+  runCurrency: 'USD',
+  runCurrencyAssumed: true,
   subtypes: [],
   error: null,
   toasts: [],
@@ -123,6 +140,7 @@ const INITIAL: FleetState = {
   dForm: { ...EMPTY_DRIVER },
   cForm: { ...EMPTY_COUPLE },
   lForm: { ...EMPTY_LINE },
+  rForm: { ...EMPTY_RUN },
 };
 
 const isOffline = (e: SbgError) => e.code === 'NETWORK' || e.code === 'OFFLINE' || e.code === 'TIMEOUT';
@@ -196,13 +214,14 @@ export function useFleetApp() {
     refreshesRunning.current += 1;
     setState((s) => ({ ...s, refreshing: true }));
     try {
-      const [dashR, vehR, drvR, asgR, corR, subR] = await Promise.all([
+      const [dashR, vehR, drvR, asgR, corR, subR, depR] = await Promise.all([
         client.api.dashboard(),
         client.api.vehicles(),
         client.api.drivers(),
         client.api.assignments(),
         client.api.corridors(),
         client.api.truckSubtypes(),
+        client.api.departures(managerDid),
       ]);
       if (superseded()) return;
 
@@ -216,6 +235,9 @@ export function useFleetApp() {
         drivers: drvR.error ? s.drivers : (narrow<DriverRow[]>(drvR.data) ?? []),
         assignments: asgR.error ? s.assignments : (narrow<AssignmentRow[]>(asgR.data) ?? []),
         corridors: corR.error ? s.corridors : (narrow<CorridorRow[]>(corR.data) ?? []),
+        departures: depR.error ? s.departures : (narrow<{ items: DepartureRow[] }>(depR.data)?.items ?? []),
+        runCurrency: depR.error ? s.runCurrency : (narrow<{ currency?: string }>(depR.data)?.currency ?? s.runCurrency),
+        runCurrencyAssumed: depR.error ? s.runCurrencyAssumed : Boolean(narrow<{ currencyAssumed?: boolean }>(depR.data)?.currencyAssumed),
         subtypes: subR.error ? s.subtypes : (narrow<SubtypeRow[]>(subR.data) ?? []),
         error: null,
         stale: false,
@@ -803,6 +825,86 @@ export function useFleetApp() {
     });
   }, [client, run, fail, pushToast, refresh]);
 
+  const setRForm = useCallback((p: Partial<RunForm>) => setState((s) => ({ ...s, rForm: { ...s.rForm, ...p } })), []);
+
+  /**
+   * F3 — put a departure on one of this fleet's own lines.
+   *
+   * The datetime the form holds is a LOCAL wall-clock string, because that is what the person typing it
+   * means: "leaves Tuesday at six" is six where the truck is. It converts to an instant here, once, rather
+   * than being passed around half-resolved.
+   */
+  const declareRun = useCallback(async () => {
+    if (!client || !managerDid) return;
+    const f = stateRef.current.rForm;
+    if (runBlocker(f)) return;
+    await run('run', async () => {
+      const r = await client.api.declareDeparture(managerDid, {
+        corridorId: f.corridorId,
+        leavesAt: new Date(f.leavesAt).toISOString(),
+        capacityKg: Number(f.capacityKg),
+        ...(Number(f.capacityM3) > 0 ? { capacityM3: Number(f.capacityM3) } : {}),
+        basis: f.basis,
+        amount: Number(f.amount),
+        ...(Number(f.minCharge) > 0 ? { minCharge: Number(f.minCharge) } : {}),
+        ...(Number(f.km) > 0 ? { km: Number(f.km) } : {}),
+        ...(Number(f.waitingPerHour) > 0 ? { freeMin: Number(f.freeMin), waitingPerHour: Number(f.waitingPerHour) } : {}),
+        ...(f.note.trim() ? { note: f.note.trim() } : {}),
+      });
+      if (r.error) return fail(r.error);
+      setState((s) => ({ ...s, rForm: { ...EMPTY_RUN } }));
+      pushToast({ tone: 'ok', icon: 'clock', title: t('fleet.toast.runDeclared'), detail: t('fleet.toast.runDeclaredDetail') });
+      await refresh();
+    });
+  }, [client, managerDid, run, fail, pushToast, refresh]);
+
+  /** Say who is driving it. Separate from declaring, because space is sold before a roster exists. */
+  const assignRunDriver = useCallback(
+    async (departureId: string, driverDid: string) => {
+      if (!client || !managerDid) return;
+      await run(`run-driver:${departureId}`, async () => {
+        const r = await client.api.assignDepartureDriver(managerDid, departureId, driverDid);
+        if (r.error) return fail(r.error);
+        await refresh();
+      });
+    },
+    [client, managerDid, run, fail, refresh],
+  );
+
+  /** Stop selling, mark it gone, or call it off. */
+  const setRunStatus = useCallback(
+    async (departureId: string, status: 'open' | 'closed' | 'departed' | 'cancelled') => {
+      if (!client || !managerDid) return;
+      await run(`run-status:${departureId}`, async () => {
+        const r = await client.api.setDepartureStatus(managerDid, departureId, status);
+        if (r.error) return fail(r.error);
+        await refresh();
+      });
+    },
+    [client, managerDid, run, fail, refresh],
+  );
+
+  /**
+   * Let a waiting charge go, with a reason.
+   *
+   * Resolves TRUE only when it actually went through, so the sheet above can stay open on a refusal rather
+   * than closing over an error nobody read.
+   */
+  const waiveWait = useCallback(
+    async (departureId: string, bookingId: string, where: 'loading' | 'delivery', reason: string): Promise<boolean> => {
+      if (!client || !managerDid || !reason.trim()) return false;
+      let ok = false;
+      await run(`waive:${bookingId}:${where}`, async () => {
+        const r = await client.api.waiveWaiting(managerDid, departureId, bookingId, where, reason.trim());
+        if (r.error) return fail(r.error);
+        ok = true;
+        await refresh();
+      });
+      return ok;
+    },
+    [client, managerDid, run, fail, refresh],
+  );
+
   const uncouple = useCallback(
     async (driverDid: string) => {
       if (!client) return;
@@ -853,6 +955,11 @@ export function useFleetApp() {
       chatApi: client?.conversations ?? null,
       setLForm,
       proposeLine,
+      setRForm,
+      declareRun,
+      assignRunDriver,
+      setRunStatus,
+      waiveWait,
       queryEarnings,
       exportEarnings,
       openDispatch,

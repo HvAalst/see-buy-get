@@ -7,6 +7,7 @@ import { useT } from '../../shared/i18n';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { DriversScreen } from './screens/DriversScreen';
 import { LinesScreen } from './screens/LinesScreen';
+import { RunsScreen } from './screens/RunsScreen';
 import { SessionsScreen } from './screens/SessionsScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { VehiclesScreen } from './screens/VehiclesScreen';
@@ -41,6 +42,9 @@ export function App() {
   }
 
   const onShift = state.dashboard?.sessions.active ?? 0;
+  // A badge of open runs, which is the one number on this tab that changes on its own — a shipper booking
+  // space is somebody else acting on the fleet's behalf, and the office should see it without looking.
+  const openRuns = state.departures.filter((d) => d.status === 'open').length;
 
   const tabs: NavItem<Screen>[] = [
     { key: 'dash', label: t('fleet.nav.dash'), icon: 'grid' },
@@ -48,6 +52,9 @@ export function App() {
     { key: 'drivers', label: t('fleet.nav.drivers'), icon: 'person' },
     { key: 'sessions', label: t('fleet.nav.sessions'), icon: 'route', badge: onShift || undefined },
     { key: 'lines', label: t('fleet.nav.lines'), icon: 'repeat' },
+    // F3 — its own tab, not a section under Lines. Drawing a line is setup, once per road; putting a
+    // departure on one is the weekly work, and burying this week's run under that form inverts the two.
+    { key: 'runs', label: t('fleet.nav.runs'), icon: 'clock', badge: openRuns || undefined },
   ];
 
   return (
@@ -102,6 +109,8 @@ function ScreenRouter({ screen, state, actions }: { screen: Screen; state: Fleet
       return <SessionsScreen state={state} actions={actions} />;
     case 'lines':
       return <LinesScreen state={state} actions={actions} />;
+    case 'runs':
+      return <RunsScreen state={state} actions={actions} />;
     case 'earnings':
       return <EarningsScreen state={state} actions={actions} />;
     case 'dispatch':

@@ -255,3 +255,54 @@ export interface DispatchView {
   rows: DispatchRow[];
   total: number;
 }
+
+/* --------------------------------------------------------------- F3: runs --
+   A departure this fleet has put on one of its own lines, and what it is carrying. */
+
+export interface WaitingRow {
+  where: 'loading' | 'delivery';
+  arrivedAt: string;
+  freeAt?: string;
+  waitedMin: number;
+  billableMin: number;
+  amount: number;
+  /** Who it lands on — the shipper at the collection gate, the consignee at delivery. */
+  bearer: 'shipper' | 'consignee';
+  waivedReason?: string;
+}
+
+export interface DepartureBookingRow {
+  bookingId: string;
+  shipperDid: string;
+  description: string;
+  weightKg: number;
+  volumeM3?: number;
+  /** Which axis this load actually filled: a pallet of foam binds on space, steel on weight. */
+  binds: 'weight' | 'space';
+  price: number;
+  units: number;
+  at: string;
+  status: 'booked' | 'cancelled';
+  waiting: WaitingRow[];
+}
+
+export interface DepartureRow {
+  departureId: string;
+  corridorId: string;
+  lineName: string;
+  originZone: string;
+  destZone: string;
+  leavesAt: string;
+  capacityKg: number;
+  capacityM3?: number;
+  rate: { basis: string; amount: number; currency: string; minCharge?: number };
+  /** What the fleet charges for being kept standing. Absent means it does not charge. */
+  waiting?: { freeMin: number; perHour: number };
+  km?: number;
+  driverDid?: string;
+  driverName?: string;
+  note?: string;
+  status: 'open' | 'closed' | 'departed' | 'cancelled';
+  bookings: DepartureBookingRow[];
+  createdAt: string;
+}

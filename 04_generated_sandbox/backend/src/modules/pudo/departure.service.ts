@@ -477,6 +477,24 @@ export class DepartureService {
     }
   }
 
+  /**
+   * WHAT CURRENCY THIS FLEET PRICES IN, and whether we are guessing.
+   *
+   * A fleet's jurisdiction is optional at registration, so "no country named" is a real state and the
+   * fallback to USD is a real guess. That guess is dangerous in exactly one place: a Kenyan fleet types
+   * 450 meaning shillings, we publish 450 USD, and a shipper books a run at a hundred and thirty times
+   * the price. Nobody finds out until the invoice.
+   *
+   * So the guess is still made — refusing to sell space because a legacy record lacks a field would be
+   * worse — but it is LABELLED, and the form that asks for a price says which currency it is asking in.
+   * An assumption a person can see is not the same thing as a silent one.
+   */
+  pricingCurrency(managerDid: string): { currency: string; assumed: boolean } {
+    const jurisdiction = this.managers.get(managerDid)?.jurisdiction;
+    const known = jurisdiction ? catalogueEntry(jurisdiction)?.currency : undefined;
+    return known ? { currency: known, assumed: false } : { currency: 'USD', assumed: true };
+  }
+
   /** The country's own currency — always answerable, including where no company of ours stands. */
   private currencyFor(jurisdiction?: string): string {
     return (jurisdiction && catalogueEntry(jurisdiction)?.currency) || 'USD';

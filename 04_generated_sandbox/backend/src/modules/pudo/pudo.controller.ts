@@ -4223,11 +4223,18 @@ export class SbgController {
     return this.departures.declare({ managerDid: did, ...dto });
   }
 
-  /** This fleet's own departures, soonest first, with who is aboard each. */
+  /**
+   * This fleet's own departures, soonest first, with who is aboard each.
+   *
+   * Carries the CURRENCY the fleet prices in, and whether that was a guess — because the form that asks
+   * for a price has to say which currency it is asking in, and a fleet with no country on its record has
+   * only ever been assumed into USD. See pricingCurrency.
+   */
   @Get('fleet/managers/:did/departures')
   fleetDepartures(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
     this.assertFleetSelf(did, actor);
-    return { items: this.departures.forFleet(did) };
+    const { currency, assumed } = this.departures.pricingCurrency(did);
+    return { items: this.departures.forFleet(did), currency, currencyAssumed: assumed };
   }
 
   /** Stop selling, mark it gone, or call it off. The fleet's own call, on its own run. */

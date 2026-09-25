@@ -4,6 +4,7 @@
  * the legacy fleet.js so console and PWA can never disagree about who may drive what.
  */
 
+import type { DepartureBookingRow, DepartureRow, WaitingRow } from './types';
 import type { MessageKey, Translate } from '../../shared/i18n';
 import {
   HEAVY_CLASSES,
@@ -435,4 +436,106 @@ export function dispatchSummary(view: DispatchView | null, t: Translate): string
   if (!view || !view.drivers.length) return t('fleet.dispatch.aloudNobody');
   const name = view.drivers.find((d) => d.did === view.driver)?.name ?? '';
   return t('fleet.dispatch.aloud', { n: view.rows.length, name, can: view.rows.filter((r) => dispatchRowState(r) === 'take').length });
+}
+
+/* --------------------------------------------------------------- F3: runs --
+   Selling the space on a departure that is happening anyway. */
+
+/**
+ * The bases a PLANNED run can honestly be sold on.
+ *
+ * `per_hour` is deliberately not among them and the omission is the point: a departure leaves at a stated
+ * time and covers a known distance, so it is quoted up front and neither side could sign an hourly number.
+ * What is genuinely hourly is the waiting, which has its own two fields below.
+ */
+export const RUN_BASES = ['per_trip', 'per_km', 'per_kg'] as const;
+export type RunBasis = (typeof RUN_BASES)[number];
+
+export interface RunForm {
+  corridorId: string;
+  /** A local datetime-local value; converted to ISO on submit. */
+  leavesAt: string;
+  capacityKg: string;
+  capacityM3: string;
+  basis: RunBasis;
+  amount: string;
+  minCharge: string;
+  km: string;
+  /** Waiting: both or neither. */
+  freeMin: string;
+  waitingPerHour: string;
+  note: string;
+}
+
+export const EMPTY_RUN: RunForm = {
+  corridorId: '',
+  leavesAt: '',
+  capacityKg: '',
+  capacityM3: '',
+  basis: 'per_trip',
+  amount: '',
+  minCharge: '',
+  km: '',
+  freeMin: '',
+  waitingPerHour: '',
+  note: '',
+};
+
+export type RunBlocker =
+  | 'fleet.runs.needLine'
+  | 'fleet.runs.needWhen'
+  | 'fleet.runs.past'
+  | 'fleet.runs.needCapacity'
+  | 'fleet.runs.needAmount'
+  | 'fleet.runs.needKm'
+  | 'fleet.runs.needFreeTime';
+
+/**
+ * Why this departure cannot be declared yet, in the order a person would notice.
+ *
+ * Every one of these is a refusal the SERVER would give, said here first so nobody fills a form and is
+ * told at the end. Two are worth naming:
+ *
+ *  - per-kilometre with no distance prices every booking at zero, so the fleet hauls for nothing;
+ *  - a waiting RATE with no free window bills a shipper from the moment the truck arrives, which is a
+ *    surcharge on loading rather than a charge for a delay.
+ */
+export function runBlocker(f: RunForm, now: number = Date.now()): RunBlocker | null {
+  if (!f.corridorId) return 'fleet.runs.needLine';
+  if (!f.leavesAt.trim()) return 'fleet.runs.needWhen';
+  const at = Date.parse(f.leavesAt);
+  if (Number.isNaN(at)) return 'fleet.runs.needWhen';
+  // A departure in the past cannot be booked onto, and selling one is how a shipper loses a day.
+  if (at < now) return 'fleet.runs.past';
+  if (!(Number(f.capacityKg) > 0)) return 'fleet.runs.needCapacity';
+  if (!(Number(f.amount) > 0)) return 'fleet.runs.needAmount';
+  if (f.basis === 'per_km' && !(Number(f.km) > 0)) return 'fleet.runs.needKm';
+  if (Number(f.waitingPerHour) > 0 && !(Number(f.freeMin) >= 0 && f.freeMin.trim() !== '')) return 'fleet.runs.needFreeTime';
+  return null;
+}
+
+/** What is left on a run, on both axes — whichever runs out first is what "full" means for a vehicle. */
+export function runRemaining(run: DepartureRow): { kg: number; m3?: number } {
+  const live = run.bookings.filter((b) => b.status === 'booked');
+  const kg = live.reduce((n, b) => n + b.weightKg, 0);
+  const m3 = live.reduce((n, b) => n + (b.volumeM3 ?? 0), 0);
+  return {
+    kg: Math.max(0, Math.round((run.capacityKg - kg) * 100) / 100),
+    ...(run.capacityM3 ? { m3: Math.max(0, Math.round((run.capacityM3 - m3) * 100) / 100) } : {}),
+  };
+}
+
+/** What this run has earned in trip money, and separately what it is owed for standing time. */
+export function runMoney(run: DepartureRow): { sold: number; waiting: number; currency: string } {
+  const live = run.bookings.filter((b) => b.status === 'booked');
+  const sold = live.reduce((n, b) => n + b.price, 0);
+  // Waiting is kept APART from the trip price on purpose: the trip was quoted and agreed, the waiting was
+  // not, and a fleet reading one number would never see which of its runs keep being held up.
+  const waiting = live.reduce((n, b) => n + b.waiting.reduce((w, r) => w + r.amount, 0), 0);
+  return { sold: Math.round(sold * 100) / 100, waiting: Math.round(waiting * 100) / 100, currency: run.rate.currency };
+}
+
+/** Every wait on a run that actually cost something — what the office has to invoice or waive. */
+export function runWaits(run: DepartureRow): Array<{ booking: DepartureBookingRow; record: WaitingRow }> {
+  return run.bookings.flatMap((booking) => booking.waiting.filter((record) => record.billableMin > 0).map((record) => ({ booking, record })));
 }
