@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks';
 import { Button, Card, Icon, Pill, Sheet } from '../../../shared/ui';
 import { Explainer } from '../../../shared/ui/Explainer';
 import { formatDate, useT } from '../../../shared/i18n';
-import type { DepartureBookingView, DepartureView, WaitingRecordView } from '../types';
+import type { DepartureBookingView, DepartureView, SafetyItem, WaitingRecordView } from '../types';
 import type { DriverActions, DriverState } from '../useDriverApp';
 
 /**
@@ -94,6 +94,10 @@ function Gate({ run, booking, state, actions }: { run: DepartureView; booking: D
         {/* THE ENDING. Clocking out of the delivery gate proves the truck got there and says nothing about
             whether the load came off it — which is the whole gap: the goods reached a door, somebody took
             them, and no record of that existed. This is the driver saying what they did, at the door. */}
+        {/* SECURED, BEFORE PULLING AWAY — the board asks this of a haul and asked nothing of a run.
+            The checklist is the SERVER’S, in the server’s own words, and it depends on the goods: a
+            drum of solvent is never signed off with the checks for a box of paperbacks. */}
+        {booking.status === 'booked' ? <Secure run={run} booking={booking} state={state} actions={actions} /> : null}
         {booking.status === 'delivered' ? (
           <span class="run__gate">
             <Pill tone="ok" dot>
@@ -121,6 +125,10 @@ function HandOver({ run, booking, state, actions }: { run: DepartureView; bookin
   const t = useT();
   const [open, setOpen] = useState(false);
   const [who, setWho] = useState('');
+  const [photo, setPhoto] = useState('');
+  const [done, setDone] = useState<string[]>([]);
+  const required = booking.checklists?.unload ?? [];
+  const ready = who.trim().length >= 2 && photo.trim() !== '' && required.every((i) => done.includes(i.key));
 
   return (
     <span class="run__gate">
@@ -130,7 +138,20 @@ function HandOver({ run, booking, state, actions }: { run: DepartureView; bookin
 
       <Sheet open={open} onClose={() => setOpen(false)} title={t('driver.run.handOverTitle')}>
         <p class="hint">{t('driver.run.handOverLede', { what: booking.description })}</p>
-        <div class="field">
+
+        {/* THE UNLOAD CHECKLIST AND A PHOTOGRAPH, which the board has required of a delivery since
+            FP3. This used to take a name and nothing — the same act, provable on a haul and
+            unprovable on a run, and it is the driver this protects first. */}
+        <Checklist items={booking.checklists?.unload ?? []} checked={done} onToggle={setDone} />
+
+        <div class="field" style="margin-top:12px">
+          <label class="field__label" for={`pod-${booking.bookingId}`}>
+            {t('driver.run.podPhoto')}
+          </label>
+          <input id={`pod-${booking.bookingId}`} class="input" value={photo} placeholder={t('driver.run.podPhotoPh')} onInput={(e) => setPhoto(e.currentTarget.value)} />
+        </div>
+
+        <div class="field" style="margin-top:12px">
           <label class="field__label" for={`who-${booking.bookingId}`}>
             {t('driver.run.whoTook')}
           </label>
@@ -139,10 +160,18 @@ function HandOver({ run, booking, state, actions }: { run: DepartureView; bookin
         <p class="hint">{t('driver.run.whoTookHint')}</p>
         <Button
           chevron={false}
+          disabled={!ready}
           busy={state.busy === `deliver:${booking.bookingId}`}
           onClick={async () => {
-            if (await actions.handOver(run.departureId, booking.bookingId, who.trim())) {
+            const ok = await actions.handOver(run.departureId, booking.bookingId, {
+              receiverName: who.trim(),
+              photoRef: photo.trim(),
+              confirmed: done,
+            });
+            if (ok) {
               setWho('');
+              setPhoto('');
+              setDone([]);
               setOpen(false);
             }
           }}
@@ -239,4 +268,97 @@ function owedWords(record: WaitingRecordView, currency: string, t: ReturnType<ty
     currency,
     minutes: record.billableMin,
   });
+}
+
+/**
+ * A checklist, in the SERVER’S words.
+ *
+ * The items arrive with the run rather than being written on the phone, which is the rule S33 settled
+ * for the board: a driver ticking a list the client invented, against a list the server enforces, is
+ * two lists that will disagree at a gate one day. Nothing here decides what is on it.
+ */
+function Checklist({ items, checked, onToggle }: { items: SafetyItem[]; checked: string[]; onToggle: (next: string[]) => void }) {
+  if (!items.length) return null;
+  return (
+    <div class="rows" role="list" style="margin-top:12px">
+      {items.map((item) => (
+        <label key={item.key} class="row row--tap" role="listitem">
+          <input
+            type="checkbox"
+            checked={checked.includes(item.key)}
+            onChange={() => onToggle(checked.includes(item.key) ? checked.filter((k) => k !== item.key) : [...checked, item.key])}
+          />
+          <span class="row__body">
+            <span class="row__t">{item.label}</span>
+          </span>
+        </label>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * SECURED, BEFORE PULLING AWAY.
+ *
+ * The other half of the standard the board holds a haul to, and the half a run had none of. A load
+ * that arrives broken is argued about at the far end of the journey; the photograph that settles it is
+ * taken here, hours earlier, at a gate where the driver is already standing.
+ */
+function Secure({ run, booking, state, actions }: { run: DepartureView; booking: DepartureBookingView; state: DriverState; actions: DriverActions }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [done, setDone] = useState<string[]>([]);
+  const [photo, setPhoto] = useState('');
+  const required = booking.checklists?.load ?? [];
+  const ready = required.every((i) => done.includes(i.key));
+
+  if (booking.loadSafety) {
+    return (
+      <span class="run__gate">
+        <Pill tone="ok" dot>
+          {t('driver.run.secured')}
+        </Pill>
+      </span>
+    );
+  }
+
+  return (
+    <span class="run__gate">
+      <Button variant="outline" full={false} chevron={false} onClick={() => setOpen(true)}>
+        {t('driver.run.secure')}
+      </Button>
+
+      <Sheet open={open} onClose={() => setOpen(false)} title={t('driver.run.secureTitle')}>
+        <p class="hint">{t('driver.run.secureLede', { what: booking.description })}</p>
+        <Checklist items={required} checked={done} onToggle={setDone} />
+
+        <div class="field" style="margin-top:12px">
+          <label class="field__label" for={`sec-${booking.bookingId}`}>
+            {t('driver.run.securePhoto')}
+          </label>
+          <input id={`sec-${booking.bookingId}`} class="input" value={photo} placeholder={t('driver.run.securePhotoPh')} onInput={(e) => setPhoto(e.currentTarget.value)} />
+        </div>
+        <p class="hint">{t('driver.run.securePhotoHint')}</p>
+
+        <Button
+          chevron={false}
+          disabled={!ready}
+          busy={state.busy === `secure:${booking.bookingId}`}
+          onClick={async () => {
+            if (await actions.secureBooking(run.departureId, booking.bookingId, done, photo.trim() || undefined)) {
+              setDone([]);
+              setPhoto('');
+              setOpen(false);
+            }
+          }}
+        >
+          {t('driver.run.secureCta')}
+        </Button>
+
+        <Button variant="link" onClick={() => setOpen(false)}>
+          {t('common.cancel')}
+        </Button>
+      </Sheet>
+    </span>
+  );
 }

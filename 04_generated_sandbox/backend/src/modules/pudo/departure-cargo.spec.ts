@@ -204,3 +204,71 @@ describe('what may go on this truck, and who carries the risk', () => {
     });
   });
 });
+
+/**
+ * A LEGACY RUN, WITH NO VEHICLE ON ITS RECORD.
+ *
+ * Found by driving it, and it was the worst possible shape: every run declared before a vehicle was
+ * required carries no vehicleId, and reading the capability list for one threw NOT_FOUND from inside
+ * `offers()` — so ONE such record took the whole offer list down for every shipper in the network.
+ *
+ * The same shape as the P2 lesson, where a money question reached from a read path 403'd a whole screen.
+ * The rule that falls out of it is a rule about DIRECTION: a read must answer, and a gate must refuse.
+ */
+describe('a run whose vehicle cannot be read', () => {
+  const MANAGER = 'did:glos:fleet-legacy';
+  const SHIPPER = 'did:glos:shipper-legacy';
+  const managers = { get: () => ({ jurisdiction: 'KE' }) } as unknown as FleetManagerService;
+  const clearDrivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
+  const openEverywhere = { can: () => true } as unknown as PresenceService;
+  const silent = { publish: async () => undefined } as unknown as EventBus;
+  const noMedia = { adopt: () => undefined } as unknown as MediaService;
+
+  /**
+   * A registry that knows the truck at declaration and has forgotten it by the time anybody reads.
+   *
+   * Built PER TEST. A shared one leaked its forgotten state into the next test and made declare() throw
+   * before the thing under test ever ran — which is its own small lesson about stubs that carry state.
+   */
+  const forgetful = () => {
+    let known = true;
+    return {
+      get: () => {
+        if (!known) throw new Error('No such vehicle');
+        return { vehicleId: 'veh_gone', plate: 'KDA 000X', vehicleClass: 'truck', capacityKg: 8000, managerDid: MANAGER, status: 'ACTIVE' };
+      },
+      isUsable: () => true,
+      offRoadReasons: () => [],
+      forget: () => {
+        known = false;
+      },
+    };
+  };
+
+  /** A run declared against a truck the registry then loses. */
+  const legacyRun = (lane: string) => {
+    const vehicles = forgetful();
+    const corridors = new CorridorService();
+    const service = new DepartureService(corridors, managers, clearDrivers, vehicles as unknown as VehicleService, new CargoService(), noMedia, openEverywhere, silent);
+    const proposed = corridors.proposeLine({ managerDid: MANAGER, company: 'Legacy Fleet', name: `Legacy ${lane}`, originZone: `Legacy ${lane}A`, destZone: `Legacy ${lane}B`, vehicleType: 'truck' });
+    const corridor = corridors.publish(proposed.corridorId, 'did:glos:network-staff');
+    const run = service.declare({ managerDid: MANAGER, corridorId: corridor.corridorId, vehicleId: 'veh_gone', leavesAt: new Date(Date.now() + 86_400_000).toISOString(), basis: 'per_trip', amount: 450 });
+    vehicles.forget();
+    return { service, departureId: run.departureId };
+  };
+  it('still lists the run, rather than taking every offer down with it', () => {
+    const { service } = legacyRun('one');
+    const offers = service.offers();
+    expect(offers).toHaveLength(1);
+    // "We do not know what it handles" is the honest answer, and the booking gate asks again for real.
+    expect(offers[0].handles).toEqual([]);
+  });
+  it('but REFUSES a load that needs a capability it cannot vouch for', () => {
+    // The opposite direction, on purpose: a read must answer, a gate must refuse. A vehicle nobody can
+    // read is not a vehicle anybody should put a drum of solvent on.
+    const { service, departureId } = legacyRun('two');
+    expect(() => service.book(departureId, { shipperDid: SHIPPER, description: 'Solvent', weightKg: 100, nature: 'HAZ-CHEM' })).toThrow(/does not carry hazmat/);
+    // And ordinary dry goods still travel: the refusal is about the capability, not about the record.
+    expect(service.book(departureId, { shipperDid: SHIPPER, description: 'Books', weightKg: 100 }).booking.nature).toBe('GEN');
+  });
+});

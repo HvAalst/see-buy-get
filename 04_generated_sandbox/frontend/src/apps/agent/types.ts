@@ -371,6 +371,10 @@ export interface OfferRow {
   settle?: { method: string; when: string };
   /** What kind of vehicle it is going on. Not the plate: that is the fleet's own business. */
   vehicleClass?: string;
+  /** What the CARRIER insures, or plainly none. Never ours, and absent means they have not said. */
+  cover?: { limit: number; policy?: string };
+  /** What the vehicle can handle — so a shipper knows before typing whether their load can go on it. */
+  handles?: string[];
   km?: number;
   note?: string;
   remainingKg: number;
@@ -402,10 +406,21 @@ export interface MyBookingRow {
   destZone: string;
   leavesAt: string;
   description: string;
+  /** What the goods are, in the same vocabulary the counter uses. */
+  nature: string;
+  /** What the shipper said they are worth. Never verified, never a promise of ours. */
+  declaredValue?: number;
   weightKg: number;
   volumeM3?: number;
   price: number;
   currency: string;
+  cover?: { limit: number; policy?: string };
+  /** The proof the carrier recorded at the door — the shipper is the party it exists for. */
+  pod?: { receiverName: string; photoRef: string; remarks?: string; at: string };
+  /** What they said went wrong, and what the carrier said back. Never decided by us. */
+  claim?: { kind: string; description: string; photoRef?: string; amount?: number; raisedAt: string; answer?: 'accepted' | 'refused'; answerNote?: string; answeredAt?: string };
+  /** Whether there is still something, and still time, to claim about. */
+  claimable?: boolean;
   bookingStatus: 'booked' | 'delivered' | 'cancelled';
   /** The RUN's state, which is a different fact: goods given back and goods stranded are not the same. */
   runStatus: 'open' | 'closed' | 'departed' | 'cancelled';

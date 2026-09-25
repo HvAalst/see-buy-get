@@ -16,7 +16,7 @@ export type SbgErrorCode =
   | 'LICENCE_EXPIRED' | 'INVALID_VEHICLE_CLASS' | 'INVALID_TRUCK_SUBTYPE' | 'UNKNOWN_ROLE' | 'DISPUTE_INCOMPLETE'
   | 'REQUIREMENTS_NOT_MET' | 'KYC_INCOMPLETE' | 'APPROVAL_BLOCKED' | 'INVALID_STATE' | 'WINDOW_EXPIRED'
   | 'NOT_INBOUND' | 'PARCEL_EXISTS' | 'SHIPMENT_NOT_PAID' | 'CODE_MISMATCH' | 'CODE_LOCKED' | 'WRONG_DESTINATION' | 'NOT_COUPLED' | 'ALREADY_COUPLED'
-  | 'CANNOT_COUPLE' | 'HOURS_EXCEEDED' | 'CAPACITY_EXCEEDED' | 'NO_ROOM' | 'FRAGILE_NOT_ALLOWED' | 'BAG_FULL' | 'BAG_EMPTY' | 'BAG_RESERVED'
+  | 'CANNOT_COUPLE' | 'HOURS_EXCEEDED' | 'CAPACITY_EXCEEDED' | 'NO_ROOM' | 'SAFETY_CHECK_INCOMPLETE' | 'RECEIVER_REQUIRED' | 'DELIVERY_PHOTO_REQUIRED' | 'FRAGILE_NOT_ALLOWED' | 'BAG_FULL' | 'BAG_EMPTY' | 'BAG_RESERVED'
   | 'BAG_MISADDRESSED' | 'ALREADY_IN_BAG' | 'STAGING_FULL' | 'SHELF_FULL' | 'NO_CAPACITY_AVAILABLE' | 'OTP_INVALID' | 'OTP_LOCKED' | 'PIN_INVALID' | 'UNAUTHORIZED'
   | 'AUTH_FAILED' | 'AUTH_CODE_INVALID' | 'AUTH_NOT_ACTIVE' | 'PAYMENT_REQUIRED' | 'WALLET_INSUFFICIENT'
   | 'FORBIDDEN' | 'WRONG_PUDO' | 'AGENT_LOCKED' | 'PIN_LOCKED' | 'ROLE_NOT_HELD' | 'MEDIA_LOCKED' | 'CARGO_REQUIRES_DEDICATED' | 'CARGO_INCOMPATIBLE' | 'VEHICLE_MISSING_CAPABILITY' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE' | 'INCOMPLETE_MANIFEST' | 'INVITE_LIMIT'
@@ -102,6 +102,17 @@ const PRESENTATION: Partial<Record<SbgErrorCode, ErrorPresentation>> = {
   // F3 — a run that cannot take this load. The server's DETAIL names which axis ran out and by how much
   // ('only 18 m3 of space is left'), which is the part a shipper can act on, so callers pass showDetail.
   NO_ROOM: { icon: 'scale', tone: 'warn', say: 'error.no_room' },
+  /*
+   * The three the delivery gate refuses with, reachable from a run since F5 held it to the board’s line.
+   *
+   * Worth noting what registering these turned up: VEHICLE_MISSING_CAPABILITY and CARGO_INCOMPATIBLE
+   * have been in this file since S31 and their SAY strings were never added to ErrorNote — so on the
+   * BOARD too, all this time, "that truck cannot carry these goods" has been rendering as "Something
+   * went wrong. Try again." Half-wired in exactly the way NO_ROOM was.
+   */
+  SAFETY_CHECK_INCOMPLETE: { icon: 'warning', tone: 'warn', say: 'error.checklist' },
+  RECEIVER_REQUIRED: { icon: 'edit', tone: 'warn', say: 'error.receiver' },
+  DELIVERY_PHOTO_REQUIRED: { icon: 'camera', tone: 'warn', say: 'error.pod_photo' },
   FRAGILE_NOT_ALLOWED: { icon: 'block', tone: 'warn', say: 'error.no_fragile' },
   // S30 cargo taxonomy — a palletised/oversized load cannot use the PUDO network; it needs dedicated freight.
   CARGO_REQUIRES_DEDICATED: { icon: 'scale', tone: 'warn', say: 'error.needs_dedicated' },

@@ -1160,6 +1160,30 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
   );
 
   /**
+   * SECURED AND READY TO PULL AWAY.
+   *
+   * The photograph that settles an argument about damage is taken HERE, hours before the argument —
+   * at the loading gate, where the driver is already standing and already tapping.
+   */
+  const secureBooking = useCallback(
+    async (departureId: string, bookingId: string, confirmed: string[], securementPhotoRef?: string): Promise<boolean> => {
+      if (!client || !did) return false;
+      let ok = false;
+      await run(`secure:${bookingId}`, async () => {
+        const r = await client.api.secureBooking(departureId, bookingId, { confirmed, ...(securementPhotoRef ? { securementPhotoRef } : {}) });
+        if (r.error) {
+          setState((s) => ({ ...s, error: r.error }));
+          return;
+        }
+        ok = true;
+        await refresh();
+      });
+      return ok;
+    },
+    [client, did, run, refresh],
+  );
+
+  /**
    * HANDED OVER at the door — the ending a run did not have.
    *
    * Resolves TRUE only when it went through, so the sheet stays open on a refusal with the name still in
@@ -1167,11 +1191,15 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
    * driver to skip the field entirely.
    */
   const handOver = useCallback(
-    async (departureId: string, bookingId: string, receivedBy?: string): Promise<boolean> => {
+    async (
+      departureId: string,
+      bookingId: string,
+      proof: { receiverName: string; photoRef: string; remarks?: string; confirmed: string[] },
+    ): Promise<boolean> => {
       if (!client || !did) return false;
       let ok = false;
       await run(`deliver:${bookingId}`, async () => {
-        const r = await client.api.handOver(departureId, bookingId, receivedBy || undefined);
+        const r = await client.api.handOver(departureId, bookingId, proof);
         if (r.error) {
           setState((s) => ({ ...s, error: r.error }));
           return;
@@ -1569,6 +1597,7 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
       refresh,
       clockGate,
       handOver,
+      secureBooking,
       signIn,
       sendPinCode,
       setPinAndSignIn,

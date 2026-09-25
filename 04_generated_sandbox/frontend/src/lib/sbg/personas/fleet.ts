@@ -147,6 +147,9 @@ export function createFleetApi(sbg: SbgClient) {
         /** How the shipper pays the fleet — a record, never a posting. Both or neither. */
         settleMethod?: string;
         settleWhen?: string;
+        /** What this fleet’s own policy covers per load. Zero is a real answer; absent is a different one. */
+        coverLimit?: number;
+        coverPolicy?: string;
       },
     ) => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/departures' as never, { params: { path: { did } }, body } as never)),
 
@@ -186,6 +189,20 @@ export function createFleetApi(sbg: SbgClient) {
         c.POST('/v1/sbg/fleet/managers/{did}/departures/{departureId}/status' as never, {
           params: { path: { did, departureId } },
           body: { status, ...(reason ? { reason } : {}) },
+        } as never),
+      ),
+
+    /**
+     * The fleet’s answer to a claim, in their own words.
+     *
+     * Recorded, never weighed. A refusal must carry a reason, because a refusal without one is not
+     * something the other side can act on — and acting on it is the entire point of the record.
+     */
+    answerBookingClaim: (did: string, departureId: string, bookingId: string, answer: 'accepted' | 'refused', note?: string) =>
+      sbg.request((c) =>
+        c.POST('/v1/sbg/fleet/managers/{did}/departures/{departureId}/bookings/{bookingId}/claim/answer' as never, {
+          params: { path: { did, departureId, bookingId } },
+          body: { answer, ...(note ? { note } : {}) },
         } as never),
       ),
 

@@ -385,6 +385,17 @@ export function createAgentApi(sbg: SbgClient) {
      */
     myDepartureBookings: () => sbg.request((c) => c.GET('/v1/sbg/departures/mine' as never, {} as never)),
 
+    /**
+     * SOMETHING WENT WRONG — recorded and evidenced, never decided by us.
+     *
+     * We did not take this payment and we carry no cover on these goods, so an award of ours would be
+     * an award of somebody else’s money. What this gives both parties is the record.
+     */
+    openBookingClaim: (departureId: string, bookingId: string, body: { kind: string; description: string; photoRef?: string; amount?: number }) =>
+      sbg.request((c) =>
+        c.POST('/v1/sbg/departures/{departureId}/bookings/{bookingId}/claim' as never, { params: { path: { departureId, bookingId } }, body } as never),
+      ),
+
     cancelDepartureBooking: (departureId: string, bookingId: string) =>
       sbg.request((c) =>
         c.POST('/v1/sbg/departures/{departureId}/bookings/{bookingId}/cancel' as never, { params: { path: { departureId, bookingId } } } as never),

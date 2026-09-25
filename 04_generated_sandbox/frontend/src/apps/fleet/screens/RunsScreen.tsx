@@ -3,6 +3,7 @@ import { Button, Card, ErrorNote, Explainer, Note, Pill, ReadAloud, Sheet } from
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { EMPTY_OWN_LOAD, RUN_BASES, ownLines, ownLoadBlocker, runBlocker, runManifest, runMoney, runRemaining, runWaits, type OwnLoadForm, type RunBasis } from '../logic';
 import { settleWords } from '../../../shared/settle';
+import { coverWords } from '../../../shared/cover';
 import type { DepartureBookingRow, DepartureRow, WaitingRow } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
 
@@ -117,6 +118,7 @@ function Run({ run, state, actions }: { run: DepartureRow; state: FleetState; ac
         {' · '}
         {settleWords(run.settle, t)}
       </p>
+      <p class="card__note">{coverWords(run.cover, run.rate.currency, t)}</p>
       {/* WHAT IS LEFT, ON BOTH AXES — whichever runs out first is what "full" means for a vehicle. */}
       <p class="card__note">
         {left.kg <= 0 || (left.m3 != null && left.m3 <= 0)
@@ -199,6 +201,9 @@ function Run({ run, state, actions }: { run: DepartureRow; state: FleetState; ac
                   {b.kind === 'own' ? (
                     <span class="row__s">{b.price > 0 ? t('fleet.runs.ownRow', { customer: b.customer }) : t('fleet.runs.ownRowNoPrice', { customer: b.customer })}</span>
                   ) : null}
+                  {/* A CLAIM AGAINST THIS LOAD. Ours to carry and nobody’s to weigh — we did not take
+                      the payment and we hold no cover, so the answer is the fleet’s own. */}
+                  {b.claim ? <ClaimRow run={run} booking={b} state={state} actions={actions} /> : null}
                 </span>
                   {/* The ending a run did not have. Shown once the load is delivered rather than hidden,
                       because "handed over to Joseph at 14:20" is the answer to the only question anybody
@@ -212,6 +217,7 @@ function Run({ run, state, actions }: { run: DepartureRow; state: FleetState; ac
                   ) : null}
                 <span class="row__end">
                   {b.kind === 'own' ? <Pill tone="idle">{t('fleet.runs.ownPill')}</Pill> : null}
+                  {b.claim ? <Pill tone={b.claim.answeredAt ? 'idle' : 'warn'}>{t('fleet.runs.claimPill')}</Pill> : null}
                   {b.status === 'delivered' ? (
                     <Pill tone="ok">{t('fleet.runs.deliveredPill')}</Pill>
                   ) : run.status !== 'cancelled' ? (
@@ -553,6 +559,34 @@ function NewRun({ state, actions, lines }: { state: FleetState; actions: FleetAc
         </div>
       </div>
 
+      {/* WHAT YOU INSURE — and we insure nothing, which is the part that has to be said rather than
+          left blank. A shipper reading a price on our screens and nothing about cover assumes somebody
+          is behind the goods. Zero is a real answer and a useful one: "I carry none" is exactly what a
+          forwarder needs to hear, and a different fact from never having said. */}
+      <h3 class="scr__section">{t('fleet.runs.coverTitle')}</h3>
+      <p class="hint">{t('fleet.runs.coverLede')}</p>
+      <div class="grid2">
+        <div class="field">
+          <label class="field__label" for="r-cover">
+            {t('fleet.runs.coverLimit', { currency: state.runCurrency })}
+          </label>
+          <input id="r-cover" class="input" inputMode="decimal" value={f.coverLimit} onInput={(e) => actions.setRForm({ coverLimit: e.currentTarget.value })} />
+        </div>
+        <div class="field">
+          <label class="field__label" for="r-policy">
+            {t('fleet.runs.coverPolicy')}
+          </label>
+          <input
+            id="r-policy"
+            class="input"
+            value={f.coverPolicy}
+            placeholder={t('fleet.runs.coverPolicyPh')}
+            onInput={(e) => actions.setRForm({ coverPolicy: e.currentTarget.value })}
+          />
+        </div>
+      </div>
+      <p class="hint">{t('fleet.runs.coverHint')}</p>
+
       <h3 class="scr__section">{t('fleet.runs.waitingTitle')}</h3>
       <p class="hint">{t('fleet.runs.waitingLede')}</p>
       <div class="grid2" style="margin-top:8px">
@@ -703,6 +737,82 @@ function OwnLoad({ run, state, actions }: { run: DepartureRow; state: FleetState
             {t(blocker, { kg: left.kg, m3: left.m3 ?? 0 })}
           </p>
         ) : null}
+
+        <Button variant="link" onClick={() => setOpen(false)}>
+          {t('common.cancel')}
+        </Button>
+      </Sheet>
+    </>
+  );
+}
+
+/**
+ * A CLAIM ON ONE LOAD, and the office’s answer to it.
+ *
+ * Not an adjudication and not a payment: the network never held this money and carries no cover on the
+ * goods, so what it can offer is the record. The fleet says accepted or refused IN THEIR OWN WORDS, and
+ * a refusal must carry a reason — a refusal without one is not something the other side can act on, and
+ * acting on it is the entire point of writing any of this down.
+ */
+function ClaimRow({ run, booking, state, actions }: { run: DepartureRow; booking: DepartureBookingRow; state: FleetState; actions: FleetActions }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [answer, setAnswer] = useState<'accepted' | 'refused'>('refused');
+  const [note, setNote] = useState('');
+  const claim = booking.claim;
+  if (!claim) return null;
+
+  return (
+    <>
+      <span class="row__s">
+        {t('fleet.runs.claimRaised', { when: formatDate(claim.raisedAt, { dateStyle: 'medium' }), what: claim.description })}
+        {claim.amount != null ? ` · ${t('fleet.runs.claimAmount', { amount: claim.amount, currency: run.rate.currency })}` : ''}
+      </span>
+      {claim.answeredAt ? (
+        <span class="row__s">
+          {t(claim.answer === 'accepted' ? 'fleet.runs.claimYouAccepted' : 'fleet.runs.claimYouRefused', { note: claim.answerNote ? `: ${claim.answerNote}` : '.' })}
+        </span>
+      ) : (
+        <Button variant="link" full={false} onClick={() => setOpen(true)}>
+          {t('fleet.runs.claimAnswer')}
+        </Button>
+      )}
+
+      <Sheet open={open} onClose={() => setOpen(false)} title={t('fleet.runs.claimAnswerTitle')}>
+        <p class="t-body">{claim.description}</p>
+        <p class="hint">{t('fleet.runs.claimAnswerLede')}</p>
+
+        <div class="field">
+          <label class="field__label" for={`a-${booking.bookingId}`}>
+            {t('fleet.runs.claimYourAnswer')}
+          </label>
+          <select id={`a-${booking.bookingId}`} class="select" value={answer} onChange={(e) => setAnswer(e.currentTarget.value as 'accepted' | 'refused')}>
+            <option value="refused">{t('fleet.runs.claimRefuse')}</option>
+            <option value="accepted">{t('fleet.runs.claimAccept')}</option>
+          </select>
+        </div>
+
+        <div class="field" style="margin-top:12px">
+          <label class="field__label" for={`n-${booking.bookingId}`}>
+            {t('fleet.runs.claimWhy')}
+          </label>
+          <input id={`n-${booking.bookingId}`} class="input" value={note} placeholder={t('fleet.runs.claimWhyPh')} onInput={(e) => setNote(e.currentTarget.value)} />
+        </div>
+        <p class="hint">{t('fleet.runs.claimWhyHint')}</p>
+
+        <Button
+          chevron={false}
+          disabled={answer === 'refused' && !note.trim()}
+          busy={state.busy === `claim:${booking.bookingId}`}
+          onClick={async () => {
+            if (await actions.answerClaim(run.departureId, booking.bookingId, answer, note)) {
+              setNote('');
+              setOpen(false);
+            }
+          }}
+        >
+          {t('fleet.runs.claimSend')}
+        </Button>
 
         <Button variant="link" onClick={() => setOpen(false)}>
           {t('common.cancel')}

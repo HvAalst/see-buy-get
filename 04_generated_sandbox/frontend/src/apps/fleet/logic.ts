@@ -469,6 +469,9 @@ export interface RunForm {
   /** How the shipper pays them. Both or neither, for the same reason. */
   settleMethod: string;
   settleWhen: string;
+  /** What this fleet’s own policy covers per load, and which policy. Blank means they have not said. */
+  coverLimit: string;
+  coverPolicy: string;
   note: string;
 }
 
@@ -486,6 +489,8 @@ export const EMPTY_RUN: RunForm = {
   waitingPerHour: '',
   settleMethod: 'mobile_money',
   settleWhen: 'on_delivery',
+  coverLimit: '',
+  coverPolicy: '',
   note: '',
 };
 

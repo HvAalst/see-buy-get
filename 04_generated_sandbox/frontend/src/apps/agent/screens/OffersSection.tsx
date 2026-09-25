@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Icon, Note, Pill, Sheet } from '../../../shared/ui';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
+import { OptionPicker } from '../../../shared/ui/OptionPicker';
+import { NATURES } from '../logic';
+import { agentConfig } from '../api';
 import { settleWords } from '../../../shared/settle';
+import { coverWords, handlesWords } from '../../../shared/cover';
 import type { OfferRow } from '../types';
 import type { AgentActions, AgentState } from '../useAgentApp';
 
@@ -84,6 +88,11 @@ function Offer({ offer, onTake }: { offer: OfferRow; onTake: () => void }) {
             nothing about settlement assumes we are handling it, which is the one thing that is certainly
             not happening — board freight works that way and this does not. */}
         <span class="row__s">{settleWords(offer.settle, t)}</span>
+        {/* WHERE COVER STANDS, before booking. Silence here reads as "the network is behind these
+            goods", which it is not and never will be — so absence gets a sentence of its own. */}
+        <span class="row__s">{coverWords(offer.cover, offer.rate.currency, t)}</span>
+        {/* What the truck can handle, so a shipper with a chilled load knows before typing. */}
+        {offer.handles?.length ? <span class="row__s">{handlesWords(offer.handles, t)}</span> : null}
         {offer.note ? <span class="row__s">{offer.note}</span> : null}
       </span>
       <span class="row__end">
@@ -106,12 +115,16 @@ function TakeSpace({ state, actions }: { state: AgentState; actions: AgentAction
   const t = useT();
   const offer = state.offerFor;
   const [what, setWhat] = useState('');
+  const [nature, setNature] = useState('GEN');
+  const [value, setValue] = useState('');
   const [kg, setKg] = useState('');
   const [m3, setM3] = useState('');
 
   useEffect(() => {
     if (offer) {
       setWhat('');
+      setNature('GEN');
+      setValue('');
       setKg('');
       setM3('');
     }
@@ -119,7 +132,13 @@ function TakeSpace({ state, actions }: { state: AgentState; actions: AgentAction
 
   if (!offer) return null;
 
-  const load = { description: what.trim(), weightKg: Number(kg), ...(Number(m3) > 0 ? { volumeM3: Number(m3) } : {}) };
+  const load = {
+    description: what.trim(),
+    nature,
+    ...(Number(value) > 0 ? { declaredValue: Number(value) } : {}),
+    weightKg: Number(kg),
+    ...(Number(m3) > 0 ? { volumeM3: Number(m3) } : {}),
+  };
   const blocker: MessageKey | null = !what.trim() ? 'agent.offers.needWhat' : !(Number(kg) > 0) ? 'agent.offers.needKg' : null;
   const quote = state.offerQuote;
 
@@ -138,6 +157,28 @@ function TakeSpace({ state, actions }: { state: AgentState; actions: AgentAction
             setWhat(e.currentTarget.value);
             actions.clearOfferQuote();
           }}
+        />
+      </div>
+
+      {/* WHAT THE GOODS ARE, in the same words and the same picker as the counter. A free-text
+          description could never say "this is flammable", which is how a drum of solvent used to be
+          bookable onto a food-grade body. The truck is checked against this before anything is taken. */}
+      <div class="field" style="margin-top:12px">
+        {/* Its own label, like every other field here. AcceptScreen can leave the picker bare because a
+           Card heading asks the question above it; on a sheet of labelled inputs, one unlabelled control
+           showing "General goods" reads as an answer to nothing. */}
+        <span class="field__label">{t('agent.offers.whatKind')}</span>
+        <OptionPicker
+          topic="nature"
+          title={t('agent.offers.whatKind')}
+          options={NATURES.map((n) => ({ key: n.key, label: t(n.labelKey), detail: t(n.detailKey) }))}
+          value={nature}
+          onChange={(key) => {
+            setNature(key);
+            actions.clearOfferQuote();
+          }}
+          placeholder={t('agent.offers.whatKind')}
+          config={agentConfig()}
         />
       </div>
 
@@ -174,6 +215,16 @@ function TakeSpace({ state, actions }: { state: AgentState; actions: AgentAction
         </div>
       </div>
       <p class="hint">{t('agent.offers.m3Hint')}</p>
+
+      {/* WHAT IT IS WORTH. Optional, unverified, and never a promise of ours — but it is the number a
+          forwarder needs beside the carrier’s limit, and the number a claim is argued against. */}
+      <div class="field" style="margin-top:12px">
+        <label class="field__label" for="o-value">
+          {t('agent.offers.value', { currency: offer.rate.currency })}
+        </label>
+        <input id="o-value" class="input" inputMode="decimal" value={value} onInput={(e) => setValue(e.currentTarget.value)} />
+      </div>
+      <p class="hint">{coverWords(offer.cover, offer.rate.currency, t)}</p>
 
       {/* A refusal belongs BESIDE the fields that caused it — "only 12 m³ is left" is an answer to the
           question just asked, not a page-level failure. */}

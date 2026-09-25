@@ -510,6 +510,11 @@ export const enAgent = {
 
   'agent.offers.sheetTitle': 'Take space with {company}',
   'agent.offers.what': 'What are you sending',
+  /* WHAT KIND of goods, in the counter’s own words and the counter’s own picker. A free-text
+     description could never say "this is flammable", which is how a drum of solvent used to be
+     bookable onto a food-grade body. */
+  'agent.offers.whatKind': 'What kind of goods',
+  'agent.offers.value': 'What it is worth ({currency})',
   'agent.offers.whatPh': 'Maize, 40 bags',
   'agent.offers.kg': 'Weight (kg)',
   'agent.offers.m3': 'Space it takes (m³)',
@@ -545,6 +550,37 @@ export const enAgent = {
   'agent.mine.deliveredTo': 'Handed to {who}, {when}',
   'agent.mine.deliveredAt': 'Handed over {when}',
   'agent.mine.waitOwed': 'You kept them waiting: {amount} {currency}',
+  /* WHAT THE CARRIER RECORDED AT THE DOOR. The shipper is the party this proof exists for, so they
+     read it rather than only its date. */
+  'agent.mine.proof': 'Proof of delivery: {who}',
+  'agent.mine.proofPhoto': 'Photographed as delivered',
+  'agent.mine.note': 'Consignment note',
+
+  /* A CLAIM — recorded and evidenced, never decided by us. We did not take the money and we hold no
+     cover, so an award of ours would be an award of somebody else’s money. What two parties get is
+     the record: dated, against a note, beside the photographs, with the carrier’s answer on it. */
+  'agent.mine.claim': 'Something went wrong',
+  'agent.mine.claimTitle': 'What went wrong?',
+  'agent.mine.claimLede': 'This goes to {company} with your consignment note and the photographs either side of the journey. SeeBuyGet records it and does not decide it — we never held this payment and we carry no cover on these goods.',
+  'agent.mine.claimKind': 'What happened',
+  'agent.mine.claimDamaged': 'They arrived damaged',
+  'agent.mine.claimShort': 'Some of it is missing',
+  'agent.mine.claimNotReceived': 'They never arrived',
+  'agent.mine.claimWhat': 'In your own words',
+  'agent.mine.claimWhatPh': 'Two of the twelve crates were crushed on the near side.',
+  'agent.mine.claimAmount': 'What it cost you ({currency})',
+  'agent.mine.claimAmountHint': 'Optional, and your figure — we do not verify it and we do not pay it.',
+  'agent.mine.claimSend': 'Send it to the carrier',
+  'agent.mine.claimNeedWords': 'Say what went wrong — the carrier is answering this.',
+  'agent.mine.claimSent': 'Sent to the carrier',
+  'agent.mine.claimSentDetail': 'They will answer it. Nothing is decided by us.',
+  'agent.mine.claimRaised': 'You raised a claim {when}: {what}',
+  'agent.mine.claimWaiting': 'The carrier has not answered yet.',
+  'agent.mine.claimAccepted': 'The carrier accepted it{note}',
+  'agent.mine.claimRefused': 'The carrier refused it{note}',
+  'agent.mine.claimBetween': 'Settle it between you — SeeBuyGet neither decides nor pays.',
+  'agent.mine.claimClosed': 'The seven days to raise a claim on this load have passed.',
+
   'agent.mine.giveBack': 'Give it back',
   'agent.mine.gaveBack': 'Space given back',
   'agent.mine.gaveBackDetail': 'It is on offer again for somebody else.',

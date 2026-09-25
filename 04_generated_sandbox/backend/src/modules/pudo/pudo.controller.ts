@@ -4423,7 +4423,13 @@ export class SbgController {
   @Get('fleet/drivers/:did/departures')
   driverDepartures(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
     this.assertDriverInFleet(did, actor);
-    return { items: this.departures.forDriver(did) };
+    // The checklists travel WITH the run, per booking: the phone must tick the server’s own list, in
+    // the server’s own words, or a driver clears a gate the service then refuses.
+    const items = this.departures.forDriver(did).map((d) => ({
+      ...d,
+      bookings: d.bookings.map((b) => ({ ...b, checklists: this.departures.checklistsFor(b) })),
+    }));
+    return { items };
   }
 
   /**

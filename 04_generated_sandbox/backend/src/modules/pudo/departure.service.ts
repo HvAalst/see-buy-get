@@ -7,7 +7,7 @@ import { DriverService } from './driver.service';
 import { VehicleService } from './vehicle.service';
 import { CargoService } from './cargo.service';
 import { MediaService } from './media.service';
-import { missingKeys, requiredLoadKeys, requiredUnloadKeys } from './heavy-cargo';
+import { loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, unloadSafetyItems } from './heavy-cargo';
 import { CARGO_NATURES, VEHICLE_CAPABILITIES, type CargoNature } from './cargo.types';
 import { FleetManagerService } from './fleet-manager.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
@@ -300,8 +300,21 @@ export class DepartureService {
    * because a shipper who has read "cold chain" on one surface has read it on all of them.
    */
   handledBy(departure: Departure): string[] {
-    const vehicle = this.vehicles.get(departure.vehicleId) as unknown as Record<string, unknown>;
-    return VEHICLE_CAPABILITIES.filter((cap) => Boolean(vehicle[cap]));
+    /*
+     * A READ PATH MUST ANSWER. Found by driving it: every run declared before a vehicle was required
+     * carries no vehicleId, so `vehicles.get` threw NOT_FOUND — and because this runs inside offers(),
+     * ONE legacy record took the whole offer list down for every shipper in the network.
+     *
+     * Exactly the shape of the P2 lesson, where a money question reached from a read path 403’d a whole
+     * screen. A run whose vehicle cannot be read says it handles nothing special, which is the honest
+     * answer: we do not know, and the booking gate will ask the same question again for real.
+     */
+    try {
+      const vehicle = this.vehicles.get(departure.vehicleId) as unknown as Record<string, unknown>;
+      return VEHICLE_CAPABILITIES.filter((cap) => Boolean(vehicle[cap]));
+    } catch {
+      return [];
+    }
   }
 
   /**
@@ -337,7 +350,9 @@ export class DepartureService {
   private assertCarriable(departure: Departure, nature: CargoNature): void {
     const need = this.cargo.requiredCapability(nature);
     if (need) {
-      const vehicle = this.vehicles.get(departure.vehicleId) as unknown as Record<string, unknown>;
+      // A vehicle we cannot read cannot be vouched for, so the load is refused — the safe direction, and
+      // the opposite of the read path above, which must answer rather than refuse.
+      const vehicle = this.vehicleOrNone(departure) ?? {};
       if (!vehicle[need]) {
         const said = need === 'coldChain' ? 'cold chain' : need;
         throw new GlosError('VEHICLE_MISSING_CAPABILITY', `${departure.plate} does not carry ${said} — these goods need a vehicle that does`);
@@ -348,6 +363,15 @@ export class DepartureService {
       .find((b) => b.nature && !this.cargo.canShareVehicle(nature, b.nature));
     if (clash) {
       throw new GlosError('CARGO_INCOMPATIBLE', `There is already ${clash.description} on this run, and those two must not travel together`);
+    }
+  }
+
+  /** The vehicle behind a run, where the record still has one. Legacy runs predate the requirement. */
+  private vehicleOrNone(departure: Departure): Record<string, unknown> | undefined {
+    try {
+      return this.vehicles.get(departure.vehicleId) as unknown as Record<string, unknown>;
+    } catch {
+      return undefined;
     }
   }
 
@@ -807,6 +831,24 @@ export class DepartureService {
     if (input.securementPhotoRef) this.media.adopt(input.securementPhotoRef, by, { type: 'freight', id: departure.departureId }, 'securement');
     this.departures.set(departure.departureId, departure);
     return { departure, booking };
+  }
+
+  /**
+   * THE CHECKLISTS A DRIVER IS SHOWN, which are the ones this service enforces.
+   *
+   * Handed over as ITEMS rather than keys so the phone renders the server’s own words. A driver
+   * ticking a list the client made up, against a list the server checks, is two lists that will one
+   * day disagree at a gate — and the board settled that question in S33 by sending the list.
+   */
+  checklistsFor(booking: DepartureBooking): { load: Array<{ key: string; label: string }>; unload: Array<{ key: string; label: string }> } {
+    return {
+      load: loadSafetyItems({
+        requiredCapabilities: this.cargo.requiredCapabilities([booking.nature]),
+        fragile: booking.nature === 'FRG',
+        bulk: false,
+      }).map((i) => ({ key: i.key, label: i.label })),
+      unload: unloadSafetyItems().map((i) => ({ key: i.key, label: i.label })),
+    };
   }
 
   /** What this booking’s load-safety checklist asks for, which depends on what the goods are. */

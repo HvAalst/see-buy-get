@@ -286,6 +286,13 @@ interface DepartureBookingBase {
   status: 'booked' | 'delivered' | 'cancelled';
   deliveredAt?: string;
   receivedBy?: string;
+  /** What the goods are — the vehicle and the other loads are checked against it. */
+  nature?: string;
+  declaredValue?: number;
+  /** What the driver recorded at the door. */
+  pod?: { receiverName: string; photoRef: string; remarks?: string; at: string };
+  /** What the shipper says went wrong, and what this fleet said back. Never decided by us. */
+  claim?: { kind: string; description: string; amount?: number; raisedAt: string; answer?: 'accepted' | 'refused'; answerNote?: string; answeredAt?: string };
   waiting: WaitingRow[];
 }
 
@@ -323,6 +330,8 @@ export interface DepartureRow {
   waiting?: { freeMin: number; perHour: number };
   /** How the shipper pays them — directly. A record, never a posting. */
   settle?: { method: string; when: string };
+  /** What THIS fleet insures, or plainly none. Never ours, and absent means they have not said. */
+  cover?: { limit: number; policy?: string };
   km?: number;
   driverDid?: string;
   driverName?: string;

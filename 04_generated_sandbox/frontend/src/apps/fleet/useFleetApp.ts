@@ -852,6 +852,10 @@ export function useFleetApp() {
         ...(Number(f.km) > 0 ? { km: Number(f.km) } : {}),
         ...(Number(f.waitingPerHour) > 0 ? { freeMin: Number(f.freeMin), waitingPerHour: Number(f.waitingPerHour) } : {}),
         ...(f.settleMethod && f.settleWhen ? { settleMethod: f.settleMethod, settleWhen: f.settleWhen } : {}),
+        // A blank limit means "not said"; a typed 0 means "I carry none". Two different facts, and the
+        // one thing a forwarder most needs to be able to tell apart.
+        ...(f.coverLimit.trim() !== '' ? { coverLimit: Number(f.coverLimit) } : {}),
+        ...(f.coverPolicy.trim() ? { coverPolicy: f.coverPolicy.trim() } : {}),
         ...(f.note.trim() ? { note: f.note.trim() } : {}),
       });
       if (r.error) return fail(r.error);
@@ -886,6 +890,27 @@ export function useFleetApp() {
       let ok = false;
       await run(`run-status:${departureId}`, async () => {
         const r = await client.api.setDepartureStatus(managerDid, departureId, status, reason);
+        if (r.error) return fail(r.error);
+        ok = true;
+        await refresh();
+      });
+      return ok;
+    },
+    [client, managerDid, run, fail, refresh],
+  );
+
+  /**
+   * ANSWERING A CLAIM, in the fleet’s own words.
+   *
+   * Never weighed by us and never settled through us — we did not take this payment and we carry no
+   * cover. What the answer does is turn an accusation into a record both sides can take somewhere.
+   */
+  const answerClaim = useCallback(
+    async (departureId: string, bookingId: string, answer: 'accepted' | 'refused', note: string): Promise<boolean> => {
+      if (!client || !managerDid) return false;
+      let ok = false;
+      await run(`claim:${bookingId}`, async () => {
+        const r = await client.api.answerBookingClaim(managerDid, departureId, bookingId, answer, note.trim() || undefined);
         if (r.error) return fail(r.error);
         ok = true;
         await refresh();
@@ -1016,6 +1041,7 @@ export function useFleetApp() {
       assignRunDriver,
       setRunStatus,
       markDelivered,
+      answerClaim,
       addOwnLoad,
       waiveWait,
       queryEarnings,

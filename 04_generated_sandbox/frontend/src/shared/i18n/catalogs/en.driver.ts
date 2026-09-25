@@ -54,6 +54,23 @@ export const enDriver = {
      whether the load came off it — so the goods reached a door, somebody took them, and no record
      of that existed. The name is asked for and never demanded: a required field at a gate in the
      rain is how a driver learns to type "x". */
+  /* SECURED, BEFORE PULLING AWAY. The other half of the standard the board holds a haul to. A load that
+     arrives broken is argued about at the far end of the journey, and the photograph that settles it is
+     taken here, hours earlier, at a gate where the driver is already standing. */
+  'driver.run.secure': 'Secured?',
+  'driver.run.secured': 'Secured',
+  'driver.run.secureTitle': 'Before you pull away',
+  'driver.run.secureLede': 'Tick what you have done with {what}, and photograph it as strapped down.',
+  'driver.run.securePhoto': 'Photo of the load, secured',
+  'driver.run.securePhotoPh': 'Take one and paste its id',
+  'driver.run.securePhotoHint': 'This is the photograph that settles an argument about damage at the other end. It protects you first.',
+  'driver.run.secureCta': 'Yes, it is secured',
+
+  /* And the proof at the door. A name and a photograph, because "delivered" without either is your
+     word against the sender’s — and with them it is box 24 of a consignment note. */
+  'driver.run.podPhoto': 'Photo of the goods as delivered',
+  'driver.run.podPhotoPh': 'Take one and paste its id',
+
   'driver.run.handOver': 'Hand it over',
   'driver.run.handOverTitle': 'Handed over?',
   'driver.run.handOverLede': 'You are recording that {what} came off the truck and somebody took it. This is what the sender is told.',

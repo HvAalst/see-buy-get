@@ -445,6 +445,11 @@ export interface DepartureBookingView {
   volumeM3?: number;
   /** `delivered` is the ending: the goods came off the truck and the driver said so. */
   status: 'booked' | 'delivered' | 'cancelled';
+  /** What the goods are — it decides which load-safety items the checklist asks for. */
+  nature?: string;
+  /** The server’s OWN lists, in the server’s own words. Never a second list made on the phone. */
+  checklists?: { load: SafetyItem[]; unload: SafetyItem[] };
+  loadSafety?: { confirmed: string[]; securementPhotoRef?: string; at: string };
   deliveredAt?: string;
   receivedBy?: string;
   waiting: WaitingRecordView[];

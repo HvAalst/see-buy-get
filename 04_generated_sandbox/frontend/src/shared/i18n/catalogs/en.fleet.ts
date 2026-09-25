@@ -78,6 +78,34 @@ export const enFleet = {
   'fleet.runs.settleWhen': 'When',
   'fleet.runs.onVehicle': 'On {plate}',
 
+  /* WHAT YOU INSURE — and we insure nothing, which is the part that has to be SAID rather than left
+     blank. A shipper reading a price on our screens and nothing about cover assumes somebody is behind
+     the goods. Zero is a real answer and a useful one; blank is a different fact, and both are kept. */
+  'fleet.runs.coverTitle': 'What you insure',
+  'fleet.runs.coverLede': 'SeeBuyGet carries no cover on goods you move. Saying what you carry is what lets a shipper — or their broker — arrange the rest instead of finding out afterwards.',
+  'fleet.runs.coverLimit': 'You cover up to ({currency}, per load)',
+  'fleet.runs.coverPolicy': 'Insurer and policy',
+  'fleet.runs.coverPolicyPh': 'Jubilee GIT/2026/114',
+  'fleet.runs.coverHint': 'Type 0 if you carry none — that is an honest answer and a useful one. Leave it blank and shippers are told you have not said.',
+
+  /* A CLAIM. Ours to carry and nobody’s to weigh: we never held this payment and we hold no cover, so
+     the answer is the carrier’s own and the settlement is between the two of them. */
+  'fleet.runs.claimPill': 'Claim',
+  'fleet.runs.claimRaised': 'The shipper raised a claim {when}: {what}',
+  'fleet.runs.claimAmount': 'they say it cost {amount} {currency}',
+  'fleet.runs.claimAnswer': 'Answer it',
+  'fleet.runs.claimAnswerTitle': 'Your answer',
+  'fleet.runs.claimAnswerLede': 'This goes to the shipper with the consignment note and both photographs. SeeBuyGet records it and does not decide it — settle the money between you.',
+  'fleet.runs.claimYourAnswer': 'Do you accept it?',
+  'fleet.runs.claimAccept': 'Yes — we accept it',
+  'fleet.runs.claimRefuse': 'No — we refuse it',
+  'fleet.runs.claimWhy': 'Why',
+  'fleet.runs.claimWhyPh': 'Loaded and signed for in that state — see the photograph at pickup.',
+  'fleet.runs.claimWhyHint': 'Required on a refusal. A refusal with no reason is not something the other side can do anything with.',
+  'fleet.runs.claimSend': 'Send your answer',
+  'fleet.runs.claimYouAccepted': 'You accepted it{note}',
+  'fleet.runs.claimYouRefused': 'You refused it{note}',
+
   'fleet.runs.waitingTitle': 'If you are kept waiting',
   'fleet.runs.waitingLede': 'Leave these empty and you do not charge for waiting. Fill them both and a shipper sees the terms before they book.',
   'fleet.runs.freeMin': 'Free minutes at each stop',

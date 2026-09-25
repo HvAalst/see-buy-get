@@ -1042,6 +1042,28 @@ export function useAgentApp() {
     setState((s) => ({ ...s, myBookings: page.items ?? [], myBookingsState: 'ready' }));
   }, [client, fail]);
 
+  /**
+   * SOMETHING WENT WRONG with a load that was delivered.
+   *
+   * Resolves TRUE only when it went through, so the sheet stays open on a refusal with everything
+   * typed into it still there — this is somebody describing a bad week, not filling in a form.
+   */
+  const raiseBookingClaim = useCallback(
+    async (departureId: string, bookingId: string, claim: { kind: string; description: string; amount?: number }): Promise<boolean> => {
+      if (!client) return false;
+      let ok = false;
+      await run(`claim:${bookingId}`, async () => {
+        const r = await client.api.openBookingClaim(departureId, bookingId, claim);
+        if (r.error) return fail(r.error);
+        ok = true;
+        pushToast({ tone: 'ok', icon: 'info', title: t('agent.mine.claimSent'), detail: t('agent.mine.claimSentDetail') });
+        await loadMyBookings();
+      });
+      return ok;
+    },
+    [client, run, fail, pushToast, loadMyBookings],
+  );
+
   /** Give the space back. Offered only where the server says it is still possible. */
   const cancelMyBooking = useCallback(
     async (departureId: string, bookingId: string) => {
@@ -2085,6 +2107,7 @@ export function useAgentApp() {
       loadOffers,
       loadMyBookings,
       cancelMyBooking,
+      raiseBookingClaim,
       openOffer,
       clearOfferQuote,
       quoteOffer,

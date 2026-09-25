@@ -18,6 +18,25 @@ import { enTower, enTowerCompanies, enTowerMoney, enTowerNetwork, enTowerQueues,
 
 /* HOW A SHIPPER PAYS A CARRIER DIRECTLY. Shared, because the fleet declaring it, the shop reading it
    before booking, and the shop reading it back afterwards must all say the same thing. */
+/* WHERE COVER STANDS ON A LOAD — and the answer is never "with us".
+
+   We do not insure goods on a fleet’s own run and are not going to. What we were doing instead was
+   saying NOTHING, and silence on a screen that quotes a price reads as cover. So the carrier states
+   their own position and the shipper states what the load is worth, and the two sit side by side:
+   neither is a promise of ours, and together they are the gap a forwarder can price. */
+const enCover = {
+  'cover.limit': 'The carrier insures up to {amount} {currency} per load. SeeBuyGet insures nothing.',
+  'cover.limitPolicy': 'The carrier insures up to {amount} {currency} per load ({policy}). SeeBuyGet insures nothing.',
+  'cover.none': 'The carrier carries no goods-in-transit cover, and neither do we. These goods travel uninsured unless you arrange it yourself.',
+  'cover.unsaid': 'The carrier has not said what cover they hold. SeeBuyGet holds none — ask them before the goods travel.',
+  'cover.short': 'You have declared {amount} {currency} more than the carrier covers. A forwarder or broker can insure the difference.',
+  'cover.handles': 'This vehicle can carry {what}.',
+  'cover.handles.cold': 'temperature-controlled goods',
+  'cover.handles.hazmat': 'dangerous goods',
+  'cover.handles.bulk': 'loose bulk',
+  'cover.handles.fragile': 'fragile goods',
+};
+
 const enSettle = {
   'settle.line': 'You pay them {method}, {when}.',
   'settle.method.cash': 'in cash',
@@ -34,6 +53,7 @@ const enSettle = {
 };
 
 export const en = {
+  ...enCover,
   ...enSettle,
   // Per-app slices (each app owns its own <app>.* namespace; filled in its own en.<app>.ts file).
   ...enAgent,

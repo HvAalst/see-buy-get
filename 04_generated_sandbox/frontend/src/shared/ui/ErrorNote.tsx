@@ -25,6 +25,13 @@ const SAY: Record<string, string> = {
   'error.hours_exceeded': 'Your driving hours do not allow this right now.',
   'error.too_heavy': 'Too heavy for the space you have left.',
   'error.no_room': 'That run does not have room for this.',
+  // F5 — the goods and the truck, or the goods and each other. The server's DETAIL names the vehicle or
+  // the load already aboard, which is the only actionable part, so callers pass showDetail.
+  'error.vehicle_capability': 'That truck cannot carry these goods.',
+  'error.cargo_incompatible': 'These goods must not travel with something already on that truck.',
+  'error.checklist': 'There are checks left to tick before this.',
+  'error.receiver': 'Record who received the goods first.',
+  'error.pod_photo': 'Attach a photo of the goods as delivered.',
   'error.no_fragile': 'This vehicle cannot carry fragile loads.',
   'error.not_found': 'We could not find that. Check the code.',
   'error.wrong_code': 'That code is not right. Try again.',
