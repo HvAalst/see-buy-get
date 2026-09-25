@@ -108,7 +108,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyRecordDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, BookDepartureDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto } from './pudo.dto';
+  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, BookDepartureDto, AddOwnLoadDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto } from './pudo.dto';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
@@ -4235,6 +4235,19 @@ export class SbgController {
     this.assertFleetSelf(did, actor);
     const { currency, assumed } = this.departures.pricingCurrency(did);
     return { items: this.departures.forFleet(did), currency, currencyAssumed: assumed };
+  }
+
+  /**
+   * F4 — the fleet puts a load it ALREADY HAD on its own run.
+   *
+   * Not a sale: nothing is quoted, no money moves, and the customer has no account here. The fleet is
+   * telling us a load exists so the space it fills stops being offered to somebody else — which is what
+   * makes the remaining-capacity figure on every F3 offer a fact instead of an advertisement.
+   */
+  @Post('fleet/managers/:did/departures/:departureId/own-loads')
+  addOwnLoad(@Param('did') did: string, @Param('departureId') departureId: string, @Body() dto: AddOwnLoadDto, @Actor() actor: IntrospectionResult) {
+    this.assertFleetSelf(did, actor);
+    return this.departures.addOwnLoad(departureId, did, dto).booking;
   }
 
   /** Stop selling, mark it gone, or call it off. The fleet's own call, on its own run. */

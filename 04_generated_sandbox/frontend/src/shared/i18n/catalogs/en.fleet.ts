@@ -105,8 +105,13 @@ export const enFleet = {
   'fleet.runs.noDriverWhy': 'Nobody can record waiting time at a gate until you say who is driving.',
   'fleet.runs.pickDriver': 'Choose a driver',
 
-  'fleet.runs.moneyTitle': 'What this run has sold',
+  /* Not "what this run has sold": since F4 a run can carry nothing but the fleet's own work, and a
+     heading claiming a sale above a list of loads nobody bought here is the small kind of untrue. */
+  'fleet.runs.moneyTitle': 'What this run is carrying',
   'fleet.runs.sold': '{amount} {currency} in bookings',
+  /* Kept apart from what was sold here, and never added to it: this is the fleet's own figure for
+     their own customers, which we neither quoted nor hold anybody to. */
+  'fleet.runs.ownMoney': '{amount} {currency} your own',
   'fleet.runs.waitingOwed': '{amount} {currency} owed for waiting',
   'fleet.runs.bindsWeight': 'filled on weight',
   'fleet.runs.bindsSpace': 'filled on space',
@@ -116,6 +121,9 @@ export const enFleet = {
   'fleet.runs.waitAtLoading': 'Held at collection',
   'fleet.runs.waitAtDelivery': 'Held at delivery',
   'fleet.runs.waitLine': '{minutes} min over the free time — {amount} {currency} from the {bearer}',
+  /* No figure on an own customer's wait. The terms on this run are the ones published to the market;
+     a customer carried for years is on whatever they agreed years ago, and nobody told us. */
+  'fleet.runs.waitLineOwn': '{minutes} min over the free time — {customer} is yours to bill, on your terms',
   'fleet.runs.bearerShipper': 'sender',
   'fleet.runs.bearerConsignee': 'receiver',
   'fleet.runs.waived': 'Waived: {reason}',
@@ -128,6 +136,43 @@ export const enFleet = {
 
   'fleet.runs.aloud': '{count} runs on the board, {open} still taking bookings.',
 
+  'fleet.runs.ownPill': 'Yours',
+  'fleet.runs.ownRow': 'For {customer} — your own customer, at your price',
+  'fleet.runs.ownRowNoPrice': 'For {customer} — your own customer',
+
+  /* F4 — THE WORK THE FLEET ALREADY HAD.
+
+     A haulier does not arrive here empty. It arrives with customers it has carried for years, and
+     until now there was nowhere to put them, so the network saw a truck and never the work on it.
+     The remaining-space figure on every offer was an advertisement rather than a fact.
+
+     The words have one job: make clear this is NOT a sale. Nothing is quoted, nothing is charged,
+     and the customer needs no account here — a fleet that thinks it is handing us their book of
+     business will never type a name into it. */
+  'fleet.own.add': 'Add a load of your own',
+  'fleet.own.title': 'A load you already had',
+  'fleet.own.lede': 'For a customer of yours, not one who found you here. Nothing is charged and they need no account — you are telling us the load exists so we stop offering the space it takes.',
+  'fleet.own.customer': 'Whose load is it',
+  'fleet.own.customerPh': 'Kariuki Hardware',
+  'fleet.own.what': 'What is it',
+  'fleet.own.whatPh': 'Cement, 40 bags',
+  'fleet.own.kg': 'Weight (kg)',
+  'fleet.own.m3': 'Space it takes (m³)',
+  'fleet.own.left': '{kg} kg left on this run.',
+  'fleet.own.leftBoth': '{kg} kg and {m3} m³ left on this run.',
+  'fleet.own.charge': 'What you charge them ({currency})',
+  'fleet.own.chargeHint': 'Optional, and only for your own run sheet — we do not quote it, bill it or take any part of it. Leave it blank and the load still takes up the space.',
+  'fleet.own.submit': 'Put it on the run',
+  'fleet.own.needCustomer': 'Say whose load it is — in whatever name you file them under.',
+  'fleet.own.needWhat': 'Say what it is. The driver is loading it.',
+  'fleet.own.needKg': 'Say what it weighs.',
+  /* The refusals name the AXIS, for the same reason the shipper's side does: told "it will not fit"
+     while the weight plainly allows, anybody reads that as a bug in our arithmetic. */
+  'fleet.own.noRoomKg': 'That is more than the {kg} kg still free on this run.',
+  'fleet.own.noRoomM3': 'It weighs little enough, but only {m3} m³ of space is left.',
+
+  'fleet.toast.ownAdded': 'On the run',
+  'fleet.toast.ownAddedDetail': '{customer}’s load is aboard, and that space is no longer being offered.',
   'fleet.toast.runDeclared': 'Run on the board',
   'fleet.toast.runDeclaredDetail': 'Shippers can book the space now.',
   'fleet.nav.lines': 'Lines',

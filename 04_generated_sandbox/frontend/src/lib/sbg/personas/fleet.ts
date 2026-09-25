@@ -147,6 +147,22 @@ export function createFleetApi(sbg: SbgClient) {
     /** This fleet's own departures, soonest first, with who is aboard each and every wait recorded. */
     departures: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/departures' as never, { params: { path: { did } } } as never)),
 
+    /**
+     * F4 — a load this fleet ALREADY HAD, put on its own run.
+     *
+     * Not a sale, and the customer has no account here: the fleet is telling us a load exists so the space
+     * it fills stops being offered to somebody else. It is what makes the remaining figure on every offer
+     * a fact rather than an advertisement.
+     */
+    addOwnLoad: (
+      did: string,
+      departureId: string,
+      body: { customer: string; description: string; weightKg: number; volumeM3?: number; charge?: number },
+    ) =>
+      sbg.request((c) =>
+        c.POST('/v1/sbg/fleet/managers/{did}/departures/{departureId}/own-loads' as never, { params: { path: { did, departureId } }, body } as never),
+      ),
+
     /** Who is driving it. Rostered after the space is sold, which is the ordinary way round. */
     assignDepartureDriver: (did: string, departureId: string, driverDid: string) =>
       sbg.request((c) =>

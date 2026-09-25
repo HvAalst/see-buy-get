@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
+import type { DepartureBookingRow, DepartureRow } from './types';
+import { EMPTY_OWN_LOAD, ownLoadBlocker, runMoney, runRemaining, runWaits, type OwnLoadForm } from './logic';
 import { ageWords, signalState, shiftHours, overShiftLimit,
   EMPTY_DRIVER,
   EMPTY_VEHICLE,
@@ -298,5 +300,108 @@ describe('FP8 — the shift clock the office reads', () => {
     expect(overShiftLimit(started, 13, Date.parse('2026-09-15T19:30:00.000Z'))).toBe(true);
     expect(overShiftLimit(started, undefined, Date.parse('2026-09-15T19:30:00.000Z'))).toBe(true);
     expect(overShiftLimit(started, 10, Date.parse('2026-09-15T16:30:00.000Z'))).toBe(true);
+  });
+});
+
+/**
+ * F4 — the work the fleet already had.
+ *
+ * The claim worth testing is not that a field round-trips. It is that the fleet's own money NEVER lands in
+ * the same figure as what was sold here — one is a price we quoted and stand behind, the other is a number
+ * we were told and have no part in, and a screen that adds them is claiming a relationship that does not
+ * exist.
+ */
+describe('F4 — a fleet’s own customers on its own run', () => {
+  const booking = (over: Partial<DepartureBookingRow> & Pick<DepartureBookingRow, 'kind'>): DepartureBookingRow =>
+    ({
+      bookingId: 'b' + Math.random(),
+      shipperDid: 'did:x',
+      description: 'Load',
+      weightKg: 100,
+      binds: 'weight',
+      price: 0,
+      units: 1,
+      at: '2026-09-25T06:00:00.000Z',
+      status: 'booked',
+      waiting: [],
+      ...over,
+    }) as DepartureBookingRow;
+
+  // null, not undefined: passing undefined for an optional parameter TRIGGERS its default, so a run with
+  // no measured hold would quietly get 40 m³ and the test that matters most would pass on the wrong run.
+  const runWith = (bookings: DepartureBookingRow[], capacityKg = 6000, capacityM3: number | null = 40): DepartureRow =>
+    ({
+      departureId: 'dep1',
+      corridorId: 'c1',
+      lineName: 'Nairobi → Mombasa',
+      originZone: 'Nairobi',
+      destZone: 'Mombasa',
+      leavesAt: '2026-10-01T06:00:00.000Z',
+      capacityKg,
+      ...(capacityM3 != null ? { capacityM3 } : {}),
+      rate: { basis: 'per_trip', amount: 450, currency: 'KES' },
+      status: 'open',
+      bookings,
+      createdAt: '2026-09-25T06:00:00.000Z',
+    }) as DepartureRow;
+
+  it('keeps the fleet’s own money out of what was sold here', () => {
+    const run = runWith([
+      booking({ kind: 'sold', price: 450 }),
+      booking({ kind: 'own', customer: 'Kariuki Hardware', price: 380 }),
+      booking({ kind: 'own', customer: 'Mwangi Feeds', price: 200 }),
+    ]);
+    expect(runMoney(run)).toMatchObject({ sold: 450, own: 580, currency: 'KES' });
+  });
+
+  it('counts an own load against the space, which is the whole point of recording it', () => {
+    const run = runWith([booking({ kind: 'own', customer: 'Kariuki Hardware', weightKg: 2000, volumeM3: 6 })]);
+    expect(runRemaining(run)).toEqual({ kg: 4000, m3: 34 });
+  });
+
+  it('ignores a cancelled own load in both, the same as any other', () => {
+    const run = runWith([booking({ kind: 'own', customer: 'Kariuki Hardware', weightKg: 2000, price: 380, status: 'cancelled' })]);
+    expect(runMoney(run).own).toBe(0);
+    expect(runRemaining(run).kg).toBe(6000);
+  });
+
+  it('lists an own customer’s wait even though we put no price on it', () => {
+    const run = runWith([
+      booking({
+        kind: 'own',
+        customer: 'Kariuki Hardware',
+        // Ninety minutes the fleet has to invoice, and an amount we deliberately did not set.
+        waiting: [{ where: 'loading', arrivedAt: 'x', freeAt: 'y', waitedMin: 150, billableMin: 90, amount: 0, bearer: 'shipper' }],
+      }),
+    ]);
+    expect(runWaits(run)).toHaveLength(1);
+  });
+
+  describe('what it refuses before the server has to', () => {
+    const run = runWith([], 6000, 40);
+    const form = (over: Partial<OwnLoadForm> = {}): OwnLoadForm => ({ ...EMPTY_OWN_LOAD, customer: 'Kariuki', description: 'Cement', weightKg: '100', ...over });
+
+    it('asks for a name, because an unattributed load is a hole nobody can account for', () => {
+      expect(ownLoadBlocker(form({ customer: '  ' }), run)).toBe('fleet.own.needCustomer');
+      expect(ownLoadBlocker(form({ description: '' }), run)).toBe('fleet.own.needWhat');
+      expect(ownLoadBlocker(form({ weightKg: '0' }), run)).toBe('fleet.own.needKg');
+      expect(ownLoadBlocker(form(), run)).toBeNull();
+    });
+
+    it('names the axis that is full, not just "it does not fit"', () => {
+      expect(ownLoadBlocker(form({ weightKg: '7000' }), run)).toBe('fleet.own.noRoomKg');
+      // Light enough and far too big — the refusal a weight-only check would get wrong.
+      expect(ownLoadBlocker(form({ weightKg: '40', volumeM3: '50' }), run)).toBe('fleet.own.noRoomM3');
+    });
+
+    it('measures the room against what is already aboard, own loads included', () => {
+      const half = runWith([booking({ kind: 'own', customer: 'Kariuki', weightKg: 5500 })]);
+      expect(ownLoadBlocker(form({ weightKg: '1000' }), half)).toBe('fleet.own.noRoomKg');
+      expect(ownLoadBlocker(form({ weightKg: '400' }), half)).toBeNull();
+    });
+
+    it('says nothing about space on a run whose hold was never measured', () => {
+      expect(ownLoadBlocker(form({ weightKg: '40', volumeM3: '999' }), runWith([], 6000, null))).toBeNull();
+    });
   });
 });

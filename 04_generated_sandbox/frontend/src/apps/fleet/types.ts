@@ -271,7 +271,7 @@ export interface WaitingRow {
   waivedReason?: string;
 }
 
-export interface DepartureBookingRow {
+interface DepartureBookingBase {
   bookingId: string;
   shipperDid: string;
   description: string;
@@ -285,6 +285,22 @@ export interface DepartureBookingRow {
   status: 'booked' | 'cancelled';
   waiting: WaitingRow[];
 }
+
+/**
+ * A load on a run, and the two kinds are not the same thing wearing different labels.
+ *
+ * A DISCRIMINATED UNION rather than an optional field beside an enum, because the one guarantee that
+ * matters here is that an `own` load always has a customer on it — the server refuses one without — and a
+ * type that merely allows a name lets every screen quietly render "For undefined". This way the compiler
+ * knows the name is there the moment the kind is checked, and nothing needs a fallback that would paper
+ * over the very state the backend exists to prevent.
+ *
+ *  `sold`  came through the offer list and we quoted it: our price, agreed by both sides.
+ *  `own`   a customer this fleet already had, recorded so the space stops being advertised. Priced by
+ *          nobody here, and the name never leaves the fleet's own screens.
+ */
+export type DepartureBookingRow = DepartureBookingBase &
+  ({ kind: 'sold'; customer?: undefined } | { kind: 'own'; customer: string });
 
 export interface DepartureRow {
   departureId: string;

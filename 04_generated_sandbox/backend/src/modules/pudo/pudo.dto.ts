@@ -1441,6 +1441,22 @@ export class DepartureStatusDto {
   @IsIn(['open', 'closed', 'departed', 'cancelled']) status!: 'open' | 'closed' | 'departed' | 'cancelled';
 }
 
+/**
+ * F4 — a load the fleet already had, put on its own run so the space stops being advertised.
+ *
+ * No shipper, because there is no account to name: this is the fleet's own customer, settled between the
+ * two of them exactly as it was before any of this existed.
+ */
+export class AddOwnLoadDto {
+  /** Whose it is, in the fleet's own words. */
+  @IsString() @MaxLength(120) customer!: string;
+  @IsString() @MaxLength(160) description!: string;
+  @IsNumber() @Min(0.1) weightKg!: number;
+  @IsOptional() @IsNumber() @Min(0.01) volumeM3?: number;
+  /** What the fleet charges them, for the fleet's own run sheet. We quote nothing and post nothing. */
+  @IsOptional() @IsNumber() @Min(0) charge?: number;
+}
+
 export class PhoneRequestDto {
   @IsString() phone!: string;
 }

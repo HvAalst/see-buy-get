@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Explainer, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
-import { RUN_BASES, ownLines, runBlocker, runMoney, runRemaining, runWaits, type RunBasis } from '../logic';
+import { EMPTY_OWN_LOAD, RUN_BASES, ownLines, ownLoadBlocker, runBlocker, runMoney, runRemaining, runWaits, type OwnLoadForm, type RunBasis } from '../logic';
 import type { DepartureBookingRow, DepartureRow, WaitingRow } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
 
@@ -141,14 +141,30 @@ function Run({ run, state, actions }: { run: DepartureRow; state: FleetState; ac
         {!run.driverDid ? <p class="hint">{t('fleet.runs.noDriverWhy')}</p> : null}
       </div>
 
+      {/* F4 — the work this fleet already had. Offered on any run that can still take a load, INCLUDING a
+          closed one: closed means "I have stopped selling", not "the truck is full", and a fleet that
+          closed the offer because it is filling the rest itself is the ordinary case. */}
+      {run.status === 'open' || run.status === 'closed' ? <OwnLoad run={run} state={state} actions={actions} /> : null}
+
       {aboard.length ? (
         <>
           <h3 class="scr__section">{t('fleet.runs.moneyTitle')}</h3>
+          {/* THREE FIGURES THAT ARE NEVER ADDED UP. What we sold, what the fleet charges its own people,
+              and standing time — quoted by us, quoted by them, and quoted by nobody. A fleet looking at a
+              thin sold beside a fat own is looking at whether this network is worth their time, and one
+              total would hide exactly that.
+
+              A figure appears when its KIND of load is aboard, not when its amount is above zero. On a run
+              carrying only the fleet's own work, "0 in bookings" states a zero we did not measure — there
+              are no bookings, which is a different fact and the one worth reading. */}
           <p class="card__note">
-            {t('fleet.runs.sold', { amount: money.sold, currency: money.currency })}
-            {/* Waiting is shown SEPARATELY from the trip money. The trip was quoted and agreed; the waiting
-                was not, and a fleet reading one total would never see which of its runs keep being held up. */}
-            {money.waiting > 0 ? ` · ${t('fleet.runs.waitingOwed', { amount: money.waiting, currency: money.currency })}` : ''}
+            {[
+              aboard.some((b) => b.kind !== 'own') ? t('fleet.runs.sold', { amount: money.sold, currency: money.currency }) : null,
+              aboard.some((b) => b.kind === 'own') ? t('fleet.runs.ownMoney', { amount: money.own, currency: money.currency }) : null,
+              money.waiting > 0 ? t('fleet.runs.waitingOwed', { amount: money.waiting, currency: money.currency }) : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           </p>
           <div class="rows" role="list">
             {aboard.map((b) => (
@@ -163,7 +179,17 @@ function Run({ run, state, actions }: { run: DepartureRow; state: FleetState; ac
                       currency: run.rate.currency,
                     })}
                   </span>
+                  {/* Whose it is, said on the row rather than inferred from a price of zero. A fleet
+                      scanning a loaded run needs to know which of these people we have any part in. */}
+                  {b.kind === 'own' ? (
+                    <span class="row__s">{b.price > 0 ? t('fleet.runs.ownRow', { customer: b.customer }) : t('fleet.runs.ownRowNoPrice', { customer: b.customer })}</span>
+                  ) : null}
                 </span>
+                {b.kind === 'own' ? (
+                  <span class="row__end">
+                    <Pill tone="idle">{t('fleet.runs.ownPill')}</Pill>
+                  </span>
+                ) : null}
               </div>
             ))}
           </div>
@@ -249,13 +275,21 @@ function Wait({
       <span class="row__body">
         <span class="row__t">{t(record.where === 'loading' ? 'fleet.runs.waitAtLoading' : 'fleet.runs.waitAtDelivery')}</span>
         <span class="row__s">{booking.description}</span>
+        {/* An own customer's wait carries NO figure, and says why rather than showing a nought. The terms
+            on this run are the ones published to the market; a customer the fleet has carried for years is
+            on whatever they agreed years ago, and we were never told it. The minutes are the point. */}
         <span class="row__s">
-          {t('fleet.runs.waitLine', {
-            minutes: record.billableMin,
-            amount: record.amount,
-            currency: run.rate.currency,
-            bearer: t(record.bearer === 'shipper' ? 'fleet.runs.bearerShipper' : 'fleet.runs.bearerConsignee'),
-          })}
+          {booking.kind === 'own'
+            ? t('fleet.runs.waitLineOwn', {
+                minutes: record.billableMin,
+                customer: booking.customer,
+              })
+            : t('fleet.runs.waitLine', {
+                minutes: record.billableMin,
+                amount: record.amount,
+                currency: run.rate.currency,
+                bearer: t(record.bearer === 'shipper' ? 'fleet.runs.bearerShipper' : 'fleet.runs.bearerConsignee'),
+              })}
         </span>
         {/* A WAIVED charge keeps its row. Deleting it would make the decision unarguable in the other
             direction — a shipper could never show a fleet writing off its own delays. */}
@@ -431,5 +465,127 @@ function NewRun({ state, actions, lines }: { state: FleetState; actions: FleetAc
         {blocker ? <p class="hint" style="margin-top:8px">{t(blocker)}</p> : null}
       </div>
     </Card>
+  );
+}
+
+/**
+ * F4 — A LOAD THIS FLEET ALREADY HAD.
+ *
+ * A haulier does not arrive here empty. It arrives with customers it has been carrying for years, and
+ * until now there was nowhere to put them: the only way a load got onto a truck was for somebody to buy it
+ * through us. So the network saw a vehicle and never the work on it — and the remaining-space figure on
+ * every offer was an advertisement rather than a fact.
+ *
+ * THIS IS WHAT MAKES SELLING SPACE HONEST. A fleet with existing customers had two options and both were
+ * bad: stay off the offer list, or publish six tonnes while four are already spoken for. The second ends
+ * with a shipper at a gate beside a full truck, and it would have been our number that sent them there.
+ *
+ * It is deliberately NOT a sale. No quote, no money, and the customer needs no account — they are the
+ * fleet's, settled between the two of them the way they always were. The price box exists only so a run
+ * sheet showing half the money is not the best this fleet can get, and it says so.
+ */
+function OwnLoad({ run, state, actions }: { run: DepartureRow; state: FleetState; actions: FleetActions }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState<OwnLoadForm>({ ...EMPTY_OWN_LOAD });
+
+  const left = runRemaining(run);
+  const blocker = ownLoadBlocker(form, run);
+  const set = (patch: Partial<OwnLoadForm>) => setForm((f) => ({ ...f, ...patch }));
+
+  const add = async () => {
+    const ok = await actions.addOwnLoad(run.departureId, {
+      customer: form.customer.trim(),
+      description: form.description.trim(),
+      weightKg: Number(form.weightKg),
+      ...(Number(form.volumeM3) > 0 ? { volumeM3: Number(form.volumeM3) } : {}),
+      ...(Number(form.charge) > 0 ? { charge: Number(form.charge) } : {}),
+    });
+    // Only on success. A refusal leaves the sheet and everything typed into it exactly where they were.
+    if (ok) {
+      setForm({ ...EMPTY_OWN_LOAD });
+      setOpen(false);
+    }
+  };
+
+  return (
+    <>
+      <div style="margin: 14px 0 6px">
+        <Button variant="outline" chevron={false} onClick={() => setOpen(true)}>
+          {t('fleet.own.add')}
+        </Button>
+      </div>
+
+      <Sheet open={open} onClose={() => setOpen(false)} title={t('fleet.own.title')}>
+        <p class="hint">{t('fleet.own.lede')}</p>
+
+        <div class="field">
+          <label class="field__label" for={`own-who-${run.departureId}`}>
+            {t('fleet.own.customer')}
+          </label>
+          <input
+            id={`own-who-${run.departureId}`}
+            class="input"
+            value={form.customer}
+            placeholder={t('fleet.own.customerPh')}
+            onInput={(e) => set({ customer: e.currentTarget.value })}
+          />
+        </div>
+
+        <div class="field" style="margin-top:12px">
+          <label class="field__label" for={`own-what-${run.departureId}`}>
+            {t('fleet.own.what')}
+          </label>
+          <input
+            id={`own-what-${run.departureId}`}
+            class="input"
+            value={form.description}
+            placeholder={t('fleet.own.whatPh')}
+            onInput={(e) => set({ description: e.currentTarget.value })}
+          />
+        </div>
+
+        <div class="grid2" style="margin-top:12px">
+          <div class="field">
+            <label class="field__label" for={`own-kg-${run.departureId}`}>
+              {t('fleet.own.kg')}
+            </label>
+            <input id={`own-kg-${run.departureId}`} class="input" inputMode="decimal" value={form.weightKg} onInput={(e) => set({ weightKg: e.currentTarget.value })} />
+          </div>
+          <div class="field">
+            <label class="field__label" for={`own-m3-${run.departureId}`}>
+              {t('fleet.own.m3')}
+            </label>
+            <input id={`own-m3-${run.departureId}`} class="input" inputMode="decimal" value={form.volumeM3} onInput={(e) => set({ volumeM3: e.currentTarget.value })} />
+          </div>
+        </div>
+        {/* What is actually left, beside the boxes that have to fit inside it — rather than a refusal
+            afterwards about a number the person could not see while typing. */}
+        <p class="hint">{left.m3 != null ? t('fleet.own.leftBoth', { kg: left.kg, m3: left.m3 }) : t('fleet.own.left', { kg: left.kg })}</p>
+
+        <div class="field" style="margin-top:12px">
+          <label class="field__label" for={`own-charge-${run.departureId}`}>
+            {t('fleet.own.charge', { currency: run.rate.currency })}
+          </label>
+          <input id={`own-charge-${run.departureId}`} class="input" inputMode="decimal" value={form.charge} onInput={(e) => set({ charge: e.currentTarget.value })} />
+        </div>
+        <p class="hint">{t('fleet.own.chargeHint')}</p>
+
+        {state.error ? <ErrorNote error={state.error} showDetail /> : null}
+
+        <Button chevron={false} disabled={blocker !== null} busy={state.busy === `own-load:${run.departureId}`} onClick={() => void add()}>
+          {t('fleet.own.submit')}
+        </Button>
+        {blocker ? (
+          <p class="hint" style="margin-top:8px">
+            {t(blocker, { kg: left.kg, m3: left.m3 ?? 0 })}
+          </p>
+        ) : null}
+
+        <Button variant="link" onClick={() => setOpen(false)}>
+          {t('common.cancel')}
+        </Button>
+      </Sheet>
+    </>
   );
 }

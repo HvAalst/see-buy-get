@@ -525,17 +525,78 @@ export function runRemaining(run: DepartureRow): { kg: number; m3?: number } {
   };
 }
 
-/** What this run has earned in trip money, and separately what it is owed for standing time. */
-export function runMoney(run: DepartureRow): { sold: number; waiting: number; currency: string } {
+/**
+ * THE MONEY ON A RUN, IN THREE FIGURES THAT MUST NOT BE ADDED UP.
+ *
+ *  - `sold`     what shippers bought here, at prices we quoted and both sides agreed to.
+ *  - `own`      what the fleet says it charges its OWN customers on this run. Their number, for their run
+ *               sheet; we quoted none of it and nothing is posted anywhere because of it. It is here
+ *               because a run sheet showing half the money is a worse run sheet than one showing none.
+ *  - `waiting`  standing time, which was never quoted at all.
+ *
+ * Kept apart because they answer different questions, and one total would answer none of them. A fleet
+ * looking at a thin `sold` beside a fat `own` is looking at the reason this network is worth their time —
+ * or the reason it is not — and a single number would hide exactly that.
+ */
+export function runMoney(run: DepartureRow): { sold: number; own: number; waiting: number; currency: string } {
   const live = run.bookings.filter((b) => b.status === 'booked');
-  const sold = live.reduce((n, b) => n + b.price, 0);
+  const sum = (rows: DepartureBookingRow[]) => Math.round(rows.reduce((n, b) => n + b.price, 0) * 100) / 100;
   // Waiting is kept APART from the trip price on purpose: the trip was quoted and agreed, the waiting was
   // not, and a fleet reading one number would never see which of its runs keep being held up.
   const waiting = live.reduce((n, b) => n + b.waiting.reduce((w, r) => w + r.amount, 0), 0);
-  return { sold: Math.round(sold * 100) / 100, waiting: Math.round(waiting * 100) / 100, currency: run.rate.currency };
+  return {
+    sold: sum(live.filter((b) => b.kind !== 'own')),
+    own: sum(live.filter((b) => b.kind === 'own')),
+    waiting: Math.round(waiting * 100) / 100,
+    currency: run.rate.currency,
+  };
 }
 
-/** Every wait on a run that actually cost something — what the office has to invoice or waive. */
+/**
+ * Every wait on a run worth the office looking at.
+ *
+ * `billableMin` and not `amount`, which is why an own customer's wait appears here too: we put no price on
+ * it, and the ninety minutes are still the thing the fleet invoices them for. A list filtered on money
+ * would silently drop exactly the loads we decided not to price.
+ */
 export function runWaits(run: DepartureRow): Array<{ booking: DepartureBookingRow; record: WaitingRow }> {
   return run.bookings.flatMap((booking) => booking.waiting.filter((record) => record.billableMin > 0).map((record) => ({ booking, record })));
+}
+
+/* ------------------------------------------------------------- F4: the work the fleet already had -- */
+
+export interface OwnLoadForm {
+  customer: string;
+  description: string;
+  weightKg: string;
+  volumeM3: string;
+  /** What the fleet charges them. Optional, and ours to record rather than to price. */
+  charge: string;
+}
+
+export const EMPTY_OWN_LOAD: OwnLoadForm = { customer: '', description: '', weightKg: '', volumeM3: '', charge: '' };
+
+export type OwnLoadBlocker =
+  | 'fleet.own.needCustomer'
+  | 'fleet.own.needWhat'
+  | 'fleet.own.needKg'
+  | 'fleet.own.noRoomKg'
+  | 'fleet.own.noRoomM3';
+
+/**
+ * Why this load cannot go on the run yet, said before the server has to say it.
+ *
+ * The two capacity refusals name the AXIS, for the same reason the shipper's side does: a fleet told "it
+ * will not fit" while the weight figure plainly allows will read that as a bug in our arithmetic.
+ */
+export function ownLoadBlocker(f: OwnLoadForm, run: DepartureRow): OwnLoadBlocker | null {
+  if (!f.customer.trim()) return 'fleet.own.needCustomer';
+  if (!f.description.trim()) return 'fleet.own.needWhat';
+  const kg = Number(f.weightKg);
+  if (!(kg > 0)) return 'fleet.own.needKg';
+  const left = runRemaining(run);
+  if (kg > left.kg) return 'fleet.own.noRoomKg';
+  const m3 = Number(f.volumeM3);
+  if (left.m3 != null && m3 > 0 && m3 > left.m3) return 'fleet.own.noRoomM3';
+  return null;
 }

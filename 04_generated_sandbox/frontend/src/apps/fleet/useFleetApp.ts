@@ -885,6 +885,32 @@ export function useFleetApp() {
   );
 
   /**
+   * F4 — record a load this fleet already had, so the space it fills stops being advertised.
+   *
+   * The form lives in the sheet rather than in this state, the way the shipper's side does: it is filled
+   * and gone in one sitting, and a half-typed customer surviving a tab change would be a worse bug than
+   * losing it. Resolves TRUE only when it went through, so the sheet can stay open on a refusal.
+   */
+  const addOwnLoad = useCallback(
+    async (
+      departureId: string,
+      load: { customer: string; description: string; weightKg: number; volumeM3?: number; charge?: number },
+    ): Promise<boolean> => {
+      if (!client || !managerDid) return false;
+      let ok = false;
+      await run(`own-load:${departureId}`, async () => {
+        const r = await client.api.addOwnLoad(managerDid, departureId, load);
+        if (r.error) return fail(r.error);
+        ok = true;
+        pushToast({ tone: 'ok', icon: 'truck', title: t('fleet.toast.ownAdded'), detail: t('fleet.toast.ownAddedDetail', { customer: load.customer }) });
+        await refresh();
+      });
+      return ok;
+    },
+    [client, managerDid, run, fail, pushToast, refresh],
+  );
+
+  /**
    * Let a waiting charge go, with a reason.
    *
    * Resolves TRUE only when it actually went through, so the sheet above can stay open on a refusal rather
@@ -959,6 +985,7 @@ export function useFleetApp() {
       declareRun,
       assignRunDriver,
       setRunStatus,
+      addOwnLoad,
       waiveWait,
       queryEarnings,
       exportEarnings,

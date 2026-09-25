@@ -141,8 +141,41 @@ export class DepartureRate {
 
 export class DepartureBooking {
   bookingId: string;
-  /** Who bought the space — a store, a shop, a person. Whoever the freight belongs to. */
+  /**
+   * WHOSE LOAD THIS IS — and it is the difference between a marketplace and a run sheet.
+   *
+   *  `sold`  a shipper found this departure in the offer list and took the space. We quoted it, they
+   *          agreed to it, and both sides can read the same price for the same reason.
+   *  `own`   the fleet already had this customer long before it came anywhere near us. Nothing here was
+   *          sold, priced or promised by this network; the fleet is telling us the load exists so that
+   *          the space it fills stops being advertised to somebody else.
+   *
+   * F4, and the reason F3 is usable at all. A fleet with a book of business had two options and both were
+   * bad: stay off the offer list, or publish capacity it has not got. The second ends with a shipper
+   * standing at a gate beside a truck that was full before they booked it.
+   */
+  @ApiProperty({ enum: ['sold', 'own'] })
+  kind: 'sold' | 'own';
+  /**
+   * Who bought the space — a store, a shop, a person. Whoever the freight belongs to.
+   *
+   * On an `own` load this is the FLEET's own DID, because the fleet is the party answerable to us for what
+   * is on their truck and their customer has no account here to name. Who it is actually for is `customer`.
+   */
   shipperDid: string;
+  /**
+   * THE FLEET'S OWN CUSTOMER, in whatever name the fleet files them under. Only on `own`, and required
+   * there: a load with no customer against it is not a booking, it is a hole in the capacity that nobody
+   * can account for a week later.
+   *
+   * A name and not an account, because the whole point is that these people are not here. In a country
+   * where we only match, the fleet IS the local operator and arrives carrying its customers with it.
+   *
+   * It never leaves the fleet's own screens. A shipper reading the offer list learns how full the truck
+   * is and not one thing about who else is on it.
+   */
+  @ApiPropertyOptional()
+  customer?: string;
   /** The load itself, where one exists on the board. Absent for space bought ahead of the goods. */
   @ApiPropertyOptional()
   freightId?: string;
@@ -160,7 +193,13 @@ export class DepartureBooking {
    */
   @ApiProperty({ enum: ['weight', 'space'] })
   binds: 'weight' | 'space';
-  /** What it was quoted at, on the departure's basis, in the departure's currency. */
+  /**
+   * What it was quoted at, on the departure's basis, in the departure's currency.
+   *
+   * On an `own` load this is whatever the fleet said they charge, and zero where they did not say. It is
+   * their figure for their own run sheet: we did not quote it, we do not hold anybody to it, and no ledger
+   * moves because of it. Which is why every screen keeps it apart from what was sold here.
+   */
   @ApiProperty()
   price: number;
   /** What the basis was applied to — kilometres, kilograms, or 1 for a trip. Kept so the price can be re-read. */
@@ -268,6 +307,12 @@ export class DepartureOffer {
   remainingKg: number;
   @ApiPropertyOptional()
   remainingM3?: number;
-  /** How many are already aboard — a run nobody has taken and a nearly-full one are different offers. */
+  /**
+   * How many loads are already aboard — a run nobody has taken and a nearly-full one are different offers.
+   *
+   * Counts the fleet's OWN customers too, because this is a fact about the truck rather than about the
+   * market: five loads aboard means five places the driver has to stop. It is only a count. Who they are
+   * is the fleet's business and stays on the fleet's screens.
+   */
   booked: number;
 }

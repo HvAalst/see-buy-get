@@ -242,6 +242,7 @@ export class DepartureService {
 
     const booking: DepartureBooking = {
       bookingId: `bkg_${randomBytes(5).toString('hex')}`,
+      kind: 'sold',
       shipperDid: input.shipperDid,
       ...(input.freightId ? { freightId: input.freightId } : {}),
       description: input.description.trim(),
@@ -250,6 +251,68 @@ export class DepartureService {
       binds,
       price,
       units,
+      at: new Date().toISOString(),
+      status: 'booked',
+      waiting: [],
+    };
+    departure.bookings = [...departure.bookings, booking];
+    this.departures.set(departure.departureId, departure);
+    return { departure, booking };
+  }
+
+  /**
+   * F4 — THE WORK THE FLEET ALREADY HAD.
+   *
+   * A haulier does not arrive at this network empty. It arrives with a book of customers it has been
+   * carrying for years, and until now there was nowhere to put them: the only way a load got onto a truck
+   * here was for somebody to buy it through us. So the network saw a vehicle and never the work on it,
+   * and the remaining-space figure on every offer was an advertisement rather than a fact.
+   *
+   * THIS IS WHAT MAKES F3 HONEST. A fleet with existing customers had two options and both were bad —
+   * stay off the offer list entirely, or publish six tonnes while four of them are already spoken for.
+   * The second one ends with a shipper standing at a gate beside a full truck, and it would have been our
+   * number that put them there.
+   *
+   * WHAT THIS DELIBERATELY IS NOT: a sale. Nothing is quoted, no money is taken, no ledger moves, and the
+   * customer needs no account — they are the fleet's, settled between the two of them the way they always
+   * were. We are being told a load exists so the arithmetic stops lying. That is the whole transaction,
+   * and it is also the reason a fleet in a country where we cannot yet bank anyone can use this at all.
+   */
+  addOwnLoad(
+    departureId: string,
+    managerDid: string,
+    input: { customer: string; description: string; weightKg: number; volumeM3?: number; charge?: number },
+  ): { departure: Departure; booking: DepartureBooking } {
+    const departure = this.require(departureId);
+    if (departure.managerDid !== managerDid) throw new GlosError('FORBIDDEN', 'That is not your departure');
+
+    const customer = String(input.customer ?? '').trim();
+    // Required, and not pedantry: an unattributed load is a hole in the capacity that nobody can account
+    // for a week later, when the only question anybody asks is whose the four tonnes were.
+    if (!customer) throw new GlosError('FIELD_REQUIRED', 'Say whose load this is — your own customer, in whatever name you file them under');
+    if (!input.description?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say what it is — the driver is loading it');
+
+    const load = { weightKg: Number(input.weightKg), volumeM3: Number(input.volumeM3) || undefined };
+    this.assertBookable(departure, load, 'fleet');
+
+    const { binds } = DepartureService.bindsOn(departure, load);
+    // The fleet's own price, kept only because a run sheet that shows half the money is a worse run sheet.
+    // We did not quote it and nothing is posted against it — see DepartureBooking.price.
+    const charge = Number(input.charge);
+
+    const booking: DepartureBooking = {
+      bookingId: `bkg_${randomBytes(5).toString('hex')}`,
+      kind: 'own',
+      // The fleet is the party answerable to us for what is on their truck, and their customer has no
+      // account here to name. It also means the ordinary cancel path already lets them take it off again.
+      shipperDid: managerDid,
+      customer,
+      description: input.description.trim(),
+      weightKg: Math.round(load.weightKg * 100) / 100,
+      ...(load.volumeM3 ? { volumeM3: Math.round(load.volumeM3 * 100) / 100 } : {}),
+      binds,
+      price: Number.isFinite(charge) && charge > 0 ? Math.round(charge * 100) / 100 : 0,
+      units: 0,
       at: new Date().toISOString(),
       status: 'booked',
       waiting: [],
@@ -343,7 +406,18 @@ export class DepartureService {
     record.waitedMin = Math.max(0, Math.round((Date.parse(record.freeAt) - Date.parse(record.arrivedAt)) / 60_000));
     const { billableMin, amount } = DepartureService.waitingCharge(departure.waiting, record.waitedMin);
     record.billableMin = billableMin;
-    record.amount = amount;
+    /*
+     * THE CLOCK RUNS ON THE FLEET'S OWN LOADS. THE PRICE DOES NOT.
+     *
+     * The driver stood at that gate either way, and the record of it — arrived, free to go, ninety-five
+     * minutes — is exactly the evidence the fleet needs to invoice their own customer. So it is kept.
+     *
+     * What we must not do is put a figure on it. The terms on this departure are the ones the fleet
+     * published to the MARKET; a customer they have carried for six years is on whatever they agreed
+     * years ago, and we were never told it. Pricing their wait at our rate would put a number on the
+     * fleet's own run sheet that is not the number they will send, which is the quiet kind of wrong.
+     */
+    record.amount = booking.kind === 'own' ? 0 : amount;
     this.departures.set(departure.departureId, departure);
     return { departure, record };
   }
@@ -362,6 +436,11 @@ export class DepartureService {
     if (!reason?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say why you are letting it go — a waived charge without a reason is not a decision');
     const booking = departure.bookings.find((b) => b.bookingId === bookingId);
     if (!booking) throw new GlosError('NOT_FOUND', 'No such booking');
+    // Nothing to let go of: we never charged for this one. Offering to waive a charge that does not exist
+    // would tell a fleet they had forgiven something, when what they actually have is a timesheet.
+    if (booking.kind === 'own') {
+      throw new GlosError('INVALID_STATE', 'That is your own customer — we put no charge on their waiting, so there is nothing here to waive');
+    }
     const record = booking.waiting.find((w) => w.where === where);
     if (!record) throw new GlosError('NOT_FOUND', `Nothing was clocked at ${where}`);
     record.amount = 0;
@@ -460,9 +539,18 @@ export class DepartureService {
     return departure;
   }
 
-  /** Everything that would make a booking a lie, asked in the order a person would ask it. */
-  private assertBookable(departure: Departure, load: { weightKg: number; volumeM3?: number }): void {
-    if (departure.status !== 'open') throw new GlosError('INVALID_STATE', `That departure is ${departure.status}`);
+  /**
+   * Everything that would make a booking a lie, asked in the order a person would ask it.
+   *
+   * `by` changes exactly one answer: WHICH STATUSES STILL TAKE A LOAD. A closed run is closed to the
+   * market and not to the fleet that owns it — closed means "I have stopped selling", not "the truck is
+   * full", and a fleet that closed the offer precisely because it is filling the rest with its own work
+   * is the ordinary case rather than an edge one. Departed and cancelled refuse either way: one has gone
+   * and the other is not happening.
+   */
+  private assertBookable(departure: Departure, load: { weightKg: number; volumeM3?: number }, by: 'shipper' | 'fleet' = 'shipper'): void {
+    const takesLoads: Departure['status'][] = by === 'fleet' ? ['open', 'closed'] : ['open'];
+    if (!takesLoads.includes(departure.status)) throw new GlosError('INVALID_STATE', `That departure is ${departure.status}`);
     if (new Date(departure.leavesAt).getTime() <= Date.now()) throw new GlosError('INVALID_STATE', 'That departure has already left');
     if (!Number.isFinite(load.weightKg) || load.weightKg <= 0) throw new GlosError('INVALID_INPUT', 'Say what it weighs');
 
