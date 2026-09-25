@@ -1,5 +1,16 @@
 import { DepartureService } from './departure.service';
 import { CorridorService } from './corridor.service';
+import { CargoService } from './cargo.service';
+import type { MediaService } from './media.service';
+
+/** A photo store that only remembers what it was asked to adopt. */
+const adoptions: Array<{ mediaId: string; by: string; role: string }> = [];
+const adopted = () =>
+  ({
+    adopt: (mediaId: string, by: string, _subject: unknown, role: string) => {
+      adoptions.push({ mediaId, by, role });
+    },
+  }) as unknown as MediaService;
 import type { DriverService } from './driver.service';
 import type { FleetManagerService } from './fleet-manager.service';
 import type { PresenceService } from '../../foundation/presence/presence.service';
@@ -52,7 +63,7 @@ describe('a fleet’s own customers, on a fleet’s own run', () => {
 
   const setUp = (capacity: { capacityKg: number; capacityM3?: number } = { capacityKg: 6000, capacityM3: 40 }) => {
     const corridors = new CorridorService();
-    const service = new DepartureService(corridors, managers, clearDrivers, oneTruck, openEverywhere, silentBus);
+    const service = new DepartureService(corridors, managers, clearDrivers, oneTruck, new CargoService(), adopted(), openEverywhere, silentBus);
     const corridor = line(corridors);
     const departure = service.declare({
       managerDid: MANAGER,

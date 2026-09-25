@@ -2,6 +2,7 @@
 import { PapersWatchService } from './papers-watch.service';
 import type { FleetDriver } from './fleet.types';
 import { ConsignmentNoteService } from './consignment-note.service';
+import { DepartureNoteService } from './departure-note.service';
 import { SiteService, SITE_BASIS, type Site } from './site.service';
 import { TransitAuthorityService, TRANSIT_BASIS } from './transit-authority.service';
 import { FieldObservationService, OBSERVATION_BASIS } from './field-observation.service';
@@ -108,7 +109,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyRecordDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto } from './pudo.dto';
+  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto } from './pudo.dto';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
@@ -230,6 +231,7 @@ export class SbgController {
     @Inject(GEOCODER) private readonly geocoder: Geocoder,
     private readonly interest: InterestService,
     private readonly departures: DepartureService,
+    private readonly departureNotes: DepartureNoteService,
     @Optional() private readonly mail?: MailService,
     @Optional() private readonly papers?: PapersWatchService,
   ) {}
@@ -4285,7 +4287,7 @@ export class SbgController {
   /** What this load would cost on that departure, and which axis of it the load fills — BEFORE booking. */
   @Post('departures/:departureId/quote')
   quoteDeparture(@Param('departureId') departureId: string, @Body() dto: BookDepartureDto) {
-    return this.departures.quote(departureId, { weightKg: dto.weightKg, volumeM3: dto.volumeM3 });
+    return this.departures.quote(departureId, { weightKg: dto.weightKg, volumeM3: dto.volumeM3, nature: dto.nature });
   }
 
   /** Take space on it. The actor is the shipper — their own DID, never one they name. */
@@ -4343,7 +4345,78 @@ export class SbgController {
   ) {
     const who = actingDid(actor);
     if (!who) throw new GlosError('FORBIDDEN', 'Sign in first');
-    return this.departures.deliver(departureId, bookingId, who, dto.receivedBy).booking;
+    return this.departures.deliver(departureId, bookingId, who, dto).booking;
+  }
+
+  /**
+   * SECURED AND READY TO PULL AWAY — the other half of the board’s standard.
+   *
+   * A load that arrives broken is argued about at the far end of the journey, and the photograph that
+   * settles it was taken hours earlier. Recorded at the loading gate, where the driver already is.
+   */
+  @Post('departures/:departureId/bookings/:bookingId/secured')
+  secureDepartureBooking(
+    @Param('departureId') departureId: string,
+    @Param('bookingId') bookingId: string,
+    @Body() dto: SecureDepartureDto,
+    @Actor() actor: IntrospectionResult,
+  ) {
+    const who = actingDid(actor);
+    if (!who) throw new GlosError('FORBIDDEN', 'Sign in first');
+    return this.departures.secured(departureId, bookingId, who, dto).booking;
+  }
+
+  /**
+   * THE CONSIGNMENT NOTE for one booking on a run — the same document a board haul gets.
+   *
+   * The rule for FP2 was: implement the CMR, and let it be the standard where there is no standard. It
+   * did not stop applying because the load arrived through a different door. Not a public document: a
+   * note names both sides and describes the goods, so only the parties to the carriage may read it.
+   */
+  @Get('departures/:departureId/bookings/:bookingId/consignment-note')
+  departureNote(@Param('departureId') departureId: string, @Param('bookingId') bookingId: string, @Actor() actor: IntrospectionResult) {
+    return this.departureNotes.note(departureId, bookingId, actor);
+  }
+
+  /** The same note, as the printable page a driver hands over or a shipper files. */
+  @Get('departures/:departureId/bookings/:bookingId/consignment-note.html')
+  @Header('content-type', 'text/html; charset=utf-8')
+  departureNoteHtml(@Param('departureId') departureId: string, @Param('bookingId') bookingId: string, @Actor() actor: IntrospectionResult) {
+    return this.departureNotes.html(departureId, bookingId, actor);
+  }
+
+  /**
+   * THE SHIPPER SAYS SOMETHING WENT WRONG.
+   *
+   * Recorded and evidenced; never adjudicated and never paid by us. On a board haul the network took
+   * the money and can take some back off the carrier; here the fleet was paid directly and we hold no
+   * cover, so an award of ours would be an award of somebody else’s money. What this gives two parties
+   * is the record: a dated claim against a consignment note, beside the photographs, with the carrier’s
+   * answer next to it — which is what a forwarder or an insurer can actually act on.
+   */
+  @Post('departures/:departureId/bookings/:bookingId/claim')
+  openDepartureClaim(
+    @Param('departureId') departureId: string,
+    @Param('bookingId') bookingId: string,
+    @Body() dto: OpenBookingClaimDto,
+    @Actor() actor: IntrospectionResult,
+  ) {
+    const who = actingDid(actor);
+    if (!who) throw new GlosError('FORBIDDEN', 'Sign in as the party whose goods these were');
+    return this.departures.openClaim(departureId, bookingId, who, dto).booking;
+  }
+
+  /** The carrier’s answer, in their own words. Ours to record and nobody’s to weigh. */
+  @Post('fleet/managers/:did/departures/:departureId/bookings/:bookingId/claim/answer')
+  answerDepartureClaim(
+    @Param('did') did: string,
+    @Param('departureId') departureId: string,
+    @Param('bookingId') bookingId: string,
+    @Body() dto: AnswerBookingClaimDto,
+    @Actor() actor: IntrospectionResult,
+  ) {
+    this.assertFleetSelf(did, actor);
+    return this.departures.answerClaim(departureId, bookingId, did, dto.answer, dto.note).booking;
   }
 
   /** The runs this driver is rostered on. Theirs alone — a roster is not a public document. */

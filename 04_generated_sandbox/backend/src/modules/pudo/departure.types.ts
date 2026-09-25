@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { CARGO_NATURES, type CargoNature } from './cargo.types';
 
 /**
  * F3 — SPACE FOR SALE ON A RUN THAT IS HAPPENING ANYWAY.
@@ -147,6 +148,107 @@ export class SettleTerms {
   when: SettleWhen;
 }
 
+/**
+ * WHAT THE CARRIER CARRIES OF THE RISK — said, and never ours.
+ *
+ * The network does not insure goods on a run and is not going to. What it was doing instead was saying
+ * NOTHING, and silence on a screen that quotes a price reads as cover: a shipper who books 450 through us
+ * and is never told otherwise reasonably assumes somebody is behind the goods.
+ *
+ * So the carrier states its own position — a goods-in-transit policy and what it is good for, or plainly
+ * that it holds none — and the shipper states what the load is worth. Neither number is a promise of ours.
+ * Together they are the two facts a forwarder or a broker needs to arrange real cover for the gap, which
+ * is the most this network can honestly offer: not the cover, but a state legible enough to price.
+ */
+export class CarrierCover {
+  /** What their goods-in-transit policy pays up to, per load, in the run's currency. Zero means none. */
+  @ApiProperty()
+  limit: number;
+  /** The insurer and policy, as the carrier writes it. What a forwarder rings to verify. */
+  @ApiPropertyOptional()
+  policy?: string;
+}
+
+/**
+ * What the driver recorded at the door. The board’s shape, field for field, on purpose: a shipper
+ * comparing a haul and a run should not find two different ideas of what proof is.
+ */
+export class ProofOfDelivery {
+  /** Who took the goods, in their own name. Two characters minimum — "x" is not a receiver. */
+  @ApiProperty()
+  receiverName: string;
+  /** A photograph of the goods as put down. A mediaId, adopted from the driver’s own upload. */
+  @ApiProperty()
+  photoRef: string;
+  /** Anything the driver wants on the record — a reservation, a remark, a note about the state. */
+  @ApiPropertyOptional()
+  remarks?: string;
+  /** The unload checklist keys they confirmed. */
+  @ApiProperty({ type: [String] })
+  confirmed: string[];
+  at: string;
+  /** Who tapped it — the driver at the door, or the office closing a run off a bad signal. */
+  by: string;
+}
+
+/** What the driver confirmed before pulling away, and the photograph of the load as secured. */
+export class LoadSafety {
+  @ApiProperty({ type: [String] })
+  confirmed: string[];
+  @ApiPropertyOptional()
+  securementPhotoRef?: string;
+  at: string;
+  by: string;
+}
+
+export const CLAIM_KINDS = ['damaged', 'short', 'not_received'] as const;
+export type ClaimKind = (typeof CLAIM_KINDS)[number];
+
+/**
+ * A SHIPPER SAYING SOMETHING WENT WRONG — recorded, evidenced, and never adjudicated by us.
+ *
+ * The board has claims with awards, caps and clawback, because on a board haul the network is the
+ * merchant of record: it took the shipper’s money, so it can take some of it back off the carrier. A
+ * run is the fleet’s own price paid directly to them. We never held the money and we carry no cover, so
+ * an award of ours would be an award of somebody else’s money — which is not a thing to build.
+ *
+ * What CAN be built, and is the thing informal freight is actually missing, is the RECORD: the claim,
+ * dated, against a consignment note, beside a photograph of the load as secured and a photograph of it
+ * as delivered, with the carrier’s answer next to it. Two parties arguing in a WhatsApp thread have
+ * none of that. Two parties arguing over this have all of it, and so does the forwarder, insurer or
+ * magistrate either of them takes it to.
+ *
+ * The same three kinds as the board, in the same words, because a shipper should not have to learn a
+ * second vocabulary for the same bad day.
+ */
+export class BookingClaim {
+  @ApiProperty({ enum: CLAIM_KINDS })
+  kind: ClaimKind;
+  @ApiProperty()
+  description: string;
+  /** The shipper’s own photograph of what arrived. Beside the carrier’s two, not instead of them. */
+  @ApiPropertyOptional()
+  photoRef?: string;
+  /** What they say it cost them, in the run’s currency. Their figure, like the declared value. */
+  @ApiPropertyOptional()
+  amount?: number;
+  @ApiProperty()
+  raisedAt: string;
+  /**
+   * WHAT THE CARRIER SAID BACK, which is the half that makes this a record rather than an accusation.
+   *
+   * `accepted` and `refused` are the carrier’s own words about their own liability — never ours, and
+   * never binding through us. Absent means they have not answered yet, which is itself a fact worth
+   * being able to point at.
+   */
+  @ApiPropertyOptional({ enum: ['accepted', 'refused'] })
+  answer?: 'accepted' | 'refused';
+  @ApiPropertyOptional()
+  answerNote?: string;
+  @ApiPropertyOptional()
+  answeredAt?: string;
+}
+
 export class DepartureRate {
   @ApiProperty({ enum: RATE_BASES })
   basis: RateBasis;
@@ -212,6 +314,28 @@ export class DepartureBooking {
   @ApiPropertyOptional()
   volumeM3?: number;
   /**
+   * WHAT THE GOODS ARE, in the vocabulary the board already uses.
+   *
+   * A booking used to be a free-text description, a weight and a volume — which meant hazmat could be put
+   * on a food-grade tanker and nothing anywhere would notice. The board has known better since S30: a
+   * nature maps to a vehicle capability, and a load is never offered to a vehicle that lacks it.
+   *
+   * The same rule, on the same enum, because a shipper who has learned what FOP means on one screen has
+   * learned it on all of them — and because a second vocabulary for the same fact is how two halves of a
+   * product drift into disagreeing about whether a load may travel.
+   */
+  @ApiProperty({ enum: CARGO_NATURES })
+  nature: CargoNature;
+  /**
+   * WHAT IT IS WORTH, as the shipper declares it. Optional and never verified.
+   *
+   * Not a valuation and not a promise: it is the number a forwarder needs to arrange cover, the number a
+   * claim is argued against, and the number that makes "the carrier's policy stops at 200,000" mean
+   * something rather than nothing. Absent is a real answer — plenty of loads are not worth insuring.
+   */
+  @ApiPropertyOptional()
+  declaredValue?: number;
+  /**
    * WHICH AXIS ACTUALLY FILLED THE TRUCK for this booking — 'weight' or 'space'.
    *
    * Recorded rather than derived later, because it is the whole argument for why the price was what it
@@ -250,9 +374,35 @@ export class DepartureBooking {
   /** When it was handed over. The server's clock, like the gate taps, and for the same reason. */
   @ApiPropertyOptional()
   deliveredAt?: string;
-  /** Who took it, in the words the driver was given at the door. Absent where nobody was named. */
+  /**
+   * PROOF, at the standard the board already holds a delivery to.
+   *
+   * This used to be an optional name and nothing else, which made the same act — a driver handing goods
+   * to somebody at a door — provable on a board haul and unprovable on a run. A shipper discovering that
+   * asymmetry after a load went missing would be right to feel misled, and the fix is not to soften the
+   * board: it is to hold this to the same line. A name AND a photograph, because "delivered" without
+   * either is the driver’s word against the sender’s, and with them it is box 24 of a consignment note.
+   *
+   * It is the DRIVER this protects first, which is the part worth remembering when it feels like a
+   * burden at a gate in the rain.
+   */
+  @ApiPropertyOptional({ type: ProofOfDelivery })
+  pod?: ProofOfDelivery;
+  /** Who took it. Kept flat as well as on the proof, because every screen reads this one line. */
   @ApiPropertyOptional()
   receivedBy?: string;
+  /**
+   * WHAT THE DRIVER CONFIRMED AT LOADING — the securement half, which the board also has.
+   *
+   * A load that arrives broken is argued about at the OTHER end of the journey, and the photograph that
+   * settles it was taken hours earlier. Recorded at the loading gate, where the driver is already
+   * standing and already tapping.
+   */
+  @ApiPropertyOptional({ type: LoadSafety })
+  loadSafety?: LoadSafety;
+  /** What the shipper says went wrong, and what the carrier said back. Never decided by us. */
+  @ApiPropertyOptional({ type: BookingClaim })
+  claim?: BookingClaim;
   /**
    * THE CLOCKS, one per stop, and empty on a run where nothing went wrong.
    *
@@ -328,6 +478,12 @@ export class Departure {
    */
   @ApiPropertyOptional({ type: SettleTerms })
   settle?: SettleTerms;
+  /**
+   * What the CARRIER's own insurance covers, where they have said. Absent means they have not said, which
+   * a screen reports as exactly that — never as "covered" and never as "not covered".
+   */
+  @ApiPropertyOptional({ type: CarrierCover })
+  cover?: CarrierCover;
   /** The distance the line runs, where it is known — what `per_km` is multiplied by. */
   @ApiPropertyOptional()
   km?: number;
@@ -387,6 +543,12 @@ export class DepartureOffer {
   /** Who they pay and when — before booking, for the same reason the waiting terms are. */
   @ApiPropertyOptional({ type: SettleTerms })
   settle?: SettleTerms;
+  /** What the carrier's own policy covers. Absent means they have not said. Never our cover. */
+  @ApiPropertyOptional({ type: CarrierCover })
+  cover?: CarrierCover;
+  /** What the vehicle can handle, so a shipper knows before typing whether their load can go on it. */
+  @ApiProperty({ type: [String] })
+  handles: string[];
   @ApiPropertyOptional()
   km?: number;
   @ApiPropertyOptional()
@@ -430,11 +592,18 @@ export class MyDepartureBooking {
   leavesAt: string;
   /** What they sent, what it weighed, what it cost — their own row, read back. */
   description: string;
+  @ApiProperty({ enum: CARGO_NATURES })
+  nature: CargoNature;
+  @ApiPropertyOptional()
+  declaredValue?: number;
   weightKg: number;
   @ApiPropertyOptional()
   volumeM3?: number;
   price: number;
   currency: string;
+  /** Where cover stands on this load, kept on the booking because that is where it is read months later. */
+  @ApiPropertyOptional({ type: CarrierCover })
+  cover?: CarrierCover;
   @ApiProperty({ enum: ['booked', 'delivered', 'cancelled'] })
   bookingStatus: 'booked' | 'delivered' | 'cancelled';
   /**
@@ -453,6 +622,14 @@ export class MyDepartureBooking {
   deliveredAt?: string;
   @ApiPropertyOptional()
   receivedBy?: string;
+  /** The proof itself — the shipper is the party it exists for, so they can read it, not just its date. */
+  @ApiPropertyOptional({ type: ProofOfDelivery })
+  pod?: ProofOfDelivery;
+  /** Their own claim, and the carrier’s answer to it. */
+  @ApiPropertyOptional({ type: BookingClaim })
+  claim?: BookingClaim;
+  /** Whether there is still something to claim about: delivered, and inside the window. */
+  claimable: boolean;
   /** The waiting terms they agreed to, so a charge is never the first they hear of the rule. */
   @ApiPropertyOptional({ type: WaitingTerms })
   waiting?: WaitingTerms;

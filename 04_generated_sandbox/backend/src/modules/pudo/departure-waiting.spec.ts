@@ -1,5 +1,16 @@
 import { DepartureService } from './departure.service';
 import { CorridorService } from './corridor.service';
+import { CargoService } from './cargo.service';
+import type { MediaService } from './media.service';
+
+/** A photo store that only remembers what it was asked to adopt. */
+const adoptions: Array<{ mediaId: string; by: string; role: string }> = [];
+const adopted = () =>
+  ({
+    adopt: (mediaId: string, by: string, _subject: unknown, role: string) => {
+      adoptions.push({ mediaId, by, role });
+    },
+  }) as unknown as MediaService;
 import type { DriverService } from './driver.service';
 import type { FleetManagerService } from './fleet-manager.service';
 import type { PresenceService } from '../../foundation/presence/presence.service';
@@ -50,7 +61,7 @@ describe('the waiting clock, from arrival to a charge somebody owes', () => {
 
   const setUp = () => {
     const corridors = new CorridorService();
-    const service = new DepartureService(corridors, managers, clearDrivers, oneTruck, openEverywhere, silentBus);
+    const service = new DepartureService(corridors, managers, clearDrivers, oneTruck, new CargoService(), adopted(), openEverywhere, silentBus);
     const corridor = line(corridors);
 
     const departure = service.declare({
@@ -120,7 +131,7 @@ describe('the waiting clock, from arrival to a charge somebody owes', () => {
   it('charges nothing at all on a departure whose fleet never published waiting terms', () => {
     // The same ninety-minute wait, on a run where nobody was told about a clock. Absent means free.
     const corridors = new CorridorService();
-    const service = new DepartureService(corridors, managers, clearDrivers, oneTruck, openEverywhere, silentBus);
+    const service = new DepartureService(corridors, managers, clearDrivers, oneTruck, new CargoService(), adopted(), openEverywhere, silentBus);
     const corridor = line(corridors);
     const departure = service.declare({
       managerDid: MANAGER, corridorId: corridor.corridorId, vehicleId: 'veh_1', leavesAt: new Date(Date.now() + 86_400_000).toISOString(),

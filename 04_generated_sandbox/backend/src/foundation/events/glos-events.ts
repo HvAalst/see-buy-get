@@ -113,6 +113,8 @@ export const GlosEvent = {
     DepartureDeparted: 'pudo.departure_departed', // the truck has gone — the last moment anything could change
     DepartureDelivered: 'pudo.departure_delivered', // one booking reached its destination and was handed over
     DepartureCancelled: 'pudo.departure_cancelled', // the run is not happening, and everybody aboard has to be told
+    DepartureClaimOpened: 'pudo.departure_claim_opened', // the shipper says something went wrong; the carrier is told, and nobody adjudicates
+    DepartureClaimAnswered: 'pudo.departure_claim_answered', // the carrier's own words about their own liability, back to the shipper
     FreightTempBreach: 'pudo.freight_temp_breach', // S33b — a cold-chain freight logged an out-of-band temperature
     FleetManagerActivated: 'pudo.fleet_manager_activated', // operator vetted + bonded → may build a fleet
   },

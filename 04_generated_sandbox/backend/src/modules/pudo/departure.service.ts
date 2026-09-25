@@ -5,6 +5,10 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { CorridorService } from './corridor.service';
 import { DriverService } from './driver.service';
 import { VehicleService } from './vehicle.service';
+import { CargoService } from './cargo.service';
+import { MediaService } from './media.service';
+import { missingKeys, requiredLoadKeys, requiredUnloadKeys } from './heavy-cargo';
+import { CARGO_NATURES, VEHICLE_CAPABILITIES, type CargoNature } from './cargo.types';
 import { FleetManagerService } from './fleet-manager.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
 import { EventBus } from '../../foundation/events/event-bus.service';
@@ -19,6 +23,11 @@ import {
   RATE_BASES,
   SETTLE_METHODS,
   SETTLE_WHEN,
+  CLAIM_KINDS,
+  type BookingClaim,
+  type CarrierCover,
+  type ClaimKind,
+  type ProofOfDelivery,
   type SettleTerms,
   type DelayPlace,
   type RateBasis,
@@ -58,6 +67,8 @@ export class DepartureService {
     private readonly managers: FleetManagerService,
     private readonly drivers: DriverService,
     private readonly vehicles: VehicleService,
+    private readonly cargo: CargoService,
+    private readonly media: MediaService,
     private readonly presence: PresenceService,
     private readonly events: EventBus,
   ) {}
@@ -85,6 +96,8 @@ export class DepartureService {
     note?: string;
     settleMethod?: string;
     settleWhen?: string;
+    coverLimit?: number;
+    coverPolicy?: string;
   }): Departure {
     const manager = this.managers.get(input.managerDid);
     const corridor = this.corridors.requireCorridor(input.corridorId);
@@ -174,6 +187,19 @@ export class DepartureService {
       settle = { method: method as SettleTerms['method'], when: when as SettleTerms['when'] };
     }
 
+    /*
+     * WHERE COVER STANDS — the carrier’s own, and never ours.
+     *
+     * A limit of ZERO is a real and useful answer: "I carry none" is exactly what a forwarder needs to
+     * hear, and it is a different fact from a carrier who has not said at all. So zero is kept, absence
+     * is kept, and only a number nobody typed is dropped.
+     */
+    const limit = Number(input.coverLimit);
+    const cover: CarrierCover | undefined =
+      Number.isFinite(limit) && limit >= 0
+        ? { limit: Math.round(limit * 100) / 100, ...(input.coverPolicy?.trim() ? { policy: input.coverPolicy.trim().slice(0, 160) } : {}) }
+        : undefined;
+
     const km = Number(input.km);
     const distance = Number.isFinite(km) && km > 0 ? Math.round(km) : undefined;
     // Per-kilometre with no distance prices every booking at zero. Asked for here rather than discovered
@@ -202,6 +228,7 @@ export class DepartureService {
       },
       ...(waiting ? { waiting } : {}),
       ...(settle ? { settle } : {}),
+      ...(cover ? { cover } : {}),
       ...(distance ? { km: distance } : {}),
       ...(input.note?.trim() ? { note: input.note.trim() } : {}),
       status: 'open',
@@ -265,6 +292,65 @@ export class DepartureService {
     return { binds: comparable && shareM3 > shareKg ? 'space' : 'weight', shareKg, shareM3 };
   }
 
+  /**
+   * WHAT THIS VEHICLE CAN CARRY, as a shipper reads it before typing anything.
+   *
+   * The board refuses a load whose nature the vehicle cannot handle, and so does this — but a refusal
+   * at the end of a form is a worse screen than a list at the top of it. The same capability names,
+   * because a shipper who has read "cold chain" on one surface has read it on all of them.
+   */
+  handledBy(departure: Departure): string[] {
+    const vehicle = this.vehicles.get(departure.vehicleId) as unknown as Record<string, unknown>;
+    return VEHICLE_CAPABILITIES.filter((cap) => Boolean(vehicle[cap]));
+  }
+
+  /**
+   * The nature of the goods, defaulted to general dry.
+   *
+   * A default rather than a refusal, because most freight IS general dry and a required field whose
+   * answer is the ordinary one nine times in ten teaches people to pick the first option without
+   * reading it. What must never be accepted is a value nobody agreed on — and the check READS
+   * CARGO_NATURES rather than restating it, so a nature added to the taxonomy is one this takes the
+   * same day.
+   */
+  static requireNature(value: string | undefined): CargoNature {
+    const nature = String(value ?? 'GEN');
+    if (!CARGO_NATURES.includes(nature as CargoNature)) {
+      throw new GlosError('INVALID_INPUT', `Say what kind of goods these are: ${CARGO_NATURES.join(', ')}`);
+    }
+    return nature as CargoNature;
+  }
+
+  /**
+   * MAY THESE GOODS GO ON THIS TRUCK — the question a booking never used to ask.
+   *
+   * Two refusals, both the board’s own and neither of them new law:
+   *
+   *  - THE VEHICLE. A nature maps to a capability (FOP → cold chain, HAZ-* → hazmat) and a vehicle
+   *    either has it or has not. A drum of solvent on a food-grade tanker is the failure this prevents,
+   *    and it was possible right up until now because a booking was a free-text description.
+   *  - THE OTHER LOADS, which is the half that is genuinely harder here than on the board: a run is
+   *    SHARED where a haul is one shipper’s. Cement dust and fresh produce must not ride together even
+   *    on a vehicle that is fine for each alone. Checked against everything aboard, the fleet’s OWN
+   *    customers included — their goods spoil the same way.
+   */
+  private assertCarriable(departure: Departure, nature: CargoNature): void {
+    const need = this.cargo.requiredCapability(nature);
+    if (need) {
+      const vehicle = this.vehicles.get(departure.vehicleId) as unknown as Record<string, unknown>;
+      if (!vehicle[need]) {
+        const said = need === 'coldChain' ? 'cold chain' : need;
+        throw new GlosError('VEHICLE_MISSING_CAPABILITY', `${departure.plate} does not carry ${said} — these goods need a vehicle that does`);
+      }
+    }
+    const clash = departure.bookings
+      .filter((b) => b.status === 'booked')
+      .find((b) => b.nature && !this.cargo.canShareVehicle(nature, b.nature));
+    if (clash) {
+      throw new GlosError('CARGO_INCOMPATIBLE', `There is already ${clash.description} on this run, and those two must not travel together`);
+    }
+  }
+
   /** What is left on a departure, on both axes. */
   remaining(departure: Departure): { kg: number; m3?: number } {
     const live = departure.bookings.filter((b) => b.status === 'booked');
@@ -277,7 +363,7 @@ export class DepartureService {
   }
 
   /** The quote, before anything is taken. Refuses for the same reasons `book` would, so a screen can say why. */
-  quote(departureId: string, load: { weightKg: number; volumeM3?: number }): {
+  quote(departureId: string, load: { weightKg: number; volumeM3?: number; nature?: string }): {
     price: number;
     units: number;
     binds: 'weight' | 'space';
@@ -286,6 +372,9 @@ export class DepartureService {
   } {
     const departure = this.require(departureId);
     this.assertBookable(departure, load);
+    // Asked at QUOTE as well as at booking, so "that truck cannot carry this" reaches the shipper while
+    // they are still choosing a run rather than at the moment they press the button.
+    this.assertCarriable(departure, DepartureService.requireNature(load.nature));
     const { binds } = DepartureService.bindsOn(departure, load);
     const { price, units } = DepartureService.priceOf(departure.rate, { ...load, km: departure.km });
     // The waiting terms travel WITH the quote: a price that hides the one charge that can appear afterwards
@@ -296,12 +385,14 @@ export class DepartureService {
   /** Take space on a departure. */
   book(
     departureId: string,
-    input: { shipperDid: string; description: string; weightKg: number; volumeM3?: number; freightId?: string },
+    input: { shipperDid: string; description: string; weightKg: number; volumeM3?: number; freightId?: string; nature?: string; declaredValue?: number },
   ): { departure: Departure; booking: DepartureBooking } {
     const departure = this.require(departureId);
     const load = { weightKg: Number(input.weightKg), volumeM3: Number(input.volumeM3) || undefined };
     this.assertBookable(departure, load);
     if (!input.description?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say what you are sending — the carrier is loading it');
+    const nature = DepartureService.requireNature(input.nature);
+    this.assertCarriable(departure, nature);
 
     const { binds } = DepartureService.bindsOn(departure, load);
     const { price, units } = DepartureService.priceOf(departure.rate, { ...load, km: departure.km });
@@ -312,6 +403,8 @@ export class DepartureService {
       shipperDid: input.shipperDid,
       ...(input.freightId ? { freightId: input.freightId } : {}),
       description: input.description.trim(),
+      nature,
+      ...(Number(input.declaredValue) > 0 ? { declaredValue: Math.round(Number(input.declaredValue) * 100) / 100 } : {}),
       weightKg: Math.round(load.weightKg * 100) / 100,
       ...(load.volumeM3 ? { volumeM3: Math.round(load.volumeM3 * 100) / 100 } : {}),
       binds,
@@ -355,7 +448,7 @@ export class DepartureService {
   addOwnLoad(
     departureId: string,
     managerDid: string,
-    input: { customer: string; description: string; weightKg: number; volumeM3?: number; charge?: number },
+    input: { customer: string; description: string; weightKg: number; volumeM3?: number; charge?: number; nature?: string },
   ): { departure: Departure; booking: DepartureBooking } {
     const departure = this.require(departureId);
     if (departure.managerDid !== managerDid) throw new GlosError('FORBIDDEN', 'That is not your departure');
@@ -368,6 +461,10 @@ export class DepartureService {
 
     const load = { weightKg: Number(input.weightKg), volumeM3: Number(input.volumeM3) || undefined };
     this.assertBookable(departure, load, 'fleet');
+    // The fleet’s own customer’s goods are goods: they can need a capability the vehicle has not got,
+    // and they can be incompatible with what is already aboard, exactly like anybody else’s.
+    const nature = DepartureService.requireNature(input.nature);
+    this.assertCarriable(departure, nature);
 
     const { binds } = DepartureService.bindsOn(departure, load);
     // The fleet's own price, kept only because a run sheet that shows half the money is a worse run sheet.
@@ -382,6 +479,7 @@ export class DepartureService {
       shipperDid: managerDid,
       customer,
       description: input.description.trim(),
+      nature,
       weightKg: Math.round(load.weightKg * 100) / 100,
       ...(load.volumeM3 ? { volumeM3: Math.round(load.volumeM3 * 100) / 100 } : {}),
       binds,
@@ -410,7 +508,12 @@ export class DepartureService {
    *
    * Idempotent. A second tap is not a second delivery, and the first one stands.
    */
-  deliver(departureId: string, bookingId: string, by: string, receivedBy?: string): { departure: Departure; booking: DepartureBooking } {
+  deliver(
+    departureId: string,
+    bookingId: string,
+    by: string,
+    proof: { receiverName?: string; photoRef?: string; remarks?: string; confirmed?: string[] },
+  ): { departure: Departure; booking: DepartureBooking } {
     const departure = this.require(departureId);
     if (by !== departure.driverDid && by !== departure.managerDid) {
       throw new GlosError('FORBIDDEN', 'Only the driver on this run or the fleet that sold it can say a load was handed over');
@@ -421,16 +524,158 @@ export class DepartureService {
     if (booking.status === 'cancelled') throw new GlosError('INVALID_STATE', 'That booking was cancelled — it was never aboard');
     if (booking.status === 'delivered') return { departure, booking };
 
+    /*
+     * THE BOARD’S STANDARD, NOT A SOFTER ONE.
+     *
+     * deliverFreight has refused a delivery without a completed unload checklist, a receiver’s name and
+     * a photograph since FP3. This took an optional name and nothing else — the same act, the same
+     * driver, the same door, provable on a haul and unprovable on a run. A shipper who found that out
+     * after a load went missing would be right to feel misled.
+     *
+     * Same three refusals, same error codes, same words. A shipper comparing the two should find one
+     * product rather than a good one and a convenient one.
+     */
+    const missing = missingKeys(requiredUnloadKeys(), proof.confirmed);
+    if (missing.length) throw new GlosError('SAFETY_CHECK_INCOMPLETE', `Complete the unload checklist before handing over — ${missing.length} item(s) left`);
+    const receiverName = proof.receiverName?.trim() ?? '';
+    if (receiverName.length < 2) throw new GlosError('RECEIVER_REQUIRED', 'Record who received the goods before marking the load handed over');
+    if (!proof.photoRef) throw new GlosError('DELIVERY_PHOTO_REQUIRED', 'Attach a photo of the goods as delivered');
+
     booking.status = 'delivered';
     booking.deliveredAt = new Date().toISOString();
-    const named = receivedBy?.trim();
-    if (named) booking.receivedBy = named;
+    booking.receivedBy = receiverName.slice(0, 120);
+    const remarks = proof.remarks?.trim();
+    booking.pod = {
+      receiverName: booking.receivedBy,
+      photoRef: proof.photoRef,
+      ...(remarks ? { remarks: remarks.slice(0, 500) } : {}),
+      confirmed: [...new Set(proof.confirmed ?? [])],
+      at: booking.deliveredAt,
+      by,
+    };
+    // Adopt-not-link, the same rule the securement photo follows: only the driver’s OWN unattached
+    // upload is taken, so a photograph of somebody else’s load cannot be pointed at.
+    this.media.adopt(proof.photoRef, by, { type: 'freight', id: departure.departureId }, 'pod');
     this.departures.set(departure.departureId, departure);
 
     void this.events
       .publish(
         GlosEvent.Pudo.DepartureDelivered,
-        { departureId: departure.departureId, bookingId, managerDid: departure.managerDid, company: departure.company, lineName: departure.lineName, shipperDid: booking.shipperDid, kind: booking.kind, description: booking.description, destZone: departure.destZone, deliveredAt: booking.deliveredAt, ...(named ? { receivedBy: named } : {}) },
+        { departureId: departure.departureId, bookingId, managerDid: departure.managerDid, company: departure.company, lineName: departure.lineName, shipperDid: booking.shipperDid, kind: booking.kind, description: booking.description, destZone: departure.destZone, deliveredAt: booking.deliveredAt, receivedBy: booking.receivedBy },
+        { source: 'pudo' },
+      )
+      .catch(() => undefined);
+    return { departure, booking };
+  }
+
+  /**
+   * HOW LONG A SHIPPER HAS TO SAY SOMETHING WENT WRONG.
+   *
+   * Seven days from delivery. Long enough to open the crates on a Monday after a Friday drop, short
+   * enough that a carrier is not answering in March for a load they put down in January — and short
+   * enough that the driver who was there still remembers the door. The board uses a window for the
+   * same reason; this one is stated in one place so it can be argued with.
+   */
+  static readonly CLAIM_WINDOW_DAYS = 7;
+
+  /** Is there still something to claim about? Delivered, not already claimed, and inside the window. */
+  static claimable(booking: DepartureBooking, now: number = Date.now()): boolean {
+    if (booking.status !== 'delivered' || !booking.deliveredAt || booking.claim) return false;
+    return now - Date.parse(booking.deliveredAt) <= DepartureService.CLAIM_WINDOW_DAYS * 86_400_000;
+  }
+
+  /**
+   * THE SHIPPER SAYS SOMETHING WENT WRONG.
+   *
+   * Recorded and evidenced; never adjudicated and never paid. On a board haul the network took the
+   * shipper’s money and can therefore take some of it back off the carrier. Here the fleet quoted their
+   * own price and was paid directly, we never held a shilling of it, and we carry no cover — so an award
+   * of ours would be an award of somebody else’s money.
+   *
+   * What this DOES give two parties is the thing informal freight has never had: a dated claim against a
+   * consignment note, beside a photograph of the load as secured and one of it as delivered, with the
+   * carrier’s answer next to it. That is what a forwarder, an insurer or a magistrate can act on.
+   */
+  openClaim(
+    departureId: string,
+    bookingId: string,
+    by: string,
+    input: { kind: string; description: string; photoRef?: string; amount?: number },
+  ): { departure: Departure; booking: DepartureBooking } {
+    const departure = this.require(departureId);
+    const booking = departure.bookings.find((b) => b.bookingId === bookingId);
+    if (!booking) throw new GlosError('NOT_FOUND', 'No such booking');
+    // The party whose goods these were, and nobody else. A carrier cannot open a claim against
+    // themselves, and the fleet's own customer is not on this network to open one.
+    if (booking.kind !== 'sold' || booking.shipperDid !== by) {
+      throw new GlosError('FORBIDDEN', 'Only the shipper whose goods these were can raise a claim on them');
+    }
+    if (booking.status !== 'delivered') {
+      throw new GlosError('INVALID_STATE', 'These goods have not been handed over yet — there is nothing delivered to claim against');
+    }
+    if (booking.claim) throw new GlosError('INVALID_STATE', 'There is already a claim on this load');
+    if (!DepartureService.claimable(booking)) {
+      throw new GlosError('INVALID_STATE', `A claim has to be raised within ${DepartureService.CLAIM_WINDOW_DAYS} days of delivery`);
+    }
+    const kind = String(input.kind);
+    if (!CLAIM_KINDS.includes(kind as ClaimKind)) {
+      throw new GlosError('INVALID_INPUT', `Say what went wrong: ${CLAIM_KINDS.join(', ')}`);
+    }
+    const description = input.description?.trim();
+    if (!description) throw new GlosError('FIELD_REQUIRED', 'Say what went wrong, in your own words — the carrier is answering this');
+
+    const claim: BookingClaim = {
+      kind: kind as ClaimKind,
+      description: description.slice(0, 1000),
+      ...(input.photoRef ? { photoRef: input.photoRef } : {}),
+      ...(Number(input.amount) > 0 ? { amount: Math.round(Number(input.amount) * 100) / 100 } : {}),
+      raisedAt: new Date().toISOString(),
+    };
+    booking.claim = claim;
+    if (input.photoRef) // 'dispute', not a role of its own: it is the same evidence bin the board's claim photos use, and
+      // the same 180-day retention — a claim argued in month five still has its photograph.
+      this.media.adopt(input.photoRef, by, { type: 'freight', id: departure.departureId }, 'dispute');
+    this.departures.set(departure.departureId, departure);
+
+    void this.events
+      .publish(
+        GlosEvent.Pudo.DepartureClaimOpened,
+        { departureId: departure.departureId, bookingId, managerDid: departure.managerDid, shipperDid: booking.shipperDid, company: departure.company, kind: claim.kind, description: claim.description, ...(claim.amount != null ? { amount: claim.amount } : {}), currency: departure.rate.currency },
+        { source: 'pudo' },
+      )
+      .catch(() => undefined);
+    return { departure, booking };
+  }
+
+  /**
+   * THE CARRIER ANSWERS, which is what makes this a record rather than an accusation.
+   *
+   * Their own words about their own liability. We do not weigh it, we do not decide between them, and
+   * nothing moves on a ledger either way — but a refusal with a reason, dated, beside the photographs,
+   * is a document. A shipper with that in hand can go to the carrier’s insurer; without it they have an
+   * argument.
+   */
+  answerClaim(departureId: string, bookingId: string, managerDid: string, answer: string, note?: string): { departure: Departure; booking: DepartureBooking } {
+    const departure = this.require(departureId);
+    if (departure.managerDid !== managerDid) throw new GlosError('FORBIDDEN', 'That is not your departure');
+    const booking = departure.bookings.find((b) => b.bookingId === bookingId);
+    if (!booking?.claim) throw new GlosError('NOT_FOUND', 'There is no claim on that load');
+    if (booking.claim.answeredAt) throw new GlosError('INVALID_STATE', 'You have already answered this claim');
+    if (answer !== 'accepted' && answer !== 'refused') throw new GlosError('INVALID_INPUT', 'Say whether you accept it or refuse it');
+    const said = note?.trim();
+    if (answer === 'refused' && !said) {
+      throw new GlosError('FIELD_REQUIRED', 'Say why you are refusing it — a refusal without a reason is not an answer the other side can do anything with');
+    }
+
+    booking.claim.answer = answer;
+    if (said) booking.claim.answerNote = said.slice(0, 1000);
+    booking.claim.answeredAt = new Date().toISOString();
+    this.departures.set(departure.departureId, departure);
+
+    void this.events
+      .publish(
+        GlosEvent.Pudo.DepartureClaimAnswered,
+        { departureId: departure.departureId, bookingId, shipperDid: booking.shipperDid, company: departure.company, answer, ...(said ? { note: said } : {}) },
         { source: 'pudo' },
       )
       .catch(() => undefined);
@@ -525,6 +770,52 @@ export class DepartureService {
     booking.waiting = [...booking.waiting, record];
     this.departures.set(departure.departureId, departure);
     return { departure, record };
+  }
+
+  /**
+   * WHAT THE DRIVER CONFIRMED BEFORE PULLING AWAY, and the photograph of the load as secured.
+   *
+   * The other half of the board’s standard. A load that arrives broken is argued about at the far end
+   * of the journey, and the photograph that settles it was taken hours earlier at the loading gate —
+   * where the driver is already standing, and already tapping.
+   *
+   * The checklist DEPENDS ON THE GOODS: hazmat adds an item, cold chain adds an item, fragile adds an
+   * item. Read from the booking’s own nature rather than a fixed list, so a drum of solvent is never
+   * signed off with the checks for a pallet of books.
+   */
+  secured(
+    departureId: string,
+    bookingId: string,
+    by: string,
+    input: { confirmed?: string[]; securementPhotoRef?: string },
+  ): { departure: Departure; booking: DepartureBooking } {
+    const { departure, booking } = this.requireClockable(departureId, bookingId, 'loading', by);
+    const required = requiredLoadKeys({
+      requiredCapabilities: this.cargo.requiredCapabilities([booking.nature]),
+      fragile: booking.nature === 'FRG',
+      bulk: false,
+    });
+    const missing = missingKeys(required, input.confirmed);
+    if (missing.length) throw new GlosError('SAFETY_CHECK_INCOMPLETE', `Complete the load-safety checklist before pulling away — ${missing.length} item(s) left`);
+
+    booking.loadSafety = {
+      confirmed: [...new Set(input.confirmed ?? [])],
+      ...(input.securementPhotoRef ? { securementPhotoRef: input.securementPhotoRef } : {}),
+      at: new Date().toISOString(),
+      by,
+    };
+    if (input.securementPhotoRef) this.media.adopt(input.securementPhotoRef, by, { type: 'freight', id: departure.departureId }, 'securement');
+    this.departures.set(departure.departureId, departure);
+    return { departure, booking };
+  }
+
+  /** What this booking’s load-safety checklist asks for, which depends on what the goods are. */
+  loadChecklist(departure: Departure, booking: DepartureBooking): string[] {
+    return requiredLoadKeys({
+      requiredCapabilities: this.cargo.requiredCapabilities([booking.nature]),
+      fragile: booking.nature === 'FRG',
+      bulk: false,
+    });
   }
 
   /**
@@ -715,6 +1006,8 @@ export class DepartureService {
           rate: d.rate,
           ...(d.waiting ? { waiting: d.waiting } : {}),
           ...(d.settle ? { settle: d.settle } : {}),
+          ...(d.cover ? { cover: d.cover } : {}),
+          handles: this.handledBy(d),
           ...(d.km ? { km: d.km } : {}),
           ...(d.note ? { note: d.note } : {}),
           vehicleClass: d.vehicleClass,
@@ -751,6 +1044,8 @@ export class DepartureService {
             destZone: d.destZone,
             leavesAt: d.leavesAt,
             description: b.description,
+            nature: b.nature,
+            ...(b.declaredValue != null ? { declaredValue: b.declaredValue } : {}),
             weightKg: b.weightKg,
             ...(b.volumeM3 != null ? { volumeM3: b.volumeM3 } : {}),
             price: b.price,
@@ -760,8 +1055,12 @@ export class DepartureService {
             ...(d.cancelledReason ? { cancelledReason: d.cancelledReason } : {}),
             ...(b.deliveredAt ? { deliveredAt: b.deliveredAt } : {}),
             ...(b.receivedBy ? { receivedBy: b.receivedBy } : {}),
+            ...(b.pod ? { pod: b.pod } : {}),
+            ...(b.claim ? { claim: b.claim } : {}),
+            claimable: DepartureService.claimable(b),
             ...(d.waiting ? { waiting: d.waiting } : {}),
             ...(d.settle ? { settle: d.settle } : {}),
+            ...(d.cover ? { cover: d.cover } : {}),
             waits: b.waiting,
             // The same rule cancelBooking enforces, said here so a screen can hide a button that
             // could only ever produce a refusal.

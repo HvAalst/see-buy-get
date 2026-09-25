@@ -1,7 +1,7 @@
 import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { INCOTERM_CODES } from '../../foundation/incoterms/catalogue';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE } from '../../foundation/interest/interest.service';
-import { DELAY_PLACES, RATE_BASES, SETTLE_METHODS, SETTLE_WHEN, type DelayPlace } from './departure.types';
+import { CLAIM_KINDS, DELAY_PLACES, RATE_BASES, SETTLE_METHODS, SETTLE_WHEN, type DelayPlace } from './departure.types';
 import { PRESENCE_LEVELS, type PresenceLevel } from '../../foundation/presence/presence.types';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
@@ -1408,6 +1408,13 @@ export class DeclareDepartureDto {
    */
   @IsOptional() @IsIn(SETTLE_METHODS) @ApiPropertyOptional({ enum: SETTLE_METHODS }) settleMethod?: string;
   @IsOptional() @IsIn(SETTLE_WHEN) @ApiPropertyOptional({ enum: SETTLE_WHEN }) settleWhen?: string;
+  /**
+   * WHAT THE CARRIER’S OWN POLICY COVERS, per load. Zero is a real answer — "I carry none" is exactly
+   * what a forwarder needs to hear, and a different fact from a carrier who has not said.
+   */
+  @IsOptional() @IsNumber() @Min(0) coverLimit?: number;
+  /** The insurer and policy, as the carrier writes it. What a forwarder rings to verify. */
+  @IsOptional() @IsString() @MaxLength(160) coverPolicy?: string;
   @IsNumber() @Min(0.01) amount!: number;
   /** The least the run will take. What stopping and strapping down already cost. */
   @IsOptional() @IsNumber() @Min(0) minCharge?: number;
@@ -1441,6 +1448,13 @@ export class WaiveWaitingDto {
 /** Taking some of that space. */
 export class BookDepartureDto {
   @IsString() @MaxLength(160) description!: string;
+  /**
+   * WHAT THE GOODS ARE, in the board’s own vocabulary — the thing a free-text description could never
+   * say. Absent means general dry, which is most freight; what is refused is a value nobody agreed on.
+   */
+  @IsOptional() @IsIn(CARGO_NATURES) @ApiPropertyOptional({ enum: CARGO_NATURES }) nature?: string;
+  /** What it is worth, as the shipper declares it. Never verified, and never a promise of ours. */
+  @IsOptional() @IsNumber() @Min(0) declaredValue?: number;
   @IsNumber() @Min(0.1) weightKg!: number;
   @IsOptional() @IsNumber() @Min(0.01) volumeM3?: number;
   /** A load already on the board, where this is space for one. */
@@ -1459,10 +1473,50 @@ export class DepartureStatusDto {
   @IsOptional() @IsString() @MaxLength(240) reason?: string;
 }
 
-/** The driver, or the office, saying a load came off the truck. */
+/**
+ * The driver, or the office, saying a load came off the truck — at the board’s standard.
+ *
+ * Every field here is REQUIRED in effect: the service refuses without a name, a photograph and a
+ * completed unload checklist, exactly as deliverFreight has since FP3. They are optional on the class
+ * only so the refusal comes back in the service’s own words rather than a decorator’s.
+ */
 export class DeliverDepartureDto {
-  /** Who took it, in the words the driver was given at the door. Optional: often nobody gives a name. */
-  @IsOptional() @IsString() @MaxLength(120) receivedBy?: string;
+  /** Who took the goods, in their own name. Two characters minimum — "x" is not a receiver. */
+  @IsOptional() @IsString() @MaxLength(120) receiverName?: string;
+  /** A mediaId for the photograph of the goods as put down. The driver’s own, unattached upload. */
+  @IsOptional() @IsString() photoRef?: string;
+  /** Anything worth putting on the record — a reservation, a remark about the state of the goods. */
+  @IsOptional() @IsString() @MaxLength(500) remarks?: string;
+  /** The unload checklist keys confirmed. */
+  @IsOptional() @IsArray() @IsString({ each: true }) confirmed?: string[];
+}
+
+/**
+ * A shipper saying something went wrong — recorded and evidenced, never adjudicated by us.
+ *
+ * The same three kinds as a board claim, in the same words, because a shipper should not have to learn
+ * a second vocabulary for the same bad day.
+ */
+export class OpenBookingClaimDto {
+  @IsIn(CLAIM_KINDS) @ApiProperty({ enum: CLAIM_KINDS }) kind!: 'damaged' | 'short' | 'not_received';
+  @IsString() @MaxLength(1000) description!: string;
+  /** Their own photograph of what arrived — beside the carrier’s two, not instead of them. */
+  @IsOptional() @IsString() photoRef?: string;
+  /** What they say it cost them. Their figure, like the declared value: never verified by us. */
+  @IsOptional() @IsNumber() @Min(0) amount?: number;
+}
+
+/** The carrier’s own words about their own liability. Never binding through us. */
+export class AnswerBookingClaimDto {
+  @IsIn(['accepted', 'refused']) answer!: 'accepted' | 'refused';
+  /** Required on a refusal: a refusal with no reason is not an answer the other side can act on. */
+  @IsOptional() @IsString() @MaxLength(1000) note?: string;
+}
+
+/** What the driver confirmed before pulling away, and the photograph of the load as secured. */
+export class SecureDepartureDto {
+  @IsOptional() @IsArray() @IsString({ each: true }) confirmed?: string[];
+  @IsOptional() @IsString() securementPhotoRef?: string;
 }
 
 /**
@@ -1474,6 +1528,8 @@ export class DeliverDepartureDto {
 export class AddOwnLoadDto {
   /** Whose it is, in the fleet's own words. */
   @IsString() @MaxLength(120) customer!: string;
+  /** What the goods are. The fleet’s own customer’s load can clash with what is already aboard too. */
+  @IsOptional() @IsIn(CARGO_NATURES) @ApiPropertyOptional({ enum: CARGO_NATURES }) nature?: string;
   @IsString() @MaxLength(160) description!: string;
   @IsNumber() @Min(0.1) weightKg!: number;
   @IsOptional() @IsNumber() @Min(0.01) volumeM3?: number;

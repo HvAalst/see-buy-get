@@ -1,6 +1,18 @@
 import { DepartureService } from './departure.service';
 import { CorridorService } from './corridor.service';
+import { CargoService } from './cargo.service';
+import type { MediaService } from './media.service';
+
+/** A photo store that only remembers what it was asked to adopt. */
+const adoptions: Array<{ mediaId: string; by: string; role: string }> = [];
+const adopted = () =>
+  ({
+    adopt: (mediaId: string, by: string, _subject: unknown, role: string) => {
+      adoptions.push({ mediaId, by, role });
+    },
+  }) as unknown as MediaService;
 import { GlosEvent } from '../../foundation/events/glos-events';
+import { requiredLoadKeys, requiredUnloadKeys } from './heavy-cargo';
 import type { DriverService } from './driver.service';
 import type { FleetManagerService } from './fleet-manager.service';
 import type { PresenceService } from '../../foundation/presence/presence.service';
@@ -46,7 +58,7 @@ describe('a booking’s life after it is sold', () => {
         heard.push({ name, payload });
       },
     } as unknown as EventBus;
-    const service = new DepartureService(corridors, managers, clearDrivers, oneTruck, openEverywhere, bus);
+    const service = new DepartureService(corridors, managers, clearDrivers, oneTruck, new CargoService(), adopted(), openEverywhere, bus);
     const proposed = corridors.proposeLine({
       managerDid: MANAGER,
       company: 'Life Haulage',
@@ -137,51 +149,90 @@ describe('a booking’s life after it is sold', () => {
   /* ------------------------------------------------------------ the ending -- */
 
   describe('handing the goods over', () => {
-    it('records who took it, and when, on the server’s clock', () => {
+    /*
+     * THE BOARD’S STANDARD, NOT A SOFTER ONE.
+     *
+     * deliverFreight has refused a delivery without a completed unload checklist, a receiver’s name and a
+     * photograph since FP3. This took an optional name and nothing else — the same act, the same driver,
+     * the same door, provable on a haul and unprovable on a run. A shipper who found that out after a
+     * load went missing would be right to feel misled.
+     */
+    const proof = (over: Record<string, unknown> = {}) => ({
+      receiverName: 'Joseph at the gate',
+      photoRef: 'med_pod1',
+      confirmed: requiredUnloadKeys(),
+      ...over,
+    });
+
+    it('records who took it, and when, on the server clock', () => {
       const { service, departureId } = setUp();
       const booking = book(service, departureId);
       service.assignDriver(departureId, MANAGER, { did: DRIVER, name: 'Wanjiru' });
 
-      const { booking: done } = service.deliver(departureId, booking.bookingId, DRIVER, '  Joseph at the gate  ');
+      const { booking: done } = service.deliver(departureId, booking.bookingId, DRIVER, proof({ receiverName: '  Joseph at the gate  ' }));
       expect(done.status).toBe('delivered');
       expect(done.receivedBy).toBe('Joseph at the gate');
+      expect(done.pod).toMatchObject({ receiverName: 'Joseph at the gate', photoRef: 'med_pod1', by: DRIVER });
       expect(Date.parse(done.deliveredAt as string)).toBeLessThanOrEqual(Date.now());
     });
 
-    it('takes a delivery nobody put a name to', () => {
+    it('refuses without a receiver’s name, exactly as a board haul does', () => {
       const { service, departureId } = setUp();
       const booking = book(service, departureId);
-      const { booking: done } = service.deliver(departureId, booking.bookingId, MANAGER);
-      expect(done.status).toBe('delivered');
-      expect(done.receivedBy).toBeUndefined();
+      expect(() => service.deliver(departureId, booking.bookingId, MANAGER, proof({ receiverName: 'x' }))).toThrow(/Record who received the goods/);
+      // And the booking is untouched: a refused delivery must not half-deliver anything.
+      expect(service.require(departureId).bookings[0].status).toBe('booked');
+    });
+
+    it('refuses without a photograph of the goods as delivered', () => {
+      const { service, departureId } = setUp();
+      const booking = book(service, departureId);
+      expect(() => service.deliver(departureId, booking.bookingId, MANAGER, proof({ photoRef: undefined }))).toThrow(/Attach a photo/);
+    });
+
+    it('refuses on an unfinished unload checklist, and says how much is left', () => {
+      const { service, departureId } = setUp();
+      const booking = book(service, departureId);
+      expect(() => service.deliver(departureId, booking.bookingId, MANAGER, proof({ confirmed: [] }))).toThrow(/Complete the unload checklist/);
+    });
+
+    it('takes the photograph as the driver’s own, rather than trusting a pointer at one', () => {
+      const { service, departureId } = setUp();
+      const booking = book(service, departureId);
+      service.assignDriver(departureId, MANAGER, { did: DRIVER, name: 'Wanjiru' });
+      adoptions.length = 0;
+      service.deliver(departureId, booking.bookingId, DRIVER, proof());
+      // Adopt-not-link: only an unattached upload of THEIRS is taken, so a photo of somebody else’s load
+      // cannot be pointed at.
+      expect(adoptions).toContainEqual({ mediaId: 'med_pod1', by: DRIVER, role: 'pod' });
     });
 
     it('is the carrier’s to record and not the shipper’s', () => {
       const { service, departureId } = setUp();
       const booking = book(service, departureId);
       // A delivery the receiving side can mark itself is a record of nothing.
-      expect(() => service.deliver(departureId, booking.bookingId, SHIPPER)).toThrow(/Only the driver on this run or the fleet/);
+      expect(() => service.deliver(departureId, booking.bookingId, SHIPPER, proof())).toThrow(/Only the driver on this run or the fleet/);
     });
 
     it('is idempotent — a second tap is not a second delivery', () => {
       const { service, departureId, of } = setUp();
       const booking = book(service, departureId);
-      const first = service.deliver(departureId, booking.bookingId, MANAGER).booking.deliveredAt;
-      const second = service.deliver(departureId, booking.bookingId, MANAGER).booking.deliveredAt;
+      const first = service.deliver(departureId, booking.bookingId, MANAGER, proof()).booking.deliveredAt;
+      const second = service.deliver(departureId, booking.bookingId, MANAGER, proof()).booking.deliveredAt;
       expect(second).toBe(first);
       expect(of(GlosEvent.Pudo.DepartureDelivered)).toHaveLength(1);
     });
 
-    it('tells the shipper their goods arrived', () => {
+    it('tells the shipper their goods arrived, and who took them', () => {
       const { service, departureId, of } = setUp();
       const booking = book(service, departureId);
-      service.deliver(departureId, booking.bookingId, MANAGER, 'Joseph');
+      service.deliver(departureId, booking.bookingId, MANAGER, proof());
 
       expect(of(GlosEvent.Pudo.DepartureDelivered)[0].payload).toMatchObject({
         shipperDid: SHIPPER,
         kind: 'sold',
         description: 'Maize',
-        receivedBy: 'Joseph',
+        receivedBy: 'Joseph at the gate',
       });
     });
 
@@ -189,18 +240,18 @@ describe('a booking’s life after it is sold', () => {
       const { service, departureId } = setUp();
       const booking = book(service, departureId);
       service.cancelBooking(departureId, booking.bookingId, SHIPPER);
-      expect(() => service.deliver(departureId, booking.bookingId, MANAGER)).toThrow(/never aboard/);
+      expect(() => service.deliver(departureId, booking.bookingId, MANAGER, proof())).toThrow(/never aboard/);
 
       const second = setUp();
       const other = book(second.service, second.departureId);
       second.service.setStatus(second.departureId, 'cancelled', MANAGER, 'off');
-      expect(() => second.service.deliver(second.departureId, other.bookingId, MANAGER)).toThrow(/called off/);
+      expect(() => second.service.deliver(second.departureId, other.bookingId, MANAGER, proof())).toThrow(/called off/);
     });
 
     it('will not let a delivered load be given back', () => {
       const { service, departureId } = setUp();
       const booking = book(service, departureId);
-      service.deliver(departureId, booking.bookingId, MANAGER);
+      service.deliver(departureId, booking.bookingId, MANAGER, proof());
       expect(() => service.cancelBooking(departureId, booking.bookingId, SHIPPER)).toThrow(/handed over/);
     });
 
@@ -208,11 +259,45 @@ describe('a booking’s life after it is sold', () => {
       const { service, departureId } = setUp();
       const booking = book(service, departureId);
       expect(service.remaining(service.require(departureId)).kg).toBe(5500);
-      service.deliver(departureId, booking.bookingId, MANAGER);
+      service.deliver(departureId, booking.bookingId, MANAGER, proof());
       expect(service.remaining(service.require(departureId)).kg).toBe(6000);
     });
   });
 
+  /* ------------------------------------------------- the other end of the same standard -- */
+
+  describe('what the driver confirmed before pulling away', () => {
+    it('refuses to record securement on an unfinished checklist', () => {
+      const { service, departureId } = setUp();
+      const booking = book(service, departureId);
+      service.assignDriver(departureId, MANAGER, { did: DRIVER, name: 'Wanjiru' });
+      service.arrive(departureId, booking.bookingId, 'loading', DRIVER);
+      expect(() => service.secured(departureId, booking.bookingId, DRIVER, { confirmed: [] })).toThrow(/Complete the load-safety checklist/);
+    });
+
+    it('asks MORE of a hazardous load than of a pallet of books', () => {
+      // The checklist depends on the goods, read from the booking’s own nature — so a drum of solvent is
+      // never signed off with the checks for a box of paperbacks.
+      const { service, departureId } = setUp();
+      const plain = service.book(departureId, { shipperDid: SHIPPER, description: 'Books', weightKg: 100, nature: 'GEN' }).booking;
+      const run = service.require(departureId);
+      const forBooks = service.loadChecklist(run, plain);
+      const forSolvent = requiredLoadKeys({ requiredCapabilities: ['hazmat'], fragile: false, bulk: false });
+      expect(forSolvent.length).toBeGreaterThan(forBooks.length);
+    });
+
+    it('keeps the photograph as the driver’s own', () => {
+      const { service, departureId } = setUp();
+      const booking = book(service, departureId);
+      service.assignDriver(departureId, MANAGER, { did: DRIVER, name: 'Wanjiru' });
+      service.arrive(departureId, booking.bookingId, 'loading', DRIVER);
+      adoptions.length = 0;
+      const run = service.require(departureId);
+      service.secured(departureId, booking.bookingId, DRIVER, { confirmed: service.loadChecklist(run, booking), securementPhotoRef: 'med_sec1' });
+      expect(adoptions).toContainEqual({ mediaId: 'med_sec1', by: DRIVER, role: 'securement' });
+      expect(service.require(departureId).bookings[0].loadSafety?.securementPhotoRef).toBe('med_sec1');
+    });
+  });
   /* ------------------------------------------------------------ what I booked -- */
 
   describe('the shipper reading back what they booked', () => {
@@ -267,8 +352,14 @@ describe('a booking’s life after it is sold', () => {
     it('shows the delivery, with who took it', () => {
       const { service, departureId } = setUp();
       const booking = book(service, departureId);
-      service.deliver(departureId, booking.bookingId, MANAGER, 'Joseph at the gate');
-      expect(service.forShipper(SHIPPER)[0]).toMatchObject({ bookingStatus: 'delivered', receivedBy: 'Joseph at the gate', cancellable: false });
+      service.deliver(departureId, booking.bookingId, MANAGER, { receiverName: 'Joseph at the gate', photoRef: 'med_pod2', confirmed: requiredUnloadKeys() });
+      // The proof itself, not only its date: the shipper is the party it exists for.
+      expect(service.forShipper(SHIPPER)[0]).toMatchObject({
+        bookingStatus: 'delivered',
+        receivedBy: 'Joseph at the gate',
+        cancellable: false,
+        pod: { photoRef: 'med_pod2' },
+      });
     });
 
     it('keeps history rather than tidying it away', () => {
@@ -334,7 +425,7 @@ describe('a booking’s life after it is sold', () => {
       // marked gone. The rejection is swallowed, and this test would fail on an unhandled one.
       const corridors = new CorridorService();
       const angry = { publish: async () => { throw new Error('bus down'); } } as unknown as EventBus;
-      const service = new DepartureService(corridors, managers, clearDrivers, oneTruck, openEverywhere, angry);
+      const service = new DepartureService(corridors, managers, clearDrivers, oneTruck, new CargoService(), adopted(), openEverywhere, angry);
       const proposed = corridors.proposeLine({ managerDid: MANAGER, company: 'Life Haulage', name: 'Angry line', originZone: 'Angry A', destZone: 'Angry B', vehicleType: 'truck' });
       const corridor = corridors.publish(proposed.corridorId, 'did:glos:network-staff');
       const run = service.declare({ managerDid: MANAGER, corridorId: corridor.corridorId, vehicleId: 'veh_1', leavesAt: new Date(Date.now() + 86_400_000).toISOString(), capacityKg: 6000, basis: 'per_trip', amount: 450 });

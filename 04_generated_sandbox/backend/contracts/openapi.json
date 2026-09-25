@@ -13573,6 +13573,229 @@
         }
       }
     },
+    "/v1/sbg/departures/{departureId}/bookings/{bookingId}/secured": {
+      "post": {
+        "operationId": "Sbg.secureDepartureBooking",
+        "summary": "",
+        "description": "SECURED AND READY TO PULL AWAY — the other half of the board’s standard.\n\nA load that arrives broken is argued about at the far end of the journey, and the photograph that\nsettles it was taken hours earlier. Recorded at the loading gate, where the driver already is.",
+        "parameters": [
+          {
+            "name": "departureId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bookingId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecureDepartureDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartureBooking"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/departures/{departureId}/bookings/{bookingId}/consignment-note": {
+      "get": {
+        "operationId": "Sbg.departureNote",
+        "summary": "",
+        "description": "THE CONSIGNMENT NOTE for one booking on a run — the same document a board haul gets.\n\nThe rule for FP2 was: implement the CMR, and let it be the standard where there is no standard. It\ndid not stop applying because the load arrived through a different door. Not a public document: a\nnote names both sides and describes the goods, so only the parties to the carriage may read it.",
+        "parameters": [
+          {
+            "name": "departureId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bookingId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/departures/{departureId}/bookings/{bookingId}/consignment-note.html": {
+      "get": {
+        "operationId": "Sbg.departureNoteHtml",
+        "summary": "",
+        "description": "The same note, as the printable page a driver hands over or a shipper files.",
+        "parameters": [
+          {
+            "name": "departureId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bookingId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/departures/{departureId}/bookings/{bookingId}/claim": {
+      "post": {
+        "operationId": "Sbg.openDepartureClaim",
+        "summary": "",
+        "description": "THE SHIPPER SAYS SOMETHING WENT WRONG.\n\nRecorded and evidenced; never adjudicated and never paid by us. On a board haul the network took\nthe money and can take some back off the carrier; here the fleet was paid directly and we hold no\ncover, so an award of ours would be an award of somebody else’s money. What this gives two parties\nis the record: a dated claim against a consignment note, beside the photographs, with the carrier’s\nanswer next to it — which is what a forwarder or an insurer can actually act on.",
+        "parameters": [
+          {
+            "name": "departureId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bookingId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenBookingClaimDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartureBooking"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/departures/{departureId}/bookings/{bookingId}/claim/answer": {
+      "post": {
+        "operationId": "Sbg.answerDepartureClaim",
+        "summary": "",
+        "description": "The carrier’s answer, in their own words. Ours to record and nobody’s to weigh.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "departureId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bookingId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerBookingClaimDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartureBooking"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/departures": {
       "get": {
         "operationId": "Sbg.driverDepartures",
@@ -29607,6 +29830,16 @@
             "description": "Cubic metres of hold. Absent where the fleet has not measured it — then only weight can bind.",
             "minimum": 0.1
           },
+          "coverLimit": {
+            "type": "number",
+            "description": "WHAT THE CARRIER’S OWN POLICY COVERS, per load. Zero is a real answer — \"I carry none\" is exactly\nwhat a forwarder needs to hear, and a different fact from a carrier who has not said.",
+            "minimum": 0
+          },
+          "coverPolicy": {
+            "type": "string",
+            "description": "The insurer and policy, as the carrier writes it. What a forwarder rings to verify.",
+            "maxLength": 160
+          },
           "amount": {
             "type": "number",
             "minimum": 0.01
@@ -29715,6 +29948,131 @@
           "when"
         ]
       },
+      "CarrierCover": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "number",
+            "description": "What their goods-in-transit policy pays up to, per load, in the run's currency. Zero means none."
+          },
+          "policy": {
+            "type": "string",
+            "description": "The insurer and policy, as the carrier writes it. What a forwarder rings to verify."
+          }
+        },
+        "required": [
+          "limit"
+        ]
+      },
+      "ProofOfDelivery": {
+        "type": "object",
+        "properties": {
+          "receiverName": {
+            "type": "string",
+            "description": "Who took the goods, in their own name. Two characters minimum — \"x\" is not a receiver."
+          },
+          "photoRef": {
+            "type": "string",
+            "description": "A photograph of the goods as put down. A mediaId, adopted from the driver’s own upload."
+          },
+          "remarks": {
+            "type": "string",
+            "description": "Anything the driver wants on the record — a reservation, a remark, a note about the state."
+          },
+          "confirmed": {
+            "description": "The unload checklist keys they confirmed.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string",
+            "description": "Who tapped it — the driver at the door, or the office closing a run off a bad signal."
+          }
+        },
+        "required": [
+          "receiverName",
+          "photoRef",
+          "confirmed",
+          "at",
+          "by"
+        ]
+      },
+      "LoadSafety": {
+        "type": "object",
+        "properties": {
+          "confirmed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "securementPhotoRef": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirmed",
+          "at",
+          "by"
+        ]
+      },
+      "BookingClaim": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "damaged",
+              "short",
+              "not_received"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "photoRef": {
+            "type": "string",
+            "description": "The shipper’s own photograph of what arrived. Beside the carrier’s two, not instead of them."
+          },
+          "amount": {
+            "type": "number",
+            "description": "What they say it cost them, in the run’s currency. Their figure, like the declared value."
+          },
+          "raisedAt": {
+            "type": "string"
+          },
+          "answer": {
+            "type": "string",
+            "description": "WHAT THE CARRIER SAID BACK, which is the half that makes this a record rather than an accusation.\n\n`accepted` and `refused` are the carrier’s own words about their own liability — never ours, and\nnever binding through us. Absent means they have not answered yet, which is itself a fact worth\nbeing able to point at.",
+            "enum": [
+              "accepted",
+              "refused"
+            ]
+          },
+          "answerNote": {
+            "type": "string"
+          },
+          "answeredAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "description",
+          "raisedAt"
+        ]
+      },
       "WaitingRecord": {
         "type": "object",
         "properties": {
@@ -29790,6 +30148,26 @@
             "type": "number",
             "description": "Cubic metres, where the shipper measured. See `binds` for why both axes are kept."
           },
+          "nature": {
+            "type": "string",
+            "description": "WHAT THE GOODS ARE, in the vocabulary the board already uses.\n\nA booking used to be a free-text description, a weight and a volume — which meant hazmat could be put\non a food-grade tanker and nothing anywhere would notice. The board has known better since S30: a\nnature maps to a vehicle capability, and a load is never offered to a vehicle that lacks it.\n\nThe same rule, on the same enum, because a shipper who has learned what FOP means on one screen has\nlearned it on all of them — and because a second vocabulary for the same fact is how two halves of a\nproduct drift into disagreeing about whether a load may travel.",
+            "enum": [
+              "GEN",
+              "FOD",
+              "FOP",
+              "HAZ-CHEM",
+              "HAZ-DUST",
+              "HAZ-BIO",
+              "HAZ-FLAM",
+              "FRG",
+              "ODR",
+              "HUM"
+            ]
+          },
+          "declaredValue": {
+            "type": "number",
+            "description": "WHAT IT IS WORTH, as the shipper declares it. Optional and never verified.\n\nNot a valuation and not a promise: it is the number a forwarder needs to arrange cover, the number a\nclaim is argued against, and the number that makes \"the carrier's policy stops at 200,000\" mean\nsomething rather than nothing. Absent is a real answer — plenty of loads are not worth insuring."
+          },
           "binds": {
             "type": "string",
             "description": "WHICH AXIS ACTUALLY FILLED THE TRUCK for this booking — 'weight' or 'space'.\n\nRecorded rather than derived later, because it is the whole argument for why the price was what it\nwas, and a fleet reading a past run deserves to see that the load which cost them the trip was the\nlight one. It is also the honest answer to \"why did my pallet of foam cost that\".",
@@ -29819,9 +30197,33 @@
             "type": "string",
             "description": "When it was handed over. The server's clock, like the gate taps, and for the same reason."
           },
+          "pod": {
+            "description": "PROOF, at the standard the board already holds a delivery to.\n\nThis used to be an optional name and nothing else, which made the same act — a driver handing goods\nto somebody at a door — provable on a board haul and unprovable on a run. A shipper discovering that\nasymmetry after a load went missing would be right to feel misled, and the fix is not to soften the\nboard: it is to hold this to the same line. A name AND a photograph, because \"delivered\" without\neither is the driver’s word against the sender’s, and with them it is box 24 of a consignment note.\n\nIt is the DRIVER this protects first, which is the part worth remembering when it feels like a\nburden at a gate in the rain.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProofOfDelivery"
+              }
+            ]
+          },
           "receivedBy": {
             "type": "string",
-            "description": "Who took it, in the words the driver was given at the door. Absent where nobody was named."
+            "description": "Who took it. Kept flat as well as on the proof, because every screen reads this one line."
+          },
+          "loadSafety": {
+            "description": "WHAT THE DRIVER CONFIRMED AT LOADING — the securement half, which the board also has.\n\nA load that arrives broken is argued about at the OTHER end of the journey, and the photograph that\nsettles it was taken hours earlier. Recorded at the loading gate, where the driver is already\nstanding and already tapping.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoadSafety"
+              }
+            ]
+          },
+          "claim": {
+            "description": "What the shipper says went wrong, and what the carrier said back. Never decided by us.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BookingClaim"
+              }
+            ]
           },
           "waiting": {
             "description": "THE CLOCKS, one per stop, and empty on a run where nothing went wrong.\n\nKept on the BOOKING rather than the departure because a shared truck waits for one shipper at a time:\nthree loads on the same run, and the two-hour stand at the second collection belongs to the second\nshipper alone. A departure-level total would be exactly the unattributable number this exists to avoid.",
@@ -29849,6 +30251,7 @@
         },
         "required": [
           "kind",
+          "nature",
           "binds",
           "price",
           "units",
@@ -29884,6 +30287,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/SettleTerms"
+              }
+            ]
+          },
+          "cover": {
+            "description": "What the CARRIER's own insurance covers, where they have said. Absent means they have not said, which\na screen reports as exactly that — never as \"covered\" and never as \"not covered\".",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CarrierCover"
               }
             ]
           },
@@ -29989,6 +30400,22 @@
       "AddOwnLoadDto": {
         "type": "object",
         "properties": {
+          "nature": {
+            "type": "string",
+            "description": "What the goods are. The fleet’s own customer’s load can clash with what is already aboard too.",
+            "enum": [
+              "GEN",
+              "FOD",
+              "FOP",
+              "HAZ-CHEM",
+              "HAZ-DUST",
+              "HAZ-BIO",
+              "HAZ-FLAM",
+              "FRG",
+              "ODR",
+              "HUM"
+            ]
+          },
           "customer": {
             "type": "string",
             "description": "Whose it is, in the fleet's own words.",
@@ -30043,9 +30470,30 @@
       "BookDepartureDto": {
         "type": "object",
         "properties": {
+          "nature": {
+            "type": "string",
+            "description": "WHAT THE GOODS ARE, in the board’s own vocabulary — the thing a free-text description could never\nsay. Absent means general dry, which is most freight; what is refused is a value nobody agreed on.",
+            "enum": [
+              "GEN",
+              "FOD",
+              "FOP",
+              "HAZ-CHEM",
+              "HAZ-DUST",
+              "HAZ-BIO",
+              "HAZ-FLAM",
+              "FRG",
+              "ODR",
+              "HUM"
+            ]
+          },
           "description": {
             "type": "string",
             "maxLength": 160
+          },
+          "declaredValue": {
+            "type": "number",
+            "description": "What it is worth, as the shipper declares it. Never verified, and never a promise of ours.",
+            "minimum": 0
           },
           "weightKg": {
             "type": "number",
@@ -30079,12 +30527,92 @@
       "DeliverDepartureDto": {
         "type": "object",
         "properties": {
-          "receivedBy": {
+          "receiverName": {
             "type": "string",
-            "description": "Who took it, in the words the driver was given at the door. Optional: often nobody gives a name.",
+            "description": "Who took the goods, in their own name. Two characters minimum — \"x\" is not a receiver.",
             "maxLength": 120
+          },
+          "photoRef": {
+            "type": "string",
+            "description": "A mediaId for the photograph of the goods as put down. The driver’s own, unattached upload."
+          },
+          "remarks": {
+            "type": "string",
+            "description": "Anything worth putting on the record — a reservation, a remark about the state of the goods.",
+            "maxLength": 500
+          },
+          "confirmed": {
+            "description": "The unload checklist keys confirmed.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
+      },
+      "SecureDepartureDto": {
+        "type": "object",
+        "properties": {
+          "confirmed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "securementPhotoRef": {
+            "type": "string"
+          }
+        }
+      },
+      "OpenBookingClaimDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "damaged",
+              "short",
+              "not_received"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "photoRef": {
+            "type": "string",
+            "description": "Their own photograph of what arrived — beside the carrier’s two, not instead of them."
+          },
+          "amount": {
+            "type": "number",
+            "description": "What they say it cost them. Their figure, like the declared value: never verified by us.",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "kind",
+          "description"
+        ]
+      },
+      "AnswerBookingClaimDto": {
+        "type": "object",
+        "properties": {
+          "answer": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "refused"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "description": "Required on a refusal: a refusal with no reason is not an answer the other side can act on.",
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "answer"
+        ]
       },
       "WaitingStopDto": {
         "type": "object",

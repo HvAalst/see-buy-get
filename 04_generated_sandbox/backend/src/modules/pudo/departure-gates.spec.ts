@@ -1,5 +1,16 @@
 import { DepartureService } from './departure.service';
 import { CorridorService } from './corridor.service';
+import { CargoService } from './cargo.service';
+import type { MediaService } from './media.service';
+
+/** A photo store that only remembers what it was asked to adopt. */
+const adoptions: Array<{ mediaId: string; by: string; role: string }> = [];
+const adopted = () =>
+  ({
+    adopt: (mediaId: string, by: string, _subject: unknown, role: string) => {
+      adoptions.push({ mediaId, by, role });
+    },
+  }) as unknown as MediaService;
 import type { DriverService } from './driver.service';
 import type { FleetManagerService } from './fleet-manager.service';
 import type { PresenceService } from '../../foundation/presence/presence.service';
@@ -53,7 +64,7 @@ const silentBus = { publish: async () => undefined } as unknown as EventBus;
 
   const setUp = (over: { drivers?: DriverService; presence?: PresenceService } = {}) => {
     const corridors = new CorridorService();
-    const service = new DepartureService(corridors, managers, over.drivers ?? clearDrivers, oneTruck, over.presence ?? openEverywhere, silentBus);
+    const service = new DepartureService(corridors, managers, over.drivers ?? clearDrivers, oneTruck, new CargoService(), adopted(), over.presence ?? openEverywhere, silentBus);
     return { service, corridor: line(corridors) };
   };
 
@@ -131,7 +142,7 @@ const silentBus = { publish: async () => undefined } as unknown as EventBus;
       // and the shipper arrives after it shut. Registration a year ago cannot answer this.
       const corridors = new CorridorService();
       const shutting = { can: () => true };
-      const service = new DepartureService(corridors, managers, clearDrivers, oneTruck, shutting as unknown as PresenceService, silentBus);
+      const service = new DepartureService(corridors, managers, clearDrivers, oneTruck, new CargoService(), adopted(), shutting as unknown as PresenceService, silentBus);
       const run = declare(service, line(corridors).corridorId);
 
       shutting.can = () => false;
@@ -157,7 +168,7 @@ const silentBus = { publish: async () => undefined } as unknown as EventBus;
       const corridors = new CorridorService();
       const asked: Array<string | undefined> = [];
       const recording = { can: (j: string | undefined) => (asked.push(j), false) } as unknown as PresenceService;
-      const service = new DepartureService(corridors, nowhere, clearDrivers, oneTruck, recording, silentBus);
+      const service = new DepartureService(corridors, nowhere, clearDrivers, oneTruck, new CargoService(), adopted(), recording, silentBus);
 
       expect(() => declare(service, line(corridors).corridorId)).not.toThrow();
       // Not "asked and forgiven" — never asked, because there is no question to put.
@@ -200,7 +211,7 @@ describe('the vehicle a run is sold on', () => {
   const setUp = (vehicles: Partial<VehicleService>) => {
     lanes += 1;
     const corridors = new CorridorService();
-    const service = new DepartureService(corridors, managers, clearDrivers, vehicles as VehicleService, openEverywhere, silent);
+    const service = new DepartureService(corridors, managers, clearDrivers, vehicles as VehicleService, new CargoService(), adopted(), openEverywhere, silent);
     const proposed = corridors.proposeLine({ managerDid: MANAGER, company: 'Veh Fleet', name: `Veh line ${lanes}`, originZone: `Veh A${lanes}`, destZone: `Veh B${lanes}`, vehicleType: 'truck' });
     return { service, corridorId: corridors.publish(proposed.corridorId, 'did:glos:network-staff').corridorId };
   };
@@ -283,7 +294,7 @@ describe('how the shipper pays the fleet', () => {
   const setUp = () => {
     lanes += 1;
     const corridors = new CorridorService();
-    const service = new DepartureService(corridors, managers, clearDrivers, truck, openEverywhere, silent);
+    const service = new DepartureService(corridors, managers, clearDrivers, truck, new CargoService(), adopted(), openEverywhere, silent);
     const proposed = corridors.proposeLine({ managerDid: MANAGER, company: 'Pay Fleet', name: `Pay line ${lanes}`, originZone: `Pay A${lanes}`, destZone: `Pay B${lanes}`, vehicleType: 'truck' });
     return { service, corridorId: corridors.publish(proposed.corridorId, 'did:glos:network-staff').corridorId };
   };
