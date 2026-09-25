@@ -453,6 +453,8 @@ export type RunBasis = (typeof RUN_BASES)[number];
 
 export interface RunForm {
   corridorId: string;
+  /** Which vehicle. Empty is a blocker: capacity is read from it. */
+  vehicleId: string;
   /** A local datetime-local value; converted to ISO on submit. */
   leavesAt: string;
   capacityKg: string;
@@ -464,11 +466,15 @@ export interface RunForm {
   /** Waiting: both or neither. */
   freeMin: string;
   waitingPerHour: string;
+  /** How the shipper pays them. Both or neither, for the same reason. */
+  settleMethod: string;
+  settleWhen: string;
   note: string;
 }
 
 export const EMPTY_RUN: RunForm = {
   corridorId: '',
+  vehicleId: '',
   leavesAt: '',
   capacityKg: '',
   capacityM3: '',
@@ -478,11 +484,15 @@ export const EMPTY_RUN: RunForm = {
   km: '',
   freeMin: '',
   waitingPerHour: '',
+  settleMethod: 'mobile_money',
+  settleWhen: 'on_delivery',
   note: '',
 };
 
 export type RunBlocker =
   | 'fleet.runs.needLine'
+  | 'fleet.runs.needVehicle'
+  | 'fleet.runs.tooMuch'
   | 'fleet.runs.needWhen'
   | 'fleet.runs.past'
   | 'fleet.runs.needCapacity'
@@ -500,14 +510,19 @@ export type RunBlocker =
  *  - a waiting RATE with no free window bills a shipper from the moment the truck arrives, which is a
  *    surcharge on loading rather than a charge for a delay.
  */
-export function runBlocker(f: RunForm, now: number = Date.now()): RunBlocker | null {
+export function runBlocker(f: RunForm, now: number = Date.now(), holdsKg?: number): RunBlocker | null {
   if (!f.corridorId) return 'fleet.runs.needLine';
+  // The vehicle is required and the driver is not: who is driving on Tuesday is a rostering detail,
+  // and which truck is going IS the offer — capacity is read off it.
+  if (!f.vehicleId) return 'fleet.runs.needVehicle';
   if (!f.leavesAt.trim()) return 'fleet.runs.needWhen';
   const at = Date.parse(f.leavesAt);
   if (Number.isNaN(at)) return 'fleet.runs.needWhen';
   // A departure in the past cannot be booked onto, and selling one is how a shipper loses a day.
   if (at < now) return 'fleet.runs.past';
-  if (!(Number(f.capacityKg) > 0)) return 'fleet.runs.needCapacity';
+  // Blank is fine now — it means the whole truck, which the registry already knows. Over is not.
+  if (f.capacityKg.trim() && !(Number(f.capacityKg) > 0)) return 'fleet.runs.needCapacity';
+  if (holdsKg != null && Number(f.capacityKg) > holdsKg) return 'fleet.runs.tooMuch';
   if (!(Number(f.amount) > 0)) return 'fleet.runs.needAmount';
   if (f.basis === 'per_km' && !(Number(f.km) > 0)) return 'fleet.runs.needKm';
   if (Number(f.waitingPerHour) > 0 && !(Number(f.freeMin) >= 0 && f.freeMin.trim() !== '')) return 'fleet.runs.needFreeTime';

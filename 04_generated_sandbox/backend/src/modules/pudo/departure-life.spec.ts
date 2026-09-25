@@ -5,6 +5,7 @@ import type { DriverService } from './driver.service';
 import type { FleetManagerService } from './fleet-manager.service';
 import type { PresenceService } from '../../foundation/presence/presence.service';
 import type { EventBus } from '../../foundation/events/event-bus.service';
+import type { VehicleService } from './vehicle.service';
 
 /**
  * THE LIFE OF A BOOKING AFTER THE MOMENT OF SALE — which it did not have.
@@ -28,6 +29,10 @@ describe('a booking’s life after it is sold', () => {
   const OTHER = 'did:glos:shipper-other';
 
   const managers = { get: () => ({ jurisdiction: 'KE' }) } as unknown as FleetManagerService;
+
+  /** One eight-tonne truck, in date and this fleet's. The vehicle gate is its own test. */
+
+  const oneTruck = { get: () => ({ vehicleId: 'veh_1', plate: 'KDA 001A', vehicleClass: 'truck', capacityKg: 8000, managerDid: MANAGER, status: 'ACTIVE' }), isUsable: () => true, offRoadReasons: () => [] } as unknown as VehicleService;
   const clearDrivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
   const openEverywhere = { can: () => true } as unknown as PresenceService;
 
@@ -41,7 +46,7 @@ describe('a booking’s life after it is sold', () => {
         heard.push({ name, payload });
       },
     } as unknown as EventBus;
-    const service = new DepartureService(corridors, managers, clearDrivers, openEverywhere, bus);
+    const service = new DepartureService(corridors, managers, clearDrivers, oneTruck, openEverywhere, bus);
     const proposed = corridors.proposeLine({
       managerDid: MANAGER,
       company: 'Life Haulage',
@@ -54,6 +59,7 @@ describe('a booking’s life after it is sold', () => {
     const departure = service.declare({
       managerDid: MANAGER,
       corridorId: corridor.corridorId,
+      vehicleId: 'veh_1',
       leavesAt: new Date(Date.now() + 86_400_000).toISOString(),
       capacityKg: 6000,
       capacityM3: 40,
@@ -328,10 +334,10 @@ describe('a booking’s life after it is sold', () => {
       // marked gone. The rejection is swallowed, and this test would fail on an unhandled one.
       const corridors = new CorridorService();
       const angry = { publish: async () => { throw new Error('bus down'); } } as unknown as EventBus;
-      const service = new DepartureService(corridors, managers, clearDrivers, openEverywhere, angry);
+      const service = new DepartureService(corridors, managers, clearDrivers, oneTruck, openEverywhere, angry);
       const proposed = corridors.proposeLine({ managerDid: MANAGER, company: 'Life Haulage', name: 'Angry line', originZone: 'Angry A', destZone: 'Angry B', vehicleType: 'truck' });
       const corridor = corridors.publish(proposed.corridorId, 'did:glos:network-staff');
-      const run = service.declare({ managerDid: MANAGER, corridorId: corridor.corridorId, leavesAt: new Date(Date.now() + 86_400_000).toISOString(), capacityKg: 6000, basis: 'per_trip', amount: 450 });
+      const run = service.declare({ managerDid: MANAGER, corridorId: corridor.corridorId, vehicleId: 'veh_1', leavesAt: new Date(Date.now() + 86_400_000).toISOString(), capacityKg: 6000, basis: 'per_trip', amount: 450 });
 
       expect(service.setStatus(run.departureId, 'departed', MANAGER).status).toBe('departed');
       await new Promise((r) => setImmediate(r));

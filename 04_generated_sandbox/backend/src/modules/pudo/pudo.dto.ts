@@ -1,7 +1,7 @@
 import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { INCOTERM_CODES } from '../../foundation/incoterms/catalogue';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE } from '../../foundation/interest/interest.service';
-import { DELAY_PLACES, RATE_BASES, type DelayPlace } from './departure.types';
+import { DELAY_PLACES, RATE_BASES, SETTLE_METHODS, SETTLE_WHEN, type DelayPlace } from './departure.types';
 import { PRESENCE_LEVELS, type PresenceLevel } from '../../foundation/presence/presence.types';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
@@ -1392,12 +1392,22 @@ export class InterestDto {
  * BASIS, because per-kilogram is the one that loses money on the loads that actually fill a truck.
  */
 export class DeclareDepartureDto {
+  /** Which truck. Required: a run that names no vehicle is selling a number somebody typed. */
+  @IsString() vehicleId!: string;
   @IsString() corridorId!: string;
   @IsString() leavesAt!: string;
-  @IsNumber() @Min(1) capacityKg!: number;
+  /** How much of the vehicle is for sale. Absent means all of it — the registry already knows. */
+  @IsOptional() @IsNumber() @Min(1) capacityKg?: number;
   /** Cubic metres of hold. Absent where the fleet has not measured it — then only weight can bind. */
   @IsOptional() @IsNumber() @Min(0.1) capacityM3?: number;
   @IsIn(RATE_BASES) @ApiProperty({ enum: RATE_BASES }) basis!: string;
+  /**
+   * How the shipper pays the fleet — a RECORD, never a posting. Required of a new run: a price with no
+   * way to pay it is the hole this closes. Optional here only because the same shape reads back records
+   * declared before it existed.
+   */
+  @IsOptional() @IsIn(SETTLE_METHODS) @ApiPropertyOptional({ enum: SETTLE_METHODS }) settleMethod?: string;
+  @IsOptional() @IsIn(SETTLE_WHEN) @ApiPropertyOptional({ enum: SETTLE_WHEN }) settleWhen?: string;
   @IsNumber() @Min(0.01) amount!: number;
   /** The least the run will take. What stopping and strapping down already cost. */
   @IsOptional() @IsNumber() @Min(0) minCharge?: number;

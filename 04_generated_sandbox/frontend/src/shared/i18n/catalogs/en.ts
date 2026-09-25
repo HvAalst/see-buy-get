@@ -16,7 +16,25 @@ import { enVendor } from './en.vendor';
 import { enHome } from './en.home';
 import { enTower, enTowerCompanies, enTowerMoney, enTowerNetwork, enTowerQueues, enTowerSupport } from './en.tower';
 
+/* HOW A SHIPPER PAYS A CARRIER DIRECTLY. Shared, because the fleet declaring it, the shop reading it
+   before booking, and the shop reading it back afterwards must all say the same thing. */
+const enSettle = {
+  'settle.line': 'You pay them {method}, {when}.',
+  'settle.method.cash': 'in cash',
+  'settle.method.mobile': 'by mobile money',
+  'settle.method.bank': 'by bank transfer',
+  'settle.method.other': 'however you two arrange',
+  'settle.when.pickup': 'when they collect',
+  'settle.when.delivery': 'when it is delivered',
+  'settle.when.after': 'after delivery, on their terms',
+  /* Said out loud rather than left blank: a shipper who reads nothing assumes the network is handling
+     it, which is the one thing that is certainly not happening. */
+  'settle.unsaid': 'They have not said how they take payment — ask before you book.',
+  'settle.notUs': 'You pay the carrier directly. SeeBuyGet takes no part in this payment and holds none of it.',
+};
+
 export const en = {
+  ...enSettle,
   // Per-app slices (each app owns its own <app>.* namespace; filled in its own en.<app>.ts file).
   ...enAgent,
   ...enDriver,

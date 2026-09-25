@@ -4,6 +4,7 @@ import type { DriverService } from './driver.service';
 import type { FleetManagerService } from './fleet-manager.service';
 import type { PresenceService } from '../../foundation/presence/presence.service';
 import type { EventBus } from '../../foundation/events/event-bus.service';
+import type { VehicleService } from './vehicle.service';
 
 /** Papers and the country are their own tests (departure-gates.spec.ts); here they simply say yes. */
 const clearDrivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
@@ -30,6 +31,10 @@ describe('a fleet’s own customers, on a fleet’s own run', () => {
 
   const managers = { get: () => ({ jurisdiction: 'KE' }) } as unknown as FleetManagerService;
 
+  /** One eight-tonne truck, in date and this fleet's. The vehicle gate is its own test. */
+
+  const oneTruck = { get: () => ({ vehicleId: 'veh_1', plate: 'KDA 001A', vehicleClass: 'truck', capacityKg: 8000, managerDid: MANAGER, status: 'ACTIVE' }), isUsable: () => true, offRoadReasons: () => [] } as unknown as VehicleService;
+
   /** A published line this fleet owns. Unique zones per call: only one line may hold a lane. */
   let lanes = 0;
   const line = (corridors: CorridorService) => {
@@ -47,11 +52,12 @@ describe('a fleet’s own customers, on a fleet’s own run', () => {
 
   const setUp = (capacity: { capacityKg: number; capacityM3?: number } = { capacityKg: 6000, capacityM3: 40 }) => {
     const corridors = new CorridorService();
-    const service = new DepartureService(corridors, managers, clearDrivers, openEverywhere, silentBus);
+    const service = new DepartureService(corridors, managers, clearDrivers, oneTruck, openEverywhere, silentBus);
     const corridor = line(corridors);
     const departure = service.declare({
       managerDid: MANAGER,
       corridorId: corridor.corridorId,
+      vehicleId: 'veh_1',
       leavesAt: new Date(Date.now() + 86_400_000).toISOString(),
       basis: 'per_trip',
       amount: 450,

@@ -120,6 +120,33 @@ export class WaitingRecord {
   waivedReason?: string;
 }
 
+/**
+ * HOW THE SHIPPER PAYS THE FLEET — and the answer is never "through us".
+ *
+ * A shipper agreed 450 on our screens and nothing anywhere told them who to pay, when, or how. That is
+ * the hole, and the fix is NOT to invent an invoice: we are not the merchant of record for this. Board
+ * freight is priced BY us and books a payable to the carrier at delivery because the shipper paid US.
+ * A departure is the fleet's own price, agreed directly, and money we never collected must not become a
+ * liability we pretend to hold — money model rule 5, from the other side.
+ *
+ * So this is a RECORD AND NEVER A POSTING, in the words CV2 already settled on for exactly this: two
+ * parties paying each other off-platform, written down so neither has to remember what was said.
+ *
+ * Reusing SETTLE_METHODS / SETTLE_WHEN rather than a second vocabulary, because a shipper who has read
+ * one settlement card in this product has read them all.
+ */
+export const SETTLE_METHODS = ['cash', 'mobile_money', 'bank', 'other'] as const;
+export type SettleMethod = (typeof SETTLE_METHODS)[number];
+export const SETTLE_WHEN = ['on_pickup', 'on_delivery', 'after_delivery'] as const;
+export type SettleWhen = (typeof SETTLE_WHEN)[number];
+
+export class SettleTerms {
+  @ApiProperty({ enum: SETTLE_METHODS })
+  method: SettleMethod;
+  @ApiProperty({ enum: SETTLE_WHEN })
+  when: SettleWhen;
+}
+
 export class DepartureRate {
   @ApiProperty({ enum: RATE_BASES })
   basis: RateBasis;
@@ -259,7 +286,32 @@ export class Departure {
    * Space is optional: a fleet that has not measured its hold says nothing rather than guessing, and then
    * only weight binds — which is stated on the booking rather than assumed.
    */
+  /**
+   * WHICH TRUCK, and it is required — unlike the driver.
+   *
+   * The thing being sold here is the space in a particular hold, so a run that names no vehicle is
+   * selling a number somebody typed. It was exactly that: capacityKg was a bare figure, and a fleet
+   * could publish forty tonnes on a van with nothing anywhere to say otherwise.
+   *
+   * The DRIVER stays optional for the opposite reason. Who is behind the wheel on Tuesday is a rostering
+   * detail that changes; which vehicle is going is the offer.
+   */
+  vehicleId: string;
+  /** What a shipper and a gate actually recognise. Copied at declaration, like the line name. */
+  plate: string;
+  vehicleClass: string;
+  /**
+   * What is for sale, which is at most what the vehicle holds.
+   *
+   * DERIVED BY DEFAULT and capped always: a fleet may sell less than the whole truck — a genuine choice,
+   * and since F4 usually expressed by recording their own load instead — but never more than it has.
+   */
   capacityKg: number;
+  /**
+   * Cubic metres, still DECLARED rather than derived: the vehicle registry holds a weight and no volume,
+   * so there is nothing to read it from. Left that way rather than guessed from the class, because a
+   * box body and a flatbed of the same tonnage are not the same offer.
+   */
   @ApiPropertyOptional()
   capacityM3?: number;
   @ApiProperty({ type: DepartureRate })
@@ -270,6 +322,12 @@ export class Departure {
    */
   @ApiPropertyOptional({ type: WaitingTerms })
   waiting?: WaitingTerms;
+  /**
+   * How the shipper pays the fleet. Required of every new run; absent on records declared before this
+   * existed, and a screen reading absence says the fleet has not said rather than inventing an answer.
+   */
+  @ApiPropertyOptional({ type: SettleTerms })
+  settle?: SettleTerms;
   /** The distance the line runs, where it is known — what `per_km` is multiplied by. */
   @ApiPropertyOptional()
   km?: number;
@@ -326,10 +384,15 @@ export class DepartureOffer {
    */
   @ApiPropertyOptional({ type: WaitingTerms })
   waiting?: WaitingTerms;
+  /** Who they pay and when — before booking, for the same reason the waiting terms are. */
+  @ApiPropertyOptional({ type: SettleTerms })
+  settle?: SettleTerms;
   @ApiPropertyOptional()
   km?: number;
   @ApiPropertyOptional()
   note?: string;
+  /** The class of vehicle it is going on. Not the plate: that is the fleet's, and a shipper does not need it. */
+  vehicleClass: string;
   /** What is still for sale. Both axes, for the same reason the capacity has both. */
   remainingKg: number;
   @ApiPropertyOptional()
@@ -393,6 +456,9 @@ export class MyDepartureBooking {
   /** The waiting terms they agreed to, so a charge is never the first they hear of the rule. */
   @ApiPropertyOptional({ type: WaitingTerms })
   waiting?: WaitingTerms;
+  /** And how they settle it, on the booking as well as the offer — read long after the offer is gone. */
+  @ApiPropertyOptional({ type: SettleTerms })
+  settle?: SettleTerms;
   /** What standing time has cost THEM — their own rows only, never another shipper's on the same truck. */
   @ApiProperty({ type: [WaitingRecord] })
   waits: WaitingRecord[];

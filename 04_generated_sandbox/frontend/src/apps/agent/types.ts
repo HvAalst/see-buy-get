@@ -367,6 +367,10 @@ export interface OfferRow {
   rate: { basis: string; amount: number; currency: string; minCharge?: number };
   /** What the carrier charges for being kept standing. Absent means it does not charge. */
   waiting?: { freeMin: number; perHour: number };
+  /** How the shipper pays them — directly, and never through us. Absent means the fleet has not said. */
+  settle?: { method: string; when: string };
+  /** What kind of vehicle it is going on. Not the plate: that is the fleet's own business. */
+  vehicleClass?: string;
   km?: number;
   note?: string;
   remainingKg: number;
@@ -409,6 +413,8 @@ export interface MyBookingRow {
   deliveredAt?: string;
   receivedBy?: string;
   waiting?: { freeMin: number; perHour: number };
+  /** How they pay the carrier. Absent means the fleet has not said — never that we are handling it. */
+  settle?: { method: string; when: string };
   /** Their own standing time only — never another shipper's on the same truck. */
   waits: Array<{ where: 'loading' | 'delivery'; arrivedAt: string; freeAt?: string; waitedMin: number; billableMin: number; amount: number; bearer: 'shipper' | 'consignee'; waivedReason?: string }>;
   cancellable: boolean;

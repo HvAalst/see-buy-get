@@ -4,6 +4,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { CorridorService } from './corridor.service';
 import { DriverService } from './driver.service';
+import { VehicleService } from './vehicle.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
 import { EventBus } from '../../foundation/events/event-bus.service';
@@ -16,6 +17,9 @@ import {
   DepartureOffer,
   DELAY_PLACES,
   RATE_BASES,
+  SETTLE_METHODS,
+  SETTLE_WHEN,
+  type SettleTerms,
   type DelayPlace,
   type RateBasis,
   type WaitingRecord,
@@ -53,6 +57,7 @@ export class DepartureService {
     private readonly corridors: CorridorService,
     private readonly managers: FleetManagerService,
     private readonly drivers: DriverService,
+    private readonly vehicles: VehicleService,
     private readonly presence: PresenceService,
     private readonly events: EventBus,
   ) {}
@@ -66,8 +71,10 @@ export class DepartureService {
   declare(input: {
     managerDid: string;
     corridorId: string;
+    vehicleId: string;
     leavesAt: string;
-    capacityKg: number;
+    /** How much of the vehicle is for sale. Absent means all of it — the registry already knows. */
+    capacityKg?: number;
     capacityM3?: number;
     basis: string;
     amount: number;
@@ -76,6 +83,8 @@ export class DepartureService {
     waitingPerHour?: number;
     km?: number;
     note?: string;
+    settleMethod?: string;
+    settleWhen?: string;
   }): Departure {
     const manager = this.managers.get(input.managerDid);
     const corridor = this.corridors.requireCorridor(input.corridorId);
@@ -98,7 +107,30 @@ export class DepartureService {
     // A departure in the past cannot be booked onto, and selling one is how a shipper loses a day.
     if (leavesAt.getTime() < Date.now()) throw new GlosError('INVALID_INPUT', 'That time has passed — a departure has to be ahead of now');
 
-    const capacityKg = Number(input.capacityKg);
+    /*
+     * THE VEHICLE, which this used to do without.
+     *
+     * capacityKg was a bare number somebody typed, so forty tonnes could be published on a van and
+     * nothing anywhere would say otherwise. Everywhere else in this product capacity is derived from a
+     * registered vehicle with a body class; a run is the one place it was invented.
+     *
+     * Three questions, in the order an office would ask them: is it yours, can it go out, and does it
+     * actually hold what you are selling.
+     */
+    const vehicle = this.vehicles.get(String(input.vehicleId ?? ''));
+    if (vehicle.managerDid !== input.managerDid) throw new GlosError('FORBIDDEN', `${vehicle.plate} is not one of your vehicles`);
+    if (!this.vehicles.isUsable(vehicle.vehicleId)) {
+      const why = this.vehicles.offRoadReasons(vehicle.vehicleId);
+      throw new GlosError('CANNOT_COUPLE', why.length ? `${vehicle.plate} is off the road: ${why.join('; ')}` : `${vehicle.plate} is ${vehicle.status} — it cannot take a run`);
+    }
+
+    // Declared or derived, and capped either way. Selling less than the whole truck is a real choice;
+    // selling more than it holds is a promise the vehicle cannot keep.
+    const asked = Number(input.capacityKg);
+    const capacityKg = Number.isFinite(asked) && asked > 0 ? asked : vehicle.capacityKg;
+    if (capacityKg > vehicle.capacityKg) {
+      throw new GlosError('INVALID_INPUT', `${vehicle.plate} holds ${vehicle.capacityKg} kg — you cannot sell ${Math.round(capacityKg)} kg on it`);
+    }
     if (!Number.isFinite(capacityKg) || capacityKg <= 0) throw new GlosError('INVALID_INPUT', 'Say how much weight is for sale');
     const capacityM3 = Number(input.capacityM3);
     const space = Number.isFinite(capacityM3) && capacityM3 > 0 ? Math.round(capacityM3 * 100) / 100 : undefined;
@@ -126,6 +158,22 @@ export class DepartureService {
       waiting = { freeMin: Math.round(freeMin), perHour: Math.round(perHour * 100) / 100 };
     }
 
+    /*
+     * HOW THEY GET PAID, said rather than assumed.
+     *
+     * Both halves or neither, like the waiting terms: "cash" with no moment is half a sentence, and a
+     * moment with no method is the other half. Absent is a real state for runs declared before this
+     * existed, and the screens say the fleet has not said rather than guessing on their behalf.
+     */
+    const method = String(input.settleMethod ?? '');
+    const when = String(input.settleWhen ?? '');
+    let settle: SettleTerms | undefined;
+    if (method || when) {
+      if (!SETTLE_METHODS.includes(method as never)) throw new GlosError('INVALID_INPUT', `Say how you take payment: ${SETTLE_METHODS.join(', ')}`);
+      if (!SETTLE_WHEN.includes(when as never)) throw new GlosError('INVALID_INPUT', `Say when you are paid: ${SETTLE_WHEN.join(', ')}`);
+      settle = { method: method as SettleTerms['method'], when: when as SettleTerms['when'] };
+    }
+
     const km = Number(input.km);
     const distance = Number.isFinite(km) && km > 0 ? Math.round(km) : undefined;
     // Per-kilometre with no distance prices every booking at zero. Asked for here rather than discovered
@@ -136,6 +184,9 @@ export class DepartureService {
       departureId: `dep_${randomBytes(6).toString('hex')}`,
       corridorId: corridor.corridorId,
       lineName: corridor.name,
+      vehicleId: vehicle.vehicleId,
+      plate: vehicle.plate,
+      vehicleClass: vehicle.vehicleClass,
       managerDid: input.managerDid,
       company: corridor.owner.company,
       originZone: corridor.originZone,
@@ -150,6 +201,7 @@ export class DepartureService {
         currency: this.currencyFor(manager.jurisdiction),
       },
       ...(waiting ? { waiting } : {}),
+      ...(settle ? { settle } : {}),
       ...(distance ? { km: distance } : {}),
       ...(input.note?.trim() ? { note: input.note.trim() } : {}),
       status: 'open',
@@ -662,8 +714,10 @@ export class DepartureService {
           leavesAt: d.leavesAt,
           rate: d.rate,
           ...(d.waiting ? { waiting: d.waiting } : {}),
+          ...(d.settle ? { settle: d.settle } : {}),
           ...(d.km ? { km: d.km } : {}),
           ...(d.note ? { note: d.note } : {}),
+          vehicleClass: d.vehicleClass,
           remainingKg: left.kg,
           ...(left.m3 != null ? { remainingM3: left.m3 } : {}),
           booked: d.bookings.filter((b) => b.status === 'booked').length,
@@ -707,6 +761,7 @@ export class DepartureService {
             ...(b.deliveredAt ? { deliveredAt: b.deliveredAt } : {}),
             ...(b.receivedBy ? { receivedBy: b.receivedBy } : {}),
             ...(d.waiting ? { waiting: d.waiting } : {}),
+            ...(d.settle ? { settle: d.settle } : {}),
             waits: b.waiting,
             // The same rule cancelBooking enforces, said here so a screen can hide a button that
             // could only ever produce a refusal.

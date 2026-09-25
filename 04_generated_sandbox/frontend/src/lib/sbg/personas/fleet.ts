@@ -131,8 +131,11 @@ export function createFleetApi(sbg: SbgClient) {
       did: string,
       body: {
         corridorId: string;
+        /** Which truck. Required: the space in a particular hold is what is for sale. */
+        vehicleId: string;
         leavesAt: string;
-        capacityKg: number;
+        /** How much of it. Absent means all of it — the vehicle registry already knows. */
+        capacityKg?: number;
         capacityM3?: number;
         basis: string;
         amount: number;
@@ -141,6 +144,9 @@ export function createFleetApi(sbg: SbgClient) {
         waitingPerHour?: number;
         km?: number;
         note?: string;
+        /** How the shipper pays the fleet — a record, never a posting. Both or neither. */
+        settleMethod?: string;
+        settleWhen?: string;
       },
     ) => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/departures' as never, { params: { path: { did } }, body } as never)),
 

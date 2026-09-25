@@ -40,6 +40,16 @@ export const enFleet = {
   'fleet.runs.line': 'Which line',
   'fleet.runs.linePh': 'Choose one of your published lines',
   'fleet.runs.when': 'When it leaves',
+  /* WHICH TRUCK — required where the driver is not. A run that names no vehicle is selling a number
+     somebody typed, which is exactly what capacityKg used to be: forty tonnes could be published on a
+     van and nothing anywhere said otherwise. */
+  'fleet.runs.vehicle': 'Which vehicle',
+  'fleet.runs.vehiclePh': 'Choose one of your vehicles',
+  'fleet.runs.vehicleOption': '{plate} · holds {kg} kg',
+  'fleet.runs.noVehicles': 'No vehicles on the road. Register one on the Vehicles tab — the run is sold on its space, so there has to be one.',
+  'fleet.runs.needVehicle': 'Say which vehicle is going. What you are selling is the space in it.',
+  'fleet.runs.tooMuch': 'That is more than the vehicle holds.',
+  'fleet.runs.capacityFrom': 'Leave it blank to sell all {kg} kg of {plate}.',
   'fleet.runs.capacityKg': 'Weight for sale (kg)',
   'fleet.runs.capacityM3': 'Space for sale (m³)',
   'fleet.runs.capacityM3Hint': 'Optional, and worth measuring once. A pallet of foam weighs nothing and fills half a truck — without this you will sell room you do not have.',
@@ -57,6 +67,16 @@ export const enFleet = {
   'fleet.runs.km': 'Distance (km)',
   'fleet.runs.note': 'Anything a shipper should know',
   'fleet.runs.notePh': 'Box body, tail-lift. No hazmat.',
+
+  /* HOW THEY PAY YOU. Not an invoice of ours: this network is not the merchant of record for a run you
+     priced yourself, and pretending otherwise would put money we never collected on our books. What was
+     missing was nobody saying so — a shipper who reads a price on our screens and nothing about payment
+     assumes we are handling it. */
+  'fleet.runs.settleTitle': 'How they pay you',
+  'fleet.runs.settleLede': 'Straight to you — SeeBuyGet takes no part in this payment and holds none of it. Saying it here is what stops a shipper assuming otherwise.',
+  'fleet.runs.settleMethod': 'How',
+  'fleet.runs.settleWhen': 'When',
+  'fleet.runs.onVehicle': 'On {plate}',
 
   'fleet.runs.waitingTitle': 'If you are kept waiting',
   'fleet.runs.waitingLede': 'Leave these empty and you do not charge for waiting. Fill them both and a shipper sees the terms before they book.',

@@ -1,6 +1,7 @@
 import { useEffect } from 'preact/hooks';
 import { Button, Icon, Note, Pill } from '../../../shared/ui';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
+import { settleWords } from '../../../shared/settle';
 import type { MyBookingRow } from '../types';
 import type { AgentActions, AgentState } from '../useAgentApp';
 
@@ -114,6 +115,8 @@ function Booking({ row, state, actions }: { row: MyBookingRow; state: AgentState
         {/* What standing time has cost THEM. Shown whenever there is a charge, never as a silent zero:
             a shipper who is billed for a wait they were never told about has been billed by surprise. */}
         {owed > 0 ? <span class="row__s">{t('agent.mine.waitOwed', { amount: owed, currency: row.currency })}</span> : null}
+        {/* Still here after the offer is long gone, which is when somebody actually asks who to pay. */}
+        {row.bookingStatus !== 'cancelled' ? <span class="row__s">{settleWords(row.settle, t)}</span> : null}
       </span>
       <span class="row__end">
         <Pill tone={status.tone} dot>

@@ -4,6 +4,7 @@ import type { DriverService } from './driver.service';
 import type { FleetManagerService } from './fleet-manager.service';
 import type { PresenceService } from '../../foundation/presence/presence.service';
 import type { EventBus } from '../../foundation/events/event-bus.service';
+import type { VehicleService } from './vehicle.service';
 
 /** Papers and the country are their own tests (departure-gates.spec.ts); here they simply say yes. */
 const clearDrivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
@@ -29,6 +30,8 @@ describe('the waiting clock, from arrival to a charge somebody owes', () => {
 
   /** A fleet whose only interesting property is the country it stands in — the charge needs a currency. */
   const managers = { get: () => ({ jurisdiction: 'KE' }) } as unknown as FleetManagerService;
+  /** One eight-tonne truck, in date and this fleet's. The vehicle gate is its own test. */
+  const oneTruck = { get: () => ({ vehicleId: 'veh_1', plate: 'KDA 001A', vehicleClass: 'truck', capacityKg: 8000, managerDid: MANAGER, status: 'ACTIVE' }), isUsable: () => true, offRoadReasons: () => [] } as unknown as VehicleService;
 
   /** A published line this fleet owns. Unique zones per call: only one line may hold a lane. */
   let lanes = 0;
@@ -47,12 +50,13 @@ describe('the waiting clock, from arrival to a charge somebody owes', () => {
 
   const setUp = () => {
     const corridors = new CorridorService();
-    const service = new DepartureService(corridors, managers, clearDrivers, openEverywhere, silentBus);
+    const service = new DepartureService(corridors, managers, clearDrivers, oneTruck, openEverywhere, silentBus);
     const corridor = line(corridors);
 
     const departure = service.declare({
       managerDid: MANAGER,
       corridorId: corridor.corridorId,
+      vehicleId: 'veh_1',
       leavesAt: new Date(Date.now() + 86_400_000).toISOString(),
       capacityKg: 6000,
       capacityM3: 40,
@@ -116,10 +120,10 @@ describe('the waiting clock, from arrival to a charge somebody owes', () => {
   it('charges nothing at all on a departure whose fleet never published waiting terms', () => {
     // The same ninety-minute wait, on a run where nobody was told about a clock. Absent means free.
     const corridors = new CorridorService();
-    const service = new DepartureService(corridors, managers, clearDrivers, openEverywhere, silentBus);
+    const service = new DepartureService(corridors, managers, clearDrivers, oneTruck, openEverywhere, silentBus);
     const corridor = line(corridors);
     const departure = service.declare({
-      managerDid: MANAGER, corridorId: corridor.corridorId, leavesAt: new Date(Date.now() + 86_400_000).toISOString(),
+      managerDid: MANAGER, corridorId: corridor.corridorId, vehicleId: 'veh_1', leavesAt: new Date(Date.now() + 86_400_000).toISOString(),
       capacityKg: 6000, basis: 'per_trip', amount: 450,
     });
     const { booking } = service.book(departure.departureId, { shipperDid: SHIPPER, description: 'Maize', weightKg: 2000 });

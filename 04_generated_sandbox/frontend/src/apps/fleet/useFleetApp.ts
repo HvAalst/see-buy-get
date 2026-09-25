@@ -841,14 +841,17 @@ export function useFleetApp() {
     await run('run', async () => {
       const r = await client.api.declareDeparture(managerDid, {
         corridorId: f.corridorId,
+        vehicleId: f.vehicleId,
         leavesAt: new Date(f.leavesAt).toISOString(),
-        capacityKg: Number(f.capacityKg),
+        // Blank means the whole truck, and the server reads that off the vehicle's own record.
+        ...(Number(f.capacityKg) > 0 ? { capacityKg: Number(f.capacityKg) } : {}),
         ...(Number(f.capacityM3) > 0 ? { capacityM3: Number(f.capacityM3) } : {}),
         basis: f.basis,
         amount: Number(f.amount),
         ...(Number(f.minCharge) > 0 ? { minCharge: Number(f.minCharge) } : {}),
         ...(Number(f.km) > 0 ? { km: Number(f.km) } : {}),
         ...(Number(f.waitingPerHour) > 0 ? { freeMin: Number(f.freeMin), waitingPerHour: Number(f.waitingPerHour) } : {}),
+        ...(f.settleMethod && f.settleWhen ? { settleMethod: f.settleMethod, settleWhen: f.settleWhen } : {}),
         ...(f.note.trim() ? { note: f.note.trim() } : {}),
       });
       if (r.error) return fail(r.error);

@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Explainer, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { EMPTY_OWN_LOAD, RUN_BASES, ownLines, ownLoadBlocker, runBlocker, runManifest, runMoney, runRemaining, runWaits, type OwnLoadForm, type RunBasis } from '../logic';
+import { settleWords } from '../../../shared/settle';
 import type { DepartureBookingRow, DepartureRow, WaitingRow } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
 
@@ -108,6 +109,13 @@ function Run({ run, state, actions }: { run: DepartureRow; state: FleetState; ac
         {t('fleet.runs.priced', { amount: run.rate.amount, currency: run.rate.currency, basis: t(BASIS_WORD[run.rate.basis as RunBasis] ?? 'fleet.runs.basisTrip') })}
         {' · '}
         {run.waiting ? t('fleet.runs.terms', { minutes: run.waiting.freeMin, rate: run.waiting.perHour, currency: run.rate.currency }) : t('fleet.runs.noWaitingTerms')}
+      </p>
+      {/* Which truck, and how they pay you — both read back, because a fleet looking at next Tuesday wants
+          the offer it made and not the form it filled. */}
+      <p class="card__note">
+        {t('fleet.runs.onVehicle', { plate: run.plate })}
+        {' · '}
+        {settleWords(run.settle, t)}
       </p>
       {/* WHAT IS LEFT, ON BOTH AXES — whichever runs out first is what "full" means for a vehicle. */}
       <p class="card__note">
@@ -394,7 +402,11 @@ function Wait({
 function NewRun({ state, actions, lines }: { state: FleetState; actions: FleetActions; lines: FleetState['corridors'] }) {
   const t = useT();
   const f = state.rForm;
-  const blocker = runBlocker(f);
+  // Only vehicles that can actually go out. One that is off the road is refused at the server anyway,
+  // and offering it here would be a row whose only outcome is a refusal.
+  const fleetVehicles = state.vehicles.filter((v) => v.status === 'ACTIVE');
+  const chosen = fleetVehicles.find((v) => v.vehicleId === f.vehicleId);
+  const blocker = runBlocker(f, Date.now(), chosen?.capacityKg);
 
   return (
     <Card title={t('fleet.runs.newTitle')}>
@@ -412,6 +424,24 @@ function NewRun({ state, actions, lines }: { state: FleetState; actions: FleetAc
         </select>
       </div>
 
+      {/* WHICH TRUCK, and it is required where the driver is not. The space in a particular hold is what
+          is being sold, so a run that names no vehicle is selling a number somebody typed — which is
+          exactly what it used to be. */}
+      <div class="field" style="margin-top:12px">
+        <label class="field__label" for="r-vehicle">
+          {t('fleet.runs.vehicle')}
+        </label>
+        <select id="r-vehicle" class="select" value={f.vehicleId} onChange={(e) => actions.setRForm({ vehicleId: e.currentTarget.value })}>
+          <option value="">{t('fleet.runs.vehiclePh')}</option>
+          {fleetVehicles.map((v) => (
+            <option key={v.vehicleId} value={v.vehicleId}>
+              {t('fleet.runs.vehicleOption', { plate: v.plate, kg: v.capacityKg })}
+            </option>
+          ))}
+        </select>
+        {fleetVehicles.length === 0 ? <p class="hint">{t('fleet.runs.noVehicles')}</p> : null}
+      </div>
+
       <div class="field" style="margin-top:12px">
         <label class="field__label" for="r-when">
           {t('fleet.runs.when')}
@@ -426,7 +456,17 @@ function NewRun({ state, actions, lines }: { state: FleetState; actions: FleetAc
           <label class="field__label" for="r-kg">
             {t('fleet.runs.capacityKg')}
           </label>
-          <input id="r-kg" class="input" inputMode="numeric" value={f.capacityKg} onInput={(e) => actions.setRForm({ capacityKg: e.currentTarget.value })} />
+          <input
+            id="r-kg"
+            class="input"
+            inputMode="numeric"
+            placeholder={chosen ? String(chosen.capacityKg) : ''}
+            value={f.capacityKg}
+            onInput={(e) => actions.setRForm({ capacityKg: e.currentTarget.value })}
+          />
+          {/* Blank means the whole truck. Saying so beats a required field whose right answer is already
+              on the vehicle's own record — and a fleet selling only part of it can still type less. */}
+          {chosen ? <p class="hint">{t('fleet.runs.capacityFrom', { plate: chosen.plate, kg: chosen.capacityKg })}</p> : null}
         </div>
         <div class="field">
           <label class="field__label" for="r-m3">
@@ -482,6 +522,36 @@ function NewRun({ state, actions, lines }: { state: FleetState; actions: FleetAc
           <input id="r-km" class="input" inputMode="numeric" value={f.km} onInput={(e) => actions.setRForm({ km: e.currentTarget.value })} />
         </div>
       ) : null}
+
+      {/* HOW THEY PAY YOU. Not an invoice of ours and deliberately not: board freight is priced BY the
+          network and books a payable at delivery, because the shipper paid us. This is your price, agreed
+          directly — so money we never collected must not become a liability we pretend to hold. What was
+          missing was nobody SAYING that. */}
+      <h3 class="scr__section">{t('fleet.runs.settleTitle')}</h3>
+      <p class="hint">{t('fleet.runs.settleLede')}</p>
+      <div class="grid2">
+        <div class="field">
+          <label class="field__label" for="r-smethod">
+            {t('fleet.runs.settleMethod')}
+          </label>
+          <select id="r-smethod" class="select" value={f.settleMethod} onChange={(e) => actions.setRForm({ settleMethod: e.currentTarget.value })}>
+            <option value="cash">{t('settle.method.cash')}</option>
+            <option value="mobile_money">{t('settle.method.mobile')}</option>
+            <option value="bank">{t('settle.method.bank')}</option>
+            <option value="other">{t('settle.method.other')}</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field__label" for="r-swhen">
+            {t('fleet.runs.settleWhen')}
+          </label>
+          <select id="r-swhen" class="select" value={f.settleWhen} onChange={(e) => actions.setRForm({ settleWhen: e.currentTarget.value })}>
+            <option value="on_pickup">{t('settle.when.pickup')}</option>
+            <option value="on_delivery">{t('settle.when.delivery')}</option>
+            <option value="after_delivery">{t('settle.when.after')}</option>
+          </select>
+        </div>
+      </div>
 
       <h3 class="scr__section">{t('fleet.runs.waitingTitle')}</h3>
       <p class="hint">{t('fleet.runs.waitingLede')}</p>

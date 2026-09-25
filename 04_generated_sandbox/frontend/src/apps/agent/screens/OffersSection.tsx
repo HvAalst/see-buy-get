@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Icon, Note, Pill, Sheet } from '../../../shared/ui';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
+import { settleWords } from '../../../shared/settle';
 import type { OfferRow } from '../types';
 import type { AgentActions, AgentState } from '../useAgentApp';
 
@@ -79,6 +80,10 @@ function Offer({ offer, onTake }: { offer: OfferRow; onTake: () => void }) {
         <span class="row__s">
           {offer.waiting ? t('agent.offers.terms', { minutes: offer.waiting.freeMin, rate: offer.waiting.perHour, currency: offer.rate.currency }) : t('agent.offers.noTerms')}
         </span>
+        {/* WHO THEY PAY, before booking rather than after. A shipper who reads a price on our screens and
+            nothing about settlement assumes we are handling it, which is the one thing that is certainly
+            not happening — board freight works that way and this does not. */}
+        <span class="row__s">{settleWords(offer.settle, t)}</span>
         {offer.note ? <span class="row__s">{offer.note}</span> : null}
       </span>
       <span class="row__end">

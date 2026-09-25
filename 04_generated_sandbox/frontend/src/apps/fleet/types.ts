@@ -309,6 +309,10 @@ export interface DepartureRow {
   departureId: string;
   corridorId: string;
   lineName: string;
+  /** Which truck. Required, unlike the driver: the space in a particular hold is what is being sold. */
+  vehicleId: string;
+  plate: string;
+  vehicleClass: string;
   originZone: string;
   destZone: string;
   leavesAt: string;
@@ -317,6 +321,8 @@ export interface DepartureRow {
   rate: { basis: string; amount: number; currency: string; minCharge?: number };
   /** What the fleet charges for being kept standing. Absent means it does not charge. */
   waiting?: { freeMin: number; perHour: number };
+  /** How the shipper pays them — directly. A record, never a posting. */
+  settle?: { method: string; when: string };
   km?: number;
   driverDid?: string;
   driverName?: string;

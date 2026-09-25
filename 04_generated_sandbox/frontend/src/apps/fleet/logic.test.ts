@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import type { DepartureBookingRow, DepartureRow } from './types';
-import { EMPTY_OWN_LOAD, ownLoadBlocker, runManifest, runMoney, runRemaining, runWaits, type OwnLoadForm } from './logic';
+import { EMPTY_OWN_LOAD, EMPTY_RUN, ownLoadBlocker, runBlocker, runManifest, runMoney, runRemaining, runWaits, type OwnLoadForm, type RunForm } from './logic';
 import { ageWords, signalState, shiftHours, overShiftLimit,
   EMPTY_DRIVER,
   EMPTY_VEHICLE,
@@ -440,5 +440,48 @@ describe('a run sheet that survives its own deliveries', () => {
     const run = runOf([b({ kind: 'sold', status: 'delivered', weightKg: 2000 })]);
     expect(runRemaining(run).kg).toBe(6000);
     expect(runManifest(run)).toHaveLength(1);
+  });
+});
+
+/**
+ * The vehicle a run is sold on — gap 7a.
+ *
+ * capacityKg was a bare number somebody typed, so forty tonnes could be published on a van. The VEHICLE
+ * is required and the DRIVER is not, and the asymmetry is the argument: who is driving on Tuesday is a
+ * rostering detail, and which truck is going IS the offer.
+ */
+describe('declaring a run against a real vehicle', () => {
+  const form = (over: Partial<RunForm> = {}): RunForm => ({
+    ...EMPTY_RUN,
+    corridorId: 'cor_1',
+    vehicleId: 'veh_1',
+    leavesAt: '2026-10-01T06:00',
+    amount: '450',
+    ...over,
+  });
+  const soon = Date.parse('2026-09-25T06:00:00.000Z');
+
+  it('asks which truck before it asks anything about the load', () => {
+    expect(runBlocker(form({ vehicleId: '' }), soon)).toBe('fleet.runs.needVehicle');
+  });
+
+  it('takes a blank capacity, because that means the whole truck', () => {
+    // A required field whose right answer is already on the vehicle's own record is a field asking to
+    // be got wrong.
+    expect(runBlocker(form({ capacityKg: '' }), soon, 8000)).toBeNull();
+  });
+
+  it('refuses more than the vehicle holds, before the server has to', () => {
+    expect(runBlocker(form({ capacityKg: '40000' }), soon, 1200)).toBe('fleet.runs.tooMuch');
+    expect(runBlocker(form({ capacityKg: '800' }), soon, 1200)).toBeNull();
+  });
+
+  it('still refuses a typed nonsense capacity', () => {
+    expect(runBlocker(form({ capacityKg: '0' }), soon, 8000)).toBe('fleet.runs.needCapacity');
+  });
+
+  it('says nothing about capacity when no vehicle has been chosen to measure against', () => {
+    // The vehicle blocker fires first, so the ceiling is never consulted against a guess.
+    expect(runBlocker(form({ vehicleId: '', capacityKg: '40000' }), soon)).toBe('fleet.runs.needVehicle');
   });
 });

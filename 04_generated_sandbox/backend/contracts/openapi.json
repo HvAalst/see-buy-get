@@ -29569,6 +29569,28 @@
               "per_kg"
             ]
           },
+          "settleMethod": {
+            "type": "string",
+            "description": "How the shipper pays the fleet — a RECORD, never a posting. Required of a new run: a price with no\nway to pay it is the hole this closes. Optional here only because the same shape reads back records\ndeclared before it existed.",
+            "enum": [
+              "cash",
+              "mobile_money",
+              "bank",
+              "other"
+            ]
+          },
+          "settleWhen": {
+            "type": "string",
+            "enum": [
+              "on_pickup",
+              "on_delivery",
+              "after_delivery"
+            ]
+          },
+          "vehicleId": {
+            "type": "string",
+            "description": "Which truck. Required: a run that names no vehicle is selling a number somebody typed."
+          },
           "corridorId": {
             "type": "string"
           },
@@ -29577,6 +29599,7 @@
           },
           "capacityKg": {
             "type": "number",
+            "description": "How much of the vehicle is for sale. Absent means all of it — the registry already knows.",
             "minimum": 1
           },
           "capacityM3": {
@@ -29614,9 +29637,9 @@
         },
         "required": [
           "basis",
+          "vehicleId",
           "corridorId",
           "leavesAt",
-          "capacityKg",
           "amount"
         ]
       },
@@ -29664,6 +29687,32 @@
         "required": [
           "freeMin",
           "perHour"
+        ]
+      },
+      "SettleTerms": {
+        "type": "object",
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": [
+              "cash",
+              "mobile_money",
+              "bank",
+              "other"
+            ]
+          },
+          "when": {
+            "type": "string",
+            "enum": [
+              "on_pickup",
+              "on_delivery",
+              "after_delivery"
+            ]
+          }
+        },
+        "required": [
+          "method",
+          "when"
         ]
       },
       "WaitingRecord": {
@@ -29816,7 +29865,8 @@
         "type": "object",
         "properties": {
           "capacityM3": {
-            "type": "number"
+            "type": "number",
+            "description": "Cubic metres, still DECLARED rather than derived: the vehicle registry holds a weight and no volume,\nso there is nothing to read it from. Left that way rather than guessed from the class, because a\nbox body and a flatbed of the same tonnage are not the same offer."
           },
           "rate": {
             "$ref": "#/components/schemas/DepartureRate"
@@ -29826,6 +29876,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/WaitingTerms"
+              }
+            ]
+          },
+          "settle": {
+            "description": "How the shipper pays the fleet. Required of every new run; absent on records declared before this\nexisted, and a screen reading absence says the fleet has not said rather than inventing an answer.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SettleTerms"
               }
             ]
           },
@@ -29890,9 +29948,20 @@
             "type": "string",
             "description": "When the vehicle actually goes. The one fact a shipper plans around."
           },
+          "vehicleId": {
+            "type": "string",
+            "description": "WHAT IS FOR SALE, ON BOTH AXES, because whichever runs out first is what \"full\" means.\n\nA truck is not a number of kilograms. The parcel side of this product worked that out already and\nprices a parcel on `max(kg, volume / divisor)`; this is the same fact at truck scale. A fleet that\ndeclared only kilograms would sell four tonnes of tempex it cannot physically fit, and one that\ndeclared only cubic metres would sell a load of steel that breaks its axle.\n\nSpace is optional: a fleet that has not measured its hold says nothing rather than guessing, and then\nonly weight binds — which is stated on the booking rather than assumed."
+          },
+          "plate": {
+            "type": "string",
+            "description": "What a shipper and a gate actually recognise. Copied at declaration, like the line name."
+          },
+          "vehicleClass": {
+            "type": "string"
+          },
           "capacityKg": {
             "type": "number",
-            "description": "WHAT IS FOR SALE, ON BOTH AXES, because whichever runs out first is what \"full\" means.\n\nA truck is not a number of kilograms. The parcel side of this product worked that out already and\nprices a parcel on `max(kg, volume / divisor)`; this is the same fact at truck scale. A fleet that\ndeclared only kilograms would sell four tonnes of tempex it cannot physically fit, and one that\ndeclared only cubic metres would sell a load of steel that breaks its axle.\n\nSpace is optional: a fleet that has not measured its hold says nothing rather than guessing, and then\nonly weight binds — which is stated on the booking rather than assumed."
+            "description": "What is for sale, which is at most what the vehicle holds.\n\nDERIVED BY DEFAULT and capped always: a fleet may sell less than the whole truck — a genuine choice,\nand since F4 usually expressed by recording their own load instead — but never more than it has."
           },
           "createdAt": {
             "type": "string"
@@ -29910,6 +29979,9 @@
           "originZone",
           "destZone",
           "leavesAt",
+          "vehicleId",
+          "plate",
+          "vehicleClass",
           "capacityKg",
           "createdAt"
         ]
