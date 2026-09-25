@@ -1,5 +1,7 @@
 import { ConsignmentNoteService } from './consignment-note.service';
 import { DepartureNoteService } from './departure-note.service';
+import { NoteArchiveService } from './note-archive.service';
+import { NoteBundleService } from './note-bundle.service';
 import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
 import { HandleService } from '../../foundation/entity/../handle/handle.service';
 import { HandleDirectory } from './handle-directory.service';
@@ -124,7 +126,7 @@ describe('dimensional weight', () => {
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         AccountService, OtpService, PersonService, InviteService, ApiKeyService, AuthService,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
-        EntityService, EntityAdminService, OperatorAccountService, ConsignmentNoteService, DepartureNoteService, PresenceService, InterestService, DepartureService, CompanyDocumentService, HandleService, HandleDirectory, CompanyReadinessService, BorderRuleService, BooksService, FxService,
+        EntityService, EntityAdminService, OperatorAccountService, ConsignmentNoteService, DepartureNoteService, NoteArchiveService, NoteBundleService, PresenceService, InterestService, DepartureService, CompanyDocumentService, HandleService, HandleDirectory, CompanyReadinessService, BorderRuleService, BooksService, FxService,
         PayoutService, ReturnService, UnclaimedService, MerchantRatingService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
         FundingService, FundingPayerRegistrar, SandboxFundingRail, { provide: FUNDING_RAIL, useExisting: SandboxFundingRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },

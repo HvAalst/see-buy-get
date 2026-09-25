@@ -19,7 +19,7 @@ import type { FleetEarningsSummary, FleetJobRow,
   VehicleRow,
 } from './types';
 
-export type Screen = 'dash' | 'vehicles' | 'drivers' | 'sessions' | 'lines' | 'runs' | 'earnings' | 'dispatch';
+export type Screen = 'dash' | 'vehicles' | 'drivers' | 'sessions' | 'lines' | 'runs' | 'earnings' | 'dispatch' | 'notes';
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
 
 export interface Toast {

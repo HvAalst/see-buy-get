@@ -4,8 +4,16 @@
  * the caller already did, and no navigation. Guarded for a non-DOM/SSR context.
  */
 export function triggerDownload(filename: string, content: string, mime = 'text/csv;charset=utf-8'): void {
+  triggerDownloadBlob(filename, new Blob([content], { type: mime }));
+}
+
+/**
+ * The same, for bytes the app already holds as a Blob — the consignment-note bundle, which is a ZIP the
+ * server built and the client never parses. Separate from the string form because re-wrapping a Blob in
+ * `new Blob([string])` would corrupt it: a ZIP is not text and does not survive a UTF-8 round trip.
+ */
+export function triggerDownloadBlob(filename: string, blob: Blob): void {
   if (typeof document === 'undefined' || typeof URL === 'undefined' || !URL.createObjectURL) return;
-  const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);
   try {
     const a = document.createElement('a');

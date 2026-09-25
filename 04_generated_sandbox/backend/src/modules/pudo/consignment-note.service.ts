@@ -19,6 +19,8 @@ import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { NETWORK_CURRENCY } from './pudo.config';
 import { VendorService } from './vendor.service';
 import { ConsignmentNote, NoteParty } from './consignment-note.types';
+import { noteFingerprint } from './note-archive.types';
+import { retentionFor, retentionWords } from './retention';
 
 /**
  * Builds the consignment note for a load from what the network knows (see consignment-note.types.ts), renders it as
@@ -59,6 +61,16 @@ export class ConsignmentNoteService implements OnModuleInit {
     if (f.shipperDid && this.shipperDidOf(f) === did) return true;
     if (f.claimedBy && this.managerOf(f.claimedBy) === did) return true;
     return false;
+  }
+
+  /**
+   * The same set `isParty` tests against, as a list — for the archive, which has to freeze WHO may read a
+   * document alongside the document. A frozen note outlives the relationships that produced it: a driver
+   * leaves the fleet, a shop closes its account, and they are all still parties to a carriage that happened.
+   */
+  partiesOf(f: Freight): string[] {
+    const dids = [f.postedByDid, f.claimedBy, this.shipperDidOf(f), f.claimedBy ? this.managerOf(f.claimedBy) : undefined];
+    return [...new Set(dids.filter((d): d is string => Boolean(d)))];
   }
 
   /* ------------------------------------------------------------------ the note -- */
@@ -354,6 +366,9 @@ export class ConsignmentNoteService implements OnModuleInit {
   table.goods th, table.goods td { text-align: left; padding: 3px 6px; border-bottom: 1px solid #ccc; vertical-align: top; font-size: 12px; }
   table.goods th { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #444; }
   footer { margin-top: 10px; font-size: 10px; color: #555; display: flex; justify-content: space-between; gap: 12px; }
+  /* The fingerprint of this exact copy. Four parties holding four printed sheets can compare one line
+     and know whether they are holding the same document — which is the thing paper did by being paper. */
+  .fp { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 8px; color: #777; word-break: break-all; }
   .status { display: inline-block; padding: 1px 8px; border: 1px solid #111; border-radius: 10px; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
   @media print { body { padding: 0; } }
 </style></head><body><div class="sheet">
@@ -385,7 +400,7 @@ export class ConsignmentNoteService implements OnModuleInit {
   ${box(23, 'Signature and stamp of the carrier', conf(n.confirmations.carrier, n.cancelled ? 'Never taken over — the load was cancelled' : 'Not yet taken over'))}
   ${box(24, 'Goods received — signature and stamp of the consignee', (n.confirmations.consignee ? conf(n.confirmations.consignee, '') : `<span class="empty">${box24missing}</span>`) + claimLines, 'wide')}
 </div>
-<footer><span>Issued by the SeeBuyGet network from its records of this load. Every box is filled from a recorded act; a box that says it is not recorded is not recorded.</span><span>${e(n.number)}</span></footer>
+<footer><span>Issued by the SeeBuyGet network from its records of this load. Every box is filled from a recorded act; a box that says it is not recorded is not recorded.<br>${e(retentionWords(retentionFor({ finishedAt: n.delivery.at, hasClaim: Boolean(n.claim) })))}</span><span>${e(n.number)}<br><span class="fp">${e(noteFingerprint(n))}</span></span></footer>
 </div></body></html>`;
   }
 }

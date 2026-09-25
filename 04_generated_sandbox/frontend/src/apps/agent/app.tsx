@@ -15,6 +15,7 @@ import { HomeScreen } from './screens/HomeScreen';
 import { RateDriverSheet } from './screens/RateDriverSheet';
 import { RatesScreen } from './screens/RatesScreen';
 import { RecordsScreen } from './screens/RecordsScreen';
+import { useArchive, type ArchiveApiState } from '../../shared/archive/useArchive';
 import { ReceiveBagScreen } from './screens/ReceiveBagScreen';
 import { ReleaseScreen } from './screens/ReleaseScreen';
 import { ShelfScreen } from './screens/ShelfScreen';
@@ -33,6 +34,9 @@ export function App() {
   // The person behind this account — their photo, PIN, address and page. The menu is ABSENT where the
   // sign-in is not a person at all (a store's shared secret), rather than opening onto a refusal.
   const account = useAccount(sbg, state.phase === 'ready');
+  // The shop's freight paperwork. Fetched only once Records is open: a counter is not waiting on a
+  // year of consignment notes to serve the person in front of it.
+  const archive = useArchive(sbg, state.phase === 'ready' && state.screen === 'records');
   // A shop signs in with an email and a password, not a PIN — so the menu offers THAT credential, and
   // the sheet lives here beside the row that opens it rather than at the foot of one screen.
   const [passwordOpen, setPasswordOpen] = useState(false);
@@ -98,7 +102,7 @@ export function App() {
       <main class="app__scroll">
         <ConnectivityNote stale={state.stale} />
         <OutboxNote />
-        <ScreenRouter screen={state.screen} state={state} actions={actions} />
+        <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} />
       </main>
 
       <BottomNav<Tab> items={tabs} active={tab} onSelect={(key) => actions.go(key as Screen)} labels={false} />
@@ -113,7 +117,7 @@ export function App() {
   );
 }
 
-function ScreenRouter({ screen, state, actions }: { screen: Screen; state: AgentState; actions: AgentActions }) {
+function ScreenRouter({ screen, state, actions, archive }: { screen: Screen; state: AgentState; actions: AgentActions; archive: ArchiveApiState }) {
   switch (screen) {
     case 'accept':
       return <AcceptScreen state={state} actions={actions} />;
@@ -135,7 +139,7 @@ function ScreenRouter({ screen, state, actions }: { screen: Screen; state: Agent
     case 'consignments':
       return <ConsignmentsScreen state={state} actions={actions} />;
     case 'records':
-      return <RecordsScreen state={state} actions={actions} />;
+      return <RecordsScreen state={state} actions={actions} archive={archive} />;
     case 'shelf':
       return <ShelfScreen state={state} actions={actions} />;
     case 'freight':

@@ -5,11 +5,16 @@ import type { MediaService } from './media.service';
 
 /** A photo store that only remembers what it was asked to adopt. */
 const adoptions: Array<{ mediaId: string; by: string; role: string }> = [];
+const anchored: string[] = [];
+const held: string[] = [];
 const adopted = () =>
   ({
     adopt: (mediaId: string, by: string, _subject: unknown, role: string) => {
       adoptions.push({ mediaId, by, role });
     },
+    // Retention: a run now starts and holds its evidence clock the way the board has since S33.
+    anchorFreightTerminal: (id: string) => void anchored.push(id),
+    holdFreightForDispute: (id: string) => void held.push(id),
   }) as unknown as MediaService;
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { requiredLoadKeys, requiredUnloadKeys } from './heavy-cargo';
@@ -432,6 +437,78 @@ describe('a booking’s life after it is sold', () => {
 
       expect(service.setStatus(run.departureId, 'departed', MANAGER).status).toBe('departed');
       await new Promise((r) => setImmediate(r));
+    });
+  });
+
+  /* -------------------------------------------------------- the evidence clock -- */
+
+  /**
+   * THE RETENTION PAIR — two holes the archive slice found, and they are a matched pair.
+   *
+   * The board has anchored a freight's photographs at delivery since S33 and swept both sides' evidence
+   * onto one dispute clock since FP3b. A run did neither: every photograph it ever took had no expiry at
+   * all (kept FOR EVER, while the board deleted the same evidence at 90 days), and its claim moved only
+   * the complainant's own photo onto the case clock. Fixing the first alone would have been worse than
+   * neither — the proof of delivery would then die at day 90 with the accusation alive to day 180.
+   */
+  describe('the evidence clock', () => {
+    const proof = () => ({ receiverName: 'Joseph at the gate', photoRef: 'med_pod1', confirmed: requiredUnloadKeys() });
+
+    it('starts at delivery, per load, the way the board’s has since S33', () => {
+      const { service, departureId } = setUp();
+      const booking = book(service, departureId);
+      anchored.length = 0;
+      service.deliver(departureId, booking.bookingId, MANAGER, proof());
+      // The BOOKING, not the run: a truck with four loads on it delivers them one at a time, and the
+      // other three are still in the world.
+      expect(anchored).toEqual([booking.bookingId]);
+    });
+
+    it('does not start for loads still on the truck', () => {
+      const { service, departureId } = setUp();
+      const first = book(service, departureId);
+      const second = book(service, departureId);
+      anchored.length = 0;
+      service.deliver(departureId, first.bookingId, MANAGER, proof());
+      expect(anchored).not.toContain(second.bookingId);
+    });
+
+    it('starts when a booking is given back before it ever travelled', () => {
+      const { service, departureId } = setUp();
+      const booking = book(service, departureId);
+      anchored.length = 0;
+      service.cancelBooking(departureId, booking.bookingId, SHIPPER);
+      expect(anchored).toEqual([booking.bookingId]);
+    });
+
+    it('starts for everybody aboard when the run is called off', () => {
+      const { service, departureId } = setUp();
+      const first = book(service, departureId);
+      const second = book(service, departureId);
+      service.cancelBooking(departureId, second.bookingId, SHIPPER);
+      anchored.length = 0;
+      service.setStatus(departureId, 'cancelled', MANAGER, 'The truck broke an axle');
+      // The one already given back is not anchored twice; the one that was aboard is.
+      expect(anchored).toEqual([first.bookingId]);
+    });
+
+    it('does NOT start merely because the truck left — those goods are still in the world', () => {
+      const { service, departureId } = setUp();
+      book(service, departureId);
+      anchored.length = 0;
+      service.setStatus(departureId, 'departed', MANAGER);
+      expect(anchored).toEqual([]);
+    });
+
+    it('puts the carrier’s evidence on the case clock when a claim is raised, not just the claimant’s', () => {
+      // The half that decides most claims is the securement photo and the proof of delivery, and until
+      // now a run kept the accusation on a 180-day clock and the defence on a 90-day one.
+      const { service, departureId } = setUp();
+      const booking = book(service, departureId);
+      service.deliver(departureId, booking.bookingId, MANAGER, proof());
+      held.length = 0;
+      service.openClaim(departureId, booking.bookingId, SHIPPER, { kind: 'damaged', description: 'Two panels cracked', photoRef: 'med_claim' });
+      expect(held).toEqual([booking.bookingId]);
     });
   });
 });

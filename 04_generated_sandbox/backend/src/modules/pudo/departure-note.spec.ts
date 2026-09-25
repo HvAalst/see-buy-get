@@ -38,7 +38,11 @@ describe('a run’s booking as a contract of carriage', () => {
   const clearDrivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
   const openEverywhere = { can: () => true } as unknown as PresenceService;
   const adoptions: Array<{ mediaId: string; role: string }> = [];
-  const media = { adopt: (mediaId: string, _by: string, _s: unknown, role: string) => void adoptions.push({ mediaId, role }) } as unknown as MediaService;
+  const media = {
+    adopt: (mediaId: string, _by: string, _s: unknown, role: string) => void adoptions.push({ mediaId, role }),
+    anchorFreightTerminal: () => undefined,
+    holdFreightForDispute: () => undefined,
+  } as unknown as MediaService;
   const vehicles = {
     get: () => ({ vehicleId: 'veh_n', plate: 'KDA 777N', vehicleClass: 'truck', capacityKg: 8000, managerDid: MANAGER, status: 'ACTIVE' }),
     isUsable: () => true,

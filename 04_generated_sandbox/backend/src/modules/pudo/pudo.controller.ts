@@ -3,6 +3,8 @@ import { PapersWatchService } from './papers-watch.service';
 import type { FleetDriver } from './fleet.types';
 import { ConsignmentNoteService } from './consignment-note.service';
 import { DepartureNoteService } from './departure-note.service';
+import { NoteArchiveService } from './note-archive.service';
+import { NoteBundleService } from './note-bundle.service';
 import { SiteService, SITE_BASIS, type Site } from './site.service';
 import { TransitAuthorityService, TRANSIT_BASIS } from './transit-authority.service';
 import { FieldObservationService, OBSERVATION_BASIS } from './field-observation.service';
@@ -109,7 +111,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyRecordDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto } from './pudo.dto';
+  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto } from './pudo.dto';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
@@ -232,6 +234,8 @@ export class SbgController {
     private readonly interest: InterestService,
     private readonly departures: DepartureService,
     private readonly departureNotes: DepartureNoteService,
+    private readonly archive: NoteArchiveService,
+    private readonly bundles: NoteBundleService,
     @Optional() private readonly mail?: MailService,
     @Optional() private readonly papers?: PapersWatchService,
   ) {}
@@ -4375,14 +4379,17 @@ export class SbgController {
    */
   @Get('departures/:departureId/bookings/:bookingId/consignment-note')
   departureNote(@Param('departureId') departureId: string, @Param('bookingId') bookingId: string, @Actor() actor: IntrospectionResult) {
-    return this.departureNotes.note(departureId, bookingId, actor);
+    this.departureNotes.requireReader(departureId, bookingId, actor);
+    return this.archive.latestForBooking(departureId, bookingId)?.note ?? this.departureNotes.note(departureId, bookingId, actor);
   }
 
   /** The same note, as the printable page a driver hands over or a shipper files. */
   @Get('departures/:departureId/bookings/:bookingId/consignment-note.html')
   @Header('content-type', 'text/html; charset=utf-8')
   departureNoteHtml(@Param('departureId') departureId: string, @Param('bookingId') bookingId: string, @Actor() actor: IntrospectionResult) {
-    return this.departureNotes.html(departureId, bookingId, actor);
+    this.departureNotes.requireReader(departureId, bookingId, actor);
+    const frozen = this.archive.latestForBooking(departureId, bookingId);
+    return frozen ? this.notes.htmlFor(frozen.note) : this.departureNotes.html(departureId, bookingId, actor);
   }
 
   /**
@@ -5119,7 +5126,10 @@ export class SbgController {
   @Get('dispatch/freight/:id/consignment-note')
   consignmentNote(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     this.notes.requireReader(id, actor);
-    return this.notes.noteFor(id);
+    // ONCE A COPY HAS BEEN FROZEN, THAT IS THE NOTE. A live re-render against today's facts is not the
+    // document anybody signed — see note-archive.types.ts. Before the goods move there is nothing to
+    // freeze, and the load's own record is the only truth there is.
+    return this.archive.latestForFreight(id)?.note ?? this.notes.noteFor(id);
   }
 
   /** The same note as a printable page. */
@@ -5128,7 +5138,73 @@ export class SbgController {
   @Header('Cache-Control', 'private, no-store')
   consignmentNoteHtml(@Param('id') id: string, @Actor() actor: IntrospectionResult): string {
     this.notes.requireReader(id, actor);
-    return this.notes.htmlFor(this.notes.noteFor(id));
+    return this.notes.htmlFor(this.archive.latestForFreight(id)?.note ?? this.notes.noteFor(id));
+  }
+
+  /* ------------------------------------------------------------ THE SHIPMENT ARCHIVE -- */
+
+  /**
+   * EVERY CONSIGNMENT NOTE THE CALLER WAS A PARTY TO — searchable, filterable, paginated.
+   *
+   * Countries that require transport documents to be kept require them to be findable; an archive nobody
+   * can search is a drawer nobody can produce. No `:did` in the path: a document's readers were frozen
+   * WITH it, so the archive answers for whoever is asking rather than for a relationship looked up today.
+   */
+  @Get('consignment-notes')
+  noteArchive(@Query() query: NoteArchiveQueryDto, @Actor() actor: IntrospectionResult) {
+    return this.archive.register(actor, query);
+  }
+
+  /** The whole match as a spreadsheet — every page, current filters, never just the page in front of them. */
+  @Get('consignment-notes/export')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="consignment-notes.csv"')
+  noteArchiveExport(@Query() query: NoteArchiveQueryDto, @Actor() actor: IntrospectionResult): string {
+    return this.archive.registerCsv(actor, query);
+  }
+
+  /**
+   * ONE DOCUMENT AS A FOLDER SOMEBODY CAN KEEP — every copy, every photograph, and a manifest.
+   *
+   * "Can I have a copy" does not mean a link in freight. A link needs an account and this network still
+   * running, and it points at photographs on a clock the document outlives. This is the copy that keeps
+   * working on a laptop with no network, which is the only kind worth calling an export.
+   */
+  @Get('consignment-notes/:docId/bundle.zip')
+  noteBundle(@Param('docId') docId: string, @Actor() actor: IntrospectionResult, @Res({ passthrough: true }) res: Response): StreamableFile {
+    const file = this.bundles.one(docId, actor);
+    res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    return new StreamableFile(file.bytes, { type: 'application/zip' });
+  }
+
+  /** The same, for everything matching a filter — the shape an audit asks for: "everything you moved in 2026". */
+  @Get('consignment-notes/bundle.zip')
+  noteBundles(@Query() query: NoteArchiveQueryDto, @Actor() actor: IntrospectionResult, @Res({ passthrough: true }) res: Response): StreamableFile {
+    const file = this.bundles.many(actor, query);
+    res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    return new StreamableFile(file.bytes, { type: 'application/zip' });
+  }
+
+  /** One document: what it is, and every copy of it with its fingerprint. The notes stay behind the copies. */
+  @Get('consignment-notes/:docId')
+  noteArchiveDocument(@Param('docId') docId: string, @Actor() actor: IntrospectionResult) {
+    return this.archive.document(docId, actor);
+  }
+
+  /** One copy, exactly as it was frozen. `0` is the newest. */
+  @Get('consignment-notes/:docId/copies/:seq')
+  noteArchiveCopy(@Param('docId') docId: string, @Param('seq') seq: string, @Actor() actor: IntrospectionResult) {
+    return this.archive.version(docId, Number(seq) || 0, actor);
+  }
+
+  /** The same copy as the printable page a party files — rendered from what was frozen, never from the load. */
+  @Get('consignment-notes/:docId/copies/:seq/print.html')
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  @Header('Cache-Control', 'private, no-store')
+  noteArchiveCopyHtml(@Param('docId') docId: string, @Param('seq') seq: string, @Actor() actor: IntrospectionResult): string {
+    return this.archive.html(docId, Number(seq) || 0, actor);
   }
 
   @Post('dispatch/freight/:id/temperature')

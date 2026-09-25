@@ -522,4 +522,5 @@ export const enVendor = {
   'vendor.toast.callbackCodeOff': 'The collection code stays in the network',
   'vendor.toast.keyRevoked': 'Key revoked',
   'vendor.toast.callbackRemoved': 'Callback URL removed',
+  'vendor.nav.notes': 'Notes',
 };

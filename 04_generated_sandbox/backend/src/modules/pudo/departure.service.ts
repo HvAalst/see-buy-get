@@ -579,7 +579,17 @@ export class DepartureService {
     };
     // Adopt-not-link, the same rule the securement photo follows: only the driver’s OWN unattached
     // upload is taken, so a photograph of somebody else’s load cannot be pointed at.
-    this.media.adopt(proof.photoRef, by, { type: 'freight', id: departure.departureId }, 'pod');
+    this.media.adopt(proof.photoRef, by, { type: 'freight', id: booking.bookingId }, 'pod');
+    /*
+     * DELIVERY IS TERMINAL, AND THE BOARD HAS SAID SO SINCE S33.
+     *
+     * deliverFreight calls anchorFreightTerminal here; this did not, and nothing else did either. Every
+     * photograph a run ever took therefore had `expiresAt` undefined and was kept FOR EVER — the exact
+     * opposite of the board, which deletes the same evidence 90 days after the same act. A retention
+     * model with a door left open is not a retention model, and "we keep it for 90 days" was untrue of
+     * half the freight on the network.
+     */
+    this.media.anchorFreightTerminal(booking.bookingId);
     this.departures.set(departure.departureId, departure);
 
     void this.events
@@ -658,7 +668,16 @@ export class DepartureService {
     booking.claim = claim;
     if (input.photoRef) // 'dispute', not a role of its own: it is the same evidence bin the board's claim photos use, and
       // the same 180-day retention — a claim argued in month five still has its photograph.
-      this.media.adopt(input.photoRef, by, { type: 'freight', id: departure.departureId }, 'dispute');
+      this.media.adopt(input.photoRef, by, { type: 'freight', id: booking.bookingId }, 'dispute');
+    /*
+     * AND THE CARRIER'S HALF GOES ON THE SAME CLOCK, which is the half that decides most claims.
+     *
+     * The board does this (holdFreightForDispute at the claim) and this did not: only the complainant's
+     * own photograph reached the dispute bin, while the securement photo and the proof of delivery stayed
+     * on the shipment clock. A claim open in month four would have kept the accusation and deleted the
+     * defence. One case, one clock, both sides.
+     */
+    this.media.holdFreightForDispute(booking.bookingId);
     this.departures.set(departure.departureId, departure);
 
     void this.events
@@ -717,6 +736,9 @@ export class DepartureService {
     if (booking.status === 'delivered') throw new GlosError('INVALID_STATE', 'That load was handed over — it cannot be given back');
     if (departure.status === 'departed') throw new GlosError('INVALID_STATE', 'That run has gone — the goods are on it');
     departure.bookings = departure.bookings.map((b) => (b.bookingId === bookingId ? { ...b, status: 'cancelled' as const } : b));
+    // Given back before it travelled: terminal, so whatever was photographed at the loading gate starts
+    // its clock now rather than waiting for a delivery that will never happen.
+    this.media.anchorFreightTerminal(bookingId);
     this.departures.set(departure.departureId, departure);
     // The space is for sale again, and the fleet is the one who can do something about that.
     void this.events
@@ -828,7 +850,10 @@ export class DepartureService {
       at: new Date().toISOString(),
       by,
     };
-    if (input.securementPhotoRef) this.media.adopt(input.securementPhotoRef, by, { type: 'freight', id: departure.departureId }, 'securement');
+    // Linked to the BOOKING, not the run. `secured` is per load — this checklist and this photograph are
+    // one shipper's goods — and the retention clock that has to start when THAT load is delivered cannot
+    // start per load if the evidence is filed under the truck.
+    if (input.securementPhotoRef) this.media.adopt(input.securementPhotoRef, by, { type: 'freight', id: booking.bookingId }, 'securement');
     this.departures.set(departure.departureId, departure);
     return { departure, booking };
   }
@@ -975,6 +1000,16 @@ export class DepartureService {
     const was = departure.status;
     departure.status = status;
     if (status === 'cancelled' && said) departure.cancelledReason = said;
+    /*
+     * A run called off ends every load aboard it, so their evidence starts its clock here. A run that is
+     * merely CLOSED or DEPARTED does not: those loads are still in the world, and a photograph of goods
+     * still on a truck is not a record of anything finished. A run somebody abandons without ever
+     * delivering or cancelling therefore keeps its evidence — which is the right way round, because an
+     * undelivered load is an open matter, not an expired one.
+     */
+    if (status === 'cancelled') {
+      for (const b of departure.bookings) if (b.status !== 'cancelled') this.media.anchorFreightTerminal(b.bookingId);
+    }
     this.departures.set(departure.departureId, departure);
 
     // Announced AFTER the write, so nothing downstream can read a run that has not been saved yet.

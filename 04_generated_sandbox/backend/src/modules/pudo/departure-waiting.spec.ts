@@ -5,11 +5,16 @@ import type { MediaService } from './media.service';
 
 /** A photo store that only remembers what it was asked to adopt. */
 const adoptions: Array<{ mediaId: string; by: string; role: string }> = [];
+const anchored: string[] = [];
+const held: string[] = [];
 const adopted = () =>
   ({
     adopt: (mediaId: string, by: string, _subject: unknown, role: string) => {
       adoptions.push({ mediaId, by, role });
     },
+    // Retention: a run now starts and holds its evidence clock the way the board has since S33.
+    anchorFreightTerminal: (id: string) => void anchored.push(id),
+    holdFreightForDispute: (id: string) => void held.push(id),
   }) as unknown as MediaService;
 import type { DriverService } from './driver.service';
 import type { FleetManagerService } from './fleet-manager.service';

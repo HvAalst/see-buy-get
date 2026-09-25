@@ -1107,4 +1107,5 @@ export const enAgent = {
   'agent.toast.dropoffUndoneDetail': 'Your wallet was refunded.',
   'agent.toast.notShopTitle': 'Not a shop account',
   'agent.toast.notShopDetail': 'This sign-in belongs to a {role} account — open the {role} app instead.',
+  'agent.records.notes': 'Notes',
 };

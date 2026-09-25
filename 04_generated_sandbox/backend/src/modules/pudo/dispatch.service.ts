@@ -1961,6 +1961,9 @@ export class DispatchService {
       }
     }
     this.freights.set(f.freightId, f);
+    // The goods are on the truck: the moment the sender's original is signed and stops being editable.
+    // Published after the write, so nothing downstream reads a load that has not been saved yet.
+    void this.events.publish(GlosEvent.Pudo.FreightPickedUp, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy }, { source: 'pudo' }).catch(() => undefined);
     return f;
   }
   deliverFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string }): Freight {

@@ -15773,6 +15773,382 @@
         }
       }
     },
+    "/v1/sbg/consignment-notes": {
+      "get": {
+        "operationId": "Sbg.noteArchive",
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "board",
+                "run"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "stage",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "taken_over",
+                "delivered",
+                "not_delivered",
+                "claimed",
+                "answered",
+                "cancelled"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/consignment-notes/export": {
+      "get": {
+        "operationId": "Sbg.noteArchiveExport",
+        "summary": "",
+        "description": "The whole match as a spreadsheet — every page, current filters, never just the page in front of them.",
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "board",
+                "run"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "stage",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "taken_over",
+                "delivered",
+                "not_delivered",
+                "claimed",
+                "answered",
+                "cancelled"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/consignment-notes/{docId}/bundle.zip": {
+      "get": {
+        "operationId": "Sbg.noteBundle",
+        "summary": "",
+        "description": "ONE DOCUMENT AS A FOLDER SOMEBODY CAN KEEP — every copy, every photograph, and a manifest.\n\n\"Can I have a copy\" does not mean a link in freight. A link needs an account and this network still\nrunning, and it points at photographs on a clock the document outlives. This is the copy that keeps\nworking on a laptop with no network, which is the only kind worth calling an export.",
+        "parameters": [
+          {
+            "name": "docId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/consignment-notes/bundle.zip": {
+      "get": {
+        "operationId": "Sbg.noteBundles",
+        "summary": "",
+        "description": "The same, for everything matching a filter — the shape an audit asks for: \"everything you moved in 2026\".",
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "board",
+                "run"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "stage",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "taken_over",
+                "delivered",
+                "not_delivered",
+                "claimed",
+                "answered",
+                "cancelled"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/consignment-notes/{docId}": {
+      "get": {
+        "operationId": "Sbg.noteArchiveDocument",
+        "summary": "",
+        "description": "One document: what it is, and every copy of it with its fingerprint. The notes stay behind the copies.",
+        "parameters": [
+          {
+            "name": "docId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/consignment-notes/{docId}/copies/{seq}": {
+      "get": {
+        "operationId": "Sbg.noteArchiveCopy",
+        "summary": "",
+        "description": "One copy, exactly as it was frozen. `0` is the newest.",
+        "parameters": [
+          {
+            "name": "docId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "seq",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/consignment-notes/{docId}/copies/{seq}/print.html": {
+      "get": {
+        "operationId": "Sbg.noteArchiveCopyHtml",
+        "summary": "",
+        "description": "The same copy as the printable page a party files — rendered from what was frozen, never from the load.",
+        "parameters": [
+          {
+            "name": "docId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "seq",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/dispatch/freight/{id}/temperature": {
       "post": {
         "operationId": "Sbg.freightTemp",

@@ -2,6 +2,8 @@ import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { ConnectivityNote, BottomNav, Button, Checklist, Icon, NotificationBell, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { AccountMenu } from '../../shared/account/AccountMenu';
 import { useAccount } from '../../shared/account/useAccount';
+import { ArchiveSection } from '../../shared/archive/ArchiveSection';
+import { useArchive, type ArchiveApiState } from '../../shared/archive/useArchive';
 import { useT } from '../../shared/i18n';
 import { money, vendorWorkLine } from './logic';
 import { BooksScreen } from './screens/BooksScreen';
@@ -20,6 +22,9 @@ export function App() {
   // The person behind this account — their photo, PIN, address and page. The menu is ABSENT where the
   // sign-in is not a person at all (a store signs in with a shared secret), rather than opening onto a refusal.
   const account = useAccount(sbg, state.phase === 'ready');
+  // A store that ships is a party to a consignment note, and the note — not the order list — is what an
+  // insurer, a customs officer or a buyer's lawyer asks for. Fetched only when the screen is open.
+  const archive = useArchive(sbg, state.phase === 'ready' && state.screen === 'notes');
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
 
@@ -45,6 +50,7 @@ export function App() {
     // Shown to every store, including those with no dock — the capability has been complete and invisible,
     // and a tab a merchant can find is the only way they learn it exists. Its empty state is the pitch.
     { key: 'dock', label: t('vendor.nav.dock'), icon: 'truck', badge: state.dock?.staging.used || undefined },
+    { key: 'notes', label: t('vendor.nav.notes'), icon: 'badge' },
     { key: 'store', label: t('vendor.nav.store'), icon: 'home' },
   ];
 
@@ -83,7 +89,7 @@ export function App() {
 
       <main class="app__scroll">
         <ConnectivityNote stale={state.stale} />
-        <ScreenRouter screen={state.screen} state={state} actions={actions} />
+        <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} />
       </main>
 
       <BottomNav<Screen> items={tabs} active={state.screen} onSelect={(key) => (key === 'mint' ? actions.startMint() : actions.go(key))} labels={false} />
@@ -93,8 +99,14 @@ export function App() {
   );
 }
 
-function ScreenRouter({ screen, state, actions }: { screen: Screen; state: VendorState; actions: VendorActions }) {
+function ScreenRouter({ screen, state, actions, archive }: { screen: Screen; state: VendorState; actions: VendorActions; archive: ArchiveApiState }) {
   switch (screen) {
+    case 'notes':
+      return (
+        <div class="scr">
+          <ArchiveSection archive={archive} />
+        </div>
+      );
     case 'mint':
       return <MintScreen state={state} actions={actions} />;
     case 'books':

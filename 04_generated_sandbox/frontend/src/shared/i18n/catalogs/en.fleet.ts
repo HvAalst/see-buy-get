@@ -699,4 +699,7 @@ export const enFleet = {
 
   // api.ts — the stored-company fallback used as the TopBar subtitle when no company name was saved.
   'fleet.myFleetFallback': 'My fleet',
+  'fleet.notes.cardTitle': 'Consignment notes',
+  'fleet.notes.cardOpen': 'Open',
+  'fleet.notes.cardHint': 'Every note your trucks carried, frozen as it read at each signature — and the copies to hand a shipper, an insurer or an officer.',
 };

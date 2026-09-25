@@ -29,7 +29,7 @@ describe('what may go on this truck, and who carries the risk', () => {
   const clearDrivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
   const openEverywhere = { can: () => true } as unknown as PresenceService;
   const silent = { publish: async () => undefined } as unknown as EventBus;
-  const noMedia = { adopt: () => undefined } as unknown as MediaService;
+  const noMedia = { adopt: () => undefined, anchorFreightTerminal: () => undefined, holdFreightForDispute: () => undefined } as unknown as MediaService;
 
   /** A plain dry-goods box body: no cold chain, no hazmat. What most of the network actually drives. */
   const PLAIN = { vehicleId: 'veh_box', plate: 'KDA 500B', vehicleClass: 'truck', capacityKg: 8000, managerDid: MANAGER, status: 'ACTIVE' };
@@ -222,7 +222,7 @@ describe('a run whose vehicle cannot be read', () => {
   const clearDrivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
   const openEverywhere = { can: () => true } as unknown as PresenceService;
   const silent = { publish: async () => undefined } as unknown as EventBus;
-  const noMedia = { adopt: () => undefined } as unknown as MediaService;
+  const noMedia = { adopt: () => undefined, anchorFreightTerminal: () => undefined, holdFreightForDispute: () => undefined } as unknown as MediaService;
 
   /**
    * A registry that knows the truck at declaration and has forgotten it by the time anybody reads.

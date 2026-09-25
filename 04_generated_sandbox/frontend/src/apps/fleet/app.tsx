@@ -3,6 +3,8 @@ import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { ConnectivityNote, BottomNav, Button, Checklist, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { AccountMenu } from '../../shared/account/AccountMenu';
 import { useAccount } from '../../shared/account/useAccount';
+import { ArchiveSection } from '../../shared/archive/ArchiveSection';
+import { useArchive } from '../../shared/archive/useArchive';
 import { useT } from '../../shared/i18n';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { DriversScreen } from './screens/DriversScreen';
@@ -13,6 +15,7 @@ import { SignInScreen } from './screens/SignInScreen';
 import { VehiclesScreen } from './screens/VehiclesScreen';
 import { DispatchScreen } from './screens/DispatchScreen';
 import { useFleetApp, type FleetActions, type FleetState, type Screen } from './useFleetApp';
+import type { ArchiveApiState } from '../../shared/archive/useArchive';
 import '../../shared/screens.css';
 import './fleet.css';
 import { fleetWorkLine } from './logic';
@@ -23,6 +26,9 @@ export function App() {
   // The person behind this account — their photo, PIN, address and page. The menu is ABSENT where the
   // sign-in is not a person at all (a store's shared secret), rather than opening onto a refusal.
   const account = useAccount(sbg, state.phase === 'ready');
+  // The paperwork behind the money: every consignment note this fleet carried, frozen at each signature.
+  // Loaded only once the office opens it — a carrier's archive is history, not something to fetch at boot.
+  const archive = useArchive(sbg, state.phase === 'ready' && state.screen === 'notes');
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
 
@@ -89,7 +95,7 @@ export function App() {
 
       <main class="app__scroll">
         <ConnectivityNote stale={state.stale} />
-        <ScreenRouter screen={state.screen} state={state} actions={actions} />
+        <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} />
       </main>
 
       <BottomNav<Screen> items={tabs} active={state.screen} onSelect={(key) => actions.go(key)} labels={false} />
@@ -99,8 +105,14 @@ export function App() {
   );
 }
 
-function ScreenRouter({ screen, state, actions }: { screen: Screen; state: FleetState; actions: FleetActions }) {
+function ScreenRouter({ screen, state, actions, archive }: { screen: Screen; state: FleetState; actions: FleetActions; archive: ArchiveApiState }) {
   switch (screen) {
+    case 'notes':
+      return (
+        <div class="scr">
+          <ArchiveSection archive={archive} />
+        </div>
+      );
     case 'vehicles':
       return <VehiclesScreen state={state} actions={actions} />;
     case 'drivers':

@@ -965,6 +965,22 @@ export class AgentParcelsQueryDto {
   @IsOptional() @IsString() offset?: string;
 }
 
+/**
+ * THE SHIPMENT ARCHIVE register query — the consignment notes a caller was a party to.
+ *
+ * No `:did` in the path and none here: the archive answers for whoever is asking, because a document's
+ * readers were frozen with it and are not a relationship that can be looked up afresh a year later.
+ */
+export class NoteArchiveQueryDto {
+  @IsOptional() @IsString() q?: string; // note number / party / plate / place / nature / status
+  @IsOptional() @IsIn(['board', 'run']) path?: 'board' | 'run';
+  @IsOptional() @IsIn(['taken_over', 'delivered', 'not_delivered', 'claimed', 'answered', 'cancelled']) stage?: string;
+  @IsOptional() @IsString() from?: string; // ISO or YYYY-MM-DD (inclusive)
+  @IsOptional() @IsString() to?: string;
+  @IsOptional() @IsString() limit?: string;
+  @IsOptional() @IsString() offset?: string;
+}
+
 /** R4 — the agent earnings-ledger register query. */
 export class AgentLedgerQueryDto {
   @IsOptional() @IsString() q?: string; // reference (parcel id / bank ref) or type word
