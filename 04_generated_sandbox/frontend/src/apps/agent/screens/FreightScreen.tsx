@@ -5,6 +5,7 @@ import { InstructionsBlock } from '../../../shared/InstructionsBlock';
 import { hasInstructions } from '../../../shared/instructions';
 import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
 import type { ChatThread } from '../../../shared/conversation/logic';
+import { OffersSection } from './OffersSection';
 import type { AgentActions, AgentState, FreightClaim, FreightPrice, PostedFreight } from '../useAgentApp';
 
 export interface FreightScreenProps {
@@ -78,6 +79,12 @@ function PostedList({ state, actions }: FreightScreenProps) {
           ))}
         </div>
       )}
+
+      {/* F3 — the same decision the other way round. Posting a load and waiting for a bid is right when the
+          load is the scarce thing; when it is not, a truck that is leaving anyway is cheaper for everybody.
+          The two belong in one place: a shop choosing between them should not have to know the product
+          thinks of them as different markets. */}
+      <OffersSection state={state} actions={actions} />
     </>
   );
 }

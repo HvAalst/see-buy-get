@@ -349,6 +349,39 @@ export function createAgentApi(sbg: SbgClient) {
     receiveBag: (did: string, code: string) =>
       sbg.request((c) => c.POST('/v1/sbg/agents/{did}/receive-bag', { params: { path: { did } }, body: { code } })),
 
+    /* --------------------------------- F3: taking space on a run that is already going -------- */
+
+    /**
+     * SPACE A SHIPPER CAN BUY — open departures that have not left, soonest first.
+     *
+     * The other direction of this market. Posting a load and waiting for a carrier to bid is the right
+     * shape when the load is the scarce thing; when it is not, the cheapest capacity in the network is a
+     * truck leaving anyway, and this is the list of them. A full departure is simply absent — it is not an
+     * error and nobody needs telling, because a row whose only content is "you cannot have this" is noise.
+     */
+    departureOffers: (filter?: { from?: string; to?: string }) =>
+      sbg.request((c) => c.GET('/v1/sbg/departures' as never, { params: { query: { ...(filter?.from ? { from: filter.from } : {}), ...(filter?.to ? { to: filter.to } : {}) } } } as never)),
+
+    /**
+     * What this load would cost on that run, and which axis of it the load fills — BEFORE booking.
+     *
+     * The same rule the top-up fee is held to: say the price before anybody commits. It refuses for every
+     * reason `book` would, so a shipper learns "only 12 m³ of space is left" while they can still do
+     * something about it rather than at the moment they press the button.
+     */
+    quoteDeparture: (departureId: string, load: { description: string; weightKg: number; volumeM3?: number }) =>
+      sbg.request((c) => c.POST('/v1/sbg/departures/{departureId}/quote' as never, { params: { path: { departureId } }, body: load } as never)),
+
+    /** Take the space. The shipper is the token's own DID, never one the body names. */
+    bookDeparture: (departureId: string, load: { description: string; weightKg: number; volumeM3?: number; freightId?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/departures/{departureId}/book' as never, { params: { path: { departureId } }, body: load } as never)),
+
+    /** Give the space back — the shipper who took it, or the fleet that sold it. */
+    cancelDepartureBooking: (departureId: string, bookingId: string) =>
+      sbg.request((c) =>
+        c.POST('/v1/sbg/departures/{departureId}/bookings/{bookingId}/cancel' as never, { params: { path: { departureId, bookingId } } } as never),
+      ),
+
     /** Reverse logistics: undo a drop-off within the 5-minute window with a torn-label photo → refund. */
     voidParcel: (parcelId: string, agentDid: string, voidedPhotoRef: string) =>
       sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/void', { params: { path: { id: parcelId } }, body: { agentDid, voidedPhotoRef } })),

@@ -353,3 +353,34 @@ export interface LedgerSummary {
   count: number;
   balance: number;
 }
+
+/* ------------------------------------ F3: space on a run that is already going -- */
+
+/** A departure as a SHIPPER reads it: where it goes, what it costs, and what is left. */
+export interface OfferRow {
+  departureId: string;
+  lineName: string;
+  company: string;
+  originZone: string;
+  destZone: string;
+  leavesAt: string;
+  rate: { basis: string; amount: number; currency: string; minCharge?: number };
+  /** What the carrier charges for being kept standing. Absent means it does not charge. */
+  waiting?: { freeMin: number; perHour: number };
+  km?: number;
+  note?: string;
+  remainingKg: number;
+  remainingM3?: number;
+  /** How many are already aboard — a run nobody has taken and a nearly-full one are different offers. */
+  booked: number;
+}
+
+/** What a load would cost on a run, before anything is taken. */
+export interface OfferQuote {
+  price: number;
+  units: number;
+  /** Which axis this load actually fills: a pallet of foam binds on space, steel on weight. */
+  binds: 'weight' | 'space';
+  currency: string;
+  waiting?: { freeMin: number; perHour: number };
+}

@@ -43,6 +43,8 @@ import type {
   ReceiveBagView,
   ReputationProfileView,
   ShelfGrid,
+  OfferQuote,
+  OfferRow,
 } from './types';
 
 export type Screen = 'home' | 'accept' | 'handover' | 'bag' | 'release' | 'collect' | 'receivebag' | 'rates' | 'void' | 'records' | 'consignments' | 'shelf' | 'freight';
@@ -178,6 +180,13 @@ export interface AgentState {
   /** FB2b — the loads this shop posted, and the prices waiting on the one being looked at. */
   posted: PostedFreight[];
   postedState: 'idle' | 'loading' | 'ready' | 'error';
+  /** F3 — runs with space on them, soonest first. Loaded on demand, like the posted loads. */
+  offers: OfferRow[];
+  offersState: 'idle' | 'loading' | 'ready' | 'error';
+  /** The run being taken, and what it would cost — quoted BEFORE anything is committed. */
+  offerFor: OfferRow | null;
+  offerQuote: OfferQuote | null;
+  offerQuoteError: SbgError | null;
   /** Which posted load's prices are open. Null = the list. */
   pricesFor: string | null;
   prices: FreightPrice[];
@@ -290,6 +299,11 @@ const INITIAL: AgentState = {
   bagPlanState: 'idle',
   posted: [],
   postedState: 'idle',
+  offers: [],
+  offersState: 'idle',
+  offerFor: null,
+  offerQuote: null,
+  offerQuoteError: null,
   pricesFor: null,
   prices: [],
   pricesState: 'idle',
@@ -984,6 +998,87 @@ export function useAgentApp() {
       setState((s) => (s.busy === key ? { ...s, busy: null } : s));
     }
   }, []);
+
+  /**
+   * F3 — the runs a shipper can buy space on.
+   *
+   * Unfiltered on purpose. Filtering to the shop's own zone sounds helpful and is the mistake the country
+   * list already taught: a shop sends things from where it stands, but it also sends things that start
+   * somewhere else, and a list that quietly hides most of the network reads as "there is nothing".
+   */
+  const loadOffers = useCallback(async () => {
+    if (!client) return;
+    setState((s) => ({ ...s, offersState: s.offersState === 'ready' ? s.offersState : 'loading' }));
+    const r = await client.api.departureOffers();
+    if (r.error) {
+      setState((s) => ({ ...s, offersState: 'error' }));
+      return fail(r.error);
+    }
+    const page = narrow<{ items?: OfferRow[] }>(r.data);
+    setState((s) => ({ ...s, offers: page.items ?? [], offersState: 'ready' }));
+  }, [client, fail]);
+
+  /**
+   * Forget the quote, because the load it was for has changed.
+   *
+   * Not cosmetic. A shop could otherwise quote 40 kg, edit the weight to 4000, and press Take it against a
+   * price that was never for this load — the server would price it correctly and the shop would have
+   * agreed to a different number than the one on their screen.
+   */
+  const clearOfferQuote = useCallback(() => {
+    setState((s) => (s.offerQuote || s.offerQuoteError ? { ...s, offerQuote: null, offerQuoteError: null } : s));
+  }, []);
+
+  /** Open (or close) the take-space sheet for one run. Closing clears the quote — it belongs to a load. */
+  const openOffer = useCallback((offer: OfferRow | null) => {
+    setState((s) => ({ ...s, offerFor: offer, offerQuote: null, offerQuoteError: null }));
+  }, []);
+
+  /**
+   * What it would cost, said before anybody commits — the same rule the top-up fee is held to.
+   *
+   * A refusal is kept as `offerQuoteError` rather than raised as a page error: "only 12 m³ of space is
+   * left" is an answer to the question just asked, and it belongs beside the fields that caused it.
+   */
+  const quoteOffer = useCallback(
+    async (load: { description: string; weightKg: number; volumeM3?: number }) => {
+      if (!client) return;
+      const offer = stateRef.current.offerFor;
+      if (!offer) return;
+      await run('quote-offer', async () => {
+        const r = await client.api.quoteDeparture(offer.departureId, load);
+        if (r.error) {
+          setState((s) => ({ ...s, offerQuote: null, offerQuoteError: r.error ?? null }));
+          return;
+        }
+        setState((s) => ({ ...s, offerQuote: narrow<OfferQuote>(r.data), offerQuoteError: null }));
+      });
+    },
+    [client, run],
+  );
+
+  /** Take the space. Resolves TRUE only when it went through, so the sheet stays open on a refusal. */
+  const bookOffer = useCallback(
+    async (load: { description: string; weightKg: number; volumeM3?: number }): Promise<boolean> => {
+      if (!client) return false;
+      const offer = stateRef.current.offerFor;
+      if (!offer) return false;
+      let ok = false;
+      await run('book-offer', async () => {
+        const r = await client.api.bookDeparture(offer.departureId, load);
+        if (r.error) {
+          setState((s) => ({ ...s, offerQuoteError: r.error ?? null }));
+          return;
+        }
+        ok = true;
+        setState((s) => ({ ...s, offerFor: null, offerQuote: null, offerQuoteError: null }));
+        pushToast({ tone: 'ok', icon: 'truck', title: t('agent.offers.tookTitle'), detail: t('agent.offers.tookDetail', { company: offer.company }) });
+        await loadOffers();
+      });
+      return ok;
+    },
+    [client, run, pushToast, loadOffers],
+  );
 
   /** Export the whole current-filter parcel history (every page) as a CSV download — server-rendered. */
   const exportHistory = useCallback(async () => {
@@ -1946,6 +2041,11 @@ export function useAgentApp() {
       submitBookFreight,
       dismissBookedFreight,
       loadPosted,
+      loadOffers,
+      openOffer,
+      clearOfferQuote,
+      quoteOffer,
+      bookOffer,
       openPrices,
       /** FP2 — the consignment note of one of this shop's loads, as a page. */
       freightNote: (freightId: string) => client!.api.freightNote(freightId),

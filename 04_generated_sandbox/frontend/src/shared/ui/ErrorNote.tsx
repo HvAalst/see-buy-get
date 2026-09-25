@@ -24,6 +24,7 @@ const SAY: Record<string, string> = {
   // telling a driver who is standing at the depot to "deliver what is aboard" is advice about a van they left.
   'error.hours_exceeded': 'Your driving hours do not allow this right now.',
   'error.too_heavy': 'Too heavy for the space you have left.',
+  'error.no_room': 'That run does not have room for this.',
   'error.no_fragile': 'This vehicle cannot carry fragile loads.',
   'error.not_found': 'We could not find that. Check the code.',
   'error.wrong_code': 'That code is not right. Try again.',

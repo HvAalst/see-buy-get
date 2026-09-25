@@ -16,7 +16,7 @@ export type SbgErrorCode =
   | 'LICENCE_EXPIRED' | 'INVALID_VEHICLE_CLASS' | 'INVALID_TRUCK_SUBTYPE' | 'UNKNOWN_ROLE' | 'DISPUTE_INCOMPLETE'
   | 'REQUIREMENTS_NOT_MET' | 'KYC_INCOMPLETE' | 'APPROVAL_BLOCKED' | 'INVALID_STATE' | 'WINDOW_EXPIRED'
   | 'NOT_INBOUND' | 'PARCEL_EXISTS' | 'SHIPMENT_NOT_PAID' | 'CODE_MISMATCH' | 'CODE_LOCKED' | 'WRONG_DESTINATION' | 'NOT_COUPLED' | 'ALREADY_COUPLED'
-  | 'CANNOT_COUPLE' | 'HOURS_EXCEEDED' | 'CAPACITY_EXCEEDED' | 'FRAGILE_NOT_ALLOWED' | 'BAG_FULL' | 'BAG_EMPTY' | 'BAG_RESERVED'
+  | 'CANNOT_COUPLE' | 'HOURS_EXCEEDED' | 'CAPACITY_EXCEEDED' | 'NO_ROOM' | 'FRAGILE_NOT_ALLOWED' | 'BAG_FULL' | 'BAG_EMPTY' | 'BAG_RESERVED'
   | 'BAG_MISADDRESSED' | 'ALREADY_IN_BAG' | 'STAGING_FULL' | 'SHELF_FULL' | 'NO_CAPACITY_AVAILABLE' | 'OTP_INVALID' | 'OTP_LOCKED' | 'PIN_INVALID' | 'UNAUTHORIZED'
   | 'AUTH_FAILED' | 'AUTH_CODE_INVALID' | 'AUTH_NOT_ACTIVE' | 'PAYMENT_REQUIRED' | 'WALLET_INSUFFICIENT'
   | 'FORBIDDEN' | 'WRONG_PUDO' | 'AGENT_LOCKED' | 'PIN_LOCKED' | 'ROLE_NOT_HELD' | 'MEDIA_LOCKED' | 'CARGO_REQUIRES_DEDICATED' | 'CARGO_INCOMPATIBLE' | 'VEHICLE_MISSING_CAPABILITY' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE' | 'INCOMPLETE_MANIFEST' | 'INVITE_LIMIT'
@@ -99,6 +99,9 @@ const PRESENTATION: Partial<Record<SbgErrorCode, ErrorPresentation>> = {
   HOURS_EXCEEDED: { icon: 'clock', tone: 'warn', say: 'error.hours_exceeded' },
   WINDOW_EXPIRED: { icon: 'clock', tone: 'warn', say: 'error.too_late' },
   CAPACITY_EXCEEDED: { icon: 'scale', tone: 'warn', say: 'error.too_heavy' },
+  // F3 — a run that cannot take this load. The server's DETAIL names which axis ran out and by how much
+  // ('only 18 m3 of space is left'), which is the part a shipper can act on, so callers pass showDetail.
+  NO_ROOM: { icon: 'scale', tone: 'warn', say: 'error.no_room' },
   FRAGILE_NOT_ALLOWED: { icon: 'block', tone: 'warn', say: 'error.no_fragile' },
   // S30 cargo taxonomy — a palletised/oversized load cannot use the PUDO network; it needs dedicated freight.
   CARGO_REQUIRES_DEDICATED: { icon: 'scale', tone: 'warn', say: 'error.needs_dedicated' },
