@@ -813,6 +813,10 @@ export const en = {
     'A consignment note is made out in originals that stop changing — the sender’s at taking over, the consignee’s at delivery. Each copy below is one of those moments. The short code is its fingerprint: two people holding two printouts can compare that one line.',
   'archive.openCopy': 'Open',
   'archive.exportBundle': 'Download this note and its photographs',
+  'archive.shareBundle': 'Share this note and its photographs',
+  'archive.shareBundleHint': 'Opens your phone’s own share sheet — send it to your Drive, Dropbox, a chat or your mail. One file holding every copy, the photographs behind them, and a list of anything already past its retention window.',
+  'archive.nowhereYet': 'These notes are not going anywhere but here.',
+  'archive.nowhereYetGo': 'Send them to your own storage',
   'archive.exportBundleHint': 'One file holding every copy, the photographs behind them, and a list of anything already past its retention window.',
 
   'archive.retention.title': 'How long we keep this',

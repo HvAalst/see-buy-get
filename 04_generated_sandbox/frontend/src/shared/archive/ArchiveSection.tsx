@@ -55,6 +55,20 @@ export function ArchiveSection({ archive, destination }: { archive: ArchiveApiSt
       <Card title={t('archive.title')} aside={<span class="row__count">{archive.total}</span>}>
         <p class="hint">{t('archive.lede')}</p>
 
+        {/*
+          THE ONE LINE SOMEBODY HAS TO SEE. The destination card sits below this register, which is right
+          once it is set up and wrong before: a reader who never scrolls past their own notes never learns
+          that we delete them. Shown only while nothing is connected, and gone the moment it is.
+        */}
+        {destination && destination.destination && !destination.destination.connected ? (
+          <p class="hint">
+            <b>{t('archive.nowhereYet')}</b>{' '}
+            <button type="button" class="linkbtn" onClick={() => document.querySelector('.dest-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+              {t('archive.nowhereYetGo')}
+            </button>
+          </p>
+        ) : null}
+
         <div class="reg__controls">
           <SearchInput value={searchText} onInput={setSearchText} placeholder={t('archive.searchPh')} label={t('archive.searchLabel')} />
           <button type="button" class={`reg__filter${chips.length ? ' reg__filter--on' : ''}`} onClick={() => setFilterOpen(true)}>
@@ -241,10 +255,12 @@ function NoteSheet({ archive }: { archive: ArchiveApiState }) {
             detail={retentionLines(doc.retention, t).join(' ')}
           />
 
+          {/* The OS share sheet where the browser has one — it already lists their Drive, Dropbox and
+              mail, and we hold no credential to reach any of them. A download everywhere else. */}
           <Button busy={archive.busy === 'bundle'} onClick={() => void archive.exportBundle(doc.docId, doc.number)}>
-            {t('archive.exportBundle')}
+            {t(archive.canShareFiles ? 'archive.shareBundle' : 'archive.exportBundle')}
           </Button>
-          <p class="hint">{t('archive.exportBundleHint')}</p>
+          <p class="hint">{t(archive.canShareFiles ? 'archive.shareBundleHint' : 'archive.exportBundleHint')}</p>
         </>
       ) : null}
     </Sheet>

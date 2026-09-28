@@ -25,7 +25,8 @@ export function DestinationCard({ api }: { api: DestinationApiState }) {
 
   return (
     <>
-      <Card title={t('dest.title')}>
+      {/* Named so the register above can scroll a first-time reader down to it. */}
+      <Card class="dest-card" title={t('dest.title')}>
         <p class="hint">{t('dest.lede')}</p>
 
         {!connected ? (

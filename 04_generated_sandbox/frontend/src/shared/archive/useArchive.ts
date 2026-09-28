@@ -27,6 +27,8 @@ export interface ArchiveApiState {
   exportCsv: () => Promise<void>;
   exportBundle: (docId: string, number: string) => Promise<void>;
   exportAll: () => Promise<void>;
+  /** True where the browser will hand a FILE to the OS share sheet — not merely a link. */
+  canShareFiles: boolean;
   printCopy: (docId: string, seq: number) => Promise<void>;
   /** Check a note somebody ELSE handed us. Null means the call failed, not that the note is unknown. */
   verifyNote: (sha256: string) => Promise<ProofAnswer | null>;
@@ -127,6 +129,17 @@ export function useArchive(client: SbgClient | null, enabled = true): ArchiveApi
     triggerDownload('consignment-notes.csv', narrow<string>(r.data));
   }, [api]);
 
+  /**
+   * HAND THE BUNDLE TO THE OPERATING SYSTEM, which already knows their Drive.
+   *
+   * The thing that makes this the right answer for an individual: their phone's share sheet already
+   * lists Google Drive, Dropbox, OneDrive, WhatsApp and mail, because those apps are installed. We hold
+   * no credential, register no OAuth application with anybody, and never touch their account — they
+   * pick a destination and the file goes. A connector per provider buys a worse version of this.
+   *
+   * It cannot be AUTOMATIC: sharing a file needs a user gesture, by design. So this is the manual path
+   * and a connected destination is the automatic one, and the two answer different people.
+   */
   const exportBundle = useCallback(
     async (docId: string, number: string) => {
       if (!api) return;
@@ -134,7 +147,29 @@ export function useArchive(client: SbgClient | null, enabled = true): ArchiveApi
       const r: Result<unknown> = await api.noteBundle(docId);
       setBusy('');
       if (r.error || !r.data) return setError(r.error ?? null);
-      triggerDownloadBlob(`${number.replace(/[^A-Za-z0-9._-]+/g, '-')}.zip`, narrow<Blob>(r.data));
+
+      const blob = narrow<Blob>(r.data);
+      const name = `${number.replace(/[^A-Za-z0-9._-]+/g, '-')}.zip`;
+      const file = typeof File === 'function' ? new File([blob], name, { type: 'application/zip' }) : null;
+      if (file && navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: number });
+          return;
+        } catch (err) {
+          /*
+           * A CANCELLED SHEET IS NOT A FAILURE — that is the person changing their mind, and putting a
+           * file in their downloads because they backed out would be presumptuous.
+           *
+           * Anything else IS a failure, and must not end in nothing happening. canShare() is the
+           * browser's opinion that it could share, and browsers are wrong about it: a desktop Chrome
+           * with no share target says yes and then rejects. Found by driving — the button did nothing
+           * at all, silently, which is the worst outcome for the one control that gets somebody their
+           * evidence.
+           */
+          if ((err as Error)?.name === 'AbortError') return;
+        }
+      }
+      triggerDownloadBlob(name, blob);
     },
     [api],
   );
@@ -175,7 +210,20 @@ export function useArchive(client: SbgClient | null, enabled = true): ArchiveApi
     [api],
   );
 
-  return { rows, total, phase, error, query, open, openPhase, busy, load, setQuery, openDoc, closeDoc, exportCsv, exportBundle, exportAll, printCopy, verifyNote };
+  /*
+   * Asked ONCE with a representative file rather than per render: canShare() is a capability question
+   * about the browser, and a zero-byte probe answers it the same way a real bundle would.
+   */
+  const canShareFiles = useMemo(() => {
+    if (typeof File !== 'function' || typeof navigator === 'undefined' || !navigator.canShare) return false;
+    try {
+      return navigator.canShare({ files: [new File([new Uint8Array(0)], 'x.zip', { type: 'application/zip' })] });
+    } catch {
+      return false;
+    }
+  }, []);
+
+  return { rows, total, phase, error, query, open, openPhase, busy, load, setQuery, openDoc, closeDoc, exportCsv, exportBundle, exportAll, printCopy, verifyNote, canShareFiles };
 }
 
 /** Show a fetched page in its own window. Falls back to a download where a popup is blocked. */
