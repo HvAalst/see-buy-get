@@ -5,6 +5,8 @@ import { useDebounced } from '../useDebounced';
 import { ARCHIVE_LIMIT, type ArchiveApiState } from './useArchive';
 import { day, documentGoingSoon, pathWord, retentionLines, routeLine, shortPrint, stageWord } from './words';
 import { NoteCheck } from './NoteCheck';
+import { DestinationCard } from './DestinationCard';
+import type { DestinationApiState } from './useDestination';
 import type { ArchiveQuery, ArchivedNoteRow, NoteStage } from '../../lib/sbg/personas/archive';
 
 const STAGES: NoteStage[] = ['taken_over', 'delivered', 'not_delivered', 'claimed', 'answered', 'cancelled'];
@@ -17,7 +19,7 @@ const STAGES: NoteStage[] = ['taken_over', 'delivered', 'not_delivered', 'claime
  * identical, and the route answers for whoever is asking — so three copies of this would only be three
  * chances to drift.
  */
-export function ArchiveSection({ archive }: { archive: ArchiveApiState }) {
+export function ArchiveSection({ archive, destination }: { archive: ArchiveApiState; destination?: DestinationApiState }) {
   const t = useT();
   const [filterOpen, setFilterOpen] = useState(false);
   const [searchText, setSearchText] = useState(archive.query.q ?? '');
@@ -122,6 +124,9 @@ export function ArchiveSection({ archive }: { archive: ArchiveApiState }) {
           </div>
         ) : null}
       </Card>
+
+      {/* Where these go besides here — the reason deleting them at twelve months is defensible. */}
+      {destination ? <DestinationCard api={destination} /> : null}
 
       {/* The other direction: not a note of ours, one somebody handed us. A fleet with a shipper's
           emailed PDF should not have to leave for a web page to find out whether it is real. */}

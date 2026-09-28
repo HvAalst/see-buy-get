@@ -5,6 +5,7 @@ import { ConsignmentNoteService } from './consignment-note.service';
 import { DepartureNoteService } from './departure-note.service';
 import { NoteArchiveService } from './note-archive.service';
 import { NoteBundleService } from './note-bundle.service';
+import { DestinationService } from './destination.service';
 import { SiteService, SITE_BASIS, type Site } from './site.service';
 import { TransitAuthorityService, TRANSIT_BASIS } from './transit-authority.service';
 import { FieldObservationService, OBSERVATION_BASIS } from './field-observation.service';
@@ -111,7 +112,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyRecordDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto } from './pudo.dto';
+  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto } from './pudo.dto';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
@@ -236,6 +237,7 @@ export class SbgController {
     private readonly departureNotes: DepartureNoteService,
     private readonly archive: NoteArchiveService,
     private readonly bundles: NoteBundleService,
+    private readonly destinations: DestinationService,
     @Optional() private readonly mail?: MailService,
     @Optional() private readonly papers?: PapersWatchService,
   ) {}
@@ -5185,6 +5187,55 @@ export class SbgController {
     res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
     res.setHeader('Cache-Control', 'private, no-store');
     return new StreamableFile(file.bytes, { type: 'application/zip' });
+  }
+
+  /* ---------------------------------------------------- PLUG YOUR OWN STORAGE -- */
+
+  /**
+   * WHERE THIS ACCOUNT'S CONSIGNMENT NOTES GET PUT, besides here.
+   *
+   * A protocol rather than a vendor — S3-compatible, WebDAV, or a signed webhook — because "any other"
+   * is the requirement and a connector per provider is a treadmill. The documents are deleted at twelve
+   * months, so a copy that arrives somewhere by itself is what makes that defensible.
+   */
+  @Get('consignment-notes/destination')
+  destination(@Actor() actor: IntrospectionResult) {
+    return this.destinations.view(actor) ?? { connected: false };
+  }
+
+  @Post('consignment-notes/destination')
+  connectDestination(@Body() dto: ConnectDestinationDto, @Actor() actor: IntrospectionResult) {
+    return this.destinations.connect(actor, dto);
+  }
+
+  @Delete('consignment-notes/destination')
+  disconnectDestination(@Actor() actor: IntrospectionResult) {
+    this.destinations.disconnect(actor);
+    return { connected: false };
+  }
+
+  /** The webhook signing secret, for setting the far end up. Shown to the owner, nobody else. */
+  @Get('consignment-notes/destination/secret')
+  destinationSecret(@Actor() actor: IntrospectionResult) {
+    return this.destinations.webhookSecret(actor);
+  }
+
+  /**
+   * Write a real file and report what happened.
+   *
+   * Not a ping: the failures people hit are credentials that read but cannot write, and a bucket that
+   * exists with a prefix that is denied. Only a real PUT finds those, and finding them now rather than
+   * a year later — when the document has gone — is the entire point of the button.
+   */
+  @Post('consignment-notes/destination/test')
+  testDestination(@Actor() actor: IntrospectionResult) {
+    return this.destinations.test(actor);
+  }
+
+  /** What has been delivered and what is still owed — so a destination that stopped working is visible. */
+  @Get('consignment-notes/deliveries')
+  deliveries(@Actor() actor: IntrospectionResult) {
+    return { items: this.destinations.deliveriesFor(actor) };
   }
 
   /**

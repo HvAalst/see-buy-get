@@ -1,3 +1,4 @@
+import { DESTINATION_KINDS } from './destination.types';
 import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { INCOTERM_CODES } from '../../foundation/incoterms/catalogue';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE } from '../../foundation/interest/interest.service';
@@ -963,6 +964,24 @@ export class AgentParcelsQueryDto {
   @IsOptional() @IsIn(['newest', 'oldest']) sort?: 'newest' | 'oldest';
   @IsOptional() @IsString() limit?: string;
   @IsOptional() @IsString() offset?: string;
+}
+
+/**
+ * CONNECTING SOMEWHERE TO PUT THE DOCUMENTS — a protocol rather than a vendor, so "any other" works.
+ */
+export class ConnectDestinationDto {
+  @IsIn(DESTINATION_KINDS) @ApiProperty({ enum: DESTINATION_KINDS }) kind!: string;
+  @IsOptional() @IsString() @MaxLength(80) label?: string;
+  @IsString() @MaxLength(400) endpoint!: string;
+  @IsOptional() @IsString() @MaxLength(120) bucket?: string;
+  @IsOptional() @IsString() @MaxLength(60) region?: string;
+  /** Path style is the default; virtual-host style is the exception AWS allows. */
+  @IsOptional() @IsBoolean() pathStyle?: boolean;
+  @IsOptional() @IsString() @MaxLength(200) prefix?: string;
+  @IsOptional() @IsString() @MaxLength(200) accessKeyId?: string;
+  @IsOptional() @IsString() @MaxLength(400) secretAccessKey?: string;
+  @IsOptional() @IsString() @MaxLength(200) username?: string;
+  @IsOptional() @IsString() @MaxLength(400) password?: string;
 }
 
 /**

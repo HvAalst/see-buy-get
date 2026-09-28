@@ -4,6 +4,7 @@ import { AccountMenu } from '../../shared/account/AccountMenu';
 import { useAccount } from '../../shared/account/useAccount';
 import { ArchiveSection } from '../../shared/archive/ArchiveSection';
 import { useArchive, type ArchiveApiState } from '../../shared/archive/useArchive';
+import { useDestination, type DestinationApiState } from '../../shared/archive/useDestination';
 import { useT } from '../../shared/i18n';
 import { money, vendorWorkLine } from './logic';
 import { BooksScreen } from './screens/BooksScreen';
@@ -25,6 +26,7 @@ export function App() {
   // A store that ships is a party to a consignment note, and the note — not the order list — is what an
   // insurer, a customs officer or a buyer's lawyer asks for. Fetched only when the screen is open.
   const archive = useArchive(sbg, state.phase === 'ready' && state.screen === 'notes');
+  const destination = useDestination(sbg, state.phase === 'ready' && state.screen === 'notes');
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
 
@@ -89,7 +91,7 @@ export function App() {
 
       <main class="app__scroll">
         <ConnectivityNote stale={state.stale} />
-        <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} />
+        <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} destination={destination} />
       </main>
 
       <BottomNav<Screen> items={tabs} active={state.screen} onSelect={(key) => (key === 'mint' ? actions.startMint() : actions.go(key))} labels={false} />
@@ -99,12 +101,12 @@ export function App() {
   );
 }
 
-function ScreenRouter({ screen, state, actions, archive }: { screen: Screen; state: VendorState; actions: VendorActions; archive: ArchiveApiState }) {
+function ScreenRouter({ screen, state, actions, archive, destination }: { screen: Screen; state: VendorState; actions: VendorActions; archive: ArchiveApiState; destination: DestinationApiState }) {
   switch (screen) {
     case 'notes':
       return (
         <div class="scr">
-          <ArchiveSection archive={archive} />
+          <ArchiveSection archive={archive} destination={destination} />
         </div>
       );
     case 'mint':

@@ -265,6 +265,19 @@ export class NoteArchiveService implements OnModuleInit, OnModuleDestroy {
     };
     this.docs.set(docId, doc);
 
+    /*
+     * SAID OUT LOUD, so a party's own storage can be given a copy without the archive knowing anything
+     * about storage. `finished` is the half that matters: a bundle delivered mid-journey is an
+     * incomplete document somebody would file and forget, so only a terminal moment is worth sending.
+     */
+    void this.events
+      .publish(
+        GlosEvent.Pudo.NoteFrozen,
+        { docId, number: note.number, stage, parties: doc.parties, finished: Boolean(this.finishedAtOf(doc)) },
+        { source: 'pudo' },
+      )
+      .catch(() => undefined);
+
     // The proof is written HERE, at the moment the copy is frozen — not later at deletion. A ledger
     // built during a sweep is a ledger that is wrong for every document the sweep never reached, and
     // one bad deploy between freezing and expiring would lose the ability to verify anything.

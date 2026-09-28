@@ -155,7 +155,63 @@ export function createArchiveApi(sbg: SbgClient) {
      */
     verifyNote: (sha256: string) =>
       sbg.request((c) => c.POST('/v1/sbg/consignment-notes/verify' as never, { body: { sha256 } } as never)),
+
+    /* ---------------------------------------------------- plug your own storage -- */
+
+    destination: () => sbg.request((c) => c.GET('/v1/sbg/consignment-notes/destination' as never, {} as never)),
+    connectDestination: (body: ConnectDestination) =>
+      sbg.request((c) => c.POST('/v1/sbg/consignment-notes/destination' as never, { body } as never)),
+    disconnectDestination: () => sbg.request((c) => c.DELETE('/v1/sbg/consignment-notes/destination' as never, {} as never)),
+    /** Writes a real file and reports what happened — the only way to find a key that cannot write. */
+    testDestination: () => sbg.request((c) => c.POST('/v1/sbg/consignment-notes/destination/test' as never, {} as never)),
+    destinationSecret: () => sbg.request((c) => c.GET('/v1/sbg/consignment-notes/destination/secret' as never, {} as never)),
+    deliveries: () => sbg.request((c) => c.GET('/v1/sbg/consignment-notes/deliveries' as never, {} as never)),
   };
+}
+
+/** The protocols, rather than the vendors — which is what makes "any other" true. */
+export const DESTINATION_KINDS = ['s3', 'webdav', 'webhook'] as const;
+export type DestinationKind = (typeof DESTINATION_KINDS)[number];
+
+export interface ConnectDestination {
+  kind: DestinationKind;
+  label?: string;
+  endpoint: string;
+  bucket?: string;
+  region?: string;
+  pathStyle?: boolean;
+  prefix?: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
+  username?: string;
+  password?: string;
+}
+
+export interface DestinationView {
+  connected: boolean;
+  kind?: DestinationKind;
+  label?: string;
+  endpoint?: string;
+  bucket?: string;
+  region?: string;
+  prefix?: string;
+  createdAt?: string;
+  /** Absent means nothing has ever landed there — worth showing rather than hiding. */
+  lastOkAt?: string;
+  lastTriedAt?: string;
+  lastError?: string;
+}
+
+export interface DeliveryRow {
+  deliveryId: string;
+  docId: string;
+  number: string;
+  key: string;
+  state: 'pending' | 'delivered' | 'failed';
+  attempts: number;
+  queuedAt: string;
+  deliveredAt?: string;
+  lastError?: string;
 }
 
 export type ArchiveApi = ReturnType<typeof createArchiveApi>;

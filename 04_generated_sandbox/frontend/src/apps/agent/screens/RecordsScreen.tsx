@@ -7,6 +7,7 @@ import { EARN_LIMIT, HIST_LIMIT, type AgentActions, type AgentState, type EarnQu
 import type { AgentLedgerRow, AgentParcelRow, ParcelStatus } from '../types';
 import { ArchiveSection } from '../../../shared/archive/ArchiveSection';
 import type { ArchiveApiState } from '../../../shared/archive/useArchive';
+import type { DestinationApiState } from '../../../shared/archive/useDestination';
 
 export interface RecordsScreenProps {
   state: AgentState;
@@ -16,6 +17,8 @@ export interface RecordsScreenProps {
 export interface RecordsScreenOuterProps extends RecordsScreenProps {
   /** The shipment archive, shared with every other app that keeps consignment notes. */
   archive: ArchiveApiState;
+  /** Where those notes go besides here. */
+  destination: DestinationApiState;
 }
 
 type View = 'parcels' | 'earnings' | 'notes';
@@ -25,7 +28,7 @@ type View = 'parcels' | 'earnings' | 'notes';
  * it earned — each searchable / filterable / paged / exportable, the persona-appropriate mirror of the
  * vendor's registers (an agent looks things up and exports; the vendor's bulk multi-select is not surfaced).
  */
-export function RecordsScreen({ state, actions, archive }: RecordsScreenOuterProps) {
+export function RecordsScreen({ state, actions, archive, destination }: RecordsScreenOuterProps) {
   const t = useT();
   const [view, setView] = useState<View>('parcels');
 
@@ -51,7 +54,7 @@ export function RecordsScreen({ state, actions, archive }: RecordsScreenOuterPro
         </button>
       </div>
 
-      {view === 'notes' ? <ArchiveSection archive={archive} /> : view === 'parcels' ? <ParcelHistory state={state} actions={actions} /> : <Earnings state={state} actions={actions} />}
+      {view === 'notes' ? <ArchiveSection archive={archive} destination={destination} /> : view === 'parcels' ? <ParcelHistory state={state} actions={actions} /> : <Earnings state={state} actions={actions} />}
     </div>
   );
 }

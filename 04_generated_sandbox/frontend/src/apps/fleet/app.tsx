@@ -5,6 +5,7 @@ import { AccountMenu } from '../../shared/account/AccountMenu';
 import { useAccount } from '../../shared/account/useAccount';
 import { ArchiveSection } from '../../shared/archive/ArchiveSection';
 import { useArchive } from '../../shared/archive/useArchive';
+import { useDestination, type DestinationApiState } from '../../shared/archive/useDestination';
 import { useT } from '../../shared/i18n';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { DriversScreen } from './screens/DriversScreen';
@@ -29,6 +30,7 @@ export function App() {
   // The paperwork behind the money: every consignment note this fleet carried, frozen at each signature.
   // Loaded only once the office opens it — a carrier's archive is history, not something to fetch at boot.
   const archive = useArchive(sbg, state.phase === 'ready' && state.screen === 'notes');
+  const destination = useDestination(sbg, state.phase === 'ready' && state.screen === 'notes');
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
 
@@ -95,7 +97,7 @@ export function App() {
 
       <main class="app__scroll">
         <ConnectivityNote stale={state.stale} />
-        <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} />
+        <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} destination={destination} />
       </main>
 
       <BottomNav<Screen> items={tabs} active={state.screen} onSelect={(key) => actions.go(key)} labels={false} />
@@ -105,12 +107,12 @@ export function App() {
   );
 }
 
-function ScreenRouter({ screen, state, actions, archive }: { screen: Screen; state: FleetState; actions: FleetActions; archive: ArchiveApiState }) {
+function ScreenRouter({ screen, state, actions, archive, destination }: { screen: Screen; state: FleetState; actions: FleetActions; archive: ArchiveApiState; destination: DestinationApiState }) {
   switch (screen) {
     case 'notes':
       return (
         <div class="scr">
-          <ArchiveSection archive={archive} />
+          <ArchiveSection archive={archive} destination={destination} />
         </div>
       );
     case 'vehicles':

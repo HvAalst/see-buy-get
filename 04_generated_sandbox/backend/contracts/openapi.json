@@ -16046,6 +16046,98 @@
         }
       }
     },
+    "/v1/sbg/consignment-notes/destination": {
+      "get": {
+        "operationId": "Sbg.destination",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "Sbg.connectDestination",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectDestinationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "Sbg.disconnectDestination",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/consignment-notes/destination/secret": {
+      "get": {
+        "operationId": "Sbg.destinationSecret",
+        "summary": "",
+        "description": "The webhook signing secret, for setting the far end up. Shown to the owner, nobody else.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/consignment-notes/destination/test": {
+      "post": {
+        "operationId": "Sbg.testDestination",
+        "summary": "",
+        "description": "Write a real file and report what happened.\n\nNot a ping: the failures people hit are credentials that read but cannot write, and a bucket that\nexists with a prefix that is denied. Only a real PUT finds those, and finding them now rather than\na year later — when the document has gone — is the entire point of the button.",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/consignment-notes/deliveries": {
+      "get": {
+        "operationId": "Sbg.deliveries",
+        "summary": "",
+        "description": "What has been delivered and what is still owed — so a destination that stopped working is visible.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/consignment-notes/verify": {
       "post": {
         "operationId": "Sbg.verifyNote",
@@ -32963,6 +33055,63 @@
           "claim",
           "freightId",
           "code"
+        ]
+      },
+      "ConnectDestinationDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "s3",
+              "webdav",
+              "webhook"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "endpoint": {
+            "type": "string",
+            "maxLength": 400
+          },
+          "bucket": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "region": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "pathStyle": {
+            "type": "boolean",
+            "description": "Path style is the default; virtual-host style is the exception AWS allows."
+          },
+          "prefix": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "accessKeyId": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "secretAccessKey": {
+            "type": "string",
+            "maxLength": 400
+          },
+          "username": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 400
+          }
+        },
+        "required": [
+          "kind",
+          "endpoint"
         ]
       },
       "VerifyNoteDto": {
