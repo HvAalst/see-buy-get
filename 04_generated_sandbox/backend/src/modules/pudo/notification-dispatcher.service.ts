@@ -177,6 +177,43 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ did: string; reason: string }>(GlosEvent.Pudo.DriverKycRejected, (e) => this.onDriverRefused(e.payload));
     // FP4 (courier) — the renewed licence they sent was checked. They sent it and are waiting: either answer.
     this.events.subscribe<{ did: string; accepted: boolean; expiresAt?: string; reason?: string }>(GlosEvent.Pudo.DriverLicenceChecked, (e) => this.onLicenceChecked(e.payload));
+
+    // Retention: the parties hear about it a month before the document goes, not afterwards.
+    this.events.subscribe<{ docId: string; number: string; parties: string[]; goesAt: string }>(GlosEvent.Pudo.NoteExpiringSoon, (e) =>
+      this.onNoteExpiring(e.payload),
+    );
+  }
+
+
+  /**
+   * A CONSIGNMENT NOTE IS ABOUT TO GO, and everybody who was a party to it is told while they can still
+   * take a copy.
+   *
+   * The date has been printed on the document since the day it was frozen, which is exactly the kind of
+   * thing nobody re-reads eleven months later. A retention period people are not reminded of is a trap,
+   * and the one thing that makes deleting somebody's evidence defensible is that they were told in time
+   * to keep it. What remains afterwards can confirm a copy they hold is genuine — it cannot give them
+   * another one, and the message says so.
+   */
+  private async onNoteExpiring(payload: { docId: string; number: string; parties: string[]; goesAt: string }): Promise<void> {
+    try {
+      const goes = payload.goesAt.slice(0, 10);
+      await Promise.all(
+        (payload.parties ?? []).map((did) =>
+          this.notifications.notify(did, {
+            kind: 'note_expiring',
+            title: `Keep your copy of ${payload.number}`,
+            body: `We delete this consignment note on ${goes}. Download it now — afterwards we can confirm a copy you hold is genuine, but we cannot give you another one.`,
+            link: '/',
+            // One per document, however many times a sweep runs.
+            tag: `note-expiring:${payload.docId}`,
+            data: { docId: payload.docId, number: payload.number, goesAt: payload.goesAt },
+          }),
+        ),
+      );
+    } catch (err) {
+      this.logger.warn(`note-expiring notify failed for ${payload.docId}: ${(err as Error).message}`);
+    }
   }
 
   private async onLicenceChecked(payload: { did: string; accepted: boolean; expiresAt?: string; reason?: string }): Promise<void> {

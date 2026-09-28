@@ -40,11 +40,28 @@ export interface NoteVersionRow {
  * go before a claim could still be brought, which is the ordinary case rather than an edge one.
  */
 export interface RetentionStatement {
-  document: 'indefinite';
+  /** Days the document is kept after the load finished — twelve months, the CMR's own claim window. */
+  documentDays: number;
+  documentUntil?: string;
+  /** Days the photographs behind it are kept. Shorter, and that gap is the thing worth saying. */
   evidenceDays: number;
   evidenceUntil?: string;
   claimWindowUntil?: string;
   exportBefore?: string;
+  /** The fingerprint of every copy outlives all of it, so a copy they keep can always be confirmed. */
+  proof: 'permanent';
+}
+
+/** What a verification answers. Never the document, and never who the parties were. */
+export interface ProofAnswer {
+  known: boolean;
+  number?: string;
+  seq?: number;
+  stage?: NoteStage;
+  at?: string;
+  documentDeletedAt?: string;
+  /** The server's own sentence — shown as-is, because it is the finding rather than a status. */
+  says: string;
 }
 
 export interface ArchivedNoteDoc {
@@ -129,6 +146,15 @@ export function createArchiveApi(sbg: SbgClient) {
     /** The same for everything matching a filter — what an audit asks for. */
     noteBundles: (query?: ArchiveQuery) =>
       sbg.request((c) => c.GET('/v1/sbg/consignment-notes/bundle.zip' as never, { params: { query: clean(query) }, parseAs: 'blob' } as never)),
+
+    /**
+     * Is a copy somebody handed us the one the network issued?
+     *
+     * The route is public, so this is for convenience inside an app rather than access — a fleet holding
+     * a note a shipper emailed them checks it here instead of leaving for a web page.
+     */
+    verifyNote: (sha256: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/consignment-notes/verify' as never, { body: { sha256 } } as never)),
   };
 }
 

@@ -816,10 +816,24 @@ export const en = {
   'archive.exportBundleHint': 'One file holding every copy, the photographs behind them, and a list of anything already past its retention window.',
 
   'archive.retention.title': 'How long we keep this',
-  'archive.retention.document': 'The note itself is kept for as long as the network runs.',
-  'archive.retention.photosOpen': 'The photographs behind it are kept {days} days after the load is finished. This one is not finished, so nothing has started counting.',
-  'archive.retention.photosUntil': 'The photographs behind it are kept {days} days after the load was finished — until {date}.',
+  'archive.retention.open': 'We keep this note for {months} months after the load is finished, and the photographs behind it for {days} days. This load is not finished, so nothing has started counting.',
+  'archive.retention.until': 'We keep this note until {doc}, and the photographs behind it until {photos}.',
   'archive.retention.claimGap': 'A claim on this carriage can be brought until {claim}, which is after the photographs go. Download your own copy before {date}.',
+  'archive.retention.proof': 'After those dates we can still confirm that a copy you hold is genuine, from its fingerprint — but we cannot give you another one.',
+
+  /* ---------------------------------------------------- verifying a copy ---- */
+  'verify.title': 'Check a consignment note',
+  'verify.lede':
+    'Somebody has handed you a consignment note. Type the fingerprint printed at the foot of it and we will tell you whether it is the document this network issued, and whether it has been altered since.',
+  'verify.label': 'The fingerprint on the note',
+  'verify.placeholder': '64 letters and numbers',
+  'verify.notAFingerprint': 'A fingerprint is 64 letters and numbers, printed at the foot of the note. Spaces and capitals do not matter.',
+  'verify.check': 'Check it',
+  'verify.genuine': 'This is a document we issued',
+  'verify.unknown': 'We did not issue this',
+  'verify.failedTitle': 'Could not check it just now',
+  'verify.failedDetail': 'Something went wrong reaching us. Try again in a moment — the answer does not change.',
+  'verify.inApp': 'Check a note somebody sent you',
 
   'archive.filterTitle': 'Narrow the archive',
   'archive.filterPath': 'Booked through',

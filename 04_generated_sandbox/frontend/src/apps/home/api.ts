@@ -1,4 +1,5 @@
 import { makeConfig, publicRequest, type Result, type SbgConfig } from '../../lib/sbg';
+import type { ProofAnswer } from '../../lib/sbg/personas/archive';
 
 const APP_VERSION = '1.0.0';
 
@@ -21,6 +22,16 @@ export interface OtpRequestView {
 
 export function requestCode(phone: string): Promise<Result<OtpRequestView>> {
   return publicRequest<OtpRequestView>(homeConfig(), '/v1/sbg/auth/phone/request', { body: { phone } });
+}
+
+/**
+ * IS THIS THE DOCUMENT SEEBUYGET ISSUED? — the one call on the front door that is not about joining.
+ *
+ * Public because the people who need it have no account and never will: an insurer, a forwarder, a
+ * magistrate, the other side's lawyer. It answers about the fingerprint alone.
+ */
+export function verifyNote(sha256: string): Promise<Result<ProofAnswer>> {
+  return publicRequest<ProofAnswer>(homeConfig(), '/v1/sbg/consignment-notes/verify', { body: { sha256 } });
 }
 
 export function verifyCode(phone: string, code: string): Promise<Result<{ verified?: boolean }>> {

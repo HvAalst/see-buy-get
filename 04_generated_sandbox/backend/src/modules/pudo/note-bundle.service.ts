@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { GlosError } from '../../foundation/http/glos-error';
+import { appUrl } from '../../foundation/mail/mail.templates';
 import { ZipEntry, zip } from '../../foundation/archive/zip';
 import { ConsignmentNoteService } from './consignment-note.service';
 import { MediaService } from './media.service';
@@ -152,11 +153,18 @@ export class NoteBundleService {
       '  Each copy’s fingerprint is a SHA-256 of the note’s own facts, printed at the foot of the page',
       '  and listed in the manifest. Two parties holding two printouts can compare that one line and know',
       '  whether they are holding the same document.',
+      '  Anybody can also check one with us, with no account:',
+      `    ${appUrl('home')}?note=<fingerprint>`,
+      '  We answer whether we issued a document with that fingerprint and which copy it is — nothing',
+      '  about the goods, the parties or the price. That answer keeps working after the dates below.',
       '',
       'HOW LONG WE KEEP IT',
-      '  The notes are kept for as long as the network runs. The photographs are not: they go on the',
-      '  retention clock stated in the manifest. This export is the copy that does not expire, and how',
-      '  long YOUR country requires you to keep it is a question for you, not for us.',
+      '  The notes are kept for twelve months after the load is finished, which is how long a claim can',
+      '  be brought under the CMR. The photographs go sooner — the manifest states both dates.',
+      '  AFTER THAT WE CANNOT GIVE YOU ANOTHER COPY. We keep each copy’s fingerprint for good, so we can',
+      '  always confirm that the files in this bundle are genuine; we cannot reissue them. This export is',
+      '  the copy that does not expire, and how long YOUR country requires you to keep it is a question',
+      '  for you, not for us.',
       '',
       'WHAT THIS IS NOT',
       '  SeeBuyGet issues these documents from its own records of what was done on the network. It is not',

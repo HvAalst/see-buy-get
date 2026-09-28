@@ -94,6 +94,8 @@ export interface ArchivedNote {
   versions: NoteVersion[];
   firstAt: string;
   lastAt: string;
+  /** When the parties were told this document is about to go. Set once; the warning is not a reminder. */
+  warnedAt?: string;
 }
 
 /** A register row: everything a list needs and not one field more. The copies stay behind the document. */
@@ -147,6 +149,58 @@ export function canonicalJson(value: unknown): string {
 /** This copy's fingerprint. Printed on the document so two people can compare what they are holding. */
 export function noteFingerprint(note: ConsignmentNote): string {
   return createHash('sha256').update(canonicalJson(note)).digest('hex');
+}
+
+/**
+ * THE NOTARISATION ROW — what survives after the document itself is deleted.
+ *
+ * A consignment note has evidential weight partly because a neutral third party issued it and held a
+ * copy. Delete ours and the sender and the carrier hold two files that either of them could have edited,
+ * with a fingerprint printed on the page that proves nothing once nobody holds the original hash. The
+ * neutrality is the thing we would be throwing away, and it is the only part worth keeping for ever.
+ *
+ * So the payload goes and the PROOF stays. Thirty-two bytes per copy, and deliberately nothing else:
+ *
+ *   NOT the parties. A permanent row saying DID-A and DID-B carried goods together on a date is, across
+ *   years, a complete trade graph — who ships with whom and how often. That is the most commercially
+ *   sensitive thing in the archive and it is not needed to answer the question.
+ *   NOT the route, the goods, the weight or the money. None of it is needed either.
+ *
+ * What is left answers exactly one question, which is the one anybody actually asks: SOMEBODY IS HOLDING
+ * A FILE — is this the document you issued, unaltered, and which copy is it? A hash cannot be reversed
+ * and cannot be guessed, so a holder must already have the document to ask; that is what makes it safe to
+ * answer this publicly, to an insurer or a magistrate who has no account here.
+ *
+ * The honest limit: a hash VERIFIES, it cannot RE-ISSUE. If every party loses their file, the proof has
+ * nothing to compare against — which is why automatic delivery to the party's own storage matters more
+ * than a download button, and why the warning before expiry is not optional.
+ */
+export interface NoteProof {
+  /** sha256 over the canonical note. The key, and what a holder presents. */
+  sha256: string;
+  /** CMR-XXXX — so an answer can say WHICH document rather than only "yes". */
+  number: string;
+  /** Which copy of it, and the moment it was taken at. */
+  seq: number;
+  stage: NoteStage;
+  at: string;
+  /** When the payload was deleted. Absent while the document is still here. */
+  documentDeletedAt?: string;
+}
+
+/** What a verification answers. Never the document, and never who the parties were. */
+export interface ProofAnswer {
+  /** Whether this network issued a document with this fingerprint. */
+  known: boolean;
+  number?: string;
+  seq?: number;
+  stage?: NoteStage;
+  /** When the copy was frozen — the moment it stopped being able to change. */
+  at?: string;
+  /** Present once the payload has gone; the proof outlives it. */
+  documentDeletedAt?: string;
+  /** In words, for whoever is reading the answer rather than parsing it. */
+  says: string;
 }
 
 /**

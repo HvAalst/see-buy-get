@@ -16046,6 +16046,36 @@
         }
       }
     },
+    "/v1/sbg/consignment-notes/verify": {
+      "post": {
+        "operationId": "Sbg.verifyNote",
+        "summary": "",
+        "description": "IS THIS THE DOCUMENT YOU ISSUED? — public, and deliberately so.\n\nThe people who most need this answer have no account here and never will: an insurer weighing a\nclaim, a forwarder, a magistrate, the other side's lawyer. A fingerprint cannot be guessed or\nreversed, so whoever is asking already holds the document; there is nothing here to probe at. It\nanswers about the fingerprint alone — never the note, never the parties, never the route — and it\nkeeps answering for good, long after the document itself has been deleted at the end of its window.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyNoteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/consignment-notes/{docId}": {
       "get": {
         "operationId": "Sbg.noteArchiveDocument",
@@ -32934,6 +32964,18 @@
           "freightId",
           "code"
         ]
+      },
+      "VerifyNoteDto": {
+        "type": "object",
+        "properties": {
+          "sha256": {
+            "type": "string"
+          },
+          "note": {
+            "type": "object",
+            "description": "The note as it was exported (copies/NN-stage.json). Canonicalised and hashed here."
+          }
+        }
       },
       "RecordTempDto": {
         "type": "object",

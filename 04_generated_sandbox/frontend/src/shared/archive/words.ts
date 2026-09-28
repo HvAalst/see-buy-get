@@ -44,17 +44,27 @@ export function routeLine(row: ArchivedNoteRow): string {
  * saying nothing, because it is the half that sounds reassuring.
  */
 export function retentionLines(r: RetentionStatement, t: Translate): string[] {
-  const lines = [t('archive.retention.document')];
-  if (!r.evidenceUntil) {
-    lines.push(t('archive.retention.photosOpen', { days: r.evidenceDays }));
-    return lines;
+  const months = Math.round(r.documentDays / 30);
+  if (!r.documentUntil) {
+    // Nothing has started counting, and saying a date for a load still in the world would be a promise
+    // about a clock nobody has started.
+    return [t('archive.retention.open', { months, days: r.evidenceDays }), t('archive.retention.proof')];
   }
-  lines.push(t('archive.retention.photosUntil', { days: r.evidenceDays, date: day(r.evidenceUntil) }));
+  const lines = [t('archive.retention.until', { doc: day(r.documentUntil), photos: day(r.evidenceUntil) })];
   if (r.exportBefore) {
     // The sentence that changes what somebody does, and the reason the export button is beside it.
     lines.push(t('archive.retention.claimGap', { claim: day(r.claimWindowUntil), date: day(r.exportBefore) }));
   }
+  // Always last, and never omitted: it is the difference between "gone" and "unverifiable".
+  lines.push(t('archive.retention.proof'));
   return lines;
+}
+
+/** True once the DOCUMENT itself is close enough to going that a reader should be pushed to export. */
+export function documentGoingSoon(r: RetentionStatement, now = Date.now()): boolean {
+  if (!r.documentUntil) return false;
+  const until = Date.parse(r.documentUntil);
+  return Number.isFinite(until) && until - now < 30 * 86_400_000;
 }
 
 /** True while the photographs are close enough to going that a reader should be told plainly. */

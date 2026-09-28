@@ -3,7 +3,8 @@ import { Button, Card, Chip, Icon, Note, Pager, SearchInput, Sheet } from '../ui
 import { useT, type Translate } from '../i18n';
 import { useDebounced } from '../useDebounced';
 import { ARCHIVE_LIMIT, type ArchiveApiState } from './useArchive';
-import { day, pathWord, retentionIsUrgent, retentionLines, routeLine, shortPrint, stageWord } from './words';
+import { day, documentGoingSoon, pathWord, retentionLines, routeLine, shortPrint, stageWord } from './words';
+import { NoteCheck } from './NoteCheck';
 import type { ArchiveQuery, ArchivedNoteRow, NoteStage } from '../../lib/sbg/personas/archive';
 
 const STAGES: NoteStage[] = ['taken_over', 'delivered', 'not_delivered', 'claimed', 'answered', 'cancelled'];
@@ -122,6 +123,10 @@ export function ArchiveSection({ archive }: { archive: ArchiveApiState }) {
         ) : null}
       </Card>
 
+      {/* The other direction: not a note of ours, one somebody handed us. A fleet with a shipper's
+          emailed PDF should not have to leave for a web page to find out whether it is real. */}
+      <NoteCheck check={archive.verifyNote} />
+
       <NoteSheet archive={archive} />
       <FilterSheet
         open={filterOpen}
@@ -225,7 +230,7 @@ function NoteSheet({ archive }: { archive: ArchiveApiState }) {
 
           {/* How long we keep it, where somebody is deciding what to do with it. */}
           <Note
-            tone={retentionIsUrgent(doc.retention) ? 'warn' : 'info'}
+            tone={documentGoingSoon(doc.retention) ? 'warn' : 'info'}
             icon="clock"
             title={t('archive.retention.title')}
             detail={retentionLines(doc.retention, t).join(' ')}

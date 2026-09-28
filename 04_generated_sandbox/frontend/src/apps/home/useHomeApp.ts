@@ -29,7 +29,7 @@ import {
 } from './api';
 import { EMPTY_JOIN, nextStep, normalizePhone, onlyJoinable, prevStep, roleById, signupBody, stepBlocker, type JoinForm, type JoinStep, type RoleSpec } from './logic';
 
-export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents';
+export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents' | 'verify';
 
 /** FB3b — how far the visitor cares to look. `null` IS a choice: the whole market. */
 export type MarketReach = number | null;
@@ -37,6 +37,8 @@ export const MARKET_REACHES: MarketReach[] = [25, 100, 300, null];
 
 export interface HomeState {
   screen: Screen;
+  /** A fingerprint carried in on ?note=, so a printed address lands straight on the answer. */
+  verifyInitial?: string;
   role: RoleSpec | null;
   step: JoinStep;
   form: JoinForm;
@@ -272,6 +274,18 @@ export function useHomeApp() {
     const handle = /^\/@([A-Za-z0-9][A-Za-z0-9-]*)\/?$/.exec(path)?.[1];
     if (handle) void openProfile(handle);
   }, [openProfile]);
+
+  /**
+   * ?note=<fingerprint> — the address printed on the consignment note and in every export bundle.
+   *
+   * Somebody holding a paper copy types the address and lands on the answer, rather than on a front door
+   * that asks them to join a logistics network to find out whether a document is genuine. Kept in the
+   * URL deliberately, unlike the store deep link: this one is worth sharing and worth refreshing.
+   */
+  useEffect(() => {
+    const note = new URLSearchParams(globalThis.location?.search ?? '').get('note');
+    if (note) setState((s) => ({ ...s, screen: 'verify', verifyInitial: note }));
+  }, []);
 
   // The deep link, read once and stripped as it is used — a refresh should not re-jump somebody onto a
   // store page they have already read and navigated away from.

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { narrow, type Result, type SbgClient, type SbgError } from '../../lib/sbg';
 import { createArchiveApi } from '../../lib/sbg/personas/archive';
-import type { ArchiveQuery, ArchivedNoteDoc, ArchivedNoteRow } from '../../lib/sbg/personas/archive';
+import type { ArchiveQuery, ArchivedNoteDoc, ArchivedNoteRow, ProofAnswer } from '../../lib/sbg/personas/archive';
 import { triggerDownload, triggerDownloadBlob } from '../download';
 
 export const ARCHIVE_LIMIT = 20;
@@ -28,6 +28,8 @@ export interface ArchiveApiState {
   exportBundle: (docId: string, number: string) => Promise<void>;
   exportAll: () => Promise<void>;
   printCopy: (docId: string, seq: number) => Promise<void>;
+  /** Check a note somebody ELSE handed us. Null means the call failed, not that the note is unknown. */
+  verifyNote: (sha256: string) => Promise<ProofAnswer | null>;
 }
 
 /**
@@ -164,7 +166,16 @@ export function useArchive(client: SbgClient | null, enabled = true): ArchiveApi
     [api],
   );
 
-  return { rows, total, phase, error, query, open, openPhase, busy, load, setQuery, openDoc, closeDoc, exportCsv, exportBundle, exportAll, printCopy };
+  const verifyNote = useCallback(
+    async (sha256: string): Promise<ProofAnswer | null> => {
+      if (!api) return null;
+      const r: Result<unknown> = await api.verifyNote(sha256);
+      return r.error || !r.data ? null : narrow<ProofAnswer>(r.data);
+    },
+    [api],
+  );
+
+  return { rows, total, phase, error, query, open, openPhase, busy, load, setQuery, openDoc, closeDoc, exportCsv, exportBundle, exportAll, printCopy, verifyNote };
 }
 
 /** Show a fetched page in its own window. Falls back to a download where a popup is blocked. */

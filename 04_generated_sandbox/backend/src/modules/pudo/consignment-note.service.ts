@@ -400,7 +400,7 @@ export class ConsignmentNoteService implements OnModuleInit {
   ${box(23, 'Signature and stamp of the carrier', conf(n.confirmations.carrier, n.cancelled ? 'Never taken over — the load was cancelled' : 'Not yet taken over'))}
   ${box(24, 'Goods received — signature and stamp of the consignee', (n.confirmations.consignee ? conf(n.confirmations.consignee, '') : `<span class="empty">${box24missing}</span>`) + claimLines, 'wide')}
 </div>
-<footer><span>Issued by the SeeBuyGet network from its records of this load. Every box is filled from a recorded act; a box that says it is not recorded is not recorded.<br>${e(retentionWords(retentionFor({ finishedAt: n.delivery.at, hasClaim: Boolean(n.claim) })))}</span><span>${e(n.number)}<br><span class="fp">${e(noteFingerprint(n))}</span></span></footer>
+<footer><span>Issued by the SeeBuyGet network from its records of this load. Every box is filled from a recorded act; a box that says it is not recorded is not recorded.<br>${e(retentionWords(retentionFor({ finishedAt: n.delivery.at, hasClaim: Boolean(n.claim) })))}</span><span>${e(n.number)}<br><span class="fp">${e(noteFingerprint(n))}</span><br><span class="fp">Check this copy: ${e(`${appUrl('home')}?note=${noteFingerprint(n)}`)}</span></span></footer>
 </div></body></html>`;
   }
 }

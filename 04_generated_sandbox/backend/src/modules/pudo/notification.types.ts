@@ -34,6 +34,8 @@ export interface PushSubscriptionRecord {
 /** The closed vocabulary of what we push. The spine (N1) fires `test`; N2/N3 add the rest;
  *  `intake_expected` (a parcel minted → its drop-off PUDO should expect it) is the genesis rule. */
 export const NOTIFICATION_KINDS = [
+  /** A consignment note is a month from the end of its retention window; export it while it is here. */
+  'note_expiring',
   'test',
   'parcel_ready',
   'load_nearby',

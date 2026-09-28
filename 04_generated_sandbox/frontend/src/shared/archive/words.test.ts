@@ -9,23 +9,30 @@ const t = ((key: string, vars?: Record<string, unknown>) =>
   vars ? `${key}(${Object.entries(vars).map(([k, v]) => `${k}=${String(v)}`).join(',')})` : key) as unknown as Translate;
 
 describe('what the archive says about retention', () => {
-  const open: RetentionStatement = { document: 'indefinite', evidenceDays: 90 };
+  const open: RetentionStatement = { documentDays: 365, evidenceDays: 90, proof: 'permanent' };
   const finished: RetentionStatement = {
-    document: 'indefinite',
+    documentDays: 365,
+    documentUntil: '2027-09-25T00:00:00.000Z',
+    proof: 'permanent',
     evidenceDays: 90,
     evidenceUntil: '2027-01-01T00:00:00.000Z',
     claimWindowUntil: '2027-10-01T00:00:00.000Z',
     exportBefore: '2027-01-01T00:00:00.000Z',
   };
 
-  it('always says the note itself is kept — silence there reads as "for ever"', () => {
-    expect(retentionLines(open, t)[0]).toBe('archive.retention.document');
+  it('ALWAYS ends on the proof line, in both states — it is the difference between gone and unverifiable', () => {
+    // Every other line is about a date. This one is the answer to "so what happens after that", and a
+    // reader who does not reach it is left thinking deletion means the record simply vanished.
+    for (const s of [open, finished]) {
+      const lines = retentionLines(s, t);
+      expect(lines[lines.length - 1]).toBe('archive.retention.proof');
+    }
   });
 
   it('says nothing has started counting while the load is still open', () => {
     // A date invented for a load that has not finished would be a promise about a clock nobody started.
     const lines = retentionLines(open, t);
-    expect(lines.join(' ')).toContain('archive.retention.photosOpen');
+    expect(lines.join(' ')).toContain('archive.retention.open');
     expect(lines.join(' ')).not.toContain('claimGap');
   });
 
@@ -33,7 +40,7 @@ describe('what the archive says about retention', () => {
     // Ninety days of evidence against a year in which a claim can still be brought. Saying only the first
     // two sentences would leave a reader reassured and wrong.
     const said = retentionLines(finished, t).join(' ');
-    expect(said).toContain('archive.retention.photosUntil');
+    expect(said).toContain('archive.retention.until');
     expect(said).toContain('archive.retention.claimGap');
   });
 

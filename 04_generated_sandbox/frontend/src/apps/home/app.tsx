@@ -9,6 +9,8 @@ import { StoreScreen } from './screens/StoreScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { WelcomeScreen } from './screens/WelcomeScreen';
+import { NoteCheck } from '../../shared/archive/NoteCheck';
+import { verifyNote } from './api';
 import { roleMeta } from './logic';
 import { useHomeApp } from './useHomeApp';
 import '../../shared/screens.css';
@@ -74,6 +76,18 @@ export function App() {
         {state.screen === 'roles' ? <RolesScreen actions={actions} /> : null}
         {state.screen === 'join' ? <JoinScreen state={state} actions={actions} /> : null}
         {state.screen === 'signin' ? <SignInScreen actions={actions} /> : null}
+        {state.screen === 'verify' ? (
+          <NoteCheck
+            /* Null for a call that never landed, so the screen can tell "we could not reach us" from
+               "we did not issue this" — two very different things to say to somebody with a document. */
+            check={async (sha256) => {
+              const r = await verifyNote(sha256);
+              return r.error || !r.data ? null : r.data;
+            }}
+            initial={state.verifyInitial}
+            bare
+          />
+        ) : null}
         {state.screen === 'welcome' ? <WelcomeScreen actions={actions} /> : null}
       </main>
     </div>

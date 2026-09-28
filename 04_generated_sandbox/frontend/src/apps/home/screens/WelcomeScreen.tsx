@@ -95,6 +95,20 @@ export function WelcomeScreen({ actions }: WelcomeScreenProps) {
             <Icon name="chevronRight" size={22} />
           </span>
         </button>
+        {/* Not a way in to the product — a way in for somebody who is never going to join it. An
+            insurer or a magistrate holding a consignment note needs one answer and no account. */}
+        <button type="button" class="row" onClick={() => actions.go('verify')}>
+          <span class="row__ic">
+            <Icon name="badge" size={24} />
+          </span>
+          <span class="row__body">
+            <span class="row__t">{t('home.welcome.verify')}</span>
+            <span class="row__s">{t('home.welcome.verifySub')}</span>
+          </span>
+          <span class="row__end">
+            <Icon name="chevronRight" size={22} />
+          </span>
+        </button>
       </div>
 
       <div class="scr__foot">

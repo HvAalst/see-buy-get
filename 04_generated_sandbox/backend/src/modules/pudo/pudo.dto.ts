@@ -966,6 +966,18 @@ export class AgentParcelsQueryDto {
 }
 
 /**
+ * VERIFYING A CONSIGNMENT NOTE somebody is holding.
+ *
+ * Either the fingerprint printed at the foot of the page, or the note's own JSON out of an export
+ * bundle — whichever the holder has to hand. Both reduce to the same 64 hex characters.
+ */
+export class VerifyNoteDto {
+  @IsOptional() @IsString() sha256?: string;
+  /** The note as it was exported (copies/NN-stage.json). Canonicalised and hashed here. */
+  @IsOptional() @IsObject() note?: Record<string, unknown>;
+}
+
+/**
  * THE SHIPMENT ARCHIVE register query — the consignment notes a caller was a party to.
  *
  * No `:did` in the path and none here: the archive answers for whoever is asking, because a document's

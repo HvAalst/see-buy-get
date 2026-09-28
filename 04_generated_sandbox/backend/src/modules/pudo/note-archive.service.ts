@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { actingDid } from '../../foundation/auth/acting';
 import { EventBus } from '../../foundation/events/event-bus.service';
@@ -17,14 +17,20 @@ import {
   NotePath,
   NoteStage,
   NoteVersion,
+  NoteProof,
   NoteVersionRow,
+  ProofAnswer,
   STAGE_WORDS,
   boardDocId,
   noteFingerprint,
   runDocId,
 } from './note-archive.types';
 import { Page, paginate, textMatch, toCsv, withinDates } from './query';
-import { RetentionStatement, retentionFor } from './retention';
+import { CLAIM_WINDOW_DAYS, DOCUMENT_RETENTION_DAYS, RetentionStatement, WARN_BEFORE_DAYS, retentionFor } from './retention';
+
+/** How often the retention sweep runs. Hourly is ample for a clock measured in months. */
+const SWEEP_MS = Number(process.env.GLOS_DOC_SWEEP_MS ?? 3_600_000);
+const DAY_MS = 86_400_000;
 
 /** What a caller may narrow the archive by. Mirrors NoteArchiveQueryDto, which validates it at the door. */
 export interface ArchiveQuery {
@@ -53,9 +59,16 @@ export interface ArchiveQuery {
  * already in the archive and does not go in twice.
  */
 @Injectable()
-export class NoteArchiveService implements OnModuleInit {
+export class NoteArchiveService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(NoteArchiveService.name);
   private readonly docs = new PersistentMap<string, ArchivedNote>('note-archive');
+  /**
+   * Keyed by fingerprint, and it OUTLIVES the documents — see NoteProof. A separate map rather than a
+   * field on the document precisely because the two have different lifetimes; hanging the proof off the
+   * record it is meant to survive would be the one mistake that makes the whole idea pointless.
+   */
+  private readonly proofs = new PersistentMap<string, NoteProof>('note-proofs');
+  private sweeper?: NodeJS.Timeout;
 
   constructor(
     private readonly dispatch: DispatchService,
@@ -102,6 +115,29 @@ export class NoteArchiveService implements OnModuleInit {
     this.events.subscribe<{ departureId: string }>(GlosEvent.Pudo.DepartureCancelled, (e) =>
       this.freezeWholeRun(e.payload.departureId, 'cancelled', 'The carrier called the run off'),
     );
+
+    /*
+     * THE LEDGER IS HEALED FROM THE DOCUMENTS BEFORE ANYTHING ELSE RUNS.
+     *
+     * While a document is still here it is its own authority, so a proof row missing for one of its
+     * copies is recoverable — and must be recovered, because the failure it causes is the worst one this
+     * endpoint has: telling somebody holding a GENUINE note that we never issued it. That can happen
+     * from a lost or rolled-back proofs file, or simply from documents frozen before the ledger existed.
+     *
+     * Done once at boot rather than as a fallback inside verify(): the route is public, and a miss that
+     * triggers a scan is a scan anybody can ask for as often as they like.
+     */
+    this.healProofs();
+
+    // Swept on boot for anything already past its window, then on a timer. unref'd so a retention
+    // sweep can never be the reason a process will not exit.
+    this.sweepExpired();
+    this.sweeper = setInterval(() => this.sweepExpired(), SWEEP_MS);
+    this.sweeper.unref?.();
+  }
+
+  onModuleDestroy(): void {
+    if (this.sweeper) clearInterval(this.sweeper);
   }
 
   /* ------------------------------------------------------------------ freezing -- */
@@ -228,6 +264,158 @@ export class NoteArchiveService implements OnModuleInit {
       lastAt: at,
     };
     this.docs.set(docId, doc);
+
+    // The proof is written HERE, at the moment the copy is frozen — not later at deletion. A ledger
+    // built during a sweep is a ledger that is wrong for every document the sweep never reached, and
+    // one bad deploy between freezing and expiring would lose the ability to verify anything.
+    this.proofs.set(sha256, { sha256, number: note.number, seq: version.seq, stage, at });
+  }
+
+  /* ------------------------------------------------------------------ the proof -- */
+
+  /**
+   * IS THIS THE DOCUMENT WE ISSUED?
+   *
+   * Public on purpose. A hash cannot be guessed and cannot be reversed, so whoever is asking already
+   * holds the document — and the people who most need this answer (an insurer, a forwarder, a
+   * magistrate) have no account here and never will. It answers about the FINGERPRINT and nothing else:
+   * never the note, never the parties, never the route.
+   */
+  verify(input: { sha256?: string; note?: ConsignmentNote }): ProofAnswer {
+    const key = (input.sha256 ?? (input.note ? noteFingerprint(input.note) : '')).trim().toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(key)) {
+      throw new GlosError('INVALID_INPUT', 'Give the fingerprint printed on the note, or the note itself');
+    }
+    const proof = this.proofs.get(key);
+    if (!proof) {
+      return {
+        known: false,
+        says: 'No document with that fingerprint was issued by this network. A copy that has been altered in any way — even a space — produces a different fingerprint from the one it was issued with.',
+      };
+    }
+    const when = proof.at.slice(0, 10);
+    return {
+      known: true,
+      number: proof.number,
+      seq: proof.seq,
+      stage: proof.stage,
+      at: proof.at,
+      ...(proof.documentDeletedAt ? { documentDeletedAt: proof.documentDeletedAt } : {}),
+      says:
+        `This is copy ${proof.seq} of consignment note ${proof.number}, as it stood on ${when} — ${STAGE_WORDS[proof.stage].toLowerCase()}. ` +
+        `It was issued by the SeeBuyGet network and has not been altered since.` +
+        (proof.documentDeletedAt
+          ? ` Our own copy was deleted on ${proof.documentDeletedAt.slice(0, 10)} at the end of its retention period; this confirmation is all we hold.`
+          : ''),
+    };
+  }
+
+  /**
+   * Write a proof for every copy of every document we still hold that has not got one.
+   *
+   * Idempotent and cheap on a healed ledger. It never invents a proof for a document that is gone —
+   * there is nothing left to derive one from, which is exactly why the row is written at freeze time
+   * and this is only a net rather than the mechanism.
+   */
+  /** Drop every proof row, to prove the heal actually rebuilds them. Tests only. */
+  forgetProofsForTest(): void {
+    for (const key of [...this.proofs.keys()]) this.proofs.delete(key);
+  }
+
+  healProofs(): { added: number } {
+    let added = 0;
+    for (const doc of this.docs.values()) {
+      for (const v of doc.versions) {
+        if (this.proofs.has(v.sha256)) continue;
+        this.proofs.set(v.sha256, { sha256: v.sha256, number: doc.number, seq: v.seq, stage: v.stage, at: v.at });
+        added += 1;
+      }
+    }
+    if (added) this.logger.log(`retention: ${added} proof row(s) rebuilt from documents still held`);
+    return { added };
+  }
+
+  /* ------------------------------------------------------------------ expiry -- */
+
+  /**
+   * THE DOCUMENT GOES AND THE PROOF STAYS.
+   *
+   * Runs on the same shape as the media sweep. What makes it safe to delete somebody's consignment note
+   * is everything around it: they were told the date on the document itself, warned before it, handed an
+   * export, and what remains can still confirm the copy they kept is genuine.
+   *
+   * TWO THINGS ARE NEVER SWEPT. A document with a claim on it, open or answered, because a claim is a
+   * live matter and its own evidence clock runs longer. And nothing at all before the CMR's ordinary
+   * limitation period has run, which the retention period equals by construction — the guard is here
+   * anyway, because an override that shortened the period would otherwise silently start destroying
+   * evidence inside the window somebody can still sue in.
+   */
+  sweepExpired(now: number = Date.now()): { deleted: number; warned: number } {
+    let deleted = 0;
+    let warned = 0;
+    for (const doc of [...this.docs.values()]) {
+      const finishedAt = this.finishedAtOf(doc);
+      if (!finishedAt) continue; // an unfinished load has no clock running
+      if (doc.versions.some((v) => v.stage === 'claimed' || v.stage === 'answered')) continue;
+
+      const elapsed = now - Date.parse(finishedAt);
+      if (!Number.isFinite(elapsed)) continue;
+
+      /*
+       * TELL THEM BEFORE, ONCE. A retention period nobody is reminded of is a trap, and the reminder is
+       * the difference between "we told you" and "you were told" — the date has been on the document
+       * since the day it was frozen, which nobody re-reads a year later.
+       *
+       * Fired as an EVENT rather than a notification: resolving who hears about a thing is the
+       * dispatcher's job everywhere else in this product, and the archive has no business knowing about
+       * devices. `warnedAt` makes it once per document, not once an hour for the last month.
+       */
+      if (!doc.warnedAt && elapsed >= (DOCUMENT_RETENTION_DAYS - WARN_BEFORE_DAYS) * DAY_MS && elapsed < DOCUMENT_RETENTION_DAYS * DAY_MS) {
+        doc.warnedAt = new Date(now).toISOString();
+        this.docs.set(doc.docId, doc);
+        warned += 1;
+        void this.events
+          .publish(
+            GlosEvent.Pudo.NoteExpiringSoon,
+            {
+              docId: doc.docId,
+              number: doc.number,
+              parties: doc.parties,
+              goesAt: new Date(Date.parse(finishedAt) + DOCUMENT_RETENTION_DAYS * DAY_MS).toISOString(),
+            },
+            { source: 'pudo' },
+          )
+          .catch(() => undefined);
+      }
+
+      if (elapsed < DOCUMENT_RETENTION_DAYS * DAY_MS) continue;
+      if (elapsed < CLAIM_WINDOW_DAYS * DAY_MS) continue;
+
+      const at = new Date(now).toISOString();
+      for (const v of doc.versions) {
+        const proof = this.proofs.get(v.sha256);
+        // Tombstone the proof rather than rewriting it: the fingerprint and what it describes do not
+        // change, only whether we still hold what it describes.
+        if (proof) this.proofs.set(v.sha256, { ...proof, documentDeletedAt: at });
+      }
+      /*
+       * The WHOLE row goes — parties, route, goods, weight, the notes themselves. Keeping a tombstone
+       * with the parties on it would mean a permanent record that these two companies carried goods
+       * together, which across years is a trade graph and is the most sensitive thing in here. "We
+       * deleted it" has to mean that.
+       */
+      this.docs.delete(doc.docId);
+      deleted += 1;
+    }
+    if (deleted) this.logger.log(`retention: ${deleted} consignment note(s) past their window deleted; their proofs kept`);
+    return { deleted, warned };
+  }
+
+  /** The moment the load became terminal, which is when every clock on it starts. */
+  private finishedAtOf(doc: ArchivedNote): string | undefined {
+    if (doc.deliveredAt) return doc.deliveredAt;
+    const last = doc.versions[doc.versions.length - 1];
+    return last && (last.stage === 'cancelled' || last.stage === 'not_delivered') ? last.at : undefined;
   }
 
   /* ------------------------------------------------------------------ reading -- */

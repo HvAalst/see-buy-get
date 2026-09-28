@@ -494,4 +494,6 @@ export const enHome = {
 
   'home.welcome.marketTitle': 'See what freight moves where',
   'home.welcome.marketSub': 'Every open load around any town — what truck it needs and what it pays. No account needed.',
+  'home.welcome.verify': 'Check a consignment note',
+  'home.welcome.verifySub': 'Somebody handed you one — is it genuine? No account needed.',
 };
