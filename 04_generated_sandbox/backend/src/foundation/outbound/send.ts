@@ -24,8 +24,42 @@ export interface PutResult {
   detail: string;
 }
 
-async function put(url: string, headers: Record<string, string>, body: Buffer, method = 'PUT'): Promise<PutResult> {
+/**
+ * Who we were talking to, so the failure reads like something the reader can act on.
+ *
+ * Two callers with genuinely different problems: somebody whose S3 key cannot write to a bucket, and a
+ * merchant whose webhook handler is rejecting our POST. One set of sentences for both told a shop to
+ * "check the key and that it may write to this folder" about an endpoint that has no folder — which is
+ * the kind of message that sends somebody looking in the wrong place for an afternoon.
+ */
+export type Voice = 'storage' | 'endpoint';
+
+function refusal(voice: Voice, status: number): string {
+  if (voice === 'endpoint') {
+    return status === 401 || status === 403
+      ? 'Your endpoint refused it. Check that it accepts our POST and is not rejecting the signature.'
+      : status === 404
+        ? 'Your endpoint answered "not found". Check the callback address on your store record.'
+        : status === 413
+          ? 'Your endpoint refused it for being too large.'
+          : status >= 500
+            ? 'Your endpoint had an error of its own. We will try again.'
+            : `Your endpoint refused it (${status}).`;
+  }
+  return status === 401 || status === 403
+    ? 'The storage refused the credentials. Check the key and that it may write to this folder.'
+    : status === 404
+      ? 'The storage says that folder or bucket does not exist.'
+      : status === 413
+        ? 'The storage refused the file for being too large.'
+        : status >= 500
+          ? 'The storage had an error of its own. We will try again.'
+          : `The storage refused it (${status}).`;
+}
+
+async function put(url: string, headers: Record<string, string>, body: Buffer, method = 'PUT', voice: Voice = 'storage'): Promise<PutResult> {
   const stop = AbortSignal.timeout(TIMEOUT_MS);
+  const thing = voice === 'endpoint' ? 'your endpoint' : 'that storage';
   try {
     const res = await fetch(url, { method, headers, body: new Uint8Array(body), signal: stop, redirect: 'error' });
     if (res.ok) return { ok: true, status: res.status, detail: 'Delivered' };
@@ -34,17 +68,7 @@ async function put(url: string, headers: Record<string, string>, body: Buffer, m
      * dropped on the floor — it is the only thing here that could carry somebody else's secrets back
      * out through an error message.
      */
-    const detail =
-      res.status === 401 || res.status === 403
-        ? 'The storage refused the credentials. Check the key and that it may write to this folder.'
-        : res.status === 404
-          ? 'The storage says that folder or bucket does not exist.'
-          : res.status === 413
-            ? 'The storage refused the file for being too large.'
-            : res.status >= 500
-              ? 'The storage had an error of its own. We will try again.'
-              : `The storage refused it (${res.status}).`;
-    return { ok: false, status: res.status, detail };
+    return { ok: false, status: res.status, detail: refusal(voice, res.status) };
   } catch (err) {
     const name = (err as Error).name;
     return {
@@ -52,8 +76,8 @@ async function put(url: string, headers: Record<string, string>, body: Buffer, m
       status: 0,
       detail:
         name === 'TimeoutError' || name === 'AbortError'
-          ? 'The storage did not answer in time. We will try again.'
-          : 'We could not reach that storage. We will try again.',
+          ? `${voice === 'endpoint' ? 'Your endpoint' : 'The storage'} did not answer in time. We will try again.`
+          : `We could not reach ${thing}. We will try again.`,
     };
   }
 }
@@ -123,6 +147,25 @@ export async function putToWebdav(target: WebdavTarget, key: string, body: Buffe
     // cumulative, so the newest always contains everything the older one did.
     overwrite: 'T',
   }, body);
+}
+
+/* --------------------------------------------------------------- a signed POST -- */
+
+/**
+ * POST a body somebody else has already signed, to an address they gave us.
+ *
+ * For the store status callbacks, whose signature is computed when the event happens rather than when
+ * it is sent — a retry must carry the SAME bytes and therefore the same signature, so the caller owns
+ * both and this only puts them on the wire. Same guard, and the same rule about never returning what
+ * the far end said.
+ */
+export async function postSigned(url: string, body: Buffer, headers: Record<string, string>): Promise<PutResult> {
+  try {
+    await assertReachable(url);
+  } catch (err) {
+    return { ok: false, status: 0, detail: (err as Error).message };
+  }
+  return put(url, headers, body, 'POST', 'endpoint');
 }
 
 /* ----------------------------------------------------------------------- webhook -- */

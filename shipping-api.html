@@ -534,19 +534,36 @@ content-type: application/json
 
   <h3>Checking it really came from us</h3>
   <p>Every callback is signed: <b>HMAC-SHA256 over the exact request body</b>, keyed with your store
-  secret, hex-encoded. Verify against the raw bytes you received — re-serialising the JSON first will
-  change the whitespace and the signature will not match.</p>
+  secret, hex-encoded, in the <code>x-sbg-signature</code> header. Verify against the raw bytes you
+  received — re-serialising the JSON first will change the whitespace and the signature will not
+  match.</p>
+  <p>Two other headers ride along. <code>x-sbg-event</code> repeats the event name, so you can route
+  before parsing. <code>x-sbg-delivery</code> is the id of this delivery and <b>stays the same across
+  retries</b> — it is the key to be idempotent on.</p>
 <pre><code>const expected = crypto.createHmac('sha256', STORE_SECRET).update(rawBody).digest('hex');
 if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(received))) return res.sendStatus(401);</code></pre>
   <p>Compare in constant time, as above. A plain <code>===</code> on a signature leaks how much of it was
   right, one character at a time.</p>
 
-  <h3>What is NOT true yet</h3>
-  <p>Callbacks are <b>recorded, not yet delivered over HTTP.</b> Every event is built, signed and queued on
-  your store's outbox, and a sandbox deployment does not post it to your URL — you can read the queue
-  through the merchant console. Said here rather than left for you to discover with a webhook endpoint that
-  never fires. There is no retry schedule and no delivery receipt yet either, so build your handler to be
-  idempotent on <code>parcelId</code> + <code>event</code> and you will be ready when there is.</p>
+  <h3>Delivery, retries and giving up</h3>
+  <p>Callbacks <b>are posted to your URL.</b> This page said for a long time that they were recorded and
+  not delivered, which was true and is no longer: they are sent now, and the outbox in the merchant
+  console shows whether each one actually arrived rather than only that it was created.</p>
+  <ul>
+    <li>Answer <b>2xx</b> and we are done. Anything else, or no answer within thirty seconds, is a
+      failure.</li>
+    <li>We retry with a backoff — about a minute, then five, fifteen, an hour, and on up to a day —
+      <b>eight attempts</b> in all, after which we stop and mark it failed in your outbox with the
+      reason.</li>
+    <li>A retry carries the <b>identical body, signature and <code>x-sbg-delivery</code></b>. That is
+      deliberate: a late delivery has to verify exactly as the first one would have.</li>
+    <li>So <b>be idempotent</b>, on <code>x-sbg-delivery</code> or on <code>parcelId</code> +
+      <code>event</code>. You can be sent the same event twice.</li>
+  </ul>
+  <p>Answer fast and do your work afterwards. We are not waiting on your order pipeline, and an endpoint
+  that takes thirty seconds to reply is an endpoint we will treat as down.</p>
+  <p>Your URL has to be <b>https</b> and must resolve to a public address — we will not post to anything
+  inside a private network, and we never pass your endpoint's response body back to anyone.</p>
 </section>
 
 <section id="areas">
@@ -714,8 +731,6 @@ if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(received))) retur
     <li><b>Amending a shipment.</b> Cancelling is here now; amending is not, and will not be —
       see <a href="#track">Reading and cancelling</a> for why an edit that re-prices somebody's paid
       shipment is worse than making them create a new one.</li>
-    <li><b>Callback DELIVERY.</b> Status callbacks are built, signed and queued, and a sandbox does not yet
-      post them to your URL. See <a href="#callbacks">Status callbacks</a>.</li>
     <li><b>A media upload on this surface.</b> <code>contentPhotoRef</code> comes from the authenticated
       media endpoint.</li>
     <li><b>Street-level addresses.</b> The gazetteer places towns and neighbourhoods in Kenya and

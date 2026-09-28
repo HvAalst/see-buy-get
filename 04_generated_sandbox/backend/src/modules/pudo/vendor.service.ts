@@ -32,6 +32,16 @@ export interface VendorSettlement {
   at: string;
 }
 
+export const CALLBACK_STATES = ['pending', 'delivered', 'failed'] as const;
+export type CallbackState = (typeof CALLBACK_STATES)[number];
+
+/**
+ * One status callback owed to a store.
+ *
+ * It carried no delivery state until 2026-09-28, for the honest reason that there was no delivery: the
+ * record was built, signed, pushed to an in-memory array and left there. A merchant reading their outbox
+ * saw a perfect list of events that had never left the building.
+ */
 export interface VendorCallback {
   id: string;
   vendorId: string;
@@ -40,6 +50,14 @@ export interface VendorCallback {
   signature: string; // HMAC-SHA256 of the body
   body: string;
   at: string;
+  /* --- the half that was missing --- */
+  state: CallbackState;
+  attempts: number;
+  /** When the next attempt is due; backs off so a dead endpoint is not hammered. */
+  nextTryAt: string;
+  deliveredAt?: string;
+  /** Our words for the last failure. Never the store's own response body. */
+  lastError?: string;
 }
 
 /* ------------------------------------------------------------- bookkeeping register (R3) -- */
@@ -163,7 +181,11 @@ export class VendorService {
   private readonly vendors = new PersistentMap<string, Vendor>('pudo-vendors');
   /** Durable too: a pending handoff is a BUYER'S ORDER that has not shipped yet. */
   private readonly checkouts = new PersistentMap<string, CheckoutHandoff>('pudo-vendor-checkouts');
-  private readonly outbox: VendorCallback[] = [];
+  /**
+   * DURABLE, because it is now a delivery queue rather than a log. A restart used to lose a list nobody
+   * was sending anyway; it would now lose events a merchant is waiting on.
+   */
+  private readonly outbox = new PersistentMap<string, VendorCallback>('pudo-vendor-outbox');
   /**
    * R3 — the settlement book is now DURABLE: it is the vendor's bookkeeping (every top-up, shipment
    * billing and rebate), the ledger behind the balance. A restart must not erase the money history the
@@ -624,18 +646,49 @@ export class VendorService {
     return c;
   }
 
-  /** Push an HMAC-signed status callback to the vendor (recorded in the outbox; real HTTP in prod). */
+  /**
+   * Queue an HMAC-signed status callback for the store. VendorCallbackService is what sends it.
+   *
+   * Signed over the EXACT body that goes on the wire, which is why the body is stored as a string
+   * rather than rebuilt at send time — re-serialising JSON changes the whitespace and the signature
+   * the merchant computes would not match, which is precisely what the documentation warns them about.
+   */
   notify(vendorId: string, event: string, payload: Record<string, unknown>): VendorCallback | null {
     const vendor = this.vendors.get(vendorId);
     if (!vendor?.callbackUrl) return null;
-    const body = JSON.stringify({ event, data: payload, at: new Date().toISOString() });
+    const at = new Date().toISOString();
+    const body = JSON.stringify({ event, data: payload, at });
     const signature = createHmac('sha256', vendor.secret).update(body).digest('hex');
-    const callback: VendorCallback = { id: `cb_${randomBytes(6).toString('hex')}`, vendorId, url: vendor.callbackUrl, event, signature, body, at: new Date().toISOString() };
-    this.outbox.push(callback);
+    const callback: VendorCallback = {
+      id: `cb_${randomBytes(6).toString('hex')}`,
+      vendorId,
+      url: vendor.callbackUrl,
+      event,
+      signature,
+      body,
+      at,
+      state: 'pending',
+      attempts: 0,
+      nextTryAt: at,
+    };
+    this.outbox.set(callback.id, callback);
     return callback;
   }
 
+  /** What the merchant console shows: newest first, with whether it actually arrived. */
   outboxFor(vendorId?: string): VendorCallback[] {
-    return (vendorId ? this.outbox.filter((c) => c.vendorId === vendorId) : this.outbox).slice(-100).reverse();
+    return [...this.outbox.values()]
+      .filter((c) => (vendorId ? c.vendorId === vendorId : true))
+      .sort((a, b) => (a.at < b.at ? 1 : -1))
+      .slice(0, 100);
+  }
+
+  /** Everything due to be sent. The sender lives in VendorCallbackService; this is the queue. */
+  callbacksDue(now: number): VendorCallback[] {
+    return [...this.outbox.values()].filter((c) => c.state === 'pending' && Date.parse(c.nextTryAt) <= now);
+  }
+
+  recordCallback(callback: VendorCallback): void {
+    this.outbox.set(callback.id, callback);
   }
 }
