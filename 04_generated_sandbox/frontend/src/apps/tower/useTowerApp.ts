@@ -277,6 +277,10 @@ export interface TowerActions {
   saveCover(body: { lane?: string; freeLimit: number | null; premiumPct: number | null }, lane?: string): Promise<void>;
   /** Sister-wide, so no lane: a top-up is not a lane of work. An empty body removes the fee. */
   saveTopUpFee(body: { amount?: number; freeAbove?: number }): Promise<void>;
+  /** Which carrier papers this sister refuses to trade without. The whole list; empty enforces nothing. */
+  saveCarrierPapers(enforce: Array<'operator_licence' | 'carrier_insurance'>): Promise<void>;
+  /** Record the dates on one fleet operator's own papers — staff only. */
+  recordCarrierPapers(did: string, body: { licenceExpiresAt?: string | null; insurancePolicy?: string | null; insuranceExpiresAt?: string | null }): Promise<boolean>;
 }
 
 const INITIAL: TowerState = {
@@ -1419,6 +1423,20 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         if (error) return { contact: null, error: error.detail || error.title };
         return { contact: narrow<CourierContact>(data), error: null };
       },
+      /** A fleet operator's own papers. Answers whether it stored, so the form closes only on success. */
+      recordCarrierPapers: async (did, body) => {
+        const client = clientRef.current;
+        if (!client) return false;
+        setState((s) => ({ ...s, busyId: did, queueError: null, done: null }));
+        const { error } = await client.api.recordCarrierPapers(did, body);
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return false;
+        }
+        setState((s) => ({ ...s, busyId: null, openId: null, done: t('tower.carrierPapers.recorded') }));
+        await loadPapers(client);
+        return true;
+      },
       /** FP4 — a fleetless vehicle's papers. The date is the switch in both directions. */
       recordVehiclePapers: async (vehicleId: string, documents: { insuranceRef?: string; insuranceExpiresAt?: string; inspectionRef?: string; inspectionExpiresAt?: string }, plate: string) => {
         const client = clientRef.current;
@@ -1488,6 +1506,13 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           'topUpFee',
           (client, entityId) => client.api.setTopUpFee(entityId, body),
           body.amount === undefined ? t('tower.topupfee.removed') : t('tower.topupfee.saved'),
+        ),
+      // Not a lane either, so its own busy id and its own words — same reasoning as the top-up fee.
+      saveCarrierPapers: (enforce) =>
+        saveKnob(
+          'carrierPapers',
+          (client, entityId) => client.api.setCarrierPapers(entityId, enforce),
+          enforce.length ? t('tower.carrierPapers.saved') : t('tower.carrierPapers.savedNone'),
         ),
     },
   };

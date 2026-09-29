@@ -129,6 +129,7 @@ export function RatesScreen({ state, actions }: { state: TowerState; actions: To
           </section>
 
           <TopUpFee pricing={pricing} state={state} actions={actions} />
+          <CarrierPapers pricing={pricing} state={state} actions={actions} />
           <RecentChanges pricing={pricing} />
           <Administrators pricing={pricing} state={state} actions={actions} />
           <RateImpact state={state} />
@@ -244,6 +245,82 @@ function TopUpFee({ pricing, state, actions }: { pricing: EntityPricing; state: 
             />
             {err ? <p class="cerr">{err}</p> : null}
             <button type="button" class="cbtn cbtn--primary" disabled={!pricing.editable || busy} onClick={save}>
+              {t('tower.rates.save')}
+            </button>
+          </section>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * WHICH OF A CARRIER'S OWN PAPERS THIS SISTER WILL NOT TRADE WITHOUT.
+ *
+ * The first on/off knob on a company, and deliberately shaped like the others: a draft until Save, one
+ * Save for one request. The toggles are pressed-state buttons rather than checkboxes because that is how
+ * this console says "on" everywhere else.
+ *
+ * NOTHING IS THE DEFAULT, and the panel says why in its hint: every fleet on the network was onboarded
+ * without an expiry date, so enforcing before the dates are recorded would refuse data that was legal when
+ * it was given. And turning it off hides nothing — the dates stay on the Papers screen either way; this
+ * decides only whether a lapse takes a carrier's runs off the board.
+ */
+const CARRIER_KINDS = ['operator_licence', 'carrier_insurance'] as const;
+type CarrierKind = (typeof CARRIER_KINDS)[number];
+
+function CarrierPapers({ pricing, state, actions }: { pricing: EntityPricing; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const stored = (pricing.carrierPapers?.enforce ?? []) as CarrierKind[];
+  const [draft, setDraft] = useState<CarrierKind[]>(stored);
+  // A save re-reads the pricing, so the toggles follow what was stored rather than what was pressed.
+  useEffect(() => setDraft((pricing.carrierPapers?.enforce ?? []) as CarrierKind[]), [pricing]);
+
+  const busy = state.busyId === 'carrierPapers';
+  const changed = draft.length !== stored.length || draft.some((k) => !stored.includes(k));
+  const toggle = (k: CarrierKind) => setDraft(draft.includes(k) ? draft.filter((x) => x !== k) : [...draft, k]);
+  const label = (k: CarrierKind) => t(k === 'operator_licence' ? 'fleet.papers.operatorLicence' : 'fleet.papers.carrierInsurance');
+
+  return (
+    <section class="cons__panel" style="margin-top:18px">
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t('tower.carrierPapers.title')}</span>
+        {/* What is enforced TODAY, off the record — the toggles are a draft until saved. */}
+        <span class="ctbl__sub">
+          {stored.length ? t('tower.carrierPapers.current', { papers: stored.map(label).join(', ') }) : t('tower.carrierPapers.currentNone')}
+        </span>
+      </div>
+
+      <div class="twr-knobs">
+        <p class="chint">{t('tower.carrierPapers.hint')}</p>
+        <div class="twr-knobs__row">
+          <section class="twr-knob">
+            <p class="twr-clear__t">{t('tower.carrierPapers.question')}</p>
+            <div style="display:flex;flex-wrap:wrap;gap:8px">
+              {CARRIER_KINDS.map((k) => {
+                const on = draft.includes(k);
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    class={`cbtn cbtn--sm ${on ? 'cbtn--primary' : 'cbtn--ghost'}`}
+                    aria-pressed={on}
+                    disabled={!pricing.editable || busy}
+                    onClick={() => toggle(k)}
+                  >
+                    {on ? <Icon name="check" size={14} /> : null}
+                    {label(k)}
+                  </button>
+                );
+              })}
+            </div>
+            <p class="chint">{draft.length ? t('tower.carrierPapers.effectOn') : t('tower.carrierPapers.effectOff')}</p>
+            <button
+              type="button"
+              class="cbtn cbtn--primary"
+              disabled={!pricing.editable || busy || !changed}
+              onClick={() => void actions.saveCarrierPapers(CARRIER_KINDS.filter((k) => draft.includes(k)))}
+            >
               {t('tower.rates.save')}
             </button>
           </section>

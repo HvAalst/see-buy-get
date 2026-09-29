@@ -1,4 +1,6 @@
 import { DepartureService } from './departure.service';
+import { GlosError } from '../../foundation/http/glos-error';
+import { requiredUnloadKeys } from './heavy-cargo';
 import { CorridorService } from './corridor.service';
 import { CargoService } from './cargo.service';
 import type { MediaService } from './media.service';
@@ -43,7 +45,7 @@ describe('the two doors a run has to pass', () => {
   const DRIVER = 'did:glos:driver-gates';
   const SHIPPER = 'did:glos:shipper-gates';
 
-  const managers = { get: () => ({ jurisdiction: 'KE' }) } as unknown as FleetManagerService;
+  const managers = { get: () => ({ jurisdiction: 'KE' }), tradingBlocks: () => [], assertMayTakeWork: () => undefined } as unknown as FleetManagerService;
 
   /** One eight-tonne truck, in date and this fleet's. The vehicle gate is its own test. */
 
@@ -169,7 +171,7 @@ const silentBus = { publish: async () => undefined } as unknown as EventBus;
        * The incomplete record is a real problem and it is surfaced where it actually bites — the price
        * field says out loud that the currency is a guess.
        */
-      const nowhere = { get: () => ({}) } as unknown as FleetManagerService;
+      const nowhere = { get: () => ({}), tradingBlocks: () => [], assertMayTakeWork: () => undefined } as unknown as FleetManagerService;
       const corridors = new CorridorService();
       const asked: Array<string | undefined> = [];
       const recording = { can: (j: string | undefined) => (asked.push(j), false) } as unknown as PresenceService;
@@ -191,6 +193,123 @@ const silentBus = { publish: async () => undefined } as unknown as EventBus;
       expect(asked).toEqual(['takeIn']);
     });
   });
+
+  /* ------------------------------------------------------------------ the carrier -- */
+
+  /**
+   * AND THE DOOR THAT WAS NEVER THERE AT ALL: may this carrier take work?
+   *
+   * `requireActive` was asked before registering a vehicle and before onboarding a driver, and nowhere
+   * else. SELLING SPACE — the thing suspension exists to stop — asked nothing, and the route guard
+   * checked who was calling rather than whether they might still trade. Suspension closed the sign-in
+   * door and left the shop open: a fleet suspended mid-session kept publishing runs and taking bookings
+   * for as long as its token lasted.
+   *
+   * The reasons a carrier is refused live in FleetManagerService (carrier-papers.spec.ts drives them).
+   * What matters HERE is which doors ask, and — just as much — which ones must never ask.
+   */
+  describe('the carrier', () => {
+    const stopped = {
+      get: () => ({ jurisdiction: 'KE' }),
+      tradingBlocks: () => ['Kilima Logistics is suspended on the network'],
+      assertMayTakeWork: () => {
+        throw new GlosError('CARRIER_NOT_TRADING', 'This carrier is not taking new work: Kilima Logistics is suspended on the network');
+      },
+    } as unknown as FleetManagerService;
+
+    const stoppedSetUp = () => {
+      const corridors = new CorridorService();
+      const service = new DepartureService(corridors, stopped, clearDrivers, oneTruck, new CargoService(), adopted(), openEverywhere, silentBus);
+      return { service, corridor: line(corridors) };
+    };
+
+    it('will not let a suspended fleet sell new space', () => {
+      const { service, corridor } = stoppedSetUp();
+      expect(() => declare(service, corridor.corridorId)).toThrow(/not taking new work/);
+      expect(() => declare(service, corridor.corridorId)).toThrow(/Kilima Logistics is suspended/);
+    });
+
+    it('refuses a shipper booking onto a run the carrier published BEFORE it was stopped', () => {
+      // The case registration cannot answer, exactly like the wound-down country above: the run went up
+      // while the fleet was fine and the shipper arrives afterwards.
+      const corridors = new CorridorService();
+      const swing = { get: () => ({ jurisdiction: 'KE' }), tradingBlocks: () => [] as string[], assertMayTakeWork: () => undefined as void };
+      const service = new DepartureService(corridors, swing as unknown as FleetManagerService, clearDrivers, oneTruck, new CargoService(), adopted(), openEverywhere, silentBus);
+      const run = declare(service, line(corridors).corridorId);
+
+      swing.tradingBlocks = () => ['Kilima Logistics is suspended on the network'];
+      swing.assertMayTakeWork = () => {
+        throw new GlosError('CARRIER_NOT_TRADING', 'This carrier is not taking new work: Kilima Logistics is suspended on the network');
+      };
+
+      expect(() => service.book(run.departureId, { shipperDid: SHIPPER, description: 'Maize', weightKg: 100 })).toThrow(/not taking new work/);
+      // Quoting too — pricing a run somebody may not book is a tease, and both go through assertBookable.
+      expect(() => service.quote(run.departureId, { weightKg: 100 })).toThrow(/not taking new work/);
+    });
+
+    it('takes the run off the board rather than refusing at the button', () => {
+      const corridors = new CorridorService();
+      const swing = { get: () => ({ jurisdiction: 'KE' }), tradingBlocks: () => [] as string[], assertMayTakeWork: () => undefined as void };
+      const service = new DepartureService(corridors, swing as unknown as FleetManagerService, clearDrivers, oneTruck, new CargoService(), adopted(), openEverywhere, silentBus);
+      declare(service, line(corridors).corridorId);
+      expect(service.offers()).toHaveLength(1);
+
+      swing.tradingBlocks = () => ['Kilima Logistics is suspended on the network'];
+      // A shipper has no way to know a carrier was stopped this morning. Letting them choose a run,
+      // price it and then be told no is a worse answer than never offering it.
+      expect(service.offers()).toHaveLength(0);
+    });
+
+    it('still lets the fleet record its OWN loads, which is not a sale', () => {
+      const { service, corridor } = (() => {
+        const corridors = new CorridorService();
+        const swing = { get: () => ({ jurisdiction: 'KE' }), tradingBlocks: () => [] as string[], assertMayTakeWork: () => undefined as void };
+        const svc = new DepartureService(corridors, swing as unknown as FleetManagerService, clearDrivers, oneTruck, new CargoService(), adopted(), openEverywhere, silentBus);
+        const c = line(corridors);
+        declare(svc, c.corridorId);
+        swing.tradingBlocks = () => ['Kilima Logistics is suspended on the network'];
+        swing.assertMayTakeWork = () => {
+          throw new GlosError('CARRIER_NOT_TRADING', 'no');
+        };
+        return { service: svc, corridor: c };
+      })();
+      const run = service.forFleet(MANAGER)[0];
+
+      // F4: a fleet recording a customer it already had is protecting space it has already promised
+      // elsewhere. Refusing it would not stop the lorry — it would let us sell the same metres twice.
+      expect(() => service.addOwnLoad(run.departureId, MANAGER, { customer: 'Kariuki', description: 'Cement', weightKg: 100 })).not.toThrow();
+      void corridor;
+    });
+
+    it('never stops a run that is already under way from being finished', () => {
+      const corridors = new CorridorService();
+      const swing = { get: () => ({ jurisdiction: 'KE' }), tradingBlocks: () => [] as string[], assertMayTakeWork: () => undefined as void };
+      const service = new DepartureService(corridors, swing as unknown as FleetManagerService, clearDrivers, oneTruck, new CargoService(), adopted(), openEverywhere, silentBus);
+      const run = declare(service, line(corridors).corridorId);
+      const { booking } = service.book(run.departureId, { shipperDid: SHIPPER, description: 'Maize', weightKg: 100 });
+      service.assignDriver(run.departureId, MANAGER, { did: DRIVER, name: 'Wanjiru' });
+
+      swing.tradingBlocks = () => ['Kilima Logistics is suspended on the network'];
+      swing.assertMayTakeWork = () => {
+        throw new GlosError('CARRIER_NOT_TRADING', 'no');
+      };
+
+      /*
+       * THE HALF THAT MATTERS MOST. Suspension is about new commitments; the cargo already on the lorry
+       * is the shipper's, and a gate that stopped delivery would strand their goods and lose the
+       * delivery signature — punishing them for their carrier's paperwork.
+       */
+      expect(() => service.setStatus(run.departureId, 'departed', MANAGER)).not.toThrow();
+      expect(() =>
+        service.deliver(run.departureId, booking.bookingId, MANAGER, {
+          receiverName: 'Otieno',
+          photoRef: 'med_1',
+          confirmed: requiredUnloadKeys(),
+        }),
+      ).not.toThrow();
+      expect(service.require(run.departureId).bookings[0].status).toBe('delivered');
+    });
+  });
 });
 
 /**
@@ -205,7 +324,7 @@ const silentBus = { publish: async () => undefined } as unknown as EventBus;
  */
 describe('the vehicle a run is sold on', () => {
   const MANAGER = 'did:glos:fleet-veh';
-  const managers = { get: () => ({ jurisdiction: 'KE' }) } as unknown as FleetManagerService;
+  const managers = { get: () => ({ jurisdiction: 'KE' }), tradingBlocks: () => [], assertMayTakeWork: () => undefined } as unknown as FleetManagerService;
   const clearDrivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
   const openEverywhere = { can: () => true } as unknown as PresenceService;
   const silent = { publish: async () => undefined } as unknown as EventBus;
@@ -289,7 +408,7 @@ describe('the vehicle a run is sold on', () => {
 describe('how the shipper pays the fleet', () => {
   const MANAGER = 'did:glos:fleet-pay';
   const SHIPPER = 'did:glos:shipper-pay';
-  const managers = { get: () => ({ jurisdiction: 'KE' }) } as unknown as FleetManagerService;
+  const managers = { get: () => ({ jurisdiction: 'KE' }), tradingBlocks: () => [], assertMayTakeWork: () => undefined } as unknown as FleetManagerService;
   const clearDrivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
   const openEverywhere = { can: () => true } as unknown as PresenceService;
   const silent = { publish: async () => undefined } as unknown as EventBus;

@@ -25,6 +25,7 @@ const SAY: Record<string, string> = {
   'error.hours_exceeded': 'Your driving hours do not allow this right now.',
   'error.too_heavy': 'Too heavy for the space you have left.',
   'error.no_room': 'That run does not have room for this.',
+  'error.carrier_not_trading': 'This carrier is not taking new work right now.',
   // F5 — the goods and the truck, or the goods and each other. The server's DETAIL names the vehicle or
   // the load already aboard, which is the only actionable part, so callers pass showDetail.
   'error.vehicle_capability': 'That truck cannot carry these goods.',
@@ -69,6 +70,7 @@ const SAY: Record<string, string> = {
 const OVERRIDE: Record<string, string> = {
   NOT_COUPLED: 'You are not on shift. Scan a vehicle first.',
   ALREADY_COUPLED: 'You are already on a shift, or that van is taken.',
+  CARRIER_NOT_TRADING: 'This carrier is not taking new work right now.', // the detail names the reason
   CANNOT_COUPLE: 'That shift cannot start.', // FP4 — the detail names the paper, or the status
   BAG_RESERVED: 'That bag is being held for another driver.',
   CONFLICT: 'Someone got there first.',

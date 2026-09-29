@@ -13,13 +13,43 @@ describe('the papers watch', () => {
   const DAY = 86_400_000;
   const day = (d: number) => new Date(now + d * DAY).toISOString().slice(0, 10);
 
-  const harness = (over: { vehicles?: Array<Record<string, unknown>>; drivers?: Array<Record<string, unknown>>; onShift?: Record<string, string>; recent?: Record<string, string[]> } = {}) => {
+  const harness = (
+    over: {
+      vehicles?: Array<Record<string, unknown>>;
+      drivers?: Array<Record<string, unknown>>;
+      onShift?: Record<string, string>;
+      recent?: Record<string, string[]>;
+      /** The fleet OPERATOR's own papers, and what its sister does about them. */
+      carrierPapers?: Record<string, unknown>;
+      enforced?: string[];
+      notOffered?: string[];
+    } = {},
+  ) => {
     process.env.GLOS_PERSIST = 'off';
     const outbox = new OutboxMailSender();
     const inbox: Array<{ did: string; kind: string; title: string; body: string }> = [];
     const ended: string[] = [];
     const onShift = { ...(over.onShift ?? {}) }; // vehicleId → driverDid
-    const managers = { list: () => [{ did: 'did:fleet:k', status: 'ACTIVE', companyName: 'Kilima Logistics', contactEmail: 'ops@kilima.example' }] } as unknown as FleetManagerService;
+    /*
+     * One fleet, with the operator's own papers on it. `requirements` carries the licence NUMBER, which
+     * was all this ever had before there was a date to go with it — the reason it could never lapse.
+     */
+    const managers = {
+      list: () => [
+        {
+          did: 'did:fleet:k',
+          status: 'ACTIVE',
+          companyName: 'Kilima Logistics',
+          contactEmail: 'ops@kilima.example',
+          jurisdiction: 'KE',
+          requirements: { businessRegistrationNo: 'BRS-1', transportOperatorLicence: 'TLB-77', taxId: 'P051' },
+          papers: over.carrierPapers,
+        },
+      ],
+      entityIdOrNone: () => 'sbg-ke',
+      enforcedFor: () => over.enforced ?? [],
+      tradingBlocks: () => over.notOffered ?? [],
+    } as unknown as FleetManagerService;
     // The mocks honour the owner filter the way the real lists do — a fleet's report must not count a courier's vehicle.
     const byOwner = <T extends { managerDid?: string }>(rows: T[], f?: { managerDid?: string }) => rows.filter((r) => !f?.managerDid || r.managerDid === f.managerDid);
     const vehicles = { list: (f?: { managerDid?: string }) => byOwner((over.vehicles ?? []) as Array<{ managerDid?: string }>, f) } as unknown as VehicleService;
@@ -125,6 +155,48 @@ describe('the papers watch', () => {
     expect(r.sweep).toBeNull();
     await watch.sweep(now);
     expect(watch.networkReport(now).sweep).toMatchObject({ at: new Date(now).toISOString(), shiftsEnded: 0 });
+  });
+
+  /*
+   * THE OPERATOR'S OWN PAPERS ARE ON THIS SCREEN WHETHER OR NOT ANYBODY ENFORCES THEM.
+   *
+   * That is the whole design: a sister decides the CONSEQUENCE of a lapse, never whether we look. If
+   * "not enforced" also meant "not shown", the transport-operator licence would be exactly what it was
+   * before — collected at KYC, read once, and never looked at again by anything.
+   */
+  describe('the operators own papers', () => {
+    it('lists a fleet whose dates were never recorded, rather than leaving it out', () => {
+      const { watch } = harness();
+      const [row] = watch.networkReport(now).carrierPapers;
+
+      expect(row).toMatchObject({ companyName: 'Kilima Logistics', entityId: 'sbg-ke', enforced: [], notOffered: [] });
+      // 'none' on both, and the licence NUMBER present without a date — the exact state that made this
+      // unenforceable, now visible instead of invisible.
+      expect(row.papers.map((p) => p.state)).toEqual(['none', 'none']);
+      expect(row.papers[0]).toMatchObject({ kind: 'operator_licence', reference: 'TLB-77' });
+    });
+
+    it('shows a lapsed licence that nobody enforces, and says nobody is enforcing it', () => {
+      const { watch } = harness({ carrierPapers: { licenceExpiresAt: day(-5) } });
+      const [row] = watch.networkReport(now).carrierPapers;
+
+      expect(row.papers[0].state).toBe('lapsed');
+      // Lapsed AND still trading. A reader can tell that apart from "in date" only because both fields
+      // are here: the paper is bad, and no sister has asked us to do anything about it.
+      expect(row.enforced).toEqual([]);
+      expect(row.notOffered).toEqual([]);
+    });
+
+    it('says so plainly when the lapse IS costing the fleet work', () => {
+      const { watch } = harness({
+        carrierPapers: { licenceExpiresAt: day(-5) },
+        enforced: ['operator_licence'],
+        notOffered: ['Operator licence lapsed 9 Sep 2026'],
+      });
+      const [row] = watch.networkReport(now).carrierPapers;
+
+      expect(row).toMatchObject({ enforced: ['operator_licence'], notOffered: ['Operator licence lapsed 9 Sep 2026'] });
+    });
   });
 
   it('does nothing for papers in date or never recorded', async () => {

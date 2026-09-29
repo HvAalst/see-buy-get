@@ -35,6 +35,12 @@ export function RunsScreen({ state, actions }: { state: FleetState; actions: Fle
       <h1 class="scr__title">{t('fleet.runs.title')}</h1>
       <Explainer who={state.manager?.did} id="fleet.runs.how" text={t('fleet.runs.lede')} />
 
+      {/* First, above everything: nothing else on this screen matters while nobody can buy from it. The
+          shipper's board drops these runs silently, so this is the one place the reason is said. (It first
+          went in beside the currency note, inside the new-run form — below every run, where the one fleet
+          it is for would scroll past a list of runs nobody could book before reaching it.) */}
+      {state.notOffered.length ? <Note tone="danger" icon="block" title={t('fleet.runs.notOfferedTitle')} detail={t('fleet.runs.notOffered', { why: state.notOffered.join('; ') })} /> : null}
+
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
 
       {runs.length === 0 ? (
@@ -114,8 +120,14 @@ function Run({ run, state, actions }: { run: DepartureRow; state: FleetState; ac
       {/* Which truck, and how they pay you — both read back, because a fleet looking at next Tuesday wants
           the offer it made and not the form it filled. */}
       <p class="card__note">
-        {t('fleet.runs.onVehicle', { plate: run.plate })}
-        {' · '}
+        {/* A run declared before a run had to name its truck has no plate. Said as nothing rather than
+            "On undefined" — the data is legitimately old; printing the gap as a word was the defect. */}
+        {run.plate ? (
+          <>
+            {t('fleet.runs.onVehicle', { plate: run.plate })}
+            {' · '}
+          </>
+        ) : null}
         {settleWords(run.settle, t)}
       </p>
       <p class="card__note">{coverWords(run.cover, run.rate.currency, t)}</p>

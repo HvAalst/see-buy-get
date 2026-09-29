@@ -45,7 +45,7 @@ describe('a booking’s life after it is sold', () => {
   const SHIPPER = 'did:glos:shipper-life';
   const OTHER = 'did:glos:shipper-other';
 
-  const managers = { get: () => ({ jurisdiction: 'KE' }) } as unknown as FleetManagerService;
+  const managers = { get: () => ({ jurisdiction: 'KE' }), tradingBlocks: () => [], assertMayTakeWork: () => undefined } as unknown as FleetManagerService;
 
   /** One eight-tonne truck, in date and this fleet's. The vehicle gate is its own test. */
 

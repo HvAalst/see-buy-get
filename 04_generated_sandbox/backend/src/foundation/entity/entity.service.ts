@@ -16,6 +16,7 @@ import {
   RateOrigin,
   RateOrigins,
   RateStack,
+  ResolvedCarrierPapers,
   ResolvedInsurance,
   ResolvedRates,
   ResolvedTax,
@@ -492,6 +493,47 @@ export class EntityService implements OnApplicationBootstrap {
     return entity;
   }
 
+  /** Which of a carrier's own papers this sister will not trade without. Empty for one that has never said. */
+  carrierPapersFor(entityId: string): ResolvedCarrierPapers {
+    return EntityService.resolveCarrierPapers(this.get(entityId));
+  }
+
+  static resolveCarrierPapers(from: Pick<Entity, 'carrierPapers'>): ResolvedCarrierPapers {
+    return { enforce: [...(from.carrierPapers?.enforce ?? [])].sort() };
+  }
+
+  /**
+   * Say which carrier papers this sister refuses to trade without.
+   *
+   * The whole list every time, not a patch: the question "which papers do you enforce" has a complete
+   * answer, and a merge could never express turning the last one off. Same reason the vault's update
+   * replaces rather than merges where the response IS the complete state.
+   *
+   * No bounds to check and nothing to round — the kinds are the caller's vocabulary (see
+   * CarrierPapersRule) and the caller has already refused any it does not recognise.
+   */
+  setCarrierPapers(entityId: string, enforce: string[], by?: string): Entity {
+    const entity = this.requireTransacting(entityId);
+    const before = EntityService.resolveCarrierPapers(entity);
+    const next = [...new Set(enforce.map((k) => k.trim()).filter(Boolean))].sort();
+
+    // Saving what is already set is not a decision, and must not be logged as one. Found by LOOKING at the
+    // change log: "was operator licence, now operator licence" reads as somebody having decided something,
+    // on the one table whose job is to answer who decided what.
+    if (next.join() === before.enforce.join()) return entity;
+
+    entity.carrierPapers = next.length ? { enforce: next } : undefined;
+    this.entities.set(entity.entityId, entity);
+    this.record(entity.entityId, {
+      at: new Date().toISOString(),
+      by: by ?? 'unknown',
+      what: 'carrierPapers',
+      from: papersLine(before),
+      to: papersLine(EntityService.resolveCarrierPapers(entity)),
+    });
+    return entity;
+  }
+
   /**
    * Set a sister's margin. Only a sister has one — the group earns its licence fee, not a cut of every
    * parcel, and giving it a rate would imply it takes a slice of transactions it is not a party to.
@@ -776,6 +818,7 @@ export class EntityService implements OnApplicationBootstrap {
       // The rule AS DECIDED, not resolved against an amount — this is the screen that sets it, and what
       // it has to show is whether anybody has decided anything. `undefined` is the answer "no fee here".
       topUpFee: entity.topUpFee,
+      carrierPapers: EntityService.resolveCarrierPapers(entity),
       // The default first: every lane row below is read against it, and a table whose fallback row is
       // buried in the middle makes "inherited from where?" a question you have to hunt for.
       lanes: [rowFor(), ...lanes.map((l) => rowFor(l))],
@@ -819,4 +862,12 @@ function taxLine(t: { ratePct: number; label: string }): string {
 function coverLine(i: { premiumPct: number; freeLimit: number }, currency?: string): string {
   const free = i.freeLimit ? `${i.freeLimit} ${currency ?? ''}`.trim() : 'nothing';
   return `${free} free, premium ${pct(i.premiumPct)}`;
+}
+
+/**
+ * "nothing" reads better in a change log than an empty list, and says what was actually decided. The
+ * kinds are spelled as words ("operator licence") because this line is shown to a person as-is.
+ */
+function papersLine(p: { enforce: string[] }): string {
+  return p.enforce.length ? p.enforce.map((k) => k.replace(/_/g, ' ')).join(', ') : 'nothing';
 }

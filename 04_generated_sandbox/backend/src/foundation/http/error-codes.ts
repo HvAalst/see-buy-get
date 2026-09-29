@@ -67,6 +67,9 @@ export const ERROR_CODES = {
   NOT_COUPLED: { status: 400, title: 'Driver is not coupled to a vehicle' },
   ALREADY_COUPLED: { status: 400, title: 'Already coupled — uncouple first' },
   CANNOT_COUPLE: { status: 400, title: 'These cannot be coupled' },
+  /** The CARRIER cannot take new work — suspended, or a paper its sister enforces has lapsed. Never
+   *  raised against finishing a run already under way: that would strand the cargo, not the paperwork. */
+  CARRIER_NOT_TRADING: { status: 409, title: 'This carrier is not taking new work' },
   HOURS_EXCEEDED: { status: 400, title: 'Over the hours limit' },
   // CL1 — the trade term is not switched on for this country, in this direction.
   TERM_NOT_ACTIVE: { status: 400, title: 'That trade term is not available here' },

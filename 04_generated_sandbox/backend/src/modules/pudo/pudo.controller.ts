@@ -112,7 +112,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyRecordDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto } from './pudo.dto';
+  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, CarrierPapersRecordDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto } from './pudo.dto';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
@@ -1934,6 +1934,31 @@ export class SbgController {
   entityInsurance(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult, @Query('lane') lane?: string) {
     this.requireReach(actor, entityId);
     return { entityId, lane: lane ?? null, ...this.entities.insuranceFor(entityId, lane) };
+  }
+
+  /**
+   * Say which of a CARRIER's own papers this sister will not trade without.
+   *
+   * The dates themselves are recorded and shown whatever is set here — this decides only the consequence
+   * of one having lapsed: the carrier's runs come off the board and it can be sold no new work, or it
+   * stays a red row somebody has to act on. See CarrierPapersRule for why nothing is the default.
+   *
+   * The whole list, every time. "Which papers do you enforce" has a complete answer, and a patch could
+   * never express turning the last one off.
+   */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/carrier-papers')
+  setEntityCarrierPapers(@Param('entityId') entityId: string, @Body() dto: CarrierPapersDto, @Actor() actor: IntrospectionResult) {
+    this.requireReach(actor, entityId);
+    return this.entities.setCarrierPapers(entityId, dto.enforce ?? [], auditActor(actor));
+  }
+
+  /** What this sister enforces against its carriers. An empty list is the answer for most of them. */
+  @Roles('operator', 'entity_admin')
+  @Get('entities/:entityId/carrier-papers')
+  entityCarrierPapers(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult) {
+    this.requireReach(actor, entityId);
+    return { entityId, ...this.entities.carrierPapersFor(entityId) };
   }
 
   /**
@@ -4115,6 +4140,40 @@ export class SbgController {
     return { ...did, at: this.papers.lastRun?.at ?? new Date().toISOString() };
   }
 
+  /**
+   * Record the dates on a fleet OPERATOR's own papers — its transport licence and its goods-in-transit
+   * cover. Staff only, like a courier's licence: a date that decides whether a company may trade is read
+   * off a document by somebody here, never typed by the company it is about.
+   */
+  @Roles('operator')
+  @Post('fleet/managers/:did/papers')
+  recordCarrierPapers(@Param('did') did: string, @Body() dto: CarrierPapersRecordDto, @Actor() actor: IntrospectionResult) {
+    const m = this.managers.recordPapers(did, dto, auditActor(actor));
+    return { did: m.did, papers: this.managers.papersOf(did), notOffered: this.managers.tradingBlocks(did), recorded: m.papers };
+  }
+
+  /**
+   * A fleet's own papers, and whether they are costing it work.
+   *
+   * Readable by the fleet itself as well as by staff, deliberately: the dates are ABOUT them, and a
+   * carrier that cannot see the paper it is being refused over has been given a refusal it cannot fix.
+   * `enforced` names what the sister behind them actually acts on — an empty list is the usual answer,
+   * and saying so is the difference between "in date" and "nobody is checking".
+   */
+  @Get('fleet/managers/:did/papers')
+  carrierPapers(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    this.assertFleetSelf(did, actor);
+    const m = this.managers.get(did);
+    return {
+      did,
+      papers: this.managers.papersOf(did),
+      recordedBy: m.papers?.recordedBy,
+      recordedAt: m.papers?.recordedAt,
+      enforced: this.managers.enforcedFor(m),
+      notOffered: this.managers.tradingBlocks(did),
+    };
+  }
+
   @Get('fleet/drivers/:did')
   getFleetDriver(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
     const driver = this.assertDriverReader(did, actor);
@@ -4237,12 +4296,17 @@ export class SbgController {
    * Carries the CURRENCY the fleet prices in, and whether that was a guess — because the form that asks
    * for a price has to say which currency it is asking in, and a fleet with no country on its record has
    * only ever been assumed into USD. See pricingCurrency.
+   *
+   * And `notOffered`, which is the board's own rule applied back to the fleet: a suspended or out-of-
+   * licence carrier's runs are filtered off the shipper's board, and a fleet watching its screen would
+   * otherwise see nothing wrong while nothing came in. Where the two sides differ, the document says so.
    */
   @Get('fleet/managers/:did/departures')
   fleetDepartures(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
     this.assertFleetSelf(did, actor);
     const { currency, assumed } = this.departures.pricingCurrency(did);
-    return { items: this.departures.forFleet(did), currency, currencyAssumed: assumed };
+    const notOffered = this.managers.tradingBlocks(did);
+    return { items: this.departures.forFleet(did), currency, currencyAssumed: assumed, ...(notOffered.length ? { notOffered } : {}) };
   }
 
   /**

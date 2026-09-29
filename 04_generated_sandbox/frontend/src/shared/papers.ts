@@ -6,7 +6,7 @@ import { formatDate, type Translate } from './i18n';
  * Shared between the fleet app (its own vehicles and drivers) and the operator console (the couriers and
  * vehicles no fleet office looks after), so the two can never describe the same date in two ways.
  */
-export type PaperKind = 'insurance' | 'inspection' | 'licence';
+export type PaperKind = 'insurance' | 'inspection' | 'licence' | 'operator_licence' | 'carrier_insurance';
 /** ok = in date · due = within 30 days · lapsed = the date has passed · none = no date recorded (switches nothing off). */
 export type PaperState = 'ok' | 'due' | 'lapsed' | 'none';
 
@@ -24,8 +24,21 @@ export function paperTone(state: PaperState): 'danger' | 'warn' | 'idle' | 'ok' 
   return state === 'lapsed' ? 'danger' : state === 'due' ? 'warn' : state === 'none' ? 'idle' : 'ok';
 }
 
+/**
+ * A total map, not a ternary chain: the chain ended in 'Driving licence', so an operator's transport licence
+ * would have been named as a lorry driver's card — and a refusal naming the wrong paper sends somebody to
+ * fetch the wrong thing. A kind added to PaperKind without a label here is now a type error.
+ */
+const KIND_KEYS = {
+  insurance: 'fleet.papers.insurance',
+  inspection: 'fleet.papers.inspection',
+  licence: 'fleet.papers.licence',
+  operator_licence: 'fleet.papers.operatorLicence',
+  carrier_insurance: 'fleet.papers.carrierInsurance',
+} as const satisfies Record<PaperKind, string>;
+
 export function paperKindLabel(kind: PaperKind, t: Translate): string {
-  return t(kind === 'insurance' ? 'fleet.papers.insurance' : kind === 'inspection' ? 'fleet.papers.inspection' : 'fleet.papers.licence');
+  return t(KIND_KEYS[kind]);
 }
 
 /**

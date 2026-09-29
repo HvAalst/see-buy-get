@@ -8,7 +8,8 @@ import { OperationalStore } from '../../foundation/data-firewall/operational-sto
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { Geocoder, GEOCODER } from './geocoder';
-import { FleetManager, FleetManagerKyc, FleetManagerRequirements, FleetManagerStatus } from './fleet.types';
+import { CarrierPapers, FleetManager, FleetManagerKyc, FleetManagerRequirements, FleetManagerStatus } from './fleet.types';
+import { fleetPapers, lapsedOf, offRoadLine, type PaperStatus } from './papers';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
 import { NETWORK_JURISDICTION } from './pudo.config';
@@ -187,6 +188,87 @@ export class FleetManagerService {
    */
   lookup(code: string): FleetManager {
     return this.login(code);
+  }
+
+  /**
+   * Record the operator's own papers. Staff only — these are dates read off a document, not self-declared.
+   *
+   * Recorded whatever the sister enforces, because a date nobody asked for is a date nobody can act on
+   * the day somebody decides to. Passing null clears one; leaving a field out leaves it alone.
+   */
+  recordPapers(
+    did: string,
+    input: { licenceExpiresAt?: string | null; insurancePolicy?: string | null; insuranceExpiresAt?: string | null; insuranceRef?: string | null },
+    by?: string,
+    now = Date.now(),
+  ): FleetManager {
+    const m = this.require(did);
+    const who = by?.trim();
+    if (!who) throw new GlosError('FIELD_REQUIRED', 'Say who is recording these dates');
+    const next: CarrierPapers = { ...(m.papers ?? {}) };
+    const set = (key: 'licenceExpiresAt' | 'insurancePolicy' | 'insuranceExpiresAt' | 'insuranceRef', value: string | null | undefined, isDate: boolean) => {
+      if (value === undefined) return;
+      if (value === null || !value.trim()) return void delete next[key];
+      const v = value.trim();
+      if (isDate && (!/^\d{4}-\d{2}-\d{2}$/.test(v) || Number.isNaN(Date.parse(v)))) {
+        throw new GlosError('VALIDATION_FAILED', 'An expiry must be a date written YYYY-MM-DD');
+      }
+      next[key] = isDate ? v : v.slice(0, 120);
+    };
+    set('licenceExpiresAt', input.licenceExpiresAt, true);
+    set('insuranceExpiresAt', input.insuranceExpiresAt, true);
+    set('insurancePolicy', input.insurancePolicy, false);
+    set('insuranceRef', input.insuranceRef, false);
+
+    m.papers = { ...next, recordedBy: who, recordedAt: new Date(now).toISOString() };
+    this.managers.set(m.did, m);
+    return m;
+  }
+
+  /** The operator's own papers as of now — always derived, never stored (see papers.ts). */
+  papersOf(did: string, now = Date.now()): PaperStatus[] {
+    return fleetPapers(this.require(did), now);
+  }
+
+  /**
+   * Which of this fleet's own papers the sister behind it will not trade without. Usually none.
+   *
+   * A fleet standing where no sister does enforces nothing, and that is the honest answer rather than a
+   * gap: in a country the network only matches, the fleet IS the local operator and nobody here is
+   * carrying the regulatory exposure that would entitle us to make the call.
+   */
+  enforcedFor(m: FleetManager): string[] {
+    const entityId = this.entityIdOrNone(m);
+    return entityId ? this.entities.carrierPapersFor(entityId).enforce : [];
+  }
+
+  /**
+   * WHY THIS FLEET MAY NOT TAKE ON NEW WORK, in words a person can act on. Empty when it may.
+   *
+   * One gate, two reasons — being suspended, and a lapsed paper the sister behind it enforces — because
+   * they are the same question asked of the same fleet at the same moment, and two gates would have been
+   * two places to forget.
+   *
+   * It answers about NEW commitments only. A fleet that is suspended or out of licence halfway through a
+   * run must still deliver, sign the note and be settled: stopping that would strand somebody's cargo and
+   * lose the delivery signature, which punishes the shipper for the carrier's paperwork.
+   */
+  tradingBlocks(did: string, now = Date.now()): string[] {
+    const m = this.managers.get(did);
+    if (!m) return ['We do not know this fleet'];
+    if (m.status !== 'ACTIVE') return [`${m.companyName} is ${m.status.toLowerCase().replace('_', ' ')} on the network`];
+
+    const enforced = new Set(this.enforcedFor(m));
+    if (!enforced.size) return [];
+    return lapsedOf(fleetPapers(m, now))
+      .filter((p) => enforced.has(p.kind))
+      .map(offRoadLine);
+  }
+
+  /** The same question, refused by name. Thrown wherever a NEW commitment to this carrier would begin. */
+  assertMayTakeWork(did: string, now = Date.now()): void {
+    const blocks = this.tradingBlocks(did, now);
+    if (blocks.length) throw new GlosError('CARRIER_NOT_TRADING', `This carrier is not taking new work: ${blocks.join('; ')}`);
   }
 
   suspend(did: string): FleetManager {

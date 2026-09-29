@@ -91,7 +91,7 @@ describe('delivering a consignment note to your own storage', () => {
     lanes += 1;
     const bus = new EventBus();
     const corridors = new CorridorService();
-    const managers = { get: () => ({ jurisdiction: 'KE' }) } as unknown as FleetManagerService;
+    const managers = { get: () => ({ jurisdiction: 'KE' }), tradingBlocks: () => [], assertMayTakeWork: () => undefined } as unknown as FleetManagerService;
     const drivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
     const presence = { can: () => true } as unknown as PresenceService;
     const media = {

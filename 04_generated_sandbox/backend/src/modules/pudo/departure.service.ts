@@ -107,6 +107,10 @@ export class DepartureService {
     // the morning after would otherwise be sold as if nothing had changed. Same reason the held quote is
     // re-asked at the mint instead of trusted.
     this.requireOperating(manager.jurisdiction);
+    // AND whether this carrier may take work at all. Suspension used to close the sign-in door and
+    // nothing else: a fleet suspended mid-session kept publishing runs until its token ran out, which is
+    // backwards — suspension is the lever pulled BECAUSE something is wrong with the operator.
+    this.managers.assertMayTakeWork(input.managerDid);
 
     if (corridor.owner?.managerDid !== input.managerDid) {
       throw new GlosError('FORBIDDEN', `${corridor.name} is not your line — you can only sell space on a line you run`);
@@ -1070,6 +1074,10 @@ export class DepartureService {
     const now = Date.now();
     return this.list()
       .filter((d) => d.status === 'open' && new Date(d.leavesAt).getTime() > now)
+      // Off the board rather than refused at the button. A shipper has no way to know a carrier was
+      // suspended this morning, and letting them pick a run, price it and then be told no is a worse
+      // answer than never offering it. The FLEET is told plainly on its own screen — see fleetView.
+      .filter((d) => !this.managers.tradingBlocks(d.managerDid, now).length)
       .filter((d) => (!filter?.from || d.originZone === filter.from) && (!filter?.to || d.destZone === filter.to))
       .map((d) => {
         const left = this.remaining(d);
@@ -1171,6 +1179,12 @@ export class DepartureService {
     // Asked on every booking, not only at declaration: a run sold last week is still being booked onto
     // today, and the country it runs in can have been wound down in between.
     this.requireOperating(this.managers.get(departure.managerDid)?.jurisdiction);
+    // The carrier's own standing, asked on the same line and for the same reason: a fleet can be
+    // suspended, or its operator licence can lapse, AFTER it published a run somebody is now booking.
+    //
+    // Only for a SHIPPER. A fleet recording its own loads is protecting space it has already promised
+    // elsewhere — refusing that would not stop the lorry, it would let us sell the same metres twice.
+    if (by === 'shipper') this.managers.assertMayTakeWork(departure.managerDid);
     const takesLoads: Departure['status'][] = by === 'fleet' ? ['open', 'closed'] : ['open'];
     if (!takesLoads.includes(departure.status)) throw new GlosError('INVALID_STATE', `That departure is ${departure.status}`);
     if (new Date(departure.leavesAt).getTime() <= Date.now()) throw new GlosError('INVALID_STATE', 'That departure has already left');

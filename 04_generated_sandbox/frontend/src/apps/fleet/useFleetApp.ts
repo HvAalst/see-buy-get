@@ -18,6 +18,16 @@ import type { FleetEarningsSummary, FleetJobRow,
   SubtypeRow,
   VehicleRow,
 } from './types';
+import type { PaperView } from '../../shared/papers';
+
+/** The fleet company's OWN papers, as GET fleet/managers/:did/papers answers. */
+export interface OwnPapers {
+  papers: PaperView[];
+  /** Which of them its company enforces. Usually none — and the card says so, never implies it. */
+  enforced: string[];
+  notOffered: string[];
+  recordedAt?: string;
+}
 
 export type Screen = 'dash' | 'vehicles' | 'drivers' | 'sessions' | 'lines' | 'runs' | 'earnings' | 'dispatch' | 'notes';
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
@@ -54,6 +64,14 @@ export interface FleetState {
    */
   runCurrency: string;
   runCurrencyAssumed: boolean;
+  /**
+   * Why this fleet's runs are NOT on the shipper's board, in the server's words — suspended, or a paper its
+   * company enforces has lapsed. Empty while it trades. The board filters these runs out silently for the
+   * shipper; the fleet is the one party that must be told, or it watches a screen where nothing arrives.
+   */
+  notOffered: string[];
+  /** The company's own transport licence and cover. Null until read. */
+  ownPapers: OwnPapers | null;
   subtypes: SubtypeRow[];
   error: SbgError | null;
   toasts: Toast[];
@@ -130,6 +148,8 @@ const INITIAL: FleetState = {
   departures: [],
   runCurrency: 'USD',
   runCurrencyAssumed: true,
+  notOffered: [],
+  ownPapers: null,
   subtypes: [],
   error: null,
   toasts: [],
@@ -214,7 +234,7 @@ export function useFleetApp() {
     refreshesRunning.current += 1;
     setState((s) => ({ ...s, refreshing: true }));
     try {
-      const [dashR, vehR, drvR, asgR, corR, subR, depR] = await Promise.all([
+      const [dashR, vehR, drvR, asgR, corR, subR, depR, ownR] = await Promise.all([
         client.api.dashboard(),
         client.api.vehicles(),
         client.api.drivers(),
@@ -222,6 +242,7 @@ export function useFleetApp() {
         client.api.corridors(),
         client.api.truckSubtypes(),
         client.api.departures(managerDid),
+        client.api.ownPapers(managerDid),
       ]);
       if (superseded()) return;
 
@@ -238,6 +259,8 @@ export function useFleetApp() {
         departures: depR.error ? s.departures : (narrow<{ items: DepartureRow[] }>(depR.data)?.items ?? []),
         runCurrency: depR.error ? s.runCurrency : (narrow<{ currency?: string }>(depR.data)?.currency ?? s.runCurrency),
         runCurrencyAssumed: depR.error ? s.runCurrencyAssumed : Boolean(narrow<{ currencyAssumed?: boolean }>(depR.data)?.currencyAssumed),
+        notOffered: depR.error ? s.notOffered : (narrow<{ notOffered?: string[] }>(depR.data)?.notOffered ?? []),
+        ownPapers: ownR.error ? s.ownPapers : narrow<OwnPapers>(ownR.data),
         subtypes: subR.error ? s.subtypes : (narrow<SubtypeRow[]>(subR.data) ?? []),
         error: null,
         stale: false,

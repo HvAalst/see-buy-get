@@ -7321,6 +7321,65 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/carrier-papers": {
+      "post": {
+        "operationId": "Sbg.setEntityCarrierPapers",
+        "summary": "",
+        "description": "Say which of a CARRIER's own papers this sister will not trade without.\n\nThe dates themselves are recorded and shown whatever is set here — this decides only the consequence\nof one having lapsed: the carrier's runs come off the board and it can be sold no new work, or it\nstays a red row somebody has to act on. See CarrierPapersRule for why nothing is the default.\n\nThe whole list, every time. \"Which papers do you enforce\" has a complete answer, and a patch could\nnever express turning the last one off.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CarrierPapersDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Entity"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "Sbg.entityCarrierPapers",
+        "summary": "",
+        "description": "What this sister enforces against its carriers. An empty list is the answer for most of them.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/rate-impact": {
       "get": {
         "operationId": "Sbg.entityRateImpact",
@@ -12923,6 +12982,58 @@
         }
       }
     },
+    "/v1/sbg/fleet/managers/{did}/papers": {
+      "post": {
+        "operationId": "Sbg.recordCarrierPapers",
+        "summary": "",
+        "description": "Record the dates on a fleet OPERATOR's own papers — its transport licence and its goods-in-transit\ncover. Staff only, like a courier's licence: a date that decides whether a company may trade is read\noff a document by somebody here, never typed by the company it is about.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CarrierPapersRecordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      },
+      "get": {
+        "operationId": "Sbg.carrierPapers",
+        "summary": "",
+        "description": "A fleet's own papers, and whether they are costing it work.\n\nReadable by the fleet itself as well as by staff, deliberately: the dates are ABOUT them, and a\ncarrier that cannot see the paper it is being refused over has been given a refusal it cannot fix.\n`enforced` names what the sister behind them actually acts on — an empty list is the usual answer,\nand saying so is the difference between \"in date\" and \"nobody is checking\".",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}": {
       "get": {
         "operationId": "Sbg.getFleetDriver",
@@ -13218,7 +13329,7 @@
       "get": {
         "operationId": "Sbg.fleetDepartures",
         "summary": "",
-        "description": "This fleet's own departures, soonest first, with who is aboard each.\n\nCarries the CURRENCY the fleet prices in, and whether that was a guess — because the form that asks\nfor a price has to say which currency it is asking in, and a fleet with no country on its record has\nonly ever been assumed into USD. See pricingCurrency.",
+        "description": "This fleet's own departures, soonest first, with who is aboard each.\n\nCarries the CURRENCY the fleet prices in, and whether that was a guess — because the form that asks\nfor a price has to say which currency it is asking in, and a fleet with no country on its record has\nonly ever been assumed into USD. See pricingCurrency.\n\nAnd `notOffered`, which is the board's own rule applied back to the fleet: a suspended or out-of-\nlicence carrier's runs are filtered off the shipper's board, and a fleet watching its screen would\notherwise see nothing wrong while nothing came in. Where the two sides differ, the document says so.",
         "parameters": [
           {
             "name": "did",
@@ -22049,6 +22160,10 @@
           "insuranceByLane": {
             "type": "object"
           },
+          "carrierPapers": {
+            "type": "object",
+            "description": "Which of a CARRIER'S own papers this sister will not trade without. Absent enforces nothing, which\nis where every sister starts. Read it through EntityService.carrierPapersFor(), never off the record."
+          },
           "parentEntityId": {
             "type": "string",
             "description": "Sisters point at the group they belong to."
@@ -25100,6 +25215,8 @@
               "tax",
               "cover",
               "fee",
+              "topUpFee",
+              "carrierPapers",
               "created",
               "record",
               "activated"
@@ -25130,6 +25247,20 @@
           "by",
           "from",
           "to"
+        ]
+      },
+      "ResolvedCarrierPapers": {
+        "type": "object",
+        "properties": {
+          "enforce": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "enforce"
         ]
       },
       "PricingBounds": {
@@ -25213,6 +25344,14 @@
             "type": "boolean",
             "description": "Whether this entity may be a party to a transaction at all. The group may not — it is the merchant of\nrecord nowhere — so its knobs are not editable, and the screen has to say why rather than fail on save."
           },
+          "carrierPapers": {
+            "description": "Which of a carrier's own papers this sister refuses to trade without. Sister-wide, like the top-up\nfee: a transport licence is not a lane of work. Always present, and EMPTY for nearly everybody —\nthe console says \"nothing enforced\" in words, because an empty list is a decision that shows.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ResolvedCarrierPapers"
+              }
+            ]
+          },
           "bounds": {
             "$ref": "#/components/schemas/PricingBounds"
           },
@@ -25228,6 +25367,7 @@
           "entityId",
           "name",
           "transacting",
+          "carrierPapers",
           "bounds",
           "editable"
         ]
@@ -25477,6 +25617,21 @@
             "nullable": true,
             "description": "Covered on every shipment without anybody declaring anything, in the sister's own currency.",
             "minimum": 0
+          }
+        }
+      },
+      "CarrierPapersDto": {
+        "type": "object",
+        "properties": {
+          "enforce": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "operator_licence",
+                "carrier_insurance"
+              ]
+            }
           }
         }
       },
@@ -27584,7 +27739,8 @@
         "type": "object",
         "properties": {
           "kind": {
-            "type": "object"
+            "type": "object",
+            "description": "READ from papers.ts rather than restated here — a second copy of an enum is a second thing to forget."
           },
           "state": {
             "type": "object"
@@ -28599,6 +28755,32 @@
           "submittedAt"
         ]
       },
+      "CarrierPapers": {
+        "type": "object",
+        "properties": {
+          "licenceExpiresAt": {
+            "type": "string",
+            "description": "When the transport-operator licence runs out. Its NUMBER stays on `requirements`, where it always was."
+          },
+          "insurancePolicy": {
+            "type": "string",
+            "description": "Goods-in-transit / carrier liability cover: the policy, its expiry, and the scan it was read from."
+          },
+          "insuranceExpiresAt": {
+            "type": "string"
+          },
+          "insuranceRef": {
+            "type": "string"
+          },
+          "recordedBy": {
+            "type": "string",
+            "description": "Who typed these dates and when — the same provenance a driver's licence carries, and for the same\nreason: a screen must be able to say whether a date was read off a document or taken on somebody's word."
+          },
+          "recordedAt": {
+            "type": "string"
+          }
+        }
+      },
       "FleetManager": {
         "type": "object",
         "properties": {
@@ -28642,6 +28824,14 @@
           },
           "kyc": {
             "$ref": "#/components/schemas/FleetManagerKyc"
+          },
+          "papers": {
+            "description": "The operator's own papers and their expiry dates — recorded always, enforced only where a sister says so.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CarrierPapers"
+              }
+            ]
           },
           "bondPaid": {
             "type": "boolean"
@@ -30160,6 +30350,27 @@
           "phone",
           "pin"
         ]
+      },
+      "CarrierPapersRecordDto": {
+        "type": "object",
+        "properties": {
+          "licenceExpiresAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "insurancePolicy": {
+            "type": "string",
+            "nullable": true
+          },
+          "insuranceExpiresAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "insuranceRef": {
+            "type": "string",
+            "nullable": true
+          }
+        }
       },
       "RenewLicenceDto": {
         "type": "object",

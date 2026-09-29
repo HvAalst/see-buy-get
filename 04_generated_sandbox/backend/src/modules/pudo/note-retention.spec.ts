@@ -41,7 +41,7 @@ describe('how long we keep a consignment note', () => {
 
   const asShipper = { role: 'pudo', did: SHIPPER } as unknown as IntrospectionResult;
 
-  const managers = { get: () => ({ jurisdiction: 'KE' }) } as unknown as FleetManagerService;
+  const managers = { get: () => ({ jurisdiction: 'KE' }), tradingBlocks: () => [], assertMayTakeWork: () => undefined } as unknown as FleetManagerService;
   const drivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
   const presence = { can: () => true } as unknown as PresenceService;
   const media = { adopt: () => undefined, anchorFreightTerminal: () => undefined, holdFreightForDispute: () => undefined } as unknown as MediaService;

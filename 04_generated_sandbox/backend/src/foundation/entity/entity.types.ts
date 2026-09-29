@@ -165,6 +165,35 @@ export class ResolvedInsurance {
 }
 
 /**
+ * WHICH OF A CARRIER'S OWN PAPERS THIS SISTER REFUSES TO TRADE WITHOUT.
+ *
+ * A fleet's transport-operator licence and its goods-in-transit cover are recorded, dated and shown to
+ * everybody whatever is set here. This decides only the CONSEQUENCE of one having lapsed: whether the
+ * fleet may still be sold new work, or whether it is merely a red row somebody has to act on.
+ *
+ * ENFORCING NOTHING IS THE DEFAULT, and deliberately so. Every fleet already on the network was onboarded
+ * without an expiry date, so a switch thrown for everyone would refuse data that was legal when it was
+ * given and empty the board overnight. The sister turns it on when it has the dates to turn it on with.
+ *
+ * It is the SISTER'S call because the sister is the merchant of record where the fleet works: it carries
+ * the regulatory exposure, and an operator licence is a real instrument in some jurisdictions and an
+ * unverifiable formality in others. A fleet standing in a country with no sister (the presence ladder's
+ * matched state) therefore enforces nothing, which is the honest answer — nobody is there to carry it.
+ *
+ * Kinds are PLAIN STRINGS because this is foundation and the paper taxonomy belongs to the pudo module,
+ * exactly as `ratesByLane` holds a lane vocabulary it refuses to learn. The caller validates the keys.
+ */
+export interface CarrierPapersRule {
+  /** Paper kinds (`operator_licence`, `carrier_insurance`). Empty or absent enforces none. */
+  enforce?: string[];
+}
+
+/** What a sister enforces against its carriers, resolved. */
+export class ResolvedCarrierPapers {
+  @ApiProperty({ type: [String] }) enforce: string[];
+}
+
+/**
  * A person who administers a company, as stored. The salt and the hash never leave this file's module.
  */
 export interface EntityAdmin {
@@ -244,8 +273,8 @@ export class EntityChange {
   at: string;
   /** The name the token carried, or the DID when a machine did it. Never a string from a request body. */
   by: string;
-  @ApiProperty({ enum: ['rates', 'tax', 'cover', 'fee', 'created', 'record', 'activated'] })
-  what: 'rates' | 'tax' | 'cover' | 'fee' | 'topUpFee' | 'created' | 'record' | 'activated';
+  @ApiProperty({ enum: ['rates', 'tax', 'cover', 'fee', 'topUpFee', 'carrierPapers', 'created', 'record', 'activated'] })
+  what: 'rates' | 'tax' | 'cover' | 'fee' | 'topUpFee' | 'carrierPapers' | 'created' | 'record' | 'activated';
   /** The lane it applies to; absent means the company's default for everything. */
   @ApiPropertyOptional()
   lane?: string;
@@ -349,6 +378,12 @@ export class EntityPricing {
    */
   @ApiPropertyOptional({ type: TopUpFeeRule })
   topUpFee?: TopUpFeeRule;
+  /**
+   * Which of a carrier's own papers this sister refuses to trade without. Sister-wide, like the top-up
+   * fee: a transport licence is not a lane of work. Always present, and EMPTY for nearly everybody —
+   * the console says "nothing enforced" in words, because an empty list is a decision that shows.
+   */
+  carrierPapers: ResolvedCarrierPapers;
   /** The sister's default first, then one row per lane. */
   @ApiProperty({ type: [LanePricing] })
   lanes: LanePricing[];
@@ -435,6 +470,11 @@ export class Entity {
    */
   insurance?: InsuranceRule;
   insuranceByLane?: Record<string, InsuranceRule>;
+  /**
+   * Which of a CARRIER'S own papers this sister will not trade without. Absent enforces nothing, which
+   * is where every sister starts. Read it through EntityService.carrierPapersFor(), never off the record.
+   */
+  carrierPapers?: CarrierPapersRule;
   /** Sisters point at the group they belong to. */
   parentEntityId?: string;
   /**

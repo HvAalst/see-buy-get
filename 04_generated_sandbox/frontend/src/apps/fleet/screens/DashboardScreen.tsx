@@ -3,9 +3,9 @@ import { pinChangeBlocker } from '../../../shared/account/password';
 import { useState, useEffect } from 'preact/hooks';
 import { Button, Card, ErrorNote, ExplainerReset, Icon, PlaceMap, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
-import { ageWords, signalState, dashboardSummary, hoursLabel, paperLine, paperLineClass, papersAloud, vehiclePins } from '../logic';
+import { ageWords, signalState, dashboardSummary, hoursLabel, paperKindLabel, paperLine, paperLineClass, papersAloud, vehiclePins } from '../logic';
 import type { PapersReport } from '../types';
-import type { FleetActions, FleetState } from '../useFleetApp';
+import type { FleetActions, FleetState, OwnPapers } from '../useFleetApp';
 
 export interface DashboardScreenProps {
   state: FleetState;
@@ -37,6 +37,7 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
           enforces, so this card and the email the fleet gets cannot disagree. Absent entirely (not empty) when the
           server has no report, so an old backend does not read as "all in date". */}
       {d?.papers ? <PapersCard report={d.papers} /> : null}
+      {state.ownPapers ? <CompanyPapersCard own={state.ownPapers} /> : null}
 
       {/* FP5 — the office puts a load on a driver. Reached from here and from a shift row, never a sixth tab. */}
       <Card title={t('fleet.dispatch.cardTitle')} aside={<Button variant="link" full={false} onClick={() => actions.openDispatch()}>{t('fleet.dispatch.cardOpen')}</Button>}>
@@ -193,6 +194,42 @@ function PapersCard({ report }: { report: PapersReport }) {
         </div>
       )}
       <p class="hint" style="margin-top:8px">{t('fleet.papers.counts', { inDate: report.inDate, unrecorded: report.unrecorded })}</p>
+    </Card>
+  );
+}
+
+/**
+ * THE COMPANY'S OWN PAPERS — its transport licence and its cover, beside its lorries' and drivers'.
+ *
+ * Only SeeBuyGet's staff record these dates (a company does not type the date on the licence that says
+ * whether it may trade), so this card is read-only and says where a renewal goes. It also says whether the
+ * company behind the fleet ENFORCES them: "lapsed" means something very different when it is costing the
+ * fleet work than when it is only a warning, and a fleet must be able to tell the two apart.
+ */
+function CompanyPapersCard({ own }: { own: OwnPapers }) {
+  const t = useT();
+  const enforced = own.enforced.map((k) => paperKindLabel(k as never, t)).join(', ');
+  return (
+    <Card title={t('fleet.ownPapers.cardTitle')}>
+      <div class="rows" role="list">
+        {own.papers.map((p) => (
+          <div key={p.kind} class="row row--static" role="listitem">
+            <span class="row__ic">
+              <Icon name="badge" size={24} />
+            </span>
+            {/* Titled by the NUMBER, the way the card above titles a vehicle by its plate — the line under it
+                already names the paper. Titled by the paper instead, every row said its own name twice. */}
+            <span class="row__body">
+              <span class="row__t">{p.reference ?? paperKindLabel(p.kind, t)}</span>
+              <span class={paperLineClass(p.state)}>{paperLine(p, t)}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+      <p class="hint" style="margin-top:8px">
+        {own.enforced.length ? t('fleet.ownPapers.enforced', { papers: enforced }) : t('fleet.ownPapers.notEnforced')}
+      </p>
+      <p class="hint">{t('fleet.ownPapers.howToRenew')}</p>
     </Card>
   );
 }

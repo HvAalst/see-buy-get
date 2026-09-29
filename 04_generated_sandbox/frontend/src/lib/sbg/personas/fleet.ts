@@ -153,6 +153,12 @@ export function createFleetApi(sbg: SbgClient) {
       },
     ) => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/departures' as never, { params: { path: { did } }, body } as never)),
 
+    /**
+     * The company's OWN papers — its transport licence and its cover — with what its company enforces and
+     * whether a lapse is costing it work. Readable by the fleet because the dates are about it.
+     */
+    ownPapers: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/papers', { params: { path: { did } } })),
+
     /** This fleet's own departures, soonest first, with who is aboard each and every wait recorded. */
     departures: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/departures' as never, { params: { path: { did } } } as never)),
 

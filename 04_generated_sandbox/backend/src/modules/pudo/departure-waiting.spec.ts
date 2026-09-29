@@ -45,7 +45,7 @@ describe('the waiting clock, from arrival to a charge somebody owes', () => {
   const SHIPPER = 'did:glos:shipper-under-test';
 
   /** A fleet whose only interesting property is the country it stands in — the charge needs a currency. */
-  const managers = { get: () => ({ jurisdiction: 'KE' }) } as unknown as FleetManagerService;
+  const managers = { get: () => ({ jurisdiction: 'KE' }), tradingBlocks: () => [], assertMayTakeWork: () => undefined } as unknown as FleetManagerService;
   /** One eight-tonne truck, in date and this fleet's. The vehicle gate is its own test. */
   const oneTruck = { get: () => ({ vehicleId: 'veh_1', plate: 'KDA 001A', vehicleClass: 'truck', capacityKg: 8000, managerDid: MANAGER, status: 'ACTIVE' }), isUsable: () => true, offRoadReasons: () => [] } as unknown as VehicleService;
 

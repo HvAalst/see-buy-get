@@ -71,6 +71,19 @@ export function createOperatorApi(sbg: SbgClient) {
     setInsurance: (entityId: string, body: { lane?: string; premiumPct?: number | null; freeLimit?: number | null }) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/insurance', { params: { path: { entityId } }, body: body as never })),
 
+    /**
+     * Say which of a CARRIER's own papers this sister will not trade without. The whole list every time —
+     * an empty one is how "enforce nothing" is said, and it is the default.
+     */
+    setCarrierPapers: (entityId: string, enforce: Array<'operator_licence' | 'carrier_insurance'>) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/carrier-papers', { params: { path: { entityId } }, body: { enforce } })),
+
+    /** Record the dates on a fleet operator's own papers. `null` clears one; leaving it out leaves it alone. */
+    recordCarrierPapers: (
+      did: string,
+      body: { licenceExpiresAt?: string | null; insurancePolicy?: string | null; insuranceExpiresAt?: string | null; insuranceRef?: string | null },
+    ) => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/papers', { params: { path: { did } }, body: body as never })),
+
     /* ---- support: the screen that answers a phone call ---- */
 
     /** One parcel, whole — status, journey and the proofs attached to it. */

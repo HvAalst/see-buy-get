@@ -9,6 +9,7 @@ import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
 import { DRIVER_ISSUES, DriverIssue } from './rating.service';
 import { MERCHANT_TAGS, MerchantTag } from './merchant-rating.service';
 import { TRUCK_SUBTYPES } from './fleet.config';
+import { CARRIER_PAPER_KINDS } from './papers';
 import { SITE_KINDS, type SiteKind } from './site.service';
 import { PACKAGING, type Packaging } from './packaging';
 import { MEDIA_KINDS, MediaKind } from './media.types';
@@ -1364,6 +1365,33 @@ export class ManagerKycDto {
   @IsString() operatorLicenceRef!: string;
   @IsString() ownerIdRef!: string;
   @IsString() proofOfAddressRef!: string;
+}
+
+/**
+ * The dates on a fleet operator's own papers. Every field optional and nullable: recording a licence
+ * expiry must not require retyping a policy number, and clearing a date somebody mistyped has to be
+ * possible without clearing the rest.
+ */
+export class CarrierPapersRecordDto {
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() licenceExpiresAt?: string | null;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() insurancePolicy?: string | null;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() insuranceExpiresAt?: string | null;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() insuranceRef?: string | null;
+}
+
+/**
+ * Which carrier papers a sister refuses to trade without.
+ *
+ * READS the kinds from papers.ts rather than restating them, so a paper added there cannot be silently
+ * unsettable here. `@ApiProperty` is spelled out because `@IsIn(..., { each: true })` publishes a SCALAR
+ * enum into the schema, not an array of one — a trap this codebase has been caught by twice.
+ */
+export class CarrierPapersDto {
+  @IsOptional()
+  @IsArray()
+  @IsIn(CARRIER_PAPER_KINDS, { each: true })
+  @ApiPropertyOptional({ type: [String], enum: CARRIER_PAPER_KINDS, isArray: true })
+  enforce?: string[];
 }
 
 export class ManagerKycDecisionDto {

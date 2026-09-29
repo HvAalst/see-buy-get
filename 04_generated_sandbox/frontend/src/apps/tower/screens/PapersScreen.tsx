@@ -7,6 +7,7 @@ import { ConsoleDetail } from '../ConsoleDetail';
 import { initials } from '../ConsoleMenu';
 import { DocumentStrip } from './DocumentStrip';
 import { TransitPanel } from './TransitPanel';
+import { OperatorPapersPanel } from './OperatorPapers';
 import { useCountryAtlas } from './CountrySelect';
 import { paperDay, paperLine, papersToShow, renewalBlocker } from '../../../shared/papers';
 import { isStuck, type CourierContact, type CourierPaperRow, type LooseVehicleRow } from '../papers';
@@ -150,6 +151,9 @@ export function PapersScreen({ state, actions }: { state: TowerState; actions: T
           <VehicleSheet row={openVehicle} state={state} actions={actions} />
         </ConsoleDetail>
       ) : null}
+
+      {/* The fleet OPERATORS' own papers — shown whatever any sister enforces. */}
+      <OperatorPapersPanel state={state} actions={actions} />
     </>
   );
 }
@@ -205,7 +209,7 @@ function vehicleTag(row: LooseVehicleRow): { cls: string; key: MessageKey } | nu
 /* ----------------------------------------------------------------- parts -- */
 
 /** A label over a value — one fact — and, when it needs one, a quiet line under it. */
-function Fig({ label, sub, children }: { label: string; sub?: string; children: ComponentChildren }) {
+export function Fig({ label, sub, children }: { label: string; sub?: string; children: ComponentChildren }) {
   return (
     <div class="twr-fig">
       <span class="twr-fig__l">{label}</span>

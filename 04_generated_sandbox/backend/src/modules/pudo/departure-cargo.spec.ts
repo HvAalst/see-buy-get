@@ -25,7 +25,7 @@ describe('what may go on this truck, and who carries the risk', () => {
   const SHIPPER = 'did:glos:shipper-cargo';
   const OTHER = 'did:glos:shipper-other-cargo';
 
-  const managers = { get: () => ({ jurisdiction: 'KE' }) } as unknown as FleetManagerService;
+  const managers = { get: () => ({ jurisdiction: 'KE' }), tradingBlocks: () => [], assertMayTakeWork: () => undefined } as unknown as FleetManagerService;
   const clearDrivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
   const openEverywhere = { can: () => true } as unknown as PresenceService;
   const silent = { publish: async () => undefined } as unknown as EventBus;
@@ -218,7 +218,7 @@ describe('what may go on this truck, and who carries the risk', () => {
 describe('a run whose vehicle cannot be read', () => {
   const MANAGER = 'did:glos:fleet-legacy';
   const SHIPPER = 'did:glos:shipper-legacy';
-  const managers = { get: () => ({ jurisdiction: 'KE' }) } as unknown as FleetManagerService;
+  const managers = { get: () => ({ jurisdiction: 'KE' }), tradingBlocks: () => [], assertMayTakeWork: () => undefined } as unknown as FleetManagerService;
   const clearDrivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
   const openEverywhere = { can: () => true } as unknown as PresenceService;
   const silent = { publish: async () => undefined } as unknown as EventBus;

@@ -6,7 +6,7 @@ import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { FleetService } from './fleet.service';
 import { NotificationService } from './notification.service';
-import { driverPapers, lapsedOf, offRoadLine, paperDay, paperLabel, PaperStatus, vehiclePapers } from './papers';
+import { driverPapers, fleetPapers, lapsedOf, offRoadLine, paperDay, paperLabel, PaperStatus, vehiclePapers } from './papers';
 import { VehicleService } from './vehicle.service';
 
 const SWEEP_MS = 6 * 60 * 60 * 1000;
@@ -72,6 +72,26 @@ export interface CourierPaperRow {
   drives: string[];
 }
 
+/** A fleet OPERATOR's own two papers, and what they are costing it. */
+export interface CarrierPaperRow {
+  did: string;
+  companyName: string;
+  jurisdiction?: string;
+  status: string;
+  /** The sister that would carry the consequence. Absent where the fleet stands in a matched country. */
+  entityId?: string;
+  papers: PaperStatus[];
+  /** Which kinds that sister actually refuses to trade without. Empty is the usual and expected answer. */
+  enforced: string[];
+  /**
+   * Why this carrier is taking no new work, if it is. Empty while a lapse is only a warning — which is
+   * exactly the state a reader needs to tell apart from "in date", and the reason this row exists.
+   */
+  notOffered: string[];
+  recordedBy?: string;
+  recordedAt?: string;
+}
+
 /** A vehicle no fleet owns — registered by a courier, so only an operator can touch its papers. */
 export interface LooseVehicleRow {
   vehicleId: string;
@@ -101,6 +121,14 @@ export interface PapersNetworkReport {
   couriers: CourierPaperRow[];
   vehicles: LooseVehicleRow[];
   fleets: { count: number; withLapsed: number; lapsed: number; due: number };
+  /**
+   * The OPERATORS' own papers — the licence that lets a company run lorries, and its cover.
+   *
+   * Listed whether or not anybody enforces them, which is the whole point. A sister decides the
+   * consequence of a lapse; if "not enforced" also meant "not shown", we would have rebuilt the defect
+   * this replaced — a paper collected at KYC, read once, and never looked at again.
+   */
+  carrierPapers: CarrierPaperRow[];
   sweep: SweepRun | null;
   sweepEveryHours: number;
   /**
@@ -250,6 +278,37 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
       fleets.lapsed += r.lapsed.length;
       fleets.due += r.due.length;
     }
+
+    /*
+     * The operators' OWN papers, which nobody but staff can record — a company does not get to type the
+     * date on the licence that says whether it may trade.
+     *
+     * Every active fleet is listed, not only the ones in trouble, because a reader has to be able to see
+     * that a date is MISSING. That is the state most of them are in, and it is the state that made the
+     * transport-operator licence unenforceable for as long as it was: a string with no date cannot lapse.
+     */
+    const carrierPapers: CarrierPaperRow[] = this.managers
+      .list()
+      .filter((m) => m.status !== 'DRAFT')
+      .map((m) => ({
+        did: m.did,
+        companyName: m.tradingName || m.companyName,
+        jurisdiction: m.jurisdiction,
+        status: m.status,
+        ...(this.managers.entityIdOrNone(m) ? { entityId: this.managers.entityIdOrNone(m)! } : {}),
+        papers: fleetPapers(m, now),
+        enforced: this.managers.enforcedFor(m),
+        notOffered: this.managers.tradingBlocks(m.did, now),
+        recordedBy: m.papers?.recordedBy,
+        recordedAt: m.papers?.recordedAt,
+      }))
+      // Refused first — that is capacity already off the board — then worst paper, then by name.
+      .sort(
+        (a, b) =>
+          Number(Boolean(b.notOffered.length)) - Number(Boolean(a.notOffered.length)) ||
+          worst(a.papers) - worst(b.papers) ||
+          a.companyName.localeCompare(b.companyName),
+      );
     /*
      * BL1 — the carriers, by name, and what each is licensed to move.
      *
@@ -271,7 +330,7 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
     const byDid = new Map(carriers.map((c) => [c.did, c.name]));
     const transit = this.transit?.register((did) => byDid.get(did), now) ?? [];
 
-    return { couriers, vehicles, fleets, transit, carriers, sweep: this.lastRun, sweepEveryHours: SWEEP_MS / 3_600_000 };
+    return { couriers, vehicles, fleets, carrierPapers, transit, carriers, sweep: this.lastRun, sweepEveryHours: SWEEP_MS / 3_600_000 };
   }
 
   /** Returns what the pass did. */

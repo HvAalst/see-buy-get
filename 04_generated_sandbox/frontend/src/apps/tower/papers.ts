@@ -48,6 +48,26 @@ export interface LooseVehicleRow {
   onShiftWith?: string;
 }
 
+/**
+ * A fleet OPERATOR's own two papers — its transport licence and its goods-in-transit cover.
+ *
+ * Listed whether or not the sister behind it enforces them. `enforced` says what that sister acts on
+ * (usually nothing) and `notOffered` whether a lapse is costing the fleet work right now: the screen has
+ * to tell "lapsed and refused" from "lapsed and nobody is checking" from "in date".
+ */
+export interface CarrierPaperRow {
+  did: string;
+  companyName: string;
+  jurisdiction?: string;
+  status: string;
+  entityId?: string;
+  papers: PaperView[];
+  enforced: string[];
+  notOffered: string[];
+  recordedBy?: string;
+  recordedAt?: string;
+}
+
 export interface SweepRun {
   at: string;
   shiftsEnded: number;
@@ -93,6 +113,8 @@ export interface PapersNetworkView {
   /** BL1 — absent from a server that predates the slice; a screen must read it as empty, not as broken. */
   transit?: TransitAuthorityRow[];
   carriers?: CarrierOption[];
+  /** The operators' own papers. Absent from a server that predates it — read as empty. */
+  carrierPapers?: CarrierPaperRow[];
 }
 
 /** The ones that need somebody: lapsed first, then running out. Withdrawn is a decision, not a job. */

@@ -45,7 +45,7 @@ describe('a fleet’s own customers, on a fleet’s own run', () => {
   const DRIVER = 'did:glos:driver-f4';
   const SHIPPER = 'did:glos:shipper-f4';
 
-  const managers = { get: () => ({ jurisdiction: 'KE' }) } as unknown as FleetManagerService;
+  const managers = { get: () => ({ jurisdiction: 'KE' }), tradingBlocks: () => [], assertMayTakeWork: () => undefined } as unknown as FleetManagerService;
 
   /** One eight-tonne truck, in date and this fleet's. The vehicle gate is its own test. */
 

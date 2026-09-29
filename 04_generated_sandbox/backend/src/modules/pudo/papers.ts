@@ -1,4 +1,4 @@
-import type { FleetDriver, Vehicle } from './fleet.types';
+import type { FleetDriver, FleetManager, Vehicle } from './fleet.types';
 
 /**
  * FP4 — the papers that switch things off.
@@ -12,7 +12,18 @@ import type { FleetDriver, Vehicle } from './fleet.types';
  * What a missing date means is decided here too: NOTHING. A paper never recorded switches nothing off, because
  * we cannot enforce what we never asked for; the fleet app shows the gap and asks. A date that has passed does.
  */
-export type PaperKind = 'insurance' | 'inspection' | 'licence';
+/**
+ * The last two belong to the COMPANY rather than to a thing it owns, and they are separate kinds rather
+ * than a subject flag so that a label and a refusal stay pure functions of the kind. "Insurance lapsed"
+ * on a lorry and on the operator running it are different sentences to the person reading them.
+ */
+export const PAPER_KINDS = ['insurance', 'inspection', 'licence', 'operator_licence', 'carrier_insurance'] as const;
+export type PaperKind = (typeof PAPER_KINDS)[number];
+
+/** The subset a SISTER can choose to enforce against a carrier. Read this; never restate it. */
+export const CARRIER_PAPER_KINDS = ['operator_licence', 'carrier_insurance'] as const;
+export type CarrierPaperKind = (typeof CARRIER_PAPER_KINDS)[number];
+
 export type PaperState = 'ok' | 'due' | 'lapsed' | 'none';
 
 /** How far ahead a fleet is told a paper is running out. */
@@ -52,12 +63,42 @@ export function driverPapers(d: Pick<FleetDriver, 'licence'>, now: number = Date
   return [paperStatus('licence', d.licence?.expiresAt, d.licence?.number, now)];
 }
 
+/**
+ * The OPERATOR's own papers — the licence that lets the company run lorries at all, and the cover it
+ * carries over other people's goods.
+ *
+ * Same clock and same rules as a vehicle's, deliberately: the network took a lorry off the road for a
+ * lapsed inspection and would not have noticed the company running it losing its licence. What differs
+ * is the CONSEQUENCE, which is a sister's to decide (Entity.carrierPapers) rather than the network's.
+ * The licence NUMBER lives where it always did, on the eligibility requirements.
+ */
+export function fleetPapers(m: Pick<FleetManager, 'requirements' | 'papers'>, now: number = Date.now()): PaperStatus[] {
+  const p = m.papers ?? {};
+  return [
+    paperStatus('operator_licence', p.licenceExpiresAt, m.requirements?.transportOperatorLicence, now),
+    paperStatus('carrier_insurance', p.insuranceExpiresAt, p.insurancePolicy, now),
+  ];
+}
+
 export function lapsedOf(papers: PaperStatus[]): PaperStatus[] {
   return papers.filter((p) => p.state === 'lapsed');
 }
 
+/**
+ * A total map rather than a chain of ternaries, so a kind added above cannot silently inherit the last
+ * branch. The old chain would have labelled an operator licence "Driving licence" — a refusal naming the
+ * wrong document is worse than one naming none.
+ */
+const PAPER_LABELS: Record<PaperKind, string> = {
+  insurance: 'Insurance',
+  inspection: 'Inspection certificate',
+  licence: 'Driving licence',
+  operator_licence: 'Operator licence',
+  carrier_insurance: 'Carrier insurance',
+};
+
 export function paperLabel(kind: PaperKind): string {
-  return kind === 'insurance' ? 'Insurance' : kind === 'inspection' ? 'Inspection certificate' : 'Driving licence';
+  return PAPER_LABELS[kind];
 }
 
 export function paperDay(expiresAt: string): string {

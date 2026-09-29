@@ -316,9 +316,13 @@ export interface DepartureRow {
   departureId: string;
   corridorId: string;
   lineName: string;
-  /** Which truck. Required, unlike the driver: the space in a particular hold is what is being sold. */
-  vehicleId: string;
-  plate: string;
+  /**
+   * Which truck. Required on every run declared now, unlike the driver: the space in a particular hold is
+   * what is being sold. OPTIONAL HERE because runs declared before that rule have none, and a type that
+   * says "always" let a screen print "On undefined" without the compiler saying a word.
+   */
+  vehicleId?: string;
+  plate?: string;
   vehicleClass: string;
   originZone: string;
   destZone: string;

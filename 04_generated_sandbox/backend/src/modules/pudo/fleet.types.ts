@@ -4,6 +4,7 @@
 
 import { TruckSubtype, VehicleClass } from './fleet.config';
 import { Equipment } from './cargo.types';
+import type { PaperKind } from './papers';
 import { GeoPoint } from './pudo.types';
 
 export type FleetManagerStatus = 'DRAFT' | 'KYC_PENDING' | 'APPROVED' | 'ACTIVE' | 'SUSPENDED';
@@ -14,6 +15,31 @@ export class FleetManagerRequirements {
   transportOperatorLicence: string; // the regulated transport-operator / PSV licence
   taxId: string; // tax identification number
   declaredFleetSize?: number; // how many vehicles they intend to run
+}
+
+/**
+ * THE OPERATOR'S OWN PAPERS, on the same clock as a lorry's.
+ *
+ * Until these existed the transport-operator licence was a STRING with no date: collected at
+ * registration, read once by a human at KYC, and then unfalsifiable by time. A vehicle came off the road
+ * for a lapsed inspection while the company running it could have lost its licence unnoticed.
+ *
+ * The dates are recorded whatever a sister has decided, because a date nobody asked for is a date nobody
+ * can act on later — what the knob governs is the CONSEQUENCE, never whether we look.
+ */
+export class CarrierPapers {
+  /** When the transport-operator licence runs out. Its NUMBER stays on `requirements`, where it always was. */
+  licenceExpiresAt?: string;
+  /** Goods-in-transit / carrier liability cover: the policy, its expiry, and the scan it was read from. */
+  insurancePolicy?: string;
+  insuranceExpiresAt?: string;
+  insuranceRef?: string;
+  /**
+   * Who typed these dates and when — the same provenance a driver's licence carries, and for the same
+   * reason: a screen must be able to say whether a date was read off a document or taken on somebody's word.
+   */
+  recordedBy?: string;
+  recordedAt?: string;
 }
 
 /** KYC documents collected to move a manager DRAFT → KYC_PENDING. */
@@ -46,6 +72,8 @@ export class FleetManager {
   location: GeoPoint;
   requirements: FleetManagerRequirements;
   kyc?: FleetManagerKyc;
+  /** The operator's own papers and their expiry dates — recorded always, enforced only where a sister says so. */
+  papers?: CarrierPapers;
   bondPaid: boolean; // refundable operating bond (activation gate)
   loginCode?: string; // issued on activation — the manager signs into the fleet console with it
   /** When the fleet last rotated its code. */
@@ -56,7 +84,8 @@ export class FleetManager {
 
 /** FP4 — one paper's state today, DERIVED at read time from its expiry date (see papers.ts); never stored. */
 export class PaperStatusView {
-  kind!: 'insurance' | 'inspection' | 'licence';
+  /** READ from papers.ts rather than restated here — a second copy of an enum is a second thing to forget. */
+  kind!: PaperKind;
   state!: 'ok' | 'due' | 'lapsed' | 'none';
   expiresAt?: string;
   /** Whole days until it lapses — negative once it has. Absent without a date. */
