@@ -1,11 +1,12 @@
 import { CredentialAge } from '../../../shared/account/CredentialAge';
 import { pinChangeBlocker } from '../../../shared/account/password';
 import { useState, useEffect } from 'preact/hooks';
-import { Button, Card, ErrorNote, ExplainerReset, Icon, PlaceMap, Pill, ReadAloud, Sheet } from '../../../shared/ui';
-import { useT } from '../../../shared/i18n';
-import { ageWords, signalState, dashboardSummary, hoursLabel, paperKindLabel, paperLine, paperLineClass, papersAloud, vehiclePins } from '../logic';
+import { Button, Card, ErrorNote, ExplainerReset, Icon, PhotoField, PlaceMap, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { formatDate, useT } from '../../../shared/i18n';
+import type { SbgError } from '../../../lib/sbg';
+import { ageWords, signalState, dashboardSummary, hoursLabel, paperDay, paperKindLabel, paperLine, paperLineClass, papersAloud, vehiclePins } from '../logic';
 import type { PapersReport } from '../types';
-import type { FleetActions, FleetState, OwnPapers } from '../useFleetApp';
+import type { FleetActions, FleetState, OwnPaperKind, OwnPapers } from '../useFleetApp';
 
 export interface DashboardScreenProps {
   state: FleetState;
@@ -37,7 +38,7 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
           enforces, so this card and the email the fleet gets cannot disagree. Absent entirely (not empty) when the
           server has no report, so an old backend does not read as "all in date". */}
       {d?.papers ? <PapersCard report={d.papers} /> : null}
-      {state.ownPapers ? <CompanyPapersCard own={state.ownPapers} /> : null}
+      {state.ownPapers ? <CompanyPapersCard own={state.ownPapers} state={state} actions={actions} /> : null}
 
       {/* FP5 — the office puts a load on a driver. Reached from here and from a shift row, never a sixth tab. */}
       <Card title={t('fleet.dispatch.cardTitle')} aside={<Button variant="link" full={false} onClick={() => actions.openDispatch()}>{t('fleet.dispatch.cardOpen')}</Button>}>
@@ -202,35 +203,109 @@ function PapersCard({ report }: { report: PapersReport }) {
  * THE COMPANY'S OWN PAPERS — its transport licence and its cover, beside its lorries' and drivers'.
  *
  * Only SeeBuyGet's staff record these dates (a company does not type the date on the licence that says
- * whether it may trade), so this card is read-only and says where a renewal goes. It also says whether the
- * company behind the fleet ENFORCES them: "lapsed" means something very different when it is costing the
- * fleet work than when it is only a warning, and a fleet must be able to tell the two apart.
+ * whether it may trade). What the office CAN do is send the renewed document from here — an image and the
+ * date it read off it — and this card is also where the answer comes back, because the fleet app has no
+ * inbox: waiting, or turned down with the staff member's own reason.
+ *
+ * It also says whether the company behind the fleet ENFORCES them: "lapsed" means something very different
+ * when it is costing the fleet work than when it is only a warning, and a fleet must be able to tell.
  */
-function CompanyPapersCard({ own }: { own: OwnPapers }) {
+function CompanyPapersCard({ own, state, actions }: { own: OwnPapers; state: FleetState; actions: FleetActions }) {
   const t = useT();
+  const [sending, setSending] = useState<OwnPaperKind | null>(null);
   const enforced = own.enforced.map((k) => paperKindLabel(k as never, t)).join(', ');
   return (
     <Card title={t('fleet.ownPapers.cardTitle')}>
       <div class="rows" role="list">
-        {own.papers.map((p) => (
-          <div key={p.kind} class="row row--static" role="listitem">
-            <span class="row__ic">
-              <Icon name="badge" size={24} />
-            </span>
-            {/* Titled by the NUMBER, the way the card above titles a vehicle by its plate — the line under it
-                already names the paper. Titled by the paper instead, every row said its own name twice. */}
-            <span class="row__body">
-              <span class="row__t">{p.reference ?? paperKindLabel(p.kind, t)}</span>
-              <span class={paperLineClass(p.state)}>{paperLine(p, t)}</span>
-            </span>
-          </div>
-        ))}
+        {own.papers.map((p) => {
+          const kind = p.kind as OwnPaperKind;
+          const sent = own.sent?.[kind];
+          const refused = own.refused?.[kind];
+          return (
+            <div key={p.kind} class="row row--static" role="listitem">
+              <span class="row__ic">
+                <Icon name="badge" size={24} />
+              </span>
+              {/* Titled by the NUMBER, the way the card above titles a vehicle by its plate — the line under it
+                  already names the paper. Titled by the paper instead, every row said its own name twice. */}
+              <span class="row__body">
+                <span class="row__t">{p.reference ?? paperKindLabel(p.kind, t)}</span>
+                <span class={paperLineClass(p.state)}>{paperLine(p, t)}</span>
+                {sent ? (
+                  <span class="row__s">{t('fleet.ownPapers.waiting', { date: formatDate(sent.sentAt), expires: paperDay(sent.expiresAt) })}</span>
+                ) : refused ? (
+                  // The staff member's own sentence, written for this office — shown as it was written.
+                  <span class="row__s row__s--warn">{t('fleet.ownPapers.refused', { reason: refused.reason })}</span>
+                ) : null}
+                <Button variant="link" onClick={() => setSending(kind)}>
+                  {t(sent ? 'fleet.ownPapers.sendAgain' : refused ? 'fleet.ownPapers.sendNew' : 'fleet.ownPapers.send')}
+                </Button>
+              </span>
+            </div>
+          );
+        })}
       </div>
       <p class="hint" style="margin-top:8px">
         {own.enforced.length ? t('fleet.ownPapers.enforced', { papers: enforced }) : t('fleet.ownPapers.notEnforced')}
       </p>
-      <p class="hint">{t('fleet.ownPapers.howToRenew')}</p>
+      {sending ? <SendPaperSheet kind={sending} state={state} actions={actions} onClose={() => setSending(null)} /> : null}
     </Card>
+  );
+}
+
+/**
+ * SEND ONE RENEWED DOCUMENT: the image, the expiry read off it, and its number.
+ *
+ * The same sheet a courier sends a renewed licence from, because it is the same act. The date is the
+ * office's reading and says so — staff type their own reading off the same image, and only theirs counts.
+ * A date already past is not let through: the server refuses it as the misreading it is.
+ */
+function SendPaperSheet({ kind, state, actions, onClose }: { kind: OwnPaperKind; state: FleetState; actions: FleetActions; onClose: () => void }) {
+  const t = useT();
+  const [photo, setPhoto] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
+  const [reference, setReference] = useState('');
+  const [error, setError] = useState<SbgError | null>(null);
+  const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+  const ready = Boolean(photo) && Boolean(expiresAt) && expiresAt >= tomorrow;
+  const label = paperKindLabel(kind, t);
+
+  return (
+    <Sheet open onClose={onClose} title={t('fleet.ownPapers.sheetTitle', { paper: label })}>
+      <p class="t-body">{t(kind === 'operator_licence' ? 'fleet.ownPapers.sheetBodyLicence' : 'fleet.ownPapers.sheetBodyInsurance')}</p>
+      {error ? <ErrorNote error={error} showDetail /> : null}
+      <PhotoField
+        id={`own-paper-${kind}`}
+        value={photo}
+        label={t('fleet.ownPapers.photo', { paper: label })}
+        upload={(file) => actions.uploadPhoto(kind === 'operator_licence' ? 'kyc_licence' : 'kyc_insurance', file)}
+        onCapture={setPhoto}
+      />
+      <label class="field">
+        <span class="field__label">{t('fleet.ownPapers.expires')}</span>
+        <input class="input" type="date" min={tomorrow} value={expiresAt} onInput={(e) => setExpiresAt((e.target as HTMLInputElement).value)} />
+      </label>
+      <label class="field">
+        <span class="field__label">{t(kind === 'operator_licence' ? 'fleet.ownPapers.licenceNumber' : 'fleet.ownPapers.policyNumber')}</span>
+        <input class="input" value={reference} autoComplete="off" onInput={(e) => setReference((e.target as HTMLInputElement).value)} />
+      </label>
+      <Button
+        chevron={false}
+        disabled={!ready}
+        busy={state.busy === 'ownPaper'}
+        onClick={async () => {
+          setError(null);
+          const failed = await actions.sendOwnPaper({ kind, copyRef: photo, expiresAt, ...(reference.trim() ? { reference: reference.trim() } : {}) });
+          if (failed) return setError(failed);
+          onClose();
+        }}
+      >
+        {t('fleet.ownPapers.submit')}
+      </Button>
+      <Button variant="link" onClick={onClose}>
+        {t('fleet.ownPapers.notNow')}
+      </Button>
+    </Sheet>
   );
 }
 

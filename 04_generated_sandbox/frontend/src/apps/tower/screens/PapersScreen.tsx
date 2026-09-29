@@ -261,7 +261,7 @@ function Face({ name, mediaId, actions, large }: { name: string; mediaId?: strin
  * opens the photograph at its own size, never downloaded: it is somebody's licence, and the retention
  * clock owns the only copy.
  */
-function CardPhoto({ mediaId, name, actions }: { mediaId: string; name: string; actions: TowerActions }) {
+export function CardPhoto({ mediaId, name, actions }: { mediaId: string; name: string; actions: TowerActions }) {
   const t = useT();
   const client = actions.client();
   const [gone, setGone] = useState(false);

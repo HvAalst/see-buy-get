@@ -78,11 +78,19 @@ export function createOperatorApi(sbg: SbgClient) {
     setCarrierPapers: (entityId: string, enforce: Array<'operator_licence' | 'carrier_insurance'>) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/carrier-papers', { params: { path: { entityId } }, body: { enforce } })),
 
-    /** Record the dates on a fleet operator's own papers. `null` clears one; leaving it out leaves it alone. */
+    /**
+     * Record the dates on a fleet operator's own papers. `null` clears one; leaving it out leaves it alone.
+     * There is no field for the document a date was read from: that is whatever the fleet SENT for the paper,
+     * carried across by the server — a copy reference is never typed by anybody.
+     */
     recordCarrierPapers: (
       did: string,
-      body: { licenceExpiresAt?: string | null; insurancePolicy?: string | null; insuranceExpiresAt?: string | null; insuranceRef?: string | null },
+      body: { licenceExpiresAt?: string | null; licenceNumber?: string | null; insurancePolicy?: string | null; insuranceExpiresAt?: string | null },
     ) => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/papers', { params: { path: { did } }, body: body as never })),
+
+    /** Turn down a document a fleet sent, with the reason the fleet is shown. */
+    refuseCarrierPaper: (did: string, kind: 'operator_licence' | 'carrier_insurance', reason: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/papers/refuse', { params: { path: { did } }, body: { kind, reason } })),
 
     /* ---- support: the screen that answers a phone call ---- */
 

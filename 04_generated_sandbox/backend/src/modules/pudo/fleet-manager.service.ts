@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { createHash, randomBytes } from 'crypto';
@@ -9,7 +9,8 @@ import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { Geocoder, GEOCODER } from './geocoder';
 import { CarrierPapers, FleetManager, FleetManagerKyc, FleetManagerRequirements, FleetManagerStatus } from './fleet.types';
-import { fleetPapers, lapsedOf, offRoadLine, type PaperStatus } from './papers';
+import { CARRIER_PAPER_KINDS, fleetPapers, lapsedOf, offRoadLine, paperLabel, paperLapsesAt, type CarrierPaperKind, type PaperStatus } from './papers';
+import { MediaService } from './media.service';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
 import { NETWORK_JURISDICTION } from './pudo.config';
@@ -52,6 +53,9 @@ export class FleetManagerService {
     private readonly entities: EntityService,
     private readonly presence: PresenceService,
     @Inject(GEOCODER) private readonly geocoder: Geocoder,
+    // Optional so the specs that build this by hand keep working, exactly as DriverService does it; the
+    // boot spec is what catches it missing from the real module.
+    @Optional() private readonly media?: MediaService,
   ) {}
 
   /**
@@ -198,15 +202,15 @@ export class FleetManagerService {
    */
   recordPapers(
     did: string,
-    input: { licenceExpiresAt?: string | null; insurancePolicy?: string | null; insuranceExpiresAt?: string | null; insuranceRef?: string | null },
+    input: { licenceExpiresAt?: string | null; licenceNumber?: string | null; insurancePolicy?: string | null; insuranceExpiresAt?: string | null },
     by?: string,
     now = Date.now(),
   ): FleetManager {
     const m = this.require(did);
     const who = by?.trim();
     if (!who) throw new GlosError('FIELD_REQUIRED', 'Say who is recording these dates');
-    const next: CarrierPapers = { ...(m.papers ?? {}) };
-    const set = (key: 'licenceExpiresAt' | 'insurancePolicy' | 'insuranceExpiresAt' | 'insuranceRef', value: string | null | undefined, isDate: boolean) => {
+    const next: CarrierPapers = { ...(m.papers ?? {}), sent: { ...(m.papers?.sent ?? {}) }, refused: { ...(m.papers?.refused ?? {}) } };
+    const set = (key: 'licenceExpiresAt' | 'insurancePolicy' | 'insuranceExpiresAt', value: string | null | undefined, isDate: boolean) => {
       if (value === undefined) return;
       if (value === null || !value.trim()) return void delete next[key];
       const v = value.trim();
@@ -218,10 +222,137 @@ export class FleetManagerService {
     set('licenceExpiresAt', input.licenceExpiresAt, true);
     set('insuranceExpiresAt', input.insuranceExpiresAt, true);
     set('insurancePolicy', input.insurancePolicy, false);
-    set('insuranceRef', input.insuranceRef, false);
 
-    m.papers = { ...next, recordedBy: who, recordedAt: new Date(now).toISOString() };
+    // A renewed licence can carry a new number. Checked BEFORE anything is written, so a refused number
+    // is not also a half-recorded date — the same one-licence-one-operator rule registration keeps.
+    const number = input.licenceNumber?.trim();
+    const numberChanges = Boolean(number && number !== m.requirements.transportOperatorLicence);
+    if (numberChanges && this.fingerprints.has(fp(number!))) {
+      throw new GlosError('DUPLICATE', 'A fleet manager with this operator licence already exists');
+    }
+
+    /*
+     * WHAT EACH DATE WAS READ FROM, for the papers whose date this call recorded.
+     *
+     * A document the fleet sent is the image this date came off, so it becomes that paper's own copy and
+     * leaves the waiting list. A date recorded with nothing sent was read off a document in somebody's hand,
+     * and says so by having no copy — never by leaving the OLD document beside a NEW date. Either way the
+     * previous copy starts its clock rather than sitting in a drawer for the life of the fleet.
+     *
+     * CLEARING a date is a correction, not a reading, so a document still waiting stays waiting.
+     */
+    const retire: string[] = [];
+    const settle = (kind: CarrierPaperKind, date: string | null | undefined, copyKey: 'licenceCopyRef' | 'insuranceCopyRef') => {
+      if (date === undefined) return;
+      const previous = next[copyKey];
+      const recorded = Boolean(date?.trim());
+      const pending = next.sent?.[kind];
+      if (recorded && pending) next[copyKey] = pending.copyRef;
+      else delete next[copyKey];
+      if (previous && previous !== next[copyKey]) retire.push(previous);
+      if (recorded) {
+        delete next.sent![kind];
+        delete next.refused![kind];
+      }
+    };
+    settle('operator_licence', input.licenceExpiresAt, 'licenceCopyRef');
+    settle('carrier_insurance', input.insuranceExpiresAt, 'insuranceCopyRef');
+
+    if (numberChanges) {
+      this.fingerprints.delete(fp(m.requirements.transportOperatorLicence));
+      this.fingerprints.add(fp(number!));
+      m.requirements = { ...m.requirements, transportOperatorLicence: number! };
+    }
+    m.papers = {
+      ...next,
+      sent: Object.keys(next.sent!).length ? next.sent : undefined,
+      refused: Object.keys(next.refused!).length ? next.refused : undefined,
+      recordedBy: who,
+      recordedAt: new Date(now).toISOString(),
+    };
     this.managers.set(m.did, m);
+    for (const ref of retire) this.media?.retireAccountDoc(ref, new Date(now));
+    return m;
+  }
+
+  /**
+   * THE FLEET SENDS ITS RENEWED DOCUMENT: an image of it, and the expiry it read off it.
+   *
+   * Until this existed the fleet app told the office to "send the renewed document to SeeBuyGet" with no
+   * way to do it, and staff were asked to record a date they had no way to see. The date sent here
+   * switches nothing on; it waits beside the image until somebody here reads the same document and types
+   * it (recordPapers). One waiting document per paper — a second send replaces the first, which was never
+   * accepted, so nothing rests on it.
+   *
+   * `ownerDid` is who UPLOADED the image. adopt() refuses anybody else's media and anything already
+   * attached elsewhere, so this cannot relabel another account's picture as a licence.
+   */
+  sendPaper(
+    did: string,
+    input: { kind: string; copyRef: string; expiresAt: string; reference?: string },
+    sender: { ownerDid: string; by?: string },
+    now = Date.now(),
+  ): FleetManager {
+    const m = this.require(did);
+    if (!CARRIER_PAPER_KINDS.includes(input.kind as CarrierPaperKind)) throw new GlosError('VALIDATION_FAILED', `Unknown paper: ${input.kind}`);
+    const kind = input.kind as CarrierPaperKind;
+    const expiresAt = input.expiresAt?.trim();
+    if (!expiresAt || !/^\d{4}-\d{2}-\d{2}$/.test(expiresAt) || Number.isNaN(Date.parse(expiresAt))) {
+      throw new GlosError('VALIDATION_FAILED', 'An expiry must be a date written YYYY-MM-DD');
+    }
+    // A renewal already in the past is a misreading — sent, it would ask staff to record a lapse.
+    if (paperLapsesAt(expiresAt) <= now) {
+      throw new GlosError('VALIDATION_FAILED', `That date has already passed — a renewed ${paperLabel(kind).toLowerCase()} runs into the future`);
+    }
+    if (!this.media) throw new GlosError('INVALID_STATE', 'Documents cannot be kept in this deployment, so a paper cannot be sent');
+    if (!this.media.adopt(input.copyRef, sender.ownerDid, { type: 'fleet', id: did }, kind === 'operator_licence' ? 'kyc_licence' : 'kyc_insurance')) {
+      throw new GlosError('PHOTO_REQUIRED', 'That image could not be attached — take the photograph again');
+    }
+
+    const papers: CarrierPapers = { ...(m.papers ?? {}) };
+    const earlier = papers.sent?.[kind];
+    if (earlier && earlier.copyRef !== input.copyRef) this.media.purgeByOwner(earlier.copyRef, earlier.ownerDid);
+    const reference = input.reference?.trim().slice(0, 120);
+    papers.sent = {
+      ...(papers.sent ?? {}),
+      [kind]: { copyRef: input.copyRef, ownerDid: sender.ownerDid, expiresAt, ...(reference ? { reference } : {}), sentAt: new Date(now).toISOString(), ...(sender.by ? { sentBy: sender.by } : {}) },
+    };
+    // Sending again answers the last refusal; leaving it up would tell them to fix what they just fixed.
+    if (papers.refused?.[kind]) {
+      const refused = { ...papers.refused };
+      delete refused[kind];
+      papers.refused = Object.keys(refused).length ? refused : undefined;
+    }
+    m.papers = papers;
+    this.managers.set(m.did, m);
+    return m;
+  }
+
+  /**
+   * The document they sent is not accepted — unreadable, the wrong paper, a date that is not on it.
+   *
+   * A REFUSAL CARRIES A REASON, because the fleet is shown it and one it cannot act on leaves it where
+   * silence did. The image is deleted now rather than kept on a clock: nothing was recorded from it, so it
+   * is a picture of somebody's licence that proves nothing.
+   */
+  refusePaper(did: string, kindInput: string, reason: string, by?: string, now = Date.now()): FleetManager {
+    const m = this.require(did);
+    if (!CARRIER_PAPER_KINDS.includes(kindInput as CarrierPaperKind)) throw new GlosError('VALIDATION_FAILED', `Unknown paper: ${kindInput}`);
+    const kind = kindInput as CarrierPaperKind;
+    const pending = m.papers?.sent?.[kind];
+    if (!pending) throw new GlosError('INVALID_STATE', 'Nothing has been sent to refuse');
+    const why = reason?.trim();
+    if (!why) throw new GlosError('REASON_REQUIRED', 'A refusal must say why: the fleet is shown it');
+
+    const sent = { ...(m.papers!.sent ?? {}) };
+    delete sent[kind];
+    m.papers = {
+      ...m.papers,
+      sent: Object.keys(sent).length ? sent : undefined,
+      refused: { ...(m.papers!.refused ?? {}), [kind]: { reason: why.slice(0, 500), at: new Date(now).toISOString(), ...(by ? { by } : {}) } },
+    };
+    this.managers.set(m.did, m);
+    this.media?.purgeByOwner(pending.copyRef, pending.ownerDid);
     return m;
   }
 

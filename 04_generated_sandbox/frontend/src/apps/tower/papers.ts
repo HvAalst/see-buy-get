@@ -66,6 +66,27 @@ export interface CarrierPaperRow {
   notOffered: string[];
   recordedBy?: string;
   recordedAt?: string;
+  /** What each recorded date was read from, when it came off a document the fleet sent. */
+  copies?: Partial<Record<CarrierKind, string>>;
+  /** A renewed document the fleet SENT and nobody has read — the work. Its date is the fleet's reading. */
+  sent?: Partial<Record<CarrierKind, SentPaper>>;
+  /** Why the last document sent for a paper was turned down. */
+  refused?: Partial<Record<CarrierKind, { reason: string; at: string; by?: string }>>;
+}
+
+export type CarrierKind = 'operator_licence' | 'carrier_insurance';
+
+export interface SentPaper {
+  copyRef: string;
+  expiresAt: string;
+  reference?: string;
+  sentAt: string;
+  sentBy?: string;
+}
+
+/** Whether a fleet has sent a document nobody here has read — done its part, and waiting on us. */
+export function operatorWaiting(row: CarrierPaperRow): boolean {
+  return Object.keys(row.sent ?? {}).length > 0;
 }
 
 export interface SweepRun {
@@ -139,7 +160,9 @@ export function isWaiting(row: CourierPaperRow): boolean {
  */
 export function waitingCount(report: PapersNetworkView | null): number | null {
   if (!report) return null;
-  return report.couriers.filter(isWaiting).length + report.vehicles.filter(isStuck).length;
+  // A fleet that SENT its renewed licence or policy has done its part exactly as a courier with a card has,
+  // and is counted once however many papers it sent — the badge counts who is waiting, not pages.
+  return report.couriers.filter(isWaiting).length + report.vehicles.filter(isStuck).length + (report.carrierPapers ?? []).filter(operatorWaiting).length;
 }
 
 /** How to reach one courier, as the vault answered. `held: false` is an answer the screen says, not an error. */

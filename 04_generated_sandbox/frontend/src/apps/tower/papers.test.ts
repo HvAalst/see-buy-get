@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renewalBlocker } from '../../shared/papers';
-import { isStuck, waitingCount, type CourierPaperRow, type PapersNetworkView } from './papers';
+import { isStuck, waitingCount, type CarrierPaperRow, type CourierPaperRow, type PapersNetworkView } from './papers';
 
 const view = (over: Partial<PapersNetworkView> = {}): PapersNetworkView => ({ couriers: [], vehicles: [], fleets: { count: 0, withLapsed: 0, lapsed: 0, due: 0 }, sweep: null, sweepEveryHours: 6, ...over });
 
@@ -20,6 +20,16 @@ describe('the papers the network has to put right', () => {
     // Merely running out waits on nobody; running out WITH the new card sent waits on us.
     expect(waitingCount(view({ couriers: [c([], card)] }))).toBe(1);
     expect(waitingCount(view({ couriers: [c(['Driving licence lapsed 1 Feb 2026'], card)] }))).toBe(1);
+  });
+
+  it('counts a fleet that sent its own papers, once however many it sent', () => {
+    const op = (sent: CarrierPaperRow['sent']): CarrierPaperRow => ({ did: 'f', companyName: 'Kilima', status: 'ACTIVE', papers: [], enforced: [], notOffered: [], sent });
+    const doc = { copyRef: 'med_2', expiresAt: '2027-09-01', sentAt: '2026-09-29T08:00:00Z' };
+    // Lapsed and refused work is the FLEET's to act on; a document it sent is ours.
+    expect(waitingCount(view({ carrierPapers: [op({}), { ...op({}), notOffered: ['Operator licence lapsed 1 Sep 2026'] }] }))).toBe(0);
+    expect(waitingCount(view({ carrierPapers: [op({ operator_licence: doc, carrier_insurance: doc })] }))).toBe(1);
+    // A server that predates the list is read as nothing waiting, not as broken.
+    expect(waitingCount(view({ carrierPapers: undefined }))).toBe(0);
   });
 
   it('refuses an empty or past renewal date before the server has to, and accepts tomorrow', () => {

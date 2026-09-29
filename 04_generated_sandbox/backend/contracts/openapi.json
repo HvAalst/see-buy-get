@@ -13034,6 +13034,70 @@
         }
       }
     },
+    "/v1/sbg/fleet/managers/{did}/papers/send": {
+      "post": {
+        "operationId": "Sbg.sendCarrierPaper",
+        "summary": "",
+        "description": "The fleet sends its renewed licence or policy from the fleet app. The FLEET OFFICE and nobody else:\nstaff sending one \"on its behalf\" would be the checker supplying the thing checked — the same line the\ncourier's renewed licence draws. The image must be one this session uploaded (see sendPaper).",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendCarrierPaperDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/papers/refuse": {
+      "post": {
+        "operationId": "Sbg.refuseCarrierPaper",
+        "summary": "",
+        "description": "What a fleet sent is not accepted, with the reason it is shown. Network staff only.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefuseCarrierPaperDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}": {
       "get": {
         "operationId": "Sbg.getFleetDriver",
@@ -28762,14 +28826,18 @@
             "type": "string",
             "description": "When the transport-operator licence runs out. Its NUMBER stays on `requirements`, where it always was."
           },
+          "licenceCopyRef": {
+            "type": "string",
+            "description": "WHAT EACH DATE WAS READ FROM: the document the fleet sent, once staff recorded a date off it. Absent\nmeans the date was typed on somebody's word — and never the OLD document left beside a NEW date."
+          },
           "insurancePolicy": {
             "type": "string",
-            "description": "Goods-in-transit / carrier liability cover: the policy, its expiry, and the scan it was read from."
+            "description": "Goods-in-transit / carrier liability cover: the policy and its expiry."
           },
           "insuranceExpiresAt": {
             "type": "string"
           },
-          "insuranceRef": {
+          "insuranceCopyRef": {
             "type": "string"
           },
           "recordedBy": {
@@ -28778,6 +28846,14 @@
           },
           "recordedAt": {
             "type": "string"
+          },
+          "sent": {
+            "type": "object",
+            "description": "A RENEWED DOCUMENT THE FLEET SENT, waiting for somebody here to read it — one per paper.\n\nThe date on it is the FLEET'S reading and switches nothing on: the paper on record changes only when a\nmember of staff types the date they read off the same image. Same rule as a courier's renewed licence."
+          },
+          "refused": {
+            "type": "object",
+            "description": "Why the last document sent for a paper was not accepted — shown to the fleet so it knows what to send."
           }
         }
       },
@@ -30358,6 +30434,12 @@
             "type": "string",
             "nullable": true
           },
+          "licenceNumber": {
+            "type": "string",
+            "nullable": true,
+            "description": "A renewed licence can carry a new number. Omitted leaves the number on record alone.",
+            "maxLength": 64
+          },
           "insurancePolicy": {
             "type": "string",
             "nullable": true
@@ -30365,12 +30447,57 @@
           "insuranceExpiresAt": {
             "type": "string",
             "nullable": true
-          },
-          "insuranceRef": {
-            "type": "string",
-            "nullable": true
           }
         }
+      },
+      "SendCarrierPaperDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "operator_licence",
+              "carrier_insurance"
+            ]
+          },
+          "copyRef": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "expiresAt": {
+            "type": "string",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/"
+          },
+          "reference": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "kind",
+          "copyRef",
+          "expiresAt"
+        ]
+      },
+      "RefuseCarrierPaperDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "operator_licence",
+              "carrier_insurance"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "kind",
+          "reason"
+        ]
       },
       "RenewLicenceDto": {
         "type": "object",
@@ -34000,6 +34127,7 @@
               "registration",
               "kyc_id",
               "kyc_licence",
+              "kyc_insurance",
               "shop",
               "avatar",
               "securement",

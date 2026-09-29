@@ -14,6 +14,12 @@ export const MEDIA_KINDS = [
   'registration', // vehicle registration papers
   'kyc_id', // account KYC — id document
   'kyc_licence', // account KYC — trading/driving licence
+  /**
+   * A carrier's goods-in-transit or liability INSURANCE certificate. Its own kind rather than a licence,
+   * because it is not one — and a staff member opening "the licence" to check a policy number is exactly
+   * the kind of mislabel a date gets misread under.
+   */
+  'kyc_insurance',
   'shop', // shop premises photo
   'avatar', // a person's profile picture (S29)
   'securement', // S33 — a driver's photo of a secured dedicated-freight load at pickup
@@ -42,7 +48,8 @@ export type MediaStatus = 'active' | 'expired';
 
 /** What a media item is attached to — drives who may see it and when its retention clock starts. */
 export interface MediaLink {
-  type: 'parcel' | 'vehicle' | 'agent' | 'driver' | 'person' | 'freight' | 'constraint' | 'box';
+  /** `fleet` — a fleet OPERATOR's own papers (its transport licence, its cover), sent from the fleet app. */
+  type: 'parcel' | 'vehicle' | 'agent' | 'driver' | 'person' | 'freight' | 'constraint' | 'box' | 'fleet';
   id: string;
 }
 
@@ -114,6 +121,7 @@ export const KIND_RETENTION: Record<MediaKind, RetentionClass> = {
   registration: 'vehicle-asset',
   kyc_id: 'account-doc',
   kyc_licence: 'account-doc',
+  kyc_insurance: 'account-doc',
   shop: 'account-doc',
   avatar: 'account-doc', // kept while the account is active (linked to the person → never orphan-reaped)
   hazard: 'road-report',

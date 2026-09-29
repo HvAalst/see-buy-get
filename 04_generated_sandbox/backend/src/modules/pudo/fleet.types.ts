@@ -4,7 +4,7 @@
 
 import { TruckSubtype, VehicleClass } from './fleet.config';
 import { Equipment } from './cargo.types';
-import type { PaperKind } from './papers';
+import type { CarrierPaperKind, PaperKind } from './papers';
 import { GeoPoint } from './pudo.types';
 
 export type FleetManagerStatus = 'DRAFT' | 'KYC_PENDING' | 'APPROVED' | 'ACTIVE' | 'SUSPENDED';
@@ -30,16 +30,53 @@ export class FleetManagerRequirements {
 export class CarrierPapers {
   /** When the transport-operator licence runs out. Its NUMBER stays on `requirements`, where it always was. */
   licenceExpiresAt?: string;
-  /** Goods-in-transit / carrier liability cover: the policy, its expiry, and the scan it was read from. */
+  /**
+   * WHAT EACH DATE WAS READ FROM: the document the fleet sent, once staff recorded a date off it. Absent
+   * means the date was typed on somebody's word — and never the OLD document left beside a NEW date.
+   */
+  licenceCopyRef?: string;
+  /** Goods-in-transit / carrier liability cover: the policy and its expiry. */
   insurancePolicy?: string;
   insuranceExpiresAt?: string;
-  insuranceRef?: string;
+  insuranceCopyRef?: string;
   /**
    * Who typed these dates and when — the same provenance a driver's licence carries, and for the same
    * reason: a screen must be able to say whether a date was read off a document or taken on somebody's word.
    */
   recordedBy?: string;
   recordedAt?: string;
+  /**
+   * A RENEWED DOCUMENT THE FLEET SENT, waiting for somebody here to read it — one per paper.
+   *
+   * The date on it is the FLEET'S reading and switches nothing on: the paper on record changes only when a
+   * member of staff types the date they read off the same image. Same rule as a courier's renewed licence.
+   */
+  sent?: Partial<Record<CarrierPaperKind, SentCarrierPaper>>;
+  /** Why the last document sent for a paper was not accepted — shown to the fleet so it knows what to send. */
+  refused?: Partial<Record<CarrierPaperKind, CarrierPaperRefusal>>;
+}
+
+export class SentCarrierPaper {
+  /** The uploaded image, adopted to this fleet at the moment it was sent. */
+  copyRef: string;
+  /**
+   * Who owns the image in the media store. Kept because deleting an unaccepted image (a refusal, or a
+   * newer send replacing it) is owner-scoped — without it staff could refuse a document and leave it on disk.
+   */
+  ownerDid: string;
+  /** The expiry the fleet read off it. Their word, shown beside staff's field and never typed into it. */
+  expiresAt: string;
+  /** The licence or policy number, as they read it. */
+  reference?: string;
+  sentAt: string;
+  /** The person in the fleet office who sent it, for the record. */
+  sentBy?: string;
+}
+
+export class CarrierPaperRefusal {
+  reason: string;
+  at: string;
+  by?: string;
 }
 
 /** KYC documents collected to move a manager DRAFT → KYC_PENDING. */

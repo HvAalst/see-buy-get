@@ -280,7 +280,9 @@ export interface TowerActions {
   /** Which carrier papers this sister refuses to trade without. The whole list; empty enforces nothing. */
   saveCarrierPapers(enforce: Array<'operator_licence' | 'carrier_insurance'>): Promise<void>;
   /** Record the dates on one fleet operator's own papers — staff only. */
-  recordCarrierPapers(did: string, body: { licenceExpiresAt?: string | null; insurancePolicy?: string | null; insuranceExpiresAt?: string | null }): Promise<boolean>;
+  recordCarrierPapers(did: string, body: { licenceExpiresAt?: string | null; licenceNumber?: string | null; insurancePolicy?: string | null; insuranceExpiresAt?: string | null }): Promise<boolean>;
+  /** Turn down a document a fleet sent, with the reason the fleet is shown. */
+  refuseCarrierPaper(did: string, kind: 'operator_licence' | 'carrier_insurance', reason: string): Promise<boolean>;
 }
 
 const INITIAL: TowerState = {
@@ -1434,6 +1436,20 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           return false;
         }
         setState((s) => ({ ...s, busyId: null, openId: null, done: t('tower.carrierPapers.recorded') }));
+        await loadPapers(client);
+        return true;
+      },
+      /** A document a fleet sent is not accepted. The reason is the fleet's to read, so it is required. */
+      refuseCarrierPaper: async (did, kind, reason) => {
+        const client = clientRef.current;
+        if (!client) return false;
+        setState((s) => ({ ...s, busyId: did, queueError: null, done: null }));
+        const { error } = await client.api.refuseCarrierPaper(did, kind, reason);
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return false;
+        }
+        setState((s) => ({ ...s, busyId: null, openId: null, done: t('tower.carrierPapers.refusedDone') }));
         await loadPapers(client);
         return true;
       },

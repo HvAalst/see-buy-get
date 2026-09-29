@@ -1374,9 +1374,27 @@ export class ManagerKycDto {
  */
 export class CarrierPapersRecordDto {
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() licenceExpiresAt?: string | null;
+  /** A renewed licence can carry a new number. Omitted leaves the number on record alone. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() @MaxLength(64) licenceNumber?: string | null;
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() insurancePolicy?: string | null;
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() insuranceExpiresAt?: string | null;
-  @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() insuranceRef?: string | null;
+}
+
+/**
+ * The fleet sends a renewed licence or policy: the image it uploaded, and what it read off it. There is no
+ * field for a copy on RECORD — that is set by staff recording a date from this, never typed by anybody.
+ */
+export class SendCarrierPaperDto {
+  @IsIn(CARRIER_PAPER_KINDS) @ApiProperty({ enum: CARRIER_PAPER_KINDS }) kind!: string;
+  @IsString() @MaxLength(64) copyRef!: string;
+  @IsString() @Matches(/^\d{4}-\d{2}-\d{2}$/) expiresAt!: string;
+  @IsOptional() @IsString() @MaxLength(120) reference?: string;
+}
+
+/** Staff do not accept what a fleet sent. Type only: an empty reason is refused by the SERVICE, in its own words. */
+export class RefuseCarrierPaperDto {
+  @IsIn(CARRIER_PAPER_KINDS) @ApiProperty({ enum: CARRIER_PAPER_KINDS }) kind!: string;
+  @IsString() @MaxLength(500) reason!: string;
 }
 
 /**

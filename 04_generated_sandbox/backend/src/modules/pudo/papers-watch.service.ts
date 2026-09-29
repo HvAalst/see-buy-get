@@ -90,6 +90,23 @@ export interface CarrierPaperRow {
   notOffered: string[];
   recordedBy?: string;
   recordedAt?: string;
+  /** What each recorded date was read from, when it was read from a document the fleet sent. */
+  copies: { operator_licence?: string; carrier_insurance?: string };
+  /**
+   * A renewed document the fleet SENT and nobody has read yet — the work. Its date is the fleet's reading,
+   * shown beside staff's field and never typed into it.
+   */
+  sent: { operator_licence?: SentPaperView; carrier_insurance?: SentPaperView };
+  /** Why the last document sent for a paper was turned down, so the next member of staff knows what was asked. */
+  refused: { operator_licence?: { reason: string; at: string; by?: string }; carrier_insurance?: { reason: string; at: string; by?: string } };
+}
+
+export interface SentPaperView {
+  copyRef: string;
+  expiresAt: string;
+  reference?: string;
+  sentAt: string;
+  sentBy?: string;
 }
 
 /** A vehicle no fleet owns — registered by a courier, so only an operator can touch its papers. */
@@ -301,10 +318,21 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
         notOffered: this.managers.tradingBlocks(m.did, now),
         recordedBy: m.papers?.recordedBy,
         recordedAt: m.papers?.recordedAt,
+        copies: {
+          ...(m.papers?.licenceCopyRef ? { operator_licence: m.papers.licenceCopyRef } : {}),
+          ...(m.papers?.insuranceCopyRef ? { carrier_insurance: m.papers.insuranceCopyRef } : {}),
+        },
+        // The owner of the image is how it gets deleted, not something a reader needs.
+        sent: Object.fromEntries(
+          Object.entries(m.papers?.sent ?? {}).map(([k, s]) => [k, { copyRef: s!.copyRef, expiresAt: s!.expiresAt, reference: s!.reference, sentAt: s!.sentAt, sentBy: s!.sentBy }]),
+        ),
+        refused: m.papers?.refused ?? {},
       }))
-      // Refused first — that is capacity already off the board — then worst paper, then by name.
+      // A document WAITING comes first: that fleet has done its part and is waiting on us, exactly as a
+      // courier's card is. Then refused — capacity already off the board — then worst paper, then by name.
       .sort(
         (a, b) =>
+          Number(Object.keys(b.sent).length > 0) - Number(Object.keys(a.sent).length > 0) ||
           Number(Boolean(b.notOffered.length)) - Number(Boolean(a.notOffered.length)) ||
           worst(a.papers) - worst(b.papers) ||
           a.companyName.localeCompare(b.companyName),

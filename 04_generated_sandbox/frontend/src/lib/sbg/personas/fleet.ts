@@ -159,6 +159,13 @@ export function createFleetApi(sbg: SbgClient) {
      */
     ownPapers: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/papers', { params: { path: { did } } })),
 
+    /**
+     * Send a renewed licence or policy: an image this session uploaded, and the expiry read off it. The
+     * date is the office's reading and switches nothing on — staff record the date they read off the image.
+     */
+    sendOwnPaper: (did: string, body: { kind: 'operator_licence' | 'carrier_insurance'; copyRef: string; expiresAt: string; reference?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/papers/send', { params: { path: { did } }, body })),
+
     /** This fleet's own departures, soonest first, with who is aboard each and every wait recorded. */
     departures: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/departures' as never, { params: { path: { did } } } as never)),
 

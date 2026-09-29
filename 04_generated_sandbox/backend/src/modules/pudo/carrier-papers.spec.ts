@@ -3,6 +3,7 @@ import { EntityService } from '../../foundation/entity/entity.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { GlosError } from '../../foundation/http/glos-error';
 import { CARRIER_PAPER_KINDS, fleetPapers, paperLabel } from './papers';
+import { MediaService } from './media.service';
 import type { EventBus } from '../../foundation/events/event-bus.service';
 import type { Geocoder } from './geocoder';
 import type { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
@@ -42,7 +43,10 @@ describe('a carrier that may not take new work', () => {
     const presence = { can: () => true, require: () => undefined } as unknown as PresenceService;
     const geocoder = { geocode: () => ({ location: { lat: -1.28, lng: 36.82 } }) } as unknown as Geocoder;
 
-    const managers = new FleetManagerService(dids, vault, core, bus, entities, presence, geocoder);
+    // The REAL media store (in memory under Jest), so ownership, adoption and purging are the rules the
+    // app runs — a fake would only test that the fake agrees with this file.
+    const media = new MediaService();
+    const managers = new FleetManagerService(dids, vault, core, bus, entities, presence, geocoder, media);
 
     /** An ACTIVE fleet in Kenya, incorporated where a sister actually stands. */
     let n = 0;
@@ -63,9 +67,13 @@ describe('a carrier that may not take new work', () => {
       return m;
     };
 
-    return { managers, entities, activeFleet };
+    /** A fresh photograph uploaded by `owner` — a fleet office session uploads as the FLEET's DID. */
+    const photo = (owner: string) => media.upload({ ownerDid: owner, kind: 'kyc_licence', dataUrl: PNG_1x1 }).mediaId;
+
+    return { managers, entities, activeFleet, media, photo };
   };
 
+  const PNG_1x1 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
   const DAY = 86_400_000;
   const dateIn = (days: number) => new Date(Date.now() + days * DAY).toISOString().slice(0, 10);
 
@@ -317,6 +325,216 @@ describe('a carrier that may not take new work', () => {
       // Derived at read time, never a status written into the record — so there is no second flag to
       // forget to clear. The same reason a vehicle's papers work this way.
       expect(managers.tradingBlocks(m.did)).toEqual([]);
+    });
+  });
+
+  /* ----------------------------------------------------------- the fleet sends its own paper -- */
+
+  /**
+   * THE WAY BACK, FROM THE FLEET'S SIDE.
+   *
+   * Before this the fleet app told the office to "send the renewed document to SeeBuyGet" with no way to do
+   * it. The courier's renewed licence is the precedent and its rules carry over whole: the date sent is the
+   * FLEET's reading and switches nothing on; staff record the date they read off the same image, or turn
+   * it down with a reason the fleet is shown.
+   */
+  describe('a renewed document the fleet sends', () => {
+    it('waits beside the paper and switches nothing on', () => {
+      const { managers, entities, activeFleet, photo } = setUp();
+      const m = activeFleet();
+      entities.setCarrierPapers(KE, ['operator_licence'], 'ops1@sbg.test');
+      managers.recordPapers(m.did, { licenceExpiresAt: dateIn(-3) }, 'ops1@sbg.test');
+      expect(managers.tradingBlocks(m.did)).toHaveLength(1);
+
+      const copy = photo(m.did);
+      managers.sendPaper(m.did, { kind: 'operator_licence', copyRef: copy, expiresAt: dateIn(365), reference: 'TLB-1' }, { ownerDid: m.did, by: 'Kilima office' });
+
+      // Their word is on file; the paper is not. Still lapsed, still off the board, until somebody reads it.
+      expect(managers.get(m.did).papers?.sent?.operator_licence).toMatchObject({ copyRef: copy, expiresAt: dateIn(365), reference: 'TLB-1', sentBy: 'Kilima office' });
+      expect(managers.papersOf(m.did)[0].state).toBe('lapsed');
+      expect(managers.tradingBlocks(m.did)).toHaveLength(1);
+    });
+
+    it('adopts the image to the fleet as the right kind of document', () => {
+      const { managers, activeFleet, photo, media } = setUp();
+      const m = activeFleet();
+      const licence = photo(m.did);
+      const cover = photo(m.did);
+      managers.sendPaper(m.did, { kind: 'operator_licence', copyRef: licence, expiresAt: dateIn(365) }, { ownerDid: m.did });
+      managers.sendPaper(m.did, { kind: 'carrier_insurance', copyRef: cover, expiresAt: dateIn(200) }, { ownerDid: m.did });
+
+      expect(media.get(licence)).toMatchObject({ kind: 'kyc_licence', link: { type: 'fleet', id: m.did }, retentionClass: 'account-doc' });
+      // An insurance certificate is not a licence, and is not filed as one.
+      expect(media.get(cover)).toMatchObject({ kind: 'kyc_insurance', link: { type: 'fleet', id: m.did } });
+    });
+
+    it('will not attach an image somebody else uploaded', () => {
+      const { managers, activeFleet, photo } = setUp();
+      const m = activeFleet();
+      const other = activeFleet('Other Haulage');
+      const theirs = photo(other.did);
+
+      // adopt() is the guard: a media id is not a secret, and a fleet must not be able to file another
+      // account's photograph as its own licence.
+      expect(() =>
+        managers.sendPaper(m.did, { kind: 'operator_licence', copyRef: theirs, expiresAt: dateIn(365) }, { ownerDid: m.did }),
+      ).toThrow(/could not be attached/);
+      expect(managers.get(m.did).papers?.sent).toBeUndefined();
+    });
+
+    it('refuses a date that has already passed', () => {
+      const { managers, activeFleet, photo } = setUp();
+      const m = activeFleet();
+      expect(() =>
+        managers.sendPaper(m.did, { kind: 'carrier_insurance', copyRef: photo(m.did), expiresAt: dateIn(-1) }, { ownerDid: m.did }),
+      ).toThrow(/already passed — a renewed carrier insurance runs into the future/);
+    });
+
+    it('replaces an earlier document nobody had read, and deletes it', () => {
+      const { managers, activeFleet, photo, media } = setUp();
+      const m = activeFleet();
+      const first = photo(m.did);
+      const second = photo(m.did);
+      managers.sendPaper(m.did, { kind: 'operator_licence', copyRef: first, expiresAt: dateIn(300) }, { ownerDid: m.did });
+      managers.sendPaper(m.did, { kind: 'operator_licence', copyRef: second, expiresAt: dateIn(365) }, { ownerDid: m.did });
+
+      expect(managers.get(m.did).papers?.sent?.operator_licence?.copyRef).toBe(second);
+      // Never accepted, so nothing rests on it — a photograph of somebody's licence that proves nothing.
+      expect(media.get(first)).toBeUndefined();
+      expect(media.get(second)).toBeDefined();
+    });
+
+    it('becomes the paper’s own copy when staff record the date they read off it', () => {
+      const { managers, activeFleet, photo, media } = setUp();
+      const m = activeFleet();
+      const copy = photo(m.did);
+      managers.sendPaper(m.did, { kind: 'operator_licence', copyRef: copy, expiresAt: dateIn(365) }, { ownerDid: m.did });
+
+      // Staff type THEIR reading — which may differ from the fleet's, and is the one that counts.
+      managers.recordPapers(m.did, { licenceExpiresAt: dateIn(360) }, 'ops1@sbg.test');
+
+      const papers = managers.get(m.did).papers!;
+      expect(papers.licenceExpiresAt).toBe(dateIn(360));
+      expect(papers.licenceCopyRef).toBe(copy);
+      expect(papers.sent).toBeUndefined();
+      expect(media.get(copy)?.expiresAt).toBeUndefined(); // the copy on record is kept, on no clock
+    });
+
+    it('starts the clock on the copy it replaces, rather than keeping every licence ever held', () => {
+      const { managers, activeFleet, photo, media } = setUp();
+      const m = activeFleet();
+      const old = photo(m.did);
+      managers.sendPaper(m.did, { kind: 'operator_licence', copyRef: old, expiresAt: dateIn(30) }, { ownerDid: m.did });
+      managers.recordPapers(m.did, { licenceExpiresAt: dateIn(30) }, 'ops1@sbg.test');
+
+      const renewed = photo(m.did);
+      managers.sendPaper(m.did, { kind: 'operator_licence', copyRef: renewed, expiresAt: dateIn(400) }, { ownerDid: m.did });
+      managers.recordPapers(m.did, { licenceExpiresAt: dateIn(400) }, 'ops1@sbg.test');
+
+      expect(managers.get(m.did).papers?.licenceCopyRef).toBe(renewed);
+      // Not purged on the spot: for the grace period it still answers "what was on record before".
+      expect(media.get(old)?.expiresAt).toBeDefined();
+      expect(media.get(renewed)?.expiresAt).toBeUndefined();
+    });
+
+    it('never leaves the old copy beside a date typed on somebody’s word', () => {
+      const { managers, activeFleet, photo, media } = setUp();
+      const m = activeFleet();
+      const copy = photo(m.did);
+      managers.sendPaper(m.did, { kind: 'operator_licence', copyRef: copy, expiresAt: dateIn(200) }, { ownerDid: m.did });
+      managers.recordPapers(m.did, { licenceExpiresAt: dateIn(200) }, 'ops1@sbg.test');
+
+      // A new date with nothing sent was read off a document in somebody's hand. It says so by having no
+      // copy — the photograph of LAST year's licence beside THIS year's date would be a quiet lie.
+      managers.recordPapers(m.did, { licenceExpiresAt: dateIn(500) }, 'ops2@sbg.test');
+      expect(managers.get(m.did).papers?.licenceCopyRef).toBeUndefined();
+      expect(media.get(copy)?.expiresAt).toBeDefined();
+    });
+
+    it('records one paper without consuming the other’s waiting document', () => {
+      const { managers, activeFleet, photo } = setUp();
+      const m = activeFleet();
+      const licence = photo(m.did);
+      const cover = photo(m.did);
+      managers.sendPaper(m.did, { kind: 'operator_licence', copyRef: licence, expiresAt: dateIn(365) }, { ownerDid: m.did });
+      managers.sendPaper(m.did, { kind: 'carrier_insurance', copyRef: cover, expiresAt: dateIn(200) }, { ownerDid: m.did });
+
+      managers.recordPapers(m.did, { licenceExpiresAt: dateIn(365) }, 'ops1@sbg.test');
+      expect(managers.get(m.did).papers?.sent).toEqual({ carrier_insurance: expect.objectContaining({ copyRef: cover }) });
+      expect(managers.get(m.did).papers?.insuranceCopyRef).toBeUndefined();
+    });
+
+    it('keeps a waiting document waiting when a date is only corrected away', () => {
+      const { managers, activeFleet, photo } = setUp();
+      const m = activeFleet();
+      managers.recordPapers(m.did, { licenceExpiresAt: dateIn(90) }, 'ops1@sbg.test');
+      const copy = photo(m.did);
+      managers.sendPaper(m.did, { kind: 'operator_licence', copyRef: copy, expiresAt: dateIn(365) }, { ownerDid: m.did });
+
+      // Clearing a mistyped date is a correction, not a reading of what they sent.
+      managers.recordPapers(m.did, { licenceExpiresAt: null }, 'ops1@sbg.test');
+      expect(managers.get(m.did).papers?.sent?.operator_licence?.copyRef).toBe(copy);
+    });
+
+    it('takes a renewed licence NUMBER, and still keeps one licence to one operator', () => {
+      const { managers, activeFleet } = setUp();
+      const m = activeFleet();
+      activeFleet('Other Haulage'); // holds TLB-2
+
+      managers.recordPapers(m.did, { licenceExpiresAt: dateIn(365), licenceNumber: 'TLB-NEW-9' }, 'ops1@sbg.test');
+      expect(managers.papersOf(m.did)[0].reference).toBe('TLB-NEW-9');
+
+      // Somebody else's number is refused — and the date sent with it is not half-recorded.
+      expect(() => managers.recordPapers(m.did, { licenceExpiresAt: dateIn(900), licenceNumber: 'TLB-2' }, 'ops1@sbg.test')).toThrow(/already exists/);
+      expect(managers.get(m.did).papers?.licenceExpiresAt).toBe(dateIn(365));
+      expect(managers.papersOf(m.did)[0].reference).toBe('TLB-NEW-9');
+    });
+  });
+
+  describe('a document staff turn down', () => {
+    it('says why, deletes the image, and records nothing from it', () => {
+      const { managers, activeFleet, photo, media } = setUp();
+      const m = activeFleet();
+      const copy = photo(m.did);
+      managers.sendPaper(m.did, { kind: 'carrier_insurance', copyRef: copy, expiresAt: dateIn(200) }, { ownerDid: m.did });
+
+      managers.refusePaper(m.did, 'carrier_insurance', 'This is the quote, not the certificate — send the certificate', 'ops1@sbg.test');
+
+      const papers = managers.get(m.did).papers!;
+      expect(papers.refused?.carrier_insurance).toMatchObject({ reason: 'This is the quote, not the certificate — send the certificate', by: 'ops1@sbg.test' });
+      expect(papers.sent).toBeUndefined();
+      expect(papers.insuranceExpiresAt).toBeUndefined();
+      expect(media.get(copy)).toBeUndefined();
+    });
+
+    it('will not refuse without a reason the fleet can act on', () => {
+      const { managers, activeFleet, photo } = setUp();
+      const m = activeFleet();
+      managers.sendPaper(m.did, { kind: 'operator_licence', copyRef: photo(m.did), expiresAt: dateIn(365) }, { ownerDid: m.did });
+      expect(() => managers.refusePaper(m.did, 'operator_licence', '   ', 'ops1@sbg.test')).toThrow(/must say why/);
+      // Still waiting: a refused refusal is not a half-done one.
+      expect(managers.get(m.did).papers?.sent?.operator_licence).toBeDefined();
+    });
+
+    it('has nothing to refuse when nothing was sent', () => {
+      const { managers, activeFleet } = setUp();
+      const m = activeFleet();
+      expect(() => managers.refusePaper(m.did, 'operator_licence', 'Blurred', 'ops1@sbg.test')).toThrow(/Nothing has been sent/);
+    });
+
+    it('clears the refusal once they send again, and once a date is recorded', () => {
+      const { managers, activeFleet, photo } = setUp();
+      const m = activeFleet();
+      managers.sendPaper(m.did, { kind: 'operator_licence', copyRef: photo(m.did), expiresAt: dateIn(365) }, { ownerDid: m.did });
+      managers.refusePaper(m.did, 'operator_licence', 'Blurred — the date cannot be read', 'ops1@sbg.test');
+
+      // Leaving it up after they sent again would tell them to fix what they just fixed.
+      managers.sendPaper(m.did, { kind: 'operator_licence', copyRef: photo(m.did), expiresAt: dateIn(365) }, { ownerDid: m.did });
+      expect(managers.get(m.did).papers?.refused).toBeUndefined();
+
+      managers.refusePaper(m.did, 'operator_licence', 'Still blurred', 'ops1@sbg.test');
+      managers.recordPapers(m.did, { licenceExpiresAt: dateIn(365) }, 'ops2@sbg.test');
+      expect(managers.get(m.did).papers?.refused).toBeUndefined();
     });
   });
 

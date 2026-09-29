@@ -11,6 +11,7 @@ export type MediaKind =
   | 'registration'
   | 'kyc_id'
   | 'kyc_licence'
+  | 'kyc_insurance' // a carrier's goods-in-transit / liability certificate — not a licence, and not filed as one
   | 'shop'
   | 'avatar'
   | 'securement' // S33 — a driver's photo of a secured dedicated-freight load at pickup

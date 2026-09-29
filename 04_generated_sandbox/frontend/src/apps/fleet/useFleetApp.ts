@@ -27,7 +27,13 @@ export interface OwnPapers {
   enforced: string[];
   notOffered: string[];
   recordedAt?: string;
+  /** A renewed document the office sent, waiting to be read. Its date is the office's own reading. */
+  sent?: Partial<Record<OwnPaperKind, { copyRef: string; expiresAt: string; reference?: string; sentAt: string }>>;
+  /** Why the last one sent was turned down — the staff member's own sentence, shown as written. */
+  refused?: Partial<Record<OwnPaperKind, { reason: string; at: string; by?: string }>>;
 }
+
+export type OwnPaperKind = 'operator_licence' | 'carrier_insurance';
 
 export type Screen = 'dash' | 'vehicles' | 'drivers' | 'sessions' | 'lines' | 'runs' | 'earnings' | 'dispatch' | 'notes';
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
@@ -760,6 +766,30 @@ export function useFleetApp() {
     [client, run, fail, pushToast, refresh],
   );
 
+  /**
+   * Send the company's OWN renewed licence or policy — the image and the date the office read off it.
+   *
+   * Answers the refusal rather than posting it to the screen's error slot: this is sent from a sheet, and
+   * an error drawn behind the sheet is an error nobody sees while the button looks like it did nothing.
+   */
+  const sendOwnPaper = useCallback(
+    async (body: { kind: 'operator_licence' | 'carrier_insurance'; copyRef: string; expiresAt: string; reference?: string }): Promise<SbgError | null> => {
+      if (!client || !managerDid) return null;
+      let error = null as SbgError | null;
+      await run('ownPaper', async () => {
+        const r = await client.api.sendOwnPaper(managerDid, body);
+        if (r.error) {
+          error = r.error;
+          return;
+        }
+        pushToast({ tone: 'ok', icon: 'check', title: t('fleet.ownPapers.sentToast'), detail: t('fleet.ownPapers.sentToastDetail') });
+        await refresh();
+      });
+      return error;
+    },
+    [client, managerDid, run, pushToast, refresh],
+  );
+
   /** FP4 — record a driver's renewed licence. The new date is the whole of the renewal. */
   const renewLicence = useCallback(
     async (did: string, body: { number?: string; expiresAt: string }) => {
@@ -1051,6 +1081,7 @@ export function useFleetApp() {
       setKyc,
       setVehiclePrice,
       setVehiclePapers,
+      sendOwnPaper,
       renewLicence,
       couple,
       uncouple,
