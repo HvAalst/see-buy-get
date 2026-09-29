@@ -5427,12 +5427,20 @@ export class SbgController {
     return { posted: this.consignments.publishReadyConsignments() };
   }
 
-  /** A driver declares a route A→B → the platform suggests the loads sitting on the way. */
+  /**
+   * A driver declares a route A→B → the platform suggests the loads sitting on the way.
+   *
+   * A ROUTE IS A PLAN, NOT A POSITION. This used to write A into the live map as where the driver was —
+   * stamped with a fresh "located at" time, so it read as a reading rather than a guess — while the driver
+   * could be planning tomorrow's run from home. It did worse than guess: it OVERWROTE the real fix the
+   * phone reports while on shift (see /locate), and it published DriverMoved, which is what nudges a
+   * driver about a load they are "about to drive past" — past a place they were never at. Where the driver
+   * is comes only from the phone. With location refused, the map shows no position rather than a made-up one.
+   */
   @Post('fleet/drivers/:did/suggest-work')
   suggestWork(@Param('did') did: string, @Body() dto: SuggestRouteDto, @Actor() actor: IntrospectionResult) {
-    this.assertDriverActs(did, actor); // it moves their dot on the map as well as reading offers
+    this.assertDriverActs(did, actor); // their capacity, their minimum earning, their rating — nobody else's
     const offers = this.dispatch.suggest(did, dto, Date.now(), dto.minEarn); // S34c — the driver's min-earning filter
-    this.fleet.reportLocation(did, dto.from); // the driver is at the route start → live map
     // F3 — what is COMING but cannot be taken yet: consolidation lots still filling along this route. Advisory
     // only (no offer, nothing to claim), so a trucker can plan a return leg around a lot that is nearly full.
     const expected = this.forthcoming.nearRoute(did, dto);

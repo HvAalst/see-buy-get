@@ -833,6 +833,10 @@ describe('GLOS backend (e2e)', () => {
     }
     await request(http).post(`/v1/sbg/totes/${bag.body.code}/release`).set(auth).expect(201);
 
+    // The phone reports where the driver actually is — the only source of a position on the live map.
+    const here = { lat: -1.21, lng: 36.81 };
+    await request(http).post(`/v1/sbg/fleet/drivers/${driver.body.did}/locate`).set(auth).send(here).expect(201);
+
     // The driver declares a route past the PUDO → gets a sized suggestion.
     const sug = await request(http).post(`/v1/sbg/fleet/drivers/${driver.body.did}/suggest-work`).set(auth).send({ from: loc, to: { lat: -1.3, lng: 36.95 } }).expect(201);
     expect(sug.body.remainingCapacityKg).toBe(50);
@@ -846,10 +850,15 @@ describe('GLOS backend (e2e)', () => {
     const loaded = await request(http).post(`/v1/sbg/totes/${bag.body.code}/load`).set(auth).send({ driverBadgeId: driver.body.badgeId }).expect(201);
     expect(loaded.body.moved).toHaveLength(2);
 
-    // Fleet-manager dashboard reflects the on-shift driver (located via suggest-work) + active cargo.
+    // Fleet-manager dashboard reflects the on-shift driver (located by the phone) + active cargo.
     const dash = await request(http).get('/v1/sbg/fleet/dashboard').set(auth).expect(200);
     expect(dash.body.sessions.active).toBeGreaterThanOrEqual(1);
-    expect(dash.body.positions.length).toBeGreaterThanOrEqual(1);
+    // WHERE THE PHONE SAID, NOT WHERE THE ROUTE STARTS. Declaring a route used to overwrite this fix with the
+    // route's start, freshly stamped, so the map was confidently wrong for the whole first leg.
+    const dot = dash.body.positions.find((p: { plate: string }) => p.plate === moto.body.plate); // stored upper-cased
+    expect(dot).toBeDefined();
+    expect(dot?.location).toEqual(here);
+    expect(dot?.location).not.toEqual(loc);
     expect(dash.body.cargo.count).toBeGreaterThanOrEqual(1);
     expect(dash.body.cargo.items[0].driver).toBeDefined();
     // The truck sub-type catalog is rich (>15 bodies) for registration UIs.
