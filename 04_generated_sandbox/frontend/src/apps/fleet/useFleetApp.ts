@@ -1088,6 +1088,8 @@ export function useFleetApp() {
       assignCorridor,
       /** CV3 — read-only conversations the fleet's drivers shared (null until signed in). */
       chatApi: client?.conversations ?? null,
+      /** The office's own inbox and push — the bell in the top bar. Null while signed out, which keeps it inert. */
+      notifications: client?.notifications ?? null,
       setLForm,
       proposeLine,
       setRForm,

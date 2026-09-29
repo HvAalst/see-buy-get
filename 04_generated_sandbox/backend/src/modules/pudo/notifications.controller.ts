@@ -55,7 +55,9 @@ export class NotificationsController {
     const devices = await this.notifications.pushToOwner(actingDid(actor), {
       kind: 'test',
       title: 'Notifications are on',
-      body: 'This is a test from SeeBuyGet — you will hear about your parcels here.',
+      // Every app shares this route — a courier hears about loads and a fleet office about its runs, so the
+      // test names no particular thing it will be about. It used to promise "your parcels" to all of them.
+      body: 'This is a test from SeeBuyGet — this is where we will tell you when something needs you.',
       link: '/',
       tag: 'sbg-test',
     });

@@ -15,6 +15,14 @@ import { DispatchService } from './dispatch.service';
 import { haversineKm } from './geo';
 import { paperDay } from './papers';
 import { GeoPoint } from './pudo.types';
+import type { NotificationKind } from './notification.types';
+
+/* The payloads the run's events carry, as published in DepartureService and FleetManagerService. */
+interface SpaceSold { departureId: string; bookingId: string; managerDid: string; lineName: string; shipperDid: string; description: string; weightKg: number; price: number; currency: string }
+interface BookingGivenBack { departureId: string; bookingId: string; managerDid: string; company: string; lineName: string; shipperDid: string; kind: 'sold' | 'own'; by: string; description: string }
+interface RunClaimOpened { departureId: string; bookingId: string; managerDid: string; shipperDid: string; company: string; lineName: string; load: string; kind: string; description: string; amount?: number; currency: string }
+interface RunClaimAnswered { departureId: string; bookingId: string; shipperDid: string; managerDid: string; company: string; load: string; answer: 'accepted' | 'refused'; note?: string }
+interface FleetPaperChecked { did: string; kind: 'operator_licence' | 'carrier_insurance'; accepted: boolean; expiresAt?: string; reason?: string }
 import { UnclaimedService } from './unclaimed.service';
 import { VendorService } from './vendor.service';
 import { HOLDING_FEE_PER_DAY, MARKET_SUPPLY_STALE_MIN, NETWORK_CURRENCY, NUDGE_COOLDOWN_MIN, NUDGE_MIN_MOVE_KM, TOTE_LOAD_FEE, UNCOLLECTED_REMINDER_H, UNCOLLECTED_SWEEP_MS } from './pudo.config';
@@ -164,6 +172,20 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
      */
     this.events.subscribe<{ departureId: string; company: string; lineName: string; originZone: string; destZone: string; leavesAt: string; shippers: string[]; reason: string }>(GlosEvent.Pudo.DepartureCancelled, (e) => this.onDepartureCancelled(e.payload));
     this.events.subscribe<{ departureId: string; company: string; shipperDid: string; kind: 'sold' | 'own'; description: string; destZone: string; receivedBy?: string }>(GlosEvent.Pudo.DepartureDelivered, (e) => this.onDepartureDelivered(e.payload));
+    /*
+     * THE HALF OF A RUN THAT WAS PUBLISHED AND NEVER DELIVERED.
+     *
+     * Four of a run's seven events told nobody. A booking was published under a comment promising "the fleet
+     * office learns its space went" and nothing listened; a claim was opened on a load and the carrier who
+     * has to answer it was not told; the carrier answered and the shipper who raised it was not told; a
+     * booking given back reached neither side. Each is a party waiting on the other with no way to know.
+     */
+    this.events.subscribe<SpaceSold>(GlosEvent.Pudo.DepartureBooked, (e) => this.onSpaceSold(e.payload));
+    this.events.subscribe<BookingGivenBack>(GlosEvent.Pudo.DepartureBookingCancelled, (e) => this.onBookingGivenBack(e.payload));
+    this.events.subscribe<RunClaimOpened>(GlosEvent.Pudo.DepartureClaimOpened, (e) => this.onRunClaimOpened(e.payload));
+    this.events.subscribe<RunClaimAnswered>(GlosEvent.Pudo.DepartureClaimAnswered, (e) => this.onRunClaimAnswered(e.payload));
+    // The fleet's own licence or cover: a document it sent was recorded, or turned down with a reason.
+    this.events.subscribe<FleetPaperChecked>(GlosEvent.Pudo.FleetPaperChecked, (e) => this.onFleetPaperChecked(e.payload));
     // FP3b (sender) — the driver is at the door and cannot hand over: the sender is the one who can fix it.
     this.events.subscribe<{ freightId: string; code: string; posterDid?: string; outcome: string; note?: string; destLabel?: string; attempts: number }>(GlosEvent.Pudo.FreightDeliveryFailed, (e) => this.onFreightDeliveryFailed(e.payload));
     // FP3b (claimant) — their claim was decided; they are shown the reason.
@@ -354,6 +376,94 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       } catch (err) {
         this.logger.warn(`departure-cancelled notify failed for ${shipperDid}: ${(err as Error).message}`);
       }
+    }
+  }
+
+  /** Somebody bought space on the fleet's run. What, how much, and for what — the three things the office plans around. */
+  private async onSpaceSold(p: SpaceSold): Promise<void> {
+    await this.tell(p.managerDid, {
+      kind: 'space_sold',
+      title: `Space sold on ${p.lineName}`,
+      body: `${p.weightKg} kg — ${p.description}, for ${p.price} ${p.currency}. It is on the run under Runs.`,
+      tag: `departure:${p.departureId}:booking:${p.bookingId}`,
+      data: { departureId: p.departureId, bookingId: p.bookingId },
+    });
+  }
+
+  /**
+   * A booking was given back — and whoever did NOT do it is told. Never the one who did: they know.
+   *
+   * A fleet's OWN load is nobody's business but the fleet's. Its "shipper" is the fleet itself, and the
+   * customer behind it has no account here; the fleet is the one who tells them.
+   */
+  private async onBookingGivenBack(p: BookingGivenBack): Promise<void> {
+    if (p.kind === 'own') return;
+    if (p.by === p.shipperDid) {
+      await this.tell(p.managerDid, {
+        kind: 'load_cancelled',
+        title: `Space given back on ${p.lineName}`,
+        body: `The shipper cancelled ${p.description}. That space is for sale again.`,
+        tag: `departure:${p.departureId}:booking:${p.bookingId}:cancelled`,
+        data: { departureId: p.departureId, bookingId: p.bookingId },
+      });
+    } else if (p.by === p.managerDid) {
+      // The side that used to reach nobody: the carrier took the space back, and the shipper's goods are not going.
+      await this.tell(p.shipperDid, {
+        kind: 'load_cancelled',
+        title: `${p.company} cancelled your booking`,
+        body: `${p.company} gave back the space for ${p.description} on ${p.lineName}. Your goods will not travel on that run — you will need another truck.`,
+        tag: `departure:${p.departureId}:booking:${p.bookingId}:cancelled`,
+        data: { departureId: p.departureId, bookingId: p.bookingId },
+      });
+    }
+  }
+
+  /** A claim was opened on a load the fleet carried. The carrier is the one who has to answer it. */
+  private async onRunClaimOpened(p: RunClaimOpened): Promise<void> {
+    if (p.shipperDid === p.managerDid) return; // the fleet's own load: nobody here to tell
+    const what = p.kind === 'damaged' ? 'Damaged' : p.kind === 'short' ? 'Short — less arrived than was loaded' : 'Not received';
+    await this.tell(p.managerDid, {
+      kind: 'claim_opened',
+      title: `A claim on ${p.load}`,
+      body: `${what}: ${p.description}${p.amount != null ? ` — they put it at ${p.amount} ${p.currency}` : ''}. Answer it under Runs: accept it, or refuse it with your reason.`,
+      tag: `departure:${p.departureId}:claim:${p.bookingId}`,
+      data: { departureId: p.departureId, bookingId: p.bookingId },
+    });
+  }
+
+  /**
+   * The carrier answered. Said as THE CARRIER's answer, because it is: nothing here weighs a claim, and a
+   * shipper who read this as our verdict would stop where they should be taking it to the carrier's insurer.
+   */
+  private async onRunClaimAnswered(p: RunClaimAnswered): Promise<void> {
+    if (p.shipperDid === p.managerDid) return;
+    await this.tell(p.shipperDid, {
+      kind: 'claim_answered',
+      title: `${p.company} ${p.answer === 'accepted' ? 'accepted' : 'refused'} your claim`,
+      body: `On ${p.load}${p.note ? `: “${p.note}”` : '.'} This is the carrier’s answer, kept with the consignment note — SeeBuyGet does not decide claims.`,
+      tag: `departure:${p.departureId}:claim:${p.bookingId}:answered`,
+      data: { departureId: p.departureId, bookingId: p.bookingId },
+    });
+  }
+
+  /** A document the fleet sent for its own licence or cover was read. Accepted, or not — with the reason. */
+  private async onFleetPaperChecked(p: FleetPaperChecked): Promise<void> {
+    const paper = p.kind === 'operator_licence' ? 'operator licence' : 'carrier insurance';
+    await this.tell(p.did, {
+      kind: 'papers_checked',
+      title: p.accepted ? `Your ${paper} is recorded` : `Your ${paper} was not accepted`,
+      body: p.accepted ? `Recorded to ${p.expiresAt ? paperDay(p.expiresAt) : 'its new date'}.` : `${p.reason ?? ''} Send it again from the dashboard.`.trim(),
+      tag: `papers:${p.did}:${p.kind}:checked`,
+      data: { kind: p.kind },
+    });
+  }
+
+  /** One notification, and one failure logged rather than thrown — the house rule for every handler here. */
+  private async tell(to: string, n: { kind: NotificationKind; title: string; body: string; tag: string; data: Record<string, unknown> }): Promise<void> {
+    try {
+      await this.notifications.notify(to, { ...n, link: '/' });
+    } catch (err) {
+      this.logger.warn(`${n.kind} notify failed for ${to}: ${(err as Error).message}`);
     }
   }
 

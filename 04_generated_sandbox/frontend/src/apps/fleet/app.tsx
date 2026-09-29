@@ -1,6 +1,6 @@
 import { EarningsScreen } from './screens/EarningsScreen';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
-import { ConnectivityNote, BottomNav, Button, Checklist, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { ConnectivityNote, BottomNav, Button, Checklist, Icon, NotificationBell, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { AccountMenu } from '../../shared/account/AccountMenu';
 import { useAccount } from '../../shared/account/useAccount';
 import { ArchiveSection } from '../../shared/archive/ArchiveSection';
@@ -75,6 +75,9 @@ export function App() {
         backLabel={t('fleet.backLabel')}
         end={
           <>
+            {/* The office's inbox. Until this existed, everything the server addressed to a fleet — a load
+                handed back, and now space sold and claims to answer — landed in an inbox no screen opened. */}
+            <NotificationBell api={actions.notifications} />
             {needRefresh ? (
               <button
                 type="button"

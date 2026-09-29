@@ -1,7 +1,9 @@
 import {
   createConversationsApi,
   createFleetApi,
+  createNotificationsApi,
   type ConversationsApi,
+  type NotificationsApi,
   createSeededClient,
   makeConfig,
   publicRequest,
@@ -68,11 +70,16 @@ export interface FleetClient {
   client: ReturnType<typeof createSeededClient>;
   /** CV3 — the conversations this fleet's drivers chose to share. Read-only. */
   conversations: ConversationsApi;
+  /**
+   * The fleet office's own notifications — its space sold, a claim to answer, its papers read. The server
+   * had been addressing these to the fleet's DID for a long time; this app simply never asked for them.
+   */
+  notifications: NotificationsApi;
 }
 
 export function createFleetClient(managerDid: string): FleetClient {
   const client = createSeededClient(fleetConfig(), tokenKeyFor(TOKEN_PREFIX, managerDid));
-  return { api: createFleetApi(client.sbg), client, conversations: createConversationsApi(client.sbg) };
+  return { api: createFleetApi(client.sbg), client, conversations: createConversationsApi(client.sbg), notifications: createNotificationsApi(client.sbg) };
 }
 
 export function purgeFleetTokens(keepDid: string | null): void {

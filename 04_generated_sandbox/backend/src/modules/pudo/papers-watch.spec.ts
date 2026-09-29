@@ -23,6 +23,8 @@ describe('the papers watch', () => {
       carrierPapers?: Record<string, unknown>;
       enforced?: string[];
       notOffered?: string[];
+      /** A fleet with no email on file: the inbox must not depend on the mail. */
+      noEmail?: boolean;
     } = {},
   ) => {
     process.env.GLOS_PERSIST = 'off';
@@ -40,7 +42,7 @@ describe('the papers watch', () => {
           did: 'did:fleet:k',
           status: 'ACTIVE',
           companyName: 'Kilima Logistics',
-          contactEmail: 'ops@kilima.example',
+          contactEmail: over.noEmail ? undefined : 'ops@kilima.example',
           jurisdiction: 'KE',
           requirements: { businessRegistrationNo: 'BRS-1', transportOperatorLicence: 'TLB-77', taxId: 'P051' },
           papers: over.carrierPapers,
@@ -86,33 +88,109 @@ describe('the papers watch', () => {
     expect(report.lapsed).toEqual([expect.objectContaining({ subject: 'vehicle', label: 'KLM 002B', kind: 'insurance', onShift: true })]);
     expect(report.due).toEqual([expect.objectContaining({ subject: 'vehicle', label: 'KLM 002B', kind: 'inspection', daysLeft: 21 })]);
     expect(report).toMatchObject({ inDate: 2, unrecorded: 1 });
-    expect(await watch.sweep(now)).toEqual({ shiftsEnded: 1, notified: 0, mails: 1 });
+    // `notified: 1` is the FLEET, in its own inbox. It used to be 0: the office was only ever MAILED, and there
+    // is no mail transport — so the report below was counted as sent and read by nobody.
+    expect(await watch.sweep(now)).toEqual({ shiftsEnded: 1, notified: 1, mails: 1 });
     expect(ended).toEqual(['d-amos']);
     expect(inbox[0]).toMatchObject({ did: 'd-amos', kind: 'papers_lapsed', title: 'Your shift was ended' });
     expect(inbox[0].body).toContain('Insurance lapsed');
+    const fleetNote = inbox.find((n) => n.did === 'did:fleet:k');
+    expect(fleetNote).toMatchObject({ kind: 'papers_lapsed', title: 'A paper lapsed in your fleet' });
+    // Both of the fleet's papers, by name, in one message — not one notification per paper.
+    expect(fleetNote?.body).toContain('KLM 002B — Insurance lapsed');
+    expect(fleetNote?.body).toContain('KLM 002B — Inspection certificate runs out');
     const [mail] = outbox.recent('ops@kilima.example');
     expect(mail.subject).toBe('1 off the road at Kilima Logistics — papers lapsed');
     expect(mail.text).toContain('KLM 002B — Insurance lapsed');
     expect(mail.text).toContain('KLM 002B — Inspection certificate runs out');
-    // The same papers, the next pass: nothing to end, nothing new to mail.
+    // The same papers, the next pass: nothing to end, nothing new to mail or say.
     expect(await watch.sweep(now + DAY)).toEqual({ shiftsEnded: 0, notified: 0, mails: 0 });
+  });
+
+  it('tells the fleet in its own inbox even with no email on file — the inbox never waits on the mail', async () => {
+    const { watch, inbox, outbox } = harness({
+      vehicles: [{ vehicleId: 'v1', plate: 'KLM 002B', status: 'ACTIVE', managerDid: 'did:fleet:k', documents: { insuranceExpiresAt: day(-2) } }],
+      drivers: [],
+      noEmail: true,
+    });
+    expect(await watch.sweep(now)).toMatchObject({ mails: 0, notified: 1 });
+    expect(outbox.recent('ops@kilima.example')).toHaveLength(0);
+    expect(inbox.find((n) => n.did === 'did:fleet:k')?.body).toContain('KLM 002B — Insurance lapsed');
+  });
+
+  /*
+   * THE COMPANY'S OWN PAPERS, WARNED WHILE THERE IS TIME. Where its sister enforces one, the day it lapses is
+   * the day the fleet's runs leave the board — a knob that did that with no warning would be a trap.
+   */
+  describe('the fleet’s own licence and cover', () => {
+    it('warns before it runs out, and says what it will cost when the company enforces it', async () => {
+      const { watch, inbox } = harness({ vehicles: [], drivers: [], carrierPapers: { licenceExpiresAt: day(11) }, enforced: ['operator_licence'] });
+      await watch.sweep(now);
+      const note = inbox.find((n) => n.did === 'did:fleet:k');
+      expect(note).toMatchObject({ kind: 'papers_due', title: 'Your operator licence runs out in 12 days' });
+      expect(note?.body).toContain('Your runs come off the board that day unless it is renewed');
+      expect(note?.body).toContain('send the new document from the dashboard');
+    });
+
+    it('warns without threatening anything when nobody enforces it', async () => {
+      const { watch, inbox } = harness({ vehicles: [], drivers: [], carrierPapers: { insuranceExpiresAt: day(-1) } });
+      await watch.sweep(now);
+      const note = inbox.find((n) => n.did === 'did:fleet:k');
+      expect(note).toMatchObject({ kind: 'papers_lapsed', title: 'Your carrier insurance has lapsed' });
+      expect(note?.body).not.toContain('off the board');
+    });
+
+    it('gives the licence and the cover their own push tags, so one warning never replaces the other', async () => {
+      const { watch, inbox } = harness({ vehicles: [], drivers: [], carrierPapers: { licenceExpiresAt: day(11), insuranceExpiresAt: day(15) } });
+      await watch.sweep(now);
+      const notes = inbox.filter((n) => n.did === 'did:fleet:k') as Array<{ tag?: string }>;
+      expect(notes).toHaveLength(2);
+      // The tag collapses notifications on a lock screen: shared, the cover's warning would hide the licence's.
+      expect(new Set(notes.map((n) => n.tag)).size).toBe(2);
+    });
+
+    it('says it once per state, not every sweep', async () => {
+      const { watch, inbox } = harness({ vehicles: [], drivers: [], carrierPapers: { licenceExpiresAt: day(11) } });
+      await watch.sweep(now);
+      await watch.sweep(now + DAY);
+      expect(inbox.filter((n) => n.did === 'did:fleet:k')).toHaveLength(1);
+    });
+
+    it('stays quiet once the fleet has SENT the renewal — it is waiting on us, not the other way round', async () => {
+      const sent = { operator_licence: { copyRef: 'med_1', ownerDid: 'did:fleet:k', expiresAt: day(400), sentAt: new Date(now).toISOString() } };
+      const { watch, inbox } = harness({ vehicles: [], drivers: [], carrierPapers: { licenceExpiresAt: day(11), sent } });
+      await watch.sweep(now);
+      expect(inbox.filter((n) => n.did === 'did:fleet:k')).toHaveLength(0);
+    });
+
+    it('never warns about a paper that was never dated', async () => {
+      const { watch, inbox } = harness({ vehicles: [], drivers: [] });
+      await watch.sweep(now);
+      expect(inbox.filter((n) => n.did === 'did:fleet:k')).toHaveLength(0);
+    });
   });
 
   it('tells a driver once that their licence is running out, ends their shift once it has lapsed, and mails the fleet once per state', async () => {
     const drivers = [{ did: 'd-jane', displayName: 'Jane W.', status: 'ACTIVE', managerDid: 'did:fleet:k', licence: { number: 'L', classes: ['van'], expiresAt: day(3) } }];
     const { watch, outbox, inbox, ended } = harness({ vehicles: [{ vehicleId: 'v9', plate: 'KLM 009X', status: 'ACTIVE', managerDid: 'did:fleet:k', documents: {} }], drivers, onShift: { v9: 'd-jane' } });
-    expect(await watch.sweep(now)).toEqual({ shiftsEnded: 0, notified: 1, mails: 1 });
-    expect(inbox[0]).toMatchObject({ did: 'd-jane', kind: 'papers_due', title: 'Your licence runs out in 4 days' });
+    // Two told: Jane, and her fleet's office in its own inbox.
+    expect(await watch.sweep(now)).toEqual({ shiftsEnded: 0, notified: 2, mails: 1 });
+    const jane = () => inbox.filter((n) => n.did === 'd-jane');
+    const office = () => inbox.filter((n) => n.did === 'did:fleet:k');
+    expect(jane()[0]).toMatchObject({ kind: 'papers_due', title: 'Your licence runs out in 4 days' });
     // Her office records it, so the message tells her where the date goes — and it is short, because the
     // place it is read is a lock screen.
-    expect(inbox[0].body).toContain('Give the new date to the fleet office');
-    expect(inbox[0].body.length).toBeLessThan(120);
+    expect(jane()[0].body).toContain('Give the new date to the fleet office');
+    expect(jane()[0].body.length).toBeLessThan(120);
+    expect(office()[0]).toMatchObject({ kind: 'papers_due', title: 'A paper running out in your fleet' });
     expect(await watch.sweep(now + DAY)).toEqual({ shiftsEnded: 0, notified: 0, mails: 0 });
-    // Five days on: lapsed. The shift ends, the driver is told (a new state, a new message), the fleet is mailed again.
+    // Five days on: lapsed. The shift ends, the driver is told (a new state, a new message), the fleet is told
+    // and mailed again.
     const r = await watch.sweep(now + 5 * DAY);
-    expect(r).toEqual({ shiftsEnded: 1, notified: 1, mails: 1 });
+    expect(r).toEqual({ shiftsEnded: 1, notified: 2, mails: 1 });
     expect(ended).toEqual(['d-jane']);
-    expect(inbox.map((n) => n.kind)).toEqual(['papers_due', 'papers_lapsed', 'papers_lapsed']);
+    expect(jane().map((n) => n.kind)).toEqual(['papers_due', 'papers_lapsed', 'papers_lapsed']);
+    expect(office().map((n) => n.kind)).toEqual(['papers_due', 'papers_lapsed']);
     expect(outbox.recent('ops@kilima.example')).toHaveLength(2);
   });
 

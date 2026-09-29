@@ -70,6 +70,12 @@ export const GlosEvent = {
      * with the reason. Published only when somebody was waiting on the answer.
      */
     DriverLicenceChecked: 'pudo.driver_licence_checked',
+    /**
+     * The same, for a fleet OPERATOR's own licence or cover: a document the fleet sent was recorded or turned
+     * down. Published only when the fleet was waiting on the answer — a date staff typed on their own is not
+     * news to anybody.
+     */
+    FleetPaperChecked: 'pudo.fleet_paper_checked',
     WalletToppedUp: 'pudo.wallet_topped_up',
     InboundCreated: 'pudo.inbound_created',
     ParcelPaid: 'pudo.parcel_paid', // vendor prepaid the full cost → label unblocked + drop-off PUDO notified

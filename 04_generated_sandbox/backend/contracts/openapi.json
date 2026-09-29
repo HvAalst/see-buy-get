@@ -16605,7 +16605,7 @@
       "post": {
         "operationId": "Sbg.suggestWork",
         "summary": "",
-        "description": "A driver declares a route A→B → the platform suggests the loads sitting on the way.",
+        "description": "A driver declares a route A→B → the platform suggests the loads sitting on the way.\n\nA ROUTE IS A PLAN, NOT A POSITION. This used to write A into the live map as where the driver was —\nstamped with a fresh \"located at\" time, so it read as a reading rather than a guess — while the driver\ncould be planning tomorrow's run from home. It did worse than guess: it OVERWROTE the real fix the\nphone reports while on shift (see /locate), and it published DriverMoved, which is what nudges a\ndriver about a load they are \"about to drive past\" — past a place they were never at. Where the driver\nis comes only from the phone. With location refused, the map shows no position rather than a made-up one.",
         "parameters": [
           {
             "name": "did",

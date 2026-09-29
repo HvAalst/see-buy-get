@@ -36,6 +36,12 @@ const KIND_ICON: Record<string, IconName> = {
   signup_rejected: 'warning',
   load_assigned: 'truck',
   load_instructions: 'edit',
+  // A run's two parties, told about each other at last: space sold and a claim for the fleet; the carrier's
+  // answer for the shipper.
+  space_sold: 'truck',
+  claim_opened: 'warning',
+  claim_answered: 'check',
+  freight_delivered: 'check',
 };
 
 /**

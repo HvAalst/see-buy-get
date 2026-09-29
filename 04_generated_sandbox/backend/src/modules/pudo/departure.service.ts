@@ -687,7 +687,9 @@ export class DepartureService {
     void this.events
       .publish(
         GlosEvent.Pudo.DepartureClaimOpened,
-        { departureId: departure.departureId, bookingId, managerDid: departure.managerDid, shipperDid: booking.shipperDid, company: departure.company, kind: claim.kind, description: claim.description, ...(claim.amount != null ? { amount: claim.amount } : {}), currency: departure.rate.currency },
+        // `load` and `lineName` say WHICH load: a claim that names no load is a message the office has to
+        // go and investigate before it can even start answering it.
+        { departureId: departure.departureId, bookingId, managerDid: departure.managerDid, shipperDid: booking.shipperDid, company: departure.company, lineName: departure.lineName, load: booking.description, kind: claim.kind, description: claim.description, ...(claim.amount != null ? { amount: claim.amount } : {}), currency: departure.rate.currency },
         { source: 'pudo' },
       )
       .catch(() => undefined);
@@ -722,7 +724,7 @@ export class DepartureService {
     void this.events
       .publish(
         GlosEvent.Pudo.DepartureClaimAnswered,
-        { departureId: departure.departureId, bookingId, shipperDid: booking.shipperDid, company: departure.company, answer, ...(said ? { note: said } : {}) },
+        { departureId: departure.departureId, bookingId, shipperDid: booking.shipperDid, managerDid: departure.managerDid, company: departure.company, load: booking.description, answer, ...(said ? { note: said } : {}) },
         { source: 'pudo' },
       )
       .catch(() => undefined);
@@ -744,11 +746,13 @@ export class DepartureService {
     // its clock now rather than waiting for a delivery that will never happen.
     this.media.anchorFreightTerminal(bookingId);
     this.departures.set(departure.departureId, departure);
-    // The space is for sale again, and the fleet is the one who can do something about that.
+    // Whoever did NOT cancel is told: the fleet, that its space is for sale again; or the shipper, that the
+    // carrier gave their space back — the side of this that used to reach nobody at all. `kind` lets the
+    // listener leave a fleet's own customers alone, and `company` is who the shipper hears it from.
     void this.events
       .publish(
         GlosEvent.Pudo.DepartureBookingCancelled,
-        { departureId: departure.departureId, bookingId, managerDid: departure.managerDid, lineName: departure.lineName, shipperDid: booking.shipperDid, by, description: booking.description },
+        { departureId: departure.departureId, bookingId, managerDid: departure.managerDid, company: departure.company, lineName: departure.lineName, shipperDid: booking.shipperDid, kind: booking.kind, by, description: booking.description },
         { source: 'pudo' },
       )
       .catch(() => undefined);

@@ -91,6 +91,15 @@ export const NOTIFICATION_KINDS = [
    * that they had booked it.
    */
   'freight_delivered',
+  /**
+   * Space on a fleet's run was bought. The event had been published since F3 under a comment promising
+   * "the fleet office learns its space went" — and nothing listened, so the office learned nothing.
+   */
+  'space_sold',
+  /** A shipper opened a claim on a load. The carrier is the one who has to answer it, so the carrier is told. */
+  'claim_opened',
+  /** The carrier answered a claim. The shipper who raised it is the one waiting to hear. */
+  'claim_answered',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

@@ -413,6 +413,39 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
           out.mails++;
         }
       }
+
+      /*
+       * THE FLEET'S OWN INBOX, whatever happens to the mail. There is no mail transport yet: the mail above
+       * lands in an outbox and is COUNTED as sent, so this report was "sent" to every fleet and read by none.
+       * The fleet app has a bell now. Keyed apart from the mail, so neither ever waits on the other.
+       */
+      const unread = [...report.lapsed, ...report.due].filter((r) => !this.told.has(this.inboxKey(m.did, r)));
+      if (unread.length && (await this.tellFleet(m.did, unread, now))) out.notified++;
+
+      /*
+       * AND THE COMPANY'S OWN PAPERS — the licence it trades on, and its cover — warned while there is time.
+       * Where its sister enforces one, the day it lapses is the day the fleet's runs leave the board, and a
+       * knob that takes a fleet off the market with no warning would be a trap rather than a rule.
+       *
+       * Not once the fleet has SENT the renewal: it has done its part, and "send the new document" would be
+       * telling it to repeat itself while the document waits on us.
+       */
+      const enforced = new Set(this.managers.enforcedFor(m));
+      for (const p of fleetPapers(m, now)) {
+        if (p.state !== 'due' && p.state !== 'lapsed') continue;
+        if (m.papers?.sent?.[p.kind as 'operator_licence' | 'carrier_insurance']) continue;
+        const what = paperLabel(p.kind).toLowerCase();
+        const costs = enforced.has(p.kind);
+        const left = p.daysLeft ?? 1;
+        const title = p.state === 'lapsed' ? `Your ${what} has lapsed` : `Your ${what} runs out in ${left} day${left === 1 ? '' : 's'}`;
+        const consequence =
+          p.state === 'lapsed'
+            ? costs ? 'Your runs are off the board until it is renewed' : 'It is shown to SeeBuyGet as lapsed'
+            : costs ? 'Your runs come off the board that day unless it is renewed' : 'Renew it before then';
+        const body = `${p.state === 'lapsed' ? offRoadLine(p) : `${paperLabel(p.kind)} to ${paperDay(p.expiresAt ?? '')}`}. ${consequence} — send the new document from the dashboard.`;
+        const kind = p.state === 'lapsed' ? 'papers_lapsed' : 'papers_due';
+        if (await this.tellOnce(`fleetown:${m.did}:${p.kind}:${p.expiresAt}:${p.state}`, m.did, title, body, kind, now, `papers:${m.did}:${p.kind}`)) out.notified++;
+      }
     }
     this.lastRun = { at: new Date(now).toISOString(), ...out };
     return out;
@@ -420,6 +453,32 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
 
   private mailKey(managerDid: string, r: PaperRow): string {
     return `fleet:${managerDid}:${r.subject}:${r.id}:${r.kind}:${r.expiresAt}:${r.state}`;
+  }
+
+  private inboxKey(managerDid: string, r: PaperRow): string {
+    return `fleetinbox:${managerDid}:${r.subject}:${r.id}:${r.kind}:${r.expiresAt}:${r.state}`;
+  }
+
+  /**
+   * The fleet's vehicles' and drivers' papers, as ONE notification per sweep rather than one per paper — a
+   * fleet of forty lorries whose insurer renews them all on one date would otherwise get forty. Short,
+   * because a notification is read on a lock screen: the first three by name, then how many more.
+   */
+  private async tellFleet(did: string, rows: PaperRow[], now: number): Promise<boolean> {
+    if (!this.notifications) return false;
+    const lapsed = rows.filter((r) => r.state === 'lapsed').length;
+    const count = (n: number) => (n === 1 ? 'A paper' : `${n} papers`);
+    const title = lapsed ? `${count(lapsed)} lapsed in your fleet` : `${count(rows.length)} running out in your fleet`;
+    const named = rows.slice(0, 3).map((r) => `${r.label} — ${paperLabel(r.kind)} ${r.state === 'lapsed' ? 'lapsed' : 'runs out'}${r.expiresAt ? ` ${paperDay(r.expiresAt)}` : ''}`);
+    const body = `${named.join('; ')}${rows.length > 3 ? `; and ${rows.length - 3} more` : ''}. Record the new dates on the dashboard.`;
+    try {
+      await this.notifications.notify(did, { kind: lapsed ? 'papers_lapsed' : 'papers_due', title, body, link: '/', tag: `papers:${did}:fleet`, data: {} });
+      for (const r of rows) this.told.set(this.inboxKey(did, r), new Date(now).toISOString());
+      return true;
+    } catch (err) {
+      this.logger.warn(`fleet papers notify failed for ${did}: ${(err as Error).message}`);
+      return false;
+    }
   }
 
   private endShift(driverDid: string, body: string): void {
@@ -432,10 +491,12 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
     void this.notifications?.notify(driverDid, { kind: 'papers_lapsed', title: 'Your shift was ended', body, link: '/', tag: `papers:${driverDid}:shift`, data: {} }).catch(() => undefined);
   }
 
-  private async tellOnce(key: string, did: string, title: string, body: string, kind: 'papers_lapsed' | 'papers_due', now: number): Promise<boolean> {
+  private async tellOnce(key: string, did: string, title: string, body: string, kind: 'papers_lapsed' | 'papers_due', now: number, tag = `papers:${did}:${kind}`): Promise<boolean> {
     if (!this.notifications || this.told.has(key)) return false;
     try {
-      await this.notifications.notify(did, { kind, title, body, link: '/', tag: `papers:${did}:${kind}`, data: {} });
+      // The tag only collapses PUSH notifications on a lock screen; two different papers need two tags, or
+      // the second warning silently replaces the first.
+      await this.notifications.notify(did, { kind, title, body, link: '/', tag, data: {} });
       this.told.set(key, new Date(now).toISOString());
       return true;
     } catch (err) {

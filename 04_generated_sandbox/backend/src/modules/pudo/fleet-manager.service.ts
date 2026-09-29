@@ -242,13 +242,17 @@ export class FleetManagerService {
      * CLEARING a date is a correction, not a reading, so a document still waiting stays waiting.
      */
     const retire: string[] = [];
+    // Papers whose sent document this recorded — the fleet was waiting on these answers, and is told.
+    const answered: Array<{ kind: CarrierPaperKind; expiresAt: string }> = [];
     const settle = (kind: CarrierPaperKind, date: string | null | undefined, copyKey: 'licenceCopyRef' | 'insuranceCopyRef') => {
       if (date === undefined) return;
       const previous = next[copyKey];
       const recorded = Boolean(date?.trim());
       const pending = next.sent?.[kind];
-      if (recorded && pending) next[copyKey] = pending.copyRef;
-      else delete next[copyKey];
+      if (recorded && pending) {
+        next[copyKey] = pending.copyRef;
+        answered.push({ kind, expiresAt: date!.trim() });
+      } else delete next[copyKey];
       if (previous && previous !== next[copyKey]) retire.push(previous);
       if (recorded) {
         delete next.sent![kind];
@@ -272,6 +276,9 @@ export class FleetManagerService {
     };
     this.managers.set(m.did, m);
     for (const ref of retire) this.media?.retireAccountDoc(ref, new Date(now));
+    for (const a of answered) {
+      void this.events.publish(GlosEvent.Pudo.FleetPaperChecked, { did: m.did, kind: a.kind, accepted: true, expiresAt: a.expiresAt }, { source: 'pudo' }).catch(() => undefined);
+    }
     return m;
   }
 
@@ -353,6 +360,7 @@ export class FleetManagerService {
     };
     this.managers.set(m.did, m);
     this.media?.purgeByOwner(pending.copyRef, pending.ownerDid);
+    void this.events.publish(GlosEvent.Pudo.FleetPaperChecked, { did: m.did, kind, accepted: false, reason: why.slice(0, 500) }, { source: 'pudo' }).catch(() => undefined);
     return m;
   }
 
