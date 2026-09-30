@@ -318,6 +318,12 @@ export class Freight {
    */
   billed?: { net: number; tax: number; gross: number; feePct: number; taxPct: number; provision: number };
   driverPaid?: boolean;
+  /**
+   * WHO the network owed for this haul, and on whose books — fixed when it was accrued at delivery. A claim
+   * upheld weeks later takes the money back from this same party: never from whichever fleet the driver has
+   * moved to since, which carried nothing and was paid nothing for it. Absent where nothing was accrued.
+   */
+  @ApiPropertyOptional() driverPayee?: { payeeDid: string; entityId: string };
   // S33 — the heavy-cargo safety gate. loadSafety is stamped at pickup (the confirmed checklist keys + the
   // securement photo mediaId); unloadReport at delivery. Absent until the driver passes each gate.
   loadSafety?: { confirmed: string[]; securementPhotoRef: string; at: string; by?: string };
@@ -346,6 +352,17 @@ export class Freight {
   @ApiProperty({ enum: FREIGHT_STATUSES })
   status: FreightStatus;
   claimedBy?: string;
+  /**
+   * THE CARRIER OF RECORD — the party the network contracted with when the job was taken: the driver's fleet,
+   * or the driver themselves when they drive for nobody. Fixed at the claim, like the price and the body.
+   *
+   * Only the driver used to be recorded, so "whose job was this" was answered from the driver's fleet TODAY.
+   * The day a driver can move to another fleet that answer changes under every haul they ever did: the old
+   * fleet's earnings statement — the list its payday is reconciled against — loses them, and the new fleet
+   * reads a competitor's customers and prices. A history keyed to the present is not a history.
+   * Absent on a load claimed before it was recorded, which is read from the driver as it always was.
+   */
+  @ApiPropertyOptional() carrierDid?: string;
   /** FP5 — when the load was put on the driver by their fleet office rather than claimed by them. Who, and when. */
   @ApiPropertyOptional() assignedBy?: { managerDid: string; name?: string; at: string };
   /** FP6 — the shipper's rating of the carrier after delivery: stars, the tags, and when. One per load, last wins. */
@@ -360,7 +377,8 @@ export class Freight {
    */
   @ApiPropertyOptional() incoterm?: string;
   @ApiPropertyOptional() namedPlace?: string;
-  @ApiPropertyOptional() handBacks?: Array<{ driverDid: string; reason: string; at: string }>;
+  /** Each hand-back names the driver and the carrier they gave it back for (absent on one recorded before that was kept). */
+  @ApiPropertyOptional() handBacks?: Array<{ driverDid: string; carrierDid?: string; reason: string; at: string }>;
   /** FP8 — what the carrier bore of an upheld claim, taken back from what they were paid for the haul. */
   @ApiPropertyOptional() clawback?: { amount: number; at: string; note: string };
   /** FP7 — CMR box 13, as given at posting (or edited before the goods were taken over). */

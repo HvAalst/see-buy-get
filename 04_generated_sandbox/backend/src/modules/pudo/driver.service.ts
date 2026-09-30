@@ -4,7 +4,8 @@ import { MediaService } from './media.service';
 import { GlosError } from '../../foundation/http/glos-error';
 import { MAX_NUDGE_MIN_EARN } from './pudo.config';
 import { PersistentMap } from '../../foundation/store/persistent-map';
-import { createHash, randomBytes } from 'crypto';
+import { randomBytes } from 'crypto';
+import { RegistrationPrints, type IdentityFields, type PrintField } from '../../foundation/identity/registration-prints';
 import { DidService } from '../../foundation/did/did.service';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
 import { OperationalStore } from '../../foundation/data-firewall/operational-store.service';
@@ -33,7 +34,17 @@ interface RegisterDriverInput {
   jurisdiction?: string;
 }
 
-const fp = (value: string): string => createHash('sha256').update(value.trim().toLowerCase()).digest('hex');
+/**
+ * What a driver is told when their details are already held — the same sentences as before, now with the
+ * field they name carried beside them, so an app can say what to do next rather than parse English.
+ */
+const DRIVER_HELD: Record<Exclude<PrintField, 'device'>, string> = {
+  nationalId: 'A driver with this national ID already exists',
+  phone: 'A driver with this mobile already exists',
+  licence: 'A driver with this licence number already exists',
+};
+const driverHeld = (field: PrintField): GlosError =>
+  new GlosError('DUPLICATE', DRIVER_HELD[field as Exclude<PrintField, 'device'>], { field, register: 'driver' });
 
 /**
  * DriverService — driver identity + onboarding (Compendium Ch 19), staged by the vehicle classes the
@@ -49,7 +60,8 @@ export class DriverService {
   // index does not, handover badge resolution breaks after a restart — so both persist.
   private readonly drivers = new PersistentMap<string, FleetDriver>('pudo-drivers'); // keyed by DID
   private readonly badges = new PersistentMap<string, string>('pudo-driver-badges'); // badgeId → DID
-  private readonly fingerprints = new Set<string>();
+  // One national ID, one mobile, one licence number across the network — kept on disk, keyed, normalised.
+  private readonly prints = new RegistrationPrints('driver');
 
   constructor(
     private readonly dids: DidService,
@@ -188,7 +200,7 @@ export class DriverService {
      *
      * `SignupDto.profile` is an unvalidated `Record<string, unknown>` — class-validator checks that it is
      * an object and nothing inside it — so a join form that forgets a field reaches here with it missing.
-     * Until now the first thing to touch it was `fp()`, which called `.trim()` on undefined and answered
+     * Until then the first thing to touch it was the fingerprint helper, which called `.trim()` on undefined and answered
      * the person with a 500 and the word "Something went wrong". A missing name is not an internal error;
      * it is a question nobody was asked, and the answer has to name the field.
      */
@@ -197,15 +209,18 @@ export class DriverService {
     if (!input.mobile?.trim()) throw new GlosError('FIELD_REQUIRED', 'A mobile number is required — it is how this driver signs in');
 
     // Dedup — one national ID, one mobile, one licence number across the network.
-    const prints = { id: fp(input.nationalId), mobile: fp(input.mobile), ...(input.licenceNumber ? { lic: fp(input.licenceNumber) } : {}) };
-    if (this.fingerprints.has(prints.id)) throw new GlosError('DUPLICATE', 'A driver with this national ID already exists');
-    if (this.fingerprints.has(prints.mobile)) throw new GlosError('DUPLICATE', 'A driver with this mobile already exists');
-    if (prints.lic && this.fingerprints.has(prints.lic)) throw new GlosError('DUPLICATE', 'A driver with this licence number already exists');
+    const identity: IdentityFields = [
+      ['nationalId', input.nationalId],
+      ['phone', input.mobile],
+      ...(input.licenceNumber ? ([['licence', input.licenceNumber]] as const) : []),
+    ];
+    const held = this.prints.taken(identity);
+    if (held) throw driverHeld(held);
 
     const did = this.dids.generate(`pudo-driver:${input.mobile}`, { role: 'pudo-driver' }).id;
     const { vaultRef } = this.vault.store({ fullName: input.fullName, governmentId: input.nationalId, phone: input.mobile }, { region: 'local' });
     this.core.upsert({ did, vaultRef, tier: 2, status: 'pending', capabilities: ['pudo-driver'], metadata: { registry, homeZone: input.homeZone } });
-    for (const p of Object.values(prints)) this.fingerprints.add(p);
+    this.prints.claim(identity, did);
 
     // Where we only match there is no sister: the courier stands without one, and is paid by whoever they carry for.
     const entity = jurisdiction ? this.entities.forJurisdiction(jurisdiction) : undefined;
@@ -291,10 +306,9 @@ export class DriverService {
     if (paperLapsesAt(input.expiresAt) <= now) throw new GlosError('LICENCE_EXPIRED', 'The expiry date given has already passed — a renewed licence runs into the future');
     const number = input.number?.trim();
     if (number && number !== driver.licence.number) {
-      const print = fp(number);
-      if (this.fingerprints.has(print)) throw new GlosError('DUPLICATE', 'A driver with this licence number already exists');
-      if (driver.licence.number && driver.licence.number !== 'n/a') this.fingerprints.delete(fp(driver.licence.number));
-      this.fingerprints.add(print);
+      if (this.prints.taken([['licence', number]], did)) throw driverHeld('licence');
+      if (driver.licence.number && driver.licence.number !== 'n/a') this.prints.release('licence', driver.licence.number, did);
+      this.prints.claim([['licence', number]], did);
       driver.licence.number = number;
     }
     /*
@@ -419,6 +433,23 @@ export class DriverService {
   /** Whether the driver's licence clears them for a given vehicle class. */
   clearedFor(did: string, vehicleClass: VehicleClass): boolean {
     return this.require(did).licence.classes.includes(vehicleClass);
+  }
+
+  /**
+   * MOVE TO ANOTHER FLEET — the driver record's half. FleetMoveService has already checked they are free to go.
+   *
+   * What goes with the driver is everything keyed to THEM: papers, trips, ratings, badge, sign-in. What stays
+   * with the old fleet is everything recorded as the fleet's — every haul carries the carrier it was taken for.
+   * A courier joining a fleet drops their residence and their sister: a fleet driver carries neither, because
+   * the network contracts with the fleet and has no business knowing where a supplier's staff live.
+   */
+  setFleet(did: string, managerDid: string): FleetDriver {
+    const driver = this.require(did);
+    driver.managerDid = managerDid;
+    delete driver.jurisdiction;
+    delete driver.entityId;
+    this.drivers.set(did, driver);
+    return driver;
   }
 
   setAssignedVehicle(did: string, vehicleId?: string): void {

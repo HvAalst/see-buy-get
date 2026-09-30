@@ -41,6 +41,13 @@ export function createDriverApi(sbg: SbgClient) {
      * FP4 — a courier without a fleet sends the renewed licence: the photo (an uploaded `kyc_licence`
      * media id) and the date they read off it. It switches nothing on until network staff read the card.
      */
+    /** Which fleet a join code belongs to, and what has to be finished before moving to it. Changes nothing. */
+    checkFleetMove: (did: string, code: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/drivers/{did}/fleet/check', { params: { path: { did } }, body: { code } })),
+
+    /** Move to that fleet now. Every earlier session ends; a fresh token comes back for this device. */
+    moveFleet: (did: string, code: string) => sbg.request((c) => c.POST('/v1/sbg/drivers/{did}/fleet', { params: { path: { did } }, body: { code } })),
+
     sendLicenceRenewal: (did: string, body: { copyRef: string; expiresAt: string; number?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/licence-renewal', { params: { path: { did } }, body: body as never })),
 

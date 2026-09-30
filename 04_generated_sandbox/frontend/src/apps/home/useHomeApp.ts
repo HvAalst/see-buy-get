@@ -342,6 +342,11 @@ export function useHomeApp() {
     });
   }, []);
 
+  /** Back to one step to put a detail right — the duplicate note's 'check what you typed'. Everything typed is kept. */
+  const revisit = useCallback((step: JoinStep) => {
+    setState((s) => ({ ...s, step, error: null }));
+  }, []);
+
   const run = useCallback(async (key: string, fn: () => Promise<void>) => {
     let blocked = false;
     setState((s) => {
@@ -420,7 +425,10 @@ export function useHomeApp() {
     await run('submit', async () => {
       const r = await signup(signupBody(role, form, deviceMarker()));
       if (r.error) {
-        setState((s) => ({ ...s, error: r.error }));
+        // Refused too often on one verification (details already registered): the phone has to be verified again,
+        // so the person is taken to that step rather than left pressing a button that can only say no.
+        const reverify = r.error.code === 'PHONE_NOT_VERIFIED';
+        setState((s) => ({ ...s, error: r.error, ...(reverify ? { step: 'phone' as JoinStep } : {}) }));
         return;
       }
       const account = r.data!;
@@ -521,7 +529,7 @@ export function useHomeApp() {
 
   return {
     state,
-    actions: { go, openStore, openProfile, findAgentsBy, startJoin, setForm, back, sendCode, confirmCode, advance, submit, restart, loadPoints, loadTruckSubtypes, setMarketQuery, lookUpMarket, setMarketReach, setMarketView, loadSeries },
+    actions: { go, openStore, openProfile, findAgentsBy, startJoin, setForm, back, revisit, sendCode, confirmCode, advance, submit, restart, loadPoints, loadTruckSubtypes, setMarketQuery, lookUpMarket, setMarketReach, setMarketView, loadSeries },
   };
 }
 

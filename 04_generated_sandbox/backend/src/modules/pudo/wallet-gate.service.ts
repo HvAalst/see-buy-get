@@ -516,9 +516,11 @@ export class WalletGateService {
    * the carriage price is a matter for their insurance and the courts, not for a ledger line. Null where no
    * sister pays this driver, for the same reason the payout was null: nothing was accrued to take back.
    */
-  driverClawback(driverId: string, amount: number, freightId: string): PudoLedgerEntry | null {
+  driverClawback(driverId: string, amount: number, freightId: string, paidTo?: { payeeDid: string; entityId: string }): PudoLedgerEntry | null {
     if (amount <= 0) return null;
-    const { entityId, payeeDid } = this.drivers.payeeOrNone(driverId);
+    // From the party that was PAID for the haul (kept on the load at delivery), on the books it was paid from. Read
+    // from the driver only for a load delivered before that was kept — the driver has moved nowhere since then.
+    const { entityId, payeeDid } = paidTo ?? this.drivers.payeeOrNone(driverId);
     if (!entityId) return null;
     const entryId = this.books.post({
       entityId,

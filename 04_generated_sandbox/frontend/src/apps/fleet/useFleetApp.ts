@@ -20,6 +20,7 @@ import type { FleetEarningsSummary, FleetJobRow,
 } from './types';
 import type { PaperView } from '../../shared/papers';
 import type { GiveBackReason } from '../../shared/giveBack';
+import { duplicateField, type DuplicateField } from '../../shared/duplicate';
 import type { RunCancelReason } from '../../shared/runCancel';
 
 /** The fleet company's OWN papers, as GET fleet/managers/:did/papers answers. */
@@ -88,6 +89,8 @@ export interface FleetState {
   stale: boolean;
   vForm: VehicleForm;
   dForm: DriverForm;
+  /** The driver being added is already registered on the network — which detail matched, and this fleet's code to hand them. */
+  driverDuplicate: { field: DuplicateField; code: string | null } | null;
   cForm: { driverDid: string; vehicleId: string; corridorId: string };
   /** F1 — the line this fleet is about to propose. */
   lForm: LineForm;
@@ -166,6 +169,7 @@ const INITIAL: FleetState = {
   stale: false,
   vForm: { ...EMPTY_VEHICLE },
   dForm: { ...EMPTY_DRIVER },
+  driverDuplicate: null,
   cForm: { ...EMPTY_COUPLE },
   lForm: { ...EMPTY_LINE },
   rForm: { ...EMPTY_RUN },
@@ -604,7 +608,8 @@ export function useFleetApp() {
     [client],
   );
   const setDForm = useCallback((p: Partial<DriverForm>) => {
-    setState((s) => ({ ...s, dForm: { ...s.dForm, ...p } }));
+    // Changing what was typed answers a duplicate: the note goes until the form is sent again.
+    setState((s) => ({ ...s, dForm: { ...s.dForm, ...p }, driverDuplicate: null }));
   }, []);
   const setCForm = useCallback((p: Partial<FleetState['cForm']>) => {
     setState((s) => ({ ...s, cForm: { ...s.cForm, ...p } }));
@@ -698,9 +703,22 @@ export function useFleetApp() {
             }
           : {}),
       });
-      if (r.error) return fail(r.error);
+      if (r.error) {
+        /*
+         * ALREADY REGISTERED ON THE NETWORK — not an error to retry. They cannot be added a second time; what is
+         * expected is that the driver joins this fleet from their own app with this fleet's code, so the note says so
+         * and hands the office the code to give them. Shown beside the form, where the office is looking.
+         */
+        const field = duplicateField(r.error);
+        if (field) {
+          const own = await loadFleetCode();
+          setState((s) => ({ ...s, driverDuplicate: { field, code: own?.code ?? null } }));
+          return;
+        }
+        return fail(r.error);
+      }
       const d = narrow<DriverRow>(r.data);
-      setState((s) => ({ ...s, dForm: { ...EMPTY_DRIVER } }));
+      setState((s) => ({ ...s, dForm: { ...EMPTY_DRIVER }, driverDuplicate: null }));
       pushToast({
         tone: 'ok',
         icon: 'person',
@@ -709,7 +727,7 @@ export function useFleetApp() {
       });
       await refresh();
     });
-  }, [client, managerDid, run, fail, pushToast, refresh]);
+  }, [client, managerDid, run, fail, pushToast, refresh, loadFleetCode]);
 
   /**
    * Send a driver's papers — with the papers.

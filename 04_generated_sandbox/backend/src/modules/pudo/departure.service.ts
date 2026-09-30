@@ -836,6 +836,20 @@ export class DepartureService {
   }
 
   /**
+   * WHAT THIS DRIVER HAS PROMISED AND NOT YET DONE: a run still to go, or goods still aboard one that left. A
+   * driver moving to another fleet is refused while any stands, because the shippers on those runs planned around
+   * this driver — stop new commitments, never the finishing of old ones. A run whose time passed with nothing
+   * booked on it is the office's to tidy, and does not hold the driver hostage.
+   */
+  unfinishedFor(driverDid: string, now: number = Date.now()): Departure[] {
+    return this.forDriver(driverDid).filter((d) => {
+      const aboard = d.bookings.some((b) => b.status === 'booked');
+      if (d.status === 'departed') return aboard;
+      return new Date(d.leavesAt).getTime() > now || aboard;
+    });
+  }
+
+  /**
    * THE TRUCK IS AT THE GATE. The clock starts here and not a moment earlier.
    *
    * The time is the server's, taken now. A driver typing "I got here at 08:00" is making a claim in a

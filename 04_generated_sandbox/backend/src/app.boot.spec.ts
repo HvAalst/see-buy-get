@@ -1,4 +1,5 @@
 import { MailService } from './foundation/mail/mail.service';
+import { FleetMoveService } from './modules/pudo/fleet-move.service';
 import { Test } from '@nestjs/testing';
 import { AppModule } from './app.module';
 
@@ -22,6 +23,8 @@ describe('the application boots', () => {
     expect(moduleRef).toBeDefined();
     // Mail is injected @Optional (so hand-listed specs keep working) — which is exactly why the real graph must have it.
     expect(moduleRef.get(MailService)).toBeDefined();
+    // The same for moving a driver between fleets: optional on the controller, so the real graph must hold it.
+    expect(moduleRef.get(FleetMoveService, { strict: false })).toBeDefined();
     await moduleRef.close();
   }, 60_000);
 });

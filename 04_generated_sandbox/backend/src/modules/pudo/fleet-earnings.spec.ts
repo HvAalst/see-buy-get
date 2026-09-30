@@ -14,7 +14,8 @@ describe('the fleet’s earnings register', () => {
     haul({ freightId: 'c', code: 'FR-C', claimedBy: 'did:amos', lockedPrice: 400, status: 'in_transit', driverPaid: false }),
     haul({ freightId: 'x', code: 'FR-X', claimedBy: 'did:stranger', lockedPrice: 9999 }),
   ];
-  const fleet = new Set(['did:amos', 'did:grace']);
+  // Which hauls were taken for the fleet is the service's to answer (DispatchService.carrierOf); here it is these two drivers'.
+  const fleet = (f: Freight) => f.claimedBy === 'did:amos' || f.claimedBy === 'did:grace';
   const nameOf = (did: string) => ({ 'did:amos': 'Amos K.', 'did:grace': 'Grace M.' })[did] ?? did;
 
   it('holds only the fleet’s own drivers’ hauls, and can narrow to one driver', () => {

@@ -12915,6 +12915,84 @@
         }
       }
     },
+    "/v1/sbg/drivers/{did}/fleet/check": {
+      "post": {
+        "operationId": "Sbg.checkFleetMove",
+        "summary": "",
+        "description": "A DRIVER MOVES TO ANOTHER FLEET, step one: which fleet that code belongs to, and what has to be finished\nfirst. Changes nothing — it is what lets the app show \"Drive for Kilima Logistics?\" before anybody commits,\nso a mistyped code joins nobody. The driver's own call, from their own sign-in, or staff standing in.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FleetCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetMoveCheckView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/drivers/{did}/fleet": {
+      "post": {
+        "operationId": "Sbg.moveFleet",
+        "summary": "",
+        "description": "Step two: move now, or be refused by name. Final — no request goes to the fleet, nothing waits on an answer;\nthe code IS the fleet's say-so, exactly as it is when a driver signs up with it.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FleetCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetMoveView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers": {
       "get": {
         "operationId": "Sbg.listFleetDrivers",
@@ -29620,6 +29698,19 @@
               "billing_failed"
             ]
           },
+          "driverPayee": {
+            "type": "object",
+            "properties": {
+              "payeeDid": {
+                "required": true,
+                "type": "string"
+              },
+              "entityId": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
           "commitMode": {
             "type": "string",
             "description": "FB0c — how this load may be taken. 'instant' (the default, and what every pre-FB0c load is read as) means\n a fit driver claims it at the computed price. 'negotiate' means the minter wants to agree a price first:\n drivers PROPOSE, the poster accepts one, and only that acceptance claims the load.",
@@ -29638,6 +29729,10 @@
               "delivered",
               "cancelled"
             ]
+          },
+          "carrierDid": {
+            "type": "string",
+            "description": "THE CARRIER OF RECORD — the party the network contracted with when the job was taken: the driver's fleet,\nor the driver themselves when they drive for nobody. Fixed at the claim, like the price and the body.\n\nOnly the driver used to be recorded, so \"whose job was this\" was answered from the driver's fleet TODAY.\nThe day a driver can move to another fleet that answer changes under every haul they ever did: the old\nfleet's earnings statement — the list its payday is reconciled against — loses them, and the new fleet\nreads a competitor's customers and prices. A history keyed to the present is not a history.\nAbsent on a load claimed before it was recorded, which is read from the driver as it always was."
           },
           "assignedBy": {
             "type": "object",
@@ -29688,6 +29783,7 @@
             "type": "string"
           },
           "handBacks": {
+            "description": "Each hand-back names the driver and the carrier they gave it back for (absent on one recorded before that was kept).",
             "type": "array",
             "items": {
               "type": "string"
@@ -29952,6 +30048,7 @@
           "proofOfDelivery",
           "reservations",
           "cancellation",
+          "driverPayee",
           "status",
           "assignedBy",
           "rating",
@@ -30482,6 +30579,90 @@
         "required": [
           "phone",
           "pin"
+        ]
+      },
+      "FleetCodeDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "FleetMoveCheckView": {
+        "type": "object",
+        "properties": {
+          "fleetDid": {
+            "type": "string"
+          },
+          "companyName": {
+            "type": "string"
+          },
+          "fromCompany": {
+            "type": "string",
+            "description": "The fleet they drive for now — absent for a courier who drives for themselves."
+          },
+          "blockers": {
+            "description": "Each thing to finish first, as a sentence the driver can act on. Empty means free to move.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "fleetDid",
+          "companyName",
+          "blockers"
+        ]
+      },
+      "IssuedTokenView": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "token_type": {
+            "type": "string",
+            "enum": [
+              "Bearer"
+            ]
+          },
+          "expires_in": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "access_token",
+          "token_type",
+          "expires_in"
+        ]
+      },
+      "FleetMoveView": {
+        "type": "object",
+        "properties": {
+          "did": {
+            "type": "string"
+          },
+          "companyName": {
+            "type": "string"
+          },
+          "token": {
+            "description": "Every earlier session ended — each carried the old fleet. Absent when staff moved the driver.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/IssuedTokenView"
+              }
+            ]
+          }
+        },
+        "required": [
+          "did",
+          "companyName"
         ]
       },
       "CarrierPapersRecordDto": {

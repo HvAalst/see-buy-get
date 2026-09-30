@@ -21,6 +21,7 @@ import { ROUTE_REASONS, RUN_REASON_SENTENCE, type GiveBackReason, type RunCancel
 /* The payloads the run's events carry, as published in DepartureService and FleetManagerService. */
 interface SpaceSold { departureId: string; bookingId: string; managerDid: string; lineName: string; shipperDid: string; description: string; weightKg: number; price: number; currency: string }
 interface VehicleChanged { departureId: string; managerDid: string; company: string; lineName: string; fromPlate: string; toPlate: string; fromClass: string; toClass: string; shippers: string[] }
+interface FleetChange { driverDid: string; driverName: string; fromManagerDid?: string; toManagerDid: string; toCompany: string }
 interface RunCalledOff { departureId: string; company: string; lineName: string; originZone: string; destZone: string; leavesAt: string; shippers: string[]; reason: string; cancelReason?: RunCancelReason; note?: string; alternatives?: number }
 
 /**
@@ -222,6 +223,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<RunClaimAnswered>(GlosEvent.Pudo.DepartureClaimAnswered, (e) => this.onRunClaimAnswered(e.payload));
     // A different truck on a run shippers are booked on — said only when what THEY can see (the class) changed.
     this.events.subscribe<VehicleChanged>(GlosEvent.Pudo.DepartureVehicleChanged, (e) => this.onVehicleChanged(e.payload));
+    // A driver moved fleets with a code. They did it; both fleets are told.
+    this.events.subscribe<FleetChange>(GlosEvent.Pudo.DriverChangedFleet, (e) => this.onDriverChangedFleet(e.payload));
     // The fleet's own licence or cover: a document it sent was recorded, or turned down with a reason.
     this.events.subscribe<FleetPaperChecked>(GlosEvent.Pudo.FleetPaperChecked, (e) => this.onFleetPaperChecked(e.payload));
     // FP3b (sender) — the driver is at the door and cannot hand over: the sender is the one who can fix it.
@@ -521,6 +524,29 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   }
 
   /** One notification, and one failure logged rather than thrown — the house rule for every handler here. */
+  /**
+   * A driver joined a fleet with its code. The fleet they joined learns who; the fleet they left learns it from us
+   * rather than from an empty seat — and is told what it keeps. It is NOT told which fleet they went to: where
+   * somebody works next is theirs to say, and a roster change is not a reason to publish it.
+   */
+  private async onDriverChangedFleet(p: FleetChange): Promise<void> {
+    await this.tell(p.toManagerDid, {
+      kind: 'roster_changed',
+      title: `${p.driverName} joined your fleet`,
+      body: `${p.driverName} used your fleet code and now drives for ${p.toCompany}. Their licence and their past trips came with them — check their papers under Drivers.`,
+      tag: `driver:${p.driverDid}:joined`,
+      data: { driverDid: p.driverDid },
+    });
+    if (!p.fromManagerDid) return;
+    await this.tell(p.fromManagerDid, {
+      kind: 'roster_changed',
+      title: `${p.driverName} left your fleet`,
+      body: `${p.driverName} now drives for another fleet. Every trip they did for you stays in your records and on your earnings statement.`,
+      tag: `driver:${p.driverDid}:left`,
+      data: { driverDid: p.driverDid },
+    });
+  }
+
   private async tell(to: string, n: { kind: NotificationKind; title: string; body: string; tag: string; data: Record<string, unknown> }): Promise<void> {
     try {
       await this.notifications.notify(to, { ...n, link: '/' });

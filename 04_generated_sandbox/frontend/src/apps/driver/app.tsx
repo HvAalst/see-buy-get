@@ -1,4 +1,5 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
+import { useState } from 'preact/hooks';
 import { ConnectivityNote, BottomNav, Button, Checklist, FeedbackFlash, Icon, NotificationBell, OutboxNote, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
 import { BoardScreen } from './screens/BoardScreen';
@@ -8,6 +9,7 @@ import { LoadsScreen } from './screens/LoadsScreen';
 import { OffersScreen } from './screens/OffersScreen';
 import { RouteScreen } from './screens/RouteScreen';
 import { SignInScreen } from './screens/SignInScreen';
+import { FleetMoveSheet } from './screens/FleetMoveSheet';
 import { useDriverApp, type DriverActions, type DriverState, type Screen } from './useDriverApp';
 import '../../shared/screens.css';
 import './driver.css';
@@ -26,6 +28,8 @@ export function App() {
   const account = useAccount(sbg, state.phase === 'ready');
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
+  // Who they drive for belongs to the person, so it is a row in the account menu; the move happens in a sheet.
+  const [fleetOpen, setFleetOpen] = useState(false);
 
   if (state.phase === 'outdated') return <UpdateGate />;
   if (state.phase === 'boot') return <Boot />;
@@ -87,7 +91,12 @@ export function App() {
             </Pill>
             {/* Last in the bar on purpose: the pill is live state a driver checks constantly, the menu
                 is a place they visit. Reading order ends on the thing tapped least. */}
-            <AccountMenu api={account} app="driver" onSignOut={actions.signOut} />
+            <AccountMenu
+              api={account}
+              app="driver"
+              onSignOut={actions.signOut}
+              rows={[{ key: 'fleet', icon: 'truck', label: t('driver.fleet.row'), sub: state.driver?.fleetName ?? t('driver.fleet.rowOwn'), onClick: () => setFleetOpen(true) }]}
+            />
           </>
         }
       />
@@ -105,6 +114,7 @@ export function App() {
         labels={false}
       />
 
+      <FleetMoveSheet open={fleetOpen} onClose={() => setFleetOpen(false)} state={state} actions={actions} />
       <Toasts state={state} actions={actions} />
       <FeedbackFlash />
     </div>

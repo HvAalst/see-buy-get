@@ -6,6 +6,7 @@ import { DepartureNoteService } from './departure-note.service';
 import { NoteArchiveService } from './note-archive.service';
 import { NoteBundleService } from './note-bundle.service';
 import { DestinationService } from './destination.service';
+import { FleetMoveService } from './fleet-move.service';
 import { SiteService, SITE_BASIS, type Site } from './site.service';
 import { TransitAuthorityService, TRANSIT_BASIS } from './transit-authority.service';
 import { FieldObservationService, OBSERVATION_BASIS } from './field-observation.service';
@@ -25,7 +26,7 @@ import { CompanyDocumentService } from '../../foundation/entity/company-document
 import { HandleService } from '../../foundation/handle/handle.service';
 import { HandleDirectory } from './handle-directory.service';
 import { ProfileView, presenceSays, profileDoes } from './profile.types';
-import { MOBILISATION_MEASURED, mobilisationOf } from './mobilisation';
+import { MOBILISATION_MEASURED } from './mobilisation';
 import { AGENT_MEASURED, RECORD_SAYS } from './agent-record';
 import { CONTAINER_TYPES, type ContainerTypeSpec } from './container-type';
 import { MoversView } from './movers.types';
@@ -112,7 +113,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyRecordDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto } from './pudo.dto';
+  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetCodeDto, FleetMoveCheckView, FleetMoveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto } from './pudo.dto';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
@@ -240,6 +241,9 @@ export class SbgController {
     private readonly destinations: DestinationService,
     @Optional() private readonly mail?: MailService,
     @Optional() private readonly papers?: PapersWatchService,
+    // Optional so the specs that hand-list this controller's providers keep working; app.boot.spec catches it
+    // missing from the module.
+    @Optional() private readonly fleetMove?: FleetMoveService,
   ) {}
 
   // --- phone verification (mandatory at onboarding — control-tower contact + GPS) ---
@@ -3368,7 +3372,9 @@ export class SbgController {
     // An OWNER-DRIVER: a party the network contracts with directly, and the only kind of driver with a
     // page. The name is their display name — FleetDriver keeps the Golden Record in the vault, and this
     // is the non-PII label that exists so there is something to say in public.
-    const driver = held.kind === 'driver' ? this.drivers.list().find((d) => d.did === held.id) : undefined;
+    // STILL an owner-driver: a courier who has since joined a fleet keeps the handle they were issued, and the page
+    // behind it closes — a handle follows the contract, and their work is now their fleet's to show.
+    const driver = held.kind === 'driver' ? this.drivers.list().find((d) => d.did === held.id && !d.managerDid) : undefined;
 
     const name = shop?.shopName ?? hub?.name ?? fleet?.companyName ?? company?.name ?? driver?.displayName;
     if (!name) throw new GlosError('NOT_FOUND', 'No such profile');
@@ -3383,8 +3389,10 @@ export class SbgController {
     // An owner-driver mobilises exactly one vehicle, and the same record a fleet gets is the honest one
     // to show: the counts are theirs, and the RATES stay null while the record is thin, which is the
     // protection that matters most to somebody with few loads behind them.
-    const movers = fleet ? this.drivers.list({ managerDid: fleet.did }).map((d) => d.did) : driver ? [driver.did] : [];
-    const moves = movers.length ? mobilisationOf(this.dispatch.listFreight(), movers) : undefined;
+    // The loads taken FOR this carrier — the fleet, or the owner-driver themselves — by whoever drove them then.
+    const carrier = fleet?.did ?? driver?.did;
+    const mobilises = fleet ? this.drivers.list({ managerDid: fleet.did }).length > 0 || this.dispatch.driversWhoCarriedFor(fleet.did).length > 0 : Boolean(driver);
+    const moves = carrier && mobilises ? this.dispatch.mobilisationFor(carrier) : undefined;
 
     /*
      * CL4 item 1 — THE CLEARING AGENT'S RECORD, and the agent exists here for the first time.
@@ -3472,28 +3480,26 @@ export class SbgController {
   @Get('fleet/movers')
   movers(): MoversView {
     this.handleDirectory.ensure();
-    const freights = this.dispatch.listFreight();
     const items = this.managers
       .list()
       .map((fleet) => {
         const drivers = this.drivers.list({ managerDid: fleet.did });
-        const nameOf = (did: string) => drivers.find((d) => d.did === did)?.displayName ?? did;
-        const mine = new Set(drivers.map((d) => d.did));
         return {
           did: fleet.did,
           name: fleet.companyName,
           ...(this.handles.forId(fleet.did) ? { handle: this.handles.forId(fleet.did)!.handle } : {}),
           ...(fleet.jurisdiction ? { jurisdiction: fleet.jurisdiction } : {}),
           drivers: drivers.length,
-          moves: mobilisationOf(freights, [...mine]),
+          // The loads taken FOR this fleet — by whoever drove for it then. Not "every load its drivers of today
+          // ever took", which would hand a moved driver's record to whichever fleet they joined.
+          moves: this.dispatch.mobilisationFor(fleet.did),
           // Newest first: a complaint is almost always about the most recent one.
-          handBacks: freights
-            .flatMap((f) => (f.handBacks ?? []).filter((h) => mine.has(h.driverDid)).map((h) => ({ code: f.code, driver: nameOf(h.driverDid), reason: h.reason, at: h.at })))
-            .sort((a, b) => b.at.localeCompare(a.at)),
-          perDriver: drivers
-            .map((d) => {
-              const m = mobilisationOf(freights, [d.did]);
-              return { driver: d.displayName, claimed: m.claimed, handedBack: m.handedBack, kept: m.kept, delivered: m.delivered };
+          handBacks: this.dispatch.handBacksFor(fleet.did).map((h) => ({ code: h.code, driver: this.anyDriverName(h.driverDid), reason: h.reason, at: h.at })),
+          perDriver: this.dispatch
+            .driversWhoCarriedFor(fleet.did)
+            .map((did) => {
+              const m = this.dispatch.mobilisationFor(fleet.did, did);
+              return { driver: this.anyDriverName(did), claimed: m.claimed, handedBack: m.handedBack, kept: m.kept, delivered: m.delivered };
             })
             // A driver who has taken nothing is not a row worth reading, and listing them all turns a
             // fleet of forty into a wall nobody scans.
@@ -3797,8 +3803,7 @@ export class SbgController {
   @Get('fleet/managers/:did/earnings')
   fleetEarnings(@Param('did') did: string, @Query() query: FleetEarningsQueryDto, @Actor() actor: IntrospectionResult) {
     this.assertFleetSelf(did, actor);
-    const { dids, nameOf } = this.fleetDrivers(did);
-    return this.dispatch.fleetJobsPage(dids, nameOf, query);
+    return this.dispatch.fleetJobsPage(did, this.anyDriverName, query);
   }
 
   /**
@@ -3810,7 +3815,6 @@ export class SbgController {
   @Get('fleet/managers/:did/earnings/summary')
   fleetEarningsSummary(@Param('did') did: string, @Query() query: FleetEarningsQueryDto, @Actor() actor: IntrospectionResult) {
     this.assertFleetSelf(did, actor);
-    const { dids, nameOf } = this.fleetDrivers(did);
     const m = this.managers.get(did);
     const entityId = this.managers.entityIdOrNone(m);
     const currency = entityId ? this.entities.get(entityId).currency : undefined;
@@ -3818,7 +3822,7 @@ export class SbgController {
     // its jobs settle between the parties, and "0 owed" would be a false comfort.
     const owed = entityId ? Math.round(-this.books.balance(entityId, ACCOUNT_CODES.PAYABLE_PROVIDER, currency, did) * 100) / 100 : null;
     return {
-      ...this.dispatch.fleetEarningsSummary(dids, nameOf, query),
+      ...this.dispatch.fleetEarningsSummary(did, this.anyDriverName, query),
       settlement: { payeeDid: did, owed, ...this.payouts.forPayee(did), ...(currency ? { currency } : {}) },
     };
   }
@@ -3830,8 +3834,7 @@ export class SbgController {
   @Header('Content-Disposition', 'attachment; filename="fleet-earnings.csv"')
   fleetEarningsExport(@Param('did') did: string, @Query() query: FleetEarningsQueryDto, @Actor() actor: IntrospectionResult): string {
     this.assertFleetSelf(did, actor);
-    const { dids, nameOf } = this.fleetDrivers(did);
-    return this.dispatch.fleetJobsCsv(dids, nameOf, query);
+    return this.dispatch.fleetJobsCsv(did, this.anyDriverName, query);
   }
 
   /** The fleet itself (its token's tenant), or network staff. Anyone else is told the fleet is not theirs. */
@@ -3891,6 +3894,24 @@ export class SbgController {
   }
 
   /** The fleet's drivers as a set, and their names — the two things every fleet register needs. */
+  /**
+   * A driver's shop-floor name, whoever they drive for now. The register holds the hauls taken FOR a fleet, and a
+   * driver who has since moved still drove them — their name stays on the row rather than turning into an id.
+   */
+  private readonly anyDriverName = (did: string): string => {
+    try {
+      return this.drivers.get(did).displayName;
+    } catch {
+      return did;
+    }
+  };
+
+  /** Moving a driver between fleets — present in the running app; absent only in specs that build this controller by hand. */
+  private mover(): FleetMoveService {
+    if (!this.fleetMove) throw new GlosError('INVALID_STATE', 'Moving between fleets is not running in this deployment');
+    return this.fleetMove;
+  }
+
   private fleetDrivers(managerDid: string): { dids: Set<string>; nameOf: (did: string) => string } {
     const drivers = this.drivers.list({ managerDid });
     const names = new Map(drivers.map((d) => [d.did, d.displayName]));
@@ -4083,6 +4104,34 @@ export class SbgController {
     return { did: driver.did, displayName: driver.displayName, status: driver.status, person: this.persons.view(person), token };
   }
 
+  /**
+   * A DRIVER MOVES TO ANOTHER FLEET, step one: which fleet that code belongs to, and what has to be finished
+   * first. Changes nothing — it is what lets the app show "Drive for Kilima Logistics?" before anybody commits,
+   * so a mistyped code joins nobody. The driver's own call, from their own sign-in, or staff standing in.
+   */
+  @Post('drivers/:did/fleet/check')
+  checkFleetMove(@Param('did') did: string, @Body() dto: FleetCodeDto, @Actor() actor: IntrospectionResult): FleetMoveCheckView {
+    this.assertDriverActs(did, actor);
+    return this.mover().check(did, dto.code);
+  }
+
+  /**
+   * Step two: move now, or be refused by name. Final — no request goes to the fleet, nothing waits on an answer;
+   * the code IS the fleet's say-so, exactly as it is when a driver signs up with it.
+   */
+  @Post('drivers/:did/fleet')
+  moveFleet(@Param('did') did: string, @Body() dto: FleetCodeDto, @Actor() actor: IntrospectionResult): FleetMoveView {
+    this.assertDriverActs(did, actor);
+    const { driver, companyName } = this.mover().move(did, dto.code);
+    // Every session this driver held has just ended — each carried the old fleet. The one that asked is handed a
+    // new one as the new fleet's driver; staff standing in for them get none, since they were never the driver.
+    const token =
+      actor?.did === did
+        ? this.auth.mintActorToken({ role: 'driver', did, tenant: driver.managerDid, ...(actor.personDid ? { revocationKey: actor.personDid, personDid: actor.personDid } : {}) })
+        : undefined;
+    return { did, companyName, ...(token ? { token } : {}) };
+  }
+
   /** A fleet manager sees only their own drivers (actor.tenant); operator sees all. */
   /**
    * This fleet's drivers — each with the work their VEHICLE'S RATE is costing them.
@@ -4206,7 +4255,14 @@ export class SbgController {
     // WHY freight vanished (rather than the driver seeing an empty marketplace with no reason).
     const rating = this.ratings.driverRating(did);
     // FP4 — and the state of their licence, so the app can say why a shift will not start before they try.
-    return { ...driver, rating, freightPaused: belowFloor(rating), papers: driverPapers(driver), offRoad: lapsedOf(driverPapers(driver)).map(offRoadLine) };
+    // And WHO they drive for, by name: the app says "You drive for Kilima Logistics" beside the way to move.
+    let fleetName: string | undefined;
+    try {
+      fleetName = driver.managerDid ? this.managers.get(driver.managerDid).companyName : undefined;
+    } catch {
+      fleetName = undefined;
+    }
+    return { ...driver, ...(fleetName ? { fleetName } : {}), rating, freightPaused: belowFloor(rating), papers: driverPapers(driver), offRoad: lapsedOf(driverPapers(driver)).map(offRoadLine) };
   }
 
   /**

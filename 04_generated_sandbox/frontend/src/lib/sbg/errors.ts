@@ -106,6 +106,9 @@ const PRESENTATION: Partial<Record<SbgErrorCode, ErrorPresentation>> = {
   CARRIER_NOT_TRADING: { icon: 'block', tone: 'warn', say: 'error.carrier_not_trading' },
   // A decision against somebody that came without its reason. The detail says which reason is missing.
   REASON_REQUIRED: { icon: 'edit', tone: 'warn', say: 'error.reason_required' },
+  // Details that already belong to an account. Never 'try again': the same details are refused again. A screen that
+  // can say what is expected next reads which detail matched from params.field (shared/duplicate.ts).
+  DUPLICATE: { icon: 'lock', tone: 'warn', say: 'error.already_registered' },
   /*
    * The three the delivery gate refuses with, reachable from a run since F5 held it to the board’s line.
    *

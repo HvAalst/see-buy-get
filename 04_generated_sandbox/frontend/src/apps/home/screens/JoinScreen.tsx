@@ -1,7 +1,8 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PlaceMap, ReadAloud, ShopDetailSheet } from '../../../shared/ui';
 import { toPlaceWords } from '../../../shared/placewords';
-import { useT } from '../../../shared/i18n';
+import { useT, type MessageKey } from '../../../shared/i18n';
+import { duplicateField, isIdentityDocument, type DuplicateField } from '../../../shared/duplicate';
 
 import { DRIVER_CLASSES, joinSpoken, needsLicence, pickedClasses, pickedVehicle, roleMeta, stepBlocker, stepsFor, vehicleClassFor } from '../logic';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE, leaveInterest, type OperatingCountry } from '../api';
@@ -39,7 +40,7 @@ export function JoinScreen({ state, actions }: JoinScreenProps) {
         </div>
       ) : null}
 
-      {state.error ? <ErrorNote error={state.error} /> : null}
+      {state.error ? duplicateField(state.error) ? <AlreadyRegistered state={state} actions={actions} /> : <ErrorNote error={state.error} /> : null}
 
       {state.step === 'phone' ? <PhoneStep state={state} actions={actions} /> : null}
       {state.step === 'code' ? <CodeStep state={state} actions={actions} /> : null}
@@ -56,6 +57,54 @@ export function JoinScreen({ state, actions }: JoinScreenProps) {
           <ReadAloud text={() => `${joinSpoken(role, state.step, t)} ${blocker ?? ''}`} label={t('home.readAloud')} />
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------- already registered -- */
+
+/** What the heading says, per detail that matched. */
+const DUP_TITLE: Record<DuplicateField, MessageKey> = {
+  phone: 'home.dup.title.phone',
+  nationalId: 'home.dup.title.nationalId',
+  licence: 'home.dup.title.licence',
+  device: 'home.dup.title.device',
+  email: 'home.dup.title.email',
+};
+
+/** What is expected next — which depends on who is joining and which of their details matched. */
+function dupDetail(role: string, field: DuplicateField): MessageKey {
+  if (field === 'email') return 'home.dup.email';
+  if (role === 'driver') return field === 'phone' ? 'home.dup.driver.phone' : 'home.dup.driver.identity';
+  if (role === 'pudo') return field === 'phone' ? 'home.dup.shop.phone' : field === 'device' ? 'home.dup.shop.device' : 'home.dup.shop.identity';
+  return 'home.dup.other';
+}
+
+/**
+ * ALREADY REGISTERED — and what we expect next, which is never "try again". The same details are refused again,
+ * and other details would make a second identity. So: sign in with the account that exists; put right a number
+ * that was mistyped; or, where neither is possible, be told honestly that the app cannot fix it yet.
+ */
+function AlreadyRegistered({ state, actions }: JoinScreenProps) {
+  const t = useT();
+  const role = state.role!;
+  const field = duplicateField(state.error)!;
+  const signsIn = role.id === 'driver' || role.id === 'pudo';
+  return (
+    <div class="dup">
+      <Note tone="warn" icon="lock" title={t(DUP_TITLE[field])} detail={t(dupDetail(role.id, field))} />
+      <div class="crow" style="margin-top:10px">
+        {signsIn ? (
+          <Button full={false} chevron={false} onClick={() => window.location.assign(role.app)}>
+            {t(role.id === 'driver' ? 'home.dup.openDriver' : 'home.dup.openShop')}
+          </Button>
+        ) : null}
+        {isIdentityDocument(field) || field === 'email' ? (
+          <Button variant="link" full={false} onClick={() => actions.revisit(field === 'email' ? 'login' : 'about')}>
+            {t('home.dup.checkTyped')}
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }

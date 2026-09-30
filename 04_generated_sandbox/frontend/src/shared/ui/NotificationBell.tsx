@@ -42,6 +42,8 @@ const KIND_ICON: Record<string, IconName> = {
   claim_opened: 'warning',
   claim_answered: 'check',
   freight_delivered: 'check',
+  // A driver joined or left a fleet with its code — both fleets are told.
+  roster_changed: 'person',
 };
 
 /**

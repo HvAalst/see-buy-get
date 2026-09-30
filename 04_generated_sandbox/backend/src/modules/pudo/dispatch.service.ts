@@ -2,6 +2,7 @@
 import { TransitAuthorityService, transitRefusal } from './transit-authority.service';
 import { BorderRuleService } from './border-rules.service';
 import type { BorderAdvice, BorderRefusal } from './border-rules.types';
+import { mobilisationForCarrier, type HandBack, type Mobilisation } from './mobilisation';
 import { GlosError } from '../../foundation/http/glos-error';
 import { incotermEntry, riskBearerOf } from '../../foundation/incoterms/catalogue';
 import { randomBytes } from 'crypto';
@@ -225,8 +226,9 @@ export interface FleetEarningsSummary extends DriverJobsSummary {
  * register is one list with the driver as a column — and the summary cuts it by driver and by month, which are
  * the two ways a fleet owner reads it: who earned it, and what the month came to.
  */
-export function filterFleetJobs(rows: Freight[], driverDids: ReadonlySet<string>, q: FleetJobsQuery): Freight[] {
-  return filterJobsFor(rows, (f) => Boolean(f.claimedBy) && driverDids.has(f.claimedBy!) && (!q.driver || f.claimedBy === q.driver), q);
+/** `isTheFleets` answers whether a haul was taken for the fleet — see DispatchService.carrierOf. */
+export function filterFleetJobs(rows: Freight[], isTheFleets: (f: Freight) => boolean, q: FleetJobsQuery): Freight[] {
+  return filterJobsFor(rows, (f) => Boolean(f.claimedBy) && isTheFleets(f) && (!q.driver || f.claimedBy === q.driver), q);
 }
 
 export function fleetJobRowOf(f: Freight, nameOf: (did: string) => string): FleetJobRow {
@@ -565,6 +567,7 @@ export class DispatchService {
         f.status = 'available';
         f.scheduledPickupAt = undefined; // its date has passed — it's now a plain ship-now load: no stale gate, no 'scheduled' timeline, and this loop skips it forever after (so it can never no-show-release twice)
         f.claimedBy = undefined;
+        f.carrierDid = undefined; // nobody carried it: it goes back on the board belonging to no carrier
         // FB4a — and the body that never actually carried it. A released no-show must leave no trace in the
         // moved series: it was offered and not taken, which is precisely the gap the series exists to show.
         f.carriedBy = undefined;
@@ -1116,6 +1119,9 @@ export class DispatchService {
     }
     f.status = 'claimed';
     f.claimedBy = driverDid;
+    // And for WHOM — the fleet, or the driver themselves — frozen for the same reason as the body below: a
+    // driver who moves fleets must take none of this fleet's history with them. See Freight.carrierDid.
+    f.carrierDid = this.carrierDidOf(driverDid);
     // FB4a — and WHAT took it, frozen here for the same reason the price is. Only the driver was recorded, so
     // "km moved by container chassis" could only be answered from what that driver is coupled to today: sell
     // the flatbed, buy a box van, and every haul you ever did silently changes body. A series that rewrites
@@ -1990,7 +1996,10 @@ export class DispatchService {
     // S34 — pay the driver their LOCKED earning on delivery, exactly once. A system-level ledger outflow
     // (drivers hold no agent wallet). A legacy/bulletin freight claimed before pricing (no lockedPrice) is skipped.
     if (f.lockedPrice != null && !f.driverPaid && f.claimedBy) {
-      this.gate.driverPayout(f.claimedBy, f.lockedPrice);
+      // WHO it was owed to, read in the same turn the payout resolves it and kept on the load: a claim upheld
+      // weeks later takes the money back from this party, not from a fleet the driver has joined since.
+      const payee = this.drivers.payeeOrNone(f.claimedBy);
+      if (this.gate.driverPayout(f.claimedBy, f.lockedPrice) && payee.entityId) f.driverPayee = { payeeDid: payee.payeeDid, entityId: payee.entityId };
       f.driverPaid = true;
     }
     // S33 — delivery is terminal: start the securement photo's retention clock (shipment-proof bin).
@@ -2141,7 +2150,7 @@ export class DispatchService {
     // actually paid them (accrued at delivery); a haul settled between the parties has nothing here to take back.
     if (award > 0 && f.claimedBy && f.driverPaid && (f.lockedPrice ?? 0) > 0) {
       const back = Math.round(Math.min(award, f.lockedPrice!) * 100) / 100;
-      if (this.gate.driverClawback(f.claimedBy, back, f.freightId)) f.clawback = { amount: back, at, note: `claim upheld · ${f.code}` };
+      if (this.gate.driverClawback(f.claimedBy, back, f.freightId, f.driverPayee)) f.clawback = { amount: back, at, note: `claim upheld · ${f.code}` };
     }
     f.claim = { ...c, state: 'resolved', decision: input.decision, award, note: note.slice(0, 1000), ...(input.by ? { decidedBy: input.by } : {}), decidedAt: at, ...(funding ? { funding } : {}), ...(paidTo ? { paidTo } : {}) };
     this.freights.set(f.freightId, f);
@@ -2171,10 +2180,13 @@ export class DispatchService {
       this.vendors.rebate(f.shipperDid, f.freightId, charged.gross, 'load handed back by the driver before pickup', charged.tax, charged.provision);
     }
     const assignedBy = f.assignedBy;
-    f.handBacks = [...(f.handBacks ?? []), { driverDid, reason: why.slice(0, 500), at }];
+    // The hand-back keeps the carrier it was given back BY, read before the claim is unwound below: it counts on
+    // that fleet's record, not on whichever fleet the driver drives for when somebody next reads it.
+    const carrierDid = this.carrierOf(f);
+    f.handBacks = [...(f.handBacks ?? []), { driverDid, ...(carrierDid ? { carrierDid } : {}), reason: why.slice(0, 500), at }];
     // Back on the market as if untouched: a booked-for-later load whose day has not come goes back to waiting for it.
     f.status = f.scheduledPickupAt && new Date(f.scheduledPickupAt).getTime() > now ? 'scheduled' : 'available';
-    for (const k of ['claimedBy', 'claimedAt', 'lockedPrice', 'priceBreakdown', 'priceOrigin', 'lockedAt', 'paidStatus', 'billed', 'assignedBy', 'carriedBy', 'driverPaid'] as const) delete (f as unknown as Record<string, unknown>)[k];
+    for (const k of ['claimedBy', 'carrierDid', 'claimedAt', 'lockedPrice', 'priceBreakdown', 'priceOrigin', 'lockedAt', 'paidStatus', 'billed', 'assignedBy', 'carriedBy', 'driverPaid'] as const) delete (f as unknown as Record<string, unknown>)[k];
     this.freights.set(f.freightId, f);
     void this.events
       .publish(GlosEvent.Pudo.FreightHandedBack, { freightId: f.freightId, code: f.code, driverDid, driverName: this.driverNameOf(driverDid), reason: why, posterDid: f.postedByDid ?? f.shipperDid, managerDid: assignedBy?.managerDid, destLabel: f.destLabel }, { source: 'pudo' })
@@ -2266,20 +2278,60 @@ export class DispatchService {
     return driverJobsToCsv(filterDriverJobs([...this.freights.values()], driverDid, q));
   }
 
-  /* --- FP1: the fleet's register over all its drivers --- */
+  /* --- FP1: the fleet's register over every haul taken for it --- */
 
-  fleetJobsPage(driverDids: ReadonlySet<string>, nameOf: (did: string) => string, q: FleetJobsQuery): Page<FleetJobRow> {
-    const filtered = filterFleetJobs([...this.freights.values()], driverDids, q);
+  /**
+   * WHOSE JOB THIS WAS: the carrier of record, fixed at the claim. A load claimed before that was recorded is
+   * read from the driver's fleet as it stands, which is what every reader did before — and still right for
+   * them, because no driver could move fleets until the carrier was recorded.
+   */
+  carrierOf(f: Freight): string | undefined {
+    if (f.carrierDid) return f.carrierDid;
+    return f.claimedBy ? this.carrierDidOf(f.claimedBy) : undefined;
+  }
+
+  /** A fleet's register is the hauls taken FOR it — by whoever was driving for it then, whoever they drive for now. */
+  private takenFor(fleetDid: string): (f: Freight) => boolean {
+    return (f) => this.carrierOf(f) === fleetDid;
+  }
+
+  /** Whose a hand-back was — kept on it since the carrier was recorded, read from the driver before that. */
+  private handBackCarrierOf = (h: HandBack): string | undefined => h.carrierDid ?? this.carrierDidOf(h.driverDid);
+
+  /** CL4 — a carrier's mobilisation record: the loads taken for it (optionally by one driver), and given back by it. */
+  mobilisationFor(carrierDid: string, driverDid?: string): Mobilisation {
+    return mobilisationForCarrier([...this.freights.values()], carrierDid, (f) => this.carrierOf(f), this.handBackCarrierOf, driverDid);
+  }
+
+  /** Every driver who has taken or given back a load FOR this carrier — current drivers and those who have moved on. */
+  driversWhoCarriedFor(carrierDid: string): string[] {
+    const dids = new Set<string>();
+    for (const f of this.freights.values()) {
+      if (f.claimedBy && this.carrierOf(f) === carrierDid) dids.add(f.claimedBy);
+      for (const h of f.handBacks ?? []) if (this.handBackCarrierOf(h) === carrierDid) dids.add(h.driverDid);
+    }
+    return [...dids];
+  }
+
+  /** The loads given back for this carrier, newest first. */
+  handBacksFor(carrierDid: string): Array<{ code: string; driverDid: string; reason: string; at: string }> {
+    return [...this.freights.values()]
+      .flatMap((f) => (f.handBacks ?? []).filter((h) => this.handBackCarrierOf(h) === carrierDid).map((h) => ({ code: f.code, driverDid: h.driverDid, reason: h.reason, at: h.at })))
+      .sort((a, b) => b.at.localeCompare(a.at));
+  }
+
+  fleetJobsPage(fleetDid: string, nameOf: (did: string) => string, q: FleetJobsQuery): Page<FleetJobRow> {
+    const filtered = filterFleetJobs([...this.freights.values()], this.takenFor(fleetDid), q);
     const { items, total } = paginate(filtered, q.limit, q.offset);
     return { items: items.map((f) => fleetJobRowOf(f, nameOf)), total };
   }
 
-  fleetEarningsSummary(driverDids: ReadonlySet<string>, nameOf: (did: string) => string, q: FleetJobsQuery): FleetEarningsSummary {
-    return fleetEarningsSummaryOf(filterFleetJobs([...this.freights.values()], driverDids, q), nameOf);
+  fleetEarningsSummary(fleetDid: string, nameOf: (did: string) => string, q: FleetJobsQuery): FleetEarningsSummary {
+    return fleetEarningsSummaryOf(filterFleetJobs([...this.freights.values()], this.takenFor(fleetDid), q), nameOf);
   }
 
-  fleetJobsCsv(driverDids: ReadonlySet<string>, nameOf: (did: string) => string, q: FleetJobsQuery): string {
-    return fleetJobsToCsv(filterFleetJobs([...this.freights.values()], driverDids, q), nameOf);
+  fleetJobsCsv(fleetDid: string, nameOf: (did: string) => string, q: FleetJobsQuery): string {
+    return fleetJobsToCsv(filterFleetJobs([...this.freights.values()], this.takenFor(fleetDid), q), nameOf);
   }
 
   /** All cargo currently claimed or moving (optionally scoped to one fleet's drivers) for the dashboard. */

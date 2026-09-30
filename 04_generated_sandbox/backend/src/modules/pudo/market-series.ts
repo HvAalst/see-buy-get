@@ -365,8 +365,11 @@ export function carriersOn(
       unattributedLoads += 1;
       continue;
     }
-    // The fleet is who the load was taken FROM where there is one; otherwise the driver is their own.
-    const fleet = fleetOf(took);
+    // The fleet is who the load was taken FROM where there is one; otherwise the driver is their own. The
+    // carrier recorded at the claim wins, so a driver who has since moved fleets takes none of the old fleet's
+    // loads with them; a load claimed before that was recorded is read from the driver, as it always was.
+    const recorded = f.carrierDid;
+    const fleet = recorded ? (recorded === took ? undefined : recorded) : fleetOf(took);
     const kind = fleet ? 'fleet' : 'driver';
     const id = fleet ?? took;
     const key = kind + ':' + id;

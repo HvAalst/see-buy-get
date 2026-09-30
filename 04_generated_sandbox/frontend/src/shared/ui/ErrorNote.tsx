@@ -27,6 +27,7 @@ const SAY: Record<string, string> = {
   'error.no_room': 'That run does not have room for this.',
   'error.carrier_not_trading': 'This carrier is not taking new work right now.',
   'error.reason_required': 'Say why first — the other side is shown your reason.',
+  'error.already_registered': 'These details are already registered — sign in with that account rather than making another.',
   // F5 — the goods and the truck, or the goods and each other. The server's DETAIL names the vehicle or
   // the load already aboard, which is the only actionable part, so callers pass showDetail.
   'error.vehicle_capability': 'That truck cannot carry these goods.',

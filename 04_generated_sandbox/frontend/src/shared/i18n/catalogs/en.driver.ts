@@ -787,4 +787,25 @@ export const enDriver = {
   'driver.toast.roadRefuted': 'Passed to the control tower',
   // Said out loud, because a driver who taps "it is gone" expects it to disappear and it must not.
   'driver.toast.roadRefutedDetail': 'It keeps warning until an operator checks it.',
+
+  // Drive for another fleet — with its code, from the driver's own phone. Final, and said before it happens.
+  'driver.fleet.row': 'Your fleet',
+  'driver.fleet.rowOwn': 'You drive for yourself',
+  'driver.fleet.title': 'Drive for another fleet',
+  'driver.fleet.now': 'You drive for {company} now.',
+  'driver.fleet.nowOwn': 'You drive for yourself now.',
+  'driver.fleet.lede': 'Ask the fleet you want to drive for for its code — the same code drivers join it with.',
+  'driver.fleet.codeLabel': 'The fleet’s code',
+  'driver.fleet.check': 'Check the code',
+  'driver.fleet.blockedTitle': 'Finish this before you move to {company}',
+  'driver.fleet.confirmTitle': 'Drive for {company}?',
+  'driver.fleet.keeps': 'Your licence, your trips and your rating come with you.',
+  'driver.fleet.confirmFrom': '{from} is told you have left. Every trip you did for them stays in their records.',
+  'driver.fleet.confirmCourier': 'From now on the network pays {company} for your work rather than you, and your public page closes — the fleet is the one the network works with.',
+  'driver.fleet.signedInAgain': 'You are signed in again on this phone as their driver; any other phone signs in again too.',
+  'driver.fleet.cta': 'Drive for {company}',
+  'driver.fleet.changeCode': 'Use another code',
+  'driver.fleet.notNow': 'Not now',
+  'driver.fleet.doneToast': 'You now drive for {company}',
+  'driver.fleet.doneDetail': 'Their office can see you under Drivers.',
 };

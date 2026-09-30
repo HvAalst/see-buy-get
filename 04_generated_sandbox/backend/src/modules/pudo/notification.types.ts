@@ -100,6 +100,11 @@ export const NOTIFICATION_KINDS = [
   'claim_opened',
   /** The carrier answered a claim. The shipper who raised it is the one waiting to hear. */
   'claim_answered',
+  /**
+   * A driver joined a fleet with its code, or left one for another. The driver did it; both fleets are told —
+   * the one they left learns it from us rather than from an empty seat, and the one they joined learns who.
+   */
+  'roster_changed',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

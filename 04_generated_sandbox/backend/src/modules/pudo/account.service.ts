@@ -118,9 +118,25 @@ export class AccountService implements OnApplicationBootstrap {
     if ((input.password || '').length < 6) throw new GlosError('PASSWORD_TOO_SHORT', 'Password must be at least 6 characters');
     if (!input.phone?.trim()) throw new GlosError('PHONE_REQUIRED', 'A phone number is required');
     if (!this.otp.isVerified(input.phone)) throw new GlosError('PHONE_NOT_VERIFIED', 'Verify your phone number first');
-    if (this.accounts.has(email)) throw new GlosError('DUPLICATE', 'An account with this email already exists');
+    /*
+     * A REFUSAL BECAUSE THE DETAILS ARE ALREADY REGISTERED is counted against this phone's verification. It
+     * names what matched, because a person who registered before needs to know which of their details did —
+     * and that makes it an answer about somebody else's ID too. So a verification allows a few, and then the
+     * next attempt has to verify the phone again: one verified phone cannot walk through every ID there is.
+     */
+    if (this.accounts.has(email)) {
+      this.otp.noteRefusal(input.phone);
+      throw new GlosError('DUPLICATE', 'An account with this email already exists', { field: 'email', register: 'account' });
+    }
 
-    const { did, entityStatus, tenant } = this.provision(input.role, input.profile);
+    let provisioned: { did: string; entityStatus?: string; tenant?: string };
+    try {
+      provisioned = this.provision(input.role, input.profile);
+    } catch (err) {
+      if (err instanceof GlosError && err.code === 'DUPLICATE') this.otp.noteRefusal(input.phone);
+      throw err;
+    }
+    const { did, entityStatus, tenant } = provisioned;
     // S20: link this role to the person identity by phone (best-effort — never blocks the signup) and
     // remember the join key on the account so the same human is never asked to make a second account.
     this.persons.tryAttachRole(input.phone, ACCOUNT_TO_PERSON_ROLE[input.role], did, tenant);
@@ -130,6 +146,18 @@ export class AccountService implements OnApplicationBootstrap {
     this.accounts.set(email, account);
     void this.mail?.send('welcome', { address: email }, { name: welcomeName(input.role, input.profile), email, role: WELCOME_ROLE[input.role] });
     return { accountId: account.accountId, role: account.role, did, email, entityStatus, token: this.mint(account) };
+  }
+
+  /**
+   * A driver moved fleets: the account they sign in to by email carries the fleet as its tenant, and that is what
+   * their next token is minted from — so it follows them, or an email sign-in would still open the old fleet.
+   */
+  retenant(did: string, tenant: string | undefined): void {
+    for (const account of this.accounts.values()) {
+      if (account.did !== did || account.tenant === tenant) continue;
+      account.tenant = tenant;
+      this.accounts.set(account.email, account);
+    }
   }
 
   /** The email behind an entity's DID — for the receipts a shop is sent about its own loads. Undefined for a store or a stranger. */

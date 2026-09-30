@@ -1,7 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
-import { createHash, randomBytes } from 'crypto';
+import { randomBytes } from 'crypto';
+import { RegistrationPrints, type IdentityFields, type PrintField } from '../../foundation/identity/registration-prints';
 import { DidService } from '../../foundation/did/did.service';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
 import { OperationalStore } from '../../foundation/data-firewall/operational-store.service';
@@ -63,7 +64,12 @@ interface RegisterAgentInput {
   equipment?: Equipment[]; // S32c — declared load/unload equipment on hand (beyond manual)
 }
 
-const fp = (value: string): string => createHash('sha256').update(value.trim().toLowerCase()).digest('hex');
+/** The same sentences as before, with the field they name carried beside them for the app to act on. */
+const SHOP_HELD: Record<Exclude<PrintField, 'licence'>, string> = {
+  nationalId: 'An agent with this national ID already exists',
+  phone: 'An agent with this mobile already exists',
+  device: 'This device is already registered to another agent',
+};
 
 /**
  * AgentService (P-002, ↔ M1 UDIW Tiers 1–2 / M1-ONB). Manages the PUDO agent (Tier 2 shopkeeper)
@@ -77,8 +83,8 @@ export class AgentService {
   // Durable: the agent golden record (status, shelf, zone, wallet link). A signed-up agent — and the
   // wallet balance keyed to them — is meaningless after a restart if this record is gone.
   private readonly agents = new PersistentMap<string, Agent>('pudo-agents'); // keyed by DID
-  /** Hashed identity/device fingerprints for the DRAFT dedup check (18.5) — no PII stored here. */
-  private readonly fingerprints = new Set<string>();
+  /** Keyed identity/device prints for the DRAFT dedup check (18.5) — on disk, and no PII in them. */
+  private readonly prints = new RegistrationPrints('shop');
 
   constructor(
     private readonly dids: DidService,
@@ -168,15 +174,18 @@ export class AgentService {
     if (unmet.length) throw new GlosError('REQUIREMENTS_NOT_MET', `Does not meet PUDO agent requirements: ${unmet.join('; ')}`);
 
     // Dedup check (18.5 DRAFT) — one national ID, one mobile, one device across the network.
-    const prints = { id: fp(input.nationalId), mobile: fp(input.mobile), device: fp(input.deviceImei) };
-    if (this.fingerprints.has(prints.id)) throw new GlosError('DUPLICATE', 'An agent with this national ID already exists');
-    if (this.fingerprints.has(prints.mobile)) throw new GlosError('DUPLICATE', 'An agent with this mobile already exists');
-    if (this.fingerprints.has(prints.device)) throw new GlosError('DUPLICATE', 'This device is already registered to another agent');
+    const identity: IdentityFields = [
+      ['nationalId', input.nationalId],
+      ['phone', input.mobile],
+      ['device', input.deviceImei],
+    ];
+    const held = this.prints.taken(identity);
+    if (held) throw new GlosError('DUPLICATE', SHOP_HELD[held as Exclude<PrintField, 'licence'>], { field: held, register: 'shop' });
 
     const did = this.dids.generate(`pudo:${input.mobile}`, { role: 'pudo-agent' }).id;
     const { vaultRef } = this.vault.store({ fullName: input.fullName, governmentId: input.nationalId, phone: input.mobile }, { region: 'local' });
     this.core.upsert({ did, vaultRef, tier: 2, status: 'pending', capabilities: ['pudo-agent'], metadata: { zone: input.zone } });
-    for (const p of Object.values(prints)) this.fingerprints.add(p);
+    this.prints.claim(identity, did);
 
     const agent: Agent = {
       agentId: `agt_${randomBytes(8).toString('hex')}`,

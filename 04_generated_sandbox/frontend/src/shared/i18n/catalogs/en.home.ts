@@ -496,4 +496,21 @@ export const enHome = {
   'home.welcome.marketSub': 'Every open load around any town — what truck it needs and what it pays. No account needed.',
   'home.welcome.verify': 'Check a consignment note',
   'home.welcome.verifySub': 'Somebody handed you one — is it genuine? No account needed.',
+
+  // A sign-up refused because the details are already registered — and what is expected next, never 'try again'.
+  'home.dup.title.phone': 'This phone number is already registered',
+  'home.dup.title.nationalId': 'This national ID is already registered',
+  'home.dup.title.licence': 'This licence number is already registered',
+  'home.dup.title.device': 'This phone already runs a shop',
+  'home.dup.title.email': 'This email already has an account',
+  'home.dup.driver.phone': 'You already have a driver account. Sign in to the driver app with this phone number and your PIN — there is nothing to fill in again.',
+  'home.dup.driver.identity': 'If you registered before, sign in to the driver app with the phone number you used then. If a number was mistyped, put it right. If you never registered, or no longer have that phone, this cannot be put right in the app yet.',
+  'home.dup.shop.phone': 'You already have a shop account. Sign in to the shop app instead — there is nothing to fill in again.',
+  'home.dup.shop.identity': 'If you registered this shop before, sign in to the shop app with the email you used then. If a number was mistyped, put it right. If you never registered, this cannot be put right in the app yet.',
+  'home.dup.shop.device': 'Each shop registers from its own phone. If this is your shop, sign in to the shop app; a second shop needs a phone of its own.',
+  'home.dup.email': 'Use another email address, or sign in with the account that already has this one.',
+  'home.dup.other': 'These details already belong to an account. Sign in with that account rather than making a second one.',
+  'home.dup.openDriver': 'Open the driver app',
+  'home.dup.openShop': 'Open the shop app',
+  'home.dup.checkTyped': 'Check what I typed',
 };

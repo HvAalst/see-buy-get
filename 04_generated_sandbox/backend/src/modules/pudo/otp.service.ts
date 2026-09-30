@@ -15,6 +15,12 @@ const MAX_ATTEMPTS = 5;
 const RESEND_COOLDOWN_MS = 60 * 1000;
 /** Codes per number per rolling day. */
 const MAX_PER_DAY = 10;
+/**
+ * Sign-ups a verification may have refused because the details belong to an existing account. A typo is
+ * human, so it is more than one; after that the verification is spent — otherwise one verified phone could
+ * ask the register about every national ID there is, and a refusal that names the field is an answer.
+ */
+export const MAX_REFUSALS_PER_VERIFICATION = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
 interface CodeEntry {
   code: string;
@@ -44,6 +50,7 @@ export class OtpService {
   private readonly codes = new Map<string, CodeEntry>();
   private readonly verified = new Map<string, number>(); // phone -> expiry
   private readonly rates = new Map<string, RateEntry>();
+  private readonly refusals = new Map<string, number>(); // phone -> sign-ups refused on this verification
 
   /**
    * Normalize to E.164 via the shared normalizer (foundation/identity/phone). Without this, rate limits
@@ -86,6 +93,7 @@ export class OtpService {
 
     this.codes.delete(p);
     this.verified.set(p, Date.now() + VERIFIED_TTL_MS);
+    this.refusals.delete(p); // a fresh verification, a fresh allowance
     return { verified: true };
   }
 
@@ -102,7 +110,23 @@ export class OtpService {
 
   /** Used by sign-up to consume the verification (a phone verifies one account). */
   consume(phone: string): void {
-    this.verified.delete(this.norm(phone));
+    const p = this.norm(phone);
+    this.verified.delete(p);
+    this.refusals.delete(p);
+  }
+
+  /**
+   * A sign-up on this verification was refused because its details are already registered. Counted, and
+   * the verification spent once the allowance is used — the next attempt is asked to verify again.
+   */
+  noteRefusal(phone: string): void {
+    const p = this.norm(phone);
+    const count = (this.refusals.get(p) ?? 0) + 1;
+    if (count >= MAX_REFUSALS_PER_VERIFICATION) {
+      this.consume(p);
+      return;
+    }
+    this.refusals.set(p, count);
   }
 
   // --- internals ---

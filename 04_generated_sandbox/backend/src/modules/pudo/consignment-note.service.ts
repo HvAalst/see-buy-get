@@ -59,7 +59,8 @@ export class ConsignmentNoteService implements OnModuleInit {
   isParty(f: Freight, did: string): boolean {
     if (f.postedByDid === did || f.claimedBy === did) return true;
     if (f.shipperDid && this.shipperDidOf(f) === did) return true;
-    if (f.claimedBy && this.managerOf(f.claimedBy) === did) return true;
+    const fleet = this.carrierFleetOf(f);
+    if (fleet && fleet === did) return true;
     return false;
   }
 
@@ -69,7 +70,7 @@ export class ConsignmentNoteService implements OnModuleInit {
    * leaves the fleet, a shop closes its account, and they are all still parties to a carriage that happened.
    */
   partiesOf(f: Freight): string[] {
-    const dids = [f.postedByDid, f.claimedBy, this.shipperDidOf(f), f.claimedBy ? this.managerOf(f.claimedBy) : undefined];
+    const dids = [f.postedByDid, f.claimedBy, this.shipperDidOf(f), this.carrierFleetOf(f)];
     return [...new Set(dids.filter((d): d is string => Boolean(d)))];
   }
 
@@ -205,6 +206,18 @@ export class ConsignmentNoteService implements OnModuleInit {
     return this.vendors.has(f.shipperDid) ? this.vendors.get(f.shipperDid).did : f.shipperDid;
   }
 
+  /**
+   * The FLEET that carried it, or nothing for an owner-driver — read from the carrier recorded at the claim.
+   *
+   * This asked the driver's fleet TODAY, which is a rule about who may read a note: the day a driver moves, the
+   * new fleet could open every note of the old fleet's loads — the customers, the addresses, the goods — and the
+   * old fleet could no longer open its own. A load claimed before the carrier was recorded is read as it was.
+   */
+  private carrierFleetOf(f: Freight): string | undefined {
+    if (f.carrierDid) return f.carrierDid === f.claimedBy ? undefined : f.carrierDid;
+    return f.claimedBy ? this.managerOf(f.claimedBy) : undefined;
+  }
+
   private managerOf(driverDid: string): string | undefined {
     try {
       return this.drivers.get(driverDid).managerDid ?? undefined;
@@ -259,11 +272,12 @@ export class ConsignmentNoteService implements OnModuleInit {
     try {
       const d = this.drivers.get(f.claimedBy);
       driverName = d.displayName;
-      managerDid = d.managerDid ?? undefined;
       jurisdiction = d.jurisdiction ?? undefined;
     } catch {
       /* a carrier the network no longer knows is still named by its identity below */
     }
+    // The carrier this load was taken FOR — never the fleet the driver happens to drive for now.
+    managerDid = this.carrierFleetOf(f);
     const vehicle = f.carriage ? { plate: f.carriage.plate, vehicleClass: f.carriage.vehicleClass } : {};
     if (managerDid) {
       try {

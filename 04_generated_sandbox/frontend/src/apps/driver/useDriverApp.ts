@@ -35,6 +35,10 @@ import { downscaleImage } from '../../shared/media';
 import { triggerDownload } from '../../shared/download';
 import type { MediaKind } from '../../lib/sbg/personas/media';
 import type { DeclaredLegBody } from '../../lib/sbg/personas/driver';
+import type { components } from '../../lib/sbg/schema';
+
+/** Which fleet a code belongs to, and what has to be finished before moving to it — as the server says it. */
+export type FleetMoveCheck = components['schemas']['FleetMoveCheckView'];
 
 export type Screen = 'home' | 'route' | 'offers' | 'loads' | 'earnings' | 'board';
 
@@ -829,6 +833,40 @@ export function useDriverApp() {
   );
 
   /**
+   * MOVE TO ANOTHER FLEET, step one: which fleet is that code, and what (if anything) has to be finished first.
+   * Changes nothing — the sheet shows "Drive for Kilima Logistics?" before anybody commits, so a mistyped code
+   * joins nobody. The refusal comes back to the sheet rather than the screen's error slot, which it sits over.
+   */
+  const checkFleetMove = useCallback(
+    async (code: string): Promise<{ check?: FleetMoveCheck; error?: SbgError }> => {
+      if (!client || !did) return {};
+      const r = await client.api.checkFleetMove(did, code.trim());
+      return r.error ? { error: r.error } : { check: narrow<FleetMoveCheck>(r.data) ?? undefined };
+    },
+    [client, did],
+  );
+
+  /**
+   * Step two: move now. Every session this driver held has ended on the server — each carried the old fleet —
+   * so the fresh token that comes back is seeded before anything else is asked, or the next call is a sign-out.
+   */
+  const moveFleet = useCallback(
+    async (code: string): Promise<SbgError | null> => {
+      if (!client || !did) return null;
+      setState((s) => ({ ...s, busy: 'fleet-move' }));
+      const r = await client.api.moveFleet(did, code.trim());
+      setState((s) => ({ ...s, busy: null }));
+      if (r.error) return r.error;
+      const moved = narrow<{ companyName: string; token?: { access_token: string; token_type: 'Bearer'; expires_in: number } }>(r.data);
+      if (moved?.token) await client.client.seed(moved.token);
+      pushToast({ tone: 'ok', icon: 'truck', title: t('driver.fleet.doneToast', { company: moved?.companyName ?? '' }), detail: t('driver.fleet.doneDetail') });
+      await refresh();
+      return null;
+    },
+    [client, did, pushToast, refresh],
+  );
+
+  /**
    * SEND THE DOCUMENTS THAT GET AN INDEPENDENT COURIER CLEARED TO WORK.
    *
    * The twin of sendLicenceRenewal, and it exists for the same reason: the route always took the
@@ -1617,6 +1655,8 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
       loadObservationNotice,
       recordObservation,
       sendLicenceRenewal,
+      checkFleetMove,
+      moveFleet,
       sendClearance,
       countries,
       loadRoad,

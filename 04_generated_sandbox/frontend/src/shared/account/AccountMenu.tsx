@@ -41,6 +41,11 @@ export interface AccountMenuProps {
   onChangePassword?: () => void;
   /** Anything the app wants at the foot of the menu — a read-aloud control, a shift-specific link. */
   extra?: ComponentChildren;
+  /**
+   * Rows about the PERSON that only one app knows — who a driver drives for. Same shape as the rows above, so the
+   * menu looks the same wherever they are; the menu closes when one is chosen.
+   */
+  rows?: Array<{ key: string; icon: Parameters<typeof Icon>[0]['name']; label: string; sub?: string; onClick: () => void }>;
 }
 
 /**
@@ -59,7 +64,7 @@ export interface AccountMenuProps {
  * them — not a greyed one. An app with no invite flow shows no invite row. A disabled row is a promise
  * the product is not keeping, and a menu of them reads as a list of things you are not allowed to do.
  */
-export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onChangePassword, extra }: AccountMenuProps) {
+export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onChangePassword, extra, rows }: AccountMenuProps) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [sheet, setSheet] = useState<'profile' | 'pin' | 'address' | null>(null);
@@ -164,6 +169,9 @@ export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onCha
             */}
           {handleHref ? <MenuRow icon="person" label={t('account.menu.page')} sub={`@${me!.handle}`} onClick={() => { setOpen(false); openPage(); }} /> : null}
           {onInvite ? <MenuRow icon="send" label={t('account.menu.invite')} sub={t('account.menu.inviteSub')} onClick={() => { setOpen(false); onInvite(); }} /> : null}
+          {(rows ?? []).map((r) => (
+            <MenuRow key={r.key} icon={r.icon} label={r.label} sub={r.sub} onClick={() => { setOpen(false); r.onClick(); }} />
+          ))}
 
           <div class="acct__foot">
             <HelpLink app={app} />

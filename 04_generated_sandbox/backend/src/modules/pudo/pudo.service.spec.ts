@@ -4122,7 +4122,8 @@ describe('PUDO Light', () => {
     expect(back.claimedBy).toBeUndefined();
     expect(back.lockedPrice).toBeUndefined();
     expect(back.assignedBy).toBeUndefined();
-    expect(back.handBacks).toEqual([{ driverDid: d.did, reason: 'Truck broke down at the depot', at: new Date(noon + 60_000).toISOString() }]);
+    // It keeps the carrier it was given back BY — this courier drives for themselves, so the carrier is them.
+    expect(back.handBacks).toEqual([{ driverDid: d.did, carrierDid: d.did, reason: 'Truck broke down at the depot', at: new Date(noon + 60_000).toISOString() }]);
     expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(before, 2); // the charge came back
     expect(dispatch.claimsFor(d.did).find((c) => c.ref === f.freightId)).toBeUndefined();
     expect(dispatch.postedBy(vendor.vendorId).find((r) => r.freightId === f.freightId)?.handBacks).toEqual([{ reason: 'Truck broke down at the depot', at: new Date(noon + 60_000).toISOString() }]);

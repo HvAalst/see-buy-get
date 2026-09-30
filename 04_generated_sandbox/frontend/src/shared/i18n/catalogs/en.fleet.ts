@@ -761,4 +761,12 @@ export const enFleet = {
   'fleet.notes.cardTitle': 'Consignment notes',
   'fleet.notes.cardOpen': 'Open',
   'fleet.notes.cardHint': 'Every note your trucks carried, frozen as it read at each signature — and the copies to hand a shipper, an insurer or an officer.',
+
+  // The driver being added is already registered on the network — they join by code, never a second time.
+  'fleet.drivers.dupTitle.phone': 'This phone number belongs to a driver who is already registered',
+  'fleet.drivers.dupTitle.nationalId': 'A driver with this national ID is already registered',
+  'fleet.drivers.dupTitle.licence': 'A driver with this licence number is already registered',
+  'fleet.drivers.dupJoin': 'They cannot be added a second time. If this is the driver you mean, ask them to open their driver app and join your fleet with your code {code} — their licence and past trips come with them.',
+  'fleet.drivers.dupJoinNoCode': 'They cannot be added a second time. If this is the driver you mean, ask them to open their driver app and join your fleet with your fleet code — their licence and past trips come with them.',
+  'fleet.drivers.dupTypo': 'If the number is wrong, correct it above and add them again.',
 };

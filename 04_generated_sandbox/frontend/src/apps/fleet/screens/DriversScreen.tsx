@@ -1,5 +1,6 @@
 import { Button, Card, ErrorNote, Note, PhotoField, Pill, ReadAloud, Sheet } from '../../../shared/ui';
-import { useT } from '../../../shared/i18n';
+import { useT, type MessageKey } from '../../../shared/i18n';
+import type { DuplicateField } from '../../../shared/duplicate';
 import { driverAction, driverMissing, isHeavySelection, paperLine, paperLineClass, papersToShow, shortDid, statusTone, toggleClass } from '../logic';
 import { VEHICLE_CLASSES, type DriverRow } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
@@ -17,6 +18,13 @@ export interface DriversScreenProps {
  * driver's stage. The KYC DECISION is SeeBuyGet ops' — this screen submits papers and then
  * says "SeeBuyGet is checking", it never offers an approve button that would 403.
  */
+/** Which of the driver's details is already registered, as the heading says it. */
+const DUP_TITLE: Partial<Record<DuplicateField, MessageKey>> = {
+  phone: 'fleet.drivers.dupTitle.phone',
+  nationalId: 'fleet.drivers.dupTitle.nationalId',
+  licence: 'fleet.drivers.dupTitle.licence',
+};
+
 export function DriversScreen({ state, actions }: DriversScreenProps) {
   const t = useT();
   const f = state.dForm;
@@ -112,6 +120,20 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
           </Button>
           {missing ? <p class="hint" style="margin-top:8px">{missing}</p> : null}
         </div>
+        {/* Already registered on the network: they join by this fleet's code from their own app, never a second time here. */}
+        {state.driverDuplicate ? (
+          <div style="margin-top:12px">
+            <Note
+              tone="warn"
+              icon="lock"
+              title={t(DUP_TITLE[state.driverDuplicate.field] ?? 'fleet.drivers.dupTitle.phone')}
+              detail={[
+                state.driverDuplicate.code ? t('fleet.drivers.dupJoin', { code: state.driverDuplicate.code }) : t('fleet.drivers.dupJoinNoCode'),
+                state.driverDuplicate.field === 'phone' ? '' : t('fleet.drivers.dupTypo'),
+              ].filter(Boolean).join(' ')}
+            />
+          </div>
+        ) : null}
       </Card>
 
       <Card title={t('fleet.drivers.poolTitle', { count: state.drivers.length })}>

@@ -346,6 +346,23 @@ export class PersonService {
   // --- migration (fold existing role accounts onto persons by phone) ---
 
   /**
+   * A role now belongs to a different tenant — a driver moved fleets. Every person holding that link is re-pointed,
+   * so their next sign-in carries the new fleet; the people touched are returned, because the sessions they already
+   * hold still carry the old one and have to end.
+   */
+  retenant(role: PersonRole, entityDid: string, tenant: string | undefined): Person[] {
+    const touched: Person[] = [];
+    for (const person of this.persons.values()) {
+      const links = person.roles.filter((r) => r.role === role && r.entityDid === entityDid && r.tenant !== tenant);
+      if (!links.length) continue;
+      for (const link of links) link.tenant = tenant;
+      this.persons.set(person.phoneHash, person);
+      touched.push(person);
+    }
+    return touched;
+  }
+
+  /**
    * Best-effort link of an already-provisioned role entity to a person. Used by the boot migration to
    * fold pre-S20 accounts onto person identities: it never throws (a bad/absent phone is skipped and
    * logged), so a migration hiccup can never block startup or the existing role apps. Returns true if a

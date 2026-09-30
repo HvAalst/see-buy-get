@@ -125,6 +125,42 @@ export function waitedHours(f: Pick<Freight, 'createdAt' | 'claimedAt'>): number
  */
 export function mobilisationOf(freights: Freight[], dids: string[], now: number = Date.now()): Mobilisation {
   const mine = new Set(dids.filter(Boolean));
+  return mobilisationWhere(
+    freights,
+    (f) => Boolean(f.claimedBy && mine.has(f.claimedBy)),
+    (h) => mine.has(h.driverDid),
+    now,
+  );
+}
+
+/** One hand-back, as a load keeps it. */
+export type HandBack = NonNullable<Freight['handBacks']>[number];
+
+/**
+ * A CARRIER's record: the loads taken FOR it — by whoever was driving for it then, wherever they drive now.
+ *
+ * Membership was how a fleet's record was built ("the loads any of its drivers took"), and membership is a fact
+ * about today. The day a driver can move fleets, that rule hands their whole record to the new fleet and takes it
+ * away from the one they did the work for. `carrierOf` answers whose job a load was (fixed at the claim — see
+ * DispatchService.carrierOf) and `handBackCarrierOf` whose a hand-back was, so neither moves with the driver.
+ */
+export function mobilisationForCarrier(
+  freights: Freight[],
+  carrierDid: string,
+  carrierOf: (f: Freight) => string | undefined,
+  handBackCarrierOf: (h: HandBack) => string | undefined,
+  driverDid?: string,
+  now: number = Date.now(),
+): Mobilisation {
+  return mobilisationWhere(
+    freights,
+    (f) => Boolean(f.claimedBy) && carrierOf(f) === carrierDid && (!driverDid || f.claimedBy === driverDid),
+    (h) => handBackCarrierOf(h) === carrierDid && (!driverDid || h.driverDid === driverDid),
+    now,
+  );
+}
+
+function mobilisationWhere(freights: Freight[], holdsIt: (f: Freight) => boolean, gaveItBack: (h: HandBack) => boolean, now: number): Mobilisation {
   const lanes = new Map<string, MobilisationSlice>();
   const classes = new Map<string, MobilisationSlice>();
 
@@ -138,8 +174,8 @@ export function mobilisationOf(freights: Freight[], dids: string[], now: number 
   for (const f of freights) {
     // Did anybody of ours take this load? A hand-back is still a claim: they had it, then gave it up, and
     // dropping those rows would erase exactly the behaviour rule 1 exists to catch.
-    const gaveBack = (f.handBacks ?? []).some((h) => mine.has(h.driverDid));
-    const holds = Boolean(f.claimedBy && mine.has(f.claimedBy));
+    const gaveBack = (f.handBacks ?? []).some(gaveItBack);
+    const holds = holdsIt(f);
     if (!gaveBack && !holds) continue;
 
     claimed += 1;

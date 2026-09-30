@@ -31,6 +31,8 @@ export interface DriverRecord {
   offRoad?: string[];
   /** Present when a fleet employs them — whose office records their licence. Absent: they ride on their own. */
   managerDid?: string;
+  /** The fleet's name, when a fleet employs them — what the account menu says they drive for. */
+  fleetName?: string;
   /** FP4 — a renewed licence they sent, not yet checked. Its date is their reading and switches nothing on. */
   licenceRenewal?: { copyRef: string; expiresAt: string; number?: string; sentAt: string };
   /** Why the last card they sent was not accepted, so they can send a better one. */

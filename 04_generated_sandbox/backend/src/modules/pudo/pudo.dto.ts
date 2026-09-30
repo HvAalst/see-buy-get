@@ -1464,6 +1464,36 @@ export class DriverSessionDto {
   @IsOptional() @IsString() did?: string;
 }
 
+/** A fleet's join code — the same code drivers use to sign up to that fleet. */
+export class FleetCodeDto {
+  @IsString() @MaxLength(40) code!: string;
+}
+
+/** Before a driver moves: which fleet the code belongs to, and what has to be finished first. */
+export class FleetMoveCheckView {
+  @ApiProperty() fleetDid!: string;
+  @ApiProperty() companyName!: string;
+  /** The fleet they drive for now — absent for a courier who drives for themselves. */
+  @ApiPropertyOptional() fromCompany?: string;
+  /** Each thing to finish first, as a sentence the driver can act on. Empty means free to move. */
+  @ApiProperty({ type: [String] }) blockers!: string[];
+}
+
+/** A bearer token as issued — the same shape every sign-in answers with. */
+export class IssuedTokenView {
+  @ApiProperty() access_token!: string;
+  @ApiProperty({ enum: ['Bearer'] }) token_type!: 'Bearer';
+  @ApiProperty() expires_in!: number;
+}
+
+/** After a driver moved: the fleet they now drive for, and a fresh sign-in when they asked themselves. */
+export class FleetMoveView {
+  @ApiProperty() did!: string;
+  @ApiProperty() companyName!: string;
+  /** Every earlier session ended — each carried the old fleet. Absent when staff moved the driver. */
+  @ApiPropertyOptional({ type: IssuedTokenView }) token?: IssuedTokenView;
+}
+
 // --- participant accounts (sign in / sign up) ---
 
 export class SignupDto {
