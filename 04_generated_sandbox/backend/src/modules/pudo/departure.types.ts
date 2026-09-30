@@ -201,6 +201,30 @@ export class LoadSafety {
   by: string;
 }
 
+/**
+ * WHY A CARRIER GIVES A SHIPPER'S SPACE BACK — coded, with room for what the list does not cover.
+ *
+ * Coded rather than free text because the shipper reads the reason in their own language, and because the
+ * reasons are not alike: "the goods are not what was booked" is the one a shipper can put right and book
+ * again, while every other one means finding another truck. `overbooked` is on the list on purpose — the
+ * space promised twice is exactly what own-load recording exists to prevent, and a carrier who says so
+ * has told the shipper the truth. `other` carries a sentence, and is refused without one.
+ */
+export const GIVE_BACK_REASONS = ['vehicle_unavailable', 'no_driver', 'goods_not_as_booked', 'overbooked', 'other'] as const;
+export type GiveBackReason = (typeof GIVE_BACK_REASONS)[number];
+
+/** Who gave a booking back, and — when it was the carrier — why. Kept on the booking so both sides can read it back. */
+export class BookingCancellation {
+  @ApiProperty({ enum: ['shipper', 'carrier'] })
+  by: 'shipper' | 'carrier';
+  @ApiPropertyOptional({ enum: GIVE_BACK_REASONS })
+  reason?: GiveBackReason;
+  /** The carrier's own words: required for `other`, optional beside any coded reason. */
+  @ApiPropertyOptional()
+  note?: string;
+  at: string;
+}
+
 export const CLAIM_KINDS = ['damaged', 'short', 'not_received'] as const;
 export type ClaimKind = (typeof CLAIM_KINDS)[number];
 
@@ -371,6 +395,9 @@ export class DepartureBooking {
    */
   @ApiProperty({ enum: ['booked', 'delivered', 'cancelled'] })
   status: 'booked' | 'delivered' | 'cancelled';
+  /** Set when `cancelled`: which side gave it back, and the carrier's reason. Absent on bookings given back before it was kept. */
+  @ApiPropertyOptional({ type: BookingCancellation })
+  cancellation?: BookingCancellation;
   /** When it was handed over. The server's clock, like the gate taps, and for the same reason. */
   @ApiPropertyOptional()
   deliveredAt?: string;
@@ -606,6 +633,13 @@ export class MyDepartureBooking {
   cover?: CarrierCover;
   @ApiProperty({ enum: ['booked', 'delivered', 'cancelled'] })
   bookingStatus: 'booked' | 'delivered' | 'cancelled';
+  /**
+   * WHO gave it back and why. The shipper's screen used to read every cancelled booking as "You
+   * cancelled" — including the ones the carrier gave back, which is telling somebody they did a thing
+   * that was done to them.
+   */
+  @ApiPropertyOptional({ type: BookingCancellation })
+  cancellation?: BookingCancellation;
   /**
    * THE RUN's state, which is a different fact from the booking's and the one that usually matters.
    *

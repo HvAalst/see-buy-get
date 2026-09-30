@@ -541,6 +541,10 @@ export const enAgent = {
   'agent.mine.onTheRoad': 'On the road',
   'agent.mine.delivered': 'Delivered',
   'agent.mine.youCancelled': 'You gave it back',
+  'agent.mine.givenBack': 'The carrier gave it back',
+  'agent.mine.givenBackTitle': '{company} gave this space back',
+  'agent.mine.givenBackRebook': 'Book again with what you are actually sending.',
+  'agent.mine.givenBackTruck': 'Your goods will not travel on this run — you will need another truck.',
   'agent.mine.calledOff': 'Run called off',
 
   /* The notice went out once, the day it happened. A shipper looking at the wreckage of their week a

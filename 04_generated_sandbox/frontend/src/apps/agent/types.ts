@@ -7,6 +7,8 @@
  * happen. Field names mirror backend/src/modules/pudo/pudo.types.ts.
  */
 
+import type { GiveBackReason } from '../../shared/giveBack';
+
 export type AgentStatus = 'DRAFT' | 'KYC_PENDING' | 'APPROVED_UNFUNDED' | 'ACTIVE' | 'LOCKED';
 export type OpenState = 'open' | 'closed';
 export type ParcelSize = 'S' | 'M' | 'L' | 'HEAVY';
@@ -422,6 +424,8 @@ export interface MyBookingRow {
   /** Whether there is still something, and still time, to claim about. */
   claimable?: boolean;
   bookingStatus: 'booked' | 'delivered' | 'cancelled';
+  /** WHO gave it back, and the carrier's reason. Absent on a booking given back before this was kept. */
+  cancellation?: { by: 'shipper' | 'carrier'; reason?: GiveBackReason; note?: string; at: string };
   /** The RUN's state, which is a different fact: goods given back and goods stranded are not the same. */
   runStatus: 'open' | 'closed' | 'departed' | 'cancelled';
   cancelledReason?: string;

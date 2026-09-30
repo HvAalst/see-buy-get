@@ -16,7 +16,7 @@ export type SbgErrorCode =
   | 'LICENCE_EXPIRED' | 'INVALID_VEHICLE_CLASS' | 'INVALID_TRUCK_SUBTYPE' | 'UNKNOWN_ROLE' | 'DISPUTE_INCOMPLETE'
   | 'REQUIREMENTS_NOT_MET' | 'KYC_INCOMPLETE' | 'APPROVAL_BLOCKED' | 'INVALID_STATE' | 'WINDOW_EXPIRED'
   | 'NOT_INBOUND' | 'PARCEL_EXISTS' | 'SHIPMENT_NOT_PAID' | 'CODE_MISMATCH' | 'CODE_LOCKED' | 'WRONG_DESTINATION' | 'NOT_COUPLED' | 'ALREADY_COUPLED'
-  | 'CANNOT_COUPLE' | 'HOURS_EXCEEDED' | 'CAPACITY_EXCEEDED' | 'NO_ROOM' | 'CARRIER_NOT_TRADING' | 'SAFETY_CHECK_INCOMPLETE' | 'RECEIVER_REQUIRED' | 'DELIVERY_PHOTO_REQUIRED' | 'FRAGILE_NOT_ALLOWED' | 'BAG_FULL' | 'BAG_EMPTY' | 'BAG_RESERVED'
+  | 'CANNOT_COUPLE' | 'HOURS_EXCEEDED' | 'CAPACITY_EXCEEDED' | 'NO_ROOM' | 'CARRIER_NOT_TRADING' | 'REASON_REQUIRED' | 'SAFETY_CHECK_INCOMPLETE' | 'RECEIVER_REQUIRED' | 'DELIVERY_PHOTO_REQUIRED' | 'FRAGILE_NOT_ALLOWED' | 'BAG_FULL' | 'BAG_EMPTY' | 'BAG_RESERVED'
   | 'BAG_MISADDRESSED' | 'ALREADY_IN_BAG' | 'STAGING_FULL' | 'SHELF_FULL' | 'NO_CAPACITY_AVAILABLE' | 'OTP_INVALID' | 'OTP_LOCKED' | 'PIN_INVALID' | 'UNAUTHORIZED'
   | 'AUTH_FAILED' | 'AUTH_CODE_INVALID' | 'AUTH_NOT_ACTIVE' | 'PAYMENT_REQUIRED' | 'WALLET_INSUFFICIENT'
   | 'FORBIDDEN' | 'WRONG_PUDO' | 'AGENT_LOCKED' | 'PIN_LOCKED' | 'ROLE_NOT_HELD' | 'MEDIA_LOCKED' | 'CARGO_REQUIRES_DEDICATED' | 'CARGO_INCOMPATIBLE' | 'VEHICLE_MISSING_CAPABILITY' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE' | 'INCOMPLETE_MANIFEST' | 'INVITE_LIMIT'
@@ -104,6 +104,8 @@ const PRESENTATION: Partial<Record<SbgErrorCode, ErrorPresentation>> = {
   NO_ROOM: { icon: 'scale', tone: 'warn', say: 'error.no_room' },
   // The carrier is suspended, or a paper its sister enforces has lapsed. The detail names which — callers pass showDetail.
   CARRIER_NOT_TRADING: { icon: 'block', tone: 'warn', say: 'error.carrier_not_trading' },
+  // A decision against somebody that came without its reason. The detail says which reason is missing.
+  REASON_REQUIRED: { icon: 'edit', tone: 'warn', say: 'error.reason_required' },
   /*
    * The three the delivery gate refuses with, reachable from a run since F5 held it to the board’s line.
    *

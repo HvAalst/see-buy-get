@@ -33,6 +33,9 @@ import {
   type RateBasis,
   type WaitingRecord,
   type WaitingTerms,
+  GIVE_BACK_REASONS,
+  type BookingCancellation,
+  type GiveBackReason,
 } from './departure.types';
 
 /**
@@ -731,8 +734,16 @@ export class DepartureService {
     return { departure, booking };
   }
 
-  /** Give the space back. The shipper who took it, or the fleet that sold it. */
-  cancelBooking(departureId: string, bookingId: string, by: string): Departure {
+  /**
+   * Give the space back. The shipper who took it, or the fleet that sold it.
+   *
+   * THE CARRIER SAYS WHY. A shipper whose space was given back is told, and "the carrier gave your space
+   * back" with no reason leaves them unable to tell whether to fix something and book again or to go and
+   * find another truck. So a fleet giving back a SOLD booking names a reason — coded, or `other` with its
+   * own sentence — and it is kept on the booking. A shipper giving back their own space owes nobody a
+   * reason, and neither does a fleet cancelling a load it brought itself.
+   */
+  cancelBooking(departureId: string, bookingId: string, by: string, input: { reason?: string; note?: string } = {}): Departure {
     const departure = this.require(departureId);
     const booking = departure.bookings.find((b) => b.bookingId === bookingId);
     if (!booking) throw new GlosError('NOT_FOUND', 'No such booking');
@@ -740,8 +751,26 @@ export class DepartureService {
       throw new GlosError('FORBIDDEN', 'Only the shipper who booked it or the fleet that sold it can cancel this');
     }
     if (booking.status === 'delivered') throw new GlosError('INVALID_STATE', 'That load was handed over — it cannot be given back');
+    if (booking.status === 'cancelled') throw new GlosError('INVALID_STATE', 'That space was already given back');
     if (departure.status === 'departed') throw new GlosError('INVALID_STATE', 'That run has gone — the goods are on it');
-    departure.bookings = departure.bookings.map((b) => (b.bookingId === bookingId ? { ...b, status: 'cancelled' as const } : b));
+
+    // A fleet's own load has the fleet as its shipper, so the carrier side is the fleet acting on a SOLD one.
+    const byCarrier = by === departure.managerDid && booking.kind !== 'own';
+    const note = input.note?.trim().slice(0, 500) || undefined;
+    let reason: GiveBackReason | undefined;
+    if (byCarrier) {
+      if (!input.reason) throw new GlosError('REASON_REQUIRED', 'Say why you are giving this space back — the shipper is told, and needs to know whether to book again or find another truck');
+      if (!GIVE_BACK_REASONS.includes(input.reason as GiveBackReason)) throw new GlosError('INVALID_INPUT', `Unknown reason: ${input.reason}`);
+      reason = input.reason as GiveBackReason;
+      if (reason === 'other' && !note) throw new GlosError('REASON_REQUIRED', 'Say what happened — “other” needs your own words');
+    }
+    const cancellation: BookingCancellation = {
+      by: by === booking.shipperDid && booking.kind !== 'own' ? 'shipper' : 'carrier',
+      ...(reason ? { reason } : {}),
+      ...(byCarrier && note ? { note } : {}),
+      at: new Date().toISOString(),
+    };
+    departure.bookings = departure.bookings.map((b) => (b.bookingId === bookingId ? { ...b, status: 'cancelled' as const, cancellation } : b));
     // Given back before it travelled: terminal, so whatever was photographed at the loading gate starts
     // its clock now rather than waiting for a delivery that will never happen.
     this.media.anchorFreightTerminal(bookingId);
@@ -752,7 +781,7 @@ export class DepartureService {
     void this.events
       .publish(
         GlosEvent.Pudo.DepartureBookingCancelled,
-        { departureId: departure.departureId, bookingId, managerDid: departure.managerDid, company: departure.company, lineName: departure.lineName, shipperDid: booking.shipperDid, kind: booking.kind, by, description: booking.description },
+        { departureId: departure.departureId, bookingId, managerDid: departure.managerDid, company: departure.company, lineName: departure.lineName, shipperDid: booking.shipperDid, kind: booking.kind, by, description: booking.description, ...(reason ? { reason } : {}), ...(cancellation.note ? { note: cancellation.note } : {}) },
         { source: 'pudo' },
       )
       .catch(() => undefined);
@@ -1140,6 +1169,7 @@ export class DepartureService {
             price: b.price,
             currency: d.rate.currency,
             bookingStatus: b.status,
+            ...(b.cancellation ? { cancellation: b.cancellation } : {}),
             runStatus: d.status,
             ...(d.cancelledReason ? { cancelledReason: d.cancelledReason } : {}),
             ...(b.deliveredAt ? { deliveredAt: b.deliveredAt } : {}),

@@ -2,7 +2,7 @@ import { DESTINATION_KINDS } from './destination.types';
 import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { INCOTERM_CODES } from '../../foundation/incoterms/catalogue';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE } from '../../foundation/interest/interest.service';
-import { CLAIM_KINDS, DELAY_PLACES, RATE_BASES, SETTLE_METHODS, SETTLE_WHEN, type DelayPlace } from './departure.types';
+import { CLAIM_KINDS, DELAY_PLACES, GIVE_BACK_REASONS, RATE_BASES, SETTLE_METHODS, SETTLE_WHEN, type DelayPlace, type GiveBackReason } from './departure.types';
 import { PRESENCE_LEVELS, type PresenceLevel } from '../../foundation/presence/presence.types';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
@@ -1378,6 +1378,16 @@ export class CarrierPapersRecordDto {
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() @MaxLength(64) licenceNumber?: string | null;
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() insurancePolicy?: string | null;
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() insuranceExpiresAt?: string | null;
+}
+
+/**
+ * Giving a booked space back. Both fields optional HERE: a shipper giving back their own space owes no
+ * reason. A carrier giving back a sold one does — refused by the service, in the sentence the fleet sees,
+ * rather than by a decorator answering in its own words.
+ */
+export class CancelBookingDto {
+  @IsOptional() @IsIn(GIVE_BACK_REASONS) @ApiPropertyOptional({ enum: GIVE_BACK_REASONS }) reason?: GiveBackReason;
+  @IsOptional() @IsString() @MaxLength(500) note?: string;
 }
 
 /**

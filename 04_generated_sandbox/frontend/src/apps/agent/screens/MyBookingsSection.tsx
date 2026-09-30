@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { Button, ErrorNote, Icon, Note, Pill, Sheet } from '../../../shared/ui';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { settleWords } from '../../../shared/settle';
+import { giveBackWords } from '../../../shared/giveBack';
 import { coverShortfall, coverWords } from '../../../shared/cover';
 import type { MyBookingRow } from '../types';
 import type { AgentActions, AgentState } from '../useAgentApp';
@@ -67,7 +68,9 @@ export function MyBookingsSection({ state, actions }: { state: AgentState; actio
 function statusOf(b: MyBookingRow): { key: MessageKey; tone: 'ok' | 'info' | 'idle' | 'warn' } {
   if (b.bookingStatus === 'delivered') return { key: 'agent.mine.delivered', tone: 'ok' };
   if (b.runStatus === 'cancelled') return { key: 'agent.mine.calledOff', tone: 'warn' };
-  if (b.bookingStatus === 'cancelled') return { key: 'agent.mine.youCancelled', tone: 'idle' };
+  // WHO gave it back. This used to read "You gave it back" for every cancelled booking — including the ones
+  // the carrier gave back, which told a shipper they had done a thing that was done to them.
+  if (b.bookingStatus === 'cancelled') return b.cancellation?.by === 'carrier' ? { key: 'agent.mine.givenBack', tone: 'warn' } : { key: 'agent.mine.youCancelled', tone: 'idle' };
   if (b.runStatus === 'departed') return { key: 'agent.mine.onTheRoad', tone: 'info' };
   return { key: 'agent.mine.booked', tone: 'ok' };
 }
@@ -105,6 +108,23 @@ function Booking({ row, state, actions }: { row: MyBookingRow; state: AgentState
             icon="info"
             title={t('agent.mine.strandedTitle', { company: row.company })}
             detail={row.cancelledReason || t('agent.mine.noReason')}
+          />
+        ) : null}
+
+        {/* THE CARRIER GAVE THIS SPACE BACK, and why — kept here, not only in the notification that went
+            out once. What to do next depends on the reason: goods that were not as booked can be booked
+            again as what they are; anything else means another truck. */}
+        {row.bookingStatus === 'cancelled' && row.cancellation?.by === 'carrier' ? (
+          <Note
+            tone="warn"
+            icon="info"
+            title={t('agent.mine.givenBackTitle', { company: row.company })}
+            detail={
+              giveBackWords(row.cancellation, t)
+                ? `${giveBackWords(row.cancellation, t)}. ${t(row.cancellation.reason === 'goods_not_as_booked' ? 'agent.mine.givenBackRebook' : 'agent.mine.givenBackTruck')}`
+                : // A booking given back before reasons were kept: the no-reason sentence already says what to do.
+                  t('agent.mine.noReason')
+            }
           />
         ) : null}
 

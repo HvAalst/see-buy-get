@@ -16,10 +16,24 @@ import { haversineKm } from './geo';
 import { paperDay } from './papers';
 import { GeoPoint } from './pudo.types';
 import type { NotificationKind } from './notification.types';
+import type { GiveBackReason } from './departure.types';
 
 /* The payloads the run's events carry, as published in DepartureService and FleetManagerService. */
 interface SpaceSold { departureId: string; bookingId: string; managerDid: string; lineName: string; shipperDid: string; description: string; weightKg: number; price: number; currency: string }
-interface BookingGivenBack { departureId: string; bookingId: string; managerDid: string; company: string; lineName: string; shipperDid: string; kind: 'sold' | 'own'; by: string; description: string }
+interface BookingGivenBack { departureId: string; bookingId: string; managerDid: string; company: string; lineName: string; shipperDid: string; kind: 'sold' | 'own'; by: string; description: string; reason?: string; note?: string }
+
+/**
+ * The carrier's reason, as the shipper's notification says it. Keyed by the contract's own list so a reason
+ * added there without words here is a type error — never a code printed in somebody's notification. `other`
+ * says nothing of its own: the carrier's sentence is the reason.
+ */
+const GIVE_BACK_WORDS: Record<string, string> = {
+  vehicle_unavailable: 'the truck is off the road',
+  no_driver: 'there is no driver for the run',
+  goods_not_as_booked: 'the goods are not what was booked',
+  overbooked: 'the space was promised twice',
+  other: '',
+} satisfies Record<GiveBackReason, string>;
 interface RunClaimOpened { departureId: string; bookingId: string; managerDid: string; shipperDid: string; company: string; lineName: string; load: string; kind: string; description: string; amount?: number; currency: string }
 interface RunClaimAnswered { departureId: string; bookingId: string; shipperDid: string; managerDid: string; company: string; load: string; answer: 'accepted' | 'refused'; note?: string }
 interface FleetPaperChecked { did: string; kind: 'operator_licence' | 'carrier_insurance'; accepted: boolean; expiresAt?: string; reason?: string }
@@ -407,11 +421,16 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         data: { departureId: p.departureId, bookingId: p.bookingId },
       });
     } else if (p.by === p.managerDid) {
-      // The side that used to reach nobody: the carrier took the space back, and the shipper's goods are not going.
+      // The side that used to reach nobody: the carrier took the space back, and the shipper's goods are not
+      // going. WITH the carrier's reason — and the next step depends on it: goods that are not what was booked
+      // can be booked again as what they are; every other reason means finding another truck.
+      const why = GIVE_BACK_WORDS[p.reason ?? ''] ?? '';
+      const said = [why, p.note ? `“${p.note}”` : ''].filter(Boolean).join(' — ');
+      const next = p.reason === 'goods_not_as_booked' ? 'Book again with what you are actually sending.' : 'Your goods will not travel on that run — you will need another truck.';
       await this.tell(p.shipperDid, {
         kind: 'load_cancelled',
         title: `${p.company} cancelled your booking`,
-        body: `${p.company} gave back the space for ${p.description} on ${p.lineName}. Your goods will not travel on that run — you will need another truck.`,
+        body: `${p.company} gave back the space for ${p.description} on ${p.lineName}${said ? `: ${said}` : ''}. ${next}`,
         tag: `departure:${p.departureId}:booking:${p.bookingId}:cancelled`,
         data: { departureId: p.departureId, bookingId: p.bookingId },
       });

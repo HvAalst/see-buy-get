@@ -1,4 +1,5 @@
 import type { SbgClient } from '../client';
+import type { components } from '../schema';
 import { createMediaApi } from './media';
 
 /**
@@ -165,6 +166,13 @@ export function createFleetApi(sbg: SbgClient) {
      */
     sendOwnPaper: (did: string, body: { kind: 'operator_licence' | 'carrier_insurance'; copyRef: string; expiresAt: string; reference?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/papers/send', { params: { path: { did } }, body })),
+
+    /**
+     * Give a shipper's space back, with the reason they are shown. The reason is REQUIRED of a carrier — the
+     * server refuses without it — and `other` needs a note.
+     */
+    giveBackBooking: (departureId: string, bookingId: string, body: { reason: NonNullable<components['schemas']['CancelBookingDto']['reason']>; note?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/departures/{departureId}/bookings/{bookingId}/cancel', { params: { path: { departureId, bookingId } }, body })),
 
     /** This fleet's own departures, soonest first, with who is aboard each and every wait recorded. */
     departures: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/departures' as never, { params: { path: { did } } } as never)),

@@ -13642,6 +13642,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelBookingDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "",
@@ -30800,6 +30810,39 @@
           "limit"
         ]
       },
+      "BookingCancellation": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "enum": [
+              "shipper",
+              "carrier"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "vehicle_unavailable",
+              "no_driver",
+              "goods_not_as_booked",
+              "overbooked",
+              "other"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "description": "The carrier's own words: required for `other`, optional beside any coded reason."
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "by",
+          "at"
+        ]
+      },
       "ProofOfDelivery": {
         "type": "object",
         "properties": {
@@ -31027,6 +31070,14 @@
               "booked",
               "delivered",
               "cancelled"
+            ]
+          },
+          "cancellation": {
+            "description": "Set when `cancelled`: which side gave it back, and the carrier's reason. Absent on bookings given back before it was kept.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BookingCancellation"
+              }
             ]
           },
           "deliveredAt": {
@@ -31348,6 +31399,25 @@
           "description",
           "weightKg"
         ]
+      },
+      "CancelBookingDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "vehicle_unavailable",
+              "no_driver",
+              "goods_not_as_booked",
+              "overbooked",
+              "other"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
       },
       "AssignDepartureDriverDto": {
         "type": "object",

@@ -19,6 +19,7 @@ import type { FleetEarningsSummary, FleetJobRow,
   VehicleRow,
 } from './types';
 import type { PaperView } from '../../shared/papers';
+import type { GiveBackReason } from '../../shared/giveBack';
 
 /** The fleet company's OWN papers, as GET fleet/managers/:did/papers answers. */
 export interface OwnPapers {
@@ -993,6 +994,30 @@ export function useFleetApp() {
   );
 
   /**
+   * Give a shipper's space back, with the reason they are shown.
+   *
+   * Answers the refusal rather than posting it to the screen's error slot, for the same reason the papers
+   * sheet does: this is sent from a sheet, and an error drawn behind it is one nobody sees.
+   */
+  const giveBackBooking = useCallback(
+    async (departureId: string, bookingId: string, body: { reason: GiveBackReason; note?: string }): Promise<SbgError | null> => {
+      if (!client) return null;
+      let error = null as SbgError | null;
+      await run(`giveback:${bookingId}`, async () => {
+        const r = await client.api.giveBackBooking(departureId, bookingId, body);
+        if (r.error) {
+          error = r.error;
+          return;
+        }
+        pushToast({ tone: 'ok', icon: 'check', title: t('fleet.giveBack.doneToast'), detail: t('fleet.giveBack.doneToastDetail') });
+        await refresh();
+      });
+      return error;
+    },
+    [client, run, pushToast, refresh],
+  );
+
+  /**
    * F4 — record a load this fleet already had, so the space it fills stops being advertised.
    *
    * The form lives in the sheet rather than in this state, the way the shipper's side does: it is filled
@@ -1082,6 +1107,7 @@ export function useFleetApp() {
       setVehiclePrice,
       setVehiclePapers,
       sendOwnPaper,
+      giveBackBooking,
       renewLicence,
       couple,
       uncouple,

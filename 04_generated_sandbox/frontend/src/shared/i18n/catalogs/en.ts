@@ -49,6 +49,12 @@ const enSettle = {
   /* Said out loud rather than left blank: a shipper who reads nothing assumes the network is handling
      it, which is the one thing that is certainly not happening. */
   'settle.unsaid': 'They have not said how they take payment — ask before you book.',
+  // Why a carrier gave a shipper's space back. The same words in the fleet's picker and on the shipper's booking.
+  'giveBack.vehicle_unavailable': 'The truck is off the road',
+  'giveBack.no_driver': 'No driver for this run',
+  'giveBack.goods_not_as_booked': 'The goods are not what was booked',
+  'giveBack.overbooked': 'The space was promised twice',
+  'giveBack.other': 'Something else',
   'settle.notUs': 'You pay the carrier directly. SeeBuyGet takes no part in this payment and holds none of it.',
 };
 

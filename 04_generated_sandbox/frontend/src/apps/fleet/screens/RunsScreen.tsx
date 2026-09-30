@@ -4,6 +4,8 @@ import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { EMPTY_OWN_LOAD, RUN_BASES, ownLines, ownLoadBlocker, runBlocker, runManifest, runMoney, runRemaining, runWaits, type OwnLoadForm, type RunBasis } from '../logic';
 import { settleWords } from '../../../shared/settle';
 import { coverWords } from '../../../shared/cover';
+import { GIVE_BACK_ORDER, giveBackLabel, type GiveBackReason } from '../../../shared/giveBack';
+import type { SbgError } from '../../../lib/sbg';
 import type { DepartureBookingRow, DepartureRow, WaitingRow } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
 
@@ -216,6 +218,11 @@ function Run({ run, state, actions }: { run: DepartureRow; state: FleetState; ac
                   {/* A CLAIM AGAINST THIS LOAD. Ours to carry and nobody’s to weigh — we did not take
                       the payment and we hold no cover, so the answer is the fleet’s own. */}
                   {b.claim ? <ClaimRow run={run} booking={b} state={state} actions={actions} /> : null}
+                  {/* Giving a SOLD space back, while the truck has not left. Not for the fleet's own loads —
+                      those are between the fleet and its customer — and not once the goods are aboard. */}
+                  {b.kind !== 'own' && b.status === 'booked' && (run.status === 'open' || run.status === 'closed') ? (
+                    <GiveBack run={run} booking={b} state={state} actions={actions} />
+                  ) : null}
                 </span>
                   {/* The ending a run did not have. Shown once the load is delivered rather than hidden,
                       because "handed over to Joseph at 14:20" is the answer to the only question anybody
@@ -751,6 +758,86 @@ function OwnLoad({ run, state, actions }: { run: DepartureRow; state: FleetState
         ) : null}
 
         <Button variant="link" onClick={() => setOpen(false)}>
+          {t('common.cancel')}
+        </Button>
+      </Sheet>
+    </>
+  );
+}
+
+/**
+ * GIVE A SHIPPER'S SPACE BACK — with the reason they are shown.
+ *
+ * Coded reasons, because the shipper reads them in their own language and because they are not alike:
+ * goods that are not what was booked can be booked again as what they are; every other reason means
+ * finding another truck. "Something else" needs the office's own words. Chips rather than a select: five
+ * short reasons are read at a glance, and a select hides four of them behind a tap.
+ *
+ * The shipper hears it the moment this is sent, so the sheet says so before the button.
+ */
+function GiveBack({ run, booking, state, actions }: { run: DepartureRow; booking: DepartureBookingRow; state: FleetState; actions: FleetActions }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState<GiveBackReason | null>(null);
+  const [note, setNote] = useState('');
+  const [error, setError] = useState<SbgError | null>(null);
+  const needsWords = reason === 'other';
+  const ready = reason !== null && (!needsWords || note.trim().length > 0);
+  const close = () => {
+    setOpen(false);
+    setReason(null);
+    setNote('');
+    setError(null);
+  };
+  const labelId = `gb-${booking.bookingId}`;
+
+  return (
+    <>
+      <Button variant="link" full={false} onClick={() => setOpen(true)}>
+        {t('fleet.giveBack.open')}
+      </Button>
+
+      <Sheet open={open} onClose={close} title={t('fleet.giveBack.title')}>
+        <p class="t-body">{t('fleet.giveBack.lede', { load: booking.description })}</p>
+        {error ? <ErrorNote error={error} showDetail /> : null}
+
+        <div class="field">
+          <span class="field__label" id={labelId}>
+            {t('fleet.giveBack.why')}
+          </span>
+          <div class="chips" role="radiogroup" aria-labelledby={labelId} style="display:flex;flex-wrap:wrap;gap:8px">
+            {GIVE_BACK_ORDER.map((r) => (
+              <button key={r} type="button" role="radio" aria-checked={reason === r} class={'chip chip--tap' + (reason === r ? ' chip--on' : '')} onClick={() => setReason(r)}>
+                {giveBackLabel(r, t)}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Said to the office before it sends, because it is what the shipper will be told to do. */}
+        {reason === 'goods_not_as_booked' ? <p class="hint">{t('fleet.giveBack.goodsHint')}</p> : null}
+
+        <div class="field" style="margin-top:12px">
+          <label class="field__label" for={`${labelId}-note`}>
+            {t(needsWords ? 'fleet.giveBack.noteRequired' : 'fleet.giveBack.noteOptional')}
+          </label>
+          <textarea id={`${labelId}-note`} class="input" rows={3} maxLength={500} value={note} onInput={(e) => setNote(e.currentTarget.value)} />
+        </div>
+        <p class="hint">{t('fleet.giveBack.told')}</p>
+
+        <Button
+          chevron={false}
+          disabled={!ready}
+          busy={state.busy === `giveback:${booking.bookingId}`}
+          onClick={async () => {
+            setError(null);
+            const failed = await actions.giveBackBooking(run.departureId, booking.bookingId, { reason: reason!, ...(note.trim() ? { note: note.trim() } : {}) });
+            if (failed) return setError(failed);
+            close();
+          }}
+        >
+          {t('fleet.giveBack.send')}
+        </Button>
+        <Button variant="link" onClick={close}>
           {t('common.cancel')}
         </Button>
       </Sheet>

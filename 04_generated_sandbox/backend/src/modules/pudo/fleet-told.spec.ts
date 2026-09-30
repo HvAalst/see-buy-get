@@ -109,19 +109,94 @@ describe('a fleet hears about its own runs, and a shipper hears the carrier', ()
     expect(inbox(notifications, SHIPPER)).toHaveLength(0);
   });
 
-  it('tells the SHIPPER when the carrier gives their space back — the side that reached nobody', async () => {
+  it('tells the SHIPPER when the carrier gives their space back — the side that reached nobody — and why', async () => {
     const { notifications, departures, run } = setUp();
     const { booking } = departures.book(run.departureId, { shipperDid: SHIPPER, description: 'Maize', weightKg: 500 });
     await settle();
-    departures.cancelBooking(run.departureId, booking.bookingId, MANAGER);
+    departures.cancelBooking(run.departureId, booking.bookingId, MANAGER, { reason: 'vehicle_unavailable', note: 'Gearbox went on the Mai Mahiu road' });
     await settle();
 
     const told = inbox(notifications, SHIPPER);
     expect(told).toHaveLength(1);
     expect(told[0]).toMatchObject({ kind: 'load_cancelled', title: 'Kilima Logistics cancelled your booking' });
-    expect(told[0].body).toMatch(/you will need another truck/);
+    expect(told[0].body).toBe(
+      'Kilima Logistics gave back the space for Maize on Nairobi – Mombasa: the truck is off the road — “Gearbox went on the Mai Mahiu road”. Your goods will not travel on that run — you will need another truck.',
+    );
     // The fleet did it; the fleet is told only about the sale, not about its own cancellation.
     expect(inbox(notifications, MANAGER).filter((n) => n.kind === 'load_cancelled')).toHaveLength(0);
+  });
+
+  /*
+   * THE CARRIER SAYS WHY. "The carrier gave your space back" with no reason leaves a shipper unable to tell
+   * whether to fix something and book again, or go and find another truck.
+   */
+  describe('the carrier’s reason for giving space back', () => {
+    const booked = (departures: DepartureService, runId: string) => departures.book(runId, { shipperDid: SHIPPER, description: 'Maize', weightKg: 500 }).booking;
+
+    it('is required of the carrier, and nothing changes when it is missing', async () => {
+      const { notifications, departures, run } = setUp();
+      const booking = booked(departures, run.departureId);
+      expect(() => departures.cancelBooking(run.departureId, booking.bookingId, MANAGER)).toThrow(/Say why you are giving this space back/);
+      await settle();
+
+      expect(departures.require(run.departureId).bookings[0].status).toBe('booked');
+      expect(inbox(notifications, SHIPPER)).toHaveLength(0);
+    });
+
+    it('takes “other” only with the carrier’s own words', () => {
+      const { departures, run } = setUp();
+      const booking = booked(departures, run.departureId);
+      expect(() => departures.cancelBooking(run.departureId, booking.bookingId, MANAGER, { reason: 'other', note: '   ' })).toThrow(/needs your own words/);
+      expect(() => departures.cancelBooking(run.departureId, booking.bookingId, MANAGER, { reason: 'other', note: 'The client moved the pickup to Thika' })).not.toThrow();
+    });
+
+    it('refuses a reason that is not on the list', () => {
+      const { departures, run } = setUp();
+      const booking = booked(departures, run.departureId);
+      expect(() => departures.cancelBooking(run.departureId, booking.bookingId, MANAGER, { reason: 'felt_like_it' })).toThrow(/Unknown reason/);
+    });
+
+    it('is kept on the booking, so the shipper can read it back — not only hear it once', () => {
+      const { departures, run } = setUp();
+      const booking = booked(departures, run.departureId);
+      departures.cancelBooking(run.departureId, booking.bookingId, MANAGER, { reason: 'overbooked' });
+
+      const mine = departures.forShipper(SHIPPER).find((b) => b.bookingId === booking.bookingId);
+      // WHO did it, which the shipper's screen used to get wrong: every cancellation read "You cancelled".
+      expect(mine?.cancellation).toMatchObject({ by: 'carrier', reason: 'overbooked' });
+    });
+
+    it('sends a shipper whose goods were not as booked back to book again, not off to find a truck', async () => {
+      const { notifications, departures, run } = setUp();
+      const booking = booked(departures, run.departureId);
+      departures.cancelBooking(run.departureId, booking.bookingId, MANAGER, { reason: 'goods_not_as_booked', note: 'It is 900 kg, not 500' });
+      await settle();
+
+      const body = inbox(notifications, SHIPPER)[0].body;
+      expect(body).toContain('the goods are not what was booked — “It is 900 kg, not 500”');
+      expect(body).toContain('Book again with what you are actually sending.');
+      expect(body).not.toContain('another truck');
+    });
+
+    it('is owed by nobody else: a shipper gives back their own space without one', () => {
+      const { departures, run } = setUp();
+      const booking = booked(departures, run.departureId);
+      expect(() => departures.cancelBooking(run.departureId, booking.bookingId, SHIPPER)).not.toThrow();
+      expect(departures.forShipper(SHIPPER).find((b) => b.bookingId === booking.bookingId)?.cancellation).toMatchObject({ by: 'shipper' });
+    });
+
+    it('is not asked for a fleet’s own load — there is nobody to tell', () => {
+      const { departures, run } = setUp();
+      const { booking } = departures.addOwnLoad(run.departureId, MANAGER, { customer: 'Kariuki', description: 'Cement', weightKg: 300 });
+      expect(() => departures.cancelBooking(run.departureId, booking.bookingId, MANAGER)).not.toThrow();
+    });
+
+    it('cannot give back what was already given back', () => {
+      const { departures, run } = setUp();
+      const booking = booked(departures, run.departureId);
+      departures.cancelBooking(run.departureId, booking.bookingId, SHIPPER);
+      expect(() => departures.cancelBooking(run.departureId, booking.bookingId, MANAGER, { reason: 'no_driver' })).toThrow(/already given back/);
+    });
   });
 
   it('never writes about a fleet’s OWN load, whoever cancels it', async () => {
