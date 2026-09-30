@@ -20,6 +20,7 @@ import type { FleetEarningsSummary, FleetJobRow,
 } from './types';
 import type { PaperView } from '../../shared/papers';
 import type { GiveBackReason } from '../../shared/giveBack';
+import type { RunCancelReason } from '../../shared/runCancel';
 
 /** The fleet company's OWN papers, as GET fleet/managers/:did/papers answers. */
 export interface OwnPapers {
@@ -939,11 +940,11 @@ export function useFleetApp() {
    * everything typed into it still there.
    */
   const setRunStatus = useCallback(
-    async (departureId: string, status: 'open' | 'closed' | 'departed' | 'cancelled', reason?: string): Promise<boolean> => {
+    async (departureId: string, status: 'open' | 'closed' | 'departed' | 'cancelled'): Promise<boolean> => {
       if (!client || !managerDid) return false;
       let ok = false;
       await run(`run-status:${departureId}`, async () => {
-        const r = await client.api.setDepartureStatus(managerDid, departureId, status, reason);
+        const r = await client.api.setDepartureStatus(managerDid, departureId, status);
         if (r.error) return fail(r.error);
         ok = true;
         await refresh();
@@ -951,6 +952,58 @@ export function useFleetApp() {
       return ok;
     },
     [client, managerDid, run, fail, refresh],
+  );
+
+  /*
+   * THE THREE FINAL ANSWERS the call-off sheet can give: call it off, put another truck on it, or put another
+   * driver on it. Each is done now or refused by name — nothing is left pending — and each answers the refusal
+   * rather than posting it to the screen's error slot, because the sheet is in front of that slot.
+   */
+  const sheetAct = useCallback(
+    async (key: string, call: () => Promise<{ error: SbgError | null }>, done: { title: string; detail?: string }): Promise<SbgError | null> => {
+      let error = null as SbgError | null;
+      await run(key, async () => {
+        const r = await call();
+        if (r.error) {
+          error = r.error;
+          return;
+        }
+        pushToast({ tone: 'ok', icon: 'check', ...done });
+        await refresh();
+      });
+      return error;
+    },
+    [run, pushToast, refresh],
+  );
+
+  /** Call a run off with a coded reason, the office's words, and — for a closed road or border — where. */
+  const callOffRun = useCallback(
+    async (departureId: string, why: { reason?: RunCancelReason; note?: string; closureAt?: { lat: number; lng: number } }) =>
+      client && managerDid
+        ? sheetAct(`run-status:${departureId}`, () => client.api.setDepartureStatus(managerDid, departureId, 'cancelled', why), {
+            title: t('fleet.callOff.doneToast'),
+            detail: why.closureAt ? t('fleet.callOff.doneToastMapped') : t('fleet.callOff.doneToastDetail'),
+          })
+        : null,
+    [client, managerDid, sheetAct],
+  );
+
+  /** Put another of this fleet's trucks on the run instead of calling it off. */
+  const swapRunVehicle = useCallback(
+    async (departureId: string, vehicleId: string, plate: string) =>
+      client && managerDid
+        ? sheetAct(`run-vehicle:${departureId}`, () => client.api.swapDepartureVehicle(managerDid, departureId, vehicleId), { title: t('fleet.callOff.swappedToast', { plate }) })
+        : null,
+    [client, managerDid, sheetAct],
+  );
+
+  /** Put another driver on the run instead of calling it off. The same roster the run card uses, answered in the sheet. */
+  const rosterInstead = useCallback(
+    async (departureId: string, driverDid: string, name: string) =>
+      client && managerDid
+        ? sheetAct(`run-driver:${departureId}`, () => client.api.assignDepartureDriver(managerDid, departureId, driverDid), { title: t('fleet.callOff.rosteredToast', { name }) })
+        : null,
+    [client, managerDid, sheetAct],
   );
 
   /**
@@ -1108,6 +1161,9 @@ export function useFleetApp() {
       setVehiclePapers,
       sendOwnPaper,
       giveBackBooking,
+      callOffRun,
+      swapRunVehicle,
+      rosterInstead,
       renewLicence,
       couple,
       uncouple,

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Button, ErrorNote, Icon, Note, Pill, Sheet } from '../../../shared/ui';
-import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
+import { formatDate, useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { settleWords } from '../../../shared/settle';
 import { giveBackWords } from '../../../shared/giveBack';
+import { isRouteReason, runCancelWords } from '../../../shared/runCancel';
 import { coverShortfall, coverWords } from '../../../shared/cover';
 import type { MyBookingRow } from '../types';
 import type { AgentActions, AgentState } from '../useAgentApp';
@@ -75,6 +76,22 @@ function statusOf(b: MyBookingRow): { key: MessageKey; tone: 'ok' | 'info' | 'id
   return { key: 'agent.mine.booked', tone: 'ok' };
 }
 
+/**
+ * WHY THE RUN IS OFF, AND WHAT TO DO — which depends on what the reason is about. A breakdown or a missing
+ * driver is about that carrier, so another truck on the route is the answer, and how many runs are open is
+ * said. A closed road or border is about the route, so sending the shipper to another run on it would send
+ * them into the same closure. A run called off before reasons were coded keeps the carrier's sentence.
+ */
+function strandedDetail(row: MyBookingRow, t: Translate): string {
+  const c = row.runCancellation;
+  if (!c) return row.cancelledReason || t('agent.mine.noReason');
+  const words = runCancelWords(c, t);
+  const advice = isRouteReason(c.reason)
+    ? t('agent.mine.routeClosed')
+    : [t('agent.mine.findTruck'), row.alternatives ? t(row.alternatives === 1 ? 'agent.mine.otherRunsOne' : 'agent.mine.otherRunsMany', { n: row.alternatives }) : ''].filter(Boolean).join(' ');
+  return words ? `${words}. ${advice}` : advice;
+}
+
 function Booking({ row, state, actions }: { row: MyBookingRow; state: AgentState; actions: AgentActions }) {
   const t = useT();
   const status = statusOf(row);
@@ -84,6 +101,10 @@ function Booking({ row, state, actions }: { row: MyBookingRow; state: AgentState
   // The one arithmetic worth doing here: declaring more than the carrier covers is a gap the shipper is
   // carrying, and until this screen nobody was in a position to tell them about it.
   const shortfall = coverShortfall(row.declaredValue, row.cover);
+  // Whether these goods are still going anywhere on this run. How the carrier takes payment and what cover
+  // they hold are facts about a journey: under a called-off run they read "ask before you book" beneath the
+  // news that there is nothing left to book — found by looking at the card, not by a test.
+  const travelling = row.bookingStatus !== 'cancelled' && row.runStatus !== 'cancelled';
 
   return (
     <div class="row row--static" role="listitem">
@@ -103,12 +124,7 @@ function Booking({ row, state, actions }: { row: MyBookingRow; state: AgentState
             the day it happened; the shipper looking at the wreckage of their week a fortnight later is
             reading this. */}
         {row.runStatus === 'cancelled' && row.bookingStatus !== 'cancelled' ? (
-          <Note
-            tone="warn"
-            icon="info"
-            title={t('agent.mine.strandedTitle', { company: row.company })}
-            detail={row.cancelledReason || t('agent.mine.noReason')}
-          />
+          <Note tone="warn" icon="info" title={t('agent.mine.strandedTitle', { company: row.company })} detail={strandedDetail(row, t)} />
         ) : null}
 
         {/* THE CARRIER GAVE THIS SPACE BACK, and why — kept here, not only in the notification that went
@@ -140,12 +156,12 @@ function Booking({ row, state, actions }: { row: MyBookingRow; state: AgentState
             a shipper who is billed for a wait they were never told about has been billed by surprise. */}
         {owed > 0 ? <span class="row__s">{t('agent.mine.waitOwed', { amount: owed, currency: row.currency })}</span> : null}
         {/* Still here after the offer is long gone, which is when somebody actually asks who to pay. */}
-        {row.bookingStatus !== 'cancelled' ? <span class="row__s">{settleWords(row.settle, t)}</span> : null}
+        {travelling ? <span class="row__s">{settleWords(row.settle, t)}</span> : null}
 
         {/* WHERE COVER STOOD ON THESE GOODS, read long after the offer is gone — which is when it
             matters — and beside a shortfall the shipper may never have been told about anywhere else. */}
-        {row.bookingStatus !== 'cancelled' ? <span class="row__s">{coverWords(row.cover, row.currency, t)}</span> : null}
-        {shortfall != null ? <span class="row__s">{t('cover.short', { amount: shortfall, currency: row.currency })}</span> : null}
+        {travelling ? <span class="row__s">{coverWords(row.cover, row.currency, t)}</span> : null}
+        {travelling && shortfall != null ? <span class="row__s">{t('cover.short', { amount: shortfall, currency: row.currency })}</span> : null}
 
         {/* THE PROOF, not just its date: the shipper is the party it exists for. And the note beside it,
             because those two together are what anybody else — a forwarder, an insurer — asks to see. */}

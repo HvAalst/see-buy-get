@@ -82,9 +82,10 @@ describe('the disputed-hazard queue', () => {
   });
 
   describe('what each kind does to a load', () => {
-    it('separates the five that stop a vehicle from the three that only cost it time', () => {
+    it('separates the seven that stop a vehicle from the three that only cost it time', () => {
       const blocking = (Object.keys(KIND_EFFECT) as ConstraintKind[]).filter((k) => KIND_EFFECT[k] === 'blocks');
-      expect(blocking.sort()).toEqual(['HEIGHT_BARRIER', 'LOW_BRIDGE', 'NO_HAZMAT', 'WASHOUT', 'WEIGHT_LIMIT']);
+      // A closed road and a closed border stop every vehicle, whatever it carries.
+      expect(blocking.sort()).toEqual(['BORDER_CLOSED', 'HEIGHT_BARRIER', 'LOW_BRIDGE', 'NO_HAZMAT', 'ROAD_CLOSED', 'WASHOUT', 'WEIGHT_LIMIT']);
       expect(KIND_EFFECT.WEIGHBRIDGE).toBe('advisory');
       expect(KIND_EFFECT.FERRY).toBe('advisory');
       expect(KIND_EFFECT.CHECKPOINT).toBe('advisory');

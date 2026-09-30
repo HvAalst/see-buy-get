@@ -13458,6 +13458,53 @@
         }
       }
     },
+    "/v1/sbg/fleet/managers/{did}/departures/{departureId}/vehicle": {
+      "post": {
+        "operationId": "Sbg.swapDepartureVehicle",
+        "summary": "",
+        "description": "Put another of the fleet's trucks on a run before it leaves. Final: done now, or refused by name — see\nDepartureService.swapVehicle for what it checks.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "departureId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwapVehicleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Departure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/managers/{did}/departures/{departureId}/status": {
       "post": {
         "operationId": "Sbg.setDepartureStatus",
@@ -30810,6 +30857,37 @@
           "limit"
         ]
       },
+      "RunCancellation": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "vehicle_unavailable",
+              "no_driver",
+              "road_closed",
+              "border_closed",
+              "not_enough_loads",
+              "other"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "description": "The carrier's own words: required for `other`, optional beside any coded reason."
+          },
+          "constraintId": {
+            "type": "string",
+            "description": "The hazard report filed with it, when the carrier put a closure on the map."
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "at"
+        ]
+      },
       "BookingCancellation": {
         "type": "object",
         "properties": {
@@ -31214,6 +31292,14 @@
             "type": "string",
             "description": "Why it was called off, kept rather than only announced.\n\nThe notice goes out once, the day it happens; the shipper looking at the wreckage of their week a\nfortnight later is reading this screen, not their notifications. Required when anybody was aboard."
           },
+          "cancellation": {
+            "description": "The same, structured: the coded reason the apps translate, the carrier's words, and the hazard report\nfiled with it. `cancelledReason` stays as the sentence, because the consignment note prints English.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RunCancellation"
+              }
+            ]
+          },
           "bookings": {
             "type": "array",
             "items": {
@@ -31332,9 +31418,33 @@
           "weightKg"
         ]
       },
+      "SwapVehicleDto": {
+        "type": "object",
+        "properties": {
+          "vehicleId": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "vehicleId"
+        ]
+      },
       "DepartureStatusDto": {
         "type": "object",
         "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Why, and required by the SERVICE when anybody is aboard rather than by this class.\n\nOptional here because the same route closes a run and marks it gone, and neither of those owes\nanybody an explanation. Calling off a loaded run does, and that is a rule about the run's state —\nwhich a DTO cannot see.",
+            "enum": [
+              "vehicle_unavailable",
+              "no_driver",
+              "road_closed",
+              "border_closed",
+              "not_enough_loads",
+              "other"
+            ]
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -31344,10 +31454,18 @@
               "cancelled"
             ]
           },
-          "reason": {
+          "note": {
             "type": "string",
-            "description": "Why, and required by the SERVICE when anybody is aboard rather than by this class.\n\nOptional here because the same route closes a run and marks it gone, and neither of those owes\nanybody an explanation. Calling off a loaded run does, and that is a rule about the run's state —\nwhich a DTO cannot see.",
-            "maxLength": 240
+            "description": "The carrier's own words: required for `other`, optional beside any coded reason.",
+            "maxLength": 500
+          },
+          "closureAt": {
+            "description": "WHERE the road or border is closed, when the carrier puts it on the hazard map. Optional — a carrier who\nknows the road is shut but not where exactly still calls the run off honestly — and accepted only with\n`road_closed` or `border_closed`. It files an ordinary hazard report, under the ordinary rules.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GeoDto"
+              }
+            ]
           }
         },
         "required": [
@@ -32254,7 +32372,9 @@
               "WASHOUT",
               "WEIGHBRIDGE",
               "FERRY",
-              "CHECKPOINT"
+              "CHECKPOINT",
+              "ROAD_CLOSED",
+              "BORDER_CLOSED"
             ]
           },
           "at": {
@@ -32318,7 +32438,9 @@
               "WASHOUT",
               "WEIGHBRIDGE",
               "FERRY",
-              "CHECKPOINT"
+              "CHECKPOINT",
+              "ROAD_CLOSED",
+              "BORDER_CLOSED"
             ]
           },
           "value": {

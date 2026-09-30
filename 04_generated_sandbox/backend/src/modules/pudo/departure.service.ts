@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
@@ -6,6 +6,8 @@ import { CorridorService } from './corridor.service';
 import { DriverService } from './driver.service';
 import { VehicleService } from './vehicle.service';
 import { CargoService } from './cargo.service';
+import { RouteConstraintService } from './route-constraint.service';
+import type { GeoPoint } from './pudo.types';
 import { MediaService } from './media.service';
 import { loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, unloadSafetyItems } from './heavy-cargo';
 import { CARGO_NATURES, VEHICLE_CAPABILITIES, type CargoNature } from './cargo.types';
@@ -36,6 +38,11 @@ import {
   GIVE_BACK_REASONS,
   type BookingCancellation,
   type GiveBackReason,
+  ROUTE_REASONS,
+  RUN_CANCEL_REASONS,
+  RUN_REASON_SENTENCE,
+  type RunCancellation,
+  type RunCancelReason,
 } from './departure.types';
 
 /**
@@ -74,6 +81,8 @@ export class DepartureService {
     private readonly media: MediaService,
     private readonly presence: PresenceService,
     private readonly events: EventBus,
+    // Optional so the specs that build this by hand keep working; the boot spec catches it missing from the module.
+    @Optional() private readonly constraints?: RouteConstraintService,
   ) {}
 
   /**
@@ -1024,19 +1033,65 @@ export class DepartureService {
    * the next carrier. It is required only when somebody is actually aboard: a fleet tidying away an
    * empty run it declared by mistake is not making a decision about anybody.
    */
-  setStatus(departureId: string, status: Departure['status'], managerDid: string, reason?: string): Departure {
+  setStatus(
+    departureId: string,
+    status: Departure['status'],
+    managerDid: string,
+    // A bare sentence is what this took before reasons were coded, and it means exactly "other, in these words".
+    // `closure` puts a closed road or border on the hazard map; `reportedBy` is who the report is attributed to.
+    input?: string | { reason?: string; note?: string; closure?: GeoPoint; reportedBy?: string },
+  ): Departure {
     const departure = this.require(departureId);
     if (departure.managerDid !== managerDid) throw new GlosError('FORBIDDEN', 'That is not your departure');
+    /*
+     * WHERE A RUN ENDS, IT STAYS ENDED. A run called off has told everybody aboard to find another truck, and
+     * why: reopening it would put them back on a truck they were told is not coming, and calling it off again
+     * would rewrite the reason they were given — and file a second closure on the map. A run that has left has
+     * the goods on it: "called off" would tell its shippers their goods were never collected, and start the
+     * evidence clock on loads still on the road. Asking for the state it is already in changes nothing.
+     */
+    if (departure.status === 'cancelled' || departure.status === 'departed') {
+      if (status === departure.status) return departure;
+      throw new GlosError(
+        'INVALID_STATE',
+        departure.status === 'cancelled'
+          ? 'That run was called off and stays off — everybody aboard has been told to find another truck. If the truck is going after all, declare a new run'
+          : 'That run has gone — the goods are on it, so it can no longer be closed, reopened or called off',
+      );
+    }
+    const closure = typeof input === 'object' ? input?.closure : undefined;
+    if (closure) {
+      if (status !== 'cancelled' || !ROUTE_REASONS.includes((input as { reason?: string }).reason as RunCancelReason)) {
+        throw new GlosError('INVALID_INPUT', 'A place on the map goes with a road or a border that is closed');
+      }
+      if (!this.constraints) throw new GlosError('INVALID_STATE', 'The hazard map is not running in this deployment');
+    }
 
     const aboard = this.shippersAboard(departure);
-    const said = reason?.trim();
-    if (status === 'cancelled' && aboard.length > 0 && !said) {
-      throw new GlosError('FIELD_REQUIRED', 'Say why you are calling it off — everybody with goods on this run is about to be told, and the reason is the only part they can act on');
+    const given = typeof input === 'string' ? { reason: 'other', note: input } : (input ?? {});
+    const note = given.note?.trim().slice(0, 500) || undefined;
+    let cancellation: RunCancellation | undefined;
+    if (status === 'cancelled') {
+      if (given.reason && !RUN_CANCEL_REASONS.includes(given.reason as RunCancelReason)) throw new GlosError('INVALID_INPUT', `Unknown reason: ${given.reason}`);
+      // "Other" with no words is no reason at all — the same as not saying.
+      const reason = given.reason === 'other' && !note ? undefined : (given.reason as RunCancelReason | undefined);
+      if (aboard.length > 0 && !reason) {
+        throw new GlosError(
+          'FIELD_REQUIRED',
+          given.reason === 'other'
+            ? 'Say what happened — “other” needs your own words, because everybody with goods on this run is about to read them'
+            : 'Say why you are calling it off — everybody with goods on this run is about to be told, and the reason is the only part they can act on',
+        );
+      }
+      if (reason) cancellation = { reason, ...(note ? { note } : {}), at: new Date().toISOString() };
     }
+    // The sentence the consignment note prints: the coded reason in words, then the carrier's own.
+    const said = cancellation ? [RUN_REASON_SENTENCE[cancellation.reason], note].filter(Boolean).join(' — ') : undefined;
 
     const was = departure.status;
     departure.status = status;
     if (status === 'cancelled' && said) departure.cancelledReason = said;
+    if (status === 'cancelled' && cancellation) departure.cancellation = cancellation;
     /*
      * A run called off ends every load aboard it, so their evidence starts its clock here. A run that is
      * merely CLOSED or DEPARTED does not: those loads are still in the world, and a photograph of goods
@@ -1048,6 +1103,24 @@ export class DepartureService {
       for (const b of departure.bookings) if (b.status !== 'cancelled') this.media.anchorFreightTerminal(b.bookingId);
     }
     this.departures.set(departure.departureId, departure);
+
+    /*
+     * THE CLOSURE GOES ON THE MAP THROUGH THE ORDINARY PROCEDURE, after the run is saved — so a refused
+     * cancellation leaves no report behind. The same report a driver files from the cab, attributed to whoever
+     * is signed in, corroborated or disputed by others, cleared only by staff. Never a shortcut: "the road was
+     * closed" is the cheapest excuse for a cancellation there is, and one carrier's word must not move the
+     * whole network on its own authority.
+     */
+    if (closure && cancellation && this.constraints) {
+      const report = this.constraints.report({
+        kind: cancellation.reason === 'border_closed' ? 'BORDER_CLOSED' : 'ROAD_CLOSED',
+        at: closure,
+        ...(note ? { note } : {}),
+        by: (input as { reportedBy?: string }).reportedBy || managerDid,
+      });
+      departure.cancellation = { ...cancellation, constraintId: report.constraintId };
+      this.departures.set(departure.departureId, departure);
+    }
 
     // Announced AFTER the write, so nothing downstream can read a run that has not been saved yet.
     if (status !== was) this.announce(departure, status, aboard, said);
@@ -1073,10 +1146,99 @@ export class DepartureService {
       shippers,
     };
     if (status === 'cancelled') {
-      void this.events.publish(GlosEvent.Pudo.DepartureCancelled, { ...base, reason: reason ?? '' }, { source: 'pudo' }).catch(() => undefined);
+      const c = departure.cancellation;
+      void this.events
+        .publish(
+          GlosEvent.Pudo.DepartureCancelled,
+          {
+            ...base,
+            reason: reason ?? '',
+            ...(c ? { cancelReason: c.reason, ...(c.note ? { note: c.note } : {}) } : {}),
+            // What the shipper can do next depends on what the reason is ABOUT: another truck on this route
+            // is an answer to a breakdown, and no answer at all to a closed road.
+            ...(c && ROUTE_REASONS.includes(c.reason) ? {} : { alternatives: this.alternativesTo(departure) }),
+          },
+          { source: 'pudo' },
+        )
+        .catch(() => undefined);
     } else if (status === 'departed') {
       void this.events.publish(GlosEvent.Pudo.DepartureDeparted, base, { source: 'pudo' }).catch(() => undefined);
     }
+  }
+
+  /**
+   * PUT ANOTHER TRUCK ON THE RUN — offered before a run is called off for a truck that is off the road.
+   *
+   * FINAL, in both directions (user, 2026-09-30: "the choice should be hard, not another half decided
+   * pending"). It happens now and completely, or it is refused by name and nothing changes: no request, no
+   * proposal waiting on anybody. The checks are the ones a run was declared under, plus the three that only
+   * matter once shippers are aboard — what they booked must FIT the new truck, every kind of goods aboard must
+   * be CARRIABLE by it, and whoever is rostered must be CLEARED to drive it.
+   *
+   * What a run offered is kept unless the new truck holds less, and then it is cut to what the truck holds —
+   * never below what is already booked, because that is refused first.
+   */
+  swapVehicle(departureId: string, managerDid: string, vehicleId: string): Departure {
+    const departure = this.require(departureId);
+    if (departure.managerDid !== managerDid) throw new GlosError('FORBIDDEN', 'That is not your departure');
+    if (departure.status !== 'open' && departure.status !== 'closed') {
+      throw new GlosError('INVALID_STATE', `That run is ${departure.status} — the truck can only change before it leaves`);
+    }
+    if (vehicleId === departure.vehicleId) throw new GlosError('INVALID_INPUT', `${departure.plate} is already the truck on this run`);
+    const vehicle = this.vehicles.get(String(vehicleId ?? ''));
+    if (vehicle.managerDid !== managerDid) throw new GlosError('FORBIDDEN', `${vehicle.plate} is not one of your vehicles`);
+    if (!this.vehicles.isUsable(vehicle.vehicleId)) {
+      const why = this.vehicles.offRoadReasons(vehicle.vehicleId);
+      throw new GlosError('CANNOT_COUPLE', why.length ? `${vehicle.plate} is off the road: ${why.join('; ')}` : `${vehicle.plate} is ${vehicle.status} — it cannot take a run`);
+    }
+
+    const aboard = departure.bookings.filter((b) => b.status === 'booked');
+    const kg = Math.round(aboard.reduce((n, b) => n + b.weightKg, 0) * 100) / 100;
+    if (kg > vehicle.capacityKg) {
+      throw new GlosError('NO_ROOM', `${vehicle.plate} holds ${vehicle.capacityKg} kg — ${kg} kg is already booked on this run`);
+    }
+    const truck = vehicle as unknown as Record<string, unknown>;
+    for (const b of aboard) {
+      const need = b.nature ? this.cargo.requiredCapability(b.nature) : undefined;
+      if (need && !truck[need]) {
+        const said = need === 'coldChain' ? 'cold chain' : need;
+        throw new GlosError('VEHICLE_MISSING_CAPABILITY', `${vehicle.plate} does not carry ${said} — ${b.description} on this run needs a vehicle that does`);
+      }
+    }
+    if (departure.driverDid && !this.drivers.clearedFor(departure.driverDid, vehicle.vehicleClass)) {
+      throw new GlosError('CANNOT_COUPLE', `${departure.driverName ?? 'The driver on this run'} is not cleared to drive a ${vehicle.vehicleClass} — put another driver on the run first`);
+    }
+
+    const before = { plate: departure.plate, vehicleClass: departure.vehicleClass };
+    departure.vehicleId = vehicle.vehicleId;
+    departure.plate = vehicle.plate;
+    departure.vehicleClass = vehicle.vehicleClass;
+    departure.capacityKg = Math.min(departure.capacityKg, Math.round(vehicle.capacityKg));
+    this.departures.set(departure.departureId, departure);
+
+    void this.events
+      .publish(
+        GlosEvent.Pudo.DepartureVehicleChanged,
+        {
+          departureId: departure.departureId,
+          managerDid,
+          company: departure.company,
+          lineName: departure.lineName,
+          fromPlate: before.plate,
+          toPlate: vehicle.plate,
+          fromClass: before.vehicleClass,
+          toClass: vehicle.vehicleClass,
+          shippers: this.shippersAboard(departure),
+        },
+        { source: 'pudo' },
+      )
+      .catch(() => undefined);
+    return departure;
+  }
+
+  /** Other runs on the same route a shipper could book right now — never this one, never a full or stopped carrier's. */
+  private alternativesTo(departure: Departure): number {
+    return this.offers({ from: departure.originZone, to: departure.destZone }).filter((o) => o.departureId !== departure.departureId).length;
   }
 
   /**
@@ -1172,6 +1334,9 @@ export class DepartureService {
             ...(b.cancellation ? { cancellation: b.cancellation } : {}),
             runStatus: d.status,
             ...(d.cancelledReason ? { cancelledReason: d.cancelledReason } : {}),
+            ...(d.status === 'cancelled' && d.cancellation ? { runCancellation: d.cancellation } : {}),
+            // Read NOW rather than when it was called off: the runs open a fortnight later are the ones that help.
+            ...(d.status === 'cancelled' && b.status === 'booked' && !(d.cancellation && ROUTE_REASONS.includes(d.cancellation.reason)) ? { alternatives: this.alternativesTo(d) } : {}),
             ...(b.deliveredAt ? { deliveredAt: b.deliveredAt } : {}),
             ...(b.receivedBy ? { receivedBy: b.receivedBy } : {}),
             ...(b.pod ? { pod: b.pod } : {}),

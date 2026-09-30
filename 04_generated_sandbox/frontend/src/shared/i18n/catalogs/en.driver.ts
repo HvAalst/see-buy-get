@@ -779,6 +779,8 @@ export const enDriver = {
   'driver.road.kind.WEIGHBRIDGE': 'Weighbridge',
   'driver.road.kind.FERRY': 'Ferry',
   'driver.road.kind.CHECKPOINT': 'Checkpoint',
+  'driver.road.kind.ROAD_CLOSED': 'Road closed',
+  'driver.road.kind.BORDER_CLOSED': 'Border closed',
   'driver.toast.roadReported': 'Reported — thank you',
   'driver.toast.roadReportedDetail': 'Other drivers on this road will see it.',
   'driver.toast.roadConfirmed': 'Marked as still there',

@@ -109,6 +109,8 @@ const KIND_ICON: Record<RoadKind, IconName> = {
   WEIGHBRIDGE: 'weight',
   FERRY: 'route',
   CHECKPOINT: 'badge',
+  ROAD_CLOSED: 'block',
+  BORDER_CLOSED: 'block',
 };
 
 function kindName(kind: string, t: Translate): string {

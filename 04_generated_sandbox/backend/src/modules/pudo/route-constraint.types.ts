@@ -17,6 +17,17 @@ export const CONSTRAINT_KINDS = [
   'WEIGHBRIDGE',
   'FERRY',
   'CHECKPOINT',
+  /**
+   * Closed to all traffic — by the police, by works, by what is lying on it. Nobody passes whatever they
+   * carry, which is what separates it from a limit. Also what a carrier calling a run off for a closed road
+   * files, through this same procedure: one report, corroborated by others, cleared only by staff.
+   */
+  'ROAD_CLOSED',
+  /**
+   * A border crossing that is not letting traffic through. A country-level fact, so beyond warning drivers
+   * it stands in the STAFF queue until somebody decides whether that country's switch should move.
+   */
+  'BORDER_CLOSED',
 ] as const;
 export type ConstraintKind = (typeof CONSTRAINT_KINDS)[number];
 
@@ -50,6 +61,9 @@ export const CONSTRAINT_EFFECT: Record<ConstraintKind, ConstraintEffect> = {
   WEIGHT_LIMIT: { blocks: true, measure: 'weight_kg', kind: 'legal' },
   NO_HAZMAT: { blocks: true, measure: 'none', kind: 'legal' },
   WASHOUT: { blocks: true, measure: 'none', kind: 'physical' },
+  // LEGAL: closed is closed, for every vehicle and every load — there is nothing to measure against.
+  ROAD_CLOSED: { blocks: true, measure: 'none', kind: 'legal' },
+  BORDER_CLOSED: { blocks: true, measure: 'none', kind: 'legal' },
   // Cost a haulier time, never the load.
   WEIGHBRIDGE: { blocks: false, measure: 'none', kind: 'advisory' },
   FERRY: { blocks: false, measure: 'none', kind: 'advisory' },

@@ -8,6 +8,7 @@
  */
 
 import type { GiveBackReason } from '../../shared/giveBack';
+import type { RunCancelReason } from '../../shared/runCancel';
 
 export type AgentStatus = 'DRAFT' | 'KYC_PENDING' | 'APPROVED_UNFUNDED' | 'ACTIVE' | 'LOCKED';
 export type OpenState = 'open' | 'closed';
@@ -429,6 +430,9 @@ export interface MyBookingRow {
   /** The RUN's state, which is a different fact: goods given back and goods stranded are not the same. */
   runStatus: 'open' | 'closed' | 'departed' | 'cancelled';
   cancelledReason?: string;
+  /** Why the RUN was called off, coded — and how many other runs on the route are open, when that helps. */
+  runCancellation?: { reason: RunCancelReason; note?: string; at: string; constraintId?: string };
+  alternatives?: number;
   deliveredAt?: string;
   receivedBy?: string;
   waiting?: { freeMin: number; perHour: number };

@@ -55,6 +55,10 @@ const enSettle = {
   'giveBack.goods_not_as_booked': 'The goods are not what was booked',
   'giveBack.overbooked': 'The space was promised twice',
   'giveBack.other': 'Something else',
+  // Why a whole run was called off — the ones a single booking has no use for.
+  'runOff.road_closed': 'The road is closed',
+  'runOff.border_closed': 'The border is closed',
+  'runOff.not_enough_loads': 'Too little was booked for it to go',
   'settle.notUs': 'You pay the carrier directly. SeeBuyGet takes no part in this payment and holds none of it.',
 };
 

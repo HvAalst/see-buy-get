@@ -22,6 +22,8 @@ export const KIND_EFFECT: Record<ConstraintKind, 'blocks' | 'advisory'> = {
   WEIGHBRIDGE: 'advisory',
   FERRY: 'advisory',
   CHECKPOINT: 'advisory',
+  ROAD_CLOSED: 'blocks',
+  BORDER_CLOSED: 'blocks',
 };
 
 /** The i18n key for each kind's name. Same rule as above: every kind has one, checked by the compiler. */
@@ -34,6 +36,8 @@ export const KIND_KEY: Record<ConstraintKind, MessageKey> = {
   WEIGHBRIDGE: 'tower.kind.WEIGHBRIDGE',
   FERRY: 'tower.kind.FERRY',
   CHECKPOINT: 'tower.kind.CHECKPOINT',
+  ROAD_CLOSED: 'tower.kind.ROAD_CLOSED',
+  BORDER_CLOSED: 'tower.kind.BORDER_CLOSED',
 };
 
 export function kindLabel(kind: ConstraintKind, t: Translate): string {

@@ -1,10 +1,11 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, ErrorNote, Explainer, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, ErrorNote, Explainer, Note, Pill, PlaceMap, ReadAloud, Sheet } from '../../../shared/ui';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { EMPTY_OWN_LOAD, RUN_BASES, ownLines, ownLoadBlocker, runBlocker, runManifest, runMoney, runRemaining, runWaits, type OwnLoadForm, type RunBasis } from '../logic';
 import { settleWords } from '../../../shared/settle';
 import { coverWords } from '../../../shared/cover';
 import { GIVE_BACK_ORDER, giveBackLabel, type GiveBackReason } from '../../../shared/giveBack';
+import { RUN_CANCEL_ORDER, isRouteReason, runCancelLabel, type RunCancelReason } from '../../../shared/runCancel';
 import type { SbgError } from '../../../lib/sbg';
 import type { DepartureBookingRow, DepartureRow, WaitingRow } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
@@ -86,7 +87,6 @@ const STATUS: Record<DepartureRow['status'], { key: MessageKey; tone: 'ok' | 'in
 function Run({ run, state, actions }: { run: DepartureRow; state: FleetState; actions: FleetActions }) {
   const t = useT();
   const [confirmCancel, setConfirmCancel] = useState(false);
-  const [cancelReason, setCancelReason] = useState('');
   const left = runRemaining(run);
   const money = runMoney(run);
   // Two different lists on purpose. `aboard` is what is physically on the truck and drives the count
@@ -297,42 +297,7 @@ function Run({ run, state, actions }: { run: DepartureRow; state: FleetState; ac
           reason is the only part of that message they can act on: "the run is off" leaves somebody ringing
           round for a lorry with nothing to tell the next carrier. Empty runs skip it — nobody planned
           anything around a departure declared by mistake. */}
-      <Sheet open={confirmCancel} onClose={() => setConfirmCancel(false)} title={t('fleet.runs.cancelConfirm')}>
-        <p class="t-body">{t('fleet.runs.cancelBody')}</p>
-        {aboard.some((b) => b.kind !== 'own') ? (
-          <>
-            <Note tone="warn" icon="info" title={t('fleet.runs.cancelTold', { count: aboard.filter((b) => b.kind !== 'own').length })} />
-            <div class="field" style="margin-top:12px">
-              <label class="field__label" for={`why-${run.departureId}`}>
-                {t('fleet.runs.cancelWhy')}
-              </label>
-              <input
-                id={`why-${run.departureId}`}
-                class="input"
-                value={cancelReason}
-                placeholder={t('fleet.runs.cancelWhyPh')}
-                onInput={(e) => setCancelReason(e.currentTarget.value)}
-              />
-            </div>
-          </>
-        ) : null}
-        <Button
-          chevron={false}
-          disabled={aboard.some((b) => b.kind !== 'own') && !cancelReason.trim()}
-          busy={state.busy === `run-status:${run.departureId}`}
-          onClick={async () => {
-            if (await actions.setRunStatus(run.departureId, 'cancelled', cancelReason.trim() || undefined)) {
-              setCancelReason('');
-              setConfirmCancel(false);
-            }
-          }}
-        >
-          {t('fleet.runs.cancelCta')}
-        </Button>
-        <Button variant="link" onClick={() => setConfirmCancel(false)}>
-          {t('common.cancel')}
-        </Button>
-      </Sheet>
+      {confirmCancel ? <CallOffSheet run={run} state={state} actions={actions} onClose={() => setConfirmCancel(false)} /> : null}
     </Card>
   );
 }
@@ -762,6 +727,187 @@ function OwnLoad({ run, state, actions }: { run: DepartureRow; state: FleetState
         </Button>
       </Sheet>
     </>
+  );
+}
+
+/**
+ * CALLING A RUN OFF — and, before that, the kinder answer where there is one.
+ *
+ * The reason decides what happens next, because the reasons are not alike. A truck off the road or a missing
+ * driver is about this fleet: the sheet first offers to put another truck or driver on the run, which keeps
+ * every shipper's booking. A closed road or border is about the route: a pin puts it onto the hazard map for
+ * every driver, as this office's report under the ordinary rules. Too little booked is the fleet's own choice.
+ *
+ * EVERY ANSWER HERE IS FINAL (user: "the choice should be hard, not another half decided pending"). Another
+ * truck is put on now, or the run is called off now; the server refuses anything that will not work, by name,
+ * inside this sheet, and nothing is left waiting on anybody.
+ */
+function CallOffSheet({ run, state, actions, onClose }: { run: DepartureRow; state: FleetState; actions: FleetActions; onClose: () => void }) {
+  const t = useT();
+  const [reason, setReason] = useState<RunCancelReason | null>(null);
+  const [note, setNote] = useState('');
+  const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null);
+  const [truckId, setTruckId] = useState('');
+  const [driverDid, setDriverDid] = useState('');
+  const [error, setError] = useState<SbgError | null>(null);
+
+  const aboard = run.bookings.filter((b) => b.status === 'booked');
+  const shippers = aboard.filter((b) => b.kind !== 'own').length;
+  const bookedKg = Math.round(aboard.reduce((n, b) => n + b.weightKg, 0) * 100) / 100;
+  // The kinder answers. The server re-checks everything (what the goods need, who is licensed for what) and
+  // refuses by name; this only leaves out what cannot possibly work.
+  const trucks = state.vehicles.filter((v) => v.vehicleId !== run.vehicleId && v.status === 'ACTIVE' && !v.offRoad?.length && v.capacityKg >= bookedKg);
+  const drivers = state.drivers.filter((d) => d.did !== run.driverDid && d.status === 'ACTIVE');
+  // A truck off the road is off the road for every run it is on, so the office sees the others while deciding.
+  // Only runs still ahead: found by looking, a run whose time has passed but was never marked gone still reads
+  // "open", and listing last Tuesday's run as at risk from today's breakdown is noise that hides the real ones.
+  const now = Date.now();
+  const sameTruck = state.departures.filter(
+    (d) => d.departureId !== run.departureId && d.vehicleId === run.vehicleId && (d.status === 'open' || d.status === 'closed') && new Date(d.leavesAt).getTime() > now,
+  );
+  const truck = trucks.find((v) => v.vehicleId === truckId);
+  const driver = drivers.find((d) => d.did === driverDid);
+  const kinder = (reason === 'vehicle_unavailable' && truck) || (reason === 'no_driver' && driver);
+
+  const needsWords = reason === 'other';
+  const ready = (shippers === 0 || reason !== null) && (!needsWords || note.trim().length > 0);
+  const labelId = `off-${run.departureId}`;
+  const busy = state.busy === `run-status:${run.departureId}` || state.busy === `run-vehicle:${run.departureId}` || state.busy === `run-driver:${run.departureId}`;
+
+  const finish = (failed: SbgError | null) => (failed ? setError(failed) : onClose());
+
+  return (
+    <Sheet open onClose={onClose} title={t('fleet.callOff.title')}>
+      <p class="t-body">{shippers ? t('fleet.callOff.lede', { count: shippers }) : t('fleet.callOff.ledeEmpty')}</p>
+      {error ? <ErrorNote error={error} showDetail /> : null}
+
+      <div class="field">
+        <span class="field__label" id={labelId}>
+          {t('fleet.callOff.why')}
+        </span>
+        <div class="chips" role="radiogroup" aria-labelledby={labelId} style="display:flex;flex-wrap:wrap;gap:8px">
+          {RUN_CANCEL_ORDER.map((r) => (
+            <button
+              key={r}
+              type="button"
+              role="radio"
+              aria-checked={reason === r}
+              class={'chip chip--tap' + (reason === r ? ' chip--on' : '')}
+              onClick={() => {
+                setReason(r);
+                setError(null);
+              }}
+            >
+              {runCancelLabel(r, t)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* THE KIND THING, FIRST: another truck keeps every booking on this run. */}
+      {reason === 'vehicle_unavailable' ? (
+        <div class="field" style="margin-top:12px">
+          <span class="field__label">{t('fleet.callOff.swapTitle')}</span>
+          {trucks.length ? (
+            <div class="chips" role="radiogroup" aria-label={t('fleet.callOff.swapTitle')} style="display:flex;flex-wrap:wrap;gap:8px">
+              {trucks.map((v) => (
+                <button key={v.vehicleId} type="button" role="radio" aria-checked={truckId === v.vehicleId} class={'chip chip--tap' + (truckId === v.vehicleId ? ' chip--on' : '')} onClick={() => setTruckId(truckId === v.vehicleId ? '' : v.vehicleId)}>
+                  {t('fleet.callOff.truckChip', { plate: v.plate, kg: v.capacityKg })}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p class="hint">{t('fleet.callOff.noTruck', { kg: bookedKg })}</p>
+          )}
+          {sameTruck.length ? (
+            <Note
+              tone="warn"
+              icon="info"
+              title={t('fleet.callOff.sameTruckTitle', { plate: run.plate ?? '' })}
+              detail={sameTruck.map((d) => `${d.lineName} · ${formatDate(d.leavesAt, { dateStyle: 'medium', timeStyle: 'short' })}`).join('; ')}
+            />
+          ) : null}
+        </div>
+      ) : null}
+
+      {reason === 'no_driver' ? (
+        <div class="field" style="margin-top:12px">
+          <span class="field__label">{t('fleet.callOff.rosterTitle')}</span>
+          {drivers.length ? (
+            <div class="chips" role="radiogroup" aria-label={t('fleet.callOff.rosterTitle')} style="display:flex;flex-wrap:wrap;gap:8px">
+              {drivers.map((d) => (
+                <button key={d.did} type="button" role="radio" aria-checked={driverDid === d.did} class={'chip chip--tap' + (driverDid === d.did ? ' chip--on' : '')} onClick={() => setDriverDid(driverDid === d.did ? '' : d.did)}>
+                  {d.displayName}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p class="hint">{t('fleet.callOff.noDriver')}</p>
+          )}
+        </div>
+      ) : null}
+
+      {/* A CLOSED ROUTE: onto the hazard map, as this office's report, under the ordinary rules. */}
+      {isRouteReason(reason ?? undefined) ? (
+        <div class="field" style="margin-top:12px">
+          <span class="field__label">{t('fleet.callOff.whereTitle')}</span>
+          <PlaceMap onDrop={setPin} dropped={pin} label={t('fleet.callOff.whereMap')} />
+          <p class="hint">{t(reason === 'border_closed' ? 'fleet.callOff.whereBorderHint' : 'fleet.callOff.whereRoadHint')}</p>
+          {pin ? (
+            <Button variant="link" full={false} onClick={() => setPin(null)}>
+              {t('fleet.callOff.wherePinClear')}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {reason && !kinder ? (
+        <div class="field" style="margin-top:12px">
+          <label class="field__label" for={`${labelId}-note`}>
+            {t(needsWords ? 'fleet.callOff.noteRequired' : 'fleet.callOff.noteOptional')}
+          </label>
+          <textarea id={`${labelId}-note`} class="input" rows={3} maxLength={500} value={note} onInput={(e) => setNote(e.currentTarget.value)} />
+          {isRouteReason(reason) ? <p class="hint">{t('fleet.callOff.routeTold')}</p> : shippers ? <p class="hint">{t('fleet.callOff.otherRunsTold')}</p> : null}
+        </div>
+      ) : null}
+
+      {/* ONE solid answer at a time: the kinder one when chosen, the call-off otherwise. */}
+      {kinder ? (
+        <Button
+          chevron={false}
+          busy={busy}
+          onClick={async () =>
+            finish(
+              reason === 'vehicle_unavailable' && truck
+                ? await actions.swapRunVehicle(run.departureId, truck.vehicleId, truck.plate)
+                : await actions.rosterInstead(run.departureId, driver!.did, driver!.displayName),
+            )
+          }
+        >
+          {reason === 'vehicle_unavailable' && truck ? t('fleet.callOff.swapCta', { plate: truck.plate }) : t('fleet.callOff.rosterCta', { name: driver?.displayName ?? '' })}
+        </Button>
+      ) : null}
+      <Button
+        variant={kinder ? 'outline' : undefined}
+        chevron={false}
+        disabled={!ready}
+        busy={busy && !kinder}
+        onClick={async () =>
+          finish(
+            await actions.callOffRun(run.departureId, {
+              ...(reason ? { reason } : {}),
+              ...(note.trim() ? { note: note.trim() } : {}),
+              ...(pin && isRouteReason(reason ?? undefined) ? { closureAt: pin } : {}),
+            }),
+          )
+        }
+      >
+        {kinder ? t('fleet.callOff.anywayCta') : shippers ? t('fleet.callOff.cta', { count: shippers }) : t('fleet.callOff.ctaEmpty')}
+      </Button>
+      <Button variant="link" onClick={onClose}>
+        {t('fleet.callOff.notNow')}
+      </Button>
+    </Sheet>
   );
 }
 

@@ -2,7 +2,7 @@ import { DESTINATION_KINDS } from './destination.types';
 import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { INCOTERM_CODES } from '../../foundation/incoterms/catalogue';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE } from '../../foundation/interest/interest.service';
-import { CLAIM_KINDS, DELAY_PLACES, GIVE_BACK_REASONS, RATE_BASES, SETTLE_METHODS, SETTLE_WHEN, type DelayPlace, type GiveBackReason } from './departure.types';
+import { CLAIM_KINDS, DELAY_PLACES, GIVE_BACK_REASONS, RATE_BASES, RUN_CANCEL_REASONS, SETTLE_METHODS, SETTLE_WHEN, type DelayPlace, type GiveBackReason, type RunCancelReason } from './departure.types';
 import { PRESENCE_LEVELS, type PresenceLevel } from '../../foundation/presence/presence.types';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
@@ -1564,6 +1564,11 @@ export class BookDepartureDto {
   @IsOptional() @IsString() freightId?: string;
 }
 
+/** Put another of the fleet's own trucks on a run. */
+export class SwapVehicleDto {
+  @IsString() @MaxLength(64) vehicleId!: string;
+}
+
 export class DepartureStatusDto {
   @IsIn(['open', 'closed', 'departed', 'cancelled']) status!: 'open' | 'closed' | 'departed' | 'cancelled';
   /**
@@ -1573,7 +1578,15 @@ export class DepartureStatusDto {
    * anybody an explanation. Calling off a loaded run does, and that is a rule about the run's state —
    * which a DTO cannot see.
    */
-  @IsOptional() @IsString() @MaxLength(240) reason?: string;
+  @IsOptional() @IsIn(RUN_CANCEL_REASONS) @ApiPropertyOptional({ enum: RUN_CANCEL_REASONS }) reason?: RunCancelReason;
+  /** The carrier's own words: required for `other`, optional beside any coded reason. */
+  @IsOptional() @IsString() @MaxLength(500) note?: string;
+  /**
+   * WHERE the road or border is closed, when the carrier puts it on the hazard map. Optional — a carrier who
+   * knows the road is shut but not where exactly still calls the run off honestly — and accepted only with
+   * `road_closed` or `border_closed`. It files an ordinary hazard report, under the ordinary rules.
+   */
+  @IsOptional() @ValidateNested() @Type(() => GeoDto) closureAt?: GeoDto;
 }
 
 /**

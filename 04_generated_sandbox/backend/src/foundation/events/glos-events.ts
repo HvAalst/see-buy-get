@@ -120,6 +120,8 @@ export const GlosEvent = {
     DepartureBooked: 'pudo.departure_booked', // a shipper took space on a run; the fleet office is told
     DepartureBookingCancelled: 'pudo.departure_booking_cancelled', // a shipper gave the space back; it is for sale again
     DepartureDeparted: 'pudo.departure_departed', // the truck has gone — the last moment anything could change
+    /** A different truck was put on a run before it left. Shippers see a vehicle's CLASS, never its plate, so they are told only when the class changed. */
+    DepartureVehicleChanged: 'pudo.departure_vehicle_changed',
     DepartureDelivered: 'pudo.departure_delivered', // one booking reached its destination and was handed over
     DepartureCancelled: 'pudo.departure_cancelled', // the run is not happening, and everybody aboard has to be told
     DepartureClaimOpened: 'pudo.departure_claim_opened', // the shipper says something went wrong; the carrier is told, and nobody adjudicates

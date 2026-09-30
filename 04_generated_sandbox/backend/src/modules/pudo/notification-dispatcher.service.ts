@@ -16,10 +16,32 @@ import { haversineKm } from './geo';
 import { paperDay } from './papers';
 import { GeoPoint } from './pudo.types';
 import type { NotificationKind } from './notification.types';
-import type { GiveBackReason } from './departure.types';
+import { ROUTE_REASONS, RUN_REASON_SENTENCE, type GiveBackReason, type RunCancelReason } from './departure.types';
 
 /* The payloads the run's events carry, as published in DepartureService and FleetManagerService. */
 interface SpaceSold { departureId: string; bookingId: string; managerDid: string; lineName: string; shipperDid: string; description: string; weightKg: number; price: number; currency: string }
+interface VehicleChanged { departureId: string; managerDid: string; company: string; lineName: string; fromPlate: string; toPlate: string; fromClass: string; toClass: string; shippers: string[] }
+interface RunCalledOff { departureId: string; company: string; lineName: string; originZone: string; destZone: string; leavesAt: string; shippers: string[]; reason: string; cancelReason?: RunCancelReason; note?: string; alternatives?: number }
+
+/**
+ * What a shipper on a called-off run is told — and what to do next depends on what the reason is ABOUT.
+ *
+ * A breakdown, a missing driver or too little booked is about THIS carrier: other trucks on the route still
+ * go, so the shipper is pointed at them, with how many are open. A closed road or border is about the ROUTE:
+ * every truck there meets it, so pointing them at another run would send them into the same closure.
+ * A run called off before reasons were coded keeps the old sentence.
+ */
+export function runCalledOffBody(p: RunCalledOff): string {
+  const coded = p.cancelReason ? RUN_REASON_SENTENCE[p.cancelReason] : '';
+  const words = p.cancelReason ? [coded ? coded.charAt(0).toLowerCase() + coded.slice(1) : '', p.note ? `“${p.note}”` : ''].filter(Boolean).join(' — ') : p.reason;
+  const head = `The run you booked space on is not happening${words ? `: ${words}` : ''}.`;
+  if (p.cancelReason && ROUTE_REASONS.includes(p.cancelReason)) {
+    return `${head} Other trucks on this route meet the same closure — check before you book another run on it.`;
+  }
+  const others = p.alternatives ? ` ${p.alternatives === 1 ? 'One other run on this route is' : `${p.alternatives} other runs on this route are`} open for booking.` : '';
+  return `${head} Your goods were not collected — you will need another truck.${others}`;
+}
+
 interface BookingGivenBack { departureId: string; bookingId: string; managerDid: string; company: string; lineName: string; shipperDid: string; kind: 'sold' | 'own'; by: string; description: string; reason?: string; note?: string }
 
 /**
@@ -184,7 +206,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
      * has to be told, and nobody was. It is also the worst possible thing to be silent about — a shipper
      * who does not know has not started looking for another truck.
      */
-    this.events.subscribe<{ departureId: string; company: string; lineName: string; originZone: string; destZone: string; leavesAt: string; shippers: string[]; reason: string }>(GlosEvent.Pudo.DepartureCancelled, (e) => this.onDepartureCancelled(e.payload));
+    this.events.subscribe<RunCalledOff>(GlosEvent.Pudo.DepartureCancelled, (e) => this.onDepartureCancelled(e.payload));
     this.events.subscribe<{ departureId: string; company: string; shipperDid: string; kind: 'sold' | 'own'; description: string; destZone: string; receivedBy?: string }>(GlosEvent.Pudo.DepartureDelivered, (e) => this.onDepartureDelivered(e.payload));
     /*
      * THE HALF OF A RUN THAT WAS PUBLISHED AND NEVER DELIVERED.
@@ -198,6 +220,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<BookingGivenBack>(GlosEvent.Pudo.DepartureBookingCancelled, (e) => this.onBookingGivenBack(e.payload));
     this.events.subscribe<RunClaimOpened>(GlosEvent.Pudo.DepartureClaimOpened, (e) => this.onRunClaimOpened(e.payload));
     this.events.subscribe<RunClaimAnswered>(GlosEvent.Pudo.DepartureClaimAnswered, (e) => this.onRunClaimAnswered(e.payload));
+    // A different truck on a run shippers are booked on — said only when what THEY can see (the class) changed.
+    this.events.subscribe<VehicleChanged>(GlosEvent.Pudo.DepartureVehicleChanged, (e) => this.onVehicleChanged(e.payload));
     // The fleet's own licence or cover: a document it sent was recorded, or turned down with a reason.
     this.events.subscribe<FleetPaperChecked>(GlosEvent.Pudo.FleetPaperChecked, (e) => this.onFleetPaperChecked(e.payload));
     // FP3b (sender) — the driver is at the door and cannot hand over: the sender is the one who can fix it.
@@ -376,13 +400,14 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
    * One failure does not stop the rest. Five shippers and a bad DID among them must not mean four
    * people never hear.
    */
-  private async onDepartureCancelled(payload: { departureId: string; company: string; lineName: string; originZone: string; destZone: string; leavesAt: string; shippers: string[]; reason: string }): Promise<void> {
+  private async onDepartureCancelled(payload: RunCalledOff): Promise<void> {
+    const body = runCalledOffBody(payload);
     for (const shipperDid of payload.shippers) {
       try {
         await this.notifications.notify(shipperDid, {
           kind: 'load_cancelled',
           title: `${payload.company} called off the ${payload.originZone} → ${payload.destZone} run`,
-          body: `The run you booked space on is not happening${payload.reason ? `: ${payload.reason}` : ''}. Your goods were not collected — you will need another truck.`,
+          body,
           link: '/',
           tag: `departure:${payload.departureId}:cancelled`,
           data: { departureId: payload.departureId },
@@ -463,6 +488,24 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       tag: `departure:${p.departureId}:claim:${p.bookingId}:answered`,
       data: { departureId: p.departureId, bookingId: p.bookingId },
     });
+  }
+
+  /**
+   * Another truck on the run. A shipper is shown a vehicle's CLASS and never its plate, so a truck swapped for
+   * another truck changes nothing they can see and they are not bothered with it; a truck swapped for a van is
+   * news about their goods, and they are told.
+   */
+  private async onVehicleChanged(p: VehicleChanged): Promise<void> {
+    if (p.fromClass === p.toClass) return;
+    for (const shipperDid of p.shippers) {
+      await this.tell(shipperDid, {
+        kind: 'load_assigned',
+        title: `A different vehicle on ${p.lineName}`,
+        body: `${p.company} put another vehicle on the run your goods are booked on: it now goes on a ${p.toClass} instead of a ${p.fromClass}. Your booking stands.`,
+        tag: `departure:${p.departureId}:vehicle`,
+        data: { departureId: p.departureId },
+      });
+    }
   }
 
   /** A document the fleet sent for its own licence or cover was read. Accepted, or not — with the reason. */

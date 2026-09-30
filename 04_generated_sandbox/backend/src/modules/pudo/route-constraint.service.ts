@@ -201,7 +201,10 @@ export class RouteConstraintService {
   /** Everything an operator has to look at: somebody says a live hazard is not there. */
   disputed(): ConstraintView[] {
     return this.live()
-      .filter((c) => c.status === 'disputed')
+      // Every dispute — and every border reported CLOSED, disputed or not. A closed border is a country-level
+      // fact that waits on a staff decision (does that country's switch move?) whether or not anybody argues
+      // with the report; a road hazard only needs staff once somebody says it is gone.
+      .filter((c) => c.status === 'disputed' || c.kind === 'BORDER_CLOSED')
       .map(constraintView)
       // Longest-waiting first. The wait is measured from the DISPUTE, not the report: a bridge reported
       // two years ago and disputed this morning has been in front of an operator since this morning, and

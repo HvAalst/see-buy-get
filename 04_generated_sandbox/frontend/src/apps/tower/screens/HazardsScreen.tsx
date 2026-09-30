@@ -120,6 +120,16 @@ function HazardRow({ row, now, state, actions }: { row: ConstraintView; now: num
           <div class="ctbl__sub">
             {KIND_EFFECT[row.kind] === 'blocks' ? t('tower.hazards.blocks') : t('tower.hazards.advisory')}
           </div>
+          {/* A CLOSED BORDER is here whether or not anybody disputes it: it is a fact about a country, and what
+              the network does about it — switch that crossing off, or wait — is a decision only staff make. */}
+          {row.kind === 'BORDER_CLOSED' ? (
+            <>
+              <span class="ctag ctag--warn">{t('tower.hazards.borderDecide')}</span>
+              <button type="button" class="cbtn cbtn--ghost cbtn--sm" style="margin-top:6px" onClick={() => actions.go('presence')}>
+                {t('tower.hazards.borderPresence')}
+              </button>
+            </>
+          ) : null}
         </td>
         <td class="ctbl__num"><span class="ctbl__lbl">{t('tower.hazards.col.measure')}</span>{measureLabel(row, t)}</td>
         <td><span class="ctbl__lbl">{t('tower.hazards.col.where')}</span>

@@ -213,6 +213,51 @@ export class LoadSafety {
 export const GIVE_BACK_REASONS = ['vehicle_unavailable', 'no_driver', 'goods_not_as_booked', 'overbooked', 'other'] as const;
 export type GiveBackReason = (typeof GIVE_BACK_REASONS)[number];
 
+/**
+ * WHY A CARRIER CALLS OFF A WHOLE RUN — and what each reason is ABOUT, which decides what happens next.
+ *
+ *  - About the carrier's own means (`vehicle_unavailable`, `no_driver`): nothing changed in the world, other
+ *    trucks on the route still go, so the shipper is pointed at them. The first two share their codes and
+ *    words with a single booking given back: the same act, described once.
+ *  - About the road or the border (`road_closed`, `border_closed`): every truck on that route meets the same
+ *    closure, so the shipper is told NOT to rush onto another run there. The closure itself goes onto the
+ *    hazard map through the ordinary report procedure, as a step the carrier confirms — never automatically,
+ *    because "the road was closed" is the cheapest excuse there is, and one carrier's word must not move the
+ *    whole network.
+ *  - The carrier's business choice (`not_enough_loads`): honest to offer, and the one reason that says
+ *    something about reliability. Recorded; never scored without a decision to.
+ */
+export const RUN_CANCEL_REASONS = ['vehicle_unavailable', 'no_driver', 'road_closed', 'border_closed', 'not_enough_loads', 'other'] as const;
+export type RunCancelReason = (typeof RUN_CANCEL_REASONS)[number];
+
+/** Reasons that are about the route itself: every truck there meets them, so nobody is sent to another run on it. */
+export const ROUTE_REASONS: readonly RunCancelReason[] = ['road_closed', 'border_closed'];
+
+/**
+ * Each reason as a sentence, for the two places that print English: the consignment note and the notice.
+ * `other` has none of its own — the carrier's words are the reason.
+ */
+export const RUN_REASON_SENTENCE: Record<RunCancelReason, string> = {
+  vehicle_unavailable: 'The truck is off the road',
+  no_driver: 'There is no driver for the run',
+  road_closed: 'The road is closed',
+  border_closed: 'The border is closed',
+  not_enough_loads: 'Too little was booked for the run to go',
+  other: '',
+};
+
+export class RunCancellation {
+  @ApiProperty({ enum: RUN_CANCEL_REASONS })
+  reason: RunCancelReason;
+  /** The carrier's own words: required for `other`, optional beside any coded reason. */
+  @ApiPropertyOptional()
+  note?: string;
+  at: string;
+  /** The hazard report filed with it, when the carrier put a closure on the map. */
+  @ApiPropertyOptional()
+  constraintId?: string;
+}
+
 /** Who gave a booking back, and — when it was the carrier — why. Kept on the booking so both sides can read it back. */
 export class BookingCancellation {
   @ApiProperty({ enum: ['shipper', 'carrier'] })
@@ -544,6 +589,12 @@ export class Departure {
    */
   @ApiPropertyOptional()
   cancelledReason?: string;
+  /**
+   * The same, structured: the coded reason the apps translate, the carrier's words, and the hazard report
+   * filed with it. `cancelledReason` stays as the sentence, because the consignment note prints English.
+   */
+  @ApiPropertyOptional({ type: RunCancellation })
+  cancellation?: RunCancellation;
   @ApiProperty({ type: [DepartureBooking] })
   bookings: DepartureBooking[];
   createdAt: string;
@@ -652,6 +703,12 @@ export class MyDepartureBooking {
   /** Why the run was called off. The notice went out once; this screen is read afterwards. */
   @ApiPropertyOptional()
   cancelledReason?: string;
+  /** Structured: which kind of reason, so the shipper's screen can say what to do next in their own language. */
+  @ApiPropertyOptional({ type: RunCancellation })
+  runCancellation?: RunCancellation;
+  /** Other runs on the same route still open for booking — offered only when the reason is not the route itself. */
+  @ApiPropertyOptional()
+  alternatives?: number;
   @ApiPropertyOptional()
   deliveredAt?: string;
   @ApiPropertyOptional()

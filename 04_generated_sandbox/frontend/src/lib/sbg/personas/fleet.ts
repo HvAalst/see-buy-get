@@ -205,13 +205,23 @@ export function createFleetApi(sbg: SbgClient) {
      * Everybody with goods on the run is about to be told, and the reason is the only part of that message
      * they can act on. The server requires it once anybody is aboard.
      */
-    setDepartureStatus: (did: string, departureId: string, status: 'open' | 'closed' | 'departed' | 'cancelled', reason?: string) =>
+    setDepartureStatus: (
+      did: string,
+      departureId: string,
+      status: 'open' | 'closed' | 'departed' | 'cancelled',
+      // A CODED reason, the carrier's words, and — for a closed road or border — where, which files an ordinary hazard report.
+      why: Omit<components['schemas']['DepartureStatusDto'], 'status'> = {},
+    ) =>
       sbg.request((c) =>
-        c.POST('/v1/sbg/fleet/managers/{did}/departures/{departureId}/status' as never, {
+        c.POST('/v1/sbg/fleet/managers/{did}/departures/{departureId}/status', {
           params: { path: { did, departureId } },
-          body: { status, ...(reason ? { reason } : {}) },
-        } as never),
+          body: { status, ...why },
+        }),
       ),
+
+    /** Put another of this fleet's trucks on a run before it leaves. Final: done now, or refused by name. */
+    swapDepartureVehicle: (did: string, departureId: string, vehicleId: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/departures/{departureId}/vehicle', { params: { path: { did, departureId } }, body: { vehicleId } })),
 
     /**
      * The fleet’s answer to a claim, in their own words.

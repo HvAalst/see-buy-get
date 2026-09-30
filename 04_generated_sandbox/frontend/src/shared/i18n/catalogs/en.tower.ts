@@ -75,16 +75,18 @@ export const enTower = {
   'tower.outdated.cta': 'Reload',
 
   // ---- the disputed-hazard queue -------------------------------------------------------------
-  'tower.hazards.title': 'Disputed road hazards',
-  'tower.hazards.lede': 'Drivers report what is on the road, and a driver saying a hazard is gone does not remove it. Clearing one is the only way it stops warning, and only from here.',
+  'tower.hazards.title': 'Road hazards waiting on you',
+  'tower.hazards.lede': 'Drivers report what is on the road, and a driver saying a hazard is gone does not remove it. Clearing one is the only way it stops warning, and only from here. A border reported closed waits here whether or not anyone disputes it, because what the network does about it is a staff decision.',
   'tower.hazards.caveatLead': 'Everything in this list is still warning every driver',
   'tower.hazards.caveat': '— at full weight, and still blocking the same loads. A dispute changes nothing on its own, and that is deliberate: being wrong about a bridge that is not there costs a detour, being wrong about one that is still there kills somebody.',
   'tower.hazards.refresh': 'Refresh',
   'tower.hazards.updatedAt': 'Read at {time}',
   'tower.hazards.count': '{n} waiting',
+  'tower.hazards.borderDecide': 'A country decision',
+  'tower.hazards.borderPresence': 'Switch it off under Presence',
   'tower.hazards.loading': 'Reading the queue…',
   'tower.hazards.emptyTitle': 'Nothing is disputed',
-  'tower.hazards.emptyBody': 'No driver is currently saying a reported hazard has gone. That is not the same as the map being up to date — it only means nobody has said otherwise.',
+  'tower.hazards.emptyBody': 'No driver is currently saying a reported hazard has gone, and no border is reported closed. That is not the same as the map being up to date — it only means nobody has said otherwise.',
   'tower.hazards.failedTitle': 'Could not read the queue',
 
   'tower.hazards.col.hazard': 'Hazard',
@@ -1199,6 +1201,8 @@ export const enTower = {
   'tower.kind.WEIGHBRIDGE': 'Weighbridge',
   'tower.kind.FERRY': 'Ferry',
   'tower.kind.CHECKPOINT': 'Checkpoint',
+  'tower.kind.ROAD_CLOSED': 'Road closed',
+  'tower.kind.BORDER_CLOSED': 'Border closed',
 };
 
 /* ---- C3: the companies, their administrators, and the record of what changed ---- */

@@ -455,6 +455,8 @@ export const ROAD_KINDS = [
   'WEIGHBRIDGE',
   'FERRY',
   'CHECKPOINT',
+  'ROAD_CLOSED',
+  'BORDER_CLOSED',
 ] as const;
 export type RoadKind = (typeof ROAD_KINDS)[number];
 
@@ -479,7 +481,8 @@ export function roadMeasure(kind: string): 'height_m' | 'weight_kg' | null {
  * not take you" teaches a driver to skim past both.
  */
 export function roadBlocks(kind: string): boolean {
-  return kind === 'LOW_BRIDGE' || kind === 'HEIGHT_BARRIER' || kind === 'WEIGHT_LIMIT' || kind === 'NO_HAZMAT' || kind === 'WASHOUT';
+  // Closed is closed: a closed road or border stops every vehicle, whatever it carries.
+  return kind === 'LOW_BRIDGE' || kind === 'HEIGHT_BARRIER' || kind === 'WEIGHT_LIMIT' || kind === 'NO_HAZMAT' || kind === 'WASHOUT' || kind === 'ROAD_CLOSED' || kind === 'BORDER_CLOSED';
 }
 
 /**
