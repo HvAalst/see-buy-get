@@ -247,6 +247,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<FleetOfferClosed>(GlosEvent.Pudo.FleetOfferClosed, (e) => this.onFleetOfferClosed(e.payload));
     // A fleet took a driver off: the driver learns it, and why, from us — not from a refused shift tomorrow morning.
     this.events.subscribe<DriverLeftFleet>(GlosEvent.Pudo.DriverLeftFleet, (e) => this.onDriverLeftFleet(e.payload));
+    // The office chose a vehicle for a driver. It started nothing, so the driver has to hear of it to start.
+    this.events.subscribe<{ driverDid: string; plate: string; vehicleClass: string }>(GlosEvent.Pudo.DriverVehicleSuggested, (e) => this.onVehicleSuggested(e.payload));
     // Five wrong PINs for one number: whoever typed them may know it. The owner is the only one who can act.
     this.events.subscribe<{ personDid: string; driverDids: string[] }>(GlosEvent.Pudo.PersonPinLocked, (e) => this.onPinLocked(e.payload));
     // The fleet's own licence or cover: a document it sent was recorded, or turned down with a reason.
@@ -622,6 +624,17 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       body: `${p.driverName} no longer drives for ${p.companyName}. Every trip they did for you stays in your records and on your earnings statement.`,
       tag: `driver:${p.driverDid}:removed`,
       data: { driverDid: p.driverDid },
+    });
+  }
+
+  /** The office picked the vehicle; the shift is still the driver's to start. Said so they know which one, and that it waits on them. */
+  private async onVehicleSuggested(p: { driverDid: string; plate: string; vehicleClass: string }): Promise<void> {
+    await this.tell(p.driverDid, {
+      kind: 'vehicle_today',
+      title: `Your vehicle today: ${p.plate}`,
+      body: `Your fleet office put ${p.plate} (${p.vehicleClass}) at the top of your list. Your shift starts when you start it, with your PIN.`,
+      tag: `vehicle-today:${p.driverDid}`,
+      data: { plate: p.plate },
     });
   }
 

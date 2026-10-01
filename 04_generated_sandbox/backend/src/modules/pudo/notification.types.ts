@@ -106,6 +106,8 @@ export const NOTIFICATION_KINDS = [
    * an empty seat, and a driver taken off learns it, and why, from us rather than from a refused shift.
    */
   'roster_changed',
+  /** The fleet office put a vehicle on this driver's list for today. Theirs to start, with their PIN. */
+  'vehicle_today',
   /** A fleet offered this driver a place, or took the offer back. Only the driver can answer it, so only they are told. */
   'fleet_offer',
   /**

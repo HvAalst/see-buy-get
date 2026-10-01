@@ -2004,11 +2004,9 @@ export class SuggestNearbyDto {
   @IsOptional() @IsNumber() @Min(0) minEarn?: number;
 }
 
-export class CoupleDto {
+/** The fleet office puts a vehicle on a driver's list for today. It starts no shift. */
+export class SuggestVehicleDto {
   @IsString() vehicleId!: string;
-  @IsOptional() @IsString() corridorId?: string;
-  /** Where they are going. Optional: a driver may couple first and say afterwards. */
-  @IsOptional() @ValidateNested() @Type(() => DeclareLegDto) leg?: DeclareLegDto;
 }
 
 /** The one-shot capability from a push notification's "Not now" — see DispatchService.mintDeclineToken. */

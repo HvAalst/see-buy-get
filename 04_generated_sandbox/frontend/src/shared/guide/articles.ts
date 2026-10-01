@@ -129,7 +129,8 @@ export const ARTICLES: GuideArticle[] = [
       "An offer stays open for 7 days. You can take it back while it is open.",
       "A driver carrying one of your loads, or rostered on one of your runs, cannot be taken off until the load is delivered or handed back and somebody else is on the run.",
       "A driver you take off keeps their own trips, papers and rating. Every trip they did for you stays in your records.",
-      "Only your own drivers can start a shift on your vehicles."
+      "Only your own drivers can start a shift on your vehicles.",
+      "You choose a driver’s vehicle under Shifts; it goes to the top of their list and they are told. The driver starts the shift themselves, with their PIN. Nobody starts a shift for somebody else."
     ]
   },
   {

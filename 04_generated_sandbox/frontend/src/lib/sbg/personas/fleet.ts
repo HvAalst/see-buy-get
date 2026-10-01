@@ -284,14 +284,12 @@ export function createFleetApi(sbg: SbgClient) {
         c.POST('/v1/sbg/fleet/drivers/{did}/assign-corridor', { params: { path: { did } }, body: { corridorId } as never }),
       ),
 
-    /** Couple a driver to a vehicle on the driver's behalf (they normally scan the QR). */
-    couple: (did: string, vehicleId: string, corridorId?: string) =>
-      sbg.request((c) =>
-        c.POST('/v1/sbg/fleet/drivers/{did}/couple', {
-          params: { path: { did } },
-          body: { vehicleId, ...(corridorId ? { corridorId } : {}) },
-        }),
-      ),
+    /**
+     * Say which vehicle a driver takes today. It heads their list and they are told — it starts NO shift: the
+     * driver is responsible for their load, so only the driver says they are at the wheel, with their PIN.
+     */
+    suggestVehicle: (did: string, vehicleId: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/vehicle-for-today', { params: { path: { did } }, body: { vehicleId } })),
 
     /* ---- CL3: scarcity, derived. The same public series both the console and a fleet office read. ---- */
 

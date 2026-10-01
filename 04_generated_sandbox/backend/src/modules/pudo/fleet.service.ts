@@ -153,6 +153,27 @@ export class FleetService {
   }
 
   /**
+   * THE OFFICE SAYS WHICH VEHICLE — AND STARTS NOTHING.
+   *
+   * It used to couple a driver from the office, which is a shift started for somebody who may not be there: the
+   * load that follows is on that driver's name, and the user's view (2026-10-01) is that this is not fair to the
+   * driver — "the driver is responsible for his load", so nobody else says they are at the wheel. The office keeps
+   * what is its own to decide, the vehicle: it goes to the head of the driver's "which vehicle today?" list, and
+   * the shift begins when the DRIVER starts it, with their PIN.
+   */
+  suggestVehicle(driverDid: string, vehicleId: string): { driverDid: string; vehicleId: string; plate: string } {
+    const driver = this.drivers.get(driverDid);
+    const vehicle = this.vehicles.get(vehicleId);
+    if (!driver.managerDid || vehicle.managerDid !== driver.managerDid) {
+      throw new GlosError('CANNOT_COUPLE', `${vehicle.plate} and ${driver.displayName} are not in the same fleet`);
+    }
+    if (!this.drivers.clearedFor(driverDid, vehicle.vehicleClass)) throw new GlosError('CANNOT_COUPLE', `${driver.displayName} is not licence-cleared for a ${vehicle.vehicleClass}`);
+    this.rememberVehicle(driverDid, vehicleId);
+    void this.events.publish(GlosEvent.Pudo.DriverVehicleSuggested, { driverDid, vehicleId, plate: vehicle.plate, vehicleClass: vehicle.vehicleClass }, { source: 'pudo' }).catch(() => undefined);
+    return { driverDid, vehicleId, plate: vehicle.plate };
+  }
+
+  /**
    * Start a work shift: the driver scans the vehicle's dashboard QR → couples to it. This is how both
    * the driver and the vehicle are "activated" for the day; closing the session decouples them.
    */

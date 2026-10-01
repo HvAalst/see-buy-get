@@ -913,7 +913,8 @@ export function useFleetApp() {
     const f = stateRef.current.cForm;
     if (!f.driverDid || !f.vehicleId) return;
     await run('couple', async () => {
-      const r = await client.api.couple(f.driverDid, f.vehicleId, f.corridorId || undefined);
+      // Says which vehicle; starts nothing. The shift is the driver's to start, with their PIN.
+      const r = await client.api.suggestVehicle(f.driverDid, f.vehicleId);
       if (r.error) return fail(r.error);
       setState((s) => ({ ...s, cForm: { ...EMPTY_COUPLE } }));
       pushToast({ tone: 'ok', icon: 'route', title: t('fleet.toast.coupled'), detail: t('fleet.toast.coupledDetail') });

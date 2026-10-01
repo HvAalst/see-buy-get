@@ -130,6 +130,8 @@ export const GlosEvent = {
     FleetOfferClosed: 'pudo.fleet_offer_closed',
     /** A fleet took a driver off its fleet. The driver is told why; the fleet's other managers see who did it. */
     DriverLeftFleet: 'pudo.driver_left_fleet',
+    /** The fleet office put a vehicle on a driver's list for today. It starts nothing — the driver does, with their PIN. */
+    DriverVehicleSuggested: 'pudo.driver_vehicle_suggested',
     /** Five wrong PINs for one phone: the PIN is locked until the phone is verified by code, and its owner is told. */
     PersonPinLocked: 'pudo.person_pin_locked',
     DepartureDelivered: 'pudo.departure_delivered', // one booking reached its destination and was handed over

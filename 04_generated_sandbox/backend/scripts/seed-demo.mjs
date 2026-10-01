@@ -413,11 +413,15 @@ const run = async () => {
   const assignments = need(await req('GET', '/v1/sbg/fleet/assignments?status=active', { token: fm }), 'assignments');
   if (!assignments.some((x) => x.driverDid === amos.did)) {
     need(
-      await req('POST', `/v1/sbg/fleet/drivers/${encodeURIComponent(amos.did)}/couple`, {
-        token: fm,
-        body: { vehicleId: bike.vehicleId, corridorId: corridorZAB.corridorId },
+      await req('POST', `/v1/sbg/fleet/drivers/${encodeURIComponent(amos.did)}/start-session`, {
+        token: amosToken,
+        body: { vehicleId: bike.vehicleId, pin: DRIVER_PIN },
       }),
-      'couple amos',
+      'amos starts his shift',
+    );
+    need(
+      await req('POST', `/v1/sbg/fleet/drivers/${encodeURIComponent(amos.did)}/assign-corridor`, { token: fm, body: { corridorId: corridorZAB.corridorId } }),
+      'corridor for amos',
     );
     say(`Amos coupled to ${bike.plate} on ${corridorZAB.name}`);
   }

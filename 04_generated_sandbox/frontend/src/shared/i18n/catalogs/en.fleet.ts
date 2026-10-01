@@ -575,8 +575,8 @@ export const enFleet = {
   'fleet.drivers.aloudPending': '{count} waiting on the SeeBuyGet check.',
 
   // Sessions screen.
-  'fleet.sessions.coupleTitle': 'Couple manually',
-  'fleet.sessions.coupleNote': 'Use this when a driver cannot scan — a coupling made here is the same shift session.',
+  'fleet.sessions.coupleTitle': 'Which vehicle today',
+  'fleet.sessions.coupleNote': 'Pick a driver and a vehicle. It goes to the top of their list and they are told. The shift starts when the driver starts it, with their own PIN — nobody starts a shift for somebody else.',
   'fleet.sessions.driver': 'Driver',
   'fleet.sessions.pickDriver': 'Pick a free driver…',
   'fleet.sessions.anyClass': 'any',
@@ -593,11 +593,11 @@ export const enFleet = {
   'fleet.sessions.overLimit': 'Over hours',
   'fleet.sessions.putOnCorridor': 'Put on a corridor',
   'fleet.sessions.setCorridor': 'Set',
-  'fleet.sessions.coupleCta': 'Couple',
+  'fleet.sessions.coupleCta': 'Put on their list',
   'fleet.sessions.onDutyTitle': 'On duty now · {count}',
   'fleet.sessions.noDrivers': 'No drivers on shift.',
   'fleet.sessions.endSession': 'End session',
-  'fleet.sessions.aloud': '{sessions} sessions on duty. {drivers} drivers and {vehicles} vehicles are free to couple.',
+  'fleet.sessions.aloud': '{sessions} sessions on duty. {drivers} drivers and {vehicles} vehicles are free.',
 
   // Vehicles screen — the photo pad.
   'fleet.vehicles.removePhoto': 'Remove photo',
@@ -751,8 +751,8 @@ export const enFleet = {
   'fleet.toast.lineProposed': 'Line proposed',
   'fleet.toast.lineProposedDetail': 'The network will publish it. Nothing runs on it until then.',
   'fleet.toast.corridorSetDetail': 'This driver can take a shop-counter handover now.',
-  'fleet.toast.coupled': 'Coupled',
-  'fleet.toast.coupledDetail': 'The driver is on shift with this vehicle.',
+  'fleet.toast.coupled': 'On their list',
+  'fleet.toast.coupledDetail': 'They have been told. The shift starts when they start it, with their PIN.',
   'fleet.toast.sessionEnded': 'Session ended',
   'fleet.toast.sessionEndedDetail': 'The vehicle is free again.',
 

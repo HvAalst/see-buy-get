@@ -11,8 +11,10 @@ export interface SessionsScreenProps {
 }
 
 /**
- * Driver ↔ vehicle couplings. Drivers normally start a shift themselves by scanning the
- * dashboard QR; this screen couples on their behalf and ends sessions.
+ * Who is on shift, and which vehicle each driver takes. A DRIVER STARTS THEIR OWN SHIFT — with their PIN — because
+ * the driver is responsible for the load: this screen used to couple on their behalf, which put a shift, and
+ * whatever was loaded next, on the name of somebody who might not be there. The office still decides the vehicle
+ * (it heads the driver's list and they are told), puts a running shift on a corridor, and ends a shift.
  *
  * THE CORRIDOR IS THE FIELD THAT MISLED PEOPLE. It was labelled "(optional)", which is true when the
  * shift starts and false by the time that driver pulls up at a shop counter: the handover refuses
@@ -62,22 +64,6 @@ export function SessionsScreen({ state, actions }: SessionsScreenProps) {
               </option>
             ))}
           </select>
-        </div>
-        <div class="field" style="margin-top:12px">
-          <label class="field__label" for="c-corridor">
-            {t('fleet.sessions.corridor')}
-          </label>
-          <select id="c-corridor" class="select" value={f.corridorId} onChange={(e) => actions.setCForm({ corridorId: e.currentTarget.value })}>
-            <option value="">{t('fleet.sessions.noCorridor')}</option>
-            {live.map((c) => (
-              <option key={c.corridorId} value={c.corridorId}>
-                {`${c.name} (${c.originZone} → ${c.destZone})`}
-              </option>
-            ))}
-          </select>
-          {/* What empty costs — or, when there is nothing to choose, why the list is empty. A manager
-              cannot draw a corridor: the network publishes them, and it has published none. */}
-          <p class="hint">{live.length ? t('fleet.sessions.corridorNote') : t('fleet.sessions.noCorridorsYet')}</p>
         </div>
         <div style="margin-top:14px">
           <Button chevron={false} onClick={() => void actions.couple()} disabled={!f.driverDid || !f.vehicleId} busy={state.busy === 'couple'}>

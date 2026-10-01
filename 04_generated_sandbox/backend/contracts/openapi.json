@@ -14572,9 +14572,9 @@
         }
       }
     },
-    "/v1/sbg/fleet/drivers/{did}/couple": {
+    "/v1/sbg/fleet/drivers/{did}/vehicle-for-today": {
       "post": {
-        "operationId": "Sbg.couple",
+        "operationId": "Sbg.suggestVehicle",
         "parameters": [
           {
             "name": "did",
@@ -14590,21 +14590,14 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CoupleDto"
+                "$ref": "#/components/schemas/SuggestVehicleDto"
               }
             }
           }
         },
         "responses": {
           "201": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Assignment"
-                }
-              }
-            }
+            "description": ""
           }
         }
       }
@@ -14640,7 +14633,7 @@
       "post": {
         "operationId": "Sbg.startSession",
         "summary": "",
-        "description": "Driver starts a shift by scanning the vehicle's dashboard QR → couples them for the day.\n\nWITH THEIR PIN, when they start their own. The start of a shift is where the network writes down who is driving\nwhich vehicle, and an open app is not proof of who is holding the phone: a colleague who picks up a phone left\nsigned in — in a cab, on a depot charger — must not be able to start a day's work in somebody else's name. The\nsame counter and lock as the door. Staff standing in name no PIN; they are not the driver and are audited as staff.",
+        "description": "Driver starts a shift by scanning the vehicle's dashboard QR → couples them for the day.\n\nWITH THEIR PIN, when they start their own. The start of a shift is where the network writes down who is driving\nwhich vehicle, and an open app is not proof of who is holding the phone: a colleague who picks up a phone left\nsigned in — in a cab, on a depot charger — must not be able to start a day's work in somebody else's name. The\nsame counter and lock as the door. Staff standing in name no PIN; they are not the driver and are audited as staff.\nThe fleet office cannot start one at all: it says which vehicle (vehicle-for-today) and the driver starts.",
         "parameters": [
           {
             "name": "did",
@@ -32170,45 +32163,11 @@
           "approve"
         ]
       },
-      "DeclareLegDto": {
-        "type": "object",
-        "properties": {
-          "fromLabel": {
-            "type": "string"
-          },
-          "from": {
-            "$ref": "#/components/schemas/GeoDto"
-          },
-          "toLabel": {
-            "type": "string"
-          },
-          "to": {
-            "$ref": "#/components/schemas/GeoDto"
-          }
-        },
-        "required": [
-          "fromLabel",
-          "from",
-          "toLabel",
-          "to"
-        ]
-      },
-      "CoupleDto": {
+      "SuggestVehicleDto": {
         "type": "object",
         "properties": {
           "vehicleId": {
             "type": "string"
-          },
-          "corridorId": {
-            "type": "string"
-          },
-          "leg": {
-            "description": "Where they are going. Optional: a driver may couple first and say afterwards.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/DeclareLegDto"
-              }
-            ]
           }
         },
         "required": [
@@ -32263,6 +32222,29 @@
           "vehicleId",
           "status",
           "startedAt"
+        ]
+      },
+      "DeclareLegDto": {
+        "type": "object",
+        "properties": {
+          "fromLabel": {
+            "type": "string"
+          },
+          "from": {
+            "$ref": "#/components/schemas/GeoDto"
+          },
+          "toLabel": {
+            "type": "string"
+          },
+          "to": {
+            "$ref": "#/components/schemas/GeoDto"
+          }
+        },
+        "required": [
+          "fromLabel",
+          "from",
+          "toLabel",
+          "to"
         ]
       },
       "StartSessionDto": {

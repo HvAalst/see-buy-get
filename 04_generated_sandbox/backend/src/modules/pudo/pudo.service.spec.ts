@@ -5180,6 +5180,30 @@ describe('PUDO Light', () => {
       expect(auth.introspect(x.token)).toMatchObject({ active: false, reason: 'revoked' });
     });
 
+    it('the fleet office says WHICH VEHICLE and starts nothing — the driver starts their own shift, with their PIN', () => {
+      const kilima = aFleetOffice('Which Vehicle Haulage');
+      const pwani = aFleetOffice('Next Door Haulage');
+      const x = aRider(kilima.did, kilima.office);
+      const colleague = aRider(kilima.did, kilima.office, '2468');
+      const second = vehicles.register({ plate: 'CL-SECOND', vehicleClass: 'bike', ownerName: 'Fleet', managerDid: kilima.did } as never);
+
+      // There is no door through which the office puts a driver on shift any more.
+      expect((controller as unknown as Record<string, unknown>).couple).toBeUndefined();
+      const said = controller.suggestVehicle(x.did, { vehicleId: second.vehicleId }, kilima.office);
+      expect(said).toMatchObject({ driverDid: x.did, plate: 'CL-SECOND' });
+      expect(fleet.activeForDriver(x.did)).toBeUndefined(); // nothing started
+      expect(fleet.recentVehicles(x.did)[0].vehicleId).toBe(second.vehicleId); // first on their list
+
+      // Not a colleague's to say, not another fleet's, and never a vehicle from somewhere else.
+      expect(() => controller.suggestVehicle(x.did, { vehicleId: second.vehicleId }, colleague.actor)).toThrow(/not in your fleet/);
+      expect(() => controller.suggestVehicle(x.did, { vehicleId: second.vehicleId }, pwani.office)).toThrow(/not in your fleet/);
+      const theirs = vehicles.register({ plate: 'CL-THEIRS', vehicleClass: 'bike', ownerName: 'Fleet', managerDid: pwani.did } as never);
+      expect(() => controller.suggestVehicle(x.did, { vehicleId: theirs.vehicleId }, kilima.office)).toThrow(/not in the same fleet/);
+
+      // The driver starts it — and only with their PIN.
+      expect((controller.startSession(x.did, { vehicleId: second.vehicleId, pin: x.pin } as never, x.actor) as { status: string }).status).toBe('active');
+    });
+
     it('only a fleet office adds drivers, and only to its own fleet — never a driver, never into somebody else’s', () => {
       const kilima = aFleetOffice('Adding Haulage');
       const pwani = aFleetOffice('Elsewhere Haulage');

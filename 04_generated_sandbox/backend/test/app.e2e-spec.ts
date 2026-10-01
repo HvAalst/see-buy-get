@@ -793,7 +793,10 @@ describe('GLOS backend (e2e)', () => {
     expect(bike.body.capacityKg).toBe(20);
 
     // Couple driver ↔ bike on the corridor (flexible).
-    await request(http).post(`/v1/sbg/fleet/drivers/${driver.body.did}/couple`).set(auth).send({ vehicleId: bike.body.vehicleId, corridorId: corridor.body.corridorId }).expect(201);
+    // The shift is started (staff standing in here), then put on its corridor — nobody 'couples' a driver from an office any more.
+    await request(http).post(`/v1/sbg/fleet/drivers/${driver.body.did}/start-session`).set(auth).send({ vehicleId: bike.body.vehicleId }).expect(201);
+    await request(http).post(`/v1/sbg/fleet/drivers/${driver.body.did}/assign-corridor`).set(auth).send({ corridorId: corridor.body.corridorId }).expect(201);
+    await request(http).post(`/v1/sbg/fleet/drivers/${driver.body.did}/couple`).set(auth).send({ vehicleId: bike.body.vehicleId }).expect(404);
 
     // Three parcels; only the small non-fragile one may ride the bike.
     for (const p of [{ id: `OK-${u}`, size: 'S' }, { id: `FR-${u}`, size: 'S', fragile: true }, { id: `HV-${u}`, size: 'HEAVY' }]) {
@@ -822,7 +825,7 @@ describe('GLOS backend (e2e)', () => {
     // A motorcycle courier (light → ACTIVE) coupled to a motorcycle.
     const driver = await request(http).post('/v1/sbg/drivers/onboard').set(auth).send({ displayName: 'Moto', fullName: 'Mo', nationalId: `DRV-${u}`, mobile: `+254d${u}`, licenceClasses: ['motorcycle'] }).expect(201);
     const moto = await request(http).post('/v1/sbg/vehicles').set(auth).send({ plate: `MT-${u}`, vehicleClass: 'motorcycle', ownerName: 'Mo' }).expect(201);
-    await request(http).post(`/v1/sbg/fleet/drivers/${driver.body.did}/couple`).set(auth).send({ vehicleId: moto.body.vehicleId }).expect(201);
+    await request(http).post(`/v1/sbg/fleet/drivers/${driver.body.did}/start-session`).set(auth).send({ vehicleId: moto.body.vehicleId }).expect(201);
 
     // Agent bags two parcels in an outbound tote bound for the hub, then releases it for claim.
     const bag = await request(http).post(`/v1/sbg/agents/${origin}/totes`).set(auth).expect(201);
