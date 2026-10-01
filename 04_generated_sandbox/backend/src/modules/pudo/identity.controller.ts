@@ -1,4 +1,8 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
+import { isSandbox } from '../../foundation/runtime/sandbox';
+import { EmailCodeService } from './email-code.service';
+import { AccountRecoveryService } from './account-recovery.service';
 import { Public } from '../../foundation/auth/public.decorator';
 import { Roles, Scopes } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
@@ -14,7 +18,7 @@ import { RoutingService } from './routing.service';
 import { classifySize, measuredFactor } from './pudo.config';
 import { InviteService } from './invite.service';
 import { toInviteView } from './invite.types';
-import { BuyerDisputeDto, CollectionResponseDto, RateMerchantDto, ConsumerSendDto, CreateInviteDto, EnrollDto, NominateCollectorDto, PinLoginDto, PodDto, ProfileDto, SetPinDto, ChangePinDto, SwitchRoleDto } from './pudo.dto';
+import { BuyerDisputeDto, CollectionResponseDto, RateMerchantDto, ConsumerSendDto, CreateInviteDto, EnrollDto, EmailCodeDto, AccountCodeDto, UndoNumberDto, RecoverAccountDto, NominateCollectorDto, PinLoginDto, PodDto, ProfileDto, SetPinDto, ChangePinDto, SwitchRoleDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 
@@ -41,6 +45,8 @@ export class IdentityController {
     private readonly routing: RoutingService,
     private readonly unclaimed: UnclaimedService,
     private readonly merchants: MerchantRatingService,
+    private readonly emailCodes: EmailCodeService,
+    private readonly recovery: AccountRecoveryService,
   ) {}
 
   /**
@@ -52,11 +58,87 @@ export class IdentityController {
   @Post('enroll')
   enroll(@Body() dto: EnrollDto) {
     const verified = this.otp.isVerified(dto.phone);
+    /*
+     * A PIN IS CHOSEN WITH A RECOVERY EMAIL BEHIND IT — the user, 2026-10-01: "we need an email for account
+     * recovery and safety." The PIN is what makes this an account somebody can be locked out of, or have taken
+     * from them, so that is the moment the second channel has to exist: confirmed by a code, because an address
+     * nobody proved they read is a way into somebody else's inbox. Checked BEFORE anything is created or the
+     * phone's verification is spent, so a refusal costs the person nothing. Not asked again once one is on record.
+     */
+    const known = verified && dto.pin !== undefined ? this.persons.findByPhone(dto.phone) : undefined;
+    const needsEmail = verified && dto.pin !== undefined && !known?.emailVerifiedAt;
+    if (needsEmail) {
+      if (!dto.email?.trim()) throw new GlosError('FIELD_REQUIRED', 'Give an email address: it is how you get back in if your number is ever lost, and where we warn you', { field: 'email' });
+      this.persons.assertEmailFree(dto.email, known?.personDid);
+      if (!this.emailCodes.isVerified(dto.email)) {
+        if (!dto.emailCode?.trim()) throw new GlosError('EMAIL_NOT_VERIFIED', 'Type the code we sent to that email address', { field: 'emailCode' });
+        this.emailCodes.verify(dto.email, dto.emailCode);
+      }
+    }
     const { person, isNew, token } = this.persons.enroll(dto.phone, verified, dto.pin);
+    if (needsEmail) {
+      this.persons.setEmail(person.personDid, dto.email as string);
+      this.emailCodes.consume(dto.email as string);
+    }
     this.otp.consume(dto.phone);
     // S24: a first-time join through an invite link credits the inviter (best-effort — never blocks sign-up).
     if (isNew && dto.inviteToken) this.invites.accept(dto.inviteToken, person.personDid);
     return { ...this.persons.view(person), isNew, token };
+  }
+
+  /**
+   * A code to an email address, to CONFIRM it as a recovery address. Echoed in the answer only in a sandbox — anywhere
+   * else, handing it to whoever asked would let anyone confirm anyone's inbox.
+   */
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(20, 15 * 60)
+  @Post('email/request')
+  emailRequest(@Body() dto: EmailCodeDto) {
+    const { code } = this.recovery.sendConfirmCode(dto.email);
+    return isSandbox() ? { sent: true, code } : { sent: true };
+  }
+
+  /**
+   * A code to the address ON an account — to get back in, or to undo a number change. Answers the same whether or
+   * not any account uses that address: this door tells a stranger nothing about who is registered.
+   */
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(10, 15 * 60)
+  @Post('account-code')
+  accountCode(@Body() dto: AccountCodeDto) {
+    const { code } = this.recovery.sendAccountCode(dto.email, dto.why);
+    return isSandbox() && code ? { sent: true, code } : { sent: true };
+  }
+
+  /**
+   * UNDO A NUMBER CHANGE — within 24 hours, with the OLD number and the PIN as it was, or with a code to the
+   * account's email. The account goes back to the old number, every phone is signed out and the PIN is locked:
+   * whoever moved it knew the PIN.
+   */
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(10, 15 * 60)
+  @Post('phone/undo')
+  undoNumber(@Body() dto: UndoNumberDto) {
+    if (dto.email?.trim()) this.recovery.undoWithEmail(dto.email, dto.code ?? '');
+    else if (dto.phone?.trim() && dto.pin?.trim()) this.recovery.undoWithOldNumber(dto.phone, dto.pin);
+    else throw new GlosError('FIELD_REQUIRED', 'Give the old number and its PIN, or the account’s email and the code we sent it');
+    return { undone: true };
+  }
+
+  /**
+   * GET BACK IN WHEN THE NUMBER IS GONE AND THE PIN FORGOTTEN: the inbox, the national ID where the account has one,
+   * a new number confirmed by code, a new PIN. It can be undone for 24 hours like any number change.
+   */
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(10, 15 * 60)
+  @Post('recover')
+  recover(@Body() dto: RecoverAccountDto) {
+    const person = this.recovery.recoverByEmail(dto);
+    return { recovered: true, undoUntil: person.phoneChange?.undoUntil };
   }
 
   /** Reopen the app: phone + 4-digit PIN, no OTP (locks after repeated wrong PINs — then OTP again). */
@@ -71,6 +153,8 @@ export class IdentityController {
   @Roles('consumer')
   @Post('pin')
   setPin(@Body() dto: SetPinDto, @Actor() actor: IntrospectionResult) {
+    // The same rule as the door: no PIN without a confirmed recovery email behind it.
+    if (!this.persons.requireByDid(actor.did!).emailVerifiedAt) throw new GlosError('FIELD_REQUIRED', 'Add your email address first: it is how you get back in if your number is ever lost', { field: 'email' });
     this.persons.setPin(actor.did!, dto.pin);
     return { ok: true };
   }

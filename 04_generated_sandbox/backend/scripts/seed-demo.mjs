@@ -247,7 +247,10 @@ const run = async () => {
     const r1 = await req('POST', '/v1/sbg/auth/phone/request', { body: { phone: mgr.contactPhone } });
     const otp = r1.data?.code ?? r1.data?.otp ?? r1.data?.verificationCode;
     if (otp) await req('POST', '/v1/sbg/auth/phone/verify', { body: { phone: mgr.contactPhone, code: otp } });
-    const enrolled = await req('POST', '/v1/sbg/identity/enroll', { body: { phone: mgr.contactPhone, pin: MGR_PIN } });
+    // A PIN is chosen with a confirmed recovery email behind it (the sandbox echoes the code it would mail).
+    const mgrEmail = 'kilima.manager@sbg.test';
+    const mgrCode = (await req('POST', '/v1/sbg/identity/email/request', { body: { email: mgrEmail } })).data?.code;
+    const enrolled = await req('POST', '/v1/sbg/identity/enroll', { body: { phone: mgr.contactPhone, pin: MGR_PIN, email: mgrEmail, emailCode: mgrCode } });
     if (!enrolled.ok) {
       // Already enrolled from an earlier run — that is the idempotent case, not a failure.
       say(`  (fleet manager person already enrolled: ${mgr.contactPhone})`);
@@ -303,7 +306,9 @@ const run = async () => {
     if (!session.ok) {
       const r1 = await req('POST', '/v1/sbg/auth/phone/request', { body: { phone } });
       await req('POST', '/v1/sbg/auth/phone/verify', { body: { phone, code: r1.data?.code } });
-      await req('POST', '/v1/sbg/identity/enroll', { body: { phone, pin: DRIVER_PIN } });
+      const email = `${label}.driver@sbg.test`;
+      const e1 = await req('POST', '/v1/sbg/identity/email/request', { body: { email } });
+      await req('POST', '/v1/sbg/identity/enroll', { body: { phone, pin: DRIVER_PIN, email, emailCode: e1.data?.code } });
       session = await req('POST', '/v1/sbg/drivers/session', { body: { phone, pin: DRIVER_PIN } });
     }
     return { phone, token: session.data?.token?.access_token };

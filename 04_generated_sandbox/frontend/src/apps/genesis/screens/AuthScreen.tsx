@@ -4,6 +4,14 @@ import { useT } from '../../../shared/i18n';
 import { canPickContact } from '../../../shared/device';
 import { codeReady, phoneReady } from '../logic';
 import type { SendActions, SendState } from '../useSendApp';
+import { useState } from 'preact/hooks';
+import { EmailStep } from '../../../shared/account/EmailStep';
+import { TroubleSheet } from '../../../shared/account/TroubleSheet';
+import { recoveryApi } from '../../../shared/account/recovery';
+import { sendConfig } from '../api';
+
+// Built once: the doors a person uses before they are signed in.
+const recovery = recoveryApi(sendConfig());
 
 export interface AuthScreenProps {
   state: SendState;
@@ -78,6 +86,7 @@ function LoginView({ state, actions, busy }: { state: SendState; actions: SendAc
   // typed (that would collapse the field mid-entry for a first-time signer).
   const known = state.phoneKnown;
   const ready = phoneReady(state.authPhone) && codeReady(state.authPin, 4);
+  const [trouble, setTrouble] = useState(false);
   return (
     <>
       <h1 class="scr__title">{t('send.auth.loginTitle')}</h1>
@@ -110,7 +119,10 @@ function LoginView({ state, actions, busy }: { state: SendState; actions: SendAc
       <div class="scr__foot">
         <Button variant="link" onClick={() => actions.setAuthMode('enroll')}>{t('send.auth.newHere')}</Button>
         <Button variant="link" onClick={() => actions.setAuthMode('enroll')}>{t('send.auth.forgot')}</Button>
+        {/* The two cases a code to the number cannot solve: the number is gone, or somebody moved the account. */}
+        <Button variant="link" onClick={() => setTrouble(true)}>{t('account.trouble.link')}</Button>
       </div>
+      <TroubleSheet open={trouble} onClose={() => setTrouble(false)} api={recovery} />
     </>
   );
 }
@@ -138,6 +150,28 @@ function EnrollView({ state, actions, busy }: { state: SendState; actions: SendA
         <div class="scr__foot">
           <Button variant="link" onClick={() => void actions.requestCode()}>{t('send.auth.newCode')}</Button>
           <Button variant="link" onClick={() => actions.authBack()}>{t('send.auth.changeNumber')}</Button>
+        </div>
+      </>
+    );
+  }
+
+  // A first PIN needs a recovery email: asked for only when the server says this person has none yet.
+  if (state.authStep === 'email') {
+    return (
+      <>
+        <h1 class="scr__title">{t('account.safety.signupTitle')}</h1>
+        <p class="scr__lede">{t('account.safety.signupLede')}</p>
+        {state.authError ? <ErrorNote error={state.authError} /> : null}
+        <Card>
+          <EmailStep id="auth" email={state.authEmail} code={state.authEmailCode} onEmail={actions.setAuthEmail} onCode={actions.setAuthEmailCode} send={recovery.emailCode} disabled={busy} />
+        </Card>
+        <div class="scr__cta">
+          <Button chevron={false} onClick={() => void actions.submitEnroll()} disabled={!state.authEmail.trim() || !codeReady(state.authEmailCode, 6)} busy={busy}>
+            {t('account.safety.signupCta')}
+          </Button>
+        </div>
+        <div class="scr__foot">
+          <Button variant="link" onClick={() => actions.authBack()}>{t('common.back')}</Button>
         </div>
       </>
     );

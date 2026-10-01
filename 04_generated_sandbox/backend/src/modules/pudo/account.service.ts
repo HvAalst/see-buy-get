@@ -150,6 +150,16 @@ export class AccountService implements OnApplicationBootstrap {
    * A driver moved fleets: the account they sign in to by email carries the fleet as its tenant, and that is what
    * their next token is minted from — so it follows them, or an email sign-in would still open the old fleet.
    */
+  /** A person's number moved: the email sign-ins that resolved to them by the old number resolve by the new one. */
+  rephone(fromHash: string, toHash: string): void {
+    if (!fromHash || !toHash) return;
+    for (const account of this.accounts.values()) {
+      if (account.phoneHash !== fromHash) continue;
+      account.phoneHash = toHash;
+      this.accounts.set(account.email, account);
+    }
+  }
+
   retenant(did: string, tenant: string | undefined): void {
     for (const account of this.accounts.values()) {
       if (account.did !== did || account.tenant === tenant) continue;

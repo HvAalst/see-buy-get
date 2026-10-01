@@ -101,6 +101,21 @@ export class RegistrationPrints {
     }
   }
 
+  /** The key a detail is held under — kept by a caller that must free it LATER, after the detail itself is gone from its hands. */
+  keyOf(field: PrintField, value: string | undefined): string {
+    return printOf(this.register, field, value);
+  }
+
+  /** Free a detail by its key — only by the account holding it. */
+  releaseKey(key: string, ownerDid: string): void {
+    if (key && this.prints.get(key)?.ownerDid === ownerDid) this.prints.delete(key);
+  }
+
+  /** Which account holds this detail, if any. */
+  holder(field: PrintField, value: string | undefined): string | undefined {
+    return this.prints.get(printOf(this.register, field, value))?.ownerDid;
+  }
+
   /** Free one detail — only by the account holding it, so nobody can release somebody else's. */
   release(field: PrintField, value: string | undefined, ownerDid: string): void {
     const key = printOf(this.register, field, value);

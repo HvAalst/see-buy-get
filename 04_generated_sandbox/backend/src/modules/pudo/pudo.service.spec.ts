@@ -55,6 +55,8 @@ import { requiredLoadKeys, requiredUnloadKeys } from './heavy-cargo';
 import { FleetManagerService } from './fleet-manager.service';
 import { FleetMoveService } from './fleet-move.service';
 import { FleetOfferService } from './fleet-offer.service';
+import { EmailCodeService } from './email-code.service';
+import { AccountRecoveryService } from './account-recovery.service';
 import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
@@ -149,7 +151,7 @@ describe('PUDO Light', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
-        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, ImportService, SiteService, TransitAuthorityService, FieldObservationService, ContainerBoxService, EmptyDepotService, ContactCardService, VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService, FleetMoveService, FleetOfferService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
+        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, ImportService, SiteService, TransitAuthorityService, FieldObservationService, ContainerBoxService, EmptyDepotService, ContactCardService, VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService, FleetMoveService, FleetOfferService, EmailCodeService, AccountRecoveryService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, EntityAdminService, OperatorAccountService, ConsignmentNoteService, DepartureNoteService, NoteArchiveService, NoteBundleService, DestinationService, MailService, OutboxMailSender, { provide: MAIL_SENDER, useExisting: OutboxMailSender }, PresenceService, InterestService, DepartureService, CompanyDocumentService, HandleService, HandleDirectory, CompanyReadinessService, BorderRuleService, BooksService, FxService, ApiKeyService,
         PayoutService, ReturnService, UnclaimedService, MerchantRatingService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
@@ -5216,6 +5218,65 @@ describe('PUDO Light', () => {
       expect(drivers.get(added.did).managerDid).toBe(kilima.did);
       const byStaff = controller.registerDriver(form('dddd', { managerDid: pwani.did }), { active: true, role: 'operator' } as never);
       expect(drivers.get(byStaff.did).managerDid).toBe(pwani.did);
+    });
+  });
+
+  /**
+   * A PIN IS CHOSEN WITH A CONFIRMED EMAIL BEHIND IT — the user, 2026-10-01: "we need an email for account recovery
+   * and safety." Asked at the door, where the PIN is first chosen, and never again once one is on record.
+   */
+  describe('choosing a PIN needs a recovery email, confirmed by a code', () => {
+    const verifyPhone = (phone: string) => otp.verify(phone, otp.request(phone).code);
+    const codeFor = (email: string) => (identity.emailRequest({ email }) as { code: string }).code;
+
+    it('refuses a PIN with no email, and an email nobody proved they read — and spends nothing on a refusal', () => {
+      const phone = '+254711660001';
+      verifyPhone(phone);
+      expect(() => identity.enroll({ phone, pin: '4826' })).toThrow(/Give an email address/);
+      expect(() => identity.enroll({ phone, pin: '4826', email: 'not-an-address' })).toThrow(/valid email address/);
+      expect(() => identity.enroll({ phone, pin: '4826', email: 'amina@example.com' })).toThrow(/Type the code we sent/);
+      codeFor('amina@example.com');
+      expect(() => identity.enroll({ phone, pin: '4826', email: 'amina@example.com', emailCode: '000000' })).toThrow(/Wrong or expired code/);
+      // Nothing was created and the phone is still verified: the person simply tries again.
+      expect(persons.findByPhone(phone)).toBeUndefined();
+      expect(otp.isVerified(phone)).toBe(true);
+    });
+
+    it('takes the PIN with a confirmed email, shows it masked, and does not ask again when the PIN is forgotten', () => {
+      const phone = '+254711660002';
+      verifyPhone(phone);
+      const code = codeFor('Juma@Example.com');
+      const joined = identity.enroll({ phone, pin: '4826', email: 'Juma@Example.com', emailCode: code }) as { email?: string; hasPin: boolean };
+      expect(joined).toMatchObject({ hasPin: true, email: 'j…@example.com' });
+      expect(persons.findByEmail('juma@example.com')?.personDid).toBe(persons.findByPhone(phone)!.personDid);
+
+      // Forgot the PIN: a code to the phone and a new PIN. The email is already on record.
+      const later = Date.now() + 2 * 60 * 1000;
+      const clock = jest.spyOn(Date, 'now').mockReturnValue(later);
+      try {
+        verifyPhone(phone);
+        expect((identity.enroll({ phone, pin: '7391' }) as { hasPin: boolean }).hasPin).toBe(true);
+      } finally {
+        clock.mockRestore();
+      }
+    });
+
+    it('refuses an address another account already holds, before anything is created', () => {
+      const first = '+254711660003';
+      verifyPhone(first);
+      identity.enroll({ phone: first, pin: '4826', email: 'shared@example.com', emailCode: codeFor('shared@example.com') });
+      const second = '+254711660004';
+      verifyPhone(second);
+      expect(() => identity.enroll({ phone: second, pin: '4826', email: 'shared@example.com', emailCode: '123456' })).toThrow(/already used by another account/);
+      expect(persons.findByPhone(second)).toBeUndefined();
+    });
+
+    it('lets somebody in with a code and no PIN yet — but the PIN, when it comes, still needs the email', () => {
+      const phone = '+254711660005';
+      verifyPhone(phone);
+      const guest = identity.enroll({ phone }) as { hasPin: boolean; token: { access_token: string } };
+      expect(guest.hasPin).toBe(false);
+      expect(() => identity.setPin({ pin: '4826' }, auth.introspect(guest.token.access_token) as never)).toThrow(/Add your email address first/);
     });
   });
 

@@ -1754,6 +1754,12 @@ const PERSON_ROLES = ['consumer', 'driver', 'agent', 'mdp', 'fleet_manager', 've
 export class EnrollDto {
   @IsString() phone!: string;
   @IsOptional() @IsString() pin?: string;
+  /**
+   * The recovery email — needed the first time a PIN is chosen, with the code sent to it. It is how somebody gets
+   * back in when their number is gone, and where we warn them. Not asked again once one is confirmed.
+   */
+  @IsOptional() @IsString() @MaxLength(254) email?: string;
+  @IsOptional() @IsString() @MaxLength(12) emailCode?: string;
   /** S24: if the person arrived via an invite link, credit the inviter on first join. */
   @IsOptional() @IsString() inviteToken?: string;
 }
@@ -1797,6 +1803,47 @@ export class AccountProfileDto {
   @IsOptional() @IsString() @MaxLength(80) displayName?: string;
   @IsOptional() @IsString() avatarMediaId?: string;
   @IsOptional() @IsString() @MaxLength(240) address?: string;
+}
+
+/** Ask for a code at an email address — to confirm it as a recovery address. */
+export class EmailCodeDto {
+  @IsString() @MaxLength(254) email!: string;
+}
+
+/** Ask for a code at the address ON an account — to get back in, or to undo a number change. */
+export class AccountCodeDto {
+  @IsString() @MaxLength(254) email!: string;
+  @IsIn(['recover', 'undo']) why!: 'recover' | 'undo';
+}
+
+/** Undo a number change: the OLD number and the PIN as it was, or the account's email and a code sent to it. */
+export class UndoNumberDto {
+  @IsOptional() @IsString() @MaxLength(40) phone?: string;
+  @IsOptional() @IsString() @MaxLength(8) pin?: string;
+  @IsOptional() @IsString() @MaxLength(254) email?: string;
+  @IsOptional() @IsString() @MaxLength(12) code?: string;
+}
+
+/** The number is gone and the PIN forgotten: the inbox, the national ID where one is on record, a new number, a new PIN. */
+export class RecoverAccountDto {
+  @IsString() @MaxLength(254) email!: string;
+  @IsOptional() @IsString() @MaxLength(12) code?: string;
+  @IsOptional() @IsString() @MaxLength(60) nationalId?: string;
+  @IsString() @MaxLength(40) newPhone!: string;
+  @IsString() @MaxLength(8) pin!: string;
+}
+
+/** The signed-in person moves their own account to another number: the PIN again, and a code already confirmed on the new number. */
+export class ChangeNumberDto {
+  @IsString() @MaxLength(8) pin!: string;
+  @IsString() @MaxLength(40) newPhone!: string;
+}
+
+/** The signed-in person sets or replaces their recovery email: the PIN again, and the code sent to the new address. */
+export class AccountEmailDto {
+  @IsString() @MaxLength(8) pin!: string;
+  @IsString() @MaxLength(254) email!: string;
+  @IsString() @MaxLength(12) code!: string;
 }
 
 /** Changing your own PIN. No phone: the account being changed is the one the token signed in as. */

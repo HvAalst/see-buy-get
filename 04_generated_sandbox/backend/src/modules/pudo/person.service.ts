@@ -7,10 +7,11 @@ import { AuthService } from '../../foundation/auth/auth.service';
 import { AccessToken } from '../../foundation/auth/auth.types';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
-import { hashPhone, isPlausiblePhone } from '../../foundation/identity/phone';
+import { hashEmail, hashPhone, isPlausiblePhone, normalizePhone } from '../../foundation/identity/phone';
+import { isPlausibleEmail, normalizeEmail } from './email-code.service';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
 import { MediaService } from './media.service';
-import { Person, PersonRole, PersonView, ROLE_TO_ACTOR, RoleLink, toView } from './person.types';
+import { Person, PersonRole, PersonView, PhoneChange, ROLE_TO_ACTOR, RoleLink, toView } from './person.types';
 
 /** Wrong-PIN attempts before the PIN locks. From then on only a code sent to the phone opens it again. */
 export const MAX_PIN_ATTEMPTS = 5;
@@ -34,6 +35,15 @@ export function isGuessablePin(pin: string): boolean {
   if (d[0] === d[2] && d[1] === d[3]) return true;
   if (d[0] === d[1] && d[2] === d[3]) return true;
   return pin === '2580' || pin === '0852';
+}
+
+/** How long a number change can be undone, and the old number is held for its owner. */
+export const NUMBER_UNDO_MS = 24 * 60 * 60 * 1000;
+
+/** "a…@example.com" — enough for its owner to recognise, not enough for anybody else to use. */
+function maskEmail(email: string): string {
+  const at = email.indexOf('@');
+  return at > 0 ? `${email[0]}…${email.slice(at)}` : '…';
 }
 
 /** Locked — by the five wrong guesses, or by the old fifteen-minute window while it still runs. */
@@ -60,6 +70,8 @@ export class PersonService {
   // Derived index personDid → phoneHash, so an authenticated request (token.did = personDid) resolves
   // in O(1). Rebuilt from the durable map at construction and kept in step on every save().
   private readonly byDid = new Map<string, string>();
+  // And emailHash → personDid: one inbox, one account, found without the address.
+  private readonly byEmail = new Map<string, string>();
 
   constructor(
     private readonly dids: DidService,
@@ -69,7 +81,10 @@ export class PersonService {
     // Optional so a hand-built module keeps compiling; without it a locked PIN is still locked, just not announced.
     @Optional() private readonly events?: EventBus,
   ) {
-    for (const p of this.persons.values()) this.byDid.set(p.personDid, p.phoneHash);
+    for (const p of this.persons.values()) {
+      this.byDid.set(p.personDid, p.phoneHash);
+      if (p.emailHash) this.byEmail.set(p.emailHash, p.personDid);
+    }
   }
 
   // --- lookups ---
@@ -108,6 +123,8 @@ export class PersonService {
     const phoneHash = hashPhone(phone);
     const existing = this.persons.get(phoneHash);
     if (existing) return existing;
+    // A number moved off an account in the last day is still that account's to move back to.
+    if (this.movedFrom(phoneHash)) throw new GlosError('INVALID_STATE', 'That number was moved off another account in the last 24 hours. It can be used again after that.', { field: 'phone' });
 
     const personDid = this.dids.generate(`person:${phoneHash}`, { role: 'person' }).id;
     const person: Person = { personDid, phoneHash, roles: [], createdAt: new Date().toISOString() };
@@ -367,6 +384,146 @@ export class PersonService {
     return { person: updated, token: this.mintConsumerToken(updated) };
   }
 
+  // --- the recovery email ---
+
+  findByEmail(email: string): Person | undefined {
+    const did = this.byEmail.get(hashEmail(email));
+    return did ? this.findByDid(did) : undefined;
+  }
+
+  /** Refuse an address another account already holds — asked BEFORE anything is created, so a refusal costs nothing. */
+  assertEmailFree(email: string, forPersonDid?: string): void {
+    if (!isPlausibleEmail(email)) throw new GlosError('VALIDATION_FAILED', 'Enter a valid email address', { field: 'email' });
+    const holder = this.byEmail.get(hashEmail(email));
+    if (holder && holder !== forPersonDid) throw new GlosError('DUPLICATE', 'That email address is already used by another account', { field: 'email', register: 'person' });
+  }
+
+  /**
+   * Record the person's recovery email. The CALLER has confirmed it with a code — this never trusts an address
+   * nobody proved they read, because it becomes a way into the account. One inbox, one account.
+   */
+  setEmail(personDid: string, email: string, now: number = Date.now()): Person {
+    const person = this.requireByDid(personDid);
+    const address = normalizeEmail(email);
+    this.assertEmailFree(address, personDid);
+    this.mergeVault(person, { email: address }, 'account-safety-update');
+    if (person.emailHash) this.byEmail.delete(person.emailHash);
+    person.emailHash = hashEmail(address);
+    person.emailMasked = maskEmail(address);
+    person.emailVerifiedAt = new Date(now).toISOString();
+    this.save(person);
+    return person;
+  }
+
+  /** The address itself, for sending — revealed from the vault, never kept beside the person. */
+  emailOf(person: Person): string | undefined {
+    if (!person.emailVerifiedAt || !person.vaultRef || !this.vault.exists(person.vaultRef)) return undefined;
+    const held = this.vault.reveal(person.vaultRef, { purpose: 'account-safety', requesterDid: person.personDid });
+    return typeof held.email === 'string' && held.email ? held.email : undefined;
+  }
+
+  // --- a number that moves ---
+
+  /** The account a number was moved OFF in the last day, if any — the old number is still its to move back to. */
+  movedFrom(phoneHash: string, now: number = Date.now()): Person | undefined {
+    if (!phoneHash) return undefined;
+    for (const p of this.persons.values()) if (p.phoneChange?.fromHash === phoneHash && Date.parse(p.phoneChange.undoUntil) > now) return p;
+    return undefined;
+  }
+
+  /** Every account with a number change on record — open or past its window and waiting to be settled. */
+  withNumberChange(): Person[] {
+    return [...this.persons.values()].filter((p) => p.phoneChange);
+  }
+
+  /**
+   * MOVE THE ACCOUNT TO ANOTHER NUMBER. The caller has proved who is asking (their PIN, their inbox, or two
+   * members of staff) and that the new number is theirs (a code to it). Everything the person is — roles, PIN,
+   * name, history keyed to them — stays; the key they are found under changes. The old number is remembered for
+   * 24 hours so the move can be undone, and nobody else can take it meanwhile.
+   */
+  movePhone(personDid: string, newPhone: string, how: PhoneChange['how'], now: number = Date.now()): { person: Person; fromHash: string } {
+    if (!isPlausiblePhone(newPhone)) throw new GlosError('PHONE_INVALID', 'Enter a valid phone number', { field: 'phone' });
+    const person = this.requireByDid(personDid);
+    const toHash = hashPhone(newPhone);
+    if (toHash === person.phoneHash) throw new GlosError('INVALID_STATE', 'That is the number you already sign in with', { field: 'phone' });
+    if (this.persons.get(toHash)) throw new GlosError('DUPLICATE', 'That number already has an account', { field: 'phone', register: 'person' });
+    if (this.movedFrom(toHash, now)) throw new GlosError('INVALID_STATE', 'That number was moved off another account in the last 24 hours. It can be used again after that.', { field: 'phone' });
+    if (person.phoneChange && Date.parse(person.phoneChange.undoUntil) > now) {
+      throw new GlosError('INVALID_STATE', 'Your number was changed less than a day ago. Undo that change, or wait until it can no longer be undone.');
+    }
+    const fromHash = person.phoneHash;
+    person.phoneChange = {
+      fromHash,
+      at: new Date(now).toISOString(),
+      undoUntil: new Date(now + NUMBER_UNDO_MS).toISOString(),
+      how,
+      ...(person.pinHash && person.pinSalt ? { pinHash: person.pinHash, pinSalt: person.pinSalt } : {}),
+      held: [],
+    };
+    this.persons.delete(fromHash);
+    person.phoneHash = toHash;
+    this.mergeVault(person, { phone: normalizePhone(newPhone) }, 'number-change');
+    this.save(person);
+    return { person, fromHash };
+  }
+
+  /** Note the register prints still held on the old number, so the sweep can free them when the window closes. */
+  holdPrints(personDid: string, held: PhoneChange['held']): void {
+    const person = this.requireByDid(personDid);
+    if (!person.phoneChange) return;
+    person.phoneChange.held = held;
+    this.save(person);
+  }
+
+  /** The PIN as it was BEFORE the move — what the owner knows, whatever the mover has done to the PIN since. */
+  originalPinMatches(person: Person, pin: string): boolean {
+    const c = person.phoneChange;
+    if (!c?.pinHash || !c.pinSalt) return false;
+    const candidate = Buffer.from(this.hashPin(pin || '', c.pinSalt), 'hex');
+    const known = Buffer.from(c.pinHash, 'hex');
+    return candidate.length === known.length && timingSafeEqual(candidate, known);
+  }
+
+  /** One more wrong try at undoing with the old number. Returns how many that makes. */
+  noteUndoMiss(person: Person): number {
+    if (!person.phoneChange) return 0;
+    person.phoneChange.undoAttempts = (person.phoneChange.undoAttempts ?? 0) + 1;
+    this.save(person);
+    return person.phoneChange.undoAttempts;
+  }
+
+  /**
+   * PUT THE NUMBER BACK. The PIN goes back to what it was and is LOCKED: whoever moved the number knew the PIN (or
+   * held the inbox), so the owner chooses a new one with a code to the number that is theirs again. Every session ends.
+   */
+  undoMove(personDid: string, now: number = Date.now()): Person {
+    const person = this.requireByDid(personDid);
+    const change = person.phoneChange;
+    if (!change || Date.parse(change.undoUntil) <= now) throw new GlosError('INVALID_STATE', 'There is no number change to undo — the 24 hours have passed');
+    this.persons.delete(person.phoneHash);
+    person.phoneHash = change.fromHash;
+    person.pinHash = change.pinHash;
+    person.pinSalt = change.pinSalt;
+    person.pinAttempts = 0;
+    person.pinLockedAt = new Date(now).toISOString();
+    person.phoneChange = undefined;
+    this.mergeVault(person, { phone: undefined }, 'number-change-undo');
+    this.save(person);
+    this.auth.revokeAll(person.personDid);
+    return person;
+  }
+
+  /** The window closed: the change stands, and what was kept to undo it is dropped. Returns the prints to free. */
+  settleMove(personDid: string, now: number = Date.now()): PhoneChange['held'] {
+    const person = this.requireByDid(personDid);
+    const change = person.phoneChange;
+    if (!change || Date.parse(change.undoUntil) > now) return [];
+    person.phoneChange = undefined;
+    this.save(person);
+    return change.held;
+  }
+
   // --- role switching ---
 
   /** The person's default identity token — acting as themselves (the consumer surface). */
@@ -435,6 +592,16 @@ export class PersonService {
   private save(person: Person): void {
     this.persons.set(person.phoneHash, person);
     this.byDid.set(person.personDid, person.phoneHash);
+    if (person.emailHash) this.byEmail.set(person.emailHash, person.personDid);
+  }
+
+  /** Read the person's vault record, apply only what was asked, write the whole thing back — `update` REPLACES. */
+  private mergeVault(person: Person, patch: Record<string, unknown>, purpose: string): void {
+    const live = Boolean(person.vaultRef && this.vault.exists(person.vaultRef));
+    const held = live ? this.vault.reveal(person.vaultRef as string, { purpose, requesterDid: person.personDid }) : undefined;
+    const next = { ...(held ?? {}), fullName: held?.fullName ?? '', ...patch };
+    if (live) this.vault.update(person.vaultRef as string, next);
+    else person.vaultRef = this.vault.store(next, { region: 'local' }).vaultRef;
   }
 
   private hashPin(pin: string, salt: string): string {

@@ -142,7 +142,7 @@ export const ARTICLES: GuideArticle[] = [
     summary: "Use the phone number your fleet registered you with, and your 4-digit PIN. Your driver ID alone does not sign you in.",
     steps: [
       "Type your phone number and PIN, and tap Sign in.",
-      "First time, or forgot your PIN? Tap “First time here, or forgot your PIN?”. We send a code to your phone; type it, then choose a PIN.",
+      "First time, or forgot your PIN? Tap “First time here, or forgot your PIN?”. We send a code to your phone; type it, then choose a PIN. The first time, you also add a recovery email.",
       "The app says “This phone is not registered to a driver”? Your PIN is fine: ask your fleet manager which number they registered."
     ],
     notes: [
@@ -179,13 +179,37 @@ export const ARTICLES: GuideArticle[] = [
     title: "Changing your PIN",
     summary: "Your PIN is 4 digits. Change it with the current one — or, if you have forgotten it, with a code sent to your phone.",
     steps: [
-      "Fleet app: Dashboard, then Change my PIN.",
-      "Send app: Account, then Change your PIN.",
-      "Driver app: tap “Not you? Sign out”, then “First time here, or forgot your PIN?”."
+      "Driver and Fleet app: tap your picture, then Settings, then Change your PIN.",
+      "Send app: Account, then Settings, then Change your PIN.",
+      "Forgot it? On the sign-in screen tap the forgot-PIN link. We send a code to your phone and you choose a new PIN."
     ],
     notes: [
       "Changing your PIN signs out every other phone that PIN had opened, in every app.",
       "A PIN that is easy to guess is refused: one digit four times, a run like 1234, or pairs like 1212."
+    ]
+  },
+  {
+    id: "account-recovery",
+    apps: [
+      "fleet",
+      "driver",
+      "send"
+    ],
+    title: "Your recovery email, a new phone number, and getting back in",
+    summary: "Your account is your phone number. Settings is where you keep your recovery email and move the account to a new number. “Trouble signing in?” is the way back when the number is gone.",
+    steps: [
+      "Open Settings. Driver and Fleet app: tap your picture, then Settings. Send app: Account, then Settings.",
+      "Recovery email: type the address and tap “Send a code to this address”. Type the code from the email, then your PIN.",
+      "New phone number, and you know your PIN: Settings, then Phone number. Type the new number, type the code we text to it, then your PIN. You are signed out everywhere; sign in with the new number and the same PIN.",
+      "Lost your number and forgot your PIN: on the sign-in screen tap “Trouble signing in?”, then “I no longer have my number”. A code goes to your recovery email. Type your new number and choose a new PIN.",
+      "Somebody changed your number and it was not you: within 24 hours tap “Trouble signing in?”, then “Undo a number change”. Use the old number with the PIN as it was, or a code to your email."
+    ],
+    notes: [
+      "Lost only the handset? Nothing is lost. Sign in from any phone with the same number and PIN.",
+      "A first PIN cannot be chosen without a recovery email. We write to it when your PIN is locked and when your phone number changes.",
+      "Drivers and shops are also asked for the national ID number they registered with when they get back in by email.",
+      "After a number change the old number is kept for you for 24 hours. After that it is free for a new person.",
+      "Undoing a number change locks the PIN. Use the forgot-PIN link on the sign-in screen to choose a new one."
     ]
   },
   {

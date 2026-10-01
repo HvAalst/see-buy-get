@@ -5,6 +5,12 @@ import { Button, Card, Checklist, ErrorNote, ReadAloud } from '../../../shared/u
 import { useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import type { FleetActions } from '../useFleetApp';
+import { TroubleSheet } from '../../../shared/account/TroubleSheet';
+import { recoveryApi } from '../../../shared/account/recovery';
+import { fleetConfig } from '../api';
+
+// Built once: the doors a person uses before they are signed in.
+const recovery = recoveryApi(fleetConfig());
 
 export interface SignInScreenProps {
   actions: FleetActions;
@@ -34,6 +40,7 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
   const [code, setCode] = useState('');
   const [phone, setPhone] = useState('');
   const [pin, setPin] = useState('');
+  const [trouble, setTrouble] = useState(false);
   const [fleets, setFleets] = useState<Array<{ did: string; companyName: string; status: string }> | null>(null);
 
   const submit = (e: JSX.TargetedEvent<HTMLFormElement>) => {
@@ -133,6 +140,7 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
   }
 
   return (
+    <>
     <form class="scr" onSubmit={submit}>
       <h1 class="scr__title">{t('fleet.signin.title')}</h1>
       <p class="scr__lede">{t('fleet.signin.lede')}</p>
@@ -195,9 +203,16 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
       </Card>
 
       <div class="scr__foot">
+        {/* A manager signs in with their own phone and PIN, so a lost number or a moved account is theirs to mend here too. */}
+        <button type="button" class="btn btn--link" onClick={() => setTrouble(true)}>
+          {t('account.trouble.link')}
+        </button>
         <HelpLink app="fleet" label="signin" />
         <ReadAloud text={() => t('fleet.signin.aloud')} label={t('fleet.readAloud')} />
       </div>
     </form>
+    {/* Outside the form: Enter in one of its fields must not submit the sign-in behind it. */}
+    <TroubleSheet open={trouble} onClose={() => setTrouble(false)} api={recovery} />
+    </>
   );
 }

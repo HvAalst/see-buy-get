@@ -1,6 +1,7 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { BottomNav, ConnectivityNote, Icon, NotificationBell, TopBar, type NavItem } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
+import { useAccount, type AccountApi } from '../../shared/account/useAccount';
 import { SendScreen } from './screens/SendScreen';
 import { TrackScreen } from './screens/TrackScreen';
 import { AuthScreen } from './screens/AuthScreen';
@@ -18,7 +19,9 @@ import { sendWorkLine } from './logic';
  */
 export function App() {
   const t = useT();
-  const { state, actions, notifications } = useSendApp();
+  const { state, actions, notifications, sbg } = useSendApp();
+  // The person's own account — the recovery email and phone number behind Settings. Loaded once signed in.
+  const account = useAccount(sbg, Boolean(state.identity));
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
 
@@ -58,7 +61,7 @@ export function App() {
 
       <main class="app__scroll">
         <ConnectivityNote />
-        <Router state={state} actions={actions} />
+        <Router state={state} actions={actions} account={account} />
       </main>
 
       <BottomNav<Screen> items={tabs} active={state.screen} onSelect={(key) => actions.go(key)} labels={false} />
@@ -67,12 +70,12 @@ export function App() {
 }
 
 /** The authenticated tabs gate on sign-in; a stored session restores silently (a brief boot spinner). */
-function Router({ state, actions }: { state: SendState; actions: SendActions }) {
+function Router({ state, actions, account }: { state: SendState; actions: SendActions; account: AccountApi }) {
   if (state.screen === 'track') return <TrackScreen state={state} actions={actions} />;
   if (state.screen === 'parcels' || state.screen === 'account') {
     if (state.restoring) return <Boot />;
     if (!state.identity) return <AuthScreen state={state} actions={actions} />;
-    return state.screen === 'parcels' ? <MyParcelsScreen state={state} actions={actions} /> : <AccountScreen state={state} actions={actions} />;
+    return state.screen === 'parcels' ? <MyParcelsScreen state={state} actions={actions} /> : <AccountScreen state={state} actions={actions} account={account} />;
   }
   return <SendScreen state={state} actions={actions} />;
 }

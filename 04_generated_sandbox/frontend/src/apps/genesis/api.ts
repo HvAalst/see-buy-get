@@ -72,8 +72,9 @@ export function verifyOtp(phone: string, code: string): Promise<Result<{ verifie
 }
 
 /** Create (or refresh) the consumer for an OTP-verified phone; optionally set the PIN + credit an invite. */
-export function enroll(phone: string, pin?: string, inviteToken?: string): Promise<Result<AuthResult>> {
-  return publicRequest<AuthResult>(sendConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, inviteToken } });
+export function enroll(phone: string, pin?: string, inviteToken?: string, recovery?: { email: string; code: string }): Promise<Result<AuthResult>> {
+  // A first PIN needs a confirmed recovery email behind it; somebody replacing a forgotten PIN already has one.
+  return publicRequest<AuthResult>(sendConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, inviteToken, ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}) } });
 }
 
 /** Validate an invite token at the landing (S24) — public, tells us only whether the link is real. */

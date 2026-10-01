@@ -49,6 +49,7 @@ const SAY: Record<string, string> = {
   'error.role_not_held': 'You cannot open that here.',
   'error.phone_invalid': 'That phone number is not right. Check it.',
   'error.verify_phone': 'Verify your phone first — we will send you a code.',
+  'error.verify_email': 'Confirm your email first — type the code we sent to it.',
   'error.bag_full': 'That bag is full.',
   'error.already_in_bag': 'That parcel is already in a bag. Check the other bag if it is not in this one.',
   'error.staging_full': 'There is no room for another bag. Give one to a driver, or make room for more in your shelf setup.',

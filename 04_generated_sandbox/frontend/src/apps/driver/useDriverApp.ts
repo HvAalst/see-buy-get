@@ -1,5 +1,6 @@
 import { drain, outboxItems } from '../../shared/outbox';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { asksForEmail } from '../../shared/account/recovery';
 import type { SbgError } from '../../lib/sbg';
 import type { IconName } from '../../shared/ui/Icon';
 import { choosePin, createDriverClient, driverConfig, driverSession, isMintSourced, isSignInRequired, narrow, purgeDriverTokens, requestPhoneCode, verifyPhoneCode } from './api';
@@ -627,15 +628,37 @@ export function useDriverApp() {
     return r.data?.code ?? '';
   }, []);
 
-  /** The code proves the phone; the new PIN replaces any old one; then sign in with it. */
-  const setPinAndSignIn = useCallback(async (phone: string, code: string, pin: string): Promise<boolean> => {
-    const verified = await verifyPhoneCode(phone.trim(), code.trim());
-    const chosen = verified.error ? verified : await choosePin(phone.trim(), pin.trim());
-    if (chosen.error) {
-      setState((s) => ({ ...s, error: chosen.error }));
-      return false;
+  /**
+   * The code proves the phone; the new PIN replaces any old one; then sign in with it.
+   *
+   * A FIRST PIN needs a recovery email, and only the server knows whether this person has one. So it is asked, and
+   * `'email'` is the answer "ask them for it" — a next step, not an error. The phone code is spent the moment it is
+   * checked and the proof it bought lasts half an hour, so the second call must not check it again.
+   */
+  const verifiedPhone = useRef('');
+  const setPinAndSignIn = useCallback(async (phone: string, code: string, pin: string, recovery?: { email: string; code: string }): Promise<'ok' | 'email' | 'failed'> => {
+    const number = phone.trim();
+    if (verifiedPhone.current !== number) {
+      const verified = await verifyPhoneCode(number, code.trim());
+      if (verified.error) {
+        setState((s) => ({ ...s, error: verified.error }));
+        return 'failed';
+      }
+      verifiedPhone.current = number;
     }
-    return signIn(phone, pin);
+    const chosen = await choosePin(number, pin.trim(), recovery);
+    if (chosen.error) {
+      if (!recovery && asksForEmail(chosen.error)) {
+        setState((s) => ({ ...s, error: null }));
+        return 'email';
+      }
+      // A proof that ran out is asked for again, from the start.
+      if (chosen.error.code === 'PHONE_NOT_VERIFIED') verifiedPhone.current = '';
+      setState((s) => ({ ...s, error: chosen.error }));
+      return 'failed';
+    }
+    verifiedPhone.current = '';
+    return (await signIn(phone, pin)) ? 'ok' : 'failed';
   }, [signIn]);
 
   const signOut = useCallback(() => {

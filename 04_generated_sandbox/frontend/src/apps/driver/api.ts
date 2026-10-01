@@ -110,8 +110,9 @@ export function verifyPhoneCode(phone: string, code: string): Promise<Result<{ v
 }
 
 /** Choose (or replace) the PIN for a phone that has just been verified by code. */
-export function choosePin(phone: string, pin: string): Promise<Result<unknown>> {
-  return publicRequest(driverConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin } });
+export function choosePin(phone: string, pin: string, recovery?: { email: string; code: string }): Promise<Result<unknown>> {
+  // A first PIN needs a confirmed recovery email behind it; somebody replacing a forgotten PIN already has one.
+  return publicRequest(driverConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}) } });
 }
 
 /**

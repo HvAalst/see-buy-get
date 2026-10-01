@@ -4,18 +4,25 @@ import type { JSX } from 'preact';
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, Note, ReadAloud } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
+import { EmailStep } from '../../../shared/account/EmailStep';
+import { TroubleSheet } from '../../../shared/account/TroubleSheet';
+import { recoveryApi } from '../../../shared/account/recovery';
+import { driverConfig } from '../api';
 
 export interface SignInScreenProps {
   /** Phone + PIN. Resolves to whether it worked. */
   onSignIn: (phone: string, pin: string) => Promise<boolean>;
   /** Send a code to the phone. Resolves to the code in a sandbox, `''` once sent, null on failure. */
   onSendCode: (phone: string) => Promise<string | null>;
-  /** Verify the code, set the new PIN, sign in. */
-  onSetPin: (phone: string, code: string, pin: string) => Promise<boolean>;
+  /** Verify the code, set the new PIN, sign in. `'email'`: this is a first PIN, and it needs a recovery email. */
+  onSetPin: (phone: string, code: string, pin: string, recovery?: { email: string; code: string }) => Promise<'ok' | 'email' | 'failed'>;
   error: SbgError | null;
 }
 
-type Step = 'pin' | 'phone' | 'code';
+type Step = 'pin' | 'phone' | 'code' | 'email';
+
+// Built once: the doors a person uses before they are signed in.
+const recovery = recoveryApi(driverConfig());
 
 /**
  * Who is driving: the phone number the fleet registered, and a PIN.
@@ -32,6 +39,9 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
   const [code, setCode] = useState('');
   const [testCode, setTestCode] = useState('');
   const [busy, setBusy] = useState(false);
+  const [email, setEmail] = useState('');
+  const [emailCode, setEmailCode] = useState('');
+  const [trouble, setTrouble] = useState(false);
 
   const busyWhile = async (work: () => Promise<unknown>) => {
     setBusy(true);
@@ -56,8 +66,13 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
         setPin('');
         setStep('code');
       });
+    } else if (step === 'code') {
+      // A first PIN: the server answers that it wants a recovery email, and that is the next thing to fill in.
+      void busyWhile(async () => {
+        if ((await onSetPin(phone, code, pin)) === 'email') setStep('email');
+      });
     } else {
-      void busyWhile(() => onSetPin(phone, code, pin));
+      void busyWhile(() => onSetPin(phone, code, pin, { email: email.trim(), code: emailCode }));
     }
   };
 
@@ -66,6 +81,8 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
     setPin('');
     setCode('');
     setTestCode('');
+    setEmail('');
+    setEmailCode('');
   };
 
   const phoneField = (
@@ -82,17 +99,19 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
         placeholder="+2547…"
         autocomplete="tel"
         inputMode="tel"
-        disabled={busy || step === 'code'}
+        disabled={busy || step === 'code' || step === 'email'}
       />
     </div>
   );
 
-  const ready = step === 'pin' ? phone.trim() !== '' && pin.length === 4 : step === 'phone' ? phone.trim() !== '' : code.length === 6 && pin.length === 4;
+  const ready =
+    step === 'pin' ? phone.trim() !== '' && pin.length === 4 : step === 'phone' ? phone.trim() !== '' : step === 'code' ? code.length === 6 && pin.length === 4 : email.trim() !== '' && emailCode.length === 6;
 
   return (
+    <>
     <form class="scr" onSubmit={submit}>
-      <h1 class="scr__title">{step === 'pin' ? t('driver.signin.title') : t('driver.signin.codeTitle')}</h1>
-      <p class="scr__lede">{step === 'pin' ? t('driver.signin.lede') : t('driver.signin.codeLede')}</p>
+      <h1 class="scr__title">{step === 'pin' ? t('driver.signin.title') : step === 'email' ? t('account.safety.signupTitle') : t('driver.signin.codeTitle')}</h1>
+      <p class="scr__lede">{step === 'pin' ? t('driver.signin.lede') : step === 'email' ? t('account.safety.signupLede') : t('driver.signin.codeLede')}</p>
 
       {/* The PIN was right but this phone drives for nobody: the generic "you cannot open that" would send a driver
           looking for a problem with their PIN, when the fix is the number their fleet registered. */}
@@ -107,7 +126,7 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
       ) : null}
 
       <Card>
-        {phoneField}
+        {step === 'email' ? <EmailStep id="drv-mail" email={email} code={emailCode} onEmail={setEmail} onCode={setEmailCode} send={recovery.emailCode} disabled={busy} /> : phoneField}
         {step === 'pin' ? (
           <div class="field">
             <span class="field__label">{t('driver.signin.pinLabel')}</span>
@@ -127,12 +146,12 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
             </div>
           </>
         ) : null}
-        <p class="card__note">{t('driver.signin.phoneNote')}</p>
+        {step === 'email' ? null : <p class="card__note">{t('driver.signin.phoneNote')}</p>}
       </Card>
 
       <div class="scr__cta">
         <Button type="submit" disabled={!ready} busy={busy}>
-          {step === 'pin' ? t('driver.signin.continue') : step === 'phone' ? t('driver.signin.sendCode') : t('driver.signin.savePin')}
+          {step === 'pin' ? t('driver.signin.continue') : step === 'phone' ? t('driver.signin.sendCode') : step === 'email' ? t('account.safety.signupCta') : t('driver.signin.savePin')}
         </Button>
       </div>
 
@@ -152,9 +171,18 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
             {t('driver.signin.back')}
           </button>
         )}
+        {/* The two cases a code to the number cannot solve: the number is gone, or somebody moved the account. */}
+        {step === 'pin' ? (
+          <button type="button" class="btn btn--link" onClick={() => setTrouble(true)} disabled={busy}>
+            {t('account.trouble.link')}
+          </button>
+        ) : null}
         <HelpLink app="driver" label="signin" />
         <ReadAloud text={() => t('driver.signin.aloud')} label={t('driver.readAloud')} />
       </div>
     </form>
+    {/* Outside the form: Enter in one of its fields must not submit the sign-in behind it. */}
+    <TroubleSheet open={trouble} onClose={() => setTrouble(false)} api={recovery} />
+    </>
   );
 }

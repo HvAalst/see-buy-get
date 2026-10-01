@@ -17459,6 +17459,112 @@
         }
       }
     },
+    "/v1/sbg/identity/email/request": {
+      "post": {
+        "operationId": "Identity.emailRequest",
+        "summary": "",
+        "description": "A code to an email address, to CONFIRM it as a recovery address. Echoed in the answer only in a sandbox — anywhere\nelse, handing it to whoever asked would let anyone confirm anyone's inbox.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/account-code": {
+      "post": {
+        "operationId": "Identity.accountCode",
+        "summary": "",
+        "description": "A code to the address ON an account — to get back in, or to undo a number change. Answers the same whether or\nnot any account uses that address: this door tells a stranger nothing about who is registered.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/phone/undo": {
+      "post": {
+        "operationId": "Identity.undoNumber",
+        "summary": "",
+        "description": "UNDO A NUMBER CHANGE — within 24 hours, with the OLD number and the PIN as it was, or with a code to the\naccount's email. The account goes back to the old number, every phone is signed out and the PIN is locked:\nwhoever moved it knew the PIN.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UndoNumberDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/recover": {
+      "post": {
+        "operationId": "Identity.recover",
+        "summary": "",
+        "description": "GET BACK IN WHEN THE NUMBER IS GONE AND THE PIN FORGOTTEN: the inbox, the national ID where the account has one,\na new number confirmed by code, a new PIN. It can be undone for 24 hours like any number change.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoverAccountDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/identity/login": {
       "post": {
         "operationId": "Identity.login",
@@ -17963,6 +18069,59 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/AccountPinDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/email": {
+      "post": {
+        "operationId": "Account.setEmail",
+        "summary": "",
+        "description": "Set or replace the recovery email — the PIN again (an open session is not proof of who holds the phone), and\nthe code sent to the NEW address. The address it replaces is told, because whoever swaps the email is one\nstep from owning the account.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountEmailDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/phone/change": {
+      "post": {
+        "operationId": "Account.changeNumber",
+        "summary": "",
+        "description": "MOVE THIS ACCOUNT TO ANOTHER PHONE NUMBER — by the person themselves, signed in. The PIN again, and a code\nalready confirmed on the new number (auth/phone/request + verify). No staff and no ID: the PIN already opens\nthe whole account. Keyed to the token, never to a number in the body.\n\nEvery session ends, this one included; they sign in again with the new number and the same PIN. It can be\nundone for 24 hours, and the old number is held for them until then.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeNumberDto"
               }
             }
           }
@@ -34483,6 +34642,15 @@
           "pin": {
             "type": "string"
           },
+          "email": {
+            "type": "string",
+            "description": "The recovery email — needed the first time a PIN is chosen, with the code sent to it. It is how somebody gets\nback in when their number is gone, and where we warn them. Not asked again once one is confirmed.",
+            "maxLength": 254
+          },
+          "emailCode": {
+            "type": "string",
+            "maxLength": 12
+          },
           "inviteToken": {
             "type": "string",
             "description": "S24: if the person arrived via an invite link, credit the inviter on first join."
@@ -34490,6 +34658,89 @@
         },
         "required": [
           "phone"
+        ]
+      },
+      "EmailCodeDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 254
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "AccountCodeDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 254
+          },
+          "why": {
+            "type": "string",
+            "enum": [
+              "recover",
+              "undo"
+            ]
+          }
+        },
+        "required": [
+          "email",
+          "why"
+        ]
+      },
+      "UndoNumberDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "pin": {
+            "type": "string",
+            "maxLength": 8
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 254
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 12
+          }
+        }
+      },
+      "RecoverAccountDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 254
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 12
+          },
+          "nationalId": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "newPhone": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "pin": {
+            "type": "string",
+            "maxLength": 8
+          }
+        },
+        "required": [
+          "email",
+          "newPhone",
+          "pin"
         ]
       },
       "PinLoginDto": {
@@ -34745,6 +34996,45 @@
         "required": [
           "currentPin",
           "newPin"
+        ]
+      },
+      "AccountEmailDto": {
+        "type": "object",
+        "properties": {
+          "pin": {
+            "type": "string",
+            "maxLength": 8
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 254
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 12
+          }
+        },
+        "required": [
+          "pin",
+          "email",
+          "code"
+        ]
+      },
+      "ChangeNumberDto": {
+        "type": "object",
+        "properties": {
+          "pin": {
+            "type": "string",
+            "maxLength": 8
+          },
+          "newPhone": {
+            "type": "string",
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "pin",
+          "newPhone"
         ]
       },
       "UploadMediaDto": {

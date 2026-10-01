@@ -5,12 +5,10 @@ import { Button } from '../ui/Button';
 import { ErrorNote } from '../ui/ErrorNote';
 import { Icon } from '../ui/Icon';
 import { Sheet } from '../ui/Sheet';
-import { CodeBoxes } from '../ui/CodeBoxes';
 import { ExplainerReset } from '../ui/Explainer';
 import { HelpLink } from '../guide/HelpLink';
 import type { GuideApp } from '../guide/articles';
-import { CredentialAge } from './CredentialAge';
-import { pinChangeBlocker } from './password';
+import { SettingsSheet, hasSettings } from './SettingsSheet';
 import { useT } from '../i18n';
 import { publicPageUrl } from '../../lib/sbg/config';
 import type { AccountApi } from './useAccount';
@@ -36,7 +34,7 @@ export interface AccountMenuProps {
    * with an email and a password held against the ACCOUNT. Both are real, some people have both, and a
    * menu that offered a PIN change to somebody who has never set one would send them to a sheet that can
    * only refuse them. So the PIN row appears when there is a PIN, and an app whose sign-in is a password
-   * passes this to put its own change-password sheet in the same place.
+   * passes this to put its own change-password sheet in the same place — Settings, where both now live.
    */
   onChangePassword?: () => void;
   /** Anything the app wants at the foot of the menu — a read-aloud control, a shift-specific link. */
@@ -67,7 +65,7 @@ export interface AccountMenuProps {
 export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onChangePassword, extra, rows }: AccountMenuProps) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const [sheet, setSheet] = useState<'profile' | 'pin' | 'address' | null>(null);
+  const [sheet, setSheet] = useState<'profile' | 'settings' | 'address' | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
 
   // A drop-down that only closes by pressing its own button is a trap on a phone, where the rest of the
@@ -145,15 +143,11 @@ export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onCha
 
           <MenuRow icon="camera" label={t('account.menu.photo')} sub={me?.avatarMediaId ? t('account.menu.photoSet') : t('account.menu.photoNone')} onClick={() => { setOpen(false); setSheet('profile'); }} />
           <MenuRow icon="pin" label={t('account.menu.address')} sub={me?.address || t('account.menu.addressNone')} onClick={() => { setOpen(false); setSheet('address'); }} />
-          {/* Only where a PIN exists. Somebody who signed up with an email has never set one, and the
-              sheet behind this row could do nothing for them but refuse. */}
-          {me?.hasPin ? (
-            <MenuRow icon="keypad" label={t('account.menu.pin')} sub={me.pinChangedAt ? undefined : t('account.menu.pinSub')} onClick={() => { setOpen(false); setSheet('pin'); }}>
-              {me.pinChangedAt ? <CredentialAge iso={me.pinChangedAt} class="row__s" /> : null}
-            </MenuRow>
-          ) : null}
-          {onChangePassword ? (
-            <MenuRow icon="lock" label={t('account.menu.password')} sub={t('account.menu.passwordSub')} onClick={() => { setOpen(false); onChangePassword(); }} />
+          {/* SETTINGS: the PIN, the password, the recovery email and the phone number — how a person signs in and
+              gets back in — live behind one row, in every app. Omitted when there is nothing in it: a store's
+              counter credential has no PIN and no password of its own. */}
+          {hasSettings(api, onChangePassword) ? (
+            <MenuRow icon="settings" label={t('account.settings.title')} sub={t(onChangePassword ? 'account.settings.subPassword' : 'account.settings.sub')} onClick={() => { setOpen(false); setSheet('settings'); }} />
           ) : null}
           {/*
             * THEIR PUBLIC PAGE — and only for somebody who HAS one.
@@ -188,7 +182,7 @@ export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onCha
 
       <ProfileSheet open={sheet === 'profile'} onClose={() => setSheet(null)} api={api} />
       <AddressSheet open={sheet === 'address'} onClose={() => setSheet(null)} api={api} />
-      <PinSheet open={sheet === 'pin'} onClose={() => setSheet(null)} api={api} onSignOut={onSignOut} />
+      <SettingsSheet open={sheet === 'settings'} onClose={() => setSheet(null)} api={api} onSignOut={onSignOut} onChangePassword={onChangePassword} />
     </div>
   );
 }
@@ -307,55 +301,6 @@ function AddressSheet({ open, onClose, api }: { open: boolean; onClose: () => vo
           {t('account.menu.addressClear')}
         </Button>
       ) : null}
-      <Button variant="link" onClick={onClose}>
-        {t('common.cancel')}
-      </Button>
-    </Sheet>
-  );
-}
-
-/**
- * Changing the PIN ends every session it opened — including this one, necessarily, because the token
- * carries the person as its revocation key. So this says so BEFORE, and signs out AFTER. Pretending
- * otherwise would leave the app holding a dead token and failing at whatever the person did next.
- */
-function PinSheet({ open, onClose, api, onSignOut }: { open: boolean; onClose: () => void; api: AccountApi; onSignOut: () => void }) {
-  const t = useT();
-  const [current, setCurrent] = useState('');
-  const [next, setNext] = useState('');
-  useEffect(() => {
-    if (open) {
-      setCurrent('');
-      setNext('');
-    }
-  }, [open]);
-
-  const blocker = pinChangeBlocker({ current, next });
-
-  return (
-    <Sheet open={open} onClose={onClose} title={t('account.menu.pin')}>
-      <p class="t-body">{t('account.menu.pinBody')}</p>
-      <div class="field">
-        <span class="field__label">{t('account.menu.currentPin')}</span>
-        <CodeBoxes id="acct-pin-current" label={t('account.menu.currentPin')} length={4} value={current} onInput={setCurrent} disabled={api.busy} mask />
-      </div>
-      <div class="field">
-        <span class="field__label">{t('account.menu.newPin')}</span>
-        <CodeBoxes id="acct-pin-new" label={t('account.menu.newPin')} length={4} value={next} onInput={setNext} disabled={api.busy} />
-      </div>
-      {api.error ? <ErrorNote error={api.error} /> : null}
-      <Button
-        chevron={false}
-        busy={api.busy}
-        disabled={blocker !== null}
-        onClick={async () => {
-          if (!(await api.changePin(current, next))) return;
-          onClose();
-          onSignOut();
-        }}
-      >
-        {t('account.menu.savePin')}
-      </Button>
       <Button variant="link" onClick={onClose}>
         {t('common.cancel')}
       </Button>

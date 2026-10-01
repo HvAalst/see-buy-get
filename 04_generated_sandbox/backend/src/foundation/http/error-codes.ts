@@ -106,6 +106,8 @@ export const ERROR_CODES = {
   OTP_INVALID: { status: 400, title: 'Wrong or expired code' },
   OTP_LOCKED: { status: 400, title: 'Too many wrong codes' },
   PIN_INVALID: { status: 400, title: 'PIN must be 4 digits' },
+  // The recovery email was given but nobody has proved they read it: a code goes to the address first.
+  EMAIL_NOT_VERIFIED: { status: 400, title: 'Confirm your email address first' },
   // One digit four times, a straight run, pairs: the PINs somebody who knows you tries first. Refused when chosen.
   PIN_GUESSABLE: { status: 400, title: 'That PIN is too easy to guess' },
 

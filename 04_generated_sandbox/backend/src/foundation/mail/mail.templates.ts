@@ -78,6 +78,10 @@ export interface MailParams {
   'order-on-its-way': { store: string; orderRef?: string; shop: string; trackingUrl: string };
   'ready-for-collection': { shop: string; address?: string; collectBy: string; openUrl?: string };
   'freight-delivered': { code: string; description: string; destination: string; deliveredAt: string; carrier: string; driver?: string; receiverName?: string; amount?: number; currency?: string; noteNumber: string };
+  /** A code to an address: to confirm it is theirs, to get back into the account, or to undo a number change. */
+  'email-code': { code: string; minutes: number; why: 'confirm' | 'recover' | 'undo' };
+  /** Something happened to the way somebody signs in. Always sent; cannot be turned off. */
+  'account-safety': { headline: string; what: string; next: string; when: string; until?: string };
   /** Somebody asked to be told when the network reaches their country. Sent the moment they ask. */
   'interest-received': { country: string; kind: string };
   /** Two members of staff switched that country on. Sent by the approval itself, not by anybody remembering. */
@@ -173,6 +177,50 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
         { kind: 'button', label: 'Register now', href: p.joinUrl },
       ],
       reason: 'You are getting this email because you asked to be told when SeeBuyGet reaches your country.',
+    }),
+  },
+
+  'email-code': {
+    title: 'A code for your email address',
+    sentWhen: 'Somebody confirms a recovery email, recovers an account whose number is gone, or undoes a number change.',
+    wired: true,
+    sample: { code: '482915', minutes: 15, why: 'confirm' },
+    build: (p) => {
+      const WHY = {
+        confirm: { heading: 'Confirm your email address', lead: 'Somebody is setting this address as the recovery email on a SeeBuyGet account. If that is you, here is your code.' },
+        recover: { heading: 'Get back into your account', lead: 'Somebody asked to recover the SeeBuyGet account that uses this address, because its phone number is gone. If that is you, here is your code.' },
+        undo: { heading: 'Undo a number change', lead: 'Somebody asked to undo the phone number change on your SeeBuyGet account. If that is you, here is your code.' },
+      }[p.why];
+      return {
+        subject: `${p.code} is your SeeBuyGet code`,
+        preheader: `Your code is ${p.code}. It works once, for ${p.minutes} minutes.`,
+        blocks: [
+          { kind: 'heading', text: WHY.heading },
+          { kind: 'paragraph', text: WHY.lead },
+          { kind: 'code', label: 'Your code', value: p.code, note: `It works once, for ${p.minutes} minutes.` },
+          { kind: 'warning', title: 'Did not ask for this?', text: 'Ignore this email: nothing changes unless somebody types this code. Never pass it on — nobody from SeeBuyGet will ever ask you for it.' },
+        ],
+        reason: 'You are getting this email because this address was typed into a SeeBuyGet app.',
+      };
+    },
+  },
+
+  'account-safety': {
+    title: 'Something changed about how you sign in',
+    sentWhen: 'A PIN is locked by wrong guesses, a phone number is changed or put back, an account is recovered, or the recovery email is replaced.',
+    wired: true,
+    sample: { headline: 'Your phone number was changed', what: 'Your SeeBuyGet account now signs in with a different phone number.', next: 'If it was not you: within 24 hours, open any SeeBuyGet app, choose “Trouble signing in?” and then “Undo a number change”.', when: '2026-10-01T17:42:00Z', until: '2026-10-02T17:42:00Z' },
+    build: (p) => ({
+      subject: `SeeBuyGet: ${p.headline.charAt(0).toLowerCase()}${p.headline.slice(1)}`,
+      preheader: p.what,
+      blocks: [
+        { kind: 'heading', text: p.headline },
+        { kind: 'paragraph', text: p.what },
+        { kind: 'facts', rows: [['When', formatWhen(p.when)], ...(p.until ? ([['Can be undone until', formatWhen(p.until)]] as Array<[string, string]>) : [])] },
+        { kind: 'warning', title: 'What to do', text: p.next },
+        { kind: 'button', label: 'Help with signing in', href: helpUrl('account-recovery') },
+      ],
+      reason: 'You are getting this email because it is the recovery address on a SeeBuyGet account. We always tell you — this email cannot be turned off.',
     }),
   },
 

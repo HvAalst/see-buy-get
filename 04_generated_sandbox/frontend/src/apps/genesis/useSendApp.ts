@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { t } from '../../shared/i18n'; // plain t(): toasts/outbound text are built at action time in the sender's active locale
 import { isSignInRequired, narrow, type SbgError } from '../../lib/sbg';
+import { asksForEmail } from '../../shared/account/recovery';
 import type { MediaKind } from '../../lib/sbg/personas/media';
 import type { MerchantTag } from '../../lib/sbg/personas/consumer';
 import { downscaleImage, type MediaView } from '../../shared/media';
@@ -39,7 +40,7 @@ export type Screen = 'send' | 'track' | 'parcels' | 'account';
 export type WizardStep = 'parcel' | 'from' | 'to' | 'quote' | 'book' | 'done';
 /** The consumer sign-in flow: enroll walks phone → code → pin; login is phone + pin together. */
 export type AuthMode = 'login' | 'enroll';
-export type AuthStep = 'phone' | 'code' | 'pin';
+export type AuthStep = 'phone' | 'code' | 'pin' | 'email';
 
 export interface SendState {
   screen: Screen;
@@ -89,6 +90,9 @@ export interface SendState {
   authBusy: boolean;
   authError: SbgError | null;
   authDevCode: string | null; // sandbox convenience: the OTP echoed back, shown as a hint
+  /** The recovery email a first PIN needs, and the code that proves somebody reads it. */
+  authEmail: string;
+  authEmailCode: string;
 
   /* --- my parcels (the receiver/sender home) --- */
   parcels: MyParcels | null;
@@ -175,6 +179,8 @@ const INITIAL: SendState = {
   authBusy: false,
   authError: null,
   authDevCode: null,
+  authEmail: '',
+  authEmailCode: '',
   parcels: null,
   parcelsState: 'idle',
   parcelsError: null,
@@ -502,6 +508,8 @@ export function useSendApp() {
       authError: null,
       authCode: '',
       authPin: '',
+      authEmail: '',
+      authEmailCode: '',
       authStep: 'phone',
       savingProfile: false, // a prior person's in-flight profile save must not leave a stuck spinner
       avatarBusy: false,
@@ -527,10 +535,12 @@ export function useSendApp() {
   const setAuthPhone = useCallback((v: string) => setState((s) => ({ ...s, authPhone: v, phoneKnown: false, authError: null })), []);
   const setAuthCode = useCallback((v: string) => setState((s) => ({ ...s, authCode: v, authError: null })), []);
   const setAuthPin = useCallback((v: string) => setState((s) => ({ ...s, authPin: v, authError: null })), []);
+  const setAuthEmail = useCallback((v: string) => setState((s) => ({ ...s, authEmail: v, authError: null })), []);
+  const setAuthEmailCode = useCallback((v: string) => setState((s) => ({ ...s, authEmailCode: v, authError: null })), []);
   // A navigation bumps the auth epoch so any in-flight request bails out instead of clobbering the step.
   const setAuthMode = useCallback((mode: AuthMode) => {
     authEpoch.current++;
-    setState((s) => ({ ...s, authMode: mode, authStep: 'phone', authCode: '', authPin: '', authError: null }));
+    setState((s) => ({ ...s, authMode: mode, authStep: 'phone', authCode: '', authPin: '', authEmail: '', authEmailCode: '', authError: null }));
   }, []);
   // "Back" always returns to phone entry: the OTP is single-use (consumed on verify), so the code step is
   // never a valid place to return to — re-requesting a fresh code from phone entry is the only real path.
@@ -575,9 +585,18 @@ export function useSendApp() {
     if (!codeReady(pin, 4)) return;
     const epoch = ++authEpoch.current;
     setState((s) => ({ ...s, authBusy: true, authError: null }));
-    const r = await enroll(phone, pin, stateRef.current.inviteToken ?? undefined);
+    // On the email step the address and its code ride along; before it, the server is asked whether it needs one.
+    const onEmailStep = stateRef.current.authStep === 'email';
+    const recovery = onEmailStep ? { email: stateRef.current.authEmail.trim(), code: stateRef.current.authEmailCode } : undefined;
+    const r = await enroll(phone, pin, stateRef.current.inviteToken ?? undefined, recovery);
     if (epoch !== authEpoch.current) return;
     if (r.error) {
+      // A FIRST PIN needs a recovery email. That is the next thing to fill in, not an error: the phone stays
+      // verified and the PIN stays typed. Somebody replacing a forgotten PIN already has one and never sees this.
+      if (!onEmailStep && asksForEmail(r.error)) {
+        setState((s) => ({ ...s, authBusy: false, authStep: 'email', authError: null }));
+        return;
+      }
       setState((s) => ({ ...s, authBusy: false, authError: r.error }));
       return;
     }
@@ -1108,6 +1127,8 @@ export function useSendApp() {
     state,
     // The Web Push controls (N1b) — surfaced for the TopBar NotificationBell; null while signed out.
     notifications: client?.notifications ?? null,
+    /** The signed-in client, for the shared account hook behind Settings; null while signed out. */
+    sbg: client?.client.sbg ?? null,
     actions: {
       /** The same controls, inside actions so a SCREEN can ask for permission where somebody sees the ask. */
       notifications: client?.notifications ?? null,
@@ -1134,6 +1155,8 @@ export function useSendApp() {
       setAuthPhone,
       setAuthCode,
       setAuthPin,
+      setAuthEmail,
+      setAuthEmailCode,
       setAuthMode,
       authBack,
       pickContact,

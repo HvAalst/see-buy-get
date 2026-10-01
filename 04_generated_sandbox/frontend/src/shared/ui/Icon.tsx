@@ -44,6 +44,9 @@ export type IconName =
   | 'grid'
   | 'bell'
   | 'filter'
+  | 'settings'
+  | 'mail'
+  | 'phone'
   | 'info';
 
 const PATHS: Record<IconName, JSX.Element> = {
@@ -133,6 +136,21 @@ const PATHS: Record<IconName, JSX.Element> = {
     </>
   ),
   bell: <path d="M6.4 10a5.6 5.6 0 0 1 11.2 0c0 4.2 1.4 6 1.4 6H5s1.4-1.8 1.4-6ZM10 19.4a2.2 2.2 0 0 0 4 0" />,
+  // Settings as two sliders: a cog's teeth close up into a blob at 20px on a cheap screen, and these do not.
+  settings: (
+    <>
+      <path d="M4 7.5h8.6m4.8 0H20M4 16.5h2.6m4.8 0H20" />
+      <circle cx="15" cy="7.5" r="2.4" />
+      <circle cx="9" cy="16.5" r="2.4" />
+    </>
+  ),
+  mail: <path d="M4.5 6h15A1.5 1.5 0 0 1 21 7.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 16.5v-9A1.5 1.5 0 0 1 4.5 6Zm-1.1 1 8.6 6.2L20.6 7" />,
+  phone: (
+    <>
+      <path d="M8.5 3h7a1.5 1.5 0 0 1 1.5 1.5v15a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 7 19.5v-15A1.5 1.5 0 0 1 8.5 3Z" />
+      <path d="M11 17.8h2" />
+    </>
+  ),
   // A circled i. Drawn as a ring plus a dot and a stem so it reads at 16px without a filled glyph.
   info: (
     <>

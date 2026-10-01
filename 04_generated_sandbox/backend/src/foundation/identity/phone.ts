@@ -52,6 +52,15 @@ export function hashPhone(phone: string): string {
   return createHash('sha256').update(`${PHONE_PEPPER}:${e164}`).digest('hex');
 }
 
+/**
+ * The same kind of key for an EMAIL ADDRESS — lower-cased, trimmed, peppered. It is how one inbox is known to be one
+ * account's without the address itself sitting in the operational core.
+ */
+export function hashEmail(email: string): string {
+  const e = (email || '').trim().toLowerCase();
+  return e ? createHash('sha256').update(`${PHONE_PEPPER}:email:${e}`).digest('hex') : '';
+}
+
 /** A phone is usable as an identity key only if it normalizes to a plausible E.164 (≥ 9 digits). */
 export function isPlausiblePhone(phone: string): boolean {
   return normalizePhone(phone).replace(/\D/g, '').length >= 9;

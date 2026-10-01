@@ -10,7 +10,7 @@
  * gracefully to the generic presentation rather than throwing.
  */
 export type SbgErrorCode =
-  | 'BAD_REQUEST' | 'VALIDATION_FAILED' | 'INVALID_INPUT' | 'AMOUNT_INVALID' | 'EMAIL_INVALID'
+  | 'BAD_REQUEST' | 'VALIDATION_FAILED' | 'INVALID_INPUT' | 'AMOUNT_INVALID' | 'EMAIL_INVALID' | 'EMAIL_NOT_VERIFIED'
   | 'PASSWORD_TOO_SHORT' | 'PHONE_REQUIRED' | 'PHONE_INVALID' | 'PHONE_NOT_VERIFIED' | 'PHOTO_REQUIRED'
   | 'ADDRESS_REQUIRED' | 'FIELD_REQUIRED' | 'INVALID_RATING' | 'ZONES_REQUIRED' | 'LICENCE_REQUIRED'
   | 'LICENCE_EXPIRED' | 'INVALID_VEHICLE_CLASS' | 'INVALID_TRUCK_SUBTYPE' | 'UNKNOWN_ROLE' | 'DISPUTE_INCOMPLETE'
@@ -94,6 +94,8 @@ const PRESENTATION: Partial<Record<SbgErrorCode, ErrorPresentation>> = {
   ROLE_NOT_HELD: { icon: 'block', tone: 'warn', say: 'error.role_not_held' },
   PHONE_INVALID: { icon: 'keypad', tone: 'warn', say: 'error.phone_invalid' },
   PHONE_NOT_VERIFIED: { icon: 'keypad', tone: 'warn', say: 'error.verify_phone' },
+  // Choosing a PIN needs a recovery email, proven by the code sent to it.
+  EMAIL_NOT_VERIFIED: { icon: 'keypad', tone: 'warn', say: 'error.verify_email' },
   PHOTO_REQUIRED: { icon: 'camera', tone: 'warn', say: 'error.photo_needed' },
   NOT_FOUND: { icon: 'search', tone: 'warn', say: 'error.not_found' },
   WRONG_PUDO: { icon: 'pin', tone: 'warn', say: 'error.wrong_place' },

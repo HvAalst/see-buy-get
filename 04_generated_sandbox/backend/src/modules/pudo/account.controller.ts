@@ -4,7 +4,8 @@ import { actingPerson } from '../../foundation/auth/acting';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { PersonService } from './person.service';
 import { HandleService } from '../../foundation/handle/handle.service';
-import { AccountProfileDto, AccountPinDto } from './pudo.dto';
+import { AccountProfileDto, AccountPinDto, AccountEmailDto, ChangeNumberDto } from './pudo.dto';
+import { AccountRecoveryService } from './account-recovery.service';
 
 /**
  * THE ACCOUNT — one surface, every app.
@@ -37,6 +38,7 @@ export class AccountController {
   constructor(
     private readonly persons: PersonService,
     private readonly handles: HandleService,
+    private readonly recovery: AccountRecoveryService,
   ) {}
 
   /**
@@ -86,5 +88,29 @@ export class AccountController {
   changePin(@Body() dto: AccountPinDto, @Actor() actor: IntrospectionResult) {
     const { person } = this.persons.changePinForPerson(actingPerson(actor), dto.currentPin, dto.newPin);
     return { changed: true, pinChangedAt: person.pinChangedAt, signedOutEverywhere: true };
+  }
+
+  /**
+   * Set or replace the recovery email — the PIN again (an open session is not proof of who holds the phone), and
+   * the code sent to the NEW address. The address it replaces is told, because whoever swaps the email is one
+   * step from owning the account.
+   */
+  @Post('email')
+  setEmail(@Body() dto: AccountEmailDto, @Actor() actor: IntrospectionResult) {
+    return this.persons.view(this.recovery.changeEmail(actingPerson(actor), dto.pin, dto.email, dto.code));
+  }
+
+  /**
+   * MOVE THIS ACCOUNT TO ANOTHER PHONE NUMBER — by the person themselves, signed in. The PIN again, and a code
+   * already confirmed on the new number (auth/phone/request + verify). No staff and no ID: the PIN already opens
+   * the whole account. Keyed to the token, never to a number in the body.
+   *
+   * Every session ends, this one included; they sign in again with the new number and the same PIN. It can be
+   * undone for 24 hours, and the old number is held for them until then.
+   */
+  @Post('phone/change')
+  changeNumber(@Body() dto: ChangeNumberDto, @Actor() actor: IntrospectionResult) {
+    const person = this.recovery.changeNumber(actingPerson(actor), dto.pin, dto.newPhone);
+    return { changed: true, undoUntil: person.phoneChange?.undoUntil, signedOutEverywhere: true };
   }
 }

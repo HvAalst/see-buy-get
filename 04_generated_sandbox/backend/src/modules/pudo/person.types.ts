@@ -54,8 +54,41 @@ export interface Person {
   /** Opaque handle to the person's avatar image (S29). The bytes are owner-gated in MediaService; the
    *  person carries only the id, and replacing it purges the old blob. */
   avatarMediaId?: string;
+  /**
+   * THE SECOND CHANNEL. A phone number can be lost, deregistered or handed to somebody else by an operator; an
+   * inbox is what a person still holds when that happens. Confirmed by a code before it is relied on. The address
+   * itself is in the vault; here is its key (one inbox, one account), a masked form to show, and when it was proved.
+   */
+  emailHash?: string;
+  emailMasked?: string;
+  emailVerifiedAt?: string;
+  /** A number change still inside its 24 hours — see PhoneChange. Cleared when it is undone or the window closes. */
+  phoneChange?: PhoneChange;
   roles: RoleLink[];
   createdAt: string;
+}
+
+/**
+ * A NUMBER THAT MOVED, FOR AS LONG AS IT CAN BE MOVED BACK.
+ *
+ * Whoever knows the PIN can move an account to their own number — a colleague, say — and the owner would be
+ * locked out for good. So for 24 hours the move can be undone: with the OLD number and the PIN as it was
+ * (kept here, because the mover may change it), or with a code to the email. Until the window closes the old
+ * number is held: nobody else can register it, so there is somewhere to move back to.
+ */
+export interface PhoneChange {
+  fromHash: string;
+  at: string;
+  undoUntil: string;
+  /** Who moved it: the person signed in with their PIN, the inbox when the number was gone, or two members of staff. */
+  how: 'self' | 'email' | 'staff';
+  /** The PIN as it was before the move — the mover may know the PIN and change it; the owner knows this one. */
+  pinHash?: string;
+  pinSalt?: string;
+  /** Wrong tries at undoing it with the old number. Five, and only the email can undo it. */
+  undoAttempts?: number;
+  /** Register prints still held on the OLD number (a driver's, a shop's) — freed when the window closes. */
+  held: Array<{ register: 'driver' | 'shop'; did: string; key: string }>;
 }
 
 /** The safe, PII-free projection returned to a signed-in person (no hashes, no vault ref, no PIN). */
@@ -73,6 +106,10 @@ export interface PersonView {
   address?: string;
   /** Self-view only: when the PIN was last changed. */
   pinChangedAt?: string;
+  /** Self-view only: the recovery email, masked ("a…@example.com"). Absent: none confirmed yet. */
+  email?: string;
+  /** Self-view only: a number change that can still be undone, and until when. */
+  numberChange?: { at: string; undoUntil: string };
 }
 
 /**
@@ -98,5 +135,7 @@ export function toView(person: Person): PersonView {
     // avatarMediaId is opaque + self-view, so it rides the pure projection; displayName lives in the
     // vault and is grafted on by PersonService.view() (a reveal), never here.
     avatarMediaId: person.avatarMediaId,
+    ...(person.emailMasked && person.emailVerifiedAt ? { email: person.emailMasked } : {}),
+    ...(person.phoneChange ? { numberChange: { at: person.phoneChange.at, undoUntil: person.phoneChange.undoUntil } } : {}),
   };
 }

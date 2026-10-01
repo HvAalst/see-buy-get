@@ -26,7 +26,13 @@ export interface AccountView {
    * not, so a menu that showed "@yourname" to everybody would be advertising a dead link to most of them.
    */
   handle?: string;
+  /** The recovery email, masked by the server ("a…@example.com"). Absent: none confirmed yet. */
+  email?: string;
+  /** A number change that can still be undone, and until when. */
+  numberChange?: { at: string; undoUntil: string };
 }
+
+type Sent = { sent: boolean; code?: string };
 
 export interface AccountApi {
   account: AccountView | null;
@@ -46,7 +52,20 @@ export interface AccountApi {
   saveAvatar: (dataUrl: string) => Promise<string | null>;
   /** Fetch owner-gated bytes for an <AuthImage>, whose `load` prop takes exactly this Result shape. */
   loadMedia: (mediaId: string) => Promise<{ data: Blob | null; error: unknown }>;
+  /**
+   * SETTINGS — the recovery email and the phone number. These answer with the Result itself rather than through
+   * `error` above: a refusal belongs in the sheet where the person typed, not on the menu behind it.
+   */
+  sendEmailCode: (email: string) => Promise<Result<Sent>>;
+  /** The PIN again, and the code sent to the NEW address. The menu redraws from what the server stored. */
+  setEmail: (pin: string, email: string, code: string) => Promise<Result<unknown>>;
+  sendPhoneCode: (phone: string) => Promise<Result<Sent>>;
+  confirmPhoneCode: (phone: string, code: string) => Promise<Result<unknown>>;
+  /** Move the account to a number already confirmed by code. On success EVERY session is over, this one included. */
+  changeNumber: (pin: string, newPhone: string) => Promise<Result<unknown>>;
 }
+
+const NO_CLIENT = { data: null, error: null } as unknown as Result<never>;
 
 /** No client yet (an app still booting, or signed out) — every call is a no-op rather than a crash. */
 const IDLE: AccountApi = {
@@ -59,6 +78,11 @@ const IDLE: AccountApi = {
   changePin: async () => false,
   saveAvatar: async () => null,
   loadMedia: async () => ({ data: null, error: null }),
+  sendEmailCode: async () => NO_CLIENT,
+  setEmail: async () => NO_CLIENT,
+  sendPhoneCode: async () => NO_CLIENT,
+  confirmPhoneCode: async () => NO_CLIENT,
+  changeNumber: async () => NO_CLIENT,
 };
 
 export function useAccount(client: SbgClient | null, enabled = true): AccountApi {
@@ -160,6 +184,28 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
     [client],
   );
 
+  const post = useCallback(
+    <T,>(path: string, body: unknown): Promise<Result<T>> => {
+      if (!client) return Promise.resolve(NO_CLIENT);
+      return client.request((raw) => raw.POST(path as never, { body } as never) as never) as Promise<Result<T>>;
+    },
+    [client],
+  );
+
+  const setEmail = useCallback(
+    async (pin: string, email: string, code: string) => {
+      const r = await post<unknown>('/v1/sbg/account/email', { pin, email, code });
+      // The response is the person's self-view; what belongs to the token (acting as, handle) is kept, as in `save`.
+      if (!r.error && r.data) setAccount((prev) => ({ ...narrow<AccountView>(r.data), actingAs: prev?.actingAs, actingDid: prev?.actingDid, handle: prev?.handle }));
+      return r;
+    },
+    [post],
+  );
+  const sendEmailCode = useCallback((email: string) => post<Sent>('/v1/sbg/identity/email/request', { email }), [post]);
+  const sendPhoneCode = useCallback((phone: string) => post<Sent>('/v1/sbg/auth/phone/request', { phone }), [post]);
+  const confirmPhoneCode = useCallback((phone: string, code: string) => post<unknown>('/v1/sbg/auth/phone/verify', { phone, code }), [post]);
+  const changeNumber = useCallback((pin: string, newPhone: string) => post<unknown>('/v1/sbg/account/phone/change', { pin, newPhone }), [post]);
+
   if (!client) return IDLE;
-  return { account, loading, error, busy, reload, save, changePin, saveAvatar, loadMedia };
+  return { account, loading, error, busy, reload, save, changePin, saveAvatar, loadMedia, sendEmailCode, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber };
 }

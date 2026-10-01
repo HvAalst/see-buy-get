@@ -520,6 +520,47 @@ export class AgentService {
     return agent;
   }
 
+  /* --- the registered number moves with the person (AccountRecoveryService) --- */
+
+  /** Refuse, before anything moves, a number another registration in this register already holds. */
+  assertPhoneFree(did: string, newPhone: string): void {
+    if (this.prints.taken([['phone', newPhone]], did)) throw new GlosError('DUPLICATE', 'An agent with this mobile already exists', { field: 'phone', register: 'shop' });
+  }
+
+  /**
+   * Hold the new number for this registration and put it in the vault. The OLD number stays held too — its key is
+   * returned — so for the 24 hours a change can be undone nobody else can register with it.
+   */
+  moveMobile(did: string, newPhone: string): string {
+    const agent = this.require(did);
+    this.assertPhoneFree(did, newPhone);
+    this.prints.claim([['phone', newPhone]], did);
+    if (!agent.vaultRef || !this.vault.exists(agent.vaultRef)) return '';
+    const pii = this.vault.reveal(agent.vaultRef, { purpose: 'number-change', requesterDid: did });
+    this.vault.update(agent.vaultRef, { ...pii, phone: newPhone, previousPhone: pii.phone });
+    return this.prints.keyOf('phone', pii.phone);
+  }
+
+  /** The change was undone: the new number is let go, and the vault says the old one again. */
+  undoMobile(did: string): void {
+    const agent = this.require(did);
+    if (!agent.vaultRef || !this.vault.exists(agent.vaultRef)) return;
+    const pii = this.vault.reveal(agent.vaultRef, { purpose: 'number-change-undo', requesterDid: did });
+    if (typeof pii.previousPhone !== 'string' || !pii.previousPhone) return;
+    this.prints.release('phone', pii.phone, did);
+    this.vault.update(agent.vaultRef, { ...pii, phone: pii.previousPhone, previousPhone: undefined });
+  }
+
+  /** The 24 hours are over: the old number is free for whoever holds it now. */
+  releaseHeldPhone(key: string, did: string): void {
+    this.prints.releaseKey(key, did);
+  }
+
+  /** Whether this registration was made with that national ID number — the question an email recovery has to answer. */
+  holdsNationalId(did: string, nationalId: string | undefined): boolean {
+    return Boolean(nationalId?.trim()) && this.prints.holder('nationalId', nationalId) === did;
+  }
+
   private require(did: string): Agent {
     const agent = this.agents.get(did);
     if (!agent) throw new GlosError('NOT_FOUND', `PUDO agent not found: ${did}`);

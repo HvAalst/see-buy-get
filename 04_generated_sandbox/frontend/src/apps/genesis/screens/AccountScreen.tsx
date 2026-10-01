@@ -1,8 +1,8 @@
 import { HelpLink } from '../../../shared/guide/HelpLink';
-import { CredentialAge } from '../../../shared/account/CredentialAge';
-import { pinChangeBlocker } from '../../../shared/account/password';
+import { SettingsSheet } from '../../../shared/account/SettingsSheet';
+import type { AccountApi } from '../../../shared/account/useAccount';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { AuthImage, Button, Card, CodeBoxes, ErrorNote, Icon, LanguageSwitcher, MediaLibrary, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { AuthImage, Button, Card, ErrorNote, Icon, LanguageSwitcher, MediaLibrary, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { roleMeta } from '../logic';
 import { ROLE_APPS } from '../api';
@@ -13,19 +13,19 @@ import type { SendActions, SendState } from '../useSendApp';
 export interface AccountScreenProps {
   state: SendState;
   actions: SendActions;
+  /** The person's account as every app sees it — what Settings reads and changes. */
+  account: AccountApi;
 }
 
 /**
  * The account home + role switcher (S21). "One person, one account, many roles" made visible: the
  * person sees every role they hold and can act as any of them — tapping a role hands its token to that
- * role's own app and opens it, so a sender who is also a driver never signs in twice. Change-PIN lives
- * in a sheet (its own context, its own primary); sign-out is the outline action.
+ * role's own app and opens it, so a sender who is also a driver never signs in twice. The PIN, the recovery
+ * email and the phone number live in Settings — the same sheet as in every other app; sign-out is the outline action.
  */
-export function AccountScreen({ state, actions }: AccountScreenProps) {
+export function AccountScreen({ state, actions, account }: AccountScreenProps) {
   const t = useT(); // re-render this screen's translated strings when the language changes
-  const [pinOpen, setPinOpen] = useState(false);
-  const [newPin, setNewPin] = useState('');
-  const [currentPin, setCurrentPin] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
@@ -131,14 +131,13 @@ export function AccountScreen({ state, actions }: AccountScreenProps) {
         <HelpLink app="send" />
       </div>
 
-      <Card title={t('send.account.signInTitle')}>
+      <Card>
         <div class="rows">
-          <button type="button" class="row" onClick={() => { setNewPin(''); setCurrentPin(''); setPinOpen(true); }}>
-            <span class="row__ic"><Icon name="keypad" size={24} /></span>
+          <button type="button" class="row" onClick={() => setSettingsOpen(true)}>
+            <span class="row__ic"><Icon name="settings" size={24} /></span>
             <span class="row__body">
-              <span class="row__t">{t('send.account.changePin')}</span>
-              <span class="row__s">{t('send.account.changePinSub')}</span>
-              <CredentialAge iso={state.identity?.pinChangedAt} class="row__s" />
+              <span class="row__t">{t('account.settings.title')}</span>
+              <span class="row__s">{t('account.settings.sub')}</span>
             </span>
             <span class="row__end"><Icon name="chevronRight" size={22} /></span>
           </button>
@@ -155,27 +154,15 @@ export function AccountScreen({ state, actions }: AccountScreenProps) {
         <ReadAloud text={() => (roles.length === 1 ? t('send.account.aloudOne') : t('send.account.aloudMany', { count: roles.length }))} label={t('send.readAloud')} />
       </div>
 
-      <Sheet open={pinOpen} onClose={() => setPinOpen(false)} title={t('send.account.changePin')}>
-        <div class="field">
-          <span class="field__label">{t('send.currentPin')}</span>
-          <CodeBoxes id="current-pin" label={t('send.currentPin')} length={4} value={currentPin} onInput={setCurrentPin} disabled={state.accountBusy} mask />
-        </div>
-        <div class="field">
-          <span class="field__label">{t('send.newPin')}</span>
-          <CodeBoxes id="change-pin" label={t('send.newPin')} length={4} value={newPin} onInput={setNewPin} disabled={state.accountBusy} />
-        </div>
-        <Button
-          chevron={false}
-          disabled={pinChangeBlocker({ current: currentPin, next: newPin }) !== null}
-          busy={state.accountBusy}
-          onClick={async () => {
-            if (await actions.changePin(currentPin, newPin)) setPinOpen(false);
-          }}
-        >
-          {t('send.account.savePin')}
-        </Button>
-        <Button variant="link" onClick={() => setPinOpen(false)}>{t('common.cancel')}</Button>
-      </Sheet>
+      {/* The Send app is handed a fresh sign-in when the PIN changes, so it stays signed in; everything else in
+          Settings is the shared account, exactly as in the other apps. */}
+      <SettingsSheet
+        open={settingsOpen}
+        onClose={() => { setSettingsOpen(false); void account.reload(); }}
+        api={account}
+        onSignOut={() => actions.signOut()}
+        pin={{ change: actions.changePin, busy: state.accountBusy, error: state.accountError }}
+      />
 
       <Sheet open={profileOpen} onClose={() => setProfileOpen(false)} title={t('send.account.profileTitle')}>
         {/* The avatar: pick a photo → it uploads and applies at once (the old one is purged server-side). */}
