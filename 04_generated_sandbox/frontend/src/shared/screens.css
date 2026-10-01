@@ -362,6 +362,12 @@
   /* Holds the right-hand edge on one line, and stays with it on the line below when the row wraps. */
   margin-left: auto;
   color: var(--tx3);
+  /* …and wraps ITSELF once it holds more than fits. A status pill and three actions on a phone were 456px of
+     row on a 390px screen: nothing scrolled, the whole page simply grew, and every fixed thing on it — the top
+     bar, a sheet, a toast — ran off the right-hand edge. */
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 100%;
 }
 
 .row__count {

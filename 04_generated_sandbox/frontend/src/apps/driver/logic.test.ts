@@ -18,6 +18,7 @@ import {
   claimControl,
   countdownLabel,
   driverStatusNotice,
+  removalWords,
   isFull,
   lastReadingBreached,
   minEarnFilter,
@@ -502,5 +503,17 @@ describe('FP8 — the shift clock', () => {
     expect(hoursWords(undefined, t)).toBeNull();
     expect(hoursWords({ onDuty: 3.2, limit: 13, over: false }, t)).toBe('On duty 3.2 h of 13 h');
     expect(hoursWords({ onDuty: 13.4, limit: 13, over: true }, t)).toBe('On duty 13.4 h — over the 13 h limit');
+  });
+});
+
+describe('removalWords — why a fleet took a driver off, as the driver reads it', () => {
+  it('says the coded reason, and always what it means for them', () => {
+    expect(removalWords({ reason: 'left' }, t)).toBe('They say you no longer work for them. Your trips, papers and rating stay yours. You cannot start a shift until a fleet offers you a place.');
+    expect(removalWords({ reason: 'ended' }, t)).toContain('ended your contract');
+  });
+
+  it('quotes the fleet’s own words for "other" — and says nothing invented when it gave none', () => {
+    expect(removalWords({ reason: 'other', note: 'Never came back after leave' }, t)).toContain('“Never came back after leave”');
+    expect(removalWords({ reason: 'other' }, t)).toBe('Your trips, papers and rating stay yours. You cannot start a shift until a fleet offers you a place.');
   });
 });

@@ -26,6 +26,7 @@ const PREFIXES = ['fleet/drivers/:did', 'agents/:did', 'fleet/managers/:did', 'd
 const GUARDS = [
   'this.assertDriverReader(',
   'this.assertDriverActs(',
+  'this.assertDriverSelf(', // the driver ONLY — not staff, not a fleet office: saying yes to a fleet is nobody else's to say
   'this.assertDriverOwner(',
   'this.assertDriverInFleet(',
   'this.isFleetOffice(',

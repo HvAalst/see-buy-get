@@ -41,12 +41,16 @@ export function createDriverApi(sbg: SbgClient) {
      * FP4 — a courier without a fleet sends the renewed licence: the photo (an uploaded `kyc_licence`
      * media id) and the date they read off it. It switches nothing on until network staff read the card.
      */
-    /** Which fleet a join code belongs to, and what has to be finished before moving to it. Changes nothing. */
-    checkFleetMove: (did: string, code: string) =>
-      sbg.request((c) => c.POST('/v1/sbg/drivers/{did}/fleet/check', { params: { path: { did } }, body: { code } })),
+    /** The fleets that have offered this driver a place — and what would have to be finished before saying yes. */
+    fleetOffers: (did: string) => sbg.request((c) => c.GET('/v1/sbg/drivers/{did}/fleet-offers', { params: { path: { did } } })),
 
-    /** Move to that fleet now. Every earlier session ends; a fresh token comes back for this device. */
-    moveFleet: (did: string, code: string) => sbg.request((c) => c.POST('/v1/sbg/drivers/{did}/fleet', { params: { path: { did } }, body: { code } })),
+    /** Yes: drive for that fleet now. Every earlier session ends; a fresh token comes back for this phone. */
+    acceptFleetOffer: (did: string, offerId: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/drivers/{did}/fleet-offers/{offerId}/accept', { params: { path: { did, offerId } } })),
+
+    /** No. The fleet is told; nothing else changes. */
+    declineFleetOffer: (did: string, offerId: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/drivers/{did}/fleet-offers/{offerId}/decline', { params: { path: { did, offerId } } })),
 
     sendLicenceRenewal: (did: string, body: { copyRef: string; expiresAt: string; number?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/licence-renewal', { params: { path: { did } }, body: body as never })),
@@ -92,9 +96,12 @@ export function createDriverApi(sbg: SbgClient) {
     setVehiclePrice: (vehicleId: string, price: number) =>
       sbg.request((c) => c.PATCH('/v1/sbg/vehicles/{id}/pricing', { params: { path: { id: vehicleId } }, body: { price } })),
 
-    /** Start a shift: scan the vehicle QR, or name one already driven before — optionally saying where it goes. */
-    startSession: (did: string, vehicle: { vehicleQr?: string; vehicleId?: string }, leg?: DeclaredLegBody) =>
-      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/start-session', { params: { path: { did } }, body: { ...vehicle, leg } })),
+    /**
+     * Start a shift: scan the vehicle QR, or name one already driven before — optionally saying where it goes.
+     * With the driver's PIN: a phone left signed in is not proof of who is holding it.
+     */
+    startSession: (did: string, vehicle: { vehicleQr?: string; vehicleId?: string }, pin: string, leg?: DeclaredLegBody) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/start-session', { params: { path: { did } }, body: { ...vehicle, pin, leg } })),
 
     /** The vehicles this driver has driven before — the "which one today?" list, before they reach the yard. */
     driverVehicles: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/vehicles', { params: { path: { did } } })),

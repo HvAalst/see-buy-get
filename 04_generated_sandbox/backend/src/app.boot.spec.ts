@@ -1,5 +1,6 @@
 import { MailService } from './foundation/mail/mail.service';
 import { FleetMoveService } from './modules/pudo/fleet-move.service';
+import { FleetOfferService } from './modules/pudo/fleet-offer.service';
 import { Test } from '@nestjs/testing';
 import { AppModule } from './app.module';
 
@@ -25,6 +26,7 @@ describe('the application boots', () => {
     expect(moduleRef.get(MailService)).toBeDefined();
     // The same for moving a driver between fleets: optional on the controller, so the real graph must hold it.
     expect(moduleRef.get(FleetMoveService, { strict: false })).toBeDefined();
+    expect(moduleRef.get(FleetOfferService, { strict: false })).toBeDefined();
     await moduleRef.close();
   }, 60_000);
 });

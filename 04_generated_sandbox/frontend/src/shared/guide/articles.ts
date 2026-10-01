@@ -91,7 +91,7 @@ export const ARTICLES: GuideArticle[] = [
       "Forgot the code? Tap “Forgot the code? Sign in with your phone”, type your phone and PIN, and pick your fleet from the list."
     ],
     notes: [
-      "Five wrong PINs lock the PIN for a while. Anybody who manages the fleet can see the code in the app."
+      "Five wrong PINs lock the PIN until you verify your phone by code and choose a new one. Anybody who manages the fleet can see the code in the app."
     ]
   },
   {
@@ -101,7 +101,7 @@ export const ARTICLES: GuideArticle[] = [
       "console"
     ],
     title: "The fleet code, and issuing a new one",
-    summary: "The code only names the fleet. Issue a new one if it has been shared with people who should no longer have it.",
+    summary: "The code only names the fleet at sign-in. It never adds anyone to your fleet. Issue a new one if it has been shared with people who should no longer have it.",
     steps: [
       "Fleet app: Dashboard, then Fleet sign-in code. Tap Show to read it.",
       "Tap “Issue a new code” and confirm. The old code stops working at once.",
@@ -110,6 +110,26 @@ export const ARTICLES: GuideArticle[] = [
     notes: [
       "The card says when the code was last changed, and suggests a new one once it is over 90 days old.",
       "Network staff can issue a new code from the operator console: Overview, then The fleets, then New code."
+    ]
+  },
+  {
+    id: "fleet-roster",
+    apps: [
+      "fleet"
+    ],
+    title: "Taking a driver on, and taking one off",
+    summary: "You add a new driver yourself. A driver who is already on SeeBuyGet joins only when you offer them a place and they say yes.",
+    steps: [
+      "New to SeeBuyGet: Drivers, then Add a driver. Type their details and the phone number they will sign in with.",
+      "Already on SeeBuyGet: Drivers, then “Offer a place to a driver already on SeeBuyGet”. Type the phone number they sign in with and tap Offer a place.",
+      "They see the offer in their driver app and say yes or no. Until they say yes, you see only the number you typed.",
+      "To take a driver off: Drivers, then “Take off fleet” beside their name. Choose why; they are shown your reason."
+    ],
+    notes: [
+      "An offer stays open for 7 days. You can take it back while it is open.",
+      "A driver carrying one of your loads, or rostered on one of your runs, cannot be taken off until the load is delivered or handed back and somebody else is on the run.",
+      "A driver you take off keeps their own trips, papers and rating. Every trip they did for you stays in your records.",
+      "Only your own drivers can start a shift on your vehicles."
     ]
   },
   {
@@ -123,6 +143,29 @@ export const ARTICLES: GuideArticle[] = [
       "Type your phone number and PIN, and tap Sign in.",
       "First time, or forgot your PIN? Tap “First time here, or forgot your PIN?”. We send a code to your phone; type it, then choose a PIN.",
       "The app says “This phone is not registered to a driver”? Your PIN is fine: ask your fleet manager which number they registered."
+    ],
+    notes: [
+      "Five wrong PINs lock the PIN. Only a code sent to your phone opens it again, and you are told when it happens.",
+      "Signing in on another phone signs this one out. If you are signed out and it was not you, choose a new PIN.",
+      "Starting a shift asks for your PIN again, so nobody can start one on a phone you left signed in."
+    ]
+  },
+  {
+    id: "driver-fleet",
+    apps: [
+      "driver"
+    ],
+    title: "Your fleet: joining one, and being taken off",
+    summary: "A fleet takes you on by offering you a place. You say yes or no in the app. No code is typed anywhere.",
+    steps: [
+      "Give the fleet office the phone number you sign in with.",
+      "When they offer you a place, it shows on your home screen, and under your picture, then Your fleet.",
+      "Tap “Drive for” and the fleet’s name to say yes, or “No thanks”. Only you can answer, from your own sign-in."
+    ],
+    notes: [
+      "You cannot say yes while you are on a shift, carrying a load, or rostered on a run of your current fleet. The app says what to finish first.",
+      "Your licence, trips and rating come with you. The fleet you leave keeps the trips you did for it.",
+      "If a fleet takes you off, the app says who and why. You cannot start a shift until another fleet offers you a place."
     ]
   },
   {
@@ -140,7 +183,8 @@ export const ARTICLES: GuideArticle[] = [
       "Driver app: tap “Not you? Sign out”, then “First time here, or forgot your PIN?”."
     ],
     notes: [
-      "Changing your PIN signs out every other phone that PIN had opened, in every app."
+      "Changing your PIN signs out every other phone that PIN had opened, in every app.",
+      "A PIN that is easy to guess is refused: one digit four times, a run like 1234, or pairs like 1212."
     ]
   },
   {

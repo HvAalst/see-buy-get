@@ -22,6 +22,23 @@ import { ROUTE_REASONS, RUN_REASON_SENTENCE, type GiveBackReason, type RunCancel
 interface SpaceSold { departureId: string; bookingId: string; managerDid: string; lineName: string; shipperDid: string; description: string; weightKg: number; price: number; currency: string }
 interface VehicleChanged { departureId: string; managerDid: string; company: string; lineName: string; fromPlate: string; toPlate: string; fromClass: string; toClass: string; shippers: string[] }
 interface FleetChange { driverDid: string; driverName: string; fromManagerDid?: string; toManagerDid: string; toCompany: string }
+interface FleetOfferMade { offerId: string; driverDid: string; fleetDid: string; companyName: string; expiresAt: string }
+interface FleetOfferClosed { offerId: string; outcome: 'declined' | 'withdrawn'; fleetDid: string; driverDid: string; phoneEnding: string; companyName: string }
+interface DriverLeftFleet { driverDid: string; driverName: string; fleetDid: string; companyName: string; reason: 'left' | 'ended' | 'other'; note?: string }
+
+const OFFER_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** "8 Oct" — the day an offer lapses, as a person reads it. */
+function offerDay(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : `${d.getUTCDate()} ${OFFER_MONTHS[d.getUTCMonth()]}`;
+}
+
+/** Why a fleet took a driver off, in the words the driver is shown — the fleet's own words when it chose to give them. */
+function removalSentence(p: Pick<DriverLeftFleet, 'reason' | 'note'>): string {
+  if (p.reason === 'left') return 'They say you no longer work for them.';
+  if (p.reason === 'ended') return 'They say they ended your contract.';
+  return p.note ? `Their reason: “${p.note}”` : '';
+}
 interface RunCalledOff { departureId: string; company: string; lineName: string; originZone: string; destZone: string; leavesAt: string; shippers: string[]; reason: string; cancelReason?: RunCancelReason; note?: string; alternatives?: number }
 
 /**
@@ -223,8 +240,15 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<RunClaimAnswered>(GlosEvent.Pudo.DepartureClaimAnswered, (e) => this.onRunClaimAnswered(e.payload));
     // A different truck on a run shippers are booked on — said only when what THEY can see (the class) changed.
     this.events.subscribe<VehicleChanged>(GlosEvent.Pudo.DepartureVehicleChanged, (e) => this.onVehicleChanged(e.payload));
-    // A driver moved fleets with a code. They did it; both fleets are told.
+    // A driver took a fleet's offer. They said yes; both fleets are told.
     this.events.subscribe<FleetChange>(GlosEvent.Pudo.DriverChangedFleet, (e) => this.onDriverChangedFleet(e.payload));
+    // A fleet offered a driver a place — only that driver can answer, so only they hear of it. And the answer back.
+    this.events.subscribe<FleetOfferMade>(GlosEvent.Pudo.FleetOfferMade, (e) => this.onFleetOfferMade(e.payload));
+    this.events.subscribe<FleetOfferClosed>(GlosEvent.Pudo.FleetOfferClosed, (e) => this.onFleetOfferClosed(e.payload));
+    // A fleet took a driver off: the driver learns it, and why, from us — not from a refused shift tomorrow morning.
+    this.events.subscribe<DriverLeftFleet>(GlosEvent.Pudo.DriverLeftFleet, (e) => this.onDriverLeftFleet(e.payload));
+    // Five wrong PINs for one number: whoever typed them may know it. The owner is the only one who can act.
+    this.events.subscribe<{ personDid: string; driverDids: string[] }>(GlosEvent.Pudo.PersonPinLocked, (e) => this.onPinLocked(e.payload));
     // The fleet's own licence or cover: a document it sent was recorded, or turned down with a reason.
     this.events.subscribe<FleetPaperChecked>(GlosEvent.Pudo.FleetPaperChecked, (e) => this.onFleetPaperChecked(e.payload));
     // FP3b (sender) — the driver is at the door and cannot hand over: the sender is the one who can fix it.
@@ -523,9 +547,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     });
   }
 
-  /** One notification, and one failure logged rather than thrown — the house rule for every handler here. */
   /**
-   * A driver joined a fleet with its code. The fleet they joined learns who; the fleet they left learns it from us
+   * A driver said yes to a fleet's offer. The fleet they joined learns who; the fleet they left learns it from us
    * rather than from an empty seat — and is told what it keeps. It is NOT told which fleet they went to: where
    * somebody works next is theirs to say, and a roster change is not a reason to publish it.
    */
@@ -533,7 +556,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     await this.tell(p.toManagerDid, {
       kind: 'roster_changed',
       title: `${p.driverName} joined your fleet`,
-      body: `${p.driverName} used your fleet code and now drives for ${p.toCompany}. Their licence and their past trips came with them — check their papers under Drivers.`,
+      body: `${p.driverName} said yes to your offer and now drives for ${p.toCompany}. Their licence and their past trips came with them — check their papers under Drivers.`,
       tag: `driver:${p.driverDid}:joined`,
       data: { driverDid: p.driverDid },
     });
@@ -545,6 +568,78 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       tag: `driver:${p.driverDid}:left`,
       data: { driverDid: p.driverDid },
     });
+  }
+
+  /** A fleet offered this driver a place. Only they can answer, so only they are told — with how long it stays open. */
+  private async onFleetOfferMade(p: FleetOfferMade): Promise<void> {
+    await this.tell(p.driverDid, {
+      kind: 'fleet_offer',
+      title: `${p.companyName} offers you a place in their fleet`,
+      body: `Open “Your fleet” in the app to say yes or no. The offer is open until ${offerDay(p.expiresAt)}, and nothing changes unless you say yes.`,
+      tag: `fleet-offer:${p.offerId}`,
+      data: { offerId: p.offerId, fleetDid: p.fleetDid },
+    });
+  }
+
+  /** The other side of an offer that closed: the fleet hears a "no", the driver hears the offer is gone. */
+  private async onFleetOfferClosed(p: FleetOfferClosed): Promise<void> {
+    if (p.outcome === 'declined') {
+      // By the number the office typed, and no more: until somebody says yes, a number names nobody to a fleet.
+      await this.tell(p.fleetDid, {
+        kind: 'roster_changed',
+        title: `The driver on •••${p.phoneEnding} said no`,
+        body: 'They turned down your offer of a place. Nothing changed on your roster.',
+        tag: `fleet-offer:${p.offerId}`,
+        data: { offerId: p.offerId },
+      });
+      return;
+    }
+    await this.tell(p.driverDid, {
+      kind: 'fleet_offer',
+      title: `${p.companyName} took back its offer`,
+      body: 'The place they offered you is no longer open. Nothing changed for you.',
+      tag: `fleet-offer:${p.offerId}`,
+      data: { offerId: p.offerId },
+    });
+  }
+
+  /**
+   * A fleet took a driver off. The DRIVER is told what happened and why, and what it means — before a refused shift
+   * tells them in worse words. The FLEET's inbox records it too: it has several managers, and the others should not
+   * learn it from a roster that is one shorter.
+   */
+  private async onDriverLeftFleet(p: DriverLeftFleet): Promise<void> {
+    await this.tell(p.driverDid, {
+      kind: 'roster_changed',
+      title: `${p.companyName} took you off their fleet`,
+      body: `${removalSentence(p)} Your trips, papers and ratings stay yours. To drive again, a fleet has to offer you a place — give its office the phone number you sign in with.`.trim(),
+      tag: `driver:${p.driverDid}:removed`,
+      data: { fleetDid: p.fleetDid },
+    });
+    await this.tell(p.fleetDid, {
+      kind: 'roster_changed',
+      title: `${p.driverName} is off your fleet`,
+      body: `${p.driverName} no longer drives for ${p.companyName}. Every trip they did for you stays in your records and on your earnings statement.`,
+      tag: `driver:${p.driverDid}:removed`,
+      data: { driverDid: p.driverDid },
+    });
+  }
+
+  /**
+   * FIVE WRONG PINS. Whoever typed them may know this person's number — a colleague, say — and the person is the only
+   * one who can do anything about it, so they hear it in every inbox they read: their own and each driver record they
+   * sign in as. Never a fleet's: a fleet's inbox is shared by its managers, and one person's PIN is nobody else's.
+   */
+  private async onPinLocked(p: { personDid: string; driverDids: string[] }): Promise<void> {
+    for (const to of [p.personDid, ...p.driverDids]) {
+      await this.tell(to, {
+        kind: 'security',
+        title: 'Your PIN was locked',
+        body: 'Someone typed a wrong PIN five times for your number, so nobody can sign in with it now. To sign in again, verify your phone by code and choose a new PIN. If it was not you, somebody knows your number: choose a PIN they cannot guess.',
+        tag: `pin-locked:${p.personDid}`,
+        data: {},
+      });
+    }
   }
 
   private async tell(to: string, n: { kind: NotificationKind; title: string; body: string; tag: string; data: Record<string, unknown> }): Promise<void> {

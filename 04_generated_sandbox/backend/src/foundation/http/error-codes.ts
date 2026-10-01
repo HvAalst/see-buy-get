@@ -106,6 +106,8 @@ export const ERROR_CODES = {
   OTP_INVALID: { status: 400, title: 'Wrong or expired code' },
   OTP_LOCKED: { status: 400, title: 'Too many wrong codes' },
   PIN_INVALID: { status: 400, title: 'PIN must be 4 digits' },
+  // One digit four times, a straight run, pairs: the PINs somebody who knows you tries first. Refused when chosen.
+  PIN_GUESSABLE: { status: 400, title: 'That PIN is too easy to guess' },
 
   // --- 400 Bad Request: a payment provider's callback -------------------------------------------
   // The body reached us but does not say what a confirmation has to say. Separate from the signature
@@ -143,6 +145,9 @@ export const ERROR_CODES = {
   AGENT_LOCKED: { status: 403, title: 'This account is locked' },
   REPUTATION_BELOW_FLOOR: { status: 403, title: 'Rating below the network minimum' },
   PIN_LOCKED: { status: 403, title: 'Too many wrong PINs — verify by code' },
+  // A wrong PIN from somebody ALREADY signed in (changing it, starting a shift). Deliberately not a 401: the
+  // session is fine, and every app reads a 401 as 'your sign-in ended' and signs the person out.
+  PIN_WRONG: { status: 403, title: 'That is not your PIN' },
   ROLE_NOT_HELD: { status: 403, title: 'You do not hold that role' },
 
   // --- 403 Forbidden: media ---------------------------------------------------------------------

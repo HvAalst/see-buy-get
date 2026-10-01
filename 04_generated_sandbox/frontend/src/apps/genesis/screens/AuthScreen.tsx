@@ -97,7 +97,7 @@ function LoginView({ state, actions, busy }: { state: SendState; actions: SendAc
         )}
         <div class="field">
           <span class="field__label">{t('send.auth.pin')}</span>
-          <CodeBoxes id="auth-pin" label={t('send.auth.pin')} length={4} value={state.authPin} onInput={actions.setAuthPin} disabled={busy} />
+          <CodeBoxes id="auth-pin" label={t('send.auth.pin')} length={4} value={state.authPin} onInput={actions.setAuthPin} disabled={busy} mask />
         </div>
       </Card>
 

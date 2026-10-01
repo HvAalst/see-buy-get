@@ -13,7 +13,6 @@ import { DriverService } from './driver.service';
 import { MdpService } from './mdp.service';
 import { VehicleService } from './vehicle.service';
 import { FleetService } from './fleet.service';
-import { FleetManagerService } from './fleet-manager.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { PersonRole } from './person.types';
@@ -65,7 +64,6 @@ export class AccountService implements OnApplicationBootstrap {
     private readonly drivers: DriverService,
     private readonly mdps: MdpService,
     private readonly vehicles: VehicleService,
-    private readonly managers: FleetManagerService,
     private readonly fleet: FleetService,
     private readonly otp: OtpService,
     private readonly auth: AuthService,
@@ -262,9 +260,20 @@ export class AccountService implements OnApplicationBootstrap {
       return { did: agent.did, entityStatus: this.agents.get(agent.did).status };
     }
     if (role === 'driver') {
-      let managerDid: string | undefined;
-      if (profile.fleetCode) managerDid = this.managers.login(String(profile.fleetCode)).did; // join an existing fleet
-      const driver = this.drivers.register({ ...(profile.driver as object), managerDid } as never);
+      /*
+       * NOBODY SIGNS THEMSELVES INTO A FLEET.
+       *
+       * This took the fleet's code and made whoever typed it that fleet's driver. The code names a company at its
+       * own sign-in, it is handed round a depot, and it is six characters long: a stranger could guess or borrow
+       * their way onto somebody's trucks and licence. A fleet takes a driver on itself — it adds a new one, or
+       * offers a place to one already registered, who says yes from their own app.
+       */
+      if (profile.fleetCode) {
+        throw new GlosError('FORBIDDEN', 'A fleet adds its own drivers. Sign up on your own, then give the fleet office the phone number you sign in with — they offer you a place and you say yes in the app.', { field: 'fleetCode' });
+      }
+      // `managerDid` is SET to nothing, never left out: the form is a client's object, and a fleet named inside it
+      // would otherwise ride straight through to the register — the same signing-in, without even the code.
+      const driver = this.drivers.register({ ...(profile.driver as object), managerDid: undefined } as never);
       /*
        * A SELF-EMPLOYED COURIER ARRIVES WITH THEIR OWN VEHICLE, OR THEY ARRIVE UNABLE TO WORK.
        *
@@ -285,16 +294,17 @@ export class AccountService implements OnApplicationBootstrap {
        *
        * And it becomes a vehicle they can START ON today, not one they must have driven before.
        */
-      if (!managerDid && profile.vehicle) {
+      if (profile.vehicle) {
         const wanted = profile.vehicle as { vehicleClass?: string };
         if (wanted.vehicleClass && !driver.licence.classes.includes(wanted.vehicleClass as never)) {
           throw new GlosError('CANNOT_COUPLE', `You are not licence-cleared for a ${wanted.vehicleClass}. Add it to what you can drive, or register a vehicle you are cleared for`);
         }
-        const vehicle = this.vehicles.register({ ...(profile.vehicle as object), ownerType: 'driver_owned', ownerName: driver.displayName } as never);
+        // Theirs, and nobody else's: no fleet (whatever the form says), and the courier recorded as the one who drives it.
+        const vehicle = this.vehicles.register({ ...(profile.vehicle as object), managerDid: undefined, ownerType: 'driver_owned', ownerName: driver.displayName, ownerDriverDid: driver.did } as never);
         this.fleet.claimOwnVehicle(driver.did, vehicle.vehicleId);
       }
       if (profile.kyc && driver.registry === 'heavy') this.drivers.submitKyc(driver.did, profile.kyc as never);
-      return { did: driver.did, entityStatus: this.drivers.get(driver.did).status, tenant: managerDid };
+      return { did: driver.did, entityStatus: this.drivers.get(driver.did).status };
     }
     if (role === 'mdp') {
       const mdp = this.mdps.register((profile.mdp ?? {}) as never);

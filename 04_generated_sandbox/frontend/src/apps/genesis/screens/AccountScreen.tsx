@@ -158,7 +158,7 @@ export function AccountScreen({ state, actions }: AccountScreenProps) {
       <Sheet open={pinOpen} onClose={() => setPinOpen(false)} title={t('send.account.changePin')}>
         <div class="field">
           <span class="field__label">{t('send.currentPin')}</span>
-          <CodeBoxes id="current-pin" label={t('send.currentPin')} length={4} value={currentPin} onInput={setCurrentPin} disabled={state.accountBusy} />
+          <CodeBoxes id="current-pin" label={t('send.currentPin')} length={4} value={currentPin} onInput={setCurrentPin} disabled={state.accountBusy} mask />
         </div>
         <div class="field">
           <span class="field__label">{t('send.newPin')}</span>

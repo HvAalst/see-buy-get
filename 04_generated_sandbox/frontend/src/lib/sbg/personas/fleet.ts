@@ -73,6 +73,23 @@ export function createFleetApi(sbg: SbgClient) {
     /** This fleet's drivers. */
     drivers: () => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers', {})),
 
+    /**
+     * Offer a place to a driver ALREADY on the network — by the phone number they sign in with. They answer from
+     * their own app; until they say yes the office sees only the number it typed. Nobody joins a fleet any other way.
+     */
+    offerPlace: (did: string, phone: string) => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/offers', { params: { path: { did } }, body: { phone } })),
+
+    /** The offers this fleet made: open ones, and what became of the rest in the last month. */
+    fleetOffers: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/offers', { params: { path: { did } } })),
+
+    /** Take an open offer back. The driver is told. */
+    withdrawOffer: (did: string, offerId: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/offers/{offerId}/withdraw', { params: { path: { did, offerId } } })),
+
+    /** Take a driver off this fleet — always with a reason the driver is shown. Refused by name while a load or a run is in their hands. */
+    removeDriver: (did: string, driverDid: string, body: { reason: 'left' | 'ended' | 'other'; note?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/drivers/{driverDid}/remove', { params: { path: { did, driverDid } }, body })),
+
     /** Onboard a driver: bike/motorcycle = light registry (ACTIVE now); heavier = DRAFT + KYC. */
     onboardDriver: (body: {
       displayName: string;
@@ -80,7 +97,6 @@ export function createFleetApi(sbg: SbgClient) {
       nationalId: string;
       mobile: string;
       licenceClasses: string[];
-      managerDid: string;
       licenceNumber?: string;
       licenceExpiresAt?: string;
       criminalRecordClear?: boolean;

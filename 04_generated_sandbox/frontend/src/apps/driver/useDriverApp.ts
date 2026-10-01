@@ -37,8 +37,8 @@ import type { MediaKind } from '../../lib/sbg/personas/media';
 import type { DeclaredLegBody } from '../../lib/sbg/personas/driver';
 import type { components } from '../../lib/sbg/schema';
 
-/** Which fleet a code belongs to, and what has to be finished before moving to it — as the server says it. */
-export type FleetMoveCheck = components['schemas']['FleetMoveCheckView'];
+/** A fleet that has offered this driver a place, and what has to be finished before saying yes — as the server says it. */
+export type FleetOffer = components['schemas']['DriverOfferView'];
 
 export type Screen = 'home' | 'route' | 'offers' | 'loads' | 'earnings' | 'board';
 
@@ -99,6 +99,8 @@ export interface DriverState {
   departures: DepartureView[];
   /** The vehicles this driver has driven before — so the day can start over a coffee, not at the bus. */
   vehicles: RecentVehicleView[];
+  /** Fleets that have offered this driver a place. Only they can answer one, and only from this sign-in. */
+  fleetOffers: FleetOffer[];
   /** R5 — the driver jobs + earnings register (a filtered/paged page + the current view's totals). */
   jobs: DriverJobRow[];
   jobsTotal: number;
@@ -205,6 +207,7 @@ const INITIAL: DriverState = {
   legs: [],
   departures: [],
   vehicles: [],
+  fleetOffers: [],
   jobs: [],
   jobsTotal: 0,
   jobsState: 'idle',
@@ -429,6 +432,11 @@ export function useDriverApp() {
       if (superseded()) return;
       const departures = depR.error ? [] : narrow<{ items: DepartureView[] }>(depR.data)?.items ?? [];
 
+      // A fleet that wants this driver. Soft-fail: not hearing of an offer must never stop the day from starting.
+      const offR = await client.api.fleetOffers(did);
+      if (superseded()) return;
+      const fleetOffers = offR.error ? [] : narrow<FleetOffer[]>(offR.data) ?? [];
+
       setState((s) => ({
         ...s,
         phase: 'ready',
@@ -436,6 +444,7 @@ export function useDriverApp() {
         session,
         vehicle,
         departures,
+        fleetOffers,
         remaining,
         remainingTotes,
         claims,
@@ -833,33 +842,35 @@ export function useDriverApp() {
   );
 
   /**
-   * MOVE TO ANOTHER FLEET, step one: which fleet is that code, and what (if anything) has to be finished first.
-   * Changes nothing — the sheet shows "Drive for Kilima Logistics?" before anybody commits, so a mistyped code
-   * joins nobody. The refusal comes back to the sheet rather than the screen's error slot, which it sits over.
-   */
-  const checkFleetMove = useCallback(
-    async (code: string): Promise<{ check?: FleetMoveCheck; error?: SbgError }> => {
-      if (!client || !did) return {};
-      const r = await client.api.checkFleetMove(did, code.trim());
-      return r.error ? { error: r.error } : { check: narrow<FleetMoveCheck>(r.data) ?? undefined };
-    },
-    [client, did],
-  );
-
-  /**
-   * Step two: move now. Every session this driver held has ended on the server — each carried the old fleet —
+   * YES TO A FLEET'S OFFER. Every session this driver held has ended on the server — each carried the old fleet —
    * so the fresh token that comes back is seeded before anything else is asked, or the next call is a sign-out.
+   * The refusal comes back to the sheet rather than the screen's error slot, which the sheet sits over.
    */
-  const moveFleet = useCallback(
-    async (code: string): Promise<SbgError | null> => {
+  const acceptFleetOffer = useCallback(
+    async (offerId: string): Promise<SbgError | null> => {
       if (!client || !did) return null;
-      setState((s) => ({ ...s, busy: 'fleet-move' }));
-      const r = await client.api.moveFleet(did, code.trim());
+      setState((s) => ({ ...s, busy: 'fleet-offer' }));
+      const r = await client.api.acceptFleetOffer(did, offerId);
       setState((s) => ({ ...s, busy: null }));
       if (r.error) return r.error;
       const moved = narrow<{ companyName: string; token?: { access_token: string; token_type: 'Bearer'; expires_in: number } }>(r.data);
       if (moved?.token) await client.client.seed(moved.token);
       pushToast({ tone: 'ok', icon: 'truck', title: t('driver.fleet.doneToast', { company: moved?.companyName ?? '' }), detail: t('driver.fleet.doneDetail') });
+      await refresh();
+      return null;
+    },
+    [client, did, pushToast, refresh],
+  );
+
+  /** No to a fleet's offer. The fleet is told; nothing else changes. */
+  const declineFleetOffer = useCallback(
+    async (offerId: string): Promise<SbgError | null> => {
+      if (!client || !did) return null;
+      setState((s) => ({ ...s, busy: 'fleet-offer' }));
+      const r = await client.api.declineFleetOffer(did, offerId);
+      setState((s) => ({ ...s, busy: null }));
+      if (r.error) return r.error;
+      pushToast({ tone: 'info', icon: 'check', title: t('driver.fleet.declinedToast') });
       await refresh();
       return null;
     },
@@ -1045,26 +1056,37 @@ export function useDriverApp() {
   /**
    * Start the shift — and, in the same breath, say where it is going. The leg is optional here on purpose:
    * a driver who does not yet know is not blocked, and Find work declares it for them when they pick a route.
+   *
+   * WITH THE DRIVER'S PIN. The start of a shift is where the network writes down who is driving which vehicle,
+   * and an open app is not proof of who is holding the phone. Resolves to the refusal, so the PIN sheet — which
+   * sits over the screen — can say "that is not your PIN" where the driver is looking; null means it started.
    */
-  const startShift = useCallback(async (vehicleId?: string, leg?: DeclaredLegBody) => {
-    if (!client || !did) return;
+  const startShift = useCallback(async (pin: string, vehicleId?: string, leg?: DeclaredLegBody): Promise<SbgError | null> => {
+    if (!client || !did) return null;
     const qr = state.form.vehicleQr.trim();
     // One of the two: the vehicle they picked from their own history, or the QR on a dashboard in front of them.
     if (!vehicleId && !qr) {
       pushToast({ tone: 'warn', icon: 'scan', title: t('driver.toast.scanQrFirst') });
-      return;
+      return null;
     }
+    let refused: SbgError | null = null;
     await run('start', async () => {
-            // An end still in the pocket goes first: the server must hear "ended" before "started" or it refuses the second.
+      // An end still in the pocket goes first: the server must hear "ended" before "started" or it refuses the second.
       if (endQueued()) await drain({ baseUrl: driverConfig().baseUrl, token: () => client.client.session.getToken() });
-const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehicleQr: qr }, leg);
-      if (r.error) return fail(r.error);
+      const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehicleQr: qr }, pin.trim(), leg);
+      if (r.error) {
+        // A dead sign-in is the shell's to handle; anything else is said in the sheet that asked for the PIN.
+        if (isSignInRequired(r.error)) fail(r.error);
+        else refused = r.error;
+        return;
+      }
       buzz();
       setState((s) => ({ ...s, form: { ...EMPTY_FORM } }));
       pushToast({ tone: 'ok', icon: 'truck', title: t('driver.toast.shiftStarted'), detail: t('driver.toast.shiftStartedDetail') });
       await refresh();
     });
-  }, [client, did, state.form.vehicleQr, run, fail, pushToast, refresh]);
+    return refused;
+  }, [client, did, state.form.vehicleQr, run, fail, pushToast, refresh, endQueued]);
 
   /**
    * Hold new offers for a while — chosen with the duration in the same breath, because the only moment
@@ -1655,8 +1677,8 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
       loadObservationNotice,
       recordObservation,
       sendLicenceRenewal,
-      checkFleetMove,
-      moveFleet,
+      acceptFleetOffer,
+      declineFleetOffer,
       sendClearance,
       countries,
       loadRoad,

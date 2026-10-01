@@ -22,6 +22,8 @@ interface RegisterVehicleInput {
   deckM?: number;
   ownerType?: VehicleOwnerType;
   ownerName: string;
+  /** The courier whose own vehicle this is — set by signup, never by a form; only they may start a shift on it. */
+  ownerDriverDid?: string;
   documents?: VehicleDocuments;
   vehiclePhotoRefs?: string[]; // S26 — mediaIds of the vehicle body photos
   trailerPhotoRefs?: string[]; // S26 — mediaIds of a coupled trailer's photos
@@ -101,6 +103,8 @@ export class VehicleService {
       equipment: [...new Set<Equipment>(['MAN', ...(sub?.equipment ?? []), ...(input.equipment ?? [])])],
       ownerType: input.ownerType ?? 'driver_owned',
       ownerName: input.ownerName,
+      // A fleet's vehicle is the fleet's, whoever is named on it: an owner-driver is recorded only where no fleet owns it.
+      ...(input.ownerDriverDid && !input.managerDid ? { ownerDriverDid: input.ownerDriverDid } : {}),
       documents: docs,
       vehiclePhotoRefs: input.vehiclePhotoRefs?.length ? input.vehiclePhotoRefs : undefined,
       trailerPhotoRefs: input.trailerPhotoRefs?.length ? input.trailerPhotoRefs : undefined,
@@ -165,6 +169,7 @@ export class VehicleService {
     // marketplace data; the genuine public surfaces (/pricing, /network/points) never carry it either.
     delete publicView.ownerName;
     delete publicView.ownerType;
+    delete publicView.ownerDriverDid; // which person a van belongs to is not marketplace data either
     return publicView;
   }
 

@@ -38,8 +38,9 @@ import { DriverService } from './driver.service';
  * the interesting part of this file, and a rule only reachable through eight injected services is a rule
  * nobody will write a test for.
  */
-export function ownerDrivers<T extends { managerDid?: string; status: string }>(drivers: T[]): T[] {
-  return drivers.filter((d) => !d.managerDid && d.status === 'ACTIVE');
+export function ownerDrivers<T extends { managerDid?: string; removedFrom?: unknown; status: string }>(drivers: T[]): T[] {
+  // No fleet is not the same as their own boss: a driver a fleet took off is between fleets, contracted by nobody.
+  return drivers.filter((d) => !d.managerDid && !d.removedFrom && d.status === 'ACTIVE');
 }
 
 @Injectable()

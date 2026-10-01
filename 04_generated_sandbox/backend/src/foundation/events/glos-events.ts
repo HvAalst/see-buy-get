@@ -122,8 +122,16 @@ export const GlosEvent = {
     DepartureDeparted: 'pudo.departure_departed', // the truck has gone — the last moment anything could change
     /** A different truck was put on a run before it left. Shippers see a vehicle's CLASS, never its plate, so they are told only when the class changed. */
     DepartureVehicleChanged: 'pudo.departure_vehicle_changed',
-    /** A driver moved to another fleet with its code. Both fleets are told; the driver did it. */
+    /** A driver took a fleet's offer and now drives for it. Both fleets are told; the driver said yes. */
     DriverChangedFleet: 'pudo.driver_changed_fleet',
+    /** A fleet offered a place to a driver already on the network — the driver, by name, is the only one who can answer. */
+    FleetOfferMade: 'pudo.fleet_offer_made',
+    /** The driver said no, or the fleet took its offer back. The other side is told. */
+    FleetOfferClosed: 'pudo.fleet_offer_closed',
+    /** A fleet took a driver off its fleet. The driver is told why; the fleet's other managers see who did it. */
+    DriverLeftFleet: 'pudo.driver_left_fleet',
+    /** Five wrong PINs for one phone: the PIN is locked until the phone is verified by code, and its owner is told. */
+    PersonPinLocked: 'pudo.person_pin_locked',
     DepartureDelivered: 'pudo.departure_delivered', // one booking reached its destination and was handed over
     DepartureCancelled: 'pudo.departure_cancelled', // the run is not happening, and everybody aboard has to be told
     DepartureClaimOpened: 'pudo.departure_claim_opened', // the shipper says something went wrong; the carrier is told, and nobody adjudicates

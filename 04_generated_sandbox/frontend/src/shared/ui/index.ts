@@ -23,7 +23,7 @@ export { ConnectivityNote } from './ConnectivityNote';
 export { BottomNav, type BottomNavProps, type NavItem } from './BottomNav';
 export { ReadAloud, speak, stopSpeaking, isSpeechSupported, type ReadAloudProps } from './ReadAloud';
 export { LanguageSwitcher } from './LanguageSwitcher';
-export { ErrorNote, Note, errorSentence, type ErrorNoteProps, type NoteProps } from './ErrorNote';
+export { ErrorNote, Note, RefusalNote, errorSentence, refusalSentence, type ErrorNoteProps, type NoteProps } from './ErrorNote';
 export { TopUpCostNote } from './TopUpCostNote';
 export { Explainer, ExplainerBlock, ExplainerReset } from './Explainer';
 export { Icon, type IconName, type IconProps } from './Icon';

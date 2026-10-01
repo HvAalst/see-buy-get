@@ -114,6 +114,20 @@ export class FleetService {
       throw new GlosError('CANNOT_COUPLE', why.length ? `Vehicle ${vehicle.plate} is off the road: ${why.join('; ')}` : `Vehicle is ${vehicle.status} — cannot be coupled`);
     }
     if (!this.drivers.clearedFor(driverDid, vehicle.vehicleClass)) throw new GlosError('CANNOT_COUPLE', `Driver is not licence-cleared for a ${vehicle.vehicleClass}`);
+    /*
+     * WHOSE VEHICLE IT IS decides who may drive it.
+     *
+     * Nothing asked. Any driver who scanned a dashboard sticker — or typed a vehicle id, which is the same act —
+     * started a shift on it, and every load that followed was recorded against their own fleet: a fleet's truck,
+     * its insurance, under somebody else's name. Taking a driver off a fleet meant nothing while they could still
+     * scan its stickers. A fleet's vehicle is for that fleet's drivers; a courier's own van is for that courier.
+     */
+    if (vehicle.managerDid && vehicle.managerDid !== driver.managerDid) {
+      throw new GlosError('CANNOT_COUPLE', `${vehicle.plate} is not one of your fleet's vehicles — only its own fleet's drivers can start a shift on it`);
+    }
+    if (vehicle.ownerDriverDid && vehicle.ownerDriverDid !== driverDid) {
+      throw new GlosError('CANNOT_COUPLE', `${vehicle.plate} is another courier's own vehicle — only they can start a shift on it`);
+    }
     if (this.activeForDriver(driverDid)) throw new GlosError('ALREADY_COUPLED', 'Driver is already coupled to a vehicle — uncouple first');
     if (this.activeForVehicle(vehicleId)) throw new GlosError('ALREADY_COUPLED', 'Vehicle is already coupled to a driver — uncouple first');
     if (corridorId) this.corridors.requireUsableBy(corridorId, driver.managerDid);

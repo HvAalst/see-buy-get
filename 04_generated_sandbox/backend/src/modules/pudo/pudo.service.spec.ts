@@ -53,6 +53,8 @@ import { MarketPulseService } from './market-pulse.service';
 import { shipperCharge } from './pricing';
 import { requiredLoadKeys, requiredUnloadKeys } from './heavy-cargo';
 import { FleetManagerService } from './fleet-manager.service';
+import { FleetMoveService } from './fleet-move.service';
+import { FleetOfferService } from './fleet-offer.service';
 import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
@@ -147,7 +149,7 @@ describe('PUDO Light', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
-        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, ImportService, SiteService, TransitAuthorityService, FieldObservationService, ContainerBoxService, EmptyDepotService, ContactCardService, VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
+        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, ImportService, SiteService, TransitAuthorityService, FieldObservationService, ContainerBoxService, EmptyDepotService, ContactCardService, VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService, FleetMoveService, FleetOfferService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, EntityAdminService, OperatorAccountService, ConsignmentNoteService, DepartureNoteService, NoteArchiveService, NoteBundleService, DestinationService, MailService, OutboxMailSender, { provide: MAIL_SENDER, useExisting: OutboxMailSender }, PresenceService, InterestService, DepartureService, CompanyDocumentService, HandleService, HandleDirectory, CompanyReadinessService, BorderRuleService, BooksService, FxService, ApiKeyService,
         PayoutService, ReturnService, UnclaimedService, MerchantRatingService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
@@ -3020,8 +3022,8 @@ describe('PUDO Light', () => {
     expect(mine.roles.some((r) => r.role === 'fleet_manager' && r.entityDid === m.did && r.status === 'active')).toBe(true);
 
     // A real account, a real PIN — and nothing to do with this fleet.
-    const stranger = persons.enroll('+254800781', true, '1111').person;
-    expect(persons.loginWithPin('+254800781', '1111').person.personDid).toBe(stranger.personDid);
+    const stranger = persons.enroll('+254800781', true, '3579').person;
+    expect(persons.loginWithPin('+254800781', '3579').person.personDid).toBe(stranger.personDid);
     // THE CHECK: holding the company code and a working account is not enough.
     expect(stranger.roles.some((r) => r.role === 'fleet_manager' && r.entityDid === m.did && r.status === 'active')).toBe(false);
 
@@ -3672,21 +3674,29 @@ describe('PUDO Light', () => {
     expect(accounts.login('shop@store.test', 'secret2').did).toBe(res.did);
   });
 
-  it('signs up a self-employed driver (own vehicle) and a fleet driver (joins via manager code)', () => {
+  it('signs up a self-employed driver (own vehicle); a fleet takes one on by offering a place, never by its code', () => {
     const ph1 = '+254700601'; otp.verify(ph1, otp.request(ph1).code);
     const self = accounts.signup({ role: 'driver', email: 'boda@d.test', password: 'secret1', phone: ph1, profile: { driver: { displayName: 'Boda', fullName: 'B', nationalId: 'ID-D1', mobile: ph1, licenceClasses: ['bike', 'motorcycle'] }, vehicle: { plate: 'BD-1', vehicleClass: 'motorcycle', ownerName: 'B' } } });
     expect(self.role).toBe('driver');
     expect(drivers.get(self.did).status).toBe('ACTIVE'); // light registry
-    expect(vehicles.list().some((v) => v.plate === 'BD-1')).toBe(true); // own vehicle registered
+    expect(vehicles.list().find((v) => v.plate === 'BD-1')).toMatchObject({ ownerDriverDid: self.did }); // own vehicle registered — theirs, and nobody else's to start on
 
-    // a fleet must be ACTIVE to join
+    // a fleet must be ACTIVE to take anybody on
     const m = managers.register({ companyName: 'Co', contactPhone: '+254co', ownerFullName: 'O', ownerNationalId: 'MGR-D', location: { lat: -1, lng: 36 }, requirements: { businessRegistrationNo: 'BRN-D', transportOperatorLicence: 'TOL-D', taxId: 'TAX-D' } });
     managers.submitKyc(m.did, { businessRegCertRef: 'r', operatorLicenceRef: 'l', ownerIdRef: 'i', proofOfAddressRef: 'a' });
     managers.decideKyc(m.did, true);
     const active = managers.recordBond(m.did);
     const ph2 = '+254700602'; otp.verify(ph2, otp.request(ph2).code);
-    const fleetDriver = accounts.signup({ role: 'driver', email: 'joiner@d.test', password: 'secret1', phone: ph2, profile: { fleetCode: active.loginCode, driver: { displayName: 'Joiner', fullName: 'J', nationalId: 'ID-D2', mobile: ph2, licenceClasses: ['bike'] } } });
-    expect(drivers.get(fleetDriver.did).managerDid).toBe(m.did); // employed by the fleet
+    const joinerProfile = { driver: { displayName: 'Joiner', fullName: 'J', nationalId: 'ID-D2', mobile: ph2, licenceClasses: ['bike'] } };
+    // The code names the company at its own sign-in. It used to make whoever typed it that fleet's driver.
+    expect(() => accounts.signup({ role: 'driver', email: 'joiner@d.test', password: 'secret1', phone: ph2, profile: { fleetCode: active.loginCode, ...joinerProfile } })).toThrow(/A fleet adds its own drivers/);
+    // They sign up on their own, the fleet office offers a place by the number they sign in with, and THEY say yes.
+    const joiner = accounts.signup({ role: 'driver', email: 'joiner@d.test', password: 'secret1', phone: ph2, profile: joinerProfile });
+    expect(drivers.get(joiner.did).managerDid).toBeUndefined();
+    const office = { active: true, role: 'fleet_manager', did: m.did, tenant: m.did } as never;
+    const offer = controller.makeFleetOffer(m.did, { phone: ph2 }, office);
+    controller.acceptFleetOffer(joiner.did, offer.offerId, auth.introspect(joiner.token.access_token) as never);
+    expect(drivers.get(joiner.did).managerDid).toBe(m.did); // employed by the fleet
   });
 
   /*
@@ -3779,7 +3789,7 @@ describe('PUDO Light', () => {
 
     // The SAME human later enrolls the SAME phone as a consumer (to send a parcel). No second account:
     // the existing person gains a consumer role.
-    const { person, isNew, token } = persons.enroll(phone, true, '1234');
+    const { person, isNew, token } = persons.enroll(phone, true, '2468');
     expect(isNew).toBe(false); // the driver already existed as a person
     expect(person.personDid).toBe(linked!.personDid); // one identity
     expect(person.roles.map((r) => r.role).sort()).toEqual(['consumer', 'driver']);
@@ -3798,9 +3808,10 @@ describe('PUDO Light', () => {
     expect(asDriver.scopes).toContain('offer:claim');
 
     // Reopen with the 4-digit PIN (no OTP). Wrong PINs lock after 5 tries; the right PIN still works before that.
-    expect(persons.loginWithPin(phone, '1234').person.personDid).toBe(person.personDid);
-    for (let i = 0; i < 5; i++) expect(() => persons.loginWithPin(phone, '0000')).toThrow(/Wrong phone or PIN/);
-    expect(() => persons.loginWithPin(phone, '1234')).toThrow(/Too many wrong PINs/); // locked out → OTP required
+    expect(persons.loginWithPin(phone, '2468').person.personDid).toBe(person.personDid);
+    for (let i = 0; i < 4; i++) expect(() => persons.loginWithPin(phone, '0000')).toThrow(/Wrong phone or PIN/);
+    expect(() => persons.loginWithPin(phone, '0000')).toThrow(/Too many wrong PINs/); // the fifth locks it, and says so
+    expect(() => persons.loginWithPin(phone, '2468')).toThrow(/Too many wrong PINs/); // locked out → OTP required
   });
 
   it('S28 — invite per contact: one token per contact, deduped credit, capped, no oracle, no inflation', () => {
@@ -3853,7 +3864,7 @@ describe('PUDO Light', () => {
     const t = invites.create(inviter).token;
 
     // A brand-new person enrolling through the link is credited — mimicking the controller's `isNew && accept`.
-    const first = persons.enroll('+254700951001', true, '1234');
+    const first = persons.enroll('+254700951001', true, '2468');
     expect(first.isNew).toBe(true);
     if (first.isNew) invites.accept(t, first.person.personDid);
     expect(invites.byToken(t)!.joiners).toHaveLength(1);
@@ -4962,15 +4973,15 @@ describe('PUDO Light', () => {
 
     it('changes a PIN only with the current one, and a wrong current PIN counts toward the lockout', () => {
       const phone = '+254700333444';
-      const enrolled = persons.enroll(phone, true, '1234');
-      expect(() => identity.changePin({ phone, pin: '9999', newPin: '5678' })).toThrow(/Wrong phone or PIN/);
-      expect(() => identity.changePin({ phone, pin: '1234', newPin: '1234' })).toThrow(/different from the current one/);
-      const r = identity.changePin({ phone, pin: '1234', newPin: '5678' });
+      const enrolled = persons.enroll(phone, true, '2468');
+      expect(() => identity.changePin({ phone, pin: '9999', newPin: '4826' })).toThrow(/Wrong phone or PIN/);
+      expect(() => identity.changePin({ phone, pin: '2468', newPin: '2468' })).toThrow(/different from the current one/);
+      const r = identity.changePin({ phone, pin: '2468', newPin: '4826' });
       expect(r.token.access_token).toBeTruthy();
       expect(auth.introspect(enrolled.token.access_token)).toMatchObject({ active: false, reason: 'revoked' }); // the old session really ends
       expect(auth.introspect(r.token.access_token).active).toBe(true);
-      expect(() => persons.loginWithPin(phone, '1234')).toThrow(/Wrong phone or PIN/);
-      expect(persons.loginWithPin(phone, '5678').token.access_token).toBeTruthy();
+      expect(() => persons.loginWithPin(phone, '2468')).toThrow(/Wrong phone or PIN/);
+      expect(persons.loginWithPin(phone, '4826').token.access_token).toBeTruthy();
     });
 
     it('rotates a store’s signing secret only with the current one, and only for the store itself', () => {
@@ -5025,7 +5036,7 @@ describe('PUDO Light', () => {
   describe('a driver signs in with the phone they were registered with', () => {
     it('links the registration to the person, and takes a PIN — not a driver ID', () => {
       const phone = '+254700990021';
-      const d = controller.registerDriver({ displayName: 'Pin Rider', fullName: 'Pin Rider', nationalId: 'NID-PINRIDER', mobile: phone, licenceClasses: ['bike'] } as never);
+      const d = controller.registerDriver({ displayName: 'Pin Rider', fullName: 'Pin Rider', nationalId: 'NID-PINRIDER', mobile: phone, licenceClasses: ['bike'] } as never, { active: true, role: 'operator' } as never);
       // Registered, but no PIN chosen yet: nothing opens.
       expect(() => controller.driverSignIn({ phone, pin: '1357' })).toThrow(/Wrong phone or PIN/);
 
@@ -5038,7 +5049,7 @@ describe('PUDO Light', () => {
       expect(auth.introspect(s.token.access_token)).toMatchObject({ active: true, role: 'driver', did: d.did });
 
       // The PIN is the credential: changing it ends the session it opened.
-      persons.changePin(phone, '1357', '2580');
+      persons.changePin(phone, '1357', '4826');
       expect(auth.introspect(s.token.access_token)).toMatchObject({ active: false, reason: 'revoked' });
     });
 
@@ -5047,6 +5058,140 @@ describe('PUDO Light', () => {
       otp.verify(phone, otp.request(phone).code);
       persons.enroll(phone, true, '4826');
       expect(() => controller.driverSignIn({ phone, pin: '4826' })).toThrow(/not registered to a driver/);
+    });
+  });
+
+  /**
+   * NOBODY DRIVES AS A COLLEAGUE BECAUSE THEY KNOW THEIR NUMBER.
+   *
+   * The user, 2026-10-01: "make sure there is no easy driver switch among colleagues of the same fleet — like, I know
+   * the phone number of colleague X so I will take up his driver identity during something illegal." Colleagues know
+   * each other's numbers. So a number must open nothing: the PIN behind it holds (five guesses, then only a code to
+   * that phone), the easy PINs are refused, a sign-in elsewhere ends the colleague's, a phone left signed in cannot
+   * start a shift without the PIN, and an offer addressed to the number is answered only from the driver's own sign-in.
+   */
+  describe('a phone number alone opens nothing — nobody drives as a colleague', () => {
+    let n = 0;
+    function aFleetOffice(name: string) {
+      n += 1;
+      const m = managers.register({ companyName: name, contactPhone: `+25480077${n}0`, ownerFullName: 'F O', ownerNationalId: `MGR-CL-${n}`, location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: `BRN-CL-${n}`, transportOperatorLicence: `TOL-CL-${n}`, taxId: `TAX-CL-${n}` } });
+      managers.submitKyc(m.did, { businessRegCertRef: 'r.pdf', operatorLicenceRef: 'l.pdf', ownerIdRef: 'id.jpg', proofOfAddressRef: 'a.pdf' });
+      managers.decideKyc(m.did, true, 'ops');
+      managers.recordBond(m.did);
+      return { did: m.did, office: { active: true, role: 'fleet_manager', did: m.did, tenant: m.did, personDid: `did:glos:mgr-${n}` } as never };
+    }
+    /** A rider the office registered, who chose a PIN through the phone door and signed in. */
+    function aRider(fleetDid: string, office: never, pin = '1357') {
+      n += 1;
+      const phone = `+25471177${String(n).padStart(4, '0')}`;
+      const d = controller.registerDriver({ displayName: `Rider ${n}`, fullName: `R ${n}`, nationalId: `NID-CL-${n}`, mobile: phone, licenceClasses: ['bike'] } as never, office);
+      otp.verify(phone, otp.request(phone).code);
+      persons.enroll(phone, true, pin);
+      const signedIn = controller.driverSignIn({ phone, pin });
+      const bike = vehicles.register({ plate: `CL-${n}`, vehicleClass: 'bike', ownerName: 'Fleet', managerDid: fleetDid } as never);
+      return { did: d.did, phone, pin, token: signedIn.token.access_token, actor: auth.introspect(signedIn.token.access_token) as never, bike };
+    }
+
+    it('a PIN locked by five wrong guesses is still locked an hour later — only a code sent to the phone opens it', () => {
+      const kilima = aFleetOffice('Colleague Haulage');
+      const x = aRider(kilima.did, kilima.office);
+      for (let i = 0; i < 4; i++) expect(() => controller.driverSignIn({ phone: x.phone, pin: '0000' })).toThrow(/Wrong phone or PIN/);
+      expect(() => controller.driverSignIn({ phone: x.phone, pin: '0000' })).toThrow(/Too many wrong PINs/);
+      const anHourLater = Date.now() + 60 * 60 * 1000;
+      const clock = jest.spyOn(Date, 'now').mockReturnValue(anHourLater);
+      try {
+        // It used to open itself after fifteen minutes: twenty guesses an hour, every hour, for whoever knew the number.
+        expect(() => controller.driverSignIn({ phone: x.phone, pin: x.pin })).toThrow(/Too many wrong PINs/);
+        // The owner, with their phone in hand, verifies by code and chooses a PIN: in again.
+        otp.verify(x.phone, otp.request(x.phone).code);
+        persons.enroll(x.phone, true, '4826');
+        expect(controller.driverSignIn({ phone: x.phone, pin: '4826' }).did).toBe(x.did);
+      } finally {
+        clock.mockRestore();
+      }
+    });
+
+    it('refuses the PINs a colleague tries first, when a PIN is chosen', () => {
+      const phone = '+254711779901';
+      otp.verify(phone, otp.request(phone).code);
+      for (const easy of ['1234', '0000', '7777', '9876', '7890', '1212', '1122', '2580']) {
+        expect(() => persons.enroll(phone, true, easy)).toThrow(/harder to guess/);
+      }
+      expect(persons.enroll(phone, true, '1357').person.pinHash).toBeTruthy();
+    });
+
+    it('one phone at a time: signing in as a driver ends that driver’s other session', () => {
+      const kilima = aFleetOffice('One Phone Haulage');
+      const x = aRider(kilima.did, kilima.office);
+      expect(auth.introspect(x.token).active).toBe(true);
+      const elsewhere = controller.driverSignIn({ phone: x.phone, pin: x.pin });
+      expect(auth.introspect(x.token)).toMatchObject({ active: false, reason: 'revoked' });
+      expect(auth.introspect(elsewhere.token.access_token).active).toBe(true);
+      // The role switcher is the same door: acting as the driver from another app ends the earlier one too.
+      const viaSwitch = persons.mintForRole(persons.findByPhone(x.phone)!, 'driver');
+      expect(auth.introspect(elsewhere.token.access_token)).toMatchObject({ active: false, reason: 'revoked' });
+      expect(auth.introspect(viaSwitch.token.access_token).active).toBe(true);
+    });
+
+    it('a phone left signed in cannot start a shift without the PIN — and wrong ones count toward the lock', () => {
+      const kilima = aFleetOffice('Shared Cab Haulage');
+      const x = aRider(kilima.did, kilima.office);
+      expect(() => controller.startSession(x.did, { vehicleId: x.bike.vehicleId } as never, x.actor)).toThrow(/Enter your PIN/);
+      for (let i = 0; i < 4; i++) expect(() => controller.startSession(x.did, { vehicleId: x.bike.vehicleId, pin: '0000' } as never, x.actor)).toThrow(/That is not your PIN/);
+      expect(() => controller.startSession(x.did, { vehicleId: x.bike.vehicleId, pin: '0000' } as never, x.actor)).toThrow(/Too many wrong PINs/);
+      // The real owner's PIN no longer works either — the phone, verified by code, is what opens it again.
+      expect(() => controller.startSession(x.did, { vehicleId: x.bike.vehicleId, pin: x.pin } as never, x.actor)).toThrow(/Too many wrong PINs/);
+      expect(fleet.activeForDriver(x.did)).toBeUndefined();
+
+      const y = aRider(kilima.did, kilima.office, '2468');
+      expect((controller.startSession(y.did, { vehicleId: y.bike.vehicleId, pin: '2468' } as never, y.actor) as { status: string }).status).toBe('active');
+      // Staff standing in name no PIN — they are not the driver, and are audited as staff.
+      const z = aRider(kilima.did, kilima.office, '3579');
+      expect((controller.startSession(z.did, { vehicleId: z.bike.vehicleId } as never, { active: true, role: 'operator' } as never) as { status: string }).status).toBe('active');
+    });
+
+    it('a colleague cannot start a shift for X, or answer X’s offer, from their own sign-in', () => {
+      const kilima = aFleetOffice('Same Fleet Haulage');
+      const pwani = aFleetOffice('Other Fleet Haulage');
+      const x = aRider(kilima.did, kilima.office);
+      const colleague = aRider(kilima.did, kilima.office, '2468');
+      expect(() => controller.startSession(x.did, { vehicleId: x.bike.vehicleId, pin: colleague.pin } as never, colleague.actor)).toThrow(/Only the driver/);
+
+      const o = controller.makeFleetOffer(pwani.did, { phone: x.phone }, pwani.office);
+      expect(() => controller.acceptFleetOffer(x.did, o.offerId, colleague.actor)).toThrow(/Only the driver can say yes/);
+      expect(() => controller.acceptFleetOffer(colleague.did, o.offerId, colleague.actor)).toThrow(/No such offer/);
+      expect(drivers.get(x.did).managerDid).toBe(kilima.did);
+    });
+
+    it('only the driver says yes — not staff, not the fleet that offered, not the fleet they are in', () => {
+      const kilima = aFleetOffice('Yes Haulage');
+      const pwani = aFleetOffice('Offering Haulage');
+      const x = aRider(kilima.did, kilima.office);
+      const o = controller.makeFleetOffer(pwani.did, { phone: x.phone }, pwani.office);
+      for (const who of [{ active: true, role: 'operator' }, pwani.office, kilima.office]) {
+        expect(() => controller.acceptFleetOffer(x.did, o.offerId, who as never)).toThrow(/Only the driver can say yes/);
+      }
+      // The fleet they are in does not even see that somebody wants them.
+      expect(() => controller.fleetOffersForDriver(x.did, kilima.office)).toThrow(/Only the driver/);
+
+      const yes = controller.acceptFleetOffer(x.did, o.offerId, x.actor);
+      expect(yes.companyName).toBe('Offering Haulage');
+      expect(auth.introspect(yes.token!.access_token)).toMatchObject({ active: true, role: 'driver', did: x.did, tenant: pwani.did });
+      expect(auth.introspect(x.token)).toMatchObject({ active: false, reason: 'revoked' });
+    });
+
+    it('only a fleet office adds drivers, and only to its own fleet — never a driver, never into somebody else’s', () => {
+      const kilima = aFleetOffice('Adding Haulage');
+      const pwani = aFleetOffice('Elsewhere Haulage');
+      const x = aRider(kilima.did, kilima.office);
+      const form = (tag: string, extra: object = {}) => ({ displayName: tag, fullName: tag, nationalId: `NID-ADD-${tag}`, mobile: `+2547118800${tag.length}${n}`, licenceClasses: ['bike'], ...extra }) as never;
+      // A fleet DRIVER's token names the fleet as its tenant too — and is still not the office.
+      expect(() => controller.registerDriver(form('a'), x.actor)).toThrow(/your own fleet only/);
+      expect(() => controller.registerDriver(form('bb', { managerDid: pwani.did }), kilima.office)).toThrow(/your own fleet only/);
+      const added = controller.registerDriver(form('ccc'), kilima.office);
+      expect(drivers.get(added.did).managerDid).toBe(kilima.did);
+      const byStaff = controller.registerDriver(form('dddd', { managerDid: pwani.did }), { active: true, role: 'operator' } as never);
+      expect(drivers.get(byStaff.did).managerDid).toBe(pwani.did);
     });
   });
 
@@ -6488,9 +6633,13 @@ describe('PUDO Light', () => {
     expect(listed[0]).toMatchObject({ busy: false, plate: expect.any(String), capacityKg: 20_000 });
 
     // Naming a known vehicle starts the day exactly as scanning its dashboard would.
-    const asg: any = controller.startSession(d.did, { vehicleId: mine } as never, asDriver(d.did));
+    // …by the driver themselves, signed in as a person, with their PIN (a shift is where who-is-driving is written down).
+    const person = persons.attachRole('+254711000777', 'driver', d.did);
+    persons.setPin(person.personDid, '1357');
+    const me = { active: true, role: 'driver', did: d.did, personDid: person.personDid } as never;
+    const asg: any = controller.startSession(d.did, { vehicleId: mine, pin: '1357' } as never, me);
     expect(asg.vehicleId).toBe(mine);
-    expect(() => controller.startSession(d.did, {} as never, asDriver(d.did))).toThrow(/Scan the vehicle QR/);
+    expect(() => controller.startSession(d.did, { pin: '1357' } as never, me)).toThrow(/Scan the vehicle QR/);
 
     // Someone else on shift with it is SHOWN and marked, not hidden — "where is my bus?" deserves an answer.
     const other = drivers.register({ displayName: 'Other', fullName: 'O O', nationalId: 'ID-other-pick', mobile: '+2547other', licenceClasses: ['truck'], licenceNumber: 'L-o', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
@@ -6499,7 +6648,7 @@ describe('PUDO Light', () => {
     fleet.uncouple(d.did); // our driver hands it back at the end of the day…
     fleet.couple(other.did, mine); // …and it goes out with someone else
     expect(fleet.recentVehicles(other.did)[0]).toMatchObject({ vehicleId: mine, busy: true });
-    expect(() => controller.startSession(d.did, { vehicleId: mine } as never, asDriver(d.did))).toThrow(/already coupled/i);
+    expect(() => controller.startSession(d.did, { vehicleId: mine, pin: '1357' } as never, me)).toThrow(/already coupled/i);
   });
 
   it('refuses a leg that is off shift, or half-named', () => {

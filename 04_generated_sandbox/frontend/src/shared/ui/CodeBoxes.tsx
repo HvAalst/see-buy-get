@@ -9,6 +9,11 @@ export interface CodeBoxesProps {
   label: string;
   id: string;
   disabled?: boolean;
+  /**
+   * A PIN, not a one-time code: the digits are drawn as dots. A code read off a text message is used once; a PIN
+   * typed in a cab with a colleague in the next seat is how the colleague learns it.
+   */
+  mask?: boolean;
 }
 
 /**
@@ -17,7 +22,7 @@ export interface CodeBoxesProps {
  * focus, keyboard, paste and autofill (`one-time-code`); it sits invisibly over the boxes
  * so a tap anywhere lands in it and the caret logic stays the browser's.
  */
-export function CodeBoxes({ value, onInput, length = 4, label, id, disabled }: CodeBoxesProps) {
+export function CodeBoxes({ value, onInput, length = 4, label, id, disabled, mask }: CodeBoxesProps) {
   const input = useRef<HTMLInputElement>(null);
   const digits = value.replace(/\D/g, '').slice(0, length);
 
@@ -29,8 +34,9 @@ export function CodeBoxes({ value, onInput, length = 4, label, id, disabled }: C
         class="codeboxes__input"
         value={digits}
         onInput={(e) => onInput(e.currentTarget.value.replace(/\D/g, '').slice(0, length))}
+        type={mask ? 'password' : 'text'}
         inputMode="numeric"
-        autocomplete="one-time-code"
+        autocomplete={mask ? 'off' : 'one-time-code'}
         maxLength={length}
         aria-label={label}
         disabled={disabled}
@@ -41,7 +47,7 @@ export function CodeBoxes({ value, onInput, length = 4, label, id, disabled }: C
           const next = i === digits.length;
           return (
             <span key={i} class={`codebox${d ? ' codebox--filled' : ''}${next && !disabled ? ' codebox--next' : ''}`}>
-              {d ?? ''}
+              {d ? (mask ? '•' : d) : ''}
             </span>
           );
         })}

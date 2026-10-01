@@ -1,6 +1,7 @@
 import { triggerDownload } from '../../shared/download';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { isUnknownIdentity, narrow, type SbgError } from '../../lib/sbg';
+import type { components } from '../../lib/sbg/schema';
 import type { MediaKind } from '../../lib/sbg/personas/media';
 import type { MarketSeriesView } from '../../shared/market';
 import { t } from '../../shared/i18n';
@@ -22,6 +23,10 @@ import type { PaperView } from '../../shared/papers';
 import type { GiveBackReason } from '../../shared/giveBack';
 import { duplicateField, type DuplicateField } from '../../shared/duplicate';
 import type { RunCancelReason } from '../../shared/runCancel';
+
+/** An offer of a place this fleet made: the number it typed (its last digits), and what became of it. */
+export type FleetOfferRow = components['schemas']['FleetOfferView'];
+export type RemovalReason = 'left' | 'ended' | 'other';
 
 /** The fleet company's OWN papers, as GET fleet/managers/:did/papers answers. */
 export interface OwnPapers {
@@ -90,7 +95,9 @@ export interface FleetState {
   vForm: VehicleForm;
   dForm: DriverForm;
   /** The driver being added is already registered on the network — which detail matched, and this fleet's code to hand them. */
-  driverDuplicate: { field: DuplicateField; code: string | null } | null;
+  driverDuplicate: { field: DuplicateField } | null;
+  /** Places this fleet has offered to drivers already on the network — the only way one joins it. */
+  fleetOffers: FleetOfferRow[];
   cForm: { driverDid: string; vehicleId: string; corridorId: string };
   /** F1 — the line this fleet is about to propose. */
   lForm: LineForm;
@@ -170,6 +177,7 @@ const INITIAL: FleetState = {
   vForm: { ...EMPTY_VEHICLE },
   dForm: { ...EMPTY_DRIVER },
   driverDuplicate: null,
+  fleetOffers: [],
   cForm: { ...EMPTY_COUPLE },
   lForm: { ...EMPTY_LINE },
   rForm: { ...EMPTY_RUN },
@@ -246,7 +254,7 @@ export function useFleetApp() {
     refreshesRunning.current += 1;
     setState((s) => ({ ...s, refreshing: true }));
     try {
-      const [dashR, vehR, drvR, asgR, corR, subR, depR, ownR] = await Promise.all([
+      const [dashR, vehR, drvR, asgR, corR, subR, depR, ownR, offR] = await Promise.all([
         client.api.dashboard(),
         client.api.vehicles(),
         client.api.drivers(),
@@ -255,6 +263,7 @@ export function useFleetApp() {
         client.api.truckSubtypes(),
         client.api.departures(managerDid),
         client.api.ownPapers(managerDid),
+        client.api.fleetOffers(managerDid),
       ]);
       if (superseded()) return;
 
@@ -273,6 +282,7 @@ export function useFleetApp() {
         runCurrencyAssumed: depR.error ? s.runCurrencyAssumed : Boolean(narrow<{ currencyAssumed?: boolean }>(depR.data)?.currencyAssumed),
         notOffered: depR.error ? s.notOffered : (narrow<{ notOffered?: string[] }>(depR.data)?.notOffered ?? []),
         ownPapers: ownR.error ? s.ownPapers : narrow<OwnPapers>(ownR.data),
+        fleetOffers: offR.error ? s.fleetOffers : (narrow<FleetOfferRow[]>(offR.data) ?? []),
         subtypes: subR.error ? s.subtypes : (narrow<SubtypeRow[]>(subR.data) ?? []),
         error: null,
         stale: false,
@@ -694,7 +704,6 @@ export function useFleetApp() {
         nationalId: f.nationalId.trim(),
         mobile: f.mobile.trim(),
         licenceClasses: f.classes,
-        managerDid,
         ...(heavy
           ? {
               licenceNumber: f.licenceNumber.trim(),
@@ -706,13 +715,13 @@ export function useFleetApp() {
       if (r.error) {
         /*
          * ALREADY REGISTERED ON THE NETWORK — not an error to retry. They cannot be added a second time; what is
-         * expected is that the driver joins this fleet from their own app with this fleet's code, so the note says so
-         * and hands the office the code to give them. Shown beside the form, where the office is looking.
+         * expected is that the office OFFERS them a place and they say yes from their own app. The note says so,
+         * beside the form, where the office is looking. (It used to hand out the fleet's code for them to type.
+         * A code shared round a depot says which fleet — it cannot say who may join it.)
          */
         const field = duplicateField(r.error);
         if (field) {
-          const own = await loadFleetCode();
-          setState((s) => ({ ...s, driverDuplicate: { field, code: own?.code ?? null } }));
+          setState((s) => ({ ...s, driverDuplicate: { field } }));
           return;
         }
         return fail(r.error);
@@ -727,7 +736,7 @@ export function useFleetApp() {
       });
       await refresh();
     });
-  }, [client, managerDid, run, fail, pushToast, refresh, loadFleetCode]);
+  }, [client, managerDid, run, fail, pushToast, refresh]);
 
   /**
    * Send a driver's papers — with the papers.
@@ -806,6 +815,65 @@ export function useFleetApp() {
         await refresh();
       });
       return error;
+    },
+    [client, managerDid, run, pushToast, refresh],
+  );
+
+  /**
+   * OFFER A PLACE to a driver already on the network, by the phone number they sign in with. Resolves to the
+   * refusal so the card can say it where the office typed ("no driver signs in with that number"); null means sent.
+   */
+  const offerPlace = useCallback(
+    async (phone: string): Promise<SbgError | null> => {
+      if (!client || !managerDid || !phone.trim()) return null;
+      let refused: SbgError | null = null;
+      await run('offer', async () => {
+        const r = await client.api.offerPlace(managerDid, phone.trim());
+        if (r.error) {
+          refused = r.error;
+          return;
+        }
+        setState((s) => ({ ...s, driverDuplicate: null }));
+        pushToast({ tone: 'ok', icon: 'person', title: t('fleet.offers.sentToast'), detail: t('fleet.offers.sentToastDetail') });
+        await refresh();
+      });
+      return refused;
+    },
+    [client, managerDid, run, pushToast, refresh],
+  );
+
+  /** Take an open offer back. The driver is told it is gone. */
+  const withdrawOffer = useCallback(
+    async (offerId: string) => {
+      if (!client || !managerDid) return;
+      await run('offer:' + offerId, async () => {
+        const r = await client.api.withdrawOffer(managerDid, offerId);
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'info', icon: 'check', title: t('fleet.offers.withdrawnToast') });
+        await refresh();
+      });
+    },
+    [client, managerDid, run, fail, pushToast, refresh],
+  );
+
+  /**
+   * TAKE A DRIVER OFF THE FLEET — with a reason they are shown. Resolves to the refusal (a load in their hands, a
+   * run they are on) so the sheet can name what has to happen first; null means they are off.
+   */
+  const removeDriver = useCallback(
+    async (driverDid: string, name: string, reason: RemovalReason, note: string): Promise<SbgError | null> => {
+      if (!client || !managerDid) return null;
+      let refused: SbgError | null = null;
+      await run('remove:' + driverDid, async () => {
+        const r = await client.api.removeDriver(managerDid, driverDid, { reason, ...(note.trim() ? { note: note.trim() } : {}) });
+        if (r.error) {
+          refused = r.error;
+          return;
+        }
+        pushToast({ tone: 'ok', icon: 'person', title: t('fleet.remove.doneToast', { name }), detail: t('fleet.remove.doneDetail') });
+        await refresh();
+      });
+      return refused;
     },
     [client, managerDid, run, pushToast, refresh],
   );
@@ -1173,6 +1241,9 @@ export function useFleetApp() {
       deleteMedia,
       submitVehicle,
       submitDriver,
+      offerPlace,
+      withdrawOffer,
+      removeDriver,
       submitKyc,
       setKyc,
       setVehiclePrice,

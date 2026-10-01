@@ -98,6 +98,10 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
           looking for a problem with their PIN, when the fix is the number their fleet registered. */}
       {error?.code === 'ROLE_NOT_HELD' ? (
         <Note tone="warn" icon="block" title={t('driver.signin.notDriver')} detail={t('driver.signin.notDriverNote')} />
+      ) : error?.code === 'UNAUTHORIZED' ? (
+        /* The sign-in ended under them. One phone at a time means that is how a driver LEARNS somebody else signed
+           in as them — so it says so, and says what undoes it, rather than a bare "sign in again". */
+        <Note tone="warn" icon="lock" title={t('driver.signin.signedOutTitle')} detail={t('driver.signin.signedOutNote')} />
       ) : error ? (
         <ErrorNote error={error} />
       ) : null}
@@ -107,7 +111,7 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
         {step === 'pin' ? (
           <div class="field">
             <span class="field__label">{t('driver.signin.pinLabel')}</span>
-            <CodeBoxes id="drv-pin" label={t('driver.signin.pinLabel')} length={4} value={pin} onInput={setPin} disabled={busy} />
+            <CodeBoxes id="drv-pin" label={t('driver.signin.pinLabel')} length={4} value={pin} onInput={setPin} disabled={busy} mask />
           </div>
         ) : null}
         {step === 'code' ? (

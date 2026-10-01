@@ -38,8 +38,14 @@ export interface Person {
   /** scrypt(pin, pinSalt) — set after OTP verification. Absent until the person chooses a PIN. */
   pinHash?: string;
   pinSalt?: string;
-  /** Brute-force defence on the 4-digit PIN: wrong attempts, and a lockout window once exceeded. */
+  /**
+   * Brute-force defence on the 4-digit PIN: wrong attempts, and the moment the PIN locked. A locked PIN stays
+   * locked until the phone is verified again by code. It used to open itself after fifteen minutes, which let
+   * anybody who knew the number try twenty PINs an hour, every hour, with the owner never told.
+   */
   pinAttempts?: number;
+  pinLockedAt?: string;
+  /** The old fifteen-minute window, still honoured while it runs so a record written before the change stays locked. */
   pinLockedUntil?: number;
   /** When the PIN was last set or changed. */
   pinChangedAt?: string;

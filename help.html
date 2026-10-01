@@ -53,8 +53,8 @@
     <ol>
       <li><b>Shop app</b><ol><li><a href="#shop-sign-in">Signing in to a shop or a hub</a></li><li><a href="#change-password">Changing your password</a></li><li><a href="#message-shop">A word between a customer and the shop</a></li><li><a href="#no-signal">When there is no signal</a></li><li><a href="#consignment-note">The consignment note (CMR)</a></li><li><a href="#freight-delivery">Delivering a load: who received it, and the photo</a></li><li><a href="#sender-instructions">Instructions for the driver: box 13 of the note</a></li><li><a href="#hand-back">Handing a load back before pickup</a></li><li><a href="#freight-tracking">Where is my load: the tracking link, and rating the driver</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
       <li><b>Hub app</b><ol><li><a href="#shop-sign-in">Signing in to a shop or a hub</a></li><li><a href="#change-password">Changing your password</a></li><li><a href="#no-signal">When there is no signal</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
-      <li><b>Fleet app</b><ol><li><a href="#fleet-sign-in">Signing in to a fleet</a></li><li><a href="#fleet-code">The fleet code, and issuing a new one</a></li><li><a href="#change-pin">Changing your PIN</a></li><li><a href="#no-signal">When there is no signal</a></li><li><a href="#consignment-note">The consignment note (CMR)</a></li><li><a href="#manager-dispatch">Dispatch: the office puts a load on a driver</a></li><li><a href="#sender-instructions">Instructions for the driver: box 13 of the note</a></li><li><a href="#hand-back">Handing a load back before pickup</a></li><li><a href="#hours-of-service">Hours: the shift limit, and the rest between shifts</a></li><li><a href="#papers-that-expire">Papers that run out: insurance, inspection, licence</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
-      <li><b>Driver app</b><ol><li><a href="#driver-sign-in">Signing in as a driver</a></li><li><a href="#change-pin">Changing your PIN</a></li><li><a href="#no-signal">When there is no signal</a></li><li><a href="#consignment-note">The consignment note (CMR)</a></li><li><a href="#freight-delivery">Delivering a load: who received it, and the photo</a></li><li><a href="#sender-instructions">Instructions for the driver: box 13 of the note</a></li><li><a href="#manager-dispatch">Dispatch: the office puts a load on a driver</a></li><li><a href="#hand-back">Handing a load back before pickup</a></li><li><a href="#hours-of-service">Hours: the shift limit, and the rest between shifts</a></li><li><a href="#papers-that-expire">Papers that run out: insurance, inspection, licence</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
+      <li><b>Fleet app</b><ol><li><a href="#fleet-sign-in">Signing in to a fleet</a></li><li><a href="#fleet-code">The fleet code, and issuing a new one</a></li><li><a href="#fleet-roster">Taking a driver on, and taking one off</a></li><li><a href="#change-pin">Changing your PIN</a></li><li><a href="#no-signal">When there is no signal</a></li><li><a href="#consignment-note">The consignment note (CMR)</a></li><li><a href="#manager-dispatch">Dispatch: the office puts a load on a driver</a></li><li><a href="#sender-instructions">Instructions for the driver: box 13 of the note</a></li><li><a href="#hand-back">Handing a load back before pickup</a></li><li><a href="#hours-of-service">Hours: the shift limit, and the rest between shifts</a></li><li><a href="#papers-that-expire">Papers that run out: insurance, inspection, licence</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
+      <li><b>Driver app</b><ol><li><a href="#driver-sign-in">Signing in as a driver</a></li><li><a href="#driver-fleet">Your fleet: joining one, and being taken off</a></li><li><a href="#change-pin">Changing your PIN</a></li><li><a href="#no-signal">When there is no signal</a></li><li><a href="#consignment-note">The consignment note (CMR)</a></li><li><a href="#freight-delivery">Delivering a load: who received it, and the photo</a></li><li><a href="#sender-instructions">Instructions for the driver: box 13 of the note</a></li><li><a href="#manager-dispatch">Dispatch: the office puts a load on a driver</a></li><li><a href="#hand-back">Handing a load back before pickup</a></li><li><a href="#hours-of-service">Hours: the shift limit, and the rest between shifts</a></li><li><a href="#papers-that-expire">Papers that run out: insurance, inspection, licence</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
       <li><b>Store app</b><ol><li><a href="#store-sign-in">Signing in to a store</a></li><li><a href="#store-secret">Rotating the signing secret</a></li><li><a href="#api-keys">Shipping API keys</a></li><li><a href="#no-signal">When there is no signal</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
       <li><b>Send app</b><ol><li><a href="#change-pin">Changing your PIN</a></li><li><a href="#send-sign-in">Signing in to send or collect</a></li><li><a href="#message-shop">A word between a customer and the shop</a></li><li><a href="#no-signal">When there is no signal</a></li><li><a href="#freight-tracking">Where is my load: the tracking link, and rating the driver</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
       <li><b>Front door</b><ol><li><a href="#which-sign-in">Which app, and what you sign in with</a></li><li><a href="#send-sign-in">Signing in to send or collect</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
@@ -108,13 +108,13 @@
     <li>Type your phone number and your 4-digit PIN.</li>
     <li>Forgot the code? Tap “Forgot the code? Sign in with your phone”, type your phone and PIN, and pick your fleet from the list.</li>
   </ol>
-  <p class="note">Five wrong PINs lock the PIN for a while. Anybody who manages the fleet can see the code in the app.</p>
+  <p class="note">Five wrong PINs lock the PIN until you verify your phone by code and choose a new one. Anybody who manages the fleet can see the code in the app.</p>
 </section>
 
 <section class="article" id="fleet-code">
   <h2>The fleet code, and issuing a new one</h2>
   <p class="in">Fleet app · Operator console</p>
-  <p class="lede">The code only names the fleet. Issue a new one if it has been shared with people who should no longer have it.</p>
+  <p class="lede">The code only names the fleet at sign-in. It never adds anyone to your fleet. Issue a new one if it has been shared with people who should no longer have it.</p>
   <ol>
     <li>Fleet app: Dashboard, then Fleet sign-in code. Tap Show to read it.</li>
     <li>Tap “Issue a new code” and confirm. The old code stops working at once.</li>
@@ -122,6 +122,22 @@
   </ol>
   <p class="note">The card says when the code was last changed, and suggests a new one once it is over 90 days old.</p>
   <p class="note">Network staff can issue a new code from the operator console: Overview, then The fleets, then New code.</p>
+</section>
+
+<section class="article" id="fleet-roster">
+  <h2>Taking a driver on, and taking one off</h2>
+  <p class="in">Fleet app</p>
+  <p class="lede">You add a new driver yourself. A driver who is already on SeeBuyGet joins only when you offer them a place and they say yes.</p>
+  <ol>
+    <li>New to SeeBuyGet: Drivers, then Add a driver. Type their details and the phone number they will sign in with.</li>
+    <li>Already on SeeBuyGet: Drivers, then “Offer a place to a driver already on SeeBuyGet”. Type the phone number they sign in with and tap Offer a place.</li>
+    <li>They see the offer in their driver app and say yes or no. Until they say yes, you see only the number you typed.</li>
+    <li>To take a driver off: Drivers, then “Take off fleet” beside their name. Choose why; they are shown your reason.</li>
+  </ol>
+  <p class="note">An offer stays open for 7 days. You can take it back while it is open.</p>
+  <p class="note">A driver carrying one of your loads, or rostered on one of your runs, cannot be taken off until the load is delivered or handed back and somebody else is on the run.</p>
+  <p class="note">A driver you take off keeps their own trips, papers and rating. Every trip they did for you stays in your records.</p>
+  <p class="note">Only your own drivers can start a shift on your vehicles.</p>
 </section>
 
 <section class="article" id="driver-sign-in">
@@ -133,6 +149,23 @@
     <li>First time, or forgot your PIN? Tap “First time here, or forgot your PIN?”. We send a code to your phone; type it, then choose a PIN.</li>
     <li>The app says “This phone is not registered to a driver”? Your PIN is fine: ask your fleet manager which number they registered.</li>
   </ol>
+  <p class="note">Five wrong PINs lock the PIN. Only a code sent to your phone opens it again, and you are told when it happens.</p>
+  <p class="note">Signing in on another phone signs this one out. If you are signed out and it was not you, choose a new PIN.</p>
+  <p class="note">Starting a shift asks for your PIN again, so nobody can start one on a phone you left signed in.</p>
+</section>
+
+<section class="article" id="driver-fleet">
+  <h2>Your fleet: joining one, and being taken off</h2>
+  <p class="in">Driver app</p>
+  <p class="lede">A fleet takes you on by offering you a place. You say yes or no in the app. No code is typed anywhere.</p>
+  <ol>
+    <li>Give the fleet office the phone number you sign in with.</li>
+    <li>When they offer you a place, it shows on your home screen, and under your picture, then Your fleet.</li>
+    <li>Tap “Drive for” and the fleet’s name to say yes, or “No thanks”. Only you can answer, from your own sign-in.</li>
+  </ol>
+  <p class="note">You cannot say yes while you are on a shift, carrying a load, or rostered on a run of your current fleet. The app says what to finish first.</p>
+  <p class="note">Your licence, trips and rating come with you. The fleet you leave keeps the trips you did for it.</p>
+  <p class="note">If a fleet takes you off, the app says who and why. You cannot start a shift until another fleet offers you a place.</p>
 </section>
 
 <section class="article" id="change-pin">
@@ -145,6 +178,7 @@
     <li>Driver app: tap “Not you? Sign out”, then “First time here, or forgot your PIN?”.</li>
   </ol>
   <p class="note">Changing your PIN signs out every other phone that PIN had opened, in every app.</p>
+  <p class="note">A PIN that is easy to guess is refused: one digit four times, a run like 1234, or pairs like 1212.</p>
 </section>
 
 <section class="article" id="store-sign-in">

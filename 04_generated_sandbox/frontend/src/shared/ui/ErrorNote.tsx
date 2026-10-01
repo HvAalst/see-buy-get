@@ -44,6 +44,8 @@ const SAY: Record<string, string> = {
   'error.wrong_pin': 'That PIN is not right. Try again.',
   'error.pin_digits': 'Your PIN must be 4 digits.',
   'error.pin_locked': 'Too many wrong PINs. Tap "Forgot your PIN?" to sign in with a code.',
+  'error.pin_wrong': 'That is not your PIN. Five wrong tries lock it.',
+  'error.pin_guessable': 'That PIN is too easy to guess. Avoid one digit four times, a run like 1234, and pairs like 1212.',
   'error.role_not_held': 'You cannot open that here.',
   'error.phone_invalid': 'That phone number is not right. Check it.',
   'error.verify_phone': 'Verify your phone first — we will send you a code.',
@@ -110,6 +112,32 @@ export function ErrorNote({ error, onRetry, retryLabel = 'Try again', showDetail
             </Button>
           </div>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The sentence a refusal should be read as: the server's own, when the server wrote one for the person reading it.
+ *
+ * "No driver signs in with that number", "Mover 12 is carrying KX-1 — it has to be delivered or handed back": these
+ * ARE the message. The shared line for their code would only sit above them saying less — "We could not find that.
+ * Check the code." over a refusal that has nothing to do with a code. Only a 4xx carries such a sentence; anything
+ * the client made up (no signal, a timeout) or the server broke on (5xx) keeps the shared wording.
+ */
+export function refusalSentence(error: SbgError): string {
+  const written = error.status >= 400 && error.status < 500 && error.status !== 401 && error.status !== 426 ? error.detail?.trim() : '';
+  return written || errorSentence(error);
+}
+
+/** A by-name refusal, shown where the person acted — one sentence, the server's. See `refusalSentence`. */
+export function RefusalNote({ error }: { error: SbgError }) {
+  const p = presentationFor(error.code);
+  return (
+    <div class={`note note--${p.tone}`} role="alert">
+      <Icon name={p.icon} size={22} class="note__ic" />
+      <div class="note__body">
+        <p class="note__t">{refusalSentence(error)}</p>
       </div>
     </div>
   );

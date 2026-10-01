@@ -1,9 +1,10 @@
-import { Button, Card, ErrorNote, Note, PhotoField, Pill, ReadAloud, Sheet } from '../../../shared/ui';
-import { useT, type MessageKey } from '../../../shared/i18n';
+import { Button, Card, ErrorNote, Note, PhotoField, Pill, ReadAloud, RefusalNote, Sheet } from '../../../shared/ui';
+import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
+import type { SbgError } from '../../../lib/sbg';
 import type { DuplicateField } from '../../../shared/duplicate';
 import { driverAction, driverMissing, isHeavySelection, paperLine, paperLineClass, papersToShow, shortDid, statusTone, toggleClass } from '../logic';
 import { VEHICLE_CLASSES, type DriverRow } from '../types';
-import type { FleetActions, FleetState } from '../useFleetApp';
+import type { FleetActions, FleetOfferRow, FleetState, RemovalReason } from '../useFleetApp';
 import { useState } from 'preact/hooks';
 import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
 import type { ChatThread } from '../../../shared/conversation/logic';
@@ -34,6 +35,17 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
   const [thread, setThread] = useState<ChatThread | null>(null);
   // FP4 — whose renewed licence is being recorded.
   const [licenceFor, setLicenceFor] = useState<DriverRow | null>(null);
+  // Who is being taken off the fleet.
+  const [removing, setRemoving] = useState<DriverRow | null>(null);
+  // The place being offered: the number typed, and what the server said about it.
+  const [offerPhone, setOfferPhone] = useState('');
+  const [offerRefused, setOfferRefused] = useState<SbgError | null>(null);
+  const offer = async (phone: string) => {
+    setOfferPhone(phone);
+    const refused = await actions.offerPlace(phone);
+    setOfferRefused(refused);
+    if (!refused) setOfferPhone('');
+  };
 
   return (
     <div class="scr">
@@ -120,18 +132,75 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
           </Button>
           {missing ? <p class="hint" style="margin-top:8px">{missing}</p> : null}
         </div>
-        {/* Already registered on the network: they join by this fleet's code from their own app, never a second time here. */}
+        {/* Already registered on the network: never added a second time. The office offers them a place, and they
+            say yes from their own app — one tap here, with the number already typed above. */}
         {state.driverDuplicate ? (
           <div style="margin-top:12px">
             <Note
               tone="warn"
               icon="lock"
               title={t(DUP_TITLE[state.driverDuplicate.field] ?? 'fleet.drivers.dupTitle.phone')}
-              detail={[
-                state.driverDuplicate.code ? t('fleet.drivers.dupJoin', { code: state.driverDuplicate.code }) : t('fleet.drivers.dupJoinNoCode'),
-                state.driverDuplicate.field === 'phone' ? '' : t('fleet.drivers.dupTypo'),
-              ].filter(Boolean).join(' ')}
+              detail={[t('fleet.drivers.dupOffer'), state.driverDuplicate.field === 'phone' ? '' : t('fleet.drivers.dupTypo')].filter(Boolean).join(' ')}
             />
+            {f.mobile.trim() ? (
+              <Button variant="outline" chevron={false} busy={state.busy === 'offer'} onClick={() => void offer(f.mobile)}>
+                {t('fleet.drivers.dupOfferCta', { phone: f.mobile.trim() })}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+      </Card>
+
+      {/* THE ONLY WAY SOMEBODY ALREADY ON THE NETWORK JOINS THIS FLEET.
+
+          It was the fleet's code, typed by whoever had it. The office names the driver now — by the number they
+          sign in with — and the driver answers from their own app. Until they say yes the office sees the number
+          it typed and nothing else: not a name, not where they drive today. */}
+      <Card title={t('fleet.offers.title')}>
+        <p class="card__note">{t('fleet.offers.note')}</p>
+        <div class="field">
+          <label class="field__label" for="offer-phone">
+            {t('fleet.offers.phone')}
+          </label>
+          <input
+            id="offer-phone"
+            class="input"
+            type="tel"
+            inputMode="tel"
+            value={offerPhone}
+            onInput={(e) => {
+              setOfferPhone(e.currentTarget.value);
+              setOfferRefused(null);
+            }}
+            placeholder="07…"
+          />
+        </div>
+        {offerRefused ? <RefusalNote error={offerRefused} /> : null}
+        <div style="margin-top:12px">
+          <Button chevron={false} disabled={!offerPhone.trim()} busy={state.busy === 'offer'} onClick={() => void offer(offerPhone)}>
+            {t('fleet.offers.cta')}
+          </Button>
+        </div>
+        {state.fleetOffers.length ? (
+          <div class="rows" role="list" style="margin-top:14px">
+            {state.fleetOffers.map((o) => (
+              <div key={o.offerId} class="row row--static" role="listitem">
+                <span class="row__body">
+                  <span class="row__t">{o.driverName ?? t('fleet.offers.ending', { ending: o.phoneEnding })}</span>
+                  <span class="row__s">{offerLine(o, t)}</span>
+                </span>
+                <span class="row__end">
+                  <Pill tone={o.status === 'accepted' ? 'ok' : o.status === 'open' ? 'warn' : 'idle'} dot>
+                    {t(`fleet.offers.pill.${o.status}` as MessageKey)}
+                  </Pill>
+                  {o.status === 'open' ? (
+                    <Button variant="link" full={false} busy={state.busy === 'offer:' + o.offerId} onClick={() => void actions.withdrawOffer(o.offerId)}>
+                      {t('fleet.offers.withdraw')}
+                    </Button>
+                  ) : null}
+                </span>
+              </div>
+            ))}
           </div>
         ) : null}
       </Card>
@@ -173,6 +242,9 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
                     </Pill>
                     <Button variant="link" full={false} onClick={() => setLicenceFor(d)}>
                       {t('fleet.drivers.licenceBtn')}
+                    </Button>
+                    <Button variant="link" full={false} onClick={() => setRemoving(d)}>
+                      {t('fleet.remove.btn')}
                     </Button>
                     {action === 'submit-kyc' ? (
                       <Button variant="link" full={false} onClick={() => actions.setKyc({ for: d.did, idCopyRef: '', licenceCopyRef: '', photoRef: '' })}>
@@ -238,6 +310,7 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
       </Sheet>
 
       <LicenceSheet driver={licenceFor} onClose={() => setLicenceFor(null)} state={state} actions={actions} />
+      <RemoveSheet driver={removing} onClose={() => setRemoving(null)} state={state} actions={actions} />
 
       <div class="scr__foot">
         <ReadAloud
@@ -249,6 +322,84 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
         />
       </div>
     </div>
+  );
+}
+
+const OFFER_DAY: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+
+/** What became of an offer, as a sentence — the status pill says the word, this says the rest. */
+function offerLine(o: FleetOfferRow, t: ReturnType<typeof useT>): string {
+  if (o.status === 'open') return t('fleet.offers.line.open', { day: formatDate(o.expiresAt, OFFER_DAY) });
+  if (o.status === 'accepted') return t('fleet.offers.line.accepted', { ending: o.phoneEnding });
+  if (o.status === 'declined') return t('fleet.offers.line.declined');
+  if (o.status === 'withdrawn') return t('fleet.offers.line.withdrawn');
+  return t('fleet.offers.line.lapsed', { day: formatDate(o.expiresAt, OFFER_DAY) });
+}
+
+const REMOVAL_REASONS: RemovalReason[] = ['left', 'ended', 'other'];
+
+/**
+ * TAKE A DRIVER OFF THE FLEET — the office's own decision about its own roster.
+ *
+ * Until this existed only network staff could suspend a driver, so a fleet could not get somebody off its trucks
+ * and its name without asking us. A reason is always given, because the driver is shown it; and what it does is
+ * said before it is done. A load in their hands or a run they are on is refused by name — the server's sentence
+ * says what has to happen first.
+ */
+function RemoveSheet({ driver, onClose, state, actions }: { driver: DriverRow | null; onClose: () => void; state: FleetState; actions: FleetActions }) {
+  const t = useT();
+  const [reason, setReason] = useState<RemovalReason | null>(null);
+  const [note, setNote] = useState('');
+  const [refused, setRefused] = useState<SbgError | null>(null);
+  const close = () => {
+    setReason(null);
+    setNote('');
+    setRefused(null);
+    onClose();
+  };
+  const name = driver?.displayName ?? '';
+  return (
+    <Sheet open={Boolean(driver)} onClose={close} title={driver ? t('fleet.remove.title', { name }) : ''}>
+      <p class="t-body">{t('fleet.remove.body')}</p>
+      {refused ? <RefusalNote error={refused} /> : null}
+      <div class="field">
+        <span class="field__label">{t('fleet.remove.why')}</span>
+        <div class="rows" role="list">
+          {REMOVAL_REASONS.map((r) => (
+            <button key={r} type="button" class={`row${reason === r ? ' row--on' : ''}`} role="listitem" aria-pressed={reason === r} onClick={() => setReason(r)}>
+              <span class="row__body">
+                <span class="row__t">{t(`fleet.remove.reason.${r}` as MessageKey)}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+      {reason === 'other' ? (
+        <div class="field">
+          <label class="field__label" for="remove-note">
+            {t('fleet.remove.note')}
+          </label>
+          <textarea id="remove-note" class="input" rows={3} maxLength={300} value={note} onInput={(e) => setNote(e.currentTarget.value)} />
+        </div>
+      ) : null}
+      <Button
+        chevron={false}
+        danger
+        disabled={!reason || (reason === 'other' && !note.trim())}
+        busy={driver ? state.busy === 'remove:' + driver.did : false}
+        onClick={async () => {
+          if (!driver || !reason) return;
+          const failed = await actions.removeDriver(driver.did, name, reason, reason === 'other' ? note : '');
+          setRefused(failed);
+          if (!failed) close();
+        }}
+      >
+        {t('fleet.remove.cta', { name })}
+      </Button>
+      <Button variant="link" onClick={close}>
+        {t('common.cancel')}
+      </Button>
+    </Sheet>
   );
 }
 

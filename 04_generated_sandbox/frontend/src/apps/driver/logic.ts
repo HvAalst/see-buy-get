@@ -150,6 +150,12 @@ export function driverStatusNotice(status: DriverStatus | undefined, t: Translat
   return t(hasFleet ? 'driver.logic.statusNotice' : 'driver.logic.statusNoticeOwn', { status: state });
 }
 
+/** Why a fleet took this driver off, and what it means — the fleet's own words when it chose to give them. */
+export function removalWords(removed: { reason: 'left' | 'ended' | 'other'; note?: string }, t: Translate): string {
+  const why = removed.reason === 'left' ? t('driver.fleet.removedLeft') : removed.reason === 'ended' ? t('driver.fleet.removedEnded') : removed.note ? t('driver.fleet.removedNote', { note: removed.note }) : '';
+  return [why, t('driver.fleet.removedNext')].filter(Boolean).join(' ');
+}
+
 export function canStartShift(status: DriverStatus | undefined): boolean {
   return status === 'ACTIVE';
 }

@@ -65,7 +65,7 @@ describe('PersonService — the identity spine (S20)', () => {
 
   it('enroll requires an OTP-verified phone, then mints a consumer token', () => {
     expect(() => persons.enroll(PHONE, false)).toThrow(/Verify your phone/);
-    const { person, isNew, token } = persons.enroll(PHONE, true, '4321');
+    const { person, isNew, token } = persons.enroll(PHONE, true, '4826');
     expect(isNew).toBe(true);
     const claims = auth.introspect(token.access_token);
     expect(claims.active).toBe(true);
@@ -84,25 +84,27 @@ describe('PersonService — the identity spine (S20)', () => {
   });
 
   it('locks the PIN after repeated wrong tries — then only OTP re-entry works', () => {
-    persons.enroll(PHONE, true, '1111');
-    for (let i = 0; i < 5; i++) expect(() => persons.loginWithPin(PHONE, '9999')).toThrow(/Wrong phone or PIN/);
-    // Locked now: even the CORRECT PIN is refused until the lockout clears / OTP re-verifies.
-    expect(() => persons.loginWithPin(PHONE, '1111')).toThrow(/Too many wrong PINs/);
+    persons.enroll(PHONE, true, '3579');
+    for (let i = 0; i < 4; i++) expect(() => persons.loginWithPin(PHONE, '9999')).toThrow(/Wrong phone or PIN/);
+    // The fifth wrong one locks it, and says so — the owner learns at once what will get them back in.
+    expect(() => persons.loginWithPin(PHONE, '9999')).toThrow(/Too many wrong PINs/);
+    // Locked now: even the CORRECT PIN is refused until the phone is verified by code again.
+    expect(() => persons.loginWithPin(PHONE, '3579')).toThrow(/Too many wrong PINs/);
     // But re-enrolling by OTP resets the lockout and the credential.
-    const re = persons.enroll(PHONE, true, '1111');
+    const re = persons.enroll(PHONE, true, '3579');
     expect(re.isNew).toBe(false);
-    expect(persons.loginWithPin(PHONE, '1111').person.personDid).toBe(re.person.personDid);
+    expect(persons.loginWithPin(PHONE, '3579').person.personDid).toBe(re.person.personDid);
   });
 
   it('does not reveal whether a phone is registered on a failed PIN login', () => {
     expect(() => persons.loginWithPin('+254700999999', '0000')).toThrow(/Wrong phone or PIN/); // unknown phone
-    persons.enroll(PHONE, true, '1234');
+    persons.enroll(PHONE, true, '2468');
     expect(() => persons.loginWithPin(PHONE, '0000')).toThrow(/Wrong phone or PIN/); // known phone, wrong pin — same message
   });
 
   it('switches to a held role, minting that role\'s actor token; refuses a role not held', () => {
     const agentDid = dids.generate('pudo:agent-entity').id;
-    persons.enroll(PHONE, true, '1234');
+    persons.enroll(PHONE, true, '2468');
     persons.attachRole(PHONE, 'agent', agentDid);
     const person = persons.findByPhone(PHONE)!;
 
@@ -131,7 +133,7 @@ describe('PersonService — the identity spine (S20)', () => {
     const avatarFor = (ownerDid: string) => media.upload({ ownerDid, kind: 'avatar', dataUrl: PNG }).mediaId;
 
     it('stores a display NAME in the vault (never the core) and reveals it only in the self-view', () => {
-      const { person } = persons.enroll(PHONE, true, '1234');
+      const { person } = persons.enroll(PHONE, true, '2468');
       persons.setProfile(person.personDid, { displayName: '  Hans  ' });
       const p = persons.findByDid(person.personDid)!;
       expect(p.vaultRef).toBeTruthy(); // the name went to the vault, not onto the person/core
@@ -140,13 +142,13 @@ describe('PersonService — the identity spine (S20)', () => {
     });
 
     it('rejects an empty or over-long display name', () => {
-      const { person } = persons.enroll(PHONE, true, '1234');
+      const { person } = persons.enroll(PHONE, true, '2468');
       expect(() => persons.setProfile(person.personDid, { displayName: '   ' })).toThrow(/cannot be empty/);
       expect(() => persons.setProfile(person.personDid, { displayName: 'x'.repeat(81) })).toThrow(/too long/);
     });
 
     it('updates the name IN PLACE (stable vault handle) rather than orphaning a record', () => {
-      const { person } = persons.enroll(PHONE, true, '1234');
+      const { person } = persons.enroll(PHONE, true, '2468');
       persons.setProfile(person.personDid, { displayName: 'First' });
       const ref1 = persons.findByDid(person.personDid)!.vaultRef;
       persons.setProfile(person.personDid, { displayName: 'Second' });
@@ -156,7 +158,7 @@ describe('PersonService — the identity spine (S20)', () => {
     });
 
     it('links an OWNED avatar to the person and purges the previous one on replace', () => {
-      const { person } = persons.enroll(PHONE, true, '1234');
+      const { person } = persons.enroll(PHONE, true, '2468');
       const first = avatarFor(person.personDid);
       persons.setProfile(person.personDid, { avatarMediaId: first });
       expect(persons.view(persons.findByDid(person.personDid)!).avatarMediaId).toBe(first);
@@ -169,14 +171,14 @@ describe('PersonService — the identity spine (S20)', () => {
     });
 
     it('refuses an avatar the person does not own (no cross-owner pinning)', () => {
-      const { person } = persons.enroll(PHONE, true, '1234');
+      const { person } = persons.enroll(PHONE, true, '2468');
       const notMine = avatarFor(dids.generate('person:stranger').id);
       expect(() => persons.setProfile(person.personDid, { avatarMediaId: notMine })).toThrow(/not yours/);
       expect(persons.findByDid(person.personDid)!.avatarMediaId).toBeUndefined();
     });
 
     it('refuses a media the person owns but did NOT upload as an avatar (no evidence-photo laundering)', () => {
-      const { person } = persons.enroll(PHONE, true, '1234');
+      const { person } = persons.enroll(PHONE, true, '2468');
       // A PoD/dispute photo the receiver owns lives in a LOCKED evidence bin. Pinning it as an avatar would
       // re-kind it out of that bin and let a later replace hard-delete it — the setProfile guard forbids it.
       const podId = media.upload({ ownerDid: person.personDid, kind: 'pod', dataUrl: PNG }).mediaId;
@@ -187,7 +189,7 @@ describe('PersonService — the identity spine (S20)', () => {
     });
 
     it('degrades gracefully when the vault entry is gone (in-memory vault lost on restart, vaultRef persisted)', () => {
-      const { person } = persons.enroll(PHONE, true, '1234');
+      const { person } = persons.enroll(PHONE, true, '2468');
       persons.setProfile(person.personDid, { displayName: 'Hans' });
       const p = persons.findByDid(person.personDid)!;
       p.vaultRef = 'vault_gone'; // simulate a restart: the Person persisted, the in-memory vault did not

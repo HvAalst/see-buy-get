@@ -12,7 +12,7 @@ import { OperationalStore } from '../../foundation/data-firewall/operational-sto
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { VEHICLE_SPEC, VehicleClass } from './fleet.config';
-import { DriverKyc, DriverRegistry, FleetDriver } from './fleet.types';
+import { DriverKyc, DriverRegistry, FleetDriver, FleetRemoval } from './fleet.types';
 import { FleetManagerService } from './fleet-manager.service';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
@@ -45,6 +45,21 @@ const DRIVER_HELD: Record<Exclude<PrintField, 'device'>, string> = {
 };
 const driverHeld = (field: PrintField): GlosError =>
   new GlosError('DUPLICATE', DRIVER_HELD[field as Exclude<PrintField, 'device'>], { field, register: 'driver' });
+
+/**
+ * BETWEEN FLEETS: a fleet took them off and nobody has taken them on. No `managerDid` used to mean "an independent
+ * courier" everywhere, and a driver a fleet let go would have read as one — paid as one, with a public page — while
+ * the network never contracted them as anything. Ask this wherever "no fleet" is about to mean "their own boss".
+ */
+export function betweenFleets(driver: Pick<FleetDriver, 'managerDid' | 'removedFrom'>): boolean {
+  return !driver.managerDid && Boolean(driver.removedFrom);
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function dayOf(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
 
 /**
  * DriverService — driver identity + onboarding (Compendium Ch 19), staged by the vehicle classes the
@@ -166,9 +181,9 @@ export class DriverService {
     return this.drivers.get(driverDid)?.jurisdiction;
   }
 
-  /** Whether the network contracts this driver directly (an independent courier) or through a fleet. */
+  /** Whether the network contracts this driver directly (an independent courier) or through a fleet — and a driver between fleets is neither. */
   isIndependent(driver: FleetDriver): boolean {
-    return !driver.managerDid;
+    return !driver.managerDid && !betweenFleets(driver);
   }
 
   /** The highest registry tier across the driver's cleared classes decides the onboarding path. */
@@ -416,10 +431,15 @@ export class DriverService {
     return driver;
   }
 
-  /** A driver may operate only if ACTIVE and no recorded licence expiry has passed (FP4 — any registry: a date given is a date kept). */
+  /**
+   * A driver may operate only if ACTIVE, no recorded licence expiry has passed (FP4 — any registry: a date given
+   * is a date kept), and they are not between fleets: a driver a fleet took off has nobody to drive for until
+   * another fleet offers them a place. Every way behind a wheel asks this — the coupling, a run, a load.
+   */
   canOperate(did: string, now: number = Date.now()): boolean {
     const driver = this.drivers.get(did);
     if (!driver || driver.status !== 'ACTIVE') return false;
+    if (betweenFleets(driver)) return false;
     return lapsedOf(driverPapers(driver, now)).length === 0;
   }
 
@@ -427,7 +447,10 @@ export class DriverService {
   offRoadReasons(did: string, now: number = Date.now()): string[] {
     const driver = this.drivers.get(did);
     if (!driver) return [];
-    return lapsedOf(driverPapers(driver, now)).map(offRoadLine);
+    const papers = lapsedOf(driverPapers(driver, now)).map(offRoadLine);
+    if (!betweenFleets(driver)) return papers;
+    const off = driver.removedFrom!;
+    return [`you are not in a fleet — ${off.companyName} took you off on ${dayOf(off.at)}, and a fleet has to offer you a place first`, ...papers];
   }
 
   /** Whether the driver's licence clears them for a given vehicle class. */
@@ -448,6 +471,24 @@ export class DriverService {
     driver.managerDid = managerDid;
     delete driver.jurisdiction;
     delete driver.entityId;
+    delete driver.removedFrom; // a fleet took them on: whoever took them off before is history, not a state
+    this.drivers.set(did, driver);
+    return driver;
+  }
+
+  /**
+   * TAKEN OFF A FLEET — the driver record's half. FleetMoveService has already checked nothing is left in the
+   * driver's hands. They keep everything that is theirs (papers, trips, ratings, badge, sign-in); what they lose
+   * is somebody to drive for, so they are between fleets — not an independent courier, which the network never
+   * contracted them as — until another fleet offers them a place.
+   */
+  leaveFleet(did: string, removal: FleetRemoval): FleetDriver {
+    const driver = this.require(did);
+    if (driver.managerDid !== removal.fleetDid) throw new GlosError('FORBIDDEN', 'That driver is not in your fleet');
+    delete driver.managerDid;
+    delete driver.jurisdiction;
+    delete driver.entityId;
+    driver.removedFrom = removal;
     this.drivers.set(did, driver);
     return driver;
   }

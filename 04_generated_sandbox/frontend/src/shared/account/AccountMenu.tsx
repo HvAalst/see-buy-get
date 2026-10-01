@@ -337,7 +337,7 @@ function PinSheet({ open, onClose, api, onSignOut }: { open: boolean; onClose: (
       <p class="t-body">{t('account.menu.pinBody')}</p>
       <div class="field">
         <span class="field__label">{t('account.menu.currentPin')}</span>
-        <CodeBoxes id="acct-pin-current" label={t('account.menu.currentPin')} length={4} value={current} onInput={setCurrent} disabled={api.busy} />
+        <CodeBoxes id="acct-pin-current" label={t('account.menu.currentPin')} length={4} value={current} onInput={setCurrent} disabled={api.busy} mask />
       </div>
       <div class="field">
         <span class="field__label">{t('account.menu.newPin')}</span>

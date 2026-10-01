@@ -1,21 +1,45 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { DidService } from '../../foundation/did/did.service';
 import { AuthService } from '../../foundation/auth/auth.service';
 import { AccessToken } from '../../foundation/auth/auth.types';
+import { EventBus } from '../../foundation/events/event-bus.service';
+import { GlosEvent } from '../../foundation/events/glos-events';
 import { hashPhone, isPlausiblePhone } from '../../foundation/identity/phone';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
 import { MediaService } from './media.service';
 import { Person, PersonRole, PersonView, ROLE_TO_ACTOR, RoleLink, toView } from './person.types';
 
-/** Wrong-PIN attempts before the PIN is locked and a fresh OTP is required. */
-const MAX_PIN_ATTEMPTS = 5;
-/** How long a locked PIN stays locked. A person can always re-enter by re-verifying their phone (OTP). */
-const PIN_LOCK_MS = 15 * 60 * 1000;
+/** Wrong-PIN attempts before the PIN locks. From then on only a code sent to the phone opens it again. */
+export const MAX_PIN_ATTEMPTS = 5;
 /** A 4-digit numeric PIN — the BondBridge credential shape, chosen for a phone-first consumer. */
 const PIN_RE = /^\d{4}$/;
+const PIN_LOCKED_SENTENCE = 'Too many wrong PINs. Verify your phone by code to sign in.';
+
+/**
+ * THE PINS SOMEBODY WHO KNOWS YOU TRIES FIRST.
+ *
+ * Five wrong guesses lock a PIN, so a PIN has to survive five — and a colleague who knows your number knows
+ * to start with one digit four times, a straight run up or down (1234, 9876, 7890), two pairs (1212, 1122) or
+ * the keypad's middle column (2580). Refused at the moment a PIN is chosen; a PIN already set keeps working.
+ */
+export function isGuessablePin(pin: string): boolean {
+  if (!PIN_RE.test(pin)) return false;
+  const d = pin.split('').map(Number);
+  if (d.every((x) => x === d[0])) return true;
+  const runs = (step: number) => d.every((x, i) => i === 0 || x === (d[i - 1] + step + 10) % 10);
+  if (runs(1) || runs(-1)) return true;
+  if (d[0] === d[2] && d[1] === d[3]) return true;
+  if (d[0] === d[1] && d[2] === d[3]) return true;
+  return pin === '2580' || pin === '0852';
+}
+
+/** Locked — by the five wrong guesses, or by the old fifteen-minute window while it still runs. */
+function pinLocked(person: Person, now: number = Date.now()): boolean {
+  return Boolean(person.pinLockedAt) || Boolean(person.pinLockedUntil && person.pinLockedUntil > now);
+}
 
 /**
  * PersonService — the identity spine (S20). "One person, one account, many roles."
@@ -42,6 +66,8 @@ export class PersonService {
     private readonly auth: AuthService,
     private readonly vault: IdentityVault,
     private readonly media: MediaService,
+    // Optional so a hand-built module keeps compiling; without it a locked PIN is still locked, just not announced.
+    @Optional() private readonly events?: EventBus,
   ) {
     for (const p of this.persons.values()) this.byDid.set(p.personDid, p.phoneHash);
   }
@@ -227,48 +253,84 @@ export class PersonService {
     return { person: this.requireByDid(person.personDid), isNew, token: this.mintConsumerToken(person) };
   }
 
-  /** Set or change the person's 4-digit PIN (scrypt-hashed) and clear any lockout. */
+  /**
+   * Set or change the person's 4-digit PIN (scrypt-hashed) and clear any lockout.
+   *
+   * The ONE place a PIN is chosen — enrolling, a forgotten PIN after a code, a change — so the guessable ones are
+   * refused here and nowhere else, and no door can choose one by going round.
+   */
   setPin(personDid: string, pin: string): void {
     if (!PIN_RE.test(pin || '')) throw new GlosError('PIN_INVALID', 'PIN must be exactly 4 digits');
+    if (isGuessablePin(pin)) {
+      throw new GlosError('PIN_GUESSABLE', 'Choose a PIN that is harder to guess: not one digit four times, not a run like 1234 or 9876, and not pairs like 1212 or 1122', { reason: 'guessable' });
+    }
     const person = this.requireByDid(personDid);
     person.pinSalt = randomBytes(16).toString('hex');
     person.pinHash = this.hashPin(pin, person.pinSalt);
     person.pinAttempts = 0;
+    person.pinLockedAt = undefined;
     person.pinLockedUntil = undefined;
     person.pinChangedAt = new Date().toISOString();
     this.save(person);
   }
 
   /**
-   * Reopen the app with a phone + PIN — no OTP. Rate-limited: after MAX_PIN_ATTEMPTS wrong tries the PIN
-   * locks for PIN_LOCK_MS and the person must re-verify by OTP (a 4-digit PIN is only 10⁴ wide, so the
-   * lockout is the credential's real strength). Returns a consumer actor token.
+   * Reopen the app with a phone + PIN — no OTP. A 4-digit PIN is only 10⁴ wide, so the lock is the credential's
+   * real strength: after MAX_PIN_ATTEMPTS wrong tries it locks, and only a code sent to the phone opens it again.
+   * Returns a consumer actor token.
    */
   loginWithPin(phone: string, pin: string): { person: Person; token: AccessToken } {
     const person = this.findByPhone(phone);
     // Do not reveal whether the phone is registered — same error either way.
     if (!person || !person.pinHash || !person.pinSalt) throw new GlosError('AUTH_FAILED', 'Wrong phone or PIN');
-    if (person.pinLockedUntil && person.pinLockedUntil > Date.now()) {
-      throw new GlosError('PIN_LOCKED', 'Too many wrong PINs. Verify your phone by code to sign in.');
-    }
-    // The lockout has elapsed → grant a fresh attempt window rather than re-locking on the first miss.
-    if (person.pinLockedUntil) {
-      person.pinAttempts = 0;
-      person.pinLockedUntil = undefined;
-      this.save(person);
-    }
+    this.checkPin(person, pin, 'AUTH_FAILED', 'Wrong phone or PIN');
+    return { person, token: this.mintConsumerToken(person) };
+  }
+
+  /**
+   * The PIN of the person who is SIGNED IN, asked again at the moment that decides who is driving: the start of a
+   * shift. A phone left signed in — in a cab, on a shared charger — is not proof of who is holding it, and a
+   * colleague who picks it up must not be able to start a day's work in somebody else's name. Same counter, same
+   * lock as the door: an open session is not an unlimited guessing seat.
+   */
+  confirmPin(personDid: string, pin: string): void {
+    const person = this.requireByDid(personDid);
+    if (!person.pinHash || !person.pinSalt) throw new GlosError('PIN_INVALID', 'You have no PIN yet. Sign out, then choose “First time, or forgot your PIN?”');
+    this.checkPin(person, pin, 'PIN_WRONG', 'That is not your PIN');
+  }
+
+  /**
+   * THE CHECK EVERY PIN GOES THROUGH. A wrong one counts; the fifth locks; a locked PIN stays locked until the
+   * phone is verified by code again; and the person is told, because somebody who knows their number is trying.
+   *
+   * At the DOOR a wrong PIN is AUTH_FAILED (401): nobody is signed in. From somebody ALREADY signed in it is
+   * PIN_WRONG (403): their session is fine, and an app that reads a 401 as 'your sign-in ended' would otherwise
+   * sign a driver out for a mistyped digit — which the change-PIN screen did.
+   */
+  private checkPin(person: Person, pin: string, code: 'AUTH_FAILED' | 'PIN_WRONG', wrong: string): void {
+    if (pinLocked(person)) throw new GlosError('PIN_LOCKED', PIN_LOCKED_SENTENCE);
     if (!this.verifyPin(pin, person)) {
       person.pinAttempts = (person.pinAttempts ?? 0) + 1;
-      if (person.pinAttempts >= MAX_PIN_ATTEMPTS) person.pinLockedUntil = Date.now() + PIN_LOCK_MS;
+      const lockedNow = person.pinAttempts >= MAX_PIN_ATTEMPTS;
+      if (lockedNow) person.pinLockedAt = new Date().toISOString();
       this.save(person);
-      throw new GlosError('AUTH_FAILED', 'Wrong phone or PIN');
+      if (lockedNow) {
+        this.tellLocked(person);
+        throw new GlosError('PIN_LOCKED', PIN_LOCKED_SENTENCE);
+      }
+      throw new GlosError(code, wrong);
     }
     if (person.pinAttempts || person.pinLockedUntil) {
       person.pinAttempts = 0;
       person.pinLockedUntil = undefined;
       this.save(person);
     }
-    return { person, token: this.mintConsumerToken(person) };
+  }
+
+  /** Who is told a PIN locked: the person themselves, and every driver record they sign in as. */
+  private tellLocked(person: Person): void {
+    const driverDids = person.roles.filter((r) => r.role === 'driver' && r.status === 'active').map((r) => r.entityDid);
+    void this.events?.publish(GlosEvent.Pudo.PersonPinLocked, { personDid: person.personDid, driverDids }, { source: 'pudo' }).catch(() => undefined);
   }
 
   /**
@@ -288,20 +350,7 @@ export class PersonService {
    */
   changePinForPerson(personDid: string, currentPin: string, newPin: string): { person: Person; token: AccessToken } {
     const person = this.requireByDid(personDid);
-    if (person.pinLockedUntil && person.pinLockedUntil > Date.now()) {
-      throw new GlosError('PIN_LOCKED', 'Too many wrong PINs. Verify your phone by code to sign in.');
-    }
-    if (person.pinLockedUntil) {
-      person.pinAttempts = 0;
-      person.pinLockedUntil = undefined;
-      this.save(person);
-    }
-    if (!person.pinHash || !person.pinSalt || !this.verifyPin(currentPin, person)) {
-      person.pinAttempts = (person.pinAttempts ?? 0) + 1;
-      if (person.pinAttempts >= MAX_PIN_ATTEMPTS) person.pinLockedUntil = Date.now() + PIN_LOCK_MS;
-      this.save(person);
-      throw new GlosError('AUTH_FAILED', 'That is not your current PIN');
-    }
+    this.checkPin(person, currentPin, 'PIN_WRONG', 'That is not your current PIN');
     if (currentPin === newPin) throw new GlosError('PIN_INVALID', 'Choose a PIN different from the current one');
     this.setPin(person.personDid, newPin);
     this.auth.revokeAll(person.personDid);
@@ -336,6 +385,8 @@ export class PersonService {
   mintForRole(person: Person, role: PersonRole): { role: PersonRole; entityDid: string; token: AccessToken } {
     const link = person.roles.find((r) => r.role === role && r.status === 'active');
     if (!link) throw new GlosError('ROLE_NOT_HELD', `You do not hold an active ${role} role`);
+    // ONE PHONE AT A TIME for a driver, exactly as at the driver app's own door (see driverSignIn).
+    if (role === 'driver') this.auth.revokeAll(link.entityDid);
     const token = role === 'consumer'
       ? this.mintConsumerToken(person)
       : // Carries the person, so changing their PIN also ends the role sessions that PIN opened.

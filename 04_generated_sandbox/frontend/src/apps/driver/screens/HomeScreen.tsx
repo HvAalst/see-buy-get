@@ -1,6 +1,7 @@
 import { DarkSpellNote } from './DarkSpellNote';
 import { useState } from 'preact/hooks';
-import { Button, Card, Checklist, ErrorNote, Explainer, ExplainerBlock, GlanceNumber, Icon, Note, PhotoField, Pill, PushPrompt, QrBlock, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeBoxes, ErrorNote, Explainer, ExplainerBlock, GlanceNumber, Icon, Note, PhotoField, Pill, PushPrompt, QrBlock, ReadAloud, RefusalNote, ScanField, Sheet } from '../../../shared/ui';
+import type { SbgError } from '../../../lib/sbg';
 import { formatDate, useT } from '../../../shared/i18n';
 import { paperDay } from '../../../shared/papers';
 import { qrPayload } from '../../../shared/qr';
@@ -15,6 +16,7 @@ import {
   minEarnFilter,
   offShiftSummary,
   rateBand,
+  removalWords,
   shiftSummary,
   usedPercent,
 } from '../logic';
@@ -24,10 +26,39 @@ import type { DriverActions, DriverState } from '../useDriverApp';
 export interface HomeScreenProps {
   state: DriverState;
   actions: DriverActions;
+  /** Open "Your fleet" — where a fleet's offer is answered. The sheet belongs to the shell, beside the account menu. */
+  onOpenFleet?: () => void;
 }
 
-export function HomeScreen({ state, actions }: HomeScreenProps) {
-  return state.session.active && state.vehicle ? <OnShift state={state} actions={actions} /> : <OffShift state={state} actions={actions} />;
+export function HomeScreen({ state, actions, onOpenFleet }: HomeScreenProps) {
+  return state.session.active && state.vehicle ? <OnShift state={state} actions={actions} onOpenFleet={onOpenFleet} /> : <OffShift state={state} actions={actions} onOpenFleet={onOpenFleet} />;
+}
+
+/**
+ * A FLEET WANTS THIS DRIVER — said on the screen they are already on, both faces of it.
+ *
+ * The offer is answered in "Your fleet", which lives behind the account menu: the right home for it and the last
+ * place anybody looks. A notification says it once; this says it for as long as the offer is open.
+ */
+function FleetOfferNote({ state, onOpenFleet }: Pick<HomeScreenProps, 'state' | 'onOpenFleet'>) {
+  const t = useT();
+  const offer = state.fleetOffers[0];
+  if (!offer) return null;
+  return (
+    <>
+      <Note
+        tone="info"
+        icon="truck"
+        title={state.fleetOffers.length > 1 ? t('driver.home.offersTitle', { count: state.fleetOffers.length }) : t('driver.home.offerTitle', { company: offer.companyName })}
+        detail={t('driver.home.offerDetail', { day: formatDate(offer.expiresAt, { day: 'numeric', month: 'short' }) })}
+      />
+      {onOpenFleet ? (
+        <Button variant="outline" chevron={false} onClick={onOpenFleet}>
+          {t('driver.home.offerSee')}
+        </Button>
+      ) : null}
+    </>
+  );
 }
 
 /**
@@ -58,7 +89,7 @@ function PushAsk({ actions }: { actions: DriverActions }) {
 
 /* ============================================================== off shift == */
 
-function OffShift({ state, actions }: HomeScreenProps) {
+function OffShift({ state, actions, onOpenFleet }: HomeScreenProps) {
   const t = useT();
   const notice = driverStatusNotice(state.driver?.status, t, Boolean(state.driver?.managerDid));
   // FP4 — a lapsed licence stops the shift before the walk to the yard, in the server's own words (the same
@@ -67,12 +98,20 @@ function OffShift({ state, actions }: HomeScreenProps) {
   const licenceDue = (state.driver?.papers ?? []).find((p) => p.kind === 'licence' && p.state === 'due');
   // Who records their licence decides what the note can tell them to do: a fleet's office, or — for a
   // courier who rides on their own — the network, from a photo sent here.
-  const own = Boolean(state.driver) && !state.driver?.managerDid;
+  // BETWEEN FLEETS: a fleet took them off and none has taken them on. Not their own boss — nobody contracted them
+  // as one — so the courier's notes below do not apply, and no shift can start until a fleet offers them a place.
+  const removed = state.driver && !state.driver.managerDid ? state.driver.removedFrom : undefined;
+  const own = Boolean(state.driver) && !state.driver?.managerDid && !removed;
   // Once the new card is sent, the notes keep their FACTS (how long is left, why no shift can start) and
   // drop the instruction to send it — the note below says it has been, and telling somebody to do what
   // they have just done reads as "it did not go through".
   const cardSent = own && Boolean(state.driver?.licenceRenewal);
-  const ready = canStartShift(state.driver?.status) && offRoad.length === 0;
+  const ready = canStartShift(state.driver?.status) && offRoad.length === 0 && !removed;
+  // THE PIN, asked at the start of a shift: that is where who-is-driving is written down, and an app left signed
+  // in — in a cab, on a depot charger — is not proof of who is holding the phone.
+  const [pinOpen, setPinOpen] = useState(false);
+  const [pin, setPin] = useState('');
+  const [refused, setRefused] = useState<SbgError | null>(null);
   // Which of this driver's usual roads they are running today. Optional: a driver who does not yet know
   // starts the shift anyway and says it later, when they look for work.
   const [legIndex, setLegIndex] = useState<number | null>(null);
@@ -103,6 +142,10 @@ function OffShift({ state, actions }: HomeScreenProps) {
       <h1 class="scr__title">{t('driver.home.startTitle')}</h1>
       <Explainer who={state.driver?.did} id="driver.shift.how" text={t('driver.home.startLede', { place: stickerPlace(namedClass, t) })} />
 
+      <FleetOfferNote state={state} onOpenFleet={onOpenFleet} />
+      {removed ? (
+        <Note tone="warn" icon="truck" title={t('driver.home.betweenTitle')} detail={`${t('driver.fleet.removed', { company: removed.companyName, day: formatDate(removed.at, { day: 'numeric', month: 'short' }) })} ${removalWords(removed, t)}`} />
+      ) : null}
       {notice ? <Note tone="warn" icon="clock" title={t('driver.home.notActivated')} detail={notice} /> : null}
       <Clearance state={state} actions={actions} />
       {offRoad.length ? (
@@ -286,13 +329,45 @@ function OffShift({ state, actions }: HomeScreenProps) {
 
       <div class="scr__cta">
         <Button
-          onClick={() => void actions.startShift(vehicleId ?? undefined, leg && { fromLabel: leg.fromLabel, from: leg.from, toLabel: leg.toLabel, to: leg.to })}
+          onClick={() => {
+            setPin('');
+            setRefused(null);
+            setPinOpen(true);
+          }}
           disabled={!ready || (!vehicleId && !state.form.vehicleQr.trim())}
           busy={state.busy === 'start'}
         >
           {t('driver.home.startShift')}
         </Button>
       </div>
+
+      <Sheet open={pinOpen} onClose={() => setPinOpen(false)} title={t('driver.home.pinTitle')}>
+        <p class="t-body">{t('driver.home.pinWhy')}</p>
+        {/* The server's own sentence for a refused start (a lapsed paper, rest owed, somebody else's vehicle); our
+            own words for a wrong PIN, which say what the next wrong one costs. */}
+        {refused ? refused.code === 'PIN_WRONG' || refused.code === 'PIN_LOCKED' ? <ErrorNote error={refused} /> : <RefusalNote error={refused} /> : null}
+        {refused?.code === 'PIN_LOCKED' ? <p class="hint">{t('driver.home.pinLocked')}</p> : null}
+        <div class="field">
+          <span class="field__label">{t('driver.home.pinLabel')}</span>
+          <CodeBoxes id="shift-pin" label={t('driver.home.pinLabel')} length={4} value={pin} onInput={setPin} disabled={state.busy === 'start'} mask />
+        </div>
+        <Button
+          chevron={false}
+          disabled={pin.length !== 4}
+          busy={state.busy === 'start'}
+          onClick={async () => {
+            const failed = await actions.startShift(pin, vehicleId ?? undefined, leg && { fromLabel: leg.fromLabel, from: leg.from, toLabel: leg.toLabel, to: leg.to });
+            setPin('');
+            setRefused(failed);
+            if (!failed) setPinOpen(false);
+          }}
+        >
+          {t('driver.home.startShift')}
+        </Button>
+        <Button variant="link" onClick={() => setPinOpen(false)}>
+          {t('driver.close')}
+        </Button>
+      </Sheet>
 
       <ExplainerBlock who={state.driver?.did} id="driver.shift.what">
         <Card title={t('driver.home.whatHappens')} tone="soft">
@@ -346,7 +421,7 @@ function Clearance({ state, actions }: HomeScreenProps) {
   const [licenceCopy, setLicenceCopy] = useState('');
   const driver = state.driver;
   // A fleet driver's papers are their office's business; a SUSPENDED one is not a paperwork problem.
-  if (!driver || driver.managerDid || driver.status === 'ACTIVE' || driver.status === 'SUSPENDED') return null;
+  if (!driver || driver.managerDid || driver.removedFrom || driver.status === 'ACTIVE' || driver.status === 'SUSPENDED') return null;
 
   if (driver.status === 'KYC_PENDING') {
     return <Note tone="info" icon="check" title={t('driver.clearance.pendingTitle')} detail={t('driver.clearance.pendingBody')} />;
@@ -624,7 +699,7 @@ function WorkCard({ state, actions }: HomeScreenProps) {
 
 /* =============================================================== on shift == */
 
-function OnShift({ state, actions }: HomeScreenProps) {
+function OnShift({ state, actions, onOpenFleet }: HomeScreenProps) {
   const t = useT();
   const [confirm, setConfirm] = useState<'end' | 'rate' | null>(null);
   const [badgeOpen, setBadgeOpen] = useState(false);
@@ -635,6 +710,7 @@ function OnShift({ state, actions }: HomeScreenProps) {
   return (
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
+      <FleetOfferNote state={state} onOpenFleet={onOpenFleet} />
       <DarkSpellNote />
       {/* FP8 — over the shift limit: said once, at the top, with what still happens (deliveries) and what does not
           (new loads). The board and the offers say it again in their own place. */}

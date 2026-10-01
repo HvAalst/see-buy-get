@@ -11968,7 +11968,7 @@
       "post": {
         "operationId": "Sbg.managerLookup",
         "summary": "",
-        "description": "Fleet console, step one: WHICH FLEET. Names the company, and hands back nothing else.\n\nThe code used to be the whole sign-in. One shared secret per company is a poor fit for a company\nrunning twenty managers across as many depots: no record of who did what, no way to cut off one\nleaver without re-issuing to everybody, and a code that is permanent access to whoever once saw it.\nIt selects the tenant now; the person proves who they are in step two.",
+        "description": "Fleet console, step one: WHICH FLEET. Names the company, and hands back nothing else.\n\nThe code used to be the whole sign-in. One shared secret per company is a poor fit for a company\nrunning twenty managers across as many depots: no record of who did what, no way to cut off one\nleaver without re-issuing to everybody, and a code that is permanent access to whoever once saw it.\nIt selects the tenant now; the person proves who they are in step two.\n\nLIMITED, because it answers a guess with a company's name: twenty tries a quarter of an hour from one caller is\nplenty for a manager who mistyped and no use for walking the code space. The code admits nobody any more — a\nfleet takes drivers on by offering them a place — but a free \"is this a fleet?\" is still nobody's to hand out.",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -12896,7 +12896,7 @@
       "post": {
         "operationId": "Sbg.driverSignIn",
         "summary": "",
-        "description": "A driver signs in with their phone and PIN.\n\nThe driver app used to mint its own token for whatever driver ID was typed in, which made the sign-in screen\ndecoration: the ID is printed on a badge, and anyone holding it could drive as that person. The PIN is the\ncredential now, checked by the identity spine that already counts wrong attempts and locks out; the token\ncarries the person, so a PIN change ends every session that PIN opened.",
+        "description": "A driver signs in with their phone and PIN.\n\nThe driver app used to mint its own token for whatever driver ID was typed in, which made the sign-in screen\ndecoration: the ID is printed on a badge, and anyone holding it could drive as that person. The PIN is the\ncredential now, checked by the identity spine that already counts wrong attempts and locks out; the token\ncarries the person, so a PIN change ends every session that PIN opened.\n\nONE PHONE AT A TIME. Signing in as a driver ends that driver's other sessions. Somebody who has got hold of a\ncolleague's PIN cannot drive as them quietly alongside them: the colleague's own phone signs out the moment\nthey do, and the colleague signing back in throws them out in turn.",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -12915,11 +12915,11 @@
         }
       }
     },
-    "/v1/sbg/drivers/{did}/fleet/check": {
-      "post": {
-        "operationId": "Sbg.checkFleetMove",
+    "/v1/sbg/drivers/{did}/fleet-offers": {
+      "get": {
+        "operationId": "Sbg.fleetOffersForDriver",
         "summary": "",
-        "description": "A DRIVER MOVES TO ANOTHER FLEET, step one: which fleet that code belongs to, and what has to be finished\nfirst. Changes nothing — it is what lets the app show \"Drive for Kilima Logistics?\" before anybody commits,\nso a mistyped code joins nobody. The driver's own call, from their own sign-in, or staff standing in.",
+        "description": "THE OFFERS WAITING ON THIS DRIVER — a fleet that wants them, until when, and what they would have to finish\nbefore saying yes. The driver, or network staff helping them. Not their current fleet's office: that a\ncompetitor wants somebody is the driver's business, not their employer's.",
         "parameters": [
           {
             "name": "did",
@@ -12930,23 +12930,16 @@
             }
           }
         ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FleetCodeDto"
-              }
-            }
-          }
-        },
         "responses": {
-          "201": {
+          "200": {
             "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FleetMoveCheckView"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DriverOfferView"
+                  }
                 }
               }
             }
@@ -12954,11 +12947,11 @@
         }
       }
     },
-    "/v1/sbg/drivers/{did}/fleet": {
+    "/v1/sbg/drivers/{did}/fleet-offers/{offerId}/accept": {
       "post": {
-        "operationId": "Sbg.moveFleet",
+        "operationId": "Sbg.acceptFleetOffer",
         "summary": "",
-        "description": "Step two: move now, or be refused by name. Final — no request goes to the fleet, nothing waits on an answer;\nthe code IS the fleet's say-so, exactly as it is when a driver signs up with it.",
+        "description": "YES. Only from the driver's OWN sign-in — not staff, not a fleet office, and not anybody who merely knows the\nphone number the offer was addressed to. Moves now, or is refused by name.",
         "parameters": [
           {
             "name": "did",
@@ -12967,18 +12960,16 @@
             "schema": {
               "type": "string"
             }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FleetCodeDto"
-              }
+          },
+          {
+            "name": "offerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
             }
           }
-        },
+        ],
         "responses": {
           "201": {
             "description": "",
@@ -12989,6 +12980,182 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/v1/sbg/drivers/{did}/fleet-offers/{offerId}/decline": {
+      "post": {
+        "operationId": "Sbg.declineFleetOffer",
+        "summary": "",
+        "description": "No — from the driver's own sign-in. The fleet hears it by the number it typed; nothing else changes.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/offers": {
+      "post": {
+        "operationId": "Sbg.makeFleetOffer",
+        "summary": "",
+        "description": "A FLEET OFFERS A PLACE to a driver already on the network, by the phone number they sign in with. The office\nlearns that the number is a driver's — which adding them already told it — and nothing more until they say yes.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FleetOfferDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetOfferView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "Sbg.fleetOffersMade",
+        "summary": "",
+        "description": "The fleet's offers: open ones, and what became of the others in the last month.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FleetOfferView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/offers/{offerId}/withdraw": {
+      "post": {
+        "operationId": "Sbg.withdrawFleetOffer",
+        "summary": "",
+        "description": "Take an open offer back. The driver is told.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetOfferView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/drivers/{driverDid}/remove": {
+      "post": {
+        "operationId": "Sbg.removeFleetDriver",
+        "summary": "",
+        "description": "THE FLEET TAKES A DRIVER OFF — its office, or network staff. Always with a reason the driver is shown; refused by\nname while a load is in their hands or they are on one of the fleet's runs.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "driverDid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveDriverDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
           }
         }
       }
@@ -14473,7 +14640,7 @@
       "post": {
         "operationId": "Sbg.startSession",
         "summary": "",
-        "description": "Driver starts a shift by scanning the vehicle's dashboard QR → couples them for the day.",
+        "description": "Driver starts a shift by scanning the vehicle's dashboard QR → couples them for the day.\n\nWITH THEIR PIN, when they start their own. The start of a shift is where the network writes down who is driving\nwhich vehicle, and an open app is not proof of who is holding the phone: a colleague who picks up a phone left\nsigned in — in a cab, on a depot charger — must not be able to start a day's work in somebody else's name. The\nsame counter and lock as the door. Staff standing in name no PIN; they are not the driver and are audited as staff.",
         "parameters": [
           {
             "name": "did",
@@ -28036,6 +28203,10 @@
           "ownerName": {
             "type": "string"
           },
+          "ownerDriverDid": {
+            "type": "string",
+            "description": "WHOSE OWN VEHICLE THIS IS when no fleet owns it — the courier who registered it at signup, and the only\ndriver who may start a shift on it. Absent on a fleet's vehicle (`managerDid` says whose) and on vehicles\nregistered before this existed."
+          },
           "documents": {
             "$ref": "#/components/schemas/VehicleDocuments"
           },
@@ -30353,6 +30524,37 @@
           "addedAt"
         ]
       },
+      "FleetRemoval": {
+        "type": "object",
+        "properties": {
+          "fleetDid": {
+            "type": "string"
+          },
+          "companyName": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "object"
+          },
+          "note": {
+            "type": "string",
+            "description": "The fleet's own words — required when the reason is `other`, shown to the driver."
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string",
+            "description": "The manager who did it, for the fleet's own record."
+          }
+        },
+        "required": [
+          "fleetDid",
+          "companyName",
+          "reason",
+          "at"
+        ]
+      },
       "DriverLicence": {
         "type": "object",
         "properties": {
@@ -30445,8 +30647,12 @@
           "managerDid": {
             "type": "string"
           },
+          "removedFrom": {
+            "$ref": "#/components/schemas/FleetRemoval"
+          },
           "jurisdiction": {
-            "type": "string"
+            "type": "string",
+            "description": "Legal residence — and ONLY for an independent courier, who the network contracts with directly.\nA fleet-attached driver has none, deliberately: the network pays their fleet, not them, so asking\nwhere they live would be collecting data for a payment we never make. We move parcels; we do not\ndo payroll or employment. Read through DriverService.settlingEntityIdOf(), which sends a fleet\ndriver's answer to their fleet."
           },
           "entityId": {
             "type": "string",
@@ -30581,33 +30787,30 @@
           "pin"
         ]
       },
-      "FleetCodeDto": {
+      "DriverOfferView": {
         "type": "object",
         "properties": {
-          "code": {
-            "type": "string",
-            "maxLength": 40
-          }
-        },
-        "required": [
-          "code"
-        ]
-      },
-      "FleetMoveCheckView": {
-        "type": "object",
-        "properties": {
+          "offerId": {
+            "type": "string"
+          },
           "fleetDid": {
             "type": "string"
           },
           "companyName": {
             "type": "string"
           },
+          "offeredAt": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          },
           "fromCompany": {
             "type": "string",
-            "description": "The fleet they drive for now — absent for a courier who drives for themselves."
+            "description": "The fleet they drive for now — absent for a courier on their own, or a driver between fleets."
           },
           "blockers": {
-            "description": "Each thing to finish first, as a sentence the driver can act on. Empty means free to move.",
+            "description": "Each thing to finish first, as a sentence the driver can act on. Empty means they can say yes now.",
             "type": "array",
             "items": {
               "type": "string"
@@ -30615,8 +30818,11 @@
           }
         },
         "required": [
+          "offerId",
           "fleetDid",
           "companyName",
+          "offeredAt",
+          "expiresAt",
           "blockers"
         ]
       },
@@ -30652,17 +30858,86 @@
             "type": "string"
           },
           "token": {
-            "description": "Every earlier session ended — each carried the old fleet. Absent when staff moved the driver.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/IssuedTokenView"
-              }
-            ]
+            "$ref": "#/components/schemas/IssuedTokenView"
           }
         },
         "required": [
           "did",
           "companyName"
+        ]
+      },
+      "FleetOfferDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "phone"
+        ]
+      },
+      "FleetOfferView": {
+        "type": "object",
+        "properties": {
+          "offerId": {
+            "type": "string"
+          },
+          "phoneEnding": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "accepted",
+              "declined",
+              "withdrawn",
+              "lapsed"
+            ]
+          },
+          "offeredAt": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "closedAt": {
+            "type": "string"
+          },
+          "driverName": {
+            "type": "string",
+            "description": "Only once they said yes — until then a phone number names nobody to the office."
+          }
+        },
+        "required": [
+          "offerId",
+          "phoneEnding",
+          "status",
+          "offeredAt",
+          "expiresAt"
+        ]
+      },
+      "RemoveDriverDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "left",
+              "ended",
+              "other"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "description": "The fleet's own words — required for `other`.",
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "reason"
         ]
       },
       "CarrierPapersRecordDto": {
@@ -31998,6 +32273,11 @@
           },
           "vehicleId": {
             "type": "string"
+          },
+          "pin": {
+            "type": "string",
+            "description": "The driver's PIN — required when they start their OWN shift. A phone left signed in is not proof of who is\nholding it, and the start of a shift is where the network records who is driving which vehicle.",
+            "maxLength": 8
           },
           "leg": {
             "description": "The leg for this shift, declared in the same breath as picking the vehicle.",

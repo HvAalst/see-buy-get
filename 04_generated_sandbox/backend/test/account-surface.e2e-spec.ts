@@ -119,9 +119,32 @@ describe('the account, reached from a role app', () => {
         .post('/v1/sbg/account/pin/change')
         .set('authorization', `Bearer ${driverToken}`)
         .send({ currentPin: '9999', newPin: '1357' })
-        .expect(401);
+        // 403, not 401: the session is fine. Every app reads a 401 as 'your sign-in ended' and signs the person out —
+        // which is what a mistyped current PIN used to do to them.
+        .expect(403)
+        .expect((res) => expect(res.body.code).toBe('PIN_WRONG'));
+      await http().get('/v1/sbg/account/me').set('authorization', `Bearer ${driverToken}`).expect(200);
       // The old PIN still opens the door: a failed change changed nothing.
-      await http().post('/v1/sbg/drivers/session').send({ phone: PHONE, pin: PIN }).expect(201);
+      const again = await http().post('/v1/sbg/drivers/session').send({ phone: PHONE, pin: PIN }).expect(201);
+      // One phone at a time: that sign-in ended the earlier one, so the rest of this file carries the new token.
+      await http().get('/v1/sbg/account/me').set('authorization', `Bearer ${driverToken}`).expect(401);
+      driverToken = again.body.token.access_token;
+    });
+  });
+
+  describe('the doors a stranger knocks on', () => {
+    it('a driver’s own token cannot add a driver to anybody’s fleet — the role is checked at the door, not just in the handler', async () => {
+      await http()
+        .post('/v1/sbg/drivers/onboard')
+        .set('authorization', `Bearer ${driverToken}`)
+        .send({ displayName: 'Ghost', fullName: 'Ghost Rider', nationalId: `ID-GHOST-${PHONE.slice(-5)}`, mobile: `+2547${PHONE.slice(-7, -1)}9`, licenceClasses: ['bike'] })
+        .expect(403);
+    });
+
+    it('a fleet code is answered twenty times a quarter of an hour from one caller, then not at all', async () => {
+      for (let i = 0; i < 20; i++) await http().post('/v1/sbg/fleet/managers/login').send({ code: `FM-${String(i).padStart(6, '0')}` }).expect(401);
+      const limited = await http().post('/v1/sbg/fleet/managers/login').send({ code: 'FM-ABCDEF' }).expect(429);
+      expect(limited.body.code).toBe('RATE_LIMITED');
     });
   });
 

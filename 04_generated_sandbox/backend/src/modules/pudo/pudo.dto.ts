@@ -1464,18 +1464,33 @@ export class DriverSessionDto {
   @IsOptional() @IsString() did?: string;
 }
 
-/** A fleet's join code — the same code drivers use to sign up to that fleet. */
-export class FleetCodeDto {
-  @IsString() @MaxLength(40) code!: string;
+/** A fleet offers a place to a driver already registered — by the phone number they sign in with. */
+export class FleetOfferDto {
+  @IsString() @MaxLength(40) phone!: string;
 }
 
-/** Before a driver moves: which fleet the code belongs to, and what has to be finished first. */
-export class FleetMoveCheckView {
+/** An offer as the fleet office sees it: the number it typed (its last three digits), and what became of it. */
+export class FleetOfferView {
+  @ApiProperty() offerId!: string;
+  @ApiProperty() phoneEnding!: string;
+  @ApiProperty({ enum: ['open', 'accepted', 'declined', 'withdrawn', 'lapsed'] }) status!: 'open' | 'accepted' | 'declined' | 'withdrawn' | 'lapsed';
+  @ApiProperty() offeredAt!: string;
+  @ApiProperty() expiresAt!: string;
+  @ApiPropertyOptional() closedAt?: string;
+  /** Only once they said yes — until then a phone number names nobody to the office. */
+  @ApiPropertyOptional() driverName?: string;
+}
+
+/** An offer waiting on the driver: who, until when, and what they would have to finish before saying yes. */
+export class DriverOfferView {
+  @ApiProperty() offerId!: string;
   @ApiProperty() fleetDid!: string;
   @ApiProperty() companyName!: string;
-  /** The fleet they drive for now — absent for a courier who drives for themselves. */
+  @ApiProperty() offeredAt!: string;
+  @ApiProperty() expiresAt!: string;
+  /** The fleet they drive for now — absent for a courier on their own, or a driver between fleets. */
   @ApiPropertyOptional() fromCompany?: string;
-  /** Each thing to finish first, as a sentence the driver can act on. Empty means free to move. */
+  /** Each thing to finish first, as a sentence the driver can act on. Empty means they can say yes now. */
   @ApiProperty({ type: [String] }) blockers!: string[];
 }
 
@@ -1486,12 +1501,18 @@ export class IssuedTokenView {
   @ApiProperty() expires_in!: number;
 }
 
-/** After a driver moved: the fleet they now drive for, and a fresh sign-in when they asked themselves. */
+/** After a driver said yes: the fleet they now drive for, and a fresh sign-in (every earlier one carried the old fleet). */
 export class FleetMoveView {
   @ApiProperty() did!: string;
   @ApiProperty() companyName!: string;
-  /** Every earlier session ended — each carried the old fleet. Absent when staff moved the driver. */
   @ApiPropertyOptional({ type: IssuedTokenView }) token?: IssuedTokenView;
+}
+
+/** A fleet takes a driver off — always with a reason the driver is shown. */
+export class RemoveDriverDto {
+  @IsIn(['left', 'ended', 'other']) reason!: 'left' | 'ended' | 'other';
+  /** The fleet's own words — required for `other`. */
+  @IsOptional() @IsString() @MaxLength(300) note?: string;
 }
 
 // --- participant accounts (sign in / sign up) ---
@@ -2011,6 +2032,11 @@ export class AssignCorridorDto {
 export class StartSessionDto {
   @IsOptional() @IsString() vehicleQr?: string;
   @IsOptional() @IsString() vehicleId?: string;
+  /**
+   * The driver's PIN — required when they start their OWN shift. A phone left signed in is not proof of who is
+   * holding it, and the start of a shift is where the network records who is driving which vehicle.
+   */
+  @IsOptional() @IsString() @MaxLength(8) pin?: string;
   /** The leg for this shift, declared in the same breath as picking the vehicle. */
   @IsOptional() @ValidateNested() @Type(() => DeclareLegDto) leg?: DeclareLegDto;
 }

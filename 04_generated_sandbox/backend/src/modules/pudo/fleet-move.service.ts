@@ -10,34 +10,34 @@ import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { FleetService } from './fleet.service';
 import { PersonService } from './person.service';
-import type { FleetDriver, FleetManager } from './fleet.types';
+import type { FleetDriver, FleetRemovalReason } from './fleet.types';
 
-/** What a driver is shown before they move: which fleet the code belongs to, and what is in the way. */
-export interface FleetMoveCheck {
-  fleetDid: string;
-  companyName: string;
-  /** The fleet they drive for now — absent for a courier who drives for themselves. */
-  fromCompany?: string;
-  /** Each thing to finish first, as a sentence the driver can act on. Empty means they are free to move. */
-  blockers: string[];
-}
+/** What a fleet's own words may say when it takes a driver off: why, in a sentence the driver is shown. */
+export const REMOVAL_REASONS: readonly FleetRemovalReason[] = ['left', 'ended', 'other'];
 
 /**
- * A DRIVER MOVES TO ANOTHER FLEET — with that fleet's code, from their own app.
+ * A DRIVER CHANGES FLEET — the mechanics, whoever decided it.
  *
- * The user's answer (2026-09-30), once registration stopped forgetting who is registered: a driver who wants to
- * drive for another fleet enters that fleet's join code, the same code drivers already use to sign up to one. It
- * happens at once — no request sent, nothing left waiting on an answer — or it is refused by name.
+ * There are exactly two ways in and one way out, and none of them is a code:
+ *   - IN: a fleet offers a place to a driver already registered, and THAT driver says yes from their own sign-in
+ *     (FleetOfferService). The fleet decides who; the driver decides whether.
+ *   - IN: a fleet adds a new driver itself (drivers/onboard) — a registration, not a move.
+ *   - OUT: the fleet takes a driver off.
  *
- * REFUSED WHILE ANYTHING IS UNFINISHED: a shift running, a load in hand, a run of the current fleet's still to go
- * or with goods aboard. Stop new commitments, never the finishing of old ones: the shippers on those planned
- * around this driver, and a driver who could walk off mid-run would leave them with a truck and nobody in it.
+ * It used to be "type the fleet's join code". That code also names the company at its own console sign-in, it is
+ * handed round a depot, it never expires, and it is six characters of hexadecimal — so anybody who guessed it,
+ * or was once shown it, could put themselves on a fleet's trucks, licence and insurance. A shared code can say
+ * WHICH fleet. It cannot say WHO may join it.
  *
- * WHAT MOVES AND WHAT STAYS. Everything keyed to the driver goes with them — papers, trips, ratings, badge. What
- * the old fleet did stays the old fleet's: every haul carries the carrier it was taken for (Freight.carrierDid),
- * so its earnings statement, its track record and its consignment notes are untouched, and the new fleet reads
- * none of them. The sign-in follows: the person link and the email account are re-pointed at the new fleet, and
- * every session the driver already holds ends, because each carries the old fleet as its tenant.
+ * REFUSED WHILE ANYTHING IS UNFINISHED, both ways: a load in hand, a run of the fleet's still to go or with goods
+ * aboard (and, for a driver choosing to move, a shift running). Stop new commitments, never the finishing of old
+ * ones: the shippers on those planned around this driver.
+ *
+ * WHAT MOVES AND WHAT STAYS. Everything keyed to the driver goes with them — papers, trips, ratings, badge. What a
+ * fleet did stays that fleet's: every haul carries the carrier it was taken for (Freight.carrierDid), so its
+ * earnings statement, its track record and its consignment notes are untouched. The sign-in follows: the person
+ * link and the email account are re-pointed, and every session the driver holds ends, because each carries the
+ * old fleet as its tenant.
  */
 @Injectable()
 export class FleetMoveService {
@@ -53,68 +53,96 @@ export class FleetMoveService {
     private readonly events: EventBus,
   ) {}
 
-  /** Which fleet the code belongs to, and what (if anything) has to be finished first. Changes nothing. */
-  check(driverDid: string, code: string, now: number = Date.now()): FleetMoveCheck {
-    const driver = this.drivers.get(driverDid);
-    const fleet = this.fleetFor(code);
-    if (driver.managerDid === fleet.did) throw new GlosError('INVALID_STATE', `You already drive for ${fleet.companyName}`);
-    const fromCompany = driver.managerDid ? this.companyOf(driver.managerDid) : undefined;
-    return { fleetDid: fleet.did, companyName: fleet.companyName, ...(fromCompany ? { fromCompany } : {}), blockers: this.blockers(driverDid, now) };
+  /** What a driver has to finish before they may move to another fleet — as sentences they can act on. Empty: free to go. */
+  blockersFor(driverDid: string, now: number = Date.now()): string[] {
+    const out: string[] = [];
+    if (this.fleet.activeForDriver(driverDid)) out.push('you are on a shift — end it first');
+    out.push(...this.inHand(driverDid, now));
+    return out;
   }
 
-  /** Move now, or refuse by name. Returns the driver as they now stand and the fleet they joined. */
-  move(driverDid: string, code: string, now: number = Date.now()): { driver: FleetDriver; companyName: string } {
-    const check = this.check(driverDid, code, now);
-    if (check.blockers.length) throw new GlosError('INVALID_STATE', `Finish this first: ${check.blockers.join('; ')}`, { blockers: check.blockers });
+  /**
+   * JOIN a fleet — called only once that fleet's offer was accepted by the driver themselves. Refused by name while
+   * anything is unfinished. Returns the driver as they now stand.
+   */
+  join(driverDid: string, fleetDid: string, now: number = Date.now()): { driver: FleetDriver; companyName: string } {
+    const target = this.managers.requireActive(fleetDid);
+    const before = this.drivers.get(driverDid);
+    if (before.managerDid === fleetDid) throw new GlosError('INVALID_STATE', `You already drive for ${target.companyName}`);
+    const blockers = this.blockersFor(driverDid, now);
+    if (blockers.length) throw new GlosError('INVALID_STATE', `Finish this first: ${blockers.join('; ')}`, { blockers });
 
-    const from = this.drivers.get(driverDid).managerDid;
-    const driver = this.drivers.setFleet(driverDid, check.fleetDid);
-    // The sign-in follows the driver: the person link and the email account now name the new fleet...
-    this.persons.retenant('driver', driverDid, check.fleetDid);
-    this.accounts.retenant(driverDid, check.fleetDid);
-    // ...and every token already issued to this driver — each of which carries the OLD fleet as its tenant — ends.
-    // Keyed to the driver, not the person: the same person's shop or consumer sign-in has nothing to do with this.
-    this.auth.revokeAll(driverDid);
-
+    const from = before.managerDid;
+    const driver = this.drivers.setFleet(driverDid, fleetDid);
+    this.repoint(driverDid, fleetDid);
     void this.events
       .publish(
         GlosEvent.Pudo.DriverChangedFleet,
-        { driverDid, driverName: driver.displayName, ...(from ? { fromManagerDid: from } : {}), toManagerDid: check.fleetDid, toCompany: check.companyName },
+        { driverDid, driverName: driver.displayName, ...(from ? { fromManagerDid: from } : {}), toManagerDid: fleetDid, toCompany: target.companyName },
         { source: 'pudo' },
       )
       .catch(() => undefined);
-    return { driver, companyName: check.companyName };
+    return { driver, companyName: target.companyName };
   }
 
-  /** The fleet a join code belongs to — in the words a driver needs, not the console's sign-in words. */
-  private fleetFor(code: string): FleetManager {
-    try {
-      return this.managers.login(code);
-    } catch (err) {
-      if (err instanceof GlosError && err.code === 'AUTH_CODE_INVALID') throw new GlosError('NOT_FOUND', 'No fleet has that code — check it with the fleet office', { field: 'code' });
-      if (err instanceof GlosError && err.code === 'AUTH_NOT_ACTIVE') throw new GlosError('INVALID_STATE', 'That fleet is not taking on drivers right now');
-      throw err;
-    }
+  /**
+   * THE FLEET TAKES A DRIVER OFF. The office's own decision about its own roster, with a reason the driver is shown.
+   *
+   * A shift with nothing aboard simply ends — the truck is the fleet's and so is the decision. A load in the driver's
+   * hands, or a run of the fleet's they are on, is refused by name: goods are somebody's, and a fleet that wants a
+   * driver gone still has to get its loads home and its runs crewed first.
+   *
+   * Afterwards they are BETWEEN FLEETS: everything that is theirs stays theirs, and they cannot start a shift until
+   * a fleet offers them a place.
+   */
+  remove(fleetDid: string, driverDid: string, input: { reason: FleetRemovalReason; note?: string; by?: string }, now: number = Date.now()): FleetDriver {
+    const company = this.managers.get(fleetDid).companyName;
+    const driver = this.drivers.get(driverDid);
+    if (driver.managerDid !== fleetDid) throw new GlosError('FORBIDDEN', 'That driver is not in your fleet');
+    if (!REMOVAL_REASONS.includes(input.reason)) throw new GlosError('VALIDATION_FAILED', 'Say why: they left, you ended it, or in your own words', { field: 'reason' });
+    const note = input.note?.trim();
+    if (input.reason === 'other' && !note) throw new GlosError('REASON_REQUIRED', 'Say why in your own words — the driver is shown it', { field: 'note' });
+
+    const blockers = this.inHand(driverDid, now, driver.displayName);
+    if (blockers.length) throw new GlosError('INVALID_STATE', `Not yet: ${blockers.join('; ')}`, { blockers });
+
+    if (this.fleet.activeForDriver(driverDid)) this.fleet.uncouple(driverDid);
+    const at = new Date(now).toISOString();
+    const left = this.drivers.leaveFleet(driverDid, { fleetDid, companyName: company, reason: input.reason, ...(note ? { note } : {}), at, ...(input.by ? { by: input.by } : {}) });
+    this.repoint(driverDid, undefined);
+    void this.events
+      .publish(
+        GlosEvent.Pudo.DriverLeftFleet,
+        { driverDid, driverName: left.displayName, fleetDid, companyName: company, reason: input.reason, ...(note ? { note } : {}), ...(input.by ? { by: input.by } : {}) },
+        { source: 'pudo' },
+      )
+      .catch(() => undefined);
+    return left;
   }
 
-  private companyOf(managerDid: string): string | undefined {
-    try {
-      return this.managers.get(managerDid).companyName;
-    } catch {
-      return undefined;
-    }
+  /**
+   * The sign-in follows the driver: the person link and the email account now name the new fleet (or none), and
+   * every token already issued to this driver — each of which carries the OLD fleet as its tenant — ends. Keyed to
+   * the driver, not the person: the same person's shop or consumer sign-in has nothing to do with this.
+   */
+  private repoint(driverDid: string, tenant: string | undefined): void {
+    this.persons.retenant('driver', driverDid, tenant);
+    this.accounts.retenant(driverDid, tenant);
+    this.auth.revokeAll(driverDid);
   }
 
-  /** What has to be finished before this driver may leave the fleet they are in. */
-  private blockers(driverDid: string, now: number): string[] {
+  /**
+   * Loads in the driver's hands and runs of their fleet's still to go — said to the driver, or, given `about` (their
+   * name), to the office that wants them gone.
+   */
+  private inHand(driverDid: string, now: number, about?: string): string[] {
     const out: string[] = [];
-    if (this.fleet.activeForDriver(driverDid)) out.push('you are on a shift — end it first');
     const cargo = this.dispatch.activeCargo(new Set([driverDid])).items;
-    if (cargo.length === 1) out.push(`you are carrying ${cargo[0].ref} — deliver it or hand it back`);
-    else if (cargo.length > 1) out.push(`you are carrying ${cargo.length} loads — deliver them or hand them back`);
+    if (cargo.length === 1) out.push(about ? `${about} is carrying ${cargo[0].ref} — it has to be delivered or handed back` : `you are carrying ${cargo[0].ref} — deliver it or hand it back`);
+    else if (cargo.length > 1) out.push(about ? `${about} is carrying ${cargo.length} loads — they have to be delivered or handed back` : `you are carrying ${cargo.length} loads — deliver them or hand them back`);
     const runs = this.departures.unfinishedFor(driverDid, now);
-    if (runs.length === 1) out.push(`you are on the ${runs[0].lineName} run — your fleet office has to take you off it`);
-    else if (runs.length > 1) out.push(`you are on ${runs.length} of your fleet's runs — your fleet office has to take you off them`);
+    if (runs.length === 1) out.push(about ? `${about} is on the ${runs[0].lineName} run — put somebody else on it first` : `you are on the ${runs[0].lineName} run — your fleet office has to take you off it`);
+    else if (runs.length > 1) out.push(about ? `${about} is on ${runs.length} of your runs — put somebody else on them first` : `you are on ${runs.length} of your fleet's runs — your fleet office has to take you off them`);
     return out;
   }
 }

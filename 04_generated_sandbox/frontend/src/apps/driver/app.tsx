@@ -9,7 +9,7 @@ import { LoadsScreen } from './screens/LoadsScreen';
 import { OffersScreen } from './screens/OffersScreen';
 import { RouteScreen } from './screens/RouteScreen';
 import { SignInScreen } from './screens/SignInScreen';
-import { FleetMoveSheet } from './screens/FleetMoveSheet';
+import { FleetSheet } from './screens/FleetSheet';
 import { useDriverApp, type DriverActions, type DriverState, type Screen } from './useDriverApp';
 import '../../shared/screens.css';
 import './driver.css';
@@ -28,7 +28,7 @@ export function App() {
   const account = useAccount(sbg, state.phase === 'ready');
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
-  // Who they drive for belongs to the person, so it is a row in the account menu; the move happens in a sheet.
+  // Who they drive for belongs to the person, so it is a row in the account menu; a fleet's offer is answered in a sheet.
   const [fleetOpen, setFleetOpen] = useState(false);
 
   if (state.phase === 'outdated') return <UpdateGate />;
@@ -95,7 +95,7 @@ export function App() {
               api={account}
               app="driver"
               onSignOut={actions.signOut}
-              rows={[{ key: 'fleet', icon: 'truck', label: t('driver.fleet.row'), sub: state.driver?.fleetName ?? t('driver.fleet.rowOwn'), onClick: () => setFleetOpen(true) }]}
+              rows={[{ key: 'fleet', icon: 'truck', label: t('driver.fleet.row'), sub: state.driver?.fleetName ?? t(state.driver?.removedFrom ? 'driver.fleet.rowNone' : 'driver.fleet.rowOwn'), onClick: () => setFleetOpen(true) }]}
             />
           </>
         }
@@ -104,7 +104,7 @@ export function App() {
       <main class="app__scroll">
         <ConnectivityNote stale={state.stale} />
         <OutboxNote />
-        <ScreenRouter screen={state.screen} state={state} actions={actions} />
+        <ScreenRouter screen={state.screen} state={state} actions={actions} onOpenFleet={() => setFleetOpen(true)} />
       </main>
 
       <BottomNav<Tab>
@@ -114,19 +114,19 @@ export function App() {
         labels={false}
       />
 
-      <FleetMoveSheet open={fleetOpen} onClose={() => setFleetOpen(false)} state={state} actions={actions} />
+      <FleetSheet open={fleetOpen} onClose={() => setFleetOpen(false)} state={state} actions={actions} />
       <Toasts state={state} actions={actions} />
       <FeedbackFlash />
     </div>
   );
 }
 
-function ScreenRouter({ screen, state, actions }: { screen: Screen; state: DriverState; actions: DriverActions }) {
+function ScreenRouter({ screen, state, actions, onOpenFleet }: { screen: Screen; state: DriverState; actions: DriverActions; onOpenFleet: () => void }) {
   // A stale tab (or a restored PWA) can be pointing at an on-shift screen after the shift
   // ended — the legacy page rendered those against a null vehicle. Re-check every time.
   // Earnings is exempt: a driver reviews their jobs + pay whether or not they're on shift. So is the market
   // board — shopping for work, and deciding what to buy next, is exactly what happens off shift.
-  if (!state.session.active && screen !== 'home' && screen !== 'earnings' && screen !== 'board') return <HomeScreen state={state} actions={actions} />;
+  if (!state.session.active && screen !== 'home' && screen !== 'earnings' && screen !== 'board') return <HomeScreen state={state} actions={actions} onOpenFleet={onOpenFleet} />;
 
   switch (screen) {
     case 'route':
@@ -140,7 +140,7 @@ function ScreenRouter({ screen, state, actions }: { screen: Screen; state: Drive
     case 'earnings':
       return <EarningsScreen state={state} actions={actions} />;
     default:
-      return <HomeScreen state={state} actions={actions} />;
+      return <HomeScreen state={state} actions={actions} onOpenFleet={onOpenFleet} />;
   }
 }
 

@@ -193,6 +193,12 @@ export class Vehicle {
   equipment: Equipment[];
   ownerType: VehicleOwnerType;
   ownerName: string;
+  /**
+   * WHOSE OWN VEHICLE THIS IS when no fleet owns it — the courier who registered it at signup, and the only
+   * driver who may start a shift on it. Absent on a fleet's vehicle (`managerDid` says whose) and on vehicles
+   * registered before this existed.
+   */
+  ownerDriverDid?: string;
   documents: VehicleDocuments;
   // S26 — the owner's photos of the actual vehicle body + any coupled trailer (mediaIds in the
   // 'vehicle-asset' retention bin: user-managed while the vehicle is registered).
@@ -264,12 +270,32 @@ export class DriverPortrait {
   addedAt: string;
 }
 
+export type FleetRemovalReason = 'left' | 'ended' | 'other';
+
+/** A fleet took this driver off — who, when and why, kept so the driver can read it and the next fleet starts clean. */
+export class FleetRemoval {
+  fleetDid: string;
+  companyName: string;
+  reason: FleetRemovalReason;
+  /** The fleet's own words — required when the reason is `other`, shown to the driver. */
+  note?: string;
+  at: string;
+  /** The manager who did it, for the fleet's own record. */
+  by?: string;
+}
+
 export class FleetDriver {
   driverId: string;
   did: string;
   /** Their face, for the badge — see DriverPortrait. Absent is ordinary, never a blocker. */
   portrait?: DriverPortrait;
-  managerDid?: string; // the fleet manager that employs this driver (undefined = independent courier)
+  managerDid?: string; // the fleet manager that employs this driver (undefined = independent courier — unless removedFrom says otherwise)
+  /**
+   * A FLEET TOOK THIS DRIVER OFF and nobody has offered them a place since. They are NOT an independent courier
+   * — the network never contracted them as one — so they cannot start a shift, take a load or have a public page
+   * until a fleet offers them a place and they take it. Cleared the moment they join one.
+   */
+  removedFrom?: FleetRemoval;
   /**
    * Legal residence — and ONLY for an independent courier, who the network contracts with directly.
    * A fleet-attached driver has none, deliberately: the network pays their fleet, not them, so asking

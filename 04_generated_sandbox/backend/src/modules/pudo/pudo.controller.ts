@@ -7,6 +7,7 @@ import { NoteArchiveService } from './note-archive.service';
 import { NoteBundleService } from './note-bundle.service';
 import { DestinationService } from './destination.service';
 import { FleetMoveService } from './fleet-move.service';
+import { FleetOfferService } from './fleet-offer.service';
 import { SiteService, SITE_BASIS, type Site } from './site.service';
 import { TransitAuthorityService, TRANSIT_BASIS } from './transit-authority.service';
 import { FieldObservationService, OBSERVATION_BASIS } from './field-observation.service';
@@ -15,7 +16,8 @@ import { appUrl } from '../../foundation/mail/mail.templates';
 import { InterestService } from '../../foundation/interest/interest.service';
 import { DepartureService } from './departure.service';
 import { isSandbox } from '../../foundation/runtime/sandbox';
-import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Res, StreamableFile, Optional } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Res, StreamableFile, Optional, UseGuards } from '@nestjs/common';
+import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { PRESENCE_CAPABILITIES, PRESENCE_LEVELS, type PresenceLevel } from '../../foundation/presence/presence.types';
 import { capabilitiesOf } from '../../foundation/presence/presence.service';
@@ -113,7 +115,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyRecordDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetCodeDto, FleetMoveCheckView, FleetMoveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto } from './pudo.dto';
+  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, FleetMoveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto } from './pudo.dto';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
@@ -244,6 +246,7 @@ export class SbgController {
     // Optional so the specs that hand-list this controller's providers keep working; app.boot.spec catches it
     // missing from the module.
     @Optional() private readonly fleetMove?: FleetMoveService,
+    @Optional() private readonly fleetOffers?: FleetOfferService,
   ) {}
 
   // --- phone verification (mandatory at onboarding — control-tower contact + GPS) ---
@@ -3374,7 +3377,8 @@ export class SbgController {
     // is the non-PII label that exists so there is something to say in public.
     // STILL an owner-driver: a courier who has since joined a fleet keeps the handle they were issued, and the page
     // behind it closes — a handle follows the contract, and their work is now their fleet's to show.
-    const driver = held.kind === 'driver' ? this.drivers.list().find((d) => d.did === held.id && !d.managerDid) : undefined;
+    // Nor a driver a fleet took off: between fleets is not their own boss, and nobody contracted them as one.
+    const driver = held.kind === 'driver' ? this.drivers.list().find((d) => d.did === held.id && !d.managerDid && !d.removedFrom) : undefined;
 
     const name = shop?.shopName ?? hub?.name ?? fleet?.companyName ?? company?.name ?? driver?.displayName;
     if (!name) throw new GlosError('NOT_FOUND', 'No such profile');
@@ -3723,8 +3727,14 @@ export class SbgController {
    * running twenty managers across as many depots: no record of who did what, no way to cut off one
    * leaver without re-issuing to everybody, and a code that is permanent access to whoever once saw it.
    * It selects the tenant now; the person proves who they are in step two.
+   *
+   * LIMITED, because it answers a guess with a company's name: twenty tries a quarter of an hour from one caller is
+   * plenty for a manager who mistyped and no use for walking the code space. The code admits nobody any more — a
+   * fleet takes drivers on by offering them a place — but a free "is this a fleet?" is still nobody's to hand out.
    */
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(20, 15 * 60)
   @Post('fleet/managers/login')
   managerLookup(@Body() dto: ManagerLoginDto) {
     const m = this.managers.lookup(dto.code);
@@ -3746,6 +3756,8 @@ export class SbgController {
    * the response names them so the console can say who is signed in, and the audit trail does not.
    */
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(20, 15 * 60) // each PIN locks after five; this stops one caller spreading guesses across many phones
   @Post('fleet/managers/session')
   managerSession(@Body() dto: ManagerSessionDto) {
     const m = dto.code ? this.managers.login(dto.code) : this.managers.requireSignInByDid(dto.did);
@@ -3776,6 +3788,8 @@ export class SbgController {
    * the session is still granted by `fleet/managers/session`, which checks the PIN and the role again.
    */
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(20, 15 * 60)
   @Post('fleet/managers/mine')
   managerChoices(@Body() dto: ManagerChoicesDto) {
     const { person } = this.persons.loginWithPin(dto.phone, dto.pin);
@@ -4067,9 +4081,24 @@ export class SbgController {
 
   // --- fleet: drivers (own ID, staged onboarding) ---
 
-  /** Register a driver. Bike/motorcycle → light registry (ACTIVE immediately); heavier → DRAFT + KYC. */
+  /**
+   * Register a driver. Bike/motorcycle → light registry (ACTIVE immediately); heavier → DRAFT + KYC.
+   *
+   * A FLEET OFFICE ADDS DRIVERS TO ITS OWN FLEET, and nobody else adds anybody to one. This route carried no role
+   * and took the fleet from the body, so any signed-in account — a courier's, a shop's, a consumer's — could
+   * register a driver straight into any fleet it named: a way onto somebody's trucks with no code at all. The
+   * office's own token decides which fleet now; network staff may name one; a person signs THEMSELVES up at the
+   * front door, never here.
+   */
+  @Roles('fleet_manager', 'operator')
   @Post('drivers/onboard')
-  registerDriver(@Body() dto: RegisterDriverDto) {
+  registerDriver(@Body() dto: RegisterDriverDto, @Actor() actor: IntrospectionResult) {
+    if (actor?.role !== 'operator') {
+      // The office, not a colleague: a fleet DRIVER's token names the fleet as its tenant too (see isFleetOffice).
+      const own = actingTenant(actor);
+      if (!this.isFleetOffice(actor, own) || (dto.managerDid && dto.managerDid !== own)) throw new GlosError('FORBIDDEN', 'You can add drivers to your own fleet only');
+      dto.managerDid = own;
+    }
     const driver = this.drivers.register(dto as never);
     // The phone the driver was registered with is how they sign in: link it to the person behind it now,
     // so the driver's first sign-in is "verify your phone, choose a PIN" — never a DID read off a badge.
@@ -4084,8 +4113,14 @@ export class SbgController {
    * decoration: the ID is printed on a badge, and anyone holding it could drive as that person. The PIN is the
    * credential now, checked by the identity spine that already counts wrong attempts and locks out; the token
    * carries the person, so a PIN change ends every session that PIN opened.
+   *
+   * ONE PHONE AT A TIME. Signing in as a driver ends that driver's other sessions. Somebody who has got hold of a
+   * colleague's PIN cannot drive as them quietly alongside them: the colleague's own phone signs out the moment
+   * they do, and the colleague signing back in throws them out in turn.
    */
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(60, 15 * 60) // a depot's morning from one address fits; spraying PINs across many phones does not
   @Post('drivers/session')
   driverSignIn(@Body() dto: DriverSessionDto) {
     const { person } = this.persons.loginWithPin(dto.phone, dto.pin);
@@ -4100,36 +4135,88 @@ export class SbgController {
       });
     if (!held.length) throw new GlosError('ROLE_NOT_HELD', 'This phone is not registered to a driver. Ask your fleet to check the number they registered.');
     const { link, driver } = held[held.length - 1]; // the most recent registration, when a phone drove for several
+    this.auth.revokeAll(driver.did); // one phone at a time: every earlier session of this driver ends here
     const token = this.auth.mintActorToken({ role: 'driver', did: driver.did, tenant: link.tenant, revocationKey: person.personDid, personDid: person.personDid });
     return { did: driver.did, displayName: driver.displayName, status: driver.status, person: this.persons.view(person), token };
   }
 
   /**
-   * A DRIVER MOVES TO ANOTHER FLEET, step one: which fleet that code belongs to, and what has to be finished
-   * first. Changes nothing — it is what lets the app show "Drive for Kilima Logistics?" before anybody commits,
-   * so a mistyped code joins nobody. The driver's own call, from their own sign-in, or staff standing in.
+   * THE OFFERS WAITING ON THIS DRIVER — a fleet that wants them, until when, and what they would have to finish
+   * before saying yes. The driver, or network staff helping them. Not their current fleet's office: that a
+   * competitor wants somebody is the driver's business, not their employer's.
    */
-  @Post('drivers/:did/fleet/check')
-  checkFleetMove(@Param('did') did: string, @Body() dto: FleetCodeDto, @Actor() actor: IntrospectionResult): FleetMoveCheckView {
+  @Get('drivers/:did/fleet-offers')
+  fleetOffersForDriver(@Param('did') did: string, @Actor() actor: IntrospectionResult): DriverOfferView[] {
     this.assertDriverActs(did, actor);
-    return this.mover().check(did, dto.code);
+    return this.offersOf().forDriver(did);
   }
 
   /**
-   * Step two: move now, or be refused by name. Final — no request goes to the fleet, nothing waits on an answer;
-   * the code IS the fleet's say-so, exactly as it is when a driver signs up with it.
+   * YES. Only from the driver's OWN sign-in — not staff, not a fleet office, and not anybody who merely knows the
+   * phone number the offer was addressed to. Moves now, or is refused by name.
    */
-  @Post('drivers/:did/fleet')
-  moveFleet(@Param('did') did: string, @Body() dto: FleetCodeDto, @Actor() actor: IntrospectionResult): FleetMoveView {
-    this.assertDriverActs(did, actor);
-    const { driver, companyName } = this.mover().move(did, dto.code);
-    // Every session this driver held has just ended — each carried the old fleet. The one that asked is handed a
-    // new one as the new fleet's driver; staff standing in for them get none, since they were never the driver.
-    const token =
-      actor?.did === did
-        ? this.auth.mintActorToken({ role: 'driver', did, tenant: driver.managerDid, ...(actor.personDid ? { revocationKey: actor.personDid, personDid: actor.personDid } : {}) })
-        : undefined;
-    return { did, companyName, ...(token ? { token } : {}) };
+  @Post('drivers/:did/fleet-offers/:offerId/accept')
+  acceptFleetOffer(@Param('did') did: string, @Param('offerId') offerId: string, @Actor() actor: IntrospectionResult): FleetMoveView {
+    this.assertDriverSelf(did, actor, 'Only the driver can say yes to a place in a fleet, from their own sign-in');
+    const { driver, companyName } = this.offersOf().accept(offerId, did);
+    // Every session this driver held has just ended — each carried the old fleet. The phone that said yes is handed
+    // a new one, as the new fleet's driver, on the same person.
+    const token = this.auth.mintActorToken({ role: 'driver', did, tenant: driver.managerDid, ...(actor.personDid ? { revocationKey: actor.personDid, personDid: actor.personDid } : {}) });
+    return { did, companyName, token };
+  }
+
+  /** No — from the driver's own sign-in. The fleet hears it by the number it typed; nothing else changes. */
+  @Post('drivers/:did/fleet-offers/:offerId/decline')
+  declineFleetOffer(@Param('did') did: string, @Param('offerId') offerId: string, @Actor() actor: IntrospectionResult): { declined: true } {
+    this.assertDriverSelf(did, actor, 'Only the driver can answer an offer, from their own sign-in');
+    this.offersOf().decline(offerId, did);
+    return { declined: true };
+  }
+
+  /** What the driver alone decides, from their own sign-in — the token's role AND subject, nothing standing in. */
+  private assertDriverSelf(did: string, actor: IntrospectionResult, refusal: string): void {
+    this.drivers.get(did); // 404 if unknown
+    if (actor?.role !== 'driver' || actor.did !== did) throw new GlosError('FORBIDDEN', refusal);
+  }
+
+  private offersOf(): FleetOfferService {
+    if (!this.fleetOffers) throw new GlosError('INVALID_STATE', 'Fleet offers are not running in this deployment');
+    return this.fleetOffers;
+  }
+
+  /**
+   * A FLEET OFFERS A PLACE to a driver already on the network, by the phone number they sign in with. The office
+   * learns that the number is a driver's — which adding them already told it — and nothing more until they say yes.
+   */
+  @Post('fleet/managers/:did/offers')
+  makeFleetOffer(@Param('did') did: string, @Body() dto: FleetOfferDto, @Actor() actor: IntrospectionResult): FleetOfferView {
+    this.assertFleetSelf(did, actor);
+    return this.offersOf().offer(did, dto.phone, actor?.personDid);
+  }
+
+  /** The fleet's offers: open ones, and what became of the others in the last month. */
+  @Get('fleet/managers/:did/offers')
+  fleetOffersMade(@Param('did') did: string, @Actor() actor: IntrospectionResult): FleetOfferView[] {
+    this.assertFleetSelf(did, actor);
+    return this.offersOf().forFleet(did);
+  }
+
+  /** Take an open offer back. The driver is told. */
+  @Post('fleet/managers/:did/offers/:offerId/withdraw')
+  withdrawFleetOffer(@Param('did') did: string, @Param('offerId') offerId: string, @Actor() actor: IntrospectionResult): FleetOfferView {
+    this.assertFleetSelf(did, actor);
+    return this.offersOf().withdraw(offerId, did);
+  }
+
+  /**
+   * THE FLEET TAKES A DRIVER OFF — its office, or network staff. Always with a reason the driver is shown; refused by
+   * name while a load is in their hands or they are on one of the fleet's runs.
+   */
+  @Post('fleet/managers/:did/drivers/:driverDid/remove')
+  removeFleetDriver(@Param('did') did: string, @Param('driverDid') driverDid: string, @Body() dto: RemoveDriverDto, @Actor() actor: IntrospectionResult) {
+    this.assertFleetSelf(did, actor);
+    const left = this.mover().remove(did, driverDid, { reason: dto.reason, note: dto.note, by: actor?.personDid ?? auditActor(actor) });
+    return { did: left.did, displayName: left.displayName, removedFrom: left.removedFrom };
   }
 
   /** A fleet manager sees only their own drivers (actor.tenant); operator sees all. */
@@ -4698,10 +4785,22 @@ export class SbgController {
     if (!this.isFleetOffice(actor, driver.managerDid)) throw new GlosError('FORBIDDEN', 'That driver is not in your fleet');
   }
 
-  /** Driver starts a shift by scanning the vehicle's dashboard QR → couples them for the day. */
+  /**
+   * Driver starts a shift by scanning the vehicle's dashboard QR → couples them for the day.
+   *
+   * WITH THEIR PIN, when they start their own. The start of a shift is where the network writes down who is driving
+   * which vehicle, and an open app is not proof of who is holding the phone: a colleague who picks up a phone left
+   * signed in — in a cab, on a depot charger — must not be able to start a day's work in somebody else's name. The
+   * same counter and lock as the door. Staff standing in name no PIN; they are not the driver and are audited as staff.
+   */
   @Post('fleet/drivers/:did/start-session')
   startSession(@Param('did') did: string, @Body() dto: StartSessionDto, @Actor() actor: IntrospectionResult) {
     this.assertDriverActs(did, actor);
+    if (actor?.role !== 'operator') {
+      if (!actor?.personDid) throw new GlosError('FORBIDDEN', 'Sign in with your phone and PIN to start a shift');
+      if (!dto.pin?.trim()) throw new GlosError('FIELD_REQUIRED', 'Enter your PIN to start the shift', { field: 'pin' });
+      this.persons.confirmPin(actor.personDid, dto.pin.trim());
+    }
     // Naming a vehicle they have driven before is the same act as scanning it — the coupling rules (licence,
     // usable vehicle, nobody else on it) are what actually protect this, and they run either way.
     if (dto.vehicleId?.trim()) return this.fleet.couple(did, dto.vehicleId.trim(), undefined, dto.leg);
