@@ -9,12 +9,14 @@ import { StoreScreen } from './screens/StoreScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { WelcomeScreen } from './screens/WelcomeScreen';
+import { TownScreen } from './screens/TownScreen';
 import { NoteCheck } from '../../shared/archive/NoteCheck';
 import { verifyNote } from './api';
 import { roleMeta } from './logic';
 import { useHomeApp } from './useHomeApp';
 import '../../shared/screens.css';
 import './home.css';
+import './landing.css';
 
 /**
  * The front door. No bottom nav: this app is a funnel, not a workspace — every screen
@@ -51,24 +53,39 @@ export function App() {
       <TopBar
         title={t('home.appTitle')}
         subtitle={subtitle}
-        onBack={state.screen === 'welcome' ? undefined : () => (state.screen === 'join' ? actions.back() : actions.go('welcome'))}
+        onBack={state.screen === 'welcome' ? undefined : () => (state.screen === 'join' ? actions.back() : state.screen === 'town' ? location.assign('/') : actions.go('welcome'))}
         backLabel={t('home.back')}
         end={
-          needRefresh ? (
-            <button
-              type="button"
-              class="topbar__lead"
-              onClick={() => void sw.updateServiceWorker(true)}
-              aria-label={t('home.update.aria')}
-              title={t('home.update.title')}
-            >
-              <Icon name="refresh" size={24} />
-            </button>
-          ) : null
+          <>
+            {needRefresh ? (
+              <button
+                type="button"
+                class="topbar__lead"
+                onClick={() => void sw.updateServiceWorker(true)}
+                aria-label={t('home.update.aria')}
+                title={t('home.update.title')}
+              >
+                <Icon name="refresh" size={24} />
+              </button>
+            ) : null}
+            {/* The returning visitor's door, on every visit and in the same place: the top right. */}
+            {state.screen === 'welcome' ? (
+              <a
+                class="topbar__signin"
+                href="/?go=signin"
+                onClick={(e) => {
+                  e.preventDefault();
+                  actions.go('signin');
+                }}
+              >
+                {t('home.landing.signIn')}
+              </a>
+            ) : null}
+          </>
         }
       />
 
-      <main class="app__scroll app__scroll--nonav">
+      <main class={`app__scroll app__scroll--nonav${state.screen === 'welcome' ? ' app__scroll--land' : ''}`}>
         {state.screen === 'market' ? <MarketScreen state={state} actions={actions} /> : null}
         {state.screen === 'store' ? <StoreScreen state={state} actions={actions} /> : null}
         {state.screen === 'profile' ? <ProfileScreen state={state} actions={actions} /> : null}
@@ -89,6 +106,7 @@ export function App() {
           />
         ) : null}
         {state.screen === 'welcome' ? <WelcomeScreen actions={actions} /> : null}
+        {state.screen === 'town' && state.townSlug ? <TownScreen slug={state.townSlug} /> : null}
       </main>
     </div>
   );

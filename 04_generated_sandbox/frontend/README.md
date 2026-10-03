@@ -72,6 +72,21 @@ there is no `src/index.html`.
 
 The backend must be running for any of it: `cd ../backend && npm run start:dev` (port 3000).
 
+## The public site: what search engines and AI assistants read
+
+The front page and one page per town (`/towns/<slug>/`) are **prerendered** — built to finished HTML with a
+title, a description and structured data, then taken over by the app in the browser (`src/apps/home/prerender.tsx`).
+A full build then writes `robots.txt`, `sitemap.xml` and `llms.txt` into `dist/` from the pages it actually made
+(`scripts/seo-files.mjs`). Two settings at BUILD time:
+
+- `SBG_PUBLIC_URL` — the site's own address (e.g. `https://seebuyget.com`). Without it there is no sitemap, no
+  canonical address and no link-preview image.
+- `VITE_SBG_API` — where the build fetches the town pages from. A build that cannot reach it still makes the front
+  page, with no town pages (it says so).
+
+Serve `dist/towns/<slug>/index.html` at `/towns/<slug>/` — any static host does. Rebuild when towns change (a
+nightly build is plenty); the live figures on the page are fetched in the browser either way.
+
 ## The operator console's entrance
 
 The user, 2026-10-03: the staff entrance must not be obvious, and must be professional. Four layers, each

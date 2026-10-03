@@ -2,6 +2,7 @@ import { MailService } from './foundation/mail/mail.service';
 import { FleetMoveService } from './modules/pudo/fleet-move.service';
 import { FleetOfferService } from './modules/pudo/fleet-offer.service';
 import { AccountRecoveryService } from './modules/pudo/account-recovery.service';
+import { NetworkPulseService } from './modules/pudo/network-pulse.service';
 import { Test } from '@nestjs/testing';
 import { AppModule } from './app.module';
 
@@ -29,6 +30,7 @@ describe('the application boots', () => {
     expect(moduleRef.get(FleetMoveService, { strict: false })).toBeDefined();
     expect(moduleRef.get(FleetOfferService, { strict: false })).toBeDefined();
     expect(moduleRef.get(AccountRecoveryService, { strict: false })).toBeDefined();
+    expect(moduleRef.get(NetworkPulseService, { strict: false })).toBeDefined();
     await moduleRef.close();
   }, 60_000);
 });

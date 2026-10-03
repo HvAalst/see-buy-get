@@ -8,6 +8,7 @@ import { NoteBundleService } from './note-bundle.service';
 import { DestinationService } from './destination.service';
 import { FleetMoveService } from './fleet-move.service';
 import { FleetOfferService } from './fleet-offer.service';
+import { NetworkPulseService } from './network-pulse.service';
 import { SiteService, SITE_BASIS, type Site } from './site.service';
 import { TransitAuthorityService, TRANSIT_BASIS } from './transit-authority.service';
 import { FieldObservationService, OBSERVATION_BASIS } from './field-observation.service';
@@ -248,6 +249,7 @@ export class SbgController {
     // missing from the module.
     @Optional() private readonly fleetMove?: FleetMoveService,
     @Optional() private readonly fleetOffers?: FleetOfferService,
+    @Optional() private readonly pulse?: NetworkPulseService,
   ) {}
 
   // --- phone verification (mandatory at onboarding — control-tower contact + GPS) ---
@@ -3064,6 +3066,28 @@ export class SbgController {
    * no vault refs, no requirements — that is what keeps this @Public while GET /agents stays
    * token-gated (S3).
    */
+  /**
+   * THE NETWORK, MEASURED — the front page's proof: trading shops, towns, parcels collected in the last 30 days, the
+   * median time to the collection shop, the shops' rating, and one real recent journey between two public shops.
+   * Counted, never typed; a median or an average is withheld below ten cases. Nothing in it names a person.
+   */
+  @Public()
+  @Header('Cache-Control', 'public, max-age=300')
+  @Get('network/pulse')
+  networkPulse() {
+    if (!this.pulse) throw new GlosError('NOT_FOUND', 'The network figures are not available on this server');
+    return this.pulse.pulse();
+  }
+
+  /** A page per town: its trading shops, as anybody outside them could see. Read by the town pages and their build. */
+  @Public()
+  @Header('Cache-Control', 'public, max-age=300')
+  @Get('network/towns')
+  networkTowns() {
+    if (!this.pulse) throw new GlosError('NOT_FOUND', 'The town pages are not available on this server');
+    return { items: this.pulse.towns() };
+  }
+
   @Public()
   @Get('network/points')
   networkPoints() {

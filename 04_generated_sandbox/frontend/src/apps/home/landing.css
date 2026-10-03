@@ -1,0 +1,599 @@
+/* ==========================================================================
+   The front page. Phone first — most visitors arrive on one — and wider on a desk, where a search visitor reads
+   it. Pictures carry the page; text is a sentence per picture, except where search engines need the words (the
+   questions at the end). The tokens are the apps' own: navy ink, blue for the one action and links, orange only
+   inside the drawings, where it marks the point of the picture.
+   ========================================================================== */
+
+/* The front page breaks out of the 560px app column: it is a page to read, not a form to fill. */
+.app__scroll.app__scroll--land {
+  max-width: none;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.land {
+  --land-w: 1080px;
+  --land-pad: calc(16px + var(--sa-l));
+  color: var(--tx);
+}
+
+.land > section,
+.land > footer {
+  max-width: var(--land-w);
+  margin: 0 auto;
+  padding: 0 var(--land-pad);
+}
+
+/* --------------------------------------------------------- welcome back -- */
+
+.land__back {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding-top: 14px !important;
+}
+
+.land__backt {
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.land__backapps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.land__backapp {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1.5px solid var(--blue);
+  color: var(--blue);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* ------------------------------------------------------------------ hero -- */
+
+.land__hero {
+  display: grid;
+  gap: 18px;
+  padding-top: 18px !important;
+  padding-bottom: 8px !important;
+}
+
+.land__title {
+  font-family: var(--font-display);
+  font-size: 34px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+  margin: 0;
+}
+
+.land__lede {
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--tx2);
+  margin: 12px 0 0;
+}
+
+.land__cta {
+  margin-top: 20px;
+}
+
+.land__primary {
+  width: 100%;
+}
+
+.land__track {
+  margin-top: 16px;
+}
+
+.land__tracklabel {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--navy);
+  margin-bottom: 6px;
+}
+
+.land__trackrow {
+  display: flex;
+  gap: 8px;
+}
+
+.land__trackrow .input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.land__trackgo {
+  flex: 0 0 auto;
+  min-height: 48px;
+  padding: 10px 18px;
+}
+
+.land__earn,
+.land__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 16px;
+  min-height: 44px;
+  font-weight: 700;
+  color: var(--blue);
+  text-decoration: none;
+}
+
+.land__heroimg {
+  width: 100%;
+  height: auto;
+  max-width: 460px;
+  justify-self: center;
+}
+
+/* --------------------------------------------------------------- sections -- */
+
+.land__sec,
+.land__proof {
+  padding-top: 36px !important;
+}
+
+.land__h2 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  color: var(--navy);
+  margin: 0 0 6px;
+}
+
+.land__h3 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--navy);
+  margin: 0;
+}
+
+.land__p {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--tx2);
+  margin: 4px 0 0;
+}
+
+.land__fine {
+  font-size: 13px;
+  color: var(--tx3);
+  margin: 10px 0 0;
+}
+
+/* ------------------------------------------------------------------ proof -- */
+
+.land__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0 0;
+}
+
+.land__stat {
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-sm);
+  padding: 14px;
+}
+
+.land__statv {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--navy);
+}
+
+.land__statl {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--tx2);
+}
+
+.land__stats2 {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--tx3);
+}
+
+.land__journey {
+  margin: 14px 0 0;
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-sm);
+  padding: 16px;
+}
+
+.land__legs {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.land__leg {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 10px;
+  align-items: start;
+  font-size: 15px;
+  color: var(--tx);
+}
+
+/* The line between the stops — a journey, drawn with the page's own ink. */
+.land__leg:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 18px;
+  bottom: -14px;
+  width: 2px;
+  background: var(--bd);
+}
+
+.land__legdot {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border-radius: 999px;
+  border: 2.5px solid var(--navy);
+  background: var(--bg);
+}
+
+.land__leg--done .land__legdot {
+  background: var(--navy);
+}
+
+.land__leg small {
+  display: block;
+  font-size: 13px;
+  color: var(--tx3);
+}
+
+.land__leg--done span {
+  color: var(--ok);
+  font-weight: 700;
+}
+
+/* ------------------------------------------------------------------ steps -- */
+
+.land__steps {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.land__step {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  padding: 14px;
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  grid-template-rows: auto 1fr;
+  column-gap: 14px;
+  align-items: center;
+}
+
+.land__step img {
+  grid-row: 1 / span 2;
+  width: 112px;
+  height: auto;
+}
+
+.land__stepn {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--navy);
+  color: var(--bg);
+  font-weight: 800;
+  font-size: 14px;
+  display: grid;
+  place-items: center;
+}
+
+/* ------------------------------------------------------------------ cards -- */
+
+.land__cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.land__card {
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-sm);
+  padding: 12px;
+  text-decoration: none;
+  color: inherit;
+  min-width: 0;
+}
+
+.land__card img {
+  width: 100%;
+  height: auto;
+  background: var(--blue-soft);
+  border-radius: 9px;
+  margin-bottom: 10px;
+}
+
+.land__cardt {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.land__cardgo {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: auto;
+  padding-top: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--blue);
+}
+
+@media (hover: hover) {
+  .land__card:hover {
+    border-color: var(--blue);
+  }
+}
+
+/* ------------------------------------------------------------------ trust -- */
+
+.land__trust {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.land__trustitem {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 14px;
+  align-items: center;
+}
+
+.land__trustitem img {
+  width: 72px;
+  height: auto;
+}
+
+.land__trustitem .land__link {
+  margin-top: 4px;
+}
+
+/* ------------------------------------------------------------------ where -- */
+
+.land__towns {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.land__town {
+  text-decoration: none;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+}
+
+.land__townname {
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.land__townn {
+  font-size: 13px;
+  color: var(--tx3);
+}
+
+/* -------------------------------------------------------------------- faq -- */
+
+.land__faq {
+  margin-top: 12px;
+  border-top: 1px solid var(--bd-soft);
+}
+
+.land__qa {
+  border-bottom: 1px solid var(--bd-soft);
+}
+
+.land__q {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  align-items: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.land__q::-webkit-details-marker {
+  display: none;
+}
+
+.land__q::after {
+  content: '+';
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--blue);
+}
+
+.land__qa[open] .land__q::after {
+  content: '–';
+}
+
+.land__a {
+  margin: 0 0 16px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--tx2);
+}
+
+/* ----------------------------------------------------------------- footer -- */
+
+.land__foot {
+  margin-top: 40px !important;
+  padding-top: 24px !important;
+  border-top: 1px solid var(--bd-soft);
+}
+
+.land__footnav {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 16px;
+}
+
+.land__footnav a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--blue);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.land__footend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.land__mark {
+  font-family: var(--font-display);
+  font-weight: 800;
+  color: var(--navy);
+  margin-right: auto;
+}
+
+/* ------------------------------------------------------------- wider -- */
+
+@media (min-width: 720px) {
+  .land__title {
+    font-size: 48px;
+  }
+
+  .land__hero {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 32px;
+    padding-top: 36px !important;
+  }
+
+  .land__primary {
+    width: auto;
+  }
+
+  .land__heroimg {
+    max-width: 540px;
+  }
+
+  .land__track {
+    max-width: 420px;
+  }
+
+  .land__stats {
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  }
+
+  .land__steps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .land__step {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    text-align: center;
+    padding: 18px;
+  }
+
+  .land__step img {
+    grid-row: auto;
+    width: 160px;
+    justify-self: center;
+    margin-bottom: 8px;
+  }
+
+  .land__cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .land__trust {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px 28px;
+  }
+
+  .land__footnav {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .land__sec,
+  .land__proof {
+    padding-top: 56px !important;
+  }
+}
+
+/* "Sign in" in the top bar: a link, quiet, always in the same place for somebody coming back. */
+.topbar__signin {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 6px;
+  font-weight: 700;
+  color: var(--blue);
+  text-decoration: none;
+}

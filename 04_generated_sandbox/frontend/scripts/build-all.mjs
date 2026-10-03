@@ -84,4 +84,8 @@ if (!wanted.length) {
     process.exit(r.status ?? 1);
   }
   console.log('built 1 embed: sbg-quote.js');
+
+  // The public site's robots.txt and sitemap.xml, from the pages the build actually prerendered.
+  const seo = spawnSync(process.execPath, [resolve(ROOT, 'scripts/seo-files.mjs')], { cwd: ROOT, env: process.env, stdio: 'inherit' });
+  if (seo.status !== 0) process.exit(seo.status ?? 1);
 }

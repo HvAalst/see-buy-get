@@ -27,9 +27,10 @@ import {
   type SignupView,
   type VendorRegisteredView,
 } from './api';
-import { EMPTY_JOIN, nextStep, normalizePhone, onlyJoinable, prevStep, roleById, signupBody, stepBlocker, type JoinForm, type JoinStep, type RoleSpec } from './logic';
+import { currentPath, townSlugFromPath } from './prerendered';
+import { EMPTY_JOIN, nextStep, readDeepLink, normalizePhone, onlyJoinable, prevStep, roleById, signupBody, stepBlocker, type JoinForm, type JoinStep, type RoleSpec } from './logic';
 
-export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents' | 'verify';
+export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents' | 'verify' | 'town';
 
 /** FB3b — how far the visitor cares to look. `null` IS a choice: the whole market. */
 export type MarketReach = number | null;
@@ -87,10 +88,13 @@ export interface HomeState {
   marketView: 'loads' | 'series';
   series: MarketSeriesView | null;
   seriesState: 'idle' | 'loading' | 'ready' | 'error';
+  /** The town page being shown, by its address (`/towns/<slug>`). */
+  townSlug: string | null;
 }
 
 const INITIAL: HomeState = {
   screen: 'welcome',
+  townSlug: null,
   agents: null,
   agentsBasis: null,
   agentsState: 'idle',
@@ -132,7 +136,12 @@ const INITIAL: HomeState = {
  * and every failure renders inline next to the control that caused it.
  */
 export function useHomeApp() {
-  const [state, setState] = useState<HomeState>(INITIAL);
+  // A town page is an ADDRESS (`/towns/<slug>`), known before the first render — in the build and in the browser
+  // alike — so the first frame is the town page and a prerendered one hydrates without a flash of the front door.
+  const [state, setState] = useState<HomeState>(() => {
+    const slug = townSlugFromPath(currentPath());
+    return slug ? { ...INITIAL, screen: 'town', townSlug: slug } : INITIAL;
+  });
   /** FB3b — which look owns the screen. A slow answer for "Nairobi" must not overwrite a fast one for
    *  "Kaapstad" typed after it; the market is read by someone trying several places in a row. */
   const marketEpoch = useRef(0);
@@ -285,6 +294,26 @@ export function useHomeApp() {
   useEffect(() => {
     const note = new URLSearchParams(globalThis.location?.search ?? '').get('note');
     if (note) setState((s) => ({ ...s, screen: 'verify', verifyInitial: note }));
+  }, []);
+
+  /*
+   * `/?join=driver`, `/?go=market` — every card on the front page is a real address (shareable, opens in a new tab,
+   * followable by a search engine). Read once and stripped, like the store link: a refresh must not re-run a join.
+   */
+  useEffect(() => {
+    const link = readDeepLink(globalThis.location?.search ?? '');
+    if (!link) return;
+    try {
+      const url = new URL(location.href);
+      url.searchParams.delete('join');
+      url.searchParams.delete('go');
+      history.replaceState(null, '', url.toString());
+    } catch {
+      /* a browser that refuses the rewrite still lands on the right screen */
+    }
+    if ('join' in link) startJoin(link.join);
+    else go(link.go);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // The deep link, read once and stripped as it is used — a refresh should not re-jump somebody onto a

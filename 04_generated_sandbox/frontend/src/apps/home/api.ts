@@ -77,6 +77,61 @@ export function fetchPoints(): Promise<Result<NetworkPoint[]>> {
   return publicRequest<NetworkPoint[]>(homeConfig(), '/v1/sbg/network/points');
 }
 
+/** One real parcel's journey between two public shops — no person, no parcel id. */
+export interface PulseJourney {
+  fromShop: string;
+  fromTown: string;
+  toShop: string;
+  toTown: string;
+  toReadyMinutes: number;
+  toCollectedMinutes: number;
+  collectedAt: string;
+}
+
+/**
+ * The network, measured — the front page's proof. Every figure is counted by the server; a median or an average
+ * is absent until there are enough cases for it to mean anything, and the page then simply does not show it.
+ */
+export interface NetworkPulse {
+  shops: number;
+  shopsOpen: number;
+  towns: number;
+  townList: Array<{ town: string; slug: string; shops: number }>;
+  countries: string[];
+  collected30d: number;
+  medianHoursToReady?: number;
+  shopRating?: { average: number; count: number };
+  journey?: PulseJourney;
+  windowDays: number;
+  at: string;
+}
+
+/** One trading shop on a town page — what anybody outside it could see. */
+export interface TownShop {
+  shopName: string;
+  landmark: string;
+  openState: 'open' | 'closed';
+  rating?: { average: number; count: number };
+  handle?: string;
+  location?: { lat: number; lng: number };
+}
+
+/** A town's page, at `/towns/<slug>`. */
+export interface TownPage {
+  town: string;
+  slug: string;
+  country: string;
+  shops: TownShop[];
+}
+
+export function fetchTowns(): Promise<Result<{ items: TownPage[] }>> {
+  return publicRequest<{ items: TownPage[] }>(homeConfig(), '/v1/sbg/network/towns');
+}
+
+export function fetchPulse(): Promise<Result<NetworkPulse>> {
+  return publicRequest<NetworkPulse>(homeConfig(), '/v1/sbg/network/pulse');
+}
+
 /** One country the network actually operates in — a real company, and the money it settles in. */
 export interface OperatingCountry {
   country: string;

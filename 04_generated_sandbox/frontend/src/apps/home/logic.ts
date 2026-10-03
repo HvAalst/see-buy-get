@@ -546,3 +546,66 @@ export function pickedVehicle(f: JoinForm, cls: string): Partial<JoinForm> {
   const licenceClasses = f.licenceClasses.includes(cls) ? f.licenceClasses : [...f.licenceClasses, cls];
   return { licenceClasses, vehicleClass: cls, ...(cls === 'truck' ? {} : { truckSubtype: '' }) };
 }
+
+/* ----------------------------------------------------------- the front page -- */
+
+/**
+ * THE APPS THIS DEVICE HAS ALREADY USED — the returning visitor's way straight back in.
+ *
+ * Every app leaves the DID (or store id) it signed in as, under its own key, and clears it on sign-out. The front
+ * door is the same origin, so it can see which are there and offer them first: somebody who drives does not want
+ * to read a landing page every morning. Only the PRESENCE of a key is read — never its value, never a secret.
+ */
+export interface DeviceApp {
+  id: 'driver' | 'shop' | 'hub' | 'fleet' | 'store' | 'send';
+  href: string;
+  icon: IconName;
+}
+
+export const DEVICE_APPS: Array<DeviceApp & { key: string }> = [
+  { id: 'driver', key: 'glos-driver-did', href: '/driver/', icon: 'truck' },
+  { id: 'shop', key: 'glos-agent-did', href: '/agent/', icon: 'home' },
+  { id: 'hub', key: 'glos-mdp-did', href: '/mdp/', icon: 'grid' },
+  { id: 'fleet', key: 'glos-fleet-did', href: '/fleet/', icon: 'badge' },
+  { id: 'store', key: 'glos-vendor-id', href: '/vendor/', icon: 'send' },
+  { id: 'send', key: 'glos-send-did', href: '/send/', icon: 'box' },
+];
+
+export function appsOnThisDevice(store: Pick<Storage, 'getItem'> | undefined = globalThis.localStorage): DeviceApp[] {
+  if (!store) return [];
+  const found: DeviceApp[] = [];
+  for (const { key, ...app } of DEVICE_APPS) {
+    try {
+      if (store.getItem(key)) found.push(app);
+    } catch {
+      /* storage locked down: nothing to offer, and nothing breaks */
+    }
+  }
+  return found;
+}
+
+/** "45 min", "9 h", "9 h 5 min", "3 days" — a duration a person reads at a glance. */
+export function formatDuration(minutes: number, t: Translate): string {
+  const m = Math.max(0, Math.round(minutes));
+  if (m < 60) return t('home.landing.min', { n: m });
+  if (m >= 48 * 60) return t('home.landing.days', { n: Math.round(m / (24 * 60)) });
+  const h = Math.floor(m / 60);
+  const rest = m % 60;
+  return rest ? t('home.landing.hoursMin', { h, m: rest }) : t('home.landing.hours', { h });
+}
+
+/**
+ * A LINK INTO THE FRONT DOOR — `/?join=driver`, `/?go=market`. Every card on the front page is a real address, so
+ * it can be shared, bookmarked, opened in a new tab and followed by a search engine; the app reads it once and
+ * takes the visitor to the screen it names.
+ */
+export type DeepLink = { join: RoleSpec['id'] } | { go: 'market' | 'agents' | 'verify' | 'signin' | 'roles' } | null;
+
+export function readDeepLink(search: string): DeepLink {
+  const q = new URLSearchParams(search);
+  const join = q.get('join');
+  if (join && ROLES.some((r) => r.id === join)) return { join: join as RoleSpec['id'] };
+  const go = q.get('go');
+  if (go === 'market' || go === 'agents' || go === 'verify' || go === 'signin' || go === 'roles') return { go };
+  return null;
+}

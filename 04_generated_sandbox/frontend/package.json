@@ -19,6 +19,7 @@
     "@preact/preset-vite": "^2.10.6",
     "@types/leaflet": "^1.9.22",
     "openapi-typescript": "^7.4.0",
+    "preact-render-to-string": "^6.8.0",
     "typescript": "^5.6.0",
     "vite": "^5.4.21",
     "vite-plugin-pwa": "^0.21.2",

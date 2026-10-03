@@ -1,7 +1,7 @@
-import { render } from 'preact';
+import { hydrate, render } from 'preact';
 import '../../shared/tokens.css';
 import { App } from './app';
-import { initI18n } from '../../shared/i18n';
+import { getLocale, initI18n } from '../../shared/i18n';
 
 /**
  * Front-door PWA entry — ships at the web ROOT.
@@ -16,4 +16,15 @@ import { initI18n } from '../../shared/i18n';
  */
 const host = document.getElementById('app');
 initI18n(); // adopt the saved/device language + stamp <html lang/dir> before first paint
-if (host) render(<App />, host);
+/*
+ * The front page arrives as finished HTML (prerender.tsx), rendered in English. Where this device reads English, the
+ * app takes over that markup (hydrate); in any other language it draws afresh, so nobody reads English text that
+ * the app never replaces. A page with nothing prerendered in it — dev, or a deep screen — is simply rendered.
+ */
+if (host) {
+  if (host.firstElementChild && getLocale() === 'en') hydrate(<App />, host);
+  else {
+    host.textContent = '';
+    render(<App />, host);
+  }
+}

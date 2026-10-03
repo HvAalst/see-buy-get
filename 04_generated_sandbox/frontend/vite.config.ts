@@ -336,7 +336,18 @@ export default defineConfig({
   envDir: ROOT,
   publicDir: resolve(APP_DIR, 'public'),
 
-  plugins: [preact(), cleanRootAssetsPlugin(), ...(INSTALLABLE ? installablePlugins() : [])],
+  plugins: [
+    preact(
+      /*
+       * THE FRONT PAGE IS PRERENDERED: built to finished HTML, then hydrated. Crawlers that do not run script — most
+       * AI ones — read the HTML the server sends, and to them a client-rendered page is an empty <div>. Only the
+       * front door, whose job is to be found; the apps behind sign-in have nothing to show a crawler.
+       */
+      APP_ID === 'home' ? { prerender: { enabled: true, renderTarget: '#app', prerenderScript: resolve(APP_DIR, 'prerender.tsx') } } : undefined,
+    ),
+    cleanRootAssetsPlugin(),
+    ...(INSTALLABLE ? installablePlugins() : []),
+  ],
 
   build: {
     // OUTSIDE src/, which is source and not a build target — an outDir inside it with
