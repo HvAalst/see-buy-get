@@ -16,7 +16,8 @@ import { appUrl } from '../../foundation/mail/mail.templates';
 import { InterestService } from '../../foundation/interest/interest.service';
 import { DepartureService } from './departure.service';
 import { isSandbox } from '../../foundation/runtime/sandbox';
-import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Res, StreamableFile, Optional, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Req, Res, StreamableFile, Optional, UseGuards } from '@nestjs/common';
+import { staffNetworkAllows } from '../../foundation/auth/staff-network';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { PRESENCE_CAPABILITIES, PRESENCE_LEVELS, type PresenceLevel } from '../../foundation/presence/presence.types';
@@ -115,7 +116,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyRecordDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, SuggestVehicleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, FleetMoveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto } from './pudo.dto';
+  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, SuggestVehicleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, FleetMoveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto } from './pudo.dto';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
@@ -123,7 +124,7 @@ import { classifySize, MAX_CLAIM_AWARD, measuredFactor, NETWORK_CURRENCY, SIZE_W
 import { EntityService } from '../../foundation/entity/entity.service';
 import { EntityAdminView, OperatorAccountView, EntityChanges, EntityPricing } from '../../foundation/entity/entity.types';
 import { EntityAdminService } from '../../foundation/entity/entity-admin.service';
-import { OperatorAccountService } from '../../foundation/entity/operator-account.service';
+import { OperatorAccountService, staffIdOf } from '../../foundation/entity/operator-account.service';
 import { CARGO_LANES } from './cargo.types';
 import { ReturnService } from './return.service';
 import { PayoutService } from '../../foundation/payouts/payout.service';
@@ -1786,18 +1787,70 @@ export class SbgController {
     return this.operatorAccounts.revoke(operatorId, auditActor(actor));
   }
 
-  /** A staff member signs in. The token carries their name, so nothing has to be typed beside it. */
+  /**
+   * A staff member signs in: the password, then the code from their authenticator app. The token carries their name,
+   * so nothing has to be typed beside it. An account without two-step sign-in, where it is required, is answered
+   * with a secret to scan instead of a token. Rate-limited per caller; each account's code also locks after five misses.
+   */
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(20, 15 * 60)
   @Post('operators/login')
-  operatorLogin(@Body() dto: EntityAdminLoginDto) {
-    return this.operatorAccounts.login(dto.email, dto.password);
+  operatorLogin(@Body() dto: StaffLoginDto, @Req() req: { ip?: string }) {
+    this.assertStaffNetwork(req.ip);
+    return this.operatorAccounts.login(dto.email, dto.password, dto.code);
   }
 
   /** A staff member changes their own password, proven with the current one. */
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(20, 15 * 60)
   @Post('operators/password')
-  changeOperatorPassword(@Body() dto: EntityAdminPasswordDto) {
+  changeOperatorPassword(@Body() dto: EntityAdminPasswordDto, @Req() req: { ip?: string }) {
+    this.assertStaffNetwork(req.ip);
     return this.operatorAccounts.changePassword(dto.email, dto.password, dto.newPassword);
+  }
+
+  /** The signed-in member of staff's own account — what their Settings reads. */
+  @Roles('operator')
+  @Get('operators/me')
+  myStaffAccount(@Actor() actor: IntrospectionResult) {
+    return this.operatorAccounts.view(this.staffSelf(actor).operatorId);
+  }
+
+  /** Set up two-step sign-in from Settings: a secret to scan. Its first code turns it on (`…/confirm`). */
+  @Roles('operator')
+  @Post('operators/me/two-step')
+  startTwoStep(@Actor() actor: IntrospectionResult) {
+    return this.operatorAccounts.startTwoStep(this.staffSelf(actor).operatorId);
+  }
+
+  @Roles('operator')
+  @Post('operators/me/two-step/confirm')
+  confirmTwoStep(@Body() dto: TwoStepCodeDto, @Actor() actor: IntrospectionResult) {
+    return this.operatorAccounts.confirmTwoStep(this.staffSelf(actor).operatorId, dto.code);
+  }
+
+  /**
+   * Somebody lost their authenticator. The first member of staff to call this ASKS; a second, different one — and
+   * neither of them the person concerned — completes it. Their sessions end; the next sign-in sets it up again.
+   */
+  @Roles('operator')
+  @Post('operators/:operatorId/two-step/reset')
+  resetTwoStep(@Param('operatorId') operatorId: string, @Actor() actor: IntrospectionResult) {
+    return this.operatorAccounts.resetTwoStep(operatorId, this.staffSelf(actor));
+  }
+
+  /** Staff sign-in is fenced to the networks a deployment names (`GLOS_STAFF_NETWORKS`); open everywhere when it names none. */
+  private assertStaffNetwork(ip: string | undefined): void {
+    if (!staffNetworkAllows(ip)) throw new GlosError('FORBIDDEN', 'Staff sign-in is open only from the networks SeeBuyGet staff work on');
+  }
+
+  /** The member of staff behind this token. The shared setup key is nobody in particular, so it cannot act as one. */
+  private staffSelf(actor: IntrospectionResult | undefined): { operatorId: string; name: string } {
+    const operatorId = staffIdOf(actor?.revocationKey);
+    if (!operatorId) throw new GlosError('FORBIDDEN', 'Sign in with your own staff account — the setup key cannot tell two people apart');
+    return { operatorId, name: auditActor(actor) };
   }
 
   /**

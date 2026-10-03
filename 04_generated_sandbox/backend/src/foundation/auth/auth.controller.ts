@@ -1,4 +1,5 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Post, Req } from '@nestjs/common';
+import { staffNetworkAllows } from './staff-network';
 import { AuthService, PUBLIC_MAX_TTL_SECONDS } from './auth.service';
 import { Public } from './public.decorator';
 import { AccessToken, ActorRole, GrantType, IntrospectionResult } from './auth.types';
@@ -34,9 +35,12 @@ export class AuthController {
    */
   @Public()
   @Post('token')
-  token(@Body() body: TokenDto): AccessToken {
+  token(@Body() body: TokenDto, @Req() req: { ip?: string }): AccessToken {
     // Trusted-caller paths (client-secret gated) — operator, or actor impersonation.
-    if (body?.role === 'operator') return this.authService.mintOperatorToken(body?.clientSecret);
+    if (body?.role === 'operator') {
+      if (!staffNetworkAllows(req?.ip)) throw new ForbiddenException('Staff access is open only from the networks SeeBuyGet staff work on');
+      return this.authService.mintOperatorToken(body?.clientSecret);
+    }
     if (body?.role && body?.did) {
       return this.authService.mintActorTokenFor(body.clientSecret, { role: body.role, did: body.did, tenant: body.tenant, tier: body.tier });
     }

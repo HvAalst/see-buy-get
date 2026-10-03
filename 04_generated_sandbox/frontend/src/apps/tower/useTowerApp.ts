@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { narrow, type SbgError } from '../../lib/sbg';
 import { downscaleImage } from '../../shared/media';
 import { t } from '../../shared/i18n'; // plain t(): these strings are built at action time
-import { changeCompanyPassword, changeStaffPassword, clearCreds, companyLogin, createTowerClient, readCreds, saveCreds, staffLogin, type TowerClient, type TowerCreds } from './api';
+import { changeCompanyPassword, changeStaffPassword, clearCreds, companyLogin, createTowerClient, myStaffAccount, readCreds, saveCreds, staffLogin, type TowerClient, type TowerCreds, type TwoStepSetup } from './api';
 import type { ConstraintView } from './logic';
 import type { EntityPricing, EntityRow } from './money';
 import type { ApprovalRow, ClaimDecision, ClaimRow, DisposalRow, DriverApplication, FreightClaimRow, StalledRow } from './queues';
@@ -37,6 +37,15 @@ export interface TowerState {
   /** A failed READ. The screen keeps whatever it last knew and says the read failed. */
   error: SbgError | null;
   signInError: string | null;
+  /** Something the sign-in screen should say that is not a refusal: the session ended, the password changed. */
+  signInNote: string | null;
+  /**
+   * The second half of a staff sign-in, when the server asked for it: the code from the authenticator app, or —
+   * the first time, where it is required — a secret to scan and then the first code.
+   */
+  staffStep: { kind: 'code' } | ({ kind: 'setup' } & TwoStepSetup) | null;
+  /** Whether the signed-in member of staff has two-step sign-in. Null for anybody else. */
+  staffTwoStep: boolean | null;
   /** constraintId of the row whose clear form is open. */
   openId: string | null;
   /** constraintId currently being cleared — single-flight, so a double-click cannot clear twice. */
@@ -216,8 +225,12 @@ export interface TowerActions {
   recordTransitAuthority(carrierDid: string, body: { country: string; reference: string; expiresAt: string }, name: string): Promise<void>;
   withdrawTransitAuthority(carrierDid: string, authorityId: string, reason: string): Promise<void>;
   signInAsCompany(email: string, password: string): Promise<void>;
-  /** A member of network staff, with an account of their own. */
-  signInAsStaff(email: string, password: string): Promise<void>;
+  /** A member of network staff, with an account of their own: the password, then — when asked — the authenticator's code. */
+  signInAsStaff(email: string, password: string, code?: string): Promise<void>;
+  /** Back from the code step to the password, e.g. to correct the email. */
+  cancelStaffStep(): void;
+  /** Two-step sign-in was just turned on from Settings. */
+  noteStaffTwoStep(on: boolean): void;
   addAdmin(entityId: string, email: string, name: string): Promise<void>;
   dismissNewAdmin(): void;
   /** A company administrator changes their password; null when done, else the refusal to show. */
@@ -299,6 +312,9 @@ const INITIAL: TowerState = {
   loading: false,
   error: null,
   signInError: null,
+  signInNote: null,
+  staffStep: null,
+  staffTwoStep: null,
   openId: null,
   busyId: null,
   clearError: null,
@@ -690,14 +706,14 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       return;
     }
     if (creds.mode === 'staff') {
-      // Asked again, like a company login: the stored credential says how to sign in, never who this is.
-      void staffLogin(creds.email, creds.password).then(({ data, error }) => {
+      // The token this tab already holds is the session. Asked who it belongs to: a dead token means sign in again.
+      void myStaffAccount(client).then(({ data, error }) => {
         if (error || !data) {
           clearCreds();
-          setState((s) => ({ ...s, phase: 'signin', signInError: error?.detail ?? null }));
+          setState((s) => ({ ...s, phase: 'signin', signInNote: t('tower.signIn.ended') }));
           return;
         }
-        setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: data.name, named: true } }));
+        setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: data.name, named: true }, staffTwoStep: Boolean(data.twoStep) }));
         void loadHazards(client);
         void loadQueues(client);
         void loadPapers(client);
@@ -790,18 +806,30 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
    * so nothing is typed beside it and a two-person rule can tell two people apart.
    */
   const signInAsStaff = useCallback(
-    async (email: string, password: string) => {
-      setState((s) => ({ ...s, loading: true, signInError: null }));
-      const { data, error } = await staffLogin(email.trim(), password);
+    async (email: string, password: string, code?: string) => {
+      setState((s) => ({ ...s, loading: true, signInError: null, signInNote: null }));
+      const { data, error } = await staffLogin(email.trim(), password, code?.trim() || undefined);
       if (error || !data) {
-        setState((s) => ({ ...s, loading: false, signInError: error?.detail || t('tower.signIn.rejected') }));
+        // The password was right and the server wants the second step: that is the next field, not a refusal.
+        const asksCode = error?.code === 'FIELD_REQUIRED' && (error.params as { field?: string } | undefined)?.field === 'code';
+        setState((s) => ({
+          ...s,
+          loading: false,
+          staffStep: asksCode ? (s.staffStep ?? { kind: 'code' }) : s.staffStep,
+          signInError: asksCode ? null : error?.detail || t('tower.signIn.rejected'),
+        }));
         return;
       }
-      const creds: TowerCreds = { mode: 'staff', email: email.trim(), password };
+      if ('setup' in data) {
+        setState((s) => ({ ...s, loading: false, signInError: null, staffStep: { kind: 'setup', ...data.setup } }));
+        return;
+      }
+      const creds: TowerCreds = { mode: 'staff', email: email.trim() };
       const client = createTowerClient(creds);
+      await client.seed?.(data.token);
       clientRef.current = client;
       saveCreds(creds);
-      setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: data.name, named: true }, screen: 'network', signInError: null, loading: false }));
+      setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: data.name, named: true }, screen: 'network', signInError: null, signInNote: null, staffStep: null, staffTwoStep: data.twoStep, loading: false }));
       await loadHazards(client);
       await loadQueues(client);
       await loadPapers(client);
@@ -816,6 +844,9 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     clientRef.current = null;
     setState({ ...INITIAL, phase: 'signin' });
   }, []);
+
+  const cancelStaffStep = useCallback(() => setState((s) => ({ ...s, staffStep: null, signInError: null })), []);
+  const noteStaffTwoStep = useCallback((on: boolean) => setState((s) => ({ ...s, staffTwoStep: on })), []);
 
   /**
    * Look one parcel up. A failed lookup CLEARS what was on screen rather than leaving the last parcel
@@ -1136,6 +1167,8 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       },
       signInAsCompany,
       signInAsStaff,
+      cancelStaffStep,
+      noteStaffTwoStep,
       showQueueError: (message: string) => setState((s) => ({ ...s, queueError: message })),
       /**
        * Decide a claim. The note travels on every ending, including a rejection.
@@ -1233,8 +1266,16 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         if (!creds || creds.mode === 'operator') return t('tower.password.onlyCompany');
         const { error } = await (creds.mode === 'staff' ? changeStaffPassword : changeCompanyPassword)(creds.email, current, next);
         if (error) return error.detail || error.title;
+        // A staff password change ends every staff session, this one included — and there is no password kept to sign
+        // back in with. So it says so, on the sign-in screen, rather than failing at the next click.
+        if (creds.mode === 'staff') {
+          clearCreds();
+          clientRef.current = null;
+          setState({ ...INITIAL, phase: 'signin', signInNote: t('tower.password.signInAgain') });
+          return null;
+        }
         // The console re-signs itself in with what it keeps, so it must keep the NEW password, not the old one.
-        const fresh: TowerCreds = { mode: creds.mode, email: creds.email, password: next };
+        const fresh: TowerCreds = { mode: 'company', email: creds.email, password: next };
         saveCreds(fresh);
         clientRef.current = createTowerClient(fresh);
         setState((s) => ({ ...s, creds: fresh }));

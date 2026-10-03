@@ -1,0 +1,2 @@
+# The operator console builds here, beside the public site and never inside it (see vite.config.ts, AppSpec.standalone).
+dist-console/

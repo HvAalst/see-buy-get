@@ -10,6 +10,15 @@ async function bootstrap() {
 
   // Allow the local frontend (e.g. http://localhost:4173) to call the API during dev.
   app.enableCors();
+  /*
+   * WHO IS CALLING, behind a proxy. Deployed behind Cloudflare or nginx every request arrives from the proxy, so the
+   * rate limits and the staff network fence (GLOS_STAFF_NETWORKS) would see one address for the whole world.
+   * GLOS_TRUST_PROXY says how many hops to trust ("1"), or which ("loopback, 10.0.0.0/8"); unset trusts none.
+   */
+  const trustProxy = process.env.GLOS_TRUST_PROXY?.trim();
+  if (trustProxy) {
+    (app.getHttpAdapter().getInstance() as { set: (k: string, v: unknown) => void }).set('trust proxy', /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy === 'true' ? true : trustProxy);
+  }
 
   // S26 media upload: a base64 image data URL (client-downscaled to <200 KB) inflates ~33%, so the
   // default 100 KB JSON limit is too small. 2 MB gives headroom without inviting large payloads (the

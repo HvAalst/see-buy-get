@@ -231,6 +231,17 @@ export interface OperatorAccount {
   /** Revoked logins are KEPT: a decision still needs the name of whoever made it. */
   revokedAt?: string;
   revokedBy?: string;
+  /** The authenticator secret, sealed under the vault key. Present = two-step sign-in is on. */
+  totpSecret?: string;
+  totpEnabledAt?: string;
+  /** The last time-step a code was accepted for — the same code never opens a second session. */
+  totpLastStep?: number;
+  /** A secret offered for setting up, waiting for its first code. Sealed. */
+  totpPending?: { secret: string; at: string };
+  totpMisses?: number;
+  totpLockedUntil?: string;
+  /** A reset one member of staff asked for; a second, different one completes it. */
+  totpReset?: { by: string; byId: string; at: string };
 }
 
 /** A staff account as the console reads it — no salt, no hash, ever. */
@@ -239,12 +250,17 @@ export class OperatorAccountView {
   email: string;
   name: string;
   createdAt: string;
+  /** Whether this account signs in with a code from an authenticator app as well as its password. */
+  twoStep: boolean;
   @ApiPropertyOptional()
   lastSeenAt?: string;
   @ApiPropertyOptional()
   passwordChangedAt?: string;
   @ApiPropertyOptional()
   revokedAt?: string;
+  /** A reset of their two-step sign-in, asked for by this member of staff and waiting for a second. */
+  @ApiPropertyOptional()
+  twoStepResetAskedBy?: string;
 }
 
 /** An administrator as anybody may read them — no salt, no hash, no password, ever. */

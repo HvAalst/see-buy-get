@@ -947,12 +947,12 @@ const run = async () => {
   out.push(`  Driver app  /driver/  phone ${amosIn.phone} PIN ${DRIVER_PIN}   (Amos K., on shift)`);
   out.push(`                        phone ${graceIn.phone} PIN ${DRIVER_PIN}   (Grace M., papers with GLOS)`);
   out.push('  Send app    /send/    no sign-in needed');
-  out.push('  Operator    /tower/   ops1@sbg.test / seebuyget-staff (Amina Otieno) · ops2@sbg.test (Brian Kamau), same password');
-  out.push('              /tower/   or the setup key: your name + any key (no GLOS_CLIENT_SECRET set in a sandbox)');
+  out.push('  Operator    :5181/    ops1@sbg.test / seebuyget-staff (Amina Otieno) · ops2@sbg.test (Brian Kamau), same password');
+  out.push('              :5181/    or the setup key: your name + any key (no GLOS_CLIENT_SECRET set in a sandbox)');
   for (const a of companyAdmins) {
-    out.push(`              /tower/   ${a.email.padEnd(18)} / ${a.password}   (${a.kind === 'group' ? 'the group: sees every sister' : 'this company only'})`);
+    out.push(`              :5181/    ${a.email.padEnd(18)} / ${a.password}   (${a.kind === 'group' ? 'the group: sees every sister' : 'this company only'})`);
   }
-  if (!companyAdmins.length) out.push('              /tower/   company logins already exist — their passwords were printed on the first seed');
+  if (!companyAdmins.length) out.push('              :5181/    company logins already exist — their passwords were printed on the first seed');
   out.push(`  Vendor app  /vendor/  store ID ${shop.vendorId}`);
   out.push(`                        secret   ${VENDOR_SECRET}`);
   out.push('-'.repeat(64));

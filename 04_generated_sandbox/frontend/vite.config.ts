@@ -54,6 +54,15 @@ type AppSpec = {
    * must never pretend to have one.
    */
   installable?: boolean;
+  /**
+   * Does this app ship on ITS OWN ADDRESS, outside the public site? Default no.
+   *
+   * The operator console does (the user, 2026-10-03: the staff entrance must not be obvious). It builds into
+   * `dist-console/` instead of a folder of `dist/`, so copying the public site to a web root carries none of it —
+   * not its sign-in page, not its code. It is never proxied by the front door in dev, and it is deployed to its own
+   * host (e.g. ops.seebuyget.com) behind a gate at the edge: see "The operator console's entrance" in README.md.
+   */
+  standalone?: boolean;
 };
 
 const APPS = {
@@ -124,7 +133,9 @@ const APPS = {
    * it is deliberately not on the front door's role chooser: nobody joins as an operator.
    */
   tower: {
-    base: '/tower/',
+    // Its own address, so it sits at the root of it — and nowhere under the public site.
+    base: '/',
+    standalone: true,
     name: 'SeeBuyGet Operator',
     short: 'Operator',
     description: 'Operate the SeeBuyGet network.',
@@ -148,7 +159,9 @@ const app = APPS[APP_ID];
 const BASE = app.base;
 
 /** The root app ships at '/', so its output and service-worker scope cover every sibling. */
-const IS_ROOT = BASE === '/';
+const IS_ROOT = BASE === '/' && !('standalone' in app && app.standalone);
+/** An app on its own address — see AppSpec.standalone. */
+const STANDALONE = 'standalone' in app && app.standalone === true;
 /** Whether this app ships a manifest and a service worker at all — see AppSpec.installable. */
 const INSTALLABLE = app.installable !== false;
 /** Every OTHER app's deploy folder, e.g. ['driver', 'agent', …] — used to fence the root SW. */
@@ -312,7 +325,8 @@ function installablePlugins(): PluginOption[] {
 
 // Output mirrors the deploy path, not the app id (genesis ships at /send/), so the
 // whole of dist/ can be copied to a web root and every base resolves as built.
-const OUT_DIR = resolve(ROOT, 'dist', BASE.replace(/^\/|\/$/g, ''));
+// A standalone app (the console) builds beside the public site, never inside it.
+const OUT_DIR = STANDALONE ? resolve(ROOT, 'dist-console') : resolve(ROOT, 'dist', BASE.replace(/^\/|\/$/g, ''));
 
 export default defineConfig({
   root: APP_DIR,
@@ -334,7 +348,7 @@ export default defineConfig({
      * delete every sibling app that had already been built. Its own output is
      * hash-named under dist/assets/, so leaving it non-empty is safe.
      */
-    emptyOutDir: BASE !== '/',
+    emptyOutDir: BASE !== '/' || STANDALONE,
     target: 'es2020',
     rollupOptions: {
       input: { [APP_ID]: resolve(APP_DIR, 'index.html') },

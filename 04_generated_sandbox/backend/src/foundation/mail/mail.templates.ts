@@ -33,11 +33,13 @@ const PATHS: Record<MailApp, [number, string]> = {
   mdp: [5178, '/mdp/'],
   vendor: [5179, '/vendor/'],
   home: [5180, '/'],
-  console: [5181, '/tower/'],
+  console: [5181, '/'],
 };
 
 /** Where a button goes. `SBG_PUBLIC_URL` in a deployment (e.g. https://app.seebuyget.com); the dev servers otherwise. */
 export function appUrl(app: MailApp): string {
+  // The operator console lives on its own address (e.g. https://ops.seebuyget.com), never under the public site.
+  if (app === 'console' && process.env.SBG_CONSOLE_URL?.trim()) return `${process.env.SBG_CONSOLE_URL.trim().replace(/\/+$/, '')}/`;
   const base = process.env.SBG_PUBLIC_URL?.trim().replace(/\/+$/, '');
   const [port, path] = PATHS[app];
   return base ? `${base}${path}` : `http://localhost:${port}${path}`;
@@ -71,6 +73,7 @@ export interface MailParams {
   welcome: { name: string; email: string; role: 'shop' | 'hub' | 'driver' };
   'company-admin-added': { name: string; email: string; company: string; addedBy: string };
   'staff-account-added': { name: string; email: string; addedBy: string };
+  'staff-two-step': { name: string; what: string; next: string; when: string };
   'access-removed': { email: string; what: string; removedBy: string; when: string };
   'fleet-code-issued': { company: string; when: string; byStaff: boolean };
   'fleet-code-due': { company: string; days: number };
@@ -331,6 +334,25 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
         { kind: 'warning', title: 'Not expecting this?', text: `Tell ${p.addedBy}. Nothing happens until somebody signs in.` },
       ],
       reason: 'You are getting this email because a SeeBuyGet staff account was created for this address.',
+    }),
+  },
+
+  'staff-two-step': {
+    title: 'Staff two-step sign-in reset',
+    sentWhen: 'Two other members of staff reset somebody’s two-step sign-in, because they lost their authenticator.',
+    wired: true,
+    sample: { name: 'Chloe Wanjiru', what: 'Your two-step sign-in was reset by Amina Otieno and Brian Kamau.', next: 'You were signed out. The next time you sign in, scan the new QR code with your authenticator app. If you did not ask for this, tell them at once.', when: '2026-10-03T09:12:00Z' },
+    build: (p) => ({
+      subject: 'SeeBuyGet: your staff two-step sign-in was reset',
+      preheader: p.what,
+      blocks: [
+        { kind: 'heading', text: 'Your two-step sign-in was reset' },
+        { kind: 'paragraph', text: `${p.name}, ${p.what.charAt(0).toLowerCase()}${p.what.slice(1)}` },
+        { kind: 'facts', rows: [['When', formatWhen(p.when)]] },
+        { kind: 'warning', title: 'What happens now', text: p.next },
+        { kind: 'button', label: 'Open the operator console', href: appUrl('console') },
+      ],
+      reason: 'You are getting this email because it is the sign-in of a SeeBuyGet staff account. We always tell you — this email cannot be turned off.',
     }),
   },
 

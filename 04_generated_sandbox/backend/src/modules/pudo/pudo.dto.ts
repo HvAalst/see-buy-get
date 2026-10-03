@@ -1236,6 +1236,16 @@ export class EntityAdminLoginDto {
   @IsString() @MaxLength(200) password!: string;
 }
 
+/** A member of staff signs in: the password, and — once two-step sign-in is on, or to turn it on — the authenticator's code. */
+export class StaffLoginDto extends EntityAdminLoginDto {
+  @IsOptional() @IsString() @MaxLength(12) @ApiPropertyOptional() code?: string;
+}
+
+/** The six digits an authenticator app shows. */
+export class TwoStepCodeDto {
+  @IsString() @MaxLength(12) code!: string;
+}
+
 export class EntityInsuranceDto {
   /** Which kind of work this applies to. Omitted = the sister's default for everything. */
   @IsOptional() @IsIn(CARGO_LANES) @ApiPropertyOptional({ enum: CARGO_LANES }) lane?: CargoLane;

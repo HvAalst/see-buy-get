@@ -1,5 +1,5 @@
 import { credentialAge } from '../../../shared/account/password';
-import type { StaffRow } from '../api';
+import { resetTwoStep, type StaffRow } from '../api';
 import { useState, useCallback, useEffect } from 'preact/hooks';
 import { Icon, PlaceMap } from '../../../shared/ui';
 import { ConsoleFold } from '../ConsoleFold';
@@ -506,6 +506,7 @@ function StaffPanel({ actions }: { actions: TowerActions }) {
               <th>{t('tower.staff.col.email')}</th>
               <th>{t('tower.staff.col.lastSeen')}</th>
               <th>{t('tower.staff.col.password')}</th>
+              <th>{t('tower.staff.col.twoStep')}</th>
               <th />
             </tr>
           </thead>
@@ -524,6 +525,32 @@ function StaffPanel({ actions }: { actions: TowerActions }) {
                 <td class="ctbl__sub">
                   <span class="ctbl__lbl">{t('tower.staff.col.password')}</span>
                   {a.passwordChangedAt ? new Date(a.passwordChangedAt).toLocaleDateString() : t('tower.staff.never')}
+                </td>
+                {/* Two-step sign-in, and the reset two OTHER people make when somebody loses their phone: the first
+                    asks, a second completes. The server refuses the person themselves and a single pair of hands. */}
+                <td class="ctbl__sub">
+                  <span class="ctbl__lbl">{t('tower.staff.col.twoStep')}</span>
+                  {a.twoStep ? <span class="ctag ctag--ok">{t('tower.twoStep.on')}</span> : <span class="ctag ctag--warn">{t('tower.twoStep.off')}</span>}
+                  {a.twoStepResetAskedBy ? <span class="chint">{t('tower.staff.resetAsked', { name: a.twoStepResetAskedBy })}</span> : null}
+                  {a.twoStep ? (
+                    <button
+                      type="button"
+                      class="cbtn cbtn--ghost cbtn--sm"
+                      style="margin-top:6px"
+                      disabled={busy === `reset:${a.operatorId}`}
+                      onClick={async () => {
+                        if (!client) return;
+                        setBusy(`reset:${a.operatorId}`);
+                        setError(null);
+                        const r = await resetTwoStep(client, a.operatorId);
+                        setBusy(null);
+                        if (r.error) setError(r.error.detail || r.error.title);
+                        else await load();
+                      }}
+                    >
+                      {a.twoStepResetAskedBy ? t('tower.staff.resetApprove') : t('tower.staff.resetAsk')}
+                    </button>
+                  ) : null}
                 </td>
                 {/* NOT ctbl__num: a cell of buttons is not a figure, and that class's nowrap would stop a
                     label from wrapping — the trap the required-papers row fell into. */}

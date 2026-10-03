@@ -6940,14 +6940,14 @@
       "post": {
         "operationId": "Sbg.operatorLogin",
         "summary": "",
-        "description": "A staff member signs in. The token carries their name, so nothing has to be typed beside it.",
+        "description": "A staff member signs in: the password, then the code from their authenticator app. The token carries their name,\nso nothing has to be typed beside it. An account without two-step sign-in, where it is required, is answered\nwith a secret to scan instead of a token. Rate-limited per caller; each account's code also locks after five misses.",
         "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/EntityAdminLoginDto"
+                "$ref": "#/components/schemas/StaffLoginDto"
               }
             }
           }
@@ -6985,6 +6985,103 @@
         "responses": {
           "201": {
             "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/operators/me": {
+      "get": {
+        "operationId": "Sbg.myStaffAccount",
+        "summary": "",
+        "description": "The signed-in member of staff's own account — what their Settings reads.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperatorAccountView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/operators/me/two-step": {
+      "post": {
+        "operationId": "Sbg.startTwoStep",
+        "summary": "",
+        "description": "Set up two-step sign-in from Settings: a secret to scan. Its first code turns it on (`…/confirm`).",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/operators/me/two-step/confirm": {
+      "post": {
+        "operationId": "Sbg.confirmTwoStep",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TwoStepCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperatorAccountView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/operators/{operatorId}/two-step/reset": {
+      "post": {
+        "operationId": "Sbg.resetTwoStep",
+        "summary": "",
+        "description": "Somebody lost their authenticator. The first member of staff to call this ASKS; a second, different one — and\nneither of them the person concerned — completes it. Their sessions end; the next sign-in sets it up again.",
+        "parameters": [
+          {
+            "name": "operatorId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperatorAccountView"
+                }
+              }
+            }
           }
         }
       }
@@ -25971,6 +26068,10 @@
           "revokedAt": {
             "type": "string"
           },
+          "twoStepResetAskedBy": {
+            "type": "string",
+            "description": "A reset of their two-step sign-in, asked for by this member of staff and waiting for a second."
+          },
           "operatorId": {
             "type": "string"
           },
@@ -25982,18 +26083,27 @@
           },
           "createdAt": {
             "type": "string"
+          },
+          "twoStep": {
+            "type": "boolean",
+            "description": "Whether this account signs in with a code from an authenticator app as well as its password."
           }
         },
         "required": [
           "operatorId",
           "email",
           "name",
-          "createdAt"
+          "createdAt",
+          "twoStep"
         ]
       },
-      "EntityAdminLoginDto": {
+      "StaffLoginDto": {
         "type": "object",
         "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 12
+          },
           "email": {
             "type": "string",
             "maxLength": 120
@@ -26028,6 +26138,35 @@
           "email",
           "password",
           "newPassword"
+        ]
+      },
+      "TwoStepCodeDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 12
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "EntityAdminLoginDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "email",
+          "password"
         ]
       },
       "EntityFeeDto": {

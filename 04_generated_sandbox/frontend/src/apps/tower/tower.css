@@ -41,6 +41,81 @@
   margin-bottom: 18px;
 }
 
+/* Help, and the quiet way to the setup key: under the form, never a third door beside the two real ones. */
+.twr-signin__foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+/* The account a code is being asked for, with the way back to correct it. */
+.twr-signin__who {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 6px;
+}
+
+/* Something to know that is not a refusal — the session ended, the password changed. */
+.cnote {
+  margin: 0 0 14px;
+  padding: 8px 12px;
+  border-radius: var(--r-ctl);
+  background: var(--blue-soft);
+  border: 1px solid var(--blue-light);
+  color: var(--navy);
+  font-size: var(--c-fs-sm);
+}
+
+/* -------------------------------------------------------- two-step sign-in -- */
+
+.twr-2fa {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.twr-2fa__steps {
+  margin: 0;
+  padding-left: 18px;
+  list-style: decimal;
+  display: grid;
+  gap: 4px;
+  color: var(--tx2);
+}
+
+/* The code and the secret side by side where there is room, the secret under the code where there is not. */
+.twr-2fa__scan {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
+.twr-2fa__key {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.twr-2fa__secret {
+  display: block;
+  margin-top: 4px;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  word-break: normal; /* break between the groups of four, never inside one */
+  user-select: all;
+}
+
+.twr-2fa__code {
+  font-size: 20px;
+  letter-spacing: 0.3em;
+  max-width: 180px;
+}
+
 /* --------------------------------------------------------------- the queue -- */
 
 /*
@@ -911,4 +986,13 @@
 .twr-find {
   max-width: 220px;
   margin-left: auto;
+}
+
+/* The two-step reminder above the work area: a sentence and the one thing to do about it. */
+.twr-nudge {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
 }

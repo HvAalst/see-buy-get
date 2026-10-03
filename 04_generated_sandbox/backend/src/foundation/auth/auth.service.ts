@@ -220,6 +220,8 @@ export class AuthService {
       actorName: claims.actorName,
       tier: claims.tier,
       personDid: claims.personDid,
+      // Which sign-out key this token answers to — for a staff session, which staff ACCOUNT it is (`operator:<id>`).
+      ...(claims.revocationKey ? { revocationKey: claims.revocationKey } : {}),
     };
   }
 

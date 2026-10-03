@@ -5,6 +5,7 @@ import { publicPageUrl } from '../../../lib/sbg/config';
 import type { TowerActions, TowerState } from '../useTowerApp';
 import { ContactCardPanel } from './ContactCardPanel';
 import { CompanyPasswordPanel } from './CompanyPasswordPanel';
+import { StaffSettings } from './StaffSettings';
 import type { SiteView } from './SitePicker';
 
 /**
@@ -44,6 +45,8 @@ export function SettingsScreen({ state, actions }: { state: TowerState; actions:
     void load();
   }, [load]);
 
+  // A member of staff has settings too — how they sign in — and nothing else.
+  if (!entityId && state.creds?.mode === 'staff') return <StaffSettings state={state} actions={actions} />;
   if (!entityId) return <p class="cons__empty">{t('tower.settings.companyOnly')}</p>;
 
   const page = handle ? publicPageUrl(handle) : null;

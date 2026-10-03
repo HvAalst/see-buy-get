@@ -13,7 +13,7 @@
  *   node scripts/build-all.mjs agent mdp    # a subset
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, rmSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -42,6 +42,10 @@ if (unknown.length) {
 }
 const apps = wanted.length ? wanted : discovered;
 
+// A FULL build starts from an empty dist/: it is what gets copied to the public web root, and a folder left by an
+// older build — the console used to live at dist/tower/ — would be published with it.
+if (!wanted.length) rmSync(resolve(ROOT, 'dist'), { recursive: true, force: true });
+
 for (const app of apps) {
   console.log(`\n--- vite build: ${app} ---`);
   // The bin is invoked through node directly, not the `vite` shim: this script must work
@@ -59,6 +63,8 @@ for (const app of apps) {
 }
 
 console.log(`\nbuilt ${apps.length} app(s): ${apps.join(', ')}`);
+// The console is not part of the public site: it is built to dist-console/ and deployed to its own address.
+if (apps.includes('tower')) console.log('the operator console went to dist-console/ — deploy it to its own address, not with dist/');
 
 /**
  * The embeddable quote widget — built last, and only on a full run.

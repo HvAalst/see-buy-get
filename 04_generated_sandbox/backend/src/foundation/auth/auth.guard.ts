@@ -5,6 +5,7 @@ import { AuthService } from './auth.service';
 import { IS_PUBLIC_KEY } from './public.decorator';
 import { MIN_TIER_KEY, ROLES_KEY, SCOPES_KEY } from './scopes.decorator';
 import { hasScope } from './actor-scopes';
+import { staffNetworkAllows } from './staff-network';
 import { ActorRole, IntrospectionResult } from './auth.types';
 import { Tier } from '../data-firewall/data-firewall.types';
 
@@ -41,6 +42,8 @@ export class AuthGuard implements CanActivate {
     const auth = this.authService.introspect(token);
     if (!auth.active) throw new UnauthorizedException(`Inactive token: ${auth.reason ?? 'unknown'}`);
     request.auth = auth;
+    // A staff token works only from where staff work, when a deployment says where that is (GLOS_STAFF_NETWORKS).
+    if (auth.role === 'operator' && !staffNetworkAllows(request.ip)) throw new ForbiddenException('Staff access is open only from the networks SeeBuyGet staff work on');
 
     // --- authorize ---
     const requiredRoles = this.reflector.getAllAndOverride<ActorRole[]>(ROLES_KEY, targets);

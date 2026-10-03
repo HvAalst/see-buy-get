@@ -27,9 +27,12 @@ export function CompanyPasswordPanel({ actions, onClose }: { actions: TowerActio
     <section class="cons__panel" style="margin-bottom:18px">
       <div class="cons__panelhead">
         <span class="cons__panelt">{t('account.password.title')}</span>
-        <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={onClose}>
-          {t('tower.presence.close')}
-        </button>
+        {/* A section of Settings has nothing to close; only a panel opened over the work area does. */}
+        {onClose ? (
+          <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={onClose}>
+            {t('tower.presence.close')}
+          </button>
+        ) : null}
       </div>
       {done ? (
         <p class="twr-done" style="margin:12px 0">

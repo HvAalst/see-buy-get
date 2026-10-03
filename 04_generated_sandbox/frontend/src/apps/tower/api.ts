@@ -1,5 +1,6 @@
 import {
   createCredentialedClient,
+  createSeededClient,
   createOperatorApi,
   makeConfig,
   publicRequest,
@@ -54,21 +55,40 @@ export interface CompanyCreds {
  * A member of NETWORK STAFF with an account of their own: operator rights, and a name the network established —
  * so a decision that needs two people really takes two. The shared key (`OperatorCreds`) stays for creating the
  * first of these accounts and for scripts.
+ *
+ * NO PASSWORD IS KEPT. Staff sign in with a password AND a code from an authenticator app, and a code is good for
+ * half a minute — so the console could not sign itself back in with what it kept even if it kept it. The session
+ * token is what lasts (a working shift, this tab only); when it ends, the person signs in again.
  */
 export interface StaffCreds {
   mode: 'staff';
   email: string;
-  password: string;
 }
 
 export type TowerCreds = OperatorCreds | CompanyCreds | StaffCreds;
 
-/** What a staff login answers with. */
+/** What a staff login answers with when it signs somebody in. */
 export interface StaffLogin {
   operatorId: string;
   email: string;
   name: string;
+  /** Whether this account signs in with an authenticator code as well. */
+  twoStep: boolean;
   token: { access_token: string; expires_in?: number };
+}
+
+/** What an authenticator app needs: the secret to type, and the same as a URI for the QR code. */
+export interface TwoStepSetup {
+  secret: string;
+  uri: string;
+}
+
+/** Where two-step sign-in is required and not set up yet: no token — a secret to scan, and the first code signs in. */
+export interface StaffSetupNeeded {
+  operatorId: string;
+  email: string;
+  name: string;
+  setup: TwoStepSetup;
 }
 
 /** A staff account as the console lists it. */
@@ -79,6 +99,10 @@ export interface StaffRow {
   createdAt: string;
   lastSeenAt?: string;
   passwordChangedAt?: string;
+  /** Signs in with an authenticator code as well as the password. */
+  twoStep?: boolean;
+  /** A reset of their two-step sign-in, asked for by this member of staff, waiting for a second. */
+  twoStepResetAskedBy?: string;
 }
 
 /** What a company login answers with — the person, and the company they administer. */
@@ -115,9 +139,29 @@ export function changeCompanyPassword(email: string, password: string, newPasswo
   return publicRequest<{ ok: true }>(towerConfig(), '/v1/sbg/entities/admins/password', { body: { email, password, newPassword } });
 }
 
-/** A member of network staff signs in. */
-export function staffLogin(email: string, password: string): Promise<Result<StaffLogin>> {
-  return publicRequest<StaffLogin>(towerConfig(), '/v1/sbg/operators/login', { body: { email, password } });
+/** A member of network staff signs in: the password, and — once asked for — the authenticator's code. */
+export function staffLogin(email: string, password: string, code?: string): Promise<Result<StaffLogin | StaffSetupNeeded>> {
+  return publicRequest<StaffLogin | StaffSetupNeeded>(towerConfig(), '/v1/sbg/operators/login', { body: { email, password, ...(code ? { code } : {}) } });
+}
+
+/** The signed-in member of staff's own account. */
+export function myStaffAccount(client: TowerClient): Promise<Result<StaffRow>> {
+  return client.client.sbg.request((raw) => raw.GET('/v1/sbg/operators/me' as never, {} as never) as never) as Promise<Result<StaffRow>>;
+}
+
+/** Set up two-step sign-in from Settings: a secret to scan. */
+export function startTwoStep(client: TowerClient): Promise<Result<TwoStepSetup>> {
+  return client.client.sbg.request((raw) => raw.POST('/v1/sbg/operators/me/two-step' as never, {} as never) as never) as Promise<Result<TwoStepSetup>>;
+}
+
+/** The first code from the app turns it on. */
+export function confirmTwoStep(client: TowerClient, code: string): Promise<Result<StaffRow>> {
+  return client.client.sbg.request((raw) => raw.POST('/v1/sbg/operators/me/two-step/confirm' as never, { body: { code } } as never) as never) as Promise<Result<StaffRow>>;
+}
+
+/** Ask for — or, as a second member of staff, complete — the reset of somebody's two-step sign-in. */
+export function resetTwoStep(client: TowerClient, operatorId: string): Promise<Result<StaffRow>> {
+  return client.client.sbg.request((raw) => raw.POST(`/v1/sbg/operators/${encodeURIComponent(operatorId)}/two-step/reset` as never, {} as never) as never) as Promise<Result<StaffRow>>;
 }
 
 /** A member of network staff changes their own password, proven with the current one. */
@@ -134,6 +178,8 @@ export function companyLogin(email: string, password: string): Promise<Result<En
 export interface TowerClient {
   api: OperatorApi;
   client: AppClient;
+  /** Staff only: hand the session the token a sign-in returned. */
+  seed?: (token: { access_token: string; expires_in?: number }) => Promise<void>;
 }
 
 /**
@@ -142,14 +188,15 @@ export interface TowerClient {
  * failure, which the shell reports as "that key was not accepted" instead of "no signal".
  */
 export function createTowerClient(creds: TowerCreds): TowerClient {
-  // Both modes hold their credential for as long as the tab lives, so both re-mint by themselves rather
-  // than bouncing somebody to sign-in mid-decision. What differs is only what the credential IS.
-  const login =
-    creds.mode === 'operator'
-      ? () => mintOperatorToken(creds.key)
-      : creds.mode === 'staff'
-        ? () => staffLogin(creds.email, creds.password)
-        : () => companyLogin(creds.email, creds.password);
+  // Staff keep no credential to sign back in with (a code lasts half a minute): the token a sign-in returned is the
+  // session, and when it ends every call says "sign in again" and the shell goes back to the sign-in screen.
+  if (creds.mode === 'staff') {
+    const seeded = createSeededClient(towerConfig(), TOKEN_KEY);
+    return { api: createOperatorApi(seeded.sbg), client: seeded, seed: (token) => seeded.seed({ access_token: token.access_token, expires_in: token.expires_in ?? 3600 }) };
+  }
+  // The other two hold their credential for as long as the tab lives, so they re-mint by themselves rather than
+  // bouncing somebody to sign-in mid-decision. What differs is only what the credential IS.
+  const login = creds.mode === 'operator' ? () => mintOperatorToken(creds.key) : () => companyLogin(creds.email, creds.password);
   const client = createCredentialedClient(towerConfig(), TOKEN_KEY, login);
   return { api: createOperatorApi(client.sbg), client };
 }
@@ -165,7 +212,8 @@ export function readCreds(): TowerCreds | null {
     const parsed = JSON.parse(raw) as { mode?: string; name?: string; key?: string; email?: string; password?: string };
     // A stored shape from before there were two modes reads as the operator one, which is what it was.
     if (parsed?.mode === 'company') return parsed.email && parsed.password ? { mode: 'company', email: parsed.email, password: parsed.password } : null;
-    if (parsed?.mode === 'staff') return parsed.email && parsed.password ? { mode: 'staff', email: parsed.email, password: parsed.password } : null;
+    // A staff entry from before two-step sign-in carried a password; only the email is read, never the rest.
+    if (parsed?.mode === 'staff') return parsed.email ? { mode: 'staff', email: parsed.email } : null;
     return parsed?.name && parsed?.key ? { mode: 'operator', name: parsed.name, key: parsed.key } : null;
   } catch {
     return null;

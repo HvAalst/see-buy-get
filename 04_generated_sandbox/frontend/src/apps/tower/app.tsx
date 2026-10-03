@@ -1,5 +1,4 @@
 import { HelpLink } from '../../shared/guide/HelpLink';
-import { CompanyPasswordPanel } from './screens/CompanyPasswordPanel';
 import { useState } from 'preact/hooks';
 import { BrandMark } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
@@ -50,7 +49,6 @@ export function App() {
   // Asked before the early returns, because a hook cannot be called conditionally — and read here rather
   // than left to CSS, because a stylesheet can move a menu but cannot swap it for a different one.
   const wide = useWideScreen();
-  const [passwordOpen, setPasswordOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
   if (state.phase === 'boot') return <div class="twr-boot" aria-busy="true" />;
@@ -70,7 +68,7 @@ export function App() {
   }
 
   if (state.phase === 'signin') {
-    return <SignInScreen actions={actions} error={state.signInError} busy={state.loading} />;
+    return <SignInScreen actions={actions} state={state} error={state.signInError} busy={state.loading} />;
   }
 
   /**
@@ -172,13 +170,10 @@ export function App() {
           under={state.who?.entityId ? companyName(state) : undefined}
           warn={state.creds?.mode === 'operator' ? t('tower.signIn.unverified') : undefined}
           entries={[
-            // A company administrator manages their own entry, their places and their password. Staff
-            // act for nobody, so they have no settings of their own to keep — and their password is the
-            // panel that has always opened over the work area.
-            ...(state.who?.entityId ? [{ key: 'settings', icon: 'edit' as const, label: t('tower.nav.settings'), onGo: () => actions.go('settings') }] : []),
-            ...(state.creds && state.creds.mode !== 'operator' && !state.who?.entityId
-              ? [{ key: 'password', icon: 'key' as const, label: t('tower.password.open'), onGo: () => setPasswordOpen(true) }]
-              : []),
+            // SETTINGS for anybody with an account of their own (the user: "these sort of actions live in
+            // settings"). A company administrator keeps their entry, places and password there; a member of staff
+            // their password and two-step sign-in. The setup key is nobody in particular and has none.
+            ...(state.who?.entityId || state.creds?.mode === 'staff' ? [{ key: 'settings', icon: 'edit' as const, label: t('tower.nav.settings'), onGo: () => actions.go('settings') }] : []),
             { key: 'help', icon: 'info' as const, label: t('guide.link'), onGo: () => setHelpOpen(true) },
             { key: 'out', icon: 'lock' as const, label: t('tower.signOut'), danger: true, onGo: actions.signOut },
           ]}
@@ -190,7 +185,15 @@ export function App() {
         {wide ? <ConsoleRail groups={groups} screen={state.screen} counts={counts} onGo={actions.go} /> : null}
 
         <main class="cons__main">
-          {passwordOpen && state.creds && state.creds.mode !== 'operator' ? <CompanyPasswordPanel actions={actions} onClose={() => setPasswordOpen(false)} /> : null}
+          {/* Off in a sandbox until somebody sets it up; required everywhere else, where nobody gets this far without it. */}
+          {state.creds?.mode === 'staff' && state.staffTwoStep === false && state.screen !== 'settings' ? (
+            <p class="cnote twr-nudge">
+              <span>{t('tower.twoStep.nudge')}</span>
+              <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => actions.go('settings')}>
+                {t('tower.twoStep.nudgeCta')}
+              </button>
+            </p>
+          ) : null}
           {state.screen === 'settings' ? (
             <SettingsScreen state={state} actions={actions} />
           ) : state.screen === 'presence' ? (

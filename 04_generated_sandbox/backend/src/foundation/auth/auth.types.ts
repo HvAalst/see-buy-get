@@ -99,6 +99,8 @@ export interface IntrospectionResult {
   tier?: Tier;
   /** The person who signed in, when a person did. See IssueTokenInput.personDid. */
   personDid?: string;
+  /** The sign-out key the token answers to; for a staff session `operator:<id>`, which says WHICH member of staff. */
+  revocationKey?: string;
 }
 
 export interface TokenClaims {

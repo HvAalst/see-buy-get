@@ -279,10 +279,14 @@ export const ARTICLES: GuideArticle[] = [
     title: "Staff sign-in",
     summary: "Everybody who works for the network has their own sign-in, so every decision carries a real name.",
     steps: [
-      "Choose Network staff, then type the email and password a colleague gave you.",
-      "Change that password straight away: Change password, at the top.",
-      "Add a colleague: Overview, then Network staff, then Add a person. Their password is shown once — hand it over in person.",
-      "Somebody leaving: Take away. Their open sessions end at once; their decisions keep their name."
+      "Open the console at the address staff were given — it is not linked from the public site. Choose Network staff and type your email and password.",
+      "Then the 6-digit code from your authenticator app. The first time, the console shows a QR code to scan with the app; the first code turns two-step sign-in on.",
+      "Change the password you were given straight away: your name at the top, then Settings.",
+      "Add a colleague: Overview, then Network staff, then Add a person. Their password is shown once — hand it over in person. Somebody leaving: Take away. Their open sessions end at once; their decisions keep their name."
+    ],
+    notes: [
+      "Lost your phone? Two other members of staff reset your two-step sign-in: Overview, then Network staff, then Reset two-step. One asks, a second approves; you are signed out and set it up again at your next sign-in.",
+      "The console may only open from the networks SeeBuyGet staff work on."
     ]
   },
   {
@@ -306,7 +310,7 @@ export const ARTICLES: GuideArticle[] = [
     summary: "A company’s administrators sign in with an email and password created by whoever administers that company.",
     steps: [
       "Choose A company, then type your email and password.",
-      "Change the password you were given: Change password, at the top.",
+      "Change the password you were given: your name at the top, then Settings.",
       "The company’s administrators are listed on its rates screen, where they can be added or taken away."
     ]
   },
