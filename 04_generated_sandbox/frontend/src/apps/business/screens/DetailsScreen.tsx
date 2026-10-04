@@ -73,16 +73,16 @@ export function DetailsScreen({ business, actions, client }: { business: Busines
           <form onSubmit={(e) => void save(e)}>
             <label class="cfield">
               <span class="cfield__label">{t('business.new.name')}</span>
-              <input class="cinput" value={form.name} onInput={(e) => setForm({ ...form, name: (e.target as HTMLInputElement).value })} />
+              <input class="cinput" value={form.name} onInput={(e) => setForm((prev) => ({ ...prev, name: (e.target as HTMLInputElement).value }))} />
             </label>
             <div class="biz-two">
               <label class="cfield">
                 <span class="cfield__label">{t('business.new.registrationNo')}</span>
-                <input class="cinput" value={form.registrationNo} onInput={(e) => setForm({ ...form, registrationNo: (e.target as HTMLInputElement).value })} />
+                <input class="cinput" value={form.registrationNo} onInput={(e) => setForm((prev) => ({ ...prev, registrationNo: (e.target as HTMLInputElement).value }))} />
               </label>
               <label class="cfield">
                 <span class="cfield__label">{t('business.new.taxNo')}</span>
-                <input class="cinput" value={form.taxNo} onInput={(e) => setForm({ ...form, taxNo: (e.target as HTMLInputElement).value })} />
+                <input class="cinput" value={form.taxNo} onInput={(e) => setForm((prev) => ({ ...prev, taxNo: (e.target as HTMLInputElement).value }))} />
               </label>
             </div>
             <fieldset class="cfield biz-acts">

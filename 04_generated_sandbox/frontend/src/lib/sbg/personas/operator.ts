@@ -423,17 +423,27 @@ export function createOperatorApi(sbg: SbgClient) {
 
     /* ---- CL2b: the agent's fee, and the road leg minted from the port ---- */
 
-    /** The agent names their price. A quote, not a charge — nothing moves until money actually arrives. */
-    quoteClearanceFee: (importId: string, body: { amount: number; note?: string; entityId?: string; by?: string }) =>
-      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/fee', { params: { path: { importId } }, body: body as never })),
+    /**
+     * The agent names their price — a QUOTATION (2026-10-04: we do not manage the agent's fee). Nothing moves through
+     * our books; the proforma is attached with `attachProforma`, and a party confirms it paid with `setClearanceFeeStatus`.
+     */
+    quoteClearanceFee: (importId: string, body: { amount: number; currency?: string; reference?: string; note?: string; entityId?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/fee' as never, { params: { path: { importId } }, body: body as never } as never) as never),
 
     /** The importer agrees the figure. */
     acceptClearanceFee: (importId: string, body: { entityId?: string; by?: string } = {}) =>
-      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/fee/accept', { params: { path: { importId } }, body: body as never })),
+      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/fee/accept' as never, { params: { path: { importId } }, body: body as never } as never) as never),
 
-    /** Money arrived — NETWORK STAFF only, against a reference. An importer saying so is not an event. */
-    recordClearanceReceipt: (importId: string, body: { reference: string; amount?: number; by?: string }) =>
-      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/fee/receipt', { params: { path: { importId } }, body: body as never })),
+    /** The importer or the agent says the fee is paid, or back to open — by name, with their own reference. */
+    setClearanceFeeStatus: (importId: string, body: { status: 'open' | 'paid'; reference?: string; entityId?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/fee/status' as never, { params: { path: { importId } }, body: body as never } as never) as never),
+
+    /** QUOTATIONS FOR ANYONE: attach the proforma, read it back, agree, confirm paid or open. The two parties alone. */
+    attachProforma: (quoteId: string, body: { dataUrl: string; fileName?: string }) =>
+      sbg.request((c) => c.POST(`/v1/sbg/quotes/${encodeURIComponent(quoteId)}/proforma` as never, { body } as never) as never),
+    proformaFile: (quoteId: string) => sbg.request((c) => c.GET(`/v1/sbg/quotes/${encodeURIComponent(quoteId)}/proforma` as never, { parseAs: 'blob' } as never) as never),
+    setQuoteStatus: (quoteId: string, body: { status: 'open' | 'paid'; reference?: string }) =>
+      sbg.request((c) => c.POST(`/v1/sbg/quotes/${encodeURIComponent(quoteId)}/status` as never, { body } as never) as never),
 
     /** Mint the road leg from the port of destination, on the freight machinery that already exists. */
     mintImportRoadLeg: (

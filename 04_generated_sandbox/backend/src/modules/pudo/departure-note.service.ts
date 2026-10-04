@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { EntityService } from '../../foundation/entity/entity.service';
+import { Injectable, Optional } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { ConsignmentNoteService } from './consignment-note.service';
 import { DepartureService } from './departure.service';
@@ -47,6 +48,8 @@ export class DepartureNoteService {
     private readonly cargo: CargoService,
     private readonly agents: AgentService,
     private readonly vendors: VendorService,
+    // B2 — a customer's business is named as the sender. Optional so the specs that build this by hand keep compiling.
+    @Optional() private readonly entities?: EntityService,
   ) {}
 
   /**
@@ -183,7 +186,7 @@ export class DepartureNoteService {
       reservations,
       established: { place: departure.originZone, at: booking.at },
       confirmations: {
-        sender: { by: sender.name, at: booking.at, how: 'Booked electronically on SeeBuyGet' },
+        sender: { by: booking.bookedByName ? `${booking.bookedByName}, for ${sender.name}` : sender.name, at: booking.at, how: 'Booked electronically on SeeBuyGet' },
         ...(booking.loadSafety
           ? { carrier: { by: departure.driverName ?? departure.company, at: booking.loadSafety.at, how: 'Load-safety checklist confirmed electronically' } }
           : {}),
@@ -252,6 +255,9 @@ export class DepartureNoteService {
     if (booking.kind === 'own') {
       return { name: booking.customer as string, address: 'The carrier’s own customer — not a SeeBuyGet account' };
     }
+    // B2 — a customer's business, by its registered name.
+    const business = this.entities?.byDid(booking.shipperDid);
+    if (business?.kind === 'business') return { name: business.name, ...(business.jurisdiction ? { country: business.jurisdiction } : {}), did: booking.shipperDid };
     // A store, then a shop, then the honest placeholder — the same order and the same fields the
     // board's note resolves a sender in, so one page cannot describe a party two ways.
     if (this.vendors.has(booking.shipperDid)) {

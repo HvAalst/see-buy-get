@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkStep, checkTone, digitsReady, isLastOwner, mayAct, mayManage, newBusinessGaps, openOnArrival, phoneReady, sectionsFor } from './logic';
+import { checkStep, checkTone, digitsReady, isLastOwner, loadGaps, loadStage, mayAct, mayManage, newBusinessGaps, openOnArrival, phoneReady, sectionsFor } from './logic';
 import type { Membership } from './api';
 
 const member = (over: Partial<Membership>): Membership => ({
@@ -9,10 +9,10 @@ const member = (over: Partial<Membership>): Membership => ({
 describe('the Business app', () => {
   describe('which sections a business is shown', () => {
     it('shows imports to anybody whose goods or clients cross a border, and a yard only to a yard', () => {
-      expect(sectionsFor(['shipper'])).toEqual(['home', 'people', 'details']);
+      expect(sectionsFor(['shipper'])).toEqual(['home', 'loads', 'runs', 'people', 'details']);
       expect(sectionsFor(['importer'])).toEqual(['home', 'imports', 'people', 'details']);
       expect(sectionsFor(['clearing_agent'])).toContain('imports');
-      expect(sectionsFor(['expeditor'])).toContain('imports');
+      expect(sectionsFor(['expeditor'])).toEqual(['home', 'loads', 'runs', 'imports', 'people', 'details']);
       expect(sectionsFor(['depot'])).toEqual(['home', 'yard', 'people', 'details']);
       expect(sectionsFor(['importer', 'depot'])).toEqual(['home', 'imports', 'yard', 'people', 'details']);
     });
@@ -71,6 +71,21 @@ describe('the Business app', () => {
     it('lets only an owner manage, and everybody but a viewer act', () => {
       expect([mayManage('owner'), mayManage('booker'), mayManage(undefined)]).toEqual([true, false, false]);
       expect([mayAct('finance'), mayAct('booker'), mayAct('viewer'), mayAct(undefined)]).toEqual([true, true, false, false]);
+    });
+  });
+
+  describe('a load', () => {
+    it('names every gap in the form', () => {
+      expect(loadGaps({ description: ' ', fromSiteId: '', toSiteId: '', weightKg: '0' })).toEqual(['description', 'fromSiteId', 'toSiteId', 'weightKg']);
+      expect(loadGaps({ description: 'Coffee', fromSiteId: 's1', toSiteId: 's2', weightKg: '18000' })).toEqual([]);
+    });
+    it('says where it has got in one word', () => {
+      expect(loadStage({ status: 'available', openProposals: 0 })).toBe('posted');
+      expect(loadStage({ status: 'available', openProposals: 2 })).toBe('offers');
+      expect(loadStage({ status: 'claimed', openProposals: 0, carrier: { driverName: 'Amos' } })).toBe('taken');
+      expect(loadStage({ status: 'in_transit', openProposals: 0, pickedUpAt: 'x' })).toBe('moving');
+      expect(loadStage({ status: 'delivered', openProposals: 0, deliveredAt: 'x' })).toBe('delivered');
+      expect(loadStage({ status: 'cancelled', openProposals: 1, cancelledAt: 'x' })).toBe('cancelled');
     });
   });
 

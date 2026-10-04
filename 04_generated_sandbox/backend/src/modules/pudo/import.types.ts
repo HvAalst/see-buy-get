@@ -1,3 +1,4 @@
+import { Quote } from './quote.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { CompanyDocument } from '../../foundation/entity/company-documents.service';
 import { BOX_ENDINGS, CONDITION_STANCES, FREE_DAY_KINDS, INTERCHANGE_SIDES } from './container-box';
@@ -433,68 +434,26 @@ export class CustomsHold {
 }
 
 /**
- * CL2b — WHAT THE AGENT CHARGES, and how far it has got.
+ * CL2b — HOW FAR THE AGENT'S FEE HAS GOT: `none` · `quoted` · `accepted` the importer agreed · `paid` a party
+ * confirmed it paid. Derived from the quotation on every read.
  *
- * `none` nobody has quoted · `quoted` the agent named a price · `accepted` the importer agreed to it ·
- * `paid` money was actually received, against a reference, and the agent is owed it on a sister's books.
- *
- * Derived from the record every time it is read rather than stored beside it, for the same reason the
- * required list derives its own state: a second field saying "paid" is a field that can disagree with the
- * journal entry that moved the money.
+ * The user, 2026-10-04: "we don't manage the clearing agent's fee, but we do handle quotations for anyone." So the fee
+ * is a QUOTATION (quote.types.ts) — the figure, the proforma, open or paid as the parties confirm it — and nothing of
+ * it passes through our books. It used to: staff recorded the money arriving and a sister owed it onward.
  */
 export const FEE_STATES = ['none', 'quoted', 'accepted', 'paid'] as const;
 export type FeeState = (typeof FEE_STATES)[number];
 
 /**
- * The agent's fee for clearing one container.
+ * What the consignment itself keeps of the fee: which quotation it is, and when it was FIRST quoted — the agent's
+ * record counts how long an appointed agent took to name a price, and a re-quote must not move that.
  *
- * **The network earns nothing from an appointment** (§10, and it is a condition of the agent record ever
- * reaching shippers). So there is no margin field here and nowhere for one to go: what is received is owed
- * onward in full. The posting is cash in and a liability to the agent — not one line of revenue — which is
- * "collected is not earned" applied to somebody else's fee rather than to our own carriage.
- *
- * DECLARED BEFORE `ImportConsignment`, which carries one. A type annotation alone would be erased, but the
- * swagger plugin emits a metadata factory that evaluates this class when the consignment class is defined —
- * so declaring it later is a temporal dead zone, and the contract emit dies rather than the typecheck.
+ * Declared before `ImportConsignment`, which carries one: the swagger plugin evaluates the class when the referring
+ * class is defined.
  */
-export class ImportFee {
-  @ApiProperty() amount: number;
-  /** The collecting sister's own currency. A sister can only invoice in its own money. */
-  @ApiProperty() currency: string;
-  @ApiProperty() quotedBy: string;
+export class ImportFeeStamp {
+  @ApiProperty() quoteId: string;
   @ApiProperty() quotedAt: string;
-  @ApiPropertyOptional() note?: string;
-  @ApiPropertyOptional() acceptedBy?: string;
-  @ApiPropertyOptional() acceptedAt?: string;
-  /** Which sister's books hold it — the one in the PAYER's jurisdiction, because collection follows the payer. */
-  @ApiPropertyOptional() collectingEntityId?: string;
-  @ApiPropertyOptional() paidAt?: string;
-  @ApiPropertyOptional() recordedBy?: string;
-  /** The rail's or the bank's own reference. Money is only ever created by an observed external event, and
-   *  this is the thing you point at afterwards when somebody says they paid. */
-  @ApiPropertyOptional() reference?: string;
-  /** The journal entry that received it. Present only once money actually moved. */
-  @ApiPropertyOptional() entryId?: string;
-}
-
-/**
- * CL2b — WHETHER WE CAN BE THE ONE WHO BILLS THIS, ANSWERED AT THE START.
- *
- * The rule from the design note, and the reason this is on the view rather than in an error: *where we only
- * match we cannot be the one who bills, and the screen must say so at the start rather than fail at the end.*
- * A person should never assemble a fee, agree it, and only then be told the money cannot run here.
- *
- * `canPayOut` is about the AGENT's country, not the importer's. The two are usually the same and do not have
- * to be — and where they are not, the honest outcome is not a refusal: the fee is received, the agent is owed
- * it on the books, and the payout run says by name that it cannot send it there yet.
- */
-export class MoneyHere {
-  @ApiProperty() canBill: boolean;
-  @ApiProperty() canPayOut: boolean;
-  /** Said plainly, before anybody starts. Absent when the money can run here normally. */
-  @ApiPropertyOptional() why?: string;
-  @ApiPropertyOptional() currency?: string;
-  @ApiPropertyOptional() collectingEntityId?: string;
 }
 
 /**
@@ -572,8 +531,8 @@ export class ImportConsignment {
 
   /* ---- CL2b: paying the agent, and the road leg minted from the port ---- */
 
-  /** What the agent charges to clear this container, once they have quoted it. */
-  @ApiPropertyOptional() fee?: ImportFee;
+  /** The agent's quotation for clearing this container, once they have named a price. */
+  @ApiPropertyOptional({ type: ImportFeeStamp }) fee?: ImportFeeStamp;
   /** The road leg, once a person has minted it. Stored as id AND code: the id is what the freight
    *  machinery answers to, the code is what a human reads on a screen beside this container. */
   @ApiPropertyOptional() roadFreightId?: string;
@@ -692,10 +651,8 @@ export class ImportDetail extends ImportRow {
   @ApiProperty() documents: CompanyDocument[];
   /** Every grant over these papers, live and revoked, so both sides see what was shared and when. */
   @ApiProperty({ type: [DocumentGrant] }) grants: DocumentGrant[];
-  /** CL2b — the agent's fee, once quoted. */
-  @ApiPropertyOptional() fee?: ImportFee;
-  /** CL2b — whether the money can run here at all, said before anybody starts assembling it. */
-  @ApiProperty() money: MoneyHere;
+  /** CL2b — the agent's quotation: the figure, the proforma, and open or paid as the parties confirm it. */
+  @ApiPropertyOptional({ type: Quote }) fee?: Quote;
   @ApiPropertyOptional() roadFreightId?: string;
   /** BL1 — the bonded run from the quay, where the chain is split. */
   @ApiPropertyOptional() bondedFreightId?: string;

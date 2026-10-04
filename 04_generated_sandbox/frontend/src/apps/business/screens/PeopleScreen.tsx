@@ -160,11 +160,11 @@ export function PeopleScreen({ business, actions, client }: { business: Business
             <div class="biz-two">
               <label class="cfield">
                 <span class="cfield__label">{t('business.people.phone')}</span>
-                <input class="cinput" type="tel" inputMode="tel" value={form.phone} placeholder="+251 911 000 000" onInput={(e) => setForm({ ...form, phone: (e.target as HTMLInputElement).value })} />
+                <input class="cinput" type="tel" inputMode="tel" value={form.phone} placeholder="+251 911 000 000" onInput={(e) => setForm((prev) => ({ ...prev, phone: (e.target as HTMLInputElement).value }))} />
               </label>
               <label class="cfield">
                 <span class="cfield__label">{t('business.people.name')}</span>
-                <input class="cinput" value={form.name} onInput={(e) => setForm({ ...form, name: (e.target as HTMLInputElement).value })} />
+                <input class="cinput" value={form.name} onInput={(e) => setForm((prev) => ({ ...prev, name: (e.target as HTMLInputElement).value }))} />
                 <span class="chint">{t('business.people.nameHint')}</span>
               </label>
             </div>
@@ -172,7 +172,7 @@ export function PeopleScreen({ business, actions, client }: { business: Business
               <legend class="cfield__label">{t('business.people.role')}</legend>
               {ROLES.map((r) => (
                 <label class="cfield--check biz-act" key={r}>
-                  <input type="radio" name="biz-role" checked={form.role === r} onChange={() => setForm({ ...form, role: r })} />
+                  <input type="radio" name="biz-role" checked={form.role === r} onChange={() => setForm((prev) => ({ ...prev, role: r }))} />
                   <span>
                     <strong>{t(ROLE_LABEL[r])}</strong>
                     <span class="chint">{t(ROLE_SUB[r])}</span>

@@ -1,4 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { catalogueEntry } from '../../foundation/countries/catalogue';
+import { QuoteService } from './quote.service';
+import type { Quote } from './quote.types';
 import { randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
@@ -31,10 +34,8 @@ import {
   HoldStance,
   ImportConsignment,
   ImportDetail,
-  ImportFee,
   ImportRow,
   KnownPaper,
-  MoneyHere,
   RequiredPaper,
   RequiredPaperView,
 } from './import.types';
@@ -97,6 +98,9 @@ export class ImportService {
     private readonly boxes: ContainerBoxService,
     private readonly media: MediaService,
     private readonly handles: HandleService,
+    // The agent's fee is a quotation (2026-10-04). Optional with a stand-in so the specs that build this by hand keep
+    // working; the module provides the one every route shares.
+    @Optional() private readonly quotes: QuoteService = new QuoteService(),
   ) {}
 
   /* ------------------------------------------------------------ the container -- */
@@ -455,9 +459,7 @@ export class ImportService {
       }),
       documents: visible,
       grants: this.grantsOn(consignment),
-      ...(consignment.fee ? { fee: consignment.fee } : {}),
-      // Said at the START, on every read, rather than discovered when somebody tries to pay.
-      money: this.moneyHereFor(consignment),
+      ...(this.feeOf(consignment) ? { fee: this.feeOf(consignment) } : {}),
       ...(consignment.roadFreightId ? { roadFreightId: consignment.roadFreightId } : {}),
       // Shown to BOTH parties, always. A hold recorded by the agent that the importer could not see would
       // be a claim made about them behind their back, and the dispute it invites could never be made.
@@ -1169,30 +1171,37 @@ export class ImportService {
   /* --------------------------------------------- CL2b: paying the agent -- */
 
   /**
-   * The agent names their price. Their decision alone, and it is a QUOTE rather than a charge.
-   *
-   * Allowed even where we cannot handle the money, on purpose: what the two parties agree between them is
-   * theirs to agree. What changes is only who carries it — `money.why` on the view has already said, before
-   * anybody typed a figure, whether we can be the one who bills it.
+   * The agent names their price — a QUOTATION, with their own reference and, if they like, the proforma attached
+   * afterwards. Their decision alone. Re-quoting drops the importer's agreement: they agreed to a number, and this is a
+   * different one. Refused once it is confirmed paid, until a party sets it back to open.
    */
-  quoteFee(importId: string, agentEntityId: string, amount: number, note: string | undefined, by: string, now = Date.now()): ImportDetail {
+  quoteFee(
+    importId: string,
+    agentEntityId: string,
+    amount: number,
+    note: string | undefined,
+    by: string,
+    now = Date.now(),
+    opts: { currency?: string; reference?: string } = {},
+  ): ImportDetail {
     const consignment = this.requireImport(importId);
     this.requireAgent(consignment, agentEntityId);
-    if (consignment.fee?.paidAt) throw new GlosError('INVALID_STATE', `The fee on ${consignment.code} has already been paid — re-quoting it now would change a figure money has already moved against`);
-    const value = money(amount);
-    if (!(value > 0)) throw new GlosError('VALIDATION_FAILED', 'A fee needs an amount above zero');
-    const currency = this.currencyFor(consignment);
-    const fee: ImportFee = {
-      amount: value,
-      currency,
-      quotedBy: by,
-      quotedAt: new Date(now).toISOString(),
-      ...(note?.trim() ? { note: note.trim() } : {}),
-      ...(this.collectingSisterFor(consignment) ? { collectingEntityId: this.collectingSisterFor(consignment)!.entityId } : {}),
-    };
-    // A re-quote drops the importer's earlier agreement rather than carrying it: they agreed to a number,
-    // and this is a different number. Nobody is held to a price they did not see.
-    consignment.fee = fee;
+    const agent = this.entities.get(agentEntityId);
+    const importer = this.entities.get(consignment.importerEntityId);
+    const quote = this.quotes.quote(
+      {
+        subject: { kind: 'import', id: consignment.importId, code: consignment.code },
+        issuer: { name: agent.name, entityId: agent.entityId },
+        payer: { name: importer.name, entityId: importer.entityId },
+        amount,
+        currency: opts.currency?.trim() || this.currencyFor(consignment),
+        note,
+        reference: opts.reference,
+      },
+      by,
+      now,
+    );
+    consignment.fee = { quoteId: quote.quoteId, quotedAt: consignment.fee?.quotedAt ?? new Date(now).toISOString() };
     this.imports.set(consignment.importId, consignment);
     return this.detail(consignment.importId, agentEntityId);
   }
@@ -1201,63 +1210,30 @@ export class ImportService {
   acceptFee(importId: string, actorEntityId: string, by: string, now = Date.now()): ImportDetail {
     const consignment = this.requireImport(importId);
     this.requireImporter(consignment, actorEntityId);
-    const fee = consignment.fee;
-    if (!fee) throw new GlosError('INVALID_STATE', `No fee has been quoted on ${consignment.code} yet`);
-    if (fee.paidAt) throw new GlosError('INVALID_STATE', 'That fee has already been paid');
-    Object.assign(fee, { acceptedBy: by, acceptedAt: new Date(now).toISOString() });
-    this.imports.set(consignment.importId, consignment);
+    const quote = this.feeOf(consignment);
+    if (!quote) throw new GlosError('INVALID_STATE', `No fee has been quoted on ${consignment.code} yet`);
+    this.quotes.agree(quote.quoteId, { name: by, entityId: actorEntityId }, now);
     return this.detail(consignment.importId, actorEntityId);
   }
 
   /**
-   * MONEY ARRIVED. Recorded by network staff against a reference, and never by the importer pressing a button.
-   *
-   * Rule 5 of the money model: money is created only by an OBSERVED EXTERNAL EVENT with a reference somebody
-   * can point at afterwards. An importer asserting "I paid" is not that event, and a button that mints cash on
-   * a claim is the exact shape the whole books rewrite exists to remove.
-   *
-   * The posting is two lines and deliberately has no third: cash in, and the same amount owed to the agent.
-   * **Not one line of revenue**, because the network earns nothing from an appointment — a condition written
-   * into §10 before any of this was built. The agent is then paid by the ordinary payout run, which settles
-   * only when a rail says it settled, and which will refuse to send it to a country we cannot pay into yet.
+   * PAID, OR BACK TO OPEN — the importer or the agent says so, by name, with whatever reference they give. A record of
+   * what a party confirmed; nothing is received, held or owed by us.
    */
-  recordFeeReceipt(importId: string, reference: string, by: string, amount?: number, now = Date.now()): ImportDetail {
+  setFeeStatus(importId: string, actorEntityId: string, status: 'open' | 'paid', by: string, reference?: string, now = Date.now()): ImportDetail {
     const consignment = this.requireImport(importId);
-    const fee = consignment.fee;
-    if (!fee) throw new GlosError('INVALID_STATE', `No fee has been quoted on ${consignment.code} yet`);
-    if (!fee.acceptedAt) throw new GlosError('INVALID_STATE', `${consignment.code}'s fee has not been agreed by the importer yet`);
-    if (fee.paidAt) throw new GlosError('CONFLICT', `That fee was already received on ${fee.paidAt.slice(0, 10)} against ${fee.reference}`);
-    if (!reference?.trim()) throw new GlosError('FIELD_REQUIRED', 'A receipt needs the reference the money arrived under — money is never created here on somebody saying so');
-    if (!consignment.agentEntityId) throw new GlosError('INVALID_STATE', 'No agent is appointed, so there is nobody this could be owed to');
-    // Refused HERE with the country's own sentence — but the screen has been saying it since the page opened.
-    this.presence.require(consignment.destCountry, 'merchantOfRecord');
-    const sister = this.entities.requireForJurisdiction(consignment.destCountry);
-    const agent = this.entities.get(consignment.agentEntityId);
-    const received = money(amount ?? fee.amount);
-    if (!(received > 0)) throw new GlosError('VALIDATION_FAILED', 'A receipt needs an amount above zero');
+    if (actorEntityId !== consignment.importerEntityId && actorEntityId !== consignment.agentEntityId) {
+      throw new GlosError('FORBIDDEN', 'Only the importer or the appointed agent can say whether the fee is paid');
+    }
+    const quote = this.feeOf(consignment);
+    if (!quote) throw new GlosError('INVALID_STATE', `No fee has been quoted on ${consignment.code} yet`);
+    this.quotes.setStatus(quote.quoteId, status, { name: by, entityId: actorEntityId }, reference, now);
+    return this.detail(consignment.importId, actorEntityId);
+  }
 
-    const entry = this.books.post({
-      entityId: sister.entityId,
-      kind: 'clearance-fee',
-      ref: consignment.code,
-      memo: `Clearance fee for ${consignment.code}, owed to ${agent.name}`,
-      lines: [
-        { code: ACCOUNT_CODES.CASH_CUSTODY, amount: received },
-        // Owed onward in full. The agent's DID is the counterparty, which is what the payout run draws down.
-        { code: ACCOUNT_CODES.PAYABLE_PROVIDER, counterparty: agent.did, amount: -received },
-      ],
-    });
-    Object.assign(fee, {
-      amount: received,
-      currency: sister.currency ?? fee.currency,
-      collectingEntityId: sister.entityId,
-      paidAt: new Date(now).toISOString(),
-      recordedBy: by,
-      reference: reference.trim(),
-      entryId: entry.entryId,
-    });
-    this.imports.set(consignment.importId, consignment);
-    return this.detail(consignment.importId, '', { all: true });
+  /** The quotation behind a consignment's fee, if one was ever made. */
+  feeOf(consignment: ImportConsignment): Quote | undefined {
+    return consignment.fee ? this.quotes.forSubject('import', consignment.importId) : undefined;
   }
 
   /* ------------------------------------- CL2b: the road leg from the port -- */
@@ -1481,39 +1457,9 @@ export class ImportService {
 
   /* ------------------------------------------------------------------ private -- */
 
-  /**
-   * Whether the money can run here, and if not, why — in words a person can act on.
-   *
-   * Two different countries are asked two different questions: we bill where the PAYER is, because collection
-   * follows the payer, and we pay out where the AGENT is. Neither answer is a refusal on its own; both are
-   * things somebody should know before they start rather than after they have agreed a price.
-   */
-  private moneyHereFor(consignment: ImportConsignment): MoneyHere {
-    const sister = this.collectingSisterFor(consignment);
-    const agent = consignment.agentEntityId ? this.entities.find(consignment.agentEntityId) : undefined;
-    const canBill = Boolean(sister) && this.presence.can(consignment.destCountry, 'merchantOfRecord');
-    const canPayOut = Boolean(agent) && this.presence.can(agent?.jurisdiction, 'payouts');
-    const why = !canBill
-      ? `We cannot bill in ${consignment.destCountry} yet, so the agent's fee is settled directly between you and them. Everything else on this screen still works — the papers, the grants and the list are ours to hold either way.`
-      : agent && !canPayOut
-        ? `${agent.name} is in ${agent.jurisdiction}, where we cannot pay out yet. We can receive their fee, and it will sit on our books as owed to them until money may leave to that country.`
-        : undefined;
-    return {
-      canBill,
-      canPayOut,
-      ...(why ? { why } : {}),
-      ...(sister?.currency ? { currency: sister.currency } : {}),
-      ...(sister ? { collectingEntityId: sister.entityId } : {}),
-    };
-  }
-
-  /** Collection follows the PAYER, and the payer is the importer — so the sister where the goods land. */
-  private collectingSisterFor(consignment: ImportConsignment) {
-    return this.entities.forJurisdiction(consignment.destCountry);
-  }
-
+  /** The quotation's default currency: the money of the country the goods are cleared in. The agent may name another. */
   private currencyFor(consignment: ImportConsignment): string {
-    return this.collectingSisterFor(consignment)?.currency ?? '';
+    return catalogueEntry(consignment.destCountry)?.currency ?? 'USD';
   }
 
   private rowOf(consignment: ImportConsignment, readerEntityId: string): ImportRow {
@@ -1544,7 +1490,7 @@ export class ImportService {
           : youAre === 'agent'
             ? states.filter((s) => s === 'supplied').length
             : 0,
-      feeState: feeStateOf(consignment.fee),
+      feeState: feeStateOf(this.feeOf(consignment)),
       ...(consignment.roadFreightCode ? { roadFreightCode: consignment.roadFreightCode } : {}),
       ...(consignment.bondedFreightId ? { bondedFreightId: consignment.bondedFreightId, bondedFreightCode: consignment.bondedFreightCode } : {}),
       ...(consignment.releasedAt ? { releasedAt: consignment.releasedAt, releasedBy: consignment.releasedBy } : {}),
@@ -1690,16 +1636,11 @@ function country(value: string, which: string): string {
   return code;
 }
 
-/**
- * How far the agent's fee has got. DERIVED on every read, never stored beside the record.
- *
- * A stored "paid" flag is a flag that can disagree with the journal entry that moved the money, and when
- * those two disagree the flag is always the one people believe.
- */
-function feeStateOf(fee?: ImportFee): FeeState {
+/** How far the agent's fee has got, read off its quotation every time. */
+function feeStateOf(fee?: Quote): FeeState {
   if (!fee) return 'none';
-  if (fee.paidAt) return 'paid';
-  return fee.acceptedAt ? 'accepted' : 'quoted';
+  if (fee.status === 'paid') return 'paid';
+  return fee.agreedAt ? 'accepted' : 'quoted';
 }
 
 /** Money to two places. The books convert to minor units at their own boundary; this stops 0.1 + 0.2 arriving. */

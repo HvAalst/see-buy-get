@@ -78,7 +78,7 @@ export function HomeScreen({ business, actions, client }: { business: BusinessVi
   };
 
   const current = (kind: string) => (papers ?? []).find((d) => d.kind === kind && d.status !== 'superseded');
-  const work = sectionsFor(business.activities).filter((s) => s === 'imports' || s === 'yard');
+  const work = sectionsFor(business.activities).filter((s) => s === 'loads' || s === 'runs' || s === 'imports' || s === 'yard');
 
   return (
     <>
@@ -173,14 +173,14 @@ export function HomeScreen({ business, actions, client }: { business: BusinessVi
           <GoRow section="people" actions={actions} />
           <GoRow section="details" actions={actions} />
         </div>
-        {/* Said, not hidden: what a shipper comes for is not on this screen yet. */}
-        {business.activities.includes('shipper') || business.activities.includes('expeditor') ? <p class="chint">{t('business.home.loadsSoon')}</p> : null}
       </section>
     </>
   );
 }
 
 const GO: Record<Exclude<Section, 'home'>, { label: MessageKey; sub: MessageKey }> = {
+  loads: { label: 'business.nav.loads', sub: 'business.home.go.loads' },
+  runs: { label: 'business.nav.runs', sub: 'business.home.go.runs' },
   imports: { label: 'business.nav.imports', sub: 'business.home.go.imports' },
   yard: { label: 'business.nav.yard', sub: 'business.home.go.yard' },
   people: { label: 'business.nav.people', sub: 'business.home.go.people' },

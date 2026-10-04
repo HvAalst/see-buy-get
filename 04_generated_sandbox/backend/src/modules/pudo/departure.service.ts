@@ -425,7 +425,7 @@ export class DepartureService {
   /** Take space on a departure. */
   book(
     departureId: string,
-    input: { shipperDid: string; description: string; weightKg: number; volumeM3?: number; freightId?: string; nature?: string; declaredValue?: number },
+    input: { shipperDid: string; bookedByName?: string; description: string; weightKg: number; volumeM3?: number; freightId?: string; nature?: string; declaredValue?: number },
   ): { departure: Departure; booking: DepartureBooking } {
     const departure = this.require(departureId);
     const load = { weightKg: Number(input.weightKg), volumeM3: Number(input.volumeM3) || undefined };
@@ -441,6 +441,7 @@ export class DepartureService {
       bookingId: `bkg_${randomBytes(5).toString('hex')}`,
       kind: 'sold',
       shipperDid: input.shipperDid,
+      ...(input.bookedByName?.trim() ? { bookedByName: input.bookedByName.trim().slice(0, 80) } : {}),
       ...(input.freightId ? { freightId: input.freightId } : {}),
       description: input.description.trim(),
       nature,

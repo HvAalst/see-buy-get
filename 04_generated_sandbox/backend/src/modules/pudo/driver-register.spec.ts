@@ -51,9 +51,9 @@ describe('driver jobs + earnings register (R5)', () => {
   });
 
   it('summarises earned / paid / unpaid / delivered over the set (filtered view)', () => {
-    expect(driverJobsSummaryOf(filterDriverJobs(jobs, D, {}))).toEqual({ earned: 240, paid: 120, unpaid: 120, delivered: 2, count: 3 });
-    expect(driverJobsSummaryOf(filterDriverJobs(jobs, D, { paid: 'unpaid' }))).toEqual({ earned: 120, paid: 0, unpaid: 120, delivered: 1, count: 2 });
-    expect(driverJobsSummaryOf([])).toEqual({ earned: 0, paid: 0, unpaid: 0, delivered: 0, count: 0 });
+    expect(driverJobsSummaryOf(filterDriverJobs(jobs, D, {}))).toEqual({ earned: 240, paid: 120, unpaid: 120, direct: 0, delivered: 2, count: 3 });
+    expect(driverJobsSummaryOf(filterDriverJobs(jobs, D, { paid: 'unpaid' }))).toEqual({ earned: 120, paid: 0, unpaid: 120, direct: 0, delivered: 1, count: 2 });
+    expect(driverJobsSummaryOf([])).toEqual({ earned: 0, paid: 0, unpaid: 0, direct: 0, delivered: 0, count: 0 });
   });
 
   it('projects a row + exports CSV with a numeric earning and no buyer hash', () => {

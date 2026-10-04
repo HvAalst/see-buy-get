@@ -230,8 +230,8 @@ function JobRow({ j, actions }: { j: FleetJobRow; actions: FleetActions }) {
       </span>
       <span class="row__end">
         <b class="amt amt--in">{money(j.earning)}</b>
-        <Pill tone={j.paid ? 'ok' : 'warn'} dot>
-          {j.paid ? t('fleet.earn.booked') : t('fleet.earn.pending')}
+        <Pill tone={j.paid || j.direct ? 'ok' : 'warn'} dot>
+          {j.paid ? t('fleet.earn.booked') : j.direct ? t('fleet.earn.direct') : t('fleet.earn.pending')}
         </Pill>
       </span>
     </div>

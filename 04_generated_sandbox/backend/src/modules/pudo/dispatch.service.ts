@@ -145,6 +145,8 @@ export interface DriverJobRow {
   weightKg: number;
   earning?: number; // lockedPrice — the driver's agreed pay for the haul
   paid: boolean; // driverPaid
+  /** B2 — the shipper pays the carrier for this one directly; nothing is owed by us, now or later. */
+  direct?: boolean;
   /** FP8 — what an upheld claim took back from that pay. */
   clawback?: number;
   claimedAt?: string;
@@ -158,13 +160,15 @@ function jobDate(f: Freight): string {
 }
 
 export function driverJobRowOf(f: Freight): DriverJobRow {
-  return { freightId: f.freightId, code: f.code, description: f.description, destLabel: f.destLabel, status: f.status, cargoClass: f.cargoClass, weightKg: f.weightKg, earning: f.status === 'cancelled' ? undefined : f.lockedPrice, paid: Boolean(f.driverPaid), ...(f.clawback ? { clawback: f.clawback.amount } : {}), claimedAt: f.claimedAt, deliveredAt: f.deliveredAt, createdAt: f.createdAt };
+  return { freightId: f.freightId, code: f.code, description: f.description, destLabel: f.destLabel, status: f.status, cargoClass: f.cargoClass, weightKg: f.weightKg, earning: f.status === 'cancelled' ? undefined : f.lockedPrice, paid: Boolean(f.driverPaid), ...(f.settlement === 'between_parties' ? { direct: true } : {}), ...(f.clawback ? { clawback: f.clawback.amount } : {}), claimedAt: f.claimedAt, deliveredAt: f.deliveredAt, createdAt: f.createdAt };
 }
 
 export interface DriverJobsSummary {
   earned: number; // sum of the agreed earning over the set
   paid: number; // of that, what has been paid out
-  unpaid: number; // earned - paid (still owed)
+  unpaid: number; // earned - paid - direct (still owed by us)
+  /** B2 — earned on hauls the shipper pays the carrier for directly: earned, and never owed by us. */
+  direct: number;
   delivered: number; // jobs completed
   count: number;
 }
@@ -172,16 +176,19 @@ export interface DriverJobsSummary {
 export function driverJobsSummaryOf(rows: Freight[]): DriverJobsSummary {
   let earned = 0;
   let paid = 0;
+  let direct = 0;
   let delivered = 0;
   for (const f of rows) {
     const e = f.status === 'cancelled' ? 0 : (f.lockedPrice ?? 0) - (f.clawback?.amount ?? 0); // FP3 — a withdrawn load pays nothing; FP8 — an upheld claim takes back
     earned += e;
     if (f.driverPaid) paid += e;
+    else if (f.settlement === 'between_parties') direct += e;
     if (f.status === 'delivered') delivered += 1;
   }
   earned = Math.round(earned * 100) / 100;
   paid = Math.round(paid * 100) / 100;
-  return { earned, paid, unpaid: Math.round((earned - paid) * 100) / 100, delivered, count: rows.length };
+  direct = Math.round(direct * 100) / 100;
+  return { earned, paid, unpaid: Math.round((earned - paid - direct) * 100) / 100, direct, delivered, count: rows.length };
 }
 
 function driverJobSort(sort?: DriverJobsQuery['sort']): (a: Freight, b: Freight) => number {
@@ -267,7 +274,7 @@ export function fleetEarningsSummaryOf(rows: Freight[], nameOf: (did: string) =>
 export function fleetJobsToCsv(rows: Freight[], nameOf: (did: string) => string): string {
   return toCsv(
     ['Driver', 'Job', 'Description', 'Destination', 'Status', 'Class', 'Weight kg', 'Earning', 'Currency', 'Booked', 'Claimed', 'Delivered'],
-    rows.map((f) => [nameOf(f.claimedBy ?? ''), f.code, f.description, f.destLabel, f.status, f.cargoClass, f.weightKg, f.lockedPrice ?? '', f.lockedPrice == null ? '' : NETWORK_CURRENCY, f.driverPaid ? 'yes' : 'no', f.claimedAt ?? '', f.deliveredAt ?? '']),
+    rows.map((f) => [nameOf(f.claimedBy ?? ''), f.code, f.description, f.destLabel, f.status, f.cargoClass, f.weightKg, f.lockedPrice ?? '', f.lockedPrice == null ? '' : NETWORK_CURRENCY, f.driverPaid ? 'yes' : f.settlement === 'between_parties' ? 'by the shipper' : 'no', f.claimedAt ?? '', f.deliveredAt ?? '']),
   );
 }
 
@@ -275,7 +282,7 @@ export function fleetJobsToCsv(rows: Freight[], nameOf: (did: string) => string)
 function filterJobsFor(rows: Freight[], mine: (f: Freight) => boolean, q: DriverJobsQuery): Freight[] {
   let out = rows.filter(mine);
   if (q.status) out = out.filter((f) => f.status === q.status);
-  if (q.paid) out = out.filter((f) => (q.paid === 'paid' ? f.driverPaid === true : !f.driverPaid));
+  if (q.paid) out = out.filter((f) => (q.paid === 'paid' ? f.driverPaid === true : !f.driverPaid && f.settlement !== 'between_parties'));
   if (q.from || q.to) out = out.filter((f) => withinDates(jobDate(f), q.from, q.to));
   if (q.q) out = out.filter((f) => textMatch([f.code, f.description, f.destLabel, f.trackingKey, f.externalOrderId], q.q));
   return [...out].sort(driverJobSort(q.sort));
@@ -284,7 +291,7 @@ function filterJobsFor(rows: Freight[], mine: (f: Freight) => boolean, q: Driver
 export function driverJobsToCsv(rows: Freight[]): string {
   return toCsv(
     ['Job', 'Description', 'Destination', 'Status', 'Class', 'Weight kg', 'Earning', 'Currency', 'Paid', 'Claimed', 'Delivered'],
-    rows.map((f) => [f.code, f.description, f.destLabel, f.status, f.cargoClass, f.weightKg, f.lockedPrice ?? '', f.lockedPrice == null ? '' : NETWORK_CURRENCY, f.driverPaid ? 'yes' : 'no', f.claimedAt ?? '', f.deliveredAt ?? '']),
+    rows.map((f) => [f.code, f.description, f.destLabel, f.status, f.cargoClass, f.weightKg, f.lockedPrice ?? '', f.lockedPrice == null ? '' : NETWORK_CURRENCY, f.driverPaid ? 'yes' : f.settlement === 'between_parties' ? 'by the shipper' : 'no', f.claimedAt ?? '', f.deliveredAt ?? '']),
   );
 }
 
@@ -401,7 +408,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string }, now: number = Date.now()): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string }, now: number = Date.now()): Freight {
     this.freightSeq += 1;
     // A future pickup date parks the load for later; a past/absent date ships now. A supplied-but-unparseable
     // date is a CALLER ERROR — fail closed (never silently ship-now what was meant to be scheduled). Store the
@@ -469,6 +476,11 @@ export class DispatchService {
       // Who NEGOTIATES for the load — not necessarily who pays. A counter booking has no shipperDid at all
       // (the customer's cash settles off-platform) and still needs a shop that can answer a proposal.
       postedByDid: input.postedByDid,
+      ...(input.postedByName?.trim() ? { postedByName: input.postedByName.trim().slice(0, 80) } : {}),
+      // B2 — a customer's business settles with the carrier itself: stamped here, once, from who posted it, so
+      // every path a business posts through (its own form, an import's road leg, a box going home) is covered
+      // and delivery never has to work out afterwards whose money it was.
+      ...(this.entities.byDid(input.postedByDid)?.kind === 'business' ? { settlement: 'between_parties' as const } : {}),
       fragile: input.fragile ?? false,
       bulk,
       packaging,
@@ -1995,7 +2007,9 @@ export class DispatchService {
     this.media.adopt(podPhotoId, driverDid ?? '', { type: 'freight', id: f.freightId }, 'pod');
     // S34 — pay the driver their LOCKED earning on delivery, exactly once. A system-level ledger outflow
     // (drivers hold no agent wallet). A legacy/bulletin freight claimed before pricing (no lockedPrice) is skipped.
-    if (f.lockedPrice != null && !f.driverPaid && f.claimedBy) {
+    // B2 — never for a haul settled between the parties: the shipper pays the carrier, and a payable on our books
+    // would be a second debt for the same work, owed by a company that never held the money.
+    if (f.lockedPrice != null && !f.driverPaid && f.claimedBy && f.settlement !== 'between_parties') {
       // WHO it was owed to, read in the same turn the payout resolves it and kept on the load: a claim upheld
       // weeks later takes the money back from this party, not from a fleet the driver has joined since.
       const payee = this.drivers.payeeOrNone(f.claimedBy);

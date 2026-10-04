@@ -319,6 +319,17 @@ export class Freight {
   billed?: { net: number; tax: number; gross: number; feePct: number; taxPct: number; provision: number };
   driverPaid?: boolean;
   /**
+   * B2 — WHO SETTLES THIS HAUL, stamped when it is posted and never re-derived.
+   *
+   * `between_parties`: the shipper pays the carrier directly, or through its own payment network, and nothing is
+   * accrued for the carrier on any of our books at delivery. Every load a customer's business posts is this (the
+   * user, 2026-10-04: "we don't handle their payments at all"). Absent: the network's older rule — a carrier we
+   * contract with is owed their earning on delivery whoever the shipper was.
+   */
+  @ApiPropertyOptional({ enum: ['between_parties'] }) settlement?: 'between_parties';
+  /** Which person in a business posted it — the business's DID is shared by everybody in it. */
+  @ApiPropertyOptional() postedByName?: string;
+  /**
    * WHO the network owed for this haul, and on whose books — fixed when it was accrued at delivery. A claim
    * upheld weeks later takes the money back from this same party: never from whichever fleet the driver has
    * moved to since, which carried nothing and was paid nothing for it. Absent where nothing was accrued.

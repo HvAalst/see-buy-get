@@ -95,7 +95,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   KnownPapersQueryDto,
   QuoteClearanceFeeDto,
   AcceptClearanceFeeDto,
-  ClearanceReceiptDto,
+  ClearanceFeeStatusDto,
   RecordCustomsHoldDto,
   AnswerCustomsHoldDto,
   ReleaseCustomsHoldDto,
@@ -1095,7 +1095,7 @@ export class SbgController {
   @Roles('operator', 'entity_admin', 'business')
   @Post('imports/:importId/fee')
   quoteClearanceFee(@Param('importId') importId: string, @Body() dto: QuoteClearanceFeeDto, @Actor() actor: IntrospectionResult): ImportDetail {
-    return this.imports.quoteFee(importId, this.actingCompany(actor, dto.entityId), dto.amount, dto.note, this.namedActor(actor, dto.by));
+    return this.imports.quoteFee(importId, this.actingCompany(actor, dto.entityId), dto.amount, dto.note, this.namedActor(actor, dto.by), Date.now(), { currency: dto.currency, reference: dto.reference });
   }
 
   /** CL2b — the importer agrees the figure. Nothing moves here; agreeing is not paying. */
@@ -1106,16 +1106,13 @@ export class SbgController {
   }
 
   /**
-   * CL2b — MONEY ARRIVED, recorded by network staff against a reference.
-   *
-   * Operator-only, and that is the point rather than an oversight: money is created only by an observed
-   * external event, and an importer pressing "I have paid" is not one. What is received is owed onward in
-   * full — the network earns nothing from an appointment.
+   * CL2b — the importer or the agent says the fee is paid, or back to open (2026-10-04: we do not manage the agent's
+   * fee; we keep the quotation). Recorded by name with their reference. Nothing moves through our books.
    */
-  @Roles('operator')
-  @Post('imports/:importId/fee/receipt')
-  recordClearanceReceipt(@Param('importId') importId: string, @Body() dto: ClearanceReceiptDto, @Actor() actor: IntrospectionResult): ImportDetail {
-    return this.imports.recordFeeReceipt(importId, dto.reference, this.namedActor(actor, dto.by), dto.amount);
+  @Roles('operator', 'entity_admin', 'business')
+  @Post('imports/:importId/fee/status')
+  setClearanceFeeStatus(@Param('importId') importId: string, @Body() dto: ClearanceFeeStatusDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    return this.imports.setFeeStatus(importId, this.actingCompany(actor, dto.entityId), dto.status, this.namedActor(actor, dto.by), dto.reference);
   }
 
   /* --------------------------------------- CL4 — what the state did, and the record -- */
@@ -4631,7 +4628,8 @@ export class SbgController {
   bookDeparture(@Param('departureId') departureId: string, @Body() dto: BookDepartureDto, @Actor() actor: IntrospectionResult) {
     const shipperDid = actingDid(actor);
     if (!shipperDid) throw new GlosError('FORBIDDEN', 'Sign in as the party whose goods these are');
-    const { booking } = this.departures.book(departureId, { shipperDid, ...dto });
+    // B2 — a business books as itself; the person who did it is kept by name.
+    const { booking } = this.departures.book(departureId, { shipperDid, ...dto, ...(actor?.role === 'business' && actor.actorName ? { bookedByName: actor.actorName } : {}) });
     return booking;
   }
 
@@ -5069,7 +5067,8 @@ export class SbgController {
     // actingDid: a bulletin freight posted with no identity legitimately has no owner, and must not 403 here.
     // CL1 — refuse a term this country has not switched on, before the load exists rather than after.
     this.requireActiveTerm(dto.incoterm, dto.pickupCountry, dto.destCountry);
-    return this.dispatch.registerFreight({ ...dto, dimensionsCm, bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did });
+    // B2 — a business's DID is shared by everybody in it, so the person who posted is kept by name as well.
+    return this.dispatch.registerFreight({ ...dto, dimensionsCm, bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did, ...(actor?.role === 'business' && actor.actorName ? { postedByName: actor.actorName } : {}) });
   }
 
   @Get('dispatch/freight')

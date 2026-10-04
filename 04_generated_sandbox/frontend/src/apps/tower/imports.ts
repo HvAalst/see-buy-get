@@ -1,5 +1,6 @@
 import type { MessageKey } from '../../shared/i18n';
 import { DOCUMENT_KINDS, type CompanyDocument, type DocumentKind } from './company';
+import { currencyReady, type QuoteView } from '../../shared/quote';
 
 /**
  * CL2a — A CONTAINER, ITS PAPERS, AND THE AGENT APPOINTED TO CLEAR IT, as the console reads it.
@@ -82,9 +83,8 @@ export interface ImportDetailView extends ImportRow {
   required: RequiredPaperView[];
   documents: CompanyDocument[];
   grants: DocumentGrant[];
-  fee?: ImportFee;
-  /** CL2b — whether the money can run here at all. Shown at the START, never saved for a failure. */
-  money: MoneyHere;
+  /** CL2b — the agent's fee as a QUOTATION: the figure, the proforma, open or paid as a party confirms it. */
+  fee?: QuoteView;
   roadFreightId?: string;
   /** BL1 — the bonded run from the quay, on a split chain. Absent where the box clears where it lands. */
   bondedFreightId?: string;
@@ -303,29 +303,6 @@ export interface ClearanceRecordView {
 
 export type FeeState = 'none' | 'quoted' | 'accepted' | 'paid';
 
-export interface ImportFee {
-  amount: number;
-  currency: string;
-  quotedBy: string;
-  quotedAt: string;
-  note?: string;
-  acceptedBy?: string;
-  acceptedAt?: string;
-  collectingEntityId?: string;
-  paidAt?: string;
-  recordedBy?: string;
-  reference?: string;
-  entryId?: string;
-}
-
-export interface MoneyHere {
-  canBill: boolean;
-  canPayOut: boolean;
-  why?: string;
-  currency?: string;
-  collectingEntityId?: string;
-}
-
 /** `GET /imports/known-papers`. What agents have BEEN ASKED FOR here — never what is required. */
 export interface KnownPaper {
   key: string;
@@ -469,15 +446,13 @@ export function consignmentPapers(documents: CompanyDocument[], code: string): C
 
 export interface FeeQuoteForm {
   amount: string;
+  /** Three letters; empty means the money of the country the goods clear in. */
+  currency: string;
+  /** The agent's own quotation or proforma number. */
+  reference: string;
   note: string;
 }
-export const EMPTY_FEE_FORM: FeeQuoteForm = { amount: '', note: '' };
-
-export interface ReceiptForm {
-  reference: string;
-  amount: string;
-}
-export const EMPTY_RECEIPT_FORM: ReceiptForm = { reference: '', amount: '' };
+export const EMPTY_FEE_FORM: FeeQuoteForm = { amount: '', currency: '', reference: '', note: '' };
 
 export interface RoadLegForm {
   /** Both ends are SAVED PLACES now — a port chosen from the list, and somewhere to deliver it. */
@@ -489,18 +464,8 @@ export const EMPTY_ROAD_FORM: RoadLegForm = { pickupSiteId: '', destSiteId: '', 
 
 /** A fee is a figure somebody will be asked to pay, so it is a real number above zero or it is nothing. */
 export function feeQuoteBlocker(form: FeeQuoteForm): MessageKey | null {
-  return positive(form.amount) ? null : 'tower.imports.needAmount';
-}
-
-/**
- * A receipt without a reference is refused here as well as on the server.
- *
- * Not defensive duplication: this is the one field that makes a recorded payment checkable afterwards, and
- * the screen should not let somebody get as far as pressing the button without it.
- */
-export function receiptBlocker(form: ReceiptForm): MessageKey | null {
-  if (!form.reference.trim()) return 'tower.imports.needReference';
-  if (form.amount.trim() && !positive(form.amount)) return 'tower.imports.needAmount';
+  if (!positive(form.amount)) return 'tower.imports.needAmount';
+  if (form.currency.trim() && !currencyReady(form.currency)) return 'tower.imports.needCurrency';
   return null;
 }
 

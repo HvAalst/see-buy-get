@@ -408,6 +408,10 @@ export class KnownPapersQueryDto {
 /** CL2b — the agent names their price for clearing one container. A quote, not a charge. */
 export class QuoteClearanceFeeDto {
   @IsNumber() @Min(1) amount!: number;
+  /** Three letters. Absent: the money of the country the goods clear in. */
+  @IsOptional() @IsString() @MaxLength(3) currency?: string;
+  /** The agent's own quotation or proforma number. */
+  @IsOptional() @IsString() @MaxLength(60) reference?: string;
   @IsOptional() @IsString() @MaxLength(300) note?: string;
   @IsOptional() @IsString() entityId?: string;
   @IsOptional() @IsString() by?: string;
@@ -419,11 +423,12 @@ export class AcceptClearanceFeeDto {
   @IsOptional() @IsString() by?: string;
 }
 
-/** CL2b — money arrived. The reference is what anybody points at afterwards, so it is required. */
-export class ClearanceReceiptDto {
-  @IsString() @MaxLength(80) reference!: string;
-  /** Where what actually arrived differs from what was quoted. Absent means the agreed figure. */
-  @IsOptional() @IsNumber() @Min(1) amount?: number;
+/** CL2b — the importer or the agent says the fee is paid, or back to open. A record, never a posting. */
+export class ClearanceFeeStatusDto {
+  @IsIn(['open', 'paid']) @ApiProperty({ enum: ['open', 'paid'] }) status!: 'open' | 'paid';
+  /** The payment's own reference — a bank or mobile-money transaction. */
+  @IsOptional() @IsString() @MaxLength(80) reference?: string;
+  @IsOptional() @IsString() entityId?: string;
   @IsOptional() @IsString() by?: string;
 }
 

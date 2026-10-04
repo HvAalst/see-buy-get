@@ -108,6 +108,15 @@
   justify-content: flex-end;
 }
 
+/* B2 — the stars a carrier is rated with, in a row. */
+.biz-stars {
+  display: flex;
+  gap: 6px;
+}
+.biz-loads__new {
+  margin-bottom: 14px;
+}
+
 /* Room for the bottom bar on a phone, so the last row is never under it. */
 @media (max-width: 1099px) {
   .biz .cons__main {

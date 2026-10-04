@@ -38,6 +38,38 @@ const enCover = {
   'cover.handles.fragile': 'fragile goods',
 };
 
+/* A QUOTATION — what one party asked another to pay, the proforma, open or paid. Kept, never collected (2026-10-04).
+   Shared: an agent's fee on an import and a carrier's price on a business's load read the same way. */
+const enQuote = {
+  'quote.figure': 'Quoted',
+  'quote.theirRef': 'their number {ref}',
+  'quote.between': 'From and to',
+  'quote.fromTo': '{from} asks {to}',
+  'quote.note': 'What it covers',
+  'quote.proforma': 'Proforma invoice',
+  'quote.noProforma': 'None attached.',
+  'quote.proformaBy': 'added by {who} on {when}',
+  'quote.addProforma': 'Attach the proforma',
+  'quote.replaceProforma': 'Replace it',
+  'quote.proformaGone': 'That file could not be opened.',
+  'quote.status': 'Paid?',
+  'quote.open': 'Open',
+  'quote.paidBy': 'Paid — confirmed by {who} on {when}',
+  'quote.paidRef': 'reference {ref}',
+  'quote.paidRefPlaceholder': 'Payment reference (optional)',
+  'quote.markPaid': 'Confirm it is paid',
+  'quote.markOpen': 'Set back to open',
+  'quote.ours': 'SeeBuyGet keeps this record for both of you. It does not take, hold or send the money.',
+  'quote.historyTitle': 'What happened to it',
+  'quote.historyCount': '{n} entries',
+  'quote.event.quoted': 'Quoted by {who}',
+  'quote.event.requoted': 'Changed by {who}',
+  'quote.event.proforma': 'Proforma attached by {who}',
+  'quote.event.agreed': 'Agreed by {who}',
+  'quote.event.paid': 'Confirmed paid by {who}',
+  'quote.event.open': 'Set back to open by {who}',
+};
+
 const enSettle = {
   'settle.line': 'You pay them {method}, {when}.',
   'settle.method.cash': 'in cash',
@@ -66,6 +98,7 @@ const enSettle = {
 export const en = {
   ...enCover,
   ...enSettle,
+  ...enQuote,
   // Per-app slices (each app owns its own <app>.* namespace; filled in its own en.<app>.ts file).
   ...enAgent,
   ...enDriver,

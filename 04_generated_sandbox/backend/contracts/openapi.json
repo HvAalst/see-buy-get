@@ -5514,11 +5514,11 @@
         }
       }
     },
-    "/v1/sbg/imports/{importId}/fee/receipt": {
+    "/v1/sbg/imports/{importId}/fee/status": {
       "post": {
-        "operationId": "Sbg.recordClearanceReceipt",
+        "operationId": "Sbg.setClearanceFeeStatus",
         "summary": "",
-        "description": "CL2b — MONEY ARRIVED, recorded by network staff against a reference.\n\nOperator-only, and that is the point rather than an oversight: money is created only by an observed\nexternal event, and an importer pressing \"I have paid\" is not one. What is received is owed onward in\nfull — the network earns nothing from an appointment.",
+        "description": "CL2b — the importer or the agent says the fee is paid, or back to open (2026-10-04: we do not manage the agent's\nfee; we keep the quotation). Recorded by name with their reference. Nothing moves through our books.",
         "parameters": [
           {
             "name": "importId",
@@ -5534,7 +5534,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ClearanceReceiptDto"
+                "$ref": "#/components/schemas/ClearanceFeeStatusDto"
               }
             }
           }
@@ -19784,6 +19784,286 @@
         }
       }
     },
+    "/v1/sbg/quotes/{quoteId}": {
+      "get": {
+        "operationId": "Quote.read",
+        "parameters": [
+          {
+            "name": "quoteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Quote"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/quotes/{quoteId}/status": {
+      "post": {
+        "operationId": "Quote.setStatus",
+        "summary": "",
+        "description": "Paid, or back to open — confirmed by a party, with their reference.",
+        "parameters": [
+          {
+            "name": "quoteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuoteStatusDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Quote"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/quotes/{quoteId}/agree": {
+      "post": {
+        "operationId": "Quote.agree",
+        "summary": "",
+        "description": "The payer agrees to the figure.",
+        "parameters": [
+          {
+            "name": "quoteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Quote"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/quotes/{quoteId}/proforma": {
+      "post": {
+        "operationId": "Quote.attachProforma",
+        "summary": "",
+        "description": "Attach the proforma invoice — either party, kept as handed over.",
+        "parameters": [
+          {
+            "name": "quoteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuoteProformaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Quote"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "Quote.proforma",
+        "parameters": [
+          {
+            "name": "quoteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/freight/{id}/quote": {
+      "get": {
+        "operationId": "Quote.freightQuote",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "Quote.recordFreightQuote",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordCarrierQuoteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Quote"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/departures/{departureId}/bookings/{bookingId}/quote": {
+      "get": {
+        "operationId": "Quote.bookingQuote",
+        "parameters": [
+          {
+            "name": "departureId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bookingId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "Quote.recordBookingQuote",
+        "summary": "",
+        "description": "The run's price is the carrier's published rate, agreed by booking; the shipper may state what was invoiced.",
+        "parameters": [
+          {
+            "name": "departureId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bookingId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordCarrierQuoteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Quote"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/settlement/module-info": {
       "get": {
         "operationId": "Sse.info",
@@ -23646,54 +23926,18 @@
           "addedAt"
         ]
       },
-      "ImportFee": {
+      "ImportFeeStamp": {
         "type": "object",
         "properties": {
-          "amount": {
-            "type": "number"
-          },
-          "currency": {
-            "type": "string",
-            "description": "The collecting sister's own currency. A sister can only invoice in its own money."
-          },
-          "quotedBy": {
+          "quoteId": {
             "type": "string"
           },
           "quotedAt": {
             "type": "string"
-          },
-          "note": {
-            "type": "string"
-          },
-          "acceptedBy": {
-            "type": "string"
-          },
-          "acceptedAt": {
-            "type": "string"
-          },
-          "collectingEntityId": {
-            "type": "string",
-            "description": "Which sister's books hold it — the one in the PAYER's jurisdiction, because collection follows the payer."
-          },
-          "paidAt": {
-            "type": "string"
-          },
-          "recordedBy": {
-            "type": "string"
-          },
-          "reference": {
-            "type": "string",
-            "description": "The rail's or the bank's own reference. Money is only ever created by an observed external event, and\n this is the thing you point at afterwards when somebody says they paid."
-          },
-          "entryId": {
-            "type": "string",
-            "description": "The journal entry that received it. Present only once money actually moved."
           }
         },
         "required": [
-          "amount",
-          "currency",
-          "quotedBy",
+          "quoteId",
           "quotedAt"
         ]
       },
@@ -23880,7 +24124,7 @@
             }
           },
           "fee": {
-            "$ref": "#/components/schemas/ImportFee"
+            "$ref": "#/components/schemas/ImportFeeStamp"
           },
           "roadFreightId": {
             "type": "string",
@@ -24090,29 +24334,199 @@
           "grantedAt"
         ]
       },
-      "MoneyHere": {
+      "QuoteSubject": {
         "type": "object",
         "properties": {
-          "canBill": {
-            "type": "boolean"
-          },
-          "canPayOut": {
-            "type": "boolean"
-          },
-          "why": {
+          "kind": {
             "type": "string",
-            "description": "Said plainly, before anybody starts. Absent when the money can run here normally."
+            "enum": [
+              "import",
+              "freight",
+              "booking"
+            ]
           },
-          "currency": {
+          "id": {
             "type": "string"
           },
-          "collectingEntityId": {
+          "code": {
+            "type": "string",
+            "description": "What a person reads it as — IMP-004, FRT-012."
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ]
+      },
+      "QuoteParty": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "did": {
             "type": "string"
           }
         },
         "required": [
-          "canBill",
-          "canPayOut"
+          "name"
+        ]
+      },
+      "QuoteProforma": {
+        "type": "object",
+        "properties": {
+          "fileName": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "size": {
+            "type": "number"
+          },
+          "fingerprint": {
+            "type": "string",
+            "description": "sha256 of the bytes. Never called `hash`: the response mask strips that name at every depth."
+          },
+          "addedBy": {
+            "type": "string"
+          },
+          "addedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "fileName",
+          "contentType",
+          "size",
+          "fingerprint",
+          "addedBy",
+          "addedAt"
+        ]
+      },
+      "QuoteEvent": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "what": {
+            "type": "string",
+            "enum": [
+              "quoted",
+              "requoted",
+              "proforma",
+              "agreed",
+              "paid",
+              "open"
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "by",
+          "what"
+        ]
+      },
+      "Quote": {
+        "type": "object",
+        "properties": {
+          "quoteId": {
+            "type": "string"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/QuoteSubject"
+          },
+          "issuer": {
+            "description": "Who is asking to be paid — the agent, the carrier.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuoteParty"
+              }
+            ]
+          },
+          "payer": {
+            "description": "Who is asked to pay — the importer, the business.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuoteParty"
+              }
+            ]
+          },
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string",
+            "description": "Whatever currency the parties agreed in. Ours to show, never to convert."
+          },
+          "note": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string",
+            "description": "Their own number for it — the quotation or invoice number on the proforma."
+          },
+          "proforma": {
+            "$ref": "#/components/schemas/QuoteProforma"
+          },
+          "agreedAt": {
+            "type": "string",
+            "description": "The payer agreed to the figure. Not every quotation asks for it; a run's published price was agreed by booking."
+          },
+          "agreedBy": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "paid"
+            ]
+          },
+          "paidAt": {
+            "type": "string"
+          },
+          "paidBy": {
+            "type": "string"
+          },
+          "paidReference": {
+            "type": "string",
+            "description": "The payment's own reference, as the person confirming it gave it — a bank or mobile-money transaction."
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuoteEvent"
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "quoteId",
+          "subject",
+          "issuer",
+          "payer",
+          "amount",
+          "currency",
+          "status",
+          "history",
+          "createdAt",
+          "createdBy"
         ]
       },
       "ContainerFacts": {
@@ -24582,18 +24996,10 @@
             }
           },
           "fee": {
-            "description": "CL2b — the agent's fee, once quoted.",
+            "description": "CL2b — the agent's quotation: the figure, the proforma, and open or paid as the parties confirm it.",
             "allOf": [
               {
-                "$ref": "#/components/schemas/ImportFee"
-              }
-            ]
-          },
-          "money": {
-            "description": "CL2b — whether the money can run here at all, said before anybody starts assembling it.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/MoneyHere"
+                "$ref": "#/components/schemas/Quote"
               }
             ]
           },
@@ -24663,7 +25069,6 @@
           "required",
           "documents",
           "grants",
-          "money",
           "customsHolds",
           "cargoGaps"
         ]
@@ -24905,6 +25310,16 @@
             "type": "number",
             "minimum": 1
           },
+          "currency": {
+            "type": "string",
+            "description": "Three letters. Absent: the money of the country the goods clear in.",
+            "maxLength": 3
+          },
+          "reference": {
+            "type": "string",
+            "description": "The agent's own quotation or proforma number.",
+            "maxLength": 60
+          },
           "note": {
             "type": "string",
             "maxLength": 300
@@ -24931,24 +25346,30 @@
           }
         }
       },
-      "ClearanceReceiptDto": {
+      "ClearanceFeeStatusDto": {
         "type": "object",
         "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "paid"
+            ]
+          },
           "reference": {
             "type": "string",
+            "description": "The payment's own reference — a bank or mobile-money transaction.",
             "maxLength": 80
           },
-          "amount": {
-            "type": "number",
-            "description": "Where what actually arrived differs from what was quoted. Absent means the agreed figure.",
-            "minimum": 1
+          "entityId": {
+            "type": "string"
           },
           "by": {
             "type": "string"
           }
         },
         "required": [
-          "reference"
+          "status"
         ]
       },
       "RecordCustomsHoldDto": {
@@ -30609,6 +31030,17 @@
               "billing_failed"
             ]
           },
+          "settlement": {
+            "type": "string",
+            "description": "B2 — WHO SETTLES THIS HAUL, stamped when it is posted and never re-derived.\n\n`between_parties`: the shipper pays the carrier directly, or through its own payment network, and nothing is\naccrued for the carrier on any of our books at delivery. Every load a customer's business posts is this (the\nuser, 2026-10-04: \"we don't handle their payments at all\"). Absent: the network's older rule — a carrier we\ncontract with is owed their earning on delivery whoever the shipper was.",
+            "enum": [
+              "between_parties"
+            ]
+          },
+          "postedByName": {
+            "type": "string",
+            "description": "Which person in a business posted it — the business's DID is shared by everybody in it."
+          },
           "driverPayee": {
             "type": "object",
             "properties": {
@@ -32288,6 +32720,10 @@
               "sold",
               "own"
             ]
+          },
+          "bookedByName": {
+            "type": "string",
+            "description": "B2 — which person in a business booked it: the business's DID is shared by everybody in it."
           },
           "customer": {
             "type": "string",
@@ -36572,6 +37008,61 @@
         "required": [
           "reason"
         ]
+      },
+      "QuoteStatusDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "paid"
+            ]
+          },
+          "reference": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "QuoteProformaDto": {
+        "type": "object",
+        "properties": {
+          "dataUrl": {
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "dataUrl"
+        ]
+      },
+      "RecordCarrierQuoteDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "minimum": 0.01
+          },
+          "currency": {
+            "type": "string",
+            "maxLength": 3
+          },
+          "reference": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 300
+          }
+        }
       },
       "MilestoneTermDto": {
         "type": "object",

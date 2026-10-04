@@ -508,6 +508,7 @@ export const enDriver = {
   'driver.earn.rowDate': ' · {date}',
   'driver.earn.paid': 'Paid',
   'driver.earn.owed': 'Owed',
+  'driver.earn.direct': 'The shipper pays you',
   'driver.earn.dateChip': '{from} → {to}',
   'driver.earn.filterTitle': 'Filter jobs',
   'driver.earn.statusFieldLabel': 'Status',

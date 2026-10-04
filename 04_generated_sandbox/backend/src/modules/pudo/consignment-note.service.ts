@@ -1,3 +1,4 @@
+import { EntityService } from '../../foundation/entity/entity.service';
 import { Injectable, OnModuleInit, Optional } from '@nestjs/common';
 import { catalogueEntry } from '../../foundation/countries/catalogue';
 import { EventBus } from '../../foundation/events/event-bus.service';
@@ -39,6 +40,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     private readonly imports: ImportService,
     @Optional() private readonly accounts?: AccountService,
     @Optional() private readonly mail?: MailService,
+    // B2 — a customer's business is named as the sender. Optional so the specs that build this by hand keep compiling.
+    @Optional() private readonly entities?: EntityService,
   ) {}
 
   onModuleInit(): void {
@@ -156,7 +159,8 @@ export class ConsignmentNoteService implements OnModuleInit {
       ...(claim ? { claim } : {}),
       established: { place: f.pickupLabel, at: f.createdAt },
       confirmations: {
-        sender: { by: sender.name, at: f.createdAt, how: 'Confirmed electronically at posting' },
+        // B2 — for a business, the person who posted it, for the business: its DID is everybody's in it.
+        sender: { by: f.postedByName ? `${f.postedByName}, for ${sender.name}` : sender.name, at: f.createdAt, how: 'Confirmed electronically at posting' },
         ...(f.pickedUpAt && carrier ? { carrier: { by: carrier.driverName ?? carrier.name, at: f.pickedUpAt, how: 'Confirmed electronically at taking over, after the load-safety check' } } : {}),
         ...(f.proofOfDelivery
           ? { consignee: { by: f.proofOfDelivery.receiverName, at: f.proofOfDelivery.at, how: f.proofOfDelivery.photoRef ? 'Received in person; name recorded by the driver at delivery, with a photo of the goods as delivered' : 'Received in person; name recorded by the driver at delivery', ...(f.proofOfDelivery.remarks ? { remarks: `Receiver’s remarks: ${f.proofOfDelivery.remarks}` } : {}) } }
@@ -238,6 +242,9 @@ export class ConsignmentNoteService implements OnModuleInit {
     }
     const did = f.postedByDid ?? f.shipperDid;
     if (did) {
+      // B2 — a customer's business that posted its own load is the sender, by its registered name.
+      const business = this.entities?.byDid(did);
+      if (business?.kind === 'business') return { name: business.name, ...(business.jurisdiction ? { country: countryName(business.jurisdiction) } : {}), did };
       const shop = this.agentOrNone(did);
       if (shop) return shop;
       return { name: 'Sender', did };

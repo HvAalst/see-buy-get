@@ -8,6 +8,7 @@ import { ConsoleFold } from '../ConsoleFold';
 import { ConsolePick } from '../ConsolePick';
 import { PaperFile, PaperFiles } from './PaperFile';
 import { PaperHelp } from './PaperHelp';
+import { QuotePanel } from './QuotePanel';
 import { ConsignmentNoteCard } from './ConsignmentNoteCard';
 import { publicPageUrl } from '../../../lib/sbg/config';
 import { ParticipantPicker } from './ParticipantPicker';
@@ -19,7 +20,6 @@ import { DOCUMENT_KINDS, DOCUMENT_LABEL, shortFingerprint, type CompanyDocument 
 import {
   EMPTY_FEE_FORM,
   EMPTY_IMPORT_FORM,
-  EMPTY_RECEIPT_FORM,
   EMPTY_ROAD_FORM,
   companyPapers,
   consignmentPapers,
@@ -27,10 +27,8 @@ import {
   feeTone,
   knownNotAsked,
   kindForLabel,
-  receiptBlocker,
   roadBlocker,
   type FeeQuoteForm,
-  type ReceiptForm,
   type RoadLegForm,
   CUSTOMS_HOLD_KINDS,
   holdDisputed,
@@ -110,7 +108,6 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
     });
   }, []);
   const [feeForm, setFeeForm] = useState<FeeQuoteForm>({ ...EMPTY_FEE_FORM });
-  const [receiptForm, setReceiptForm] = useState<ReceiptForm>({ ...EMPTY_RECEIPT_FORM });
   const [roadForm, setRoadForm] = useState<RoadLegForm>({ ...EMPTY_ROAD_FORM });
   const [holdForm, setHoldForm] = useState<{ kind: CustomsHoldKind; note: string }>({ kind: 'inspection_selected', note: '' });
   const [holdNote, setHoldNote] = useState<Record<string, string>>({});
@@ -684,13 +681,6 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
 
       {detail ? (
         <ConsoleDetail openKey={detail.importId} title={detail.code} onClose={() => setDetail(null)}>
-          {/* CL2b — said the moment the container is opened, never saved up for the moment somebody pays. */}
-          {detail.money.why ? (
-            <p class="cons__caveat">
-              <Icon name="info" size={16} />
-              <span>{detail.money.why}</span>
-            </p>
-          ) : null}
 
 
           {/* ---- the agent's side: publish what you need, prompted by what others were asked for ---- */}
@@ -927,19 +917,9 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
           >
             <p class="cons__lede">{t('tower.imports.feeHint')}</p>
 
+            {/* 2026-10-04 — a quotation, kept and never collected: the proforma, and open or paid as a party says so. */}
             {detail.fee ? (
-              <ul class="twr-checklist">
-                <li>
-                  <b>
-                    {detail.fee.amount.toLocaleString()} {detail.fee.currency}
-                  </b>
-                  {detail.fee.note ? <div class="chint">{detail.fee.note}</div> : null}
-                  <div class="chint">{t('tower.imports.feeBy', { who: detail.fee.quotedBy })}</div>
-                  {detail.fee.paidAt ? <div class="chint">{t('tower.imports.feePaid', { when: detail.fee.paidAt.slice(0, 10), reference: detail.fee.reference ?? '' })}</div> : null}
-                  {/* Owed, and not yet sent — the books say so and this screen must not imply otherwise. */}
-                  {detail.fee.paidAt && detail.agentName ? <div class="chint">{t('tower.imports.feeOwed', { name: detail.agentName })}</div> : null}
-                </li>
-              </ul>
+              <QuotePanel quote={detail.fee} api={client ? (client.api as never) : null} canChange={isCompany && detail.youAre !== 'onlooker'} onChanged={() => openOne(detail.importId, false)} />
             ) : null}
 
             {detail.youAre === 'agent' && detail.feeState !== 'paid' ? (
@@ -948,6 +928,14 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                   <label class="twr-knob cfield">
                     <span class="cfield__label">{t('tower.imports.f.amount')}</span>
                     <input class="cinput" type="number" min={1} value={feeForm.amount} onChange={(e) => setFeeForm({ ...feeForm, amount: (e.target as HTMLInputElement).value })} />
+                  </label>
+                  <label class="twr-knob cfield">
+                    <span class="cfield__label">{t('tower.imports.f.currency')}</span>
+                    <input class="cinput" maxLength={3} value={feeForm.currency} placeholder={detail.fee?.currency ?? ''} onChange={(e) => setFeeForm({ ...feeForm, currency: (e.target as HTMLInputElement).value })} />
+                  </label>
+                  <label class="twr-knob cfield">
+                    <span class="cfield__label">{t('tower.imports.f.quoteRef')}</span>
+                    <input class="cinput" value={feeForm.reference} onChange={(e) => setFeeForm({ ...feeForm, reference: (e.target as HTMLInputElement).value })} />
                   </label>
                   <label class="twr-knob cfield">
                     <span class="cfield__label">{t('tower.imports.f.feeNote')}</span>
@@ -963,7 +951,14 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                     onClick={() =>
                       run(
                         'fee',
-                        () => client!.api.quoteClearanceFee(detail.importId, { amount: Number(feeForm.amount), ...(feeForm.note.trim() ? { note: feeForm.note.trim() } : {}), ...(who ? { by: who } : {}) }),
+                        () =>
+                          client!.api.quoteClearanceFee(detail.importId, {
+                            amount: Number(feeForm.amount),
+                            ...(feeForm.currency.trim() ? { currency: feeForm.currency.trim().toUpperCase() } : {}),
+                            ...(feeForm.reference.trim() ? { reference: feeForm.reference.trim() } : {}),
+                            ...(feeForm.note.trim() ? { note: feeForm.note.trim() } : {}),
+                            ...(who ? { by: who } : {}),
+                          }),
                         t('tower.imports.quoted'),
                         () => setFeeForm({ ...EMPTY_FEE_FORM }),
                       )
@@ -988,45 +983,6 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
               </div>
             ) : null}
 
-            {/* Network staff only: money is created by an observed event with a reference, never by a claim. */}
-            {!isCompany && detail.feeState === 'accepted' ? (
-              <>
-                <p class="cons__lede">{t('tower.imports.receiptHint')}</p>
-                <div class="twr-knobs__row">
-                  <label class="twr-knob cfield">
-                    <span class="cfield__label">{t('tower.imports.f.reference')}</span>
-                    <input class="cinput" value={receiptForm.reference} onChange={(e) => setReceiptForm({ ...receiptForm, reference: (e.target as HTMLInputElement).value })} />
-                  </label>
-                  <label class="twr-knob cfield">
-                    <span class="cfield__label">{t('tower.imports.f.amount')}</span>
-                    <input class="cinput" type="number" min={1} value={receiptForm.amount} onChange={(e) => setReceiptForm({ ...receiptForm, amount: (e.target as HTMLInputElement).value })} />
-                  </label>
-                </div>
-                <div class="twr-panelend">
-                  {receiptBlocker(receiptForm) ? <span class="chint">{t(receiptBlocker(receiptForm)!)}</span> : null}
-                  <button
-                    type="button"
-                    class="cbtn cbtn--primary"
-                    disabled={Boolean(receiptBlocker(receiptForm)) || busy === 'receipt'}
-                    onClick={() =>
-                      run(
-                        'receipt',
-                        () =>
-                          client!.api.recordClearanceReceipt(detail.importId, {
-                            reference: receiptForm.reference.trim(),
-                            ...(receiptForm.amount.trim() ? { amount: Number(receiptForm.amount) } : {}),
-                            ...(who ? { by: who } : {}),
-                          }),
-                        t('tower.imports.received'),
-                        () => setReceiptForm({ ...EMPTY_RECEIPT_FORM }),
-                      )
-                    }
-                  >
-                    {t('tower.imports.recordReceipt')}
-                  </button>
-                </div>
-              </>
-            ) : null}
           </ConsoleFold>
 
           {/*

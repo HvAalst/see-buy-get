@@ -162,7 +162,7 @@ function JobRow({ j }: { j: DriverJobRow }) {
         <span class="row__t mono-t">{j.code}</span>
         <span class="row__s">{t('driver.earn.rowDesc', { description: j.description, dest: j.destLabel })}</span>
         <span class="row__meta">
-          {t('driver.earn.rowMeta', { status: statusWord(j.status, t), kg: j.weightKg, payment: j.paid ? t('driver.earn.paid') : t('driver.earn.owed') })}
+          {t('driver.earn.rowMeta', { status: statusWord(j.status, t), kg: j.weightKg, payment: j.paid ? t('driver.earn.paid') : j.direct ? t('driver.earn.direct') : t('driver.earn.owed') })}
           {when ? t('driver.earn.rowDate', { date: new Date(when).toLocaleDateString() }) : ''}
         </span>
         {/* FP8 — an upheld claim took part of this pay back. The agreed figure stays; the line says what left. */}
@@ -170,8 +170,8 @@ function JobRow({ j }: { j: DriverJobRow }) {
       </span>
       <span class="row__end">
         <b class="amt amt--in">{money(j.earning)}</b>
-        <Pill tone={j.paid ? 'ok' : 'warn'} dot>
-          {j.paid ? t('driver.earn.paid') : t('driver.earn.owed')}
+        <Pill tone={j.paid || j.direct ? 'ok' : 'warn'} dot>
+          {j.paid ? t('driver.earn.paid') : j.direct ? t('driver.earn.direct') : t('driver.earn.owed')}
         </Pill>
       </span>
     </div>

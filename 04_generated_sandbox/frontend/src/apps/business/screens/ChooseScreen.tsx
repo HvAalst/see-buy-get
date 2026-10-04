@@ -157,23 +157,23 @@ function NewBusinessForm({ state, actions, onCancel }: { state: BusinessState; a
 
       <label class="cfield">
         <span class="cfield__label">{t('business.new.name')}</span>
-        <input class="cinput" value={form.name} autocomplete="organization" onInput={(e) => setForm({ ...form, name: (e.target as HTMLInputElement).value })} />
+        <input class="cinput" value={form.name} autocomplete="organization" onInput={(e) => setForm((prev) => ({ ...prev, name: (e.target as HTMLInputElement).value }))} />
         <span class="chint">{t('business.new.nameHint')}</span>
         {gap('name')}
       </label>
 
-      <CountrySelect value={form.country} onChange={(country) => setForm({ ...form, country })} label={t('business.new.country')} options={countries} />
+      <CountrySelect value={form.country} onChange={(country) => setForm((prev) => ({ ...prev, country }))} label={t('business.new.country')} options={countries} />
       {gap('country')}
 
       <div class="biz-two">
         <label class="cfield">
           <span class="cfield__label">{t('business.new.registrationNo')}</span>
-          <input class="cinput" value={form.registrationNo} onInput={(e) => setForm({ ...form, registrationNo: (e.target as HTMLInputElement).value })} />
+          <input class="cinput" value={form.registrationNo} onInput={(e) => setForm((prev) => ({ ...prev, registrationNo: (e.target as HTMLInputElement).value }))} />
           {gap('registrationNo')}
         </label>
         <label class="cfield">
           <span class="cfield__label">{t('business.new.taxNo')}</span>
-          <input class="cinput" value={form.taxNo} onInput={(e) => setForm({ ...form, taxNo: (e.target as HTMLInputElement).value })} />
+          <input class="cinput" value={form.taxNo} onInput={(e) => setForm((prev) => ({ ...prev, taxNo: (e.target as HTMLInputElement).value }))} />
         </label>
       </div>
 
@@ -193,7 +193,7 @@ function NewBusinessForm({ state, actions, onCancel }: { state: BusinessState; a
 
       <label class="cfield">
         <span class="cfield__label">{t('business.new.yourName')}</span>
-        <input class="cinput" value={form.yourName} autocomplete="name" onInput={(e) => setForm({ ...form, yourName: (e.target as HTMLInputElement).value })} />
+        <input class="cinput" value={form.yourName} autocomplete="name" onInput={(e) => setForm((prev) => ({ ...prev, yourName: (e.target as HTMLInputElement).value }))} />
         <span class="chint">{t('business.new.yourNameHint')}</span>
         {gap('yourName')}
       </label>

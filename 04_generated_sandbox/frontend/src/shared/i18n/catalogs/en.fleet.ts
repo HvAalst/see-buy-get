@@ -491,6 +491,7 @@ export const enFleet = {
   'fleet.earn.clawbackLine': '{amount} taken back after a claim',
   'fleet.earn.booked': 'Booked',
   'fleet.earn.pending': 'Not yet',
+  'fleet.earn.direct': 'Paid by the shipper',
   'fleet.earn.filterTitle': 'Filter hauls',
   'fleet.earn.driverLabel': 'Driver',
   'fleet.earn.anyDriver': 'Any driver',

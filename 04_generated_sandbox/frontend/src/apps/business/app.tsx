@@ -16,6 +16,8 @@ import { ChooseScreen } from './screens/ChooseScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { PeopleScreen } from './screens/PeopleScreen';
 import { DetailsScreen } from './screens/DetailsScreen';
+import { LoadsScreen } from './screens/LoadsScreen';
+import { RunsScreen } from './screens/RunsScreen';
 import '../../shared/screens.css';
 import '../../shared/console.css';
 import '../tower/tower.css';
@@ -23,6 +25,8 @@ import './business.css';
 
 const SECTION: Record<Section, { label: MessageKey; icon: IconName }> = {
   home: { label: 'business.nav.home', icon: 'home' },
+  loads: { label: 'business.nav.loads', icon: 'truck' },
+  runs: { label: 'business.nav.runs', icon: 'route' },
   imports: { label: 'business.nav.imports', icon: 'box' },
   yard: { label: 'business.nav.yard', icon: 'grid' },
   people: { label: 'business.nav.people', icon: 'person' },
@@ -103,7 +107,11 @@ export function App() {
               <span>{state.note}</span>
             </p>
           ) : null}
-          {section === 'imports' ? (
+          {section === 'loads' ? (
+            <LoadsScreen business={business} actions={actions} client={client} />
+          ) : section === 'runs' ? (
+            <RunsScreen business={business} actions={actions} client={client} />
+          ) : section === 'imports' ? (
             <ImportsScreen state={{ who }} actions={towerActions as never} />
           ) : section === 'yard' ? (
             <DepotsScreen state={{ who }} actions={towerActions as never} />

@@ -130,6 +130,59 @@ describe('a customer’s business, over the wire', () => {
     await http().get('/v1/sbg/business/me').set(bearer(viewerBiz)).expect(403);
   });
 
+  it('posts its own load, settled between the parties, and keeps an agent’s fee as a quotation it confirms itself', async () => {
+    const owner = await aPerson();
+    const made = await http()
+      .post('/v1/sbg/business')
+      .set(bearer(owner.token))
+      .send({ name: `Sidama Coffee ${tag}`, country: 'ET', registrationNo: `REG4-${tag}`, activities: ['shipper', 'importer'], yourName: 'Tigist Owner' })
+      .expect(201);
+    const biz = made.body.token.access_token;
+    const entityId = made.body.business.entityId;
+
+    // A load of its own: posted as the business, by a named person, and settled with the carrier directly.
+    const posted = await http()
+      .post('/v1/sbg/dispatch/freight')
+      .set(bearer(biz))
+      .send({ description: 'Green coffee, 300 bags', pickupLocation: { lat: 6.76, lng: 38.42 }, pickupLabel: 'Hawassa warehouse', destLabel: 'Modjo dry port', weightKg: 18000, packaging: 'bagged', commitMode: 'negotiate', pickupCountry: 'ET', destCountry: 'ET' })
+      .expect(201);
+    expect(posted.body).toMatchObject({ settlement: 'between_parties', postedByName: 'Tigist Owner' });
+    const mine = await http().get('/v1/sbg/dispatch/posted').set(bearer(biz)).expect(200);
+    expect(JSON.stringify(mine.body)).toContain(posted.body.code);
+    const note = await http().get(`/v1/sbg/dispatch/freight/${posted.body.freightId}/consignment-note`).set(bearer(biz)).expect(200);
+    expect(note.body.sender.name).toBe(`Sidama Coffee ${tag}`);
+    // Not priced until a carrier takes it — and never "paid by the sender through SeeBuyGet".
+    expect(note.body.carriage.paidBy).not.toBe('sender');
+    // Nobody has quoted before a carrier has the load.
+    await http().post(`/v1/sbg/dispatch/freight/${posted.body.freightId}/quote`).set(bearer(biz)).send({}).expect(400);
+
+    // An import, a clearing agent, and the agent's fee as a quotation the two settle between them.
+    const agentOwner = await aPerson();
+    const agentMade = await http()
+      .post('/v1/sbg/business')
+      .set(bearer(agentOwner.token))
+      .send({ name: `Modjo Clearing ${tag}`, country: 'ET', registrationNo: `REG5-${tag}`, activities: ['clearing_agent'], yourName: 'Dawit Agent' })
+      .expect(201);
+    const agent = agentMade.body.token.access_token;
+    // Another business is a stranger to this load: it neither reads nor records the price paid for it.
+    await http().get(`/v1/sbg/dispatch/freight/${posted.body.freightId}/quote`).set(bearer(agent)).expect(404);
+    await http().post(`/v1/sbg/dispatch/freight/${posted.body.freightId}/quote`).set(bearer(agent)).send({ amount: 1 }).expect(404);
+    const imp = await http().post('/v1/sbg/imports').set(bearer(biz)).send({ goodsDescription: 'Roaster', originCountry: 'NL', destCountry: 'ET', destPort: 'Modjo dry port' }).expect(201);
+    await http().post(`/v1/sbg/imports/${imp.body.importId}/appoint`).set(bearer(biz)).send({ agentEntityId: agentMade.body.business.entityId }).expect(201);
+    const quoted = await http().post(`/v1/sbg/imports/${imp.body.importId}/fee`).set(bearer(agent)).send({ amount: 4500, reference: 'PF-114' }).expect(201);
+    expect(quoted.body.fee).toMatchObject({ amount: 4500, currency: 'ETB', reference: 'PF-114', status: 'open' });
+    const quoteId = quoted.body.fee.quoteId;
+    await http().post(`/v1/sbg/quotes/${quoteId}/proforma`).set(bearer(agent)).send({ dataUrl: pdf(`${tag}-pf`), fileName: 'PF-114.pdf' }).expect(201);
+    await http().get(`/v1/sbg/quotes/${quoteId}/proforma`).set(bearer(biz)).expect(200);
+    await http().get(`/v1/sbg/quotes/${quoteId}/proforma`).set(bearer(owner.token)).expect(404);
+    await http().post(`/v1/sbg/imports/${imp.body.importId}/fee/accept`).set(bearer(biz)).send({}).expect(201);
+    const paid = await http().post(`/v1/sbg/imports/${imp.body.importId}/fee/status`).set(bearer(biz)).send({ status: 'paid', reference: 'CBE-778' }).expect(201);
+    expect(paid.body).toMatchObject({ feeState: 'paid', fee: { status: 'paid', paidBy: 'Tigist Owner', paidReference: 'CBE-778' } });
+    // The old way, where staff recorded money arriving on our books, is gone.
+    await http().post(`/v1/sbg/imports/${imp.body.importId}/fee/receipt`).set(bearer(setupKey)).send({ reference: 'X' }).expect(404);
+    expect(entityId).toBeTruthy();
+  });
+
   it('is checked by two members of staff, and only then given a public page and a place in the agent finder', async () => {
     const owner = await aPerson();
     const name = `Djibouti Clearing ${tag}`;

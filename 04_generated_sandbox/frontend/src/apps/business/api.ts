@@ -1,4 +1,5 @@
-import { createOperatorApi, createSeededClient, makeConfig, publicRequest, type OperatorApi, type Result, type SbgConfig, type SeededAppClient } from '../../lib/sbg';
+import { createAgentApi, createOperatorApi, createSeededClient, makeConfig, publicRequest, type AgentApi, type OperatorApi, type Result, type SbgConfig, type SeededAppClient } from '../../lib/sbg';
+import type { QuoteView } from '../../shared/quote';
 
 const APP_VERSION = '1.0.0';
 
@@ -133,9 +134,73 @@ export function createPersonClient(): PersonClient {
  * `api` is the same client the console's import and yard screens already speak, which is what lets the Business app
  * host those screens as they stand: the server decides what a business sign-in may reach, never the screen.
  */
+/** B2 — a load the business posted, as its list reads it. */
+export interface PostedLoad {
+  freightId: string;
+  code: string;
+  description: string;
+  destLabel: string;
+  weightKg: number;
+  status: string;
+  commitMode: 'instant' | 'negotiate';
+  scheduledPickupAt?: string;
+  createdAt: string;
+  openProposals: number;
+  agreedPrice?: number;
+  pickedUpAt?: string;
+  deliveredAt?: string;
+  receiverName?: string;
+  cancelledAt?: string;
+  canCancel: boolean;
+  trackingKey?: string;
+  trackingUrl?: string;
+  carrier?: { driverName?: string; plate?: string; vehicleClass?: string };
+  rating?: { stars: number; issues: string[]; at: string };
+  canRate: boolean;
+}
+
+export interface LoadProposal {
+  proposalId: string;
+  price: number;
+  note?: string;
+  status: 'open' | 'accepted' | 'declined' | 'withdrawn' | 'superseded';
+  createdAt: string;
+}
+
+/** What a business sends to post a load. The two ends are saved places; the server takes their name and point. */
+export interface NewLoad {
+  description: string;
+  pickupLabel: string;
+  pickupLocation: { lat: number; lng: number };
+  destLabel: string;
+  destLocation: { lat: number; lng: number };
+  pickupCountry?: string;
+  destCountry?: string;
+  weightKg: number;
+  packaging?: string;
+  natureCode?: string;
+  fragile?: boolean;
+  commitMode: 'instant' | 'negotiate';
+  instructions?: string;
+  contactName?: string;
+  contactPhone?: string;
+  deliveryWindow?: string;
+  scheduledPickupAt?: string;
+  dimensionsCm?: { l: number; w: number; h: number };
+}
+
 export interface BusinessClient {
   api: OperatorApi;
+  /** The shipper's calls the Shop app already speaks — posted loads, proposals, runs, bookings, notes, claims. */
+  shipping: AgentApi;
   client: SeededAppClient;
+  postLoad(load: NewLoad): Promise<Result<PostedLoad & { settlement?: string }>>;
+  freightQuote(freightId: string): Promise<Result<{ quote: QuoteView | null }>>;
+  recordFreightQuote(freightId: string, body: { amount?: number; currency?: string; reference?: string; note?: string }): Promise<Result<QuoteView>>;
+  /** The run's consignment note, as the page the shipper prints. */
+  bookingNote(departureId: string, bookingId: string): Promise<Result<string>>;
+  bookingQuote(departureId: string, bookingId: string): Promise<Result<{ quote: QuoteView | null }>>;
+  recordBookingQuote(departureId: string, bookingId: string, body: { amount?: number; currency?: string; reference?: string; note?: string }): Promise<Result<QuoteView>>;
   me(): Promise<Result<BusinessView>>;
   update(patch: { name?: string; registrationNo?: string; taxNo?: string | null; activities?: BusinessActivity[] }): Promise<Result<BusinessView>>;
   members(): Promise<Result<{ items: MemberRow[] }>>;
@@ -150,7 +215,19 @@ export function createBusinessClient(): BusinessClient {
   const call = <T>(fn: Parameters<typeof client.sbg.request>[0]) => client.sbg.request(fn) as unknown as Promise<Result<T>>;
   return {
     api: createOperatorApi(client.sbg),
+    shipping: createAgentApi(client.sbg),
     client,
+    postLoad: (load) => call((c) => c.POST('/v1/sbg/dispatch/freight' as never, { body: load } as never) as never),
+    freightQuote: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/quote` as never, {} as never) as never),
+    recordFreightQuote: (freightId, body) => call((c) => c.POST(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/quote` as never, { body } as never) as never),
+    bookingNote: (departureId, bookingId) =>
+      client.sbg.request(
+        (c) => c.GET(`/v1/sbg/departures/${encodeURIComponent(departureId)}/bookings/${encodeURIComponent(bookingId)}/consignment-note.html` as never, { parseAs: 'text' } as never) as never,
+      ) as unknown as Promise<Result<string>>,
+    bookingQuote: (departureId, bookingId) =>
+      call((c) => c.GET(`/v1/sbg/departures/${encodeURIComponent(departureId)}/bookings/${encodeURIComponent(bookingId)}/quote` as never, {} as never) as never),
+    recordBookingQuote: (departureId, bookingId, body) =>
+      call((c) => c.POST(`/v1/sbg/departures/${encodeURIComponent(departureId)}/bookings/${encodeURIComponent(bookingId)}/quote` as never, { body } as never) as never),
     me: () => call((c) => c.GET('/v1/sbg/business/me' as never, {} as never) as never),
     update: (patch) => call((c) => c.PATCH('/v1/sbg/business/me' as never, { body: patch } as never) as never),
     members: () => call((c) => c.GET('/v1/sbg/business/me/members' as never, {} as never) as never),

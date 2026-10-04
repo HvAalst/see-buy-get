@@ -3,7 +3,6 @@ import {
   EMPTY_FEE_FORM,
   kindForLabel,
   EMPTY_IMPORT_FORM,
-  EMPTY_RECEIPT_FORM,
   EMPTY_ROAD_FORM,
   companyPapers,
   consignmentPapers,
@@ -21,7 +20,6 @@ import {
   paperTone,
   publishBlocker,
   readinessOf,
-  receiptBlocker,
   registerBlocker,
   roadBlocker,
   slugOf,
@@ -138,14 +136,14 @@ describe('a container, its papers, and the agent who clears them', () => {
 
   it('refuses a fee, a receipt and a road leg that the server would refuse anyway', () => {
     expect(feeQuoteBlocker(EMPTY_FEE_FORM)).toBe('tower.imports.needAmount');
-    expect(feeQuoteBlocker({ amount: '0', note: '' })).toBe('tower.imports.needAmount');
-    expect(feeQuoteBlocker({ amount: 'lots', note: '' })).toBe('tower.imports.needAmount');
-    expect(feeQuoteBlocker({ amount: '4500', note: 'Port dues' })).toBeNull();
+    expect(feeQuoteBlocker({ ...EMPTY_FEE_FORM, amount: '0' })).toBe('tower.imports.needAmount');
+    expect(feeQuoteBlocker({ ...EMPTY_FEE_FORM, amount: 'lots' })).toBe('tower.imports.needAmount');
+    expect(feeQuoteBlocker({ ...EMPTY_FEE_FORM, amount: '4500', note: 'Port dues' })).toBeNull();
+    // A currency is optional, and three letters when given.
+    expect(feeQuoteBlocker({ ...EMPTY_FEE_FORM, amount: '4500', currency: 'birr' })).toBe('tower.imports.needCurrency');
+    expect(feeQuoteBlocker({ ...EMPTY_FEE_FORM, amount: '4500', currency: 'usd' })).toBeNull();
 
     // The reference is the whole point of a receipt: without it nothing can be checked afterwards.
-    expect(receiptBlocker(EMPTY_RECEIPT_FORM)).toBe('tower.imports.needReference');
-    expect(receiptBlocker({ reference: 'MPESA-1', amount: '' })).toBeNull();
-    expect(receiptBlocker({ reference: 'MPESA-1', amount: '-2' })).toBe('tower.imports.needAmount');
 
     /*
      * BOTH ENDS ARE PLACES NOW, chosen from the company's own list rather than typed.

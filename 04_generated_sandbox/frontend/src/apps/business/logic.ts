@@ -1,7 +1,7 @@
 import type { BusinessActivity, BusinessView, CheckState, Membership, MemberRole, NewBusiness } from './api';
 
 /** Where somebody is in the Business app. */
-export type Section = 'home' | 'imports' | 'yard' | 'people' | 'details';
+export type Section = 'home' | 'loads' | 'runs' | 'imports' | 'yard' | 'people' | 'details';
 
 /**
  * WHICH SECTIONS A BUSINESS IS SHOWN — from what it says it does, never from what it is allowed.
@@ -15,6 +15,8 @@ export function sectionsFor(activities: BusinessActivity[]): Section[] {
   const has = (a: BusinessActivity) => activities.includes(a);
   return [
     'home',
+    // B2 — whoever sends goods, or arranges sending them for clients: post a load, or take space on a carrier's run.
+    ...(has('shipper') || has('expeditor') ? (['loads', 'runs'] as Section[]) : []),
     ...(has('importer') || has('clearing_agent') || has('expeditor') ? (['imports'] as Section[]) : []),
     ...(has('depot') ? (['yard'] as Section[]) : []),
     'people',
@@ -88,6 +90,36 @@ export function newBusinessGaps(form: NewBusiness): Array<keyof NewBusiness> {
   if (!form.activities.length) gaps.push('activities');
   if (!form.yourName.trim()) gaps.push('yourName');
   return gaps;
+}
+
+/** What the load form still needs, as field names — the screen says each in words. */
+export interface LoadForm {
+  description: string;
+  fromSiteId: string;
+  toSiteId: string;
+  weightKg: string;
+}
+export function loadGaps(form: LoadForm): Array<keyof LoadForm> {
+  const gaps: Array<keyof LoadForm> = [];
+  if (!form.description.trim()) gaps.push('description');
+  if (!form.fromSiteId) gaps.push('fromSiteId');
+  if (!form.toSiteId) gaps.push('toSiteId');
+  const kg = Number(form.weightKg);
+  if (!(Number.isFinite(kg) && kg >= 1)) gaps.push('weightKg');
+  return gaps;
+}
+
+/**
+ * WHERE A LOAD HAS GOT, as one word for its list. `posted` waiting for a carrier · `offers` carriers have named
+ * prices · `taken` a carrier has it · `moving` picked up · `delivered` · `cancelled`.
+ */
+export type LoadStage = 'posted' | 'offers' | 'taken' | 'moving' | 'delivered' | 'cancelled';
+export function loadStage(l: { status: string; openProposals: number; pickedUpAt?: string; deliveredAt?: string; cancelledAt?: string; carrier?: unknown }): LoadStage {
+  if (l.cancelledAt || l.status === 'cancelled') return 'cancelled';
+  if (l.deliveredAt || l.status === 'delivered') return 'delivered';
+  if (l.pickedUpAt || l.status === 'in_transit') return 'moving';
+  if (l.carrier || l.status === 'claimed') return 'taken';
+  return l.openProposals > 0 ? 'offers' : 'posted';
 }
 
 /** At least nine digits, the server's own test of a plausible number. */

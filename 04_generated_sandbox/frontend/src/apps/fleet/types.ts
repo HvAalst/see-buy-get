@@ -186,6 +186,8 @@ export interface FleetJobRow {
   earning?: number;
   /** BOOKED by the network at delivery — owed to the fleet, not yet money that moved. */
   paid: boolean;
+  /** B2 — the shipper pays the carrier for this haul directly; nothing is owed by SeeBuyGet. */
+  direct?: boolean;
   /** FP8 — what an upheld claim took back from this haul's pay. */
   clawback?: number;
   claimedAt?: string;

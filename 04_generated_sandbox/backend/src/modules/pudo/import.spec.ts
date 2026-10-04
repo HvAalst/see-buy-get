@@ -353,79 +353,77 @@ describe('an import consignment, its papers, and the agent who clears them', () 
     });
   });
 
-  describe('paying the agent', () => {
+  /**
+   * The user, 2026-10-04: "we don't manage the clearing agent's fee, but we do handle quotations for anyone. Like
+   * proforma invoices are common so we have a field for it, but the user needs to confirm open/paid."
+   */
+  describe('the agent’s fee, as a quotation the parties settle', () => {
     const appointed = () => {
       const one = register();
       imports.appoint(one.importId, agentId, importerId, 'Hans');
       return one;
     };
 
-    it('quotes, agrees, receives — and the network earns nothing from it', () => {
+    it('quotes, agrees and is confirmed paid by a party — and nothing lands on anybody’s books', () => {
       const one = appointed();
-      const quoted = imports.quoteFee(one.importId, agentId, 4500, 'Port dues and our attendance', 'Selam');
+      const quoted = imports.quoteFee(one.importId, agentId, 4500, 'Port dues and our attendance', 'Selam', Date.now(), { reference: 'PF-2026-114' });
       expect(quoted.feeState).toBe('quoted');
-      expect(quoted.fee).toMatchObject({ amount: 4500, quotedBy: 'Selam', note: 'Port dues and our attendance' });
+      expect(quoted.fee).toMatchObject({ amount: 4500, currency: 'ETB', note: 'Port dues and our attendance', reference: 'PF-2026-114', status: 'open' });
+      expect(quoted.fee?.issuer.entityId).toBe(agentId);
+      expect(quoted.fee?.payer.entityId).toBe(importerId);
       expect(imports.acceptFee(one.importId, importerId, 'Hans').feeState).toBe('accepted');
 
-      const paid = imports.recordFeeReceipt(one.importId, 'MPESA-XYZ-1', 'Amina');
+      const paid = imports.setFeeStatus(one.importId, importerId, 'paid', 'Hans', 'CBE-TXN-778');
       expect(paid.feeState).toBe('paid');
-      expect(paid.fee).toMatchObject({ reference: 'MPESA-XYZ-1', recordedBy: 'Amina' });
+      expect(paid.fee).toMatchObject({ status: 'paid', paidBy: 'Hans', paidReference: 'CBE-TXN-778' });
 
-      // Cash in, and the same amount owed onward to the AGENT — and no third line anywhere. "The network
-      // earns nothing from an appointment" is a condition of this epic, so it is asserted, not assumed.
+      // The whole point of the decision: no sister received it, holds it or owes it onward.
       const sister = entities.requireForJurisdiction('ET');
-      const agentDid = entities.get(agentId).did;
-      const entry = books.journal({ entityId: sister.entityId, ref: one.code })[0];
-      expect(entry.lines).toHaveLength(2);
-      // A stored line carries an accountId rather than a code, so the claim is made where it is legible:
-      // nowhere in this sister's book did receiving somebody else's fee put anything into revenue.
-      expect(books.trialBalance(sister.entityId).some((a) => String(a.code).startsWith('revenue') && a.balance !== 0)).toBe(false);
-      expect(books.balance(sister.entityId, ACCOUNT_CODES.PAYABLE_PROVIDER, undefined, agentDid)).toBe(-4500);
-      expect(books.balances(sister.entityId).balanced).toBe(true);
+      expect(books.journal({ entityId: sister.entityId, ref: one.code })).toEqual([]);
+      expect(books.balance(sister.entityId, ACCOUNT_CODES.PAYABLE_PROVIDER, undefined, entities.get(agentId).did)).toBe(0);
     });
 
-    it('keeps each side to its own act, and will not receive money nobody agreed to', () => {
+    it('keeps each side to its own act', () => {
       const one = appointed();
       expect(() => imports.quoteFee(one.importId, importerId, 100, undefined, 'Hans')).toThrow(/Only the agent appointed/);
-      expect(() => imports.recordFeeReceipt(one.importId, 'REF', 'Amina')).toThrow(/No fee has been quoted/);
-
+      expect(() => imports.setFeeStatus(one.importId, importerId, 'paid', 'Hans')).toThrow(/No fee has been quoted/);
       imports.quoteFee(one.importId, agentId, 100, undefined, 'Selam');
       expect(() => imports.acceptFee(one.importId, agentId, 'Selam')).toThrow(/the importer’s/);
-      // Agreed by nobody yet: receiving money against it would be recording a debt the payer never accepted.
-      expect(() => imports.recordFeeReceipt(one.importId, 'REF', 'Amina')).toThrow(/not been agreed/);
-
-      imports.acceptFee(one.importId, importerId, 'Hans');
-      // Money is never created on somebody saying so — the reference is the observed external event.
-      expect(() => imports.recordFeeReceipt(one.importId, '  ', 'Amina')).toThrow(/needs the reference/);
-      imports.recordFeeReceipt(one.importId, 'REF-1', 'Amina');
-      expect(() => imports.recordFeeReceipt(one.importId, 'REF-2', 'Amina')).toThrow(/already received/);
-      expect(() => imports.quoteFee(one.importId, agentId, 200, undefined, 'Selam')).toThrow(/already been paid/);
+      // A stranger to the container says nothing about whether it is paid.
+      expect(() => imports.setFeeStatus(one.importId, rivalId, 'paid', 'Dawit')).toThrow(/Only the importer or the appointed agent/);
     });
 
-    it('drops an earlier agreement when the agent re-quotes, so nobody is held to a price they never saw', () => {
+    it('lets either party confirm it paid or set it back to open, and keeps every turn with a name on it', () => {
       const one = appointed();
       imports.quoteFee(one.importId, agentId, 100, undefined, 'Selam');
+      imports.setFeeStatus(one.importId, agentId, 'paid', 'Selam', 'received in cash');
+      expect(() => imports.setFeeStatus(one.importId, importerId, 'paid', 'Hans')).toThrow(/Already confirmed paid by Selam/);
+      // Paid figures do not move until somebody says it is open again.
+      expect(() => imports.quoteFee(one.importId, agentId, 200, undefined, 'Selam')).toThrow(/set it back to open/);
+      const reopened = imports.setFeeStatus(one.importId, importerId, 'open', 'Hans');
+      expect(reopened.fee?.status).toBe('open');
+      expect(reopened.fee?.paidBy).toBeUndefined();
+      expect(reopened.fee?.history.map((h) => `${h.what}:${h.by}`)).toEqual(['quoted:Selam', 'paid:Selam', 'open:Hans']);
+    });
+
+    it('drops an earlier agreement when the agent re-quotes, and keeps when it was FIRST quoted for their record', () => {
+      const one = appointed();
+      const first = imports.quoteFee(one.importId, agentId, 100, undefined, 'Selam', Date.parse('2026-10-01T08:00:00Z'));
       imports.acceptFee(one.importId, importerId, 'Hans');
-      const requoted = imports.quoteFee(one.importId, agentId, 250, undefined, 'Selam');
+      const requoted = imports.quoteFee(one.importId, agentId, 250, undefined, 'Selam', Date.parse('2026-10-02T08:00:00Z'));
       expect(requoted.feeState).toBe('quoted');
       expect(requoted.fee).toMatchObject({ amount: 250 });
-      // toMatchObject with an undefined value asks for the key to EXIST holding undefined; the agreement is
-      // genuinely gone, so it is asserted as absence.
-      expect(requoted.fee?.acceptedAt).toBeUndefined();
+      expect(requoted.fee?.agreedAt).toBeUndefined();
+      expect(requoted.fee?.quoteId).toBe(first.fee?.quoteId);
+      expect(requoted.fee?.history.map((h) => h.what)).toEqual(['quoted', 'agreed', 'requoted']);
     });
 
-    it('says at the START that we cannot be the one who bills, and refuses the receipt in the country’s own words', () => {
-      // Where we only match, we cannot charge customers — the rule this slice was told to respect.
+    it('quotes even where we hold no company: what two companies agree between them is theirs to agree', () => {
       presence.set({ jurisdiction: 'ET', level: 'matched' } as never);
       const one = appointed();
-      const view = imports.detail(one.importId, importerId);
-      expect(view.money.canBill).toBe(false);
-      expect(view.money.why).toMatch(/settled directly between you and them/);
-
-      // Quoting and agreeing still work: what two companies agree between them is theirs to agree.
-      imports.quoteFee(one.importId, agentId, 100, undefined, 'Selam');
-      imports.acceptFee(one.importId, importerId, 'Hans');
-      expect(() => imports.recordFeeReceipt(one.importId, 'REF-1', 'Amina')).toThrow(/cannot charge customers/);
+      imports.quoteFee(one.importId, agentId, 100, undefined, 'Selam', Date.now(), { currency: 'usd' });
+      expect(imports.acceptFee(one.importId, importerId, 'Hans').fee?.currency).toBe('USD');
+      expect(imports.setFeeStatus(one.importId, importerId, 'paid', 'Hans').feeState).toBe('paid');
     });
   });
 

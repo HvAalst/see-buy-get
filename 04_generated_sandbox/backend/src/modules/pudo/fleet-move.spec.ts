@@ -10,7 +10,7 @@ import { ToteService } from './tote.service';
 import { VehicleService } from './vehicle.service';
 import { DriverService } from './driver.service';
 import { FleetService } from './fleet.service';
-import { DispatchService } from './dispatch.service';
+import { DispatchService, driverJobRowOf, driverJobsSummaryOf } from './dispatch.service';
 import { RouteConstraintService } from './route-constraint.service';
 import { WalletGateService } from './wallet-gate.service';
 import { CargoService } from './cargo.service';
@@ -655,6 +655,48 @@ describe('a driver changing fleet', () => {
       expect(notifications.inboxFor(d.driver.did)[0].body).toContain('verify your phone by code');
       expect(notifications.inboxFor(person.personDid)[0]).toMatchObject({ kind: 'security' });
       expect(notifications.inboxFor(kilima.did)).toHaveLength(0);
+    });
+  });
+
+  /**
+   * B2 — A LOAD A CUSTOMER'S BUSINESS POSTED IS SETTLED BETWEEN THE PARTIES.
+   *
+   * The user, 2026-10-04: "we don't handle their payments at all." The network's older rule owes a carrier we contract
+   * with their earning on delivery whoever the shipper was; for a business's load that would be a second debt for the
+   * same work, owed by a company that never held the money.
+   */
+  describe('a business’s own load', () => {
+    it('owes the carrier nothing on our books, and their register says the shipper pays them', () => {
+      const kilima = aFleet('Kilima Freight');
+      const d = aDriver(kilima.did);
+      const business = entities.createBusiness({ name: `Abebe Import ${++seq}`, jurisdiction: 'KE', profile: { activities: ['shipper'], registrationNo: `R-${seq}`, createdBy: 'Abebe', createdByPersonDid: 'did:glos:abebe' } });
+      const at = { lat: -1.2, lng: 36.8 };
+      const before = owedTo(kilima.did);
+      const f = dispatch.registerFreight({ description: 'Coffee, 40 bags', pickupLocation: at, pickupLabel: 'Warehouse', destLabel: 'Port', destLocation: at, weightKg: 200, packaging: 'palletised', postedByDid: business.did, postedByName: 'Abebe Kebede' });
+      expect(f.settlement).toBe('between_parties');
+      expect(f.postedByName).toBe('Abebe Kebede');
+      fleet.couple(d.driver.did, d.truck.vehicleId);
+      dispatch.assign(f.freightId, d.driver.did, { managerDid: kilima.did });
+      dispatch.pickupFreight(f.freightId, d.driver.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_test' });
+      dispatch.deliverFreight(f.freightId, d.driver.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' });
+      fleet.uncouple(d.driver.did);
+
+      const done = dispatch.listFreight().find((x) => x.freightId === f.freightId)!;
+      expect(done.lockedPrice).toBeGreaterThan(0);
+      expect(owedTo(kilima.did)).toBe(before);
+      const row = driverJobRowOf(done);
+      expect(row).toMatchObject({ paid: false, direct: true });
+      const summary = driverJobsSummaryOf([done]);
+      expect(summary).toMatchObject({ unpaid: 0, direct: done.lockedPrice });
+    });
+
+    it('still owes the carrier for a load somebody else posted — the older rule is untouched', () => {
+      const kilima = aFleet('Kilima Older');
+      const d = aDriver(kilima.did);
+      const before = owedTo(kilima.did);
+      const { freight } = aDeliveredHaul(d.driver.did, d.truck.vehicleId, kilima.did);
+      expect(freight.settlement).toBeUndefined();
+      expect(owedTo(kilima.did)).toBeGreaterThan(before);
     });
   });
 });

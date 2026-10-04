@@ -377,6 +377,54 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "business-loads",
+    apps: [
+      "business"
+    ],
+    title: "Posting a load as a business",
+    summary: "Post a load for carriers on the open board, agree a price, and follow it to the door. You pay the carrier yourself.",
+    steps: [
+      "Loads, then Post a load. Choose where it is collected and where it goes from your saved places — Save a new place adds one.",
+      "Say what it is, its weight, how it is packed and what kind of goods. Carriers read exactly this, and it goes on the consignment note.",
+      "Choose how the price is set: carriers name their price and you accept one, or the first carrier at the board price takes it.",
+      "Open the load to see the prices offered, who is carrying it, the tracking link to share, and the consignment note."
+    ],
+    notes: [
+      "SeeBuyGet does not take, hold or send the money for your loads. You pay the carrier directly, or through your own payment system."
+    ]
+  },
+  {
+    id: "business-runs",
+    apps: [
+      "business"
+    ],
+    title: "Booking space on a carrier’s run",
+    summary: "Trucks that are leaving anyway, with room for your goods. The price is the carrier’s own, and you pay them directly.",
+    steps: [
+      "Space on runs lists the runs with room: where they go, when they leave, the carrier’s rate, and how they want to be paid.",
+      "Open one, say what you are sending and its weight, and ask what it would cost. Book it for that price.",
+      "Your bookings are listed above the runs. Open one for its consignment note, or to give the space back."
+    ]
+  },
+  {
+    id: "quotations",
+    apps: [
+      "business",
+      "console"
+    ],
+    title: "Quotations, proforma invoices, and saying it is paid",
+    summary: "Wherever a price lives — a clearing agent’s fee, a carrier’s price — SeeBuyGet keeps the quotation, the proforma invoice and whether it is paid, in one place. It never handles the money.",
+    steps: [
+      "A clearing agent quotes their fee on the import, with their own quotation number. The importer agrees it.",
+      "For a load or a booking, press Keep track of paying the carrier: the agreed price is filled in, and you can change it to what the carrier invoiced.",
+      "Either side can attach the proforma invoice. It is kept as it was handed over.",
+      "When it is paid, press Confirm it is paid and add the payment’s reference if you have one. Set back to open undoes it."
+    ],
+    notes: [
+      "Every change is kept with the name of whoever made it, so “who said this was paid” can always be answered."
+    ]
+  },
+  {
     id: "message-shop",
     apps: [
       "send",

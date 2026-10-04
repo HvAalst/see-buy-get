@@ -361,6 +361,8 @@ export class DepartureBooking {
    * is on their truck and their customer has no account here to name. Who it is actually for is `customer`.
    */
   shipperDid: string;
+  /** B2 — which person in a business booked it: the business's DID is shared by everybody in it. */
+  @ApiPropertyOptional() bookedByName?: string;
   /**
    * THE FLEET'S OWN CUSTOMER, in whatever name the fleet files them under. Only on `own`, and required
    * there: a load with no customer against it is not a booking, it is a hole in the capacity that nobody
