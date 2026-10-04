@@ -134,6 +134,26 @@ export function createPersonClient(): PersonClient {
  * `api` is the same client the console's import and yard screens already speak, which is what lets the Business app
  * host those screens as they stand: the server decides what a business sign-in may reach, never the screen.
  */
+/** B4 — a client in an expeditor's book, and who a load or booking was sent for. */
+export interface Client {
+  clientId: string;
+  name: string;
+  country?: string;
+  address?: string;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  createdBy: string;
+  createdAt: string;
+  archivedAt?: string;
+}
+export interface ClientRef {
+  clientId: string;
+  name: string;
+  country?: string;
+  address?: string;
+}
+
 /** B2 — a load the business posted, as its list reads it. */
 export interface PostedLoad {
   freightId: string;
@@ -157,6 +177,8 @@ export interface PostedLoad {
   carrier?: { driverName?: string; plate?: string; vehicleClass?: string };
   rating?: { stars: number; issues: string[]; at: string };
   canRate: boolean;
+  /** B4 — the client it was sent for, as their agent. */
+  onBehalfOf?: ClientRef;
 }
 
 export interface LoadProposal {
@@ -187,6 +209,8 @@ export interface NewLoad {
   deliveryWindow?: string;
   scheduledPickupAt?: string;
   dimensionsCm?: { l: number; w: number; h: number };
+  /** B4 — sent for one of the business's own clients, as their agent. */
+  forClientId?: string;
 }
 
 export interface BusinessClient {
@@ -208,6 +232,9 @@ export interface BusinessClient {
   setRole(memberId: string, role: MemberRole): Promise<Result<MemberRow>>;
   remove(memberId: string): Promise<Result<MemberRow>>;
   askForCheck(): Promise<Result<BusinessView>>;
+  clients(archived?: boolean): Promise<Result<{ items: Client[] }>>;
+  addClient(input: Omit<Client, 'clientId' | 'createdBy' | 'createdAt' | 'archivedAt'>): Promise<Result<Client>>;
+  archiveClient(clientId: string, archived: boolean): Promise<Result<Client>>;
 }
 
 export function createBusinessClient(): BusinessClient {
@@ -235,6 +262,9 @@ export function createBusinessClient(): BusinessClient {
     setRole: (memberId, role) => call((c) => c.POST(`/v1/sbg/business/me/members/${encodeURIComponent(memberId)}/role` as never, { body: { role } } as never) as never),
     remove: (memberId) => call((c) => c.DELETE(`/v1/sbg/business/me/members/${encodeURIComponent(memberId)}` as never, {} as never) as never),
     askForCheck: () => call((c) => c.POST('/v1/sbg/business/me/check' as never, {} as never) as never),
+    clients: (archived) => call((c) => c.GET('/v1/sbg/business/me/clients' as never, { params: { query: archived ? { archived: 'true' } : {} } } as never) as never),
+    addClient: (input) => call((c) => c.POST('/v1/sbg/business/me/clients' as never, { body: input } as never) as never),
+    archiveClient: (clientId, archived) => call((c) => c.POST(`/v1/sbg/business/me/clients/${encodeURIComponent(clientId)}/archive` as never, { body: { archived } } as never) as never),
   };
 }
 

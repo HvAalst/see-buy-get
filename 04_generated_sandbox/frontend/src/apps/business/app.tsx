@@ -18,6 +18,7 @@ import { PeopleScreen } from './screens/PeopleScreen';
 import { DetailsScreen } from './screens/DetailsScreen';
 import { LoadsScreen } from './screens/LoadsScreen';
 import { RunsScreen } from './screens/RunsScreen';
+import { ClientsScreen } from './screens/ClientsScreen';
 import '../../shared/screens.css';
 import '../../shared/console.css';
 import '../tower/tower.css';
@@ -27,6 +28,7 @@ const SECTION: Record<Section, { label: MessageKey; icon: IconName }> = {
   home: { label: 'business.nav.home', icon: 'home' },
   loads: { label: 'business.nav.loads', icon: 'truck' },
   runs: { label: 'business.nav.runs', icon: 'route' },
+  clients: { label: 'business.nav.clients', icon: 'bag' },
   imports: { label: 'business.nav.imports', icon: 'box' },
   yard: { label: 'business.nav.yard', icon: 'grid' },
   people: { label: 'business.nav.people', icon: 'person' },
@@ -111,6 +113,8 @@ export function App() {
             <LoadsScreen business={business} actions={actions} client={client} />
           ) : section === 'runs' ? (
             <RunsScreen business={business} actions={actions} client={client} />
+          ) : section === 'clients' ? (
+            <ClientsScreen business={business} actions={actions} client={client} />
           ) : section === 'imports' ? (
             <ImportsScreen state={{ who }} actions={towerActions as never} />
           ) : section === 'yard' ? (

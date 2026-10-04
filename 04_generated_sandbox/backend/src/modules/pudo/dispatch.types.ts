@@ -2,6 +2,7 @@
 // A→B; the platform offers full/aged totes (and bulk freight) that sit near that route, sized to the
 // remaining capacity of the driver's coupled vehicle. The driver claims, ignores, or lets it lapse.
 
+import { ClientRef } from './business-client.types';
 import { BorderAdvice } from './border-rules.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { GeoPoint } from './pudo.types';
@@ -329,6 +330,8 @@ export class Freight {
   @ApiPropertyOptional({ enum: ['between_parties'] }) settlement?: 'between_parties';
   /** Which person in a business posted it — the business's DID is shared by everybody in it. */
   @ApiPropertyOptional() postedByName?: string;
+  /** B4 — the client an expeditor sent this for, as their agent. The client is the SENDER on the note. A copy, not a link. */
+  @ApiPropertyOptional({ type: ClientRef }) onBehalfOf?: ClientRef;
   /**
    * WHO the network owed for this haul, and on whose books — fixed when it was accrued at delivery. A claim
    * upheld weeks later takes the money back from this same party: never from whichever fleet the driver has
@@ -829,6 +832,8 @@ export class PostedFreightRow {
   createdAt: string;
   /** How many prices are waiting for an answer. The whole reason this row is on a screen. */
   openProposals: number;
+  /** B4 — the client an expeditor sent this for, as their agent. The client is the SENDER on the note. A copy, not a link. */
+  @ApiPropertyOptional({ type: ClientRef }) onBehalfOf?: ClientRef;
   /** Set once the load is taken, so the poster sees the outcome without a second call. */
   agreedPrice?: number;
   /** FP3 — the journey's stamps, so the list can say "on the road since", "delivered to", "cancelled". */

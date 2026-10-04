@@ -407,6 +407,23 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "business-clients",
+    apps: [
+      "business"
+    ],
+    title: "Sending for your clients, as their agent",
+    summary: "An expeditor keeps a book of the businesses it sends for. A load or a booking made for one of them names the client as the sender, and you as their agent.",
+    steps: [
+      "Clients, then Add a client: their registered name, country, address and who to ask for.",
+      "When you post a load or book space, choose the client under Sent for. They become the sender on the consignment note; you are named as the agent who booked it.",
+      "Open a client to see everything sent for them, with each load’s tracking link to hand them. It needs no account.",
+      "A client you no longer work for can be archived. What was sent for them keeps naming them."
+    ],
+    notes: [
+      "Several clients’ goods on one run are several bookings on that run, one for each client — each with its own consignment note."
+    ]
+  },
+  {
     id: "quotations",
     apps: [
       "business",

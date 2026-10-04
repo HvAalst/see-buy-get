@@ -1,7 +1,7 @@
 import type { BusinessActivity, BusinessView, CheckState, Membership, MemberRole, NewBusiness } from './api';
 
 /** Where somebody is in the Business app. */
-export type Section = 'home' | 'loads' | 'runs' | 'imports' | 'yard' | 'people' | 'details';
+export type Section = 'home' | 'loads' | 'runs' | 'clients' | 'imports' | 'yard' | 'people' | 'details';
 
 /**
  * WHICH SECTIONS A BUSINESS IS SHOWN — from what it says it does, never from what it is allowed.
@@ -17,6 +17,8 @@ export function sectionsFor(activities: BusinessActivity[]): Section[] {
     'home',
     // B2 — whoever sends goods, or arranges sending them for clients: post a load, or take space on a carrier's run.
     ...(has('shipper') || has('expeditor') ? (['loads', 'runs'] as Section[]) : []),
+    // B4 — an expeditor's own book of the clients it sends for, as their agent.
+    ...(has('expeditor') ? (['clients'] as Section[]) : []),
     ...(has('importer') || has('clearing_agent') || has('expeditor') ? (['imports'] as Section[]) : []),
     ...(has('depot') ? (['yard'] as Section[]) : []),
     'people',

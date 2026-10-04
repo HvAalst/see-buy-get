@@ -1,3 +1,4 @@
+import { ClientRef } from './business-client.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { CARGO_NATURES, type CargoNature } from './cargo.types';
 
@@ -363,6 +364,8 @@ export class DepartureBooking {
   shipperDid: string;
   /** B2 — which person in a business booked it: the business's DID is shared by everybody in it. */
   @ApiPropertyOptional() bookedByName?: string;
+  /** B4 — the client an expeditor sent this for, as their agent. The client is the SENDER on the note. A copy, not a link. */
+  @ApiPropertyOptional({ type: ClientRef }) onBehalfOf?: ClientRef;
   /**
    * THE FLEET'S OWN CUSTOMER, in whatever name the fleet files them under. Only on `own`, and required
    * there: a load with no customer against it is not a booking, it is a hole in the capacity that nobody
@@ -664,6 +667,8 @@ export class DepartureOffer {
  */
 export class MyDepartureBooking {
   bookingId: string;
+  /** B4 — the client an expeditor sent this for, as their agent. The client is the SENDER on the note. A copy, not a link. */
+  @ApiPropertyOptional({ type: ClientRef }) onBehalfOf?: ClientRef;
   departureId: string;
   company: string;
   lineName: string;

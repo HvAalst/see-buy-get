@@ -1,3 +1,4 @@
+import type { ClientRef } from './business-client.types';
 import { Injectable, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -425,7 +426,7 @@ export class DepartureService {
   /** Take space on a departure. */
   book(
     departureId: string,
-    input: { shipperDid: string; bookedByName?: string; description: string; weightKg: number; volumeM3?: number; freightId?: string; nature?: string; declaredValue?: number },
+    input: { shipperDid: string; bookedByName?: string; onBehalfOf?: ClientRef; description: string; weightKg: number; volumeM3?: number; freightId?: string; nature?: string; declaredValue?: number },
   ): { departure: Departure; booking: DepartureBooking } {
     const departure = this.require(departureId);
     const load = { weightKg: Number(input.weightKg), volumeM3: Number(input.volumeM3) || undefined };
@@ -442,6 +443,7 @@ export class DepartureService {
       kind: 'sold',
       shipperDid: input.shipperDid,
       ...(input.bookedByName?.trim() ? { bookedByName: input.bookedByName.trim().slice(0, 80) } : {}),
+      ...(input.onBehalfOf ? { onBehalfOf: input.onBehalfOf } : {}),
       ...(input.freightId ? { freightId: input.freightId } : {}),
       description: input.description.trim(),
       nature,
@@ -1332,6 +1334,7 @@ export class DepartureService {
           .filter((b) => b.kind === 'sold' && b.shipperDid === shipperDid)
           .map((b) => ({
             bookingId: b.bookingId,
+            ...(b.onBehalfOf ? { onBehalfOf: b.onBehalfOf } : {}),
             departureId: d.departureId,
             company: d.company,
             lineName: d.lineName,

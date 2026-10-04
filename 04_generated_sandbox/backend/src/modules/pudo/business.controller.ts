@@ -1,4 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { BusinessClientService } from './business-client.service';
+import { BusinessClient } from './business-client.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
@@ -7,7 +9,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { isSandbox } from '../../foundation/runtime/sandbox';
 import { BusinessService } from './business.service';
 import { AnyMember, BusinessMemberGuard } from './business-member.guard';
-import { ApproveBusinessDto, CreateBusinessDto, InviteMemberDto, MemberRoleDto, RefuseBusinessDto, UpdateBusinessDto } from './business.dto';
+import { ApproveBusinessDto, ArchiveClientDto, BusinessClientDto, UpdateBusinessClientDto, CreateBusinessDto, InviteMemberDto, MemberRoleDto, RefuseBusinessDto, UpdateBusinessDto } from './business.dto';
 import { BusinessMemberView, BusinessMembershipList, BusinessMembershipView, BusinessSession, BusinessStaffList, BusinessStaffRow, BusinessView } from './business.types';
 
 /**
@@ -24,7 +26,10 @@ import { BusinessMemberView, BusinessMembershipList, BusinessMembershipView, Bus
 @Controller('sbg')
 @UseGuards(BusinessMemberGuard)
 export class BusinessController {
-  constructor(private readonly businesses: BusinessService) {}
+  constructor(
+    private readonly businesses: BusinessService,
+    private readonly clients: BusinessClientService,
+  ) {}
 
   /* --------------------------------------------------- a person, as themselves -- */
 
@@ -113,6 +118,37 @@ export class BusinessController {
     const acting = this.businesses.requireMember(actor);
     this.businesses.askForCheck(acting);
     return this.businesses.view(acting.entity.entityId, acting.member.personDid!);
+  }
+
+  /* ------------------------------------------------- B4: an expeditor's clients -- */
+
+  /** The business's own book of clients — the ones it sends for, as their agent. Any member reads it. */
+  @Roles('business')
+  @Get('business/me/clients')
+  listClients(@Actor() actor: IntrospectionResult, @Query('archived') archived?: string): { items: BusinessClient[] } {
+    const acting = this.businesses.requireMember(actor);
+    return { items: this.clients.list(acting.entity.entityId, { archived: archived === 'true' }) };
+  }
+
+  @Roles('business')
+  @Post('business/me/clients')
+  addClient(@Body() dto: BusinessClientDto, @Actor() actor: IntrospectionResult): BusinessClient {
+    const acting = this.businesses.requireMember(actor);
+    return this.clients.add(acting.entity.entityId, dto, acting.member.name);
+  }
+
+  @Roles('business')
+  @Patch('business/me/clients/:clientId')
+  updateClient(@Param('clientId') clientId: string, @Body() dto: UpdateBusinessClientDto, @Actor() actor: IntrospectionResult): BusinessClient {
+    return this.clients.update(this.businesses.requireMember(actor).entity.entityId, clientId, dto);
+  }
+
+  /** Archive, or bring back. Never deleted: what was sent for them keeps naming them. */
+  @Roles('business')
+  @Post('business/me/clients/:clientId/archive')
+  archiveClient(@Param('clientId') clientId: string, @Body() dto: ArchiveClientDto, @Actor() actor: IntrospectionResult): BusinessClient {
+    const acting = this.businesses.requireMember(actor);
+    return this.clients.setArchived(acting.entity.entityId, clientId, dto.archived, acting.member.name);
   }
 
   /* --------------------------------------------------------------- staff -- */

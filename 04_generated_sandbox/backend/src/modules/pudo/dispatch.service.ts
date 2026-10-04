@@ -1,4 +1,5 @@
-﻿import { Inject, Injectable, Optional } from '@nestjs/common';
+﻿import type { ClientRef } from './business-client.types';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { TransitAuthorityService, transitRefusal } from './transit-authority.service';
 import { BorderRuleService } from './border-rules.service';
 import type { BorderAdvice, BorderRefusal } from './border-rules.types';
@@ -408,7 +409,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string }, now: number = Date.now()): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string }, now: number = Date.now()): Freight {
     this.freightSeq += 1;
     // A future pickup date parks the load for later; a past/absent date ships now. A supplied-but-unparseable
     // date is a CALLER ERROR — fail closed (never silently ship-now what was meant to be scheduled). Store the
@@ -477,6 +478,7 @@ export class DispatchService {
       // (the customer's cash settles off-platform) and still needs a shop that can answer a proposal.
       postedByDid: input.postedByDid,
       ...(input.postedByName?.trim() ? { postedByName: input.postedByName.trim().slice(0, 80) } : {}),
+      ...(input.onBehalfOf ? { onBehalfOf: input.onBehalfOf } : {}),
       // B2 — a customer's business settles with the carrier itself: stamped here, once, from who posted it, so
       // every path a business posts through (its own form, an import's road leg, a box going home) is covered
       // and delivery never has to work out afterwards whose money it was.
@@ -1510,6 +1512,7 @@ export class DispatchService {
         scheduledPickupAt: f.scheduledPickupAt,
         createdAt: f.createdAt,
         openProposals: open.get(f.freightId) ?? 0,
+        ...(f.onBehalfOf ? { onBehalfOf: f.onBehalfOf } : {}),
         agreedPrice: f.lockedPrice,
         pickedUpAt: f.pickedUpAt,
         deliveredAt: f.deliveredAt,

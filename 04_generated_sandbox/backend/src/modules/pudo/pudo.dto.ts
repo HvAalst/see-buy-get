@@ -1628,6 +1628,8 @@ export class BookDepartureDto {
   @IsOptional() @IsNumber() @Min(0.01) volumeM3?: number;
   /** A load already on the board, where this is space for one. */
   @IsOptional() @IsString() freightId?: string;
+  /** B4 — an expeditor booking it for one of its clients, as their agent. A business sign-in only. */
+  @IsOptional() @IsString() forClientId?: string;
 }
 
 /** Put another of the fleet's own trucks on a run. */
@@ -2172,6 +2174,8 @@ export class RegisterFreightDto {
   /** F1 — the shipper's early-claim choice for a scheduled load: true (default) → a driver may RESERVE it
    *  ahead of its pickup date; false → it stays out of the marketplace until due. */
   @IsOptional() @IsBoolean() allowEarlyClaim?: boolean;
+  /** B4 — an expeditor posting it for one of its clients, as their agent. A business sign-in only. */
+  @IsOptional() @IsString() forClientId?: string;
 }
 
 /** F2 — the PUDO counter books a too-big (dedicated, P4+) walk-up as FREIGHT instead of refusing it. The

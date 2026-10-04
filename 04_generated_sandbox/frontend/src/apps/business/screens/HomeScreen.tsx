@@ -78,7 +78,7 @@ export function HomeScreen({ business, actions, client }: { business: BusinessVi
   };
 
   const current = (kind: string) => (papers ?? []).find((d) => d.kind === kind && d.status !== 'superseded');
-  const work = sectionsFor(business.activities).filter((s) => s === 'loads' || s === 'runs' || s === 'imports' || s === 'yard');
+  const work = sectionsFor(business.activities).filter((s) => s === 'loads' || s === 'runs' || s === 'clients' || s === 'imports' || s === 'yard');
 
   return (
     <>
@@ -181,6 +181,7 @@ export function HomeScreen({ business, actions, client }: { business: BusinessVi
 const GO: Record<Exclude<Section, 'home'>, { label: MessageKey; sub: MessageKey }> = {
   loads: { label: 'business.nav.loads', sub: 'business.home.go.loads' },
   runs: { label: 'business.nav.runs', sub: 'business.home.go.runs' },
+  clients: { label: 'business.nav.clients', sub: 'business.home.go.clients' },
   imports: { label: 'business.nav.imports', sub: 'business.home.go.imports' },
   yard: { label: 'business.nav.yard', sub: 'business.home.go.yard' },
   people: { label: 'business.nav.people', sub: 'business.home.go.people' },

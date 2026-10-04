@@ -1,7 +1,7 @@
 import { EntityService } from '../../foundation/entity/entity.service';
 import { Injectable, Optional } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
-import { ConsignmentNoteService } from './consignment-note.service';
+import { ConsignmentNoteService, agentConfirmation } from './consignment-note.service';
 import { DepartureService } from './departure.service';
 import { CargoService } from './cargo.service';
 import { AgentService } from './agent.service';
@@ -83,6 +83,9 @@ export class DepartureNoteService {
 
   build(departure: Departure, booking: DepartureBooking): ConsignmentNote {
     const sender = this.senderOf(booking);
+    // B4 — the business that booked it for a client, named as their agent.
+    const agentEntity = booking.onBehalfOf ? this.entities?.byDid(booking.shipperDid) : undefined;
+    const agent = agentEntity ? { name: agentEntity.name, ...(agentEntity.jurisdiction ? { country: agentEntity.jurisdiction } : {}), did: agentEntity.did } : undefined;
     const spec = this.cargo.classify({ kg: booking.weightKg });
     const capabilities = this.cargo.requiredCapabilities([booking.nature]);
 
@@ -148,6 +151,7 @@ export class DepartureNoteService {
       code: booking.bookingId,
       status: booking.status,
       sender,
+      ...(agent ? { agent } : {}),
       // A run sells SPACE, not a door. Inventing a consignee would be the one lie on an otherwise honest
       // page; box 24 names whoever actually took the goods.
       consignee: { name: 'Not stated — space booked on a scheduled run' },
@@ -186,7 +190,7 @@ export class DepartureNoteService {
       reservations,
       established: { place: departure.originZone, at: booking.at },
       confirmations: {
-        sender: { by: booking.bookedByName ? `${booking.bookedByName}, for ${sender.name}` : sender.name, at: booking.at, how: 'Booked electronically on SeeBuyGet' },
+        sender: { by: agentConfirmation(booking.bookedByName, agent, sender), at: booking.at, how: 'Booked electronically on SeeBuyGet' },
         ...(booking.loadSafety
           ? { carrier: { by: departure.driverName ?? departure.company, at: booking.loadSafety.at, how: 'Load-safety checklist confirmed electronically' } }
           : {}),
@@ -252,6 +256,8 @@ export class DepartureNoteService {
    * put them on the truck — which is the honest version of a party we cannot verify.
    */
   private senderOf(booking: DepartureBooking): NoteParty {
+    // B4 — booked by an expeditor for a client: the CLIENT is the sender.
+    if (booking.onBehalfOf) return { name: booking.onBehalfOf.name, ...(booking.onBehalfOf.address ? { address: booking.onBehalfOf.address } : {}), ...(booking.onBehalfOf.country ? { country: booking.onBehalfOf.country } : {}) };
     if (booking.kind === 'own') {
       return { name: booking.customer as string, address: 'The carrier’s own customer — not a SeeBuyGet account' };
     }

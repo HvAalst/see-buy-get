@@ -92,6 +92,22 @@ describe('a run’s booking as a contract of carriage', () => {
   /* ------------------------------------------------------------------- the note -- */
 
   describe('the consignment note', () => {
+    it('B4 — names the CLIENT as sender when an expeditor booked for them, and the expeditor as their agent', () => {
+      const { service, departureId } = setUp();
+      const forwarder = { byDid: (did: string) => (did === SHIPPER ? { kind: 'business', name: 'Abyssinia Forwarding', jurisdiction: 'ET', did: SHIPPER } : undefined) };
+      const renderer = new ConsignmentNoteService(undefined as never, undefined as never, undefined as never, undefined as never, undefined as never, undefined as never, undefined as never);
+      const notes = new DepartureNoteService(service, renderer, new CargoService(), agents, vendors, forwarder as never);
+      const { booking } = service.book(departureId, { shipperDid: SHIPPER, bookedByName: 'Hana Tadesse', onBehalfOf: { clientId: 'cli_1', name: 'Yirgacheffe Union', country: 'ET', address: 'Dilla' }, description: 'Coffee samples', weightKg: 40 });
+      const n = notes.note(departureId, booking.bookingId, asShipper);
+      expect(n.sender).toMatchObject({ name: 'Yirgacheffe Union', address: 'Dilla' });
+      expect(n.agent).toMatchObject({ name: 'Abyssinia Forwarding' });
+      expect(n.confirmations.sender.by).toBe('Hana Tadesse, for Abyssinia Forwarding, as agent for Yirgacheffe Union');
+      expect(notes.html(departureId, booking.bookingId, asShipper)).toContain('Booked by Abyssinia Forwarding as agent for the sender');
+      // A booking for nobody in particular names nobody as agent.
+      const own = service.book(departureId, { shipperDid: SHIPPER, description: 'Own goods', weightKg: 40 }).booking;
+      expect(notes.note(departureId, own.bookingId, asShipper).agent).toBeUndefined();
+    });
+
     it('names the sender, the carrier and the vehicle that took the goods', () => {
       const { notes, departureId, bookingId } = setUp();
       const n = notes.note(departureId, bookingId, asShipper);

@@ -183,6 +183,36 @@ describe('a customer’s business, over the wire', () => {
     expect(entityId).toBeTruthy();
   });
 
+  it('lets an expeditor send for a client of its own, as their agent: the client is the sender on the note', async () => {
+    const owner = await aPerson();
+    const made = await http()
+      .post('/v1/sbg/business')
+      .set(bearer(owner.token))
+      .send({ name: `Abyssinia Forwarding ${tag}`, country: 'ET', registrationNo: `REG6-${tag}`, activities: ['expeditor'], yourName: 'Hana Tadesse' })
+      .expect(201);
+    const fwd = made.body.token.access_token;
+    const client = await http().post('/v1/sbg/business/me/clients').set(bearer(fwd)).send({ name: `Yirgacheffe Union ${tag}`, country: 'ET', address: 'Dilla', contactPhone: '+251911000222' }).expect(201);
+    const book = await http().get('/v1/sbg/business/me/clients').set(bearer(fwd)).expect(200);
+    expect(book.body.items.map((c: { clientId: string }) => c.clientId)).toContain(client.body.clientId);
+
+    const load = { description: 'Washed coffee, 80 bags', pickupLocation: { lat: 6.41, lng: 38.31 }, pickupLabel: 'Dilla washing station', destLabel: 'Modjo dry port', weightKg: 4800, pickupCountry: 'ET', destCountry: 'ET' };
+    const posted = await http().post('/v1/sbg/dispatch/freight').set(bearer(fwd)).send({ ...load, forClientId: client.body.clientId }).expect(201);
+    expect(posted.body.onBehalfOf).toMatchObject({ clientId: client.body.clientId, name: `Yirgacheffe Union ${tag}` });
+    expect(posted.body.settlement).toBe('between_parties');
+    const note = await http().get(`/v1/sbg/dispatch/freight/${posted.body.freightId}/consignment-note`).set(bearer(fwd)).expect(200);
+    expect(note.body.sender.name).toBe(`Yirgacheffe Union ${tag}`);
+    expect(note.body.agent.name).toBe(`Abyssinia Forwarding ${tag}`);
+    expect(note.body.confirmations.sender.by).toBe(`Hana Tadesse, for Abyssinia Forwarding ${tag}, as agent for Yirgacheffe Union ${tag}`);
+    const rows = await http().get('/v1/sbg/dispatch/posted').set(bearer(fwd)).expect(200);
+    expect(rows.body.items.find((r: { freightId: string }) => r.freightId === posted.body.freightId).onBehalfOf.clientId).toBe(client.body.clientId);
+
+    // A client is in ONE book: another business cannot send for it, and a person who is no business cannot name one.
+    const rival = await aPerson();
+    const rivalMade = await http().post('/v1/sbg/business').set(bearer(rival.token)).send({ name: `Rival Forwarding ${tag}`, country: 'ET', registrationNo: `REG7-${tag}`, activities: ['expeditor'], yourName: 'Rival' }).expect(201);
+    await http().post('/v1/sbg/dispatch/freight').set(bearer(rivalMade.body.token.access_token)).send({ ...load, forClientId: client.body.clientId }).expect(404);
+    await http().post('/v1/sbg/dispatch/freight').set(bearer(rival.token)).send({ ...load, forClientId: client.body.clientId }).expect(403);
+  });
+
   it('is checked by two members of staff, and only then given a public page and a place in the agent finder', async () => {
     const owner = await aPerson();
     const name = `Djibouti Clearing ${tag}`;

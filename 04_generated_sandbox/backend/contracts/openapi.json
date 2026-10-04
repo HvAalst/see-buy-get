@@ -19663,6 +19663,128 @@
         }
       }
     },
+    "/v1/sbg/business/me/clients": {
+      "get": {
+        "operationId": "Business.listClients",
+        "parameters": [
+          {
+            "name": "archived",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "Business.addClient",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BusinessClientDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessClient"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/clients/{clientId}": {
+      "patch": {
+        "operationId": "Business.updateClient",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBusinessClientDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessClient"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/clients/{clientId}/archive": {
+      "post": {
+        "operationId": "Business.archiveClient",
+        "summary": "",
+        "description": "Archive, or bring back. Never deleted: what was sent for them keeps naming them.",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveClientDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessClient"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/businesses": {
       "get": {
         "operationId": "Business.staffList",
@@ -30577,6 +30699,27 @@
           "paidTo"
         ]
       },
+      "ClientRef": {
+        "type": "object",
+        "properties": {
+          "clientId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "clientId",
+          "name"
+        ]
+      },
       "FreightInstructions": {
         "type": "object",
         "properties": {
@@ -31040,6 +31183,14 @@
           "postedByName": {
             "type": "string",
             "description": "Which person in a business posted it — the business's DID is shared by everybody in it."
+          },
+          "onBehalfOf": {
+            "description": "B4 — the client an expeditor sent this for, as their agent. The client is the SENDER on the note. A copy, not a link.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ClientRef"
+              }
+            ]
           },
           "driverPayee": {
             "type": "object",
@@ -32725,6 +32876,14 @@
             "type": "string",
             "description": "B2 — which person in a business booked it: the business's DID is shared by everybody in it."
           },
+          "onBehalfOf": {
+            "description": "B4 — the client an expeditor sent this for, as their agent. The client is the SENDER on the note. A copy, not a link.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ClientRef"
+              }
+            ]
+          },
           "customer": {
             "type": "string",
             "description": "THE FLEET'S OWN CUSTOMER, in whatever name the fleet files them under. Only on `own`, and required\nthere: a load with no customer against it is not a booking, it is a hole in the capacity that nobody\ncan account for a week later.\n\nA name and not an account, because the whole point is that these people are not here. In a country\nwhere we only match, the fleet IS the local operator and arrives carrying its customers with it.\n\nIt never leaves the fleet's own screens. A shipper reading the offer list learns how full the truck\nis and not one thing about who else is on it."
@@ -33143,6 +33302,10 @@
           "freightId": {
             "type": "string",
             "description": "A load already on the board, where this is space for one."
+          },
+          "forClientId": {
+            "type": "string",
+            "description": "B4 — an expeditor booking it for one of its clients, as their agent. A business sign-in only."
           }
         },
         "required": [
@@ -33741,6 +33904,10 @@
           "allowEarlyClaim": {
             "type": "boolean",
             "description": "F1 — the shipper's early-claim choice for a scheduled load: true (default) → a driver may RESERVE it\n ahead of its pickup date; false → it stays out of the marketplace until due."
+          },
+          "forClientId": {
+            "type": "string",
+            "description": "B4 — an expeditor posting it for one of its clients, as their agent. A business sign-in only."
           }
         },
         "required": [
@@ -34776,6 +34943,14 @@
             "enum": [
               "instant",
               "negotiate"
+            ]
+          },
+          "onBehalfOf": {
+            "description": "B4 — the client an expeditor sent this for, as their agent. The client is the SENDER on the note. A copy, not a link.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ClientRef"
+              }
             ]
           },
           "attempts": {
@@ -36869,6 +37044,128 @@
         },
         "required": [
           "role"
+        ]
+      },
+      "BusinessClientDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "country": {
+            "type": "string",
+            "maxLength": 2
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "contactName": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "contactPhone": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "contactEmail": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "BusinessClient": {
+        "type": "object",
+        "properties": {
+          "clientId": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string",
+            "description": "The expeditor whose book this is."
+          },
+          "name": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "contactName": {
+            "type": "string"
+          },
+          "contactPhone": {
+            "type": "string"
+          },
+          "contactEmail": {
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "archivedAt": {
+            "type": "string",
+            "description": "Kept, not deleted: a load sent for them in March still names them."
+          },
+          "archivedBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "clientId",
+          "entityId",
+          "name",
+          "createdBy",
+          "createdAt"
+        ]
+      },
+      "UpdateBusinessClientDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "country": {
+            "type": "string",
+            "maxLength": 2
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "contactName": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "contactPhone": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "contactEmail": {
+            "type": "string",
+            "maxLength": 120
+          }
+        }
+      },
+      "ArchiveClientDto": {
+        "type": "object",
+        "properties": {
+          "archived": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "archived"
         ]
       },
       "BusinessStaffRow": {

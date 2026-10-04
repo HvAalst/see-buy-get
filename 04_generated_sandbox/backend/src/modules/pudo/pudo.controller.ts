@@ -1,4 +1,6 @@
-﻿import { driverPapers, lapsedOf, offRoadLine } from './papers';
+﻿import { BusinessClientService } from './business-client.service';
+import { clientRefOf, type ClientRef } from './business-client.types';
+import { driverPapers, lapsedOf, offRoadLine } from './papers';
 import { PapersWatchService } from './papers-watch.service';
 import type { FleetDriver } from './fleet.types';
 import { ConsignmentNoteService } from './consignment-note.service';
@@ -184,6 +186,7 @@ export function awardCapOf(p: { coverLimit?: number; declaredValue?: number }): 
 @UseGuards(BusinessMemberGuard)
 export class SbgController {
   constructor(
+    private readonly clients: BusinessClientService,
     private readonly agents: AgentService,
     private readonly gate: WalletGateService,
     private readonly corridors: CorridorService,
@@ -521,6 +524,16 @@ export class SbgController {
     }
     if (!typed) throw new GlosError('FIELD_REQUIRED', 'Name the company you are acting for');
     return this.entities.get(typed).entityId;
+  }
+
+  /**
+   * B4 — WHO A LOAD OR A BOOKING IS FOR, when an expeditor sends it for a client. The client must be in THIS business's
+   * own book; nobody else may name one, because only a business keeps clients.
+   */
+  private onBehalfOf(actor: IntrospectionResult, clientId: string | undefined): { onBehalfOf?: ClientRef } {
+    if (!clientId) return {};
+    if (actor?.role !== 'business' || !actor.tenant) throw new GlosError('FORBIDDEN', 'Only a business sends for a client of its own');
+    return { onBehalfOf: clientRefOf(this.clients.require(actor.tenant, clientId)) };
   }
 
   private requireReach(actor: IntrospectionResult, entityId: string): void {
@@ -4629,7 +4642,8 @@ export class SbgController {
     const shipperDid = actingDid(actor);
     if (!shipperDid) throw new GlosError('FORBIDDEN', 'Sign in as the party whose goods these are');
     // B2 — a business books as itself; the person who did it is kept by name.
-    const { booking } = this.departures.book(departureId, { shipperDid, ...dto, ...(actor?.role === 'business' && actor.actorName ? { bookedByName: actor.actorName } : {}) });
+    const { forClientId, ...load } = dto;
+    const { booking } = this.departures.book(departureId, { shipperDid, ...load, ...(actor?.role === 'business' && actor.actorName ? { bookedByName: actor.actorName } : {}), ...this.onBehalfOf(actor, forClientId) });
     return booking;
   }
 
@@ -5068,7 +5082,8 @@ export class SbgController {
     // CL1 — refuse a term this country has not switched on, before the load exists rather than after.
     this.requireActiveTerm(dto.incoterm, dto.pickupCountry, dto.destCountry);
     // B2 — a business's DID is shared by everybody in it, so the person who posted is kept by name as well.
-    return this.dispatch.registerFreight({ ...dto, dimensionsCm, bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did, ...(actor?.role === 'business' && actor.actorName ? { postedByName: actor.actorName } : {}) });
+    const { forClientId, ...load } = dto;
+    return this.dispatch.registerFreight({ ...load, dimensionsCm, bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did, ...(actor?.role === 'business' && actor.actorName ? { postedByName: actor.actorName } : {}), ...this.onBehalfOf(actor, forClientId) });
   }
 
   @Get('dispatch/freight')

@@ -7,6 +7,7 @@ import { QuotePanel } from '../../tower/screens/QuotePanel';
 import { NATURES, PACKAGING_OPTIONS } from '../../agent/logic';
 import type { BusinessClient, BusinessView, LoadProposal, PostedLoad } from '../api';
 import { loadGaps, loadStage, mayAct, type LoadForm, type LoadStage } from '../logic';
+import { SentFor } from './SentFor';
 import type { BusinessActions } from '../useBusinessApp';
 
 const STAGE: Record<LoadStage, { label: MessageKey; tone: string }> = {
@@ -18,8 +19,8 @@ const STAGE: Record<LoadStage, { label: MessageKey; tone: string }> = {
   cancelled: { label: 'business.loads.stage.cancelled', tone: 'quiet' },
 };
 
-type Form = LoadForm & { packaging: string; natureCode: string; fragile: boolean; commitMode: 'negotiate' | 'instant'; instructions: string; contactName: string; contactPhone: string; deliveryWindow: string; pickupOn: string };
-const EMPTY: Form = { description: '', fromSiteId: '', toSiteId: '', weightKg: '', packaging: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '' };
+type Form = LoadForm & { packaging: string; natureCode: string; fragile: boolean; commitMode: 'negotiate' | 'instant'; instructions: string; contactName: string; contactPhone: string; deliveryWindow: string; pickupOn: string; forClientId: string };
+const EMPTY: Form = { description: '', fromSiteId: '', toSiteId: '', weightKg: '', packaging: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '' };
 
 /**
  * B2 — A BUSINESS'S OWN LOADS: post one, and follow it to the door.
@@ -109,6 +110,7 @@ export function LoadsScreen({ business, client }: { business: BusinessView; acti
                     <span class="crow__sub">
                       {t('business.loads.rowSub', { dest: r.destLabel, kg: r.weightKg.toLocaleString(), when: r.createdAt.slice(0, 10) })}
                       {r.carrier?.driverName ? ` · ${t('business.loads.carriedBy', { who: r.carrier.driverName })}` : ''}
+                      {r.onBehalfOf ? ` · ${t('business.sentFor.forClient', { name: r.onBehalfOf.name })}` : ''}
                     </span>
                   </span>
                 </button>
@@ -178,6 +180,7 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
       ...(form.contactPhone.trim() ? { contactPhone: form.contactPhone.trim() } : {}),
       ...(form.deliveryWindow.trim() ? { deliveryWindow: form.deliveryWindow.trim() } : {}),
       ...(form.pickupOn ? { scheduledPickupAt: new Date(`${form.pickupOn}T08:00:00`).toISOString() } : {}),
+      ...(form.forClientId ? { forClientId: form.forClientId } : {}),
     });
     setBusy(false);
     if (posted.error || !posted.data) return setError(posted.error?.detail || posted.error?.title || null);
@@ -191,6 +194,7 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
       </div>
       <p class="cons__lede">{t('business.loads.newLede')}</p>
       <form onSubmit={(e) => void submit(e)}>
+        <SentFor client={client} expeditor={business.activities.includes('expeditor')} value={form.forClientId} onChange={(id) => setForm((prev) => ({ ...prev, forClientId: id }))} />
         <label class="cfield">
           <span class="cfield__label">{t('business.loads.f.description')}</span>
           <input class="cinput" maxLength={160} value={form.description} onInput={(e) => setForm((prev) => ({ ...prev, description: (e.target as HTMLInputElement).value }))} />

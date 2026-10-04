@@ -9,6 +9,7 @@ import { NATURES } from '../../agent/logic';
 import type { MyBookingRow, OfferQuote, OfferRow } from '../../agent/types';
 import type { BusinessClient, BusinessView } from '../api';
 import { mayAct } from '../logic';
+import { SentFor } from './SentFor';
 import type { BusinessActions } from '../useBusinessApp';
 
 /**
@@ -76,7 +77,10 @@ export function RunsScreen({ business, client }: { business: BusinessView; actio
                       {t(b.runStatus === 'cancelled' && b.bookingStatus === 'booked' ? 'business.runs.status.runOff' : `business.runs.status.${b.bookingStatus}`)}
                     </span>
                   </span>
-                  <span class="crow__sub">{t('business.runs.bookingSub', { from: b.originZone, to: b.destZone, when: b.leavesAt.slice(0, 16).replace('T', ' '), price: `${b.price.toLocaleString()} ${b.currency}` })}</span>
+                  <span class="crow__sub">
+                    {t('business.runs.bookingSub', { from: b.originZone, to: b.destZone, when: b.leavesAt.slice(0, 16).replace('T', ' '), price: `${b.price.toLocaleString()} ${b.currency}` })}
+                    {(b as MyBookingRow & { onBehalfOf?: { name: string } }).onBehalfOf ? ` · ${t('business.sentFor.forClient', { name: (b as MyBookingRow & { onBehalfOf?: { name: string } }).onBehalfOf!.name })}` : ''}
+                  </span>
                 </span>
               </button>
             ))}
@@ -120,6 +124,7 @@ export function RunsScreen({ business, client }: { business: BusinessView; actio
           client={client}
           act={act}
           onClose={() => setOffer(null)}
+          business={business}
           onBooked={async () => {
             setOffer(null);
             setDone(t('business.runs.booked', { company: offer.company }));
@@ -143,9 +148,9 @@ export function RunsScreen({ business, client }: { business: BusinessView; actio
   );
 }
 
-function BookPanel({ offer, client, act, onClose, onBooked }: { offer: OfferRow; client: BusinessClient | null; act: boolean; onClose: () => void; onBooked: () => void | Promise<void> }) {
+function BookPanel({ offer, business, client, act, onClose, onBooked }: { offer: OfferRow; business: BusinessView; client: BusinessClient | null; act: boolean; onClose: () => void; onBooked: () => void | Promise<void> }) {
   const t = useT();
-  const [form, setForm] = useState({ description: '', nature: 'GEN', weightKg: '', volumeM3: '', declaredValue: '' });
+  const [form, setForm] = useState({ description: '', nature: 'GEN', weightKg: '', volumeM3: '', declaredValue: '', forClientId: '' });
   const [quote, setQuote] = useState<OfferQuote | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -155,6 +160,7 @@ function BookPanel({ offer, client, act, onClose, onBooked }: { offer: OfferRow;
     weightKg: Number(form.weightKg),
     ...(Number(form.volumeM3) > 0 ? { volumeM3: Number(form.volumeM3) } : {}),
     ...(Number(form.declaredValue) > 0 ? { declaredValue: Number(form.declaredValue) } : {}),
+    ...(form.forClientId ? { forClientId: form.forClientId } : {}),
   });
   const ready = Boolean(form.description.trim()) && Number(form.weightKg) > 0;
 
@@ -231,6 +237,7 @@ function BookPanel({ offer, client, act, onClose, onBooked }: { offer: OfferRow;
           <div class="cons__panelhead">
             <span class="cons__panelt">{t('business.runs.bookTitle')}</span>
           </div>
+          <SentFor client={client} expeditor={business.activities.includes('expeditor')} value={form.forClientId} onChange={(id) => setForm((prev) => ({ ...prev, forClientId: id }))} />
           <label class="cfield">
             <span class="cfield__label">{t('business.loads.f.description')}</span>
             <input class="cinput" maxLength={160} value={form.description} onInput={(e) => (setForm((prev) => ({ ...prev, description: (e.target as HTMLInputElement).value })), setQuote(null))} />

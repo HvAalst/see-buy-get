@@ -85,6 +85,7 @@ export class ConsignmentNoteService implements OnModuleInit {
 
   build(f: Freight): ConsignmentNote {
     const sender = this.senderOf(f);
+    const agent = f.onBehalfOf ? this.agentOf(f.postedByDid) : undefined;
     const carrier = this.carrierOf(f);
     const international = Boolean(f.pickupCountry && f.destCountry && f.pickupCountry !== f.destCountry);
     const volume = f.dimensionsCm ? Math.round(((f.dimensionsCm[0] * f.dimensionsCm[1] * f.dimensionsCm[2]) / 1_000_000) * 1000) / 1000 : undefined;
@@ -134,6 +135,7 @@ export class ConsignmentNoteService implements OnModuleInit {
       trackingKey: f.trackingKey,
       status: f.status,
       sender,
+      ...(agent ? { agent } : {}),
       consignee: this.consigneeOf(f),
       delivery: { place: f.destLabel, ...(f.destCountry ? { country: countryName(f.destCountry) } : {}), ...(f.deliveredAt ? { at: f.deliveredAt } : {}) },
       takingOver: { place: f.pickupLabel, ...(f.pickupCountry ? { country: countryName(f.pickupCountry) } : {}), ...(f.pickedUpAt ? { at: f.pickedUpAt } : {}) },
@@ -160,7 +162,7 @@ export class ConsignmentNoteService implements OnModuleInit {
       established: { place: f.pickupLabel, at: f.createdAt },
       confirmations: {
         // B2 — for a business, the person who posted it, for the business: its DID is everybody's in it.
-        sender: { by: f.postedByName ? `${f.postedByName}, for ${sender.name}` : sender.name, at: f.createdAt, how: 'Confirmed electronically at posting' },
+        sender: { by: agentConfirmation(f.postedByName, agent, sender), at: f.createdAt, how: 'Confirmed electronically at posting' },
         ...(f.pickedUpAt && carrier ? { carrier: { by: carrier.driverName ?? carrier.name, at: f.pickedUpAt, how: 'Confirmed electronically at taking over, after the load-safety check' } } : {}),
         ...(f.proofOfDelivery
           ? { consignee: { by: f.proofOfDelivery.receiverName, at: f.proofOfDelivery.at, how: f.proofOfDelivery.photoRef ? 'Received in person; name recorded by the driver at delivery, with a photo of the goods as delivered' : 'Received in person; name recorded by the driver at delivery', ...(f.proofOfDelivery.remarks ? { remarks: `Receiver’s remarks: ${f.proofOfDelivery.remarks}` } : {}) } }
@@ -230,7 +232,15 @@ export class ConsignmentNoteService implements OnModuleInit {
     }
   }
 
+  /** B4 — the business that booked it as an agent, by its registered name. */
+  private agentOf(did: string | undefined): NoteParty | undefined {
+    const business = did ? this.entities?.byDid(did) : undefined;
+    return business ? { name: business.name, ...(business.jurisdiction ? { country: countryName(business.jurisdiction) } : {}), did: business.did } : undefined;
+  }
+
   private senderOf(f: Freight): NoteParty {
+    // B4 — sent by an expeditor for a client: the CLIENT is the sender. The expeditor is named as their agent.
+    if (f.onBehalfOf) return { name: f.onBehalfOf.name, ...(f.onBehalfOf.address ? { address: f.onBehalfOf.address } : {}), ...(f.onBehalfOf.country ? { country: countryName(f.onBehalfOf.country) } : {}) };
     // A CONTAINER's road leg: the importer is the sender. Asked first, because such a leg carries no
     // shipper DID at all and would otherwise fall through to the placeholder at the bottom.
     const parties = f.externalOrderId ? this.imports.noteParties(f.externalOrderId) : null;
@@ -402,7 +412,7 @@ export class ConsignmentNoteService implements OnModuleInit {
   <div class="num">${e(n.number)}<small>Load ${e(n.code)}${n.trackingKey ? ` · Tracking ${e(n.trackingKey)}` : ''}</small>${qr}</div>
 </header>
 <div class="grid">
-  ${box(1, 'Sender (name, address, country)', party(n.sender))}
+  ${box(1, 'Sender (name, address, country)', party(n.sender) + (n.agent ? `<br><span class="how">Booked by ${e(n.agent.name)} as agent for the sender</span>` : ''))}
   ${box(16, 'Carrier (name, address, country)', party(n.carrier, carrierExtra) || '')}
   ${box(2, 'Consignee (name, address, country)', party(n.consignee))}
   ${box(17, 'Successive carriers', '<span class="empty">None</span>')}
@@ -424,6 +434,15 @@ export class ConsignmentNoteService implements OnModuleInit {
 <footer><span>Issued by the SeeBuyGet network from its records of this load. Every box is filled from a recorded act; a box that says it is not recorded is not recorded.<br>${e(retentionWords(retentionFor({ finishedAt: n.delivery.at, hasClaim: Boolean(n.claim) })))}</span><span>${e(n.number)}<br><span class="fp">${e(noteFingerprint(n))}</span><br><span class="fp">Check this copy: ${e(`${appUrl('home')}?note=${noteFingerprint(n)}`)}</span></span></footer>
 </div></body></html>`;
   }
+}
+
+/**
+ * Who confirmed it for the sender: the person, for the business — and, where an expeditor booked it, as agent for the
+ * client. Shared by the board's note and a run's, so one page cannot describe the same act two ways.
+ */
+export function agentConfirmation(person: string | undefined, agent: NoteParty | undefined, sender: NoteParty): string {
+  if (agent) return `${person ? `${person}, for ` : ''}${agent.name}, as agent for ${sender.name}`;
+  return person ? `${person}, for ${sender.name}` : sender.name;
 }
 
 function countryName(code: string | undefined): string | undefined {

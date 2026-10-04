@@ -12,7 +12,7 @@ describe('the Business app', () => {
       expect(sectionsFor(['shipper'])).toEqual(['home', 'loads', 'runs', 'people', 'details']);
       expect(sectionsFor(['importer'])).toEqual(['home', 'imports', 'people', 'details']);
       expect(sectionsFor(['clearing_agent'])).toContain('imports');
-      expect(sectionsFor(['expeditor'])).toEqual(['home', 'loads', 'runs', 'imports', 'people', 'details']);
+      expect(sectionsFor(['expeditor'])).toEqual(['home', 'loads', 'runs', 'clients', 'imports', 'people', 'details']);
       expect(sectionsFor(['depot'])).toEqual(['home', 'yard', 'people', 'details']);
       expect(sectionsFor(['importer', 'depot'])).toEqual(['home', 'imports', 'yard', 'people', 'details']);
     });

@@ -8,6 +8,7 @@ import { HandleService } from '../../foundation/entity/../handle/handle.service'
 import { HandleDirectory } from './handle-directory.service';
 import { BusinessService } from './business.service';
 import { BusinessMemberGuard } from './business-member.guard';
+import { BusinessClientService } from './business-client.service';
 import { BorderRuleService } from './border-rules.service';
 import { CompanyReadinessService } from '../../foundation/entity/company-readiness.service';
 import { Test } from '@nestjs/testing';
@@ -131,7 +132,7 @@ describe('dimensional weight', () => {
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         EmailCodeService, AccountRecoveryService, AccountService, OtpService, PersonService, InviteService, ApiKeyService, AuthService,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
-        EntityService, EntityAdminService, OperatorAccountService, ConsignmentNoteService, DepartureNoteService, NoteArchiveService, NoteBundleService, DestinationService, PresenceService, InterestService, DepartureService, CompanyDocumentService, HandleService, HandleDirectory, BusinessService, BusinessMemberGuard, CompanyReadinessService, BorderRuleService, BooksService, FxService,
+        EntityService, EntityAdminService, OperatorAccountService, ConsignmentNoteService, DepartureNoteService, NoteArchiveService, NoteBundleService, DestinationService, PresenceService, InterestService, DepartureService, CompanyDocumentService, HandleService, HandleDirectory, BusinessService, BusinessMemberGuard, BusinessClientService, CompanyReadinessService, BorderRuleService, BooksService, FxService,
         PayoutService, ReturnService, UnclaimedService, MerchantRatingService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
         FundingService, FundingPayerRegistrar, SandboxFundingRail, { provide: FUNDING_RAIL, useExisting: SandboxFundingRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },

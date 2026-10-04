@@ -41,6 +41,11 @@ export interface ConsignmentNote {
   status: string;
   /** Box 1 */
   sender: NoteParty;
+  /**
+   * B4 — WHO BOOKED IT FOR THE SENDER, when an expeditor did, as their agent. The sender stays the sender: claims and
+   * liability follow the note, and the note says who the goods belong to.
+   */
+  agent?: NoteParty;
   /** Box 2 */
   consignee: NoteParty;
   /** Box 3 — place of delivery. */

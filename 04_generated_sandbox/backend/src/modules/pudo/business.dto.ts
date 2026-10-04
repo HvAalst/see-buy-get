@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ArrayMaxSize, IsArray, IsIn, IsOptional, IsString, MaxLength, ValidateIf } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsOptional, IsString, MaxLength, ValidateIf } from 'class-validator';
 import { BUSINESS_ACTIVITIES } from '../../foundation/entity/entity.types';
 import { BUSINESS_MEMBER_ROLES } from './business.types';
 
@@ -33,6 +33,29 @@ export class InviteMemberDto {
 
 export class MemberRoleDto {
   @ApiProperty({ enum: BUSINESS_MEMBER_ROLES }) @IsIn(BUSINESS_MEMBER_ROLES as unknown as string[]) role!: string;
+}
+
+/** B4 — a client in an expeditor's book. */
+export class BusinessClientDto {
+  @IsString() @MaxLength(120) name!: string;
+  @IsOptional() @IsString() @MaxLength(2) country?: string;
+  @IsOptional() @IsString() @MaxLength(200) address?: string;
+  @IsOptional() @IsString() @MaxLength(80) contactName?: string;
+  @IsOptional() @IsString() @MaxLength(32) contactPhone?: string;
+  @IsOptional() @IsString() @MaxLength(120) contactEmail?: string;
+}
+
+export class UpdateBusinessClientDto {
+  @IsOptional() @IsString() @MaxLength(120) name?: string;
+  @IsOptional() @IsString() @MaxLength(2) country?: string;
+  @IsOptional() @IsString() @MaxLength(200) address?: string;
+  @IsOptional() @IsString() @MaxLength(80) contactName?: string;
+  @IsOptional() @IsString() @MaxLength(32) contactPhone?: string;
+  @IsOptional() @IsString() @MaxLength(120) contactEmail?: string;
+}
+
+export class ArchiveClientDto {
+  @IsBoolean() archived!: boolean;
 }
 
 /** Staff refuse a check — always with the reason the business will read. */
