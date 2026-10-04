@@ -1,0 +1,90 @@
+import { describe, expect, it } from 'vitest';
+import { checkStep, checkTone, digitsReady, isLastOwner, mayAct, mayManage, newBusinessGaps, openOnArrival, phoneReady, sectionsFor } from './logic';
+import type { Membership } from './api';
+
+const member = (over: Partial<Membership>): Membership => ({
+  memberId: 'm', entityId: 'e', name: 'Acme', country: 'ET', role: 'owner', state: 'joined', invitedBy: 'A', checked: 'unverified', ...over,
+});
+
+describe('the Business app', () => {
+  describe('which sections a business is shown', () => {
+    it('shows imports to anybody whose goods or clients cross a border, and a yard only to a yard', () => {
+      expect(sectionsFor(['shipper'])).toEqual(['home', 'people', 'details']);
+      expect(sectionsFor(['importer'])).toEqual(['home', 'imports', 'people', 'details']);
+      expect(sectionsFor(['clearing_agent'])).toContain('imports');
+      expect(sectionsFor(['expeditor'])).toContain('imports');
+      expect(sectionsFor(['depot'])).toEqual(['home', 'yard', 'people', 'details']);
+      expect(sectionsFor(['importer', 'depot'])).toEqual(['home', 'imports', 'yard', 'people', 'details']);
+    });
+  });
+
+  describe('where the check stands', () => {
+    const check = (state: Parameters<typeof checkStep>[0]['state'], missing: string[] = []) => ({ state, missing });
+    it('asks for the papers before anything else, even after a refusal', () => {
+      expect(checkStep(check('unverified', ['representative_id']))).toBe('papers');
+      expect(checkStep(check('refused', ['certificate_of_incorporation']))).toBe('papers');
+    });
+    it('then the asking, then the wait, and says a refusal plainly', () => {
+      expect(checkStep(check('unverified'))).toBe('ask');
+      expect(checkStep(check('asked'))).toBe('waiting');
+      expect(checkStep(check('checking'))).toBe('waiting');
+      expect(checkStep(check('refused'))).toBe('refused');
+      expect(checkStep(check('verified'))).toBe('done');
+    });
+    it('wears a tone that matches', () => {
+      expect([checkTone('verified'), checkTone('refused'), checkTone('checking'), checkTone('unverified')]).toEqual(['ok', 'warn', 'info', 'quiet']);
+    });
+  });
+
+  describe('which business opens on its own', () => {
+    it('opens the only one', () => {
+      expect(openOnArrival([member({ entityId: 'a' })], null)).toBe('a');
+    });
+    it('opens the last one used, while they are still in it', () => {
+      const two = [member({ entityId: 'a' }), member({ entityId: 'b' })];
+      expect(openOnArrival(two, 'b')).toBe('b');
+      expect(openOnArrival(two, 'gone')).toBeNull();
+      expect(openOnArrival(two, null)).toBeNull();
+    });
+    it('never opens anything over an unanswered invitation', () => {
+      expect(openOnArrival([member({ entityId: 'a' }), member({ entityId: 'b', state: 'invited' })], 'a')).toBeNull();
+    });
+    it('shows the list to somebody who is in nothing yet', () => {
+      expect(openOnArrival([], null)).toBeNull();
+    });
+  });
+
+  describe('the last owner', () => {
+    it('is the only joined owner — an invited owner does not count', () => {
+      const rows = [
+        { memberId: 'a', role: 'owner' as const, state: 'joined' as const },
+        { memberId: 'b', role: 'owner' as const, state: 'invited' as const },
+        { memberId: 'c', role: 'booker' as const, state: 'joined' as const },
+      ];
+      expect(isLastOwner(rows, 'a')).toBe(true);
+      expect(isLastOwner(rows, 'c')).toBe(false);
+      expect(isLastOwner([...rows, { memberId: 'd', role: 'owner', state: 'joined' }], 'a')).toBe(false);
+    });
+  });
+
+  describe('who may do what', () => {
+    it('lets only an owner manage, and everybody but a viewer act', () => {
+      expect([mayManage('owner'), mayManage('booker'), mayManage(undefined)]).toEqual([true, false, false]);
+      expect([mayAct('finance'), mayAct('booker'), mayAct('viewer'), mayAct(undefined)]).toEqual([true, true, false, false]);
+    });
+  });
+
+  describe('the forms', () => {
+    it('names every gap in a new business', () => {
+      expect(newBusinessGaps({ name: ' ', country: 'Ethiopia', registrationNo: '', activities: [], yourName: '' })).toEqual(['name', 'country', 'registrationNo', 'activities', 'yourName']);
+      expect(newBusinessGaps({ name: 'Acme', country: 'et', registrationNo: 'R1', activities: ['shipper'], yourName: 'Abebe' })).toEqual([]);
+    });
+    it('reads a phone and a code the way the server does', () => {
+      expect(phoneReady('+251 911 000 001')).toBe(true);
+      expect(phoneReady('0911')).toBe(false);
+      expect(digitsReady('4826', 4)).toBe(true);
+      expect(digitsReady('482', 4)).toBe(false);
+      expect(digitsReady('48a6', 4)).toBe(false);
+    });
+  });
+});

@@ -65,8 +65,11 @@ import type { TowerActions, TowerState } from '../useTowerApp';
  * Network staff read over the shoulder and can act on nothing, which is what an onlooker means.
  *
  * Nothing here reaches a driver. They are not a party to any of it.
+ *
+ * B1 — it reads only who is signed in and the API client, so the Business app hosts it as it stands: an importer
+ * and a clearing agent see the same screen whichever app signed them in.
  */
-export function ImportsScreen({ state, actions }: { state: TowerState; actions: TowerActions }) {
+export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who'>; actions: Pick<TowerActions, 'client'> }) {
   const t = useT();
   const client = actions.client();
   const who = state.who?.name;

@@ -145,7 +145,7 @@ export class OperatorAccountService {
     if (!asked) {
       account.totpReset = { by: by.name, byId: by.operatorId, at: new Date(now).toISOString() };
       this.accounts.set(account.email, account);
-      return viewOf(account);
+      return viewOf(account, now);
     }
     if (asked.byId === by.operatorId) throw new GlosError('CONFLICT', 'A different member of staff must approve the reset you asked for');
     delete account.totpSecret;
@@ -272,7 +272,12 @@ export class OperatorAccountService {
   }
 }
 
-function viewOf(a: OperatorAccount): OperatorAccountView {
+/**
+ * `now` is the clock of whatever just acted. The view used to read the wall clock while the act it answers read the
+ * one it was given, so a reset asked for "now" in a test pinned to a past date showed as already expired: the two
+ * halves of one answer disagreed about what time it was.
+ */
+function viewOf(a: OperatorAccount, now: number = Date.now()): OperatorAccountView {
   return {
     operatorId: a.operatorId,
     email: a.email,
@@ -282,7 +287,7 @@ function viewOf(a: OperatorAccount): OperatorAccountView {
     ...(a.lastSeenAt ? { lastSeenAt: a.lastSeenAt } : {}),
     ...(a.passwordChangedAt ? { passwordChangedAt: a.passwordChangedAt } : {}),
     ...(a.revokedAt ? { revokedAt: a.revokedAt } : {}),
-    ...(a.totpReset && Date.now() - Date.parse(a.totpReset.at) < RESET_WAIT_MS ? { twoStepResetAskedBy: a.totpReset.by } : {}),
+    ...(a.totpReset && now - Date.parse(a.totpReset.at) < RESET_WAIT_MS ? { twoStepResetAskedBy: a.totpReset.by } : {}),
   };
 }
 

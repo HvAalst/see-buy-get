@@ -140,8 +140,9 @@ export class PresenceService implements OnApplicationBootstrap {
     const keys = new Set<string>([...this.presences.keys()]);
     for (const entity of this.entities.list()) {
       const key = normalise(entity.jurisdiction);
-      // Drafts and partners too: a country where a company is being prepared belongs on the map.
-      if (key && entity.kind !== 'group') keys.add(key);
+      // Drafts and partners too: a country where a company is being prepared belongs on the map. A customer's
+      // business does not: a shipper signing up from Germany is not us preparing Germany.
+      if (key && entity.kind !== 'group' && entity.kind !== 'business') keys.add(key);
     }
     return [...keys].sort((a, b) => a.localeCompare(b)).map((k) => this.resolve(k));
   }

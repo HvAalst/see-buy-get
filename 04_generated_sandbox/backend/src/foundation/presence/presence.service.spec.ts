@@ -157,6 +157,20 @@ describe('presence', () => {
       expect(map.find((p) => p.jurisdiction === 'KE')?.level).toBe('established');
       expect(map.find((p) => p.jurisdiction === 'ZM')?.level).toBe('matched');
     });
+
+    it('B1 — is not moved by a CUSTOMER: a shipper signing up from a country is not us preparing it, nor our partner there', async () => {
+      // A business used to be recorded as a `partner`, so an importer in a country answered `partnerFor` and could
+      // stand in for the company that partners us there.
+      const moduleRef = await Test.createTestingModule({
+        providers: [PresenceService, EntityService, DidService, LedgerService, EventBus, { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter }],
+      }).compile();
+      const entities = moduleRef.get(EntityService);
+      entities.seed();
+      const map = moduleRef.get(PresenceService);
+      entities.createBusiness({ name: 'Accra Shippers', jurisdiction: 'GH', profile: { activities: ['shipper'], registrationNo: 'CS-1', createdBy: 'Ama', createdByPersonDid: 'did:glos:ama' } });
+      expect(map.list().map((p) => p.jurisdiction)).not.toContain('GH');
+      expect(() => map.set({ jurisdiction: 'GH', level: 'partnered', by: 'A. Mwangi' })).toThrow();
+    });
   });
 
   describe('CA1 — only a country that exists', () => {

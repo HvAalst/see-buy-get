@@ -6,7 +6,7 @@
  * translated, articles are not yet.
  */
 
-export type GuideApp = 'agent' | 'mdp' | 'fleet' | 'driver' | 'vendor' | 'send' | 'home' | 'console';
+export type GuideApp = 'agent' | 'mdp' | 'fleet' | 'driver' | 'vendor' | 'send' | 'home' | 'console' | 'business';
 
 export interface GuideArticle {
   /** Stable: it is the anchor on help.html. */
@@ -27,7 +27,8 @@ export const GUIDE_APPS: Record<GuideApp, string> = {
   vendor: "Store app",
   send: "Send app",
   home: "Front door",
-  console: "Operator console"
+  console: "Operator console",
+  business: "Business app"
 };
 
 export const ARTICLES: GuideArticle[] = [
@@ -44,6 +45,7 @@ export const ARTICLES: GuideArticle[] = [
       "A driver: the phone number your fleet registered, and your PIN.",
       "A store: your store ID and signing secret.",
       "Sending or collecting a parcel: your phone number and a PIN you choose.",
+      "A business — a shipper, importer, expeditor, clearing agent or yard: the Business app, with your own phone number and PIN.",
       "Network staff: the email and password a colleague set up for you."
     ]
   },
@@ -312,6 +314,9 @@ export const ARTICLES: GuideArticle[] = [
       "Choose A company, then type your email and password.",
       "Change the password you were given: your name at the top, then Settings.",
       "The company’s administrators are listed on its rates screen, where they can be added or taken away."
+    ],
+    notes: [
+      "Importers, clearing agents and other customers do not sign in here: they use the Business app."
     ]
   },
   {
@@ -323,6 +328,52 @@ export const ARTICLES: GuideArticle[] = [
     summary: "Switching a country on and verifying a company’s documents each need a second, different person.",
     notes: [
       "The console compares the names your sign-ins carry, so both people must sign in as themselves."
+    ]
+  },
+  {
+    id: "business-sign-in",
+    apps: [
+      "business",
+      "home"
+    ],
+    title: "The Business app: signing in and setting up",
+    summary: "Everyone in a business signs in as themselves, with their own phone number and PIN — the same PIN as in any SeeBuyGet app.",
+    steps: [
+      "Open the Business app from the front page: Sign in, then A business.",
+      "Type your phone number and PIN. New here, or forgot your PIN? We send a code to your phone first.",
+      "The first time, set up your business: its registered name, country, registration number and what it does. You become its owner.",
+      "In more than one business? Pick one. Switch business, in the menu under your name, takes you back to the list."
+    ]
+  },
+  {
+    id: "business-people",
+    apps: [
+      "business"
+    ],
+    title: "The people in a business",
+    summary: "An owner adds people by the phone number they sign in with. Nothing opens for them until they sign in themselves and say yes.",
+    steps: [
+      "People, then Add someone: their phone number, their name, and what they may do.",
+      "Owner: everything, including the people. Booker: the day-to-day work. Finance: the same, and the person your payments will be connected through. Viewer: sees everything, changes nothing.",
+      "To take somebody out, press Remove on their row. It holds from their next click.",
+      "Leave takes you out of a business yourself. The only owner cannot leave until somebody else is an owner."
+    ]
+  },
+  {
+    id: "business-check",
+    apps: [
+      "business",
+      "console"
+    ],
+    title: "SeeBuyGet checking a business",
+    summary: "A business works from the moment it is set up. It is shown to others — a public page, a place in the agent finder — once two members of SeeBuyGet staff have checked it.",
+    steps: [
+      "Business app, Overview: add the registration certificate and the ID of the person speaking for the business, then Ask SeeBuyGet to check us.",
+      "Operator console, Businesses: open the business, open each paper and verify it, then approve. A second, different member of staff gives the second approval.",
+      "Refused? The business reads the reason in its app and by email, puts it right, and asks again."
+    ],
+    notes: [
+      "Changing the business’s name or registration number puts it back to not checked: those are what was checked."
     ]
   },
   {

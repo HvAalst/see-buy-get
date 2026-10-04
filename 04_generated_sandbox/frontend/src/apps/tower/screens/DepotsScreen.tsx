@@ -64,8 +64,10 @@ export interface DepotRegister {
  *
  * So: the position is the yard's OWN WORDS, recorded and never assigned — and what we bring is the one
  * thing a gate man with a notebook cannot have, which is what is arriving and whether it is empty.
+ *
+ * B1 — it reads only who is signed in and the API client, so the Business app hosts it for a yard's own people.
  */
-export function DepotsScreen({ state, actions }: { state: TowerState; actions: TowerActions }) {
+export function DepotsScreen({ state, actions }: { state: Pick<TowerState, 'who'>; actions: Pick<TowerActions, 'client'> }) {
   const t = useT();
   const client = actions.client();
   const who = state.who?.name;

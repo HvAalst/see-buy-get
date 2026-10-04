@@ -18,6 +18,10 @@ export type ActorRole =
   /** Administers a COMPANY — a sister, or the group. `tenant` is the entityId; reach follows the
    *  company structure from there (see EntityService.mayAdminister). */
   | 'entity_admin'
+  /** A person acting for a customer's BUSINESS (B1) — a shipper, importer, expeditor, clearing agent or yard. `did`
+   *  is the business's own, `tenant` its entityId, `personDid` the member. Not an `entity_admin`: that role sets what
+   *  a company of ours charges, and a customer's login must never reach a price. */
+  | 'business'
   | 'operator'
   | 'anon';
 

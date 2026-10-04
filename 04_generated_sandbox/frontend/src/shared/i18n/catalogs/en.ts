@@ -14,7 +14,8 @@ import { enFleet } from './en.fleet';
 import { enMdp } from './en.mdp';
 import { enVendor } from './en.vendor';
 import { enHome } from './en.home';
-import { enTower, enTowerCompanies, enTowerMoney, enTowerNetwork, enTowerQueues, enTowerSupport } from './en.tower';
+import { enBusiness } from './en.business';
+import { enTower, enTowerBusinesses, enTowerCompanies, enTowerMoney, enTowerNetwork, enTowerQueues, enTowerSupport } from './en.tower';
 
 /* HOW A SHIPPER PAYS A CARRIER DIRECTLY. Shared, because the fleet declaring it, the shop reading it
    before booking, and the shop reading it back afterwards must all say the same thing. */
@@ -72,7 +73,9 @@ export const en = {
   ...enMdp,
   ...enVendor,
   ...enHome,
+  ...enBusiness,
   ...enTower,
+  ...enTowerBusinesses,
   ...enTowerCompanies,
   ...enTowerQueues,
   ...enTowerNetwork,

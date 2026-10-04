@@ -1,3 +1,4 @@
+import type { BusinessRow } from './businesses';
 import type { CourierContact, PapersNetworkView } from './papers';
 import type { MoversView } from './movers';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
@@ -18,7 +19,7 @@ import type { HelpOption } from './pictures';
 import { resolveBaseUrl } from '../../lib/sbg';
 
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
-export type Screen = 'network' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'papers' | 'imports' | 'market' | 'movers' | 'reports' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'company' | 'corridors' | 'borders' | 'presence' | 'depots' | 'settings';
+export type Screen = 'network' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'businesses' | 'papers' | 'imports' | 'market' | 'movers' | 'reports' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'company' | 'corridors' | 'borders' | 'presence' | 'depots' | 'settings';
 
 export interface TowerState {
   phase: Phase;
@@ -78,6 +79,8 @@ export interface TowerState {
   freightClaims: FreightClaimRow[] | null;
   disposal: DisposalRow[] | null;
   approvals: ApprovalRow[] | null;
+  /** B1 — customers' businesses, those waiting on a check first. Null while unread, like every queue. */
+  businesses: BusinessRow[] | null;
   /** Shops that started signing up and stopped — read beside the applications, counted with none of
    *  them. Null while unread, like every other list here. */
   stalled: StalledRow[] | null;
@@ -334,6 +337,7 @@ const INITIAL: TowerState = {
   freightClaims: null,
   disposal: null,
   approvals: null,
+  businesses: null,
   stalled: null,
   driverApplications: null,
   presence: null,
@@ -594,7 +598,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
    */
   const loadQueues = useCallback(async (client: TowerClient) => {
     setState((s) => ({ ...s, loading: true }));
-    const [claims, freightClaims, disposal, approvals, stalled, driverApplications] = await Promise.all([
+    const [claims, freightClaims, disposal, approvals, stalled, driverApplications, businesses] = await Promise.all([
       client.api.disputes(),
       client.api.freightClaims(),
       client.api.disposalQueue(),
@@ -604,6 +608,8 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       client.api.unfinishedSignups(),
       // The queue that had no screen: read here because it IS a decision we owe, unlike the chase list.
       client.api.driverKycQueue(),
+      // B1 — a business asking to be checked is a decision we owe, and it takes two of us.
+      client.api.businesses(),
     ]);
     setState((s) => ({
       ...s,
@@ -614,6 +620,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       approvals: approvals.error ? null : (narrow<ApprovalRow[]>(approvals.data) ?? []),
       stalled: stalled.error ? null : (narrow<{ items: StalledRow[] }>(stalled.data)?.items ?? []),
       driverApplications: driverApplications.error ? null : (narrow<DriverApplication[]>(driverApplications.data) ?? []),
+      businesses: businesses.error ? null : (narrow<{ items: BusinessRow[] }>(businesses.data)?.items ?? []),
       readAt: Date.now(),
     }));
   }, []);
@@ -890,6 +897,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     else if (state.screen === 'presence') await loadPresence(client);
     else if (state.screen === 'companies') await loadEntities(client);
     else if (state.screen === 'papers') await loadPapers(client);
+    else if (state.screen === 'businesses') await loadQueues(client);
     else if (state.screen === 'movers') await loadMovers(client);
     else if (state.screen === 'support') {
       // Refreshing the support screen means re-reading the parcel somebody is on the phone about, not
@@ -980,6 +988,8 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         // CA5 — the lapsing list is only worth reading fresh: a policy that lapsed since sign-in must show.
         if (screen === 'companies' && client) void loadEntities(client);
         if (screen === 'papers' && client) void loadPapers(client);
+        // B1 — fresh: a colleague may have just given the first approval, and the second is yours to give.
+        if (screen === 'businesses' && client) void loadQueues(client);
         // Read fresh every time: a hand-back that happened this morning is the reason somebody opened it.
         if (screen === 'movers' && client) void loadMovers(client);
       },

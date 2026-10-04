@@ -10,6 +10,10 @@ describe('the front page', () => {
       ['glos-agent-did', ''], // signed out leaves nothing worth offering
     ]);
     expect(appsOnThisDevice({ getItem: (k) => store.get(k) ?? null }).map((a) => a.href)).toEqual(['/driver/', '/send/']);
+    // B1 — somebody who works for a business is offered the Business app, and it has a name to be offered by.
+    store.set('glos-business-did', 'did:glos:c');
+    expect(appsOnThisDevice({ getItem: (k) => store.get(k) ?? null }).map((a) => a.href)).toEqual(['/driver/', '/send/', '/business/']);
+    expect(t('home.landing.back.business')).toBe('Business app');
     expect(appsOnThisDevice(undefined)).toEqual([]);
     // Storage that throws (a locked-down browser) offers nothing and breaks nothing.
     expect(appsOnThisDevice({ getItem: () => { throw new Error('denied'); } })).toEqual([]);

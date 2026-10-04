@@ -16,6 +16,12 @@ rule restored under a coarse pointer), and it is **not installable**: no manifes
 tab, and no service worker, because an operator acts on a queue and a cached queue is one that lies. See
 `AppSpec.installable` in `vite.config.ts`.
 
+`business` (B1, served at `/business/`, dev port 5182) is the Business app: shippers, importers, expeditors,
+clearing agents and container yards, each person signed in with their own phone and PIN. It is part of the
+PUBLIC site — customers, not staff — and is built for a desk like the console: it uses `console.css`, hosts the
+console's import and yard screens unchanged, and is likewise not installable. Staff check a business in the
+console's Businesses queue (two different members of staff).
+
 `src/control-tower.html` is GONE too, and it was deleted rather than migrated. It drove the M7 module —
 scenarios, disruption, network design, carbon — whose only signal source is a stub feed of Suez-canal and
 Singapore port advisories: software written for a global freight forwarder, before this became a network
@@ -48,7 +54,7 @@ page you are already on, because Vite's SPA fallback answers `/send/` with the c
 **One app, with hot reload.**
 
 ```bash
-SBG_APP=home npm run dev      # or driver, agent, fleet, mdp, vendor, genesis, tower
+SBG_APP=home npm run dev      # or driver, agent, fleet, mdp, vendor, genesis, business, tower
 ```
 
 Each app has its own dev port (see `APPS` in `vite.config.ts`). The service worker is off in dev on

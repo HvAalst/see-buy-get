@@ -37,6 +37,20 @@ export function SignInScreen({ actions }: SignInScreenProps) {
             </span>
           </a>
         ))}
+        {/* B1 — a customer's business has its own app, apart from the staff console and from the participant apps
+            above: everybody in it signs in with their own phone and PIN. */}
+        <a class="row" href="/business/">
+          <span class="row__ic">
+            <Icon name="badge" size={24} />
+          </span>
+          <span class="row__body">
+            <span class="row__t">{t('home.signin.business')}</span>
+            <span class="row__s">{t('home.signin.businessSub')}</span>
+          </span>
+          <span class="row__end">
+            <Icon name="chevronRight" size={22} />
+          </span>
+        </a>
         <a class="row" href="/send/">
           <span class="row__ic">
             <Icon name="send" size={24} />

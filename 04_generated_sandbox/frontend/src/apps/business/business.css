@@ -1,0 +1,121 @@
+/* ==========================================================================
+   The Business app — the console's design system (console.css, tower.css),
+   and only what a customer's workplace adds to it.
+   ========================================================================== */
+
+/* The chooser and the setup form carry more than a sign-in card: wider, and the sections spaced. */
+.biz-choose {
+  max-width: 560px;
+}
+.biz-choose > section {
+  margin-bottom: 20px;
+}
+.biz-choose .cons__panelt {
+  display: block;
+  margin-bottom: 8px;
+}
+.biz-choose__acts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* The phone apps' email step sits inside a console card here: its own spacing is enough, and its label is dressed
+   like every other label on this surface — a small navy title, not the phone apps' spaced capitals. */
+.biz-signin .field__label {
+  font-size: var(--c-fs-sm);
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--navy);
+}
+.biz-signin__same {
+  margin-top: 12px;
+}
+
+.biz-new .cfield {
+  margin-bottom: 14px;
+}
+
+/* Two short fields side by side at a desk, stacked on a phone. */
+.biz-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 12px;
+}
+@media (max-width: 560px) {
+  .biz-two {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* A choice with a line under each option that says what it means. */
+.biz-acts {
+  border: 0;
+  padding: 0;
+  margin: 0 0 14px;
+}
+.biz-act span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.biz-act strong {
+  font-weight: 600;
+}
+
+/* The business's name beside the product's, in the masthead — which business is open is never a guess. */
+.biz-mast__name {
+  max-width: 40vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.biz-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The check panel: a paper still missing is the step, so it reads as one. */
+.biz-check--papers .cdoc__tile,
+.biz-check--refused .cdoc__tile {
+  color: var(--tx2);
+}
+.biz-papers {
+  margin: 12px 0;
+}
+
+/* A file input wearing a button: the label is the control, the input is there for the browser. */
+.biz-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.cdoc__acts label.cbtn {
+  position: relative;
+  cursor: pointer;
+}
+
+.biz-people__acts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Room for the bottom bar on a phone, so the last row is never under it. */
+@media (max-width: 1099px) {
+  .biz .cons__main {
+    padding-bottom: 88px;
+  }
+}
+
+/* The setup form's lede sits a little apart from its first field, as a panel's does. */
+.biz-new .cons__lede {
+  margin-bottom: 16px;
+}

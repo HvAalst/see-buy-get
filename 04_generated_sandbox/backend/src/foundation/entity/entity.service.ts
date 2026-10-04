@@ -8,6 +8,7 @@ import { DidService } from '../did/did.service';
 import { currencyForJurisdiction } from '../money/currency';
 import { DEFAULT_TAX_LABEL, MAX_PLATFORM_FEE_PCT, MAX_PREMIUM_PCT, MAX_TAX_PCT, MIN_PLATFORM_FEE_PCT, MIN_TAX_PCT, PLATFORM_FEE_PCT } from '../../modules/pudo/pudo.config';
 import {
+  BusinessProfile,
   Entity,
   EntityChange,
   EntityPricing,
@@ -147,7 +148,7 @@ export class EntityService implements OnApplicationBootstrap {
         'FORBIDDEN',
         entity.status === 'draft'
           ? `${entity.name} is still a draft: it cannot be a party to a transaction until two people switch it on`
-          : `${entity.name} is ${entity.kind === 'partner' ? 'a partner company' : 'a holding company'}: it cannot be a party to a transaction`,
+          : `${entity.name} is ${entity.kind === 'partner' ? 'a partner company' : entity.kind === 'business' ? 'a customer’s business' : 'a holding company'}: it cannot be a party to a transaction`,
       );
     }
     return entity;
@@ -575,9 +576,78 @@ export class EntityService implements OnApplicationBootstrap {
    */
   /* ------------------------------------------- CA3 + CA7: companies created on purpose -- */
 
-  /** Every company of ours and every partner, drafts included — the register of who stands where. Never the money. */
+  /**
+   * Every company of ours and every partner, drafts included — the register of who stands where. Never the money.
+   *
+   * NEVER A CUSTOMER'S BUSINESS. This list decides which companies stand in a country, whose lapsed licence switches a
+   * capability off there, and whose papers the expiry reminders chase. A shipper's lapsed insurance must not switch off
+   * parcels in Kenya.
+   */
   companies(): Entity[] {
-    return this.list().filter((e) => e.kind !== 'group');
+    return this.list().filter((e) => e.kind !== 'group' && e.kind !== 'business');
+  }
+
+  /* ---------------------------------------------------------- B1: customers' businesses -- */
+
+  /** Every customer's business, newest first. */
+  businesses(): Entity[] {
+    return this.list()
+      .filter((e) => e.kind === 'business')
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  /**
+   * Record a customer's business. Called by BusinessService, which holds the rules about WHO may (a signed-in person,
+   * who becomes its first owner); this holds what the record is.
+   *
+   * ACTIVE FROM THE START, unlike a company of ours: a business is a customer, not somebody we answer for. What it may
+   * not do until staff have checked it is be shown to strangers — see `listedPublicly`.
+   */
+  createBusiness(input: { name: string; jurisdiction: string; profile: Omit<BusinessProfile, 'verification'> }): Entity {
+    const country = catalogueEntry(input.jurisdiction);
+    if (!country) throw new GlosError('INVALID_INPUT', `${(input.jurisdiction ?? '').toUpperCase()} is not a country in the catalogue`, { field: 'country' });
+    const name = input.name?.trim();
+    if (!name) throw new GlosError('FIELD_REQUIRED', 'Give the business its registered name', { field: 'name' });
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'business';
+    const base = `biz-${country.code.toLowerCase()}-${slug}`;
+    let entityId = base;
+    for (let n = 2; this.entities.has(entityId); n += 1) entityId = `${base}-${n}`;
+    const now = new Date().toISOString();
+    const entity: Entity = {
+      entityId,
+      name,
+      kind: 'business',
+      jurisdiction: country.code,
+      currency: country.currency,
+      record: emptyRecord(),
+      business: { ...input.profile, verification: { state: 'unverified' } },
+      did: this.dids.generate(`entity:${entityId}`, { role: 'entity', kind: 'business', jurisdiction: country.code }).id,
+      createdAt: now,
+    };
+    this.entities.set(entityId, entity);
+    this.record(entityId, { at: now, by: input.profile.createdBy, what: 'created', from: '—', to: `business in ${country.name}` });
+    return entity;
+  }
+
+  /**
+   * Change a business's own facts, or where its check stands. The caller decides who may; this keeps the record and the
+   * line in its history.
+   */
+  updateBusiness(entityId: string, patch: { name?: string; profile?: Partial<BusinessProfile> }, by: string, what: 'record' | 'verification' = 'record'): Entity {
+    const entity = this.get(entityId);
+    if (entity.kind !== 'business' || !entity.business) throw new GlosError('NOT_FOUND', `No such business: ${entityId}`);
+    const before = entity.business.verification.state;
+    if (patch.name !== undefined) entity.name = patch.name;
+    entity.business = { ...entity.business, ...(patch.profile ?? {}) };
+    this.entities.set(entityId, entity);
+    this.record(entityId, {
+      at: new Date().toISOString(),
+      by,
+      what: what === 'verification' ? 'verification' : 'record',
+      from: what === 'verification' ? before : '—',
+      to: what === 'verification' ? entity.business.verification.state : Object.keys({ ...(patch.name !== undefined ? { name: 1 } : {}), ...(patch.profile ?? {}) }).join(', '),
+    });
+    return entity;
   }
 
   /** Our company in a country, draft or active — for the record screens and the activation, never for money. */

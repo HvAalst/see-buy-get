@@ -16,8 +16,65 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
  * and `jurisdiction` are optional here: a company that settles nothing needs neither.
  */
 
-/** CA7 — a partner is a local company that contracts where we are Partnered: recorded like ours, never a party to our books. */
-export type EntityKind = 'group' | 'sister' | 'partner';
+/**
+ * CA7 — a partner is a local company that contracts where we are Partnered: recorded like ours, never a party to our books.
+ *
+ * B1 — a BUSINESS is a customer: a shipper, an importer, an expeditor, a clearing agent or a container yard. It signs
+ * itself up, its people sign in with their own phone and PIN, and it is never a party to our books either. It used to be
+ * recorded as a `partner`, which put a customer in the same drawer as the company that stands in for us in a country —
+ * so an importer in Ethiopia made `partnerFor('ET')` answer with the importer.
+ */
+export type EntityKind = 'group' | 'sister' | 'partner' | 'business';
+
+/** What a business says it does. Its own claim: it decides which screens it is shown, never what it is allowed. */
+export const BUSINESS_ACTIVITIES = ['shipper', 'importer', 'expeditor', 'clearing_agent', 'depot'] as const;
+export type BusinessActivity = (typeof BUSINESS_ACTIVITIES)[number];
+
+/**
+ * WHETHER SEEBUYGET HAS CHECKED WHO THIS IS — two members of staff, from its papers.
+ *
+ * `unverified` nobody has asked · `asked` the business asked and staff have not looked · `checking` one member of staff
+ * approved and a second, different one has to · `verified` · `refused` with the reason, until the business asks again.
+ */
+export const VERIFICATION_STATES = ['unverified', 'asked', 'checking', 'verified', 'refused'] as const;
+export type VerificationState = (typeof VERIFICATION_STATES)[number];
+
+export interface BusinessVerification {
+  state: VerificationState;
+  askedAt?: string;
+  askedBy?: string;
+  /** The first member of staff to approve, by name and by the key their sessions answer to. */
+  firstBy?: string;
+  firstById?: string;
+  firstAt?: string;
+  verifiedBy?: string;
+  verifiedAt?: string;
+  refusedBy?: string;
+  refusedAt?: string;
+  reason?: string;
+}
+
+/** A business's own facts. Its name lives on the entity, like every company's. */
+export interface BusinessProfile {
+  activities: BusinessActivity[];
+  /** Its number at the company registry of its country. What staff check the certificate against. */
+  registrationNo: string;
+  taxNo?: string;
+  createdBy: string;
+  createdByPersonDid: string;
+  verification: BusinessVerification;
+}
+
+/**
+ * MAY THIS COMPANY BE SHOWN TO STRANGERS — given a public address, listed in a finder?
+ *
+ * A business names itself when it signs up, so until two people have checked its papers the name is only a claim. A
+ * handle falls out of the name and is never taken back, so issuing one to an unchecked "FedEx" would hand the real one's
+ * address to whoever typed it first.
+ */
+export function listedPublicly(entity: Entity): boolean {
+  return entity.kind !== 'business' || entity.business?.verification.state === 'verified';
+}
 
 /**
  * What a sister charges on top of what a shipment COST it, in three layers it decides separately.
@@ -289,8 +346,8 @@ export class EntityChange {
   at: string;
   /** The name the token carried, or the DID when a machine did it. Never a string from a request body. */
   by: string;
-  @ApiProperty({ enum: ['rates', 'tax', 'cover', 'fee', 'topUpFee', 'carrierPapers', 'created', 'record', 'activated'] })
-  what: 'rates' | 'tax' | 'cover' | 'fee' | 'topUpFee' | 'carrierPapers' | 'created' | 'record' | 'activated';
+  @ApiProperty({ enum: ['rates', 'tax', 'cover', 'fee', 'topUpFee', 'carrierPapers', 'created', 'record', 'activated', 'verification'] })
+  what: 'rates' | 'tax' | 'cover' | 'fee' | 'topUpFee' | 'carrierPapers' | 'created' | 'record' | 'activated' | 'verification';
   /** The lane it applies to; absent means the company's default for everything. */
   @ApiPropertyOptional()
   lane?: string;
@@ -371,7 +428,7 @@ export class PricingBounds {
 export class EntityPricing {
   entityId: string;
   name: string;
-  @ApiProperty({ enum: ['group', 'sister', 'partner'] })
+  @ApiProperty({ enum: ['group', 'sister', 'partner', 'business'] })
   kind: EntityKind;
   @ApiPropertyOptional()
   jurisdiction?: string;
@@ -500,6 +557,8 @@ export class Entity {
   status?: 'draft' | 'active';
   /** CA3 — the legal record: form, registration, representatives, owners, tax numbers, bank, licences, insurance. */
   record?: CompanyRecord;
+  /** B1 — present exactly when `kind` is `business`. */
+  business?: BusinessProfile;
   createdAt: string;
 }
 

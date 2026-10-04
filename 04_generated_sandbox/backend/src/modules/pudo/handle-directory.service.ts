@@ -1,6 +1,7 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { HandleService } from '../../foundation/handle/handle.service';
 import { EntityService } from '../../foundation/entity/entity.service';
+import { listedPublicly } from '../../foundation/entity/entity.types';
 import { AgentService } from './agent.service';
 import { MdpService } from './mdp.service';
 import { FleetManagerService } from './fleet-manager.service';
@@ -62,7 +63,10 @@ export class HandleDirectory implements OnApplicationBootstrap {
 
   /** Issue anything missing, and only when the population has actually moved. */
   ensure(): void {
-    const companies = this.entities.list();
+    // A customer's business only once two members of staff have checked its papers: the name is its own claim until
+    // then, and a handle is never taken back. Filtered BEFORE the count, so the check passing is itself the change
+    // that makes the next sweep run.
+    const companies = this.entities.list().filter(listedPublicly);
     const shops = this.agents.list();
     const hubs = this.mdps.list();
     const fleets = this.managers.list();

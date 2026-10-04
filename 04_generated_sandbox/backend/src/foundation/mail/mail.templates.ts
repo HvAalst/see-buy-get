@@ -12,7 +12,7 @@ import { MailDocument, RenderedMail, renderDocument } from './mail.blocks';
  */
 
 /** The apps an email can send somebody to. */
-export type MailApp = 'agent' | 'mdp' | 'fleet' | 'driver' | 'vendor' | 'send' | 'console' | 'home';
+export type MailApp = 'agent' | 'mdp' | 'fleet' | 'driver' | 'vendor' | 'send' | 'console' | 'home' | 'business';
 
 export const APP_NAMES: Record<MailApp, string> = {
   agent: 'Shop app',
@@ -23,6 +23,7 @@ export const APP_NAMES: Record<MailApp, string> = {
   send: 'Send app',
   console: 'operator console',
   home: 'SeeBuyGet',
+  business: 'Business app',
 };
 
 const PATHS: Record<MailApp, [number, string]> = {
@@ -34,6 +35,7 @@ const PATHS: Record<MailApp, [number, string]> = {
   vendor: [5179, '/vendor/'],
   home: [5180, '/'],
   console: [5181, '/'],
+  business: [5182, '/business/'],
 };
 
 /** Where a button goes. `SBG_PUBLIC_URL` in a deployment (e.g. https://app.seebuyget.com); the dev servers otherwise. */
@@ -89,6 +91,8 @@ export interface MailParams {
   'interest-received': { country: string; kind: string };
   /** Two members of staff switched that country on. Sent by the approval itself, not by anybody remembering. */
   'country-open': { country: string; settles: boolean; company?: string; joinUrl: string };
+  /** B1 — SeeBuyGet checked a business, or refused to, with the reason. Sent to its owners by the decision itself. */
+  'business-checked': { business: string; outcome: 'verified' | 'refused'; reason?: string; when: string };
 }
 
 export type MailTemplateId = keyof MailParams;
@@ -206,6 +210,38 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
         reason: 'You are getting this email because this address was typed into a SeeBuyGet app.',
       };
     },
+  },
+
+  'business-checked': {
+    title: 'Your business was checked',
+    sentWhen: 'A second member of staff verifies a business, or a member of staff refuses to, with the reason.',
+    wired: true,
+    sample: { business: 'Abebe Import & Export PLC', outcome: 'verified', when: '2026-10-04T10:12:00Z' },
+    build: (p) =>
+      p.outcome === 'verified'
+        ? {
+            subject: `SeeBuyGet checked ${p.business}`,
+            preheader: 'Your business is verified: carriers and clearing agents now see it as checked.',
+            blocks: [
+              { kind: 'heading', text: `${p.business} is verified` },
+              { kind: 'paragraph', text: 'Two members of SeeBuyGet staff checked your registration certificate and the ID of the person speaking for the business. Carriers and clearing agents now see the business as checked, and it has its own public page.' },
+              { kind: 'facts', rows: [['Business', p.business], ['When', formatWhen(p.when)]] },
+              { kind: 'button', label: `Open the ${APP_NAMES.business}`, href: appUrl('business') },
+            ],
+            reason: 'You are getting this email because you are an owner of this business on SeeBuyGet.',
+          }
+        : {
+            subject: `SeeBuyGet could not check ${p.business} yet`,
+            preheader: p.reason ?? 'Something in the papers needs putting right.',
+            blocks: [
+              { kind: 'heading', text: 'We could not check your business yet' },
+              { kind: 'paragraph', text: `SeeBuyGet staff looked at the papers for ${p.business} and could not verify it. This is what they said:` },
+              { kind: 'warning', title: 'What needs putting right', text: p.reason ?? 'Open the Business app to see the reason.' },
+              { kind: 'paragraph', text: 'Put it right in the Business app, then ask for the check again. Your business keeps working in the meantime.' },
+              { kind: 'button', label: `Open the ${APP_NAMES.business}`, href: appUrl('business') },
+            ],
+            reason: 'You are getting this email because you are an owner of this business on SeeBuyGet.',
+          },
   },
 
   'account-safety': {

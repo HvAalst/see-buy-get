@@ -16,6 +16,7 @@ import { MailService } from '../../foundation/mail/mail.service';
 import { appUrl } from '../../foundation/mail/mail.templates';
 import { InterestService } from '../../foundation/interest/interest.service';
 import { DepartureService } from './departure.service';
+import { BusinessMemberGuard } from './business-member.guard';
 import { isSandbox } from '../../foundation/runtime/sandbox';
 import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Req, Res, StreamableFile, Optional, UseGuards } from '@nestjs/common';
 import { staffNetworkAllows } from '../../foundation/auth/staff-network';
@@ -178,6 +179,9 @@ export function awardCapOf(p: { coverLimit?: number; declaredValue?: number }): 
 }
 
 @Controller('sbg')
+// B1 — a business sign-in reaches about forty of these routes; whether that person is still in the business, and may
+// change anything, is asked live on every one of them. Every other caller passes through untouched.
+@UseGuards(BusinessMemberGuard)
 export class SbgController {
   constructor(
     private readonly agents: AgentService,
@@ -507,10 +511,12 @@ export class SbgController {
    * company on the system would put a decision on a real importer's record.
    */
   private actingCompany(actor: IntrospectionResult, typed?: string): string {
-    if (actor?.role === 'entity_admin') {
+    // B1 — somebody acting for a customer's business acts as that business and no other, exactly like an administrator.
+    // Whether they are still a member, and may act at all, BusinessMemberGuard has already asked.
+    if (actor?.role === 'entity_admin' || actor?.role === 'business') {
       const own = actingTenant(actor);
       if (!own) throw new GlosError('FORBIDDEN', 'This sign-in carries no company');
-      if (typed && typed !== own) throw new GlosError('FORBIDDEN', 'You administer one company, and it is not that one');
+      if (typed && typed !== own) throw new GlosError('FORBIDDEN', 'You act for one company, and it is not that one');
       return own;
     }
     if (!typed) throw new GlosError('FIELD_REQUIRED', 'Name the company you are acting for');
@@ -520,6 +526,8 @@ export class SbgController {
   private requireReach(actor: IntrospectionResult, entityId: string): void {
     if (actor?.role === 'operator') return;
     if (actor?.role === 'entity_admin' && this.entities.mayAdminister(actor.tenant, entityId)) return;
+    // A business reaches itself. It has no parent and is nobody's: the company structure's reach does not apply.
+    if (actor?.role === 'business' && actor.tenant === entityId) return;
     throw new GlosError('NOT_FOUND', `No such company: ${entityId}`);
   }
 
@@ -747,7 +755,7 @@ export class SbgController {
   }
 
   /** CA3 — everything about one company: the record, whether it is ready, its papers, what lapsed, what changed. */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Get('entities/:entityId/record')
   companyRecord(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult) {
     this.requireReach(actor, entityId);
@@ -776,7 +784,7 @@ export class SbgController {
   }
 
   /** CA4 — put a document on record: fingerprinted, versioned, waiting for a second person to verify it. */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('entities/:entityId/documents')
   uploadCompanyDocument(@Param('entityId') entityId: string, @Body() dto: CompanyDocumentDto, @Actor() actor: IntrospectionResult) {
     this.requireReach(actor, entityId);
@@ -792,7 +800,7 @@ export class SbgController {
   }
 
   /** CA4 — the file itself, with the fingerprint it was kept under and whether the stored bytes still match it. */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Get('entities/:entityId/documents/:documentId/file')
   @Header('Cache-Control', 'private, no-store')
   @Header('X-Content-Type-Options', 'nosniff')
@@ -843,7 +851,7 @@ export class SbgController {
    * reach `requireReach` already gives them over every company record; they are an onlooker on each, and
    * an onlooker is owed nothing and can act on nothing.
    */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('imports')
   registerImport(@Body() dto: RegisterImportDto, @Actor() actor: IntrospectionResult) {
     const acting = this.actingCompany(actor, dto.importerEntityId);
@@ -884,7 +892,7 @@ export class SbgController {
   }
 
   /** The consignments this company is a party to. Staff naming no company see the network's. */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Get('imports')
   listImports(@Actor() actor: IntrospectionResult, @Query('entityId') entityId?: string): { items: ImportRow[] } {
     const rows = actor?.role === 'operator' && !entityId ? this.imports.list('', { all: true }) : this.imports.list(this.actingCompany(actor, entityId));
@@ -901,13 +909,13 @@ export class SbgController {
    * not clearing anything, which is how rumour is refused at intake rather than stored at low confidence.
    * It is never phrased as a requirement — we say who asked, how often, and when.
    */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Get('imports/known-papers')
   knownImportPapers(@Query() q: KnownPapersQueryDto): { items: KnownPaper[] } {
     return { items: this.imports.knownPapers(q.country, q.port) };
   }
 
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Get('imports/:importId')
   importDetail(@Param('importId') importId: string, @Actor() actor: IntrospectionResult, @Query('entityId') entityId?: string): ImportDetail {
     const detail = actor?.role === 'operator' && !entityId ? this.imports.detail(importId, '', { all: true }) : this.imports.detail(importId, this.actingCompany(actor, entityId));
@@ -915,14 +923,14 @@ export class SbgController {
   }
 
   /** Appoint a clearing agent — the act that grants them the papers. The importer's decision alone. */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('imports/:importId/appoint')
   appointClearingAgent(@Param('importId') importId: string, @Body() dto: AppointAgentDto, @Actor() actor: IntrospectionResult): ImportDetail {
     return this.imports.appoint(importId, dto.agentEntityId, this.actingCompany(actor, dto.entityId), this.namedActor(actor, dto.by));
   }
 
   /** End it. Immediate, and visible to both sides: the grants are marked revoked, never deleted. */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('imports/:importId/revoke')
   revokeClearingAgent(@Param('importId') importId: string, @Body() dto: RevokeAgentDto, @Actor() actor: IntrospectionResult): ImportDetail {
     return this.imports.revoke(importId, this.actingCompany(actor, dto.entityId), this.namedActor(actor, dto.by), dto.reason);
@@ -938,7 +946,7 @@ export class SbgController {
    * The notice travels with the answer so no screen has to keep its own copy of the words, which is how
    * two versions of a consent text start existing.
    */
-  @Roles('operator', 'entity_admin', 'agent', 'driver', 'fleet_manager')
+  @Roles('operator', 'entity_admin', 'business', 'agent', 'driver', 'fleet_manager')
   @Get('field-observations/notice')
   observationNotice(@Query('country') country?: string) {
     return { country: country?.toUpperCase(), mayHoldEvidence: this.observations.mayHoldEvidence(country), ...this.observations.notice() };
@@ -950,7 +958,7 @@ export class SbgController {
    * Open to the people who are actually at a counter — a driver, a shopkeeping agent, a fleet office, a
    * company administrator — because a form that only staff can fill in collects what staff already know.
    */
-  @Roles('operator', 'entity_admin', 'agent', 'driver', 'fleet_manager')
+  @Roles('operator', 'entity_admin', 'business', 'agent', 'driver', 'fleet_manager')
   @Post('field-observations')
   recordFieldObservation(@Body() dto: FieldObservationDto, @Actor() actor: IntrospectionResult) {
     return this.observations.record(
@@ -971,7 +979,7 @@ export class SbgController {
   }
 
   /** CL5 — what has been observed at a place, newest first by the date it HAPPENED. */
-  @Roles('operator', 'entity_admin', 'agent', 'driver', 'fleet_manager')
+  @Roles('operator', 'entity_admin', 'business', 'agent', 'driver', 'fleet_manager')
   @Get('field-observations')
   listFieldObservations(@Query('country') country?: string, @Query('place') place?: string) {
     const items = country ? this.observations.at(country, place) : this.observations.list();
@@ -996,7 +1004,7 @@ export class SbgController {
    * The agent's, because they are the party at the counter and the only one who knows. It is what lets a
    * split chain mint its delivery leg: before it, the box is still the state's business.
    */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('imports/:importId/released')
   recordImportRelease(@Param('importId') importId: string, @Body() dto: ReleaseDto, @Actor() actor: IntrospectionResult): ImportDetail {
     return this.imports.recordRelease(importId, this.actingCompany(actor, dto.entityId), this.namedActor(actor, dto.by));
@@ -1015,7 +1023,7 @@ export class SbgController {
     return this.transit.declare({ carrierDid, country: dto.country, reference: dto.reference, expiresAt: dto.expiresAt }, this.namedActor(actor, dto.by));
   }
 
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Get('carriers/:carrierDid/transit-authorities')
   listTransitAuthorities(@Param('carrierDid') carrierDid: string) {
     return { items: this.transit.list(carrierDid), basis: TRANSIT_BASIS };
@@ -1028,28 +1036,28 @@ export class SbgController {
   }
 
   /** The agent publishes what they will need. We never assert this list — see the service. */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('imports/:importId/required')
   publishRequiredPapers(@Param('importId') importId: string, @Body() dto: PublishRequiredDto, @Actor() actor: IntrospectionResult): ImportDetail {
     return this.imports.publishRequired(importId, this.actingCompany(actor, dto.entityId), dto.items, this.namedActor(actor, dto.by));
   }
 
   /** The importer attaches one of their own papers. There is deliberately no upload on this route. */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('imports/:importId/supply')
   supplyRequiredPaper(@Param('importId') importId: string, @Body() dto: SupplyPaperDto, @Actor() actor: IntrospectionResult): ImportDetail {
     return this.imports.supply(importId, this.actingCompany(actor, dto.entityId), dto.key, dto.documentId, this.namedActor(actor, dto.by));
   }
 
   /** The agent ticks one off. An expired paper is refused HERE, not at the counter. */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('imports/:importId/required/:key/accept')
   acceptRequiredPaper(@Param('importId') importId: string, @Param('key') key: string, @Body() dto: PaperDecisionDto, @Actor() actor: IntrospectionResult): ImportDetail {
     return this.imports.accept(importId, this.actingCompany(actor, dto.entityId), key, this.namedActor(actor, dto.by));
   }
 
   /** Send one back, always with a reason. */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('imports/:importId/required/:key/reject')
   rejectRequiredPaper(@Param('importId') importId: string, @Param('key') key: string, @Body() dto: PaperDecisionDto, @Actor() actor: IntrospectionResult): ImportDetail {
     return this.imports.reject(importId, this.actingCompany(actor, dto.entityId), key, this.namedActor(actor, dto.by), dto.reason);
@@ -1061,7 +1069,7 @@ export class SbgController {
    * A document the caller may not read answers NOT FOUND rather than FORBIDDEN: the alternative confirms to
    * somebody probing that a document with this id exists on a company they cannot see.
    */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Get('imports/:importId/documents/:documentId/file')
   @Header('Cache-Control', 'private, no-store')
   @Header('X-Content-Type-Options', 'nosniff')
@@ -1084,14 +1092,14 @@ export class SbgController {
   /* ------------------------------------- CL2b — paying the agent, and the road leg -- */
 
   /** CL2b — the agent names their price. Allowed even where we cannot handle the money: it is their agreement. */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('imports/:importId/fee')
   quoteClearanceFee(@Param('importId') importId: string, @Body() dto: QuoteClearanceFeeDto, @Actor() actor: IntrospectionResult): ImportDetail {
     return this.imports.quoteFee(importId, this.actingCompany(actor, dto.entityId), dto.amount, dto.note, this.namedActor(actor, dto.by));
   }
 
   /** CL2b — the importer agrees the figure. Nothing moves here; agreeing is not paying. */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('imports/:importId/fee/accept')
   acceptClearanceFee(@Param('importId') importId: string, @Body() dto: AcceptClearanceFeeDto, @Actor() actor: IntrospectionResult): ImportDetail {
     return this.imports.acceptFee(importId, this.actingCompany(actor, dto.entityId), this.namedActor(actor, dto.by));
@@ -1122,7 +1130,7 @@ export class SbgController {
    * That makes it self-serving by construction, so it is built like a road-hazard dispute: attributed,
    * visible to the other party at once, answerable BESIDE rather than instead, and never erased.
    */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('imports/:importId/customs-holds')
   recordCustomsHold(@Param('importId') importId: string, @Body() dto: RecordCustomsHoldDto, @Actor() actor: IntrospectionResult): ImportDetail {
     return this.imports.recordCustomsHold(
@@ -1134,14 +1142,14 @@ export class SbgController {
   }
 
   /** The other party's account of the same hold. Never a deletion — see the service. */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('imports/:importId/customs-holds/:holdId/answer')
   answerCustomsHold(@Param('importId') importId: string, @Param('holdId') holdId: string, @Body() dto: AnswerCustomsHoldDto, @Actor() actor: IntrospectionResult): ImportDetail {
     return this.imports.answerCustomsHold(importId, this.actingCompany(actor, dto.entityId), holdId, dto.stance as never, dto.note, this.namedActor(actor, dto.by));
   }
 
   /** It ended. Once: a release date that moves is not a record. */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('imports/:importId/customs-holds/:holdId/release')
   releaseCustomsHold(@Param('importId') importId: string, @Param('holdId') holdId: string, @Body() dto: ReleaseCustomsHoldDto, @Actor() actor: IntrospectionResult): ImportDetail {
     return this.imports.releaseCustomsHold(importId, this.actingCompany(actor, dto.entityId), holdId, dto.at);
@@ -1154,7 +1162,7 @@ export class SbgController {
    * shipper reads: a record handed down is a verdict, one both parties hold is an account. The public page
    * is the other route to this, and the drive compares the two payloads field for field.
    */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Get('entities/:entityId/clearance-record')
   clearanceRecord(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): ClearanceRecordResponse {
     const me = this.actingCompany(actor, entityId);
@@ -1176,7 +1184,7 @@ export class SbgController {
    *
    * The importer's, because the goods are theirs.
    */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('imports/:importId/cargo')
   declareImportCargo(@Param('importId') importId: string, @Body() dto: DeclareCargoDto, @Actor() actor: IntrospectionResult): ImportDetail {
     return this.withHandles(
@@ -1208,7 +1216,7 @@ export class SbgController {
    * it is recorded with a name against it — and until it is, the clock says in words that demurrage is
    * not running rather than counting from an ETA that was a guess.
    */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('imports/:importId/box/arrived')
   recordBoxArrival(@Param('importId') importId: string, @Body() dto: BoxArrivedDto, @Actor() actor: IntrospectionResult): ImportDetail {
     return this.withHandles(
@@ -1224,7 +1232,7 @@ export class SbgController {
    * it, attribute it, and count — and we never compute what being late costs, because that is the duty
    * line again and the penalty lands on somebody who is not us.
    */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('imports/:importId/box/free-days')
   claimBoxFreeDays(@Param('importId') importId: string, @Body() dto: BoxFreeDaysDto, @Actor() actor: IntrospectionResult): ImportDetail {
     return this.withHandles(
@@ -1243,7 +1251,7 @@ export class SbgController {
    * Either party may record it, and usually the agent will — they booked the box, they owe the return and
    * they are the one standing at the depot gate.
    */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('imports/:importId/box/ending')
   endBox(@Param('importId') importId: string, @Body() dto: BoxEndingDto, @Actor() actor: IntrospectionResult): ImportDetail {
     return this.withHandles(
@@ -1270,7 +1278,7 @@ export class SbgController {
    * The weight is the box's own tare on an empty run, and it is asked for rather than invented: an empty
    * container is not a light one, and the figure is painted on the door.
    */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('imports/:importId/box/return-leg')
   mintReturnLeg(@Param('importId') importId: string, @Body() dto: BoxReturnLegDto, @Actor() actor: IntrospectionResult): ImportDetail {
     return this.withHandles(
@@ -1300,7 +1308,7 @@ export class SbgController {
    * the box. This is the other half — the importer who says the hole was there before it was loaded, the
    * agent who says it was not — added BESIDE, never over, with nothing adjudicating the two.
    */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('imports/:importId/box/interchange')
   recordInterchange(@Param('importId') importId: string, @Body() dto: BoxInterchangeDto, @Actor() actor: IntrospectionResult): ImportDetail {
     return this.withHandles(
@@ -1325,7 +1333,7 @@ export class SbgController {
    * A photograph the caller may not read answers NOT FOUND rather than FORBIDDEN, for the same reason the
    * document route does: the alternative confirms to somebody probing that it exists.
    */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Get('imports/:importId/box/photos/:mediaId')
   @Header('Cache-Control', 'private, no-store')
   @Header('X-Content-Type-Options', 'nosniff')
@@ -1382,7 +1390,7 @@ export class SbgController {
    * checked and choices never are: we do not ring it, write to it, or open the site. And it is PUBLISHED,
    * which is the point of writing one — so it wants the gate's number rather than somebody's private one.
    */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('entities/:entityId/contact')
   setContactCard(@Param('entityId') entityId: string, @Body() dto: ContactCardDto, @Actor() actor: IntrospectionResult): ContactCardView {
     const own = actor?.role === 'operator' ? this.entities.get(entityId).entityId : this.actingCompany(actor, entityId);
@@ -1396,7 +1404,7 @@ export class SbgController {
   }
 
   /** Their card as it stands, for the screen that edits it. The same object every directory shows. */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Get('entities/:entityId/contact')
   contactCard(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): ContactCardView {
     const own = actor?.role === 'operator' ? this.entities.get(entityId).entityId : this.actingCompany(actor, entityId);
@@ -1418,7 +1426,7 @@ export class SbgController {
    * a segregation distance wrong is the kind of advice that hurts somebody. So the layout stays theirs.
    * The departure side is ours already, because the leg home is on the board.
    */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('depots')
   declareDepot(@Body() dto: DeclareDepotDto, @Actor() actor: IntrospectionResult): EmptyDepot {
     return this.depots.declare(
@@ -1429,7 +1437,7 @@ export class SbgController {
   }
 
   /** It stopped holding empties. Marked, never deleted — it held them last month. */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('depots/:entityId/close')
   closeDepot(@Param('entityId') entityId: string, @Body() dto: ByDto, @Actor() actor: IntrospectionResult): EmptyDepot {
     return this.depots.close(this.requireDepotKeeper(actor, entityId), this.namedActor(actor, dto.by));
@@ -1443,7 +1451,7 @@ export class SbgController {
    * assets, and it serves nobody who is deciding where to drive — what they need is which yards exist,
    * near where, and whether there is anything in them. The next step is a telephone call.
    */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Get('depots')
   findDepots(@Query('country') country?: string, @Query('q') q?: string): DepotListResponse {
     return {
@@ -1458,7 +1466,7 @@ export class SbgController {
    * The yard's own, and an operator's. Not a participant's: the box-level list is an inventory of another
    * company's assets, and the finder above already answers the question a haulier actually has.
    */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Get('depots/:entityId/register')
   depotRegister(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): DepotRegisterView {
     return this.depots.registerOf(this.requireDepotKeeper(actor, entityId)) as never;
@@ -1471,14 +1479,14 @@ export class SbgController {
    * can find the box. Recording a position and assigning one are different jobs and only the first is
    * honestly ours, which is the whole of the layout argument in one field.
    */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('depots/:entityId/boxes')
   depotSays(@Param('entityId') entityId: string, @Body() dto: DepotBoxDto, @Actor() actor: IntrospectionResult): DepotRegisterView {
     return this.depots.say(this.requireDepotKeeper(actor, entityId), dto.containerNo, { position: dto.position, note: dto.note }, this.namedActor(actor, dto.by)) as never;
   }
 
   /** It left. Removed from what the yard SAYS — never from what we derived, which is a movement record. */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Delete('depots/:entityId/boxes/:containerNo')
   depotGone(@Param('entityId') entityId: string, @Param('containerNo') containerNo: string, @Actor() actor: IntrospectionResult): DepotRegisterView {
     return this.depots.gone(this.requireDepotKeeper(actor, entityId), containerNo) as never;
@@ -1505,7 +1513,7 @@ export class SbgController {
    * Written by the company itself. An operator may write one on their behalf (they carry every company's
    * reach already), and the name on it says who did.
    */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('entities/:entityId/clearance-offer')
   setClearanceOffer(@Param('entityId') entityId: string, @Body() dto: ClearanceOfferDto, @Actor() actor: IntrospectionResult): ClearanceOffer {
     return this.imports.setOffer(
@@ -1555,7 +1563,7 @@ export class SbgController {
    * says WHICH, because a resolved address is the centre of a town and a pin is somebody pointing at a
    * gate. Both end up on a consignment note, where the difference has legal weight.
    */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('entities/:entityId/sites')
   declareSite(@Param('entityId') entityId: string, @Body() dto: DeclareSiteDto, @Actor() actor: IntrospectionResult): Site {
     return this.sites.declare(
@@ -1566,14 +1574,14 @@ export class SbgController {
   }
 
   /** This company's saved places, alphabetical. Theirs alone: nobody else's list is reachable here. */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Get('entities/:entityId/sites')
   sitesOf(@Param('entityId') entityId: string, @Query() q: SitesQueryDto, @Actor() actor: IntrospectionResult): { sites: Site[]; basis: string } {
     return { sites: this.sites.list(this.actingCompany(actor, entityId), q.kind), basis: SITE_BASIS };
   }
 
   /** CL2b — mint the road leg from the port. A person does this; we observe no arrival and invent none. */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Post('imports/:importId/road-leg')
   mintImportRoadLeg(@Param('importId') importId: string, @Body() dto: MintRoadLegDto, @Actor() actor: IntrospectionResult): ImportDetail {
     const acting = this.actingCompany(actor, dto.entityId);
@@ -5228,7 +5236,7 @@ export class SbgController {
    * and does not publish a ranking of the people in it. The counts are there because they are measured and
    * a reader can check them; the ORDER makes no claim.
    */
-  @Roles('operator', 'entity_admin')
+  @Roles('operator', 'entity_admin', 'business')
   @Get('market/lane-carriers')
   laneCarriers(@Query() q: LaneCarriersQueryDto): LaneCarriers {
     const until = q.until ? Date.parse(q.until) : Date.now();

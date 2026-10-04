@@ -128,6 +128,21 @@ const APPS = {
     previewPort: 5189,
   },
   /**
+   * B1 — the Business app: shippers, importers, expeditors, clearing agents and container yards, run by the
+   * people in them, each signed in with their own phone and PIN (the user, 2026-10-04: separate from the
+   * staff console). Built for a desk first and usable on a phone. Not installable, for the console's reason:
+   * it shows papers and containers somebody is about to act on, and a cached copy would be a copy that lies.
+   */
+  business: {
+    base: '/business/',
+    name: 'SeeBuyGet Business',
+    short: 'Business',
+    description: 'Ship, import and clear goods on the SeeBuyGet network — for your whole team.',
+    devPort: 5182,
+    previewPort: 5192,
+    installable: false,
+  },
+  /**
    * The operator console — the first app in this family built for a LARGE SCREEN and a mouse, for the
    * people who operate the network rather than use it. Not installable (see `installable` above), and
    * it is deliberately not on the front door's role chooser: nobody joins as an operator.

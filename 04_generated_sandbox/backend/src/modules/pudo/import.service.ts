@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { EntityService } from '../../foundation/entity/entity.service';
+import { listedPublicly } from '../../foundation/entity/entity.types';
 import { CompanyDocument, CompanyDocumentService } from '../../foundation/entity/company-documents.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
 import { BooksService } from '../../foundation/books/books.service';
@@ -1083,6 +1084,8 @@ export class ImportService {
         return []; // a company that has since been removed is not a result
       }
       if (country && (entity.jurisdiction ?? '').toUpperCase() !== country) return [];
+      // A business that signed itself up is listed for strangers to ring only once staff have checked who it is.
+      if (!listedPublicly(entity)) return [];
 
       const offer = this.offers.get(entityId);
       const record = agentRecordOf(all, entityId);

@@ -18,6 +18,8 @@ import { SupportScreen } from './screens/SupportScreen';
 import { NetworkScreen } from './screens/NetworkScreen';
 import { RatesScreen } from './screens/RatesScreen';
 import { ImportsScreen } from './screens/ImportsScreen';
+import { BusinessesScreen } from './screens/BusinessesScreen';
+import { waitingOnStaff } from './businesses';
 import { MarketScreen } from './screens/MarketScreen';
 import { DepotsScreen } from './screens/DepotsScreen';
 import { MoversScreen } from './screens/MoversScreen';
@@ -96,7 +98,7 @@ export function App() {
      * company administrator saw on signing in. COMPANY moved out, because their own record is theirs to
      * keep — an operator picks a company from a list, an administrator IS one.
      */
-    ...(isOperator ? (['network', 'hazards', 'claims', 'disposal', 'approvals', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'borders', 'movers', 'rates'] as Screen[]) : []),
+    ...(isOperator ? (['network', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'borders', 'movers', 'rates'] as Screen[]) : []),
     ...(manyCompanies ? (['companies'] as Screen[]) : []),
     // Their own books and what they are owed — never the network's ledger, which is not theirs to read.
     'money',
@@ -124,6 +126,7 @@ export function App() {
     claims: state.claims == null && state.freightClaims == null ? null : (state.claims?.length ?? 0) + (state.freightClaims?.length ?? 0),
     disposal: state.disposal?.length ?? null,
     approvals: state.approvals?.length ?? null,
+    businesses: waitingOnStaff(state.businesses),
     // FP4 — who is waiting on somebody HERE: off the road, or a renewed card sent and not yet read. A courier
     // whose licence is merely running out is waiting on nobody; one who has sent the new card is waiting on us.
     papers: waitingCount(state.papers),
@@ -230,6 +233,8 @@ export function App() {
             <DisposalScreen state={state} actions={actions} />
           ) : state.screen === 'reports' ? (
             <ReportsScreen state={state} actions={actions} />
+          ) : state.screen === 'businesses' ? (
+            <BusinessesScreen state={state} actions={actions} />
           ) : state.screen === 'approvals' ? (
             <ApprovalsScreen state={state} actions={actions} />
           ) : state.screen === 'papers' ? (

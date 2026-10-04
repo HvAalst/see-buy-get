@@ -46,6 +46,10 @@ export const ROLE_SCOPES: Record<ActorRole, string[]> = {
   // Deliberately NOT here: anything operational (clearing hazards, KYC decisions, payout runs). Those
   // belong to network staff, and a commercial login must not quietly become one.
   entity_admin: ['entity:read:own', 'entity:manage:own', 'books:read:own'],
+  // A customer's business: its own papers, places, imports and people. No books (it keeps none with us) and no
+  // pricing. What each member may do inside it (owner, booker, finance, viewer) is checked live on every request
+  // by BusinessMemberGuard, never carried here, so taking somebody's access away takes effect on their next click.
+  business: ['business:read:own', 'business:manage:own'],
   operator: [WILDCARD_SCOPE],
   anon: [],
 };

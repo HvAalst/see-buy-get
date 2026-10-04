@@ -19372,6 +19372,418 @@
         }
       }
     },
+    "/v1/sbg/business": {
+      "post": {
+        "operationId": "Business.create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBusinessDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessSession"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/mine": {
+      "get": {
+        "operationId": "Business.mine",
+        "summary": "",
+        "description": "The businesses this person is in, and the ones they are invited to.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessMembershipList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/invitations/{memberId}/accept": {
+      "post": {
+        "operationId": "Business.accept",
+        "parameters": [
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessMembershipView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/invitations/{memberId}/decline": {
+      "post": {
+        "operationId": "Business.decline",
+        "parameters": [
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/{entityId}/session": {
+      "post": {
+        "operationId": "Business.session",
+        "summary": "",
+        "description": "Open one business: a session that acts as it, for a person who is in it.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessSession"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me": {
+      "get": {
+        "operationId": "Business.me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "Business.update",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBusinessDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/members": {
+      "get": {
+        "operationId": "Business.members",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "Business.invite",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteMemberDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessMemberView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/members/{memberId}/role": {
+      "post": {
+        "operationId": "Business.setRole",
+        "parameters": [
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemberRoleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessMemberView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/members/{memberId}": {
+      "delete": {
+        "operationId": "Business.remove",
+        "summary": "",
+        "description": "Take somebody out — or, on your own row, leave. A viewer may leave too: that is not changing the business.",
+        "parameters": [
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessMemberView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/check": {
+      "post": {
+        "operationId": "Business.askForCheck",
+        "summary": "",
+        "description": "Ask SeeBuyGet to check the business, once its papers are on record.",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/businesses": {
+      "get": {
+        "operationId": "Business.staffList",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessStaffList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/businesses/{entityId}": {
+      "get": {
+        "operationId": "Business.staffRow",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessStaffRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/businesses/{entityId}/approve": {
+      "post": {
+        "operationId": "Business.approve",
+        "summary": "",
+        "description": "Approve — the first of two, or the second. Never twice by the same member of staff.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveBusinessDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessStaffRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/businesses/{entityId}/refuse": {
+      "post": {
+        "operationId": "Business.refuse",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefuseBusinessDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessStaffRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/settlement/module-info": {
       "get": {
         "operationId": "Sse.info",
@@ -22826,6 +23238,10 @@
               }
             ]
           },
+          "business": {
+            "type": "object",
+            "description": "B1 — present exactly when `kind` is `business`."
+          },
           "createdAt": {
             "type": "string"
           }
@@ -25865,7 +26281,8 @@
               "carrierPapers",
               "created",
               "record",
-              "activated"
+              "activated",
+              "verification"
             ]
           },
           "lane": {
@@ -25945,7 +26362,8 @@
             "enum": [
               "group",
               "sister",
-              "partner"
+              "partner",
+              "business"
             ]
           },
           "jurisdiction": {
@@ -35630,6 +36048,525 @@
               "abuse",
               "scam"
             ]
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "CreateBusinessDto": {
+        "type": "object",
+        "properties": {
+          "activities": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "shipper",
+                "importer",
+                "expeditor",
+                "clearing_agent",
+                "depot"
+              ]
+            }
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "country": {
+            "type": "string",
+            "description": "Two letters, from the country catalogue.",
+            "maxLength": 2
+          },
+          "registrationNo": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "taxNo": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "yourName": {
+            "type": "string",
+            "description": "How the person setting it up appears inside it.",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "activities",
+          "name",
+          "country",
+          "registrationNo",
+          "yourName"
+        ]
+      },
+      "BusinessToken": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "token_type": {
+            "type": "string"
+          },
+          "expires_in": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "access_token",
+          "token_type",
+          "expires_in"
+        ]
+      },
+      "BusinessCheckView": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "unverified",
+              "asked",
+              "checking",
+              "verified",
+              "refused"
+            ]
+          },
+          "askedAt": {
+            "type": "string"
+          },
+          "verifiedAt": {
+            "type": "string"
+          },
+          "refusedAt": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why it was refused, in staff's words. Shown so the business can put it right."
+          },
+          "missing": {
+            "description": "WHAT IS STILL MISSING BEFORE IT CAN BE ASKED FOR, in keys a screen turns into sentences. Derived on every read.\n`certificate_of_incorporation` · `representative_id`.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "state",
+          "missing"
+        ]
+      },
+      "BusinessMemberView": {
+        "type": "object",
+        "properties": {
+          "memberId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "booker",
+              "finance",
+              "viewer"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "description": "`invited` until they sign in and accept.",
+            "enum": [
+              "invited",
+              "joined"
+            ]
+          },
+          "phoneEnds": {
+            "type": "string"
+          },
+          "invitedBy": {
+            "type": "string"
+          },
+          "invitedAt": {
+            "type": "string"
+          },
+          "joinedAt": {
+            "type": "string"
+          },
+          "you": {
+            "type": "boolean",
+            "description": "True on the reader's own row."
+          }
+        },
+        "required": [
+          "memberId",
+          "name",
+          "role",
+          "state",
+          "phoneEnds",
+          "invitedBy",
+          "invitedAt",
+          "you"
+        ]
+      },
+      "BusinessView": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "activities": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "shipper",
+                "importer",
+                "expeditor",
+                "clearing_agent",
+                "depot"
+              ]
+            }
+          },
+          "registrationNo": {
+            "type": "string"
+          },
+          "taxNo": {
+            "type": "string"
+          },
+          "check": {
+            "$ref": "#/components/schemas/BusinessCheckView"
+          },
+          "handle": {
+            "type": "string",
+            "description": "Its public address — only once checked."
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "you": {
+            "description": "The reader's own place in it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BusinessMemberView"
+              }
+            ]
+          }
+        },
+        "required": [
+          "entityId",
+          "name",
+          "country",
+          "activities",
+          "registrationNo",
+          "check",
+          "createdAt",
+          "you"
+        ]
+      },
+      "BusinessSession": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "$ref": "#/components/schemas/BusinessToken"
+          },
+          "business": {
+            "$ref": "#/components/schemas/BusinessView"
+          }
+        },
+        "required": [
+          "token",
+          "business"
+        ]
+      },
+      "BusinessMembershipView": {
+        "type": "object",
+        "properties": {
+          "memberId": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "booker",
+              "finance",
+              "viewer"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "invited",
+              "joined"
+            ]
+          },
+          "invitedBy": {
+            "type": "string"
+          },
+          "checked": {
+            "type": "string",
+            "enum": [
+              "unverified",
+              "asked",
+              "checking",
+              "verified",
+              "refused"
+            ]
+          }
+        },
+        "required": [
+          "memberId",
+          "entityId",
+          "name",
+          "country",
+          "role",
+          "state",
+          "invitedBy",
+          "checked"
+        ]
+      },
+      "BusinessMembershipList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BusinessMembershipView"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "UpdateBusinessDto": {
+        "type": "object",
+        "properties": {
+          "taxNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "Null clears it.",
+            "maxLength": 60
+          },
+          "activities": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "shipper",
+                "importer",
+                "expeditor",
+                "clearing_agent",
+                "depot"
+              ]
+            }
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "registrationNo": {
+            "type": "string",
+            "maxLength": 60
+          }
+        }
+      },
+      "InviteMemberDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "booker",
+              "finance",
+              "viewer"
+            ]
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 24
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "role",
+          "phone",
+          "name"
+        ]
+      },
+      "MemberRoleDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "booker",
+              "finance",
+              "viewer"
+            ]
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "BusinessStaffRow": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "activities": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "shipper",
+                "importer",
+                "expeditor",
+                "clearing_agent",
+                "depot"
+              ]
+            }
+          },
+          "registrationNo": {
+            "type": "string"
+          },
+          "taxNo": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "unverified",
+              "asked",
+              "checking",
+              "verified",
+              "refused"
+            ]
+          },
+          "askedAt": {
+            "type": "string"
+          },
+          "askedBy": {
+            "type": "string"
+          },
+          "firstBy": {
+            "type": "string"
+          },
+          "firstAt": {
+            "type": "string"
+          },
+          "verifiedBy": {
+            "type": "string"
+          },
+          "verifiedAt": {
+            "type": "string"
+          },
+          "refusedBy": {
+            "type": "string"
+          },
+          "refusedAt": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "members": {
+            "type": "number"
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "handle": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "entityId",
+          "name",
+          "country",
+          "activities",
+          "registrationNo",
+          "createdAt",
+          "createdBy",
+          "state",
+          "members",
+          "missing"
+        ]
+      },
+      "BusinessStaffList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BusinessStaffRow"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "ApproveBusinessDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string"
+          }
+        }
+      },
+      "RefuseBusinessDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "by": {
+            "type": "string",
+            "description": "The shared operator key's typed name. A named staff session's own name always wins."
           }
         },
         "required": [

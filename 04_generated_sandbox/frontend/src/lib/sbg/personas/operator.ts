@@ -744,6 +744,17 @@ export function createOperatorApi(sbg: SbgClient) {
     kycQueue: () => sbg.request((c) => c.GET('/v1/sbg/agents/kyc-queue', {})),
 
     /**
+     * B1 — customers' businesses: every one, those waiting on a check first. Checked by TWO members of staff from the
+     * registration certificate and the representative's ID; the second approval verifies, never the first one twice.
+     */
+    businesses: () => sbg.request((c) => c.GET('/v1/sbg/businesses', {})),
+    approveBusiness: (entityId: string, by?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/businesses/{entityId}/approve', { params: { path: { entityId } }, body: { ...(by ? { by } : {}) } })),
+    /** `reason` is what the business reads, in the app and by email: it is how they know what to put right. */
+    refuseBusiness: (entityId: string, reason: string, by?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/businesses/{entityId}/refuse', { params: { path: { entityId } }, body: { reason, ...(by ? { by } : {}) } })),
+
+    /**
      * Heavy-registry drivers waiting to be vetted, and the decision.
      *
      * Both routes have been live since the driver registry shipped and NOTHING read the queue: a driver
