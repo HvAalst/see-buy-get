@@ -76,6 +76,14 @@ describe('a customer’s business, over the wire', () => {
     await http().get('/v1/sbg/entities/sbg-et/record').set(bearer(biz)).expect(404);
     // And a consumer token is not a business sign-in.
     await http().get('/v1/sbg/business/me').set(bearer(owner.token)).expect(403);
+
+    // Staff see it in their own Businesses list — never among OUR companies, and never with an email-and-password
+    // login of the kind our companies' administrators have: its people are its owners' to add.
+    const ours = await http().get('/v1/sbg/entities').set(bearer(setupKey)).expect(200);
+    expect(ours.body.map((e: { entityId: string }) => e.entityId)).not.toContain(entityId);
+    const theirs = await http().get('/v1/sbg/businesses').set(bearer(setupKey)).expect(200);
+    expect(theirs.body.items.map((e: { entityId: string }) => e.entityId)).toContain(entityId);
+    await http().post(`/v1/sbg/entities/${entityId}/admins`).set(bearer(setupKey)).send({ email: `x-${tag}@example.com`, name: 'X' }).expect(400);
   });
 
   it('lets a viewer read and leave, and takes somebody out on their next request', async () => {

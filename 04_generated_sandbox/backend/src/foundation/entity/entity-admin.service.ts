@@ -56,6 +56,9 @@ export class EntityAdminService {
    */
   create(entityId: string, input: { email: string; name: string }, by = 'SeeBuyGet staff'): EntityAdminView & { temporaryPassword: string } {
     const entity = this.entities.get(entityId); // throws NOT_FOUND for an entity that does not exist
+    // A customer's business has no administrator logins: its people sign in with their own phone and PIN and are added
+    // by its owners. An email-and-password login here would be a way in that skips both, and the check by two of us.
+    if (entity.kind === 'business') throw new GlosError('INVALID_STATE', `${entity.name} is a customer’s business: its owners add its people in the Business app`);
     const email = (input.email || '').trim().toLowerCase();
     if (!email.includes('@')) throw new GlosError('VALIDATION_FAILED', 'An administrator needs a real email address to sign in with');
     if (!input.name?.trim()) throw new GlosError('VALIDATION_FAILED', 'Say who this is — every change they make is recorded against this name');

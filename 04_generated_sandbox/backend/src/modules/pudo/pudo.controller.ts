@@ -1620,7 +1620,9 @@ export class SbgController {
   listEntities(@Actor() actor: IntrospectionResult) {
     // An operator sees the whole structure; an administrator sees only what it administers. Filtering
     // HERE rather than on the screen is the point: a console can only render what it was given.
-    const rows = actor?.role === 'operator' ? this.entities.list() : this.entities.administrable(actor?.tenant);
+    // Never a customer's business: this is the structure of OUR companies, read by the rates, money and register
+    // screens. Businesses have their own staff list (`GET businesses`).
+    const rows = (actor?.role === 'operator' ? this.entities.list() : this.entities.administrable(actor?.tenant)).filter((e) => e.kind !== 'business');
     return rows.map((e) => ({ ...e, holdsCustody: this.entities.canHoldCustody(e.entityId) }));
   }
 
