@@ -5121,7 +5121,7 @@ export class SbgController {
   @Get('dispatch/freight')
   listFreight(@Query('status') status?: string) {
     // P1 — an order under a contract is the two parties' and that fleet's, never part of a list anybody may read.
-    return this.dispatch.listFreight({ status: status as never }).filter((f) => !f.contract);
+    return this.dispatch.listFreight({ status: status as never }).filter((f) => !this.dispatch.isPrivateOrder(f));
   }
 
   /**

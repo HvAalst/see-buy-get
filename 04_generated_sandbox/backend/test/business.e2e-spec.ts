@@ -340,6 +340,38 @@ describe('a customer’s business, over the wire', () => {
     await http().post(`${planAt}/send`).set(bearer(setupKey)).send({ day: tomorrow }).expect(400);
     await http().post(`${planAt}/send`).set(bearer(setupKey)).send({ day: new Date().toISOString().slice(0, 10) }).expect(400);
 
+    // P4 — handing an order on, over the wire: a partner is made by a code its own office enters; an offer hides the
+    // customer; the first to take it carries it; it can be given back with a reason, released to the board, taken back.
+    const u2 = `${Date.now() % 1_000_000}${seq}9`;
+    const partner = (await http().post('/v1/sbg/fleet/managers').set(bearer(setupKey)).send({ companyName: `Pwani ${tag}`, contactPhone: `+2547${u2}`, ownerFullName: 'P', ownerNationalId: `MGR-PT-${u2}`, location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: `BRN-PT-${u2}`, transportOperatorLicence: `TOL-PT-${u2}`, taxId: `TAX-PT-${u2}` } }).expect(201)).body;
+    const fa = `/v1/sbg/fleet/managers/${fleet.did}`;
+    const fb = `/v1/sbg/fleet/managers/${partner.did}`;
+    await http().get(`${fa}/partners`).set(bearer(shop)).expect(403);
+    await http().post(`${fa}/orders/offer`).set(bearer(setupKey)).send({ freightIds: [ordered.body.freightId] }).expect(400);
+    const pInvite = (await http().post(`${fa}/partners`).set(bearer(setupKey)).send({ partnerName: 'Pwani' }).expect(201)).body;
+    expect(pInvite.partnership).not.toHaveProperty('invite');
+    await http().post(`${fa}/partners/link`).set(bearer(setupKey)).send({ code: pInvite.code }).expect(400);
+    expect((await http().post(`${fb}/partners/link`).set(bearer(setupKey)).send({ code: pInvite.code }).expect(201)).body).toMatchObject({ status: 'active', partnerName: `Pwani ${tag}` });
+    expect((await http().get(`${fb}/partners`).set(bearer(setupKey)).expect(200)).body.offeredBy).toHaveLength(1);
+    const offeredOut = await http().post(`${fa}/orders/offer`).set(bearer(setupKey)).send({ freightIds: [ordered.body.freightId] }).expect(201);
+    expect(offeredOut.body).toMatchObject({ done: [ordered.body.code], to: [`Pwani ${tag}`] });
+    const seen = (await http().get(`${fb}/orders`).set(bearer(setupKey)).expect(200)).body.items.find((r: { freightId: string }) => r.freightId === ordered.body.freightId);
+    expect(seen).toMatchObject({ role: 'offered', fromFleetName: `Kilima ${tag}` });
+    expect(JSON.stringify(seen)).not.toContain('Jenga Bricks');
+    await http().post(`${fb}/orders/${ordered.body.freightId}/offer/take`).set(bearer(setupKey)).send({}).expect(201);
+    await http().post(`${fb}/orders/${ordered.body.freightId}/offer/take`).set(bearer(setupKey)).send({}).expect(404);
+    expect((await http().get(`/v1/sbg/track/${ordered.body.trackingKey}`).expect(200)).body.carrier).toMatchObject({ name: `Pwani ${tag}` });
+    await http().post(`${fa}/orders/release`).set(bearer(setupKey)).send({ freightIds: [ordered.body.freightId] }).expect(201).then((r) => expect(r.body.refused[0].why).toMatch(/has taken this order/));
+    await http().post(`${fb}/orders/${ordered.body.freightId}/hand-back`).set(bearer(setupKey)).send({ reason: 'No truck after all' }).expect(201);
+    const back = (await http().get(`${fa}/orders`).set(bearer(setupKey)).expect(200)).body.items.find((r: { freightId: string }) => r.freightId === ordered.body.freightId);
+    expect(back).toMatchObject({ role: 'own', handedBack: { reason: 'No truck after all' } });
+    expect(back.handOn).toBeUndefined();
+    expect((await http().post(`${fa}/orders/release`).set(bearer(setupKey)).send({ freightIds: [ordered.body.freightId] }).expect(201)).body.done).toEqual([ordered.body.code]);
+    expect((await http().get('/v1/sbg/dispatch/freight').set(bearer(setupKey)).expect(200)).body.map((x: { freightId: string }) => x.freightId)).toContain(ordered.body.freightId);
+    await http().post(`${fb}/orders/${ordered.body.freightId}/take-back`).set(bearer(setupKey)).send({}).expect(404);
+    await http().post(`${fa}/orders/${ordered.body.freightId}/take-back`).set(bearer(setupKey)).send({}).expect(201);
+    expect((await http().get('/v1/sbg/dispatch/freight').set(bearer(setupKey)).expect(200)).body.map((x: { freightId: string }) => x.freightId)).not.toContain(ordered.body.freightId);
+
     // Ended by the shipper: no new orders, and what was ordered stays with the fleet.
     await http().post(`/v1/sbg/business/me/contracts/${contract.contractId}/end`).set(bearer(shop)).send({ reason: 'Season over' }).expect(201);
     await http().post('/v1/sbg/dispatch/freight').set(bearer(shop)).send({ ...load, contractId: contract.contractId, deliverOn: tomorrow }).expect(400);

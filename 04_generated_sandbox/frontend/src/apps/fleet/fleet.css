@@ -429,3 +429,17 @@
 .plan__held {
   color: var(--dang);
 }
+
+/* P4 — where an order has been handed, and the one thing to do about it: set apart from the facts above it. */
+.handon {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bd);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+.handon .field {
+  width: 100%;
+}

@@ -48,6 +48,8 @@ const KIND_ICON: Record<string, IconName> = {
   fleet_offer: 'truck',
   // The office chose their vehicle for today; the shift is still theirs to start.
   vehicle_today: 'truck',
+  // P4 — orders offered, taken, left or given back between a fleet and its partners.
+  order_handed_on: 'truck',
   // Five wrong PINs locked the way they sign in — somebody may know their number.
   security: 'lock',
 };

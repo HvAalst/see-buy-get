@@ -1103,7 +1103,7 @@ export class DispatchService {
     // P1 — an order under a contract goes on a truck by ONE hand: the office of the fleet it was ordered from. A claim,
     // an offer or an accepted price are other doors onto this same lock, and none of them carries an office.
     if (f.status === 'ordered') {
-      if (!office || f.contract?.fleetDid !== office) throw new GlosError('FORBIDDEN', 'This is an order under a contract — only the fleet it was ordered from puts it on a truck');
+      if (!office || this.carrierOfOrder(f) !== office) throw new GlosError('FORBIDDEN', 'This is an order under a contract — only the fleet carrying it puts it on a truck');
     } else if (!(f.status === 'available' || (f.status === 'scheduled' && f.allowEarlyClaim))) {
       // Claimable when live ('available') OR when it's a scheduled load the shipper opened to early reservation.
       throw new GlosError('INVALID_STATE', `Freight is ${f.status}`);
@@ -1412,7 +1412,7 @@ export class DispatchService {
     const near = (f: Freight) => !input.from || radius == null || this.router.roadKm(input.from, f.pickupLocation) <= radius;
     // P1 — an order under a contract was never offered to anybody: counting it would invent demand the market did not
     // have, and publish whose lanes a fleet works.
-    const scoped = [...this.freights.values()].filter((f) => !f.contract && near(f));
+    const scoped = [...this.freights.values()].filter((f) => !this.isPrivateOrder(f) && near(f));
     return buildSeries(scoped, { from: input.since, to: input.until }, (a, b) => this.router.roadKm(a, b));
   }
 
@@ -1433,7 +1433,7 @@ export class DispatchService {
         return undefined;
       }
     };
-    return carriersOn([...this.freights.values()].filter((f) => !f.contract), input.from, input.to, { from: input.since, to: input.until }, fleetOf);
+    return carriersOn([...this.freights.values()].filter((f) => !this.isPrivateOrder(f)), input.from, input.to, { from: input.since, to: input.until }, fleetOf);
   }
 
   /* ------------------------------------------------- FB0c: negotiate before commit -- */
@@ -1594,7 +1594,13 @@ export class DispatchService {
     const today = new Date(now).toISOString().slice(0, 10);
     const rows: FleetOrderRow[] = [];
     for (const f of this.freights.values()) {
-      if (f.contract?.fleetDid !== fleetDid || !f.deliverOn) continue;
+      if (!f.contract || !f.deliverOn) continue;
+      const role: FleetOrderRow['role'] | undefined =
+        f.contract.fleetDid === fleetDid ? 'own' : f.handOn?.state === 'partner' && f.handOn.partner?.fleetDid === fleetDid ? 'partner' : f.handOn?.state === 'offered' && f.handOn.offeredTo?.some((p) => p.fleetDid === fleetDid) ? 'offered' : undefined;
+      if (!role) continue;
+      // An offer that is still only an offer says what a carrier needs to decide — what, from where to where, how
+      // heavy, for which day — and not whose customer it is: that is the offering fleet's until the order is taken.
+      const masked = role === 'offered';
       if (q.from && f.deliverOn < q.from) continue;
       if (q.to && f.deliverOn > q.to) continue;
       let driverName: string | undefined;
@@ -1612,10 +1618,15 @@ export class DispatchService {
       rows.push({
         freightId: f.freightId,
         code: f.code,
-        contract: f.contract,
-        ...(f.orderRef ? { orderRef: f.orderRef } : {}),
-        uploaded: f.postedByDid === fleetDid,
-        ...(f.planned ? { planned: f.planned } : {}),
+        contract: masked ? { contractId: f.contract.contractId, fleetDid: f.contract.fleetDid, fleetName: f.contract.fleetName, shipperName: f.contract.fleetName } : f.contract,
+        ...(f.orderRef && !masked ? { orderRef: f.orderRef } : {}),
+        uploaded: role === 'own' && f.postedByDid === fleetDid,
+        // A plan is the carrier's: the fleet that handed an order on does not see the partner's trucks.
+        ...(f.planned && this.carrierOfOrder(f) === fleetDid ? { planned: f.planned } : {}),
+        role,
+        ...(f.handOn ? { handOn: role === 'own' ? f.handOn : { ...f.handOn, ...(f.handOn.offeredTo ? { offeredTo: f.handOn.offeredTo.filter((p) => p.fleetDid === fleetDid) } : {}) } } : {}),
+        ...(role !== 'own' ? { fromFleetName: f.contract.fleetName } : {}),
+        ...(role === 'own' && f.handedBack?.length ? { handedBack: f.handedBack[f.handedBack.length - 1] } : {}),
         deliverOn: f.deliverOn,
         ...(window ? { deliveryWindow: window } : {}),
         description: f.description,
@@ -1626,8 +1637,8 @@ export class DispatchService {
         destLabel: f.destLabel,
         ...(f.destLocation ? { destLocation: f.destLocation } : {}),
         status: f.status,
-        ...(f.postedByName ? { postedByName: f.postedByName } : {}),
-        ...(f.onBehalfOf ? { onBehalfOf: f.onBehalfOf } : {}),
+        ...(f.postedByName && role === 'own' ? { postedByName: f.postedByName } : {}),
+        ...(f.onBehalfOf && !masked ? { onBehalfOf: f.onBehalfOf } : {}),
         ...(driverName ? { driverName } : {}),
         ...(plate ? { plate } : {}),
         createdAt: f.createdAt,
@@ -1698,7 +1709,7 @@ export class DispatchService {
 
   /** P3 — a fleet's contract orders for one day that are still without a truck: what a plan for that day is made of. */
   contractOrdersForDay(fleetDid: string, day: string): Freight[] {
-    return [...this.freights.values()].filter((f) => f.contract?.fleetDid === fleetDid && f.deliverOn === day && f.status === 'ordered').sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    return [...this.freights.values()].filter((f) => this.carrierOfOrder(f) === fleetDid && f.handOn?.state !== 'offered' && f.deliverOn === day && f.status === 'ordered').sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
   /**
@@ -1740,7 +1751,8 @@ export class DispatchService {
   /** The vehicle a load was planned on, and whose plan — what a delivery needs to know to send that truck its next trip. */
   planOf(freightId: string): { fleetDid: string; day: string; vehicleId: string } | undefined {
     const f = this.freights.get(freightId);
-    return f?.planned && f.contract ? { fleetDid: f.contract.fleetDid, day: f.planned.day, vehicleId: f.planned.vehicleId } : undefined;
+    const carrier = f ? this.carrierOfOrder(f) : undefined;
+    return f?.planned && carrier ? { fleetDid: carrier, day: f.planned.day, vehicleId: f.planned.vehicleId } : undefined;
   }
 
   freightStatusOf(freightId: string): Freight['status'] | undefined {
@@ -1750,6 +1762,129 @@ export class DispatchService {
   /** The window the sender gave for delivery, if any — read through the one place that knows where it is kept. */
   deliveryWindowOf(f: Freight): string | undefined {
     return instructionsViewOf(f)?.deliveryWindow;
+  }
+
+/* ------------------------------------------------------------ P4: handing an order on -- */
+
+  /**
+   * THE FLEET THAT MUST CARRY A CONTRACT ORDER: the partner that took it, else the fleet it was ordered from. Asked by
+   * everything that decides whose queue, whose plan and whose office — so handing an order on moves all of them at once.
+   */
+  carrierOfOrder(f: Freight): string | undefined {
+    return f.handOn?.state === 'partner' ? f.handOn.partner?.fleetDid : f.contract?.fleetDid;
+  }
+
+  /** An order this fleet was ordered from, that it may still hand on: not on a truck, not already a partner's. */
+  private ownOrderToHandOn(fleetDid: string, freightId: string): Freight {
+    const f = this.requireFreight(freightId);
+    if (f.contract?.fleetDid !== fleetDid) throw new GlosError('NOT_FOUND', 'No such order');
+    if (f.handOn?.state === 'partner') throw new GlosError('INVALID_STATE', `${f.handOn.partner?.fleetName ?? 'A partner'} has taken this order — it is theirs to carry`);
+    return f;
+  }
+
+  /**
+   * OFFER AN ORDER TO THE FLEET'S PARTNERS. All of them at once; the first to take it carries it. It leaves this
+   * fleet's own plan — an order cannot be planned on a truck and offered away in the same breath.
+   */
+  offerToPartners(fleetDid: string, freightId: string, partners: Array<{ fleetDid: string; fleetName: string }>, by: string, now: number = Date.now()): Freight {
+    const f = this.ownOrderToHandOn(fleetDid, freightId);
+    if (f.status !== 'ordered') throw new GlosError('INVALID_STATE', f.status === 'available' ? 'This order is on the open board — take it back first' : `This order is ${f.status} — it can no longer be offered`);
+    if (partners.length === 0) throw new GlosError('INVALID_STATE', 'You have no partner fleet to offer it to — name one first');
+    f.handOn = { state: 'offered', at: new Date(now).toISOString(), by, offeredTo: partners.map((p) => ({ fleetDid: p.fleetDid, fleetName: p.fleetName })) };
+    delete f.planned;
+    this.freights.set(f.freightId, f);
+    return f;
+  }
+
+  /** The partners an order is on offer to right now. Empty when it is not on offer. */
+  offeredTo(freightId: string): Array<{ fleetDid: string; fleetName: string }> {
+    const f = this.freights.get(freightId);
+    return f?.handOn?.state === 'offered' ? [...(f.handOn.offeredTo ?? [])] : [];
+  }
+
+  /**
+   * Is this an order no market may see: under a contract, and not released to the open board? One answer for every
+   * list, series and figure that describes the open market.
+   */
+  isPrivateOrder(f: Freight): boolean {
+    return Boolean(f.contract) && f.handOn?.state !== 'board';
+  }
+
+  /** The offering fleet takes its offer back, while nobody has taken the order. */
+  withdrawOffer(fleetDid: string, freightId: string): Freight {
+    const f = this.ownOrderToHandOn(fleetDid, freightId);
+    if (f.handOn?.state !== 'offered') throw new GlosError('INVALID_STATE', 'This order is not on offer');
+    delete f.handOn;
+    this.freights.set(f.freightId, f);
+    return f;
+  }
+
+  /**
+   * A PARTNER ANSWERS AN OFFER. Taking it makes the order the partner's to plan and carry — first come: the others
+   * are no longer asked. Leaving it takes only that partner off the offer; when the last one has, the offer has run
+   * out and the order is back with nobody. A fleet the order was never offered to is told there is no such offer —
+   * the same answer as once somebody else has taken it.
+   */
+  answerOffer(partnerDid: string, freightId: string, take: boolean, by: string, now: number = Date.now()): Freight {
+    const f = this.freights.get(freightId);
+    const mine = f?.handOn?.state === 'offered' ? f.handOn.offeredTo?.find((p) => p.fleetDid === partnerDid) : undefined;
+    if (!f || !mine || f.status !== 'ordered') throw new GlosError('NOT_FOUND', 'No such offer — it may have been taken, or taken back');
+    if (take) {
+      f.handOn = { state: 'partner', at: f.handOn!.at, by: f.handOn!.by, partner: mine, takenAt: new Date(now).toISOString(), takenBy: by };
+    } else {
+      const rest = f.handOn!.offeredTo!.filter((p) => p.fleetDid !== partnerDid);
+      if (rest.length) f.handOn = { ...f.handOn!, offeredTo: rest };
+      else delete f.handOn;
+    }
+    this.freights.set(f.freightId, f);
+    return f;
+  }
+
+  /**
+   * A PARTNER GIVES BACK an order it had taken, before it is on a truck — with a reason, because the fleet it came
+   * from now has less time to do something about it than it had. Once it is on a truck it is carried.
+   */
+  handBackToPartner(partnerDid: string, freightId: string, reason: string, now: number = Date.now()): Freight {
+    const f = this.freights.get(freightId);
+    if (!f || f.handOn?.state !== 'partner' || f.handOn.partner?.fleetDid !== partnerDid) throw new GlosError('NOT_FOUND', 'No such order');
+    const why = (reason ?? '').trim();
+    if (why.length < 3) throw new GlosError('REASON_REQUIRED', 'Say why you are giving it back');
+    if (f.status !== 'ordered') throw new GlosError('INVALID_STATE', `This order is ${f.status} — it is on a truck, and is carried`);
+    f.handedBack = [...(f.handedBack ?? []), { fleetName: f.handOn.partner.fleetName, reason: why.slice(0, 280), at: new Date(now).toISOString() }];
+    delete f.handOn;
+    delete f.planned;
+    this.freights.set(f.freightId, f);
+    return f;
+  }
+
+  /**
+   * RELEASE AN ORDER TO THE OPEN BOARD: any checked carrier may now take it, at the board's price, and the drivers
+   * near its collection point are told. It is still settled between the parties — the fleet pays whoever it hired.
+   * The contract it was ordered under stays on it: the papers are still the shipper's and the fleet's.
+   */
+  releaseToBoard(fleetDid: string, freightId: string, by: string, now: number = Date.now()): Freight {
+    const f = this.ownOrderToHandOn(fleetDid, freightId);
+    if (f.status !== 'ordered') throw new GlosError('INVALID_STATE', f.status === 'available' ? 'This order is already on the open board' : `This order is ${f.status} — it can no longer be released`);
+    f.status = 'available';
+    f.handOn = { state: 'board', at: new Date(now).toISOString(), by };
+    delete f.planned;
+    this.freights.set(f.freightId, f);
+    void this.events
+      .publish(GlosEvent.Pudo.FreightPosted, { freightId: f.freightId, code: f.code, pickupLocation: f.pickupLocation, destLabel: f.destLabel, weightKg: f.weightKg, cargoClass: f.cargoClass }, { source: 'pudo' })
+      .catch(() => undefined);
+    return f;
+  }
+
+  /** Take an order back off the open board, while nobody has taken it. Offers already on drivers' phones lapse. */
+  takeBackFromBoard(fleetDid: string, freightId: string): Freight {
+    const f = this.requireFreight(freightId);
+    if (f.contract?.fleetDid !== fleetDid || f.handOn?.state !== 'board') throw new GlosError('NOT_FOUND', 'No such order on the board');
+    if (f.status !== 'available') throw new GlosError('INVALID_STATE', `A carrier has it — this order is ${f.status}`);
+    f.status = 'ordered';
+    delete f.handOn;
+    this.freights.set(f.freightId, f);
+    for (const o of this.offers.values()) if (o.ref === f.freightId && o.status === 'pending') o.status = 'expired';
+    return f;
   }
 
   /** FP6 — the load behind a tracking key, or nothing. The key is the credential: no other lookup is offered. */
@@ -1874,7 +2009,8 @@ export class DispatchService {
   assign(freightId: string, driverDid: string, by: { managerDid: string; name?: string }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
     // P1 — whose order it is comes before anything about the truck: another fleet learns nothing about whether it fits.
-    if (f.status === 'ordered' && f.contract?.fleetDid !== by.managerDid) throw new GlosError('FORBIDDEN', 'This is an order under a contract — only the fleet it was ordered from puts it on a truck');
+    if (f.status === 'ordered' && this.carrierOfOrder(f) !== by.managerDid) throw new GlosError('FORBIDDEN', 'This is an order under a contract — only the fleet carrying it puts it on a truck');
+    if (f.status === 'ordered' && f.handOn?.state === 'offered') throw new GlosError('INVALID_STATE', 'This order is on offer to your partners — take the offer back before putting it on a truck');
     const vehicle = this.fleet.vehicleForDriver(driverDid);
     if (!vehicle) throw new GlosError('NOT_COUPLED', 'That driver is not on a shift — a load goes on a vehicle, and they have none yet');
     if (commitModeOf(f) === 'negotiate') throw new GlosError('NEGOTIATION_REQUIRED', 'This load is posted for negotiation — the driver can send the shipper a price from their board; it cannot be assigned at a counter rate');

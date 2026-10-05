@@ -1,3 +1,4 @@
+import type { OrderHandedOn } from './fleet-overflow.types';
 import { UNCOLLECTED_H } from './pudo.config';
 import { appUrl } from '../../foundation/mail/mail.templates';
 import { MailService } from '../../foundation/mail/mail.service';
@@ -235,6 +236,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
      * booking given back reached neither side. Each is a party waiting on the other with no way to know.
      */
     this.events.subscribe<SpaceSold>(GlosEvent.Pudo.DepartureBooked, (e) => this.onSpaceSold(e.payload));
+    this.events.subscribe<OrderHandedOn>(GlosEvent.Pudo.OrderHandedOn, (e) => this.onOrderHandedOn(e.payload));
     this.events.subscribe<BookingGivenBack>(GlosEvent.Pudo.DepartureBookingCancelled, (e) => this.onBookingGivenBack(e.payload));
     this.events.subscribe<RunClaimOpened>(GlosEvent.Pudo.DepartureClaimOpened, (e) => this.onRunClaimOpened(e.payload));
     this.events.subscribe<RunClaimAnswered>(GlosEvent.Pudo.DepartureClaimAnswered, (e) => this.onRunClaimAnswered(e.payload));
@@ -444,6 +446,34 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       } catch (err) {
         this.logger.warn(`departure-cancelled notify failed for ${shipperDid}: ${(err as Error).message}`);
       }
+    }
+  }
+
+/**
+   * P4 — orders moved between a fleet and its partners. Each message says what a planner needs to act on it: how many,
+   * how heavy, for which day — and, when a partner gives one back, why.
+   */
+  private async onOrderHandedOn(p: OrderHandedOn): Promise<void> {
+    const many = p.count !== 1;
+    const what = many ? `${p.count} orders` : (p.code ?? '1 order');
+    const size = p.weightKg >= 1000 ? `${Math.round(p.weightKg / 100) / 10} t` : `${p.weightKg} kg`;
+    const when = p.days.length === 1 ? `for ${p.days[0]}` : p.days.length ? `for ${p.days[0]} to ${p.days[p.days.length - 1]}` : '';
+    const tag = `handon:${p.fromFleetDid}:${p.what}:${p.code ?? p.days.join(',')}`;
+    const data = { what: p.what, count: p.count };
+    if (p.what === 'offered') {
+      for (const to of p.toFleetDids ?? []) {
+        await this.tell(to, { kind: 'order_handed_on', title: `${p.fromFleetName} offers you ${many ? what : 'an order'}`, body: `${size} ${when}. Take ${many ? 'them' : 'it'} or leave ${many ? 'them' : 'it'} under Orders — the first fleet to take an order carries it.`, tag, data });
+      }
+    } else if (p.what === 'withdrawn') {
+      for (const to of p.toFleetDids ?? []) {
+        await this.tell(to, { kind: 'order_handed_on', title: `${p.fromFleetName} took back an offer`, body: `${what}, ${size} ${when}, is no longer on offer to you.`, tag, data });
+      }
+    } else if (p.what === 'taken') {
+      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `${p.partnerName} took ${what}`, body: `${size} ${when}. It is theirs to plan and carry now; you still see it under Orders.`, tag, data });
+    } else if (p.what === 'ran_out') {
+      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `No partner took ${what}`, body: `${size} ${when}. It is back with you without a truck — the open board is the next step.`, tag, data });
+    } else {
+      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `${p.partnerName} gave ${what} back`, body: `${size} ${when}. They said: ${p.reason ?? 'no reason given'}. It is back with you without a truck.`, tag, data });
     }
   }
 

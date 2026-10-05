@@ -191,14 +191,17 @@ export class ConsignmentNoteService implements OnModuleInit {
     return {
       kind: 'freight',
       ref: f.code,
-      status: f.status,
+      // P4 — released to the open board and not yet taken: to the receiver it is still an order with its carrier.
+      status: f.contract && f.status === 'available' ? 'ordered' : f.status,
       description: f.description,
       weightKg: f.weightKg,
       pickupLabel: f.pickupLabel,
       destLabel: f.destLabel,
       ...(f.destLocation ? { destLocation: f.destLocation } : {}),
       ...(f.scheduledPickupAt ? { scheduledPickupAt: f.scheduledPickupAt } : {}),
-      ...(!carrier && f.contract ? { carrier: { name: f.contract.fleetName } } : {}),
+      // Handed to a partner: the partner is who will come. Released to the board: nobody has it yet, and the fleet
+      // the shipper ordered from is still who answers for it.
+      ...(!carrier && f.contract ? { carrier: { name: f.handOn?.state === 'partner' && f.handOn.partner ? f.handOn.partner.fleetName : f.contract.fleetName } } : {}),
       ...(carrier ? { carrier: { name: carrier.name, ...(carrier.driverName ? { driverName: carrier.driverName } : {}), ...(carrier.plate ? { plate: carrier.plate } : {}), ...(carrier.vehicleClass ? { vehicleClass: carrier.vehicleClass } : {}) } } : {}),
       steps,
       ...(f.deliveryAttempts?.length ? { attempts: f.deliveryAttempts.map((a) => ({ outcome: a.outcome, at: a.at })) } : {}),

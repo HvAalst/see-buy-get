@@ -108,6 +108,12 @@ export const NOTIFICATION_KINDS = [
   'roster_changed',
   /** The fleet office put a vehicle on this driver's list for today. Theirs to start, with their PIN. */
   'vehicle_today',
+  /**
+   * P4 — orders moved between a fleet and its partners: a partner is offered a batch, or the offer is taken back; the
+   * fleet that offered hears that one was taken, that nobody took it, or that a partner gave it back and why. Whoever
+   * did not do it is told — an order changing hands is two offices planning on the same thing.
+   */
+  'order_handed_on',
   /** A fleet offered this driver a place, or took the offer back. Only the driver can answer it, so only they are told. */
   'fleet_offer',
   /**

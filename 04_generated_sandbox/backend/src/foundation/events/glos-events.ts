@@ -118,6 +118,7 @@ export const GlosEvent = {
     // F3/F4 — a fleet's own departure. Until these existed DepartureService published nothing at all, so a
     // run could be called off with five shippers aboard and not one of them could be told.
     DepartureBooked: 'pudo.departure_booked', // a shipper took space on a run; the fleet office is told
+    OrderHandedOn: 'pudo.order_handed_on', // P4 — orders moved between a fleet and its partners; the other office is told
     DepartureBookingCancelled: 'pudo.departure_booking_cancelled', // a shipper gave the space back; it is for sale again
     DepartureDeparted: 'pudo.departure_departed', // the truck has gone — the last moment anything could change
     /** A different truck was put on a run before it left. Shippers see a vehicle's CLASS, never its plate, so they are told only when the class changed. */

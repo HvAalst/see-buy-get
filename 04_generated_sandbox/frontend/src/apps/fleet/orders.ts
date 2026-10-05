@@ -13,6 +13,10 @@ export type PlanLeft = components['schemas']['PlanLeftView'];
 export type PlanLeftReason = PlanLeft['reason'];
 export type PlanSendResult = components['schemas']['PlanSendResult'];
 export type PlanSendTruck = components['schemas']['PlanSendTruck'];
+export type Partnership = components['schemas']['FleetPartnershipView'];
+export type PartnerLists = components['schemas']['FleetPartnerLists'];
+export type PartnerInvite = components['schemas']['PartnerInviteIssued'];
+export type HandOnResult = components['schemas']['HandOnBatchResult'];
 /** What a plan for a day is asked with: the day, and whatever the office changes about its own day. */
 export interface PlanAsk {
   day: string;
@@ -59,6 +63,23 @@ export function ordersApi(sbg: SbgClient, did: string) {
     /** P3b — send the next trip to every truck in today's accepted plan that is ready for one. */
     sendPlan: (day: string): Promise<Result<PlanSendResult>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/plan/send', { params: { path }, body: { day } })) as never,
     planState: (day: string): Promise<Result<DayPlanState>> => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/plan', { params: { path, query: { day } } })) as never,
+    /* P4 — partners, and handing orders on to them or to the open board. */
+    partners: (): Promise<Result<PartnerLists>> => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/partners', { params: { path } })) as never,
+    invitePartner: (partnerName: string): Promise<Result<PartnerInvite>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/partners', { params: { path }, body: { partnerName } })) as never,
+    reissuePartner: (partnershipId: string): Promise<Result<PartnerInvite>> =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/partners/{partnershipId}/invite', { params: { path: { did, partnershipId } } })) as never,
+    linkPartner: (code: string): Promise<Result<Partnership>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/partners/link', { params: { path }, body: { code } })) as never,
+    endPartner: (partnershipId: string): Promise<Result<Partnership>> =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/partners/{partnershipId}/end', { params: { path: { did, partnershipId } } })) as never,
+    offerOrders: (freightIds: string[]): Promise<Result<HandOnResult>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/orders/offer', { params: { path }, body: { freightIds } })) as never,
+    releaseOrders: (freightIds: string[]): Promise<Result<HandOnResult>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/orders/release', { params: { path }, body: { freightIds } })) as never,
+    withdrawOffer: (freightId: string): Promise<Result<unknown>> =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/orders/{freightId}/offer/withdraw', { params: { path: { did, freightId } } })) as never,
+    takeOffer: (freightId: string): Promise<Result<unknown>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/orders/{freightId}/offer/take', { params: { path: { did, freightId } } })) as never,
+    leaveOffer: (freightId: string): Promise<Result<unknown>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/orders/{freightId}/offer/leave', { params: { path: { did, freightId } } })) as never,
+    handBack: (freightId: string, reason: string): Promise<Result<unknown>> =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/orders/{freightId}/hand-back', { params: { path: { did, freightId } }, body: { reason } })) as never,
+    takeBack: (freightId: string): Promise<Result<unknown>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/orders/{freightId}/take-back', { params: { path: { did, freightId } } })) as never,
     pin: (freightId: string, at: { lat: number; lng: number }): Promise<Result<{ pinned: true }>> =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/orders/{freightId}/pin', { params: { path: { did, freightId } }, body: at })) as never,
     geocode: (q: string): Promise<Result<{ location: { lat: number; lng: number }; confidence: 'exact' | 'approx' | 'fallback'; matched?: string }>> =>
@@ -69,14 +90,20 @@ export function ordersApi(sbg: SbgClient, did: string) {
 /* ------------------------------------------------------------------- logic -- */
 
 /** What an order's tag says, from the facts on it. `late` outranks everything but done and withdrawn. */
-export type OrderTag = 'unplanned' | 'planned' | 'onTruck' | 'onRoad' | 'delivered' | 'withdrawn' | 'late';
+export type OrderTag = 'unplanned' | 'planned' | 'onTruck' | 'onRoad' | 'delivered' | 'withdrawn' | 'late' | 'offeredToYou' | 'onOffer' | 'withPartner' | 'onBoard';
 
-export function orderTag(o: Pick<FleetOrder, 'status' | 'late' | 'planned'>): OrderTag {
+export function orderTag(o: Pick<FleetOrder, 'status' | 'late' | 'planned'> & Partial<Pick<FleetOrder, 'role' | 'handOn'>>): OrderTag {
   if (o.status === 'delivered') return 'delivered';
   if (o.status === 'cancelled') return 'withdrawn';
+  // Something a partner is asking: that it is waiting for an answer comes before anything about its day.
+  if (o.role === 'offered') return 'offeredToYou';
   if (o.late) return 'late';
   if (o.status === 'in_transit') return 'onRoad';
   if (o.status === 'claimed') return 'onTruck';
+  // P4 — handed on, and where to: none of these is "without a truck" in the sense of being nobody's.
+  if (o.handOn?.state === 'board') return 'onBoard';
+  if (o.role !== 'partner' && o.handOn?.state === 'partner') return 'withPartner';
+  if (o.handOn?.state === 'offered') return 'onOffer';
   // In the accepted plan for its day, and not yet sent out to a driver.
   return o.planned ? 'planned' : 'unplanned';
 }
@@ -84,6 +111,10 @@ export function orderTag(o: Pick<FleetOrder, 'status' | 'late' | 'planned'>): Or
 export const TAG_TONE: Record<OrderTag, 'ok' | 'info' | 'warn' | 'danger' | 'idle'> = {
   unplanned: 'warn',
   planned: 'info',
+  offeredToYou: 'warn',
+  onOffer: 'idle',
+  withPartner: 'info',
+  onBoard: 'idle',
   onTruck: 'info',
   onRoad: 'info',
   delivered: 'ok',
@@ -108,12 +139,15 @@ export function byDay(items: FleetOrder[]): Array<{ day: string; orders: FleetOr
  * ONE DAY IN NUMBERS — what a dispatcher reads first at midday: how many orders, how heavy, and how many still have
  * no truck. Withdrawn orders count for nothing.
  */
-export function daySummary(orders: FleetOrder[]): { orders: number; kg: number; unplanned: number; late: number; delivered: number } {
-  const live = orders.filter((o) => o.status !== 'cancelled');
+export function daySummary(orders: FleetOrder[]): { orders: number; kg: number; unplanned: number; late: number; delivered: number; handedOn: number } {
+  // An order a partner is only OFFERING is not this fleet's day yet: it counts for nothing until it is taken.
+  const live = orders.filter((o) => o.status !== 'cancelled' && o.role !== 'offered');
   return {
     orders: live.length,
     kg: Math.round(live.reduce((s, o) => s + o.weightKg, 0)),
-    unplanned: live.filter((o) => o.status === 'ordered' && !o.planned).length,
+    // Without a truck and in nobody's hands: not planned, not offered, not with a partner. (On the board it is `available`.)
+    unplanned: live.filter((o) => o.status === 'ordered' && !o.planned && (!o.handOn || o.role === 'partner')).length,
+    handedOn: live.filter((o) => o.role !== 'partner' && Boolean(o.handOn) && (o.status === 'ordered' || o.status === 'available')).length,
     late: live.filter((o) => o.late).length,
     delivered: live.filter((o) => o.status === 'delivered').length,
   };
@@ -158,6 +192,19 @@ export function askOf(day: string, accepted?: DayPlan | null): PlanAsk {
   const s = accepted.settings;
   const out = accepted.vehicles.filter((v) => v.excluded).map((v) => v.vehicleId);
   return { day, dayStart: s.dayStart, dayHours: s.dayHours, speedKmh: s.speedKmh, loadMin: s.loadMin, unloadMin: s.unloadMin, ...(out.length ? { excludeVehicleIds: out } : {}) };
+}
+
+/** P4 — may this fleet hand this order on (offer it, or release it)? Its own, still without a truck, and nobody's yet. */
+export function mayHandOn(o: Pick<FleetOrder, 'role' | 'status' | 'handOn'>): boolean {
+  return o.role === 'own' && o.status === 'ordered' && !o.handOn;
+}
+
+/** P4 — what came of offering or releasing a batch, as one sentence. */
+export function handOnLine(what: 'offer' | 'release', r: HandOnResult, t: Translate): string {
+  const n = r.done.length;
+  const went = what === 'offer' ? t(n === 1 ? 'fleet.handOn.offeredOne' : 'fleet.handOn.offered', { n, to: r.to.join(', ') }) : t(n === 1 ? 'fleet.handOn.releasedOne' : 'fleet.handOn.released', { n });
+  const not = r.refused.length ? ` ${t(r.refused.length === 1 ? 'fleet.handOn.refusedOne' : 'fleet.handOn.refused', { n: r.refused.length, why: r.refused[0].why })}` : '';
+  return (n ? went : t('fleet.handOn.none')) + not;
 }
 
 /** P3 — minutes as a working day is said: "9 h 30", "45 min". */

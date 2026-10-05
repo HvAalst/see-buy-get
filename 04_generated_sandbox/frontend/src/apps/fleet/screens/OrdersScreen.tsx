@@ -4,7 +4,8 @@ import { Button, Card, CodeCard, ErrorNote, Explainer, Note, Pill, PlacePicker, 
 import type { GeoPoint } from '../../../shared/geo';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { PACKAGING_OPTIONS } from '../../agent/logic';
-import { TAG_TONE, byDay, dayOf, daySummary, dayWord, mayWithdraw, orderTag, ordersApi, weightWords, type Contract, type DayPlanState, type FleetOrder, type InviteIssued } from '../orders';
+import { TAG_TONE, byDay, dayOf, daySummary, dayWord, mayWithdraw, orderTag, ordersApi, weightWords, type Contract, type DayPlanState, type FleetOrder, type InviteIssued, type PartnerLists } from '../orders';
+import { OrderHandOn, PartnersCard } from './HandOn';
 import { PlanBoard } from './PlanBoard';
 import { OrderUpload } from './OrderUpload';
 
@@ -16,6 +17,10 @@ const TAG_WORD: Record<ReturnType<typeof orderTag>, MessageKey> = {
   delivered: 'fleet.orders.tag.delivered',
   withdrawn: 'fleet.orders.tag.withdrawn',
   late: 'fleet.orders.tag.late',
+  offeredToYou: 'fleet.orders.tag.offeredToYou',
+  onOffer: 'fleet.orders.tag.onOffer',
+  withPartner: 'fleet.orders.tag.withPartner',
+  onBoard: 'fleet.orders.tag.onBoard',
 };
 
 /**
@@ -31,6 +36,7 @@ export function OrdersScreen({ sbg, managerDid, who, onWide }: { sbg: SbgClient 
   const api = useMemo(() => (sbg && managerDid ? ordersApi(sbg, managerDid) : null), [sbg, managerDid]);
   const [orders, setOrders] = useState<FleetOrder[] | null>(null);
   const [contracts, setContracts] = useState<Contract[]>([]);
+  const [partners, setPartners] = useState<PartnerLists | null>(null);
   const [day, setDay] = useState(() => dayOf(new Date(), 1));
   const [error, setError] = useState<unknown>(null);
   const [open, setOpen] = useState<FleetOrder | null>(null);
@@ -56,11 +62,12 @@ export function OrdersScreen({ sbg, managerDid, who, onWide }: { sbg: SbgClient 
   const load = useCallback(async () => {
     if (!api) return;
     const now = new Date();
-    const [o, c] = await Promise.all([api.orders({ from: dayOf(now, -14), to: dayOf(now, 30) }), api.contracts()]);
+    const [o, c, p] = await Promise.all([api.orders({ from: dayOf(now, -14), to: dayOf(now, 30) }), api.contracts(), api.partners()]);
     if (o.error) return setError(o.error);
     setError(null);
     setOrders(o.data?.items ?? []);
     setContracts(c.data?.items ?? []);
+    setPartners(p.data ?? null);
   }, [api]);
 
   useEffect(() => {
@@ -68,10 +75,12 @@ export function OrdersScreen({ sbg, managerDid, who, onWide }: { sbg: SbgClient 
   }, [load]);
 
   const now = new Date();
-  const groups = byDay(orders ?? []);
+  const offered = (orders ?? []).filter((o) => o.role === 'offered' && o.status === 'ordered');
+  const hasPartners = (partners?.offeringTo ?? []).some((p) => p.status === 'active');
+  const groups = byDay((orders ?? []).filter((o) => o.role !== 'offered'));
   // Today and tomorrow are always offered: tomorrow is what gets planned, today is what is happening.
   const days = [...new Set([dayOf(now), dayOf(now, 1), ...groups.map((g) => g.day).filter((d) => d >= dayOf(now))])].sort();
-  const late = (orders ?? []).filter((o) => o.late && o.deliverOn < day);
+  const late = (orders ?? []).filter((o) => o.late && o.deliverOn < day && o.role !== 'offered');
   const chosen = groups.find((g) => g.day === day)?.orders ?? [];
   const sum = daySummary(chosen);
 
@@ -82,6 +91,7 @@ export function OrdersScreen({ sbg, managerDid, who, onWide }: { sbg: SbgClient 
         api={api}
         accepted={planState?.plan}
         newSince={planState?.newSince}
+        hasPartners={hasPartners}
         onClose={() => setPlanning(false)}
         onAccepted={async () => {
           await Promise.all([load(), loadPlanState()]);
@@ -104,6 +114,15 @@ export function OrdersScreen({ sbg, managerDid, who, onWide }: { sbg: SbgClient 
         ))}
       </div>
 
+      {/* WHAT A PARTNER IS ASKING comes first, whatever day is chosen: it is waiting for an answer, and the first
+          fleet to take an order carries it. */}
+      {offered.length ? (
+        <Card title={t('fleet.orders.offeredTitle', { n: offered.length })}>
+          <p class="hint">{t('fleet.orders.offeredLede')}</p>
+          <OrderRows orders={offered} onOpen={setOpen} showDay />
+        </Card>
+      ) : null}
+
       {orders === null ? (
         <p class="hint">{t('fleet.orders.loading')}</p>
       ) : (
@@ -115,6 +134,7 @@ export function OrdersScreen({ sbg, managerDid, who, onWide }: { sbg: SbgClient 
               <p class="orders__sum">
                 <strong>{t(sum.orders === 1 ? 'fleet.orders.sumOne' : 'fleet.orders.sum', { n: sum.orders, weight: weightWords(sum.kg) })}</strong>
                 {sum.unplanned ? <span class="orders__sumwarn">{t('fleet.orders.sumUnplanned', { n: sum.unplanned })}</span> : <span>{t('fleet.orders.sumAllPlanned')}</span>}
+                {sum.handedOn ? <span>{t('fleet.orders.sumHandedOn', { n: sum.handedOn })}</span> : null}
                 {sum.delivered ? <span>{t('fleet.orders.sumDelivered', { n: sum.delivered })}</span> : null}
               </p>
             )}
@@ -146,8 +166,9 @@ export function OrdersScreen({ sbg, managerDid, who, onWide }: { sbg: SbgClient 
       )}
 
       <ContractsCard api={api} contracts={contracts} onChanged={load} />
+      <PartnersCard api={api} lists={partners} onChanged={load} />
 
-      {open ? <OrderSheet order={open} api={api} onClose={() => setOpen(null)} onChanged={load} /> : null}
+      {open ? <OrderSheet order={open} api={api} hasPartners={hasPartners} onClose={() => setOpen(null)} onChanged={load} /> : null}
 
       <div class="scr__foot">
         <ReadAloud text={() => t('fleet.orders.aloud', { day: dayWord(day, now, t), n: sum.orders, unplanned: sum.unplanned })} label={t('fleet.readAloud')} />
@@ -171,9 +192,13 @@ function OrderRows({ orders, onOpen, showDay }: { orders: FleetOrder[]; onOpen: 
               <span class="row__s">{`${o.pickupLabel} → ${o.destLabel} · ${weightWords(o.weightKg)}`}</span>
               {o.destLocation ? null : <span class="row__s orders__nopin">{t('fleet.orders.noPin')}</span>}
               <span class="row__s">
-                {o.onBehalfOf ? t('fleet.orders.forClient', { shipper: o.contract.shipperName, client: o.onBehalfOf.name }) : o.contract.shipperName}
+                {o.role === 'offered'
+                  ? t('fleet.orders.offeredFrom', { fleet: o.fromFleetName ?? '', day: o.deliverOn })
+                  : o.onBehalfOf
+                    ? t('fleet.orders.forClient', { shipper: o.contract.shipperName, client: o.onBehalfOf.name })
+                    : o.contract.shipperName}
                 {o.orderRef ? ` · ${o.orderRef}` : ''}
-                {showDay ? ` · ${t('fleet.orders.due', { day: o.deliverOn })}` : ''}
+                {showDay && o.role !== 'offered' ? ` · ${t('fleet.orders.due', { day: o.deliverOn })}` : ''}
                 {o.deliveryWindow ? ` · ${o.deliveryWindow}` : ''}
                 {o.driverName ? ` · ${t('fleet.orders.driver', { name: o.driverName, plate: o.plate ?? '' })}` : ''}
               </span>
@@ -193,13 +218,13 @@ function OrderRows({ orders, onOpen, showDay }: { orders: FleetOrder[]; onOpen: 
 }
 
 /** One order: everything about it, and — while it has no truck — putting it on a driver who is out now. */
-function OrderSheet({ order, api, onClose, onChanged }: { order: FleetOrder; api: ReturnType<typeof ordersApi> | null; onClose: () => void; onChanged: () => Promise<void> }) {
+function OrderSheet({ order, api, hasPartners, onClose, onChanged }: { order: FleetOrder; api: ReturnType<typeof ordersApi> | null; hasPartners: boolean; onClose: () => void; onChanged: () => Promise<void> }) {
   const t = useT();
   const [drivers, setDrivers] = useState<Array<{ did: string; name: string; plate: string; remainingKg: number }> | null>(null);
   const [driver, setDriver] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  const unplanned = order.status === 'ordered';
+  const unplanned = order.status === 'ordered' && (order.role === 'partner' || (order.role === 'own' && !order.handOn));
   const [withdrawing, setWithdrawing] = useState(false);
   // An uploaded order whose address the map did not know: the office places it, so it can be planned.
   const needsPin = order.uploaded && !order.destLocation && (order.status === 'ordered' || order.status === 'claimed');
@@ -252,7 +277,7 @@ function OrderSheet({ order, api, onClose, onChanged }: { order: FleetOrder; api
   return (
     <Sheet open onClose={onClose} title={`${order.code} · ${order.description}`}>
       <div class="rows">
-        <Fact k={t('fleet.orders.f.shipper')} v={order.onBehalfOf ? t('fleet.orders.forClient', { shipper: order.contract.shipperName, client: order.onBehalfOf.name }) : order.contract.shipperName} />
+        <Fact k={t(order.role === 'offered' ? 'fleet.orders.f.offeredBy' : 'fleet.orders.f.shipper')} v={order.onBehalfOf ? t('fleet.orders.forClient', { shipper: order.contract.shipperName, client: order.onBehalfOf.name }) : order.contract.shipperName} />
         {order.contract.reference ? <Fact k={t('fleet.orders.f.contract')} v={order.contract.reference} /> : null}
         {order.orderRef ? <Fact k={t('fleet.orders.f.orderRef')} v={order.orderRef} /> : null}
         <Fact k={t('fleet.orders.f.from')} v={order.pickupLabel} />
@@ -325,6 +350,18 @@ function OrderSheet({ order, api, onClose, onChanged }: { order: FleetOrder; api
             </p>
           </div>
         )
+      ) : null}
+
+      {api ? (
+        <OrderHandOn
+          order={order}
+          api={api}
+          hasPartners={hasPartners}
+          onDone={async () => {
+            await onChanged();
+            onClose();
+          }}
+        />
       ) : null}
 
       {mayWithdraw(order) ? (

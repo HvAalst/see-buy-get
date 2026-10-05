@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { askOf, byDay, dayOf, daySummary, dayWord, hoursWords, importVerdictLine, leftByReason, mayWithdraw, notASheet, orderTag, sendLine, weightWords, type DayPlan, type FleetOrder, type PlanLeft, type PlanSendTruck } from './orders';
+import { askOf, byDay, dayOf, daySummary, dayWord, handOnLine, hoursWords, mayHandOn, importVerdictLine, leftByReason, mayWithdraw, notASheet, orderTag, sendLine, weightWords, type DayPlan, type FleetOrder, type PlanLeft, type PlanSendTruck } from './orders';
 
 const order = (over: Partial<FleetOrder> = {}): FleetOrder =>
   ({
@@ -15,6 +15,7 @@ const order = (over: Partial<FleetOrder> = {}): FleetOrder =>
     pickupLocation: { lat: 0, lng: 0 },
     destLabel: 'Site',
     status: 'ordered',
+    role: 'own',
     uploaded: false,
     createdAt: '2026-10-05T10:00:00Z',
     late: false,
@@ -43,7 +44,7 @@ describe('P1 — a fleet’s orders', () => {
 
   it('sums a day the way a dispatcher reads it — withdrawn orders count for nothing', () => {
     const sum = daySummary([order(), order({ status: 'claimed', weightKg: 2500 }), order({ status: 'delivered', weightKg: 500 }), order({ status: 'cancelled', weightKg: 9000 })]);
-    expect(sum).toEqual({ orders: 3, kg: 7000, unplanned: 1, late: 0, delivered: 1 });
+    expect(sum).toEqual({ orders: 3, kg: 7000, unplanned: 1, late: 0, delivered: 1, handedOn: 0 });
   });
 
   it('says today and tomorrow in words, and other days as dates', () => {
@@ -112,6 +113,28 @@ describe('P1 — a fleet’s orders', () => {
       ],
     } as unknown as DayPlan;
     expect(askOf('2026-10-06', accepted)).toEqual({ day: '2026-10-06', dayStart: '06:30', dayHours: 12, speedKmh: 40, loadMin: 10, unloadMin: 25, excludeVehicleIds: ['v1'] });
+  });
+
+  it('tags an order by where it has been handed, and counts a day by what is really in nobody’s hands', () => {
+    const at = '2026-10-05T12:00:00Z';
+    const offered = order({ handOn: { state: 'offered', at, by: 'Amina', offeredTo: [{ fleetDid: 'b', fleetName: 'Pwani' }] } });
+    const withPartner = order({ handOn: { state: 'partner', at, by: 'Amina', partner: { fleetDid: 'b', fleetName: 'Pwani' } } });
+    const onBoard = order({ status: 'available', handOn: { state: 'board', at, by: 'Amina' } });
+    const toMe = order({ role: 'offered', handOn: { state: 'offered', at, by: 'X' }, late: true });
+    const mineNow = order({ role: 'partner', handOn: { state: 'partner', at, by: 'X', partner: { fleetDid: 'me', fleetName: 'Me' } } });
+    expect([offered, withPartner, onBoard, toMe, mineNow].map((o) => orderTag(o))).toEqual(['onOffer', 'withPartner', 'onBoard', 'offeredToYou', 'unplanned']);
+    // Offered to me is not my day yet; what I took from a partner is, and it has no truck.
+    expect(daySummary([offered, withPartner, onBoard, toMe, mineNow, order()])).toMatchObject({ orders: 5, unplanned: 2, handedOn: 3 });
+    expect(mayHandOn(order())).toBe(true);
+    expect([offered, withPartner, onBoard, toMe, mineNow, order({ status: 'claimed' })].map((o) => mayHandOn(o))).toEqual([false, false, false, false, false, false]);
+  });
+
+  it('says what came of handing a batch on, the refusals included', () => {
+    expect(handOnLine('offer', { done: ['FRT-1', 'FRT-2'], refused: [], to: ['Pwani Haulage', 'Rift Carriers'] }, t)).toBe('2 orders offered to Pwani Haulage, Rift Carriers.');
+    expect(handOnLine('release', { done: ['FRT-1'], refused: [{ freightId: 'x', why: 'This order is claimed — it can no longer be released' }], to: [] }, t)).toBe(
+      '1 order is on the open board. 1 could not be: This order is claimed — it can no longer be released.',
+    );
+    expect(handOnLine('offer', { done: [], refused: [], to: [] }, t)).toBe('Nothing was handed on.');
   });
 
   it('says minutes the way a working day is said', () => {

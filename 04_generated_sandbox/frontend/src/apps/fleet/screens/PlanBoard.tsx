@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Icon, Note, Pill } from '../../../shared/ui';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
-import { askOf, dayOf, dayWord, hoursWords, leftByReason, sendLine, weightWords, type DayPlan, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi } from '../orders';
+import { askOf, dayOf, dayWord, handOnLine, hoursWords, leftByReason, sendLine, weightWords, type DayPlan, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi } from '../orders';
 
 const REASON: Record<PlanLeftReason, { title: MessageKey; what: MessageKey }> = {
   no_pin: { title: 'fleet.plan.left.noPin', what: 'fleet.plan.left.noPinDo' },
@@ -24,12 +24,13 @@ const REASON: Record<PlanLeftReason, { title: MessageKey; what: MessageKey }> = 
  * worked out again. It is a proposal until accepted; accepting writes it onto the orders. Every time on it is an
  * estimate from distance and those settings, and is marked as one.
  */
-export function PlanBoard({ day, api, accepted, newSince, onClose, onAccepted }: { day: string; api: ReturnType<typeof ordersApi>; accepted?: DayPlan | null; newSince?: number; onClose: () => void; onAccepted: () => Promise<void> | void }) {
+export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, onAccepted }: { day: string; api: ReturnType<typeof ordersApi>; accepted?: DayPlan | null; newSince?: number; hasPartners?: boolean; onClose: () => void; onAccepted: () => Promise<void> | void }) {
   const t = useT();
   const [ask, setAsk] = useState<PlanAsk>(() => askOf(day, accepted));
   const [plan, setPlan] = useState<DayPlan | null>(accepted ?? null);
   const [busy, setBusy] = useState<'plan' | 'accept' | 'send' | null>(accepted ? null : 'plan');
   const [sent, setSent] = useState<PlanSendResult | null>(null);
+  const [handed, setHanded] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [tune, setTune] = useState(false);
   const [done, setDone] = useState(false);
@@ -78,6 +79,21 @@ export function PlanBoard({ day, api, accepted, newSince, onClose, onAccepted }:
     if (r.error || !r.data) return setError(r.error);
     setSent(r.data);
     await onAccepted();
+  };
+
+  // P4 — what does not fit goes to the partners first, then to the open board. Either way the orders leave this
+  // plan, so it is worked out again and shows what is still nobody's.
+  const handOn = async (what: 'offer' | 'release') => {
+    if (!plan) return;
+    const ids = plan.unplanned.map((u) => u.freightId);
+    setBusy('send');
+    setError(null);
+    const r = what === 'offer' ? await api.offerOrders(ids) : await api.releaseOrders(ids);
+    setBusy(null);
+    if (r.error || !r.data) return setError(r.error);
+    setHanded(handOnLine(what, r.data, t));
+    await onAccepted();
+    if (!plan.accepted) await propose(ask);
   };
 
   const now = new Date();
@@ -244,6 +260,23 @@ export function PlanBoard({ day, api, accepted, newSince, onClose, onAccepted }:
           ) : null}
 
           {/* WHAT DOES NOT FIT, by reason: each reason is a different thing to do about it. */}
+          {handed ? <Note tone="ok" icon="check" title={handed} /> : null}
+          {plan.unplanned.length && !plan.accepted ? (
+            <Card title={t('fleet.plan.handOn.title', { n: plan.unplanned.length })}>
+              <p class="hint">{t('fleet.plan.handOn.hint')}</p>
+              <div class="plan__acts">
+                {hasPartners ? (
+                  <Button chevron={false} disabled={busy !== null} onClick={() => void handOn('offer')}>
+                    {t('fleet.plan.handOn.offerCta')}
+                  </Button>
+                ) : null}
+                <Button variant="outline" chevron={false} disabled={busy !== null} onClick={() => void handOn('release')}>
+                  {t('fleet.plan.handOn.releaseCta')}
+                </Button>
+              </div>
+              {hasPartners ? null : <p class="hint">{t('fleet.handOn.noPartners')}</p>}
+            </Card>
+          ) : null}
           <div class="plan__left">
           {left.map((g) => (
             <Card key={g.reason} title={t(REASON[g.reason].title, { n: g.orders.length })}>

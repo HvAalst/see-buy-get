@@ -263,7 +263,7 @@ describe('a standing contract of carriage', () => {
       const own = onShift(kilima.did);
       const rival = onShift(pwani.did);
       const f = order(refFor(kilima.did, kilima.companyName));
-      expect(() => dispatch.assign(f.freightId, rival.did, { managerDid: pwani.did })).toThrow(/only the fleet it was ordered from/);
+      expect(() => dispatch.assign(f.freightId, rival.did, { managerDid: pwani.did })).toThrow(/only the fleet carrying it/);
       expect(dispatch.listFreight().find((x) => x.freightId === f.freightId)!.status).toBe('ordered');
       const taken = dispatch.assign(f.freightId, own.did, { managerDid: kilima.did, name: 'Amina' });
       expect(taken).toMatchObject({ status: 'claimed', claimedBy: own.did, assignedBy: { managerDid: kilima.did, name: 'Amina' } });

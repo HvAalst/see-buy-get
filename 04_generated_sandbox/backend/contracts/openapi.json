@@ -20762,6 +20762,411 @@
         }
       }
     },
+    "/v1/sbg/fleet/managers/{did}/partners": {
+      "get": {
+        "operationId": "FleetOverflow.list",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetPartnerLists"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "FleetOverflow.invite",
+        "summary": "",
+        "description": "Name a fleet to hand overflow to. The answer carries the code to pass on — shown this once.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvitePartnerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerInviteIssued"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/partners/link": {
+      "post": {
+        "operationId": "FleetOverflow.link",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkContractDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetPartnershipView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/partners/{partnershipId}/invite": {
+      "post": {
+        "operationId": "FleetOverflow.reissue",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "partnershipId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerInviteIssued"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/partners/{partnershipId}/end": {
+      "post": {
+        "operationId": "FleetOverflow.end",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "partnershipId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetPartnershipView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/orders/offer": {
+      "post": {
+        "operationId": "FleetOverflow.offer",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandOnOrdersDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HandOnBatchResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/orders/{freightId}/offer/withdraw": {
+      "post": {
+        "operationId": "FleetOverflow.withdrawOffer",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "freightId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/orders/{freightId}/offer/take": {
+      "post": {
+        "operationId": "FleetOverflow.take",
+        "summary": "",
+        "description": "A partner takes an order it was offered.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "freightId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/orders/{freightId}/offer/leave": {
+      "post": {
+        "operationId": "FleetOverflow.leave",
+        "summary": "",
+        "description": "A partner leaves an order it was offered.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "freightId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/orders/{freightId}/hand-back": {
+      "post": {
+        "operationId": "FleetOverflow.handBack",
+        "summary": "",
+        "description": "A partner gives back an order it had taken, before it is on a truck — with a reason.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "freightId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandBackOrderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/orders/release": {
+      "post": {
+        "operationId": "FleetOverflow.release",
+        "summary": "",
+        "description": "Release orders to the open board: any checked carrier may take them.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandOnOrdersDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HandOnBatchResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/orders/{freightId}/take-back": {
+      "post": {
+        "operationId": "FleetOverflow.takeBack",
+        "summary": "",
+        "description": "Take an order back off the open board, while nobody has taken it.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "freightId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/settlement/module-info": {
       "get": {
         "operationId": "Sse.info",
@@ -31382,6 +31787,66 @@
           "at"
         ]
       },
+      "HandOnFleet": {
+        "type": "object",
+        "properties": {
+          "fleetDid": {
+            "type": "string"
+          },
+          "fleetName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "fleetDid",
+          "fleetName"
+        ]
+      },
+      "OrderHandOn": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "offered",
+              "partner",
+              "board"
+            ]
+          },
+          "offeredTo": {
+            "description": "The partners still deciding. A partner that declines is taken off; nobody left means the offer has run out.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HandOnFleet"
+            }
+          },
+          "partner": {
+            "description": "The partner that took it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HandOnFleet"
+              }
+            ]
+          },
+          "takenAt": {
+            "type": "string"
+          },
+          "takenBy": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "at",
+          "by"
+        ]
+      },
       "FreightInstructions": {
         "type": "object",
         "properties": {
@@ -31877,6 +32342,21 @@
                 "$ref": "#/components/schemas/PlannedOn"
               }
             ]
+          },
+          "handOn": {
+            "description": "P4 — what became of an order its fleet could not carry itself: offered to its partners, taken by one, or released\nto the open board. Absent: the fleet it was ordered from carries it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OrderHandOn"
+              }
+            ]
+          },
+          "handedBack": {
+            "description": "P4 — each time a partner that had taken it gave it back before collecting: who, why, when.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "driverPayee": {
             "type": "object",
@@ -38294,6 +38774,44 @@
               }
             ]
           },
+          "role": {
+            "type": "string",
+            "description": "P4 — how the fleet reading this stands to the order: `own` it was ordered from this fleet (whoever carries it now)\n· `offered` a partner is offering it to this fleet · `partner` this fleet took it from a partner and carries it.",
+            "enum": [
+              "own",
+              "offered",
+              "partner"
+            ]
+          },
+          "handOn": {
+            "description": "P4 — offered to partners, with a partner, or on the open board.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OrderHandOn"
+              }
+            ]
+          },
+          "fromFleetName": {
+            "type": "string",
+            "description": "P4 — the fleet that handed it on, where that is not the fleet reading this."
+          },
+          "handedBack": {
+            "type": "object",
+            "properties": {
+              "fleetName": {
+                "required": true,
+                "type": "string"
+              },
+              "reason": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
           "deliveryWindow": {
             "type": "string"
           },
@@ -38398,6 +38916,8 @@
         },
         "required": [
           "contract",
+          "role",
+          "handedBack",
           "packaging",
           "status",
           "freightId",
@@ -39187,6 +39707,211 @@
         },
         "required": [
           "code"
+        ]
+      },
+      "PartnershipEnd": {
+        "type": "object",
+        "properties": {
+          "side": {
+            "type": "string",
+            "description": "Which side ended it: the fleet that offers, or the partner.",
+            "enum": [
+              "from",
+              "to"
+            ]
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "side",
+          "at",
+          "by"
+        ]
+      },
+      "FleetPartnershipView": {
+        "type": "object",
+        "properties": {
+          "toFleetDid": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "invited",
+              "active",
+              "ended"
+            ]
+          },
+          "linkedAt": {
+            "type": "string"
+          },
+          "linkedBy": {
+            "type": "string"
+          },
+          "ended": {
+            "$ref": "#/components/schemas/PartnershipEnd"
+          },
+          "inviteExpiresAt": {
+            "type": "string"
+          },
+          "partnershipId": {
+            "type": "string"
+          },
+          "fromFleetDid": {
+            "type": "string"
+          },
+          "fromFleetName": {
+            "type": "string"
+          },
+          "partnerName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "partnershipId",
+          "fromFleetDid",
+          "fromFleetName",
+          "partnerName",
+          "createdAt",
+          "createdBy"
+        ]
+      },
+      "FleetPartnerLists": {
+        "type": "object",
+        "properties": {
+          "offeringTo": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FleetPartnershipView"
+            }
+          },
+          "offeredBy": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FleetPartnershipView"
+            }
+          }
+        },
+        "required": [
+          "offeringTo",
+          "offeredBy"
+        ]
+      },
+      "InvitePartnerDto": {
+        "type": "object",
+        "properties": {
+          "partnerName": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "partnerName"
+        ]
+      },
+      "PartnerInviteIssued": {
+        "type": "object",
+        "properties": {
+          "partnership": {
+            "$ref": "#/components/schemas/FleetPartnershipView"
+          },
+          "code": {
+            "type": "string",
+            "description": "The code — shown this once."
+          },
+          "expiresAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "partnership",
+          "code",
+          "expiresAt"
+        ]
+      },
+      "HandOnOrdersDto": {
+        "type": "object",
+        "properties": {
+          "freightIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "freightIds"
+        ]
+      },
+      "HandOnRefused": {
+        "type": "object",
+        "properties": {
+          "freightId": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "freightId",
+          "why"
+        ]
+      },
+      "HandOnBatchResult": {
+        "type": "object",
+        "properties": {
+          "done": {
+            "description": "The orders it was done for, by code.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "refused": {
+            "description": "The ones it could not be done for, each with why.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HandOnRefused"
+            }
+          },
+          "to": {
+            "description": "For an offer: the partner fleets it went to, by name. Empty for a release to the board.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "done",
+          "refused",
+          "to"
+        ]
+      },
+      "HandBackOrderDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 280
+          }
+        },
+        "required": [
+          "reason"
         ]
       },
       "MilestoneTermDto": {

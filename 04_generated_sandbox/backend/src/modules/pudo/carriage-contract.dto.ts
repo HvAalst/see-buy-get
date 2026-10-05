@@ -53,6 +53,20 @@ export class PlanStateQueryDto {
   @Matches(DAY, { message: 'A day is YYYY-MM-DD' }) day!: string;
 }
 
+/** P4 — name a fleet to hand overflow to. */
+export class InvitePartnerDto {
+  @IsString() @MaxLength(120) partnerName!: string;
+}
+
+/** P4 — orders to offer to partners, or to release to the open board. */
+export class HandOnOrdersDto {
+  @IsArray() @ArrayMaxSize(200) @IsString({ each: true }) freightIds!: string[];
+}
+
+export class HandBackOrderDto {
+  @IsString() @MinLength(3) @MaxLength(280) reason!: string;
+}
+
 /** P1b — where an uploaded order is delivered, as a point. */
 export class PinOrderDto {
   @Type(() => Number) @IsNumber() @Min(-90) @Max(90) lat!: number;

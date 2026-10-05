@@ -5,6 +5,7 @@
 import { ClientRef } from './business-client.types';
 import { ContractRef } from './carriage-contract.types';
 import { PlannedOn } from './fleet-plan.types';
+import { OrderHandOn } from './fleet-partner.types';
 import { BorderAdvice } from './border-rules.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { GeoPoint } from './pudo.types';
@@ -358,6 +359,13 @@ export class Freight {
    */
   @ApiPropertyOptional({ type: PlannedOn }) planned?: PlannedOn;
   /**
+   * P4 — what became of an order its fleet could not carry itself: offered to its partners, taken by one, or released
+   * to the open board. Absent: the fleet it was ordered from carries it.
+   */
+  @ApiPropertyOptional({ type: OrderHandOn }) handOn?: OrderHandOn;
+  /** P4 — each time a partner that had taken it gave it back before collecting: who, why, when. */
+  @ApiPropertyOptional() handedBack?: Array<{ fleetName: string; reason: string; at: string }>;
+  /**
    * WHO the network owed for this haul, and on whose books — fixed when it was accrued at delivery. A claim
    * upheld weeks later takes the money back from this same party: never from whichever fleet the driver has
    * moved to since, which carried nothing and was paid nothing for it. Absent where nothing was accrued.
@@ -455,6 +463,17 @@ export class FleetOrderRow {
   uploaded: boolean;
   /** P3 — where the accepted plan for its day puts it. */
   @ApiPropertyOptional({ type: PlannedOn }) planned?: PlannedOn;
+  /**
+   * P4 — how the fleet reading this stands to the order: `own` it was ordered from this fleet (whoever carries it now)
+   * · `offered` a partner is offering it to this fleet · `partner` this fleet took it from a partner and carries it.
+   */
+  @ApiProperty({ enum: ['own', 'offered', 'partner'] }) role: 'own' | 'offered' | 'partner';
+  /** P4 — offered to partners, with a partner, or on the open board. */
+  @ApiPropertyOptional({ type: OrderHandOn }) handOn?: OrderHandOn;
+  /** P4 — the fleet that handed it on, where that is not the fleet reading this. */
+  @ApiPropertyOptional() fromFleetName?: string;
+  /** P4 — the last partner that gave it back, and why. */
+  @ApiPropertyOptional() handedBack?: { fleetName: string; reason: string; at: string };
   /** The day it must arrive. */
   deliverOn: string;
   @ApiPropertyOptional() deliveryWindow?: string;
