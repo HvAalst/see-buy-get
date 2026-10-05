@@ -364,6 +364,11 @@ export class DepartureBooking {
   shipperDid: string;
   /** B2 — which person in a business booked it: the business's DID is shared by everybody in it. */
   @ApiPropertyOptional() bookedByName?: string;
+  /**
+   * The key behind this booking's public tracking link — the same link format and page as a load's. Only on space
+   * somebody bought (`sold`): a fleet's own customer is not ours to hand a link to. Absent on bookings made before.
+   */
+  @ApiPropertyOptional() trackingKey?: string;
   /** B4 — the client an expeditor sent this for, as their agent. The client is the SENDER on the note. A copy, not a link. */
   @ApiPropertyOptional({ type: ClientRef }) onBehalfOf?: ClientRef;
   /**
@@ -586,6 +591,8 @@ export class Departure {
    */
   @ApiProperty({ enum: ['open', 'closed', 'departed', 'cancelled'] })
   status: 'open' | 'closed' | 'departed' | 'cancelled';
+  /** When the fleet said it had left. Stamped once, at that moment — what a tracking page counts "under way" from. */
+  @ApiPropertyOptional() departedAt?: string;
   /**
    * Why it was called off, kept rather than only announced.
    *
@@ -667,6 +674,9 @@ export class DepartureOffer {
  */
 export class MyDepartureBooking {
   bookingId: string;
+  /** The public tracking link to hand to whoever is receiving the goods — or to the client an expeditor booked for. */
+  @ApiPropertyOptional() trackingKey?: string;
+  @ApiPropertyOptional() trackingUrl?: string;
   /** B4 — the client an expeditor sent this for, as their agent. The client is the SENDER on the note. A copy, not a link. */
   @ApiPropertyOptional({ type: ClientRef }) onBehalfOf?: ClientRef;
   departureId: string;

@@ -37,7 +37,10 @@ import {
   stepTime,
   trackSummary,
   carrierLine,
+  freightLadder,
   freightLadderIndex,
+  freightStatusPresentation,
+  freightWithdrawnLine,
   freightTrackSummary,
 } from './logic';
 import type { ConsumerParcelView, FreightTrackView, NetworkPoint, QuoteView, TrackView } from './types';
@@ -377,5 +380,21 @@ describe('FP6 — a load on the tracking page', () => {
     expect(carrierLine({ name: 'Kilima Logistics', driverName: 'Amos K.', plate: 'KLM 002B', vehicleClass: 'bike' }, t)).toBe('Kilima Logistics · Amos K., in a bike KLM 002B');
     expect(carrierLine({ name: 'Amos K.', driverName: 'Amos K.' }, t)).toBe('Amos K.');
     expect(freightTrackSummary(view('in_transit'), t)).toBe('Load FRT-018: on the road, going to Riverside Corner.');
+  });
+
+  it('reads space on a run as booked from the start — it never waited for a carrier', () => {
+    const run = view('claimed', { on: 'run', ref: 'Nairobi–Mombasa' });
+    expect(freightLadder(run)).toEqual(['claimed', 'in_transit', 'delivered']);
+    expect(freightLadderIndex('claimed', freightLadder(run))).toBe(0);
+    expect(freightLadder(view('claimed'))).toContain('available');
+    expect(freightStatusPresentation('claimed', t, 'run').word).toBe('Booked on the run');
+    expect(freightStatusPresentation('claimed', t).word).toBe('A carrier has it booked');
+    expect(freightTrackSummary(run, t)).toBe('Space on a run: booked on the run, going to Riverside Corner.');
+  });
+
+  it('says who withdrew it, the carrier included, and never why', () => {
+    expect(freightWithdrawnLine({ at: 'x', by: 'carrier' }, t)).toBe('The carrier called this off on x.');
+    expect(freightWithdrawnLine({ at: 'x', by: 'sender' }, t)).toBe('The sender withdrew this load on x.');
+    expect(freightWithdrawnLine({ at: 'x', by: 'network' }, t)).toBe('The network withdrew this load on x.');
   });
 });

@@ -442,4 +442,7 @@ export interface MyBookingRow {
   waits: Array<{ where: 'loading' | 'delivery'; arrivedAt: string; freeAt?: string; waitedMin: number; billableMin: number; amount: number; bearer: 'shipper' | 'consignee'; waivedReason?: string }>;
   cancellable: boolean;
   at: string;
+  /** The public tracking link for these goods — the same page a load's link opens. Absent on bookings made before. */
+  trackingKey?: string;
+  trackingUrl?: string;
 }

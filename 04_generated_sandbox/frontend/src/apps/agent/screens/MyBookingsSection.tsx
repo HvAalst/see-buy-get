@@ -119,6 +119,13 @@ function Booking({ row, state, actions }: { row: MyBookingRow; state: AgentState
           {' · '}
           {t('agent.mine.paid', { amount: row.price, currency: row.currency, kg: row.weightKg })}
         </span>
+        {row.trackingUrl && row.bookingStatus !== 'cancelled' ? (
+          <span class="row__s">
+            <a href={row.trackingUrl} target="_blank" rel="noopener noreferrer">
+              {t('agent.mine.track')}
+            </a>
+          </span>
+        ) : null}
 
         {/* WHY IT IS OFF, on the screen rather than only in the notification. That notice went out once,
             the day it happened; the shipper looking at the wreckage of their week a fortnight later is

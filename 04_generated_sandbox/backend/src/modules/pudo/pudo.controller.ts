@@ -3048,6 +3048,9 @@ export class SbgController {
     // answers with kind 'freight', a parcel with none (the shape the parcel page has always read).
     const freight = this.dispatch.freightByTrackingKey(key);
     if (freight) return this.notes.trackView(freight);
+    // Space booked on a run answers on the same link, in the same shape.
+    const booked = this.departures.trackView(key);
+    if (booked) return booked;
     const t = this.parcels.track(key);
     // DT — surface the twin's stable id + its PLANNED route (the hops it will travel + when it should be
     // ready), so the parcel is trackable AS a planned journey from creation, before it has moved. All PII-free
@@ -4602,7 +4605,9 @@ export class SbgController {
   setDepartureStatus(@Param('did') did: string, @Param('departureId') departureId: string, @Body() dto: DepartureStatusDto, @Actor() actor: IntrospectionResult) {
     this.assertFleetSelf(did, actor);
     // A closure is filed on the hazard map by the run service, under the ordinary report procedure, as whoever is signed in.
-    return this.departures.setStatus(departureId, dto.status, did, { reason: dto.reason, note: dto.note, closure: dto.closureAt, reportedBy: actingDid(actor) });
+    // Staff standing in carry no DID: actingDid threw for them on EVERY status — closing, departing — though only a
+    // closure files a report. Their name is the attribution instead.
+    return this.departures.setStatus(departureId, dto.status, did, { reason: dto.reason, note: dto.note, closure: dto.closureAt, reportedBy: actor?.did || auditActor(actor) });
   }
 
   /**

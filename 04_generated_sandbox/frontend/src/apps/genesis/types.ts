@@ -103,7 +103,9 @@ export interface FreightTrackView {
   steps: TrackStep[];
   attempts?: Array<{ outcome: 'absent' | 'refused' | 'unreachable'; at: string }>;
   receiverName?: string;
-  cancelled?: { at: string; by: 'sender' | 'network' };
+  cancelled?: { at: string; by: 'sender' | 'network' | 'carrier' };
+  /** `run` — space booked on a carrier's scheduled run, which leaves at `scheduledPickupAt`. Absent: a load off the board. */
+  on?: 'board' | 'run';
 }
 
 export type AnyTrackView = TrackView | FreightTrackView;

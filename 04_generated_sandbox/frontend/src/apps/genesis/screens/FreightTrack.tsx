@@ -1,6 +1,6 @@
 import { Card, Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
-import { FREIGHT_LADDER, carrierLine, freightLadderIndex, freightStatusPresentation, stepTime } from '../logic';
+import { carrierLine, freightLadder, freightLadderIndex, freightStatusPresentation, freightWithdrawnLine, stepTime } from '../logic';
 import type { FreightTrackView } from '../types';
 
 /**
@@ -10,8 +10,10 @@ import type { FreightTrackView } from '../types';
  */
 export function FreightTrack({ view }: { view: FreightTrackView }) {
   const t = useT();
-  const p = freightStatusPresentation(view.status, t);
-  const at = freightLadderIndex(view.status);
+  const ladder = freightLadder(view);
+  const run = view.on === 'run';
+  const p = freightStatusPresentation(view.status, t, view.on);
+  const at = freightLadderIndex(view.status, ladder);
   const carrier = carrierLine(view.carrier, t);
   return (
     <>
@@ -19,7 +21,7 @@ export function FreightTrack({ view }: { view: FreightTrackView }) {
         <Icon name={p.icon} size={34} class="now__ic" />
         <span class="now__body">
           <span class="now__word">{p.word}</span>
-          <span class="now__sub">{t('send.freight.line', { ref: view.ref, kg: view.weightKg, pickup: view.pickupLabel, dest: view.destLabel })}</span>
+          <span class="now__sub">{t(run ? 'send.freight.runLine' : 'send.freight.line', { ref: view.ref, kg: view.weightKg, pickup: view.pickupLabel, dest: view.destLabel })}</span>
         </span>
       </section>
 
@@ -45,14 +47,15 @@ export function FreightTrack({ view }: { view: FreightTrackView }) {
         </Card>
       ) : null}
 
+      {run && view.status === 'claimed' && view.scheduledPickupAt ? <p class="scr__lede">{t('send.freight.runLeaves', { when: stepTime(view.scheduledPickupAt) })}</p> : null}
       {view.receiverName ? <p class="scr__lede">{t('send.freight.receivedBy', { name: view.receiverName })}</p> : null}
-      {view.cancelled ? <p class="scr__lede">{t(view.cancelled.by === 'network' ? 'send.freight.withdrawnByNetwork' : 'send.freight.withdrawnBySender', { when: stepTime(view.cancelled.at) })}</p> : null}
+      {view.cancelled ? <p class="scr__lede">{freightWithdrawnLine(view.cancelled, t)}</p> : null}
 
       {at >= 0 ? (
         <Card label={t('send.track.journeySoFar')}>
           <ol class="ladder">
-            {FREIGHT_LADDER.map((s, i) => {
-              const rung = freightStatusPresentation(s, t);
+            {ladder.map((s, i) => {
+              const rung = freightStatusPresentation(s, t, view.on);
               const done = i < at;
               const now = i === at;
               const step = view.steps.find((x) => x.status === s || (s === 'available' && x.status === 'scheduled'));

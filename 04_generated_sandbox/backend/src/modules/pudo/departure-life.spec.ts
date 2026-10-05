@@ -511,4 +511,78 @@ describe('a booking’s life after it is sold', () => {
       expect(held).toEqual([booking.bookingId]);
     });
   });
+
+  /* ------------------------------------------------------ the tracking link -- */
+
+  /**
+   * A LOAD HAD A TRACKING LINK; SPACE ON A RUN DID NOT. An expeditor booking for a client could hand that client a
+   * link for a load and nothing for the same goods on a scheduled run. These pin that a booking answers on the same
+   * page, read-only, and that the page says nothing a forwarded link should not: no money, no shipper, nobody else aboard.
+   */
+  describe('the tracking link on a booking', () => {
+    const proof = () => ({ receiverName: 'Joseph at the gate', photoRef: 'med_pod1', confirmed: requiredUnloadKeys() });
+
+    it('gives every sold booking its own key, and the shipper the link to hand on', () => {
+      const { service, departureId } = setUp();
+      const one = book(service, departureId);
+      const two = book(service, departureId, OTHER);
+      expect(one.trackingKey).toMatch(/^T-[0-9A-F]{10}$/);
+      expect(two.trackingKey).not.toBe(one.trackingKey);
+      const mine = service.forShipper(SHIPPER).find((r) => r.bookingId === one.bookingId)!;
+      expect(mine.trackingKey).toBe(one.trackingKey);
+      expect(mine.trackingUrl).toMatch(new RegExp(`\\?track=${one.trackingKey}$`));
+    });
+
+    it('reads booked, then under way from the moment it left, then delivered to whom', () => {
+      const { service, departureId } = setUp();
+      const booking = book(service, departureId);
+      const booked = service.trackView(booking.trackingKey!)!;
+      expect(booked).toMatchObject({ kind: 'freight', on: 'run', status: 'claimed', description: 'Maize', weightKg: 500 });
+      expect(booked.carrier).toMatchObject({ name: 'Life Haulage', plate: 'KDA 001A' });
+      expect(booked.steps.map((x) => x.status)).toEqual(['claimed']);
+
+      service.setStatus(departureId, 'departed', MANAGER);
+      const gone = service.require(departureId).departedAt!;
+      expect(gone).toBeTruthy();
+      const moving = service.trackView(booking.trackingKey!)!;
+      expect(moving.status).toBe('in_transit');
+      expect(moving.steps).toEqual([{ status: 'claimed', at: booking.at }, { status: 'in_transit', at: gone }]);
+
+      service.deliver(departureId, booking.bookingId, MANAGER, proof());
+      const done = service.trackView(booking.trackingKey!.toLowerCase())!;
+      expect(done.status).toBe('delivered');
+      expect(done.receiverName).toBe('Joseph at the gate');
+      expect(done.steps.map((x) => x.status)).toEqual(['claimed', 'in_transit', 'delivered']);
+    });
+
+    it('says who withdrew it — the sender, or the carrier calling the run off — and never why', () => {
+      const { service, departureId } = setUp();
+      const mine = book(service, departureId);
+      const other = book(service, departureId, OTHER);
+      service.cancelBooking(departureId, mine.bookingId, SHIPPER);
+      expect(service.trackView(mine.trackingKey!)).toMatchObject({ status: 'cancelled', cancelled: { by: 'sender' } });
+
+      service.setStatus(departureId, 'cancelled', MANAGER, 'The truck threw a rod');
+      const off = service.trackView(other.trackingKey!)!;
+      expect(off).toMatchObject({ status: 'cancelled', cancelled: { by: 'carrier' } });
+      expect(JSON.stringify(off)).not.toContain('threw a rod');
+    });
+
+    it('carries nothing a forwarded link should not: no money, no shipper, nobody else aboard', () => {
+      const { service, departureId } = setUp();
+      const mine = book(service, departureId);
+      book(service, departureId, OTHER);
+      const seen = JSON.stringify(service.trackView(mine.trackingKey!));
+      expect(seen).not.toContain(SHIPPER);
+      expect(seen).not.toContain(OTHER);
+      expect(seen).not.toMatch(/amount|price|bookingId|shipperDid/);
+    });
+
+    it('answers nothing for a key it never issued', () => {
+      const { service, departureId } = setUp();
+      book(service, departureId);
+      expect(service.trackView('T-0000000000')).toBeUndefined();
+      expect(service.trackView('')).toBeUndefined();
+    });
+  });
 });

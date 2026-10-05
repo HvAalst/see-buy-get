@@ -403,7 +403,8 @@ export const ARTICLES: GuideArticle[] = [
     steps: [
       "Space on runs lists the runs with room: where they go, when they leave, the carrier’s rate, and how they want to be paid.",
       "Open one, say what you are sending and its weight, and ask what it would cost. Book it for that price.",
-      "Your bookings are listed above the runs. Open one for its consignment note, or to give the space back."
+      "Your bookings are listed above the runs. Open one for its consignment note, its tracking link, or to give the space back.",
+      "The tracking link opens a page anybody can read without an account: booked, on the road from the moment the carrier marks the run gone, then delivered and to whom. Send it to whoever is receiving the goods. It shows no price, and nobody else’s goods on the same truck."
     ]
   },
   {
@@ -416,7 +417,7 @@ export const ARTICLES: GuideArticle[] = [
     steps: [
       "Clients, then Add a client: their registered name, country, address and who to ask for.",
       "When you post a load or book space, choose the client under Sent for. They become the sender on the consignment note; you are named as the agent who booked it.",
-      "Open a client to see everything sent for them, with each load’s tracking link to hand them. It needs no account.",
+      "Open a client to see everything sent for them — loads and space on runs alike — with each one’s tracking link to hand them. It needs no account.",
       "A client you no longer work for can be archived. What was sent for them keeps naming them."
     ],
     notes: [

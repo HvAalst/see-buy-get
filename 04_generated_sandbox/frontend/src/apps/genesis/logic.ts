@@ -236,13 +236,21 @@ export function statusPresentation(status: ParcelStatus, t: Translate): StatusPr
 /** The rungs a load climbs. 'scheduled' stands on the first rung: booked, waiting for its day and a carrier. */
 export const FREIGHT_LADDER: Array<FreightTrackView['status']> = ['available', 'claimed', 'in_transit', 'delivered'];
 
-export function freightLadderIndex(status: FreightTrackView['status']): number {
+/** Space on a scheduled run never waited for a carrier: it was booked on one, so its ladder starts there. */
+export const RUN_LADDER: Array<FreightTrackView['status']> = ['claimed', 'in_transit', 'delivered'];
+
+export function freightLadder(view: Pick<FreightTrackView, 'on'>): Array<FreightTrackView['status']> {
+  return view.on === 'run' ? RUN_LADDER : FREIGHT_LADDER;
+}
+
+export function freightLadderIndex(status: FreightTrackView['status'], ladder: Array<FreightTrackView['status']> = FREIGHT_LADDER): number {
   if (status === 'scheduled') return 0;
-  return FREIGHT_LADDER.indexOf(status);
+  return ladder.indexOf(status);
 }
 
 /** Plain words for every state of a load — the same grade-3 register as a parcel's. */
-export function freightStatusPresentation(status: FreightTrackView['status'], t: Translate): StatusPresentation {
+export function freightStatusPresentation(status: FreightTrackView['status'], t: Translate, on?: FreightTrackView['on']): StatusPresentation {
+  if (on === 'run' && status === 'claimed') return { word: t('send.freight.runBooked'), icon: 'badge', tone: 'info' };
   switch (status) {
     case 'scheduled':
     case 'available':
@@ -267,8 +275,8 @@ export function carrierLine(c: FreightTrackView['carrier'], t: Translate): strin
 }
 
 export function freightTrackSummary(view: FreightTrackView, t: Translate): string {
-  const status = freightStatusPresentation(view.status, t).word.toLowerCase();
-  return t('send.logic.freightTrack', { ref: view.ref, status, dest: view.destLabel });
+  const status = freightStatusPresentation(view.status, t, view.on).word.toLowerCase();
+  return t(view.on === 'run' ? 'send.logic.runTrack' : 'send.logic.freightTrack', { ref: view.ref, status, dest: view.destLabel });
 }
 
 export function trackSummary(view: TrackView, t: Translate): string {
@@ -277,6 +285,12 @@ export function trackSummary(view: TrackView, t: Translate): string {
   return atDest
     ? t('send.logic.trackAt', { ref: view.ref, status, dest: view.destination })
     : t('send.logic.trackPlain', { ref: view.ref, status });
+}
+
+/** Who withdrew a load, in words — never why: that is between the parties. */
+export function freightWithdrawnLine(c: NonNullable<FreightTrackView['cancelled']>, t: Translate): string {
+  const key = c.by === 'network' ? 'send.freight.withdrawnByNetwork' : c.by === 'carrier' ? 'send.freight.withdrawnByCarrier' : 'send.freight.withdrawnBySender';
+  return t(key, { when: stepTime(c.at) });
 }
 
 /** When a step happened, in the reader's locale — falls back to the raw string. */

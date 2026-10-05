@@ -32876,6 +32876,10 @@
             "type": "string",
             "description": "B2 — which person in a business booked it: the business's DID is shared by everybody in it."
           },
+          "trackingKey": {
+            "type": "string",
+            "description": "The key behind this booking's public tracking link — the same link format and page as a load's. Only on space\nsomebody bought (`sold`): a fleet's own customer is not ours to hand a link to. Absent on bookings made before."
+          },
           "onBehalfOf": {
             "description": "B4 — the client an expeditor sent this for, as their agent. The client is the SENDER on the note. A copy, not a link.",
             "allOf": [
@@ -33078,6 +33082,10 @@
               "departed",
               "cancelled"
             ]
+          },
+          "departedAt": {
+            "type": "string",
+            "description": "When the fleet said it had left. Stamped once, at that moment — what a tracking page counts \"under way\" from."
           },
           "cancelledReason": {
             "type": "string",

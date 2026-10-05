@@ -280,7 +280,7 @@ export const enBusiness = {
   'business.clients.sentTitle': 'Sent for them',
   'business.clients.sentNone': 'Nothing sent for them yet.',
   'business.clients.trackLink': 'tracking link',
-  'business.clients.trackHint': 'Hand them a load’s tracking link: it shows where their goods are, and needs no account.',
+  'business.clients.trackHint': 'Hand them the tracking link — a load’s or a run booking’s: it shows where their goods are, and needs no account.',
   'business.clients.archive': 'Archive this client',
   'business.clients.restore': 'Bring them back',
   'business.clients.archived': '{name} is archived. What was sent for them still names them.',

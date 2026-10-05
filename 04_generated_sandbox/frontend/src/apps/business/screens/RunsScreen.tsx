@@ -358,6 +358,17 @@ function BookingDetail({ row, client, act, onClose, onChanged }: { row: MyBookin
               <dd class="cons__factv">{t('business.loads.fact.deliveredTo', { when: row.deliveredAt.slice(0, 10), who: row.receivedBy ?? '—' })}</dd>
             </div>
           ) : null}
+          {row.trackingUrl ? (
+            <div class="cons__fact">
+              <dt class="cons__factk">{t('business.loads.fact.tracking')}</dt>
+              <dd class="cons__factv">
+                <a href={row.trackingUrl} target="_blank" rel="noopener noreferrer">
+                  {row.trackingKey}
+                </a>
+                <span class="chint"> {t('business.loads.fact.trackingHint')}</span>
+              </dd>
+            </div>
+          ) : null}
         </dl>
         <div class="twr-panelend">
           <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void note()}>

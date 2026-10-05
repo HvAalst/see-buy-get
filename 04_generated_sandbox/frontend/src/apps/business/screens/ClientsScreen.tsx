@@ -273,7 +273,17 @@ function ClientDetail({ row, client, act, onClose, onChanged }: { row: Client; c
                     </span>
                     <span class="ctag ctag--quiet">{t(`business.runs.status.${b.bookingStatus}` as never)}</span>
                   </span>
-                  <span class="crow__sub">{t('business.runs.bookingSub', { from: b.originZone, to: b.destZone, when: b.leavesAt.slice(0, 16).replace('T', ' '), price: `${b.price.toLocaleString()} ${b.currency}` })}</span>
+                  <span class="crow__sub">
+                    {t('business.runs.bookingSub', { from: b.originZone, to: b.destZone, when: b.leavesAt.slice(0, 16).replace('T', ' '), price: `${b.price.toLocaleString()} ${b.currency}` })}
+                    {b.trackingUrl ? (
+                      <>
+                        {' · '}
+                        <a href={b.trackingUrl} target="_blank" rel="noopener noreferrer">
+                          {t('business.clients.trackLink')}
+                        </a>
+                      </>
+                    ) : null}
+                  </span>
                 </span>
               </div>
             ))}

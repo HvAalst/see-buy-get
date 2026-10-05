@@ -563,6 +563,7 @@ export const enAgent = {
   'agent.mine.proof': 'Proof of delivery: {who}',
   'agent.mine.proofPhoto': 'Photographed as delivered',
   'agent.mine.note': 'Consignment note',
+  'agent.mine.track': 'Tracking link — send it to whoever is receiving the goods',
 
   /* A CLAIM — recorded and evidenced, never decided by us. We did not take the money and we hold no
      cover, so an award of ours would be an award of somebody else’s money. What two parties get is

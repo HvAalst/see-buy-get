@@ -574,6 +574,12 @@ export const en = {
   'send.freight.receivedBy': 'Received by {name}.',
   'send.freight.withdrawnBySender': 'The sender withdrew this load on {when}.',
   'send.freight.withdrawnByNetwork': 'The network withdrew this load on {when}.',
+  // Space booked on a carrier's scheduled run answers on the same link.
+  'send.freight.runBooked': 'Booked on the run',
+  'send.freight.runLine': 'Space on a scheduled run · {kg} kg · {pickup} → {dest}',
+  'send.freight.runLeaves': 'The run leaves {when}.',
+  'send.freight.withdrawnByCarrier': 'The carrier called this off on {when}.',
+  'send.logic.runTrack': 'Space on a run: {status}, going to {dest}.',
   'send.logic.freightTrack': 'Load {ref}: {status}, going to {dest}.',
   // FP7 — the sender's instructions (CMR box 13), read by the shop, the driver and the fleet office alike.
   'common.instructions.title': 'Instructions from the sender',

@@ -1122,6 +1122,11 @@ export class FreightTrackView {
   @ApiPropertyOptional({ type: [FreightDeliveryAttempt] }) attempts?: Array<Pick<FreightDeliveryAttempt, 'outcome' | 'at'>>;
   /** Who took the goods in, once delivered — the name the driver recorded, as it stands on the consignment note. */
   receiverName?: string;
-  /** Withdrawn: when, and by the sender or the network. Never the reason — that is between the parties. */
-  @ApiPropertyOptional() cancelled?: { at: string; by: 'sender' | 'network' };
+  /** Withdrawn: when, and by the sender, the network or — on a run — the carrier. Never the reason: that is between the parties. */
+  @ApiPropertyOptional() cancelled?: { at: string; by: 'sender' | 'network' | 'carrier' };
+  /**
+   * Where the goods travel: `board` a load a carrier took off the open board (absent means this) · `run` space
+   * booked on a carrier's scheduled run, which leaves at `scheduledPickupAt` whether or not anybody else is aboard.
+   */
+  @ApiPropertyOptional({ enum: ['board', 'run'] }) on?: 'board' | 'run';
 }

@@ -1,3 +1,5 @@
+import type { FreightTrackView } from './dispatch.types';
+import { appUrl } from '../../foundation/mail/mail.templates';
 import type { ClientRef } from './business-client.types';
 import { Injectable, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
@@ -423,6 +425,50 @@ export class DepartureService {
     return { price, units, binds, currency: departure.rate.currency, ...(departure.waiting ? { waiting: departure.waiting } : {}) };
   }
 
+/**
+   * A BOOKING AS THE HOLDER OF ITS TRACKING LINK SEES IT — read-only, no account, the key being the credential.
+   *
+   * The same page and the same shape as a load's, so a client handed either link reads the same thing: what is moving,
+   * between where, on whose truck, and how far it has got. Nothing about money, the shipper or anybody else aboard —
+   * a key can be forwarded, and a run carries other people's goods.
+   */
+  trackView(key: string): FreightTrackView | undefined {
+    const wanted = (key ?? '').trim().toUpperCase();
+    if (!wanted) return undefined;
+    for (const d of this.departures.values()) {
+      const b = d.bookings.find((x) => x.kind === 'sold' && x.trackingKey === wanted);
+      if (!b) continue;
+      const runOff = d.status === 'cancelled' && b.status !== 'delivered';
+      const steps: FreightTrackView['steps'] = [{ status: 'claimed', at: b.at }];
+      if (d.departedAt && b.status !== 'cancelled') steps.push({ status: 'in_transit', at: d.departedAt });
+      if (b.deliveredAt) steps.push({ status: 'delivered', at: b.deliveredAt });
+      const cancelled =
+        b.status === 'cancelled'
+          ? { at: b.cancellation?.at ?? b.at, by: b.cancellation?.by === 'carrier' ? ('carrier' as const) : ('sender' as const) }
+          : runOff
+            ? { at: d.cancellation?.at ?? b.at, by: 'carrier' as const }
+            : undefined;
+      if (cancelled) steps.push({ status: 'cancelled', at: cancelled.at });
+      const status: FreightTrackView['status'] = cancelled ? 'cancelled' : b.deliveredAt || b.status === 'delivered' ? 'delivered' : d.status === 'departed' ? 'in_transit' : 'claimed';
+      return {
+        kind: 'freight',
+        on: 'run',
+        ref: d.lineName,
+        status,
+        description: b.description,
+        weightKg: b.weightKg,
+        pickupLabel: d.originZone,
+        destLabel: d.destZone,
+        scheduledPickupAt: d.leavesAt,
+        carrier: { name: d.company, ...(d.driverName ? { driverName: d.driverName } : {}), plate: d.plate, vehicleClass: d.vehicleClass },
+        steps,
+        ...(b.receivedBy ? { receiverName: b.receivedBy } : {}),
+        ...(cancelled ? { cancelled } : {}),
+      };
+    }
+    return undefined;
+  }
+
   /** Take space on a departure. */
   book(
     departureId: string,
@@ -441,6 +487,8 @@ export class DepartureService {
     const booking: DepartureBooking = {
       bookingId: `bkg_${randomBytes(5).toString('hex')}`,
       kind: 'sold',
+      // The same key shape as a load's, answered by the same public page.
+      trackingKey: `T-${randomBytes(5).toString('hex').toUpperCase()}`,
       shipperDid: input.shipperDid,
       ...(input.bookedByName?.trim() ? { bookedByName: input.bookedByName.trim().slice(0, 80) } : {}),
       ...(input.onBehalfOf ? { onBehalfOf: input.onBehalfOf } : {}),
@@ -1107,6 +1155,7 @@ export class DepartureService {
 
     const was = departure.status;
     departure.status = status;
+    if (status === 'departed' && !departure.departedAt) departure.departedAt = new Date().toISOString();
     if (status === 'cancelled' && said) departure.cancelledReason = said;
     if (status === 'cancelled' && cancellation) departure.cancellation = cancellation;
     /*
@@ -1335,6 +1384,7 @@ export class DepartureService {
           .map((b) => ({
             bookingId: b.bookingId,
             ...(b.onBehalfOf ? { onBehalfOf: b.onBehalfOf } : {}),
+            ...(b.trackingKey ? { trackingKey: b.trackingKey, trackingUrl: bookingTrackingUrl(b.trackingKey) } : {}),
             departureId: d.departureId,
             company: d.company,
             lineName: d.lineName,
@@ -1469,4 +1519,9 @@ export class DepartureService {
   private currencyFor(jurisdiction?: string): string {
     return (jurisdiction && catalogueEntry(jurisdiction)?.currency) || 'USD';
   }
+}
+
+/** A booking's public tracking link — the Send app's track page, the same one a load's link opens. */
+function bookingTrackingUrl(trackingKey: string): string {
+  return `${appUrl('send')}?track=${encodeURIComponent(trackingKey)}`;
 }
