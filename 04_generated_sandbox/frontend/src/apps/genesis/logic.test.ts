@@ -392,6 +392,14 @@ describe('FP6 — a load on the tracking page', () => {
     expect(freightTrackSummary(run, t)).toBe('Space on a run: booked on the run, going to Riverside Corner.');
   });
 
+  it('reads an order under a contract as with its carrier from the start', () => {
+    const ordered = view('ordered', { steps: [{ status: 'ordered', at: 'x' }] });
+    expect(freightLadder(ordered)).toEqual(['ordered', 'claimed', 'in_transit', 'delivered']);
+    expect(freightLadderIndex('ordered', freightLadder(ordered))).toBe(0);
+    expect(freightStatusPresentation('ordered', t).word).toBe('Ordered with the carrier');
+    expect(freightLadder(view('available', { steps: [{ status: 'available', at: 'x' }] }))).toContain('available');
+  });
+
   it('says who withdrew it, the carrier included, and never why', () => {
     expect(freightWithdrawnLine({ at: 'x', by: 'carrier' }, t)).toBe('The carrier called this off on x.');
     expect(freightWithdrawnLine({ at: 'x', by: 'sender' }, t)).toBe('The sender withdrew this load on x.');

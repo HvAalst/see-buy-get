@@ -1,4 +1,6 @@
-﻿import { BusinessClientService } from './business-client.service';
+﻿import { CarriageContractService, isDay } from './carriage-contract.service';
+import type { ContractRef } from './carriage-contract.types';
+import { BusinessClientService } from './business-client.service';
 import { clientRefOf, type ClientRef } from './business-client.types';
 import { driverPapers, lapsedOf, offRoadLine } from './papers';
 import { PapersWatchService } from './papers-watch.service';
@@ -257,6 +259,7 @@ export class SbgController {
     @Optional() private readonly fleetMove?: FleetMoveService,
     @Optional() private readonly fleetOffers?: FleetOfferService,
     @Optional() private readonly pulse?: NetworkPulseService,
+    @Optional() private readonly contracts?: CarriageContractService,
   ) {}
 
   // --- phone verification (mandatory at onboarding — control-tower contact + GPS) ---
@@ -530,6 +533,23 @@ export class SbgController {
    * B4 — WHO A LOAD OR A BOOKING IS FOR, when an expeditor sends it for a client. The client must be in THIS business's
    * own book; nobody else may name one, because only a business keeps clients.
    */
+/**
+   * P1 — AN ORDER UNDER A STANDING CONTRACT: only the business that linked the contract places one, only while it
+   * stands, and only for a day that has not gone by. What comes back is the copy the load carries.
+   */
+  private contractOrder(actor: IntrospectionResult, contractId: string | undefined, deliverOn: string | undefined): { contract?: ContractRef; deliverOn?: string } {
+    if (!contractId) {
+      if (deliverOn) throw new GlosError('INVALID_INPUT', 'A delivery day belongs to an order under a contract — name the contract', { field: 'contractId' });
+      return {};
+    }
+    if (actor?.role !== 'business' || !actor.tenant) throw new GlosError('FORBIDDEN', 'Only the business that linked a contract orders under it');
+    if (!this.contracts) throw new GlosError('INVALID_STATE', 'Contracts are not running in this deployment');
+    if (!deliverOn || !isDay(deliverOn)) throw new GlosError('FIELD_REQUIRED', 'Say which day it must arrive', { field: 'deliverOn' });
+    if (deliverOn < new Date().toISOString().slice(0, 10)) throw new GlosError('INVALID_INPUT', 'That day has gone — an order is for today or later', { field: 'deliverOn' });
+    const contract = this.contracts.orderable(this.contracts.requireForShipper(actor.tenant, contractId), deliverOn);
+    return { contract, deliverOn };
+  }
+
   private onBehalfOf(actor: IntrospectionResult, clientId: string | undefined): { onBehalfOf?: ClientRef } {
     if (!clientId) return {};
     if (actor?.role !== 'business' || !actor.tenant) throw new GlosError('FORBIDDEN', 'Only a business sends for a client of its own');
@@ -5087,13 +5107,14 @@ export class SbgController {
     // CL1 — refuse a term this country has not switched on, before the load exists rather than after.
     this.requireActiveTerm(dto.incoterm, dto.pickupCountry, dto.destCountry);
     // B2 — a business's DID is shared by everybody in it, so the person who posted is kept by name as well.
-    const { forClientId, ...load } = dto;
-    return this.dispatch.registerFreight({ ...load, dimensionsCm, bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did, ...(actor?.role === 'business' && actor.actorName ? { postedByName: actor.actorName } : {}), ...this.onBehalfOf(actor, forClientId) });
+    const { forClientId, contractId, deliverOn, ...load } = dto;
+    return this.dispatch.registerFreight({ ...load, dimensionsCm, ...this.contractOrder(actor, contractId, deliverOn), bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did, ...(actor?.role === 'business' && actor.actorName ? { postedByName: actor.actorName } : {}), ...this.onBehalfOf(actor, forClientId) });
   }
 
   @Get('dispatch/freight')
   listFreight(@Query('status') status?: string) {
-    return this.dispatch.listFreight({ status: status as never });
+    // P1 — an order under a contract is the two parties' and that fleet's, never part of a list anybody may read.
+    return this.dispatch.listFreight({ status: status as never }).filter((f) => !f.contract);
   }
 
   /**

@@ -2176,6 +2176,12 @@ export class RegisterFreightDto {
   @IsOptional() @IsBoolean() allowEarlyClaim?: boolean;
   /** B4 — an expeditor posting it for one of its clients, as their agent. A business sign-in only. */
   @IsOptional() @IsString() forClientId?: string;
+  /**
+   * P1 — order it under a standing contract: it goes to that fleet's queue and onto no market. A business sign-in, on a
+   * contract it has linked. `deliverOn` is then required — the day it must arrive, today or later.
+   */
+  @IsOptional() @IsString() contractId?: string;
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'A delivery day is YYYY-MM-DD' }) deliverOn?: string;
 }
 
 /** F2 — the PUDO counter books a too-big (dedicated, P4+) walk-up as FREIGHT instead of refusing it. The

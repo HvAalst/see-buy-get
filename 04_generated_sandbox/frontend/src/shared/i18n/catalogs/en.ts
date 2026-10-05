@@ -561,6 +561,7 @@ export const en = {
   // FP6 — a LOAD behind a tracking key: the consignment note's QR and the shipper's shared link land here.
   'send.freight.waiting': 'Waiting for a carrier',
   'send.freight.booked': 'A carrier has it booked',
+  'send.freight.ordered': 'Ordered with the carrier',
   'send.freight.onRoad': 'On the road',
   'send.freight.delivered': 'Delivered',
   'send.freight.withdrawn': 'Withdrawn',

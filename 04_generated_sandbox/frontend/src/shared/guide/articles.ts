@@ -408,6 +408,23 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "business-contracts",
+    apps: [
+      "business"
+    ],
+    title: "Ordering with a carrier you have a contract with",
+    summary: "If a fleet carries for you under a contract, your loads can go straight to that fleet instead of onto the open board.",
+    steps: [
+      "Your carrier records the contract in their fleet app and sends you a code. An owner opens Carriers, pastes it and taps Link it. The code works once.",
+      "When you post a load, choose that carrier under Who carries it, and the day it must arrive. Tomorrow is filled in for you.",
+      "The load shows as With your carrier until they put it on a truck. Its tracking link and consignment note work the same as any other load."
+    ],
+    notes: [
+      "The price and how you pay are on your own contract with the carrier. SeeBuyGet keeps the order, the note and the tracking — never the money.",
+      "An owner can end a contract under Carriers. Loads already ordered are still delivered."
+    ]
+  },
+  {
     id: "business-clients",
     apps: [
       "business"
@@ -571,6 +588,24 @@ export const ARTICLES: GuideArticle[] = [
     ],
     notes: [
       "A driver has to be on a shift to be given a load, because a load goes on a vehicle and the price is that vehicle’s. What the driver could not take — too heavy, the wrong body, a road that will not carry it — the office cannot force either."
+    ]
+  },
+  {
+    id: "fleet-orders",
+    apps: [
+      "fleet"
+    ],
+    title: "Orders under a contract, and planning the day they must arrive",
+    summary: "A shipper you have a contract with sends its orders straight to you. They are on no board and no other carrier sees them; your office puts each one on a truck.",
+    steps: [
+      "Orders, then Record a contract: who you carry for, and the contract number. No price — what you charge them stays on your own contract.",
+      "If the shipper has a business on SeeBuyGet, tap Send them a link code and pass the code on. An owner of their business enters it once, and from then on they order with you directly.",
+      "Orders opens on tomorrow: how many orders, how heavy, and how many still have no truck. Choose another day at the top. Anything from an earlier day that has not been delivered stays in sight under Behind.",
+      "Open an order to see where it is collected, where it goes and the day it must arrive. While a driver is on a shift you can put it on their truck there and then."
+    ],
+    notes: [
+      "An order is Late when the day it had to arrive has gone by and it has not been delivered. That is read from the order itself, never estimated.",
+      "Either side can end a contract. That stops new orders; the ones already placed are still yours to deliver."
     ]
   },
   {

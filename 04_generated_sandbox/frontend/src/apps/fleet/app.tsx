@@ -15,6 +15,7 @@ import { SessionsScreen } from './screens/SessionsScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { VehiclesScreen } from './screens/VehiclesScreen';
 import { DispatchScreen } from './screens/DispatchScreen';
+import { OrdersScreen } from './screens/OrdersScreen';
 import { useFleetApp, type FleetActions, type FleetState, type Screen } from './useFleetApp';
 import type { ArchiveApiState } from '../../shared/archive/useArchive';
 import '../../shared/screens.css';
@@ -63,6 +64,8 @@ export function App() {
     // F3 — its own tab, not a section under Lines. Drawing a line is setup, once per road; putting a
     // departure on one is the weekly work, and burying this week's run under that form inverts the two.
     { key: 'runs', label: t('fleet.nav.runs'), icon: 'clock', badge: openRuns || undefined },
+    // P1 — the orders arriving under its contracts, by the day they must arrive: what the office plans from.
+    { key: 'orders', label: t('fleet.nav.orders'), icon: 'box' },
   ];
 
   return (
@@ -100,7 +103,11 @@ export function App() {
 
       <main class="app__scroll">
         <ConnectivityNote stale={state.stale} />
-        <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} destination={destination} />
+        {state.screen === 'orders' ? (
+          <OrdersScreen sbg={sbg} managerDid={state.manager?.did} who={state.manager?.did} />
+        ) : (
+          <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} destination={destination} />
+        )}
       </main>
 
       <BottomNav<Screen> items={tabs} active={state.screen} onSelect={(key) => actions.go(key)} labels={false} />

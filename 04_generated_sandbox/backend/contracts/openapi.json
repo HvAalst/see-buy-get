@@ -20186,6 +20186,282 @@
         }
       }
     },
+    "/v1/sbg/fleet/managers/{did}/contracts": {
+      "get": {
+        "operationId": "CarriageContract.fleetList",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarriageContractList"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "CarriageContract.create",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateContractDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarriageContractView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/contracts/{contractId}/invite": {
+      "post": {
+        "operationId": "CarriageContract.invite",
+        "summary": "",
+        "description": "A code for the shipper's business to link the contract with. Shown once; a new one replaces the last.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "contractId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractInviteIssued"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/contracts/{contractId}/end": {
+      "post": {
+        "operationId": "CarriageContract.fleetEnd",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "contractId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EndContractDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarriageContractView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/orders": {
+      "get": {
+        "operationId": "CarriageContract.orders",
+        "summary": "",
+        "description": "The orders this fleet must carry, by the day they must arrive.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "pattern": "DAY",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "pattern": "DAY",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetOrderList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/contracts": {
+      "get": {
+        "operationId": "CarriageContract.shipperList",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarriageContractList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/contracts/link": {
+      "post": {
+        "operationId": "CarriageContract.link",
+        "summary": "",
+        "description": "Link a contract with the fleet's code. An owner's act: it commits the business to the fleet as its carrier.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkContractDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarriageContractView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/contracts/{contractId}/end": {
+      "post": {
+        "operationId": "CarriageContract.shipperEnd",
+        "parameters": [
+          {
+            "name": "contractId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EndContractDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarriageContractView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/settlement/module-info": {
       "get": {
         "operationId": "Sse.info",
@@ -30720,6 +30996,32 @@
           "name"
         ]
       },
+      "ContractRef": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string"
+          },
+          "contractId": {
+            "type": "string"
+          },
+          "fleetDid": {
+            "type": "string"
+          },
+          "fleetName": {
+            "type": "string"
+          },
+          "shipperName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "contractId",
+          "fleetDid",
+          "fleetName",
+          "shipperName"
+        ]
+      },
       "FreightInstructions": {
         "type": "object",
         "properties": {
@@ -31192,6 +31494,18 @@
               }
             ]
           },
+          "contract": {
+            "description": "P1 — the standing contract this order was placed under: which fleet must carry it, for whom. A copy, stamped when\nit was ordered, so the papers never change if either side renames itself or the contract later ends.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ContractRef"
+              }
+            ]
+          },
+          "deliverOn": {
+            "type": "string",
+            "description": "P1 — the calendar day a contract order must ARRIVE. What the fleet plans against, and what makes it late."
+          },
           "driverPayee": {
             "type": "object",
             "properties": {
@@ -31218,6 +31532,7 @@
             "enum": [
               "scheduled",
               "available",
+              "ordered",
               "claimed",
               "in_transit",
               "delivered",
@@ -33916,6 +34231,14 @@
           "forClientId": {
             "type": "string",
             "description": "B4 — an expeditor posting it for one of its clients, as their agent. A business sign-in only."
+          },
+          "contractId": {
+            "type": "string",
+            "description": "P1 — order it under a standing contract: it goes to that fleet's queue and onto no market. A business sign-in, on a\ncontract it has linked. `deliverOn` is then required — the day it must arrive, today or later."
+          },
+          "deliverOn": {
+            "type": "string",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/"
           }
         },
         "required": [
@@ -34940,6 +35263,7 @@
             "enum": [
               "scheduled",
               "available",
+              "ordered",
               "claimed",
               "in_transit",
               "delivered",
@@ -34960,6 +35284,17 @@
                 "$ref": "#/components/schemas/ClientRef"
               }
             ]
+          },
+          "contract": {
+            "description": "P1 — ordered under a standing contract: with which fleet, and the day it must arrive.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ContractRef"
+              }
+            ]
+          },
+          "deliverOn": {
+            "type": "string"
           },
           "attempts": {
             "description": "FP3b — the door the driver stood at and could not hand over at, most recent last.",
@@ -35303,6 +35638,7 @@
             "enum": [
               "scheduled",
               "available",
+              "ordered",
               "claimed",
               "in_transit",
               "delivered",
@@ -37368,6 +37704,331 @@
             "maxLength": 300
           }
         }
+      },
+      "ContractShipper": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "description": "The shipper's business on SeeBuyGet, once it linked the contract with the fleet's code. Absent: not here."
+          },
+          "linkedAt": {
+            "type": "string"
+          },
+          "linkedBy": {
+            "type": "string",
+            "description": "Which person in the business linked it."
+          },
+          "name": {
+            "type": "string",
+            "description": "As the fleet named them — and, once linked, as the business is registered. Box 1 on every order's note."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "ContractEnd": {
+        "type": "object",
+        "properties": {
+          "side": {
+            "type": "string",
+            "description": "Which side ended it, and the person who did.",
+            "enum": [
+              "fleet",
+              "shipper"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "side",
+          "at",
+          "by"
+        ]
+      },
+      "CarriageContractView": {
+        "type": "object",
+        "properties": {
+          "shipper": {
+            "$ref": "#/components/schemas/ContractShipper"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "startsOn": {
+            "type": "string"
+          },
+          "endsOn": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "ended"
+            ]
+          },
+          "ended": {
+            "$ref": "#/components/schemas/ContractEnd"
+          },
+          "inviteExpiresAt": {
+            "type": "string",
+            "description": "Whether a link code is outstanding, and until when — never the code."
+          },
+          "contractId": {
+            "type": "string"
+          },
+          "fleetDid": {
+            "type": "string"
+          },
+          "fleetName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "shipper",
+          "status",
+          "contractId",
+          "fleetDid",
+          "fleetName",
+          "createdAt",
+          "createdBy"
+        ]
+      },
+      "CarriageContractList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CarriageContractView"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "CreateContractDto": {
+        "type": "object",
+        "properties": {
+          "shipperName": {
+            "type": "string",
+            "description": "Who the fleet carries for — the sender on every order's consignment note until their business links it.",
+            "maxLength": 120
+          },
+          "reference": {
+            "type": "string",
+            "description": "Their own contract number. Never a price: the terms are between the two of them.",
+            "maxLength": 60
+          },
+          "startsOn": {
+            "type": "string",
+            "pattern": "DAY"
+          },
+          "endsOn": {
+            "type": "string",
+            "pattern": "DAY"
+          }
+        },
+        "required": [
+          "shipperName"
+        ]
+      },
+      "ContractInviteIssued": {
+        "type": "object",
+        "properties": {
+          "contract": {
+            "$ref": "#/components/schemas/CarriageContractView"
+          },
+          "code": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "contract",
+          "code",
+          "expiresAt"
+        ]
+      },
+      "EndContractDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 280
+          }
+        }
+      },
+      "FleetOrderRow": {
+        "type": "object",
+        "properties": {
+          "contract": {
+            "$ref": "#/components/schemas/ContractRef"
+          },
+          "deliveryWindow": {
+            "type": "string"
+          },
+          "packaging": {
+            "type": "string",
+            "enum": [
+              "loose",
+              "bagged",
+              "palletised",
+              "drummed",
+              "baled",
+              "ibc",
+              "piece"
+            ]
+          },
+          "destLocation": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "available",
+              "ordered",
+              "claimed",
+              "in_transit",
+              "delivered",
+              "cancelled"
+            ]
+          },
+          "postedByName": {
+            "type": "string",
+            "description": "Who in the shipper's business ordered it, and the client an expeditor ordered it for."
+          },
+          "onBehalfOf": {
+            "$ref": "#/components/schemas/ClientRef"
+          },
+          "driverName": {
+            "type": "string",
+            "description": "On a truck: who drives it and which vehicle."
+          },
+          "plate": {
+            "type": "string"
+          },
+          "claimedAt": {
+            "type": "string"
+          },
+          "pickedUpAt": {
+            "type": "string"
+          },
+          "deliveredAt": {
+            "type": "string"
+          },
+          "receiverName": {
+            "type": "string"
+          },
+          "cancelledAt": {
+            "type": "string"
+          },
+          "freightId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "deliverOn": {
+            "type": "string",
+            "description": "The day it must arrive."
+          },
+          "description": {
+            "type": "string"
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "pickupLabel": {
+            "type": "string"
+          },
+          "pickupLocation": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "destLabel": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "late": {
+            "type": "boolean",
+            "description": "Its delivery day is over and it has not arrived. Computed on the server's clock, never typed."
+          },
+          "trackingKey": {
+            "type": "string"
+          },
+          "trackingUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "contract",
+          "packaging",
+          "status",
+          "freightId",
+          "code",
+          "deliverOn",
+          "description",
+          "weightKg",
+          "pickupLabel",
+          "pickupLocation",
+          "destLabel",
+          "createdAt",
+          "late",
+          "trackingKey",
+          "trackingUrl"
+        ]
+      },
+      "FleetOrderList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FleetOrderRow"
+            }
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ]
+      },
+      "LinkContractDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "code"
+        ]
       },
       "MilestoneTermDto": {
         "type": "object",

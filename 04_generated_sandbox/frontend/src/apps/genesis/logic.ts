@@ -239,8 +239,12 @@ export const FREIGHT_LADDER: Array<FreightTrackView['status']> = ['available', '
 /** Space on a scheduled run never waited for a carrier: it was booked on one, so its ladder starts there. */
 export const RUN_LADDER: Array<FreightTrackView['status']> = ['claimed', 'in_transit', 'delivered'];
 
-export function freightLadder(view: Pick<FreightTrackView, 'on'>): Array<FreightTrackView['status']> {
-  return view.on === 'run' ? RUN_LADDER : FREIGHT_LADDER;
+/** P1 — an order under a contract starts WITH its carrier: it never waited on a board for one. */
+export const ORDER_LADDER: Array<FreightTrackView['status']> = ['ordered', 'claimed', 'in_transit', 'delivered'];
+
+export function freightLadder(view: Pick<FreightTrackView, 'on' | 'steps'>): Array<FreightTrackView['status']> {
+  if (view.on === 'run') return RUN_LADDER;
+  return view.steps?.[0]?.status === 'ordered' ? ORDER_LADDER : FREIGHT_LADDER;
 }
 
 export function freightLadderIndex(status: FreightTrackView['status'], ladder: Array<FreightTrackView['status']> = FREIGHT_LADDER): number {
@@ -255,6 +259,8 @@ export function freightStatusPresentation(status: FreightTrackView['status'], t:
     case 'scheduled':
     case 'available':
       return { word: t('send.freight.waiting'), icon: 'edit', tone: 'info' };
+    case 'ordered':
+      return { word: t('send.freight.ordered'), icon: 'badge', tone: 'info' };
     case 'claimed':
       return { word: t('send.freight.booked'), icon: 'badge', tone: 'info' };
     case 'in_transit':

@@ -254,4 +254,51 @@ describe('a customer’s business, over the wire', () => {
     expect(me.body.check.state).toBe('verified');
     await http().get(`/v1/sbg/profiles/${me.body.handle ?? 'missing'}`).expect(200);
   });
+
+  it('orders under a standing contract: the fleet’s code links it, the order goes to that fleet alone, and ending it stops new ones', async () => {
+    // A fleet, recorded by staff — its office's routes answer staff as well as the office.
+    const u = `${Date.now() % 1_000_000}${seq}`;
+    const fleet = (await http().post('/v1/sbg/fleet/managers').set(bearer(setupKey)).send({ companyName: `Kilima ${tag}`, contactPhone: `+2547${u}`, ownerFullName: 'O', ownerNationalId: `MGR-CT-${u}`, location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: `BRN-CT-${u}`, transportOperatorLicence: `TOL-CT-${u}`, taxId: `TAX-CT-${u}` } }).expect(201)).body;
+    const contract = (await http().post(`/v1/sbg/fleet/managers/${fleet.did}/contracts`).set(bearer(setupKey)).send({ shipperName: 'Jenga Bricks', reference: 'KL-07' }).expect(201)).body;
+    const invite = (await http().post(`/v1/sbg/fleet/managers/${fleet.did}/contracts/${contract.contractId}/invite`).set(bearer(setupKey)).send({}).expect(201)).body;
+    expect(invite.code).toMatch(/^[A-Z2-9]{5}-[A-Z2-9]{5}$/);
+
+    const owner = await aPerson();
+    const made = await http().post('/v1/sbg/business').set(bearer(owner.token)).send({ name: `Jenga Bricks ${tag}`, country: 'KE', registrationNo: `REG8-${tag}`, activities: ['shipper'], yourName: 'Baraka Owner' }).expect(201);
+    const shop = made.body.token.access_token;
+    // A business sign-in is not the fleet's office.
+    await http().get(`/v1/sbg/fleet/managers/${fleet.did}/orders`).set(bearer(shop)).expect(403);
+    const linked = await http().post('/v1/sbg/business/me/contracts/link').set(bearer(shop)).send({ code: invite.code }).expect(201);
+    expect(linked.body).toMatchObject({ contractId: contract.contractId, fleetName: `Kilima ${tag}`, shipper: { name: `Jenga Bricks ${tag}`, linkedBy: 'Baraka Owner' } });
+    expect(linked.body).not.toHaveProperty('invite');
+    expect((await http().get('/v1/sbg/business/me/contracts').set(bearer(shop)).expect(200)).body.items).toHaveLength(1);
+
+    // The code was single use: another business cannot link with it, nor order under a contract it never linked.
+    const other = await aPerson();
+    const otherBiz = (await http().post('/v1/sbg/business').set(bearer(other.token)).send({ name: `Other Bricks ${tag}`, country: 'KE', registrationNo: `REG9-${tag}`, activities: ['shipper'], yourName: 'Other' }).expect(201)).body.token.access_token;
+    await http().post('/v1/sbg/business/me/contracts/link').set(bearer(otherBiz)).send({ code: invite.code }).expect(404);
+
+    const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+    const load = { description: 'Bricks, 4 pallets', pickupLocation: { lat: -1.3, lng: 36.85 }, pickupLabel: 'Jenga yard', destLabel: 'Kitengela site', destLocation: { lat: -1.25, lng: 36.9 }, weightKg: 4000, packaging: 'palletised', pickupCountry: 'KE', destCountry: 'KE' };
+    await http().post('/v1/sbg/dispatch/freight').set(bearer(shop)).send({ ...load, contractId: contract.contractId }).expect(400);
+    await http().post('/v1/sbg/dispatch/freight').set(bearer(shop)).send({ ...load, contractId: contract.contractId, deliverOn: '2020-01-01' }).expect(400);
+    await http().post('/v1/sbg/dispatch/freight').set(bearer(otherBiz)).send({ ...load, contractId: contract.contractId, deliverOn: tomorrow }).expect(404);
+    await http().post('/v1/sbg/dispatch/freight').set(bearer(owner.token)).send({ ...load, contractId: contract.contractId, deliverOn: tomorrow }).expect(403);
+    const ordered = await http().post('/v1/sbg/dispatch/freight').set(bearer(shop)).send({ ...load, contractId: contract.contractId, deliverOn: tomorrow }).expect(201);
+    expect(ordered.body).toMatchObject({ status: 'ordered', settlement: 'between_parties', deliverOn: tomorrow, contract: { fleetDid: fleet.did, reference: 'KL-07' } });
+
+    // In the fleet's queue, on no list anybody may read, and tracked with the fleet named as carrier.
+    const queue = await http().get(`/v1/sbg/fleet/managers/${fleet.did}/orders`).query({ from: tomorrow, to: tomorrow }).set(bearer(setupKey)).expect(200);
+    expect(queue.body.items.map((r: { freightId: string }) => r.freightId)).toEqual([ordered.body.freightId]);
+    expect(queue.body.items[0]).toMatchObject({ late: false, postedByName: 'Baraka Owner', status: 'ordered' });
+    const all = await http().get('/v1/sbg/dispatch/freight').set(bearer(setupKey)).expect(200);
+    expect(all.body.map((x: { freightId: string }) => x.freightId)).not.toContain(ordered.body.freightId);
+    const tracked = await http().get(`/v1/sbg/track/${ordered.body.trackingKey}`).expect(200);
+    expect(tracked.body).toMatchObject({ kind: 'freight', status: 'ordered', carrier: { name: `Kilima ${tag}` } });
+
+    // Ended by the shipper: no new orders, and what was ordered stays with the fleet.
+    await http().post(`/v1/sbg/business/me/contracts/${contract.contractId}/end`).set(bearer(shop)).send({ reason: 'Season over' }).expect(201);
+    await http().post('/v1/sbg/dispatch/freight').set(bearer(shop)).send({ ...load, contractId: contract.contractId, deliverOn: tomorrow }).expect(400);
+    expect((await http().get(`/v1/sbg/fleet/managers/${fleet.did}/orders`).set(bearer(setupKey)).expect(200)).body.total).toBe(1);
+  });
 });

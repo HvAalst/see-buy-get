@@ -92,7 +92,7 @@ export interface TrackStep {
 export interface FreightTrackView {
   kind: 'freight';
   ref: string;
-  status: 'scheduled' | 'available' | 'claimed' | 'in_transit' | 'delivered' | 'cancelled';
+  status: 'scheduled' | 'available' | 'ordered' | 'claimed' | 'in_transit' | 'delivered' | 'cancelled';
   description: string;
   weightKg: number;
   pickupLabel: string;

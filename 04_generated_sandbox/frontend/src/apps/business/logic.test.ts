@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { checkStep, checkTone, digitsReady, isLastOwner, loadGaps, loadStage, mayAct, mayManage, newBusinessGaps, openOnArrival, phoneReady, sectionsFor } from './logic';
+import { checkStep, checkTone, contractPeriod, digitsReady, isLastOwner, loadGaps, loadStage, mayAct, mayManage, newBusinessGaps, nextDay, openOnArrival, orderableContracts, phoneReady, sectionsFor } from './logic';
+import { t } from '../../shared/i18n';
+import type { CarriageContract } from './api';
 import type { Membership } from './api';
 
 const member = (over: Partial<Membership>): Membership => ({
@@ -9,10 +11,10 @@ const member = (over: Partial<Membership>): Membership => ({
 describe('the Business app', () => {
   describe('which sections a business is shown', () => {
     it('shows imports to anybody whose goods or clients cross a border, and a yard only to a yard', () => {
-      expect(sectionsFor(['shipper'])).toEqual(['home', 'loads', 'runs', 'people', 'details']);
+      expect(sectionsFor(['shipper'])).toEqual(['home', 'loads', 'runs', 'contracts', 'people', 'details']);
       expect(sectionsFor(['importer'])).toEqual(['home', 'imports', 'people', 'details']);
       expect(sectionsFor(['clearing_agent'])).toContain('imports');
-      expect(sectionsFor(['expeditor'])).toEqual(['home', 'loads', 'runs', 'clients', 'imports', 'people', 'details']);
+      expect(sectionsFor(['expeditor'])).toEqual(['home', 'loads', 'runs', 'contracts', 'clients', 'imports', 'people', 'details']);
       expect(sectionsFor(['depot'])).toEqual(['home', 'yard', 'people', 'details']);
       expect(sectionsFor(['importer', 'depot'])).toEqual(['home', 'imports', 'yard', 'people', 'details']);
     });
@@ -86,6 +88,25 @@ describe('the Business app', () => {
       expect(loadStage({ status: 'in_transit', openProposals: 0, pickedUpAt: 'x' })).toBe('moving');
       expect(loadStage({ status: 'delivered', openProposals: 0, deliveredAt: 'x' })).toBe('delivered');
       expect(loadStage({ status: 'cancelled', openProposals: 1, cancelledAt: 'x' })).toBe('cancelled');
+      // P1 — with the contract carrier, waiting for one of its trucks.
+      expect(loadStage({ status: 'ordered', openProposals: 0 })).toBe('ordered');
+      expect(loadStage({ status: 'claimed', openProposals: 0, carrier: { driverName: 'Amos' } })).toBe('taken');
+    });
+  });
+
+  describe('P1 — ordering under a contract', () => {
+    const contract = (over: Partial<CarriageContract> = {}): CarriageContract => ({ contractId: 'c1', fleetDid: 'did:f', fleetName: 'Kilima', shipper: { name: 'Jenga' }, status: 'active', createdAt: 'x', createdBy: 'A', ...over });
+    it('offers only the contracts standing on the day it must arrive', () => {
+      const items = [contract(), contract({ contractId: 'c2', status: 'ended' }), contract({ contractId: 'c3', startsOn: '2026-11-01' }), contract({ contractId: 'c4', endsOn: '2026-10-01' })];
+      expect(orderableContracts(items, '2026-10-06').map((c) => c.contractId)).toEqual(['c1']);
+      expect(orderableContracts(items, '2026-11-02').map((c) => c.contractId)).toEqual(['c1', 'c3']);
+    });
+    it('defaults the delivery day to tomorrow, across a month end', () => {
+      expect(nextDay(new Date(2026, 9, 31, 15))).toBe('2026-11-01');
+    });
+    it('says a contract’s period in words', () => {
+      expect(contractPeriod({ startsOn: '2026-10-01', endsOn: '2026-12-31' }, t)).toBe('2026-10-01 to 2026-12-31');
+      expect(contractPeriod({}, t)).toBe('No end date');
     });
   });
 

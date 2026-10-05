@@ -3,6 +3,7 @@
 // remaining capacity of the driver's coupled vehicle. The driver claims, ignores, or lets it lapse.
 
 import { ClientRef } from './business-client.types';
+import { ContractRef } from './carriage-contract.types';
 import { BorderAdvice } from './border-rules.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { GeoPoint } from './pudo.types';
@@ -61,7 +62,12 @@ export class RoutePlan {
 export type ClaimableKind = 'tote' | 'freight';
 // 'scheduled' — booked for a FUTURE pickup date; held out of the driver marketplace until due, then
 // promoted to 'available' (the freight analogue of a tote that isn't full/aged yet).
-export const FREIGHT_STATUSES = ['scheduled', 'available', 'claimed', 'in_transit', 'delivered', 'cancelled'] as const;
+/**
+ * `ordered` — P1: an order placed under a standing contract with ONE fleet. It is that fleet's to plan and put on a
+ * truck, and on no market: a status rather than a flag, so that every board, offer, nudge and market series — which
+ * all read `available` — leaves it out without having to be told, including the ones written after this.
+ */
+export const FREIGHT_STATUSES = ['scheduled', 'available', 'ordered', 'claimed', 'in_transit', 'delivered', 'cancelled'] as const;
 export type FreightStatus = (typeof FREIGHT_STATUSES)[number];
 
 /** FP3b — a delivery the driver could not make: they were there, the goods were not handed over, and why. */
@@ -333,6 +339,13 @@ export class Freight {
   /** B4 — the client an expeditor sent this for, as their agent. The client is the SENDER on the note. A copy, not a link. */
   @ApiPropertyOptional({ type: ClientRef }) onBehalfOf?: ClientRef;
   /**
+   * P1 — the standing contract this order was placed under: which fleet must carry it, for whom. A copy, stamped when
+   * it was ordered, so the papers never change if either side renames itself or the contract later ends.
+   */
+  @ApiPropertyOptional({ type: ContractRef }) contract?: ContractRef;
+  /** P1 — the calendar day a contract order must ARRIVE. What the fleet plans against, and what makes it late. */
+  @ApiPropertyOptional() deliverOn?: string;
+  /**
    * WHO the network owed for this haul, and on whose books — fixed when it was accrued at delivery. A claim
    * upheld weeks later takes the money back from this same party: never from whichever fleet the driver has
    * moved to since, which carried nothing and was paid nothing for it. Absent where nothing was accrued.
@@ -416,6 +429,48 @@ export class Freight {
 }
 
 /** FB4a — the vehicle that took a load, as much of it as the market series needs. */
+/**
+ * P1 — ONE ORDER IN A FLEET'S QUEUE, as the office plans from it: what, from where to where, for which day, and how
+ * far it has got. Read by the fleet that must carry it, and nobody else.
+ */
+export class FleetOrderRow {
+  freightId: string;
+  code: string;
+  @ApiProperty({ type: ContractRef }) contract: ContractRef;
+  /** The day it must arrive. */
+  deliverOn: string;
+  @ApiPropertyOptional() deliveryWindow?: string;
+  description: string;
+  weightKg: number;
+  @ApiProperty({ enum: PACKAGING }) packaging: Packaging;
+  pickupLabel: string;
+  pickupLocation: GeoPoint;
+  destLabel: string;
+  @ApiPropertyOptional() destLocation?: GeoPoint;
+  @ApiProperty({ enum: FREIGHT_STATUSES }) status: FreightStatus;
+  /** Who in the shipper's business ordered it, and the client an expeditor ordered it for. */
+  @ApiPropertyOptional() postedByName?: string;
+  @ApiPropertyOptional({ type: ClientRef }) onBehalfOf?: ClientRef;
+  /** On a truck: who drives it and which vehicle. */
+  @ApiPropertyOptional() driverName?: string;
+  @ApiPropertyOptional() plate?: string;
+  createdAt: string;
+  @ApiPropertyOptional() claimedAt?: string;
+  @ApiPropertyOptional() pickedUpAt?: string;
+  @ApiPropertyOptional() deliveredAt?: string;
+  @ApiPropertyOptional() receiverName?: string;
+  @ApiPropertyOptional() cancelledAt?: string;
+  /** Its delivery day is over and it has not arrived. Computed on the server's clock, never typed. */
+  late: boolean;
+  trackingKey: string;
+  trackingUrl: string;
+}
+
+export class FleetOrderList {
+  @ApiProperty({ type: [FleetOrderRow] }) items: FleetOrderRow[];
+  total: number;
+}
+
 export class CarriedBody {
   @ApiProperty({ enum: VEHICLE_CLASSES })
   vehicleClass: VehicleClass;
@@ -834,6 +889,9 @@ export class PostedFreightRow {
   openProposals: number;
   /** B4 — the client an expeditor sent this for, as their agent. The client is the SENDER on the note. A copy, not a link. */
   @ApiPropertyOptional({ type: ClientRef }) onBehalfOf?: ClientRef;
+  /** P1 — ordered under a standing contract: with which fleet, and the day it must arrive. */
+  @ApiPropertyOptional({ type: ContractRef }) contract?: ContractRef;
+  @ApiPropertyOptional() deliverOn?: string;
   /** Set once the load is taken, so the poster sees the outcome without a second call. */
   agreedPrice?: number;
   /** FP3 — the journey's stamps, so the list can say "on the road since", "delivered to", "cancelled". */

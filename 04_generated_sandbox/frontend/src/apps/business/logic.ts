@@ -1,7 +1,8 @@
-import type { BusinessActivity, BusinessView, CheckState, Membership, MemberRole, NewBusiness } from './api';
+import type { BusinessActivity, BusinessView, CarriageContract, CheckState, Membership, MemberRole, NewBusiness } from './api';
+import type { Translate } from '../../shared/i18n';
 
 /** Where somebody is in the Business app. */
-export type Section = 'home' | 'loads' | 'runs' | 'clients' | 'imports' | 'yard' | 'people' | 'details';
+export type Section = 'home' | 'loads' | 'runs' | 'contracts' | 'clients' | 'imports' | 'yard' | 'people' | 'details';
 
 /**
  * WHICH SECTIONS A BUSINESS IS SHOWN — from what it says it does, never from what it is allowed.
@@ -17,6 +18,8 @@ export function sectionsFor(activities: BusinessActivity[]): Section[] {
     'home',
     // B2 — whoever sends goods, or arranges sending them for clients: post a load, or take space on a carrier's run.
     ...(has('shipper') || has('expeditor') ? (['loads', 'runs'] as Section[]) : []),
+    // P1 — the carriers it has a standing contract with, whose queue its orders go straight into.
+    ...(has('shipper') || has('expeditor') ? (['contracts'] as Section[]) : []),
     // B4 — an expeditor's own book of the clients it sends for, as their agent.
     ...(has('expeditor') ? (['clients'] as Section[]) : []),
     ...(has('importer') || has('clearing_agent') || has('expeditor') ? (['imports'] as Section[]) : []),
@@ -115,13 +118,34 @@ export function loadGaps(form: LoadForm): Array<keyof LoadForm> {
  * WHERE A LOAD HAS GOT, as one word for its list. `posted` waiting for a carrier · `offers` carriers have named
  * prices · `taken` a carrier has it · `moving` picked up · `delivered` · `cancelled`.
  */
-export type LoadStage = 'posted' | 'offers' | 'taken' | 'moving' | 'delivered' | 'cancelled';
+export type LoadStage = 'ordered' | 'posted' | 'offers' | 'taken' | 'moving' | 'delivered' | 'cancelled';
 export function loadStage(l: { status: string; openProposals: number; pickedUpAt?: string; deliveredAt?: string; cancelledAt?: string; carrier?: unknown }): LoadStage {
   if (l.cancelledAt || l.status === 'cancelled') return 'cancelled';
   if (l.deliveredAt || l.status === 'delivered') return 'delivered';
   if (l.pickedUpAt || l.status === 'in_transit') return 'moving';
   if (l.carrier || l.status === 'claimed') return 'taken';
+  // P1 — with the contract carrier, waiting to be put on one of its trucks. Never on the board, never offered prices.
+  if (l.status === 'ordered') return 'ordered';
   return l.openProposals > 0 ? 'offers' : 'posted';
+}
+
+/** P1 — the day after `now`, as YYYY-MM-DD in the reader's own calendar: next-day delivery is the ordinary order. */
+export function nextDay(now: Date = new Date()): string {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** P1 — the contracts a load can be ordered under: standing, and open on the day it must arrive. */
+export function orderableContracts(items: CarriageContract[], deliverOn: string): CarriageContract[] {
+  return items.filter((c) => c.status === 'active' && (!c.startsOn || deliverOn >= c.startsOn) && (!c.endsOn || deliverOn <= c.endsOn));
+}
+
+/** P1 — a contract's period in words. */
+export function contractPeriod(c: Pick<CarriageContract, 'startsOn' | 'endsOn'>, t: Translate): string {
+  if (c.startsOn && c.endsOn) return t('business.contracts.period', { from: c.startsOn, to: c.endsOn });
+  if (c.startsOn) return t('business.contracts.from', { from: c.startsOn });
+  if (c.endsOn) return t('business.contracts.until', { to: c.endsOn });
+  return t('business.contracts.openEnded');
 }
 
 /** At least nine digits, the server's own test of a plausible number. */

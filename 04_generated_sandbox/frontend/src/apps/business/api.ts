@@ -179,6 +179,34 @@ export interface PostedLoad {
   canRate: boolean;
   /** B4 — the client it was sent for, as their agent. */
   onBehalfOf?: ClientRef;
+  /** P1 — ordered under a standing contract: with which fleet, and the day it must arrive. */
+  contract?: ContractRef;
+  deliverOn?: string;
+}
+
+/** P1 — the copy of a contract an order carries. */
+export interface ContractRef {
+  contractId: string;
+  fleetDid: string;
+  fleetName: string;
+  shipperName: string;
+  reference?: string;
+}
+
+/** P1 — a standing contract with a fleet, as either side reads it. The terms are on their own paper. */
+export interface CarriageContract {
+  contractId: string;
+  fleetDid: string;
+  fleetName: string;
+  shipper: { name: string; entityId?: string; linkedAt?: string; linkedBy?: string };
+  reference?: string;
+  startsOn?: string;
+  endsOn?: string;
+  status: 'active' | 'ended';
+  createdAt: string;
+  createdBy: string;
+  ended?: { at: string; side: 'fleet' | 'shipper'; by: string; reason?: string };
+  inviteExpiresAt?: string;
 }
 
 export interface LoadProposal {
@@ -211,6 +239,9 @@ export interface NewLoad {
   dimensionsCm?: { l: number; w: number; h: number };
   /** B4 — sent for one of the business's own clients, as their agent. */
   forClientId?: string;
+  /** P1 — ordered under a standing contract, for the day it must arrive. */
+  contractId?: string;
+  deliverOn?: string;
 }
 
 export interface BusinessClient {
@@ -235,6 +266,9 @@ export interface BusinessClient {
   clients(archived?: boolean): Promise<Result<{ items: Client[] }>>;
   addClient(input: Omit<Client, 'clientId' | 'createdBy' | 'createdAt' | 'archivedAt'>): Promise<Result<Client>>;
   archiveClient(clientId: string, archived: boolean): Promise<Result<Client>>;
+  contracts(): Promise<Result<{ items: CarriageContract[] }>>;
+  linkContract(code: string): Promise<Result<CarriageContract>>;
+  endContract(contractId: string, reason?: string): Promise<Result<CarriageContract>>;
 }
 
 export function createBusinessClient(): BusinessClient {
@@ -265,6 +299,9 @@ export function createBusinessClient(): BusinessClient {
     clients: (archived) => call((c) => c.GET('/v1/sbg/business/me/clients' as never, { params: { query: archived ? { archived: 'true' } : {} } } as never) as never),
     addClient: (input) => call((c) => c.POST('/v1/sbg/business/me/clients' as never, { body: input } as never) as never),
     archiveClient: (clientId, archived) => call((c) => c.POST(`/v1/sbg/business/me/clients/${encodeURIComponent(clientId)}/archive` as never, { body: { archived } } as never) as never),
+    contracts: () => call((c) => c.GET('/v1/sbg/business/me/contracts' as never, {} as never) as never),
+    linkContract: (code) => call((c) => c.POST('/v1/sbg/business/me/contracts/link' as never, { body: { code } } as never) as never),
+    endContract: (contractId, reason) => call((c) => c.POST(`/v1/sbg/business/me/contracts/${encodeURIComponent(contractId)}/end` as never, { body: reason ? { reason } : {} } as never) as never),
   };
 }
 

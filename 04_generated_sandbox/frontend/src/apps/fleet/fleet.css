@@ -218,3 +218,21 @@
   flex: 1;
   min-width: 0;
 }
+
+/* P1 — a delivery day in one line: the count and weight first, what still has no truck in the warning colour. */
+.orders__sum {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0 0 8px;
+}
+.orders__sumwarn {
+  color: var(--navy);
+  font-weight: 600;
+}
+.orders__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}

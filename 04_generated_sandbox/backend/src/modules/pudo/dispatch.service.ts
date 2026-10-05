@@ -1,4 +1,5 @@
-﻿import type { ClientRef } from './business-client.types';
+﻿import type { ContractRef } from './carriage-contract.types';
+import type { ClientRef } from './business-client.types';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { TransitAuthorityService, transitRefusal } from './transit-authority.service';
 import { BorderRuleService } from './border-rules.service';
@@ -40,7 +41,7 @@ import { DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPAT
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
-import { BoardRow, Claimable, ClaimableKind, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, MarketRow, MarketSeries, Offer, PostedFreightRow, RoutePlan, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS } from './dispatch.types';
+import { BoardRow, Claimable, ClaimableKind, FleetOrderRow, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, MarketRow, MarketSeries, Offer, PostedFreightRow, RoutePlan, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS } from './dispatch.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 import { buildOfferResponse, type OfferResponse } from './offer-response';
 
@@ -409,7 +410,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string }, now: number = Date.now()): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string }, now: number = Date.now()): Freight {
     this.freightSeq += 1;
     // A future pickup date parks the load for later; a past/absent date ships now. A supplied-but-unparseable
     // date is a CALLER ERROR — fail closed (never silently ship-now what was meant to be scheduled). Store the
@@ -421,6 +422,9 @@ export class DispatchService {
       if (t > now) scheduledPickupAt = new Date(t).toISOString();
     }
     const scheduled = scheduledPickupAt != null;
+    // P1 — an order under a standing contract is that fleet's, on no market, for a day it must arrive by.
+    const contract = input.contract;
+    if (contract && !input.deliverOn) throw new GlosError('FIELD_REQUIRED', 'An order under a contract says which day it must arrive', { field: 'deliverOn' });
     // The shipper's early-claim choice (default: allow — a scarce truck can commit ahead of the date).
     const allowEarlyClaim = input.allowEarlyClaim ?? true;
     // S32: give the freight a cargo model so it matches vehicles like a tote does — class (from weight+dims)
@@ -473,7 +477,8 @@ export class DispatchService {
       bodyDerived,
       // FB0c — 'negotiate' means the minter wants to agree a price before anyone commits. Stored only when it
       // is actually chosen: absent reads as 'instant', which is how every load has always behaved.
-      commitMode: input.commitMode === 'negotiate' ? 'negotiate' : undefined,
+      // P1 — never on an order under a contract: its price is the contract's, and a negotiable load cannot be assigned.
+      commitMode: input.commitMode === 'negotiate' && !contract ? 'negotiate' : undefined,
       // Who NEGOTIATES for the load — not necessarily who pays. A counter booking has no shipperDid at all
       // (the customer's cash settles off-platform) and still needs a shop that can answer a proposal.
       postedByDid: input.postedByDid,
@@ -482,7 +487,9 @@ export class DispatchService {
       // B2 — a customer's business settles with the carrier itself: stamped here, once, from who posted it, so
       // every path a business posts through (its own form, an import's road leg, a box going home) is covered
       // and delivery never has to work out afterwards whose money it was.
-      ...(this.entities.byDid(input.postedByDid)?.kind === 'business' ? { settlement: 'between_parties' as const } : {}),
+      ...(this.entities.byDid(input.postedByDid)?.kind === 'business' || contract ? { settlement: 'between_parties' as const } : {}),
+      // P1 — and a contract order is settled under the contract, between the two of them, whoever placed it.
+      ...(contract ? { contract, deliverOn: input.deliverOn } : {}),
       fragile: input.fragile ?? false,
       bulk,
       packaging,
@@ -522,13 +529,14 @@ export class DispatchService {
       // A scheduled load is booked for later; if allowEarlyClaim it is still reservable now (see availableLoads).
       scheduledPickupAt,
       allowEarlyClaim,
-      status: scheduled ? 'scheduled' : 'available',
+      status: contract ? 'ordered' : scheduled ? 'scheduled' : 'available',
       createdAt: new Date().toISOString(),
     };
     this.freights.set(freight.freightId, freight);
     // Ping nearby drivers NOW for a ship-now load OR an early-claimable scheduled one (so a scarce truck can
     // commit ahead of the date). A no-early-claim scheduled load stays silent until due (publishReadyFreight).
-    if (!scheduled || allowEarlyClaim) {
+    // A contract order pings nobody: it is not for whoever is nearby.
+    if (!contract && (!scheduled || allowEarlyClaim)) {
       void this.events
         .publish(GlosEvent.Pudo.FreightPosted, { freightId: freight.freightId, code: freight.code, pickupLocation: freight.pickupLocation, destLabel: freight.destLabel, weightKg: freight.weightKg, cargoClass: freight.cargoClass }, { source: 'pudo' })
         .catch(() => undefined);
@@ -1089,9 +1097,15 @@ export class DispatchService {
    * `agreedPrice` set (FB0c) means the number was NEGOTIATED, so it becomes the locked price and the computed
    * breakdown is kept only for its terms and its real distances.
    */
-  private lockFreightToDriver(f: Freight, driverDid: string, vehicle: Vehicle, legs: { deadheadKm: number; loadedKm: number }, agreedPrice: number | undefined, now: number): Freight {
-    // Claimable when live ('available') OR when it's a scheduled load the shipper opened to early reservation.
-    if (!(f.status === 'available' || (f.status === 'scheduled' && f.allowEarlyClaim))) throw new GlosError('INVALID_STATE', `Freight is ${f.status}`);
+  private lockFreightToDriver(f: Freight, driverDid: string, vehicle: Vehicle, legs: { deadheadKm: number; loadedKm: number }, agreedPrice: number | undefined, now: number, office?: string): Freight {
+    // P1 — an order under a contract goes on a truck by ONE hand: the office of the fleet it was ordered from. A claim,
+    // an offer or an accepted price are other doors onto this same lock, and none of them carries an office.
+    if (f.status === 'ordered') {
+      if (!office || f.contract?.fleetDid !== office) throw new GlosError('FORBIDDEN', 'This is an order under a contract — only the fleet it was ordered from puts it on a truck');
+    } else if (!(f.status === 'available' || (f.status === 'scheduled' && f.allowEarlyClaim))) {
+      // Claimable when live ('available') OR when it's a scheduled load the shipper opened to early reservation.
+      throw new GlosError('INVALID_STATE', `Freight is ${f.status}`);
+    }
     // REP4 — bar a below-floor driver from CLAIMING freight (defence-in-depth behind suggest's withholding, and
     // it also catches a stale offer claimed after the driver dropped below the floor). Recoverable; cold-start safe.
     if (belowFloor(this.ratings.driverRating(driverDid))) throw new GlosError('REPUTATION_BELOW_FLOOR', 'Your rating is below the network minimum — freight is paused until it recovers. Keep delivering to bring it back up.');
@@ -1394,7 +1408,9 @@ export class DispatchService {
   marketSeries(input: { from?: GeoPoint; radiusKm?: number; since: number; until: number }): MarketSeries {
     const radius = input.radiusKm != null && Number.isFinite(input.radiusKm) && input.radiusKm > 0 ? input.radiusKm : undefined;
     const near = (f: Freight) => !input.from || radius == null || this.router.roadKm(input.from, f.pickupLocation) <= radius;
-    const scoped = [...this.freights.values()].filter(near);
+    // P1 — an order under a contract was never offered to anybody: counting it would invent demand the market did not
+    // have, and publish whose lanes a fleet works.
+    const scoped = [...this.freights.values()].filter((f) => !f.contract && near(f));
     return buildSeries(scoped, { from: input.since, to: input.until }, (a, b) => this.router.roadKm(a, b));
   }
 
@@ -1415,7 +1431,7 @@ export class DispatchService {
         return undefined;
       }
     };
-    return carriersOn([...this.freights.values()], input.from, input.to, { from: input.since, to: input.until }, fleetOf);
+    return carriersOn([...this.freights.values()].filter((f) => !f.contract), input.from, input.to, { from: input.since, to: input.until }, fleetOf);
   }
 
   /* ------------------------------------------------- FB0c: negotiate before commit -- */
@@ -1513,6 +1529,7 @@ export class DispatchService {
         createdAt: f.createdAt,
         openProposals: open.get(f.freightId) ?? 0,
         ...(f.onBehalfOf ? { onBehalfOf: f.onBehalfOf } : {}),
+        ...(f.contract ? { contract: f.contract, deliverOn: f.deliverOn } : {}),
         agreedPrice: f.lockedPrice,
         pickedUpAt: f.pickedUpAt,
         deliveredAt: f.deliveredAt,
@@ -1545,7 +1562,7 @@ export class DispatchService {
     const f = this.requireFreight(freightId);
     const at = new Date(now).toISOString();
     let amended = false;
-    if (f.status === 'scheduled' || f.status === 'available' || f.status === 'claimed') {
+    if (f.status === 'scheduled' || f.status === 'available' || f.status === 'ordered' || f.status === 'claimed') {
       const next = instructionsOf(input, byDid, now);
       if (next) f.instructions = next.instructions;
       else delete f.instructions;
@@ -1565,6 +1582,63 @@ export class DispatchService {
         .catch(() => undefined);
     }
     return f;
+  }
+
+/**
+   * P1 — THE ORDERS A FLEET MUST CARRY, by the day they must arrive: everything ordered under its contracts, whatever
+   * has become of it, so the office plans tomorrow and still sees what yesterday left undone. Read for one fleet only.
+   */
+  ordersForFleet(fleetDid: string, q: { from?: string; to?: string } = {}, now: number = Date.now()): FleetOrderRow[] {
+    const today = new Date(now).toISOString().slice(0, 10);
+    const rows: FleetOrderRow[] = [];
+    for (const f of this.freights.values()) {
+      if (f.contract?.fleetDid !== fleetDid || !f.deliverOn) continue;
+      if (q.from && f.deliverOn < q.from) continue;
+      if (q.to && f.deliverOn > q.to) continue;
+      let driverName: string | undefined;
+      if (f.claimedBy) {
+        try {
+          driverName = this.drivers.get(f.claimedBy).displayName;
+        } catch {
+          /* a driver no longer on record is still on the haul — by plate below */
+        }
+      }
+      const window = instructionsViewOf(f)?.deliveryWindow;
+      // The vehicle is frozen onto the load when the goods are taken over. Until then the truck that will collect it
+      // is whichever one its driver is out in now — read live, because before pickup that is still the office's to change.
+      const plate = f.carriage?.plate ?? (f.claimedBy && f.status === 'claimed' ? this.fleet.vehicleForDriver(f.claimedBy)?.plate : undefined);
+      rows.push({
+        freightId: f.freightId,
+        code: f.code,
+        contract: f.contract,
+        deliverOn: f.deliverOn,
+        ...(window ? { deliveryWindow: window } : {}),
+        description: f.description,
+        weightKg: f.weightKg,
+        packaging: f.packaging ?? DEFAULT_PACKAGING,
+        pickupLabel: f.pickupLabel,
+        pickupLocation: f.pickupLocation,
+        destLabel: f.destLabel,
+        ...(f.destLocation ? { destLocation: f.destLocation } : {}),
+        status: f.status,
+        ...(f.postedByName ? { postedByName: f.postedByName } : {}),
+        ...(f.onBehalfOf ? { onBehalfOf: f.onBehalfOf } : {}),
+        ...(driverName ? { driverName } : {}),
+        ...(plate ? { plate } : {}),
+        createdAt: f.createdAt,
+        ...(f.claimedAt ? { claimedAt: f.claimedAt } : {}),
+        ...(f.pickedUpAt ? { pickedUpAt: f.pickedUpAt } : {}),
+        ...(f.deliveredAt ? { deliveredAt: f.deliveredAt } : {}),
+        ...(f.proofOfDelivery?.receiverName ? { receiverName: f.proofOfDelivery.receiverName } : {}),
+        ...(f.cancellation ? { cancelledAt: f.cancellation.at } : {}),
+        // Late is a FACT about the day, not an estimate: the day it had to arrive is behind us and it has not.
+        late: f.deliverOn < today && f.status !== 'delivered' && f.status !== 'cancelled',
+        // Every order is minted with a key; one never is without.
+        trackingKey: f.trackingKey!,
+        trackingUrl: trackingUrlOf(f.trackingKey!),
+      });
+    }
+    return rows.sort((a, b) => a.deliverOn.localeCompare(b.deliverOn) || a.createdAt.localeCompare(b.createdAt));
   }
 
   /** FP6 — the load behind a tracking key, or nothing. The key is the credential: no other lookup is offered. */
@@ -1688,6 +1762,8 @@ export class DispatchService {
    */
   assign(freightId: string, driverDid: string, by: { managerDid: string; name?: string }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
+    // P1 — whose order it is comes before anything about the truck: another fleet learns nothing about whether it fits.
+    if (f.status === 'ordered' && f.contract?.fleetDid !== by.managerDid) throw new GlosError('FORBIDDEN', 'This is an order under a contract — only the fleet it was ordered from puts it on a truck');
     const vehicle = this.fleet.vehicleForDriver(driverDid);
     if (!vehicle) throw new GlosError('NOT_COUPLED', 'That driver is not on a shift — a load goes on a vehicle, and they have none yet');
     if (commitModeOf(f) === 'negotiate') throw new GlosError('NEGOTIATION_REQUIRED', 'This load is posted for negotiation — the driver can send the shipper a price from their board; it cannot be assigned at a counter rate');
@@ -1705,7 +1781,7 @@ export class DispatchService {
     const at = this.fleet.activeForDriver(driverDid)?.location;
     const deadheadKm = at ? round1(this.router.roadKm(at, f.pickupLocation)) : 0;
     const loadedKm = round1(f.destLocation ? this.router.roadKm(f.pickupLocation, f.destLocation) : 0);
-    const freight = this.lockFreightToDriver(f, driverDid, vehicle, { deadheadKm, loadedKm }, undefined, now);
+    const freight = this.lockFreightToDriver(f, driverDid, vehicle, { deadheadKm, loadedKm }, undefined, now, by.managerDid);
     const atIso = new Date(now).toISOString();
     freight.assignedBy = { managerDid: by.managerDid, ...(by.name ? { name: by.name } : {}), at: atIso };
     this.freights.set(freight.freightId, freight);

@@ -128,3 +128,18 @@
 .biz-new .cons__lede {
   margin-bottom: 16px;
 }
+
+/* P1 — a carrier's link code is read off a message and typed: set like one. */
+.biz-code {
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  max-width: 260px;
+}
+/* Ending a contract opens under its row: the reason, what it means, and the two buttons. */
+.biz-contract__end {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}

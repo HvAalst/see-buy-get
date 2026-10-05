@@ -182,7 +182,8 @@ export class ConsignmentNoteService implements OnModuleInit {
    */
   trackView(f: Freight): FreightTrackView {
     const carrier = this.carrierOf(f);
-    const steps: FreightTrackView['steps'] = [{ status: f.scheduledPickupAt ? 'scheduled' : 'available', at: f.createdAt }];
+    // P1 — an order under a contract starts WITH its carrier: it never waited on a board for one.
+    const steps: FreightTrackView['steps'] = [{ status: f.contract ? 'ordered' : f.scheduledPickupAt ? 'scheduled' : 'available', at: f.createdAt }];
     if (f.claimedAt) steps.push({ status: 'claimed', at: f.claimedAt });
     if (f.pickedUpAt) steps.push({ status: 'in_transit', at: f.pickedUpAt });
     if (f.deliveredAt) steps.push({ status: 'delivered', at: f.deliveredAt });
@@ -197,6 +198,7 @@ export class ConsignmentNoteService implements OnModuleInit {
       destLabel: f.destLabel,
       ...(f.destLocation ? { destLocation: f.destLocation } : {}),
       ...(f.scheduledPickupAt ? { scheduledPickupAt: f.scheduledPickupAt } : {}),
+      ...(!carrier && f.contract ? { carrier: { name: f.contract.fleetName } } : {}),
       ...(carrier ? { carrier: { name: carrier.name, ...(carrier.driverName ? { driverName: carrier.driverName } : {}), ...(carrier.plate ? { plate: carrier.plate } : {}), ...(carrier.vehicleClass ? { vehicleClass: carrier.vehicleClass } : {}) } } : {}),
       steps,
       ...(f.deliveryAttempts?.length ? { attempts: f.deliveryAttempts.map((a) => ({ outcome: a.outcome, at: a.at })) } : {}),

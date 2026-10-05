@@ -52,6 +52,7 @@ export type TipId =
   | 'fleet.lines.how'
   /** Runs — that a departure sells the space a line is already carrying empty, on the fleet's own terms. */
   | 'fleet.runs.how'
+  | 'fleet.orders.how'
   | 'fleet.dispatch.how'
   | 'fleet.earnings.how'
   /* THE STORE. Only the dock: what a collection from your own address IS. The rest of the store's

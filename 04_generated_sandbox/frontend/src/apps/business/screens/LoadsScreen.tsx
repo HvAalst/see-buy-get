@@ -5,12 +5,13 @@ import { ConsoleDetail } from '../../tower/ConsoleDetail';
 import { SitePicker, type SiteView } from '../../tower/screens/SitePicker';
 import { QuotePanel } from '../../tower/screens/QuotePanel';
 import { NATURES, PACKAGING_OPTIONS } from '../../agent/logic';
-import type { BusinessClient, BusinessView, LoadProposal, PostedLoad } from '../api';
-import { loadGaps, loadStage, mayAct, type LoadForm, type LoadStage } from '../logic';
+import type { BusinessClient, BusinessView, CarriageContract, LoadProposal, PostedLoad } from '../api';
+import { loadGaps, loadStage, mayAct, nextDay, orderableContracts, type LoadForm, type LoadStage } from '../logic';
 import { SentFor } from './SentFor';
 import type { BusinessActions } from '../useBusinessApp';
 
 const STAGE: Record<LoadStage, { label: MessageKey; tone: string }> = {
+  ordered: { label: 'business.loads.stage.ordered', tone: 'info' },
   posted: { label: 'business.loads.stage.posted', tone: 'quiet' },
   offers: { label: 'business.loads.stage.offers', tone: 'info' },
   taken: { label: 'business.loads.stage.taken', tone: 'info' },
@@ -19,8 +20,8 @@ const STAGE: Record<LoadStage, { label: MessageKey; tone: string }> = {
   cancelled: { label: 'business.loads.stage.cancelled', tone: 'quiet' },
 };
 
-type Form = LoadForm & { packaging: string; natureCode: string; fragile: boolean; commitMode: 'negotiate' | 'instant'; instructions: string; contactName: string; contactPhone: string; deliveryWindow: string; pickupOn: string; forClientId: string };
-const EMPTY: Form = { description: '', fromSiteId: '', toSiteId: '', weightKg: '', packaging: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '' };
+type Form = LoadForm & { packaging: string; natureCode: string; fragile: boolean; commitMode: 'negotiate' | 'instant'; instructions: string; contactName: string; contactPhone: string; deliveryWindow: string; pickupOn: string; forClientId: string; contractId: string; deliverOn: string };
+const EMPTY: Form = { description: '', fromSiteId: '', toSiteId: '', weightKg: '', packaging: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '' };
 
 /**
  * B2 — A BUSINESS'S OWN LOADS: post one, and follow it to the door.
@@ -70,9 +71,9 @@ export function LoadsScreen({ business, client }: { business: BusinessView; acti
             business={business}
             client={client}
             onCancel={() => setPosting(false)}
-            onPosted={async (code) => {
+            onPosted={async (code, ordered) => {
               setPosting(false);
-              setDone(t('business.loads.posted', { code }));
+              setDone(ordered ? t('business.loads.ordered', { code, fleet: ordered.fleet, day: ordered.day }) : t('business.loads.posted', { code }));
               await load();
             }}
           />
@@ -111,6 +112,7 @@ export function LoadsScreen({ business, client }: { business: BusinessView; acti
                       {t('business.loads.rowSub', { dest: r.destLabel, kg: r.weightKg.toLocaleString(), when: r.createdAt.slice(0, 10) })}
                       {r.carrier?.driverName ? ` · ${t('business.loads.carriedBy', { who: r.carrier.driverName })}` : ''}
                       {r.onBehalfOf ? ` · ${t('business.sentFor.forClient', { name: r.onBehalfOf.name })}` : ''}
+                      {r.contract ? ` · ${t('business.loads.withCarrier', { fleet: r.contract.fleetName, day: r.deliverOn ?? '' })}` : ''}
                     </span>
                   </span>
                 </button>
@@ -136,15 +138,23 @@ export function LoadsScreen({ business, client }: { business: BusinessView; acti
   );
 }
 
-function NewLoadPanel({ business, client, onCancel, onPosted }: { business: BusinessView; client: BusinessClient | null; onCancel: () => void; onPosted: (code: string) => void | Promise<void> }) {
+function NewLoadPanel({ business, client, onCancel, onPosted }: { business: BusinessView; client: BusinessClient | null; onCancel: () => void; onPosted: (code: string, ordered?: { fleet: string; day: string }) => void | Promise<void> }) {
   const t = useT();
-  const [form, setForm] = useState<Form>({ ...EMPTY });
+  const [form, setForm] = useState<Form>({ ...EMPTY, deliverOn: nextDay() });
+  const [contracts, setContracts] = useState<CarriageContract[]>([]);
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const gaps = loadGaps(form);
   const gap = (f: keyof LoadForm) => (tried && gaps.includes(f) ? <span class="cerr">{t(`business.loads.need.${f}` as MessageKey)}</span> : null);
   const siteApi = client ? (client.api as never) : null;
+  // P1 — the carriers this business has a standing contract with. An order with one goes to its queue, not the board.
+  useEffect(() => {
+    if (!client) return;
+    void client.contracts().then((r) => setContracts(r.data?.items ?? []));
+  }, [client]);
+  const offered = orderableContracts(contracts, form.deliverOn || nextDay());
+  const contract = offered.find((c) => c.contractId === form.contractId) ?? null;
 
   const submit = async (e: Event) => {
     e.preventDefault();
@@ -179,12 +189,14 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
       ...(form.contactName.trim() ? { contactName: form.contactName.trim() } : {}),
       ...(form.contactPhone.trim() ? { contactPhone: form.contactPhone.trim() } : {}),
       ...(form.deliveryWindow.trim() ? { deliveryWindow: form.deliveryWindow.trim() } : {}),
-      ...(form.pickupOn ? { scheduledPickupAt: new Date(`${form.pickupOn}T08:00:00`).toISOString() } : {}),
+      ...(form.pickupOn && !contract ? { scheduledPickupAt: new Date(`${form.pickupOn}T08:00:00`).toISOString() } : {}),
       ...(form.forClientId ? { forClientId: form.forClientId } : {}),
+      // Under a contract: the day it must arrive, and no pickup date of our own — the fleet plans when it collects.
+      ...(contract ? { contractId: contract.contractId, deliverOn: form.deliverOn } : {}),
     });
     setBusy(false);
     if (posted.error || !posted.data) return setError(posted.error?.detail || posted.error?.title || null);
-    await onPosted(posted.data.code);
+    await onPosted(posted.data.code, contract ? { fleet: contract.fleetName, day: form.deliverOn } : undefined);
   };
 
   return (
@@ -192,9 +204,37 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
       <div class="cons__panelhead">
         <span class="cons__panelt">{t('business.loads.newTitle')}</span>
       </div>
-      <p class="cons__lede">{t('business.loads.newLede')}</p>
+      <p class="cons__lede">{t(contract ? 'business.loads.newLedeContract' : 'business.loads.newLede')}</p>
       <form onSubmit={(e) => void submit(e)}>
         <SentFor client={client} expeditor={business.activities.includes('expeditor')} value={form.forClientId} onChange={(id) => setForm((prev) => ({ ...prev, forClientId: id }))} />
+        {offered.length ? (
+          <fieldset class="cfield biz-acts">
+            <legend class="cfield__label">{t('business.loads.f.carrier')}</legend>
+            <label class="cfield--check biz-act">
+              <input type="radio" name="biz-carrier" checked={!contract} onChange={() => setForm((prev) => ({ ...prev, contractId: '' }))} />
+              <span>
+                <strong>{t('business.loads.f.board')}</strong>
+                <span class="chint">{t('business.loads.f.boardSub')}</span>
+              </span>
+            </label>
+            {offered.map((c) => (
+              <label class="cfield--check biz-act" key={c.contractId}>
+                <input type="radio" name="biz-carrier" checked={contract?.contractId === c.contractId} onChange={() => setForm((prev) => ({ ...prev, contractId: c.contractId }))} />
+                <span>
+                  <strong>{c.reference ? `${c.fleetName} · ${c.reference}` : c.fleetName}</strong>
+                  <span class="chint">{t('business.loads.f.contractSub')}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+        ) : null}
+        {contract ? (
+          <label class="cfield">
+            <span class="cfield__label">{t('business.loads.f.deliverOn')}</span>
+            <input class="cinput" type="date" min={new Date().toISOString().slice(0, 10)} value={form.deliverOn} onInput={(e) => setForm((prev) => ({ ...prev, deliverOn: (e.target as HTMLInputElement).value }))} />
+            <span class="chint">{t('business.loads.f.deliverOnHint', { fleet: contract.fleetName })}</span>
+          </label>
+        ) : null}
         <label class="cfield">
           <span class="cfield__label">{t('business.loads.f.description')}</span>
           <input class="cinput" maxLength={160} value={form.description} onInput={(e) => setForm((prev) => ({ ...prev, description: (e.target as HTMLInputElement).value }))} />
@@ -238,17 +278,19 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
               ))}
             </select>
           </label>
-          <label class="cfield">
-            <span class="cfield__label">{t('business.loads.f.pickupOn')}</span>
-            <input class="cinput" type="date" value={form.pickupOn} onInput={(e) => setForm((prev) => ({ ...prev, pickupOn: (e.target as HTMLInputElement).value }))} />
-            <span class="chint">{t('business.loads.f.pickupOnHint')}</span>
-          </label>
+          {contract ? null : (
+            <label class="cfield">
+              <span class="cfield__label">{t('business.loads.f.pickupOn')}</span>
+              <input class="cinput" type="date" value={form.pickupOn} onInput={(e) => setForm((prev) => ({ ...prev, pickupOn: (e.target as HTMLInputElement).value }))} />
+              <span class="chint">{t('business.loads.f.pickupOnHint')}</span>
+            </label>
+          )}
         </div>
         <label class="cfield--check">
-          <input type="checkbox" checked={form.fragile} onChange={() => setForm((prev) => ({ ...prev, fragile: !form.fragile }))} />
+          <input type="checkbox" checked={form.fragile} onChange={() => setForm((prev) => ({ ...prev, fragile: !prev.fragile }))} />
           <span>{t('business.loads.f.fragile')}</span>
         </label>
-        <fieldset class="cfield biz-acts">
+        <fieldset class="cfield biz-acts" style={contract ? 'display:none' : undefined}>
           <legend class="cfield__label">{t('business.loads.f.price')}</legend>
           {(['negotiate', 'instant'] as const).map((m) => (
             <label class="cfield--check biz-act" key={m}>
@@ -278,14 +320,14 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
           <span class="cfield__label">{t('business.loads.f.window')}</span>
           <input class="cinput" maxLength={80} value={form.deliveryWindow} placeholder={t('business.loads.f.windowPlaceholder')} onInput={(e) => setForm((prev) => ({ ...prev, deliveryWindow: (e.target as HTMLInputElement).value }))} />
         </label>
-        <p class="cnote">{t('business.loads.settleNote')}</p>
+        <p class="cnote">{t(contract ? 'business.loads.contractNote' : 'business.loads.settleNote')}</p>
         {error ? <p class="cerr">{error}</p> : null}
         <div class="twr-panelend">
           <button type="button" class="cbtn cbtn--ghost" onClick={onCancel}>
             {t('common.cancel')}
           </button>
           <button type="submit" class="cbtn cbtn--primary" disabled={busy}>
-            {t('business.loads.postCta')}
+            {t(contract ? 'business.loads.orderCta' : 'business.loads.postCta')}
           </button>
         </div>
       </form>
@@ -354,6 +396,16 @@ function LoadDetail({ row, client, act, onClose, onChanged }: { row: PostedLoad;
             <dt class="cons__factk">{t('business.loads.fact.weight')}</dt>
             <dd class="cons__factv">{row.weightKg.toLocaleString()} kg</dd>
           </div>
+          {row.contract ? (
+            <div class="cons__fact">
+              <dt class="cons__factk">{t('business.loads.fact.contract')}</dt>
+              <dd class="cons__factv">
+                {row.contract.fleetName}
+                {row.contract.reference ? ` · ${row.contract.reference}` : ''}
+                {row.deliverOn ? ` · ${t('business.loads.fact.arrivesOn', { day: row.deliverOn })}` : ''}
+              </dd>
+            </div>
+          ) : null}
           {row.carrier?.driverName ? (
             <div class="cons__fact">
               <dt class="cons__factk">{t('business.loads.fact.carrier')}</dt>
