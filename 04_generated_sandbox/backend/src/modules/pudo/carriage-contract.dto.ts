@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -33,6 +33,24 @@ export class ImportOrdersDto {
   @IsOptional() @Type(() => Number) @IsNumber() @Min(-90) @Max(90) pickupLat?: number;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(-180) @Max(180) pickupLng?: number;
   @IsOptional() @IsBoolean() dryRun?: boolean;
+}
+
+/**
+ * P3 — what a plan for a day is asked with. Everything but the day has a default; the office changes what is true of
+ * its own day (a truck in the workshop, a later start, slower roads).
+ */
+export class PlanDayDto {
+  @Matches(DAY, { message: 'A day is YYYY-MM-DD' }) day!: string;
+  @IsOptional() @IsArray() @ArrayMaxSize(200) @IsString({ each: true }) excludeVehicleIds?: string[];
+  @IsOptional() @Matches(/^([01]?\d|2[0-3]):[0-5]\d$/, { message: 'A start time is HH:MM' }) dayStart?: string;
+  @IsOptional() @Type(() => Number) @IsNumber() dayHours?: number;
+  @IsOptional() @Type(() => Number) @IsNumber() speedKmh?: number;
+  @IsOptional() @Type(() => Number) @IsNumber() loadMin?: number;
+  @IsOptional() @Type(() => Number) @IsNumber() unloadMin?: number;
+}
+
+export class PlanStateQueryDto {
+  @Matches(DAY, { message: 'A day is YYYY-MM-DD' }) day!: string;
 }
 
 /** P1b — where an uploaded order is delivered, as a point. */

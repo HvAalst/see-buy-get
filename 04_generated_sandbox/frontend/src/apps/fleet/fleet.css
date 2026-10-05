@@ -275,3 +275,157 @@
 .orders__nopin {
   color: var(--dang);
 }
+
+/* P3 — the plan board. Read at a desk: the app gives it the width while it is open, and each truck's day is a column
+   beside the next where there is room for it. On a phone they stack. */
+.app__scroll--wide {
+  max-width: 1320px;
+}
+.orders__plan {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+.plan__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  margin: 0 0 10px;
+  font-size: 17px;
+}
+.plan__acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+.plan__tune {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+.plan__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+  align-items: start;
+  margin-top: 14px;
+}
+.plan__truck {
+  background: var(--bg);
+  border: 1px solid var(--bd);
+  border-radius: var(--r-lg, 16px);
+  padding: 14px 16px;
+}
+.plan__truckhead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--bd);
+}
+.plan__plate {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--navy);
+}
+.plan__trucksub {
+  font-size: 14px;
+  color: var(--tx2);
+}
+.plan__trip {
+  padding-top: 12px;
+}
+.plan__triphead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: var(--tx2);
+}
+.plan__triphead strong {
+  color: var(--navy);
+  font-size: 15px;
+}
+.plan__stops {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.plan__stops li {
+  display: flex;
+  gap: 10px;
+  padding: 6px 0;
+}
+.plan__stops li + li {
+  border-top: 1px dashed var(--bd);
+}
+.plan__time {
+  flex: 0 0 52px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--blue-dark);
+}
+.plan__stop {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.plan__stopt {
+  font-weight: 600;
+  color: var(--tx);
+}
+.plan__stops-s {
+  font-size: 13px;
+  color: var(--tx2);
+}
+
+/* What a plan left out, a reason to a card — beside each other at a desk, since each is a different thing to do. */
+.plan__left {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+.plan__left .card {
+  margin: 0;
+}
+.plan__leftlist {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.plan__leftlist li {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0;
+}
+.plan__leftlist li + li {
+  border-top: 1px dashed var(--bd);
+}
+/* At a desk a button is as wide as its words; on a phone it is the width of the thumb's reach. */
+@media (min-width: 900px) {
+  .plan__acts .btn {
+    width: auto;
+  }
+}
+
+/* The plan's answer card: the short-of-trucks note stands a little clear of the small print under it. */
+.plan .note + .hint,
+.plan .note + p {
+  margin-top: 10px;
+}
+
+/* Sending the plan out, under the answer: a line a truck, the ones that met a refusal in the warning colour. */
+.plan__send {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bd);
+}
+.plan__held {
+  color: var(--dang);
+}

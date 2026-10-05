@@ -2,13 +2,15 @@ import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 import type { SbgClient } from '../../../lib/sbg';
 import { Button, Card, CodeCard, ErrorNote, Explainer, Note, Pill, PlacePicker, ReadAloud, Sheet } from '../../../shared/ui';
 import type { GeoPoint } from '../../../shared/geo';
-import { useT, type MessageKey } from '../../../shared/i18n';
+import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { PACKAGING_OPTIONS } from '../../agent/logic';
-import { TAG_TONE, byDay, dayOf, daySummary, dayWord, mayWithdraw, orderTag, ordersApi, weightWords, type Contract, type FleetOrder, type InviteIssued } from '../orders';
+import { TAG_TONE, byDay, dayOf, daySummary, dayWord, mayWithdraw, orderTag, ordersApi, weightWords, type Contract, type DayPlanState, type FleetOrder, type InviteIssued } from '../orders';
+import { PlanBoard } from './PlanBoard';
 import { OrderUpload } from './OrderUpload';
 
 const TAG_WORD: Record<ReturnType<typeof orderTag>, MessageKey> = {
   unplanned: 'fleet.orders.tag.unplanned',
+  planned: 'fleet.orders.tag.planned',
   onTruck: 'fleet.orders.tag.onTruck',
   onRoad: 'fleet.orders.tag.onRoad',
   delivered: 'fleet.orders.tag.delivered',
@@ -24,7 +26,7 @@ const TAG_WORD: Record<ReturnType<typeof orderTag>, MessageKey> = {
  * still has no truck, and keeps anything late in sight whatever day is chosen. Every tag is a fact on the order —
  * nothing here is an estimate.
  */
-export function OrdersScreen({ sbg, managerDid, who }: { sbg: SbgClient | null; managerDid: string | undefined; who: string | undefined }) {
+export function OrdersScreen({ sbg, managerDid, who, onWide }: { sbg: SbgClient | null; managerDid: string | undefined; who: string | undefined; onWide?: (wide: boolean) => void }) {
   const t = useT();
   const api = useMemo(() => (sbg && managerDid ? ordersApi(sbg, managerDid) : null), [sbg, managerDid]);
   const [orders, setOrders] = useState<FleetOrder[] | null>(null);
@@ -32,6 +34,24 @@ export function OrdersScreen({ sbg, managerDid, who }: { sbg: SbgClient | null; 
   const [day, setDay] = useState(() => dayOf(new Date(), 1));
   const [error, setError] = useState<unknown>(null);
   const [open, setOpen] = useState<FleetOrder | null>(null);
+  const [planning, setPlanning] = useState(false);
+  const [planState, setPlanState] = useState<DayPlanState | null>(null);
+
+  // The plan board is laid out for a desk: it asks the app for the room while it is open, and gives it back.
+  useEffect(() => {
+    onWide?.(planning);
+    return () => onWide?.(false);
+  }, [planning, onWide]);
+
+  // The accepted plan for the day being looked at, and how the day has moved on under it.
+  const loadPlanState = useCallback(async () => {
+    if (!api) return;
+    const r = await api.planState(day);
+    setPlanState(r.error ? null : (r.data ?? null));
+  }, [api, day]);
+  useEffect(() => {
+    void loadPlanState();
+  }, [loadPlanState]);
 
   const load = useCallback(async () => {
     if (!api) return;
@@ -55,6 +75,21 @@ export function OrdersScreen({ sbg, managerDid, who }: { sbg: SbgClient | null; 
   const chosen = groups.find((g) => g.day === day)?.orders ?? [];
   const sum = daySummary(chosen);
 
+  if (planning && api) {
+    return (
+      <PlanBoard
+        day={day}
+        api={api}
+        accepted={planState?.plan}
+        newSince={planState?.newSince}
+        onClose={() => setPlanning(false)}
+        onAccepted={async () => {
+          await Promise.all([load(), loadPlanState()]);
+        }}
+      />
+    );
+  }
+
   return (
     <div class="scr">
       <h1 class="scr__title">{t('fleet.orders.title')}</h1>
@@ -73,7 +108,7 @@ export function OrdersScreen({ sbg, managerDid, who }: { sbg: SbgClient | null; 
         <p class="hint">{t('fleet.orders.loading')}</p>
       ) : (
         <>
-          <Card label={dayWord(day, now, t)}>
+          <Card title={dayWord(day, now, t)}>
             {sum.orders === 0 ? (
               <p class="hint">{t('fleet.orders.dayEmpty')}</p>
             ) : (
@@ -83,11 +118,27 @@ export function OrdersScreen({ sbg, managerDid, who }: { sbg: SbgClient | null; 
                 {sum.delivered ? <span>{t('fleet.orders.sumDelivered', { n: sum.delivered })}</span> : null}
               </p>
             )}
+            {/* THE PLAN for this day: make one, or see the one accepted and whether the day has moved on under it. */}
+            {day >= dayOf(now) && (sum.orders > 0 || planState?.plan) ? (
+              <div class="orders__plan">
+                {planState?.plan ? (
+                  <p class="hint">
+                    {t(planState.plan.totals.trucksUsed === 1 ? 'fleet.orders.planAcceptedOne' : 'fleet.orders.planAccepted', { who: planState.plan.accepted?.by ?? '', when: formatDate(planState.plan.accepted?.at ?? '', { timeStyle: 'short' }), planned: planState.plan.totals.planned, trucks: planState.plan.totals.trucksUsed })}
+                    {planState.leftOut ? ` ${t(planState.leftOut === 1 ? 'fleet.orders.planLeftOne' : 'fleet.orders.planLeft', { n: planState.leftOut })}` : ''}
+                    {planState.newSince ? ` ${t(planState.newSince === 1 ? 'fleet.orders.planNewOne' : 'fleet.orders.planNew', { n: planState.newSince })}` : ''}
+                    {planState.withdrawnSince ? ` ${t('fleet.orders.planWithdrawn', { n: planState.withdrawnSince })}` : ''}
+                  </p>
+                ) : null}
+                <Button variant={planState?.plan && !planState.newSince ? 'outline' : 'primary'} chevron={false} onClick={() => setPlanning(true)}>
+                  {t(planState?.plan ? 'fleet.orders.planAgain' : 'fleet.orders.planCta')}
+                </Button>
+              </div>
+            ) : null}
             {chosen.length ? <OrderRows orders={chosen} onOpen={setOpen} /> : null}
           </Card>
 
           {late.length ? (
-            <Card label={t('fleet.orders.behind', { n: late.length })}>
+            <Card title={t('fleet.orders.behind', { n: late.length })}>
               <OrderRows orders={late} onOpen={setOpen} showDay />
             </Card>
           ) : null}
@@ -126,6 +177,8 @@ function OrderRows({ orders, onOpen, showDay }: { orders: FleetOrder[]; onOpen: 
                 {o.deliveryWindow ? ` · ${o.deliveryWindow}` : ''}
                 {o.driverName ? ` · ${t('fleet.orders.driver', { name: o.driverName, plate: o.plate ?? '' })}` : ''}
               </span>
+              {o.planned && o.status === 'ordered' ? <span class="row__s">{t('fleet.orders.plannedOn', { plate: o.planned.plate, trip: o.planned.tripNo, arrive: o.planned.arrive })}</span> : null}
+              {o.planned?.held && o.status === 'ordered' ? <span class="row__s orders__nopin">{t('fleet.orders.planHeld', { plate: o.planned.plate, why: o.planned.held.why })}</span> : null}
             </span>
             <span class="row__end">
               <Pill tone={TAG_TONE[tag]} dot>

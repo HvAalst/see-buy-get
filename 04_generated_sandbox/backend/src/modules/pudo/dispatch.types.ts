@@ -4,6 +4,7 @@
 
 import { ClientRef } from './business-client.types';
 import { ContractRef } from './carriage-contract.types';
+import { PlannedOn } from './fleet-plan.types';
 import { BorderAdvice } from './border-rules.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { GeoPoint } from './pudo.types';
@@ -352,6 +353,11 @@ export class Freight {
    */
   @ApiPropertyOptional() orderRef?: string;
   /**
+   * P3 — the truck and trip this order is on in the plan its fleet accepted for its day. A plan, not a fact about the
+   * goods: it goes on a driver only when the office sends that trip out. Rewritten when the day is planned again.
+   */
+  @ApiPropertyOptional({ type: PlannedOn }) planned?: PlannedOn;
+  /**
    * WHO the network owed for this haul, and on whose books — fixed when it was accrued at delivery. A claim
    * upheld weeks later takes the money back from this same party: never from whichever fleet the driver has
    * moved to since, which carried nothing and was paid nothing for it. Absent where nothing was accrued.
@@ -447,6 +453,8 @@ export class FleetOrderRow {
   @ApiPropertyOptional() orderRef?: string;
   /** Whether this fleet's office uploaded it (and so may withdraw it) rather than the shipper ordering it. */
   uploaded: boolean;
+  /** P3 — where the accepted plan for its day puts it. */
+  @ApiPropertyOptional({ type: PlannedOn }) planned?: PlannedOn;
   /** The day it must arrive. */
   deliverOn: string;
   @ApiPropertyOptional() deliveryWindow?: string;

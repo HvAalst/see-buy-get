@@ -3889,8 +3889,12 @@ export class SbgController {
     // Not FORBIDDEN: telling somebody "right PIN, wrong company" confirms both the account and the code.
     if (!holds) throw new GlosError('AUTH_FAILED', 'That account cannot manage this fleet');
     // Carries the PERSON: every manager of this fleet shares its DID, and a PIN change must end only this person's sessions.
-    const token = this.auth.mintActorToken({ role: 'fleet_manager', did: m.did, tenant: m.did, revocationKey: person.personDid, personDid: person.personDid });
-    return { ...m, person: this.persons.view(person), token };
+    // And their NAME, where they have given one: a plan accepted, a contract recorded, a load put on a driver are
+    // then signed by the person, not by the company every manager of it shares.
+    const view = this.persons.view(person);
+    const name = (view as { displayName?: string }).displayName?.trim();
+    const token = this.auth.mintActorToken({ role: 'fleet_manager', did: m.did, tenant: m.did, revocationKey: person.personDid, personDid: person.personDid, ...(name ? { actorName: name } : {}) });
+    return { ...m, person: view, token };
   }
 
   /** Managers awaiting a KYC decision (the GLOS operator review queue). */

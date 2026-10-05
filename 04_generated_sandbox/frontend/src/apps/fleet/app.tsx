@@ -1,5 +1,6 @@
 import { EarningsScreen } from './screens/EarningsScreen';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
+import { useState } from 'preact/hooks';
 import { ConnectivityNote, BottomNav, Button, Checklist, Icon, NotificationBell, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { AccountMenu } from '../../shared/account/AccountMenu';
 import { useAccount } from '../../shared/account/useAccount';
@@ -34,6 +35,8 @@ export function App() {
   const destination = useDestination(sbg, state.phase === 'ready' && state.screen === 'notes');
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
+  // P3 — the plan board is read at a desk: it asks for the width while it is open.
+  const [wide, setWide] = useState(false);
 
   if (state.phase === 'outdated') return <UpdateGate />;
   if (state.phase === 'boot') return <Boot />;
@@ -101,10 +104,10 @@ export function App() {
         }
       />
 
-      <main class="app__scroll">
+      <main class={'app__scroll' + (wide && state.screen === 'orders' ? ' app__scroll--wide' : '')}>
         <ConnectivityNote stale={state.stale} />
         {state.screen === 'orders' ? (
-          <OrdersScreen sbg={sbg} managerDid={state.manager?.did} who={state.manager?.did} />
+          <OrdersScreen sbg={sbg} managerDid={state.manager?.did} who={state.manager?.did} onWide={setWide} />
         ) : (
           <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} destination={destination} />
         )}

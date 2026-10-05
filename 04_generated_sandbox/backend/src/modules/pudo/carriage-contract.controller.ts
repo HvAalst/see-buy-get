@@ -1,3 +1,5 @@
+import { FleetPlanService } from './fleet-plan.service';
+import { DayPlanState, DayPlanView, PlanSendResult } from './fleet-plan.types';
 import { OrderImportService } from './order-import.service';
 import { OrderImportResult } from './order-import.types';
 import { ORDER_SHEET_TEMPLATE } from './order-sheet';
@@ -11,7 +13,7 @@ import { BusinessMemberGuard } from './business-member.guard';
 import { BusinessService } from './business.service';
 import { CarriageContractService } from './carriage-contract.service';
 import { CarriageContractList, CarriageContractView, ContractInviteIssued } from './carriage-contract.types';
-import { CreateContractDto, EndContractDto, FleetOrdersQueryDto, ImportOrdersDto, LinkContractDto, PinOrderDto, WithdrawOrderDto } from './carriage-contract.dto';
+import { CreateContractDto, EndContractDto, FleetOrdersQueryDto, ImportOrdersDto, LinkContractDto, PinOrderDto, PlanDayDto, PlanStateQueryDto, WithdrawOrderDto } from './carriage-contract.dto';
 import { DispatchService } from './dispatch.service';
 import { FleetOrderList } from './dispatch.types';
 import { FleetManagerService } from './fleet-manager.service';
@@ -33,6 +35,7 @@ export class CarriageContractController {
     private readonly dispatch: DispatchService,
     private readonly businesses: BusinessService,
     private readonly imports: OrderImportService,
+    private readonly plans: FleetPlanService,
   ) {}
 
   /* ------------------------------------------------------------- the fleet -- */
@@ -111,6 +114,43 @@ export class CarriageContractController {
     this.assertFleet(did, actor);
     this.dispatch.withdrawUploadedOrder(did, freightId, dto.reason);
     return { withdrawn: true };
+  }
+
+/* ------------------------------------------------------------ the plan -- */
+
+  /**
+   * P3 — a PROPOSAL for a day: which truck takes which orders, trip after trip, what does not fit and why, and how
+   * many trucks short the fleet is. Worked out fresh; changes nothing.
+   */
+  @Roles('fleet_manager', 'operator')
+  @Post('fleet/managers/:did/plan')
+  proposePlan(@Param('did') did: string, @Body() dto: PlanDayDto, @Actor() actor: IntrospectionResult): DayPlanView {
+    this.assertFleet(did, actor);
+    return this.plans.propose(did, dto);
+  }
+
+  /** Accept the plan for a day. Worked out again here from the same asks, kept, and written onto its orders. */
+  @Roles('fleet_manager', 'operator')
+  @Post('fleet/managers/:did/plan/accept')
+  acceptPlan(@Param('did') did: string, @Body() dto: PlanDayDto, @Actor() actor: IntrospectionResult): DayPlanView {
+    const fleet = this.assertFleet(did, actor);
+    return this.plans.accept(did, dto, this.fleetPerson(actor, fleet.companyName));
+  }
+
+  /** P3b — send the next trip to every truck in TODAY's accepted plan that is ready for one. */
+  @Roles('fleet_manager', 'operator')
+  @Post('fleet/managers/:did/plan/send')
+  sendPlan(@Param('did') did: string, @Body() dto: PlanStateQueryDto, @Actor() actor: IntrospectionResult): PlanSendResult {
+    this.assertFleet(did, actor);
+    return this.plans.send(did, dto.day);
+  }
+
+  /** The plan accepted for a day, as accepted, and what has changed under it since. */
+  @Roles('fleet_manager', 'operator')
+  @Get('fleet/managers/:did/plan')
+  planState(@Param('did') did: string, @Query() q: PlanStateQueryDto, @Actor() actor: IntrospectionResult): DayPlanState {
+    this.assertFleet(did, actor);
+    return this.plans.state(did, q.day);
   }
 
   /* ----------------------------------------------------------- the shipper -- */

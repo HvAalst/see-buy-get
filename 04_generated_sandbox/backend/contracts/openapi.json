@@ -20526,6 +20526,157 @@
         }
       }
     },
+    "/v1/sbg/fleet/managers/{did}/plan": {
+      "post": {
+        "operationId": "CarriageContract.proposePlan",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanDayDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayPlanView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "CarriageContract.planState",
+        "summary": "",
+        "description": "The plan accepted for a day, as accepted, and what has changed under it since.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "day",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "pattern": "DAY",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayPlanState"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/plan/accept": {
+      "post": {
+        "operationId": "CarriageContract.acceptPlan",
+        "summary": "",
+        "description": "Accept the plan for a day. Worked out again here from the same asks, kept, and written onto its orders.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanDayDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayPlanView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/plan/send": {
+      "post": {
+        "operationId": "CarriageContract.sendPlan",
+        "summary": "",
+        "description": "P3b — send the next trip to every truck in TODAY's accepted plan that is ready for one.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanStateQueryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanSendResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/business/me/contracts": {
       "get": {
         "operationId": "CarriageContract.shipperList",
@@ -31171,6 +31322,66 @@
           "shipperName"
         ]
       },
+      "PlanHeld": {
+        "type": "object",
+        "properties": {
+          "why": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "why",
+          "at"
+        ]
+      },
+      "PlannedOn": {
+        "type": "object",
+        "properties": {
+          "held": {
+            "description": "Set when its trip came up and it could not be put on the truck. Cleared when it is, or when the day is planned again.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PlanHeld"
+              }
+            ]
+          },
+          "day": {
+            "type": "string"
+          },
+          "vehicleId": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "tripNo": {
+            "type": "number"
+          },
+          "seq": {
+            "type": "number",
+            "description": "Its place in the trip's round, from 1."
+          },
+          "arrive": {
+            "type": "string",
+            "description": "When the truck is expected at the door, on the clock."
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "vehicleId",
+          "plate",
+          "tripNo",
+          "seq",
+          "arrive",
+          "at"
+        ]
+      },
       "FreightInstructions": {
         "type": "object",
         "properties": {
@@ -31658,6 +31869,14 @@
           "orderRef": {
             "type": "string",
             "description": "P1b — the SHIPPER's own number for this order (a webshop's order number). Kept apart from `externalOrderId`, which\nnames a shop order or a consignment and makes the consignee \"the buyer of order …, collecting at a shop\". Under one\ncontract a number is used once: it is what makes uploading the same sheet twice harmless."
+          },
+          "planned": {
+            "description": "P3 — the truck and trip this order is on in the plan its fleet accepted for its day. A plan, not a fact about the\ngoods: it goes on a driver only when the office sends that trip out. Rewritten when the day is planned again.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PlannedOn"
+              }
+            ]
           },
           "driverPayee": {
             "type": "object",
@@ -38067,6 +38286,14 @@
             "type": "string",
             "description": "The shipper's own order number, where it gave one."
           },
+          "planned": {
+            "description": "P3 — where the accepted plan for its day puts it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PlannedOn"
+              }
+            ]
+          },
           "deliveryWindow": {
             "type": "string"
           },
@@ -38378,6 +38605,576 @@
         },
         "required": [
           "reason"
+        ]
+      },
+      "PlanDayDto": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string",
+            "pattern": "DAY"
+          },
+          "excludeVehicleIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "dayStart": {
+            "type": "string",
+            "pattern": "/^([01]?\\d|2[0-3]):[0-5]\\d$/"
+          },
+          "dayHours": {
+            "type": "number"
+          },
+          "speedKmh": {
+            "type": "number"
+          },
+          "loadMin": {
+            "type": "number"
+          },
+          "unloadMin": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "day"
+        ]
+      },
+      "PlanStopView": {
+        "type": "object",
+        "properties": {
+          "orderRef": {
+            "type": "string"
+          },
+          "deliveryWindow": {
+            "type": "string"
+          },
+          "freightId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "shipperName": {
+            "type": "string"
+          },
+          "destLabel": {
+            "type": "string"
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "km": {
+            "type": "number",
+            "description": "Kilometres from the collection, or from the stop before."
+          },
+          "arrive": {
+            "type": "string",
+            "description": "When the truck is at this door, on the clock (HH:MM). An estimate from distance and the day's settings."
+          }
+        },
+        "required": [
+          "freightId",
+          "code",
+          "description",
+          "shipperName",
+          "destLabel",
+          "weightKg",
+          "km",
+          "arrive"
+        ]
+      },
+      "PlanTripView": {
+        "type": "object",
+        "properties": {
+          "stops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanStopView"
+            }
+          },
+          "no": {
+            "type": "number"
+          },
+          "pickupLabel": {
+            "type": "string"
+          },
+          "emptyKm": {
+            "type": "number",
+            "description": "Empty running to reach the collection: from the depot, or from where the last trip ended."
+          },
+          "start": {
+            "type": "string"
+          },
+          "end": {
+            "type": "string"
+          },
+          "weightKg": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "stops",
+          "no",
+          "pickupLabel",
+          "emptyKm",
+          "start",
+          "end",
+          "weightKg"
+        ]
+      },
+      "PlanRouteView": {
+        "type": "object",
+        "properties": {
+          "vehicleClass": {
+            "type": "string",
+            "enum": [
+              "bike",
+              "motorcycle",
+              "tuktuk",
+              "car",
+              "van",
+              "bus",
+              "truck"
+            ]
+          },
+          "trips": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanTripView"
+            }
+          },
+          "vehicleId": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "capacityKg": {
+            "type": "number"
+          },
+          "km": {
+            "type": "number"
+          },
+          "emptyKm": {
+            "type": "number"
+          },
+          "minutes": {
+            "type": "number",
+            "description": "Depot to depot, in minutes, and when the truck is home again."
+          },
+          "home": {
+            "type": "string"
+          },
+          "weightKg": {
+            "type": "number",
+            "description": "Everything it carries in the day, over all its trips."
+          },
+          "fullestPct": {
+            "type": "number",
+            "description": "Its fullest trip, as a share of what it carries at once (0–100)."
+          }
+        },
+        "required": [
+          "vehicleClass",
+          "trips",
+          "vehicleId",
+          "plate",
+          "capacityKg",
+          "km",
+          "emptyKm",
+          "minutes",
+          "home",
+          "weightKg",
+          "fullestPct"
+        ]
+      },
+      "PlanLeftView": {
+        "type": "object",
+        "properties": {
+          "orderRef": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "no_pin",
+              "too_heavy",
+              "no_truck_can_carry",
+              "no_time",
+              "no_driver",
+              "no_trucks"
+            ]
+          },
+          "freightId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "shipperName": {
+            "type": "string"
+          },
+          "destLabel": {
+            "type": "string"
+          },
+          "weightKg": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "reason",
+          "freightId",
+          "code",
+          "description",
+          "shipperName",
+          "destLabel",
+          "weightKg"
+        ]
+      },
+      "PlanHire": {
+        "type": "object",
+        "properties": {
+          "trucks": {
+            "type": "number",
+            "description": "How many more trucks like the fleet's largest the leftover orders would take."
+          },
+          "orders": {
+            "type": "number"
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "capacityKg": {
+            "type": "number",
+            "description": "What one of those trucks carries."
+          }
+        },
+        "required": [
+          "trucks",
+          "orders",
+          "weightKg",
+          "capacityKg"
+        ]
+      },
+      "PlanTotals": {
+        "type": "object",
+        "properties": {
+          "orders": {
+            "type": "number",
+            "description": "Orders for the day still without a truck when the plan was made, and how many of them it placed."
+          },
+          "planned": {
+            "type": "number"
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "plannedKg": {
+            "type": "number"
+          },
+          "km": {
+            "type": "number"
+          },
+          "emptyKm": {
+            "type": "number"
+          },
+          "trucksUsed": {
+            "type": "number"
+          },
+          "trucksAvailable": {
+            "type": "number"
+          },
+          "drivers": {
+            "type": "number",
+            "description": "Drivers the fleet has to send out: the plan uses no more trucks than this."
+          }
+        },
+        "required": [
+          "orders",
+          "planned",
+          "weightKg",
+          "plannedKg",
+          "km",
+          "emptyKm",
+          "trucksUsed",
+          "trucksAvailable",
+          "drivers"
+        ]
+      },
+      "PlanSettings": {
+        "type": "object",
+        "properties": {
+          "dayStart": {
+            "type": "string",
+            "description": "When the trucks leave the depot (HH:MM), and the longest a truck's day may be, in hours."
+          },
+          "dayHours": {
+            "type": "number"
+          },
+          "speedKmh": {
+            "type": "number"
+          },
+          "loadMin": {
+            "type": "number"
+          },
+          "unloadMin": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "dayStart",
+          "dayHours",
+          "speedKmh",
+          "loadMin",
+          "unloadMin"
+        ]
+      },
+      "PlanVehicle": {
+        "type": "object",
+        "properties": {
+          "vehicleClass": {
+            "type": "string",
+            "enum": [
+              "bike",
+              "motorcycle",
+              "tuktuk",
+              "car",
+              "van",
+              "bus",
+              "truck"
+            ]
+          },
+          "offRoad": {
+            "description": "Off the road for a reason of its own (papers, status): never planned, and said why.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "vehicleId": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "capacityKg": {
+            "type": "number"
+          },
+          "excluded": {
+            "type": "boolean",
+            "description": "Left out of this plan by the office."
+          }
+        },
+        "required": [
+          "vehicleClass",
+          "vehicleId",
+          "plate",
+          "capacityKg",
+          "excluded"
+        ]
+      },
+      "PlanAccepted": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "by"
+        ]
+      },
+      "DayPlanView": {
+        "type": "object",
+        "properties": {
+          "routes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanRouteView"
+            }
+          },
+          "unplanned": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanLeftView"
+            }
+          },
+          "hire": {
+            "$ref": "#/components/schemas/PlanHire"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/PlanTotals"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/PlanSettings"
+          },
+          "vehicles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanVehicle"
+            }
+          },
+          "accepted": {
+            "description": "Set on the plan the office accepted for this day. A proposal has none.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PlanAccepted"
+              }
+            ]
+          },
+          "day": {
+            "type": "string"
+          },
+          "madeAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "routes",
+          "unplanned",
+          "totals",
+          "settings",
+          "vehicles",
+          "day",
+          "madeAt"
+        ]
+      },
+      "PlanStateQueryDto": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string",
+            "pattern": "DAY"
+          }
+        },
+        "required": [
+          "day"
+        ]
+      },
+      "PlanSendHeld": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "why"
+        ]
+      },
+      "PlanSendTruck": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "sent",
+              "no_driver",
+              "carrying",
+              "nothing_left"
+            ]
+          },
+          "driverName": {
+            "type": "string"
+          },
+          "tripNo": {
+            "type": "number"
+          },
+          "sent": {
+            "description": "The orders that went onto the driver, by code.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "held": {
+            "description": "The orders of that trip that were refused, and why. They stay in the queue, marked.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanSendHeld"
+            }
+          },
+          "vehicleId": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "sent",
+          "held",
+          "vehicleId",
+          "plate"
+        ]
+      },
+      "PlanSendResult": {
+        "type": "object",
+        "properties": {
+          "trucks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanSendTruck"
+            }
+          },
+          "day": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "trucks",
+          "day"
+        ]
+      },
+      "DayPlanState": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "description": "The plan as it was accepted — a record, not recomputed. Absent: no plan accepted for this day.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DayPlanView"
+              }
+            ]
+          },
+          "day": {
+            "type": "string"
+          },
+          "leftOut": {
+            "type": "number",
+            "description": "Orders the accepted plan could not place, still waiting: known about, and somebody's to hire for or pin."
+          },
+          "newSince": {
+            "type": "number",
+            "description": "Orders for the day that ARRIVED after the plan was accepted: the plan has never seen them."
+          },
+          "withdrawnSince": {
+            "type": "number",
+            "description": "Orders in the accepted plan that have since been withdrawn."
+          }
+        },
+        "required": [
+          "day",
+          "leftOut",
+          "newSince",
+          "withdrawnSince"
         ]
       },
       "LinkContractDto": {

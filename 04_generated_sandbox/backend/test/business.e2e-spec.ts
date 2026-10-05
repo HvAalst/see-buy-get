@@ -322,6 +322,24 @@ describe('a customer’s business, over the wire', () => {
     await http().post(`/v1/sbg/fleet/managers/${fleet.did}/orders/${uploaded.freightId}/withdraw`).set(bearer(setupKey)).send({ reason: 'Uploaded by mistake' }).expect(201);
     expect((await http().get(`/v1/sbg/track/${uploaded.trackingKey}`).expect(200)).body.cancelled).toMatchObject({ by: 'carrier' });
 
+    // P3 — the plan for a day, over the wire: the office's alone, a proposal that changes nothing, and nothing to
+    // accept for a fleet with no truck to send — said as that, not as an empty success.
+    const planAt = `/v1/sbg/fleet/managers/${fleet.did}/plan`;
+    await http().post(planAt).set(bearer(shop)).send({ day: tomorrow }).expect(403);
+    await http().post(planAt).set(bearer(setupKey)).send({ day: '2020-01-01' }).expect(400);
+    await http().post(planAt).set(bearer(setupKey)).send({ day: tomorrow, dayHours: 20 }).expect(400);
+    const proposal = await http().post(planAt).set(bearer(setupKey)).send({ day: tomorrow }).expect(201);
+    expect(proposal.body.totals).toMatchObject({ planned: 0, trucksAvailable: 0 });
+    expect(proposal.body.totals.orders).toBeGreaterThan(0);
+    expect(new Set(proposal.body.unplanned.map((u: { reason: string }) => u.reason))).toEqual(new Set(['no_trucks']));
+    expect(proposal.body.settings).toMatchObject({ dayStart: '07:00', dayHours: 10 });
+    await http().post(`${planAt}/accept`).set(bearer(setupKey)).send({ day: tomorrow }).expect(400);
+    expect((await http().get(planAt).query({ day: tomorrow }).set(bearer(setupKey)).expect(200)).body).toEqual({ day: tomorrow, leftOut: 0, newSince: 0, withdrawnSince: 0 });
+    // P3b — trips go out on their own day, from an accepted plan, and only the office sends them.
+    await http().post(`${planAt}/send`).set(bearer(shop)).send({ day: tomorrow }).expect(403);
+    await http().post(`${planAt}/send`).set(bearer(setupKey)).send({ day: tomorrow }).expect(400);
+    await http().post(`${planAt}/send`).set(bearer(setupKey)).send({ day: new Date().toISOString().slice(0, 10) }).expect(400);
+
     // Ended by the shipper: no new orders, and what was ordered stays with the fleet.
     await http().post(`/v1/sbg/business/me/contracts/${contract.contractId}/end`).set(bearer(shop)).send({ reason: 'Season over' }).expect(201);
     await http().post('/v1/sbg/dispatch/freight').set(bearer(shop)).send({ ...load, contractId: contract.contractId, deliverOn: tomorrow }).expect(400);

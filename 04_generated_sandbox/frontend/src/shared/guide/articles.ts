@@ -628,6 +628,27 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "fleet-plan",
+    apps: [
+      "fleet"
+    ],
+    title: "Planning a day: which truck takes which orders",
+    summary: "The app works out a plan for a day’s orders on your own trucks, and tells you how many trucks short you are. Best read on a laptop.",
+    steps: [
+      "Orders, choose the day, then Plan this day. The first line is the answer: how many of the day’s orders are on a truck, and how many more trucks you would need for the rest.",
+      "Under it, what does not fit, grouped by why: an address not on the map (pin it and plan again), no room left in the day, a free truck with no driver, goods no truck of yours can handle, or an order heavier than your largest truck.",
+      "Then each truck’s day, trip after trip in the order it is driven. A truck that has unloaded goes on to its next collection from where it is, not from the depot.",
+      "Change the day opens your settings: when trucks leave, the longest day, the speed on the road, the minutes to load and to hand over, and which vehicles go out. Change one and the plan is worked out again.",
+      "Accept this plan when it is right. Each order then shows its truck, its trip and about when it arrives. Opening the plan later shows it as accepted; Plan the day again works out a new one, which replaces it only when you accept that.",
+      "On the day itself the plan goes out by itself, a trip at a time: a truck gets its first trip when its driver starts a shift in it, and the next when the last order of that trip is delivered. Send the next trips out now does the same by hand, and says what each truck is doing."
+    ],
+    notes: [
+      "Every time on the plan is an estimate: distance at one speed, plus fixed minutes at each stop. Distances are estimates too — there is no road routing yet.",
+      "A truck is only ever given one trip at a time — what it can carry at once. Every order goes on with the same checks as any load (room, equipment, the driver’s hours). One that is refused stays in the queue with the reason on it.",
+      "The plan never loads a truck past what it carries, never makes a day longer than you set (13 hours at most), and sends out no more vehicles than you have drivers."
+    ]
+  },
+  {
     id: "papers-that-expire",
     apps: [
       "fleet",

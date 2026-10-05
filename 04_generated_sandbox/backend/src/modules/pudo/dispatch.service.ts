@@ -1,4 +1,5 @@
-﻿import type { ContractRef } from './carriage-contract.types';
+﻿import type { PlannedOn } from './fleet-plan.types';
+import type { ContractRef } from './carriage-contract.types';
 import type { ClientRef } from './business-client.types';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { TransitAuthorityService, transitRefusal } from './transit-authority.service';
@@ -1614,6 +1615,7 @@ export class DispatchService {
         contract: f.contract,
         ...(f.orderRef ? { orderRef: f.orderRef } : {}),
         uploaded: f.postedByDid === fleetDid,
+        ...(f.planned ? { planned: f.planned } : {}),
         deliverOn: f.deliverOn,
         ...(window ? { deliveryWindow: window } : {}),
         description: f.description,
@@ -1682,6 +1684,72 @@ export class DispatchService {
     f.destLocation = { lat: location.lat, lng: location.lng };
     this.freights.set(f.freightId, f);
     return f;
+  }
+
+/**
+   * P3 — COULD THIS VEHICLE CARRY THIS LOAD AT ALL — its equipment, what it is fitted for, loose goods, fragile goods.
+   * Room is a separate question. The one test, asked by an assignment (of the truck the driver is in now) and by a
+   * plan (of every truck in the yard), so the plan never proposes what an assignment would then refuse.
+   */
+  vehicleCanCarryFreight(vehicle: Vehicle, freightId: string): boolean {
+    const need = this.loadRequirements('freight', freightId);
+    return !(need.capabilities.some((cap) => !vehicle[cap]) || !DispatchService.hasEquipmentFor(vehicle, need.equipment) || (need.bulk && !vehicle.carriesBulk) || (need.fragile && !vehicle.allowsFragile));
+  }
+
+  /** P3 — a fleet's contract orders for one day that are still without a truck: what a plan for that day is made of. */
+  contractOrdersForDay(fleetDid: string, day: string): Freight[] {
+    return [...this.freights.values()].filter((f) => f.contract?.fleetDid === fleetDid && f.deliverOn === day && f.status === 'ordered').sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
+  /**
+   * P3 — write an accepted plan onto its orders, and take the day's OLD plan off the ones the new plan left out. Only
+   * orders still without a truck are touched: one already on a driver keeps what it was planned on, as history.
+   */
+  stampPlan(fleetDid: string, day: string, stamps: Map<string, PlannedOn>): void {
+    for (const f of this.contractOrdersForDay(fleetDid, day)) {
+      const stamp = stamps.get(f.freightId);
+      if (stamp) f.planned = stamp;
+      else if (f.planned?.day === day) delete f.planned;
+      else continue;
+      this.freights.set(f.freightId, f);
+    }
+  }
+
+/** P3b — the orders an accepted plan put on one vehicle for a day that have not yet gone onto a driver, in the order they are driven. */
+  plannedOrdersOn(fleetDid: string, day: string, vehicleId: string): Freight[] {
+    return this.contractOrdersForDay(fleetDid, day)
+      .filter((f) => f.planned?.day === day && f.planned.vehicleId === vehicleId)
+      .sort((a, b) => a.planned!.tripNo - b.planned!.tripNo || a.planned!.seq - b.planned!.seq);
+  }
+
+  /** P3b — how many loads a driver has taken on and not yet delivered: a truck with goods aboard does not get its next trip. */
+  loadsAboard(driverDid: string): number {
+    return [...this.freights.values()].filter((f) => f.claimedBy === driverDid && (f.status === 'claimed' || f.status === 'in_transit')).length;
+  }
+
+  /** P3b — the plan tried to put this order on its truck and was refused: kept on the order, in the refusal's own words. */
+  holdPlanned(freightId: string, why: string | undefined, now: number = Date.now()): void {
+    const f = this.freights.get(freightId);
+    if (!f?.planned) return;
+    const { held: _was, ...rest } = f.planned;
+    // No reason means it went on after all: the old refusal comes off.
+    f.planned = why ? { ...rest, held: { why: why.slice(0, 280), at: new Date(now).toISOString() } } : rest;
+    this.freights.set(f.freightId, f);
+  }
+
+  /** The vehicle a load was planned on, and whose plan — what a delivery needs to know to send that truck its next trip. */
+  planOf(freightId: string): { fleetDid: string; day: string; vehicleId: string } | undefined {
+    const f = this.freights.get(freightId);
+    return f?.planned && f.contract ? { fleetDid: f.contract.fleetDid, day: f.planned.day, vehicleId: f.planned.vehicleId } : undefined;
+  }
+
+  freightStatusOf(freightId: string): Freight['status'] | undefined {
+    return this.freights.get(freightId)?.status;
+  }
+
+  /** The window the sender gave for delivery, if any — read through the one place that knows where it is kept. */
+  deliveryWindowOf(f: Freight): string | undefined {
+    return instructionsViewOf(f)?.deliveryWindow;
   }
 
   /** FP6 — the load behind a tracking key, or nothing. The key is the credential: no other lookup is offered. */
@@ -1811,13 +1879,7 @@ export class DispatchService {
     if (!vehicle) throw new GlosError('NOT_COUPLED', 'That driver is not on a shift — a load goes on a vehicle, and they have none yet');
     if (commitModeOf(f) === 'negotiate') throw new GlosError('NEGOTIATION_REQUIRED', 'This load is posted for negotiation — the driver can send the shipper a price from their board; it cannot be assigned at a counter rate');
     if (f.weightKg > this.remainingCapacity(driverDid)) throw new GlosError('CAPACITY_EXCEEDED', "That driver's vehicle has no room left for this load");
-    const need = this.loadRequirements('freight', f.freightId);
-    if (
-      need.capabilities.some((cap) => !vehicle[cap]) ||
-      !DispatchService.hasEquipmentFor(vehicle, need.equipment) ||
-      (need.bulk && !vehicle.carriesBulk) ||
-      (need.fragile && !vehicle.allowsFragile)
-    ) {
+    if (!this.vehicleCanCarryFreight(vehicle, f.freightId)) {
       throw new GlosError('VEHICLE_MISSING_CAPABILITY', "That driver's vehicle lacks a capability or equipment this load requires");
     }
     this.requireBorderAllows(vehicle, driverDid, 'freight', f.freightId);
