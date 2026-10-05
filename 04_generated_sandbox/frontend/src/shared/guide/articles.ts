@@ -599,13 +599,32 @@ export const ARTICLES: GuideArticle[] = [
     summary: "A shipper you have a contract with sends its orders straight to you. They are on no board and no other carrier sees them; your office puts each one on a truck.",
     steps: [
       "Orders, then Record a contract: who you carry for, and the contract number. No price — what you charge them stays on your own contract.",
-      "If the shipper has a business on SeeBuyGet, tap Send them a link code and pass the code on. An owner of their business enters it once, and from then on they order with you directly.",
+      "If the shipper has a business on SeeBuyGet, tap Send them a link code and pass the code on. An owner of their business enters it once, and from then on they order with you directly. If they are not, upload their orders yourself as a sheet.",
       "Orders opens on tomorrow: how many orders, how heavy, and how many still have no truck. Choose another day at the top. Anything from an earlier day that has not been delivered stays in sight under Behind.",
       "Open an order to see where it is collected, where it goes and the day it must arrive. While a driver is on a shift you can put it on their truck there and then."
     ],
     notes: [
       "An order is Late when the day it had to arrive has gone by and it has not been delivered. That is read from the order itself, never estimated.",
       "Either side can end a contract. That stops new orders; the ones already placed are still yours to deliver."
+    ]
+  },
+  {
+    id: "fleet-order-sheet",
+    apps: [
+      "fleet"
+    ],
+    title: "Uploading a sheet of orders",
+    summary: "When a shipper sends you its orders as a spreadsheet, upload the sheet under their contract. It is checked line by line before anything is added.",
+    steps: [
+      "Orders, then Upload orders beside the contract. Say where the goods are collected: type the place and find it on the map. It is remembered for next time.",
+      "Choose the sheet saved as CSV, or copy the cells in the spreadsheet and paste them. The first line names the columns: an order number, the goods, the weight, where to deliver and the date. Download a template to send them shows the exact form.",
+      "Tap Check the sheet. You see how many orders are ready, how many are already here, and each line with a problem, by its line number and in words.",
+      "Tap Add orders. The lines that are right become orders; the others are left out. Put them right and upload the same sheet again — an order number that is already here is never added twice.",
+      "An address the map does not know is added without a point and marked in the queue. Open it and place it on the map, or it cannot be planned."
+    ],
+    notes: [
+      "Dates are read as 2026-10-06 or day first, 06/10/2026. Weights may be 4000, 4,000 kg or 1.5 t. An Excel file itself is not read: save it as CSV, or paste the cells.",
+      "Your office can withdraw an order it uploaded, with a reason. An order the shipper placed themselves is theirs to withdraw."
     ]
   },
   {

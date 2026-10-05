@@ -136,6 +136,12 @@ export class CarriageContractService {
     return { contractId: c.contractId, fleetDid: c.fleetDid, fleetName: c.fleetName, shipperName: c.shipper.name, ...(c.reference ? { reference: c.reference } : {}) };
   }
 
+  /** P1b — the collection point named for an upload, kept for the next one. */
+  rememberPickup(c: CarriageContract, pickup: { label: string; location: { lat: number; lng: number } }): void {
+    c.pickup = { label: pickup.label, location: { lat: pickup.location.lat, lng: pickup.location.lng } };
+    this.contracts.set(c.contractId, c);
+  }
+
   view(c: CarriageContract): CarriageContractView {
     return viewOf(c);
   }

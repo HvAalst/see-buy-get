@@ -296,9 +296,35 @@ describe('a customer’s business, over the wire', () => {
     const tracked = await http().get(`/v1/sbg/track/${ordered.body.trackingKey}`).expect(200);
     expect(tracked.body).toMatchObject({ kind: 'freight', status: 'ordered', carrier: { name: `Kilima ${tag}` } });
 
+    // P1b — the shipper's own order number is used once under a contract.
+    await http().post('/v1/sbg/dispatch/freight').set(bearer(shop)).send({ ...load, contractId: contract.contractId, deliverOn: tomorrow, orderRef: 'WS-900' }).expect(201);
+    await http().post('/v1/sbg/dispatch/freight').set(bearer(shop)).send({ ...load, contractId: contract.contractId, deliverOn: tomorrow, orderRef: 'ws-900' }).expect(409);
+
+    // P1b — the fleet's office uploads a sheet: checked first (nothing created), then imported; a number it already
+    // has is left alone, a bad line is said in words, and a business sign-in is not the office.
+    const imp = `/v1/sbg/fleet/managers/${fleet.did}/contracts/${contract.contractId}/orders/import`;
+    const sheet = ['Order number;Goods;Weight;Deliver to;Date', `WS-900;Bricks;4000;Nairobi;${tomorrow}`, `WS-901;Cement;1,5 t;Nairobi;${tomorrow}`, `WS-902;Sand;heavy;Nairobi;${tomorrow}`].join('\n');
+    const where = { pickupLabel: 'Jenga yard', pickupLat: -1.3, pickupLng: 36.85 };
+    await http().post(imp).set(bearer(shop)).send({ text: sheet, ...where }).expect(403);
+    const checked = await http().post(imp).set(bearer(setupKey)).send({ text: sheet, ...where }).expect(201);
+    expect(checked.body).toMatchObject({ imported: false, ok: 1, duplicates: 1, problems: 1 });
+    expect((await http().get(`/v1/sbg/fleet/managers/${fleet.did}/orders`).set(bearer(setupKey)).expect(200)).body.total).toBe(2);
+    const done = await http().post(imp).set(bearer(setupKey)).send({ text: sheet, ...where, dryRun: false }).expect(201);
+    expect(done.body).toMatchObject({ imported: true, ok: 1 });
+    expect(done.body.rows.map((r: { verdict: string }) => r.verdict)).toEqual(['duplicate', 'ok', 'problem']);
+    const after = await http().get(`/v1/sbg/fleet/managers/${fleet.did}/orders`).set(bearer(setupKey)).expect(200);
+    const uploaded = after.body.items.find((r: { orderRef?: string }) => r.orderRef === 'WS-901');
+    expect(uploaded).toMatchObject({ uploaded: true, weightKg: 1500, status: 'ordered', pickupLabel: 'Jenga yard' });
+    expect((await http().get(`/v1/sbg/fleet/managers/${fleet.did}/contracts`).set(bearer(setupKey)).expect(200)).body.items[0].pickup).toMatchObject({ label: 'Jenga yard' });
+    expect((await http().get(`/v1/sbg/fleet/managers/${fleet.did}/orders/template`).set(bearer(setupKey)).expect(200)).body.csv).toContain('Order number,Goods');
+    // The office withdraws what it uploaded; what the shipper ordered is the shipper's to withdraw.
+    await http().post(`/v1/sbg/fleet/managers/${fleet.did}/orders/${ordered.body.freightId}/withdraw`).set(bearer(setupKey)).send({ reason: 'Cannot carry it' }).expect(403);
+    await http().post(`/v1/sbg/fleet/managers/${fleet.did}/orders/${uploaded.freightId}/withdraw`).set(bearer(setupKey)).send({ reason: 'Uploaded by mistake' }).expect(201);
+    expect((await http().get(`/v1/sbg/track/${uploaded.trackingKey}`).expect(200)).body.cancelled).toMatchObject({ by: 'carrier' });
+
     // Ended by the shipper: no new orders, and what was ordered stays with the fleet.
     await http().post(`/v1/sbg/business/me/contracts/${contract.contractId}/end`).set(bearer(shop)).send({ reason: 'Season over' }).expect(201);
     await http().post('/v1/sbg/dispatch/freight').set(bearer(shop)).send({ ...load, contractId: contract.contractId, deliverOn: tomorrow }).expect(400);
-    expect((await http().get(`/v1/sbg/fleet/managers/${fleet.did}/orders`).set(bearer(setupKey)).expect(200)).body.total).toBe(1);
+    expect((await http().get(`/v1/sbg/fleet/managers/${fleet.did}/orders`).set(bearer(setupKey)).expect(200)).body.total).toBe(3);
   });
 });

@@ -2182,6 +2182,8 @@ export class RegisterFreightDto {
    */
   @IsOptional() @IsString() contractId?: string;
   @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'A delivery day is YYYY-MM-DD' }) deliverOn?: string;
+  /** P1b — the shipper's own number for an order under a contract. Used once per contract. */
+  @IsOptional() @IsString() @MaxLength(60) orderRef?: string;
 }
 
 /** F2 — the PUDO counter books a too-big (dedicated, P4+) walk-up as FREIGHT instead of refusing it. The

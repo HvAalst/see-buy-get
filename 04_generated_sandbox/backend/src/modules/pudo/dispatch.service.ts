@@ -410,7 +410,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string }, now: number = Date.now()): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string }, now: number = Date.now()): Freight {
     this.freightSeq += 1;
     // A future pickup date parks the load for later; a past/absent date ships now. A supplied-but-unparseable
     // date is a CALLER ERROR — fail closed (never silently ship-now what was meant to be scheduled). Store the
@@ -490,6 +490,7 @@ export class DispatchService {
       ...(this.entities.byDid(input.postedByDid)?.kind === 'business' || contract ? { settlement: 'between_parties' as const } : {}),
       // P1 — and a contract order is settled under the contract, between the two of them, whoever placed it.
       ...(contract ? { contract, deliverOn: input.deliverOn } : {}),
+      ...(contract && input.orderRef?.trim() ? { orderRef: input.orderRef.trim().slice(0, 60) } : {}),
       fragile: input.fragile ?? false,
       bulk,
       packaging,
@@ -1529,7 +1530,7 @@ export class DispatchService {
         createdAt: f.createdAt,
         openProposals: open.get(f.freightId) ?? 0,
         ...(f.onBehalfOf ? { onBehalfOf: f.onBehalfOf } : {}),
-        ...(f.contract ? { contract: f.contract, deliverOn: f.deliverOn } : {}),
+        ...(f.contract ? { contract: f.contract, deliverOn: f.deliverOn, ...(f.orderRef ? { orderRef: f.orderRef } : {}) } : {}),
         agreedPrice: f.lockedPrice,
         pickedUpAt: f.pickedUpAt,
         deliveredAt: f.deliveredAt,
@@ -1611,6 +1612,8 @@ export class DispatchService {
         freightId: f.freightId,
         code: f.code,
         contract: f.contract,
+        ...(f.orderRef ? { orderRef: f.orderRef } : {}),
+        uploaded: f.postedByDid === fleetDid,
         deliverOn: f.deliverOn,
         ...(window ? { deliveryWindow: window } : {}),
         description: f.description,
@@ -1639,6 +1642,46 @@ export class DispatchService {
       });
     }
     return rows.sort((a, b) => a.deliverOn.localeCompare(b.deliverOn) || a.createdAt.localeCompare(b.createdAt));
+  }
+
+/**
+   * P1b — the order already under a contract with this shipper's number, if there is one. A withdrawn order does not
+   * hold its number: the shipper may send that order again.
+   */
+  contractOrderByRef(contractId: string, orderRef: string): Freight | undefined {
+    const wanted = orderRef.trim().toLowerCase();
+    if (!wanted) return undefined;
+    for (const f of this.freights.values()) {
+      if (f.contract?.contractId === contractId && f.status !== 'cancelled' && f.orderRef?.toLowerCase() === wanted) return f;
+    }
+    return undefined;
+  }
+
+  /**
+   * P1b — the fleet's office withdraws an order IT uploaded. An order the shipper placed itself is the shipper's to
+   * withdraw; the fleet's answer to one it cannot carry is to hand it on, not to delete it.
+   */
+  withdrawUploadedOrder(fleetDid: string, freightId: string, reason: string, now: number = Date.now()): Freight {
+    const f = this.requireFreight(freightId);
+    if (f.contract?.fleetDid !== fleetDid) throw new GlosError('NOT_FOUND', 'No such order');
+    if (f.postedByDid !== fleetDid) throw new GlosError('FORBIDDEN', 'The shipper placed this order — it is theirs to withdraw');
+    return this.cancelFreight(freightId, { did: fleetDid, role: 'shipper' }, reason, now);
+  }
+
+/**
+   * P1b — the office puts an uploaded order's delivery address ON THE MAP. A sheet gives an address in words; where
+   * the map does not know it, the order arrives with no point and cannot be planned. Only for an order this office
+   * uploaded, and only until the goods are taken over: after that the place it was carried to is a record.
+   */
+  pinOrderDestination(fleetDid: string, freightId: string, location: GeoPoint): Freight {
+    const f = this.requireFreight(freightId);
+    if (f.contract?.fleetDid !== fleetDid) throw new GlosError('NOT_FOUND', 'No such order');
+    if (f.postedByDid !== fleetDid) throw new GlosError('FORBIDDEN', 'The shipper placed this order — where it goes is theirs to say');
+    if (f.status !== 'ordered' && f.status !== 'claimed') throw new GlosError('INVALID_STATE', `This order is ${f.status} — where it went is on record`);
+    if (!Number.isFinite(location?.lat) || !Number.isFinite(location?.lng) || Math.abs(location.lat) > 90 || Math.abs(location.lng) > 180) throw new GlosError('INVALID_INPUT', 'A point is a latitude and a longitude');
+    f.destLocation = { lat: location.lat, lng: location.lng };
+    this.freights.set(f.freightId, f);
+    return f;
   }
 
   /** FP6 — the load behind a tracking key, or nothing. The key is the credential: no other lookup is offered. */

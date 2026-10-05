@@ -236,3 +236,42 @@
   gap: 8px;
   margin-top: 8px;
 }
+
+/* P1b — a sheet of orders: the pasted cells in the mono face a table is read in, and the verdict under it. */
+.upload__text {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  white-space: pre;
+  overflow-x: auto;
+  min-height: 110px;
+}
+.upload__result {
+  margin-top: 14px;
+}
+.upload__sum {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0 0 6px;
+}
+.upload__bad,
+.upload__refused {
+  color: var(--dang);
+  font-weight: 600;
+}
+.upload__lines {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 14px;
+  color: var(--tx2);
+}
+.upload__lines li + li {
+  margin-top: 4px;
+}
+.upload__acts {
+  margin-top: 16px;
+}
+/* An order whose address has no point on the map: it can be delivered, and cannot be planned. */
+.orders__nopin {
+  color: var(--dang);
+}

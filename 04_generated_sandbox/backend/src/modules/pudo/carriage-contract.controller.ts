@@ -1,3 +1,6 @@
+import { OrderImportService } from './order-import.service';
+import { OrderImportResult } from './order-import.types';
+import { ORDER_SHEET_TEMPLATE } from './order-sheet';
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
@@ -8,7 +11,7 @@ import { BusinessMemberGuard } from './business-member.guard';
 import { BusinessService } from './business.service';
 import { CarriageContractService } from './carriage-contract.service';
 import { CarriageContractList, CarriageContractView, ContractInviteIssued } from './carriage-contract.types';
-import { CreateContractDto, EndContractDto, FleetOrdersQueryDto, LinkContractDto } from './carriage-contract.dto';
+import { CreateContractDto, EndContractDto, FleetOrdersQueryDto, ImportOrdersDto, LinkContractDto, PinOrderDto, WithdrawOrderDto } from './carriage-contract.dto';
 import { DispatchService } from './dispatch.service';
 import { FleetOrderList } from './dispatch.types';
 import { FleetManagerService } from './fleet-manager.service';
@@ -29,6 +32,7 @@ export class CarriageContractController {
     private readonly managers: FleetManagerService,
     private readonly dispatch: DispatchService,
     private readonly businesses: BusinessService,
+    private readonly imports: OrderImportService,
   ) {}
 
   /* ------------------------------------------------------------- the fleet -- */
@@ -69,6 +73,44 @@ export class CarriageContractController {
     this.assertFleet(did, actor);
     const items = this.dispatch.ordersForFleet(did, q);
     return { items, total: items.length };
+  }
+
+/**
+   * P1b — a sheet of orders for one contract. Sent first as a CHECK (`dryRun`, the default): every line judged, nothing
+   * created. Sent again with `dryRun: false`, the good lines become orders and the rest are left out and said why.
+   */
+  @Roles('fleet_manager', 'operator')
+  @Post('fleet/managers/:did/contracts/:contractId/orders/import')
+  importOrders(@Param('did') did: string, @Param('contractId') contractId: string, @Body() dto: ImportOrdersDto, @Actor() actor: IntrospectionResult): OrderImportResult {
+    const fleet = this.assertFleet(did, actor);
+    const pickupLocation = dto.pickupLat != null && dto.pickupLng != null ? { lat: dto.pickupLat, lng: dto.pickupLng } : undefined;
+    return this.imports.run({ did, name: fleet.companyName }, this.contracts.requireForFleet(did, contractId), { text: dto.text, pickupLabel: dto.pickupLabel, pickupLocation }, this.fleetPerson(actor, fleet.companyName), dto.dryRun !== false);
+  }
+
+  /** The sheet to hand a shipper: the columns by the names the import reads, and one line showing each form. */
+  @Roles('fleet_manager', 'operator')
+  @Get('fleet/managers/:did/orders/template')
+  orderTemplate(@Param('did') did: string, @Actor() actor: IntrospectionResult): { fileName: string; csv: string } {
+    this.assertFleet(did, actor);
+    return { fileName: 'orders-template.csv', csv: ORDER_SHEET_TEMPLATE };
+  }
+
+  /** The office puts an uploaded order's delivery address on the map, so it can be planned. */
+  @Roles('fleet_manager', 'operator')
+  @Post('fleet/managers/:did/orders/:freightId/pin')
+  pinOrder(@Param('did') did: string, @Param('freightId') freightId: string, @Body() dto: PinOrderDto, @Actor() actor: IntrospectionResult): { pinned: true } {
+    this.assertFleet(did, actor);
+    this.dispatch.pinOrderDestination(did, freightId, { lat: dto.lat, lng: dto.lng });
+    return { pinned: true };
+  }
+
+  /** The office withdraws an order it uploaded itself. One the shipper placed is the shipper's to withdraw. */
+  @Roles('fleet_manager', 'operator')
+  @Post('fleet/managers/:did/orders/:freightId/withdraw')
+  withdrawOrder(@Param('did') did: string, @Param('freightId') freightId: string, @Body() dto: WithdrawOrderDto, @Actor() actor: IntrospectionResult): { withdrawn: true } {
+    this.assertFleet(did, actor);
+    this.dispatch.withdrawUploadedOrder(did, freightId, dto.reason);
+    return { withdrawn: true };
   }
 
   /* ----------------------------------------------------------- the shipper -- */

@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { GeoPoint } from './pudo.types';
 
 /**
  * P1 — A STANDING CONTRACT OF CARRIAGE between a shipper and ONE fleet.
@@ -35,6 +36,11 @@ export class ContractEnd {
   @ApiPropertyOptional() reason?: string;
 }
 
+export class ContractPickup {
+  label: string;
+  @ApiProperty({ type: GeoPoint }) location: GeoPoint;
+}
+
 /** The pending link, kept as a hash. The code itself is shown once, to the fleet that asked for it. */
 export interface ContractInvite {
   codeHash: string;
@@ -56,6 +62,8 @@ export class CarriageContract {
   createdAt: string;
   createdBy: string;
   @ApiPropertyOptional({ type: ContractEnd }) ended?: ContractEnd;
+  /** P1b — where this shipper's goods are collected, as named for the last sheet uploaded. The next upload starts from it. */
+  @ApiPropertyOptional({ type: ContractPickup }) pickup?: ContractPickup;
   /** Internal — the code a business links with. Never sent out. */
   invite?: ContractInvite;
 }
@@ -73,6 +81,7 @@ export class CarriageContractView {
   createdAt: string;
   createdBy: string;
   @ApiPropertyOptional({ type: ContractEnd }) ended?: ContractEnd;
+  @ApiPropertyOptional({ type: ContractPickup }) pickup?: ContractPickup;
   /** Whether a link code is outstanding, and until when — never the code. */
   @ApiPropertyOptional() inviteExpiresAt?: string;
 }

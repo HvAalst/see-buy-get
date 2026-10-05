@@ -20377,6 +20377,155 @@
         }
       }
     },
+    "/v1/sbg/fleet/managers/{did}/contracts/{contractId}/orders/import": {
+      "post": {
+        "operationId": "CarriageContract.importOrders",
+        "summary": "",
+        "description": "P1b — a sheet of orders for one contract. Sent first as a CHECK (`dryRun`, the default): every line judged, nothing\ncreated. Sent again with `dryRun: false`, the good lines become orders and the rest are left out and said why.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "contractId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportOrdersDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderImportResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/orders/template": {
+      "get": {
+        "operationId": "CarriageContract.orderTemplate",
+        "summary": "",
+        "description": "The sheet to hand a shipper: the columns by the names the import reads, and one line showing each form.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/orders/{freightId}/pin": {
+      "post": {
+        "operationId": "CarriageContract.pinOrder",
+        "summary": "",
+        "description": "The office puts an uploaded order's delivery address on the map, so it can be planned.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "freightId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinOrderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/orders/{freightId}/withdraw": {
+      "post": {
+        "operationId": "CarriageContract.withdrawOrder",
+        "summary": "",
+        "description": "The office withdraws an order it uploaded itself. One the shipper placed is the shipper's to withdraw.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "freightId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WithdrawOrderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/business/me/contracts": {
       "get": {
         "operationId": "CarriageContract.shipperList",
@@ -31506,6 +31655,10 @@
             "type": "string",
             "description": "P1 — the calendar day a contract order must ARRIVE. What the fleet plans against, and what makes it late."
           },
+          "orderRef": {
+            "type": "string",
+            "description": "P1b — the SHIPPER's own number for this order (a webshop's order number). Kept apart from `externalOrderId`, which\nnames a shop order or a consignment and makes the consignee \"the buyer of order …, collecting at a shop\". Under one\ncontract a number is used once: it is what makes uploading the same sheet twice harmless."
+          },
           "driverPayee": {
             "type": "object",
             "properties": {
@@ -34239,6 +34392,11 @@
           "deliverOn": {
             "type": "string",
             "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/"
+          },
+          "orderRef": {
+            "type": "string",
+            "description": "P1b — the shipper's own number for an order under a contract. Used once per contract.",
+            "maxLength": 60
           }
         },
         "required": [
@@ -35294,6 +35452,9 @@
             ]
           },
           "deliverOn": {
+            "type": "string"
+          },
+          "orderRef": {
             "type": "string"
           },
           "attempts": {
@@ -37755,6 +37916,21 @@
           "by"
         ]
       },
+      "ContractPickup": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "location",
+          "label"
+        ]
+      },
       "CarriageContractView": {
         "type": "object",
         "properties": {
@@ -37779,6 +37955,9 @@
           },
           "ended": {
             "$ref": "#/components/schemas/ContractEnd"
+          },
+          "pickup": {
+            "$ref": "#/components/schemas/ContractPickup"
           },
           "inviteExpiresAt": {
             "type": "string",
@@ -37884,6 +38063,10 @@
           "contract": {
             "$ref": "#/components/schemas/ContractRef"
           },
+          "orderRef": {
+            "type": "string",
+            "description": "The shipper's own order number, where it gave one."
+          },
           "deliveryWindow": {
             "type": "string"
           },
@@ -37949,6 +38132,10 @@
           "code": {
             "type": "string"
           },
+          "uploaded": {
+            "type": "boolean",
+            "description": "Whether this fleet's office uploaded it (and so may withdraw it) rather than the shipper ordering it."
+          },
           "deliverOn": {
             "type": "string",
             "description": "The day it must arrive."
@@ -37988,6 +38175,7 @@
           "status",
           "freightId",
           "code",
+          "uploaded",
           "deliverOn",
           "description",
           "weightKg",
@@ -38016,6 +38204,180 @@
         "required": [
           "items",
           "total"
+        ]
+      },
+      "ImportOrdersDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 1500000
+          },
+          "pickupLabel": {
+            "type": "string",
+            "description": "Where the goods are collected, for every line that does not say otherwise. Both, or neither.",
+            "maxLength": 160
+          },
+          "pickupLat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "pickupLng": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "dryRun": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "OrderImportRow": {
+        "type": "object",
+        "properties": {
+          "verdict": {
+            "type": "string",
+            "description": "`ok` it can be (or was) imported · `duplicate` an order with this number is already under the contract, so it is\nleft alone · `problem` it is not imported, and `problems` says why.",
+            "enum": [
+              "ok",
+              "duplicate",
+              "problem"
+            ]
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "code": {
+            "type": "string",
+            "description": "The order's code, once imported."
+          },
+          "line": {
+            "type": "number",
+            "description": "The line as a person counts it: the header is line 1."
+          },
+          "reference": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "dest": {
+            "type": "string"
+          },
+          "deliverOn": {
+            "type": "string"
+          },
+          "located": {
+            "type": "boolean",
+            "description": "Whether the delivery address has a point on the map. An order without one is imported, and cannot be planned until it has."
+          }
+        },
+        "required": [
+          "verdict",
+          "problems",
+          "line",
+          "reference",
+          "description",
+          "weightKg",
+          "dest",
+          "deliverOn",
+          "located"
+        ]
+      },
+      "OrderImportResult": {
+        "type": "object",
+        "properties": {
+          "refusal": {
+            "type": "string",
+            "description": "Why the sheet as a whole could not be read. Then there are no rows."
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderImportRow"
+            }
+          },
+          "columns": {
+            "type": "object",
+            "description": "Which of the sheet's own headings was read as what, and which were made nothing of.",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "ignored": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "imported": {
+            "type": "boolean",
+            "description": "Whether anything was created: false for a check, true for an import."
+          },
+          "ok": {
+            "type": "number"
+          },
+          "duplicates": {
+            "type": "number"
+          },
+          "problems": {
+            "type": "number"
+          },
+          "unlocated": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "rows",
+          "columns",
+          "ignored",
+          "imported",
+          "ok",
+          "duplicates",
+          "problems",
+          "unlocated"
+        ]
+      },
+      "PinOrderDto": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "lng": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          }
+        },
+        "required": [
+          "lat",
+          "lng"
+        ]
+      },
+      "WithdrawOrderDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 280
+          }
+        },
+        "required": [
+          "reason"
         ]
       },
       "LinkContractDto": {

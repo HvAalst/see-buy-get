@@ -20,8 +20,8 @@ const STAGE: Record<LoadStage, { label: MessageKey; tone: string }> = {
   cancelled: { label: 'business.loads.stage.cancelled', tone: 'quiet' },
 };
 
-type Form = LoadForm & { packaging: string; natureCode: string; fragile: boolean; commitMode: 'negotiate' | 'instant'; instructions: string; contactName: string; contactPhone: string; deliveryWindow: string; pickupOn: string; forClientId: string; contractId: string; deliverOn: string };
-const EMPTY: Form = { description: '', fromSiteId: '', toSiteId: '', weightKg: '', packaging: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '' };
+type Form = LoadForm & { packaging: string; natureCode: string; fragile: boolean; commitMode: 'negotiate' | 'instant'; instructions: string; contactName: string; contactPhone: string; deliveryWindow: string; pickupOn: string; forClientId: string; contractId: string; deliverOn: string; orderRef: string };
+const EMPTY: Form = { description: '', fromSiteId: '', toSiteId: '', weightKg: '', packaging: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '' };
 
 /**
  * B2 — A BUSINESS'S OWN LOADS: post one, and follow it to the door.
@@ -192,7 +192,7 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
       ...(form.pickupOn && !contract ? { scheduledPickupAt: new Date(`${form.pickupOn}T08:00:00`).toISOString() } : {}),
       ...(form.forClientId ? { forClientId: form.forClientId } : {}),
       // Under a contract: the day it must arrive, and no pickup date of our own — the fleet plans when it collects.
-      ...(contract ? { contractId: contract.contractId, deliverOn: form.deliverOn } : {}),
+      ...(contract ? { contractId: contract.contractId, deliverOn: form.deliverOn, ...(form.orderRef.trim() ? { orderRef: form.orderRef.trim() } : {}) } : {}),
     });
     setBusy(false);
     if (posted.error || !posted.data) return setError(posted.error?.detail || posted.error?.title || null);
@@ -233,6 +233,13 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
             <span class="cfield__label">{t('business.loads.f.deliverOn')}</span>
             <input class="cinput" type="date" min={new Date().toISOString().slice(0, 10)} value={form.deliverOn} onInput={(e) => setForm((prev) => ({ ...prev, deliverOn: (e.target as HTMLInputElement).value }))} />
             <span class="chint">{t('business.loads.f.deliverOnHint', { fleet: contract.fleetName })}</span>
+          </label>
+        ) : null}
+        {contract ? (
+          <label class="cfield">
+            <span class="cfield__label">{t('business.loads.f.orderRef')}</span>
+            <input class="cinput" maxLength={60} value={form.orderRef} onInput={(e) => setForm((prev) => ({ ...prev, orderRef: (e.target as HTMLInputElement).value }))} />
+            <span class="chint">{t('business.loads.f.orderRefHint')}</span>
           </label>
         ) : null}
         <label class="cfield">
@@ -403,6 +410,7 @@ function LoadDetail({ row, client, act, onClose, onChanged }: { row: PostedLoad;
                 {row.contract.fleetName}
                 {row.contract.reference ? ` · ${row.contract.reference}` : ''}
                 {row.deliverOn ? ` · ${t('business.loads.fact.arrivesOn', { day: row.deliverOn })}` : ''}
+                {row.orderRef ? ` · ${row.orderRef}` : ''}
               </dd>
             </div>
           ) : null}

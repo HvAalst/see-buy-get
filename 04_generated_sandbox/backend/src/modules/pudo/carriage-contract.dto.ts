@@ -1,4 +1,5 @@
-import { IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsBoolean, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -19,6 +20,29 @@ export class LinkContractDto {
 
 export class EndContractDto {
   @IsOptional() @IsString() @MaxLength(280) reason?: string;
+}
+
+/**
+ * P1b — a sheet of orders: the text of a CSV file, or cells pasted out of a spreadsheet. `dryRun` (the default) judges
+ * every line and creates nothing.
+ */
+export class ImportOrdersDto {
+  @IsString() @MaxLength(1_500_000) text!: string;
+  /** Where the goods are collected, for every line that does not say otherwise. Both, or neither. */
+  @IsOptional() @IsString() @MaxLength(160) pickupLabel?: string;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(-90) @Max(90) pickupLat?: number;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(-180) @Max(180) pickupLng?: number;
+  @IsOptional() @IsBoolean() dryRun?: boolean;
+}
+
+/** P1b — where an uploaded order is delivered, as a point. */
+export class PinOrderDto {
+  @Type(() => Number) @IsNumber() @Min(-90) @Max(90) lat!: number;
+  @Type(() => Number) @IsNumber() @Min(-180) @Max(180) lng!: number;
+}
+
+export class WithdrawOrderDto {
+  @IsString() @MinLength(3) @MaxLength(280) reason!: string;
 }
 
 /** A fleet's orders, by the day they must arrive. Both ends inclusive; absent means unbounded. */

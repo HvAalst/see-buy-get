@@ -346,6 +346,12 @@ export class Freight {
   /** P1 — the calendar day a contract order must ARRIVE. What the fleet plans against, and what makes it late. */
   @ApiPropertyOptional() deliverOn?: string;
   /**
+   * P1b — the SHIPPER's own number for this order (a webshop's order number). Kept apart from `externalOrderId`, which
+   * names a shop order or a consignment and makes the consignee "the buyer of order …, collecting at a shop". Under one
+   * contract a number is used once: it is what makes uploading the same sheet twice harmless.
+   */
+  @ApiPropertyOptional() orderRef?: string;
+  /**
    * WHO the network owed for this haul, and on whose books — fixed when it was accrued at delivery. A claim
    * upheld weeks later takes the money back from this same party: never from whichever fleet the driver has
    * moved to since, which carried nothing and was paid nothing for it. Absent where nothing was accrued.
@@ -437,6 +443,10 @@ export class FleetOrderRow {
   freightId: string;
   code: string;
   @ApiProperty({ type: ContractRef }) contract: ContractRef;
+  /** The shipper's own order number, where it gave one. */
+  @ApiPropertyOptional() orderRef?: string;
+  /** Whether this fleet's office uploaded it (and so may withdraw it) rather than the shipper ordering it. */
+  uploaded: boolean;
   /** The day it must arrive. */
   deliverOn: string;
   @ApiPropertyOptional() deliveryWindow?: string;
@@ -892,6 +902,7 @@ export class PostedFreightRow {
   /** P1 — ordered under a standing contract: with which fleet, and the day it must arrive. */
   @ApiPropertyOptional({ type: ContractRef }) contract?: ContractRef;
   @ApiPropertyOptional() deliverOn?: string;
+  @ApiPropertyOptional() orderRef?: string;
   /** Set once the load is taken, so the poster sees the outcome without a second call. */
   agreedPrice?: number;
   /** FP3 — the journey's stamps, so the list can say "on the road since", "delivered to", "cancelled". */

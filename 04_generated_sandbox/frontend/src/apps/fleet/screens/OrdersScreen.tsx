@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 import type { SbgClient } from '../../../lib/sbg';
-import { Button, Card, CodeCard, ErrorNote, Explainer, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, CodeCard, ErrorNote, Explainer, Note, Pill, PlacePicker, ReadAloud, Sheet } from '../../../shared/ui';
+import type { GeoPoint } from '../../../shared/geo';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { PACKAGING_OPTIONS } from '../../agent/logic';
-import { TAG_TONE, byDay, dayOf, daySummary, dayWord, orderTag, ordersApi, weightWords, type Contract, type FleetOrder, type InviteIssued } from '../orders';
+import { TAG_TONE, byDay, dayOf, daySummary, dayWord, mayWithdraw, orderTag, ordersApi, weightWords, type Contract, type FleetOrder, type InviteIssued } from '../orders';
+import { OrderUpload } from './OrderUpload';
 
 const TAG_WORD: Record<ReturnType<typeof orderTag>, MessageKey> = {
   unplanned: 'fleet.orders.tag.unplanned',
@@ -116,8 +118,10 @@ function OrderRows({ orders, onOpen, showDay }: { orders: FleetOrder[]; onOpen: 
                 {o.code} · {o.description}
               </span>
               <span class="row__s">{`${o.pickupLabel} → ${o.destLabel} · ${weightWords(o.weightKg)}`}</span>
+              {o.destLocation ? null : <span class="row__s orders__nopin">{t('fleet.orders.noPin')}</span>}
               <span class="row__s">
                 {o.onBehalfOf ? t('fleet.orders.forClient', { shipper: o.contract.shipperName, client: o.onBehalfOf.name }) : o.contract.shipperName}
+                {o.orderRef ? ` · ${o.orderRef}` : ''}
                 {showDay ? ` · ${t('fleet.orders.due', { day: o.deliverOn })}` : ''}
                 {o.deliveryWindow ? ` · ${o.deliveryWindow}` : ''}
                 {o.driverName ? ` · ${t('fleet.orders.driver', { name: o.driverName, plate: o.plate ?? '' })}` : ''}
@@ -143,6 +147,12 @@ function OrderSheet({ order, api, onClose, onChanged }: { order: FleetOrder; api
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const unplanned = order.status === 'ordered';
+  const [withdrawing, setWithdrawing] = useState(false);
+  // An uploaded order whose address the map did not know: the office places it, so it can be planned.
+  const needsPin = order.uploaded && !order.destLocation && (order.status === 'ordered' || order.status === 'claimed');
+  const [pinLabel, setPinLabel] = useState(order.destLabel);
+  const [pin, setPin] = useState<GeoPoint | null>(null);
+  const [reason, setReason] = useState('');
 
   useEffect(() => {
     if (!api || !unplanned) return;
@@ -164,16 +174,39 @@ function OrderSheet({ order, api, onClose, onChanged }: { order: FleetOrder; api
     onClose();
   };
 
+  const savePin = async () => {
+    if (!api || !pin) return;
+    setBusy(true);
+    setError(null);
+    const r = await api.pin(order.freightId, pin);
+    setBusy(false);
+    if (r.error) return setError(r.error);
+    await onChanged();
+    onClose();
+  };
+
+  const withdraw = async () => {
+    if (!api) return;
+    setBusy(true);
+    setError(null);
+    const r = await api.withdraw(order.freightId, reason.trim());
+    setBusy(false);
+    if (r.error) return setError(r.error);
+    await onChanged();
+    onClose();
+  };
+
   return (
     <Sheet open onClose={onClose} title={`${order.code} · ${order.description}`}>
       <div class="rows">
         <Fact k={t('fleet.orders.f.shipper')} v={order.onBehalfOf ? t('fleet.orders.forClient', { shipper: order.contract.shipperName, client: order.onBehalfOf.name }) : order.contract.shipperName} />
         {order.contract.reference ? <Fact k={t('fleet.orders.f.contract')} v={order.contract.reference} /> : null}
+        {order.orderRef ? <Fact k={t('fleet.orders.f.orderRef')} v={order.orderRef} /> : null}
         <Fact k={t('fleet.orders.f.from')} v={order.pickupLabel} />
         <Fact k={t('fleet.orders.f.to')} v={order.destLabel} />
         <Fact k={t('fleet.orders.f.arrives')} v={order.deliveryWindow ? `${order.deliverOn} · ${order.deliveryWindow}` : order.deliverOn} />
         <Fact k={t('fleet.orders.f.weight')} v={`${weightWords(order.weightKg)} · ${t((PACKAGING_OPTIONS.find((p) => p.value === order.packaging)?.labelKey ?? "agent.accept.packPiece") as MessageKey)}`} />
-        {order.postedByName ? <Fact k={t('fleet.orders.f.orderedBy')} v={order.postedByName} /> : null}
+        {order.postedByName ? <Fact k={t(order.uploaded ? 'fleet.orders.f.uploadedBy' : 'fleet.orders.f.orderedBy')} v={order.postedByName} /> : null}
         {order.driverName ? <Fact k={t('fleet.orders.f.driver')} v={`${order.driverName}${order.plate ? ` · ${order.plate}` : ''}`} /> : null}
         {order.receiverName ? <Fact k={t('fleet.orders.f.receivedBy')} v={order.receiverName} /> : null}
       </div>
@@ -182,6 +215,33 @@ function OrderSheet({ order, api, onClose, onChanged }: { order: FleetOrder; api
           {t('fleet.orders.track')}
         </a>
       </p>
+
+      {needsPin && api ? (
+        <div style="margin-top:12px">
+          <PlacePicker
+            id="o-pin"
+            fieldLabel={t('fleet.orders.pin.field')}
+            placeholder={order.destLabel}
+            mapLabel={t('fleet.orders.pin.map')}
+            findLabel={t('fleet.upload.find')}
+            label={pinLabel}
+            pin={pin}
+            reference={order.pickupLocation}
+            onLabel={setPinLabel}
+            onPin={(p) => setPin(p)}
+            geocode={async (q) => {
+              const r = await api.geocode(q);
+              return r.error || !r.data ? null : r.data;
+            }}
+            noteText={(n) => (n.kind === 'pinned' || (n.kind === 'found' && n.confidence !== 'fallback') ? t('fleet.orders.pin.set') : t('fleet.orders.pin.how'))}
+          />
+          <div style="margin-top:10px">
+            <Button variant="outline" chevron={false} disabled={!pin} busy={busy} onClick={() => void savePin()}>
+              {t('fleet.orders.pin.save')}
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {unplanned ? (
         drivers === null ? (
@@ -213,6 +273,33 @@ function OrderSheet({ order, api, onClose, onChanged }: { order: FleetOrder; api
           </div>
         )
       ) : null}
+
+      {mayWithdraw(order) ? (
+        withdrawing ? (
+          <div class="field" style="margin-top:16px">
+            <label class="field__label" for="o-why">
+              {t('fleet.orders.withdrawWhy')}
+            </label>
+            <input id="o-why" class="input" maxLength={280} value={reason} onInput={(e) => setReason(e.currentTarget.value)} />
+            {!unplanned && error ? <ErrorNote error={error as never} showDetail /> : null}
+            <div class="orders__acts">
+              <Button variant="outline" chevron={false} onClick={() => setWithdrawing(false)}>
+                {t('common.cancel')}
+              </Button>
+              <Button chevron={false} disabled={reason.trim().length < 3} busy={busy} onClick={() => void withdraw()}>
+                {t('fleet.orders.withdrawCta')}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div style="margin-top:16px">
+            <Button variant="link" chevron={false} onClick={() => setWithdrawing(true)}>
+              {t('fleet.orders.withdraw')}
+            </Button>
+            <p class="hint">{t('fleet.orders.withdrawHint')}</p>
+          </div>
+        )
+      ) : null}
     </Sheet>
   );
 }
@@ -234,6 +321,8 @@ function ContractsCard({ api, contracts, onChanged }: { api: ReturnType<typeof o
   const [form, setForm] = useState({ shipperName: '', reference: '', startsOn: '', endsOn: '' });
   const [adding, setAdding] = useState(false);
   const [issued, setIssued] = useState<InviteIssued | null>(null);
+  const [uploadFor, setUploadFor] = useState<Contract | null>(null);
+  const [imported, setImported] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -270,6 +359,9 @@ function ContractsCard({ api, contracts, onChanged }: { api: ReturnType<typeof o
                 </span>
                 {c.status === 'active' ? (
                   <span class="orders__acts">
+                    <Button variant="outline" chevron={false} disabled={busy} onClick={() => setUploadFor(c)}>
+                      {t('fleet.upload.cta')}
+                    </Button>
                     {!c.shipper.entityId ? (
                       <Button variant="outline" chevron={false} disabled={busy} onClick={() => void run(() => api!.invite(c.contractId), setIssued)}>
                         {t(c.inviteExpiresAt ? 'fleet.contracts.newCode' : 'fleet.contracts.sendCode')}
@@ -291,6 +383,18 @@ function ContractsCard({ api, contracts, onChanged }: { api: ReturnType<typeof o
         <p class="hint">{t('fleet.contracts.none')}</p>
       )}
       {error ? <ErrorNote error={error as never} showDetail /> : null}
+      {imported !== null ? <Note tone="ok" icon="check" title={t(imported === 1 ? 'fleet.upload.doneOne' : 'fleet.upload.done', { n: imported })} /> : null}
+      {uploadFor && api ? (
+        <OrderUpload
+          contract={uploadFor}
+          api={api}
+          onClose={() => setUploadFor(null)}
+          onImported={async (n) => {
+            setImported(n);
+            await onChanged();
+          }}
+        />
+      ) : null}
 
       {adding ? (
         <div style="margin-top:12px">

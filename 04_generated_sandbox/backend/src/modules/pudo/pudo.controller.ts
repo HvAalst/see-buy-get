@@ -537,7 +537,7 @@ export class SbgController {
    * P1 — AN ORDER UNDER A STANDING CONTRACT: only the business that linked the contract places one, only while it
    * stands, and only for a day that has not gone by. What comes back is the copy the load carries.
    */
-  private contractOrder(actor: IntrospectionResult, contractId: string | undefined, deliverOn: string | undefined): { contract?: ContractRef; deliverOn?: string } {
+  private contractOrder(actor: IntrospectionResult, contractId: string | undefined, deliverOn: string | undefined, orderRef?: string): { contract?: ContractRef; deliverOn?: string; orderRef?: string } {
     if (!contractId) {
       if (deliverOn) throw new GlosError('INVALID_INPUT', 'A delivery day belongs to an order under a contract — name the contract', { field: 'contractId' });
       return {};
@@ -547,7 +547,10 @@ export class SbgController {
     if (!deliverOn || !isDay(deliverOn)) throw new GlosError('FIELD_REQUIRED', 'Say which day it must arrive', { field: 'deliverOn' });
     if (deliverOn < new Date().toISOString().slice(0, 10)) throw new GlosError('INVALID_INPUT', 'That day has gone — an order is for today or later', { field: 'deliverOn' });
     const contract = this.contracts.orderable(this.contracts.requireForShipper(actor.tenant, contractId), deliverOn);
-    return { contract, deliverOn };
+    const ref = orderRef?.trim();
+    // The shipper's own number is used once under a contract — the same rule a sheet is held to.
+    if (ref && this.dispatch.contractOrderByRef(contractId, ref)) throw new GlosError('CONFLICT', `Order ${ref} is already with ${contract.fleetName}`, { field: 'orderRef' });
+    return { contract, deliverOn, ...(ref ? { orderRef: ref } : {}) };
   }
 
   private onBehalfOf(actor: IntrospectionResult, clientId: string | undefined): { onBehalfOf?: ClientRef } {
@@ -5107,8 +5110,8 @@ export class SbgController {
     // CL1 — refuse a term this country has not switched on, before the load exists rather than after.
     this.requireActiveTerm(dto.incoterm, dto.pickupCountry, dto.destCountry);
     // B2 — a business's DID is shared by everybody in it, so the person who posted is kept by name as well.
-    const { forClientId, contractId, deliverOn, ...load } = dto;
-    return this.dispatch.registerFreight({ ...load, dimensionsCm, ...this.contractOrder(actor, contractId, deliverOn), bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did, ...(actor?.role === 'business' && actor.actorName ? { postedByName: actor.actorName } : {}), ...this.onBehalfOf(actor, forClientId) });
+    const { forClientId, contractId, deliverOn, orderRef, ...load } = dto;
+    return this.dispatch.registerFreight({ ...load, dimensionsCm, ...this.contractOrder(actor, contractId, deliverOn, orderRef), bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did, ...(actor?.role === 'business' && actor.actorName ? { postedByName: actor.actorName } : {}), ...this.onBehalfOf(actor, forClientId) });
   }
 
   @Get('dispatch/freight')

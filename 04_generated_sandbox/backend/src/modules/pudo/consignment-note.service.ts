@@ -203,7 +203,7 @@ export class ConsignmentNoteService implements OnModuleInit {
       steps,
       ...(f.deliveryAttempts?.length ? { attempts: f.deliveryAttempts.map((a) => ({ outcome: a.outcome, at: a.at })) } : {}),
       ...(f.proofOfDelivery?.receiverName ? { receiverName: f.proofOfDelivery.receiverName } : {}),
-      ...(f.cancellation ? { cancelled: { at: f.cancellation.at, by: f.cancellation.role === 'operator' ? 'network' : 'sender' } } : {}),
+      ...(f.cancellation ? { cancelled: { at: f.cancellation.at, by: f.cancellation.role === 'operator' ? 'network' : f.contract && f.cancellation.by === f.contract.fleetDid ? 'carrier' : 'sender' } } : {}),
     };
   }
 
@@ -257,6 +257,9 @@ export class ConsignmentNoteService implements OnModuleInit {
       // B2 — a customer's business that posted its own load is the sender, by its registered name.
       const business = this.entities?.byDid(did);
       if (business?.kind === 'business') return { name: business.name, ...(business.jurisdiction ? { country: countryName(business.jurisdiction) } : {}), did };
+      // P1b — an order the FLEET uploaded under a contract: the sender is the shipper the contract names. The fleet
+      // that typed it in is the carrier, never the sender of its own customer's goods.
+      if (f.contract) return { name: f.contract.shipperName };
       const shop = this.agentOrNone(did);
       if (shop) return shop;
       return { name: 'Sender', did };

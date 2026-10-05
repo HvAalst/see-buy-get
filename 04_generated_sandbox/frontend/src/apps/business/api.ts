@@ -182,6 +182,7 @@ export interface PostedLoad {
   /** P1 — ordered under a standing contract: with which fleet, and the day it must arrive. */
   contract?: ContractRef;
   deliverOn?: string;
+  orderRef?: string;
 }
 
 /** P1 — the copy of a contract an order carries. */
@@ -242,6 +243,8 @@ export interface NewLoad {
   /** P1 — ordered under a standing contract, for the day it must arrive. */
   contractId?: string;
   deliverOn?: string;
+  /** P1b — the business's own number for the order. Used once per contract. */
+  orderRef?: string;
 }
 
 export interface BusinessClient {

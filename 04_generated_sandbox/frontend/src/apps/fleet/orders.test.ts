@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { byDay, dayOf, daySummary, dayWord, orderTag, weightWords, type FleetOrder } from './orders';
+import { byDay, dayOf, daySummary, dayWord, importVerdictLine, mayWithdraw, notASheet, orderTag, weightWords, type FleetOrder } from './orders';
 
 const order = (over: Partial<FleetOrder> = {}): FleetOrder =>
   ({
@@ -15,6 +15,7 @@ const order = (over: Partial<FleetOrder> = {}): FleetOrder =>
     pickupLocation: { lat: 0, lng: 0 },
     destLabel: 'Site',
     status: 'ordered',
+    uploaded: false,
     createdAt: '2026-10-05T10:00:00Z',
     late: false,
     trackingKey: 'T-1',
@@ -51,6 +52,26 @@ describe('P1 — a fleet’s orders', () => {
     expect(dayWord('2026-10-05', now, t)).toBe('Today');
     expect(dayWord('2026-10-06', now, t)).toBe('Tomorrow');
     expect(dayWord('2026-10-09', now, t)).toBe('2026-10-09');
+  });
+
+  it('refuses a workbook by its name, before reading a zip as if it were text', () => {
+    expect(notASheet('orders.xlsx')).toBe('fleet.upload.notText');
+    expect(notASheet('Orders.XLS')).toBe('fleet.upload.notText');
+    expect(notASheet('scan.pdf')).toBe('fleet.upload.notSheet');
+    expect(notASheet('orders.csv')).toBeNull();
+    expect(notASheet('export')).toBeNull();
+  });
+
+  it('says a refused line as a sentence: which line, which order, everything wrong with it', () => {
+    expect(importVerdictLine({ line: 4, reference: 'WS-2', problems: ['"heavy" is not a weight', 'No delivery address'] }, t)).toBe('Line 4, order WS-2: "heavy" is not a weight; No delivery address');
+    expect(importVerdictLine({ line: 5, reference: '', problems: ['No order number'] }, t)).toBe('Line 5: No order number');
+  });
+
+  it('lets the office withdraw only what it uploaded, and only before it is on the road', () => {
+    expect(mayWithdraw(order({ uploaded: true }))).toBe(true);
+    expect(mayWithdraw(order({ uploaded: true, status: 'claimed' }))).toBe(true);
+    expect(mayWithdraw(order({ uploaded: true, status: 'in_transit' }))).toBe(false);
+    expect(mayWithdraw(order({ uploaded: false }))).toBe(false);
   });
 
   it('weighs a day in tonnes and a small order in kilos', () => {

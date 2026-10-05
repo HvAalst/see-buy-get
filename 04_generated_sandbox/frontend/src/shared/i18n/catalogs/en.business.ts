@@ -157,6 +157,8 @@ export const enBusiness = {
   'business.loads.f.contractSub': 'Your contract carrier. It goes to their plan, at your contract price.',
   'business.loads.f.deliverOn': 'Day it must arrive',
   'business.loads.f.deliverOnHint': '{fleet} plans its trucks for each day from the orders it has.',
+  'business.loads.f.orderRef': 'Your order number (optional)',
+  'business.loads.f.orderRefHint': 'Your carrier sees it, and the same number cannot be ordered twice.',
   'business.loads.contractNote': 'Ordered under your contract: the price and how you pay are between you and the carrier. SeeBuyGet keeps the order, the consignment note and the tracking.',
   'business.loads.orderCta': 'Order it',
   'business.loads.ordered': '{code} is ordered with {fleet}, to arrive {day}.',
