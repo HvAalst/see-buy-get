@@ -296,6 +296,75 @@ describe('a fleet’s plan for a day', () => {
     expect(plans.state(fleet.did, tomorrow())).toMatchObject({ leftOut: 1, newSince: 0 });
   });
 
+  /* ------------------------------------------------------------ the rules -- */
+
+  /**
+   * P5 — A RULE THE OFFICE PUTS ON A PLAN: one order kept off one vehicle, or put on one. What the adviser changes when
+   * a dispatcher says "not on that truck" — and what a dispatcher can read back and check.
+   */
+  describe('rules on a plan', () => {
+    const truckOf = (plan: { routes: Array<{ plate: string; trips: Array<{ stops: Array<{ freightId: string }> }> }> }, freightId: string) => plan.routes.find((r) => r.trips.some((t) => t.stops.some((st) => st.freightId === freightId)))?.plate;
+
+    it('keeps an order off a vehicle, puts one on a vehicle, and names each rule on the plan', () => {
+      const { fleet, big, small } = setUp();
+      const a = anOrder(fleet, { kg: 2000, n: 1 });
+      const b = anOrder(fleet, { kg: 2000, n: 2 });
+      const free = plans.propose(fleet.did, { day: tomorrow() });
+      // Left to itself the math puts both on the big truck, in one round.
+      expect([truckOf(free, a.freightId), truckOf(free, b.freightId)]).toEqual(['KPL 008T', 'KPL 008T']);
+      expect(free.rules).toEqual([]);
+
+      const kept = plans.propose(fleet.did, { day: tomorrow(), keepOff: [{ freightId: a.freightId, vehicleId: big.vehicleId }] });
+      expect(truckOf(kept, a.freightId)).toBe('KPL 003T');
+      expect(truckOf(kept, b.freightId)).toBeDefined();
+      expect(kept.rules).toEqual([{ kind: 'keep_off', freightId: a.freightId, code: a.code, vehicleId: big.vehicleId, plate: 'KPL 008T' }]);
+
+      const put = plans.propose(fleet.did, { day: tomorrow(), putOn: [{ freightId: b.freightId, vehicleId: small.vehicleId }] });
+      expect(truckOf(put, b.freightId)).toBe('KPL 003T');
+      expect(put.rules).toEqual([{ kind: 'put_on', freightId: b.freightId, code: b.code, vehicleId: small.vehicleId, plate: 'KPL 003T' }]);
+    });
+
+    it('never bends a truck to a rule: an order put on a vehicle too small for it is handed back, not squeezed on', () => {
+      const { fleet, small } = setUp();
+      const heavy = anOrder(fleet, { kg: 6000, n: 1 });
+      const plan = plans.propose(fleet.did, { day: tomorrow(), putOn: [{ freightId: heavy.freightId, vehicleId: small.vehicleId }] });
+      expect(truckOf(plan, heavy.freightId)).toBeUndefined();
+      expect(plan.unplanned).toEqual([expect.objectContaining({ freightId: heavy.freightId, reason: 'no_truck_can_carry' })]);
+    });
+
+    it('refuses a rule that contradicts another, or names a vehicle or an order that is not this fleet’s', () => {
+      const { fleet, big, small } = setUp();
+      const other = aFleet('Pwani Haulage');
+      const theirs = anOrder(other);
+      const theirTruck = aTruck(other.did, 'PWN 001T', 8000);
+      const a = anOrder(fleet, { kg: 2000 });
+      const day = tomorrow();
+      expect(() => plans.propose(fleet.did, { day, putOn: [{ freightId: a.freightId, vehicleId: big.vehicleId }, { freightId: a.freightId, vehicleId: small.vehicleId }] })).toThrow(/cannot be put on two vehicles/);
+      expect(() => plans.propose(fleet.did, { day, putOn: [{ freightId: a.freightId, vehicleId: big.vehicleId }], keepOff: [{ freightId: a.freightId, vehicleId: big.vehicleId }] })).toThrow(/both put on KPL 008T and kept off it/);
+      expect(() => plans.propose(fleet.did, { day, keepOff: [{ freightId: a.freightId, vehicleId: theirTruck.vehicleId }] })).toThrow(/vehicle that is not in this fleet/);
+      expect(() => plans.propose(fleet.did, { day, keepOff: [{ freightId: theirs.freightId, vehicleId: big.vehicleId }] })).toThrow(/order that is not yours/);
+      expect(() => plans.propose(fleet.did, { day, keepOff: [{ freightId: 'frt_nonsense', vehicleId: big.vehicleId }] })).toThrow(/order that is not yours/);
+    });
+
+    it('lets a rule go with its order: one withdrawn since is no longer a rule, and no error', () => {
+      const { fleet, big } = setUp();
+      const a = anOrder(fleet, { kg: 2000, n: 1 });
+      const gone = anOrder(fleet, { kg: 2000, n: 2 });
+      dispatch.withdrawUploadedOrder(fleet.did, gone.freightId, 'Customer cancelled');
+      const plan = plans.propose(fleet.did, { day: tomorrow(), keepOff: [{ freightId: gone.freightId, vehicleId: big.vehicleId }, { freightId: a.freightId, vehicleId: big.vehicleId }] });
+      expect(plan.rules.map((r) => r.code)).toEqual([a.code]);
+    });
+
+    it('is kept with an accepted plan, and written onto its orders as planned', () => {
+      const { fleet, big } = setUp();
+      const a = anOrder(fleet, { kg: 2000, n: 1 });
+      const kept = plans.accept(fleet.did, { day: tomorrow(), keepOff: [{ freightId: a.freightId, vehicleId: big.vehicleId }] }, 'Amina');
+      expect(kept.rules).toHaveLength(1);
+      expect(plans.state(fleet.did, tomorrow()).plan!.rules).toEqual(kept.rules);
+      expect(dispatch.ordersForFleet(fleet.did).find((r) => r.freightId === a.freightId)!.planned!.plate).toBe('KPL 003T');
+    });
+  });
+
   /* ------------------------------------------------------- sending it out -- */
 
   /**

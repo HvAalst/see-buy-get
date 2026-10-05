@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
+import { ADVISER_HISTORY, historyOf, keptOff, ruleLine, rulesAsk, withoutRule, type PlanRule } from './orders';
 import { askOf, byDay, dayOf, daySummary, dayWord, handOnLine, hoursWords, mayHandOn, importVerdictLine, leftByReason, mayWithdraw, notASheet, orderTag, sendLine, weightWords, type DayPlan, type FleetOrder, type PlanLeft, type PlanSendTruck } from './orders';
 
 const order = (over: Partial<FleetOrder> = {}): FleetOrder =>
@@ -142,6 +143,71 @@ describe('P1 — a fleet’s orders', () => {
     expect(hoursWords(570)).toBe('9 h 30');
     expect(hoursWords(600)).toBe('10 h');
     expect(hoursWords(605)).toBe('10 h 05');
+  });
+
+  /* P5 — the rules on a plan, and the talk with the adviser. */
+  const rule = (kind: PlanRule['kind'], freightId: string, vehicleId: string): PlanRule => ({ kind, freightId, code: freightId.toUpperCase(), vehicleId, plate: vehicleId.toUpperCase() });
+
+  it('plans a day again under the rules its accepted plan was made with', () => {
+    const accepted = {
+      settings: { dayStart: '07:00', dayHours: 10, speedKmh: 30, loadMin: 15, unloadMin: 20 },
+      vehicles: [{ vehicleId: 'v1', plate: 'A', vehicleClass: 'truck', capacityKg: 8000, excluded: false }],
+      rules: [rule('keep_off', 'f1', 'v1'), rule('put_on', 'f2', 'v2'), rule('keep_off', 'f3', 'v2')],
+    } as unknown as DayPlan;
+    const ask = askOf('2026-10-06', accepted);
+    expect(ask.keepOff).toEqual([
+      { freightId: 'f1', vehicleId: 'v1' },
+      { freightId: 'f3', vehicleId: 'v2' },
+    ]);
+    expect(ask.putOn).toEqual([{ freightId: 'f2', vehicleId: 'v2' }]);
+    // No rules, no lists: an ask stays as short as what the office changed.
+    expect(askOf('2026-10-06', { ...accepted, rules: [] } as DayPlan)).not.toHaveProperty('keepOff');
+  });
+
+  it('takes one rule off and leaves the others — both lists always sent, so the server replaces what it had', () => {
+    const rules = [rule('keep_off', 'f1', 'v1'), rule('put_on', 'f1', 'v2'), rule('keep_off', 'f2', 'v1')];
+    expect(withoutRule(rules, rules[0])).toEqual({ keepOff: [{ freightId: 'f2', vehicleId: 'v1' }], putOn: [{ freightId: 'f1', vehicleId: 'v2' }] });
+    // The last of a kind: an EMPTY list, not a missing one — a missing one would mean "leave as it is".
+    expect(withoutRule([rules[1]], rules[1])).toEqual({ keepOff: [], putOn: [] });
+    // The same order and vehicle under the other kind is another rule.
+    expect(withoutRule(rules, rule('put_on', 'f1', 'v1'))).toEqual(rulesAsk(rules));
+  });
+
+  it('keeps an order off a vehicle by hand — once, beside the rules already there, and over a put-on that said the opposite', () => {
+    const rules = [rule('keep_off', 'f1', 'v1'), rule('put_on', 'f2', 'v1'), rule('put_on', 'f3', 'v2')];
+    expect(keptOff(rules, { freightId: 'f9', vehicleId: 'v1' })).toEqual({
+      keepOff: [
+        { freightId: 'f1', vehicleId: 'v1' },
+        { freightId: 'f9', vehicleId: 'v1' },
+      ],
+      putOn: [
+        { freightId: 'f2', vehicleId: 'v1' },
+        { freightId: 'f3', vehicleId: 'v2' },
+      ],
+    });
+    // Asked again: still one rule.
+    expect(keptOff(rules, { freightId: 'f1', vehicleId: 'v1' }).keepOff).toHaveLength(1);
+    // f2 was put on v1; now it is kept off v1. The put-on goes — and the one for another order stays.
+    expect(keptOff(rules, { freightId: 'f2', vehicleId: 'v1' }).putOn).toEqual([{ freightId: 'f3', vehicleId: 'v2' }]);
+    // f3 is put on v2 and kept off v1: both stand, they agree.
+    expect(keptOff(rules, { freightId: 'f3', vehicleId: 'v1' }).putOn).toHaveLength(2);
+  });
+
+  it('says a rule the way the office would', () => {
+    expect(ruleLine({ kind: 'keep_off', code: 'FRT-12', plate: 'KPL 008T' }, t)).toBe('FRT-12 stays off KPL 008T');
+    expect(ruleLine({ kind: 'put_on', code: 'FRT-12', plate: 'KPL 003T' }, t)).toBe('FRT-12 goes on KPL 003T, or on no vehicle');
+  });
+
+  it('sends the adviser the words of the talk so far, the newest only — never its own account of what changed', () => {
+    const turns = Array.from({ length: 10 }, (_, i) => [
+      { role: 'user' as const, text: `Q${i}` },
+      { role: 'assistant' as const, text: `A${i}`, changed: ['Vehicles leave at 06:00 (was 07:00)'] },
+    ]).flat();
+    const sent = historyOf([...turns, { role: 'assistant', text: '  ' }]);
+    expect(sent).toHaveLength(ADVISER_HISTORY);
+    expect(sent[sent.length - 1]).toEqual({ role: 'assistant', text: 'A9' });
+    expect(sent.every((x) => Object.keys(x).sort().join() === 'role,text')).toBe(true);
+    expect(historyOf([{ role: 'user', text: 'x'.repeat(5000) }])[0].text).toHaveLength(4000);
   });
 
   it('weighs a day in tonnes and a small order in kilos', () => {

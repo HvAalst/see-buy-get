@@ -20677,6 +20677,74 @@
         }
       }
     },
+    "/v1/sbg/fleet/managers/{did}/plan/adviser": {
+      "get": {
+        "operationId": "CarriageContract.adviserStatus",
+        "summary": "",
+        "description": "P5 — can this server reach the adviser at all? The screen asks before it offers one.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanAdviserStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/plan/advise": {
+      "post": {
+        "operationId": "CarriageContract.advisePlan",
+        "summary": "",
+        "description": "P5 — say something to the adviser about a day's plan: a question, or what to change. It answers with words and\nwith a PROPOSAL the solver worked out; nothing is accepted and nothing is sent to a driver by asking.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdvisePlanDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanAdviceView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/business/me/contracts": {
       "get": {
         "operationId": "CarriageContract.shipperList",
@@ -39127,6 +39195,23 @@
           "reason"
         ]
       },
+      "PlanPairDto": {
+        "type": "object",
+        "properties": {
+          "freightId": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "vehicleId": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "freightId",
+          "vehicleId"
+        ]
+      },
       "PlanDayDto": {
         "type": "object",
         "properties": {
@@ -39155,6 +39240,19 @@
           },
           "unloadMin": {
             "type": "number"
+          },
+          "keepOff": {
+            "description": "P5 — keep these orders off these vehicles; put these orders on these vehicles.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanPairDto"
+            }
+          },
+          "putOn": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanPairDto"
+            }
           }
         },
         "required": [
@@ -39501,6 +39599,37 @@
           "excluded"
         ]
       },
+      "PlanRuleView": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "keep_off",
+              "put_on"
+            ]
+          },
+          "freightId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "vehicleId": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "freightId",
+          "code",
+          "vehicleId",
+          "plate"
+        ]
+      },
       "PlanAccepted": {
         "type": "object",
         "properties": {
@@ -39546,6 +39675,13 @@
               "$ref": "#/components/schemas/PlanVehicle"
             }
           },
+          "rules": {
+            "description": "The rules this plan was made under. Empty when there are none.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanRuleView"
+            }
+          },
           "accepted": {
             "description": "Set on the plan the office accepted for this day. A proposal has none.",
             "allOf": [
@@ -39567,6 +39703,7 @@
           "totals",
           "settings",
           "vehicles",
+          "rules",
           "day",
           "madeAt"
         ]
@@ -39695,6 +39832,179 @@
           "leftOut",
           "newSince",
           "withdrawnSince"
+        ]
+      },
+      "PlanAdviserStatus": {
+        "type": "object",
+        "properties": {
+          "configured": {
+            "type": "boolean",
+            "description": "Whether this server can reach the adviser at all."
+          }
+        },
+        "required": [
+          "configured"
+        ]
+      },
+      "AdviserTurnDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 4000
+          }
+        },
+        "required": [
+          "role",
+          "text"
+        ]
+      },
+      "AdvisePlanDto": {
+        "type": "object",
+        "properties": {
+          "ask": {
+            "$ref": "#/components/schemas/PlanDayDto"
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdviserTurnDto"
+            }
+          }
+        },
+        "required": [
+          "ask",
+          "message"
+        ]
+      },
+      "PlanAskView": {
+        "type": "object",
+        "properties": {
+          "excludeVehicleIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "keepOff": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "freightId": {
+                  "type": "string"
+                },
+                "vehicleId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "freightId",
+                "vehicleId"
+              ]
+            }
+          },
+          "putOn": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "freightId": {
+                  "type": "string"
+                },
+                "vehicleId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "freightId",
+                "vehicleId"
+              ]
+            }
+          },
+          "day": {
+            "type": "string"
+          },
+          "dayStart": {
+            "type": "string"
+          },
+          "dayHours": {
+            "type": "number"
+          },
+          "speedKmh": {
+            "type": "number"
+          },
+          "loadMin": {
+            "type": "number"
+          },
+          "unloadMin": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "excludeVehicleIds",
+          "keepOff",
+          "putOn",
+          "day",
+          "dayStart",
+          "dayHours",
+          "speedKmh",
+          "loadMin",
+          "unloadMin"
+        ]
+      },
+      "PlanAdviceView": {
+        "type": "object",
+        "properties": {
+          "failed": {
+            "type": "string",
+            "enum": [
+              "not_configured",
+              "busy",
+              "unreachable",
+              "declined"
+            ]
+          },
+          "changed": {
+            "description": "What changed in the asks, in words — worked out by the server from the asks before and after, never taken from\nthe adviser's own account of itself.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ask": {
+            "$ref": "#/components/schemas/PlanAskView"
+          },
+          "plan": {
+            "description": "The plan under those asks: a proposal, worked out by the solver. Nothing is accepted by asking.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DayPlanView"
+              }
+            ]
+          },
+          "reply": {
+            "type": "string",
+            "description": "What the adviser said. Empty when it could not answer — `failed` then says why."
+          }
+        },
+        "required": [
+          "changed",
+          "ask",
+          "plan",
+          "reply"
         ]
       },
       "LinkContractDto": {

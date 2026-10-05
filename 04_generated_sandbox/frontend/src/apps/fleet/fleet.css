@@ -430,6 +430,77 @@
   color: var(--dang);
 }
 
+/* P5 — the rules on a plan: a line a rule, and the way to take it off at the end of the line. */
+.plan__rules li {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.plan__rules .btn {
+  width: auto;
+}
+.plan__stop .btn {
+  width: auto;
+  align-self: flex-start;
+  padding-left: 0;
+}
+.plan__ruled {
+  color: var(--navy);
+  font-weight: 600;
+}
+
+/* P5 — the talk with the adviser. What was SAID and what CHANGED are set apart: the second is the planner's fact. */
+.adviser__turns {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.adviser__turn {
+  padding: 10px 12px;
+  border: 1px solid var(--bd);
+  border-radius: var(--r-md, 12px);
+  background: var(--bg);
+}
+.adviser__turn--user {
+  background: transparent;
+}
+.adviser__who {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tx2);
+}
+.adviser__text {
+  margin: 2px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--tx);
+}
+.adviser__changed {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--bd);
+  font-size: 14px;
+  color: var(--navy);
+}
+.adviser__changed ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+.adviser__same {
+  margin: 8px 0 0;
+  padding-top: 8px;
+  border-top: 1px dashed var(--bd);
+  font-size: 13px;
+  color: var(--tx2);
+}
+.adviser__ask {
+  margin-top: 12px;
+}
+
 /* P4 — where an order has been handed, and the one thing to do about it: set apart from the facts above it. */
 .handon {
   margin-top: 16px;

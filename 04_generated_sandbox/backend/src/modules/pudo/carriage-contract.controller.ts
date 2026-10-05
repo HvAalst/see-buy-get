@@ -1,6 +1,8 @@
 import { FleetPlanService } from './fleet-plan.service';
 import { DayPlanState, DayPlanView, PlanSendResult } from './fleet-plan.types';
 import { OrderImportService } from './order-import.service';
+import { PlanAdviserService } from './plan-adviser.service';
+import { PlanAdviceView, PlanAdviserStatus } from './plan-adviser.types';
 import { OrderImportResult } from './order-import.types';
 import { ORDER_SHEET_TEMPLATE } from './order-sheet';
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
@@ -13,7 +15,7 @@ import { BusinessMemberGuard } from './business-member.guard';
 import { BusinessService } from './business.service';
 import { CarriageContractService } from './carriage-contract.service';
 import { CarriageContractList, CarriageContractView, ContractInviteIssued } from './carriage-contract.types';
-import { CreateContractDto, EndContractDto, FleetOrdersQueryDto, ImportOrdersDto, LinkContractDto, PinOrderDto, PlanDayDto, PlanStateQueryDto, WithdrawOrderDto } from './carriage-contract.dto';
+import { AdvisePlanDto, CreateContractDto, EndContractDto, FleetOrdersQueryDto, ImportOrdersDto, LinkContractDto, PinOrderDto, PlanDayDto, PlanStateQueryDto, WithdrawOrderDto } from './carriage-contract.dto';
 import { DispatchService } from './dispatch.service';
 import { FleetOrderList } from './dispatch.types';
 import { FleetManagerService } from './fleet-manager.service';
@@ -36,6 +38,7 @@ export class CarriageContractController {
     private readonly businesses: BusinessService,
     private readonly imports: OrderImportService,
     private readonly plans: FleetPlanService,
+    private readonly adviser: PlanAdviserService,
   ) {}
 
   /* ------------------------------------------------------------- the fleet -- */
@@ -151,6 +154,25 @@ export class CarriageContractController {
   planState(@Param('did') did: string, @Query() q: PlanStateQueryDto, @Actor() actor: IntrospectionResult): DayPlanState {
     this.assertFleet(did, actor);
     return this.plans.state(did, q.day);
+  }
+
+  /** P5 — can this server reach the adviser at all? The screen asks before it offers one. */
+  @Roles('fleet_manager', 'operator')
+  @Get('fleet/managers/:did/plan/adviser')
+  adviserStatus(@Param('did') did: string, @Actor() actor: IntrospectionResult): PlanAdviserStatus {
+    this.assertFleet(did, actor);
+    return this.adviser.status();
+  }
+
+  /**
+   * P5 — say something to the adviser about a day's plan: a question, or what to change. It answers with words and
+   * with a PROPOSAL the solver worked out; nothing is accepted and nothing is sent to a driver by asking.
+   */
+  @Roles('fleet_manager', 'operator')
+  @Post('fleet/managers/:did/plan/advise')
+  advisePlan(@Param('did') did: string, @Body() dto: AdvisePlanDto, @Actor() actor: IntrospectionResult): Promise<PlanAdviceView> {
+    this.assertFleet(did, actor);
+    return this.adviser.advise(did, dto);
   }
 
   /* ----------------------------------------------------------- the shipper -- */

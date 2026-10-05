@@ -84,6 +84,22 @@ export class PlanVehicle {
   @ApiPropertyOptional({ type: [String] }) offRoad?: string[];
 }
 
+/**
+ * P5 — A RULE THE OFFICE PUT ON A PLAN: keep one order off one vehicle, or put one order on one vehicle. Narrow on
+ * purpose — an order and a vehicle, both named — so that what was asked can be read back and checked. Anything wider
+ * (an area, a customer) is said as several of these.
+ */
+export const PLAN_RULE_KINDS = ['keep_off', 'put_on'] as const;
+export type PlanRuleKind = (typeof PLAN_RULE_KINDS)[number];
+
+export class PlanRuleView {
+  @ApiProperty({ enum: PLAN_RULE_KINDS }) kind: PlanRuleKind;
+  freightId: string;
+  code: string;
+  vehicleId: string;
+  plate: string;
+}
+
 export class PlanSettings {
   /** When the trucks leave the depot (HH:MM), and the longest a truck's day may be, in hours. */
   dayStart: string;
@@ -121,6 +137,8 @@ export class DayPlanView {
   @ApiProperty({ type: PlanTotals }) totals: PlanTotals;
   @ApiProperty({ type: PlanSettings }) settings: PlanSettings;
   @ApiProperty({ type: [PlanVehicle] }) vehicles: PlanVehicle[];
+  /** The rules this plan was made under. Empty when there are none. */
+  @ApiProperty({ type: [PlanRuleView] }) rules: PlanRuleView[];
   /** Set on the plan the office accepted for this day. A proposal has none. */
   @ApiPropertyOptional({ type: PlanAccepted }) accepted?: PlanAccepted;
 }

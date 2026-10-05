@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Icon, Note, Pill } from '../../../shared/ui';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
-import { askOf, dayOf, dayWord, handOnLine, hoursWords, leftByReason, sendLine, weightWords, type DayPlan, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi } from '../orders';
+import { PlanAdviser } from './PlanAdviser';
+import { askOf, dayOf, dayWord, handOnLine, hoursWords, keptOff, leftByReason, ruleLine, sendLine, weightWords, withoutRule, type DayPlan, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi } from '../orders';
 
 const REASON: Record<PlanLeftReason, { title: MessageKey; what: MessageKey }> = {
   no_pin: { title: 'fleet.plan.left.noPin', what: 'fleet.plan.left.noPinDo' },
@@ -23,6 +24,9 @@ const REASON: Record<PlanLeftReason, { title: MessageKey; what: MessageKey }> = 
  * The office changes what is true of ITS day (a truck in the workshop, a later start, slower roads) and the plan is
  * worked out again. It is a proposal until accepted; accepting writes it onto the orders. Every time on it is an
  * estimate from distance and those settings, and is marked as one.
+ *
+ * P5 — the office can also SAY what it wants, to an adviser that asks the planner again. Whatever that leaves in force
+ * is on the board to read and to take off: the settings in the line under the answer, each rule on a line of its own.
  */
 export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, onAccepted }: { day: string; api: ReturnType<typeof ordersApi>; accepted?: DayPlan | null; newSince?: number; hasPartners?: boolean; onClose: () => void; onAccepted: () => Promise<void> | void }) {
   const t = useT();
@@ -100,6 +104,8 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
   const isToday = day === dayOf(now);
   const s = plan?.settings;
   const left = plan ? leftByReason(plan.unplanned) : [];
+  // A plan kept from before there were rules has none.
+  const rules = plan?.rules ?? [];
 
   return (
     <div class="scr plan">
@@ -195,6 +201,25 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
             ) : null}
           </Card>
 
+          {/* THE RULES IN FORCE: said in full, and each one the office's to take off. On an accepted plan, a record. */}
+          {rules.length ? (
+            <Card title={t('fleet.plan.rules.title')}>
+              <ul class="plan__leftlist plan__rules">
+                {rules.map((r) => (
+                  <li key={`${r.kind}:${r.freightId}:${r.vehicleId}`}>
+                    <span class="plan__stopt">{ruleLine(r, t)}</span>
+                    {plan.accepted ? null : (
+                      <Button variant="link" chevron={false} full={false} disabled={busy !== null} onClick={() => change(withoutRule(rules, r))}>
+                        {t('fleet.plan.rules.remove')}
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <p class="hint">{t('fleet.plan.rules.hint')}</p>
+            </Card>
+          ) : null}
+
           {tune && !plan.accepted ? (
             <Card title={t('fleet.plan.tuneTitle')}>
               <div class="plan__tune">
@@ -256,8 +281,23 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
                 })}
               </div>
               <p class="hint">{t('fleet.plan.f.trucksHint')}</p>
+              <p class="hint">{t('fleet.plan.rules.keepOffHint')}</p>
             </Card>
           ) : null}
+
+          {/* P5 — SAY IT INSTEAD. Only over a proposal: an accepted plan is a record, and is not talked into another. */}
+          {plan.accepted ? null : (
+            <PlanAdviser
+              api={api}
+              ask={ask}
+              busy={busy !== null}
+              onAdvice={(advice) => {
+                setAsk(advice.ask);
+                setPlan(advice.plan);
+                setDone(false);
+              }}
+            />
+          )}
 
           {/* WHAT DOES NOT FIT, by reason: each reason is a different thing to do about it. */}
           {handed ? <Note tone="ok" icon="check" title={handed} /> : null}
@@ -286,6 +326,14 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
                   <li key={o.freightId}>
                     <span class="plan__stopt">{`${o.destLabel} · ${weightWords(o.weightKg)}`}</span>
                     <span class="plan__stops-s">{`${o.code} · ${o.description} · ${o.shipperName}${o.orderRef ? ` · ${o.orderRef}` : ''}`}</span>
+                    {/* A rule on this order may be WHY it is here: said beside it, so the reason above is not read as the whole story. */}
+                    {rules
+                      .filter((r) => r.freightId === o.freightId)
+                      .map((r) => (
+                        <span key={`${r.kind}:${r.vehicleId}`} class="plan__stops-s plan__ruled">
+                          {t('fleet.plan.rules.onLeft', { rule: ruleLine(r, t) })}
+                        </span>
+                      ))}
                   </li>
                 ))}
               </ul>
@@ -318,6 +366,12 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
                               {`${stop.code} · ${stop.description} · ${weightWords(stop.weightKg)}`}
                               {stop.deliveryWindow ? ` · ${t('fleet.plan.window', { window: stop.deliveryWindow })}` : ''}
                             </span>
+                            {/* A RULE BY HAND, while the office is changing its day: this order, not on this vehicle. */}
+                            {tune && !plan.accepted ? (
+                              <Button variant="link" chevron={false} full={false} disabled={busy !== null} onClick={() => change(keptOff(rules, { freightId: stop.freightId, vehicleId: r.vehicleId }))}>
+                                {t('fleet.plan.rules.keepOffCta')}
+                              </Button>
+                            ) : null}
                           </span>
                         </li>
                       ))}

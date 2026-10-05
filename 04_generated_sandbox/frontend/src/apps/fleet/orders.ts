@@ -17,6 +17,20 @@ export type Partnership = components['schemas']['FleetPartnershipView'];
 export type PartnerLists = components['schemas']['FleetPartnerLists'];
 export type PartnerInvite = components['schemas']['PartnerInviteIssued'];
 export type HandOnResult = components['schemas']['HandOnBatchResult'];
+export type PlanRule = components['schemas']['PlanRuleView'];
+export type PlanAdvice = components['schemas']['PlanAdviceView'];
+export type AdviserFailure = NonNullable<PlanAdvice['failed']>;
+/** One order and one vehicle: what a rule on a plan names. */
+export interface PlanPair {
+  freightId: string;
+  vehicleId: string;
+}
+/** A turn of the talk with the adviser, as the screen keeps it. `changed` is the server's account, shown under a reply. */
+export interface AdviserTurn {
+  role: 'user' | 'assistant';
+  text: string;
+  changed?: string[];
+}
 /** What a plan for a day is asked with: the day, and whatever the office changes about its own day. */
 export interface PlanAsk {
   day: string;
@@ -26,6 +40,9 @@ export interface PlanAsk {
   speedKmh?: number;
   loadMin?: number;
   unloadMin?: number;
+  /** P5 — keep these orders off these vehicles; put these orders on these vehicles. */
+  keepOff?: PlanPair[];
+  putOn?: PlanPair[];
 }
 
 /**
@@ -63,6 +80,10 @@ export function ordersApi(sbg: SbgClient, did: string) {
     /** P3b — send the next trip to every truck in today's accepted plan that is ready for one. */
     sendPlan: (day: string): Promise<Result<PlanSendResult>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/plan/send', { params: { path }, body: { day } })) as never,
     planState: (day: string): Promise<Result<DayPlanState>> => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/plan', { params: { path, query: { day } } })) as never,
+    /** P5 — whether this service has an adviser at all, and saying something to it about the plan made with `ask`. */
+    adviserStatus: (): Promise<Result<{ configured: boolean }>> => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/plan/adviser', { params: { path } })) as never,
+    advise: (ask: PlanAsk, message: string, history: Array<{ role: 'user' | 'assistant'; text: string }>): Promise<Result<PlanAdvice>> =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/plan/advise', { params: { path }, body: { ask, message, history } })) as never,
     /* P4 — partners, and handing orders on to them or to the open board. */
     partners: (): Promise<Result<PartnerLists>> => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/partners', { params: { path } })) as never,
     invitePartner: (partnerName: string): Promise<Result<PartnerInvite>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/partners', { params: { path }, body: { partnerName } })) as never,
@@ -191,7 +212,58 @@ export function askOf(day: string, accepted?: DayPlan | null): PlanAsk {
   if (!accepted) return { day };
   const s = accepted.settings;
   const out = accepted.vehicles.filter((v) => v.excluded).map((v) => v.vehicleId);
-  return { day, dayStart: s.dayStart, dayHours: s.dayHours, speedKmh: s.speedKmh, loadMin: s.loadMin, unloadMin: s.unloadMin, ...(out.length ? { excludeVehicleIds: out } : {}) };
+  // A rule it was made under holds for the next plan too — a plan kept from before there were rules has none.
+  const rules = rulesAsk(accepted.rules ?? []);
+  return {
+    day,
+    dayStart: s.dayStart,
+    dayHours: s.dayHours,
+    speedKmh: s.speedKmh,
+    loadMin: s.loadMin,
+    unloadMin: s.unloadMin,
+    ...(out.length ? { excludeVehicleIds: out } : {}),
+    ...(rules.keepOff.length ? { keepOff: rules.keepOff } : {}),
+    ...(rules.putOn.length ? { putOn: rules.putOn } : {}),
+  };
+}
+
+/** P5 — a plan's rules, as the two lists a plan is asked with. Both always present, so sending them REPLACES what was asked before. */
+export function rulesAsk(rules: PlanRule[]): { keepOff: PlanPair[]; putOn: PlanPair[] } {
+  const pairs = (kind: PlanRule['kind']) => rules.filter((r) => r.kind === kind).map((r) => ({ freightId: r.freightId, vehicleId: r.vehicleId }));
+  return { keepOff: pairs('keep_off'), putOn: pairs('put_on') };
+}
+
+/** P5 — the asks for the same plan with one rule taken off. Read from the plan's own rules: they are what is in force. */
+export function withoutRule(rules: PlanRule[], gone: PlanRule): { keepOff: PlanPair[]; putOn: PlanPair[] } {
+  return rulesAsk(rules.filter((r) => !(r.kind === gone.kind && r.freightId === gone.freightId && r.vehicleId === gone.vehicleId)));
+}
+
+/**
+ * P5 — the asks for the same plan with one order kept off one vehicle, BY HAND: a rule must not need the adviser.
+ * Asked twice it is one rule; and a put-on of that same order on that same vehicle gives way to it — the office has
+ * just said the opposite.
+ */
+export function keptOff(rules: PlanRule[], pair: PlanPair): { keepOff: PlanPair[]; putOn: PlanPair[] } {
+  const now = rulesAsk(rules);
+  const same = (p: PlanPair) => p.freightId === pair.freightId && p.vehicleId === pair.vehicleId;
+  return { keepOff: now.keepOff.some(same) ? now.keepOff : [...now.keepOff, { freightId: pair.freightId, vehicleId: pair.vehicleId }], putOn: now.putOn.filter((p) => !same(p)) };
+}
+
+/** P5 — a rule as the office reads it. */
+export function ruleLine(rule: Pick<PlanRule, 'kind' | 'code' | 'plate'>, t: Translate): string {
+  return t(rule.kind === 'keep_off' ? 'fleet.plan.rules.keepOff' : 'fleet.plan.rules.putOn', { code: rule.code, plate: rule.plate });
+}
+
+/**
+ * P5 — the talk so far, as it is sent with the next thing said: the words only, the newest turns. What changed under
+ * a reply is not sent back — the plan as it stands now is, by the server, and that is the only account of it.
+ */
+export const ADVISER_HISTORY = 12;
+export function historyOf(turns: AdviserTurn[]): Array<{ role: 'user' | 'assistant'; text: string }> {
+  return turns
+    .filter((x) => x.text.trim())
+    .slice(-ADVISER_HISTORY)
+    .map((x) => ({ role: x.role, text: x.text.slice(0, 4000) }));
 }
 
 /** P4 — may this fleet hand this order on (offer it, or release it)? Its own, still without a truck, and nobody's yet. */

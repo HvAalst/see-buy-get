@@ -10,7 +10,7 @@ import { DispatchService } from './dispatch.service';
 import { Freight } from './dispatch.types';
 import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
-import { DayPlanState, DayPlanView, PlanLeftView, PlanRouteView, PlanSendResult, PlanSendTruck, PlanSettings, PlannedOn } from './fleet-plan.types';
+import { DayPlanState, DayPlanView, PlanLeftView, PlanRouteView, PlanRuleView, PlanSendResult, PlanSendTruck, PlanSettings, PlannedOn } from './fleet-plan.types';
 import { ROUTER, Router } from './router';
 import { VehicleService } from './vehicle.service';
 
@@ -29,7 +29,19 @@ export interface PlanAsk {
   speedKmh?: number;
   loadMin?: number;
   unloadMin?: number;
+  /** P5 — keep this order off this vehicle. */
+  keepOff?: PlanPair[];
+  /** P5 — this order goes on this vehicle, or on none. */
+  putOn?: PlanPair[];
 }
+
+export interface PlanPair {
+  freightId: string;
+  vehicleId: string;
+}
+
+/** The most rules one plan carries. A day's exceptions, not a second plan written by hand. */
+export const MAX_PLAN_RULES = 200;
 
 /**
  * P3 — A FLEET'S PLAN FOR A DAY: the orders it must deliver, on the trucks it has.
@@ -113,9 +125,12 @@ export class FleetPlanService implements OnModuleInit {
     const going = fleet.filter((x) => !x.excluded && x.offRoad.length === 0);
     const driverCount = this.drivers.list({ managerDid: fleetDid }).filter((d) => d.status === 'ACTIVE').length;
 
+    const rules = this.rulesOf(fleetDid, ask, orders, new Map(fleet.map((x) => [x.v.vehicleId, x.v.plate])));
+    // What a rule means to the math: a vehicle this order may not go on. "Put it on that one" is every other one.
+    const barred = (vehicleId: string, freightId: string) => rules.some((r) => r.freightId === freightId && (r.kind === 'keep_off' ? r.vehicleId === vehicleId : r.vehicleId !== vehicleId));
     const pinned = orders.filter((f) => f.destLocation);
     const planOrders: PlanOrder[] = pinned.map((f) => ({ id: f.freightId, kg: f.weightKg, pickup: f.pickupLocation, drop: f.destLocation! }));
-    const trucks: PlanTruck[] = going.map(({ v }) => ({ id: v.vehicleId, capacityKg: v.capacityKg, cannot: new Set(pinned.filter((f) => !this.dispatch.vehicleCanCarryFreight(v, f.freightId)).map((f) => f.freightId)) }));
+    const trucks: PlanTruck[] = going.map(({ v }) => ({ id: v.vehicleId, capacityKg: v.capacityKg, cannot: new Set(pinned.filter((f) => barred(v.vehicleId, f.freightId) || !this.dispatch.vehicleCanCarryFreight(v, f.freightId)).map((f) => f.freightId)) }));
     const result = planDay({
       orders: planOrders,
       trucks,
@@ -179,6 +194,7 @@ export class FleetPlanService implements OnModuleInit {
       },
       settings,
       vehicles: fleet.map(({ v, excluded: out, offRoad }) => ({ vehicleId: v.vehicleId, plate: v.plate, vehicleClass: v.vehicleClass, capacityKg: v.capacityKg, excluded: out, ...(offRoad.length ? { offRoad } : {}) })),
+      rules,
     };
   }
 
@@ -261,6 +277,35 @@ export class FleetPlanService implements OnModuleInit {
       newSince: plan ? waiting.filter((f) => !inPlan.has(f.freightId) && !handedBack.has(f.freightId)).length : 0,
       withdrawnSince: plan ? [...inPlan].filter((id) => this.dispatch.freightStatusOf(id) === 'cancelled').length : 0,
     };
+  }
+
+/**
+   * The rules a plan is asked with, checked and named. A rule about an order that is not this day's, or a vehicle that
+   * is not this fleet's, is refused rather than dropped: a rule that silently does nothing is worse than none. An order
+   * that has since gone on a truck or been withdrawn takes its rules with it — those are simply no longer rules.
+   */
+  private rulesOf(fleetDid: string, ask: PlanAsk, orders: Freight[], plateOf: Map<string, string>): PlanRuleView[] {
+    const asked = [...(ask.keepOff ?? []).map((p) => ({ kind: 'keep_off' as const, ...p })), ...(ask.putOn ?? []).map((p) => ({ kind: 'put_on' as const, ...p }))];
+    if (asked.length > MAX_PLAN_RULES) throw new GlosError('INVALID_INPUT', `A plan carries ${MAX_PLAN_RULES} rules at most`);
+    const byId = new Map(orders.map((f) => [f.freightId, f]));
+    const rules: PlanRuleView[] = [];
+    for (const r of asked) {
+      const plate = plateOf.get(r.vehicleId);
+      if (!plate) throw new GlosError('INVALID_INPUT', 'A rule names a vehicle that is not in this fleet', { field: r.kind === 'keep_off' ? 'keepOff' : 'putOn' });
+      const f = byId.get(r.freightId);
+      if (!f) {
+        // Gone from the day's waiting orders. If it was never an order of this fleet at all, that is a mistake to say.
+        if (this.dispatch.carrierOfOrderId(r.freightId) !== fleetDid) throw new GlosError('INVALID_INPUT', 'A rule names an order that is not yours for this day', { field: r.kind === 'keep_off' ? 'keepOff' : 'putOn' });
+        continue;
+      }
+      if (rules.some((x) => x.kind === r.kind && x.freightId === r.freightId && x.vehicleId === r.vehicleId)) continue;
+      rules.push({ kind: r.kind, freightId: f.freightId, code: f.code, vehicleId: r.vehicleId, plate });
+    }
+    for (const r of rules.filter((x) => x.kind === 'put_on')) {
+      if (rules.some((x) => x.kind === 'put_on' && x.freightId === r.freightId && x.vehicleId !== r.vehicleId)) throw new GlosError('INVALID_INPUT', `${r.code} cannot be put on two vehicles`, { field: 'putOn' });
+      if (rules.some((x) => x.kind === 'keep_off' && x.freightId === r.freightId && x.vehicleId === r.vehicleId)) throw new GlosError('INVALID_INPUT', `${r.code} is both put on ${r.plate} and kept off it`, { field: 'putOn' });
+    }
+    return rules;
   }
 
   private orderWords(f: Freight) {

@@ -649,6 +649,29 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "fleet-plan-adviser",
+    apps: [
+      "fleet"
+    ],
+    title: "Asking about a plan, and saying what to change",
+    summary: "On a plan you have not accepted yet you can ask an AI adviser why the plan is the way it is, or tell it in your own words what should be different. It explains, and it asks the planner again. The planner still does the planning.",
+    steps: [
+      "Orders, choose the day, then Plan this day. Under the answer is Ask about this plan. Type a question — why is this order left out, why is that truck not going out — and tap Ask.",
+      "Or say what to change: keep FRT-142 off KLM 808T, start at six, the small truck is in the workshop, allow eleven hours. The adviser changes what the planner is asked, the plan is worked out again, and the board shows the new one.",
+      "Under each answer the app says what was changed, or that nothing was. That line comes from the planner, not from the adviser: if the two ever disagree, believe that line and the plan on the board.",
+      "A rule you asked for stays on the board under Rules on this plan: an order kept off a vehicle, or an order put on one vehicle and no other. It holds every time the day is planned again. Tap Remove to take it off.",
+      "Without the adviser: open Change the day, and each stop has Not on this vehicle. Tap it and that order is kept off that vehicle.",
+      "Nothing is accepted by asking. When the plan is right, Accept this plan is still yours to tap. The rules a plan was accepted under are kept with it."
+    ],
+    notes: [
+      "The adviser can change when vehicles leave, the longest day, the speed on the road, the minutes to load and to hand over, which vehicles go out, and rules about one order and one vehicle. It cannot set delivery time windows or the order of stops, or split an order; it says so when asked.",
+      "It cannot break the plan’s own limits: no vehicle loaded past what it carries, no day over 13 hours, no more vehicles out than you have drivers. An order put on a vehicle too small for it is left out, and the board says a rule is why.",
+      "What goes to the AI service to answer you: your words, and the plan — order codes, shippers’ names, delivery addresses, weights and plates. No phone numbers and no contact names.",
+      "If the adviser is not switched on, is busy or cannot be reached, the plan is unaffected. Change the day still does the settings and the vehicles by hand.",
+      "It is an AI and can misread a question. It never writes the plan itself, so a wrong answer cannot put an order on a truck."
+    ]
+  },
+  {
     id: "fleet-partners",
     apps: [
       "fleet"

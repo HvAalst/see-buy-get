@@ -1774,6 +1774,12 @@ export class DispatchService {
     return f.handOn?.state === 'partner' ? f.handOn.partner?.fleetDid : f.contract?.fleetDid;
   }
 
+  /** Who must carry the order with this id, or nothing when there is no such order. */
+  carrierOfOrderId(freightId: string): string | undefined {
+    const f = this.freights.get(freightId);
+    return f ? this.carrierOfOrder(f) : undefined;
+  }
+
   /** An order this fleet was ordered from, that it may still hand on: not on a truck, not already a partner's. */
   private ownOrderToHandOn(fleetDid: string, freightId: string): Freight {
     const f = this.requireFreight(freightId);
