@@ -280,9 +280,12 @@ export function carrierLine(c: FreightTrackView['carrier'], t: Translate): strin
   return what ? t('send.freight.carrierWith', { who, what }) : who;
 }
 
-export function freightTrackSummary(view: FreightTrackView, t: Translate): string {
+export function freightTrackSummary(view: FreightTrackView, t: Translate, locale?: string): string {
   const status = freightStatusPresentation(view.status, t, view.on).word.toLowerCase();
-  return t(view.on === 'run' ? 'send.logic.runTrack' : 'send.logic.freightTrack', { ref: view.ref, status, dest: view.destLabel });
+  const said = t(view.on === 'run' ? 'send.logic.runTrack' : 'send.logic.freightTrack', { ref: view.ref, status, dest: view.destLabel });
+  // Read aloud, it says when as the page does: whoever is listening is waiting at the same door.
+  const expected = expectedLine(view, t, locale);
+  return expected ? `${said} ${expected}` : said;
 }
 
 export function trackSummary(view: TrackView, t: Translate): string {
@@ -300,6 +303,30 @@ export function freightWithdrawnLine(c: NonNullable<FreightTrackView['cancelled'
 }
 
 /** When a step happened, in the reader's locale — falls back to the raw string. */
+/** A day (YYYY-MM-DD) as somebody says it — "Thursday 22 October" — in the reader's own language. The day as written, where it is not one. */
+export function dayWords(day: string, locale?: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day ?? '');
+  if (!m) return day ?? '';
+  // Noon, so that no time zone can turn the day into the one before or after it.
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12);
+  try {
+    return new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' }).format(d);
+  } catch {
+    return day;
+  }
+}
+
+/**
+ * WHEN A LOAD IS EXPECTED, for whoever is waiting at the door. The day, from the moment it is ordered; and once it is
+ * on the road, about when its carrier's plan has it there — said as the plan's word and an estimate, never as a
+ * promise: the page cannot know the road. Nothing for a load that was not ordered for a day.
+ */
+export function expectedLine(view: Pick<FreightTrackView, 'expectedOn' | 'expectedAbout'>, t: Translate, locale?: string): string | null {
+  if (!view.expectedOn) return null;
+  const day = dayWords(view.expectedOn, locale);
+  return view.expectedAbout ? t('send.freight.expectedAbout', { day, at: view.expectedAbout }) : t('send.freight.expectedOn', { day });
+}
+
 export function stepTime(iso: string): string {
   try {
     return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));

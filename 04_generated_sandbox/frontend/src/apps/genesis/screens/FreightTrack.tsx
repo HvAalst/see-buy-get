@@ -1,6 +1,6 @@
 import { Card, Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
-import { carrierLine, freightLadder, freightLadderIndex, freightStatusPresentation, freightWithdrawnLine, stepTime } from '../logic';
+import { carrierLine, expectedLine, freightLadder, freightLadderIndex, freightStatusPresentation, freightWithdrawnLine, stepTime } from '../logic';
 import type { FreightTrackView } from '../types';
 
 /**
@@ -15,6 +15,7 @@ export function FreightTrack({ view }: { view: FreightTrackView }) {
   const p = freightStatusPresentation(view.status, t, view.on);
   const at = freightLadderIndex(view.status, ladder);
   const carrier = carrierLine(view.carrier, t);
+  const expected = expectedLine(view, t);
   return (
     <>
       <section class={'now now--' + p.tone} aria-live="polite">
@@ -24,6 +25,9 @@ export function FreightTrack({ view }: { view: FreightTrackView }) {
           <span class="now__sub">{t(run ? 'send.freight.runLine' : 'send.freight.line', { ref: view.ref, kg: view.weightKg, pickup: view.pickupLabel, dest: view.destLabel })}</span>
         </span>
       </section>
+
+      {/* WHEN — the first thing somebody waiting at a door wants. The day always; the hour once it is on the road. */}
+      {expected ? <p class="scr__lede">{expected}</p> : null}
 
       {carrier ? (
         <div class="row row--static" role="group" aria-label={t('send.freight.carrierLabel')}>

@@ -188,6 +188,11 @@ export class ConsignmentNoteService implements OnModuleInit {
     if (f.pickedUpAt) steps.push({ status: 'in_transit', at: f.pickedUpAt });
     if (f.deliveredAt) steps.push({ status: 'delivered', at: f.deliveredAt });
     if (f.cancellation) steps.push({ status: 'cancelled', at: f.cancellation.at });
+    // WHEN, for whoever is waiting at the door: the day from the start; the hour only once it is on the road, from
+    // the plan it went out on — and not after a door nobody answered, when that hour has passed.
+    const coming = f.status === 'ordered' || f.status === 'available' || f.status === 'claimed' || f.status === 'in_transit';
+    const expectedOn = coming ? f.deliverOn : undefined;
+    const expectedAbout = expectedOn && f.status === 'in_transit' && f.planned && !f.planned.held && f.planned.day === expectedOn && !f.deliveryAttempts?.length ? f.planned.arrive : undefined;
     return {
       kind: 'freight',
       ref: f.code,
@@ -203,6 +208,8 @@ export class ConsignmentNoteService implements OnModuleInit {
       destLabel: f.destLabel,
       ...(f.destLocation ? { destLocation: f.destLocation } : {}),
       ...(f.scheduledPickupAt ? { scheduledPickupAt: f.scheduledPickupAt } : {}),
+      ...(expectedOn ? { expectedOn } : {}),
+      ...(expectedAbout ? { expectedAbout } : {}),
       // Handed to a partner: the partner is who will come. Released to the board: nobody has it yet, and the fleet
       // the shipper ordered from is still who answers for it.
       ...(!carrier && f.contract ? { carrier: { name: f.handOn?.state === 'partner' && f.handOn.partner ? f.handOn.partner.fleetName : f.contract.fleetName } } : {}),

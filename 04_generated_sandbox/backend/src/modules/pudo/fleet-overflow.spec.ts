@@ -732,6 +732,74 @@ describe('handing orders on', () => {
     });
 
     /**
+     * WHEN, ON THE TRACKING PAGE. The user, 2026-10-06: "Day always, time once on its way." The page is read by
+     * anybody holding the link, and nobody tells them when a plan changes — so the day is there from the start, and
+     * the hour only once the goods are on the road, from the plan they went out on.
+     */
+    it('shows whoever holds the link the day from the start, and about when only once the load is on the road', () => {
+      const { a } = threeFleets();
+      const own = onShift(a.did);
+      const day = tomorrow();
+      const placed = (ref: string) => dispatch.registerFreight({ description: 'Blocks', pickupLocation: yard, pickupLabel: 'Jenga yard', destLabel: 'Machakos junction', destLocation: site, weightKg: 2000, packaging: 'palletised', postedByDid: 'did:glos:jenga-bricks', postedByName: 'Wanjiru', contract: { contractId: 'ctr_ov', fleetDid: a.did, fleetName: a.name, shipperName: 'Jenga Bricks' }, deliverOn: day, orderRef: ref, deliveryWindow: '8-12' });
+      const seen = (id: string) => notes.trackView(dispatch.listFreight().find((x) => x.freightId === id)!);
+      const when = (id: string) => [seen(id).expectedOn, seen(id).expectedAbout];
+      const stamp = (arrive: string, on = day) => ({ day: on, vehicleId: 'veh_1', plate: 'KPL 008T', tripNo: 1, seq: 1, arrive, window: '08:00 to 12:00', at: new Date().toISOString() });
+      const plan = (id: string, arrive: string, on = day) => dispatch.stampPlan(a.did, day, new Map([[id, stamp(arrive, on)]]));
+      const collect = (id: string) => {
+        dispatch.assign(id, own.did, { managerDid: a.did, name: 'Amina' });
+        const f = dispatch.listFreight().find((x) => x.freightId === id)!;
+        dispatch.pickupFreight(id, own.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_test' });
+      };
+      const hand = (id: string) => dispatch.deliverFreight(id, own.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' });
+
+      const theirs = placed('WS-WHEN-1');
+      // Ordered: the day, and no hour — planned or not. A plan can still be made again, and nobody would tell them.
+      expect(when(theirs.freightId)).toEqual([day, undefined]);
+      dispatch.stampPlan(a.did, day, new Map([[theirs.freightId, stamp('10:10')]]));
+      expect(when(theirs.freightId)).toEqual([day, undefined]);
+      // On its driver, not yet collected: still no hour.
+      dispatch.assign(theirs.freightId, own.did, { managerDid: a.did, name: 'Amina' });
+      expect(when(theirs.freightId)).toEqual([day, undefined]);
+      // On the road: about when, from the plan it went out on.
+      const f = dispatch.listFreight().find((x) => x.freightId === theirs.freightId)!;
+      dispatch.pickupFreight(theirs.freightId, own.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_test' });
+      expect(when(theirs.freightId)).toEqual([day, '10:10']);
+      // A door nobody answered: the plan's hour has passed, and is not shown as if it were still to come.
+      dispatch.failDelivery(theirs.freightId, own.did, { outcome: 'absent' });
+      expect(when(theirs.freightId)).toEqual([day, undefined]);
+      // Delivered: nothing is expected any more; who received it is what the page says.
+      hand(theirs.freightId);
+      expect(when(theirs.freightId)).toEqual([undefined, undefined]);
+      expect(seen(theirs.freightId).receiverName).toBe('Wanjiru at the gate');
+
+      // Put on a driver by hand, in no plan: on the road, and no hour is made up.
+      const byHand = placed('WS-WHEN-2');
+      collect(byHand.freightId);
+      expect(when(byHand.freightId)).toEqual([day, undefined]);
+      hand(byHand.freightId);
+      // A plan for another day than it was ordered for says nothing about the day it is expected.
+      const otherDay = placed('WS-WHEN-3');
+      plan(otherDay.freightId, '10:10', '2020-01-01');
+      collect(otherDay.freightId);
+      expect(when(otherDay.freightId)).toEqual([day, undefined]);
+      hand(otherDay.freightId);
+      // It missed its trip and went out by hand later: the hour of the trip it missed is not shown.
+      const missed = placed('WS-WHEN-4');
+      plan(missed.freightId, '10:10');
+      dispatch.holdPlanned(missed.freightId, 'The truck is full');
+      collect(missed.freightId);
+      expect(when(missed.freightId)).toEqual([day, undefined]);
+      hand(missed.freightId);
+      // Withdrawn: it is not expected.
+      const gone = placed('WS-WHEN-5');
+      dispatch.cancelFreight(gone.freightId, { did: 'did:glos:jenga-bricks', role: 'shipper' }, 'Not needed any more');
+      expect(when(gone.freightId)).toEqual([undefined, undefined]);
+      // A load off the open board was ordered for no day: the page says nothing of one.
+      const board = dispatch.registerFreight({ description: 'Sand', pickupLocation: yard, pickupLabel: 'Jenga yard', destLabel: 'Kitengela site', destLocation: site, weightKg: 500, packaging: 'palletised', postedByDid: 'did:glos:jenga-bricks' });
+      expect(when(board.freightId)).toEqual([undefined, undefined]);
+    });
+
+    /**
      * PASSED ON. The user, 2026-10-06, asked whether a partner that took an order may pass it on to a fleet of its
      * own: "Only if I allowed that partner". So it is a switch on the arrangement, the offering fleet's alone, off
      * until it is turned on — asked when the order is offered on AND when it is taken; one step and no further; and

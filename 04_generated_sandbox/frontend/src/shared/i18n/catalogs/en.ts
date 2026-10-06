@@ -572,6 +572,8 @@ export const en = {
   'send.freight.attemptAbsent': 'The driver was at the door on {when} and nobody was there.',
   'send.freight.attemptRefused': 'The driver was at the door on {when} and the goods were refused.',
   'send.freight.attemptUnreachable': 'The driver could not reach the door on {when}.',
+  'send.freight.expectedOn': 'Expected on {day}.',
+  'send.freight.expectedAbout': 'Expected on {day}. It is on the road, and its carrier planned to be at the door about {at}. That is an estimate.',
   'send.freight.receivedBy': 'Received by {name}.',
   'send.freight.rejoined': 'This load was put back together with the rest of its order. It is not coming on its own — ask the sender for the order’s own link.',
   'send.freight.loadsTitle': 'This order comes in {n} loads',

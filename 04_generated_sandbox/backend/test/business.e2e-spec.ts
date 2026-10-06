@@ -301,6 +301,9 @@ describe('a customer’s business, over the wire', () => {
     expect(all.body.map((x: { freightId: string }) => x.freightId)).not.toContain(ordered.body.freightId);
     const tracked = await http().get(`/v1/sbg/track/${ordered.body.trackingKey}`).expect(200);
     expect(tracked.body).toMatchObject({ kind: 'freight', status: 'ordered', carrier: { name: `Kilima ${tag}` } });
+    // Whoever holds the link is shown the day it was ordered for from the start — and no hour while it is only ordered.
+    expect(tracked.body.expectedOn).toBe(tomorrow);
+    expect(tracked.body.expectedAbout).toBeUndefined();
 
     // P1b — the shipper's own order number is used once under a contract.
     await http().post('/v1/sbg/dispatch/freight').set(bearer(shop)).send({ ...load, contractId: contract.contractId, deliverOn: tomorrow, orderRef: 'WS-900' }).expect(201);

@@ -464,7 +464,7 @@ export const ARTICLES: GuideArticle[] = [
       "An order that is more than one vehicle carries may be brought in several loads by your carrier. You are told under the bell, each load says Load 1 of 2 in your list, and either tracking link shows them all.",
       "If your carrier’s plan for the day has a load arriving outside the delivery window you asked for, you are told under the bell, and the load says Outside your window with about when it is planned and by how much. A plan’s time is an estimate and your carrier can still plan the day again. If it cannot work, speak to your carrier.",
       "If your carrier’s plan for the day leaves a load on no vehicle, you are told under the bell, and the load says Not on a vehicle with the reason: no room that day, no vehicle that can carry it, heavier than their largest vehicle, or a place that could not be found on the map. Speak to your carrier, because the day can still be planned again. You are told again when the load is on a vehicle.",
-      "The time a load is planned for is your carrier’s estimate. It is shown to you in the Business app only: the tracking link you share shows where the load has got to, not a time."
+      "The time a load is planned for is your carrier’s estimate. You see it in the Business app as soon as your carrier accepts its plan. Whoever holds the tracking link sees the day from the start, and about when only once the load is on the road."
     ]
   },
   {
@@ -606,7 +606,7 @@ export const ARTICLES: GuideArticle[] = [
       "send"
     ],
     title: "Where is my load: the tracking link, and rating the driver",
-    summary: "Every load has a tracking link — the same code the consignment note carries as a QR. Whoever holds it sees where the load is, who is carrying it and who signed for it, and nothing else. After delivery the shop that posted the load rates the driver.",
+    summary: "Every load has a tracking link — the same code the consignment note carries as a QR. Whoever holds it sees where the load is, who is carrying it, the day it is expected where it was ordered for one, and who signed for it — and nothing else. After delivery the shop that posted the load rates the driver.",
     steps: [
       "Shop app, Freight you posted: open the load and tap “Tracking link”. Share it, or copy it into a message to whoever is waiting for the goods. They need no account.",
       "Send app, Track: type the code, or open the link. A load climbs its own ladder — waiting for a carrier, booked, on the road, delivered — with the carrier as they will be at the door, any door nobody answered, and who signed.",
@@ -614,7 +614,8 @@ export const ARTICLES: GuideArticle[] = [
     ],
     notes: [
       "The link shows no phone number, no price and no reasons — a withdrawn load says when, never why. What is between the sender and the carrier stays there.",
-      "Whoever sent the load is told when it is delivered, with who received it: look under the bell."
+      "Whoever sent the load is told when it is delivered, with who received it: look under the bell.",
+      "A load ordered from a carrier for a day shows that day from the start. Once it is on the road it also shows about when the carrier planned to be at the door. That hour is the carrier’s estimate; it is not shown before the load is on the road, because until then the carrier can still plan the day again."
     ]
   },
   {
@@ -696,7 +697,7 @@ export const ARTICLES: GuideArticle[] = [
       "The plan will leave one order out when that lets it deliver more of the others: a far, heavy load can hold a truck that three nearer orders would fill. It never gives one order up for one. What is left out is listed with its reason and counted in the trucks you are short.",
       "A window is read when it is written as hours: 8-12, 08:00-12:00, before 14:00, after 9, 2pm-5pm. Words such as morning, or hours that could be either half of the day (1-5), are not read: the order is planned to its day only and says so. Nothing is ever left out because of a window.",
       "Accepting a plan tells shippers two things, and the plan says so above the Accept button when either applies. The shipper of an order the plan leaves out is told it is on no vehicle and why: no room that day, no vehicle that can carry it, heavier than your largest vehicle, or no point on the map. They are never told anything about your drivers. The shipper of an order planned outside its window is told about when, and by how much.",
-      "Accepting the same day again repeats nothing. A shipper hears again only when something changed: another reason for being left out, a time that moved by half an hour or more, or an order that is on a vehicle after all. A shipper also sees, in its own app, about when each of its planned orders arrives. An order your own office typed in or uploaded has nobody to tell."
+      "Accepting the same day again repeats nothing. A shipper hears again only when something changed: another reason for being left out, a time that moved by half an hour or more, or an order that is on a vehicle after all. A shipper also sees, in its own app, about when each of its planned orders arrives. Whoever holds an order’s tracking link sees its day, and about when once the load is on the road. An order your own office typed in or uploaded has nobody to tell."
     ]
   },
   {

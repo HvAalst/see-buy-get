@@ -35,6 +35,8 @@ import {
   sortForPerson,
   statusPresentation,
   stepTime,
+  dayWords,
+  expectedLine,
   trackSummary,
   carrierLine,
   freightLadder,
@@ -241,6 +243,30 @@ describe('track', () => {
     });
     expect(trackSummary(mkTrack('On_Bus'), t)).toBe('Parcel P-1: on the bus.');
     expect(trackSummary(mkTrack('Ready_For_Pickup'), t)).toBe('Parcel P-1: ready to collect at Riverside.');
+  });
+
+  it('says when a load is expected: the day always, and about when only where the page was given an hour', () => {
+    expect(expectedLine({}, t, 'en-GB')).toBeNull();
+    expect(expectedLine({ expectedOn: '2026-10-22' }, t, 'en-GB')).toBe('Expected on Thursday 22 October.');
+    expect(expectedLine({ expectedOn: '2026-10-22', expectedAbout: '10:40' }, t, 'en-GB')).toBe('Expected on Thursday 22 October. It is on the road, and its carrier planned to be at the door about 10:40. That is an estimate.');
+    // An hour with no day is not a thing the page was told: it says nothing rather than half of it.
+    expect(expectedLine({ expectedAbout: '10:40' }, t, 'en-GB')).toBeNull();
+  });
+
+  it('reads the day aloud with the rest: whoever listens is waiting at the same door', () => {
+    const load = { kind: 'freight', ref: 'FRT-018', status: 'in_transit', description: 'Bricks', weightKg: 3000, pickupLabel: 'Jenga yard', destLabel: 'Riverside Corner', steps: [] } as FreightTrackView;
+    expect(freightTrackSummary(load, t, 'en-GB')).toBe('Load FRT-018: on the road, going to Riverside Corner.');
+    expect(freightTrackSummary({ ...load, status: 'ordered', expectedOn: '2026-10-22' }, t, 'en-GB')).toBe('Load FRT-018: ordered with the carrier, going to Riverside Corner. Expected on Thursday 22 October.');
+    expect(freightTrackSummary({ ...load, expectedOn: '2026-10-22', expectedAbout: '10:40' }, t, 'en-GB')).toBe(
+      'Load FRT-018: on the road, going to Riverside Corner. Expected on Thursday 22 October. It is on the road, and its carrier planned to be at the door about 10:40. That is an estimate.',
+    );
+  });
+
+  it('says a day as somebody says it, the same day in every time zone, and leaves alone what is not one', () => {
+    expect(dayWords('2026-10-22', 'en-GB')).toBe('Thursday 22 October');
+    expect(dayWords('2026-01-01', 'en-GB')).toBe('Thursday 1 January');
+    expect(dayWords('soon', 'en-GB')).toBe('soon');
+    expect(dayWords('', 'en-GB')).toBe('');
   });
 
   it('stepTime falls back to the raw string on garbage', () => {

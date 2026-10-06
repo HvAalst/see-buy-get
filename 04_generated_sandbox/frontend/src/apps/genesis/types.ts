@@ -109,6 +109,9 @@ export interface FreightTrackView {
   loads?: Array<{ no: number; code: string; weightKg: number; status: FreightTrackView['status'] }>;
   /** This load was put back together with the rest of its order: it is not coming on its own. */
   rejoined?: boolean;
+  /** The day it was ordered for, while it is still to come — and, once it is on the road, about when its carrier's plan has it at the door. */
+  expectedOn?: string;
+  expectedAbout?: string;
   /** `run` — space booked on a carrier's scheduled run, which leaves at `scheduledPickupAt`. Absent: a load off the board. */
   on?: 'board' | 'run';
 }

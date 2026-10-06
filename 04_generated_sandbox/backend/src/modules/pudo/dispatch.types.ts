@@ -1338,6 +1338,15 @@ export class FreightTrackView {
   /** This load was put back together with the rest of its order: it is not coming on its own. */
   @ApiPropertyOptional() rejoined?: boolean;
   /**
+   * WHEN, for whoever is waiting at the door. The user, 2026-10-06: "Day always, time once on its way."
+   * `expectedOn` — the day an order was placed for, from the moment it is ordered until it is delivered or withdrawn.
+   * `expectedAbout` — about when its carrier's plan has it at the door, and only once the goods are on the road:
+   * until then the day can be planned again, and this page is read by anybody holding the link, who is told nothing
+   * when it changes. Gone again after a door nobody answered — the plan's hour has passed.
+   */
+  @ApiPropertyOptional() expectedOn?: string;
+  @ApiPropertyOptional() expectedAbout?: string;
+  /**
    * Where the goods travel: `board` a load a carrier took off the open board (absent means this) · `run` space
    * booked on a carrier's scheduled run, which leaves at `scheduledPickupAt` whether or not anybody else is aboard.
    */
