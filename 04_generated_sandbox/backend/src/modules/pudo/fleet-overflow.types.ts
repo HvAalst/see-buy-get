@@ -20,16 +20,22 @@ export class HandOnBatchResult {
  * Published when orders move between a fleet and its partners.
  *
  * `offered` to its partners, as one batch · `withdrawn` the offer taken back · `taken` a partner took one · `ran_out`
- * the last partner left it · `handed_back` a partner that had taken it gave it back, with a reason.
+ * the last partner left it · `handed_back` a partner that had taken it gave it back, with a reason · `passed_on` an
+ * order this fleet handed to a partner has been passed on to a fleet of the partner's own, which carries it · `lapsed`
+ * a partner's offers to pass orders on were taken back because the fleet they came from no longer allows it.
  */
 export interface OrderHandedOn {
-  what: 'offered' | 'withdrawn' | 'taken' | 'ran_out' | 'handed_back';
+  what: 'offered' | 'withdrawn' | 'taken' | 'ran_out' | 'handed_back' | 'passed_on' | 'lapsed';
   fromFleetDid: string;
   fromFleetName: string;
   /** The partners being told, for `offered` and `withdrawn`. */
   toFleetDids?: string[];
-  /** The partner that acted, for `taken`, `ran_out` and `handed_back`. */
+  /** The partner that acted, for `taken`, `ran_out` and `handed_back`; the fleet now carrying, for `passed_on`; the fleet that withdrew its leave, for `lapsed`. */
   partnerName?: string;
+  /** For `passed_on`: the partner that passed it on. */
+  viaName?: string;
+  /** The news is about an order a partner was passing on, told to that partner — it cannot go to the open board from there. */
+  onward?: boolean;
   count: number;
   weightKg: number;
   days: string[];

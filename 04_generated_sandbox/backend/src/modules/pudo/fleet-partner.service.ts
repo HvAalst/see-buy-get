@@ -90,6 +90,26 @@ export class FleetPartnerService {
     return p;
   }
 
+  /**
+   * The offering fleet says whether this partner may pass its orders on to a fleet of its own. Its switch alone: the
+   * partner cannot turn it on for itself.
+   */
+  setPassOn(fromFleetDid: string, partnershipId: string, allowed: boolean): FleetPartnership {
+    const p = this.requireFrom(fromFleetDid, partnershipId);
+    if (p.status === 'ended') throw new GlosError('INVALID_STATE', 'This arrangement has ended');
+    p.mayPassOn = allowed === true;
+    this.partnerships.set(p.partnershipId, p);
+    return p;
+  }
+
+  /**
+   * May `toFleetDid` pass on an order it took from `fromFleetDid`? Only under an arrangement between exactly those
+   * two, standing now, on which the offering fleet said so. Asked when an order is offered on AND when it is taken.
+   */
+  mayPassOn(fromFleetDid: string, toFleetDid: string): boolean {
+    return [...this.partnerships.values()].some((p) => p.fromFleetDid === fromFleetDid && p.toFleetDid === toFleetDid && p.status === 'active' && p.mayPassOn === true);
+  }
+
   lists(fleetDid: string): FleetPartnerLists {
     return { offeringTo: this.offeringTo(fleetDid).map(viewOf), offeredBy: this.offeredBy(fleetDid).map(viewOf) };
   }

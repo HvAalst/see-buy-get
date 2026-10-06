@@ -688,12 +688,15 @@ export const ARTICLES: GuideArticle[] = [
       "A partner sees what it needs to decide: what, from where to where, how heavy, for which day. It does not see whose customer it is until it takes the order.",
       "An order on offer is not in your own plan and cannot go on your own trucks. Take the offer back to carry it yourself.",
       "What no partner takes: open the order and tap Put it on the open board. Any checked carrier can take it at the board’s price, and you pay them yourself. Take it back off the board while nobody has it.",
-      "Orders a partner offers YOU are at the top of Orders. Take one and it is yours to plan and carry; leave it and it goes to their other partners. If you took one and cannot carry it after all, give it back with a reason — until it is on one of your trucks."
+      "Orders a partner offers YOU are at the top of Orders. Take one and it is yours to plan and carry; leave it and it goes to their other partners. If you took one and cannot carry it after all, give it back with a reason — until it is on one of your trucks.",
+      "Passing on. Under Partners, tick They may pass my orders on beside a partner you trust to. That partner can then offer an order it took from you to its own partners; the first to take it carries it, and the order shows you who. Untick it and their open offers are taken back. An order somebody is already carrying stays with them.",
+      "If a fleet has ticked that for you, an order you took from it has Pass it on to your partners. It can be passed on once: the fleet that takes it carries it or gives it back to you, and you can still give it back to the fleet it came from."
     ],
     notes: [
       "You stay the carrier your shipper ordered from. The consignment note names whoever actually carried the goods.",
       "You are told when a partner takes an order, when no partner took it, and when one gives it back and why. A partner is told when you offer and when you take an offer back.",
-      "The price between you and a partner, or a carrier from the board, is yours to agree and pay. SeeBuyGet does not handle it."
+      "The price between you and a partner, or a carrier from the board, is yours to agree and pay. SeeBuyGet does not handle it.",
+      "A fleet being offered an order that is passed on sees which fleet is offering it — not the fleet it was first ordered from, nor whose customer it is, until it takes it. The consignment note names whoever carried."
     ]
   },
   {

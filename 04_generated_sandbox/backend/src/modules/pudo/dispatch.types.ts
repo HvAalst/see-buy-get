@@ -364,7 +364,7 @@ export class Freight {
    */
   @ApiPropertyOptional({ type: OrderHandOn }) handOn?: OrderHandOn;
   /** P4 — each time a partner that had taken it gave it back before collecting: who, why, when. */
-  @ApiPropertyOptional() handedBack?: Array<{ fleetName: string; reason: string; at: string }>;
+  @ApiPropertyOptional() handedBack?: Array<{ fleetName: string; reason: string; at: string; toFleetDid?: string }>;
   /**
    * WHO the network owed for this haul, and on whose books — fixed when it was accrued at delivery. A claim
    * upheld weeks later takes the money back from this same party: never from whichever fleet the driver has
@@ -467,7 +467,7 @@ export class FleetOrderRow {
    * P4 — how the fleet reading this stands to the order: `own` it was ordered from this fleet (whoever carries it now)
    * · `offered` a partner is offering it to this fleet · `partner` this fleet took it from a partner and carries it.
    */
-  @ApiProperty({ enum: ['own', 'offered', 'partner'] }) role: 'own' | 'offered' | 'partner';
+  @ApiProperty({ enum: ['own', 'offered', 'partner', 'passed'] }) role: 'own' | 'offered' | 'partner' | 'passed';
   /** P4 — offered to partners, with a partner, or on the open board. */
   @ApiPropertyOptional({ type: OrderHandOn }) handOn?: OrderHandOn;
   /** P4 — the fleet that handed it on, where that is not the fleet reading this. */

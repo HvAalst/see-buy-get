@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, CodeCard, ErrorNote, Note, Pill, Sheet } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
-import { mayHandOn, type FleetOrder, type PartnerInvite, type PartnerLists, type ordersApi } from '../orders';
+import { mayHandOn, passOnState, type FleetOrder, type PartnerInvite, type PartnerLists, type ordersApi } from '../orders';
 
 type Api = ReturnType<typeof ordersApi>;
 const day = (iso: string | undefined) => (iso ? formatDate(iso, { dateStyle: 'medium' }) : '');
@@ -14,8 +14,13 @@ const day = (iso: string | undefined) => (iso ? formatDate(iso, { dateStyle: 'me
  * board) · on offer (take the offer back) · with a partner (theirs now) · on the board (take it back while nobody has
  * it) · offered TO this fleet (take it or leave it) · taken BY this fleet from a partner (give it back, with a reason,
  * until it is on a truck).
+ *
+ * PASSED ON (the user, 2026-10-06: "only if I allowed that partner"). A fleet that took an order may offer it on to
+ * partners of its own where the fleet it came from allows that — one step, no further. Every fleet along the way sees
+ * who is carrying: the first fleet "Pwani passed it on to Rift, who carries it"; the one in the middle "Rift carries
+ * it — you passed it on"; the one carrying, who it has it from and may give it back to.
  */
-export function OrderHandOn({ order, api, hasPartners, onDone }: { order: FleetOrder; api: Api; hasPartners: boolean; onDone: () => Promise<void> | void }) {
+export function OrderHandOn({ order, api, hasPartners, lists, onDone }: { order: FleetOrder; api: Api; hasPartners: boolean; lists?: PartnerLists | null; onDone: () => Promise<void> | void }) {
   const t = useT();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -35,6 +40,8 @@ export function OrderHandOn({ order, api, hasPartners, onDone }: { order: FleetO
   };
 
   const h = order.handOn;
+  const names = (list: Array<{ fleetName: string }> | undefined) => (list ?? []).map((p) => p.fleetName).join(', ');
+  const passOn = passOnState(order, lists ?? null);
   let body = null;
 
   if (order.role === 'offered') {
@@ -51,10 +58,35 @@ export function OrderHandOn({ order, api, hasPartners, onDone }: { order: FleetO
         </div>
       </>
     );
+  } else if (order.role === 'passed') {
+    body = <p class="hint">{t('fleet.handOn.passedOn', { partner: h?.partner?.fleetName ?? '', when: day(h?.takenAt) })}</p>;
+  } else if (order.role === 'partner' && h?.onward) {
+    // This fleet's own offer to pass it on. Until somebody takes it, or it is taken back, it goes on nobody's truck.
+    body = (
+      <>
+        <p class="hint">{t('fleet.handOn.fromPartnerShort', { fleet: order.fromFleetName ?? '' })}</p>
+        <p class="hint">{t('fleet.handOn.onOffer', { to: names(h.onward.offeredTo), when: day(h.onward.at) })}</p>
+        <Button variant="outline" chevron={false} busy={busy} onClick={() => void run(() => api.withdrawOffer(order.freightId))}>
+          {t('fleet.handOn.withdrawCta')}
+        </Button>
+      </>
+    );
   } else if (order.role === 'partner') {
     body = (
       <>
-        <p class="hint">{t('fleet.handOn.fromPartner', { fleet: order.fromFleetName ?? '', when: day(h?.takenAt) })}</p>
+        <p class="hint">{h?.takenAt ? t('fleet.handOn.fromPartner', { fleet: order.fromFleetName ?? '', when: day(h.takenAt) }) : t('fleet.handOn.fromPartnerShort', { fleet: order.fromFleetName ?? '' })}</p>
+        {passOn === 'yes' ? (
+          <>
+            <Button variant="outline" chevron={false} busy={busy} onClick={() => void run(() => api.passOnOrders([order.freightId]))}>
+              {t('fleet.handOn.passOnCta')}
+            </Button>
+            <p class="hint">{t('fleet.handOn.passOnHint', { fleet: order.fromFleetName ?? '' })}</p>
+          </>
+        ) : passOn === 'not_allowed' ? (
+          <p class="hint">{t('fleet.handOn.passOnNotAllowed', { fleet: order.fromFleetName ?? '' })}</p>
+        ) : h?.via ? (
+          <p class="hint">{t('fleet.handOn.noFurther')}</p>
+        ) : null}
         {order.status === 'ordered' ? (
           givingBack ? (
             <div class="field">
@@ -90,7 +122,18 @@ export function OrderHandOn({ order, api, hasPartners, onDone }: { order: FleetO
       </>
     );
   } else if (h?.state === 'partner') {
-    body = <p class="hint">{t('fleet.handOn.withPartner', { partner: h.partner?.fleetName ?? '', when: day(h.takenAt) })}</p>;
+    body = (
+      <>
+        <p class="hint">
+          {h.via
+            ? t('fleet.handOn.withThird', { via: h.via.fleetName, partner: h.partner?.fleetName ?? '', when: day(h.takenAt) })
+            : h.takenAt
+              ? t('fleet.handOn.withPartner', { partner: h.partner?.fleetName ?? '', when: day(h.takenAt) })
+              : t('fleet.handOn.withPartnerAgain', { partner: h.partner?.fleetName ?? '' })}
+        </p>
+        {h.onward ? <p class="hint">{t('fleet.handOn.partnerOffering', { partner: h.partner?.fleetName ?? '', to: names(h.onward.offeredTo) })}</p> : null}
+      </>
+    );
   } else if (h?.state === 'board') {
     body = (
       <>
@@ -180,6 +223,13 @@ export function PartnersCard({ api, lists, onChanged }: { api: Api | null; lists
                       ? t('fleet.partners.codeOut', { until: day(p.inviteExpiresAt) })
                       : t('fleet.partners.endedOn', { when: day(p.ended?.at) })}
                 </span>
+                {/* THE LEAVE TO PASS ON: this fleet's alone to give, off until it does. */}
+                {p.status === 'active' ? (
+                  <label class="checkline partners__pass">
+                    <input type="checkbox" checked={p.mayPassOn === true} disabled={busy} onChange={(e) => void run(() => api!.setPassOn(p.partnershipId, e.currentTarget.checked))} />
+                    <span>{t('fleet.partners.mayPassOn')}</span>
+                  </label>
+                ) : null}
                 {p.status !== 'ended' ? (
                   <span class="orders__acts">
                     {p.status === 'invited' ? (
@@ -265,6 +315,7 @@ export function PartnersCard({ api, lists, onChanged }: { api: Api | null; lists
               <div key={p.partnershipId} class="row row--static" role="listitem">
                 <span class="row__body">
                   <span class="row__t">{t('fleet.partners.offeredByRow', { fleet: p.fromFleetName, when: day(p.linkedAt) })}</span>
+                  <span class="row__s">{t(p.mayPassOn ? 'fleet.partners.theyAllow' : 'fleet.partners.theyDoNotAllow')}</span>
                 </span>
                 <span class="row__end">
                   <Button variant="link" chevron={false} disabled={busy} onClick={() => void run(() => api!.endPartner(p.partnershipId))}>

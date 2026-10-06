@@ -526,6 +526,12 @@
   margin-top: 12px;
 }
 
+/* The leave to pass work on, under a partner's name: a line of its own, as wide as its words. */
+.partners__pass {
+  margin-top: 6px;
+  font-size: 14px;
+}
+
 /* P4 — where an order has been handed, and the one thing to do about it: set apart from the facts above it. */
 .handon {
   margin-top: 16px;

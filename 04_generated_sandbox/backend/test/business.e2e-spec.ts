@@ -382,6 +382,17 @@ describe('a customer’s business, over the wire', () => {
     await http().post(`${fa}/partners/link`).set(bearer(setupKey)).send({ code: pInvite.code }).expect(400);
     expect((await http().post(`${fb}/partners/link`).set(bearer(setupKey)).send({ code: pInvite.code }).expect(201)).body).toMatchObject({ status: 'active', partnerName: `Pwani ${tag}` });
     expect((await http().get(`${fb}/partners`).set(bearer(setupKey)).expect(200)).body.offeredBy).toHaveLength(1);
+    // Passing on: the offering fleet's switch, its alone, off until it turns it on — and a partner with no partners
+    // of its own, or no leave, passes nothing on.
+    const passAt = `${fa}/partners/${pInvite.partnership.partnershipId}/pass-on`;
+    expect((await http().get(`${fa}/partners`).set(bearer(setupKey)).expect(200)).body.offeringTo[0].mayPassOn).toBeFalsy();
+    await http().post(passAt).set(bearer(shop)).send({ allowed: true }).expect(403);
+    await http().post(passAt).set(bearer(setupKey)).send({ allowed: 'yes' }).expect(400);
+    await http().post(`${fb}/partners/${pInvite.partnership.partnershipId}/pass-on`).set(bearer(setupKey)).send({ allowed: true }).expect(404);
+    expect((await http().post(passAt).set(bearer(setupKey)).send({ allowed: true }).expect(201)).body).toMatchObject({ mayPassOn: true, status: 'active' });
+    await http().post(`${fb}/orders/pass-on`).set(bearer(shop)).send({ freightIds: [ordered.body.freightId] }).expect(403);
+    await http().post(`${fb}/orders/pass-on`).set(bearer(setupKey)).send({ freightIds: [ordered.body.freightId] }).expect(400);
+    expect((await http().post(passAt).set(bearer(setupKey)).send({ allowed: false }).expect(201)).body.mayPassOn).toBe(false);
     const offeredOut = await http().post(`${fa}/orders/offer`).set(bearer(setupKey)).send({ freightIds: [ordered.body.freightId] }).expect(201);
     expect(offeredOut.body).toMatchObject({ done: [ordered.body.code], to: [`Pwani ${tag}`] });
     const seen = (await http().get(`${fb}/orders`).set(bearer(setupKey)).expect(200)).body.items.find((r: { freightId: string }) => r.freightId === ordered.body.freightId);

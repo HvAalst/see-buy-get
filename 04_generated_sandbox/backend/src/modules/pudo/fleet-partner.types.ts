@@ -37,6 +37,12 @@ export class FleetPartnership {
   @ApiPropertyOptional() linkedAt?: string;
   @ApiPropertyOptional() linkedBy?: string;
   @ApiPropertyOptional({ type: PartnershipEnd }) ended?: PartnershipEnd;
+  /**
+   * Whether the partner may PASS ON an order it took from this fleet to a fleet of its own. Off unless the offering
+   * fleet turns it on (the user, 2026-10-06: "only if I allowed that partner"): its customer's goods go no further
+   * than the fleet it chose, unless it said they may.
+   */
+  @ApiPropertyOptional() mayPassOn?: boolean;
   /** Internal — the hash of the code and when it stops working. Never sent out. */
   invite?: { codeHash: string; expiresAt: string };
 }
@@ -54,6 +60,8 @@ export class FleetPartnershipView {
   @ApiPropertyOptional() linkedAt?: string;
   @ApiPropertyOptional() linkedBy?: string;
   @ApiPropertyOptional({ type: PartnershipEnd }) ended?: PartnershipEnd;
+  /** Whether the partner may pass this fleet's orders on to a fleet of its own. The offering fleet's switch. */
+  @ApiPropertyOptional() mayPassOn?: boolean;
   @ApiPropertyOptional() inviteExpiresAt?: string;
 }
 
@@ -88,6 +96,14 @@ export class HandOnFleet {
 export const HAND_ON_STATES = ['offered', 'partner', 'board'] as const;
 export type HandOnState = (typeof HAND_ON_STATES)[number];
 
+/** A partner that took an order, offering it on to fleets of its own. */
+export class OnwardOffer {
+  at: string;
+  by: string;
+  /** The fleets still deciding. */
+  @ApiProperty({ type: [HandOnFleet] }) offeredTo: HandOnFleet[];
+}
+
 export class OrderHandOn {
   @ApiProperty({ enum: HAND_ON_STATES }) state: HandOnState;
   at: string;
@@ -98,4 +114,11 @@ export class OrderHandOn {
   @ApiPropertyOptional({ type: HandOnFleet }) partner?: HandOnFleet;
   @ApiPropertyOptional() takenAt?: string;
   @ApiPropertyOptional() takenBy?: string;
+  /**
+   * PASSED ON. The partner that took it from the fleet it was ordered from, and passed it on to the one carrying it
+   * now (`partner`). One step and no further: a fleet that an order was passed on to carries it or gives it back.
+   */
+  @ApiPropertyOptional({ type: HandOnFleet }) via?: HandOnFleet;
+  /** While the partner that took it is offering it on, and nobody has taken it yet. It is in nobody's plan meanwhile. */
+  @ApiPropertyOptional({ type: OnwardOffer }) onward?: OnwardOffer;
 }

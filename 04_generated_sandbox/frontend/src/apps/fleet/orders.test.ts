@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { ADVISER_HISTORY, base64Of, historyOf, isWorkbook, keptOff, putOnto, ruleLine, windowLine, rulesAsk, withoutRule, type PlanRule } from './orders';
+import { ADVISER_HISTORY, base64Of, historyOf, isWorkbook, keptOff, passOnState, putOnto, ruleLine, windowLine, rulesAsk, withoutRule, type PlanRule } from './orders';
 import { askOf, byDay, dayOf, daySummary, dayWord, handOnLine, hoursWords, mayHandOn, importVerdictLine, leftByReason, mayWithdraw, notASheet, orderTag, sendLine, weightWords, type DayPlan, type FleetOrder, type PlanLeft, type PlanSendTruck } from './orders';
 
 const order = (over: Partial<FleetOrder> = {}): FleetOrder =>
@@ -229,6 +229,43 @@ describe('P1 — a fleet’s orders', () => {
     expect(windowLine({ window: 'from 15:00', waitMin: 25 }, t)).toEqual({ tone: 'idle', text: 'The vehicle waits 25 min for the window to open (from 15:00).' });
     // Late outranks the wait a later door might also have had.
     expect(windowLine({ window: '08:00–12:00', lateMin: 5, waitMin: 10 }, t)?.tone).toBe('danger');
+  });
+
+  it('offers passing an order on only where the fleet it came from allows it — and says when that is all that is missing', () => {
+    const at = '2026-10-06T12:00:00Z';
+    const taken = order({ role: 'partner', status: 'ordered', handOn: { state: 'partner', at, by: 'Amina', partner: { fleetDid: 'me', fleetName: 'Pwani' } } });
+    const link = (over: Record<string, unknown>) => ({ partnershipId: 'p', fromFleetDid: 'x', fromFleetName: 'X', partnerName: 'Y', status: 'active', createdAt: at, createdBy: 'a', ...over }) as never;
+    const allowed = link({ fromFleetDid: 'did:f', toFleetDid: 'me', mayPassOn: true });
+    const notAllowed = link({ fromFleetDid: 'did:f', toFleetDid: 'me' });
+    const ownPartner = link({ fromFleetDid: 'me', toFleetDid: 'c' });
+    expect(passOnState(taken, { offeredBy: [allowed], offeringTo: [ownPartner] })).toBe('yes');
+    expect(passOnState(taken, { offeredBy: [notAllowed], offeringTo: [ownPartner] })).toBe('not_allowed');
+    // Leave from ANOTHER fleet is not leave from the one this order came from; nor is leave under an arrangement that ended.
+    expect(passOnState(taken, { offeredBy: [link({ fromFleetDid: 'other', toFleetDid: 'me', mayPassOn: true })], offeringTo: [ownPartner] })).toBe('not_allowed');
+    expect(passOnState(taken, { offeredBy: [link({ fromFleetDid: 'did:f', toFleetDid: 'me', mayPassOn: true, status: 'ended' })], offeringTo: [ownPartner] })).toBe('not_allowed');
+    // Nobody of its own to pass it to — the fleet it came from does not count, nor a partner not yet linked.
+    expect(passOnState(taken, { offeredBy: [allowed], offeringTo: [] })).toBe('no');
+    expect(passOnState(taken, { offeredBy: [allowed], offeringTo: [link({ fromFleetDid: 'me', toFleetDid: 'did:f' })] })).toBe('no');
+    expect(passOnState(taken, { offeredBy: [allowed], offeringTo: [link({ fromFleetDid: 'me', status: 'invited' })] })).toBe('no');
+    expect(passOnState(taken, null)).toBe('no');
+    // Not this fleet's to pass on: its own order, one only offered to it, one on a truck, one already passed on or on offer.
+    const lists = { offeredBy: [allowed], offeringTo: [ownPartner] };
+    expect(passOnState(order({ role: 'own', status: 'ordered' }), lists)).toBe('no');
+    expect(passOnState({ ...taken, role: 'offered' }, lists)).toBe('no');
+    expect(passOnState({ ...taken, status: 'claimed' }, lists)).toBe('no');
+    expect(passOnState({ ...taken, handOn: { ...taken.handOn!, via: { fleetDid: 'b', fleetName: 'B' } } }, lists)).toBe('no');
+    expect(passOnState({ ...taken, handOn: { ...taken.handOn!, onward: { at, by: 'Baraka', offeredTo: [{ fleetDid: 'c', fleetName: 'C' }] } } }, lists)).toBe('no');
+  });
+
+  it('tags and counts an order by where it has gone along the chain', () => {
+    const at = '2026-10-06T12:00:00Z';
+    const mine = { state: 'partner' as const, at, by: 'Amina', partner: { fleetDid: 'me', fleetName: 'Pwani' } };
+    const onOffer = order({ role: 'partner', handOn: { ...mine, onward: { at, by: 'Baraka', offeredTo: [{ fleetDid: 'c', fleetName: 'Rift' }] } } });
+    const passed = order({ role: 'passed', handOn: { state: 'partner', at, by: 'Amina', partner: { fleetDid: 'c', fleetName: 'Rift' }, via: { fleetDid: 'me', fleetName: 'Pwani' } } });
+    const held = order({ role: 'partner', handOn: mine });
+    expect([orderTag(onOffer), orderTag(passed), orderTag(held)]).toEqual(['onOffer', 'withPartner', 'unplanned']);
+    // Passed on: another fleet's day. On offer: not waiting for one of this fleet's trucks. Held: it is.
+    expect(daySummary([onOffer, passed, held])).toMatchObject({ orders: 2, unplanned: 1 });
   });
 
   it('says a rule the way the office would', () => {

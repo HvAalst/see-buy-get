@@ -4,7 +4,7 @@ import { Actor } from '../../foundation/auth/actor.decorator';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { actingTenant, auditActor } from '../../foundation/auth/acting';
 import { GlosError } from '../../foundation/http/glos-error';
-import { HandBackOrderDto, HandOnOrdersDto, InvitePartnerDto, LinkContractDto } from './carriage-contract.dto';
+import { HandBackOrderDto, HandOnOrdersDto, InvitePartnerDto, LinkContractDto, SetPassOnDto } from './carriage-contract.dto';
 import { FleetManagerService } from './fleet-manager.service';
 import { FleetOverflowService } from './fleet-overflow.service';
 import { HandOnBatchResult } from './fleet-overflow.types';
@@ -60,7 +60,18 @@ export class FleetOverflowController {
   @Post('fleet/managers/:did/partners/:partnershipId/end')
   end(@Param('did') did: string, @Param('partnershipId') partnershipId: string, @Actor() actor: IntrospectionResult): FleetPartnershipView {
     const fleet = this.fleetOf(did, actor);
-    return this.partners.view(this.partners.end(did, partnershipId, this.person(actor, fleet.name)));
+    return this.partners.view(this.overflow.endPartnership(did, partnershipId, this.person(actor, fleet.name)));
+  }
+
+  /**
+   * May this partner pass your orders on to a fleet of its own. The offering fleet's switch, off until it is turned
+   * on. Turned off, an order already passed on stays with whoever carries it; offers still open are taken back.
+   */
+  @Roles('fleet_manager', 'operator')
+  @Post('fleet/managers/:did/partners/:partnershipId/pass-on')
+  setPassOn(@Param('did') did: string, @Param('partnershipId') partnershipId: string, @Body() dto: SetPassOnDto, @Actor() actor: IntrospectionResult): FleetPartnershipView {
+    const fleet = this.fleetOf(did, actor);
+    return this.partners.view(this.overflow.setPassOn({ did, name: fleet.name }, partnershipId, dto.allowed));
   }
 
   /* ----------------------------------------------------- handing orders on -- */
@@ -71,6 +82,14 @@ export class FleetOverflowController {
   offer(@Param('did') did: string, @Body() dto: HandOnOrdersDto, @Actor() actor: IntrospectionResult): HandOnBatchResult {
     const fleet = this.fleetOf(did, actor);
     return this.overflow.offer({ did, name: fleet.name }, dto.freightIds, this.person(actor, fleet.name));
+  }
+
+  /** A partner that took orders offers them on to its own partners — where the fleet they came from allows it. */
+  @Roles('fleet_manager', 'operator')
+  @Post('fleet/managers/:did/orders/pass-on')
+  passOn(@Param('did') did: string, @Body() dto: HandOnOrdersDto, @Actor() actor: IntrospectionResult): HandOnBatchResult {
+    const fleet = this.fleetOf(did, actor);
+    return this.overflow.passOn({ did, name: fleet.name }, dto.freightIds, this.person(actor, fleet.name));
   }
 
   @Roles('fleet_manager', 'operator')

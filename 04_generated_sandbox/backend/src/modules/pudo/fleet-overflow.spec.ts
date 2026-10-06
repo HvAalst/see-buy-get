@@ -406,6 +406,251 @@ describe('handing orders on', () => {
       expect(() => overflow.takeBack(a, f.freightId)).toThrow(/No such order on the board/);
     });
 
+    /**
+     * PASSED ON. The user, 2026-10-06, asked whether a partner that took an order may pass it on to a fleet of its
+     * own: "Only if I allowed that partner". So it is a switch on the arrangement, the offering fleet's alone, off
+     * until it is turned on — asked when the order is offered on AND when it is taken; one step and no further; and
+     * every fleet in the chain sees who is carrying.
+     */
+    describe('passed on to a fleet of the partner’s own', () => {
+      /** A offers to B and C. B has partners of its own: C, D — and A, which is never asked to take its own order back. */
+      function chain() {
+        const { a, b, c } = threeFleets();
+        const d = aFleet('Delta Freight');
+        for (const to of [a, c, d]) partners.link({ fleetDid: to.did, fleetName: to.name }, partners.invite({ fleetDid: b.did, fleetName: b.name }, { partnerName: to.name }, 'Baraka').code, 'Office');
+        return { a, b, c, d };
+      }
+      const arrangement = (from: { did: string }, to: { did: string }) => partners.lists(from.did).offeringTo.find((p) => p.toFleetDid === to.did)!.partnershipId;
+      const allow = (from: { did: string; name: string }, to: { did: string }, allowed = true) => overflow.setPassOn(from, arrangement(from, to), allowed);
+      /** An order of A's that B has taken. */
+      const takenBy = (a: { did: string; name: string }, b: { did: string; name: string }) => {
+        const f = anOrder(a);
+        overflow.offer(a, [f.freightId], 'Amina');
+        overflow.answer(b, f.freightId, true, 'Baraka');
+        return f;
+      };
+      const titles = (fleet: { did: string }) => notifications.inboxFor(fleet.did).map((n) => n.title);
+      /** What the message with this title said — found by its title, not its place in the list. */
+      const bodyOf = (fleet: { did: string }, title: RegExp) => notifications.inboxFor(fleet.did).find((n) => title.test(n.title))?.body ?? '';
+
+      it('is the offering fleet’s to allow, partner by partner, and off until it does', () => {
+        const { a, b, c, d } = chain();
+        const f = takenBy(a, b);
+        // Nothing said: no.
+        expect(partners.lists(a.did).offeringTo.every((p) => !p.mayPassOn)).toBe(true);
+        expect(overflow.passOn(b, [f.freightId], 'Baraka')).toMatchObject({ done: [], refused: [{ freightId: f.freightId, why: expect.stringMatching(/Kilima Logistics has not said its orders may be passed on/) }] });
+        // Leave given to ANOTHER partner is not leave for this one.
+        allow(a, c);
+        expect(overflow.passOn(b, [f.freightId], 'Baraka').done).toEqual([]);
+        // Nor is leave that ANOTHER fleet gave this partner, for that fleet's own orders.
+        partners.link({ fleetDid: b.did, fleetName: b.name }, partners.invite({ fleetDid: d.did, fleetName: d.name }, { partnerName: b.name }, 'Dalia').code, 'Baraka');
+        allow(d, b);
+        expect(partners.mayPassOn(d.did, b.did)).toBe(true);
+        expect(overflow.passOn(b, [f.freightId], 'Baraka')).toMatchObject({ done: [], refused: [{ why: expect.stringMatching(/Kilima Logistics has not said/) }] });
+        // The partner cannot give itself leave: the arrangement is the other fleet's to change.
+        expect(() => partners.setPassOn(b.did, arrangement(a, b), true)).toThrow(/No such partner/);
+        expect(partners.mayPassOn(a.did, b.did)).toBe(false);
+
+        expect(partners.view(allow(a, b))).toMatchObject({ mayPassOn: true, partnerName: 'Pwani Haulage' });
+        const out = overflow.passOn(b, [f.freightId, 'frt_nonsense'], 'Baraka');
+        expect(out.done).toEqual([f.code]);
+        // To the partner's own partners — never back to the fleet the order came from.
+        expect([...out.to].sort()).toEqual(['Delta Freight', 'Rift Carriers']);
+        expect(out.refused).toEqual([{ freightId: 'frt_nonsense', why: 'No such order' }]);
+        // An order that is not the partner's to pass on is "no such order", whoever asks.
+        const own = anOrder(a);
+        expect(overflow.passOn(b, [own.freightId], 'Baraka').refused[0].why).toBe('No such order');
+        expect(overflow.passOn(a, [own.freightId], 'Amina').refused[0].why).toBe('No such order');
+      });
+
+      it('is on offer to the partner’s own partners — who see it comes from the partner, not where it was ordered or for whom', async () => {
+        const { a, b, c, d } = chain();
+        const driver = onShift(b.did);
+        const f = takenBy(a, b);
+        allow(a, b);
+        expect(dispatch.contractOrdersForDay(b.did, tomorrow()).map((x) => x.freightId)).toEqual([f.freightId]);
+        overflow.passOn(b, [f.freightId], 'Baraka');
+        for (const third of [c, d]) {
+          const row = rowFor(third.did, f.freightId)!;
+          expect(row).toMatchObject({ role: 'offered', fromFleetName: 'Pwani Haulage', description: f.description, weightKg: 4000, destLabel: 'Kitengela site' });
+          expect(row.contract).toMatchObject({ fleetName: 'Pwani Haulage', shipperName: 'Pwani Haulage', fleetDid: b.did });
+          expect(JSON.stringify(row)).not.toContain('Jenga Bricks');
+          expect(JSON.stringify(row)).not.toContain('Kilima');
+          expect(JSON.stringify(row)).not.toContain('KL-07');
+          // Each sees only itself on the offer.
+          expect(row.handOn!.onward!.offeredTo).toEqual([{ fleetDid: third.did, fleetName: third.name }]);
+        }
+        // The partner sees its own offer whole; so does the fleet the order was ordered from, which allowed it.
+        expect(rowFor(b.did, f.freightId)).toMatchObject({ role: 'partner', fromFleetName: 'Kilima Logistics' });
+        expect(rowFor(b.did, f.freightId)!.handOn!.onward!.offeredTo.map((p) => p.fleetName).sort()).toEqual(['Delta Freight', 'Rift Carriers']);
+        expect(rowFor(a.did, f.freightId)!.handOn).toMatchObject({ state: 'partner', partner: { fleetName: 'Pwani Haulage' }, onward: { by: 'Baraka' } });
+        // While it is on offer it is in nobody's plan and goes on nobody's truck.
+        expect(dispatch.contractOrdersForDay(b.did, tomorrow())).toEqual([]);
+        expect(() => dispatch.assign(f.freightId, driver.did, { managerDid: b.did })).toThrow(/on offer to your partners/);
+        expect(() => overflow.passOn(b, [f.freightId], 'Baraka')).not.toThrow();
+        expect(overflow.passOn(b, [f.freightId], 'Baraka').refused[0].why).toMatch(/already on offer/);
+        await settle();
+        expect(titles(d)).toEqual(['Pwani Haulage offers you an order']);
+        // Taking its offer back makes it the partner's to carry again, and the fleets that were asked are told.
+        overflow.withdrawOffer(b, f.freightId);
+        expect(rowFor(d.did, f.freightId)).toBeUndefined();
+        expect(rowFor(b.did, f.freightId)!.handOn!.onward).toBeUndefined();
+        expect(dispatch.assign(f.freightId, driver.did, { managerDid: b.did }).status).toBe('claimed');
+        await settle();
+        expect(titles(d)).toContain('Pwani Haulage took back an offer');
+      });
+
+      it('goes to the first of them to take it: carried by that fleet, seen by all three, and the first fleet is told', async () => {
+        const { a, b, c, d } = chain();
+        const f = takenBy(a, b);
+        allow(a, b);
+        overflow.passOn(b, [f.freightId], 'Baraka');
+        overflow.answer(d, f.freightId, true, 'Dalia');
+        expect(dispatch.carrierOfOrderId(f.freightId)).toBe(d.did);
+        // The fleet carrying it: it came from the partner, and now it knows whose goods they are.
+        expect(rowFor(d.did, f.freightId)).toMatchObject({ role: 'partner', fromFleetName: 'Pwani Haulage', contract: { shipperName: 'Jenga Bricks' }, orderRef: f.orderRef });
+        // The partner that passed it on still sees it, and who has it.
+        expect(rowFor(b.did, f.freightId)).toMatchObject({ role: 'passed', handOn: { state: 'partner', partner: { fleetName: 'Delta Freight' }, via: { fleetName: 'Pwani Haulage' } } });
+        // So does the fleet it was ordered from — the whole chain.
+        expect(rowFor(a.did, f.freightId)).toMatchObject({ role: 'own', handOn: { state: 'partner', partner: { fleetDid: d.did, fleetName: 'Delta Freight' }, via: { fleetDid: b.did, fleetName: 'Pwani Haulage' }, takenBy: 'Dalia' } });
+        expect(rowFor(a.did, f.freightId)!.handOn!.onward).toBeUndefined();
+        // The one that did not take it has nothing left to answer.
+        expect(rowFor(c.did, f.freightId)).toBeUndefined();
+        expect(() => overflow.answer(c, f.freightId, true, 'Chege')).toThrow(/No such offer/);
+        // Whose queue, plan and tracking link it is.
+        expect(dispatch.contractOrdersForDay(d.did, tomorrow()).map((x) => x.freightId)).toEqual([f.freightId]);
+        expect(dispatch.contractOrdersForDay(b.did, tomorrow())).toEqual([]);
+        expect(notes.trackView(dispatch.listFreight().find((x) => x.freightId === f.freightId)!).carrier).toEqual({ name: 'Delta Freight' });
+        await settle();
+        expect(titles(b)).toContain('Delta Freight took ' + f.code);
+        expect(titles(a)).toContain('Pwani Haulage passed ' + f.code + ' on to Delta Freight');
+        expect(bodyOf(a, /passed/)).toMatch(/Delta Freight carries it now, as you allowed/);
+      });
+
+      it('goes no further: the fleet it was passed on to carries it or gives it back', () => {
+        const { a, b, c, d } = chain();
+        const e = aFleet('Echo Trucks');
+        partners.link({ fleetDid: e.did, fleetName: e.name }, partners.invite({ fleetDid: d.did, fleetName: d.name }, { partnerName: e.name }, 'Dalia').code, 'Office');
+        const f = takenBy(a, b);
+        allow(a, b);
+        overflow.passOn(b, [f.freightId], 'Baraka');
+        overflow.answer(d, f.freightId, true, 'Dalia');
+        expect(overflow.passOn(d, [f.freightId], 'Dalia')).toMatchObject({ done: [], to: [] });
+        // Even with every leave there could be, the order itself says it has gone its one step.
+        expect(() => dispatch.passOnOffer(d.did, f.freightId, [{ fleetDid: e.did, fleetName: e.name }], 'Dalia')).toThrow(/Pwani Haulage passed this order on to you — carry it or give it back; it goes no further/);
+        expect(rowFor(e.did, f.freightId)).toBeUndefined();
+        expect(c.did).not.toBe(d.did);
+      });
+
+      it('comes back the way it went: given back by the third fleet it is the partner’s again, and by the partner, the first fleet’s', async () => {
+        const { a, b, d } = chain();
+        const f = takenBy(a, b);
+        allow(a, b);
+        overflow.passOn(b, [f.freightId], 'Baraka');
+        overflow.answer(d, f.freightId, true, 'Dalia');
+        overflow.handBack(d, f.freightId, 'No driver tomorrow');
+        expect(dispatch.carrierOfOrderId(f.freightId)).toBe(b.did);
+        expect(rowFor(d.did, f.freightId)).toBeUndefined();
+        expect(rowFor(b.did, f.freightId)).toMatchObject({ role: 'partner', fromFleetName: 'Kilima Logistics', handedBack: { fleetName: 'Delta Freight', reason: 'No driver tomorrow' } });
+        expect([rowFor(b.did, f.freightId)!.handOn!.via, rowFor(b.did, f.freightId)!.handOn!.onward]).toEqual([undefined, undefined]);
+        // The first fleet sees its partner has it again. It was not given back to the first fleet, so that is not what its row says.
+        expect(rowFor(a.did, f.freightId)!.handOn).toMatchObject({ state: 'partner', partner: { fleetName: 'Pwani Haulage' } });
+        expect(rowFor(a.did, f.freightId)!.handedBack).toBeUndefined();
+        await settle();
+        expect(titles(b)).toContain('Delta Freight gave ' + f.code + ' back');
+        expect(titles(a).some((t) => /gave/.test(t))).toBe(false);
+        // And from the partner, as it always could.
+        overflow.handBack(b, f.freightId, 'Cannot place it');
+        expect(rowFor(a.did, f.freightId)).toMatchObject({ role: 'own', handedBack: { fleetName: 'Pwani Haulage', reason: 'Cannot place it' } });
+        expect(rowFor(a.did, f.freightId)!.handOn).toBeUndefined();
+        expect(rowFor(b.did, f.freightId)).toBeUndefined();
+      });
+
+      it('asks the first fleet’s leave again when the order is TAKEN — and with no answer, the answer is no', async () => {
+        const { a, b, c, d } = chain();
+        const f = takenBy(a, b);
+        const id = arrangement(a, b);
+        allow(a, b);
+        overflow.passOn(b, [f.freightId], 'Baraka');
+        // Leave withdrawn behind the offer's back (the switch itself, without the tidying-up that goes with it).
+        partners.setPassOn(a.did, id, false);
+        expect(() => overflow.answer(d, f.freightId, true, 'Dalia')).toThrow(/Kilima Logistics does not let Pwani Haulage pass its orders on — this offer has lapsed/);
+        expect(dispatch.carrierOfOrderId(f.freightId)).toBe(b.did);
+        // Leaving an offer needs nobody's leave.
+        expect(() => overflow.answer(c, f.freightId, false, 'Chege')).not.toThrow();
+        // Asked without anybody to answer for the first fleet: no.
+        partners.setPassOn(a.did, id, true);
+        expect(() => dispatch.answerOffer(d.did, f.freightId, true, 'Dalia')).toThrow(/this offer has lapsed/);
+        expect(dispatch.carrierOfOrderId(f.freightId)).toBe(b.did);
+        // With leave standing, it is taken.
+        overflow.answer(d, f.freightId, true, 'Dalia');
+        expect(dispatch.carrierOfOrderId(f.freightId)).toBe(d.did);
+      });
+
+      it('takes open offers back when the leave goes — by the switch, or with the arrangement — and leaves alone what is already being carried', async () => {
+        const { a, b, c, d } = chain();
+        const carried = takenBy(a, b);
+        const open = takenBy(a, b);
+        const also = takenBy(a, b);
+        allow(a, b);
+        overflow.passOn(b, [carried.freightId, open.freightId], 'Baraka');
+        overflow.answer(d, carried.freightId, true, 'Dalia');
+        await settle();
+        allow(a, b, false);
+        // The open offer is gone from the fleets that were asked; the partner holds the order as before.
+        expect(rowFor(c.did, open.freightId)).toBeUndefined();
+        expect(rowFor(d.did, open.freightId)).toBeUndefined();
+        expect(rowFor(b.did, open.freightId)).toMatchObject({ role: 'partner' });
+        expect(rowFor(b.did, open.freightId)!.handOn!.onward).toBeUndefined();
+        // What was already passed on is being carried, and stays.
+        expect(dispatch.carrierOfOrderId(carried.freightId)).toBe(d.did);
+        await settle();
+        expect(titles(c)).toContain('Pwani Haulage took back an offer');
+        expect(titles(b)).toContain('Kilima Logistics no longer lets you pass its orders on');
+        expect(bodyOf(b, /no longer lets/)).toMatch(/still yours to carry, or to give back/);
+
+        // And the same when the two fleets part: the leave was part of the arrangement.
+        allow(a, b);
+        overflow.passOn(b, [also.freightId], 'Baraka');
+        expect(rowFor(c.did, also.freightId)).toMatchObject({ role: 'offered' });
+        overflow.endPartnership(b.did, arrangement(a, b), 'Baraka');
+        expect(rowFor(c.did, also.freightId)).toBeUndefined();
+        expect(dispatch.carrierOfOrderId(also.freightId)).toBe(b.did);
+        expect(() => allow(a, b)).toThrow(/has ended/);
+        // The leave was the arrangement's: it does not outlive it, whatever the record still says.
+        expect(partners.lists(a.did).offeringTo.find((p) => p.toFleetDid === b.did)).toMatchObject({ status: 'ended', mayPassOn: true });
+        expect(partners.mayPassOn(a.did, b.did)).toBe(false);
+      });
+
+      it('is still the partner’s when none of them takes it — and the partner is told that, not sent to the open board', async () => {
+        const { a, b, c, d } = chain();
+        const f = takenBy(a, b);
+        allow(a, b);
+        overflow.passOn(b, [f.freightId], 'Baraka');
+        await settle();
+        overflow.answer(c, f.freightId, false, 'Chege');
+        expect(rowFor(b.did, f.freightId)!.handOn!.onward!.offeredTo.map((p) => p.fleetName)).toEqual(['Delta Freight']);
+        expect(titles(b).some((t) => /No partner took/.test(t))).toBe(false);
+        overflow.answer(d, f.freightId, false, 'Dalia');
+        expect(rowFor(b.did, f.freightId)).toMatchObject({ role: 'partner', handOn: { state: 'partner', partner: { fleetName: 'Pwani Haulage' } } });
+        expect(rowFor(b.did, f.freightId)!.handOn!.onward).toBeUndefined();
+        expect(dispatch.contractOrdersForDay(b.did, tomorrow()).map((x) => x.freightId)).toEqual([f.freightId]);
+        await settle();
+        expect(titles(b)).toContain('No partner took ' + f.code);
+        expect(bodyOf(b, /No partner took/)).toMatch(/still yours to carry — or to give back to the fleet you took it from/);
+        expect(bodyOf(b, /No partner took/)).not.toMatch(/open board/);
+        // The first fleet hears nothing of an offer that came to nothing.
+        expect(titles(a).some((t) => /No partner took/.test(t))).toBe(false);
+        // And it cannot be given back while its own offer to pass it on is still open: those fleets would be left
+        // answering an offer that had ceased to exist.
+        overflow.passOn(b, [f.freightId], 'Baraka');
+        expect(() => overflow.handBack(b, f.freightId, 'No truck after all')).toThrow(/take that offer back before giving it back/);
+        overflow.withdrawOffer(b, f.freightId);
+        // The open board is the first fleet's alone.
+        expect(overflow.release(b, [f.freightId], 'Baraka').refused[0].why).toMatch(/No such order/);
+      });
+    });
+
     it('cannot be taken back off the board once a carrier has it, nor by a fleet it was not ordered from', () => {
       const { a, b } = threeFleets();
       const outsider = onShift();

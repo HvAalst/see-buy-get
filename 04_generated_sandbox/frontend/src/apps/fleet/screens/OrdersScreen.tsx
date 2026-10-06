@@ -168,7 +168,7 @@ export function OrdersScreen({ sbg, managerDid, who, onWide }: { sbg: SbgClient 
       <ContractsCard api={api} contracts={contracts} onChanged={load} />
       <PartnersCard api={api} lists={partners} onChanged={load} />
 
-      {open ? <OrderSheet order={open} api={api} hasPartners={hasPartners} onClose={() => setOpen(null)} onChanged={load} /> : null}
+      {open ? <OrderSheet order={open} api={api} hasPartners={hasPartners} lists={partners} onClose={() => setOpen(null)} onChanged={load} /> : null}
 
       <div class="scr__foot">
         <ReadAloud text={() => t('fleet.orders.aloud', { day: dayWord(day, now, t), n: sum.orders, unplanned: sum.unplanned })} label={t('fleet.readAloud')} />
@@ -221,7 +221,7 @@ function OrderRows({ orders, onOpen, showDay }: { orders: FleetOrder[]; onOpen: 
 }
 
 /** One order: everything about it, and — while it has no truck — putting it on a driver who is out now. */
-function OrderSheet({ order, api, hasPartners, onClose, onChanged }: { order: FleetOrder; api: ReturnType<typeof ordersApi> | null; hasPartners: boolean; onClose: () => void; onChanged: () => Promise<void> }) {
+function OrderSheet({ order, api, hasPartners, lists, onClose, onChanged }: { order: FleetOrder; api: ReturnType<typeof ordersApi> | null; hasPartners: boolean; lists: PartnerLists | null; onClose: () => void; onChanged: () => Promise<void> }) {
   const t = useT();
   const [drivers, setDrivers] = useState<Array<{ did: string; name: string; plate: string; remainingKg: number }> | null>(null);
   const [driver, setDriver] = useState('');
@@ -360,6 +360,7 @@ function OrderSheet({ order, api, hasPartners, onClose, onChanged }: { order: Fl
           order={order}
           api={api}
           hasPartners={hasPartners}
+          lists={lists}
           onDone={async () => {
             await onChanged();
             onClose();

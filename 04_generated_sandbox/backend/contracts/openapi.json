@@ -21001,9 +21001,95 @@
         }
       }
     },
+    "/v1/sbg/fleet/managers/{did}/partners/{partnershipId}/pass-on": {
+      "post": {
+        "operationId": "FleetOverflow.setPassOn",
+        "summary": "",
+        "description": "May this partner pass your orders on to a fleet of its own. The offering fleet's switch, off until it is turned\non. Turned off, an order already passed on stays with whoever carries it; offers still open are taken back.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "partnershipId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPassOnDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetPartnershipView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/managers/{did}/orders/offer": {
       "post": {
         "operationId": "FleetOverflow.offer",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandOnOrdersDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HandOnBatchResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/orders/pass-on": {
+      "post": {
+        "operationId": "FleetOverflow.passOn",
+        "summary": "",
+        "description": "A partner that took orders offers them on to its own partners — where the fleet they came from allows it.",
         "parameters": [
           {
             "name": "did",
@@ -31878,6 +31964,29 @@
           "fleetName"
         ]
       },
+      "OnwardOffer": {
+        "type": "object",
+        "properties": {
+          "offeredTo": {
+            "description": "The fleets still deciding.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HandOnFleet"
+            }
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "offeredTo",
+          "at",
+          "by"
+        ]
+      },
       "OrderHandOn": {
         "type": "object",
         "properties": {
@@ -31909,6 +32018,22 @@
           },
           "takenBy": {
             "type": "string"
+          },
+          "via": {
+            "description": "PASSED ON. The partner that took it from the fleet it was ordered from, and passed it on to the one carrying it\nnow (`partner`). One step and no further: a fleet that an order was passed on to carries it or gives it back.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HandOnFleet"
+              }
+            ]
+          },
+          "onward": {
+            "description": "While the partner that took it is offering it on, and nobody has taken it yet. It is in nobody's plan meanwhile.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OnwardOffer"
+              }
+            ]
           },
           "at": {
             "type": "string"
@@ -38856,7 +38981,8 @@
             "enum": [
               "own",
               "offered",
-              "partner"
+              "partner",
+              "passed"
             ]
           },
           "handOn": {
@@ -40117,6 +40243,10 @@
           "ended": {
             "$ref": "#/components/schemas/PartnershipEnd"
           },
+          "mayPassOn": {
+            "type": "boolean",
+            "description": "Whether the partner may pass this fleet's orders on to a fleet of its own. The offering fleet's switch."
+          },
           "inviteExpiresAt": {
             "type": "string"
           },
@@ -40200,6 +40330,17 @@
           "partnership",
           "code",
           "expiresAt"
+        ]
+      },
+      "SetPassOnDto": {
+        "type": "object",
+        "properties": {
+          "allowed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "allowed"
         ]
       },
       "HandOnOrdersDto": {

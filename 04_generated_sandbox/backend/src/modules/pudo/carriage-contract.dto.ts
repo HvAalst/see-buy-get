@@ -87,6 +87,11 @@ export class HandOnOrdersDto {
   @IsArray() @ArrayMaxSize(200) @IsString({ each: true }) freightIds!: string[];
 }
 
+/** May this partner pass the fleet's orders on to a fleet of its own. */
+export class SetPassOnDto {
+  @IsBoolean() allowed!: boolean;
+}
+
 export class HandBackOrderDto {
   @IsString() @MinLength(3) @MaxLength(280) reason!: string;
 }

@@ -471,7 +471,13 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     } else if (p.what === 'taken') {
       await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `${p.partnerName} took ${what}`, body: `${size} ${when}. It is theirs to plan and carry now; you still see it under Orders.`, tag, data });
     } else if (p.what === 'ran_out') {
-      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `No partner took ${what}`, body: `${size} ${when}. It is back with you without a truck — the open board is the next step.`, tag, data });
+      // A partner that was passing an order on cannot put it on the open board: that is the fleet's it was ordered from.
+      const next = p.onward ? 'It is still yours to carry — or to give back to the fleet you took it from.' : 'It is back with you without a truck — the open board is the next step.';
+      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `No partner took ${what}`, body: `${size} ${when}. ${next}`, tag, data });
+    } else if (p.what === 'passed_on') {
+      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `${p.viaName} passed ${what} on to ${p.partnerName}`, body: `${size} ${when}. ${p.partnerName} carries ${many ? 'them' : 'it'} now, as you allowed; you still see ${many ? 'them' : 'it'} under Orders.`, tag, data });
+    } else if (p.what === 'lapsed') {
+      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `${p.partnerName} no longer lets you pass its orders on`, body: `${what}, ${size} ${when}: your offer to your own partners was taken back. ${many ? 'They are' : 'It is'} still yours to carry, or to give back.`, tag, data });
     } else {
       await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `${p.partnerName} gave ${what} back`, body: `${size} ${when}. They said: ${p.reason ?? 'no reason given'}. It is back with you without a truck.`, tag, data });
     }

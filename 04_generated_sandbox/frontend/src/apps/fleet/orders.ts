@@ -93,6 +93,11 @@ export function ordersApi(sbg: SbgClient, did: string) {
     linkPartner: (code: string): Promise<Result<Partnership>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/partners/link', { params: { path }, body: { code } })) as never,
     endPartner: (partnershipId: string): Promise<Result<Partnership>> =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/partners/{partnershipId}/end', { params: { path: { did, partnershipId } } })) as never,
+    /** A partner that took orders offers them on to its own partners — where the fleet they came from allows it. */
+    passOnOrders: (freightIds: string[]): Promise<Result<HandOnResult>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/orders/pass-on', { params: { path }, body: { freightIds } })) as never,
+    /** The offering fleet's switch: may this partner pass its orders on to a fleet of its own. */
+    setPassOn: (partnershipId: string, allowed: boolean): Promise<Result<Partnership>> =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/partners/{partnershipId}/pass-on', { params: { path: { did, partnershipId } }, body: { allowed } })) as never,
     offerOrders: (freightIds: string[]): Promise<Result<HandOnResult>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/orders/offer', { params: { path }, body: { freightIds } })) as never,
     releaseOrders: (freightIds: string[]): Promise<Result<HandOnResult>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/orders/release', { params: { path }, body: { freightIds } })) as never,
     withdrawOffer: (freightId: string): Promise<Result<unknown>> =>
@@ -124,6 +129,8 @@ export function orderTag(o: Pick<FleetOrder, 'status' | 'late' | 'planned'> & Pa
   if (o.status === 'claimed') return 'onTruck';
   // P4 — handed on, and where to: none of these is "without a truck" in the sense of being nobody's.
   if (o.handOn?.state === 'board') return 'onBoard';
+  // Taken by this fleet and on offer to its own partners: on offer, not waiting for one of its trucks.
+  if (o.role === 'partner' && o.handOn?.onward) return 'onOffer';
   if (o.role !== 'partner' && o.handOn?.state === 'partner') return 'withPartner';
   if (o.handOn?.state === 'offered') return 'onOffer';
   // In the accepted plan for its day, and not yet sent out to a driver.
@@ -163,12 +170,13 @@ export function byDay(items: FleetOrder[]): Array<{ day: string; orders: FleetOr
  */
 export function daySummary(orders: FleetOrder[]): { orders: number; kg: number; unplanned: number; late: number; delivered: number; handedOn: number } {
   // An order a partner is only OFFERING is not this fleet's day yet: it counts for nothing until it is taken.
-  const live = orders.filter((o) => o.status !== 'cancelled' && o.role !== 'offered');
+  // Nor is one this fleet passed on: another fleet carries it, and it is in that fleet's day.
+  const live = orders.filter((o) => o.status !== 'cancelled' && o.role !== 'offered' && o.role !== 'passed');
   return {
     orders: live.length,
     kg: Math.round(live.reduce((s, o) => s + o.weightKg, 0)),
     // Without a truck and in nobody's hands: not planned, not offered, not with a partner. (On the board it is `available`.)
-    unplanned: live.filter((o) => o.status === 'ordered' && !o.planned && (!o.handOn || o.role === 'partner')).length,
+    unplanned: live.filter((o) => o.status === 'ordered' && !o.planned && (!o.handOn || (o.role === 'partner' && !o.handOn.onward))).length,
     handedOn: live.filter((o) => o.role !== 'partner' && Boolean(o.handOn) && (o.status === 'ordered' || o.status === 'available')).length,
     late: live.filter((o) => o.late).length,
     delivered: live.filter((o) => o.status === 'delivered').length,
@@ -316,6 +324,22 @@ export function historyOf(turns: AdviserTurn[]): Array<{ role: 'user' | 'assista
 /** P4 — may this fleet hand this order on (offer it, or release it)? Its own, still without a truck, and nobody's yet. */
 export function mayHandOn(o: Pick<FleetOrder, 'role' | 'status' | 'handOn'>): boolean {
   return o.role === 'own' && o.status === 'ordered' && !o.handOn;
+}
+
+/**
+ * WHETHER THIS FLEET MAY PASS AN ORDER ON to a fleet of its own, and if not, why not — so the screen offers it only
+ * where the server will allow it, and says the one thing that is in somebody else's hands.
+ *  - `yes` it took the order, has not passed it on already, the fleet it came from allows it, and it has a partner of its own;
+ *  - `not_allowed` everything but the leave of the fleet it came from;
+ *  - `no` not this fleet's to pass on (or nobody to pass it to): nothing is said.
+ * The server decides again when it is done, and again when the order is taken.
+ */
+export function passOnState(o: Pick<FleetOrder, 'role' | 'status' | 'handOn' | 'contract'>, lists: Pick<PartnerLists, 'offeringTo' | 'offeredBy'> | null): 'yes' | 'not_allowed' | 'no' {
+  if (o.role !== 'partner' || o.status !== 'ordered' || !o.handOn || o.handOn.via || o.handOn.onward) return 'no';
+  const from = o.contract.fleetDid;
+  // A partner of its own that is not the fleet the order came from.
+  if (!(lists?.offeringTo ?? []).some((p) => p.status === 'active' && p.toFleetDid && p.toFleetDid !== from)) return 'no';
+  return (lists?.offeredBy ?? []).some((p) => p.status === 'active' && p.fromFleetDid === from && p.mayPassOn === true) ? 'yes' : 'not_allowed';
 }
 
 /** P4 — what came of offering or releasing a batch, as one sentence. */
