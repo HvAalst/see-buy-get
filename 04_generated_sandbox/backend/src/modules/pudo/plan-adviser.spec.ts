@@ -62,6 +62,7 @@ import { FleetPlanService } from './fleet-plan.service';
 import Anthropic from '@anthropic-ai/sdk';
 import type { ClaudeGateway, ClaudeReply, ClaudeRequest } from './claude.gateway';
 import { ADVISER_BRIEF, ADVISER_MAX_HISTORY, ADVISER_MAX_MESSAGE, ADVISER_MAX_STEPS, PlanAdviserService, REPLAN_TOOL } from './plan-adviser.service';
+import type { RoadDistances, RoadMatrix } from './road-matrix';
 import { ROUTER as ROUTER_TOKEN, type Router } from './router';
 import { requiredLoadKeys, requiredUnloadKeys } from './heavy-cargo';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -103,6 +104,9 @@ describe('the adviser over a day’s plan', () => {
   let plans: FleetPlanService;
   let claude: ScriptedClaude;
   let adviser: PlanAdviserService;
+  /** The same service, with a routing server to ask. */
+  let withRoads: (roads: RoadMatrix) => FleetPlanService;
+  let heuristic: Router;
   let fleetSvc: FleetService;
   let seq = 0;
   const settle = async () => {
@@ -137,6 +141,8 @@ describe('the adviser over a day’s plan', () => {
     plans.onModuleInit();
     claude = new ScriptedClaude();
     adviser = new PlanAdviserService(plans, claude as unknown as ClaudeGateway);
+    heuristic = moduleRef.get<Router>(ROUTER_TOKEN);
+    withRoads = (roads) => new FleetPlanService(dispatch, vehicles, drivers, managers, heuristic, fleetSvc, moduleRef.get(EventBus), roads);
   });
 
   const depot = { lat: -1.2, lng: 36.8 };
@@ -570,8 +576,44 @@ describe('the adviser over a day’s plan', () => {
     expect(data.totals).toMatchObject({ outsideTheirWindow: 1, windowsNotRead: 1 });
   });
 
+  it('tells the adviser what the plan’s distances are — and plans again on the same roads when it changes an ask', async () => {
+    const { fleet } = setUp();
+    anOrder(fleet, { kg: 2000, n: 1 });
+    claude.script.push(says('Estimated.'));
+    await adviser.advise(fleet.did, { ask: { day: tomorrow() }, message: 'How far is it?' });
+    const dataIn = (request: ClaudeRequest) => {
+      const sent = textOf(request.messages[0].content);
+      return JSON.parse(sent.slice(sent.indexOf('{'), sent.lastIndexOf('}') + 1));
+    };
+    expect(dataIn(claude.requests[0]).distances).toBe('an estimate: straight lines with an allowance for the road');
+
+    // With a routing server: said as by road, in the plan it is first shown AND in the one it asks for.
+    const asked: unknown[] = [];
+    const routed = new PlanAdviserService(
+      withRoads({
+        between: async (points) => {
+          asked.push(points);
+          return { source: 'roads', gaps: 1, km: (a, b) => heuristic.roadKm(a, b) * 2 };
+        },
+      }),
+      claude as unknown as ClaudeGateway,
+    );
+    claude.script.push(replans({ day_start: '08:00' }), says('Later.'));
+    const out = await routed.advise(fleet.did, { ask: { day: tomorrow() }, message: 'Start at eight' });
+    expect(dataIn(claude.requests[1]).distances).toBe('by road, from the routing server (1 legs it knew no road for are estimated)');
+    expect(JSON.parse(resultsOf(claude.requests[2])[0].content).distances).toMatch(/^by road/);
+    expect(out.plan.distances).toEqual({ source: 'roads', gaps: 1 });
+    expect(out.plan.settings.dayStart).toBe('08:00');
+    expect(asked).toHaveLength(2);
+    // A routing server that is down is said to the adviser in the plan's own words.
+    const down = new PlanAdviserService(withRoads({ between: async () => ({ source: 'estimate', why: 'the routing server could not be reached', km: (a, b) => heuristic.roadKm(a, b) }) }), claude as unknown as ClaudeGateway);
+    claude.script.push(says('Estimated, for now.'));
+    await down.advise(fleet.did, { ask: { day: tomorrow() }, message: 'How far?' });
+    expect(dataIn(claude.requests[3]).distances).toBe('an estimate: straight lines with an allowance for the road (the routing server could not be reached)');
+  });
+
   it('gives the adviser its limits in the brief: what it may not invent, what the tool cannot say, and that nothing is sent', () => {
-    for (const must of ['never state something about the plan that is not in the plan data', 'replaces the list in force', 'changing a delivery window', 'nothing is left out because of a window', '13 hours', 'Say "about" with times', 'accepts a plan or sends anything to a driver', 'language the dispatcher writes in']) {
+    for (const must of ['never state something about the plan that is not in the plan data', 'replaces the list in force', 'changing a delivery window', 'nothing is left out because of a window', '13 hours', 'says what its distances are', 'Say "about" with times', 'accepts a plan or sends anything to a driver', 'language the dispatcher writes in']) {
       expect(ADVISER_BRIEF).toContain(must);
     }
   });

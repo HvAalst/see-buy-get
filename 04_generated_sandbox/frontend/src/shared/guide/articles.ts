@@ -647,7 +647,7 @@ export const ARTICLES: GuideArticle[] = [
       "On the day itself the plan goes out by itself, a trip at a time: a truck gets its first trip when its driver starts a shift in it, and the next when the last order of that trip is delivered. Send the next trips out now does the same by hand, and says what each truck is doing."
     ],
     notes: [
-      "Every time on the plan is an estimate: distance at one speed, plus fixed minutes at each stop — so is “late” and “early”. Distances are estimates too — there is no road routing yet.",
+      "Every time on the plan is an estimate: distance at one speed, plus fixed minutes at each stop — so is “late” and “early”. Distances are by road where the service has a routing server, and an estimate — straight lines with an allowance for the road — where it has not, or when it cannot be reached. The plan says which, under its first lines.",
       "A truck is only ever given one trip at a time — what it can carry at once. Every order goes on with the same checks as any load (room, equipment, the driver’s hours). One that is refused stays in the queue with the reason on it.",
       "The plan never loads a truck past what it carries, never makes a day longer than you set (13 hours at most), and sends out no more vehicles than you have drivers.",
       "The plan will leave one order out when that lets it deliver more of the others: a far, heavy load can hold a truck that three nearer orders would fill. It never gives one order up for one. What is left out is listed with its reason and counted in the trucks you are short.",

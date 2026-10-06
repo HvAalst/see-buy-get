@@ -116,6 +116,21 @@ Backend settings that go with it: `SBG_CONSOLE_URL` (the console's address, for 
 emails), `GLOS_STAFF_NETWORKS`, `GLOS_STAFF_TWO_STEP=required` (to force it in a sandbox), and
 `GLOS_TRUST_PROXY`, and `GLOS_VAULT_KEY` (authenticator secrets are encrypted under it).
 
+## The fleet's planning panel: two backend settings
+
+Both are optional, and the plan is whole without either.
+
+- **Road distances.** `GLOS_ROUTER_URL` is the address of an OSRM-compatible routing server (one you host, or
+  anybody's that speaks the protocol — no Google). A day's plan then asks its `table` service once for every
+  place of the day and is made on road distances; the board says "by road". Unset, unreachable, slow (4 s),
+  or answering with anything that is not a table, the plan is made on the estimate it always was, and the board
+  says which and why. `GLOS_ROUTER_MAX_POINTS` (default 100) is the most places one request carries — raise it
+  only if the server's own `--max-table-size` was raised; `GLOS_ROUTER_PROFILE` (default `driving`) is the
+  routing profile. Only coordinates are sent. Only DISTANCE is taken: a leg's time is still the office's own
+  speed over it.
+- **The adviser.** `ANTHROPIC_API_KEY` switches on "Ask about this plan". Without it the board says the adviser
+  is not switched on. What is sent is said on the screen: the dispatcher's words and the plan.
+
 ## Conventions
 - **Every slice names its screens.** A backend change with no surface is tracked ui-debt, not a shipped slice.
 - **i18n per slice**: new English keys go in `src/shared/i18n/catalogs/`; the other locales get a central

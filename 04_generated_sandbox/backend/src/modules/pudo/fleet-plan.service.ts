@@ -1,4 +1,4 @@
-import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, OnModuleInit, Optional } from '@nestjs/common';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { FleetService } from './fleet.service';
@@ -12,6 +12,7 @@ import { Freight } from './dispatch.types';
 import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { DayPlanState, DayPlanView, PlanLeftView, PlanRouteView, PlanRuleView, PlanSendResult, PlanSendTruck, PlanSettings, PlannedOn } from './fleet-plan.types';
+import { ROAD_MATRIX, type RoadDistances, type RoadMatrix } from './road-matrix';
 import { ROUTER, Router } from './router';
 import { VehicleService } from './vehicle.service';
 
@@ -74,6 +75,8 @@ export class FleetPlanService implements OnModuleInit {
     @Inject(ROUTER) private readonly router: Router,
     private readonly fleet: FleetService,
     private readonly events: EventBus,
+    // Where real road distances come from, when the operator has a routing server. Without one a plan is the estimate it always was.
+    @Optional() @Inject(ROAD_MATRIX) private readonly roads?: RoadMatrix,
   ) {}
 
   /**
@@ -105,11 +108,43 @@ export class FleetPlanService implements OnModuleInit {
     this.sendNext(managerDid, today, vehicleId, plan, now);
   }
 
-  propose(fleetDid: string, ask: PlanAsk, now: number = Date.now()): DayPlanView {
+  /**
+   * A PROPOSAL ON ROAD DISTANCES. The same plan as `propose`, with every leg measured by road where the operator has
+   * a routing server (the user, 2026-10-06: "OSRM-compatible server"): the day's places — the depot, each collection
+   * point, each door that has a point — are asked about ONCE, before the math runs, and the math then looks each leg
+   * up. A bad ask is refused before anybody is asked anything. Whatever comes back, there is a plan: where the
+   * routing server gives nothing, it is the estimate, and the plan says so and why.
+   */
+  async proposeRouted(fleetDid: string, ask: PlanAsk, now: number = Date.now()): Promise<DayPlanView> {
+    this.checked(ask, now);
+    return this.propose(fleetDid, ask, now, await this.distancesFor(fleetDid, ask.day));
+  }
+
+  /** Accept a plan made on road distances: worked out again here, on distances asked for again here. */
+  async acceptRouted(fleetDid: string, ask: PlanAsk, by: string, now: number = Date.now()): Promise<DayPlanView> {
+    this.checked(ask, now);
+    return this.accept(fleetDid, ask, by, now, await this.distancesFor(fleetDid, ask.day));
+  }
+
+  /** The distances between every place of a fleet's day. Coordinates are all that is asked about. */
+  private async distancesFor(fleetDid: string, day: string): Promise<RoadDistances | undefined> {
+    if (!this.roads) return undefined;
+    const depot = this.managers.get(fleetDid).location;
+    const places = this.dispatch.contractOrdersForDay(fleetDid, day).filter((f) => f.destLocation).flatMap((f) => [f.pickupLocation, f.destLocation!]);
+    return this.roads.between([depot, ...places]);
+  }
+
+  /** What a plan is asked with, checked: its settings within their limits, its day a day that has not gone. */
+  private checked(ask: PlanAsk, now: number): PlanSettings {
     const settings = this.settingsOf(ask);
     const today = new Date(now).toISOString().slice(0, 10);
     if (!isDay(ask.day)) throw new GlosError('INVALID_INPUT', 'A day is YYYY-MM-DD', { field: 'day' });
     if (ask.day < today) throw new GlosError('INVALID_INPUT', 'That day has gone — a plan is for today or later', { field: 'day' });
+    return settings;
+  }
+
+  propose(fleetDid: string, ask: PlanAsk, now: number = Date.now(), roads?: RoadDistances): DayPlanView {
+    const settings = this.checked(ask, now);
     const manager = this.managers.get(fleetDid);
     const orders = this.dispatch.contractOrdersForDay(fleetDid, ask.day);
     const excluded = new Set(ask.excludeVehicleIds ?? []);
@@ -150,7 +185,7 @@ export class FleetPlanService implements OnModuleInit {
       orders: planOrders,
       trucks,
       depot: manager.location,
-      km: (a, b) => this.router.roadKm(a, b),
+      km: roads ? (a, b) => roads.km(a, b) : (a, b) => this.router.roadKm(a, b),
       params: { speedKmh: settings.speedKmh, loadMin: settings.loadMin, unloadMin: settings.unloadMin, dayMin: settings.dayHours * 60, maxTrucks: driverCount },
     });
 
@@ -228,6 +263,7 @@ export class FleetPlanService implements OnModuleInit {
       settings,
       vehicles: fleet.map(({ v, excluded: out, offRoad }) => ({ vehicleId: v.vehicleId, plate: v.plate, vehicleClass: v.vehicleClass, capacityKg: v.capacityKg, excluded: out, ...(offRoad.length ? { offRoad } : {}) })),
       rules,
+      distances: { source: roads?.source ?? 'estimate', ...(roads?.why ? { why: roads.why } : {}), ...(roads?.gaps ? { gaps: roads.gaps } : {}) },
     };
   }
 
@@ -236,8 +272,8 @@ export class FleetPlanService implements OnModuleInit {
    * every order in it is told which truck and trip it is on. Accepting again replaces the day's plan, and an order the
    * new plan left out loses the truck the old one gave it.
    */
-  accept(fleetDid: string, ask: PlanAsk, by: string, now: number = Date.now()): DayPlanView {
-    const plan = this.propose(fleetDid, ask, now);
+  accept(fleetDid: string, ask: PlanAsk, by: string, now: number = Date.now(), roads?: RoadDistances): DayPlanView {
+    const plan = this.propose(fleetDid, ask, now, roads);
     if (plan.totals.planned === 0) throw new GlosError('INVALID_STATE', 'There is nothing in this plan to accept — no order for the day could be put on a truck');
     const at = new Date(now).toISOString();
     const stamps = new Map<string, PlannedOn>();

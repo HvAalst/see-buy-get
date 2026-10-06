@@ -59,6 +59,7 @@ import type { ImportService } from './import.service';
 import type { ContractRef } from './carriage-contract.types';
 
 import { FleetPlanService } from './fleet-plan.service';
+import type { RoadDistances, RoadMatrix } from './road-matrix';
 import { ROUTER as ROUTER_TOKEN, type Router } from './router';
 import { requiredLoadKeys, requiredUnloadKeys } from './heavy-cargo';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -77,6 +78,9 @@ describe('a fleet’s plan for a day', () => {
   let vehicles: VehicleService;
   let managers: FleetManagerService;
   let plans: FleetPlanService;
+  /** The same service, with a routing server to ask. */
+  let withRoads: (roads: RoadMatrix) => FleetPlanService;
+  let heuristic: Router;
   let fleetSvc: FleetService;
   let seq = 0;
   const settle = async () => {
@@ -109,6 +113,8 @@ describe('a fleet’s plan for a day', () => {
     fleetSvc = moduleRef.get(FleetService);
     plans = new FleetPlanService(dispatch, vehicles, drivers, managers, moduleRef.get<Router>(ROUTER_TOKEN), fleetSvc, moduleRef.get(EventBus));
     plans.onModuleInit();
+    heuristic = moduleRef.get<Router>(ROUTER_TOKEN);
+    withRoads = (roads) => new FleetPlanService(dispatch, vehicles, drivers, managers, heuristic, fleetSvc, moduleRef.get(EventBus), roads);
   });
 
   const depot = { lat: -1.2, lng: 36.8 };
@@ -567,6 +573,93 @@ describe('a fleet’s plan for a day', () => {
       const loads = dispatch.splitOrder(fleet.did, big.freightId, [5000, 3000], 'Amina');
       expect(dispatch.ordersForFleet(fleet.did).every((r) => r.planned === undefined)).toBe(true);
       expect(loads).toHaveLength(2);
+    });
+  });
+
+  /* ------------------------------------------------------------ road distances -- */
+
+  /**
+   * ROAD DISTANCES. The user, 2026-10-06: real distances from an OSRM-compatible routing server. The adapter that
+   * talks to one has its own spec; what is pinned here is the plan's side of it — that the day's places are asked
+   * about once and nothing else is, that the math runs on the answer, that a plan says which distances it was made on
+   * and why when it is the estimate, and that with nothing to ask the plan is what it always was.
+   */
+  describe('road distances', () => {
+    type Place = { lat: number; lng: number };
+    /** A routing server on which every road is three times the estimate — and which remembers what it was asked. */
+    const tripled = (asked: Place[][], over: Partial<RoadDistances> = {}): RoadMatrix => ({
+      between: async (points) => {
+        asked.push(points);
+        return { source: 'roads', km: (a, b) => heuristic.roadKm(a, b) * 3, ...over };
+      },
+    });
+    const key = (p: Place) => p.lat + ',' + p.lng;
+
+    it('is made on the routing server’s distances where it gives them — and says which it used', async () => {
+      const { fleet } = setUp();
+      anOrder(fleet, { kg: 2000, n: 1 });
+      anOrder(fleet, { kg: 2000, n: 4 });
+      anOrder(fleet, { kg: 500, n: 2, pinned: false });
+      const asked: Place[][] = [];
+      const routed = withRoads(tripled(asked));
+      const estimate = plans.propose(fleet.did, { day: tomorrow() });
+      expect(estimate.distances).toEqual({ source: 'estimate' });
+      const plan = await routed.proposeRouted(fleet.did, { day: tomorrow() });
+      expect(plan.distances).toEqual({ source: 'roads' });
+      expect(plan.totals.planned).toBe(2);
+      expect(plan.totals.km / estimate.totals.km).toBeCloseTo(3, 1);
+      // The times follow: the office's own speed, over the longer road.
+      expect(plan.routes[0].minutes).toBeGreaterThan(estimate.routes[0].minutes);
+      // Asked once, about the depot, the yard and the two doors that have a point — and about nothing else.
+      expect(asked).toHaveLength(1);
+      expect(new Set(asked[0].map(key))).toEqual(new Set([depot, yard, site(1), site(4)].map(key)));
+    });
+
+    it('is the estimate when the routing server gives nothing — and the plan says why', async () => {
+      const { fleet } = setUp();
+      anOrder(fleet, { kg: 2000, n: 1 });
+      const down = withRoads({ between: async () => ({ source: 'estimate', why: 'the routing server did not answer in time', km: (a, b) => heuristic.roadKm(a, b) }) });
+      const plan = await down.proposeRouted(fleet.did, { day: tomorrow() });
+      expect(plan.distances).toEqual({ source: 'estimate', why: 'the routing server did not answer in time' });
+      expect(plan.routes).toEqual(plans.propose(fleet.did, { day: tomorrow() }).routes);
+      // Legs the map had no road for are counted on the plan.
+      const gappy = await withRoads(tripled([], { gaps: 2 })).proposeRouted(fleet.did, { day: tomorrow() });
+      expect(gappy.distances).toEqual({ source: 'roads', gaps: 2 });
+    });
+
+    it('is the plan it always was where there is no routing server to ask', async () => {
+      const { fleet } = setUp();
+      anOrder(fleet, { kg: 2000, n: 1 });
+      const plain = plans.propose(fleet.did, { day: tomorrow() });
+      const asked = await plans.proposeRouted(fleet.did, { day: tomorrow() });
+      expect(asked.distances).toEqual({ source: 'estimate' });
+      expect(asked.routes).toEqual(plain.routes);
+    });
+
+    it('refuses a bad ask before the routing server is asked anything', async () => {
+      const { fleet } = setUp();
+      anOrder(fleet);
+      const asked: Place[][] = [];
+      const routed = withRoads(tripled(asked));
+      await expect(routed.proposeRouted(fleet.did, { day: '2020-01-01' })).rejects.toThrow(/That day has gone/);
+      await expect(routed.proposeRouted(fleet.did, { day: tomorrow(), dayHours: 20 })).rejects.toThrow(/between 1 and 13/);
+      await expect(routed.acceptRouted(fleet.did, { day: 'tomorrow' }, 'Amina')).rejects.toThrow(/A day is YYYY-MM-DD/);
+      expect(asked).toEqual([]);
+    });
+
+    it('keeps what it was made on with the accepted plan — which is the plan made on those distances', async () => {
+      const { fleet } = setUp();
+      anOrder(fleet, { kg: 2000, n: 1 });
+      const asked: Place[][] = [];
+      const routed = withRoads(tripled(asked));
+      const proposed = await routed.proposeRouted(fleet.did, { day: tomorrow() });
+      const kept = await routed.acceptRouted(fleet.did, { day: tomorrow() }, 'Amina');
+      expect(kept.distances).toEqual({ source: 'roads' });
+      expect(kept.totals.km).toBe(proposed.totals.km);
+      expect(kept.routes[0].trips[0].stops[0].arrive).toBe(proposed.routes[0].trips[0].stops[0].arrive);
+      expect(routed.state(fleet.did, tomorrow()).plan!.distances).toEqual({ source: 'roads' });
+      // Accepting asked again: what is kept is never what a screen sent back, nor a table from an earlier look.
+      expect(asked).toHaveLength(2);
     });
   });
 

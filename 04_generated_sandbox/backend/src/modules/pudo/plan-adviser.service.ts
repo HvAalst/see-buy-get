@@ -36,7 +36,7 @@ The solver already holds to the rules of the trade, so do not propose breaking t
 
 The solver already plans to the delivery window each shipper asked for, wherever it could read one as a time ("plannedTo"). A vehicle that is early waits for the window to open ("waitsMin"). An order that cannot make its window is planned all the same and marked ("lateByMin", or "earlyByMin" where the day had no room to wait) - nothing is left out because of a window. Words the solver could not read as a time are marked "windowNotRead": that order was planned to its day only, and the fix is the shipper or the office writing the window as hours, such as 8-12 or before 14:00.
 
-Every time and distance in the plan is an estimate - straight-line distance at one speed, plus fixed minutes at each stop. Say "about" with times and do not present them as promises.
+The plan data says what its distances are ("distances"): by road, from a routing server, or an estimate - straight lines with an allowance for the road - and, where a routing server could not be used, why. Every time in the plan is an estimate either way: those distances at one speed, plus fixed minutes at each stop. Say "about" with times and do not present them as promises.
 
 Nothing you do accepts a plan or sends anything to a driver: what comes back from replan is a proposal on the dispatcher's screen, and accepting it is theirs.
 
@@ -119,7 +119,7 @@ export class PlanAdviserService {
     if (said.length > ADVISER_MAX_MESSAGE) throw new GlosError('INVALID_INPUT', `Keep it under ${ADVISER_MAX_MESSAGE} characters`, { field: 'message' });
 
     // The plan as it stands, under the asks the screen has now. A bad ask fails here, before anybody is called.
-    let plan = this.plans.propose(fleetDid, input.ask, now);
+    let plan = await this.plans.proposeRouted(fleetDid, input.ask, now);
     const first = plan;
     const answer = (reply: string, failed?: AdviserFailure): PlanAdviceView => {
       const ask = askOf(plan);
@@ -154,16 +154,18 @@ export class PlanAdviserService {
 
       // The assistant's turn goes back exactly as it came — thinking blocks and all — and every call gets its result.
       messages.push({ role: 'assistant', content: reply.content });
-      const results: Anthropic.Beta.Messages.BetaToolResultBlockParam[] = calls.map((call) => {
+      // One after the other, each on top of the last: a plan is worked out (and its roads asked about) before the next call is read.
+      const results: Anthropic.Beta.Messages.BetaToolResultBlockParam[] = [];
+      for (const call of calls) {
         try {
           if (call.name !== 'replan') throw new Error(`There is no tool called ${call.name}`);
-          plan = this.replan(fleetDid, plan, call.input, now);
-          return { type: 'tool_result', tool_use_id: call.id, content: JSON.stringify(dataOf(plan)) };
+          plan = await this.replan(fleetDid, plan, call.input, now);
+          results.push({ type: 'tool_result', tool_use_id: call.id, content: JSON.stringify(dataOf(plan)) });
         } catch (e) {
           // Told back to the adviser in the refusal's own words, so it can correct itself or tell the dispatcher.
-          return { type: 'tool_result', tool_use_id: call.id, content: e instanceof Error ? e.message : 'That could not be done', is_error: true };
+          results.push({ type: 'tool_result', tool_use_id: call.id, content: e instanceof Error ? e.message : 'That could not be done', is_error: true });
         }
-      });
+      }
       messages.push({ role: 'user', content: results });
     }
     // Out of steps without a last word. The plan is still the solver's latest, and what changed is still derived.
@@ -186,7 +188,7 @@ export class PlanAdviserService {
   }
 
   /** What a replan call asks, turned into the solver's asks: plates and codes looked up, never guessed. */
-  private replan(fleetDid: string, plan: DayPlanView, raw: unknown, now: number): DayPlanView {
+  private async replan(fleetDid: string, plan: DayPlanView, raw: unknown, now: number): Promise<DayPlanView> {
     const input = (raw ?? {}) as Partial<ReplanInput>;
     const current = askOf(plan);
     const vehicleId = (plate: string): string => {
@@ -213,7 +215,7 @@ export class PlanAdviserService {
       keepOff: input.keep_off ? pairs(input.keep_off) : current.keepOff,
       putOn: input.put_on ? pairs(input.put_on) : current.putOn,
     };
-    return this.plans.propose(fleetDid, ask, now);
+    return this.plans.proposeRouted(fleetDid, ask, now);
   }
 
   /** Why the adviser could not be asked, as one of the few things a dispatcher can do something about. */
@@ -268,6 +270,7 @@ function turnsOf(history: AdviserTurn[] | undefined): Anthropic.Beta.Messages.Be
 export function dataOf(plan: DayPlanView) {
   return {
     day: plan.day,
+    distances: plan.distances?.source === 'roads' ? `by road, from the routing server${plan.distances.gaps ? ` (${plan.distances.gaps} legs it knew no road for are estimated)` : ''}` : `an estimate: straight lines with an allowance for the road${plan.distances?.why ? ` (${plan.distances.why})` : ''}`,
     settings: { leaveAt: plan.settings.dayStart, longestDayHours: plan.settings.dayHours, speedKmh: plan.settings.speedKmh, loadMinPerOrder: plan.settings.loadMin, handOverMinPerOrder: plan.settings.unloadMin },
     totals: { orders: plan.totals.orders, planned: plan.totals.planned, kg: plan.totals.weightKg, plannedKg: plan.totals.plannedKg, km: plan.totals.km, emptyKm: plan.totals.emptyKm, vehiclesUsed: plan.totals.trucksUsed, vehiclesGoingOut: plan.totals.trucksAvailable, drivers: plan.totals.drivers, outsideTheirWindow: plan.totals.outsideWindow ?? 0, windowsNotRead: plan.totals.unreadWindows ?? 0 },
     ...(plan.hire ? { short: { moreVehiclesNeeded: plan.hire.trucks, eachCarryingKg: plan.hire.capacityKg, forOrders: plan.hire.orders, kg: plan.hire.weightKg } } : {}),

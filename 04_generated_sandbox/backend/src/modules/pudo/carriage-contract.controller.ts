@@ -147,17 +147,17 @@ export class CarriageContractController {
    */
   @Roles('fleet_manager', 'operator')
   @Post('fleet/managers/:did/plan')
-  proposePlan(@Param('did') did: string, @Body() dto: PlanDayDto, @Actor() actor: IntrospectionResult): DayPlanView {
+  proposePlan(@Param('did') did: string, @Body() dto: PlanDayDto, @Actor() actor: IntrospectionResult): Promise<DayPlanView> {
     this.assertFleet(did, actor);
-    return this.plans.propose(did, dto);
+    return this.plans.proposeRouted(did, dto);
   }
 
   /** Accept the plan for a day. Worked out again here from the same asks, kept, and written onto its orders. */
   @Roles('fleet_manager', 'operator')
   @Post('fleet/managers/:did/plan/accept')
-  acceptPlan(@Param('did') did: string, @Body() dto: PlanDayDto, @Actor() actor: IntrospectionResult): DayPlanView {
+  acceptPlan(@Param('did') did: string, @Body() dto: PlanDayDto, @Actor() actor: IntrospectionResult): Promise<DayPlanView> {
     const fleet = this.assertFleet(did, actor);
-    return this.plans.accept(did, dto, this.fleetPerson(actor, fleet.companyName));
+    return this.plans.acceptRouted(did, dto, this.fleetPerson(actor, fleet.companyName));
   }
 
   /** P3b — send the next trip to every truck in TODAY's accepted plan that is ready for one. */

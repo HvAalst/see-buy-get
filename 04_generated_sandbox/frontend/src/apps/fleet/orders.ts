@@ -310,6 +310,17 @@ export function windowLine(stop: Pick<PlanStop, 'deliveryWindow' | 'window' | 'w
   return null;
 }
 
+/**
+ * WHAT A PLAN'S DISTANCES ARE, in a line. By road, from the routing server (and how many legs it knew no road for);
+ * an estimate, as a plan was always made; or — said louder, because it is not what the office expects where there IS
+ * a routing server — an estimate because the routing server could not be used, with why. A plan kept from before
+ * there was one to ask was an estimate.
+ */
+export function distanceLine(d: DayPlan['distances'], t: Translate): { tone: 'idle' | 'warn'; text: string } {
+  if (d?.source === 'roads') return { tone: 'idle', text: [t('fleet.plan.dist.roads'), d.gaps ? t(d.gaps === 1 ? 'fleet.plan.dist.gapOne' : 'fleet.plan.dist.gaps', { n: d.gaps }) : ''].filter(Boolean).join(' ') };
+  return d?.why ? { tone: 'warn', text: t('fleet.plan.dist.fallback', { why: d.why }) } : { tone: 'idle', text: t('fleet.plan.dist.estimate') };
+}
+
 /** P5 — a rule as the office reads it. */
 export function ruleLine(rule: Pick<PlanRule, 'kind' | 'code' | 'plate'>, t: Translate): string {
   return t(rule.kind === 'keep_off' ? 'fleet.plan.rules.keepOff' : 'fleet.plan.rules.putOn', { code: rule.code, plate: rule.plate });

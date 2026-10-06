@@ -40026,6 +40026,27 @@
           "plate"
         ]
       },
+      "PlanDistances": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "roads",
+              "estimate"
+            ]
+          },
+          "why": {
+            "type": "string"
+          },
+          "gaps": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "source"
+        ]
+      },
       "PlanAccepted": {
         "type": "object",
         "properties": {
@@ -40077,6 +40098,14 @@
             "items": {
               "$ref": "#/components/schemas/PlanRuleView"
             }
+          },
+          "distances": {
+            "description": "What its distances are. A plan kept from before there was a routing server to ask has none: it was an estimate.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PlanDistances"
+              }
+            ]
           },
           "accepted": {
             "description": "Set on the plan the office accepted for this day. A proposal has none.",

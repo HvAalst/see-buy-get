@@ -363,6 +363,8 @@ describe('a customer’s business, over the wire', () => {
     expect(proposal.body.totals.orders).toBeGreaterThan(0);
     expect(new Set(proposal.body.unplanned.map((u: { reason: string }) => u.reason))).toEqual(new Set(['no_trucks']));
     expect(proposal.body.settings).toMatchObject({ dayStart: '07:00', dayHours: 10 });
+    // No routing server is configured here: the plan is the estimate it always was, and says so.
+    expect(proposal.body.distances).toEqual({ source: 'estimate' });
     await http().post(`${planAt}/accept`).set(bearer(setupKey)).send({ day: tomorrow }).expect(400);
     expect((await http().get(planAt).query({ day: tomorrow }).set(bearer(setupKey)).expect(200)).body).toEqual({ day: tomorrow, leftOut: 0, newSince: 0, withdrawnSince: 0 });
     // P3b — trips go out on their own day, from an accepted plan, and only the office sends them.

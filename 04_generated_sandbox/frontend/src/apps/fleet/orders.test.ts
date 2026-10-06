@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { ADVISER_HISTORY, base64Of, evenLoads, historyOf, isWorkbook, keptOff, loadLine, mayRejoin, maySplit, passOnState, putOnto, ruleLine, windowLine, rulesAsk, withoutRule, type PlanRule } from './orders';
+import { ADVISER_HISTORY, base64Of, distanceLine, evenLoads, historyOf, isWorkbook, keptOff, loadLine, mayRejoin, maySplit, passOnState, putOnto, ruleLine, windowLine, rulesAsk, withoutRule, type PlanRule } from './orders';
 import { askOf, byDay, dayOf, daySummary, dayWord, handOnLine, hoursWords, mayHandOn, importVerdictLine, leftByReason, mayWithdraw, notASheet, orderTag, sendLine, weightWords, type DayPlan, type FleetOrder, type PlanLeft, type PlanSendTruck } from './orders';
 
 const order = (over: Partial<FleetOrder> = {}): FleetOrder =>
@@ -304,6 +304,16 @@ describe('P1 — a fleet’s orders', () => {
     expect(mayRejoin({ ...load, status: 'claimed' })).toBe(false);
     expect(mayRejoin({ ...load, role: 'partner' })).toBe(false);
     expect(mayRejoin({ ...load, handOn: { state: 'board', at: '2026-10-06T12:00:00Z', by: 'Amina' } })).toBe(false);
+  });
+
+  it('says what a plan’s distances are — and says it louder when a routing server was there and could not be used', () => {
+    expect(distanceLine({ source: 'roads' }, t)).toEqual({ tone: 'idle', text: 'Distances are by road, from the routing server.' });
+    expect(distanceLine({ source: 'roads', gaps: 1 }, t).text).toBe('Distances are by road, from the routing server. 1 leg has no road on its map and is estimated.');
+    expect(distanceLine({ source: 'roads', gaps: 4 }, t).text).toBe('Distances are by road, from the routing server. 4 legs have no road on its map and are estimated.');
+    expect(distanceLine({ source: 'estimate' }, t)).toEqual({ tone: 'idle', text: 'Distances are estimates too: straight lines with an allowance for the road.' });
+    expect(distanceLine({ source: 'estimate', why: 'the routing server did not answer in time' }, t)).toEqual({ tone: 'warn', text: 'Distances are estimates, not by road: the routing server did not answer in time. Plan again in a moment for road distances.' });
+    // A plan kept from before there was a routing server to ask: an estimate.
+    expect(distanceLine(undefined, t).text).toBe('Distances are estimates too: straight lines with an allowance for the road.');
   });
 
   it('says a rule the way the office would', () => {

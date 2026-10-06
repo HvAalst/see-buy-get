@@ -150,6 +150,17 @@ export class PlanAccepted {
   by: string;
 }
 
+/**
+ * WHAT A PLAN'S DISTANCES ARE. `roads` — from the routing server the operator configured · `estimate` — straight
+ * lines with an allowance for the road, as a plan was always made. When a routing server is configured and could not
+ * be used, `why` says so; `gaps` counts the legs it knew no road for, each estimated on its own.
+ */
+export class PlanDistances {
+  @ApiProperty({ enum: ['roads', 'estimate'] }) source: 'roads' | 'estimate';
+  @ApiPropertyOptional() why?: string;
+  @ApiPropertyOptional() gaps?: number;
+}
+
 export class DayPlanView {
   day: string;
   madeAt: string;
@@ -161,6 +172,8 @@ export class DayPlanView {
   @ApiProperty({ type: [PlanVehicle] }) vehicles: PlanVehicle[];
   /** The rules this plan was made under. Empty when there are none. */
   @ApiProperty({ type: [PlanRuleView] }) rules: PlanRuleView[];
+  /** What its distances are. A plan kept from before there was a routing server to ask has none: it was an estimate. */
+  @ApiPropertyOptional({ type: PlanDistances }) distances?: PlanDistances;
   /** Set on the plan the office accepted for this day. A proposal has none. */
   @ApiPropertyOptional({ type: PlanAccepted }) accepted?: PlanAccepted;
 }

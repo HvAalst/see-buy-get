@@ -3,7 +3,7 @@ import { Button, Card, ErrorNote, Icon, Note, Pill } from '../../../shared/ui';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { PlanAdviser } from './PlanAdviser';
 import { SplitOrder } from './SplitOrder';
-import { askOf, dayOf, dayWord, handOnLine, hoursWords, keptOff, leftByReason, putOnto, ruleLine, windowLine, sendLine, weightWords, withoutRule, type DayPlan, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi } from '../orders';
+import { askOf, dayOf, dayWord, distanceLine, handOnLine, hoursWords, keptOff, leftByReason, putOnto, ruleLine, windowLine, sendLine, weightWords, withoutRule, type DayPlan, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi } from '../orders';
 
 const REASON: Record<PlanLeftReason, { title: MessageKey; what: MessageKey }> = {
   no_pin: { title: 'fleet.plan.left.noPin', what: 'fleet.plan.left.noPinDo' },
@@ -146,6 +146,11 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
             {plan.totals.unreadWindows ? <p class="hint">{t(plan.totals.unreadWindows === 1 ? 'fleet.plan.win.unreadOne' : 'fleet.plan.win.unreadMany', { n: plan.totals.unreadWindows })}</p> : null}
             {plan.totals.drivers < plan.totals.trucksAvailable ? <p class="hint">{t('fleet.plan.driversShort', { drivers: plan.totals.drivers, trucks: plan.totals.trucksAvailable })}</p> : null}
             <p class="hint">{t('fleet.plan.estimate', { start: s!.dayStart, hours: hoursWords(s!.dayHours * 60), speed: s!.speedKmh, load: s!.loadMin, unload: s!.unloadMin })}</p>
+            {/* WHAT THE DISTANCES ARE: by road, or the estimate — and, where a routing server was there and failed, that. */}
+            {(() => {
+              const d = distanceLine(plan.distances, t);
+              return <p class={'hint' + (d.tone === 'warn' ? ' plan__win--warn' : '')}>{d.text}</p>;
+            })()}
 
             <div class="plan__acts">
               {plan.accepted ? (
