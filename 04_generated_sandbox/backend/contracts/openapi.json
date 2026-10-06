@@ -31813,6 +31813,14 @@
       "PlannedOn": {
         "type": "object",
         "properties": {
+          "lateMin": {
+            "type": "number",
+            "description": "Planned to arrive this many minutes after the window its shipper asked for."
+          },
+          "earlyMin": {
+            "type": "number",
+            "description": "Planned to be handed over this many minutes before its window opens."
+          },
           "held": {
             "description": "Set when its trip came up and it could not be put on the truck. Cleared when it is, or when the day is planned again.",
             "allOf": [
@@ -39278,7 +39286,28 @@
             "type": "string"
           },
           "deliveryWindow": {
-            "type": "string"
+            "type": "string",
+            "description": "The window in the shipper's own words."
+          },
+          "window": {
+            "type": "string",
+            "description": "The window as the plan READ those words (\"08:00–12:00\", \"before 14:00\") — what it planned to. Absent: no window, or words it could not read as one."
+          },
+          "windowUnread": {
+            "type": "boolean",
+            "description": "The shipper wrote something about when, and the plan could not read it as a time: it is shown, and was not planned to."
+          },
+          "lateMin": {
+            "type": "number",
+            "description": "Minutes after its window closed that the door is reached. Planned all the same, and said."
+          },
+          "earlyMin": {
+            "type": "number",
+            "description": "Minutes before its window opens that the goods are handed over: the day had no room to wait."
+          },
+          "waitMin": {
+            "type": "number",
+            "description": "Minutes the truck stands at the door before its window opens; `arrive` is then the opening."
           },
           "freightId": {
             "type": "string"
@@ -39304,7 +39333,7 @@
           },
           "arrive": {
             "type": "string",
-            "description": "When the truck is at this door, on the clock (HH:MM). An estimate from distance and the day's settings."
+            "description": "When the goods are handed over at this door, on the clock (HH:MM). An estimate from distance and the day's settings."
           }
         },
         "required": [
@@ -39525,6 +39554,14 @@
           "drivers": {
             "type": "number",
             "description": "Drivers the fleet has to send out: the plan uses no more trucks than this."
+          },
+          "outsideWindow": {
+            "type": "number",
+            "description": "Planned orders that reach their door outside the window their shipper asked for — late, or early. Each is marked."
+          },
+          "unreadWindows": {
+            "type": "number",
+            "description": "Orders whose window is in words the plan could not read as a time. They are planned, to the day only."
           }
         },
         "required": [
@@ -39536,7 +39573,9 @@
           "emptyKm",
           "trucksUsed",
           "trucksAvailable",
-          "drivers"
+          "drivers",
+          "outsideWindow",
+          "unreadWindows"
         ]
       },
       "PlanSettings": {

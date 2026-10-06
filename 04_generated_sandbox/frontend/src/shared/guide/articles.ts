@@ -639,15 +639,17 @@ export const ARTICLES: GuideArticle[] = [
       "Orders, choose the day, then Plan this day. The first line is the answer: how many of the day’s orders are on a truck, and how many more trucks you would need for the rest.",
       "Under it, what does not fit, grouped by why: an address not on the map (pin it and plan again), no room left in the day, a free truck with no driver, goods no truck of yours can handle, or an order heavier than your largest truck.",
       "Then each truck’s day, trip after trip in the order it is driven. A truck that has unloaded goes on to its next collection from where it is, not from the depot.",
+      "Where a shipper asked for a delivery window, the plan goes for it: a vehicle that is early waits for the window to open, and the door that closes soonest is visited first. An order that cannot make its window is planned all the same and marked with how late it will be — or how early, when the day has no room to wait. The first lines of the plan say how many.",
       "Change the day opens your settings: when trucks leave, the longest day, the speed on the road, the minutes to load and to hand over, and which vehicles go out. Change one and the plan is worked out again.",
       "Accept this plan when it is right. Each order then shows its truck, its trip and about when it arrives. Opening the plan later shows it as accepted; Plan the day again works out a new one, which replaces it only when you accept that.",
       "On the day itself the plan goes out by itself, a trip at a time: a truck gets its first trip when its driver starts a shift in it, and the next when the last order of that trip is delivered. Send the next trips out now does the same by hand, and says what each truck is doing."
     ],
     notes: [
-      "Every time on the plan is an estimate: distance at one speed, plus fixed minutes at each stop. Distances are estimates too — there is no road routing yet.",
+      "Every time on the plan is an estimate: distance at one speed, plus fixed minutes at each stop — so is “late” and “early”. Distances are estimates too — there is no road routing yet.",
       "A truck is only ever given one trip at a time — what it can carry at once. Every order goes on with the same checks as any load (room, equipment, the driver’s hours). One that is refused stays in the queue with the reason on it.",
       "The plan never loads a truck past what it carries, never makes a day longer than you set (13 hours at most), and sends out no more vehicles than you have drivers.",
-      "The plan will leave one order out when that lets it deliver more of the others: a far, heavy load can hold a truck that three nearer orders would fill. It never gives one order up for one. What is left out is listed with its reason and counted in the trucks you are short."
+      "The plan will leave one order out when that lets it deliver more of the others: a far, heavy load can hold a truck that three nearer orders would fill. It never gives one order up for one. What is left out is listed with its reason and counted in the trucks you are short.",
+      "A window is read when it is written as hours: 8-12, 08:00-12:00, before 14:00, after 9, 2pm-5pm. Words such as morning, or hours that could be either half of the day (1-5), are not read: the order is planned to its day only and says so. Nothing is ever left out because of a window."
     ]
   },
   {
@@ -666,7 +668,7 @@ export const ARTICLES: GuideArticle[] = [
       "Nothing is accepted by asking. When the plan is right, Accept this plan is still yours to tap. The rules a plan was accepted under are kept with it."
     ],
     notes: [
-      "The adviser can change when vehicles leave, the longest day, the speed on the road, the minutes to load and to hand over, which vehicles go out, and rules about one order and one vehicle. It cannot set delivery time windows or the order of stops, or split an order; it says so when asked.",
+      "The adviser can change when vehicles leave, the longest day, the speed on the road, the minutes to load and to hand over, which vehicles go out, and rules about one order and one vehicle. It cannot change a delivery window or the order of stops, or split an order; it says so when asked. It can tell you which orders are planned late for their window and why.",
       "It cannot break the plan’s own limits: no vehicle loaded past what it carries, no day over 13 hours, no more vehicles out than you have drivers. An order put on a vehicle too small for it is left out, and the board says a rule is why.",
       "What goes to the AI service to answer you: your words, and the plan — order codes, shippers’ names, delivery addresses, weights and plates. No phone numbers and no contact names.",
       "If the adviser is not switched on, is busy or cannot be reached, the plan is unaffected. Change the day still does the settings and the vehicles by hand.",

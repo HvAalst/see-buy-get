@@ -18,6 +18,7 @@ export type PartnerLists = components['schemas']['FleetPartnerLists'];
 export type PartnerInvite = components['schemas']['PartnerInviteIssued'];
 export type HandOnResult = components['schemas']['HandOnBatchResult'];
 export type PlanRule = components['schemas']['PlanRuleView'];
+export type PlanStop = components['schemas']['PlanStopView'];
 export type PlanAdvice = components['schemas']['PlanAdviceView'];
 export type AdviserFailure = NonNullable<PlanAdvice['failed']>;
 /** One order and one vehicle: what a rule on a plan names. */
@@ -280,6 +281,19 @@ export function putOnto(rules: PlanRule[], pair: PlanPair): { keepOff: PlanPair[
     keepOff: now.keepOff.filter((p) => !(p.freightId === pair.freightId && p.vehicleId === pair.vehicleId)),
     putOn: [...now.putOn.filter((p) => p.freightId !== pair.freightId), { freightId: pair.freightId, vehicleId: pair.vehicleId }],
   };
+}
+
+/**
+ * WHAT CAME OF A STOP'S DELIVERY WINDOW, as one line and how loudly to say it — or nothing, when the door is reached
+ * inside its window or never had one. Late and early are the plan not doing what was asked (the order is delivered
+ * all the same); waiting is the plan doing it; unread is the plan saying it did not understand the words.
+ */
+export function windowLine(stop: Pick<PlanStop, 'deliveryWindow' | 'window' | 'windowUnread' | 'lateMin' | 'earlyMin' | 'waitMin'>, t: Translate): { tone: 'danger' | 'warn' | 'idle'; text: string } | null {
+  if (stop.lateMin) return { tone: 'danger', text: t('fleet.plan.win.late', { by: hoursWords(stop.lateMin), window: stop.window ?? '' }) };
+  if (stop.earlyMin) return { tone: 'danger', text: t('fleet.plan.win.early', { by: hoursWords(stop.earlyMin), window: stop.window ?? '' }) };
+  if (stop.windowUnread) return { tone: 'warn', text: t('fleet.plan.win.unread', { words: stop.deliveryWindow ?? '' }) };
+  if (stop.waitMin) return { tone: 'idle', text: t('fleet.plan.win.waits', { by: hoursWords(stop.waitMin), window: stop.window ?? '' }) };
+  return null;
 }
 
 /** P5 — a rule as the office reads it. */

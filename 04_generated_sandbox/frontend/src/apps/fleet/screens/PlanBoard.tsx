@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Icon, Note, Pill } from '../../../shared/ui';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { PlanAdviser } from './PlanAdviser';
-import { askOf, dayOf, dayWord, handOnLine, hoursWords, keptOff, leftByReason, putOnto, ruleLine, sendLine, weightWords, withoutRule, type DayPlan, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi } from '../orders';
+import { askOf, dayOf, dayWord, handOnLine, hoursWords, keptOff, leftByReason, putOnto, ruleLine, windowLine, sendLine, weightWords, withoutRule, type DayPlan, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi } from '../orders';
 
 const REASON: Record<PlanLeftReason, { title: MessageKey; what: MessageKey }> = {
   no_pin: { title: 'fleet.plan.left.noPin', what: 'fleet.plan.left.noPinDo' },
@@ -140,6 +140,9 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
             ) : plan.unplanned.length === 0 && plan.totals.orders > 0 ? (
               <Note tone="ok" icon="check" title={t('fleet.plan.allFit')} />
             ) : null}
+            {/* WINDOWS the plan could not keep, or could not read. A plan kept from before windows were planned to says neither. */}
+            {plan.totals.outsideWindow ? <Note tone="warn" icon="warning" title={t(plan.totals.outsideWindow === 1 ? 'fleet.plan.win.outsideOne' : 'fleet.plan.win.outside', { n: plan.totals.outsideWindow })} detail={t('fleet.plan.win.outsideDetail')} /> : null}
+            {plan.totals.unreadWindows ? <p class="hint">{t(plan.totals.unreadWindows === 1 ? 'fleet.plan.win.unreadOne' : 'fleet.plan.win.unreadMany', { n: plan.totals.unreadWindows })}</p> : null}
             {plan.totals.drivers < plan.totals.trucksAvailable ? <p class="hint">{t('fleet.plan.driversShort', { drivers: plan.totals.drivers, trucks: plan.totals.trucksAvailable })}</p> : null}
             <p class="hint">{t('fleet.plan.estimate', { start: s!.dayStart, hours: hoursWords(s!.dayHours * 60), speed: s!.speedKmh, load: s!.loadMin, unload: s!.unloadMin })}</p>
 
@@ -391,6 +394,10 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
                               {`${stop.code} · ${stop.description} · ${weightWords(stop.weightKg)}`}
                               {stop.deliveryWindow ? ` · ${t('fleet.plan.window', { window: stop.deliveryWindow })}` : ''}
                             </span>
+                            {(() => {
+                              const w = windowLine(stop, t);
+                              return w ? <span class={`plan__stops-s plan__win plan__win--${w.tone}`}>{w.text}</span> : null;
+                            })()}
                             {/* A RULE BY HAND, while the office is changing its day: this order, not on this vehicle. */}
                             {tune && !plan.accepted ? (
                               <span class="plan__byhand">

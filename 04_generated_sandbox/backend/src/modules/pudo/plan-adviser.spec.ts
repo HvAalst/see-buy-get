@@ -171,12 +171,13 @@ describe('the adviser over a day’s plan', () => {
     return vehicles.register({ plate, vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg, ownerName: 'X', equipment, baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, managerDid } as never);
   }
   const contractOf = (fleet: { did: string; companyName: string }): ContractRef => ({ contractId: 'ctr_plan', fleetDid: fleet.did, fleetName: fleet.companyName, shipperName: 'Jenga Bricks' });
-  function anOrder(fleet: { did: string; companyName: string }, over: { kg?: number; n?: number; day?: string; pinned?: boolean; ref?: string } = {}) {
+  function anOrder(fleet: { did: string; companyName: string }, over: { kg?: number; n?: number; day?: string; pinned?: boolean; ref?: string; window?: string } = {}) {
     seq += 1;
     return dispatch.registerFreight({
       description: `Bricks ${seq}`, pickupLocation: yard, pickupLabel: 'Jenga yard', destLabel: `Site ${over.n ?? seq}`,
       ...(over.pinned === false ? {} : { destLocation: site(over.n ?? 1) }),
       weightKg: over.kg ?? 2000, packaging: 'palletised', postedByDid: fleet.did, postedByName: 'Amina', contract: contractOf(fleet), deliverOn: over.day ?? tomorrow(), orderRef: over.ref ?? `WS-${seq}`,
+      ...(over.window ? { deliveryWindow: over.window } : {}),
     });
   }
   /** A fleet with an 8 t and a 3 t truck and two drivers. */
@@ -549,8 +550,27 @@ describe('the adviser over a day’s plan', () => {
     expect(data.totals).toMatchObject({ orders: 2, planned: 0, drivers: 1 });
   });
 
+  it('tells the adviser what came of each window: what was read, who is late, who waits, and what was not read', async () => {
+    const { fleet } = setUp();
+    const late = anOrder(fleet, { kg: 1000, n: 2, window: 'before 07:05' });
+    const waits = anOrder(fleet, { kg: 1000, n: 1, window: 'after 15:00' });
+    const unread = anOrder(fleet, { kg: 1000, n: 3, window: 'morning' });
+    claude.script.push(says('One is late.'));
+    await adviser.advise(fleet.did, { ask: { day: tomorrow() }, message: 'Who is late?' });
+    const sent = textOf(claude.requests[0].messages[0].content);
+    const data = JSON.parse(sent.slice(sent.indexOf('{'), sent.lastIndexOf('}') + 1));
+    const stops = Object.fromEntries(data.days.flatMap((d: { trips: Array<{ stops: Array<{ order: string }> }> }) => d.trips.flatMap((t) => t.stops)).map((s: { order: string }) => [s.order, s]));
+    expect(stops[late.code]).toMatchObject({ askedFor: 'before 07:05', plannedTo: 'before 07:05' });
+    expect(stops[late.code].lateByMin).toBeGreaterThan(0);
+    expect(stops[waits.code]).toMatchObject({ plannedTo: 'from 15:00', about: '15:00' });
+    expect(stops[waits.code].waitsMin).toBeGreaterThan(0);
+    expect(stops[unread.code]).toMatchObject({ askedFor: 'morning', windowNotRead: true });
+    expect(stops[unread.code].plannedTo).toBeUndefined();
+    expect(data.totals).toMatchObject({ outsideTheirWindow: 1, windowsNotRead: 1 });
+  });
+
   it('gives the adviser its limits in the brief: what it may not invent, what the tool cannot say, and that nothing is sent', () => {
-    for (const must of ['never state something about the plan that is not in the plan data', 'replaces the list in force', 'delivery time windows', '13 hours', 'Say "about" with times', 'accepts a plan or sends anything to a driver', 'language the dispatcher writes in']) {
+    for (const must of ['never state something about the plan that is not in the plan data', 'replaces the list in force', 'changing a delivery window', 'nothing is left out because of a window', '13 hours', 'Say "about" with times', 'accepts a plan or sends anything to a driver', 'language the dispatcher writes in']) {
       expect(ADVISER_BRIEF).toContain(must);
     }
   });

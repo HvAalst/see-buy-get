@@ -6,6 +6,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { isDay } from './carriage-contract.service';
 import { DEFAULT_PLAN_PARAMS, clockOf, planDay, type PlanOrder, type PlanTruck } from './day-plan';
+import { windowOf, windowWords, type DayWindow } from './delivery-window';
 import { DispatchService } from './dispatch.service';
 import { Freight } from './dispatch.types';
 import { DriverService } from './driver.service';
@@ -129,7 +130,21 @@ export class FleetPlanService implements OnModuleInit {
     // What a rule means to the math: a vehicle this order may not go on. "Put it on that one" is every other one.
     const barred = (vehicleId: string, freightId: string) => rules.some((r) => r.freightId === freightId && (r.kind === 'keep_off' ? r.vehicleId === vehicleId : r.vehicleId !== vehicleId));
     const pinned = orders.filter((f) => f.destLocation);
-    const planOrders: PlanOrder[] = pinned.map((f) => ({ id: f.freightId, kg: f.weightKg, pickup: f.pickupLocation, drop: f.destLocation! }));
+    // THE WINDOW each shipper asked for, read where it can be read. The math counts from when the day starts, so a
+    // window on the clock is moved onto the day's own minutes. Words that are not a time are not planned to — and are
+    // said to be unread, on the order, rather than planned to a guess.
+    const [startH, startM] = settings.dayStart.split(':').map(Number);
+    const dayStartMin = startH * 60 + startM;
+    const windows = new Map<string, DayWindow>();
+    const unread = new Set<string>();
+    for (const f of pinned) {
+      const words = this.dispatch.deliveryWindowOf(f);
+      const w = windowOf(words);
+      if (w) windows.set(f.freightId, w);
+      else if (words?.trim()) unread.add(f.freightId);
+    }
+    const onTheDay = (w: DayWindow) => ({ ...(w.fromMin !== undefined ? { fromMin: w.fromMin - dayStartMin } : {}), ...(w.toMin !== undefined ? { toMin: w.toMin - dayStartMin } : {}) });
+    const planOrders: PlanOrder[] = pinned.map((f) => ({ id: f.freightId, kg: f.weightKg, pickup: f.pickupLocation, drop: f.destLocation!, ...(windows.has(f.freightId) ? { window: onTheDay(windows.get(f.freightId)!) } : {}) }));
     const trucks: PlanTruck[] = going.map(({ v }) => ({ id: v.vehicleId, capacityKg: v.capacityKg, cannot: new Set(pinned.filter((f) => barred(v.vehicleId, f.freightId) || !this.dispatch.vehicleCanCarryFreight(v, f.freightId)).map((f) => f.freightId)) }));
     const result = planDay({
       orders: planOrders,
@@ -158,7 +173,17 @@ export class FleetPlanService implements OnModuleInit {
           weightKg: t.kg,
           stops: t.stops.map((s) => {
             const f = byId.get(s.orderId)!;
-            return { ...this.orderWords(f), km: s.km, arrive: clock(s.arriveMin), ...(this.dispatch.deliveryWindowOf(f) ? { deliveryWindow: this.dispatch.deliveryWindowOf(f) } : {}) };
+            return {
+              ...this.orderWords(f),
+              km: s.km,
+              arrive: clock(s.arriveMin),
+              ...(this.dispatch.deliveryWindowOf(f) ? { deliveryWindow: this.dispatch.deliveryWindowOf(f) } : {}),
+              ...(windows.has(f.freightId) ? { window: windowWords(windows.get(f.freightId)!) } : {}),
+              ...(unread.has(f.freightId) ? { windowUnread: true } : {}),
+              ...(s.lateMin ? { lateMin: s.lateMin } : {}),
+              ...(s.earlyMin ? { earlyMin: s.earlyMin } : {}),
+              ...(s.waitMin ? { waitMin: s.waitMin } : {}),
+            };
           }),
         })),
         km: r.km,
@@ -191,6 +216,8 @@ export class FleetPlanService implements OnModuleInit {
         trucksUsed: routes.length,
         trucksAvailable: going.length,
         drivers: driverCount,
+        outsideWindow: routes.reduce((n, r) => n + r.trips.reduce((m, t) => m + t.stops.filter((s) => s.lateMin || s.earlyMin).length, 0), 0),
+        unreadWindows: plannedIds.filter((id) => unread.has(id)).length,
       },
       settings,
       vehicles: fleet.map(({ v, excluded: out, offRoad }) => ({ vehicleId: v.vehicleId, plate: v.plate, vehicleClass: v.vehicleClass, capacityKg: v.capacityKg, excluded: out, ...(offRoad.length ? { offRoad } : {}) })),
@@ -210,7 +237,7 @@ export class FleetPlanService implements OnModuleInit {
     const stamps = new Map<string, PlannedOn>();
     for (const r of plan.routes) {
       for (const t of r.trips) {
-        t.stops.forEach((s, i) => stamps.set(s.freightId, { day: plan.day, vehicleId: r.vehicleId, plate: r.plate, tripNo: t.no, seq: i + 1, arrive: s.arrive, at }));
+        t.stops.forEach((s, i) => stamps.set(s.freightId, { day: plan.day, vehicleId: r.vehicleId, plate: r.plate, tripNo: t.no, seq: i + 1, arrive: s.arrive, ...(s.lateMin ? { lateMin: s.lateMin } : {}), ...(s.earlyMin ? { earlyMin: s.earlyMin } : {}), at }));
       }
     }
     this.dispatch.stampPlan(fleetDid, plan.day, stamps);

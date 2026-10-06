@@ -200,6 +200,127 @@ describe('planning a day', () => {
   });
 
   /**
+   * DELIVERY WINDOWS. The user, 2026-10-06: an order that cannot make its window is planned all the same, and said to
+   * be late. So a window never refuses an order; it makes a late door dearer than an on-time one, and an early truck
+   * wait. Minutes are counted from the start of the day, as everywhere on this sheet.
+   */
+  describe('delivery windows', () => {
+    const windowed = (id: string, drop: PlanPoint, window: { fromMin?: number; toMin?: number }, kg = 1000): PlanOrder => ({ ...order(id, kg, drop), window });
+
+    it('waits at a door that is not open yet — and the waiting is part of the truck’s day', () => {
+      const r = plan([windowed('a', at(20), { fromMin: 100 })], [truck('T1', 5000)]);
+      // At the door after 30 minutes (10 to the yard, 10 loading, 10 on); it opens at 100.
+      expect(r.routes[0].trips[0].stops[0]).toEqual({ orderId: 'a', km: 10, arriveMin: 100, waitMin: 70 });
+      // 100 + 10 handing over + 20 home.
+      expect(r.routes[0].minutes).toBe(130);
+    });
+
+    it('hands over before the window opens, and says so, when the day has no room to wait — rather than not deliver', () => {
+      const a = windowed('a', at(20), { fromMin: 500 });
+      // A ten-hour day holds the wait: at the door at 30, handed over at 500.
+      expect(plan([a], [truck('T1', 5000)]).routes[0].trips[0].stops[0]).toEqual({ orderId: 'a', km: 10, arriveMin: 500, waitMin: 470 });
+      // A day of 200 minutes does not. It is delivered when the truck gets there, 470 minutes early, and nothing is left out.
+      const short = plan([a], [truck('T1', 5000)], { dayMin: 200 });
+      expect(short.unplanned).toEqual([]);
+      expect(short.routes[0].trips[0].stops[0]).toEqual({ orderId: 'a', km: 10, arriveMin: 30, earlyMin: 470 });
+      expect(short.routes[0].minutes).toBe(60);
+      // An order that has no room in the day with or without its window is left for the reason it always was.
+      expect(plan([windowed('far', at(300), { fromMin: 500 })], [truck('T1', 5000)], { dayMin: 200 }).unplanned).toEqual([{ orderId: 'far', reason: 'no_time' }]);
+    });
+
+    it('when it must go in early, it goes in as near its window as the same day’s driving allows', () => {
+      // 'a' opens long after this short day is over. The road's order reaches it first; the other way round reaches
+      // it 40 minutes nearer its window, for the same kilometres — so that is the way round.
+      const r = plan([windowed('a', at(15), { fromMin: 500 }), order('b', 1000, at(30))], [truck('T1', 5000)], { dayMin: 200 });
+      const stops = r.routes[0].trips.flatMap((t) => t.stops);
+      expect(stops.map((s) => s.orderId)).toEqual(['b', 'a']);
+      // Taken first, as the road runs, it would be handed over at minute 35: 465 early.
+      expect(stops[1].earlyMin).toBeLessThan(465 - 30);
+      expect(stops[1].arriveMin + stops[1].earlyMin!).toBe(500);
+      expect(r.routes[0].minutes).toBeLessThanOrEqual(200);
+    });
+
+    it('goes to the door with a window first, when the order the road runs would reach it late', () => {
+      const free = plan([order('a', 1000, at(15)), order('b', 1000, at(30))], [truck('T1', 5000)]);
+      expect(free.routes[0].trips[0].stops.map((s) => s.orderId)).toEqual(['a', 'b']);
+      // b must be reached by minute 55. The road's order gets there at 60; the other way round, at 50 — for the same day's driving.
+      const r = plan([order('a', 1000, at(15)), windowed('b', at(30), { toMin: 55 })], [truck('T1', 5000)]);
+      expect(r.routes[0].trips[0].stops).toEqual([
+        { orderId: 'b', km: 20, arriveMin: 50 },
+        { orderId: 'a', km: 15, arriveMin: 75 },
+      ]);
+      expect(r.routes[0].minutes).toBe(free.routes[0].minutes);
+    });
+
+    it('plans an order that cannot make its window all the same, and says by how much it is late', () => {
+      // A hundred kilometres out, wanted within the hour: no plan can do it.
+      const r = plan([windowed('a', at(100), { toMin: 60 })], [truck('T1', 5000)]);
+      expect(r.unplanned).toEqual([]);
+      expect(r.routes[0].trips[0].stops[0]).toEqual({ orderId: 'a', km: 90, arriveMin: 110, lateMin: 50 });
+    });
+
+    it('sends a second truck out rather than be very late — but not to save a few minutes', () => {
+      // One east, one west, both wanted early: one truck reaches the second 105 minutes late.
+      const tight = [windowed('a', at(60), { toMin: 85 }), windowed('b', at(-40), { toMin: 85 })];
+      const two = plan(tight, [truck('T1', 5000), truck('T2', 5000)]);
+      expect(two.routes).toHaveLength(2);
+      expect(two.routes.flatMap((x) => x.trips.flatMap((t) => t.stops)).every((s) => s.lateMin === undefined)).toBe(true);
+      // With only the one truck it is still delivered — late, and said to be.
+      const one = plan(tight, [truck('T1', 5000)]);
+      expect(one.unplanned).toEqual([]);
+      const late = one.routes[0].trips.flatMap((t) => t.stops.map((s) => s.lateMin ?? 0)).sort((x, y) => x - y);
+      expect(late).toHaveLength(2);
+      expect(late[0]).toBe(0);
+      expect(late[1]).toBeGreaterThan(60);
+      // Five minutes late is not worth a truck and a driver (an hour, on this sheet): it stays one round.
+      const slack = plan([windowed('a', at(60), { toMin: 85 }), windowed('b', at(-40), { toMin: 185 })], [truck('T1', 5000), truck('T2', 5000)]);
+      expect(slack.routes).toHaveLength(1);
+      // (Whether the truck loads both at once or comes back past the yard for the second is the same road: the yard is on the way.)
+      expect(slack.routes[0].trips.flatMap((t) => t.stops.map((s) => [s.orderId, s.lateMin ?? 0]))).toEqual([
+        ['a', 0],
+        ['b', 5],
+      ]);
+    });
+
+    it('holds to a window what it holds to everything: never early through a closed door, lateness counted true, the shift never overrun', () => {
+      let seed = 11;
+      const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+      let early = 0;
+      let waited = 0;
+      for (let run = 0; run < 12; run++) {
+        const orders = Array.from({ length: 14 }, (_, i): PlanOrder => {
+          // Some windows open after the shift is over: those cannot be waited for.
+          const from = Math.floor(rnd() * 620);
+          const kind = rnd();
+          return { ...order(`o${String(i).padStart(2, '0')}`, 500 + Math.floor(rnd() * 3000), at(rnd() * 60 - 20, rnd() * 30)), ...(kind < 0.3 ? {} : { window: kind < 0.5 ? { toMin: from + 60 } : kind < 0.7 ? { fromMin: from } : { fromMin: from, toMin: from + 90 } }) };
+        });
+        const byId = new Map(orders.map((o) => [o.id, o]));
+        const r = plan(orders, [truck('T1', 8000), truck('T2', 5000)], { dayMin: 480 });
+        const stops = r.routes.flatMap((x) => x.trips.flatMap((t) => t.stops));
+        expect([...stops.map((s) => s.orderId), ...r.unplanned.map((u) => u.orderId)].sort()).toEqual(orders.map((o) => o.id).sort());
+        for (const s of stops) {
+          const w = byId.get(s.orderId)!.window;
+          // Through a door before it opens only when said: handed over at or after the opening, or marked early by exactly the gap.
+          if (w?.fromMin !== undefined) expect(s.arriveMin + (s.earlyMin ?? 0)).toBe(Math.max(s.arriveMin, w.fromMin));
+          else expect(s.earlyMin).toBeUndefined();
+          // Nobody both waits for a window and goes in before it.
+          expect(Boolean(s.waitMin) && Boolean(s.earlyMin)).toBe(false);
+          expect(s.lateMin ?? 0).toBe(w?.toMin !== undefined ? Math.max(0, s.arriveMin - w.toMin) : 0);
+          if (!w) expect([s.waitMin, s.lateMin]).toEqual([undefined, undefined]);
+        }
+        early += stops.filter((s) => s.earlyMin).length;
+        waited += stops.filter((s) => s.waitMin).length;
+        for (const route of r.routes) expect(route.minutes).toBeLessThanOrEqual(480);
+        // And nobody is left out for being late: what is left wanted for room, like any other order.
+        expect(r.unplanned.every((u) => ['no_time', 'no_driver'].includes(u.reason))).toBe(true);
+      }
+      // The days above really did hold both kinds: a guard that met neither would have proved nothing.
+      expect(early).toBeGreaterThan(0);
+      expect(waited).toBeGreaterThan(0);
+    });
+  });
+
+  /**
    * GIVING ONE UP. One truck, a 450-minute day. The far load alone is 420 minutes (10 to the yard, 10 loading, 190 out,
    * 10 at the door, 200 home), and being the heaviest it is placed first — after which nothing else fits beside it.
    * The three near loads together are 100 minutes. A plan that never asks "would the day carry more without this

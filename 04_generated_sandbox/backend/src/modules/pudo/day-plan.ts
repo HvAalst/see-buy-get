@@ -34,6 +34,14 @@ export interface PlanOrder {
   kg: number;
   pickup: PlanPoint;
   drop: PlanPoint;
+  /**
+   * When the door expects it, in minutes after the day starts: not before `fromMin`, not after `toMin`. Either end
+   * may be absent. A truck that is early WAITS for the window to open; one that cannot make it is planned all the
+   * same and marked late (the user, 2026-10-06: "plan it late, say so") — lateness is a cost, never a refusal. And
+   * where the day is too short to wait for a door to open, the order is delivered BEFORE its window and marked early:
+   * nothing is left undelivered because of a window.
+   */
+  window?: { fromMin?: number; toMin?: number };
 }
 
 export interface PlanTruck {
@@ -62,9 +70,14 @@ export interface PlanParams {
   polish?: boolean;
   /** How many orders may be given up for more (see solve), at most. Absent: as many as the work allows. */
   maxGiveUps?: number;
+  /**
+   * What a minute past a delivery window is worth in minutes of the fleet's day. At 4, the plan drives up to four
+   * minutes more to be one minute less late — and sends out another truck (openTruckMin) before being much later.
+   */
+  lateWeight: number;
 }
 
-export const DEFAULT_PLAN_PARAMS: PlanParams = { speedKmh: 30, loadMin: 15, unloadMin: 20, dayMin: 600, openTruckMin: 90, samePickupKm: 0.3 };
+export const DEFAULT_PLAN_PARAMS: PlanParams = { speedKmh: 30, loadMin: 15, unloadMin: 20, dayMin: 600, openTruckMin: 90, samePickupKm: 0.3, lateWeight: 4 };
 
 /**
  * `too_heavy` heavier than the fleet's largest truck · `no_truck_can_carry` no truck that could handle it is big enough
@@ -77,8 +90,14 @@ export interface PlanStop {
   orderId: string;
   /** Kilometres driven from the previous point (the collection, or the stop before). */
   km: number;
-  /** Minutes after the day starts that the truck is at this door. */
+  /** Minutes after the day starts that the goods are handed over at this door: on arrival, or when its window opens. */
   arriveMin: number;
+  /** Minutes the truck stands at the door before its window opens. Absent when it does not wait. */
+  waitMin?: number;
+  /** Minutes after its window closed that the door is reached. Absent when it is on time, or has no window. */
+  lateMin?: number;
+  /** Minutes before its window opens that the goods are handed over — the day had no room to wait. Absent otherwise. */
+  earlyMin?: number;
 }
 
 export interface PlanTrip {
@@ -114,21 +133,25 @@ export interface PlanResult {
 
 type Km = (a: PlanPoint, b: PlanPoint) => number;
 
+/** An order as it sits in a truck's day. `noWait`: the day could not hold the wait for its window, so it goes in early. */
+type Placed = PlanOrder & { noWait?: boolean };
+
 interface Draft {
   pickup: PlanPoint;
-  orders: PlanOrder[];
+  orders: Placed[];
 }
 
 /* ------------------------------------------------------------ one truck's day -- */
 
 /** A truck's day, driven: every leg, every stop, in order. The one place distance and time are worked out. */
-function drive(trips: Draft[], depot: PlanPoint, p: PlanParams, km: Km): { trips: PlanTrip[]; km: number; emptyKm: number; minutes: number; kg: number } {
+function drive(trips: Draft[], depot: PlanPoint, p: PlanParams, km: Km): { trips: PlanTrip[]; km: number; emptyKm: number; minutes: number; kg: number; late: number } {
   const travel = (d: number) => (d / p.speedKmh) * 60;
   let at = depot;
   let clock = 0;
   let total = 0;
   let empty = 0;
   let kgAll = 0;
+  let lateAll = 0;
   const out: PlanTrip[] = trips.map((trip, i) => {
     const toPickup = km(at, trip.pickup);
     clock += travel(toPickup);
@@ -141,10 +164,18 @@ function drive(trips: Draft[], depot: PlanPoint, p: PlanParams, km: Km): { trips
       const leg = km(at, o.drop);
       clock += travel(leg);
       total += leg;
+      // Early for its window: the truck stands at the door until it opens, and that standing is part of its day.
+      const before = o.window?.fromMin !== undefined && clock < o.window.fromMin ? o.window.fromMin - clock : 0;
+      const wait = o.noWait ? 0 : before;
+      const early = o.noWait ? before : 0;
+      clock += wait;
       const arriveMin = clock;
+      // Past its window: delivered all the same, and counted — what it costs is weighed where plans are compared.
+      const late = o.window?.toMin !== undefined && clock > o.window.toMin ? clock - o.window.toMin : 0;
+      lateAll += late + early;
       clock += p.unloadMin;
       at = o.drop;
-      return { orderId: o.id, km: round1(leg), arriveMin: Math.round(arriveMin) };
+      return { orderId: o.id, km: round1(leg), arriveMin: Math.round(arriveMin), ...(Math.round(wait) > 0 ? { waitMin: Math.round(wait) } : {}), ...(Math.round(late) > 0 ? { lateMin: Math.round(late) } : {}), ...(Math.round(early) > 0 ? { earlyMin: Math.round(early) } : {}) };
     });
     const kg = trip.orders.reduce((s, o) => s + o.kg, 0);
     kgAll += kg;
@@ -156,7 +187,7 @@ function drive(trips: Draft[], depot: PlanPoint, p: PlanParams, km: Km): { trips
     total += home;
     empty += home;
   }
-  return { trips: out, km: total, emptyKm: empty, minutes: clock, kg: kgAll };
+  return { trips: out, km: total, emptyKm: empty, minutes: clock, kg: kgAll, late: lateAll };
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
@@ -165,10 +196,15 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
  * How a day is judged: how long it is, and — between two days of the same length — how soon the doors are reached.
  * On an out-and-back road a truck can deliver on the way out or on the way home for the same day's work; the customer
  * is better off with the first, and so is the truck, which runs lighter sooner.
+ *
+ * `minutes` is the day as the driver lives it — it is what must fit a shift. `cost` is what plans are COMPARED by: the
+ * same minutes, plus every minute outside a delivery window — after it closed, or before it opened where the day
+ * could not wait — at what the fleet says such a minute is worth. So a door reached outside its window is never
+ * forbidden, only dearer than one reached inside it.
  */
-function measure(trips: Draft[], depot: PlanPoint, p: PlanParams, km: Km): { minutes: number; waiting: number } {
+function measure(trips: Draft[], depot: PlanPoint, p: PlanParams, km: Km): { minutes: number; cost: number; waiting: number } {
   const d = drive(trips, depot, p, km);
-  return { minutes: d.minutes, waiting: d.trips.reduce((s, t) => s + t.stops.reduce((x, stop) => x + stop.arriveMin, 0), 0) };
+  return { minutes: d.minutes, cost: d.minutes + p.lateWeight * d.late, waiting: d.trips.reduce((s, t) => s + t.stops.reduce((x, stop) => x + stop.arriveMin, 0), 0) };
 }
 const EPS = 1e-6;
 
@@ -186,7 +222,10 @@ function untangle(trips: Draft[], depot: PlanPoint, p: PlanParams, km: Km): Draf
           const orders = [...best[t].orders.slice(0, i), ...best[t].orders.slice(i, j + 1).reverse(), ...best[t].orders.slice(j + 1)];
           const next = best.map((trip, k) => (k === t ? { ...trip, orders } : trip));
           const m = measure(next, depot, p, km);
-          if (m.minutes < bestIs.minutes - EPS || (m.minutes < bestIs.minutes + EPS && m.waiting < bestIs.waiting - EPS)) {
+          // With windows a cheaper order of stops can be a LONGER day (waiting for a door instead of being late at
+          // it), so the shift is asked here too: no re-ordering may take a day past what a driver may work.
+          if (m.minutes > p.dayMin + EPS && m.minutes > bestIs.minutes + EPS) continue;
+          if (m.cost < bestIs.cost - EPS || (m.cost < bestIs.cost + EPS && m.waiting < bestIs.waiting - EPS)) {
             best = next;
             bestIs = m;
             improved = true;
@@ -210,6 +249,16 @@ type Reason = UnplannedReason;
  * is why.
  */
 function place(o: PlanOrder, days: Days, trucks: PlanTruck[], depot: PlanPoint, p: PlanParams, km: Km, only?: string): { truckId: string; trips: Draft[]; cost: number } | { reason: Reason } {
+  const waiting = placeAs({ ...o, noWait: false }, days, trucks, depot, p, km, only);
+  // No room in any day to WAIT for this door to open. Rather than leave it undelivered for its window, it is offered
+  // the day again as an order that goes in when the truck gets there — early, and counted as that.
+  if ('reason' in waiting && wantsTime(waiting.reason) && o.window?.fromMin !== undefined) return placeAs({ ...o, noWait: true }, days, trucks, depot, p, km, only);
+  return waiting;
+}
+
+const wantsTime = (r: Reason) => r === 'no_time' || r === 'no_driver';
+
+function placeAs(o: Placed, days: Days, trucks: PlanTruck[], depot: PlanPoint, p: PlanParams, km: Km, only?: string): { truckId: string; trips: Draft[]; cost: number } | { reason: Reason } {
   if (trucks.length === 0) return { reason: 'no_trucks' };
   const able = trucks.filter((t) => !t.cannot?.has(o.id));
   if (able.length === 0) return { reason: 'no_truck_can_carry' };
@@ -241,7 +290,7 @@ function place(o: PlanOrder, days: Days, trucks: PlanTruck[], depot: PlanPoint, 
     for (const trips of candidates) {
       const after = measure(trips, depot, p, km);
       if (after.minutes > p.dayMin + EPS) continue;
-      const cost = after.minutes - was.minutes + (opening ? p.openTruckMin : 0);
+      const cost = after.cost - was.cost + (opening ? p.openTruckMin : 0);
       const waiting = after.waiting - was.waiting;
       // Equal cost: the one that reaches its doors sooner. Still equal: the truck named first — the same orders
       // always make the same plan.
@@ -285,7 +334,7 @@ function solve(orders: PlanOrder[], trucks: PlanTruck[], depot: PlanPoint, p: Pl
         if (!home) continue;
         const [truckId, day] = home;
         const rest = without(day, o.id);
-        const saved = measure(day, depot, p, km).minutes - measure(rest, depot, p, km).minutes + (rest.length === 0 ? p.openTruckMin : 0);
+        const saved = measure(day, depot, p, km).cost - measure(rest, depot, p, km).cost + (rest.length === 0 ? p.openTruckMin : 0);
         const trial: Days = new Map(days);
         trial.set(truckId, rest);
         const at = place(o, trial, trucks, depot, p, km);
@@ -358,7 +407,7 @@ function solve(orders: PlanOrder[], trucks: PlanTruck[], depot: PlanPoint, p: Pl
         still.push({ order: x, reason: back.reason });
       } else trial.set(back.truckId, back.trips);
       if (gain <= 0) continue;
-      const minutes = [...trial.values()].reduce((s, day) => s + measure(day, depot, p, km).minutes, 0);
+      const minutes = [...trial.values()].reduce((s, day) => s + measure(day, depot, p, km).cost, 0);
       if (!best || gain > best.gain || (gain === best.gain && (kg > best.kg + EPS || (kg > best.kg - EPS && minutes < best.minutes - EPS)))) best = { days: trial, left: still, gain, kg, minutes };
     }
     if (!best) return false;

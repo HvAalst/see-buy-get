@@ -415,6 +415,7 @@
 }
 
 /* The plan's answer card: the short-of-trucks note stands a little clear of the small print under it. */
+.plan .note + .note,
 .plan .note + .hint,
 .plan .note + p {
   margin-top: 10px;
@@ -444,6 +445,15 @@
   width: auto;
   align-self: flex-start;
   padding-left: 0;
+}
+/* What came of a delivery window: not kept, loudest; not read, next; a wait, quietly. */
+.plan__win--danger {
+  color: var(--dang);
+  font-weight: 600;
+}
+.plan__win--warn {
+  color: var(--navy);
+  font-weight: 600;
 }
 .plan__byhand {
   display: flex;

@@ -30,9 +30,11 @@ You can do two things.
 
 What replan can express: when vehicles leave the depot, the longest day (1 to 13 hours), the speed on the road, the minutes to load an order and to hand one over, which vehicles are left out of the plan, keeping a named order off a named vehicle, and putting a named order on a named vehicle. Each list you send replaces the list in force, so to add one entry send the entries already in force as well (they are in the plan data: "rules", and the vehicles marked "leftOut").
 
-What it cannot express: delivery time windows, the order of stops within a trip, splitting an order across vehicles, areas on a map, prices or costs. When the dispatcher asks for one of these, say that the plan cannot do that yet, and offer the nearest thing it can do if there is one. An instruction about an area ("keep truck 3 out of the city centre") can be done order by order: use the delivery addresses in the plan data to choose the orders, keep each of them off that vehicle, and name the orders you chose so the dispatcher can check your reading of the addresses - you are reading place names, not a map.
+What it cannot express: changing a delivery window, the order of stops within a trip, splitting an order across vehicles, areas on a map, prices or costs. When the dispatcher asks for one of these, say that the plan cannot do that yet, and offer the nearest thing it can do if there is one. An instruction about an area ("keep truck 3 out of the city centre") can be done order by order: use the delivery addresses in the plan data to choose the orders, keep each of them off that vehicle, and name the orders you chose so the dispatcher can check your reading of the addresses - you are reading place names, not a map.
 
 The solver already holds to the rules of the trade, so do not propose breaking them and do not present them as your own caution: a vehicle is never loaded past what it carries at once, no day is longer than 13 hours, no more vehicles go out than the fleet has drivers, and goods go only on a vehicle with the equipment for them.
+
+The solver already plans to the delivery window each shipper asked for, wherever it could read one as a time ("plannedTo"). A vehicle that is early waits for the window to open ("waitsMin"). An order that cannot make its window is planned all the same and marked ("lateByMin", or "earlyByMin" where the day had no room to wait) - nothing is left out because of a window. Words the solver could not read as a time are marked "windowNotRead": that order was planned to its day only, and the fix is the shipper or the office writing the window as hours, such as 8-12 or before 14:00.
 
 Every time and distance in the plan is an estimate - straight-line distance at one speed, plus fixed minutes at each stop. Say "about" with times and do not present them as promises.
 
@@ -267,7 +269,7 @@ export function dataOf(plan: DayPlanView) {
   return {
     day: plan.day,
     settings: { leaveAt: plan.settings.dayStart, longestDayHours: plan.settings.dayHours, speedKmh: plan.settings.speedKmh, loadMinPerOrder: plan.settings.loadMin, handOverMinPerOrder: plan.settings.unloadMin },
-    totals: { orders: plan.totals.orders, planned: plan.totals.planned, kg: plan.totals.weightKg, plannedKg: plan.totals.plannedKg, km: plan.totals.km, emptyKm: plan.totals.emptyKm, vehiclesUsed: plan.totals.trucksUsed, vehiclesGoingOut: plan.totals.trucksAvailable, drivers: plan.totals.drivers },
+    totals: { orders: plan.totals.orders, planned: plan.totals.planned, kg: plan.totals.weightKg, plannedKg: plan.totals.plannedKg, km: plan.totals.km, emptyKm: plan.totals.emptyKm, vehiclesUsed: plan.totals.trucksUsed, vehiclesGoingOut: plan.totals.trucksAvailable, drivers: plan.totals.drivers, outsideTheirWindow: plan.totals.outsideWindow ?? 0, windowsNotRead: plan.totals.unreadWindows ?? 0 },
     ...(plan.hire ? { short: { moreVehiclesNeeded: plan.hire.trucks, eachCarryingKg: plan.hire.capacityKg, forOrders: plan.hire.orders, kg: plan.hire.weightKg } } : {}),
     vehicles: plan.vehicles.map((v) => ({ plate: v.plate, kind: v.vehicleClass, carriesKg: v.capacityKg, ...(v.excluded ? { leftOut: true } : {}), ...(v.offRoad?.length ? { offTheRoad: v.offRoad } : {}) })),
     rules: (plan.rules ?? []).map((r) => ({ rule: r.kind === 'keep_off' ? 'keep off' : 'put on', order: r.code, vehicle: r.plate })),
@@ -284,7 +286,7 @@ export function dataOf(plan: DayPlanView) {
         loadsAbout: t.start,
         kg: t.weightKg,
         emptyKmToGetThere: t.emptyKm,
-        stops: t.stops.map((s) => ({ order: s.code, for: s.shipperName, to: s.destLabel, kg: s.weightKg, about: s.arrive, ...(s.deliveryWindow ? { askedFor: s.deliveryWindow } : {}) })),
+        stops: t.stops.map((s) => ({ order: s.code, for: s.shipperName, to: s.destLabel, kg: s.weightKg, about: s.arrive, ...(s.deliveryWindow ? { askedFor: s.deliveryWindow } : {}), ...(s.window ? { plannedTo: s.window } : {}), ...(s.windowUnread ? { windowNotRead: true } : {}), ...(s.lateMin ? { lateByMin: s.lateMin } : {}), ...(s.earlyMin ? { earlyByMin: s.earlyMin } : {}), ...(s.waitMin ? { waitsMin: s.waitMin } : {}) })),
       })),
     })),
     notPlanned: plan.unplanned.map((u) => ({ order: u.code, for: u.shipperName, to: u.destLabel, kg: u.weightKg, why: WHY[u.reason] })),

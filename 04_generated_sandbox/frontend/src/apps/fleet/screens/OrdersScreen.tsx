@@ -4,7 +4,7 @@ import { Button, Card, CodeCard, ErrorNote, Explainer, Note, Pill, PlacePicker, 
 import type { GeoPoint } from '../../../shared/geo';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { PACKAGING_OPTIONS } from '../../agent/logic';
-import { TAG_TONE, byDay, dayOf, daySummary, dayWord, mayWithdraw, orderTag, ordersApi, weightWords, type Contract, type DayPlanState, type FleetOrder, type InviteIssued, type PartnerLists } from '../orders';
+import { TAG_TONE, byDay, dayOf, daySummary, dayWord, hoursWords, mayWithdraw, orderTag, ordersApi, weightWords, type Contract, type DayPlanState, type FleetOrder, type InviteIssued, type PartnerLists } from '../orders';
 import { OrderHandOn, PartnersCard } from './HandOn';
 import { PlanBoard } from './PlanBoard';
 import { OrderUpload } from './OrderUpload';
@@ -203,6 +203,9 @@ function OrderRows({ orders, onOpen, showDay }: { orders: FleetOrder[]; onOpen: 
                 {o.driverName ? ` · ${t('fleet.orders.driver', { name: o.driverName, plate: o.plate ?? '' })}` : ''}
               </span>
               {o.planned && o.status === 'ordered' ? <span class="row__s">{t('fleet.orders.plannedOn', { plate: o.planned.plate, trip: o.planned.tripNo, arrive: o.planned.arrive })}</span> : null}
+              {o.planned && o.status === 'ordered' && (o.planned.lateMin || o.planned.earlyMin) ? (
+                <span class="row__s orders__nopin">{o.planned.lateMin ? t('fleet.orders.plannedLate', { by: hoursWords(o.planned.lateMin) }) : t('fleet.orders.plannedEarly', { by: hoursWords(o.planned.earlyMin ?? 0) })}</span>
+              ) : null}
               {o.planned?.held && o.status === 'ordered' ? <span class="row__s orders__nopin">{t('fleet.orders.planHeld', { plate: o.planned.plate, why: o.planned.held.why })}</span> : null}
             </span>
             <span class="row__end">

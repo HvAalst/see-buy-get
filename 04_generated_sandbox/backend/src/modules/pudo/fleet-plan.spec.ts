@@ -143,12 +143,13 @@ describe('a fleet’s plan for a day', () => {
     return vehicles.register({ plate, vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg, ownerName: 'X', equipment, baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, managerDid } as never);
   }
   const contractOf = (fleet: { did: string; companyName: string }): ContractRef => ({ contractId: 'ctr_plan', fleetDid: fleet.did, fleetName: fleet.companyName, shipperName: 'Jenga Bricks' });
-  function anOrder(fleet: { did: string; companyName: string }, over: { kg?: number; n?: number; day?: string; pinned?: boolean; ref?: string } = {}) {
+  function anOrder(fleet: { did: string; companyName: string }, over: { kg?: number; n?: number; day?: string; pinned?: boolean; ref?: string; window?: string } = {}) {
     seq += 1;
     return dispatch.registerFreight({
       description: `Bricks ${seq}`, pickupLocation: yard, pickupLabel: 'Jenga yard', destLabel: `Site ${over.n ?? seq}`,
       ...(over.pinned === false ? {} : { destLocation: site(over.n ?? 1) }),
       weightKg: over.kg ?? 2000, packaging: 'palletised', postedByDid: fleet.did, postedByName: 'Amina', contract: contractOf(fleet), deliverOn: over.day ?? tomorrow(), orderRef: over.ref ?? `WS-${seq}`,
+      ...(over.window ? { deliveryWindow: over.window } : {}),
     });
   }
   /** A fleet with an 8 t and a 3 t truck and two drivers. */
@@ -362,6 +363,93 @@ describe('a fleet’s plan for a day', () => {
       expect(kept.rules).toHaveLength(1);
       expect(plans.state(fleet.did, tomorrow()).plan!.rules).toEqual(kept.rules);
       expect(dispatch.ordersForFleet(fleet.did).find((r) => r.freightId === a.freightId)!.planned!.plate).toBe('KPL 003T');
+    });
+  });
+
+  /* ------------------------------------------------------ delivery windows -- */
+
+  /**
+   * THE WINDOW A SHIPPER ASKED FOR. The user, 2026-10-06: an order that cannot make its window is planned all the
+   * same, and said to be late. What is pinned here is the layer round the math: the words are read on the office's own
+   * clock, what was read is said back, what could not be read is said to be unread, and nothing is left out for it.
+   */
+  describe('delivery windows', () => {
+    type Stop = { freightId: string; arrive: string; deliveryWindow?: string; window?: string; windowUnread?: boolean; lateMin?: number; earlyMin?: number; waitMin?: number };
+    const stopOf = (plan: { routes: Array<{ trips: Array<{ stops: Stop[] }> }> }, freightId: string) => plan.routes.flatMap((r) => r.trips.flatMap((t) => t.stops)).find((s) => s.freightId === freightId)!;
+
+    it('plans to the window on the office’s own clock: waits for a door, is late at one it cannot make, and says what it read', () => {
+      const { fleet } = setUp();
+      const waits = anOrder(fleet, { kg: 1000, n: 1, window: 'after 15:00' });
+      const late = anOrder(fleet, { kg: 1000, n: 2, window: 'before 07:05' });
+      const unread = anOrder(fleet, { kg: 1000, n: 3, window: 'morning, call first' });
+      const free = anOrder(fleet, { kg: 1000, n: 4 });
+      const plan = plans.propose(fleet.did, { day: tomorrow() });
+      // Nothing is left out because of a window.
+      expect(plan.unplanned).toEqual([]);
+      expect(stopOf(plan, waits.freightId)).toMatchObject({ deliveryWindow: 'after 15:00', window: 'from 15:00', arrive: '15:00' });
+      expect(stopOf(plan, waits.freightId).waitMin).toBeGreaterThan(0);
+      // Five minutes after the trucks leave, a door across town: no plan can be there. It goes all the same.
+      expect(stopOf(plan, late.freightId)).toMatchObject({ window: 'before 07:05' });
+      expect(stopOf(plan, late.freightId).lateMin).toBeGreaterThan(0);
+      expect(stopOf(plan, late.freightId).waitMin).toBeUndefined();
+      // Words that are not a time: shown, said to be unread, and planned to the day only.
+      const u = stopOf(plan, unread.freightId);
+      expect(u).toMatchObject({ deliveryWindow: 'morning, call first', windowUnread: true });
+      expect([u.window, u.lateMin, u.waitMin, u.earlyMin]).toEqual([undefined, undefined, undefined, undefined]);
+      const f = stopOf(plan, free.freightId);
+      expect([f.deliveryWindow, f.window, f.windowUnread, f.lateMin]).toEqual([undefined, undefined, undefined, undefined]);
+      expect(plan.totals).toMatchObject({ planned: 4, outsideWindow: 1, unreadWindows: 1 });
+
+      // The same orders with the trucks leaving two hours later: the late door is two hours later still.
+      const later = plans.propose(fleet.did, { day: tomorrow(), dayStart: '09:00' });
+      expect(stopOf(later, late.freightId).lateMin).toBe(stopOf(plan, late.freightId).lateMin! + 120);
+    });
+
+    it('goes to the door that closes soonest first', () => {
+      const { fleet } = setUp();
+      const a = anOrder(fleet, { kg: 1000, n: 1 });
+      const b = anOrder(fleet, { kg: 1000, n: 6 });
+      const free = plans.propose(fleet.did, { day: tomorrow() });
+      const order = (plan: typeof free) => plan.routes.flatMap((r) => r.trips.flatMap((t) => t.stops.map((s) => s.freightId)));
+      const [first, second] = order(free);
+      expect([first, second].sort()).toEqual([a.freightId, b.freightId].sort());
+      // Whichever the road reaches second is given a window that closes just before it gets there.
+      const at = stopOf(free, second).arrive;
+      const [h, m] = at.split(':').map(Number);
+      const closes = String(h).padStart(2, '0') + ':' + String(Math.max(0, m - 5)).padStart(2, '0');
+      dispatch.withdrawUploadedOrder(fleet.did, second, 'Re-ordered with a window');
+      const again = anOrder(fleet, { kg: 1000, n: second === a.freightId ? 1 : 6, window: 'before ' + closes });
+      const plan = plans.propose(fleet.did, { day: tomorrow() });
+      expect(order(plan)).toEqual([again.freightId, first]);
+      expect(stopOf(plan, again.freightId).lateMin).toBeUndefined();
+      expect(plan.totals.outsideWindow).toBe(0);
+    });
+
+    it('hands over before a window opens when the day ends first — early, said as early, and still delivered', () => {
+      const { fleet } = setUp();
+      const a = anOrder(fleet, { kg: 1000, n: 1, window: 'after 18:00' });
+      // A ten-hour day from 07:00 is over at 17:00: there is no waiting for a door that opens at 18:00.
+      const plan = plans.propose(fleet.did, { day: tomorrow() });
+      expect(plan.unplanned).toEqual([]);
+      const s = stopOf(plan, a.freightId);
+      expect(s.earlyMin).toBeGreaterThan(0);
+      expect([s.waitMin, s.lateMin]).toEqual([undefined, undefined]);
+      expect(plan.totals.outsideWindow).toBe(1);
+      // A longer day holds the wait, and it is on time.
+      const long = plans.propose(fleet.did, { day: tomorrow(), dayHours: 13 });
+      expect(stopOf(long, a.freightId)).toMatchObject({ arrive: '18:00' });
+      expect(stopOf(long, a.freightId).earlyMin).toBeUndefined();
+      expect(long.totals.outsideWindow).toBe(0);
+    });
+
+    it('keeps what came of a window with the accepted plan, and on the order', () => {
+      const { fleet } = setUp();
+      const late = anOrder(fleet, { kg: 1000, n: 2, window: 'before 07:05' });
+      const kept = plans.accept(fleet.did, { day: tomorrow() }, 'Amina');
+      const lateMin = stopOf(kept, late.freightId).lateMin!;
+      expect(lateMin).toBeGreaterThan(0);
+      expect(stopOf(plans.state(fleet.did, tomorrow()).plan!, late.freightId).lateMin).toBe(lateMin);
+      expect(dispatch.ordersForFleet(fleet.did).find((r) => r.freightId === late.freightId)!.planned).toMatchObject({ lateMin });
     });
   });
 

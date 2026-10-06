@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { ADVISER_HISTORY, base64Of, historyOf, isWorkbook, keptOff, putOnto, ruleLine, rulesAsk, withoutRule, type PlanRule } from './orders';
+import { ADVISER_HISTORY, base64Of, historyOf, isWorkbook, keptOff, putOnto, ruleLine, windowLine, rulesAsk, withoutRule, type PlanRule } from './orders';
 import { askOf, byDay, dayOf, daySummary, dayWord, handOnLine, hoursWords, mayHandOn, importVerdictLine, leftByReason, mayWithdraw, notASheet, orderTag, sendLine, weightWords, type DayPlan, type FleetOrder, type PlanLeft, type PlanSendTruck } from './orders';
 
 const order = (over: Partial<FleetOrder> = {}): FleetOrder =>
@@ -218,6 +218,17 @@ describe('P1 — a fleet’s orders', () => {
     });
     // Asked again: still one rule for the order.
     expect(putOnto(rules, { freightId: 'f1', vehicleId: 'v1' }).putOn.filter((p) => p.freightId === 'f1')).toEqual([{ freightId: 'f1', vehicleId: 'v1' }]);
+  });
+
+  it('says what came of a delivery window — late and early loudest, an unread window next, a wait quietly, on time not at all', () => {
+    expect(windowLine({ deliveryWindow: '8-12', window: '08:00–12:00' }, t)).toBeNull();
+    expect(windowLine({}, t)).toBeNull();
+    expect(windowLine({ deliveryWindow: '8-12', window: '08:00–12:00', lateMin: 40 }, t)).toEqual({ tone: 'danger', text: 'About 40 min after its window (08:00–12:00). It is planned all the same.' });
+    expect(windowLine({ window: 'from 18:00', earlyMin: 150 }, t)).toEqual({ tone: 'danger', text: 'About 2 h 30 before its window opens (from 18:00): the day has no room to wait.' });
+    expect(windowLine({ deliveryWindow: 'morning', windowUnread: true }, t)).toEqual({ tone: 'warn', text: '"morning" is not a time the plan could read, so it is planned to the day only. Write it as 8-12, or before 14:00.' });
+    expect(windowLine({ window: 'from 15:00', waitMin: 25 }, t)).toEqual({ tone: 'idle', text: 'The vehicle waits 25 min for the window to open (from 15:00).' });
+    // Late outranks the wait a later door might also have had.
+    expect(windowLine({ window: '08:00–12:00', lateMin: 5, waitMin: 10 }, t)?.tone).toBe('danger');
   });
 
   it('says a rule the way the office would', () => {

@@ -20,9 +20,20 @@ export class PlanStopView {
   weightKg: number;
   /** Kilometres from the collection, or from the stop before. */
   km: number;
-  /** When the truck is at this door, on the clock (HH:MM). An estimate from distance and the day's settings. */
+  /** When the goods are handed over at this door, on the clock (HH:MM). An estimate from distance and the day's settings. */
   arrive: string;
+  /** The window in the shipper's own words. */
   @ApiPropertyOptional() deliveryWindow?: string;
+  /** The window as the plan READ those words ("08:00–12:00", "before 14:00") — what it planned to. Absent: no window, or words it could not read as one. */
+  @ApiPropertyOptional() window?: string;
+  /** The shipper wrote something about when, and the plan could not read it as a time: it is shown, and was not planned to. */
+  @ApiPropertyOptional() windowUnread?: boolean;
+  /** Minutes after its window closed that the door is reached. Planned all the same, and said. */
+  @ApiPropertyOptional() lateMin?: number;
+  /** Minutes before its window opens that the goods are handed over: the day had no room to wait. */
+  @ApiPropertyOptional() earlyMin?: number;
+  /** Minutes the truck stands at the door before its window opens; `arrive` is then the opening. */
+  @ApiPropertyOptional() waitMin?: number;
 }
 
 export class PlanTripView {
@@ -121,6 +132,10 @@ export class PlanTotals {
   trucksAvailable: number;
   /** Drivers the fleet has to send out: the plan uses no more trucks than this. */
   drivers: number;
+  /** Planned orders that reach their door outside the window their shipper asked for — late, or early. Each is marked. */
+  outsideWindow: number;
+  /** Orders whose window is in words the plan could not read as a time. They are planned, to the day only. */
+  unreadWindows: number;
 }
 
 export class PlanAccepted {
@@ -201,6 +216,10 @@ export class PlannedOn {
   seq: number;
   /** When the truck is expected at the door, on the clock. */
   arrive: string;
+  /** Planned to arrive this many minutes after the window its shipper asked for. */
+  @ApiPropertyOptional() lateMin?: number;
+  /** Planned to be handed over this many minutes before its window opens. */
+  @ApiPropertyOptional() earlyMin?: number;
   at: string;
   /** Set when its trip came up and it could not be put on the truck. Cleared when it is, or when the day is planned again. */
   @ApiPropertyOptional({ type: PlanHeld }) held?: PlanHeld;
