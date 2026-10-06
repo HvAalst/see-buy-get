@@ -317,6 +317,18 @@ describe('a customer’s business, over the wire', () => {
     expect(uploaded).toMatchObject({ uploaded: true, weightKg: 1500, status: 'ordered', pickupLabel: 'Jenga yard' });
     expect((await http().get(`/v1/sbg/fleet/managers/${fleet.did}/contracts`).set(bearer(setupKey)).expect(200)).body.items[0].pickup).toMatchObject({ label: 'Jenga yard' });
     expect((await http().get(`/v1/sbg/fleet/managers/${fleet.did}/orders/template`).set(bearer(setupKey)).expect(200)).body.csv).toContain('Order number,Goods');
+    // An Excel workbook is read as it is: the file Excel saved, base64 in the same call. Its first sheet is named.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const workbook = (require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'src', 'modules', 'pudo', 'fixtures', 'orders-from-excel.xlsx')) as Buffer).toString('base64');
+    const importAt = `/v1/sbg/fleet/managers/${fleet.did}/contracts/${contract.contractId}/orders/import`;
+    const wbCheck = await http().post(importAt).set(bearer(setupKey)).send({ workbook, pickupLabel: 'Jenga yard', pickupLat: -1.3, pickupLng: 36.85 }).expect(201);
+    expect(wbCheck.body).toMatchObject({ imported: false, ok: 4, problems: 1, sheet: 'Orders', otherSheets: ['Prices'] });
+    expect(wbCheck.body.rows.find((r: { verdict: string }) => r.verdict === 'problem')).toMatchObject({ line: 7 });
+    await http().post(importAt).set(bearer(setupKey)).send({ workbook: 'not base64 at all!!', pickupLabel: 'Jenga yard', pickupLat: -1.3, pickupLng: 36.85 }).expect(400);
+    await http().post(importAt).set(bearer(setupKey)).send({ workbook, text: 'Order number,Goods' }).expect(400);
+    expect((await http().post(importAt).set(bearer(setupKey)).send({ workbook: Buffer.from('plain words').toString('base64') }).expect(201)).body.refusal).toMatch(/not an Excel workbook/);
+    await http().post(importAt).set(bearer(shop)).send({ workbook }).expect(403);
+
     // The office withdraws what it uploaded; what the shipper ordered is the shipper's to withdraw.
     await http().post(`/v1/sbg/fleet/managers/${fleet.did}/orders/${ordered.body.freightId}/withdraw`).set(bearer(setupKey)).send({ reason: 'Cannot carry it' }).expect(403);
     await http().post(`/v1/sbg/fleet/managers/${fleet.did}/orders/${uploaded.freightId}/withdraw`).set(bearer(setupKey)).send({ reason: 'Uploaded by mistake' }).expect(201);

@@ -1,8 +1,8 @@
-import { useState } from 'preact/hooks';
+import { useRef, useState } from 'preact/hooks';
 import { Button, ErrorNote, Note, PlacePicker, Sheet, type PlaceNote } from '../../../shared/ui';
 import { useT, type Translate } from '../../../shared/i18n';
 import { pinAfterRename, type GeoPoint, type PinSource } from '../../../shared/geo';
-import { importVerdictLine, notASheet, type Contract, type ImportResult, type ordersApi } from '../orders';
+import { MAX_WORKBOOK_BYTES, base64Of, importVerdictLine, isWorkbook, notASheet, type Contract, type ImportResult, type ordersApi } from '../orders';
 
 /** What a placed (or unplaced) collection point means here: every line without its own is collected from it. */
 function pickupNote(t: Translate, note: PlaceNote): string {
@@ -25,11 +25,16 @@ function pickupNote(t: Translate, note: PlaceNote): string {
  * typed by people, so nothing is imported unseen: it is CHECKED first, every line judged in words, and only then
  * imported — the lines that are right, with the others left out and said why. Changing the sheet or the collection
  * point after a check throws the check away: what is imported is always what was last judged.
+ *
+ * The sheet is a CSV file, cells pasted, or the EXCEL WORKBOOK itself — sent as it is and read by the server, which
+ * says which of its sheets it read. A workbook and pasted cells are one or the other: choosing one clears the other.
  */
 export function OrderUpload({ contract, api, onClose, onImported }: { contract: Contract; api: ReturnType<typeof ordersApi>; onClose: () => void; onImported: (n: number) => Promise<void> | void }) {
   const t = useT();
   const [text, setText] = useState('');
   const [fileName, setFileName] = useState<string | null>(null);
+  const [workbook, setWorkbook] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [label, setLabel] = useState(contract.pickup?.label ?? '');
   const [pin, setPin] = useState<GeoPoint | null>(contract.pickup?.location ?? null);
   const [from, setFrom] = useState<PinSource>(contract.pickup ? 'map' : null);
@@ -53,15 +58,29 @@ export function OrderUpload({ contract, api, onClose, onImported }: { contract: 
       setFileName(null);
       return;
     }
+    if (isWorkbook(file.name)) {
+      if (file.size > MAX_WORKBOOK_BYTES) {
+        setRefused(t('fleet.upload.tooBig'));
+        setFileName(null);
+        setWorkbook(null);
+        return;
+      }
+      setRefused(null);
+      setFileName(file.name);
+      setText('');
+      setWorkbook(base64Of(new Uint8Array(await file.arrayBuffer())));
+      return;
+    }
     setRefused(null);
     setFileName(file.name);
+    setWorkbook(null);
     setText(await file.text());
   };
 
   const send = async (dryRun: boolean) => {
     setBusy(dryRun ? 'check' : 'import');
     setError(null);
-    const r = await api.importOrders(contract.contractId, { text, ...(label.trim() && pin ? { pickupLabel: label.trim(), pickupLat: pin.lat, pickupLng: pin.lng } : {}), dryRun });
+    const r = await api.importOrders(contract.contractId, { ...(workbook ? { workbook } : { text }), ...(label.trim() && pin ? { pickupLabel: label.trim(), pickupLat: pin.lat, pickupLng: pin.lng } : {}), dryRun });
     setBusy(null);
     if (r.error || !r.data) return setError(r.error);
     if (dryRun || r.data.refusal) return setChecked(r.data);
@@ -116,7 +135,14 @@ export function OrderUpload({ contract, api, onClose, onImported }: { contract: 
         <label class="field__label" for="up-file">
           {t('fleet.upload.file')}
         </label>
-        <input id="up-file" class="input" type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" onChange={(e) => void pick(e.currentTarget.files?.[0])} />
+        <input
+          id="up-file"
+          ref={fileInput}
+          class="input"
+          type="file"
+          accept=".xlsx,.xlsm,.csv,.tsv,.txt,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          onChange={(e) => void pick(e.currentTarget.files?.[0])}
+        />
         {refused ? <p class="hint upload__refused">{refused}</p> : null}
       </div>
       <div class="field" style="margin-top:12px">
@@ -133,11 +159,15 @@ export function OrderUpload({ contract, api, onClose, onImported }: { contract: 
           onInput={(e) => {
             stale();
             setFileName(null);
+            setWorkbook(null);
+            // The file is no longer what would be sent. Let go of it, so choosing the SAME file again is a choice —
+            // a file input says nothing when it is handed the file it already holds.
+            if (fileInput.current) fileInput.current.value = '';
             setText(e.currentTarget.value);
           }}
         />
         <p class="hint">
-          {fileName ? `${t('fleet.upload.fromFile', { name: fileName })} ` : ''}
+          {fileName ? `${t(workbook ? 'fleet.upload.fromWorkbook' : 'fleet.upload.fromFile', { name: fileName })} ` : ''}
           {t('fleet.upload.columns')}
         </p>
         <Button variant="link" chevron={false} onClick={() => void template()}>
@@ -156,6 +186,12 @@ export function OrderUpload({ contract, api, onClose, onImported }: { contract: 
             {checked.problems ? <span class="upload__bad">{t('fleet.upload.problems', { n: checked.problems })}</span> : null}
           </p>
           {checked.unlocated ? <p class="hint">{t(checked.unlocated === 1 ? 'fleet.upload.unlocatedOne' : 'fleet.upload.unlocated', { n: checked.unlocated })}</p> : null}
+          {checked.sheet ? (
+            <p class="hint">
+              {t('fleet.upload.sheetRead', { sheet: checked.sheet })}
+              {checked.otherSheets?.length ? ` ${t(checked.otherSheets.length === 1 ? 'fleet.upload.sheetsLeftOne' : 'fleet.upload.sheetsLeft', { sheets: checked.otherSheets.join(', ') })}` : ''}
+            </p>
+          ) : null}
           {checked.ignored.length ? <p class="hint">{t('fleet.upload.ignored', { columns: checked.ignored.join(', ') })}</p> : null}
           {bad.length ? (
             <ul class="upload__lines">
@@ -173,7 +209,7 @@ export function OrderUpload({ contract, api, onClose, onImported }: { contract: 
             {t(checked.ok === 1 ? 'fleet.upload.importOne' : 'fleet.upload.import', { n: checked.ok })}
           </Button>
         ) : (
-          <Button chevron={false} disabled={!text.trim()} busy={busy === 'check'} onClick={() => void send(true)}>
+          <Button chevron={false} disabled={!text.trim() && !workbook} busy={busy === 'check'} onClick={() => void send(true)}>
             {t('fleet.upload.check')}
           </Button>
         )}

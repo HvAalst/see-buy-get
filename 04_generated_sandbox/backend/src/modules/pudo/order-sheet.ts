@@ -6,9 +6,10 @@ import { isPackaging, type Packaging } from './packaging';
  *
  * The user, 2026-10-05: orders also reach the fleet as a spreadsheet the office uploads — the daily export of a
  * webshop that is not on SeeBuyGet, or is and still works from Excel. So this reads what people actually have: a CSV
- * saved from a spreadsheet, or cells copied out of one and pasted (tabs), with whatever the columns happen to be
- * called and in whatever order. It is pure — text in, rows and their problems out — so the phone and the desk get the
- * same verdict on every line, and so it can be tested on the sheets that go wrong.
+ * saved from a spreadsheet, cells copied out of one and pasted (tabs), or the workbook itself (its cells are read by
+ * workbook.ts and judged here, line for line the same) — with whatever the columns happen to be called and in
+ * whatever order. It is pure — cells in, rows and their problems out — so the phone and the desk get the same verdict
+ * on every line, and so it can be tested on the sheets that go wrong.
  *
  * It reads; it does not guess. A date it cannot read for certain, a weight with no number in it, a row with no order
  * number: each is a PROBLEM on that row, said in words, and that row is not imported. The rest are.
@@ -162,9 +163,20 @@ const keyOf = (heading: string) => heading.toLowerCase().replace(/\(.*?\)/g, '')
  * Read a sheet of orders. `today` is the server's day: an order for a day already gone is a problem on its row.
  */
 export function readOrderSheet(text: string, today: string): SheetReading {
+  if (!text?.trim()) return { refusal: 'The sheet is empty', columns: {}, ignored: [], orders: [] };
+  return readOrderRows(cellsOf(text), today);
+}
+
+/**
+ * The same reading, of cells already cut: a workbook's sheet, or the text above. Empty lines are not lines. `lines`
+ * is the number each row carries where it came from (a workbook shows one beside every row): given, a problem is
+ * reported against THAT number, the one on the screen of whoever has to fix it.
+ */
+export function readOrderRows(cells: string[][], today: string, lines?: number[]): SheetReading {
   const empty = (refusal: string): SheetReading => ({ refusal, columns: {}, ignored: [], orders: [] });
-  if (!text?.trim()) return empty('The sheet is empty');
-  const rows = cellsOf(text);
+  const kept = cells.map((r, i) => ({ cells: r.map((c) => (c ?? '').trim()), line: lines?.[i] })).filter((r) => r.cells.some((c) => c !== ''));
+  const rows = kept.map((r) => r.cells);
+  if (rows.length === 0) return empty('The sheet is empty');
   if (rows.length < 2) return empty('The sheet needs a first line naming its columns, and at least one order under it');
   const [header, ...body] = rows;
   if (body.length > MAX_SHEET_ROWS) return empty(`A sheet holds ${MAX_SHEET_ROWS} orders at most — this one has ${body.length}. Send it in parts`);
@@ -188,7 +200,7 @@ export function readOrderSheet(text: string, today: string): SheetReading {
 
   const seen = new Map<string, number>();
   const orders = body.map((cells, i): SheetOrder => {
-    const line = i + 2;
+    const line = kept[i + 1].line ?? i + 2;
     const get = (f: SheetField) => (at[f] === undefined ? '' : (cells[at[f]!] ?? '')).trim();
     const problems: string[] = [];
 

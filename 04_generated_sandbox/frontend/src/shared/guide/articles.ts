@@ -617,14 +617,15 @@ export const ARTICLES: GuideArticle[] = [
     summary: "When a shipper sends you its orders as a spreadsheet, upload the sheet under their contract. It is checked line by line before anything is added.",
     steps: [
       "Orders, then Upload orders beside the contract. Say where the goods are collected: type the place and find it on the map. It is remembered for next time.",
-      "Choose the sheet saved as CSV, or copy the cells in the spreadsheet and paste them. The first line names the columns: an order number, the goods, the weight, where to deliver and the date. Download a template to send them shows the exact form.",
+      "Choose the sheet — the Excel workbook itself (.xlsx) or a CSV file — or copy the cells in the spreadsheet and paste them. The first line names the columns: an order number, the goods, the weight, where to deliver and the date. Download a template to send them shows the exact form.",
       "Tap Check the sheet. You see how many orders are ready, how many are already here, and each line with a problem, by its line number and in words.",
       "Tap Add orders. The lines that are right become orders; the others are left out. Put them right and upload the same sheet again — an order number that is already here is never added twice.",
       "An address the map does not know is added without a point and marked in the queue. Open it and place it on the map, or it cannot be planned."
     ],
     notes: [
-      "Dates are read as 2026-10-06 or day first, 06/10/2026. Weights may be 4000, 4,000 kg or 1.5 t. An Excel file itself is not read: save it as CSV, or paste the cells.",
-      "Your office can withdraw an order it uploaded, with a reason. An order the shipper placed themselves is theirs to withdraw."
+      "Dates are read as 2026-10-06 or day first, 06/10/2026. Weights may be 4000, 4,000 kg or 1.5 t. A date typed as a date in Excel is read whatever format the cell shows it in.",
+      "Your office can withdraw an order it uploaded, with a reason. An order the shipper placed themselves is theirs to withdraw.",
+      "Of an Excel workbook the first sheet is read, and you are told its name and which sheets were not read. Problems are reported by the line numbers Excel shows. An old .xls file, a workbook with a password, and a file over 1 MB are not read: save it as .xlsx or as CSV."
     ]
   },
   {

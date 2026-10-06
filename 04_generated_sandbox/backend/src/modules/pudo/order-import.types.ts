@@ -42,4 +42,7 @@ export class OrderImportResult {
   /** Which of the sheet's own headings was read as what, and which were made nothing of. */
   @ApiProperty({ type: 'object', additionalProperties: { type: 'string' } }) columns: Record<string, string>;
   @ApiProperty({ type: [String] }) ignored: string[];
+  /** For a workbook: the sheet that was read — only ever the first — and the names of the ones that were not. */
+  @ApiPropertyOptional() sheet?: string;
+  @ApiPropertyOptional({ type: [String] }) otherSheets?: string[];
 }

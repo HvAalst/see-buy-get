@@ -323,6 +323,38 @@ describe('a standing contract of carriage', () => {
         return { kilima, svc, contract, imports, run };
       };
 
+      it('reads the workbook itself — Excel’s own file: the first sheet, named; each bad line by the number Excel shows', () => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const workbook: Buffer = require('node:fs').readFileSync(require('node:path').join(__dirname, 'fixtures', 'orders-from-excel.xlsx'));
+        const { kilima, contract, imports } = setUp();
+        const fleetRef = { did: kilima.did, name: kilima.companyName };
+        const where = { pickupLabel: 'Jenga yard', pickupLocation: yard };
+        const checked = imports.run(fleetRef, contract, { workbook, ...where }, 'Amina', true);
+        expect(checked).toMatchObject({ imported: false, ok: 4, problems: 1, duplicates: 0, sheet: 'Orders', otherSheets: ['Prices'], ignored: ['Internal code'] });
+        expect(checked.columns).toMatchObject({ reference: 'Order number', weightKg: 'Weight (kg)', deliverOn: 'Delivery date' });
+        // Line 4 of the workbook is empty, so the bad line is the one Excel numbers 7 — not the sixth it happens to be.
+        expect(checked.rows.filter((r) => r.verdict === 'problem')).toEqual([expect.objectContaining({ line: 7, problems: ['No order number', '"heavy" is not a weight'] })]);
+        expect(dispatch.ordersForFleet(kilima.did)).toHaveLength(0);
+
+        const done = imports.run(fleetRef, contract, { workbook, ...where }, 'Amina', false);
+        expect(done).toMatchObject({ imported: true, ok: 4, sheet: 'Orders' });
+        const made = dispatch.ordersForFleet(kilima.did);
+        expect(made.map((o) => [o.orderRef, o.weightKg, o.deliverOn]).sort()).toEqual([
+          ['10432', 3030, '2031-03-10'],
+          ['WS-2001', 4000, '2031-03-09'],
+          ['WS-2003', 1200, '2031-03-11'],
+          ['WS-2004', 2200, '2031-03-12'],
+        ]);
+        // Sent again, the workbook is as harmless as a sheet sent twice.
+        expect(imports.run(fleetRef, contract, { workbook, ...where }, 'Amina', false)).toMatchObject({ ok: 0, duplicates: 4 });
+        expect(dispatch.ordersForFleet(kilima.did)).toHaveLength(4);
+
+        // A file the reader refuses is the sheet's refusal, in the reader's words; and it is one or the other, not both.
+        expect(imports.run(fleetRef, contract, { workbook: Buffer.from('Order number,Goods'), ...where }, 'Amina', true)).toMatchObject({ refusal: expect.stringMatching(/not an Excel workbook/), rows: [], ok: 0 });
+        expect(() => imports.run(fleetRef, contract, { workbook, text: 'Order number,Goods', ...where }, 'Amina', true)).toThrow(/as text or as a workbook, not both/);
+        expect(imports.run(fleetRef, contract, { ...where }, 'Amina', true)).toMatchObject({ refusal: 'The sheet is empty' });
+      });
+
       it('checks first and creates nothing; then imports, and each order is the shipper’s, uploaded by the office', () => {
         const { kilima, contract, run } = setUp();
         const sheet = [HEAD, `WS-1,"Bricks, 4 pallets",4000,Nairobi,${tomorrowIso()}`, `WS-2,Cement,1.5 t,Nairobi,${tomorrowIso()}`].join('\n');

@@ -39028,6 +39028,11 @@
             "type": "string",
             "maxLength": 1500000
           },
+          "workbook": {
+            "type": "string",
+            "description": "The .xlsx file itself, base64. A megabyte of workbook at most.",
+            "maxLength": 1400000
+          },
           "pickupLabel": {
             "type": "string",
             "description": "Where the goods are collected, for every line that does not say otherwise. Both, or neither.",
@@ -39046,10 +39051,7 @@
           "dryRun": {
             "type": "boolean"
           }
-        },
-        "required": [
-          "text"
-        ]
+        }
       },
       "OrderImportRow": {
         "type": "object",
@@ -39130,6 +39132,16 @@
             }
           },
           "ignored": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sheet": {
+            "type": "string",
+            "description": "For a workbook: the sheet that was read — only ever the first — and the names of the ones that were not."
+          },
+          "otherSheets": {
             "type": "array",
             "items": {
               "type": "string"

@@ -90,7 +90,7 @@ export class CarriageContractController {
   importOrders(@Param('did') did: string, @Param('contractId') contractId: string, @Body() dto: ImportOrdersDto, @Actor() actor: IntrospectionResult): OrderImportResult {
     const fleet = this.assertFleet(did, actor);
     const pickupLocation = dto.pickupLat != null && dto.pickupLng != null ? { lat: dto.pickupLat, lng: dto.pickupLng } : undefined;
-    return this.imports.run({ did, name: fleet.companyName }, this.contracts.requireForFleet(did, contractId), { text: dto.text, pickupLabel: dto.pickupLabel, pickupLocation }, this.fleetPerson(actor, fleet.companyName), dto.dryRun !== false);
+    return this.imports.run({ did, name: fleet.companyName }, this.contracts.requireForFleet(did, contractId), { text: dto.text, ...(dto.workbook ? { workbook: Buffer.from(dto.workbook, 'base64') } : {}), pickupLabel: dto.pickupLabel, pickupLocation }, this.fleetPerson(actor, fleet.companyName), dto.dryRun !== false);
   }
 
   /** The sheet to hand a shipper: the columns by the names the import reads, and one line showing each form. */

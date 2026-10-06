@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBase64, IsBoolean, IsIn, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -23,11 +23,13 @@ export class EndContractDto {
 }
 
 /**
- * P1b — a sheet of orders: the text of a CSV file, or cells pasted out of a spreadsheet. `dryRun` (the default) judges
- * every line and creates nothing.
+ * P1b — a sheet of orders: the text of a CSV file or cells pasted out of a spreadsheet, OR an Excel workbook (.xlsx,
+ * base64; its first sheet is read) — one or the other. `dryRun` (the default) judges every line and creates nothing.
  */
 export class ImportOrdersDto {
-  @IsString() @MaxLength(1_500_000) text!: string;
+  @IsOptional() @IsString() @MaxLength(1_500_000) text?: string;
+  /** The .xlsx file itself, base64. A megabyte of workbook at most. */
+  @IsOptional() @IsBase64() @MaxLength(1_400_000) workbook?: string;
   /** Where the goods are collected, for every line that does not say otherwise. Both, or neither. */
   @IsOptional() @IsString() @MaxLength(160) pickupLabel?: string;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(-90) @Max(90) pickupLat?: number;

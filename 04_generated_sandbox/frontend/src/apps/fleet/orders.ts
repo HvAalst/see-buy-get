@@ -69,7 +69,7 @@ export function ordersApi(sbg: SbgClient, did: string) {
     assign: (freightId: string, driverDid: string): Promise<Result<unknown>> =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/dispatch', { params: { path }, body: { freightId, driverDid } })) as never,
     /** P1b — a sheet of orders: a check (`dryRun`) judges every line and creates nothing; an import creates the good ones. */
-    importOrders: (contractId: string, body: { text: string; pickupLabel?: string; pickupLat?: number; pickupLng?: number; dryRun: boolean }): Promise<Result<ImportResult>> =>
+    importOrders: (contractId: string, body: { text?: string; workbook?: string; pickupLabel?: string; pickupLat?: number; pickupLng?: number; dryRun: boolean }): Promise<Result<ImportResult>> =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/contracts/{contractId}/orders/import', { params: { path: { did, contractId } }, body })) as never,
     template: (): Promise<Result<{ fileName: string; csv: string }>> => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/orders/template', { params: { path } })) as never,
     withdraw: (freightId: string, reason: string): Promise<Result<{ withdrawn: true }>> =>
@@ -182,13 +182,34 @@ export function dayWord(day: string, now: Date, t: Translate): string {
   return day;
 }
 
+/** The largest workbook sent. The server holds the same line; said here so a big file is refused before it is read. */
+export const MAX_WORKBOOK_BYTES = 1_000_000;
+
+/** An Excel workbook the server reads as it is (.xlsx, and .xlsm — the same file with macros, which are not run). */
+export function isWorkbook(fileName: string): boolean {
+  return ['xlsx', 'xlsm'].includes(extOf(fileName));
+}
+
+/** What comes after the last dot of a file's name — nothing, for a name without one. */
+function extOf(fileName: string): string {
+  return /\.([a-z0-9]+)$/.exec(fileName.trim().toLowerCase())?.[1] ?? '';
+}
+
+/** A workbook's bytes as base64, for the wire. In pieces: one call with a megabyte of arguments is too many. */
+export function base64Of(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+}
+
 /**
- * P1b — a file this cannot read as a sheet, by its name: a workbook is a zip of XML, not text, and reading one as
- * text would "check" a page of noise. Said before anything is sent. Null means it may be a sheet.
+ * P1b — a file this cannot read as a sheet, by its name: the spreadsheet formats that are neither text nor an .xlsx
+ * workbook (an old .xls, OpenDocument, Numbers), and things that are not sheets at all. Said before anything is sent.
+ * Null means it may be a sheet — as text, or as a workbook (see isWorkbook).
  */
 export function notASheet(fileName: string): MessageKey | null {
-  const ext = fileName.toLowerCase().split('.').pop() ?? '';
-  if (['xlsx', 'xls', 'xlsm', 'ods', 'numbers'].includes(ext)) return 'fleet.upload.notText';
+  const ext = extOf(fileName);
+  if (['xls', 'xlsb', 'ods', 'numbers'].includes(ext)) return 'fleet.upload.notText';
   if (['pdf', 'doc', 'docx', 'png', 'jpg', 'jpeg'].includes(ext)) return 'fleet.upload.notSheet';
   return null;
 }

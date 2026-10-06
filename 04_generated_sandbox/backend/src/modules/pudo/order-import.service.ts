@@ -4,7 +4,8 @@ import { CarriageContractService } from './carriage-contract.service';
 import { CarriageContract } from './carriage-contract.types';
 import { DispatchService } from './dispatch.service';
 import { GEOCODER, Geocoder } from './geocoder';
-import { readOrderSheet, type SheetOrder } from './order-sheet';
+import { readOrderRows, readOrderSheet, type SheetOrder, type SheetReading } from './order-sheet';
+import { readWorkbook } from './workbook';
 import { ImportVerdict, OrderImportResult, OrderImportRow } from './order-import.types';
 import { GeoPoint } from './pudo.types';
 
@@ -14,6 +15,9 @@ import { GeoPoint } from './pudo.types';
  * The user, 2026-10-05: orders reach the fleet from the Business app AND as a spreadsheet the office uploads — the
  * daily export of a webshop that is not here. Two steps, because a sheet is typed by people: CHECK it (every line
  * judged, nothing created), then IMPORT it (the good lines become orders, the rest are left out and said why).
+ *
+ * The sheet comes as TEXT (a CSV file, or cells pasted) or as a WORKBOOK (.xlsx): one or the other. A workbook's first
+ * sheet is read, and the answer names it and the sheets that were not — so a wrong sheet is seen, not imported.
  *
  * A line's ORDER NUMBER is what makes sending the same sheet twice harmless: a number already under the contract is a
  * duplicate and is left exactly as it is — never updated, because the order may already be on a truck.
@@ -30,12 +34,22 @@ export class OrderImportService {
     @Inject(GEOCODER) private readonly geocoder: Geocoder,
   ) {}
 
-  run(fleet: { did: string; name: string }, contract: CarriageContract, input: { text: string; pickupLabel?: string; pickupLocation?: GeoPoint }, by: string, dryRun: boolean, now: number = Date.now()): OrderImportResult {
+  run(fleet: { did: string; name: string }, contract: CarriageContract, input: { text?: string; workbook?: Buffer; pickupLabel?: string; pickupLocation?: GeoPoint }, by: string, dryRun: boolean, now: number = Date.now()): OrderImportResult {
     if (contract.fleetDid !== fleet.did) throw new GlosError('NOT_FOUND', 'No such contract', { field: 'contractId' });
     if (contract.status !== 'active') throw new GlosError('INVALID_STATE', 'This contract has ended — orders under it cannot be placed');
     const today = new Date(now).toISOString().slice(0, 10);
-    const reading = readOrderSheet(input.text, today);
-    const base = { imported: false, rows: [], ok: 0, duplicates: 0, problems: 0, unlocated: 0, columns: reading.columns as Record<string, string>, ignored: reading.ignored };
+    if (input.workbook && input.text?.trim()) throw new GlosError('INVALID_INPUT', 'Send the sheet as text or as a workbook, not both', { field: 'workbook' });
+    let reading: SheetReading;
+    let read: { sheet?: string; otherSheets?: string[] } = {};
+    if (input.workbook) {
+      const wb = readWorkbook(input.workbook);
+      if ('refusal' in wb) reading = { refusal: wb.refusal, columns: {}, ignored: [], orders: [] };
+      else {
+        reading = readOrderRows(wb.rows, today, wb.lines);
+        read = { sheet: wb.sheet, ...(wb.otherSheets.length ? { otherSheets: wb.otherSheets } : {}) };
+      }
+    } else reading = readOrderSheet(input.text ?? '', today);
+    const base = { imported: false, rows: [], ok: 0, duplicates: 0, problems: 0, unlocated: 0, columns: reading.columns as Record<string, string>, ignored: reading.ignored, ...read };
     if (reading.refusal) return { ...base, refusal: reading.refusal };
 
     const sheetPickup = input.pickupLabel?.trim() && input.pickupLocation ? { label: input.pickupLabel.trim().slice(0, 160), location: input.pickupLocation } : undefined;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { ADVISER_HISTORY, historyOf, keptOff, putOnto, ruleLine, rulesAsk, withoutRule, type PlanRule } from './orders';
+import { ADVISER_HISTORY, base64Of, historyOf, isWorkbook, keptOff, putOnto, ruleLine, rulesAsk, withoutRule, type PlanRule } from './orders';
 import { askOf, byDay, dayOf, daySummary, dayWord, handOnLine, hoursWords, mayHandOn, importVerdictLine, leftByReason, mayWithdraw, notASheet, orderTag, sendLine, weightWords, type DayPlan, type FleetOrder, type PlanLeft, type PlanSendTruck } from './orders';
 
 const order = (over: Partial<FleetOrder> = {}): FleetOrder =>
@@ -56,12 +56,24 @@ describe('P1 — a fleet’s orders', () => {
     expect(dayWord('2026-10-09', now, t)).toBe('2026-10-09');
   });
 
-  it('refuses a workbook by its name, before reading a zip as if it were text', () => {
-    expect(notASheet('orders.xlsx')).toBe('fleet.upload.notText');
+  it('takes an Excel workbook as it is, and refuses by name the spreadsheet files nothing here reads', () => {
+    expect(notASheet('orders.xlsx')).toBeNull();
+    expect([isWorkbook('orders.xlsx'), isWorkbook('Orders.XLSM'), isWorkbook('orders.csv'), isWorkbook('orders.xls'), isWorkbook('xlsx')]).toEqual([true, true, false, false, false]);
     expect(notASheet('Orders.XLS')).toBe('fleet.upload.notText');
+    expect(notASheet('orders.ods')).toBe('fleet.upload.notText');
+    expect(notASheet('orders.numbers')).toBe('fleet.upload.notText');
     expect(notASheet('scan.pdf')).toBe('fleet.upload.notSheet');
     expect(notASheet('orders.csv')).toBeNull();
     expect(notASheet('export')).toBeNull();
+  });
+
+  it('sends a workbook’s bytes as base64, whole — every byte value, and more of them than one call takes', () => {
+    expect(base64Of(new Uint8Array([80, 75, 3, 4]))).toBe('UEsDBA==');
+    const all = new Uint8Array(100_000).map((_, i) => i % 256);
+    const back = Uint8Array.from(atob(base64Of(all)), (ch) => ch.charCodeAt(0));
+    expect(back).toHaveLength(100_000);
+    expect(back.every((b, i) => b === i % 256)).toBe(true);
+    expect(base64Of(new Uint8Array(0))).toBe('');
   });
 
   it('says a refused line as a sentence: which line, which order, everything wrong with it', () => {
