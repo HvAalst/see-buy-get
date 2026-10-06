@@ -143,13 +143,14 @@ describe('a fleet’s plan for a day', () => {
     return vehicles.register({ plate, vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg, ownerName: 'X', equipment, baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, managerDid } as never);
   }
   const contractOf = (fleet: { did: string; companyName: string }): ContractRef => ({ contractId: 'ctr_plan', fleetDid: fleet.did, fleetName: fleet.companyName, shipperName: 'Jenga Bricks' });
-  function anOrder(fleet: { did: string; companyName: string }, over: { kg?: number; n?: number; day?: string; pinned?: boolean; ref?: string; window?: string } = {}) {
+  function anOrder(fleet: { did: string; companyName: string }, over: { kg?: number; n?: number; day?: string; pinned?: boolean; ref?: string; window?: string; indivisible?: boolean } = {}) {
     seq += 1;
     return dispatch.registerFreight({
       description: `Bricks ${seq}`, pickupLocation: yard, pickupLabel: 'Jenga yard', destLabel: `Site ${over.n ?? seq}`,
       ...(over.pinned === false ? {} : { destLocation: site(over.n ?? 1) }),
       weightKg: over.kg ?? 2000, packaging: 'palletised', postedByDid: fleet.did, postedByName: 'Amina', contract: contractOf(fleet), deliverOn: over.day ?? tomorrow(), orderRef: over.ref ?? `WS-${seq}`,
       ...(over.window ? { deliveryWindow: over.window } : {}),
+      ...(over.indivisible ? { indivisible: true } : {}),
     });
   }
   /** A fleet with an 8 t and a 3 t truck and two drivers. */
@@ -450,6 +451,122 @@ describe('a fleet’s plan for a day', () => {
       expect(lateMin).toBeGreaterThan(0);
       expect(stopOf(plans.state(fleet.did, tomorrow()).plan!, late.freightId).lateMin).toBe(lateMin);
       expect(dispatch.ordersForFleet(fleet.did).find((r) => r.freightId === late.freightId)!.planned).toMatchObject({ lateMin });
+    });
+  });
+
+  /* --------------------------------------------------- an order in several loads -- */
+
+  /**
+   * AN ORDER HEAVIER THAN THE LARGEST VEHICLE. The user, 2026-10-06: the office splits it into loads, and the shipper
+   * is told. The plan says how many loads it would make; the split is the office's act; each load is then an order
+   * in its own right, and the order can be put back together while nothing has been done with any of them.
+   */
+  describe('an order in several loads', () => {
+    it('is said to be so many loads of the largest vehicle — and split, each load is planned on its own', () => {
+      const { fleet } = setUp();
+      const heavy = anOrder(fleet, { kg: 12000, n: 1, ref: 'WS-HEAVY' });
+      const before = plans.propose(fleet.did, { day: tomorrow() });
+      expect(before.unplanned).toEqual([expect.objectContaining({ freightId: heavy.freightId, reason: 'too_heavy', splitInto: 2, loadKg: 8000 })]);
+      expect(before.totals.planned).toBe(0);
+
+      const loads = dispatch.splitOrder(fleet.did, heavy.freightId, [7000, 5000], 'Amina');
+      expect(loads.map((l) => [l.code === heavy.code, l.weightKg, l.partOf!.no, l.partOf!.of])).toEqual([
+        [true, 7000, 1, 2],
+        [false, 5000, 2, 2],
+      ]);
+      // The order BECAME its first load: same id, same code, same tracking link.
+      expect(loads[0].freightId).toBe(heavy.freightId);
+      expect(loads[0].trackingKey).toBe(heavy.trackingKey);
+      expect(loads[1].trackingKey).not.toBe(heavy.trackingKey);
+      // The other load is the same order in everything but its weight.
+      expect(loads[1]).toMatchObject({ status: 'ordered', description: heavy.description, destLabel: heavy.destLabel, deliverOn: tomorrow(), orderRef: 'WS-HEAVY', contract: heavy.contract, postedByDid: fleet.did });
+      expect(loads[1].partOf).toMatchObject({ rootId: heavy.freightId, rootCode: heavy.code, orderKg: 12000, by: 'Amina' });
+      // Still one order by the shipper's own number: sending the sheet again adds nothing.
+      expect(dispatch.contractOrderByRef('ctr_plan', 'WS-HEAVY')).toBeDefined();
+
+      const after = plans.propose(fleet.did, { day: tomorrow() });
+      expect(after.unplanned).toEqual([]);
+      expect(after.totals).toMatchObject({ orders: 2, planned: 2, plannedKg: 12000 });
+      const rows = dispatch.ordersForFleet(fleet.did);
+      expect(rows.map((r) => [r.code, r.weightKg, r.partOf?.no, r.partOf?.of]).sort()).toEqual(loads.map((l) => [l.code, l.weightKg, l.partOf!.no, 2]).sort());
+    });
+
+    it('can be split again, and every load of the order is numbered anew', () => {
+      const { fleet } = setUp();
+      const heavy = anOrder(fleet, { kg: 12000, n: 1 });
+      const [, second] = dispatch.splitOrder(fleet.did, heavy.freightId, [6000, 6000], 'Amina');
+      dispatch.splitOrder(fleet.did, second.freightId, [3500, 2500], 'Baraka');
+      const all = dispatch.loadsOf(heavy.freightId);
+      expect(all.map((l) => [l.weightKg, l.partOf!.no, l.partOf!.of, l.partOf!.orderKg, l.partOf!.rootCode])).toEqual([
+        [6000, 1, 3, 12000, heavy.code],
+        [3500, 2, 3, 12000, heavy.code],
+        [2500, 3, 3, 12000, heavy.code],
+      ]);
+      // The load that was split kept its place and its code; the new one stands right after it.
+      expect(all[1].freightId).toBe(second.freightId);
+      // Asked of any load, the answer is the whole order.
+      expect(dispatch.loadsOf(all[2].freightId).map((l) => l.freightId)).toEqual(all.map((l) => l.freightId));
+    });
+
+    it('refuses a split that does not add up, is no split, is of goods that are one piece, or is not this fleet’s to make', () => {
+      const { fleet } = setUp();
+      const other = aFleet('Pwani Haulage');
+      const heavy = anOrder(fleet, { kg: 12000, n: 1 });
+      const split = (kgs: number[], by = fleet.did, id = heavy.freightId) => () => dispatch.splitOrder(by, id, kgs, 'Amina');
+      expect(split([6000, 5000])).toThrow(/must add up to what is being split: 12000 kg/);
+      expect(split([12000])).toThrow(/at least two loads/);
+      expect(split([])).toThrow(/at least two loads/);
+      expect(split([12000, 0])).toThrow(/at least a kilo/);
+      expect(split([13000, -1000])).toThrow(/at least a kilo/);
+      expect(split(Array(21).fill(12000 / 21))).toThrow(/20 loads at most/);
+      expect(split([6000, 6000], other.did)).toThrow(/No such order/);
+      expect(split([6000, 6000], fleet.did, 'frt_nonsense')).toThrow(/No such order/);
+      // Nothing was changed by any of those.
+      expect(dispatch.loadsOf(heavy.freightId).map((l) => [l.weightKg, l.partOf])).toEqual([[12000, undefined]]);
+
+      // One piece: the plan does not offer to split it, and it is not split.
+      const piece = anOrder(fleet, { kg: 11000, n: 2, indivisible: true });
+      expect(plans.propose(fleet.did, { day: tomorrow() }).unplanned.find((u) => u.freightId === piece.freightId)).toMatchObject({ reason: 'too_heavy' });
+      expect(plans.propose(fleet.did, { day: tomorrow() }).unplanned.find((u) => u.freightId === piece.freightId)!.splitInto).toBeUndefined();
+      expect(split([6000, 5000], fleet.did, piece.freightId)).toThrow(/one piece — they cannot go in several loads/);
+
+      // In somebody else's hands: not while it is on offer to a partner.
+      dispatch.offerToPartners(fleet.did, heavy.freightId, [{ fleetDid: other.did, fleetName: other.companyName }], 'Amina');
+      expect(split([6000, 6000])).toThrow(/has been handed on/);
+    });
+
+    it('is put back together while every load is still an order — and not once one of them has moved', () => {
+      const { fleet } = setUp();
+      const other = aFleet('Pwani Haulage');
+      const heavy = anOrder(fleet, { kg: 12000, n: 1 });
+      expect(() => dispatch.rejoinOrder(fleet.did, heavy.freightId, 'Amina')).toThrow(/in one load already/);
+      const [, second] = dispatch.splitOrder(fleet.did, heavy.freightId, [7000, 5000], 'Amina');
+      expect(() => dispatch.rejoinOrder(other.did, heavy.freightId, 'X')).toThrow(/No such order/);
+      // Asked of ANY load of it.
+      const whole = dispatch.rejoinOrder(fleet.did, second.freightId, 'Amina');
+      expect(whole).toMatchObject({ freightId: heavy.freightId, code: heavy.code, weightKg: 12000, status: 'ordered' });
+      expect(whole.partOf).toBeUndefined();
+      // One order in the queue again; the load that stopped being one is in no list.
+      expect(dispatch.ordersForFleet(fleet.did).map((r) => [r.code, r.weightKg])).toEqual([[heavy.code, 12000]]);
+      expect(dispatch.loadsOf(heavy.freightId)).toHaveLength(1);
+      expect(plans.propose(fleet.did, { day: tomorrow() }).unplanned).toEqual([expect.objectContaining({ reason: 'too_heavy', splitInto: 2 })]);
+      // It can be split again, differently.
+      const again = dispatch.splitOrder(fleet.did, heavy.freightId, [4000, 4000, 4000], 'Amina');
+      expect(again.map((l) => l.partOf!.of)).toEqual([3, 3, 3]);
+      // One of them handed to a partner: the order is no longer the office's to put back together.
+      dispatch.offerToPartners(fleet.did, again[2].freightId, [{ fleetDid: other.did, fleetName: other.companyName }], 'Amina');
+      expect(() => dispatch.rejoinOrder(fleet.did, heavy.freightId, 'Amina')).toThrow('Load 3 (' + again[2].code + ') is handed on');
+      expect(dispatch.loadsOf(heavy.freightId)).toHaveLength(3);
+    });
+
+    it('takes a split order out of the plan it was in: its loads are planned afresh', () => {
+      const { fleet } = setUp();
+      const big = anOrder(fleet, { kg: 8000, n: 1 });
+      plans.accept(fleet.did, { day: tomorrow() }, 'Amina');
+      expect(dispatch.ordersForFleet(fleet.did)[0].planned).toBeDefined();
+      const loads = dispatch.splitOrder(fleet.did, big.freightId, [5000, 3000], 'Amina');
+      expect(dispatch.ordersForFleet(fleet.did).every((r) => r.planned === undefined)).toBe(true);
+      expect(loads).toHaveLength(2);
     });
   });
 

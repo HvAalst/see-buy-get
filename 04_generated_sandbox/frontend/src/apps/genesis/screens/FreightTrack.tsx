@@ -49,7 +49,22 @@ export function FreightTrack({ view }: { view: FreightTrackView }) {
 
       {run && view.status === 'claimed' && view.scheduledPickupAt ? <p class="scr__lede">{t('send.freight.runLeaves', { when: stepTime(view.scheduledPickupAt) })}</p> : null}
       {view.receiverName ? <p class="scr__lede">{t('send.freight.receivedBy', { name: view.receiverName })}</p> : null}
-      {view.cancelled ? <p class="scr__lede">{freightWithdrawnLine(view.cancelled, t)}</p> : null}
+      {/* Put back with the rest of its order: said as that — it was not withdrawn, it is coming with the others. */}
+      {view.rejoined ? <p class="scr__lede">{t('send.freight.rejoined')}</p> : view.cancelled ? <p class="scr__lede">{freightWithdrawnLine(view.cancelled, t)}</p> : null}
+
+      {/* AN ORDER IN SEVERAL LOADS: which one this link is for, and where every one of them has got to. */}
+      {view.partOf && view.loads?.length ? (
+        <Card label={t('send.freight.loadsTitle', { n: view.loads.length })}>
+          <p class="card__note">{t('send.freight.loadsLede', { no: view.partOf.no, of: view.partOf.of, kg: view.partOf.orderKg.toLocaleString() })}</p>
+          <ul class="loads">
+            {view.loads.map((l) => (
+              <li key={l.code} class={l.no === view.partOf!.no ? 'loads__this' : undefined}>
+                {t(l.no === view.partOf!.no ? 'send.freight.loadLineThis' : 'send.freight.loadLine', { no: l.no, kg: l.weightKg.toLocaleString(), status: freightStatusPresentation(l.status, t, view.on).word })}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
 
       {at >= 0 ? (
         <Card label={t('send.track.journeySoFar')}>

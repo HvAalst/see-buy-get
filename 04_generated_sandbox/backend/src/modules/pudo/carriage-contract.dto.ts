@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsBase64, IsBoolean, IsIn, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBase64, IsBoolean, IsIn, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -100,6 +100,11 @@ export class HandBackOrderDto {
 export class PinOrderDto {
   @Type(() => Number) @IsNumber() @Min(-90) @Max(90) lat!: number;
   @Type(() => Number) @IsNumber() @Min(-180) @Max(180) lng!: number;
+}
+
+/** The loads an order is split into, by weight. They add up to the order. */
+export class SplitOrderDto {
+  @IsArray() @ArrayMinSize(2) @ArrayMaxSize(20) @Type(() => Number) @IsNumber({}, { each: true }) @Min(1, { each: true }) loadsKg!: number[];
 }
 
 export class WithdrawOrderDto {

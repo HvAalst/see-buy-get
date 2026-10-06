@@ -406,6 +406,44 @@ describe('handing orders on', () => {
       expect(() => overflow.takeBack(a, f.freightId)).toThrow(/No such order on the board/);
     });
 
+    it('tells the shipper its order comes in loads — where the shipper is somebody here to tell — and shows every load to whoever holds a link', async () => {
+      const { a } = threeFleets();
+      const placed = (postedByDid: string) => dispatch.registerFreight({ description: 'Blocks', pickupLocation: yard, pickupLabel: 'Jenga yard', destLabel: 'Machakos junction', destLocation: site, weightKg: 12000, packaging: 'palletised', postedByDid, postedByName: 'Wanjiru', contract: { contractId: 'ctr_ov', fleetDid: a.did, fleetName: a.name, shipperName: 'Jenga Bricks' }, deliverOn: tomorrow(), orderRef: 'WS-BLOCKS-' + postedByDid.length });
+      const theirs = placed('did:glos:jenga-bricks');
+      const [first, second] = dispatch.splitOrder(a.did, theirs.freightId, [8000, 4000], 'Amina');
+      await settle();
+      const inbox = () => notifications.inboxFor('did:glos:jenga-bricks');
+      expect(inbox().map((n) => n.title)).toEqual(['Kilima Logistics will bring ' + theirs.code + ' in 2 loads']);
+      expect(inbox()[0].body).toMatch(/12 t for .* It is more than one vehicle carries, so it comes in 2 deliveries; each is signed for on its own/);
+      // Whoever holds the link of either load sees both, and which one this is.
+      const seen = notes.trackView(dispatch.listFreight().find((x) => x.freightId === second.freightId)!);
+      expect(seen.partOf).toMatchObject({ no: 2, of: 2, rootCode: theirs.code, orderKg: 12000 });
+      expect(seen.loads).toEqual([
+        { no: 1, code: first.code, weightKg: 8000, status: 'ordered' },
+        { no: 2, code: second.code, weightKg: 4000, status: 'ordered' },
+      ]);
+      expect(notes.trackView(dispatch.listFreight().find((x) => x.freightId === first.freightId)!).loads).toHaveLength(2);
+      // The shipper's own list of what it ordered shows both loads as loads.
+      expect(dispatch.postedBy('did:glos:jenga-bricks').map((r) => [r.code, r.partOf?.no, r.partOf?.of]).sort()).toEqual([[first.code, 1, 2], [second.code, 2, 2]].sort());
+
+      // Put back together: the shipper is told that too; the link of the load that is no more says what became of it.
+      dispatch.rejoinOrder(a.did, theirs.freightId, 'Amina');
+      await settle();
+      expect(inbox().map((n) => n.title)).toContain('Kilima Logistics will bring ' + theirs.code + ' in one load after all');
+      const gone = notes.trackView(dispatch.listFreight().find((x) => x.freightId === second.freightId)!);
+      expect(gone).toMatchObject({ rejoined: true, status: 'cancelled' });
+      expect([gone.partOf, gone.loads]).toEqual([undefined, undefined]);
+      expect(dispatch.postedBy('did:glos:jenga-bricks').map((r) => [r.code, r.weightKg, r.partOf])).toEqual([[theirs.code, 12000, undefined]]);
+      const whole = notes.trackView(dispatch.listFreight().find((x) => x.freightId === theirs.freightId)!);
+      expect([whole.partOf, whole.loads, whole.rejoined]).toEqual([undefined, undefined, undefined]);
+
+      // An order the fleet's own office typed in has nobody here to tell: nobody is told, least of all the fleet itself.
+      const typed = placed(a.did);
+      dispatch.splitOrder(a.did, typed.freightId, [6000, 6000], 'Amina');
+      await settle();
+      expect(notifications.inboxFor(a.did).some((n) => /will bring/.test(n.title))).toBe(false);
+    });
+
     /**
      * PASSED ON. The user, 2026-10-06, asked whether a partner that took an order may pass it on to a fleet of its
      * own: "Only if I allowed that partner". So it is a switch on the arrangement, the offering fleet's alone, off

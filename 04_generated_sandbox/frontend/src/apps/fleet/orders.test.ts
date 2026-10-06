@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { ADVISER_HISTORY, base64Of, historyOf, isWorkbook, keptOff, passOnState, putOnto, ruleLine, windowLine, rulesAsk, withoutRule, type PlanRule } from './orders';
+import { ADVISER_HISTORY, base64Of, evenLoads, historyOf, isWorkbook, keptOff, loadLine, mayRejoin, maySplit, passOnState, putOnto, ruleLine, windowLine, rulesAsk, withoutRule, type PlanRule } from './orders';
 import { askOf, byDay, dayOf, daySummary, dayWord, handOnLine, hoursWords, mayHandOn, importVerdictLine, leftByReason, mayWithdraw, notASheet, orderTag, sendLine, weightWords, type DayPlan, type FleetOrder, type PlanLeft, type PlanSendTruck } from './orders';
 
 const order = (over: Partial<FleetOrder> = {}): FleetOrder =>
@@ -266,6 +266,44 @@ describe('P1 — a fleet’s orders', () => {
     expect([orderTag(onOffer), orderTag(passed), orderTag(held)]).toEqual(['onOffer', 'withPartner', 'unplanned']);
     // Passed on: another fleet's day. On offer: not waiting for one of this fleet's trucks. Held: it is.
     expect(daySummary([onOffer, passed, held])).toMatchObject({ orders: 2, unplanned: 1 });
+  });
+
+  it('shares an order out over its loads evenly, in whole kilos, adding up to the order exactly', () => {
+    expect(evenLoads(12000, 2)).toEqual([6000, 6000]);
+    expect(evenLoads(12000, 3)).toEqual([4000, 4000, 4000]);
+    expect(evenLoads(10000, 3)).toEqual([3334, 3333, 3333]);
+    expect(evenLoads(10001, 4)).toEqual([2501, 2500, 2500, 2500]);
+    expect(evenLoads(7, 3)).toEqual([3, 2, 2]);
+    // A part of a kilo is somebody's too: it goes on the first load.
+    expect(evenLoads(1000.5, 2)).toEqual([500.5, 500]);
+    for (const [kg, n] of [[12345, 7], [999, 20], [8000.25, 3], [56300, 9]] as const) {
+      const loads = evenLoads(kg, n);
+      expect(loads).toHaveLength(n);
+      expect(Math.round(loads.reduce((s, x) => s + x, 0) * 100) / 100).toBe(kg);
+      expect(Math.max(...loads) - Math.min(...loads)).toBeLessThanOrEqual(1.5);
+      expect(loads.every((x) => x >= 1)).toBe(true);
+    }
+    // Never fewer than two loads, never more than an order goes in.
+    expect(evenLoads(12000, 1)).toHaveLength(2);
+    expect(evenLoads(12000, 0)).toHaveLength(2);
+    expect(evenLoads(12000, 99)).toHaveLength(20);
+  });
+
+  it('says a load as which one of how many of which order — and offers the split and its way back only where they can be', () => {
+    expect(loadLine({ no: 2, of: 3, rootCode: 'FRT-012', orderKg: 12000 }, t)).toBe('Load 2 of 3 of order FRT-012 — 12 t in all');
+    const own = order({ role: 'own', status: 'ordered', weightKg: 12000 });
+    expect(maySplit(own)).toBe(true);
+    expect(maySplit({ ...own, indivisible: true })).toBe(false);
+    expect(maySplit({ ...own, status: 'claimed' })).toBe(false);
+    expect(maySplit({ ...own, role: 'partner' })).toBe(false);
+    expect(maySplit({ ...own, handOn: { state: 'board', at: '2026-10-06T12:00:00Z', by: 'Amina' } })).toBe(false);
+    expect(maySplit({ ...own, weightKg: 1 })).toBe(false);
+    const load = { ...own, partOf: { no: 1, of: 2 } };
+    expect(mayRejoin(load)).toBe(true);
+    expect(mayRejoin(own)).toBe(false);
+    expect(mayRejoin({ ...load, status: 'claimed' })).toBe(false);
+    expect(mayRejoin({ ...load, role: 'partner' })).toBe(false);
+    expect(mayRejoin({ ...load, handOn: { state: 'board', at: '2026-10-06T12:00:00Z', by: 'Amina' } })).toBe(false);
   });
 
   it('says a rule the way the office would', () => {

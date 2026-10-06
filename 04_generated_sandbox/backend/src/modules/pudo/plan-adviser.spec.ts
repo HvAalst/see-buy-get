@@ -171,13 +171,14 @@ describe('the adviser over a day’s plan', () => {
     return vehicles.register({ plate, vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg, ownerName: 'X', equipment, baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, managerDid } as never);
   }
   const contractOf = (fleet: { did: string; companyName: string }): ContractRef => ({ contractId: 'ctr_plan', fleetDid: fleet.did, fleetName: fleet.companyName, shipperName: 'Jenga Bricks' });
-  function anOrder(fleet: { did: string; companyName: string }, over: { kg?: number; n?: number; day?: string; pinned?: boolean; ref?: string; window?: string } = {}) {
+  function anOrder(fleet: { did: string; companyName: string }, over: { kg?: number; n?: number; day?: string; pinned?: boolean; ref?: string; window?: string; indivisible?: boolean } = {}) {
     seq += 1;
     return dispatch.registerFreight({
       description: `Bricks ${seq}`, pickupLocation: yard, pickupLabel: 'Jenga yard', destLabel: `Site ${over.n ?? seq}`,
       ...(over.pinned === false ? {} : { destLocation: site(over.n ?? 1) }),
       weightKg: over.kg ?? 2000, packaging: 'palletised', postedByDid: fleet.did, postedByName: 'Amina', contract: contractOf(fleet), deliverOn: over.day ?? tomorrow(), orderRef: over.ref ?? `WS-${seq}`,
       ...(over.window ? { deliveryWindow: over.window } : {}),
+      ...(over.indivisible ? { indivisible: true } : {}),
     });
   }
   /** A fleet with an 8 t and a 3 t truck and two drivers. */

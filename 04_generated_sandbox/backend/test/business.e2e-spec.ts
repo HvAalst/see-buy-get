@@ -329,6 +329,24 @@ describe('a customer’s business, over the wire', () => {
     expect((await http().post(importAt).set(bearer(setupKey)).send({ workbook: Buffer.from('plain words').toString('base64') }).expect(201)).body.refusal).toMatch(/not an Excel workbook/);
     await http().post(importAt).set(bearer(shop)).send({ workbook }).expect(403);
 
+    // An order in several loads: the office's act on an order that is its own to plan; the loads add up to it; the
+    // shipper sees both in its own list and behind either tracking link; and it can be put back together.
+    const splitAt = `/v1/sbg/fleet/managers/${fleet.did}/orders/${ordered.body.freightId}`;
+    await http().post(`${splitAt}/split`).set(bearer(shop)).send({ loadsKg: [2000, 2000] }).expect(403);
+    await http().post(`${splitAt}/split`).set(bearer(setupKey)).send({ loadsKg: [4000] }).expect(400);
+    await http().post(`${splitAt}/split`).set(bearer(setupKey)).send({ loadsKg: [3000, 500] }).expect(400);
+    await http().post(`${splitAt}/split`).set(bearer(setupKey)).send({ loadsKg: ['a', 'b'] }).expect(400);
+    const splitDone = await http().post(`${splitAt}/split`).set(bearer(setupKey)).send({ loadsKg: [2500, 1500] }).expect(201);
+    expect(splitDone.body.loads.map((l: { weightKg: number; no: number; of: number }) => [l.weightKg, l.no, l.of])).toEqual([[2500, 1, 2], [1500, 2, 2]]);
+    expect(splitDone.body.loads[0]).toMatchObject({ freightId: ordered.body.freightId, code: ordered.body.code });
+    const seenLoads = (await http().get(`/v1/sbg/track/${ordered.body.trackingKey}`).expect(200)).body;
+    expect(seenLoads).toMatchObject({ partOf: { no: 1, of: 2, orderKg: 4000 }, weightKg: 2500 });
+    expect(seenLoads.loads.map((l: { no: number; weightKg: number; status: string }) => [l.no, l.weightKg, l.status])).toEqual([[1, 2500, 'ordered'], [2, 1500, 'ordered']]);
+    await http().post(`${splitAt}/rejoin`).set(bearer(shop)).send({}).expect(403);
+    expect((await http().post(`${splitAt}/rejoin`).set(bearer(setupKey)).send({}).expect(201)).body.loads).toEqual([{ freightId: ordered.body.freightId, code: ordered.body.code, weightKg: 4000, no: 1, of: 1 }]);
+    await http().post(`${splitAt}/rejoin`).set(bearer(setupKey)).send({}).expect(400);
+    expect((await http().get(`/v1/sbg/track/${ordered.body.trackingKey}`).expect(200)).body.loads).toBeUndefined();
+
     // The office withdraws what it uploaded; what the shipper ordered is the shipper's to withdraw.
     await http().post(`/v1/sbg/fleet/managers/${fleet.did}/orders/${ordered.body.freightId}/withdraw`).set(bearer(setupKey)).send({ reason: 'Cannot carry it' }).expect(403);
     await http().post(`/v1/sbg/fleet/managers/${fleet.did}/orders/${uploaded.freightId}/withdraw`).set(bearer(setupKey)).send({ reason: 'Uploaded by mistake' }).expect(201);

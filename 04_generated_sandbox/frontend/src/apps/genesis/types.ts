@@ -104,6 +104,11 @@ export interface FreightTrackView {
   attempts?: Array<{ outcome: 'absent' | 'refused' | 'unreachable'; at: string }>;
   receiverName?: string;
   cancelled?: { at: string; by: 'sender' | 'network' | 'carrier' };
+  /** One load of an order its carrier brings in several — and all of them, each with where it has got to. */
+  partOf?: { rootCode: string; no: number; of: number; orderKg: number };
+  loads?: Array<{ no: number; code: string; weightKg: number; status: FreightTrackView['status'] }>;
+  /** This load was put back together with the rest of its order: it is not coming on its own. */
+  rejoined?: boolean;
   /** `run` — space booked on a carrier's scheduled run, which leaves at `scheduledPickupAt`. Absent: a load off the board. */
   on?: 'board' | 'run';
 }

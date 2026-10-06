@@ -20526,6 +20526,90 @@
         }
       }
     },
+    "/v1/sbg/fleet/managers/{did}/orders/{freightId}/split": {
+      "post": {
+        "operationId": "CarriageContract.splitOrder",
+        "summary": "",
+        "description": "Split an order into loads — for one that is more than a vehicle carries. The office's act, on an order that is\nstill its own to plan; the shipper is told. The loads add up to the order.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "freightId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SplitOrderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderLoads"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/orders/{freightId}/rejoin": {
+      "post": {
+        "operationId": "CarriageContract.rejoinOrder",
+        "summary": "",
+        "description": "Put an order back together, while every load of it is still an order: none on a truck, none handed on.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "freightId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderLoads"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/managers/{did}/plan": {
       "post": {
         "operationId": "CarriageContract.proposePlan",
@@ -32048,6 +32132,45 @@
           "by"
         ]
       },
+      "LoadOf": {
+        "type": "object",
+        "properties": {
+          "rootId": {
+            "type": "string",
+            "description": "The order as it was placed: the id and code of its first load."
+          },
+          "rootCode": {
+            "type": "string"
+          },
+          "no": {
+            "type": "number",
+            "description": "This load, and how many there are."
+          },
+          "of": {
+            "type": "number"
+          },
+          "orderKg": {
+            "type": "number",
+            "description": "What the whole order weighs."
+          },
+          "at": {
+            "type": "string",
+            "description": "When it was split, and by whom in the carrier's office."
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "rootId",
+          "rootCode",
+          "no",
+          "of",
+          "orderKg",
+          "at",
+          "by"
+        ]
+      },
       "FreightInstructions": {
         "type": "object",
         "properties": {
@@ -32558,6 +32681,18 @@
             "items": {
               "type": "string"
             }
+          },
+          "partOf": {
+            "description": "One load of an order that comes in several. Absent: the order is in one load.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoadOf"
+              }
+            ]
+          },
+          "rejoinedInto": {
+            "type": "string",
+            "description": "A load that was put back together with the rest of its order: the id of the order. It is in no list from then on."
           },
           "driverPayee": {
             "type": "object",
@@ -36316,6 +36451,14 @@
       "PostedFreightRow": {
         "type": "object",
         "properties": {
+          "partOf": {
+            "description": "One load of an order its carrier split into several.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoadOf"
+              }
+            ]
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -38967,6 +39110,18 @@
             "type": "string",
             "description": "The shipper's own order number, where it gave one."
           },
+          "partOf": {
+            "description": "One load of an order that comes in several.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoadOf"
+              }
+            ]
+          },
+          "indivisible": {
+            "type": "boolean",
+            "description": "Goods that are one piece: they cannot go in several loads."
+          },
           "planned": {
             "description": "P3 — where the accepted plan for its day puts it.",
             "allOf": [
@@ -39341,6 +39496,62 @@
           "reason"
         ]
       },
+      "SplitOrderDto": {
+        "type": "object",
+        "properties": {
+          "loadsKg": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 1
+            }
+          }
+        },
+        "required": [
+          "loadsKg"
+        ]
+      },
+      "OrderLoad": {
+        "type": "object",
+        "properties": {
+          "freightId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "no": {
+            "type": "number"
+          },
+          "of": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "freightId",
+          "code",
+          "weightKg",
+          "no",
+          "of"
+        ]
+      },
+      "OrderLoads": {
+        "type": "object",
+        "properties": {
+          "loads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderLoad"
+            }
+          }
+        },
+        "required": [
+          "loads"
+        ]
+      },
       "PlanPairDto": {
         "type": "object",
         "properties": {
@@ -39594,6 +39805,14 @@
               "no_driver",
               "no_trucks"
             ]
+          },
+          "splitInto": {
+            "type": "number",
+            "description": "For an order heavier than the fleet's largest vehicle that the office MAY split: how many loads of that vehicle\nit would make. A suggestion — the office decides, and the shipper is told."
+          },
+          "loadKg": {
+            "type": "number",
+            "description": "What that largest vehicle carries."
           },
           "freightId": {
             "type": "string"

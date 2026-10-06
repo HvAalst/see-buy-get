@@ -191,6 +191,10 @@ export class ConsignmentNoteService implements OnModuleInit {
     return {
       kind: 'freight',
       ref: f.code,
+      // One load of an order that comes in several: every load of it, so whoever holds one link sees them all.
+      // (Not for a load that was put back with its order: it is no longer one of them, and says only that.)
+      ...(f.partOf && !f.rejoinedInto ? { partOf: f.partOf, loads: this.dispatch.loadsOf(f.freightId).map((x) => ({ no: x.partOf?.no ?? 1, code: x.code, weightKg: x.weightKg, status: x.contract && x.status === 'available' ? ('ordered' as const) : x.status })) } : {}),
+      ...(f.rejoinedInto ? { rejoined: true } : {}),
       // P4 — released to the open board and not yet taken: to the receiver it is still an order with its carrier.
       status: f.contract && f.status === 'available' ? 'ordered' : f.status,
       description: f.description,

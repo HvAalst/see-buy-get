@@ -164,6 +164,7 @@ export const enBusiness = {
   'business.loads.ordered': '{code} is ordered with {fleet}, to arrive {day}.',
   'business.loads.newLedeContract': 'Where it is, where it goes, and what it is. Your carrier plans from exactly this, and it goes on the consignment note.',
   'business.loads.withCarrier': 'with {fleet}, for {day}',
+  'business.loads.loadOf': 'load {no} of {of} of {order}: your carrier brings this order in {of} deliveries',
   'business.loads.fact.contract': 'Carrier (contract)',
   'business.loads.fact.arrivesOn': 'arrives {day}',
   'business.home.go.loads': 'Post a load for carriers to take, and follow it to the door.',

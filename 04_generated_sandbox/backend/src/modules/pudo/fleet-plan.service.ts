@@ -156,6 +156,7 @@ export class FleetPlanService implements OnModuleInit {
 
     const byId = new Map(orders.map((f) => [f.freightId, f]));
     const vehicleOf = new Map(fleet.map((x) => [x.v.vehicleId, x.v]));
+    const largestKg = going.reduce((m, x) => Math.max(m, x.v.capacityKg), 0);
     const clock = (min: number) => clockOf(settings.dayStart, min);
     const routes: PlanRouteView[] = result.routes.map((r) => {
       const v = vehicleOf.get(r.truckId)!;
@@ -196,7 +197,12 @@ export class FleetPlanService implements OnModuleInit {
     });
     const unplanned: PlanLeftView[] = [
       ...orders.filter((f) => !f.destLocation).map((f) => ({ ...this.orderWords(f), reason: 'no_pin' as const })),
-      ...result.unplanned.map((u) => ({ ...this.orderWords(byId.get(u.orderId)!), reason: u.reason })),
+      ...result.unplanned.map((u) => {
+        const f = byId.get(u.orderId)!;
+        // Heavier than anything going out: it can still be carried, in several loads — where it is this fleet's to split.
+        const split = u.reason === 'too_heavy' && largestKg > 0 && this.dispatch.maySplit(fleetDid, f) ? { splitInto: Math.ceil(f.weightKg / largestKg), loadKg: largestKg } : {};
+        return { ...this.orderWords(f), reason: u.reason, ...split };
+      }),
     ];
     const plannedIds = routes.flatMap((r) => r.trips.flatMap((t) => t.stops.map((s) => s.freightId)));
     const sumKg = (list: Freight[]) => Math.round(list.reduce((s, f) => s + f.weightKg, 0));

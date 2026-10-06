@@ -158,6 +158,8 @@ export interface ClientRef {
 export interface PostedLoad {
   freightId: string;
   code: string;
+  /** One load of an order its carrier brings in several: which one, of how many, of which order. */
+  partOf?: { rootCode: string; no: number; of: number; orderKg: number };
   description: string;
   destLabel: string;
   weightKg: number;

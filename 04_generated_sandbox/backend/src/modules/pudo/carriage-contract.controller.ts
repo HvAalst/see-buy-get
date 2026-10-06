@@ -15,9 +15,9 @@ import { BusinessMemberGuard } from './business-member.guard';
 import { BusinessService } from './business.service';
 import { CarriageContractService } from './carriage-contract.service';
 import { CarriageContractList, CarriageContractView, ContractInviteIssued } from './carriage-contract.types';
-import { AdvisePlanDto, CreateContractDto, EndContractDto, FleetOrdersQueryDto, ImportOrdersDto, LinkContractDto, PinOrderDto, PlanDayDto, PlanStateQueryDto, WithdrawOrderDto } from './carriage-contract.dto';
+import { AdvisePlanDto, CreateContractDto, EndContractDto, SplitOrderDto, FleetOrdersQueryDto, ImportOrdersDto, LinkContractDto, PinOrderDto, PlanDayDto, PlanStateQueryDto, WithdrawOrderDto } from './carriage-contract.dto';
 import { DispatchService } from './dispatch.service';
-import { FleetOrderList } from './dispatch.types';
+import { FleetOrderList, OrderLoads } from './dispatch.types';
 import { FleetManagerService } from './fleet-manager.service';
 
 /**
@@ -117,6 +117,26 @@ export class CarriageContractController {
     this.assertFleet(did, actor);
     this.dispatch.withdrawUploadedOrder(did, freightId, dto.reason);
     return { withdrawn: true };
+  }
+
+  /**
+   * Split an order into loads — for one that is more than a vehicle carries. The office's act, on an order that is
+   * still its own to plan; the shipper is told. The loads add up to the order.
+   */
+  @Roles('fleet_manager', 'operator')
+  @Post('fleet/managers/:did/orders/:freightId/split')
+  splitOrder(@Param('did') did: string, @Param('freightId') freightId: string, @Body() dto: SplitOrderDto, @Actor() actor: IntrospectionResult): OrderLoads {
+    const fleet = this.assertFleet(did, actor);
+    return { loads: this.dispatch.splitOrder(did, freightId, dto.loadsKg, this.fleetPerson(actor, fleet.companyName)).map((f) => ({ freightId: f.freightId, code: f.code, weightKg: f.weightKg, no: f.partOf!.no, of: f.partOf!.of })) };
+  }
+
+  /** Put an order back together, while every load of it is still an order: none on a truck, none handed on. */
+  @Roles('fleet_manager', 'operator')
+  @Post('fleet/managers/:did/orders/:freightId/rejoin')
+  rejoinOrder(@Param('did') did: string, @Param('freightId') freightId: string, @Actor() actor: IntrospectionResult): OrderLoads {
+    const fleet = this.assertFleet(did, actor);
+    const f = this.dispatch.rejoinOrder(did, freightId, this.fleetPerson(actor, fleet.companyName));
+    return { loads: [{ freightId: f.freightId, code: f.code, weightKg: f.weightKg, no: 1, of: 1 }] };
   }
 
 /* ------------------------------------------------------------ the plan -- */

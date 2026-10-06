@@ -1516,7 +1516,7 @@ export class DispatchService {
       if (p.status === 'open') open.set(p.freightId, (open.get(p.freightId) ?? 0) + 1);
     }
     return [...this.freights.values()]
-      .filter((f) => f.postedByDid === did || f.shipperDid === did)
+      .filter((f) => !f.rejoinedInto && (f.postedByDid === did || f.shipperDid === did))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .map((f) => ({
         freightId: f.freightId,
@@ -1531,6 +1531,7 @@ export class DispatchService {
         createdAt: f.createdAt,
         openProposals: open.get(f.freightId) ?? 0,
         ...(f.onBehalfOf ? { onBehalfOf: f.onBehalfOf } : {}),
+        ...(f.partOf ? { partOf: f.partOf } : {}),
         ...(f.contract ? { contract: f.contract, deliverOn: f.deliverOn, ...(f.orderRef ? { orderRef: f.orderRef } : {}) } : {}),
         agreedPrice: f.lockedPrice,
         pickedUpAt: f.pickedUpAt,
@@ -1594,7 +1595,7 @@ export class DispatchService {
     const today = new Date(now).toISOString().slice(0, 10);
     const rows: FleetOrderRow[] = [];
     for (const f of this.freights.values()) {
-      if (!f.contract || !f.deliverOn) continue;
+      if (!f.contract || !f.deliverOn || f.rejoinedInto) continue;
       const h = f.handOn;
       // own: ordered from this fleet · partner: this fleet took it and carries it · passed: this fleet took it and
       // passed it on to the one carrying it · offered: it is on offer to this fleet, by its own fleet or by a partner.
@@ -1638,6 +1639,8 @@ export class DispatchService {
         contract: masked ? { contractId: f.contract.contractId, fleetDid: from.fleetDid, fleetName: from.fleetName, shipperName: from.fleetName } : f.contract,
         ...(f.orderRef && !masked ? { orderRef: f.orderRef } : {}),
         uploaded: role === 'own' && f.postedByDid === fleetDid,
+        ...(f.partOf ? { partOf: f.partOf } : {}),
+        ...(f.indivisible ? { indivisible: true } : {}),
         // A plan is the carrier's: the fleet that handed an order on does not see the partner's trucks.
         ...(f.planned && this.carrierOfOrder(f) === fleetDid ? { planned: f.planned } : {}),
         role,
@@ -1780,6 +1783,114 @@ export class DispatchService {
   /** The window the sender gave for delivery, if any — read through the one place that knows where it is kept. */
   deliveryWindowOf(f: Freight): string | undefined {
     return instructionsViewOf(f)?.deliveryWindow;
+  }
+
+/* ------------------------------------------------------- an order in several loads -- */
+
+  /** Every load of the order this one belongs to, first to last. One, when the order was never split. */
+  loadsOf(freightId: string): Freight[] {
+    const f = this.freights.get(freightId);
+    if (!f) return [];
+    const root = f.partOf?.rootId ?? f.freightId;
+    return [...this.freights.values()].filter((x) => !x.rejoinedInto && (x.freightId === root || x.partOf?.rootId === root)).sort((a, b) => (a.partOf?.no ?? 1) - (b.partOf?.no ?? 1));
+  }
+
+  /** May this fleet split this order: its own, still without a truck, in nobody else's hands, and not one piece. */
+  maySplit(fleetDid: string, f: Freight): boolean {
+    return f.contract?.fleetDid === fleetDid && f.status === 'ordered' && !f.handOn && !f.indivisible && !f.rejoinedInto;
+  }
+
+  /**
+   * SPLIT AN ORDER INTO LOADS. The user, 2026-10-06: an order heavier than the largest truck is split by the office,
+   * and the shipper is told. The order becomes its first load (it keeps its code, its tracking link and the shipper's
+   * own order number) and a load is made for each of the rest: the same goods, shipper, day, door and instructions,
+   * with the weight the office gave it. What each needs to be carried is worked out again from its own weight — two
+   * tonnes of bricks do not need what twelve did. A load can itself be split again.
+   *
+   * Only the fleet the order was ordered from, and only while it is still an order: not on a truck, not handed on
+   * (a partner that cannot carry it gives it back), and not goods that are one piece.
+   */
+  splitOrder(fleetDid: string, freightId: string, loadsKg: number[], by: string, now: number = Date.now()): Freight[] {
+    const f = this.freights.get(freightId);
+    if (!f || f.contract?.fleetDid !== fleetDid || f.rejoinedInto) throw new GlosError('NOT_FOUND', 'No such order');
+    if (f.status !== 'ordered') throw new GlosError('INVALID_STATE', `This order is ${f.status} — it can no longer be split`);
+    if (f.handOn) throw new GlosError('INVALID_STATE', 'This order has been handed on — it is split by the fleet that has it in its own hands');
+    if (f.indivisible) throw new GlosError('INVALID_STATE', 'These goods are one piece — they cannot go in several loads');
+    const kgs = (Array.isArray(loadsKg) ? loadsKg : []).map((k) => Math.round(Number(k) * 100) / 100);
+    if (kgs.length < 2) throw new GlosError('INVALID_INPUT', 'Split it into at least two loads', { field: 'loadsKg' });
+    if (kgs.some((k) => !Number.isFinite(k) || k < 1)) throw new GlosError('INVALID_INPUT', 'Every load weighs at least a kilo', { field: 'loadsKg' });
+    if (Math.abs(kgs.reduce((s, k) => s + k, 0) - f.weightKg) > 0.5) throw new GlosError('INVALID_INPUT', `The loads must add up to what is being split: ${f.weightKg} kg`, { field: 'loadsKg' });
+    const before = this.loadsOf(freightId);
+    if (before.length - 1 + kgs.length > MAX_ORDER_LOADS) throw new GlosError('INVALID_INPUT', `An order goes in ${MAX_ORDER_LOADS} loads at most`, { field: 'loadsKg' });
+    const root = before[0];
+    const orderKg = root.partOf?.orderKg ?? root.weightKg;
+    const at = new Date(now).toISOString();
+
+    this.reweigh(f, kgs[0]);
+    delete f.planned;
+    const made = kgs.slice(1).map((kg) => {
+      this.freightSeq += 1;
+      const load: Freight = { ...f, freightId: `frt_${randomBytes(5).toString('hex')}`, code: `FRT-${String(this.freightSeq).padStart(3, '0')}`, trackingKey: `T-${randomBytes(5).toString('hex').toUpperCase()}`, createdAt: at };
+      delete load.handedBack;
+      this.reweigh(load, kg);
+      return load;
+    });
+    // The new loads stand right after the one they were split from; every load of the order is numbered again.
+    const all = before.flatMap((x) => (x.freightId === f.freightId ? [f, ...made] : [x]));
+    all.forEach((x, i) => {
+      x.partOf = { rootId: root.freightId, rootCode: root.code, no: i + 1, of: all.length, orderKg, at, by };
+      this.freights.set(x.freightId, x);
+    });
+    this.tellSplit(root, all.length, false);
+    return all;
+  }
+
+  /**
+   * PUT AN ORDER BACK TOGETHER — the way back from a split, while nobody has acted on it: every load still an order,
+   * none on a truck, none handed on. The first load is the order again, at its whole weight; the others stop being
+   * loads (kept, so a tracking link somebody was given still says what became of it; in no list from then on).
+   */
+  rejoinOrder(fleetDid: string, freightId: string, by: string, now: number = Date.now()): Freight {
+    const loads = this.loadsOf(freightId);
+    const root = loads[0];
+    if (!root || root.contract?.fleetDid !== fleetDid) throw new GlosError('NOT_FOUND', 'No such order');
+    if (loads.length < 2 || !root.partOf) throw new GlosError('INVALID_STATE', 'This order is in one load already');
+    const moved = loads.find((x) => x.status !== 'ordered' || x.handOn);
+    if (moved) throw new GlosError('INVALID_STATE', `Load ${moved.partOf?.no} (${moved.code}) is ${moved.handOn ? 'handed on' : moved.status} — the order can no longer be put back together`);
+    const at = new Date(now).toISOString();
+    for (const x of loads.slice(1)) {
+      x.status = 'cancelled';
+      x.cancelledAt = at;
+      x.cancellation = { by: fleetDid, role: 'shipper', reason: `Put back together with order ${root.code} by ${by}`, at };
+      x.rejoinedInto = root.freightId;
+      delete x.planned;
+      this.freights.set(x.freightId, x);
+    }
+    this.reweigh(root, root.partOf.orderKg);
+    delete root.partOf;
+    delete root.planned;
+    this.freights.set(root.freightId, root);
+    this.tellSplit(root, 1, true);
+    return root;
+  }
+
+  /** A load's weight, and everything that was worked out from it: its class, what must lift it, the body it needs. */
+  private reweigh(f: Freight, kg: number): void {
+    f.weightKg = Math.round(kg * 100) / 100;
+    // The measurements were the whole order's; a load of it has none of its own.
+    delete f.dimensionsCm;
+    const packaging = f.packaging ?? DEFAULT_PACKAGING;
+    f.cargoClass = this.cargo.classify({ kg: f.weightKg });
+    f.requiredEquipment = selfLoading(packaging) ? [] : this.cargo.requiredEquipment(f.cargoClass);
+    f.bodyDerived = canonicalBody({ requiredCapabilities: f.requiredCapabilities, packaging, natureCode: f.natureCode, weightKg: f.weightKg, indivisible: f.indivisible });
+  }
+
+  /** The shipper hears that its order comes in several loads, or in one after all — where it is somebody who can be told. */
+  private tellSplit(root: Freight, loads: number, rejoined: boolean): void {
+    const shipperDid = root.postedByDid && root.postedByDid !== root.contract?.fleetDid ? root.postedByDid : undefined;
+    void this.events
+      .publish(GlosEvent.Pudo.OrderSplit, { freightId: root.freightId, code: root.code, loads, rejoined, orderKg: root.partOf?.orderKg ?? root.weightKg, deliverOn: root.deliverOn, fleetName: root.contract?.fleetName ?? '', ...(shipperDid ? { shipperDid } : {}) }, { source: 'pudo' })
+      .catch(() => undefined);
   }
 
 /* ------------------------------------------------------------ P4: handing an order on -- */
@@ -3086,3 +3197,6 @@ export class DispatchService {
     return f;
   }
 }
+
+/** The most loads one order goes in. A very heavy order on small vehicles, with room; not a way to mint orders. */
+export const MAX_ORDER_LOADS = 20;

@@ -69,6 +69,48 @@ export type ClaimableKind = 'tote' | 'freight';
  * truck, and on no market: a status rather than a flag, so that every board, offer, nudge and market series — which
  * all read `available` — leaves it out without having to be told, including the ones written after this.
  */
+/**
+ * ONE LOAD OF AN ORDER THAT COMES IN SEVERAL.
+ *
+ * The user, 2026-10-06, on an order heavier than the largest truck: the office splits it, and the shipper is told.
+ * The order is not replaced by something else: it BECOMES its first load, and a load is made for each of the rest.
+ * Every load is an order in its own right — planned, put on a truck, signed for and tracked on its own — and each
+ * carries this, so that anybody looking at one load sees the order it is part of and how many there are.
+ */
+export class LoadOf {
+  /** The order as it was placed: the id and code of its first load. */
+  rootId: string;
+  rootCode: string;
+  /** This load, and how many there are. */
+  no: number;
+  of: number;
+  /** What the whole order weighs. */
+  orderKg: number;
+  /** When it was split, and by whom in the carrier's office. */
+  at: string;
+  by: string;
+}
+
+/** A load as the tracking page lists it beside the others of its order. */
+export class TrackLoad {
+  no: number;
+  code: string;
+  weightKg: number;
+  @ApiProperty({ enum: ['scheduled', 'available', 'ordered', 'claimed', 'in_transit', 'delivered', 'cancelled'] }) status: 'scheduled' | 'available' | 'ordered' | 'claimed' | 'in_transit' | 'delivered' | 'cancelled';
+}
+
+/** What splitting an order, or putting it back together, answers with: its loads as they now stand. */
+export class OrderLoad {
+  freightId: string;
+  code: string;
+  weightKg: number;
+  no: number;
+  of: number;
+}
+export class OrderLoads {
+  @ApiProperty({ type: [OrderLoad] }) loads: OrderLoad[];
+}
+
 export const FREIGHT_STATUSES = ['scheduled', 'available', 'ordered', 'claimed', 'in_transit', 'delivered', 'cancelled'] as const;
 export type FreightStatus = (typeof FREIGHT_STATUSES)[number];
 
@@ -365,6 +407,10 @@ export class Freight {
   @ApiPropertyOptional({ type: OrderHandOn }) handOn?: OrderHandOn;
   /** P4 — each time a partner that had taken it gave it back before collecting: who, why, when. */
   @ApiPropertyOptional() handedBack?: Array<{ fleetName: string; reason: string; at: string; toFleetDid?: string }>;
+  /** One load of an order that comes in several. Absent: the order is in one load. */
+  @ApiPropertyOptional({ type: LoadOf }) partOf?: LoadOf;
+  /** A load that was put back together with the rest of its order: the id of the order. It is in no list from then on. */
+  @ApiPropertyOptional() rejoinedInto?: string;
   /**
    * WHO the network owed for this haul, and on whose books — fixed when it was accrued at delivery. A claim
    * upheld weeks later takes the money back from this same party: never from whichever fleet the driver has
@@ -461,6 +507,10 @@ export class FleetOrderRow {
   @ApiPropertyOptional() orderRef?: string;
   /** Whether this fleet's office uploaded it (and so may withdraw it) rather than the shipper ordering it. */
   uploaded: boolean;
+  /** One load of an order that comes in several. */
+  @ApiPropertyOptional({ type: LoadOf }) partOf?: LoadOf;
+  /** Goods that are one piece: they cannot go in several loads. */
+  @ApiPropertyOptional() indivisible?: boolean;
   /** P3 — where the accepted plan for its day puts it. */
   @ApiPropertyOptional({ type: PlannedOn }) planned?: PlannedOn;
   /**
@@ -911,6 +961,8 @@ export class FreightProposalsResponse {
 export class PostedFreightRow {
   freightId: string;
   code: string;
+  /** One load of an order its carrier split into several. */
+  @ApiPropertyOptional({ type: LoadOf }) partOf?: LoadOf;
   description: string;
   destLabel: string;
   weightKg: number;
@@ -1220,6 +1272,11 @@ export class FreightTrackView {
   receiverName?: string;
   /** Withdrawn: when, and by the sender, the network or — on a run — the carrier. Never the reason: that is between the parties. */
   @ApiPropertyOptional() cancelled?: { at: string; by: 'sender' | 'network' | 'carrier' };
+  /** This is one load of an order that comes in several — and all of them, each with where it has got to. */
+  @ApiPropertyOptional({ type: LoadOf }) partOf?: LoadOf;
+  @ApiPropertyOptional({ type: [TrackLoad] }) loads?: TrackLoad[];
+  /** This load was put back together with the rest of its order: it is not coming on its own. */
+  @ApiPropertyOptional() rejoined?: boolean;
   /**
    * Where the goods travel: `board` a load a carrier took off the open board (absent means this) · `run` space
    * booked on a carrier's scheduled run, which leaves at `scheduledPickupAt` whether or not anybody else is aboard.

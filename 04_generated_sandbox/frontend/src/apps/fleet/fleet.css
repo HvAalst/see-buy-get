@@ -526,6 +526,31 @@
   margin-top: 12px;
 }
 
+/* An order split into loads: how many, with a step either way, set apart like the other things done to an order. */
+.split {
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--bd);
+  border-radius: var(--r-md, 12px);
+  background: var(--bg);
+}
+.split__n {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 6px 0;
+}
+.split__n .btn {
+  width: 44px;
+  min-width: 44px;
+  padding-left: 0;
+  padding-right: 0;
+  justify-content: center;
+}
+.split .orders__acts {
+  margin-top: 10px;
+}
+
 /* The leave to pass work on, under a partner's name: a line of its own, as wide as its words. */
 .partners__pass {
   margin-top: 6px;

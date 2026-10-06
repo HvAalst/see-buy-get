@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Icon, Note, Pill } from '../../../shared/ui';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { PlanAdviser } from './PlanAdviser';
+import { SplitOrder } from './SplitOrder';
 import { askOf, dayOf, dayWord, handOnLine, hoursWords, keptOff, leftByReason, putOnto, ruleLine, windowLine, sendLine, weightWords, withoutRule, type DayPlan, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi } from '../orders';
 
 const REASON: Record<PlanLeftReason, { title: MessageKey; what: MessageKey }> = {
@@ -331,6 +332,21 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
                   <li key={o.freightId}>
                     <span class="plan__stopt">{`${o.destLabel} · ${weightWords(o.weightKg)}`}</span>
                     <span class="plan__stops-s">{`${o.code} · ${o.description} · ${o.shipperName}${o.orderRef ? ` · ${o.orderRef}` : ''}`}</span>
+                    {/* HEAVIER THAN ANY VEHICLE GOING OUT, and the office's to split: so many loads of the largest. */}
+                    {o.splitInto && !plan.accepted ? (
+                      <span class="plan__byhand">
+                        <SplitOrder
+                          order={o}
+                          suggest={o.splitInto}
+                          loadKg={o.loadKg}
+                          api={api}
+                          onDone={async () => {
+                            await onAccepted();
+                            await propose(ask);
+                          }}
+                        />
+                      </span>
+                    ) : null}
                     {/* BY HAND, while the office is changing its day: this order goes on that vehicle, or on none. */}
                     {tune && !plan.accepted && going.length > 0 && g.reason !== 'no_pin' ? (
                       <span class="plan__byhand">

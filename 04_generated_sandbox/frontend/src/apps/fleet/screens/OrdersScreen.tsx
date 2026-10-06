@@ -4,8 +4,9 @@ import { Button, Card, CodeCard, ErrorNote, Explainer, Note, Pill, PlacePicker, 
 import type { GeoPoint } from '../../../shared/geo';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { PACKAGING_OPTIONS } from '../../agent/logic';
-import { TAG_TONE, byDay, dayOf, daySummary, dayWord, hoursWords, mayWithdraw, orderTag, ordersApi, weightWords, type Contract, type DayPlanState, type FleetOrder, type InviteIssued, type PartnerLists } from '../orders';
+import { TAG_TONE, byDay, dayOf, daySummary, dayWord, hoursWords, loadLine, mayRejoin, maySplit, mayWithdraw, orderTag, ordersApi, weightWords, type Contract, type DayPlanState, type FleetOrder, type InviteIssued, type PartnerLists } from '../orders';
 import { OrderHandOn, PartnersCard } from './HandOn';
+import { RejoinOrder, SplitOrder } from './SplitOrder';
 import { PlanBoard } from './PlanBoard';
 import { OrderUpload } from './OrderUpload';
 
@@ -202,6 +203,7 @@ function OrderRows({ orders, onOpen, showDay }: { orders: FleetOrder[]; onOpen: 
                 {o.deliveryWindow ? ` · ${o.deliveryWindow}` : ''}
                 {o.driverName ? ` · ${t('fleet.orders.driver', { name: o.driverName, plate: o.plate ?? '' })}` : ''}
               </span>
+              {o.partOf ? <span class="row__s">{loadLine(o.partOf, t)}</span> : null}
               {o.planned && o.status === 'ordered' ? <span class="row__s">{t('fleet.orders.plannedOn', { plate: o.planned.plate, trip: o.planned.tripNo, arrive: o.planned.arrive })}</span> : null}
               {o.planned && o.status === 'ordered' && (o.planned.lateMin || o.planned.earlyMin) ? (
                 <span class="row__s orders__nopin">{o.planned.lateMin ? t('fleet.orders.plannedLate', { by: hoursWords(o.planned.lateMin) }) : t('fleet.orders.plannedEarly', { by: hoursWords(o.planned.earlyMin ?? 0) })}</span>
@@ -353,6 +355,33 @@ function OrderSheet({ order, api, hasPartners, lists, onClose, onChanged }: { or
             </p>
           </div>
         )
+      ) : null}
+
+      {/* AN ORDER IN SEVERAL LOADS: which load this is; splitting what is still the office's own; and the way back. */}
+      {order.partOf ? <p class="hint">{loadLine(order.partOf, t)}</p> : null}
+      {api && (maySplit(order) || mayRejoin(order)) ? (
+        <div class="handon">
+          {maySplit(order) ? (
+            <SplitOrder
+              order={order}
+              api={api}
+              onDone={async () => {
+                await onChanged();
+                onClose();
+              }}
+            />
+          ) : null}
+          {mayRejoin(order) ? (
+            <RejoinOrder
+              freightId={order.freightId}
+              api={api}
+              onDone={async () => {
+                await onChanged();
+                onClose();
+              }}
+            />
+          ) : null}
+        </div>
       ) : null}
 
       {api ? (

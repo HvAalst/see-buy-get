@@ -114,6 +114,7 @@ export const NOTIFICATION_KINDS = [
    * did not do it is told — an order changing hands is two offices planning on the same thing.
    */
   'order_handed_on',
+  'order_split',
   /** A fleet offered this driver a place, or took the offer back. Only the driver can answer it, so only they are told. */
   'fleet_offer',
   /**

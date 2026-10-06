@@ -73,6 +73,13 @@ export class PlanLeftView {
   destLabel: string;
   weightKg: number;
   @ApiProperty({ enum: PLAN_LEFT_REASONS }) reason: PlanLeftReason;
+  /**
+   * For an order heavier than the fleet's largest vehicle that the office MAY split: how many loads of that vehicle
+   * it would make. A suggestion — the office decides, and the shipper is told.
+   */
+  @ApiPropertyOptional() splitInto?: number;
+  /** What that largest vehicle carries. */
+  @ApiPropertyOptional() loadKg?: number;
 }
 
 export class PlanHire {

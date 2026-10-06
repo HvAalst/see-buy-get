@@ -421,7 +421,8 @@ export const ARTICLES: GuideArticle[] = [
     ],
     notes: [
       "The price and how you pay are on your own contract with the carrier. SeeBuyGet keeps the order, the note and the tracking — never the money.",
-      "An owner can end a contract under Carriers. Loads already ordered are still delivered."
+      "An owner can end a contract under Carriers. Loads already ordered are still delivered.",
+      "An order that is more than one vehicle carries may be brought in several loads by your carrier. You are told, each load shows in your list as load 1 of 2, and either tracking link shows them all."
     ]
   },
   {
@@ -637,7 +638,8 @@ export const ARTICLES: GuideArticle[] = [
     summary: "The app works out a plan for a day’s orders on your own trucks, and tells you how many trucks short you are. Best read on a laptop.",
     steps: [
       "Orders, choose the day, then Plan this day. The first line is the answer: how many of the day’s orders are on a truck, and how many more trucks you would need for the rest.",
-      "Under it, what does not fit, grouped by why: an address not on the map (pin it and plan again), no room left in the day, a free truck with no driver, goods no truck of yours can handle, or an order heavier than your largest truck.",
+      "Under it, what does not fit, grouped by why: an address not on the map (pin it and plan again), no room left in the day, a free truck with no driver, goods no truck of yours can handle, or an order heavier than your largest truck (split it into loads).",
+      "An order heavier than your largest truck has Split it into loads. The plan says how many loads of your largest vehicle it makes; you can choose more. Each load then is an order of its own — planned, put on a truck, signed for and tracked separately — and the shipper is told its order comes in parts. Open any load and tap Put the order back together to undo it, while no load is on a truck or handed on.",
       "Then each truck’s day, trip after trip in the order it is driven. A truck that has unloaded goes on to its next collection from where it is, not from the depot.",
       "Where a shipper asked for a delivery window, the plan goes for it: a vehicle that is early waits for the window to open, and the door that closes soonest is visited first. An order that cannot make its window is planned all the same and marked with how late it will be — or how early, when the day has no room to wait. The first lines of the plan say how many.",
       "Change the day opens your settings: when trucks leave, the longest day, the speed on the road, the minutes to load and to hand over, and which vehicles go out. Change one and the plan is worked out again.",

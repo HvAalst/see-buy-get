@@ -18,6 +18,8 @@ export type PartnerLists = components['schemas']['FleetPartnerLists'];
 export type PartnerInvite = components['schemas']['PartnerInviteIssued'];
 export type HandOnResult = components['schemas']['HandOnBatchResult'];
 export type PlanRule = components['schemas']['PlanRuleView'];
+export type LoadOf = components['schemas']['LoadOf'];
+export type OrderLoads = components['schemas']['OrderLoads'];
 export type PlanStop = components['schemas']['PlanStopView'];
 export type PlanAdvice = components['schemas']['PlanAdviceView'];
 export type AdviserFailure = NonNullable<PlanAdvice['failed']>;
@@ -73,6 +75,10 @@ export function ordersApi(sbg: SbgClient, did: string) {
     importOrders: (contractId: string, body: { text?: string; workbook?: string; pickupLabel?: string; pickupLat?: number; pickupLng?: number; dryRun: boolean }): Promise<Result<ImportResult>> =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/contracts/{contractId}/orders/import', { params: { path: { did, contractId } }, body })) as never,
     template: (): Promise<Result<{ fileName: string; csv: string }>> => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/orders/template', { params: { path } })) as never,
+    /** An order split into loads by weight (they add up to it), and put back together while nothing has been done with any of them. */
+    splitOrder: (freightId: string, loadsKg: number[]): Promise<Result<OrderLoads>> =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/orders/{freightId}/split', { params: { path: { did, freightId } }, body: { loadsKg } })) as never,
+    rejoinOrder: (freightId: string): Promise<Result<OrderLoads>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/orders/{freightId}/rejoin', { params: { path: { did, freightId } } })) as never,
     withdraw: (freightId: string, reason: string): Promise<Result<{ withdrawn: true }>> =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/orders/{freightId}/withdraw', { params: { path: { did, freightId } }, body: { reason } })) as never,
     /** P3 — a proposal for a day (changes nothing), accepting one (kept, and written onto its orders), and the day's accepted plan. */
@@ -319,6 +325,42 @@ export function historyOf(turns: AdviserTurn[]): Array<{ role: 'user' | 'assista
     .filter((x) => x.text.trim())
     .slice(-ADVISER_HISTORY)
     .map((x) => ({ role: x.role, text: x.text.slice(0, 4000) }));
+}
+
+/** The most loads one order goes in. The server holds the same line. */
+export const MAX_ORDER_LOADS = 20;
+
+/**
+ * AN ORDER'S WEIGHT SHARED OUT OVER `n` LOADS, as evenly as whole kilos allow — and adding up to the order exactly,
+ * because the server refuses a split that does not. The kilos left over go one each onto the first loads; any part
+ * of a kilo goes on the first.
+ */
+export function evenLoads(weightKg: number, n: number): number[] {
+  const count = Math.max(2, Math.min(MAX_ORDER_LOADS, Math.floor(n) || 2));
+  const base = Math.floor(weightKg / count);
+  const loads: number[] = Array(count).fill(base);
+  let rest = Math.round((weightKg - base * count) * 100) / 100;
+  for (let i = 0; rest >= 1 && i < count; i++) {
+    loads[i] += 1;
+    rest = Math.round((rest - 1) * 100) / 100;
+  }
+  loads[0] = Math.round((loads[0] + rest) * 100) / 100;
+  return loads;
+}
+
+/** A load, said: which one, of how many, of which order, and what the whole order weighs. */
+export function loadLine(p: Pick<LoadOf, 'no' | 'of' | 'rootCode' | 'orderKg'>, t: Translate): string {
+  return t('fleet.split.loadOf', { no: p.no, of: p.of, order: p.rootCode, weight: weightWords(p.orderKg) });
+}
+
+/** May the office split this order: its own, still without a truck, in nobody else's hands, not one piece, and more than one kilo. */
+export function maySplit(o: Pick<FleetOrder, 'role' | 'status' | 'handOn' | 'weightKg'> & { indivisible?: boolean }): boolean {
+  return o.role === 'own' && o.status === 'ordered' && !o.handOn && !o.indivisible && o.weightKg >= 2;
+}
+
+/** May the office ASK to put a split order back together — from any load of it that is still its own to plan. */
+export function mayRejoin(o: Pick<FleetOrder, 'role' | 'status' | 'handOn'> & { partOf?: unknown }): boolean {
+  return Boolean(o.partOf) && o.role === 'own' && o.status === 'ordered' && !o.handOn;
 }
 
 /** P4 — may this fleet hand this order on (offer it, or release it)? Its own, still without a truck, and nobody's yet. */

@@ -237,6 +237,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
      */
     this.events.subscribe<SpaceSold>(GlosEvent.Pudo.DepartureBooked, (e) => this.onSpaceSold(e.payload));
     this.events.subscribe<OrderHandedOn>(GlosEvent.Pudo.OrderHandedOn, (e) => this.onOrderHandedOn(e.payload));
+    // An order is coming in several loads — or in one after all. Its shipper placed one order and is told what became of it.
+    this.events.subscribe<{ code: string; loads: number; rejoined: boolean; orderKg: number; deliverOn?: string; fleetName: string; shipperDid?: string }>(GlosEvent.Pudo.OrderSplit, (e) => this.onOrderSplit(e.payload));
     this.events.subscribe<BookingGivenBack>(GlosEvent.Pudo.DepartureBookingCancelled, (e) => this.onBookingGivenBack(e.payload));
     this.events.subscribe<RunClaimOpened>(GlosEvent.Pudo.DepartureClaimOpened, (e) => this.onRunClaimOpened(e.payload));
     this.events.subscribe<RunClaimAnswered>(GlosEvent.Pudo.DepartureClaimAnswered, (e) => this.onRunClaimAnswered(e.payload));
@@ -453,6 +455,16 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
    * P4 — orders moved between a fleet and its partners. Each message says what a planner needs to act on it: how many,
    * how heavy, for which day — and, when a partner gives one back, why.
    */
+  /** The shipper of an order its carrier split. An order the carrier's own office typed in has nobody here to tell: its tracking page says it. */
+  private async onOrderSplit(p: { code: string; loads: number; rejoined: boolean; orderKg: number; deliverOn?: string; fleetName: string; shipperDid?: string }): Promise<void> {
+    if (!p.shipperDid) return;
+    const size = p.orderKg >= 1000 ? `${Math.round(p.orderKg / 100) / 10} t` : `${p.orderKg} kg`;
+    const when = p.deliverOn ? ` for ${p.deliverOn}` : '';
+    const title = p.rejoined ? `${p.fleetName} will bring ${p.code} in one load after all` : `${p.fleetName} will bring ${p.code} in ${p.loads} loads`;
+    const body = p.rejoined ? `${size}${when}, in one delivery as you ordered it.` : `${size}${when}. It is more than one vehicle carries, so it comes in ${p.loads} deliveries; each is signed for on its own, and your tracking link shows them all.`;
+    await this.tell(p.shipperDid, { kind: 'order_split', title, body, tag: `split:${p.code}:${p.loads}`, data: { loads: p.loads } });
+  }
+
   private async onOrderHandedOn(p: OrderHandedOn): Promise<void> {
     const many = p.count !== 1;
     const what = many ? `${p.count} orders` : (p.code ?? '1 order');

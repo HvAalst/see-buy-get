@@ -573,6 +573,11 @@ export const en = {
   'send.freight.attemptRefused': 'The driver was at the door on {when} and the goods were refused.',
   'send.freight.attemptUnreachable': 'The driver could not reach the door on {when}.',
   'send.freight.receivedBy': 'Received by {name}.',
+  'send.freight.rejoined': 'This load was put back together with the rest of its order. It is not coming on its own — ask the sender for the order’s own link.',
+  'send.freight.loadsTitle': 'This order comes in {n} loads',
+  'send.freight.loadsLede': 'It is more than one vehicle carries: {kg} kg in all. This link is for load {no} of {of}. Each load is delivered and signed for on its own.',
+  'send.freight.loadLine': 'Load {no} · {kg} kg · {status}',
+  'send.freight.loadLineThis': 'Load {no} · {kg} kg · {status} — this one',
   'send.freight.withdrawnBySender': 'The sender withdrew this load on {when}.',
   'send.freight.withdrawnByNetwork': 'The network withdrew this load on {when}.',
   // Space booked on a carrier's scheduled run answers on the same link.
