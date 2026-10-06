@@ -445,6 +445,21 @@
   align-self: flex-start;
   padding-left: 0;
 }
+.plan__byhand {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: 2px;
+}
+.plan__moveto {
+  width: auto;
+  max-width: 100%;
+  min-height: 36px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  font-size: 14px;
+}
 .plan__ruled {
   color: var(--navy);
   font-weight: 600;

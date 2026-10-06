@@ -249,6 +249,18 @@ export function keptOff(rules: PlanRule[], pair: PlanPair): { keepOff: PlanPair[
   return { keepOff: now.keepOff.some(same) ? now.keepOff : [...now.keepOff, { freightId: pair.freightId, vehicleId: pair.vehicleId }], putOn: now.putOn.filter((p) => !same(p)) };
 }
 
+/**
+ * P5 — the asks for the same plan with one order put on one vehicle, BY HAND: that vehicle, or none. An order has one
+ * such rule, so an earlier one for it gives way; and so does a keep-off of that same order on that same vehicle.
+ */
+export function putOnto(rules: PlanRule[], pair: PlanPair): { keepOff: PlanPair[]; putOn: PlanPair[] } {
+  const now = rulesAsk(rules);
+  return {
+    keepOff: now.keepOff.filter((p) => !(p.freightId === pair.freightId && p.vehicleId === pair.vehicleId)),
+    putOn: [...now.putOn.filter((p) => p.freightId !== pair.freightId), { freightId: pair.freightId, vehicleId: pair.vehicleId }],
+  };
+}
+
 /** P5 — a rule as the office reads it. */
 export function ruleLine(rule: Pick<PlanRule, 'kind' | 'code' | 'plate'>, t: Translate): string {
   return t(rule.kind === 'keep_off' ? 'fleet.plan.rules.keepOff' : 'fleet.plan.rules.putOn', { code: rule.code, plate: rule.plate });

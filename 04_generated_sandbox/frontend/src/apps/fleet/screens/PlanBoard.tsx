@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Icon, Note, Pill } from '../../../shared/ui';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { PlanAdviser } from './PlanAdviser';
-import { askOf, dayOf, dayWord, handOnLine, hoursWords, keptOff, leftByReason, ruleLine, sendLine, weightWords, withoutRule, type DayPlan, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi } from '../orders';
+import { askOf, dayOf, dayWord, handOnLine, hoursWords, keptOff, leftByReason, putOnto, ruleLine, sendLine, weightWords, withoutRule, type DayPlan, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi } from '../orders';
 
 const REASON: Record<PlanLeftReason, { title: MessageKey; what: MessageKey }> = {
   no_pin: { title: 'fleet.plan.left.noPin', what: 'fleet.plan.left.noPinDo' },
@@ -106,6 +106,8 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
   const left = plan ? leftByReason(plan.unplanned) : [];
   // A plan kept from before there were rules has none.
   const rules = plan?.rules ?? [];
+  // The vehicles an order can be put on by hand: the ones going out.
+  const going = (plan?.vehicles ?? []).filter((v) => !v.excluded && !v.offRoad?.length);
 
   return (
     <div class="scr plan">
@@ -326,6 +328,29 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
                   <li key={o.freightId}>
                     <span class="plan__stopt">{`${o.destLabel} · ${weightWords(o.weightKg)}`}</span>
                     <span class="plan__stops-s">{`${o.code} · ${o.description} · ${o.shipperName}${o.orderRef ? ` · ${o.orderRef}` : ''}`}</span>
+                    {/* BY HAND, while the office is changing its day: this order goes on that vehicle, or on none. */}
+                    {tune && !plan.accepted && going.length > 0 && g.reason !== 'no_pin' ? (
+                      <span class="plan__byhand">
+                              <select
+                                class="select plan__moveto"
+                                aria-label={t('fleet.plan.rules.putOnLabel', { code: o.code })}
+                                value=""
+                                disabled={busy !== null}
+                                onChange={(e) => {
+                                  const vehicleId = e.currentTarget.value;
+                                  if (vehicleId) change(putOnto(rules, { freightId: o.freightId, vehicleId }));
+                                }}
+                              >
+                                <option value="">{t('fleet.plan.rules.putOnCta')}</option>
+                                {going
+                                  .map((v) => (
+                                    <option key={v.vehicleId} value={v.vehicleId}>
+                                      {t('fleet.plan.truckChip', { plate: v.plate, size: weightWords(v.capacityKg) })}
+                                    </option>
+                                  ))}
+                              </select>
+                      </span>
+                    ) : null}
                     {/* A rule on this order may be WHY it is here: said beside it, so the reason above is not read as the whole story. */}
                     {rules
                       .filter((r) => r.freightId === o.freightId)
@@ -368,9 +393,32 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
                             </span>
                             {/* A RULE BY HAND, while the office is changing its day: this order, not on this vehicle. */}
                             {tune && !plan.accepted ? (
-                              <Button variant="link" chevron={false} full={false} disabled={busy !== null} onClick={() => change(keptOff(rules, { freightId: stop.freightId, vehicleId: r.vehicleId }))}>
-                                {t('fleet.plan.rules.keepOffCta')}
-                              </Button>
+                              <span class="plan__byhand">
+                                <Button variant="link" chevron={false} full={false} disabled={busy !== null} onClick={() => change(keptOff(rules, { freightId: stop.freightId, vehicleId: r.vehicleId }))}>
+                                  {t('fleet.plan.rules.keepOffCta')}
+                                </Button>
+                                {going.length > 1 ? (
+                              <select
+                                class="select plan__moveto"
+                                aria-label={t('fleet.plan.rules.putOnLabel', { code: stop.code })}
+                                value=""
+                                disabled={busy !== null}
+                                onChange={(e) => {
+                                  const vehicleId = e.currentTarget.value;
+                                  if (vehicleId) change(putOnto(rules, { freightId: stop.freightId, vehicleId }));
+                                }}
+                              >
+                                <option value="">{t('fleet.plan.rules.moveTo')}</option>
+                                {going
+                                  .filter((v) => v.vehicleId !== r.vehicleId)
+                                  .map((v) => (
+                                    <option key={v.vehicleId} value={v.vehicleId}>
+                                      {t('fleet.plan.truckChip', { plate: v.plate, size: weightWords(v.capacityKg) })}
+                                    </option>
+                                  ))}
+                              </select>
+                                ) : null}
+                              </span>
                             ) : null}
                           </span>
                         </li>

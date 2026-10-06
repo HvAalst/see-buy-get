@@ -1071,7 +1071,10 @@ export const enFleet = {
   'fleet.plan.rules.putOn': '{code} goes on {plate}, or on no vehicle',
   'fleet.plan.rules.remove': 'Remove',
   'fleet.plan.rules.keepOffCta': 'Not on this vehicle',
-  'fleet.plan.rules.keepOffHint': 'To keep one order off one vehicle, tap Not on this vehicle under it in the plan below.',
+  'fleet.plan.rules.keepOffHint': 'To keep one order off a vehicle, or to put it on another, use Not on this vehicle and Move to under it in the plan below.',
+  'fleet.plan.rules.moveTo': 'Move to…',
+  'fleet.plan.rules.putOnCta': 'Put on…',
+  'fleet.plan.rules.putOnLabel': 'Put {code} on a vehicle',
   'fleet.plan.rules.onLeft': 'A rule on this plan: {rule}',
   'fleet.plan.rules.hint': 'A rule holds every time the day is planned again, until it is removed. No vehicle is ever overloaded to keep one.',
 };

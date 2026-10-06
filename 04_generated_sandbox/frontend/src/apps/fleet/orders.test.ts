@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { ADVISER_HISTORY, historyOf, keptOff, ruleLine, rulesAsk, withoutRule, type PlanRule } from './orders';
+import { ADVISER_HISTORY, historyOf, keptOff, putOnto, ruleLine, rulesAsk, withoutRule, type PlanRule } from './orders';
 import { askOf, byDay, dayOf, daySummary, dayWord, handOnLine, hoursWords, mayHandOn, importVerdictLine, leftByReason, mayWithdraw, notASheet, orderTag, sendLine, weightWords, type DayPlan, type FleetOrder, type PlanLeft, type PlanSendTruck } from './orders';
 
 const order = (over: Partial<FleetOrder> = {}): FleetOrder =>
@@ -191,6 +191,21 @@ describe('P1 — a fleet’s orders', () => {
     expect(keptOff(rules, { freightId: 'f2', vehicleId: 'v1' }).putOn).toEqual([{ freightId: 'f3', vehicleId: 'v2' }]);
     // f3 is put on v2 and kept off v1: both stand, they agree.
     expect(keptOff(rules, { freightId: 'f3', vehicleId: 'v1' }).putOn).toHaveLength(2);
+  });
+
+  it('puts an order on a vehicle by hand — its one vehicle, over an earlier one and over a keep-off that said the opposite', () => {
+    const rules = [rule('put_on', 'f1', 'v1'), rule('keep_off', 'f1', 'v2'), rule('keep_off', 'f1', 'v3'), rule('put_on', 'f2', 'v1')];
+    expect(putOnto(rules, { freightId: 'f1', vehicleId: 'v2' })).toEqual({
+      // Kept off v3 still stands; kept off v2 cannot, it is now ON v2.
+      keepOff: [{ freightId: 'f1', vehicleId: 'v3' }],
+      // f1's earlier vehicle is gone; f2's rule is another order's.
+      putOn: [
+        { freightId: 'f2', vehicleId: 'v1' },
+        { freightId: 'f1', vehicleId: 'v2' },
+      ],
+    });
+    // Asked again: still one rule for the order.
+    expect(putOnto(rules, { freightId: 'f1', vehicleId: 'v1' }).putOn.filter((p) => p.freightId === 'f1')).toEqual([{ freightId: 'f1', vehicleId: 'v1' }]);
   });
 
   it('says a rule the way the office would', () => {

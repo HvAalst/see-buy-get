@@ -18,9 +18,10 @@
  *  - What is left over is priced in trucks: the same math is run on copies of the fleet's largest truck, and the
  *    number it needs is how many to hire.
  *
- * It is a heuristic (cheapest insertion, each trip's drops re-ordered by 2-opt, then every order offered the whole
- * day again), not a proof of the best possible plan. It is honest about its inputs: the distances are whatever `km` says, and the times are those
- * distances at one speed plus fixed minutes at each stop.
+ * It is a heuristic (cheapest insertion, each trip's drops re-ordered by 2-opt, every order offered the whole day
+ * again, and then each planned order given up in turn to see whether the day carries more orders without it), not a
+ * proof of the best possible plan. It is honest about its inputs: the distances are whatever `km` says, and the
+ * times are those distances at one speed plus fixed minutes at each stop.
  */
 
 export interface PlanPoint {
@@ -59,6 +60,8 @@ export interface PlanParams {
   maxTrucks?: number;
   /** Second thoughts after the first pass (see solve). On unless a test wants the first pass alone. */
   polish?: boolean;
+  /** How many orders may be given up for more (see solve), at most. Absent: as many as the work allows. */
+  maxGiveUps?: number;
 }
 
 export const DEFAULT_PLAN_PARAMS: PlanParams = { speedKmh: 30, loadMin: 15, unloadMin: 20, dayMin: 600, openTruckMin: 90, samePickupKm: 0.3 };
@@ -206,7 +209,7 @@ type Reason = UnplannedReason;
  * truck's day. Nothing is offered that overloads a truck or overruns its day. When nowhere will take it, the answer
  * is why.
  */
-function place(o: PlanOrder, days: Days, trucks: PlanTruck[], depot: PlanPoint, p: PlanParams, km: Km): { truckId: string; trips: Draft[]; cost: number } | { reason: Reason } {
+function place(o: PlanOrder, days: Days, trucks: PlanTruck[], depot: PlanPoint, p: PlanParams, km: Km, only?: string): { truckId: string; trips: Draft[]; cost: number } | { reason: Reason } {
   if (trucks.length === 0) return { reason: 'no_trucks' };
   const able = trucks.filter((t) => !t.cannot?.has(o.id));
   if (able.length === 0) return { reason: 'no_truck_can_carry' };
@@ -218,6 +221,8 @@ function place(o: PlanOrder, days: Days, trucks: PlanTruck[], depot: PlanPoint, 
   let best: { truckId: string; trips: Draft[]; cost: number; waiting: number } | null = null;
   let heldBack = false;
   for (const t of able) {
+    // `only`: the one truck whose day has just changed — everything else was asked a moment ago and said no.
+    if (only && t.id !== only) continue;
     if (t.capacityKg < o.kg) continue;
     const day = days.get(t.id)!;
     const opening = day.length === 0;
@@ -271,38 +276,104 @@ function solve(orders: PlanOrder[], trucks: PlanTruck[], depot: PlanPoint, p: Pl
   // in turn and offered the whole day again: it moves only if the fleet's day gets shorter for it (a truck that is
   // emptied by the move and can stay in the yard counts for what sending it out was worth). Then whatever was left
   // over is offered the room that made. A few rounds; it stops as soon as a round changes nothing.
-  for (let round = 0; round < 4; round++) {
-    let changed = false;
-    for (const o of queue) {
-      const home = [...days.entries()].find(([, day]) => day.some((trip) => trip.orders.some((x) => x.id === o.id)));
-      if (!home) continue;
-      const [truckId, day] = home;
-      const rest = without(day, o.id);
-      const saved = measure(day, depot, p, km).minutes - measure(rest, depot, p, km).minutes + (rest.length === 0 ? p.openTruckMin : 0);
-      const trial: Days = new Map(days);
-      trial.set(truckId, rest);
-      const at = place(o, trial, trucks, depot, p, km);
-      if ('reason' in at || at.cost > saved - 0.01) continue;
-      trial.set(at.truckId, at.trips);
-      for (const [id, d] of trial) days.set(id, d);
-      changed = true;
-    }
-    tidy();
-    const still: typeof left = [];
-    for (const l of left) {
-      const at = place(l.order, days, trucks, depot, p, km);
-      if ('reason' in at) still.push({ order: l.order, reason: at.reason });
-      else {
-        days.set(at.truckId, at.trips);
+  const homeOf = (orderId: string) => [...days.entries()].find(([, day]) => day.some((trip) => trip.orders.some((x) => x.id === orderId)));
+  const secondThoughts = () => {
+    for (let round = 0; round < 4; round++) {
+      let changed = false;
+      for (const o of queue) {
+        const home = homeOf(o.id);
+        if (!home) continue;
+        const [truckId, day] = home;
+        const rest = without(day, o.id);
+        const saved = measure(day, depot, p, km).minutes - measure(rest, depot, p, km).minutes + (rest.length === 0 ? p.openTruckMin : 0);
+        const trial: Days = new Map(days);
+        trial.set(truckId, rest);
+        const at = place(o, trial, trucks, depot, p, km);
+        if ('reason' in at || at.cost > saved - 0.01) continue;
+        trial.set(at.truckId, at.trips);
+        for (const [id, d] of trial) days.set(id, d);
         changed = true;
       }
+      tidy();
+      const still: typeof left = [];
+      for (const l of left) {
+        const at = place(l.order, days, trucks, depot, p, km);
+        if ('reason' in at) still.push({ order: l.order, reason: at.reason });
+        else {
+          days.set(at.truckId, at.trips);
+          changed = true;
+        }
+      }
+      left = still;
+      if (!changed) break;
     }
-    left = still;
-    if (!changed) break;
-  }
-  tidy();
+    tidy();
+  };
+  secondThoughts();
+
+  // GIVING ONE UP. Everything above only ever adds an order or moves one: it never asks whether the day would carry
+  // MORE without an order it already has. One far, heavy load placed first can hold a truck that three nearer ones
+  // would have filled. So each planned order in turn is taken off, the leftovers that only wanted for room are
+  // offered the day without it, and then it is offered what remains. The exchange that leaves the most orders on a
+  // truck is kept — more orders first, then more weight, then the shorter day — and only if it is strictly more
+  // orders: nobody's delivery is given up for a tidier day. Then second thoughts again, and round once more.
+  const order = new Map(queue.map((o, i) => [o.id, i]));
+  const wantsRoom = (r: Reason) => r === 'no_time' || r === 'no_driver';
+  let spent = 0;
+  const giveOneUp = (): boolean => {
+    const wanting = left.filter((l) => wantsRoom(l.reason));
+    if (wanting.length === 0) return false;
+    // The search is as big as the day is over-full. It is counted in work done, not seconds, so that the same orders
+    // make the same plan on a slow machine as on a fast one; past the budget the plan stands as it is.
+    spent += queue.length * wanting.length;
+    if (spent > GIVE_UP_BUDGET) return false;
+    let best: { days: Days; left: typeof left; gain: number; kg: number; minutes: number } | null = null;
+    for (const x of queue) {
+      const home = homeOf(x.id);
+      if (!home) continue;
+      const trial: Days = new Map(days);
+      const rest = without(home[1], x.id);
+      trial.set(home[0], rest);
+      // Only the truck it came off has more room than a moment ago — unless taking it off sends that truck back to the
+      // yard, which frees a driver for any of the others.
+      const only = rest.length > 0 ? home[0] : undefined;
+      const still: typeof left = [];
+      let gain = 0;
+      let kg = 0;
+      for (const l of left) {
+        const at = wantsRoom(l.reason) ? place(l.order, trial, trucks, depot, p, km, only) : { reason: l.reason };
+        // Asked of one truck only, a "no" says nothing new about why: the reason it had stands until it is asked in full.
+        if ('reason' in at) still.push(only ? l : { order: l.order, reason: at.reason });
+        else {
+          trial.set(at.truckId, at.trips);
+          gain += 1;
+          kg += l.order.kg;
+        }
+      }
+      if (gain === 0) continue;
+      const back = place(x, trial, trucks, depot, p, km);
+      if ('reason' in back) {
+        gain -= 1;
+        kg -= x.kg;
+        still.push({ order: x, reason: back.reason });
+      } else trial.set(back.truckId, back.trips);
+      if (gain <= 0) continue;
+      const minutes = [...trial.values()].reduce((s, day) => s + measure(day, depot, p, km).minutes, 0);
+      if (!best || gain > best.gain || (gain === best.gain && (kg > best.kg + EPS || (kg > best.kg - EPS && minutes < best.minutes - EPS)))) best = { days: trial, left: still, gain, kg, minutes };
+    }
+    if (!best) return false;
+    for (const [id, d] of best.days) days.set(id, d);
+    left = best.left.sort((a, b) => order.get(a.order.id)! - order.get(b.order.id)!);
+    return true;
+  };
+  // Each exchange puts at least one more order on a truck, so this ends by itself; the bound is for the clock.
+  for (let n = 0; n < (p.maxGiveUps ?? MAX_GIVE_UPS) && giveOneUp(); n++) secondThoughts();
   return { days, left };
 }
+
+/** How many exchanges one plan may make, and how much searching (planned orders × leftovers, summed) it may do for them. */
+const MAX_GIVE_UPS = 12;
+const GIVE_UP_BUDGET = 40_000;
 
 /**
  * Plan a day. `trucks` in the order the fleet lists them: a tie between two trucks goes to the first.

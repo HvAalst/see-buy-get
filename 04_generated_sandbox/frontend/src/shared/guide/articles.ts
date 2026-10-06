@@ -645,7 +645,8 @@ export const ARTICLES: GuideArticle[] = [
     notes: [
       "Every time on the plan is an estimate: distance at one speed, plus fixed minutes at each stop. Distances are estimates too — there is no road routing yet.",
       "A truck is only ever given one trip at a time — what it can carry at once. Every order goes on with the same checks as any load (room, equipment, the driver’s hours). One that is refused stays in the queue with the reason on it.",
-      "The plan never loads a truck past what it carries, never makes a day longer than you set (13 hours at most), and sends out no more vehicles than you have drivers."
+      "The plan never loads a truck past what it carries, never makes a day longer than you set (13 hours at most), and sends out no more vehicles than you have drivers.",
+      "The plan will leave one order out when that lets it deliver more of the others: a far, heavy load can hold a truck that three nearer orders would fill. It never gives one order up for one. What is left out is listed with its reason and counted in the trucks you are short."
     ]
   },
   {
@@ -660,7 +661,7 @@ export const ARTICLES: GuideArticle[] = [
       "Or say what to change: keep FRT-142 off KLM 808T, start at six, the small truck is in the workshop, allow eleven hours. The adviser changes what the planner is asked, the plan is worked out again, and the board shows the new one.",
       "Under each answer the app says what was changed, or that nothing was. That line comes from the planner, not from the adviser: if the two ever disagree, believe that line and the plan on the board.",
       "A rule you asked for stays on the board under Rules on this plan: an order kept off a vehicle, or an order put on one vehicle and no other. It holds every time the day is planned again. Tap Remove to take it off.",
-      "Without the adviser: open Change the day, and each stop has Not on this vehicle. Tap it and that order is kept off that vehicle.",
+      "Without the adviser: open Change the day. Under each stop, Not on this vehicle keeps that order off that vehicle and Move to puts it on another. An order the plan left out has Put on.",
       "Nothing is accepted by asking. When the plan is right, Accept this plan is still yours to tap. The rules a plan was accepted under are kept with it."
     ],
     notes: [

@@ -199,6 +199,85 @@ describe('planning a day', () => {
     expect(better).toBeGreaterThanOrEqual(4);
   });
 
+  /**
+   * GIVING ONE UP. One truck, a 450-minute day. The far load alone is 420 minutes (10 to the yard, 10 loading, 190 out,
+   * 10 at the door, 200 home), and being the heaviest it is placed first — after which nothing else fits beside it.
+   * The three near loads together are 100 minutes. A plan that never asks "would the day carry more without this
+   * one?" delivers one order where it could deliver three.
+   */
+  describe('giving one order up', () => {
+    const far = order('far', 6000, at(200));
+    const near = ['a', 'b', 'c'].map((id) => order(id, 2500, at(20)));
+    const day = { dayMin: 450 };
+
+    it('lets go of the one order that was holding the truck three others would fill', () => {
+      const first = plan([far, ...near], [truck('T1', 8000)], { ...day, polish: false });
+      expect(first.routes[0].trips.flatMap((t) => t.stops.map((s) => s.orderId))).toEqual(['far']);
+      const r = plan([far, ...near], [truck('T1', 8000)], day);
+      expect(r.routes[0].trips.flatMap((t) => t.stops.map((s) => s.orderId)).sort()).toEqual(['a', 'b', 'c']);
+      expect(r.routes[0].minutes).toBe(100);
+      // What was given up is handed back like anything else that found no room — and priced in trucks to hire.
+      expect(r.unplanned).toEqual([{ orderId: 'far', reason: 'no_time' }]);
+      expect(r.hire).toMatchObject({ trucks: 1, orders: 1, kg: 6000 });
+    });
+
+    it('gives nobody’s delivery up for a tidier day: one order for one is not an exchange', () => {
+      // Asked for one exchange and for many: a swap of one for one made twelve times over would end where it began,
+      // and look like no swap at all.
+      for (const maxGiveUps of [1, undefined]) {
+        const r = plan([far, near[0]], [truck('T1', 8000)], { ...day, maxGiveUps });
+        expect(r.routes[0].trips.flatMap((t) => t.stops.map((s) => s.orderId))).toEqual(['far']);
+        expect(r.unplanned).toEqual([{ orderId: 'a', reason: 'no_time' }]);
+      }
+    });
+
+    it('makes the exchange that puts the most orders on a truck first', () => {
+      // Two trucks, each held by a far load only it can carry. T1's is in the way of three near orders, T2's of two.
+      const far1 = order('far1', 6000, at(200));
+      const far2 = order('far2', 6000, at(200));
+      const two = [order('d', 2500, at(20)), order('e', 2500, at(20))];
+      const trucks = [truck('T1', 8000, ['far2', 'd', 'e']), truck('T2', 8000, ['far1', 'a', 'b', 'c'])];
+      const one = plan([far1, far2, ...near, ...two], trucks, { ...day, maxGiveUps: 1 });
+      expect(one.unplanned.map((u) => u.orderId).sort()).toEqual(['d', 'e', 'far1']);
+      // Left to finish, both are made.
+      const all = plan([far1, far2, ...near, ...two], trucks, day);
+      expect(all.unplanned.map((u) => u.orderId).sort()).toEqual(['far1', 'far2']);
+    });
+
+    it('gives nothing up when a second truck has the room', () => {
+      // A second truck, free for the near ones: nothing needs giving up at all.
+      const r = plan([far, ...near], [truck('T1', 8000), truck('T2', 8000)], day);
+      expect(r.unplanned).toEqual([]);
+      expect(r.routes.map((x) => x.trips.flatMap((t) => t.stops.map((s) => s.orderId)).sort())).toEqual([['far'], ['a', 'b', 'c']]);
+    });
+
+    it('sends a truck home when its one order was keeping the only driver from two that another truck can take', () => {
+      // One driver. T1 alone can carry the far load; only T2 can carry the near ones.
+      const r = plan([far, near[0], near[1]], [truck('T1', 8000, ['a', 'b']), truck('T2', 8000, ['far'])], { ...day, maxTrucks: 1 });
+      expect(r.routes.map((x) => [x.truckId, x.trips.flatMap((t) => t.stops.map((s) => s.orderId)).sort()])).toEqual([['T2', ['a', 'b']]]);
+      // And the reason it is left is the true one now: a truck stands free for it, with nobody to drive.
+      expect(r.unplanned).toEqual([{ orderId: 'far', reason: 'no_driver' }]);
+    });
+
+    it('does not give up an order to make room for one that no room would help', () => {
+      // 'huge' is heavier than the truck: taking 'far' off does nothing for it, so 'far' stays.
+      const r = plan([far, order('huge', 9000, at(20))], [truck('T1', 8000)], day);
+      expect(r.routes[0].trips.flatMap((t) => t.stops.map((s) => s.orderId))).toEqual(['far']);
+      expect(r.unplanned).toEqual([{ orderId: 'huge', reason: 'too_heavy' }]);
+    });
+
+    it('still never overloads a truck or a day by it', () => {
+      const r = plan([far, ...near, order('d', 2500, at(20)), order('e', 2500, at(25))], [truck('T1', 8000)], day);
+      for (const route of r.routes) {
+        expect(route.minutes).toBeLessThanOrEqual(450);
+        for (const trip of route.trips) expect(trip.kg).toBeLessThanOrEqual(8000);
+      }
+      const seen = [...r.routes.flatMap((x) => x.trips.flatMap((t) => t.stops.map((s) => s.orderId))), ...r.unplanned.map((u) => u.orderId)].sort();
+      expect(seen).toEqual(['a', 'b', 'c', 'd', 'e', 'far']);
+      expect(r.unplanned.map((u) => u.orderId)).toContain('far');
+    });
+  });
+
   it('reads minutes into the day as a clock', () => {
     expect(clockOf('07:00', 45)).toBe('07:45');
     expect(clockOf('06:30', 600)).toBe('16:30');
