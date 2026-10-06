@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkStep, checkTone, contractPeriod, digitsReady, isLastOwner, loadGaps, loadStage, mayAct, mayManage, newBusinessGaps, nextDay, openOnArrival, orderableContracts, phoneReady, sectionsFor, spanWords, windowMiss } from './logic';
+import { checkStep, checkTone, contractPeriod, digitsReady, isLastOwner, loadGaps, loadStage, mayAct, mayManage, newBusinessGaps, nextDay, openOnArrival, orderableContracts, phoneReady, planSays, sectionsFor, spanWords, windowMiss } from './logic';
 import { t } from '../../shared/i18n';
 import type { CarriageContract } from './api';
 import type { Membership } from './api';
@@ -131,6 +131,40 @@ describe('the Business app', () => {
       expect(windowMiss(undefined, t)).toBeNull();
       expect(windowMiss({ day, arrive: '10:00' }, t)).toBeNull();
       expect(windowMiss({ day, arrive: '12:40', lateMin: 40 }, t)!.full).toBe('At the door about 12:40 on 2026-10-07 — 40 minutes after the window you asked for.');
+    });
+  });
+
+  describe('what a carrier’s plan says of a load', () => {
+    const day = '2026-10-07';
+    it('says nothing while no accepted plan has anything to say of it', () => {
+      expect(planSays({}, t)).toBeNull();
+    });
+    it('says quietly about when a planned load is at the door — inside its window where it asked for one', () => {
+      expect(planSays({ plannedAbout: { day, arrive: '10:40', window: '08:00 to 12:00' } }, t)).toEqual({
+        state: 'planned',
+        row: 'planned for about 10:40, inside your window',
+        full: 'At the door about 10:40 on 2026-10-07, inside the window you asked for (08:00 to 12:00).',
+      });
+      // No window asked for: no window is claimed to have been kept.
+      expect(planSays({ plannedAbout: { day, arrive: '10:40' } }, t)).toEqual({ state: 'planned', row: 'planned for about 10:40', full: 'At the door about 10:40 on 2026-10-07.' });
+    });
+    it('says a plan outside the window as that, not as planned in time', () => {
+      const says = planSays({ plannedAbout: { day, arrive: '12:40', window: '08:00 to 12:00' }, outsideWindow: { day, arrive: '12:40', window: '08:00 to 12:00', lateMin: 40 } }, t)!;
+      expect(says.state).toBe('outside');
+      expect(says.row).toBe('planned about 12:40, 40 minutes after your window');
+      expect(says.row).not.toContain('inside');
+    });
+    it('says an order on no vehicle first and above everything, with why as a shipper is told it', () => {
+      expect(planSays({ leftOut: { day, why: 'room' } }, t)).toEqual({
+        state: 'left',
+        row: 'your carrier’s plan for 2026-10-07 has no room for it',
+        full: 'On no vehicle: your carrier’s plan for 2026-10-07 has no room for it.',
+      });
+      expect(planSays({ leftOut: { day, why: 'fit' } }, t)!.row).toBe('no vehicle in your carrier’s plan for 2026-10-07 can carry it as ordered');
+      expect(planSays({ leftOut: { day, why: 'heavy' } }, t)!.row).toBe('it is heavier than your carrier’s largest vehicle carries');
+      expect(planSays({ leftOut: { day, why: 'place' } }, t)!.row).toBe('the place it goes to has no point on the map, so it could not be planned');
+      // Whatever else an older answer still carries, a load on no vehicle is not also said to be planned.
+      expect(planSays({ leftOut: { day, why: 'room' }, plannedAbout: { day, arrive: '10:40' }, outsideWindow: { day, arrive: '12:40', lateMin: 40 } }, t)!.state).toBe('left');
     });
   });
 

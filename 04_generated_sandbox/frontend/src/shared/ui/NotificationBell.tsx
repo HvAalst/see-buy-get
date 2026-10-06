@@ -60,6 +60,8 @@ const KIND_ICON: Record<string, IconName> = {
   order_split: 'truck',
   // The carrier's plan has an order outside the window its shipper asked for — or inside it after all.
   order_window: 'clock',
+  // The carrier's accepted plan leaves an order on no vehicle: the one of these to act on today.
+  order_left_out: 'warning',
   // Five wrong PINs locked the way they sign in — somebody may know their number.
   security: 'lock',
 };

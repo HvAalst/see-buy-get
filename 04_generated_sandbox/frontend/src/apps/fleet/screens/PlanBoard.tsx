@@ -3,7 +3,7 @@ import { Button, Card, ErrorNote, Icon, Note, Pill } from '../../../shared/ui';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { PlanAdviser } from './PlanAdviser';
 import { SplitOrder } from './SplitOrder';
-import { askOf, dayOf, dayWord, distanceLine, handOnLine, hoursWords, keptOff, leftByReason, putOnto, ruleLine, windowLine, sendLine, weightWords, withoutRule, type DayPlan, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi } from '../orders';
+import { acceptTellsShippers, askOf, dayOf, dayWord, distanceLine, handOnLine, hoursWords, keptOff, leftByReason, putOnto, ruleLine, windowLine, sendLine, weightWords, withoutRule, type DayPlan, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi } from '../orders';
 
 const REASON: Record<PlanLeftReason, { title: MessageKey; what: MessageKey }> = {
   no_pin: { title: 'fleet.plan.left.noPin', what: 'fleet.plan.left.noPinDo' },
@@ -191,6 +191,8 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
             ) : plan.totals.planned > 0 ? (
               <p class="hint">{t(accepted ? 'fleet.plan.proposalReplaces' : 'fleet.plan.proposal')}</p>
             ) : null}
+            {/* Accepting reaches outside the office: said before the button is pressed, not found out afterwards. */}
+            {!plan.accepted && !done && acceptTellsShippers(plan) ? <p class="hint">{t('fleet.plan.tellsShippers')}</p> : null}
             {/* ON THE DAY ITSELF the accepted plan goes out trip by trip — by itself as shifts start and loads are
                 handed over, and from here when the office wants it now. */}
             {plan.accepted && isToday ? (

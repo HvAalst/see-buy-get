@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { ADVISER_HISTORY, base64Of, distanceLine, evenLoads, historyOf, isWorkbook, keptOff, loadLine, mayRejoin, maySplit, passOnState, putOnto, ruleLine, windowLine, rulesAsk, withoutRule, type PlanRule } from './orders';
+import { ADVISER_HISTORY, acceptTellsShippers, base64Of, distanceLine, evenLoads, historyOf, isWorkbook, keptOff, loadLine, mayRejoin, maySplit, passOnState, putOnto, ruleLine, windowLine, rulesAsk, withoutRule, type PlanRule } from './orders';
 import { askOf, byDay, dayOf, daySummary, dayWord, handOnLine, hoursWords, mayHandOn, importVerdictLine, leftByReason, mayWithdraw, notASheet, orderTag, sendLine, weightWords, type DayPlan, type FleetOrder, type PlanLeft, type PlanSendTruck } from './orders';
 
 const order = (over: Partial<FleetOrder> = {}): FleetOrder =>
@@ -331,6 +331,17 @@ describe('P1 — a fleet’s orders', () => {
     expect(sent[sent.length - 1]).toEqual({ role: 'assistant', text: 'A9' });
     expect(sent.every((x) => Object.keys(x).sort().join() === 'role,text')).toBe(true);
     expect(historyOf([{ role: 'user', text: 'x'.repeat(5000) }])[0].text).toHaveLength(4000);
+  });
+
+  it('says beforehand that accepting tells shippers — when the plan leaves an order out or has one outside its window', () => {
+    const plan = (planned: number, left: number, outsideWindow?: number) => ({ unplanned: Array.from({ length: left }, () => ({})), totals: { planned, ...(outsideWindow === undefined ? {} : { outsideWindow }) } }) as unknown as Parameters<typeof acceptTellsShippers>[0];
+    // A plan that carries everything in time tells nobody anything.
+    expect(acceptTellsShippers(plan(4, 0, 0))).toBe(false);
+    expect(acceptTellsShippers(plan(4, 0))).toBe(false);
+    expect(acceptTellsShippers(plan(4, 1, 0))).toBe(true);
+    expect(acceptTellsShippers(plan(4, 0, 2))).toBe(true);
+    // Nothing on a vehicle: it cannot be accepted, so nobody is told and the board does not say they will be.
+    expect(acceptTellsShippers(plan(0, 3, 0))).toBe(false);
   });
 
   it('weighs a day in tonnes and a small order in kilos', () => {

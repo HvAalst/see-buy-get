@@ -1,4 +1,5 @@
 import type { OrderHandedOn } from './fleet-overflow.types';
+import type { PlanLeftWhy } from './dispatch.types';
 import { UNCOLLECTED_H } from './pudo.config';
 import { appUrl } from '../../foundation/mail/mail.templates';
 import { MailService } from '../../foundation/mail/mail.service';
@@ -72,6 +73,17 @@ export function spanWords(minutes: number): string {
   if (h === 0) return m === 1 ? '1 minute' : `${m} minutes`;
   return m % 60 === 0 ? hours : `${hours} ${String(m % 60).padStart(2, '0')} minutes`;
 }
+
+/** A carrier's accepted plan leaves an order on no vehicle (`left`) — or, after that was said, has it on one. */
+interface OrderLeftOut { freightId: string; code: string; shipperDid: string; fleetName: string; day: string; left: boolean; why?: PlanLeftWhy; arrive?: string; window?: string }
+
+/** Why a plan left an order out, as a sentence to its shipper. The carrier's reason, without the carrier's own business. */
+const LEFT_OUT_BECAUSE: Record<PlanLeftWhy, (day: string) => string> = {
+  room: (day) => `Its plan for ${day} has no room for it: the vehicles going out are full, or the day is too short.`,
+  fit: (day) => `None of the vehicles in its plan for ${day} can carry it as it was ordered.`,
+  heavy: () => 'It is heavier than its largest vehicle carries. It may bring it in several loads, and you are told if it does.',
+  place: () => 'The place it goes to has no point on the map, so it could not be planned. A fuller address will help.',
+};
 
 interface BookingGivenBack { departureId: string; bookingId: string; managerDid: string; company: string; lineName: string; shipperDid: string; kind: 'sold' | 'own'; by: string; description: string; reason?: string; note?: string }
 
@@ -251,6 +263,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<OrderHandedOn>(GlosEvent.Pudo.OrderHandedOn, (e) => this.onOrderHandedOn(e.payload));
     // An order is coming in several loads — or in one after all. Its shipper placed one order and is told what became of it.
     this.events.subscribe<{ code: string; loads: number; rejoined: boolean; orderKg: number; deliverOn?: string; fleetName: string; shipperDid?: string }>(GlosEvent.Pudo.OrderSplit, (e) => this.onOrderSplit(e.payload));
+    // A carrier's accepted plan leaves an order on no vehicle — or has it on one after all. Its shipper is told.
+    this.events.subscribe<OrderLeftOut>(GlosEvent.Pudo.OrderLeftOut, (e) => this.onOrderLeftOut(e.payload));
+    // A load reached the other end: whoever sent it is told, as the shipper of a run always was.
+    this.events.subscribe<{ freightId: string; code: string; posterDid?: string; description?: string; destLabel?: string; receivedBy?: string }>(GlosEvent.Pudo.FreightDelivered, (e) => this.onFreightDelivered(e.payload));
     // A carrier's plan for the day has an order outside the window its shipper asked for — or inside it after all.
     this.events.subscribe<OrderWindowPlanned>(GlosEvent.Pudo.OrderWindowPlanned, (e) => this.onOrderWindowPlanned(e.payload));
     this.events.subscribe<BookingGivenBack>(GlosEvent.Pudo.DepartureBookingCancelled, (e) => this.onBookingGivenBack(e.payload));
@@ -496,6 +512,29 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     } else {
       await this.tell(p.shipperDid, { kind: 'order_window', title: `${p.fleetName} now plans ${p.code} inside your window`, body: `${asked} Its plan for that day now has ${p.code} at the door about ${p.arrive}. ${estimate}`, tag: `window:${p.code}:inside`, data });
     }
+  }
+
+  /**
+   * The shipper of an order its carrier's accepted plan leaves on no vehicle. It says what the shipper can do with it —
+   * speak to the carrier while the day can still be planned again — and nothing about the carrier's drivers or trucks.
+   * That it is on a vehicle after all is news about a time, and is said as one.
+   */
+  private async onOrderLeftOut(p: OrderLeftOut): Promise<void> {
+    const data = { freightId: p.freightId };
+    if (p.left) {
+      const because = LEFT_OUT_BECAUSE[p.why ?? 'room'](p.day);
+      await this.tell(p.shipperDid, { kind: 'order_left_out', title: `${p.fleetName} has not put ${p.code} on a vehicle for ${p.day}`, body: `${because} As its plan stands, ${p.code} is on no vehicle. The day can still be planned again: speak to ${p.fleetName} now.`, tag: `left:${p.code}:${p.day}:${p.why}`, data });
+    } else {
+      const inside = p.window ? `, inside the window you asked for (${p.window})` : '';
+      await this.tell(p.shipperDid, { kind: 'order_window', title: `${p.fleetName} now has ${p.code} on a vehicle for ${p.day}`, body: `Its plan has ${p.code} at the door about ${p.arrive}${inside}. A plan’s time is an estimate, and the day can still be planned again.`, tag: `left:${p.code}:${p.day}:planned`, data });
+    }
+  }
+
+  /** A load reached the other end. Whoever sent it hears it once, with who signed for it. */
+  private async onFreightDelivered(p: { freightId: string; code: string; posterDid?: string; description?: string; destLabel?: string; receivedBy?: string }): Promise<void> {
+    if (!p.posterDid) return;
+    const goods = p.description ? `: ${p.description.replace(/\.+$/, '')}` : '';
+    await this.tell(p.posterDid, { kind: 'freight_delivered', title: `${p.code} was delivered`, body: `Handed over${p.receivedBy ? ` to ${p.receivedBy}` : ''}${p.destLabel ? ` at ${p.destLabel}` : ''}${goods}.`, tag: `freight:${p.freightId}:delivered`, data: { freightId: p.freightId } });
   }
 
   private async onOrderHandedOn(p: OrderHandedOn): Promise<void> {

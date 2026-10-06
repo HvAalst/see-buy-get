@@ -119,6 +119,7 @@ export const GlosEvent = {
     // run could be called off with five shippers aboard and not one of them could be told.
     DepartureBooked: 'pudo.departure_booked', // a shipper took space on a run; the fleet office is told
     OrderSplit: 'pudo.order_split', // an order is coming in several loads (or one again): its shipper is told
+    OrderLeftOut: 'pudo.order_left_out', // a carrier's accepted plan leaves an order on no vehicle (or has it on one after all): its shipper is told
     OrderWindowPlanned: 'pudo.order_window_planned', // a carrier's accepted plan has an order outside the window asked for (or inside it again): its shipper is told
     OrderHandedOn: 'pudo.order_handed_on', // P4 — orders moved between a fleet and its partners; the other office is told
     DepartureBookingCancelled: 'pudo.departure_booking_cancelled', // a shipper gave the space back; it is for sale again

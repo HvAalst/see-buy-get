@@ -121,6 +121,12 @@ export const NOTIFICATION_KINDS = [
    * door, or the carrier.
    */
   'order_window',
+  /**
+   * The carrier's accepted plan for the day leaves an order on no vehicle. The user, 2026-10-06: "It's commonly a
+   * phonecall away, but he needs at least a notification." Said once per day and reason; that it is on a vehicle
+   * after all is said as an `order_window` notice, with about when.
+   */
+  'order_left_out',
   /** A fleet offered this driver a place, or took the offer back. Only the driver can answer it, so only they are told. */
   'fleet_offer',
   /**

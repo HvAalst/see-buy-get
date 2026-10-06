@@ -428,7 +428,8 @@ export const ARTICLES: GuideArticle[] = [
       "Open the load to see the prices offered, who is carrying it, the tracking link to share, and the consignment note."
     ],
     notes: [
-      "SeeBuyGet does not take, hold or send the money for your loads. You pay the carrier directly, or through your own payment system."
+      "SeeBuyGet does not take, hold or send the money for your loads. You pay the carrier directly, or through your own payment system.",
+      "You are told under the bell when a load is delivered, with who received it."
     ]
   },
   {
@@ -455,13 +456,15 @@ export const ARTICLES: GuideArticle[] = [
     steps: [
       "Your carrier records the contract in their fleet app and sends you a code. An owner opens Carriers, pastes it and taps Link it. The code works once.",
       "When you post a load, choose that carrier under Who carries it, and the day it must arrive. Tomorrow is filled in for you.",
-      "The load shows as With your carrier until they put it on a truck. Its tracking link and consignment note work the same as any other load."
+      "The load shows as With your carrier until they put it on a truck. Once your carrier has accepted its plan for that day, the load also says about when it is planned to arrive. Its tracking link and consignment note work the same as any other load."
     ],
     notes: [
       "The price and how you pay are on your own contract with the carrier. SeeBuyGet keeps the order, the note and the tracking — never the money.",
       "An owner can end a contract under Carriers. Loads already ordered are still delivered.",
       "An order that is more than one vehicle carries may be brought in several loads by your carrier. You are told under the bell, each load says Load 1 of 2 in your list, and either tracking link shows them all.",
-      "If your carrier’s plan for the day has a load arriving outside the delivery window you asked for, you are told under the bell, and the load says Outside your window with about when it is planned and by how much. A plan’s time is an estimate and your carrier can still plan the day again. If it cannot work, speak to your carrier."
+      "If your carrier’s plan for the day has a load arriving outside the delivery window you asked for, you are told under the bell, and the load says Outside your window with about when it is planned and by how much. A plan’s time is an estimate and your carrier can still plan the day again. If it cannot work, speak to your carrier.",
+      "If your carrier’s plan for the day leaves a load on no vehicle, you are told under the bell, and the load says Not on a vehicle with the reason: no room that day, no vehicle that can carry it, heavier than their largest vehicle, or a place that could not be found on the map. Speak to your carrier, because the day can still be planned again. You are told again when the load is on a vehicle.",
+      "The time a load is planned for is your carrier’s estimate. It is shown to you in the Business app only: the tracking link you share shows where the load has got to, not a time."
     ]
   },
   {
@@ -610,7 +613,8 @@ export const ARTICLES: GuideArticle[] = [
       "Shop app, once delivered: tap “Rate the driver”. Stars out of five, and tags for what went wrong if anything. It counts toward the driver’s rating like a shop’s rating at the counter, one verdict per load, and you can change it within 30 days."
     ],
     notes: [
-      "The link shows no phone number, no price and no reasons — a withdrawn load says when, never why. What is between the sender and the carrier stays there."
+      "The link shows no phone number, no price and no reasons — a withdrawn load says when, never why. What is between the sender and the carrier stays there.",
+      "Whoever sent the load is told when it is delivered, with who received it: look under the bell."
     ]
   },
   {
@@ -691,7 +695,8 @@ export const ARTICLES: GuideArticle[] = [
       "The plan never loads a truck past what it carries, never makes a day longer than you set (13 hours at most), and sends out no more vehicles than you have drivers.",
       "The plan will leave one order out when that lets it deliver more of the others: a far, heavy load can hold a truck that three nearer orders would fill. It never gives one order up for one. What is left out is listed with its reason and counted in the trucks you are short.",
       "A window is read when it is written as hours: 8-12, 08:00-12:00, before 14:00, after 9, 2pm-5pm. Words such as morning, or hours that could be either half of the day (1-5), are not read: the order is planned to its day only and says so. Nothing is ever left out because of a window.",
-      "When you accept a plan that has a shipper’s order outside the window they asked for, that shipper is told about when it is planned and by how much. Accepting the day again tells them again only if the plan has moved by half an hour or more, and once more if it is now inside their window. An order your own office typed in or uploaded has nobody to tell."
+      "Accepting a plan tells shippers two things, and the plan says so above the Accept button when either applies. The shipper of an order the plan leaves out is told it is on no vehicle and why: no room that day, no vehicle that can carry it, heavier than your largest vehicle, or no point on the map. They are never told anything about your drivers. The shipper of an order planned outside its window is told about when, and by how much.",
+      "Accepting the same day again repeats nothing. A shipper hears again only when something changed: another reason for being left out, a time that moved by half an hour or more, or an order that is on a vehicle after all. A shipper also sees, in its own app, about when each of its planned orders arrives. An order your own office typed in or uploaded has nobody to tell."
     ]
   },
   {

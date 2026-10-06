@@ -161,6 +161,7 @@ export const enFleet = {
   'fleet.plan.dist.estimate': 'Distances are estimates too: straight lines with an allowance for the road.',
   'fleet.plan.dist.fallback': 'Distances are estimates, not by road: {why}. Plan again in a moment for road distances.',
   'fleet.plan.accept': 'Accept this plan',
+  'fleet.plan.tellsShippers': 'Accepting tells the shipper of each order that is left out, or outside its window — where the shipper placed the order itself. Orders your office typed in or uploaded have nobody to tell.',
   'fleet.plan.acceptedBy': 'Accepted by {who} at {when}',
   'fleet.plan.acceptedNote': 'Accepted. Each order now shows its truck and trip. On the day, a truck gets its first trip when its driver starts a shift in it, and the next when that one is delivered.',
   'fleet.plan.send.cta': 'Send the next trips out now',

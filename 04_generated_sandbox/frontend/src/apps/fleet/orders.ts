@@ -311,6 +311,16 @@ export function windowLine(stop: Pick<PlanStop, 'deliveryWindow' | 'window' | 'w
 }
 
 /**
+ * WILL ACCEPTING THIS PLAN TELL A SHIPPER SOMETHING? It does when the plan leaves an order out, or has one outside its
+ * window — and pressing Accept is then an act that reaches outside the office, so the board says so beforehand. (Only
+ * a shipper that placed the order itself is told; the server knows which, the board does not, so it says "where".)
+ * A plan with nothing on a vehicle cannot be accepted, and tells nobody.
+ */
+export function acceptTellsShippers(plan: Pick<DayPlan, 'unplanned' | 'totals'>): boolean {
+  return plan.totals.planned > 0 && (plan.unplanned.length > 0 || (plan.totals.outsideWindow ?? 0) > 0);
+}
+
+/**
  * WHAT A PLAN'S DISTANCES ARE, in a line. By road, from the routing server (and how many legs it knew no road for);
  * an estimate, as a plan was always made; or — said louder, because it is not what the office expects where there IS
  * a routing server — an estimate because the routing server could not be used, with why. A plan kept from before

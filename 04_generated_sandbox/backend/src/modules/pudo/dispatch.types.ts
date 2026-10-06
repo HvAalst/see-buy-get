@@ -105,6 +105,35 @@ export class OutsideWindow {
   @ApiPropertyOptional() earlyMin?: number;
 }
 
+/** About when the carrier's accepted plan has an order at the door, as its shipper is shown it. An estimate. */
+export class PlannedAbout {
+  day: string;
+  arrive: string;
+  /** The window the plan was made to, as it read it. */
+  @ApiPropertyOptional() window?: string;
+}
+
+/**
+ * WHY A PLAN LEFT AN ORDER OUT, as its shipper is told it — the carrier's own reasons, without the carrier's own
+ * business: `room` the vehicles going out are full or the day is too short (a truck with no driver is the same thing to
+ * a shipper) · `fit` no vehicle going out can carry it as ordered · `heavy` heavier than the largest vehicle carries ·
+ * `place` where it goes has no point on the map.
+ */
+export const PLAN_LEFT_WHYS = ['room', 'fit', 'heavy', 'place'] as const;
+export type PlanLeftWhy = (typeof PLAN_LEFT_WHYS)[number];
+export function shipperWhy(reason: string): PlanLeftWhy {
+  if (reason === 'no_pin') return 'place';
+  if (reason === 'too_heavy') return 'heavy';
+  if (reason === 'no_truck_can_carry') return 'fit';
+  return 'room';
+}
+
+/** The carrier's accepted plan for its day leaves this order on no vehicle — as its shipper is shown it. */
+export class LeftOutOfPlan {
+  day: string;
+  @ApiProperty({ enum: PLAN_LEFT_WHYS }) why: PlanLeftWhy;
+}
+
 /** A load as the tracking page lists it beside the others of its order. */
 export class TrackLoad {
   no: number;
@@ -430,6 +459,12 @@ export class Freight {
    * day's plan again says nothing new unless there is something new; gone once the shipper has been told it is inside.
    */
   @ApiPropertyOptional() windowTold?: { lateMin?: number; earlyMin?: number; at: string };
+  /**
+   * The accepted plan for its day leaves it on no vehicle: for which day, why as its shipper is told it, and when that
+   * was said. Kept so that accepting the day again says nothing new unless there is something new; gone when a plan
+   * has it on a vehicle, and when the order is split into loads (the plan was about the order as it was).
+   */
+  @ApiPropertyOptional() planLeft?: { day: string; why: PlanLeftWhy; at: string };
   /**
    * WHO the network owed for this haul, and on whose books — fixed when it was accrued at delivery. A claim
    * upheld weeks later takes the money back from this same party: never from whichever fleet the driver has
@@ -984,6 +1019,10 @@ export class PostedFreightRow {
   @ApiPropertyOptional({ type: LoadOf }) partOf?: LoadOf;
   /** The carrier's accepted plan has it outside the window asked for. Absent when it is inside it, or not planned. */
   @ApiPropertyOptional({ type: OutsideWindow }) outsideWindow?: OutsideWindow;
+  /** About when the carrier's accepted plan has it at the door, while it is still on its way. Absent: not planned. */
+  @ApiPropertyOptional({ type: PlannedAbout }) plannedAbout?: PlannedAbout;
+  /** The carrier's accepted plan for its day leaves it on no vehicle. Gone once a plan has it on one. */
+  @ApiPropertyOptional({ type: LeftOutOfPlan }) leftOut?: LeftOutOfPlan;
   description: string;
   destLabel: string;
   weightKg: number;

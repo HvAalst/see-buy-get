@@ -1,5 +1,5 @@
 import type { BusinessActivity, BusinessView, CarriageContract, CheckState, Membership, MemberRole, NewBusiness, PostedLoad } from './api';
-import type { Translate } from '../../shared/i18n';
+import type { MessageKey, Translate } from '../../shared/i18n';
 
 /** Where somebody is in the Business app. */
 export type Section = 'home' | 'loads' | 'runs' | 'contracts' | 'clients' | 'imports' | 'yard' | 'people' | 'details';
@@ -152,6 +152,35 @@ export function windowMiss(o: PostedLoad['outsideWindow'], t: Translate): { row:
     row: t(late ? 'business.loads.win.late' : 'business.loads.win.early', { at: o.arrive, by }),
     full: t(late ? 'business.loads.win.lateFull' : 'business.loads.win.earlyFull', { at: o.arrive, day: o.day, by, asked }),
   };
+}
+
+/**
+ * WHAT THE CARRIER'S PLAN SAYS OF A LOAD, as one thing: `left` it is on no vehicle · `outside` it is planned outside
+ * the window asked for · `planned` it is planned, in time or with no window to keep. The worst comes first, because a
+ * row says one thing. Nothing while there is no accepted plan to speak of.
+ *
+ * The first two are said in the colour of something to act on. The third is said quietly and never rings: an order
+ * that is going to plan needs nobody — and the same few words are where a shipper looks when somebody asks "when?".
+ */
+export interface PlanSays {
+  state: 'left' | 'outside' | 'planned';
+  /** A few words for the load's row. */
+  row: string;
+  /** The whole of it, on the load itself. */
+  full: string;
+}
+export function planSays(l: Pick<PostedLoad, 'leftOut' | 'outsideWindow' | 'plannedAbout'>, t: Translate): PlanSays | null {
+  if (l.leftOut) {
+    const why = t(`business.loads.left.${l.leftOut.why}` as MessageKey, { day: l.leftOut.day });
+    return { state: 'left', row: why, full: t('business.loads.left.full', { why }) };
+  }
+  const miss = windowMiss(l.outsideWindow, t);
+  if (miss) return { state: 'outside', ...miss };
+  const p = l.plannedAbout;
+  if (!p) return null;
+  return p.window
+    ? { state: 'planned', row: t('business.loads.plan.rowIn', { at: p.arrive }), full: t('business.loads.plan.fullIn', { at: p.arrive, day: p.day, window: p.window }) }
+    : { state: 'planned', row: t('business.loads.plan.row', { at: p.arrive }), full: t('business.loads.plan.full', { at: p.arrive, day: p.day }) };
 }
 
 /** P1 — the day after `now`, as YYYY-MM-DD in the reader's own calendar: next-day delivery is the ordinary order. */

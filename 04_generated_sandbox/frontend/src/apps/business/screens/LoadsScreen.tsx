@@ -6,7 +6,7 @@ import { SitePicker, type SiteView } from '../../tower/screens/SitePicker';
 import { QuotePanel } from '../../tower/screens/QuotePanel';
 import { NATURES, PACKAGING_OPTIONS } from '../../agent/logic';
 import type { BusinessClient, BusinessView, CarriageContract, LoadProposal, PostedLoad } from '../api';
-import { loadGaps, loadStage, mayAct, nextDay, orderableContracts, windowMiss, type LoadForm, type LoadStage } from '../logic';
+import { loadGaps, loadStage, mayAct, nextDay, orderableContracts, planSays, type LoadForm, type LoadStage } from '../logic';
 import { SentFor } from './SentFor';
 import type { BusinessActions } from '../useBusinessApp';
 
@@ -99,7 +99,7 @@ export function LoadsScreen({ business, client }: { business: BusinessView; acti
           <div class="crows">
             {rows.map((r) => {
               const stage = loadStage(r);
-              const miss = windowMiss(r.outsideWindow, t);
+              const says = planSays(r, t);
               return (
                 <button type="button" class="crow" key={r.freightId} onClick={() => setOpen(r)}>
                   <span class="crow__body">
@@ -115,13 +115,15 @@ export function LoadsScreen({ business, client }: { business: BusinessView; acti
                       {r.onBehalfOf ? ` · ${t('business.sentFor.forClient', { name: r.onBehalfOf.name })}` : ''}
                       {r.contract ? ` · ${t('business.loads.withCarrier', { fleet: r.contract.fleetName, day: r.deliverOn ?? '' })}` : ''}
                     </span>
-                    {/* What a row must not lose to an ellipsis: which load of an order this is, and a plan outside the
-                        window. The line above gives way to the width; this one wraps. */}
-                    {r.partOf || miss ? (
+                    {/* What a row must not lose to an ellipsis: which load of an order this is, and what its carrier's
+                        plan says of it — on no vehicle, outside its window, or (with no tag: it needs nobody) about
+                        when. The line above gives way to the width; this one wraps. */}
+                    {r.partOf || says ? (
                       <span class="biz-loads__flags">
                         {r.partOf ? <span class="ctag ctag--quiet">{t('business.loads.loadOf', { no: r.partOf.no, of: r.partOf.of, order: r.partOf.rootCode })}</span> : null}
-                        {miss ? <span class="ctag ctag--warn">{t('business.loads.win.tag')}</span> : null}
-                        {miss ? <span>{miss.row}</span> : null}
+                        {says?.state === 'left' ? <span class="ctag ctag--danger">{t('business.loads.left.tag')}</span> : null}
+                        {says?.state === 'outside' ? <span class="ctag ctag--warn">{t('business.loads.win.tag')}</span> : null}
+                        {says ? <span>{says.row}</span> : null}
                       </span>
                     ) : null}
                   </span>
@@ -355,7 +357,7 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
 function LoadDetail({ row, client, act, onClose, onChanged }: { row: PostedLoad; client: BusinessClient | null; act: boolean; onClose: () => void; onChanged: (message?: string) => void | Promise<void> }) {
   const t = useT();
   const stage = loadStage(row);
-  const miss = windowMiss(row.outsideWindow, t);
+  const says = planSays(row, t);
   const [proposals, setProposals] = useState<LoadProposal[] | null>(null);
   const [quote, setQuote] = useState<QuoteView | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
@@ -431,12 +433,12 @@ function LoadDetail({ row, client, act, onClose, onChanged }: { row: PostedLoad;
               <dd class="cons__factv">{t('business.loads.loadOfFull', { no: row.partOf.no, of: row.partOf.of, order: row.partOf.rootCode, kg: row.partOf.orderKg.toLocaleString() })}</dd>
             </div>
           ) : null}
-          {miss ? (
+          {says ? (
             <div class="cons__fact">
               <dt class="cons__factk">{t('business.loads.fact.plan')}</dt>
               <dd class="cons__factv">
-                {miss.full}
-                <span class="chint"> {t('business.loads.win.estimate', { fleet: row.contract?.fleetName ?? '' })}</span>
+                {says.full}
+                <span class="chint"> {says.state === 'planned' ? t('business.loads.plan.estimate') : t(says.state === 'left' ? 'business.loads.left.do' : 'business.loads.win.estimate', { fleet: row.contract?.fleetName ?? '' })}</span>
               </dd>
             </div>
           ) : null}

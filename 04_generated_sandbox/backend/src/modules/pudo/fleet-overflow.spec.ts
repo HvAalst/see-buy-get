@@ -69,6 +69,7 @@ import { OtpService } from './otp.service';
 import { AuthService } from '../../foundation/auth/auth.service';
 import type { UnclaimedService } from './unclaimed.service';
 import type { OrderHandedOn } from './fleet-overflow.types';
+import { requiredLoadKeys, requiredUnloadKeys } from './heavy-cargo';
 
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
@@ -542,6 +543,192 @@ describe('handing orders on', () => {
       await settle();
       expect(titles()).toHaveLength(3);
       expect(titles()).toContain('Kilima Logistics plans ' + second.code + ' for about 12:45 — 45 minutes after your window');
+    });
+
+    /**
+     * ON NO VEHICLE. The user, 2026-10-06: "It's commonly a phonecall away, but he needs at least a notification."
+     * Pinned here: the shipper of an order an accepted plan leaves out is told, once for a day and a reason; told that
+     * it is on a vehicle after all, with about when; and its own list says the same for as long as the plan does — and,
+     * quietly, about when an order that IS planned is at the door.
+     */
+    describe('an order the accepted plan leaves on no vehicle', () => {
+      const shipper = 'did:glos:jenga-bricks';
+      type Over = { arrive: string; lateMin?: number };
+      function aDay() {
+        const { a } = threeFleets();
+        const day = tomorrow();
+        const placed = (postedByDid: string, ref: string, kg = 2000) => dispatch.registerFreight({ description: 'Blocks', pickupLocation: yard, pickupLabel: 'Jenga yard', destLabel: 'Machakos junction', destLocation: site, weightKg: kg, packaging: 'palletised', postedByDid, postedByName: 'Wanjiru', contract: { contractId: 'ctr_ov', fleetDid: a.did, fleetName: a.name, shipperName: 'Jenga Bricks' }, deliverOn: day, orderRef: ref, deliveryWindow: '8-12' });
+        const stamp = (over: Over) => ({ day, vehicleId: 'veh_1', plate: 'KPL 008T', tripNo: 1, seq: 1, window: '08:00 to 12:00', at: new Date().toISOString(), ...over });
+        const accept = async (on: Array<[string, Over]>, left?: Array<[string, string]>) => {
+          dispatch.stampPlan(a.did, day, new Map(on.map(([id, o]) => [id, stamp(o)] as [string, ReturnType<typeof stamp>])), Date.now(), left ? new Map(left) : undefined);
+          await settle();
+        };
+        const inbox = () => notifications.inboxFor(shipper).filter((n) => n.kind === 'order_left_out' || n.kind === 'order_window');
+        const row = (did: string, id: string) => dispatch.postedBy(did).find((r) => r.freightId === id)!;
+        return { a, day, placed, accept, inbox, titles: () => inbox().map((n) => n.title), row };
+      }
+
+      it('is said to its shipper once for a day and a reason, and said to be on a vehicle after all — and the list follows the plan', async () => {
+        const { day, placed, accept, inbox, titles, row } = aDay();
+        const theirs = placed(shipper, 'WS-LEFT-1');
+        const mine = () => row(shipper, theirs.freightId);
+
+        // Planned, inside its window: nothing is said — and its list says, quietly, about when.
+        await accept([[theirs.freightId, { arrive: '10:10' }]], []);
+        expect(titles()).toEqual([]);
+        expect(mine().plannedAbout).toEqual({ day, arrive: '10:10', window: '08:00 to 12:00' });
+        expect([mine().leftOut, mine().outsideWindow]).toEqual([undefined, undefined]);
+
+        // The day is accepted again and it is on no vehicle: said, with why as a shipper is told it.
+        await accept([], [[theirs.freightId, 'no_time']]);
+        expect(titles()).toEqual(['Kilima Logistics has not put ' + theirs.code + ' on a vehicle for ' + day]);
+        expect(inbox()[0].kind).toBe('order_left_out');
+        expect(inbox()[0].body).toBe('Its plan for ' + day + ' has no room for it: the vehicles going out are full, or the day is too short. As its plan stands, ' + theirs.code + ' is on no vehicle. The day can still be planned again: speak to Kilima Logistics now.');
+        expect(mine().leftOut).toEqual({ day, why: 'room' });
+        expect(mine().plannedAbout).toBeUndefined();
+        // Still out — for want of a driver, or of any truck, which is the same thing to a shipper: not said again,
+        // and the carrier's drivers are nobody's business but the carrier's.
+        await accept([], [[theirs.freightId, 'no_driver']]);
+        await accept([], [[theirs.freightId, 'no_trucks']]);
+        expect(titles()).toHaveLength(1);
+        expect(JSON.stringify(inbox())).not.toMatch(/driver/i);
+        // Another reason is news, each in its own words.
+        await accept([], [[theirs.freightId, 'too_heavy']]);
+        await accept([], [[theirs.freightId, 'no_truck_can_carry']]);
+        await accept([], [[theirs.freightId, 'no_pin']]);
+        expect(titles()).toHaveLength(4);
+        const bodies = inbox().map((n) => n.body).join(' | ');
+        expect(bodies).toContain('It is heavier than its largest vehicle carries. It may bring it in several loads, and you are told if it does.');
+        expect(bodies).toContain('None of the vehicles in its plan for ' + day + ' can carry it as it was ordered.');
+        expect(bodies).toContain('The place it goes to has no point on the map, so it could not be planned. A fuller address will help.');
+        expect(mine().leftOut).toEqual({ day, why: 'place' });
+
+        // On a vehicle after all, inside its window: said as news about a time, with about when — and the list follows.
+        await accept([[theirs.freightId, { arrive: '09:40' }]], []);
+        expect(titles()).toHaveLength(5);
+        const back = inbox().find((n) => /now has/.test(n.title))!;
+        expect([back.kind, back.title]).toEqual(['order_window', 'Kilima Logistics now has ' + theirs.code + ' on a vehicle for ' + day]);
+        expect(back.body).toBe('Its plan has ' + theirs.code + ' at the door about 09:40, inside the window you asked for (08:00 to 12:00). A plan’s time is an estimate, and the day can still be planned again.');
+        expect(mine().leftOut).toBeUndefined();
+        expect(mine().plannedAbout).toMatchObject({ arrive: '09:40' });
+        // Accepted again as it is: nothing more. And left out again after that is news again.
+        await accept([[theirs.freightId, { arrive: '09:45' }]], []);
+        expect(titles()).toHaveLength(5);
+        await accept([], [[theirs.freightId, 'no_time']]);
+        expect(titles()).toHaveLength(6);
+      });
+
+      it('is said to be back on a vehicle as LATE when it is late — even a lateness that was said before it was left out', async () => {
+        const { placed, accept, titles, row } = aDay();
+        const theirs = placed(shipper, 'WS-LEFT-2');
+        await accept([[theirs.freightId, { arrive: '12:40', lateMin: 40 }]], []);
+        await accept([], [[theirs.freightId, 'no_time']]);
+        expect(titles()).toHaveLength(2);
+        // Back, forty-five minutes late: five minutes from what was once said, which on its own would not be news.
+        await accept([[theirs.freightId, { arrive: '12:45', lateMin: 45 }]], []);
+        expect(titles()).toHaveLength(3);
+        expect(titles()).toContain('Kilima Logistics plans ' + theirs.code + ' for about 12:45 — 45 minutes after your window');
+        expect(titles().some((x) => /now has/.test(x))).toBe(false);
+        expect(row(shipper, theirs.freightId)).toMatchObject({ outsideWindow: { lateMin: 45 }, plannedAbout: { arrive: '12:45' } });
+        expect(row(shipper, theirs.freightId).leftOut).toBeUndefined();
+      });
+
+      it('tells nobody of an order the carrier’s own office typed in, shows it all the same, and stops showing what no longer holds', async () => {
+        const { a, day, placed, accept, inbox, row } = aDay();
+        const typed = placed(a.did, 'WS-LEFT-3');
+        const theirs = placed(shipper, 'WS-LEFT-4');
+        await accept([], [[typed.freightId, 'no_time'], [theirs.freightId, 'no_time']]);
+        expect(notifications.inboxFor(a.did).some((n) => n.kind === 'order_left_out')).toBe(false);
+        expect(inbox()).toHaveLength(1);
+        expect(row(a.did, typed.freightId).leftOut).toEqual({ day, why: 'room' });
+        // A plan that says nothing of what it left out — an older caller — says nothing, and takes nothing back.
+        await accept([]);
+        expect(inbox()).toHaveLength(1);
+        expect(row(shipper, theirs.freightId).leftOut).toEqual({ day, why: 'room' });
+        // Withdrawn: it is on no vehicle because it is going nowhere, and the list does not say a plan left it out.
+        dispatch.cancelFreight(theirs.freightId, { did: shipper, role: 'shipper' }, 'Not needed any more');
+        expect(row(shipper, theirs.freightId).leftOut).toBeUndefined();
+        // Put on a driver by hand, outside any plan: it is on a vehicle.
+        const own = onShift(a.did);
+        dispatch.assign(typed.freightId, own.did, { managerDid: a.did, name: 'Amina' });
+        expect(row(a.did, typed.freightId).leftOut).toBeUndefined();
+      });
+
+      it('is not carried onto the loads of a split: the plan was about the order as it was', async () => {
+        const { a, day, placed, accept, titles, row } = aDay();
+        const heavy = placed(shipper, 'WS-LEFT-5', 12000);
+        await accept([], [[heavy.freightId, 'too_heavy']]);
+        expect(titles()).toHaveLength(1);
+        const [first, second] = dispatch.splitOrder(a.did, heavy.freightId, [8000, 4000], 'Amina');
+        expect([first.planLeft, second.planLeft]).toEqual([undefined, undefined]);
+        expect([row(shipper, first.freightId).leftOut, row(shipper, second.freightId).leftOut]).toEqual([undefined, undefined]);
+        // Both loads planned: the notice that it comes in loads said what became of the order; nothing is "after all".
+        await accept([[first.freightId, { arrive: '09:00' }], [second.freightId, { arrive: '11:00' }]], []);
+        expect(titles()).toHaveLength(1);
+        expect(row(shipper, second.freightId).plannedAbout).toEqual({ day, arrive: '11:00', window: '08:00 to 12:00' });
+        // A load left out is said of that load, in its own right.
+        await accept([[first.freightId, { arrive: '09:00' }]], [[second.freightId, 'no_time']]);
+        expect(titles()).toHaveLength(2);
+        expect(titles()).toContain('Kilima Logistics has not put ' + second.code + ' on a vehicle for ' + day);
+      });
+
+      it('shows about when a planned order is at the door only while that is still to come', async () => {
+        const { a, day, placed, accept, row } = aDay();
+        const theirs = placed(shipper, 'WS-LEFT-6');
+        const mine = () => row(shipper, theirs.freightId);
+        expect(mine().plannedAbout).toBeUndefined();
+        await accept([[theirs.freightId, { arrive: '10:10' }]], []);
+        expect(mine().plannedAbout).toEqual({ day, arrive: '10:10', window: '08:00 to 12:00' });
+        // Its trip came up and it could not be loaded: no time is claimed for it while that stands.
+        dispatch.holdPlanned(theirs.freightId, 'The truck is full');
+        expect(mine().plannedAbout).toBeUndefined();
+        dispatch.holdPlanned(theirs.freightId, undefined);
+        expect(mine().plannedAbout).toMatchObject({ arrive: '10:10' });
+        // On its driver and on the road it is still to come; delivered, it is not.
+        const own = onShift(a.did);
+        dispatch.assign(theirs.freightId, own.did, { managerDid: a.did, name: 'Amina' });
+        expect(mine().plannedAbout).toMatchObject({ arrive: '10:10' });
+        const f = dispatch.listFreight().find((x) => x.freightId === theirs.freightId)!;
+        dispatch.pickupFreight(theirs.freightId, own.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_test' });
+        expect(mine().plannedAbout).toMatchObject({ arrive: '10:10' });
+        dispatch.deliverFreight(theirs.freightId, own.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' });
+        expect(mine().plannedAbout).toBeUndefined();
+      });
+    });
+
+    /**
+     * DELIVERED. The shipper of a run was always told its goods reached the other end; whoever sent a load — onto the
+     * open board, or to its contract carrier — was told nothing, at any point of a delivery that went to plan.
+     */
+    it('tells whoever sent a load that it was delivered, and to whom — not the carrier’s own office, and not the driver', async () => {
+      const { a } = threeFleets();
+      const own = onShift(a.did);
+      const shipper = 'did:glos:jenga-bricks';
+      const placed = (postedByDid: string, ref: string, description: string) => dispatch.registerFreight({ description, pickupLocation: yard, pickupLabel: 'Jenga yard', destLabel: 'Machakos junction', destLocation: site, weightKg: 2000, packaging: 'palletised', postedByDid, postedByName: 'Wanjiru', contract: { contractId: 'ctr_ov', fleetDid: a.did, fleetName: a.name, shipperName: 'Jenga Bricks' }, deliverOn: tomorrow(), orderRef: ref });
+      const carry = (freightId: string) => {
+        dispatch.assign(freightId, own.did, { managerDid: a.did, name: 'Amina' });
+        const f = dispatch.listFreight().find((x) => x.freightId === freightId)!;
+        dispatch.pickupFreight(freightId, own.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_test' });
+        dispatch.deliverFreight(freightId, own.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' });
+      };
+      const delivered = (did: string) => notifications.inboxFor(did).filter((n) => n.kind === 'freight_delivered');
+      const theirs = placed(shipper, 'WS-DEL-1', 'Bricks, 4 pallets.');
+      // Nothing is said before it is delivered.
+      dispatch.assign(theirs.freightId, own.did, { managerDid: a.did, name: 'Amina' });
+      await settle();
+      expect(delivered(shipper)).toEqual([]);
+      const f = dispatch.listFreight().find((x) => x.freightId === theirs.freightId)!;
+      dispatch.pickupFreight(theirs.freightId, own.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_test' });
+      dispatch.deliverFreight(theirs.freightId, own.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' });
+      await settle();
+      expect(delivered(shipper).map((n) => [n.title, n.body])).toEqual([[theirs.code + ' was delivered', 'Handed over to Wanjiru at the gate at Machakos junction: Bricks, 4 pallets.']]);
+      // An order the carrier's own office typed in: its customer is not ours to write to, and the office saw it done.
+      const typed = placed(a.did, 'WS-DEL-2', 'Cement');
+      carry(typed.freightId);
+      await settle();
+      expect(delivered(a.did)).toEqual([]);
+      expect(delivered(own.did)).toEqual([]);
+      expect(delivered(shipper)).toHaveLength(1);
     });
 
     /**

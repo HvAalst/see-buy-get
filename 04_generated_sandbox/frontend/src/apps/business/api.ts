@@ -162,6 +162,10 @@ export interface PostedLoad {
   partOf?: { rootCode: string; no: number; of: number; orderKg: number };
   /** The carrier's accepted plan has it outside the window asked for: about when, the window as the plan read it, by how much. */
   outsideWindow?: { day: string; arrive: string; window?: string; lateMin?: number; earlyMin?: number };
+  /** About when the carrier's accepted plan has it at the door, while it is still on its way. */
+  plannedAbout?: { day: string; arrive: string; window?: string };
+  /** The carrier's accepted plan for its day leaves it on no vehicle, and why as a shipper is told it. */
+  leftOut?: { day: string; why: 'room' | 'fit' | 'heavy' | 'place' };
   description: string;
   destLabel: string;
   weightKg: number;

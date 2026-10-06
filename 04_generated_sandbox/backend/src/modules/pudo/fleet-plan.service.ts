@@ -282,7 +282,8 @@ export class FleetPlanService implements OnModuleInit {
         t.stops.forEach((s, i) => stamps.set(s.freightId, { day: plan.day, vehicleId: r.vehicleId, plate: r.plate, tripNo: t.no, seq: i + 1, arrive: s.arrive, ...(s.window ? { window: s.window } : {}), ...(s.lateMin ? { lateMin: s.lateMin } : {}), ...(s.earlyMin ? { earlyMin: s.earlyMin } : {}), at }));
       }
     }
-    this.dispatch.stampPlan(fleetDid, plan.day, stamps, now);
+    // What the plan left out goes with it: an order on no vehicle is as much the plan's word as one on a vehicle.
+    this.dispatch.stampPlan(fleetDid, plan.day, stamps, now, new Map(plan.unplanned.map((u) => [u.freightId, u.reason])));
     const kept: DayPlanView = { ...plan, accepted: { at, by } };
     this.accepted.set(keyOf(fleetDid, plan.day), kept);
     return kept;

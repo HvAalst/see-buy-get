@@ -42,7 +42,7 @@ import { DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPAT
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
-import { BoardRow, Claimable, ClaimableKind, FleetOrderRow, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, MarketRow, MarketSeries, Offer, OutsideWindow, PostedFreightRow, RoutePlan, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS } from './dispatch.types';
+import { BoardRow, Claimable, ClaimableKind, FleetOrderRow, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, LeftOutOfPlan, MarketRow, MarketSeries, Offer, OutsideWindow, PlannedAbout, PostedFreightRow, RoutePlan, shipperWhy, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS } from './dispatch.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 import { buildOfferResponse, type OfferResponse } from './offer-response';
 
@@ -1533,6 +1533,8 @@ export class DispatchService {
         ...(f.onBehalfOf ? { onBehalfOf: f.onBehalfOf } : {}),
         ...(f.partOf ? { partOf: f.partOf } : {}),
         ...(this.outsideWindowOf(f) ? { outsideWindow: this.outsideWindowOf(f) } : {}),
+        ...(this.plannedAboutOf(f) ? { plannedAbout: this.plannedAboutOf(f) } : {}),
+        ...(this.leftOutOf(f) ? { leftOut: this.leftOutOf(f) } : {}),
         ...(f.contract ? { contract: f.contract, deliverOn: f.deliverOn, ...(f.orderRef ? { orderRef: f.orderRef } : {}) } : {}),
         agreedPrice: f.lockedPrice,
         pickedUpAt: f.pickedUpAt,
@@ -1738,15 +1740,77 @@ export class DispatchService {
    * P3 — write an accepted plan onto its orders, and take the day's OLD plan off the ones the new plan left out. Only
    * orders still without a truck are touched: one already on a driver keeps what it was planned on, as history.
    */
-  stampPlan(fleetDid: string, day: string, stamps: Map<string, PlannedOn>, now: number = Date.now()): void {
+  stampPlan(fleetDid: string, day: string, stamps: Map<string, PlannedOn>, now: number = Date.now(), left?: Map<string, string>): void {
     for (const f of this.contractOrdersForDay(fleetDid, day)) {
       const stamp = stamps.get(f.freightId);
-      if (stamp) f.planned = stamp;
-      else if (f.planned?.day === day) delete f.planned;
-      else continue;
-      if (stamp) this.tellWindow(f, stamp, now);
+      if (stamp) {
+        f.planned = stamp;
+        // Said to be on no vehicle, and on one now: that is said too — as late or early where it is, as planned where
+        // it is not. What was said of its window before it was left out no longer stands in the way of saying it.
+        const back = Boolean(f.planLeft);
+        if (back) {
+          delete f.planLeft;
+          delete f.windowTold;
+        }
+        if (back && !stamp.lateMin && !stamp.earlyMin) this.tellOnVehicle(f, stamp);
+        else this.tellWindow(f, stamp, now);
+      } else {
+        const had = f.planned?.day === day;
+        if (had) delete f.planned;
+        const reason = left?.get(f.freightId);
+        const said = reason ? this.tellLeftOut(f, day, reason, now) : false;
+        if (!had && !said) continue;
+      }
       this.freights.set(f.freightId, f);
     }
+  }
+
+  /** The shipper of a contract order, where it is somebody here to tell: not the carrier's own office, which typed it in. */
+  private shipperToTell(f: Freight): string | undefined {
+    return f.postedByDid && f.postedByDid !== f.contract?.fleetDid ? f.postedByDid : undefined;
+  }
+
+  /**
+   * THE SHIPPER HEARS THAT ITS ORDER IS ON NO VEHICLE. The user, 2026-10-06: "It's commonly a phonecall away, but he
+   * needs at least a notification." Until this, an order an accepted plan left out simply stayed "with your carrier"
+   * in the shipper's list — on the day itself, with nothing coming.
+   *
+   * Said when the plan is accepted, once for a day and a reason: accepting the day again with the order still left out
+   * for the same reason says nothing; another reason, or another day's plan, does. The record is kept on the order
+   * whoever placed it, so the list shows it; only a shipper that is somebody here is told. Answers whether anything
+   * changed.
+   */
+  private tellLeftOut(f: Freight, day: string, reason: string, now: number): boolean {
+    const why = shipperWhy(reason);
+    if (f.planLeft?.day === day && f.planLeft.why === why) return false;
+    f.planLeft = { day, why, at: new Date(now).toISOString() };
+    const shipperDid = this.shipperToTell(f);
+    if (shipperDid) void this.events.publish(GlosEvent.Pudo.OrderLeftOut, { freightId: f.freightId, code: f.code, shipperDid, fleetName: f.contract?.fleetName ?? '', day, left: true, why }, { source: 'pudo' }).catch(() => undefined);
+    return true;
+  }
+
+  /** …and that it is on a vehicle after all, inside its window or with none: about when. */
+  private tellOnVehicle(f: Freight, stamp: PlannedOn): void {
+    const shipperDid = this.shipperToTell(f);
+    if (!shipperDid) return;
+    void this.events
+      .publish(GlosEvent.Pudo.OrderLeftOut, { freightId: f.freightId, code: f.code, shipperDid, fleetName: f.contract?.fleetName ?? '', day: stamp.day, left: false, arrive: stamp.arrive, ...(stamp.window ? { window: stamp.window } : {}) }, { source: 'pudo' })
+      .catch(() => undefined);
+  }
+
+  /** About when the accepted plan has an order at the door, while it is on its way and nothing has stopped it loading. */
+  private plannedAboutOf(f: Freight): PlannedAbout | undefined {
+    const p = f.planned;
+    if (!p || p.held) return undefined;
+    if (f.status !== 'ordered' && f.status !== 'claimed' && f.status !== 'in_transit') return undefined;
+    return { day: p.day, arrive: p.arrive, ...(p.window ? { window: p.window } : {}) };
+  }
+
+  /** That the accepted plan for its day leaves an order out — for as long as that is still what the plan says of it. */
+  private leftOutOf(f: Freight): LeftOutOfPlan | undefined {
+    const l = f.planLeft;
+    if (!l || f.planned || f.status !== 'ordered' || f.deliverOn !== l.day) return undefined;
+    return { day: l.day, why: l.why };
   }
 
   /**
@@ -1862,6 +1926,8 @@ export class DispatchService {
 
     this.reweigh(f, kgs[0]);
     delete f.planned;
+    // A plan that left the order out was about the order as it was. Its loads have been in no plan yet.
+    delete f.planLeft;
     const made = kgs.slice(1).map((kg) => {
       this.freightSeq += 1;
       const load: Freight = { ...f, freightId: `frt_${randomBytes(5).toString('hex')}`, code: `FRT-${String(this.freightSeq).padStart(3, '0')}`, trackingKey: `T-${randomBytes(5).toString('hex').toUpperCase()}`, createdAt: at };
@@ -1905,6 +1971,7 @@ export class DispatchService {
     this.reweigh(root, root.partOf.orderKg);
     delete root.partOf;
     delete root.planned;
+    delete root.planLeft;
     this.freights.set(root.freightId, root);
     this.tellSplit(root, 1, true);
     return root;
@@ -2581,7 +2648,13 @@ export class DispatchService {
     this.media.anchorFreightTerminal(f.freightId);
     this.freights.set(f.freightId, f);
     // FP2 — the consignment closes: whoever documents and bills it is told.
-    void this.events.publish(GlosEvent.Pudo.FreightDelivered, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy }, { source: 'pudo' }).catch(() => undefined);
+    // …and whoever sent it is told it arrived. Not the carrier's own office for an order it typed in itself: its
+    // customer is not ours to write to, and the office saw its own driver hand it over.
+    const sender = f.postedByDid ?? (f.shipperDid && this.vendors.has(f.shipperDid) ? this.vendors.get(f.shipperDid).did : f.shipperDid);
+    const posterDid = sender && sender !== f.contract?.fleetDid && sender !== f.claimedBy ? sender : undefined;
+    void this.events
+      .publish(GlosEvent.Pudo.FreightDelivered, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy, ...(posterDid ? { posterDid } : {}), description: f.description, destLabel: f.destLabel, receivedBy: f.proofOfDelivery.receiverName }, { source: 'pudo' })
+      .catch(() => undefined);
     return f;
   }
 

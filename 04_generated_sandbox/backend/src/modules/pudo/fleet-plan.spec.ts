@@ -485,6 +485,37 @@ describe('a fleet’s plan for a day', () => {
     });
   });
 
+  /**
+   * WHAT ITS SHIPPER IS SHOWN OF AN ORDER LEFT OUT. Accepting a plan hands on what it left out as well as what it
+   * planned: the order carries that it is on no vehicle, and why as a shipper is told it, until a plan has it on one.
+   */
+  describe('an order the accepted plan leaves out, as the order’s shipper is shown it', () => {
+    it('carries what the plan left out onto the order, and takes it off when a plan has room for it', () => {
+      const fleet = aFleet('Kilima Logistics');
+      aTruck(fleet.did, 'KPL 003T', 3000);
+      aDriver(fleet.did);
+      const fits = anOrder(fleet, { kg: 3000, n: 1 });
+      const heavy = anOrder(fleet, { kg: 9000, n: 2 });
+      const mine = (id: string) => dispatch.postedBy(fleet.did).find((r) => r.freightId === id)!;
+      // Nothing is said of a plan nobody accepted.
+      const proposed = plans.propose(fleet.did, { day: tomorrow() });
+      expect(proposed.unplanned.map((u) => [u.freightId, u.reason])).toEqual([[heavy.freightId, 'too_heavy']]);
+      expect(mine(heavy.freightId).leftOut).toBeUndefined();
+      plans.accept(fleet.did, { day: tomorrow() }, 'Amina');
+      expect(mine(heavy.freightId).leftOut).toEqual({ day: tomorrow(), why: 'heavy' });
+      expect(mine(heavy.freightId).plannedAbout).toBeUndefined();
+      expect(mine(fits.freightId).leftOut).toBeUndefined();
+      expect(mine(fits.freightId).plannedAbout).toMatchObject({ day: tomorrow() });
+      expect(mine(fits.freightId).plannedAbout!.arrive).toHaveLength(5);
+      // A truck that carries it joins the fleet, and the day is accepted again: it is on a vehicle, and says about when.
+      aTruck(fleet.did, 'KPL 010T', 10000);
+      aDriver(fleet.did);
+      plans.accept(fleet.did, { day: tomorrow() }, 'Amina');
+      expect(mine(heavy.freightId).leftOut).toBeUndefined();
+      expect(mine(heavy.freightId).plannedAbout).toMatchObject({ day: tomorrow() });
+    });
+  });
+
   /* --------------------------------------------------- an order in several loads -- */
 
   /**
