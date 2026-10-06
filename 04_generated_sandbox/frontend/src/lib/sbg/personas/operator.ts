@@ -758,6 +758,12 @@ export function createOperatorApi(sbg: SbgClient) {
      * registration certificate and the representative's ID; the second approval verifies, never the first one twice.
      */
     businesses: () => sbg.request((c) => c.GET('/v1/sbg/businesses', {})),
+    /**
+     * What this server is connected to for the fleets' planning — the routing server and the adviser: set up or not,
+     * and what the last ask met. Staff only. `checkRouter` asks the routing server one question now.
+     */
+    connections: () => sbg.request((c) => c.GET('/v1/sbg/connections', {})),
+    checkRouter: () => sbg.request((c) => c.POST('/v1/sbg/connections/router/check', {})),
     approveBusiness: (entityId: string, by?: string) =>
       sbg.request((c) => c.POST('/v1/sbg/businesses/{entityId}/approve', { params: { path: { entityId } }, body: { ...(by ? { by } : {}) } })),
     /** `reason` is what the business reads, in the app and by email: it is how they know what to put right. */

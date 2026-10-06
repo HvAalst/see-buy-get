@@ -21405,6 +21405,44 @@
         }
       }
     },
+    "/v1/sbg/connections": {
+      "get": {
+        "operationId": "Connections.view",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/connections/router/check": {
+      "post": {
+        "operationId": "Connections.checkRouter",
+        "summary": "",
+        "description": "Ask the routing server now. The two places are a fleet's depot and a point a little way off it: places a plan\nwould really ask about, on whatever map the operator's server holds.",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouterCheck"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/settlement/module-info": {
       "get": {
         "operationId": "Sse.info",
@@ -31983,6 +32021,10 @@
       "PlannedOn": {
         "type": "object",
         "properties": {
+          "window": {
+            "type": "string",
+            "description": "The window the plan was made to, as it was read then — kept, because the shipper may reword what it asked for."
+          },
           "lateMin": {
             "type": "number",
             "description": "Planned to arrive this many minutes after the window its shipper asked for."
@@ -32694,6 +32736,23 @@
             "type": "string",
             "description": "A load that was put back together with the rest of its order: the id of the order. It is in no list from then on."
           },
+          "windowTold": {
+            "type": "object",
+            "properties": {
+              "lateMin": {
+                "required": false,
+                "type": "number"
+              },
+              "earlyMin": {
+                "required": false,
+                "type": "number"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
           "driverPayee": {
             "type": "object",
             "properties": {
@@ -33045,6 +33104,7 @@
           "proofOfDelivery",
           "reservations",
           "cancellation",
+          "windowTold",
           "driverPayee",
           "status",
           "assignedBy",
@@ -36422,6 +36482,30 @@
           "basis"
         ]
       },
+      "OutsideWindow": {
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string"
+          },
+          "lateMin": {
+            "type": "number"
+          },
+          "earlyMin": {
+            "type": "number"
+          },
+          "day": {
+            "type": "string"
+          },
+          "arrive": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "arrive"
+        ]
+      },
       "FreightInstructionsView": {
         "type": "object",
         "properties": {
@@ -36456,6 +36540,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/LoadOf"
+              }
+            ]
+          },
+          "outsideWindow": {
+            "description": "The carrier's accepted plan has it outside the window asked for. Absent when it is inside it, or not planned.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OutsideWindow"
               }
             ]
           },
@@ -40662,6 +40754,161 @@
         },
         "required": [
           "reason"
+        ]
+      },
+      "RouterAsk": {
+        "type": "object",
+        "properties": {
+          "why": {
+            "type": "string",
+            "description": "Why the plan was made on estimates instead, in the words the plan itself carried."
+          },
+          "at": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "places": {
+            "type": "number",
+            "description": "How many places the plan had."
+          }
+        },
+        "required": [
+          "at",
+          "ok",
+          "places"
+        ]
+      },
+      "RouterConnection": {
+        "type": "object",
+        "properties": {
+          "host": {
+            "type": "string",
+            "description": "The host of the address that is set. Never the address itself."
+          },
+          "invalid": {
+            "type": "boolean",
+            "description": "Something is set, and it is not a web address: no plan can use it."
+          },
+          "last": {
+            "$ref": "#/components/schemas/RouterAsk"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "maxPoints": {
+            "type": "number",
+            "description": "The most places one request carries; a day with more is planned on estimates."
+          }
+        },
+        "required": [
+          "configured",
+          "profile",
+          "maxPoints"
+        ]
+      },
+      "AdviserAsk": {
+        "type": "object",
+        "properties": {
+          "failed": {
+            "type": "string",
+            "enum": [
+              "not_configured",
+              "busy",
+              "unreachable",
+              "declined"
+            ]
+          },
+          "at": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "at",
+          "ok"
+        ]
+      },
+      "AdviserConnection": {
+        "type": "object",
+        "properties": {
+          "last": {
+            "$ref": "#/components/schemas/AdviserAsk"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "model": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "configured",
+          "model"
+        ]
+      },
+      "ConnectionsView": {
+        "type": "object",
+        "properties": {
+          "router": {
+            "$ref": "#/components/schemas/RouterConnection"
+          },
+          "adviser": {
+            "$ref": "#/components/schemas/AdviserConnection"
+          },
+          "since": {
+            "type": "string",
+            "description": "When this server started. \"Last asked\" is since then: it is kept in memory, and a restart forgets it."
+          }
+        },
+        "required": [
+          "router",
+          "adviser",
+          "since"
+        ]
+      },
+      "RouterCheck": {
+        "type": "object",
+        "properties": {
+          "why": {
+            "type": "string"
+          },
+          "km": {
+            "type": "number",
+            "description": "By road between the two places, as the server has it."
+          },
+          "noRoad": {
+            "type": "boolean",
+            "description": "It answered, and knows no road between them."
+          },
+          "apartKm": {
+            "type": "number",
+            "description": "How far apart the two places are in a straight line."
+          },
+          "near": {
+            "type": "string",
+            "description": "Whose depot the two places are near."
+          },
+          "ms": {
+            "type": "number",
+            "description": "How long it took to answer."
+          },
+          "at": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "at",
+          "ok"
         ]
       },
       "MilestoneTermDto": {

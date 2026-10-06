@@ -236,6 +236,8 @@ export class PlannedOn {
   seq: number;
   /** When the truck is expected at the door, on the clock. */
   arrive: string;
+  /** The window the plan was made to, as it was read then — kept, because the shipper may reword what it asked for. */
+  @ApiPropertyOptional() window?: string;
   /** Planned to arrive this many minutes after the window its shipper asked for. */
   @ApiPropertyOptional() lateMin?: number;
   /** Planned to be handed over this many minutes before its window opens. */

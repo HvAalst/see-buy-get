@@ -1,4 +1,4 @@
-import type { BusinessActivity, BusinessView, CarriageContract, CheckState, Membership, MemberRole, NewBusiness } from './api';
+import type { BusinessActivity, BusinessView, CarriageContract, CheckState, Membership, MemberRole, NewBusiness, PostedLoad } from './api';
 import type { Translate } from '../../shared/i18n';
 
 /** Where somebody is in the Business app. */
@@ -127,6 +127,31 @@ export function loadStage(l: { status: string; openProposals: number; pickedUpAt
   // P1 — with the contract carrier, waiting to be put on one of its trucks. Never on the board, never offered prices.
   if (l.status === 'ordered') return 'ordered';
   return l.openProposals > 0 ? 'offers' : 'posted';
+}
+
+/** A span of minutes as somebody says it — "40 minutes", "1 hour", "2 hours 05 minutes" — in the words the notice of it uses. */
+export function spanWords(minutes: number): string {
+  const m = Math.max(1, Math.round(minutes));
+  const h = Math.floor(m / 60);
+  const hours = h === 1 ? '1 hour' : `${h} hours`;
+  if (h === 0) return m === 1 ? '1 minute' : `${m} minutes`;
+  return m % 60 === 0 ? hours : `${hours} ${String(m % 60).padStart(2, '0')} minutes`;
+}
+
+/**
+ * A PLAN THAT MISSES THE WINDOW, as the shipper reads it: a few words for the load's row, and the whole of it on the
+ * load. Nothing when the carrier's plan has it inside the window, or there is no plan. Always "about": a plan's time
+ * is an estimate, and the words must not make a promise of it.
+ */
+export function windowMiss(o: PostedLoad['outsideWindow'], t: Translate): { row: string; full: string } | null {
+  const late = o?.lateMin ? true : o?.earlyMin ? false : null;
+  if (!o || late === null) return null;
+  const by = spanWords(o.lateMin ?? o.earlyMin ?? 0);
+  const asked = o.window ? t('business.loads.win.asked', { window: o.window }) : t('business.loads.win.askedPlain');
+  return {
+    row: t(late ? 'business.loads.win.late' : 'business.loads.win.early', { at: o.arrive, by }),
+    full: t(late ? 'business.loads.win.lateFull' : 'business.loads.win.earlyFull', { at: o.arrive, day: o.day, by, asked }),
+  };
 }
 
 /** P1 — the day after `now`, as YYYY-MM-DD in the reader's own calendar: next-day delivery is the ordinary order. */

@@ -115,6 +115,12 @@ export const NOTIFICATION_KINDS = [
    */
   'order_handed_on',
   'order_split',
+  /**
+   * The carrier's plan for the day has an order outside the window its shipper asked for — or, after that was said,
+   * inside it again. Said to the shipper when the plan is accepted: the day before is when it can still ring the
+   * door, or the carrier.
+   */
+  'order_window',
   /** A fleet offered this driver a place, or took the offer back. Only the driver can answer it, so only they are told. */
   'fleet_offer',
   /**
@@ -128,7 +134,7 @@ export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 /**
  * One inbox entry (N2). Every notification we push is ALSO recorded here, so the in-app notification
  * centre can show history and an unread count even on a device that never enabled push (or missed the
- * live message). `readAt` is set when the owner opens/marks it. Durable — a user's notification history
+ * live message). `readAt` is set when the owner opens/marks it — once: who read a shared notice first stays who read it. Durable — a user's notification history
  * must survive a restart.
  */
 export interface NotificationRecord {
@@ -141,6 +147,8 @@ export interface NotificationRecord {
   data?: Record<string, unknown>;
   createdAt: string;
   readAt?: string;
+  /** Who read it, where the inbox is one several people share (a business's). Absent in a person's own. */
+  readBy?: string;
 }
 
 /**

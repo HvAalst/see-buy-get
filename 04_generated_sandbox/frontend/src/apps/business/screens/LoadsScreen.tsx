@@ -6,7 +6,7 @@ import { SitePicker, type SiteView } from '../../tower/screens/SitePicker';
 import { QuotePanel } from '../../tower/screens/QuotePanel';
 import { NATURES, PACKAGING_OPTIONS } from '../../agent/logic';
 import type { BusinessClient, BusinessView, CarriageContract, LoadProposal, PostedLoad } from '../api';
-import { loadGaps, loadStage, mayAct, nextDay, orderableContracts, type LoadForm, type LoadStage } from '../logic';
+import { loadGaps, loadStage, mayAct, nextDay, orderableContracts, windowMiss, type LoadForm, type LoadStage } from '../logic';
 import { SentFor } from './SentFor';
 import type { BusinessActions } from '../useBusinessApp';
 
@@ -99,6 +99,7 @@ export function LoadsScreen({ business, client }: { business: BusinessView; acti
           <div class="crows">
             {rows.map((r) => {
               const stage = loadStage(r);
+              const miss = windowMiss(r.outsideWindow, t);
               return (
                 <button type="button" class="crow" key={r.freightId} onClick={() => setOpen(r)}>
                   <span class="crow__body">
@@ -113,8 +114,16 @@ export function LoadsScreen({ business, client }: { business: BusinessView; acti
                       {r.carrier?.driverName ? ` · ${t('business.loads.carriedBy', { who: r.carrier.driverName })}` : ''}
                       {r.onBehalfOf ? ` · ${t('business.sentFor.forClient', { name: r.onBehalfOf.name })}` : ''}
                       {r.contract ? ` · ${t('business.loads.withCarrier', { fleet: r.contract.fleetName, day: r.deliverOn ?? '' })}` : ''}
-                      {r.partOf ? ` · ${t('business.loads.loadOf', { no: r.partOf.no, of: r.partOf.of, order: r.partOf.rootCode })}` : ''}
                     </span>
+                    {/* What a row must not lose to an ellipsis: which load of an order this is, and a plan outside the
+                        window. The line above gives way to the width; this one wraps. */}
+                    {r.partOf || miss ? (
+                      <span class="biz-loads__flags">
+                        {r.partOf ? <span class="ctag ctag--quiet">{t('business.loads.loadOf', { no: r.partOf.no, of: r.partOf.of, order: r.partOf.rootCode })}</span> : null}
+                        {miss ? <span class="ctag ctag--warn">{t('business.loads.win.tag')}</span> : null}
+                        {miss ? <span>{miss.row}</span> : null}
+                      </span>
+                    ) : null}
                   </span>
                 </button>
               );
@@ -346,6 +355,7 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
 function LoadDetail({ row, client, act, onClose, onChanged }: { row: PostedLoad; client: BusinessClient | null; act: boolean; onClose: () => void; onChanged: (message?: string) => void | Promise<void> }) {
   const t = useT();
   const stage = loadStage(row);
+  const miss = windowMiss(row.outsideWindow, t);
   const [proposals, setProposals] = useState<LoadProposal[] | null>(null);
   const [quote, setQuote] = useState<QuoteView | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
@@ -412,6 +422,21 @@ function LoadDetail({ row, client, act, onClose, onChanged }: { row: PostedLoad;
                 {row.contract.reference ? ` · ${row.contract.reference}` : ''}
                 {row.deliverOn ? ` · ${t('business.loads.fact.arrivesOn', { day: row.deliverOn })}` : ''}
                 {row.orderRef ? ` · ${row.orderRef}` : ''}
+              </dd>
+            </div>
+          ) : null}
+          {row.partOf ? (
+            <div class="cons__fact">
+              <dt class="cons__factk">{t('business.loads.fact.order')}</dt>
+              <dd class="cons__factv">{t('business.loads.loadOfFull', { no: row.partOf.no, of: row.partOf.of, order: row.partOf.rootCode, kg: row.partOf.orderKg.toLocaleString() })}</dd>
+            </div>
+          ) : null}
+          {miss ? (
+            <div class="cons__fact">
+              <dt class="cons__factk">{t('business.loads.fact.plan')}</dt>
+              <dd class="cons__factv">
+                {miss.full}
+                <span class="chint"> {t('business.loads.win.estimate', { fleet: row.contract?.fleetName ?? '' })}</span>
               </dd>
             </div>
           ) : null}

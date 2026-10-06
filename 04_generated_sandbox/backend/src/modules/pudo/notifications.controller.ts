@@ -1,9 +1,11 @@
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { Public } from '../../foundation/auth/public.decorator';
 import { Scopes } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { actingDid } from '../../foundation/auth/acting';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
+import { GlosError } from '../../foundation/http/glos-error';
+import { BusinessMemberGuard } from './business-member.guard';
 import { NotificationService } from './notification.service';
 import { SubscribeDto, UnsubscribeDto } from './notification.dto';
 
@@ -17,8 +19,15 @@ import { SubscribeDto, UnsubscribeDto } from './notification.dto';
  * `notification:manage:self` scope (see actor-scopes.ts), so the routes are labelled for STRICT authz.
  * The VAPID public key is @Public by design: it is the `applicationServerKey`, not a secret, and the
  * browser must read it before it holds any token at all.
+ *
+ * A BUSINESS SIGN-IN READS ITS BUSINESS'S INBOX. The token acts as the business, so the inbox is the business's and
+ * its people share it: what one of them has read is read. Two things follow, and both are decided here rather than on
+ * a screen. Whether the person is still in the business is asked on every request (the member guard), so somebody
+ * taken out reads nothing more; and a viewer, who changes nothing, cannot mark a notice read for the others. And a
+ * business is given NO DEVICE: see `noDeviceFor`.
  */
 @Controller('sbg/notifications')
+@UseGuards(BusinessMemberGuard)
 export class NotificationsController {
   constructor(private readonly notifications: NotificationService) {}
 
@@ -33,6 +42,7 @@ export class NotificationsController {
   @Scopes('notification:manage:self')
   @Post('subscribe')
   subscribe(@Body() dto: SubscribeDto, @Actor() actor: IntrospectionResult) {
+    this.noDeviceFor(actor);
     const record = this.notifications.subscribe(actingDid(actor), actor.role ?? 'anon', {
       endpoint: dto.endpoint,
       keys: dto.keys,
@@ -52,6 +62,7 @@ export class NotificationsController {
   @Scopes('notification:manage:self')
   @Post('test')
   async test(@Actor() actor: IntrospectionResult) {
+    this.noDeviceFor(actor);
     const devices = await this.notifications.pushToOwner(actingDid(actor), {
       kind: 'test',
       title: 'Notifications are on',
@@ -76,7 +87,7 @@ export class NotificationsController {
   @Scopes('notification:manage:self')
   @Post('inbox/:id/read')
   markRead(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
-    this.notifications.markRead(actingDid(actor), id);
+    this.notifications.markRead(actingDid(actor), id, readerOf(actor));
     return { ok: true };
   }
 
@@ -84,7 +95,21 @@ export class NotificationsController {
   @Scopes('notification:manage:self')
   @Post('inbox/read-all')
   markAllRead(@Actor() actor: IntrospectionResult) {
-    this.notifications.markAllRead(actingDid(actor));
+    this.notifications.markAllRead(actingDid(actor), readerOf(actor));
     return { ok: true };
   }
+
+  /**
+   * A BUSINESS'S NOTICES ARE READ IN THE APP, never sent to a device. A device enrolled under the business would go on
+   * receiving them after its owner was taken out of the business, and — on a desk an office shares — after they had
+   * signed out: nothing asks the member guard when a push leaves. Refused on the act, with the reason.
+   */
+  private noDeviceFor(actor: IntrospectionResult): void {
+    if (actor?.role === 'business') throw new GlosError('FORBIDDEN', 'A business’s notices are read in the Business app, by its own people. They are not sent to a device.');
+  }
+}
+
+/** An inbox several people share says who read a notice. A person's own inbox has nobody else to name. */
+function readerOf(actor: IntrospectionResult): string | undefined {
+  return actor?.role === 'business' ? actor.actorName : undefined;
 }

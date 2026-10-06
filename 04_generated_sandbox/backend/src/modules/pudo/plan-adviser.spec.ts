@@ -484,6 +484,39 @@ describe('the adviser over a day’s plan', () => {
     expect(out.ask.dayStart).toBe('06:00');
   });
 
+  it('keeps what the last question met, for staff: an answer, which failure, a decline as an answer — and never the key', async () => {
+    const { fleet } = setUp();
+    anOrder(fleet);
+    const t0 = Date.now();
+    const iso = (ms: number) => new Date(ms).toISOString();
+    const asks = (ms: number) => adviser.advise(fleet.did, { ask: { day: tomorrow() }, message: 'Why?' }, ms);
+    // Before anybody has asked, there is nothing to say of a last time.
+    expect(adviser.connection()).toEqual({ configured: true, model: 'claude-opus-5-5' });
+    claude.script.push(says('Because of the weight.'));
+    await asks(t0);
+    expect(adviser.connection()).toEqual({ configured: true, model: 'claude-opus-5-5', last: { at: iso(t0), ok: true } });
+    // It failed: staff read which kind, in the words the office was given.
+    claude.script.push(new Anthropic.RateLimitError(429, undefined, 'slow down', new Headers()));
+    await asks(t0 + 60_000);
+    expect(adviser.connection().last).toEqual({ at: iso(t0 + 60_000), ok: false, failed: 'busy' });
+    claude.script.push(new Anthropic.AuthenticationError(401, undefined, 'invalid x-api-key sk-ant-secret', new Headers()));
+    await asks(t0 + 120_000);
+    expect(adviser.connection().last).toEqual({ at: iso(t0 + 120_000), ok: false, failed: 'not_configured' });
+    expect(JSON.stringify(adviser.connection())).not.toContain('sk-ant');
+    // A round that worked and then one that did not: the last call is the one that is kept.
+    claude.script.push(replans({ day_start: '06:00' }), new Anthropic.APIConnectionError({ message: 'no route' }));
+    await asks(t0 + 180_000);
+    expect(adviser.connection().last).toEqual({ at: iso(t0 + 180_000), ok: false, failed: 'unreachable' });
+    // A decline is an answer: the service is there, and would not say this.
+    claude.script.push(says('No', 'refusal'));
+    await asks(t0 + 240_000);
+    expect(adviser.connection().last).toEqual({ at: iso(t0 + 240_000), ok: true });
+    // With no key nobody is called, and what the last call met stands as it was.
+    claude.isConfigured = false;
+    await asks(t0 + 300_000);
+    expect(adviser.connection()).toEqual({ configured: false, model: 'claude-opus-5-5', last: { at: iso(t0 + 240_000), ok: true } });
+  });
+
   /* ------------------------------------------------------ the conversation -- */
 
   it('carries the talk so far as plain words, starting with the dispatcher, the newest turns only', async () => {

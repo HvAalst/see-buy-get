@@ -1,4 +1,4 @@
-import { createAgentApi, createOperatorApi, createSeededClient, makeConfig, publicRequest, type AgentApi, type OperatorApi, type Result, type SbgConfig, type SeededAppClient } from '../../lib/sbg';
+import { createAgentApi, createNotificationsApi, createOperatorApi, createSeededClient, makeConfig, publicRequest, type AgentApi, type NotificationsApi, type OperatorApi, type Result, type SbgConfig, type SeededAppClient } from '../../lib/sbg';
 import type { QuoteView } from '../../shared/quote';
 
 const APP_VERSION = '1.0.0';
@@ -160,6 +160,8 @@ export interface PostedLoad {
   code: string;
   /** One load of an order its carrier brings in several: which one, of how many, of which order. */
   partOf?: { rootCode: string; no: number; of: number; orderKg: number };
+  /** The carrier's accepted plan has it outside the window asked for: about when, the window as the plan read it, by how much. */
+  outsideWindow?: { day: string; arrive: string; window?: string; lateMin?: number; earlyMin?: number };
   description: string;
   destLabel: string;
   weightKg: number;
@@ -253,6 +255,8 @@ export interface BusinessClient {
   api: OperatorApi;
   /** The shipper's calls the Shop app already speaks — posted loads, proposals, runs, bookings, notes, claims. */
   shipping: AgentApi;
+  /** The business's inbox: what a carrier or the network told it. Made once per session, so the bell reads it once. */
+  notifications: NotificationsApi;
   client: SeededAppClient;
   postLoad(load: NewLoad): Promise<Result<PostedLoad & { settlement?: string }>>;
   freightQuote(freightId: string): Promise<Result<{ quote: QuoteView | null }>>;
@@ -282,6 +286,7 @@ export function createBusinessClient(): BusinessClient {
   return {
     api: createOperatorApi(client.sbg),
     shipping: createAgentApi(client.sbg),
+    notifications: createNotificationsApi(client.sbg),
     client,
     postLoad: (load) => call((c) => c.POST('/v1/sbg/dispatch/freight' as never, { body: load } as never) as never),
     freightQuote: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/quote` as never, {} as never) as never),

@@ -44,7 +44,7 @@ export const NAV_GROUPS: NavGroup[] = [
     screens: ['hazards', 'claims', 'disposal', 'approvals', 'businesses', 'papers', 'imports', 'reports', 'support'],
   },
   { key: 'money', labelKey: 'tower.group.money', icon: 'wallet', screens: ['money'] },
-  { key: 'setup', labelKey: 'tower.group.setup', icon: 'edit', screens: ['settings', 'companies', 'company', 'rates', 'corridors', 'borders', 'presence', 'pictures'] },
+  { key: 'setup', labelKey: 'tower.group.setup', icon: 'edit', screens: ['settings', 'companies', 'company', 'rates', 'corridors', 'borders', 'presence', 'pictures', 'connections'] },
 ];
 
 /**
@@ -77,6 +77,7 @@ export const SCREEN_META: Record<Screen, { labelKey: MessageKey; icon: IconName 
   presence: { labelKey: 'tower.nav.presence', icon: 'pin' },
   depots: { labelKey: 'tower.nav.depots', icon: 'box' },
   pictures: { labelKey: 'tower.nav.pictures', icon: 'camera' },
+  connections: { labelKey: 'tower.nav.connections', icon: 'repeat' },
 };
 
 /** Which group a screen lives in. Every screen has exactly one home. */

@@ -650,6 +650,13 @@
   opacity: 0.5;
 }
 
+/* An inbox several people share says so, once, where the device controls would be. */
+.nlist__shared {
+  padding: 4px 0 12px;
+  border-bottom: 1px solid var(--bd-soft);
+  margin: 0 0 6px;
+}
+
 /* The inbox list. */
 .nlist__head {
   display: flex;

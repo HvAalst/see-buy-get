@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { NotificationsApi } from '../lib/sbg';
-import { enablePush, isPushSupported, loadInbox, relativeTime, urlBase64ToUint8Array } from './push';
+import { enablePush, isPushSupported, loadInbox, relativeTime, urlBase64ToUint8Array, whenLine } from './push';
 
 /** The real dev-default VAPID public key the backend serves (a base64url uncompressed P-256 point). */
 const VAPID = 'BGdKs8o8SwKFtZWmRYPEy5j8tccJ2bbBzExTX0xJW2qzb6ft9Rot26iGI9p4u5_5e0jXTskaRLJrNW7p3oIP37U';
@@ -91,6 +91,19 @@ describe('relativeTime', () => {
   it('returns empty for an unparseable date and clamps a future time', () => {
     expect(relativeTime('nonsense', base)).toBe('');
     expect(relativeTime('2026-08-02T12:05:00Z', base)).toBe('just now');
+  });
+});
+
+describe('whenLine', () => {
+  const base = Date.parse('2026-08-02T12:00:00Z');
+  const came = '2026-08-02T11:55:00Z';
+  it('says when a notice came, and who read it where the inbox is one several people share', () => {
+    expect(whenLine({ createdAt: came }, base)).toBe('5m ago');
+    expect(whenLine({ createdAt: came, readAt: '2026-08-02T11:58:00Z', readBy: 'Selam Owner' }, base)).toBe('5m ago · read by Selam Owner');
+  });
+  it('names nobody on a notice read in a person’s own inbox, and never on one still unread', () => {
+    expect(whenLine({ createdAt: came, readAt: '2026-08-02T11:58:00Z' }, base)).toBe('5m ago');
+    expect(whenLine({ createdAt: came, readBy: 'Selam Owner' }, base)).toBe('5m ago');
   });
 });
 

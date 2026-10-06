@@ -58,8 +58,8 @@
       <li><b>Store app</b><ol><li><a href="#store-sign-in">Signing in to a store</a></li><li><a href="#store-secret">Rotating the signing secret</a></li><li><a href="#api-keys">Shipping API keys</a></li><li><a href="#no-signal">When there is no signal</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
       <li><b>Send app</b><ol><li><a href="#change-pin">Changing your PIN</a></li><li><a href="#account-recovery">Your recovery email, a new phone number, and getting back in</a></li><li><a href="#send-sign-in">Signing in to send or collect</a></li><li><a href="#message-shop">A word between a customer and the shop</a></li><li><a href="#no-signal">When there is no signal</a></li><li><a href="#freight-tracking">Where is my load: the tracking link, and rating the driver</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
       <li><b>Front door</b><ol><li><a href="#which-sign-in">Which app, and what you sign in with</a></li><li><a href="#business-sign-in">The Business app: signing in and setting up</a></li><li><a href="#send-sign-in">Signing in to send or collect</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
-      <li><b>Operator console</b><ol><li><a href="#fleet-code">The fleet code, and issuing a new one</a></li><li><a href="#console-staff">Staff sign-in</a></li><li><a href="#console-setup-key">The setup key</a></li><li><a href="#console-company">Signing in for a company</a></li><li><a href="#two-person">Decisions that need two people</a></li><li><a href="#business-check">SeeBuyGet checking a business</a></li><li><a href="#quotations">Quotations, proforma invoices, and saying it is paid</a></li><li><a href="#papers-that-expire">Papers that run out: insurance, inspection, licence</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
-      <li><b>Business app</b><ol><li><a href="#business-sign-in">The Business app: signing in and setting up</a></li><li><a href="#business-people">The people in a business</a></li><li><a href="#business-loads">Posting a load as a business</a></li><li><a href="#business-contracts">Ordering with a carrier you have a contract with</a></li><li><a href="#business-clients">Sending for your clients, as their agent</a></li><li><a href="#business-runs">Booking space on a carrier’s run</a></li><li><a href="#quotations">Quotations, proforma invoices, and saying it is paid</a></li><li><a href="#business-check">SeeBuyGet checking a business</a></li></ol></li>
+      <li><b>Operator console</b><ol><li><a href="#fleet-code">The fleet code, and issuing a new one</a></li><li><a href="#console-staff">Staff sign-in</a></li><li><a href="#console-setup-key">The setup key</a></li><li><a href="#console-company">Signing in for a company</a></li><li><a href="#console-connections">Connections: the routing server and the adviser</a></li><li><a href="#two-person">Decisions that need two people</a></li><li><a href="#business-check">SeeBuyGet checking a business</a></li><li><a href="#quotations">Quotations, proforma invoices, and saying it is paid</a></li><li><a href="#papers-that-expire">Papers that run out: insurance, inspection, licence</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
+      <li><b>Business app</b><ol><li><a href="#business-sign-in">The Business app: signing in and setting up</a></li><li><a href="#business-people">The people in a business</a></li><li><a href="#business-bell">The bell: what your business was told</a></li><li><a href="#business-loads">Posting a load as a business</a></li><li><a href="#business-contracts">Ordering with a carrier you have a contract with</a></li><li><a href="#business-clients">Sending for your clients, as their agent</a></li><li><a href="#business-runs">Booking space on a carrier’s run</a></li><li><a href="#quotations">Quotations, proforma invoices, and saying it is paid</a></li><li><a href="#business-check">SeeBuyGet checking a business</a></li></ol></li>
     </ol>
   </nav>
   <main>
@@ -282,6 +282,22 @@
   <p class="note">Importers, clearing agents and other customers do not sign in here: they use the Business app.</p>
 </section>
 
+<section class="article" id="console-connections">
+  <h2>Connections: the routing server and the adviser</h2>
+  <p class="in">Operator console</p>
+  <p class="lede">The Connections screen says whether the two services behind the fleets’ planning are set up, and whether they are answering.</p>
+  <ol>
+    <li>Open Connections, under Setup. Only SeeBuyGet staff see it.</li>
+    <li>Read the word beside each service: Not set up, Set up and not asked yet, Answering, or Not answering. The line under it says what the last plan, or the last office to ask, met.</li>
+    <li>For the routing server, tap Check it now. It asks for the road distance between a fleet’s depot and a place a little way off it, and says what came back.</li>
+  </ol>
+  <p class="note">A routing server that is not set up, or not answering, stops nothing. Each day’s plan is made on estimated distances instead, and says so to the office that made it.</p>
+  <p class="note">If a check answers with a distance that cannot be right for two places that close together, the routing server may hold another country’s map.</p>
+  <p class="note">The adviser is not checked from here, because every question to it is paid for. What the last office’s question met says whether it is answering.</p>
+  <p class="note">Both services are set where the server runs, not on this screen. The routing server’s address is shown without anything secret in it, and the adviser’s key is never shown.</p>
+  <p class="note">What each service last met is kept only since the server started. After a restart, check the routing server again.</p>
+</section>
+
 <section class="article" id="two-person">
   <h2>Decisions that need two people</h2>
   <p class="in">Operator console</p>
@@ -325,6 +341,20 @@
   <p class="note">Changing the business’s name or registration number puts it back to not checked: those are what was checked.</p>
 </section>
 
+<section class="article" id="business-bell">
+  <h2>The bell: what your business was told</h2>
+  <p class="in">Business app</p>
+  <p class="lede">What a carrier or SeeBuyGet tells your business is kept under the bell at the top of the Business app.</p>
+  <ol>
+    <li>Tap the bell. The number on it is how many notices nobody in the business has read yet.</li>
+    <li>Tap a notice to read all of it. That marks it read for everybody in the business, and it then says who read it.</li>
+    <li>Mark all read clears the number in one go.</li>
+  </ol>
+  <p class="note">The inbox belongs to the business, not to you alone: everybody in the business reads the same one.</p>
+  <p class="note">Somebody who can only view the business can read every notice but cannot mark one read. It stays unread until somebody who can act on it has read it.</p>
+  <p class="note">Notices are not sent to a phone or a computer. Open the Business app to read them. Somebody taken out of the business stops seeing them straight away.</p>
+</section>
+
 <section class="article" id="business-loads">
   <h2>Posting a load as a business</h2>
   <p class="in">Business app</p>
@@ -361,7 +391,8 @@
   </ol>
   <p class="note">The price and how you pay are on your own contract with the carrier. SeeBuyGet keeps the order, the note and the tracking — never the money.</p>
   <p class="note">An owner can end a contract under Carriers. Loads already ordered are still delivered.</p>
-  <p class="note">An order that is more than one vehicle carries may be brought in several loads by your carrier. You are told, each load shows in your list as load 1 of 2, and either tracking link shows them all.</p>
+  <p class="note">An order that is more than one vehicle carries may be brought in several loads by your carrier. You are told under the bell, each load says Load 1 of 2 in your list, and either tracking link shows them all.</p>
+  <p class="note">If your carrier’s plan for the day has a load arriving outside the delivery window you asked for, you are told under the bell, and the load says Outside your window with about when it is planned and by how much. A plan’s time is an estimate and your carrier can still plan the day again. If it cannot work, speak to your carrier.</p>
 </section>
 
 <section class="article" id="business-clients">
@@ -529,6 +560,7 @@
   <p class="note">The plan never loads a truck past what it carries, never makes a day longer than you set (13 hours at most), and sends out no more vehicles than you have drivers.</p>
   <p class="note">The plan will leave one order out when that lets it deliver more of the others: a far, heavy load can hold a truck that three nearer orders would fill. It never gives one order up for one. What is left out is listed with its reason and counted in the trucks you are short.</p>
   <p class="note">A window is read when it is written as hours: 8-12, 08:00-12:00, before 14:00, after 9, 2pm-5pm. Words such as morning, or hours that could be either half of the day (1-5), are not read: the order is planned to its day only and says so. Nothing is ever left out because of a window.</p>
+  <p class="note">When you accept a plan that has a shipper’s order outside the window they asked for, that shipper is told about when it is planned and by how much. Accepting the day again tells them again only if the plan has moved by half an hour or more, and once more if it is now inside their window. An order your own office typed in or uploaded has nobody to tell.</p>
 </section>
 
 <section class="article" id="fleet-plan-adviser">

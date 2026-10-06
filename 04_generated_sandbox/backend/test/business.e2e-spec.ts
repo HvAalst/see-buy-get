@@ -116,6 +116,11 @@ describe('a customer’s business, over the wire', () => {
     // A viewer reads, and changes nothing — on the import routes as much as on the business's own.
     await http().get('/v1/sbg/imports').set(bearer(viewerBiz)).expect(200);
     await http().post('/v1/sbg/imports').set(bearer(viewerBiz)).send({ goodsDescription: 'x', originCountry: 'NL', destCountry: 'ET', destPort: 'Modjo' }).expect(403);
+    // The business's inbox is its people's: a viewer reads it and marks nothing read for the others.
+    expect((await http().get('/v1/sbg/notifications/inbox').set(bearer(viewerBiz)).expect(200)).body).toEqual({ items: [], unread: 0 });
+    await http().post('/v1/sbg/notifications/inbox/read-all').set(bearer(viewerBiz)).expect(403);
+    await http().post('/v1/sbg/notifications/inbox/ntf_none/read').set(bearer(viewerBiz)).expect(403);
+    await http().get('/v1/sbg/notifications/inbox').set(bearer(bookerBiz)).expect(200);
     // Only an owner manages people.
     await http().post('/v1/sbg/business/me/members').set(bearer(bookerBiz)).send({ phone: '+251911000999', name: 'X', role: 'owner' }).expect(403);
 
@@ -123,6 +128,7 @@ describe('a customer’s business, over the wire', () => {
     await http().post('/v1/sbg/imports').set(bearer(bookerBiz)).send({ goodsDescription: 'Spare parts', originCountry: 'CN', destCountry: 'ET', destPort: 'Modjo' }).expect(201);
     await http().delete(`/v1/sbg/business/me/members/${bookerRow.body.memberId}`).set(bearer(ownerBiz)).expect(200);
     await http().get('/v1/sbg/imports').set(bearer(bookerBiz)).expect(403);
+    await http().get('/v1/sbg/notifications/inbox').set(bearer(bookerBiz)).expect(403);
 
     // A viewer may leave: that changes only their own place.
     const me = await http().get('/v1/sbg/business/me').set(bearer(viewerBiz)).expect(200);
@@ -342,9 +348,30 @@ describe('a customer’s business, over the wire', () => {
     const seenLoads = (await http().get(`/v1/sbg/track/${ordered.body.trackingKey}`).expect(200)).body;
     expect(seenLoads).toMatchObject({ partOf: { no: 1, of: 2, orderKg: 4000 }, weightKg: 2500 });
     expect(seenLoads.loads.map((l: { no: number; weightKg: number; status: string }) => [l.no, l.weightKg, l.status])).toEqual([[1, 2500, 'ordered'], [2, 1500, 'ordered']]);
+    // The shipper is told — and has somewhere to read it: the business's own inbox, which its sign-in opens. Nobody
+    // else's does: not another business, not the person's own sign-in, and no device is enrolled for a business.
+    const inboxAt = '/v1/sbg/notifications/inbox';
+    const told = (await http().get(inboxAt).set(bearer(shop)).expect(200)).body;
+    const notice = told.items.find((n: { kind: string }) => n.kind === 'order_split');
+    expect(notice).toMatchObject({ title: `Kilima ${tag} will bring ${ordered.body.code} in 2 loads` });
+    expect(notice.body).toContain('4 t');
+    expect(notice.readAt).toBeUndefined();
+    expect(told.unread).toBe(told.items.length);
+    expect((await http().get(inboxAt).set(bearer(otherBiz)).expect(200)).body.items).toEqual([]);
+    expect((await http().get(inboxAt).set(bearer(owner.token)).expect(200)).body.items.map((n: { kind: string }) => n.kind)).not.toContain('order_split');
+    await http().post(`${inboxAt}/${notice.id}/read`).set(bearer(otherBiz)).expect(201);
+    expect((await http().get(inboxAt).set(bearer(shop)).expect(200)).body.items.find((n: { id: string }) => n.id === notice.id).readAt).toBeUndefined();
+    await http().post('/v1/sbg/notifications/subscribe').set(bearer(shop)).send({ endpoint: 'https://push.example/abc', keys: { p256dh: 'p', auth: 'a' } }).expect(403);
+    await http().post('/v1/sbg/notifications/test').set(bearer(shop)).expect(403);
+    // Read by one of its people, it is read — and says by whom, because the inbox is one they share.
+    await http().post(`${inboxAt}/${notice.id}/read`).set(bearer(shop)).expect(201);
+    const read = (await http().get(inboxAt).set(bearer(shop)).expect(200)).body;
+    expect(read.items.find((n: { id: string }) => n.id === notice.id)).toMatchObject({ readBy: 'Baraka Owner' });
+    expect(read.unread).toBe(told.unread - 1);
     await http().post(`${splitAt}/rejoin`).set(bearer(shop)).send({}).expect(403);
     expect((await http().post(`${splitAt}/rejoin`).set(bearer(setupKey)).send({}).expect(201)).body.loads).toEqual([{ freightId: ordered.body.freightId, code: ordered.body.code, weightKg: 4000, no: 1, of: 1 }]);
     await http().post(`${splitAt}/rejoin`).set(bearer(setupKey)).send({}).expect(400);
+    expect((await http().get(inboxAt).set(bearer(shop)).expect(200)).body.items.map((n: { title: string }) => n.title)).toContain(`Kilima ${tag} will bring ${ordered.body.code} in one load after all`);
     expect((await http().get(`/v1/sbg/track/${ordered.body.trackingKey}`).expect(200)).body.loads).toBeUndefined();
 
     // The office withdraws what it uploaded; what the shipper ordered is the shipper's to withdraw.
@@ -367,6 +394,26 @@ describe('a customer’s business, over the wire', () => {
     expect(proposal.body.distances).toEqual({ source: 'estimate' });
     await http().post(`${planAt}/accept`).set(bearer(setupKey)).send({ day: tomorrow }).expect(400);
     expect((await http().get(planAt).query({ day: tomorrow }).set(bearer(setupKey)).expect(200)).body).toEqual({ day: tomorrow, leftOut: 0, newSince: 0, withdrawnSince: 0 });
+    // What this server is connected to is the operator's to read, and nobody else's: not a business, not a person.
+    await http().get('/v1/sbg/connections').set(bearer(shop)).expect(403);
+    await http().get('/v1/sbg/connections').set(bearer(owner.token)).expect(403);
+    await http().get('/v1/sbg/connections').expect(401);
+    await http().post('/v1/sbg/connections/router/check').set(bearer(shop)).expect(403);
+    delete process.env.GLOS_ROUTER_URL;
+    const conn = (await http().get('/v1/sbg/connections').set(bearer(setupKey)).expect(200)).body;
+    expect(conn.router).toEqual({ configured: false, profile: 'driving', maxPoints: 100 });
+    expect(conn.adviser).toMatchObject({ model: 'claude-opus-5-5' });
+    expect(Date.parse(conn.since)).toBeLessThanOrEqual(Date.now());
+    expect((await http().post('/v1/sbg/connections/router/check').set(bearer(setupKey)).expect(201)).body).toMatchObject({ ok: false, why: 'no routing server is configured' });
+    // An address nothing answers on: set, and the check says in a plan's own words what it met. No key is echoed.
+    process.env.GLOS_ROUTER_URL = 'http://user:hunter2@127.0.0.1:9/osrm';
+    expect((await http().get('/v1/sbg/connections').set(bearer(setupKey)).expect(200)).body.router).toEqual({ configured: true, host: '127.0.0.1:9', profile: 'driving', maxPoints: 100 });
+    const routerSays = (await http().post('/v1/sbg/connections/router/check').set(bearer(setupKey)).expect(201)).body;
+    expect(routerSays).toMatchObject({ ok: false, why: 'the routing server could not be reached' });
+    expect(routerSays.near).toEqual(expect.any(String));
+    expect(routerSays.apartKm).toBeGreaterThan(1);
+    expect(JSON.stringify(routerSays)).not.toContain('hunter2');
+    delete process.env.GLOS_ROUTER_URL;
     // P3b — trips go out on their own day, from an accepted plan, and only the office sends them.
     await http().post(`${planAt}/send`).set(bearer(shop)).send({ day: tomorrow }).expect(403);
     await http().post(`${planAt}/send`).set(bearer(setupKey)).send({ day: tomorrow }).expect(400);

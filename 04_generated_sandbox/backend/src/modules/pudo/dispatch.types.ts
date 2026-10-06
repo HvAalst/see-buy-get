@@ -91,6 +91,20 @@ export class LoadOf {
   by: string;
 }
 
+/**
+ * THE CARRIER'S PLAN HAS THIS ORDER OUTSIDE THE WINDOW ITS SHIPPER ASKED FOR — as the shipper is shown it. About when
+ * the plan has it at the door, the window as the plan read it, and by how much it misses: after it closes, or before
+ * it opens (a day that leaves the truck no room to wait). A plan's time is an estimate, and the day can be planned
+ * again; what is here is what the plan the carrier last accepted says.
+ */
+export class OutsideWindow {
+  day: string;
+  arrive: string;
+  @ApiPropertyOptional() window?: string;
+  @ApiPropertyOptional() lateMin?: number;
+  @ApiPropertyOptional() earlyMin?: number;
+}
+
 /** A load as the tracking page lists it beside the others of its order. */
 export class TrackLoad {
   no: number;
@@ -411,6 +425,11 @@ export class Freight {
   @ApiPropertyOptional({ type: LoadOf }) partOf?: LoadOf;
   /** A load that was put back together with the rest of its order: the id of the order. It is in no list from then on. */
   @ApiPropertyOptional() rejoinedInto?: string;
+  /**
+   * What its shipper was last told about the plan missing the window it asked for, and when. Kept so that accepting a
+   * day's plan again says nothing new unless there is something new; gone once the shipper has been told it is inside.
+   */
+  @ApiPropertyOptional() windowTold?: { lateMin?: number; earlyMin?: number; at: string };
   /**
    * WHO the network owed for this haul, and on whose books — fixed when it was accrued at delivery. A claim
    * upheld weeks later takes the money back from this same party: never from whichever fleet the driver has
@@ -963,6 +982,8 @@ export class PostedFreightRow {
   code: string;
   /** One load of an order its carrier split into several. */
   @ApiPropertyOptional({ type: LoadOf }) partOf?: LoadOf;
+  /** The carrier's accepted plan has it outside the window asked for. Absent when it is inside it, or not planned. */
+  @ApiPropertyOptional({ type: OutsideWindow }) outsideWindow?: OutsideWindow;
   description: string;
   destLabel: string;
   weightKg: number;

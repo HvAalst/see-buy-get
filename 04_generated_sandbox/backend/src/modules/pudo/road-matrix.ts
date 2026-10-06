@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { GeoPoint } from './pudo.types';
 import { ROUTER, Router } from './router';
+import type { RouterAsk, RouterCheck, RouterConnection } from './connections.types';
 
 /**
  * ROAD DISTANCES FOR A DAY'S PLAN — every place to every other, by road, asked for once.
@@ -76,10 +77,17 @@ export function readTable(body: unknown, n: number): Array<Array<number | null>>
   return rows;
 }
 
+const NOT_A_TABLE = 'the routing server sent something that is not a table of distances';
+
 @Injectable()
 export class OsrmRoadMatrix implements RoadMatrix {
   private readonly logger = new Logger(OsrmRoadMatrix.name);
   private readonly kept = new Map<string, { at: number; table: Array<Array<number | null>>; places: string[] }>();
+  /**
+   * What became of the last time a plan asked, since this server started — so staff can see a routing server that is
+   * set and silent. A table reused from a few minutes ago is not an ask, and leaves this as it was.
+   */
+  private last?: RouterAsk;
   /** The platform's fetch; a test puts its own here. */
   fetcher: (url: string, init: { signal: AbortSignal; headers: Record<string, string> }) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }> = (url, init) => fetch(url, init);
 
@@ -87,38 +95,80 @@ export class OsrmRoadMatrix implements RoadMatrix {
 
   /** Whether a routing server is configured at all. */
   configured(): boolean {
-    return Boolean((process.env.GLOS_ROUTER_URL ?? '').trim());
+    return Boolean(this.base());
+  }
+
+  private base(): string {
+    return (process.env.GLOS_ROUTER_URL ?? '').trim();
+  }
+  private profile(): string {
+    return (process.env.GLOS_ROUTER_PROFILE ?? '').trim() || 'driving';
+  }
+  private most(): number {
+    return Number(process.env.GLOS_ROUTER_MAX_POINTS) > 1 ? Math.floor(Number(process.env.GLOS_ROUTER_MAX_POINTS)) : ROAD_MAX_POINTS;
+  }
+
+  /**
+   * WHAT STAFF ARE SHOWN OF IT. The address as its host only — an address can carry a key — and, where what is set is
+   * not a web address at all, that: no plan can use it, and "configured" alone would have said all was well.
+   */
+  status(): RouterConnection {
+    const base = this.base();
+    let host: string | undefined;
+    try {
+      host = base ? new URL(base).host || undefined : undefined;
+    } catch {
+      host = undefined;
+    }
+    return { configured: Boolean(base), ...(host ? { host } : {}), ...(base && !host ? { invalid: true } : {}), profile: this.profile(), maxPoints: this.most(), ...(this.last ? { last: this.last } : {}) };
+  }
+
+  /**
+   * ASK IT NOW about two places, and say what came back. Never from a kept table, and never kept: the question is
+   * whether it is answering, and what. It does not count as a plan's ask either — `last` is what plans met.
+   */
+  async check(a: GeoPoint, b: GeoPoint, now: number = Date.now()): Promise<RouterCheck> {
+    const at = new Date(now).toISOString();
+    const base = this.base();
+    if (!base) return { at, ok: false, why: 'no routing server is configured' };
+    const started = performance.now();
+    const got = await this.ask(base, [a, b]);
+    const ms = Math.round(performance.now() - started);
+    if ('why' in got) return { at, ok: false, why: got.why, ms };
+    const metres = got.table[0][1];
+    return { at, ok: true, ...(metres === null ? { noRoad: true } : { km: Math.round(metres / 100) / 10 }), ms };
   }
 
   async between(points: GeoPoint[], now: number = Date.now()): Promise<RoadDistances> {
     const estimated = (why?: string): RoadDistances => ({ source: 'estimate', ...(why ? { why } : {}), km: (a, b) => this.estimate.roadKm(a, b) });
-    const base = (process.env.GLOS_ROUTER_URL ?? '').trim();
+    const base = this.base();
     if (!base) return estimated();
     const places = new Map<string, GeoPoint>();
     for (const p of points) if (p && Number.isFinite(p.lat) && Number.isFinite(p.lng)) places.set(placeKey(p), p);
     // One place or none: there is no leg to measure.
     if (places.size < 2) return estimated();
-    const most = Number(process.env.GLOS_ROUTER_MAX_POINTS) > 1 ? Math.floor(Number(process.env.GLOS_ROUTER_MAX_POINTS)) : ROAD_MAX_POINTS;
-    if (places.size > most) return estimated(`${places.size} places are more than the routing server takes in one request (${most})`);
+    const asked = (ok: boolean, why?: string): void => void (this.last = { at: new Date(now).toISOString(), ok, places: places.size, ...(why ? { why } : {}) });
+    const most = this.most();
+    if (places.size > most) {
+      const why = `${places.size} places are more than the routing server takes in one request (${most})`;
+      asked(false, why);
+      return estimated(why);
+    }
 
     const keys = [...places.keys()].sort();
     const id = `${base}|${keys.join('|')}`;
     let table = this.kept.get(id);
     if (!table || now - table.at > KEEP_MS) {
-      try {
-        const res = await this.fetcher(tableUrl(base, (process.env.GLOS_ROUTER_PROFILE ?? '').trim() || 'driving', keys.map((k) => places.get(k)!)), { signal: AbortSignal.timeout(ROAD_TIMEOUT_MS), headers: { accept: 'application/json' } });
-        if (!res.ok) return this.failed(estimated, `the routing server answered ${res.status}`);
-        const read = readTable(await res.json(), keys.length);
-        if (!read) return this.failed(estimated, 'the routing server sent something that is not a table of distances');
-        table = { at: now, table: read, places: keys };
-        this.kept.set(id, table);
-        // Oldest out: a table is cheap to ask for again.
-        while (this.kept.size > KEEP_TABLES) this.kept.delete(this.kept.keys().next().value as string);
-      } catch (e) {
-        const name = (e as { name?: string } | null)?.name;
-        if (name === 'SyntaxError') return this.failed(estimated, 'the routing server sent something that is not a table of distances');
-        return this.failed(estimated, name === 'TimeoutError' || name === 'AbortError' ? 'the routing server did not answer in time' : 'the routing server could not be reached');
+      const got = await this.ask(base, keys.map((k) => places.get(k)!));
+      if ('why' in got) {
+        asked(false, got.why);
+        return this.failed(estimated, got.why);
       }
+      asked(true);
+      table = { at: now, table: got.table, places: keys };
+      this.kept.set(id, table);
+      // Oldest out: a table is cheap to ask for again.
+      while (this.kept.size > KEEP_TABLES) this.kept.delete(this.kept.keys().next().value as string);
     }
     const at = new Map(table.places.map((k, i) => [k, i]));
     const grid = table.table;
@@ -134,6 +184,20 @@ export class OsrmRoadMatrix implements RoadMatrix {
         return metres === null ? this.estimate.roadKm(a, b) : metres / 1000;
       },
     };
+  }
+
+  /** One table request, and what came of it: the distances, or why there are none — in words a plan can carry. */
+  private async ask(base: string, places: GeoPoint[]): Promise<{ table: Array<Array<number | null>> } | { why: string }> {
+    try {
+      const res = await this.fetcher(tableUrl(base, this.profile(), places), { signal: AbortSignal.timeout(ROAD_TIMEOUT_MS), headers: { accept: 'application/json' } });
+      if (!res.ok) return { why: `the routing server answered ${res.status}` };
+      const read = readTable(await res.json(), places.length);
+      return read ? { table: read } : { why: NOT_A_TABLE };
+    } catch (e) {
+      const name = (e as { name?: string } | null)?.name;
+      if (name === 'SyntaxError') return { why: NOT_A_TABLE };
+      return { why: name === 'TimeoutError' || name === 'AbortError' ? 'the routing server did not answer in time' : 'the routing server could not be reached' };
+    }
   }
 
   private failed(estimated: (why?: string) => RoadDistances, why: string): RoadDistances {

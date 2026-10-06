@@ -72,6 +72,17 @@
   white-space: nowrap;
 }
 
+/* The bell and the account menu keep to the right together; the bell loses the phone bar's pull to the left. */
+.biz-mast__end {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.biz-mast__end .topbar__lead {
+  margin-left: 0;
+}
+
 .biz-note {
   display: flex;
   align-items: center;
@@ -112,6 +123,16 @@
 .biz-stars {
   display: flex;
   gap: 6px;
+}
+/* What a load's row must not lose to an ellipsis, on a line of its own that wraps at any width. */
+.biz-loads__flags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 4px;
+  color: var(--tx2);
+  font-size: var(--c-fs-sm);
 }
 .biz-loads__new {
   margin-bottom: 14px;

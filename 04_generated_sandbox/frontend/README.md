@@ -131,6 +131,10 @@ Both are optional, and the plan is whole without either.
 - **The adviser.** `ANTHROPIC_API_KEY` switches on "Ask about this plan". Without it the board says the adviser
   is not switched on. What is sent is said on the screen: the dispatcher's words and the plan.
 
+Staff read where both stand in the operator console, under Setup → **Connections**: set up or not, what the last
+plan (or the last office to ask the adviser) met since the server started, and a "Check it now" for the routing
+server. The address is shown as its host only and the key never; nothing is changed from that screen.
+
 ## Conventions
 - **Every slice names its screens.** A backend change with no surface is tracked ui-debt, not a shipped slice.
 - **i18n per slice**: new English keys go in `src/shared/i18n/catalogs/`; the other locales get a central

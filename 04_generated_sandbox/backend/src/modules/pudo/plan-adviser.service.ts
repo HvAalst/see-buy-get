@@ -5,6 +5,7 @@ import { ClaudeGateway, type ClaudeReply, type ClaudeRequest } from './claude.ga
 import { FleetPlanService, type PlanAsk } from './fleet-plan.service';
 import { DayPlanView } from './fleet-plan.types';
 import { AdviserFailure, AdviserTurn, PlanAdviceView, PlanAdviserStatus, PlanAskView } from './plan-adviser.types';
+import type { AdviserAsk, AdviserConnection } from './connections.types';
 
 /** The model the adviser runs on. */
 export const ADVISER_MODEL = 'claude-opus-5-5';
@@ -109,8 +110,16 @@ export class PlanAdviserService {
     private readonly claude: ClaudeGateway,
   ) {}
 
+  /** What became of the last call to the adviser since this server started, in the words an office is given. */
+  private last?: AdviserAsk;
+
   status(): PlanAdviserStatus {
     return { configured: this.claude.configured() };
+  }
+
+  /** What staff are shown: set up or not, the model asked, and what the last call met. Never the credential. */
+  connection(): AdviserConnection {
+    return { configured: this.claude.configured(), model: ADVISER_MODEL, ...(this.last ? { last: this.last } : {}) };
   }
 
   async advise(fleetDid: string, input: { ask: PlanAsk; message: string; history?: AdviserTurn[] }, now: number = Date.now()): Promise<PlanAdviceView> {
@@ -137,8 +146,12 @@ export class PlanAdviserService {
       try {
         reply = await this.claude.create(this.request(messages));
       } catch (e) {
-        return answer('', this.failureOf(e));
+        const failed = this.failureOf(e);
+        this.last = { at: new Date(now).toISOString(), ok: false, failed };
+        return answer('', failed);
       }
+      // It answered. A decline is an answer too: the service is there, and would not say this.
+      this.last = { at: new Date(now).toISOString(), ok: true };
       // A decline arrives as an ordinary reply: read why it stopped before reading what it said.
       if (reply.stop_reason === 'refusal') return answer('', 'declined');
 

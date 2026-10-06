@@ -460,6 +460,31 @@ describe('a fleet’s plan for a day', () => {
     });
   });
 
+  /**
+   * WHAT THE SHIPPER IS SHOWN. The window an accepted plan was made to is kept on the order as it was read then, so
+   * what the shipper's list says does not change when the shipper rewords what it asked for.
+   */
+  describe('a plan that misses a window, as the order’s shipper is shown it', () => {
+    it('keeps the window it was made to on the order, and shows the list about when and by how much', () => {
+      const { fleet } = setUp();
+      const late = anOrder(fleet, { kg: 1000, n: 2, window: 'before 07:05' });
+      const fine = anOrder(fleet, { kg: 1000, n: 3 });
+      const kept = plans.accept(fleet.did, { day: tomorrow() }, 'Amina');
+      const stop = kept.routes.flatMap((r) => r.trips.flatMap((t) => t.stops)).find((s) => s.freightId === late.freightId)!;
+      expect(stop.lateMin).toBeGreaterThan(0);
+      const mine = () => dispatch.postedBy(fleet.did);
+      expect(mine().find((r) => r.freightId === late.freightId)!.outsideWindow).toEqual({ day: tomorrow(), arrive: stop.arrive, window: 'before 07:05', lateMin: stop.lateMin });
+      expect(mine().find((r) => r.freightId === fine.freightId)!.outsideWindow).toBeUndefined();
+      // Reworded after the plan was accepted: the list still says what the plan was made to.
+      dispatch.setInstructions(late.freightId, fleet.did, { deliveryWindow: 'any time' });
+      expect(mine().find((r) => r.freightId === late.freightId)!.outsideWindow).toMatchObject({ window: 'before 07:05', lateMin: stop.lateMin });
+      // Planned again with the trucks leaving later: the figure follows the plan that was accepted last.
+      dispatch.setInstructions(late.freightId, fleet.did, { deliveryWindow: 'before 07:05' });
+      plans.accept(fleet.did, { day: tomorrow(), dayStart: '09:00' }, 'Amina');
+      expect(mine().find((r) => r.freightId === late.freightId)!.outsideWindow!.lateMin).toBe(stop.lateMin! + 120);
+    });
+  });
+
   /* --------------------------------------------------- an order in several loads -- */
 
   /**

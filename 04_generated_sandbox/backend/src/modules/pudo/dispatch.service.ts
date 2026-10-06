@@ -42,7 +42,7 @@ import { DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPAT
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
-import { BoardRow, Claimable, ClaimableKind, FleetOrderRow, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, MarketRow, MarketSeries, Offer, PostedFreightRow, RoutePlan, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS } from './dispatch.types';
+import { BoardRow, Claimable, ClaimableKind, FleetOrderRow, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, MarketRow, MarketSeries, Offer, OutsideWindow, PostedFreightRow, RoutePlan, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS } from './dispatch.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 import { buildOfferResponse, type OfferResponse } from './offer-response';
 
@@ -1532,6 +1532,7 @@ export class DispatchService {
         openProposals: open.get(f.freightId) ?? 0,
         ...(f.onBehalfOf ? { onBehalfOf: f.onBehalfOf } : {}),
         ...(f.partOf ? { partOf: f.partOf } : {}),
+        ...(this.outsideWindowOf(f) ? { outsideWindow: this.outsideWindowOf(f) } : {}),
         ...(f.contract ? { contract: f.contract, deliverOn: f.deliverOn, ...(f.orderRef ? { orderRef: f.orderRef } : {}) } : {}),
         agreedPrice: f.lockedPrice,
         pickedUpAt: f.pickedUpAt,
@@ -1737,14 +1738,47 @@ export class DispatchService {
    * P3 — write an accepted plan onto its orders, and take the day's OLD plan off the ones the new plan left out. Only
    * orders still without a truck are touched: one already on a driver keeps what it was planned on, as history.
    */
-  stampPlan(fleetDid: string, day: string, stamps: Map<string, PlannedOn>): void {
+  stampPlan(fleetDid: string, day: string, stamps: Map<string, PlannedOn>, now: number = Date.now()): void {
     for (const f of this.contractOrdersForDay(fleetDid, day)) {
       const stamp = stamps.get(f.freightId);
       if (stamp) f.planned = stamp;
       else if (f.planned?.day === day) delete f.planned;
       else continue;
+      if (stamp) this.tellWindow(f, stamp, now);
       this.freights.set(f.freightId, f);
     }
+  }
+
+  /**
+   * THE SHIPPER HEARS WHEN THE PLAN MISSES ITS WINDOW. Until this, an order planned to arrive after the window its
+   * shipper asked for was said to be late to the carrier's office and to nobody else — and the shipper is the one who
+   * can still ring the door, or the carrier, the day before.
+   *
+   * Said when the plan is accepted, not each time it is: an office accepts a day several times while it tunes it. So
+   * what was last said is kept on the order, and it is said again only when the plan has moved to the other side of
+   * the window or by half an hour or more — and once more when the plan has it inside the window after all. An order
+   * the carrier's own office typed in has nobody here to tell.
+   */
+  private tellWindow(f: Freight, stamp: PlannedOn, now: number): void {
+    const shipperDid = f.postedByDid && f.postedByDid !== f.contract?.fleetDid ? f.postedByDid : undefined;
+    if (!shipperDid) return;
+    const off = stamp.lateMin ? { lateMin: stamp.lateMin } : stamp.earlyMin ? { earlyMin: stamp.earlyMin } : undefined;
+    const told = f.windowTold;
+    if (!off && !told) return;
+    if (off && told && Boolean(off.lateMin) === Boolean(told.lateMin) && Math.abs((off.lateMin ?? off.earlyMin ?? 0) - (told.lateMin ?? told.earlyMin ?? 0)) < WINDOW_RETELL_MIN) return;
+    if (off) f.windowTold = { ...off, at: new Date(now).toISOString() };
+    else delete f.windowTold;
+    void this.events
+      .publish(GlosEvent.Pudo.OrderWindowPlanned, { freightId: f.freightId, code: f.code, shipperDid, fleetName: f.contract?.fleetName ?? '', day: stamp.day, arrive: stamp.arrive, ...(stamp.window ? { window: stamp.window } : {}), ...(off ?? {}) }, { source: 'pudo' })
+      .catch(() => undefined);
+  }
+
+  /** What the shipper is shown of a plan that misses its window, while the order is still on its way to the door. */
+  private outsideWindowOf(f: Freight): OutsideWindow | undefined {
+    const p = f.planned;
+    if (!p || !(p.lateMin || p.earlyMin)) return undefined;
+    if (f.status !== 'ordered' && f.status !== 'claimed' && f.status !== 'in_transit') return undefined;
+    return { day: p.day, arrive: p.arrive, ...(p.window ? { window: p.window } : {}), ...(p.lateMin ? { lateMin: p.lateMin } : {}), ...(p.earlyMin ? { earlyMin: p.earlyMin } : {}) };
   }
 
 /** P3b — the orders an accepted plan put on one vehicle for a day that have not yet gone onto a driver, in the order they are driven. */
@@ -1832,6 +1866,8 @@ export class DispatchService {
       this.freightSeq += 1;
       const load: Freight = { ...f, freightId: `frt_${randomBytes(5).toString('hex')}`, code: `FRT-${String(this.freightSeq).padStart(3, '0')}`, trackingKey: `T-${randomBytes(5).toString('hex').toUpperCase()}`, createdAt: at };
       delete load.handedBack;
+      // What the order's shipper was told about its window was said of the order, under its code: a new load starts unsaid.
+      delete load.windowTold;
       this.reweigh(load, kg);
       return load;
     });
@@ -3200,3 +3236,6 @@ export class DispatchService {
 
 /** The most loads one order goes in. A very heavy order on small vehicles, with room; not a way to mint orders. */
 export const MAX_ORDER_LOADS = 20;
+
+/** A plan that still misses a window is said to the shipper again only when it has moved by this many minutes. */
+export const WINDOW_RETELL_MIN = 30;

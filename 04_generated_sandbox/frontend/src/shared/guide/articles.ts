@@ -320,6 +320,26 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "console-connections",
+    apps: [
+      "console"
+    ],
+    title: "Connections: the routing server and the adviser",
+    summary: "The Connections screen says whether the two services behind the fleets’ planning are set up, and whether they are answering.",
+    steps: [
+      "Open Connections, under Setup. Only SeeBuyGet staff see it.",
+      "Read the word beside each service: Not set up, Set up and not asked yet, Answering, or Not answering. The line under it says what the last plan, or the last office to ask, met.",
+      "For the routing server, tap Check it now. It asks for the road distance between a fleet’s depot and a place a little way off it, and says what came back."
+    ],
+    notes: [
+      "A routing server that is not set up, or not answering, stops nothing. Each day’s plan is made on estimated distances instead, and says so to the office that made it.",
+      "If a check answers with a distance that cannot be right for two places that close together, the routing server may hold another country’s map.",
+      "The adviser is not checked from here, because every question to it is paid for. What the last office’s question met says whether it is answering.",
+      "Both services are set where the server runs, not on this screen. The routing server’s address is shown without anything secret in it, and the adviser’s key is never shown.",
+      "What each service last met is kept only since the server started. After a restart, check the routing server again."
+    ]
+  },
+  {
     id: "two-person",
     apps: [
       "console"
@@ -377,6 +397,24 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "business-bell",
+    apps: [
+      "business"
+    ],
+    title: "The bell: what your business was told",
+    summary: "What a carrier or SeeBuyGet tells your business is kept under the bell at the top of the Business app.",
+    steps: [
+      "Tap the bell. The number on it is how many notices nobody in the business has read yet.",
+      "Tap a notice to read all of it. That marks it read for everybody in the business, and it then says who read it.",
+      "Mark all read clears the number in one go."
+    ],
+    notes: [
+      "The inbox belongs to the business, not to you alone: everybody in the business reads the same one.",
+      "Somebody who can only view the business can read every notice but cannot mark one read. It stays unread until somebody who can act on it has read it.",
+      "Notices are not sent to a phone or a computer. Open the Business app to read them. Somebody taken out of the business stops seeing them straight away."
+    ]
+  },
+  {
     id: "business-loads",
     apps: [
       "business"
@@ -422,7 +460,8 @@ export const ARTICLES: GuideArticle[] = [
     notes: [
       "The price and how you pay are on your own contract with the carrier. SeeBuyGet keeps the order, the note and the tracking — never the money.",
       "An owner can end a contract under Carriers. Loads already ordered are still delivered.",
-      "An order that is more than one vehicle carries may be brought in several loads by your carrier. You are told, each load shows in your list as load 1 of 2, and either tracking link shows them all."
+      "An order that is more than one vehicle carries may be brought in several loads by your carrier. You are told under the bell, each load says Load 1 of 2 in your list, and either tracking link shows them all.",
+      "If your carrier’s plan for the day has a load arriving outside the delivery window you asked for, you are told under the bell, and the load says Outside your window with about when it is planned and by how much. A plan’s time is an estimate and your carrier can still plan the day again. If it cannot work, speak to your carrier."
     ]
   },
   {
@@ -651,7 +690,8 @@ export const ARTICLES: GuideArticle[] = [
       "A truck is only ever given one trip at a time — what it can carry at once. Every order goes on with the same checks as any load (room, equipment, the driver’s hours). One that is refused stays in the queue with the reason on it.",
       "The plan never loads a truck past what it carries, never makes a day longer than you set (13 hours at most), and sends out no more vehicles than you have drivers.",
       "The plan will leave one order out when that lets it deliver more of the others: a far, heavy load can hold a truck that three nearer orders would fill. It never gives one order up for one. What is left out is listed with its reason and counted in the trucks you are short.",
-      "A window is read when it is written as hours: 8-12, 08:00-12:00, before 14:00, after 9, 2pm-5pm. Words such as morning, or hours that could be either half of the day (1-5), are not read: the order is planned to its day only and says so. Nothing is ever left out because of a window."
+      "A window is read when it is written as hours: 8-12, 08:00-12:00, before 14:00, after 9, 2pm-5pm. Words such as morning, or hours that could be either half of the day (1-5), are not read: the order is planned to its day only and says so. Nothing is ever left out because of a window.",
+      "When you accept a plan that has a shipper’s order outside the window they asked for, that shipper is told about when it is planned and by how much. Accepting the day again tells them again only if the plan has moved by half an hour or more, and once more if it is now inside their window. An order your own office typed in or uploaded has nobody to tell."
     ]
   },
   {

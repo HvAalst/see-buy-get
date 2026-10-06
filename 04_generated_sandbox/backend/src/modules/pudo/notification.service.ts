@@ -149,20 +149,22 @@ export class NotificationService {
   }
 
   /** Mark one notification read. Ownership-guarded — a caller can only ever touch its OWN notifications. */
-  markRead(ownerDid: string, id: string): void {
+  markRead(ownerDid: string, id: string, by?: string): void {
     const n = this.inbox.get(id);
     if (n && n.ownerDid === ownerDid && !n.readAt) {
       n.readAt = new Date().toISOString();
+      if (by) n.readBy = by;
       this.inbox.set(id, n);
     }
   }
 
   /** Mark every one of an owner's unread notifications read (the "mark all read" affordance). */
-  markAllRead(ownerDid: string): void {
+  markAllRead(ownerDid: string, by?: string): void {
     const now = new Date().toISOString();
     for (const n of this.inbox.values()) {
       if (n.ownerDid === ownerDid && !n.readAt) {
         n.readAt = now;
+        if (by) n.readBy = by;
         this.inbox.set(n.id, n);
       }
     }

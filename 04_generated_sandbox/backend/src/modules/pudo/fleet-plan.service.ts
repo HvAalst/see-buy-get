@@ -279,10 +279,10 @@ export class FleetPlanService implements OnModuleInit {
     const stamps = new Map<string, PlannedOn>();
     for (const r of plan.routes) {
       for (const t of r.trips) {
-        t.stops.forEach((s, i) => stamps.set(s.freightId, { day: plan.day, vehicleId: r.vehicleId, plate: r.plate, tripNo: t.no, seq: i + 1, arrive: s.arrive, ...(s.lateMin ? { lateMin: s.lateMin } : {}), ...(s.earlyMin ? { earlyMin: s.earlyMin } : {}), at }));
+        t.stops.forEach((s, i) => stamps.set(s.freightId, { day: plan.day, vehicleId: r.vehicleId, plate: r.plate, tripNo: t.no, seq: i + 1, arrive: s.arrive, ...(s.window ? { window: s.window } : {}), ...(s.lateMin ? { lateMin: s.lateMin } : {}), ...(s.earlyMin ? { earlyMin: s.earlyMin } : {}), at }));
       }
     }
-    this.dispatch.stampPlan(fleetDid, plan.day, stamps);
+    this.dispatch.stampPlan(fleetDid, plan.day, stamps, now);
     const kept: DayPlanView = { ...plan, accepted: { at, by } };
     this.accepted.set(keyOf(fleetDid, plan.day), kept);
     return kept;

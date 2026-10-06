@@ -7,6 +7,7 @@ import { CompanyRecordScreen } from './screens/CompanyRecordScreen';
 import { BordersScreen } from './screens/BordersScreen';
 import { CorridorsScreen } from './screens/CorridorsScreen';
 import { PresenceScreen } from './screens/PresenceScreen';
+import { ConnectionsScreen } from './screens/ConnectionsScreen';
 import { HazardsScreen } from './screens/HazardsScreen';
 import { PapersScreen } from './screens/PapersScreen';
 import { waitingCount } from './papers';
@@ -98,7 +99,7 @@ export function App() {
      * company administrator saw on signing in. COMPANY moved out, because their own record is theirs to
      * keep — an operator picks a company from a list, an administrator IS one.
      */
-    ...(isOperator ? (['network', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'borders', 'movers', 'rates'] as Screen[]) : []),
+    ...(isOperator ? (['network', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'borders', 'movers', 'rates', 'connections'] as Screen[]) : []),
     ...(manyCompanies ? (['companies'] as Screen[]) : []),
     // Their own books and what they are owed — never the network's ledger, which is not theirs to read.
     'money',
@@ -201,6 +202,8 @@ export function App() {
             <SettingsScreen state={state} actions={actions} />
           ) : state.screen === 'presence' ? (
             <PresenceScreen state={state} actions={actions} />
+          ) : state.screen === 'connections' ? (
+            <ConnectionsScreen state={state} actions={actions} />
           ) : state.screen === 'corridors' ? (
             <CorridorsScreen state={state} actions={actions} />
           ) : state.screen === 'support' ? (

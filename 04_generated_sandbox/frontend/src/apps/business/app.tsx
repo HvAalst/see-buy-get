@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import { HelpLink } from '../../shared/guide/HelpLink';
-import { BottomNav, BrandMark, Icon } from '../../shared/ui';
+import { BottomNav, BrandMark, Icon, NotificationBell } from '../../shared/ui';
 import { useT, type MessageKey } from '../../shared/i18n';
 import type { IconName } from '../../shared/ui/Icon';
 import { useWideScreen } from '../../shared/useWideScreen';
@@ -9,7 +9,7 @@ import { useAccount } from '../../shared/account/useAccount';
 import { ConsoleMenu } from '../tower/ConsoleMenu';
 import { ImportsScreen } from '../tower/screens/ImportsScreen';
 import { DepotsScreen } from '../tower/screens/DepotsScreen';
-import { sectionsFor, type Section } from './logic';
+import { mayAct, sectionsFor, type Section } from './logic';
 import { useBusinessApp } from './useBusinessApp';
 import { SignInScreen } from './screens/SignInScreen';
 import { ChooseScreen } from './screens/ChooseScreen';
@@ -76,17 +76,22 @@ export function App() {
           <span class="cons__brandname">{t('business.appTitle')}</span>
           <span class="cons__mastwork biz-mast__name">· {business.name}</span>
         </div>
-        <ConsoleMenu
-          name={business.you.name}
-          under={business.name}
-          entries={[
-            // ONE Settings entry for how this person signs in (the user: these actions live in Settings).
-            { key: 'settings', icon: 'settings', label: t('business.menu.settings'), onGo: () => setSettings(true) },
-            { key: 'switch', icon: 'repeat', label: t('business.menu.switch'), onGo: () => void actions.backToList() },
-            { key: 'help', icon: 'info', label: t('guide.link'), onGo: () => setHelpOpen(true) },
-            { key: 'out', icon: 'lock', label: t('business.signOut'), danger: true, onGo: actions.signOut },
-          ]}
-        />
+        <div class="biz-mast__end">
+          {/* The business's inbox. Until this was here, what a carrier told a business — a load that could not be
+              delivered, an order coming in several loads — was recorded for it and could be read by nobody. */}
+          <NotificationBell api={client?.notifications ?? null} shared={{ canMark: mayAct(business.you.role) }} />
+          <ConsoleMenu
+            name={business.you.name}
+            under={business.name}
+            entries={[
+              // ONE Settings entry for how this person signs in (the user: these actions live in Settings).
+              { key: 'settings', icon: 'settings', label: t('business.menu.settings'), onGo: () => setSettings(true) },
+              { key: 'switch', icon: 'repeat', label: t('business.menu.switch'), onGo: () => void actions.backToList() },
+              { key: 'help', icon: 'info', label: t('guide.link'), onGo: () => setHelpOpen(true) },
+              { key: 'out', icon: 'lock', label: t('business.signOut'), danger: true, onGo: actions.signOut },
+            ]}
+          />
+        </div>
         <HelpLink app="business" open={helpOpen} onOpenChange={setHelpOpen} />
       </header>
 

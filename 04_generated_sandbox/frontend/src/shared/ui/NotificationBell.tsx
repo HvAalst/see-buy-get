@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 import type { NotificationsApi } from '../../lib/sbg';
 import { usePush } from '../usePush';
-import { relativeTime, type InboxItem } from '../push';
+import { whenLine, type InboxItem } from '../push';
 import { Button } from './Button';
 import { Icon, type IconName } from './Icon';
 import { Note } from './ErrorNote';
@@ -10,6 +10,13 @@ import { Sheet } from './Sheet';
 export interface NotificationBellProps {
   /** The signed-in app's notifications API. Null while signed out — the bell then stays inert. */
   api: NotificationsApi | null;
+  /**
+   * AN INBOX SEVERAL PEOPLE SHARE — a business's, read by whoever of its people is signed in. Three things differ, and
+   * the server holds all three: nothing is sent to a device (so the device controls are not offered), a notice one of
+   * them has read is read and says by whom, and `canMark: false` is somebody who reads and changes nothing (a
+   * viewer) — a notice opens for them and stays unread for the people who can act on it.
+   */
+  shared?: { canMark: boolean };
 }
 
 /** Icon per notification kind (typed set — never an emoji). Unknown kinds fall back to the bell. */
@@ -51,6 +58,8 @@ const KIND_ICON: Record<string, IconName> = {
   // P4 — orders offered, taken, left or given back between a fleet and its partners.
   order_handed_on: 'truck',
   order_split: 'truck',
+  // The carrier's plan has an order outside the window its shipper asked for — or inside it after all.
+  order_window: 'clock',
   // Five wrong PINs locked the way they sign in — somebody may know their number.
   security: 'lock',
 };
@@ -64,7 +73,8 @@ const KIND_ICON: Record<string, IconName> = {
  * Design contract: at most one solid-blue CTA per sheet — "Turn on notifications" when push is off;
  * none when it is on (the inbox is the focus; test/turn-off are links).
  */
-export function NotificationBell({ api }: NotificationBellProps) {
+export function NotificationBell({ api, shared }: NotificationBellProps) {
+  const canMark = shared?.canMark ?? true;
   const [open, setOpen] = useState(false);
   const push = usePush(api);
 
@@ -89,12 +99,20 @@ export function NotificationBell({ api }: NotificationBellProps) {
       <Sheet open={open} onClose={() => setOpen(false)} title="Notifications">
         {push.flash ? <Note tone={push.flash.tone} title={push.flash.text} /> : null}
 
-        <PushControls push={push} />
+        {shared ? (
+          <p class="hint nlist__shared">
+            {canMark
+              ? 'This is the business’s inbox: everybody in it reads the same one. A notice one of you has read is read.'
+              : 'This is the business’s inbox. You can read it; a notice stays unread until somebody who can act on it has read it.'}
+          </p>
+        ) : (
+          <PushControls push={push} />
+        )}
 
         <div class="nlist">
           <div class="nlist__head">
             <span class="nlist__title">Recent</span>
-            {push.unread > 0 ? (
+            {push.unread > 0 && canMark ? (
               <button type="button" class="nlist__all" onClick={() => void push.markAllRead()}>
                 Mark all read
               </button>
@@ -107,7 +125,7 @@ export function NotificationBell({ api }: NotificationBellProps) {
           {push.items.length > 0 ? (
             <ul class="nlist__items">
               {push.items.map((it) => (
-                <NotificationRow key={it.id} item={it} onRead={() => void push.markRead(it.id)} />
+                <NotificationRow key={it.id} item={it} onRead={canMark ? () => void push.markRead(it.id) : undefined} />
               ))}
             </ul>
           ) : push.inboxState === 'loading' ? (
@@ -164,10 +182,10 @@ function PushControls({ push }: { push: ReturnType<typeof usePush> }) {
 
 /**
  * One notification: what it is, the first two lines of what it says, and when. Pressing it opens that one
- * in full — and marks it read, which pressing it always did. Five-line bodies meant one notification per
+ * in full — and marks it read, which pressing it always did (not for somebody who only reads a shared inbox). Five-line bodies meant one notification per
  * phone screen and the next one cut in half by the bottom of the sheet.
  */
-function NotificationRow({ item, onRead }: { item: InboxItem; onRead: () => void }) {
+function NotificationRow({ item, onRead }: { item: InboxItem; onRead?: () => void }) {
   const [open, setOpen] = useState(false);
   const unread = !item.readAt;
   return (
@@ -178,7 +196,7 @@ function NotificationRow({ item, onRead }: { item: InboxItem; onRead: () => void
         aria-expanded={open}
         onClick={() => {
           setOpen((was) => !was);
-          if (unread) onRead();
+          if (unread) onRead?.();
         }}
       >
         <span class="nitem__ic">
@@ -187,7 +205,7 @@ function NotificationRow({ item, onRead }: { item: InboxItem; onRead: () => void
         <span class="nitem__body">
           <span class="nitem__t">{item.title}</span>
           <span class="nitem__b">{item.body}</span>
-          <span class="nitem__time">{relativeTime(item.createdAt)}</span>
+          <span class="nitem__time">{whenLine(item)}</span>
         </span>
         {unread ? <span class="nitem__dot" aria-label="unread" /> : null}
       </button>

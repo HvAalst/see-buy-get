@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkStep, checkTone, contractPeriod, digitsReady, isLastOwner, loadGaps, loadStage, mayAct, mayManage, newBusinessGaps, nextDay, openOnArrival, orderableContracts, phoneReady, sectionsFor } from './logic';
+import { checkStep, checkTone, contractPeriod, digitsReady, isLastOwner, loadGaps, loadStage, mayAct, mayManage, newBusinessGaps, nextDay, openOnArrival, orderableContracts, phoneReady, sectionsFor, spanWords, windowMiss } from './logic';
 import { t } from '../../shared/i18n';
 import type { CarriageContract } from './api';
 import type { Membership } from './api';
@@ -107,6 +107,30 @@ describe('the Business app', () => {
     it('says a contract’s period in words', () => {
       expect(contractPeriod({ startsOn: '2026-10-01', endsOn: '2026-12-31' }, t)).toBe('2026-10-01 to 2026-12-31');
       expect(contractPeriod({}, t)).toBe('No end date');
+    });
+  });
+
+  describe('a plan that misses the window a load was to arrive in', () => {
+    const day = '2026-10-07';
+    it('says a span the way the notice of it does', () => {
+      expect([spanWords(1), spanWords(40), spanWords(60), spanWords(65), spanWords(120), spanWords(185)]).toEqual(['1 minute', '40 minutes', '1 hour', '1 hour 05 minutes', '2 hours', '3 hours 05 minutes']);
+      // Never "0 minutes": a plan that is outside its window is outside it by something.
+      expect(spanWords(0.2)).toBe('1 minute');
+    });
+    it('says late and early apart, about when, and against the window as the plan read it', () => {
+      expect(windowMiss({ day, arrive: '12:40', window: '08:00 to 12:00', lateMin: 40 }, t)).toEqual({
+        row: 'planned about 12:40, 40 minutes after your window',
+        full: 'At the door about 12:40 on 2026-10-07 — 40 minutes after the window you asked for (08:00 to 12:00).',
+      });
+      expect(windowMiss({ day, arrive: '06:50', window: 'from 08:00', earlyMin: 70 }, t)).toEqual({
+        row: 'planned about 06:50, 1 hour 10 minutes before your window',
+        full: 'At the door about 06:50 on 2026-10-07 — 1 hour 10 minutes before the window you asked for (from 08:00): the day does not leave the vehicle room to wait.',
+      });
+    });
+    it('says nothing of a plan inside the window, or of no plan — and does without the window’s words where an older plan kept none', () => {
+      expect(windowMiss(undefined, t)).toBeNull();
+      expect(windowMiss({ day, arrive: '10:00' }, t)).toBeNull();
+      expect(windowMiss({ day, arrive: '12:40', lateMin: 40 }, t)!.full).toBe('At the door about 12:40 on 2026-10-07 — 40 minutes after the window you asked for.');
     });
   });
 

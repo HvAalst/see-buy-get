@@ -61,6 +61,18 @@ export function runCalledOffBody(p: RunCalledOff): string {
   return `${head} Your goods were not collected — you will need another truck.${others}`;
 }
 
+/** A carrier's accepted plan has an order outside the window its shipper asked for — or, with neither figure, inside it again. */
+interface OrderWindowPlanned { freightId: string; code: string; shipperDid: string; fleetName: string; day: string; arrive: string; window?: string; lateMin?: number; earlyMin?: number }
+
+/** A span of minutes as somebody says it: "40 minutes", "1 hour", "2 hours 05 minutes". */
+export function spanWords(minutes: number): string {
+  const m = Math.max(1, Math.round(minutes));
+  const h = Math.floor(m / 60);
+  const hours = h === 1 ? '1 hour' : `${h} hours`;
+  if (h === 0) return m === 1 ? '1 minute' : `${m} minutes`;
+  return m % 60 === 0 ? hours : `${hours} ${String(m % 60).padStart(2, '0')} minutes`;
+}
+
 interface BookingGivenBack { departureId: string; bookingId: string; managerDid: string; company: string; lineName: string; shipperDid: string; kind: 'sold' | 'own'; by: string; description: string; reason?: string; note?: string }
 
 /**
@@ -239,6 +251,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<OrderHandedOn>(GlosEvent.Pudo.OrderHandedOn, (e) => this.onOrderHandedOn(e.payload));
     // An order is coming in several loads — or in one after all. Its shipper placed one order and is told what became of it.
     this.events.subscribe<{ code: string; loads: number; rejoined: boolean; orderKg: number; deliverOn?: string; fleetName: string; shipperDid?: string }>(GlosEvent.Pudo.OrderSplit, (e) => this.onOrderSplit(e.payload));
+    // A carrier's plan for the day has an order outside the window its shipper asked for — or inside it after all.
+    this.events.subscribe<OrderWindowPlanned>(GlosEvent.Pudo.OrderWindowPlanned, (e) => this.onOrderWindowPlanned(e.payload));
     this.events.subscribe<BookingGivenBack>(GlosEvent.Pudo.DepartureBookingCancelled, (e) => this.onBookingGivenBack(e.payload));
     this.events.subscribe<RunClaimOpened>(GlosEvent.Pudo.DepartureClaimOpened, (e) => this.onRunClaimOpened(e.payload));
     this.events.subscribe<RunClaimAnswered>(GlosEvent.Pudo.DepartureClaimAnswered, (e) => this.onRunClaimAnswered(e.payload));
@@ -463,6 +477,25 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     const title = p.rejoined ? `${p.fleetName} will bring ${p.code} in one load after all` : `${p.fleetName} will bring ${p.code} in ${p.loads} loads`;
     const body = p.rejoined ? `${size}${when}, in one delivery as you ordered it.` : `${size}${when}. It is more than one vehicle carries, so it comes in ${p.loads} deliveries; each is signed for on its own, and your tracking link shows them all.`;
     await this.tell(p.shipperDid, { kind: 'order_split', title, body, tag: `split:${p.code}:${p.loads}`, data: { loads: p.loads } });
+  }
+
+  /**
+   * The shipper of an order its carrier planned outside the window it asked for. The words keep a plan a plan: "about",
+   * and that the day can be planned again — and say the one thing the shipper can do with it, while there is time.
+   */
+  private async onOrderWindowPlanned(p: OrderWindowPlanned): Promise<void> {
+    const asked = p.window ? `You asked for ${p.window} on ${p.day}.` : `You asked for a delivery window on ${p.day}.`;
+    const estimate = 'A plan’s time is an estimate, and the day can still be planned again.';
+    const data = { freightId: p.freightId };
+    if (p.lateMin) {
+      const by = spanWords(p.lateMin);
+      await this.tell(p.shipperDid, { kind: 'order_window', title: `${p.fleetName} plans ${p.code} for about ${p.arrive} — ${by} after your window`, body: `${asked} Its plan for that day has ${p.code} at the door about ${p.arrive}, ${by} after that. ${estimate} If this cannot work, speak to ${p.fleetName} now.`, tag: `window:${p.code}:late:${p.lateMin}`, data });
+    } else if (p.earlyMin) {
+      const by = spanWords(p.earlyMin);
+      await this.tell(p.shipperDid, { kind: 'order_window', title: `${p.fleetName} plans ${p.code} for about ${p.arrive} — ${by} before your window`, body: `${asked} Its plan for that day has ${p.code} at the door about ${p.arrive}, ${by} before that: the day does not leave its vehicle room to wait. ${estimate} If this cannot work, speak to ${p.fleetName} now.`, tag: `window:${p.code}:early:${p.earlyMin}`, data });
+    } else {
+      await this.tell(p.shipperDid, { kind: 'order_window', title: `${p.fleetName} now plans ${p.code} inside your window`, body: `${asked} Its plan for that day now has ${p.code} at the door about ${p.arrive}. ${estimate}`, tag: `window:${p.code}:inside`, data });
+    }
   }
 
   private async onOrderHandedOn(p: OrderHandedOn): Promise<void> {

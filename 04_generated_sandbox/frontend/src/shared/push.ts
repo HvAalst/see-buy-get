@@ -23,6 +23,17 @@ export interface InboxItem {
   link?: string;
   createdAt: string;
   readAt?: string;
+  /** Who read it — only in an inbox several people share (a business's). */
+  readBy?: string;
+}
+
+/**
+ * The line under a notification: when it came — and, in an inbox several people share, who read it. A read notice
+ * nobody is named on (read before names were kept, or in a person's own inbox) says only when.
+ */
+export function whenLine(item: Pick<InboxItem, 'createdAt' | 'readAt' | 'readBy'>, nowMs: number = Date.now()): string {
+  const when = relativeTime(item.createdAt, nowMs);
+  return item.readAt && item.readBy ? `${when} · read by ${item.readBy}` : when;
 }
 
 /** Load the caller's notification inbox. Returns null on failure (the centre shows a retry, not a crash). */

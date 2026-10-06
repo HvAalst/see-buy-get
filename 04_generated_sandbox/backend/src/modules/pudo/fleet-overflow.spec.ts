@@ -445,6 +445,106 @@ describe('handing orders on', () => {
     });
 
     /**
+     * A PLAN THAT MISSES THE WINDOW. Until this, an order planned to arrive after the window its shipper asked for was
+     * said to be late to the carrier's office and to nobody else. Pinned here: the shipper is told when the plan is
+     * accepted, not every time it is accepted again; told again when it has moved; told when it is inside after all;
+     * and its own list of what it ordered says the same as long as the order is still on its way.
+     */
+    it('tells the shipper when the plan its carrier accepted misses the window it asked for — and not again until that changes', async () => {
+      const { a } = threeFleets();
+      const day = tomorrow();
+      const shipper = 'did:glos:jenga-bricks';
+      const placed = (postedByDid: string, ref: string) => dispatch.registerFreight({ description: 'Blocks', pickupLocation: yard, pickupLabel: 'Jenga yard', destLabel: 'Machakos junction', destLocation: site, weightKg: 2000, packaging: 'palletised', postedByDid, postedByName: 'Wanjiru', contract: { contractId: 'ctr_ov', fleetDid: a.did, fleetName: a.name, shipperName: 'Jenga Bricks' }, deliverOn: day, orderRef: ref, deliveryWindow: '8-12' });
+      const theirs = placed(shipper, 'WS-WIN-1');
+      type Over = { arrive: string; lateMin?: number; earlyMin?: number };
+      const stamp = (over: Over) => ({ day, vehicleId: 'veh_1', plate: 'KPL 008T', tripNo: 1, seq: 1, window: '08:00 to 12:00', at: new Date().toISOString(), ...over });
+      const accept = async (over: Over, more: Array<[string, Over]> = []) => {
+        dispatch.stampPlan(a.did, day, new Map([[theirs.freightId, stamp(over)], ...more.map(([id, o]) => [id, stamp(o)] as [string, ReturnType<typeof stamp>])]));
+        await settle();
+      };
+      const told = () => notifications.inboxFor(shipper).filter((n) => n.kind === 'order_window');
+      const titles = () => told().map((n) => n.title);
+      const row = (did = shipper, id = theirs.freightId) => dispatch.postedBy(did).find((r) => r.freightId === id)!;
+      const plans = 'Kilima Logistics plans ' + theirs.code + ' for about ';
+
+      // Inside its window: nothing to say, and nothing shown.
+      await accept({ arrive: '10:10' });
+      expect(titles()).toEqual([]);
+      expect(row().outsideWindow).toBeUndefined();
+
+      // Forty minutes after it closes: said, in words that keep a plan a plan.
+      await accept({ arrive: '12:40', lateMin: 40 });
+      expect(titles()).toEqual([plans + '12:40 — 40 minutes after your window']);
+      expect(told()[0].body).toBe('You asked for 08:00 to 12:00 on ' + day + '. Its plan for that day has ' + theirs.code + ' at the door about 12:40, 40 minutes after that. A plan’s time is an estimate, and the day can still be planned again. If this cannot work, speak to Kilima Logistics now.');
+      expect(row().outsideWindow).toEqual({ day, arrive: '12:40', window: '08:00 to 12:00', lateMin: 40 });
+
+      // Accepted again, much the same: nothing new is said. The list follows the plan all the same.
+      await accept({ arrive: '13:09', lateMin: 69 });
+      expect(titles()).toHaveLength(1);
+      expect(row().outsideWindow).toMatchObject({ arrive: '13:09', lateMin: 69 });
+      // Half an hour or more from what was SAID (forty minutes), not from the last plan: said again.
+      await accept({ arrive: '13:10', lateMin: 70 });
+      expect(titles()).toHaveLength(2);
+      expect(titles()).toContain(plans + '13:10 — 1 hour 10 minutes after your window');
+      // The other side of the window is news whatever the figure.
+      await accept({ arrive: '06:50', earlyMin: 70 });
+      expect(titles()).toHaveLength(3);
+      expect(titles()).toContain(plans + '06:50 — 1 hour 10 minutes before your window');
+      expect(told().find((n) => /before your window/.test(n.title))!.body).toMatch(/1 hour 10 minutes before that: the day does not leave its vehicle room to wait./);
+      expect(row().outsideWindow).toEqual({ day, arrive: '06:50', window: '08:00 to 12:00', earlyMin: 70 });
+
+      // Inside after all: said once, and the list says nothing more about it.
+      await accept({ arrive: '09:30' });
+      expect(titles()).toHaveLength(4);
+      expect(titles()).toContain('Kilima Logistics now plans ' + theirs.code + ' inside your window');
+      expect(told().find((n) => /inside your window/.test(n.title))!.body).toMatch(/now has .* at the door about 09:30. A plan’s time is an estimate/);
+      expect(row().outsideWindow).toBeUndefined();
+      await accept({ arrive: '09:45' });
+      expect(titles()).toHaveLength(4);
+      // And late again after that is news again.
+      await accept({ arrive: '12:05', lateMin: 5 });
+      expect(titles()).toHaveLength(5);
+
+      // An order the carrier's own office typed in has nobody here to tell — its list, read by the office, still says it.
+      const typed = placed(a.did, 'WS-WIN-2');
+      await accept({ arrive: '12:05', lateMin: 5 }, [[typed.freightId, { arrive: '13:30', lateMin: 90 }]]);
+      expect(notifications.inboxFor(a.did).some((n) => n.kind === 'order_window')).toBe(false);
+      expect(titles()).toHaveLength(5);
+      expect(row(a.did, typed.freightId).outsideWindow).toMatchObject({ lateMin: 90 });
+
+      // Withdrawn: a plan that no longer matters is not shown against it.
+      dispatch.cancelFreight(theirs.freightId, { did: shipper, role: 'shipper' }, 'Not needed any more');
+      expect(dispatch.listFreight().find((x) => x.freightId === theirs.freightId)!.planned).toMatchObject({ lateMin: 5 });
+      expect(row().outsideWindow).toBeUndefined();
+    });
+
+    it('does not carry what was said of an order onto the loads it is split into: each new load starts unsaid', async () => {
+      const { a } = threeFleets();
+      const day = tomorrow();
+      const shipper = 'did:glos:jenga-bricks';
+      const theirs = dispatch.registerFreight({ description: 'Blocks', pickupLocation: yard, pickupLabel: 'Jenga yard', destLabel: 'Machakos junction', destLocation: site, weightKg: 12000, packaging: 'palletised', postedByDid: shipper, postedByName: 'Wanjiru', contract: { contractId: 'ctr_ov', fleetDid: a.did, fleetName: a.name, shipperName: 'Jenga Bricks' }, deliverOn: day, orderRef: 'WS-WIN-SPLIT', deliveryWindow: '8-12' });
+      const stamp = (over: { arrive: string; lateMin?: number }) => ({ day, vehicleId: 'veh_1', plate: 'KPL 008T', tripNo: 1, seq: 1, window: '08:00 to 12:00', at: new Date().toISOString(), ...over });
+      const titles = () => notifications.inboxFor(shipper).filter((n) => n.kind === 'order_window').map((n) => n.title);
+      dispatch.stampPlan(a.did, day, new Map([[theirs.freightId, stamp({ arrive: '12:40', lateMin: 40 })]]));
+      await settle();
+      expect(titles()).toHaveLength(1);
+      const [first, second] = dispatch.splitOrder(a.did, theirs.freightId, [8000, 4000], 'Amina');
+      expect(second.windowTold).toBeUndefined();
+      // The second load, planned inside the window: nothing was ever said of it, so there is nothing to take back.
+      // The first is the order itself, under the code the shipper was told about — it IS news that it is inside now.
+      dispatch.stampPlan(a.did, day, new Map([[first.freightId, stamp({ arrive: '10:00' })], [second.freightId, stamp({ arrive: '10:30' })]]));
+      await settle();
+      expect(titles()).toHaveLength(2);
+      expect(titles()).toContain('Kilima Logistics now plans ' + first.code + ' inside your window');
+      expect(titles().some((x) => x.includes(second.code))).toBe(false);
+      // And late, the new load is said to be late in its own right — forty minutes was said of the order, not of it.
+      dispatch.stampPlan(a.did, day, new Map([[first.freightId, stamp({ arrive: '10:00' })], [second.freightId, stamp({ arrive: '12:45', lateMin: 45 })]]));
+      await settle();
+      expect(titles()).toHaveLength(3);
+      expect(titles()).toContain('Kilima Logistics plans ' + second.code + ' for about 12:45 — 45 minutes after your window');
+    });
+
+    /**
      * PASSED ON. The user, 2026-10-06, asked whether a partner that took an order may pass it on to a fleet of its
      * own: "Only if I allowed that partner". So it is a switch on the arrangement, the offering fleet's alone, off
      * until it is turned on — asked when the order is offered on AND when it is taken; one step and no further; and

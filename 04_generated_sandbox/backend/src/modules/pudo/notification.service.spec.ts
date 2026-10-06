@@ -153,5 +153,34 @@ describe('NotificationService — the push spine (N1)', () => {
       svc.markRead('did:person:b', mine.id); // B tries to touch A's notification
       expect(svc.unreadCount('did:person:a')).toBe(1); // unchanged
     });
+
+    it('keeps who read a notice in an inbox several people share — the first to read it — and names nobody in a person’s own', async () => {
+      const svc = new NotificationService(new OutboxPushSender());
+      const tag = Math.random().toString(36).slice(2, 8);
+      const owner = `did:glos:biz-${tag}`;
+      const one = await svc.notify(owner, { ...payload, title: 'one' });
+      const two = await svc.notify(owner, { ...payload, title: 'two' });
+      const three = await svc.notify(owner, { ...payload, title: 'three' });
+      const of = (id: string) => svc.inboxFor(owner).find((n) => n.id === id)!;
+      svc.markRead(owner, one.id, 'Selam Owner');
+      expect(of(one.id).readBy).toBe('Selam Owner');
+      // Read is read: somebody opening it afterwards does not become the one who read it.
+      svc.markRead(owner, one.id, 'Bekele Booker');
+      expect(of(one.id).readBy).toBe('Selam Owner');
+      // No name given — a person's own inbox: read, and nobody named.
+      svc.markRead(owner, two.id);
+      expect(of(two.id).readAt).toBeDefined();
+      expect(of(two.id).readBy).toBeUndefined();
+      // The rest at once: by the one who did it, and what was read already stays as it was.
+      svc.markAllRead(owner, 'Bekele Booker');
+      expect(of(three.id).readBy).toBe('Bekele Booker');
+      expect([of(one.id).readBy, of(two.id).readBy]).toEqual(['Selam Owner', undefined]);
+      // Somebody else's inbox is not theirs to mark, with a name or without.
+      const theirs = await svc.notify(`did:glos:other-${tag}`, payload);
+      svc.markRead(owner, theirs.id, 'Selam Owner');
+      svc.markAllRead(owner, 'Selam Owner');
+      expect(svc.inboxFor(`did:glos:other-${tag}`)[0]).toMatchObject({ id: theirs.id });
+      expect([svc.inboxFor(`did:glos:other-${tag}`)[0].readAt, svc.inboxFor(`did:glos:other-${tag}`)[0].readBy]).toEqual([undefined, undefined]);
+    });
   });
 });

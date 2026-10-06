@@ -49,7 +49,10 @@ export const ROLE_SCOPES: Record<ActorRole, string[]> = {
   // A customer's business: its own papers, places, imports and people. No books (it keeps none with us) and no
   // pricing. What each member may do inside it (owner, booker, finance, viewer) is checked live on every request
   // by BusinessMemberGuard, never carried here, so taking somebody's access away takes effect on their next click.
-  business: ['business:read:own', 'business:manage:own'],
+  // NOTIF — the business's own inbox: what a carrier or the network told it. Until it carried this, every notice
+  // addressed to a business was recorded and could be read by nobody. The inbox only: the notifications routes refuse
+  // a business sign-in a device to push to, and ask the member guard who is still in it.
+  business: ['business:read:own', 'business:manage:own', 'notification:manage:self'],
   operator: [WILDCARD_SCOPE],
   anon: [],
 };

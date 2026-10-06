@@ -164,6 +164,87 @@ describe('road distances for a plan', () => {
     expect(asked).toEqual([]);
   });
 
+  /**
+   * WHAT STAFF ARE SHOWN. A routing server that is set and silent looked, until this, exactly like one that works:
+   * every plan fell back and said so to the office, and nobody whose job it is to put it right could see it.
+   */
+  describe('as staff are shown it', () => {
+    const three = [yard, kitengela, mlolongo];
+    const t0 = Date.parse('2026-10-06T08:00:00Z');
+
+    it('says nothing is set, and the defaults a plan would use', () => {
+      expect(matrix.status()).toEqual({ configured: false, profile: 'driving', maxPoints: ROAD_MAX_POINTS });
+    });
+
+    it('shows an address as its host only — never a path, a key, or a name and password in it', () => {
+      process.env.GLOS_ROUTER_URL = 'https://planner:s3cret@osrm.example:5000/v9/secret-key-abc?token=xyz';
+      process.env.GLOS_ROUTER_PROFILE = 'truck';
+      process.env.GLOS_ROUTER_MAX_POINTS = '250';
+      const s = matrix.status();
+      expect(s).toEqual({ configured: true, host: 'osrm.example:5000', profile: 'truck', maxPoints: 250 });
+      for (const leak of ['s3cret', 'planner', 'secret-key-abc', 'xyz']) expect(JSON.stringify(s)).not.toContain(leak);
+    });
+
+    it('says so when what is set is not a web address: configured, and no plan can use it', () => {
+      process.env.GLOS_ROUTER_URL = 'osrm on the office server';
+      expect(matrix.status()).toEqual({ configured: true, invalid: true, profile: 'driving', maxPoints: ROAD_MAX_POINTS });
+    });
+
+    it('keeps what the last plan met — an answer, or why not — and a table reused from a few minutes ago is not an ask', async () => {
+      process.env.GLOS_ROUTER_URL = 'http://osrm.example:5000';
+      expect(matrix.status().last).toBeUndefined();
+      await matrix.between(three, t0);
+      expect(matrix.status().last).toEqual({ at: '2026-10-06T08:00:00.000Z', ok: true, places: 3 });
+      // Planned again a minute later from the kept table: nobody was asked, and the record says when somebody was.
+      await matrix.between(three, t0 + 60_000);
+      expect(matrix.status().last).toEqual({ at: '2026-10-06T08:00:00.000Z', ok: true, places: 3 });
+      // Other places, and the server now refusing: the plan was made on estimates, and staff can read why.
+      answering({ message: 'no' }, 503);
+      await matrix.between([yard, kitengela], t0 + 120_000);
+      expect(matrix.status().last).toEqual({ at: '2026-10-06T08:02:00.000Z', ok: false, places: 2, why: 'the routing server answered 503' });
+      // A day too big to ask about never reached the server — and is the last thing a plan met all the same.
+      const many = Array.from({ length: ROAD_MAX_POINTS + 1 }, (_, i) => ({ lat: -1 - i / 1000, lng: 36 + i / 1000 }));
+      await matrix.between(many, t0 + 180_000);
+      expect(matrix.status().last).toEqual({ at: '2026-10-06T08:03:00.000Z', ok: false, places: 101, why: '101 places are more than the routing server takes in one request (100)' });
+      // Nothing to measure is not an ask.
+      await matrix.between([yard], t0 + 240_000);
+      expect(matrix.status().last!.at).toBe('2026-10-06T08:03:00.000Z');
+    });
+
+    it('asks now, about two places: by road as the server has it — never from a kept table, never kept, and not a plan’s ask', async () => {
+      expect(await matrix.check(yard, kitengela, t0)).toEqual({ at: '2026-10-06T08:00:00.000Z', ok: false, why: 'no routing server is configured' });
+      expect(asked).toEqual([]);
+      process.env.GLOS_ROUTER_URL = 'http://osrm.example:5000';
+      answering({ code: 'Ok', distances: [[0, 4321], [4000, 0]] });
+      const first = await matrix.check(yard, kitengela, t0);
+      expect(first).toMatchObject({ at: '2026-10-06T08:00:00.000Z', ok: true, km: 4.3 });
+      expect(first.ms).toBeGreaterThanOrEqual(0);
+      // In the order it was asked, not sorted as a plan's table is: the figure is from the first place to the second.
+      expect(asked[0].url).toBe('http://osrm.example:5000/table/v1/driving/36.98000,-1.45000;36.96200,-1.47800?annotations=distance');
+      // Asked again a second later, it is asked again.
+      await matrix.check(yard, kitengela, t0 + 1000);
+      expect(asked).toHaveLength(2);
+      // It is nobody's plan, and a plan for the same two places still asks for itself.
+      expect(matrix.status().last).toBeUndefined();
+      await matrix.between([yard, kitengela], t0 + 2000);
+      expect(asked).toHaveLength(3);
+    });
+
+    it('says what a check met when it is not distances: no road between them, an error, silence', async () => {
+      process.env.GLOS_ROUTER_URL = 'http://osrm.example:5000';
+      answering({ code: 'Ok', distances: [[0, null], [null, 0]] });
+      const none = await matrix.check(yard, kitengela, t0);
+      expect(none).toMatchObject({ ok: true, noRoad: true });
+      expect(none.km).toBeUndefined();
+      answering({ message: 'Too Many Requests' }, 429);
+      expect(await matrix.check(yard, kitengela, t0)).toMatchObject({ ok: false, why: 'the routing server answered 429' });
+      matrix.fetcher = async () => Promise.reject(Object.assign(new Error('timed out'), { name: 'TimeoutError' }));
+      expect(await matrix.check(yard, kitengela, t0)).toMatchObject({ ok: false, why: 'the routing server did not answer in time' });
+      matrix.fetcher = async () => Promise.reject(new TypeError('fetch failed'));
+      expect(await matrix.check(yard, kitengela, t0)).toMatchObject({ ok: false, why: 'the routing server could not be reached' });
+    });
+  });
+
   it('reads a table strictly: it is a table or it is not', () => {
     expect(readTable(REAL, 3)).toEqual(REAL.distances);
     expect(readTable({ code: 'Ok', distances: [[0, null], [null, 0]] }, 2)).toEqual([[0, null], [null, 0]]);
