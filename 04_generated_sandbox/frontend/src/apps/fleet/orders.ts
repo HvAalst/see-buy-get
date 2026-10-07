@@ -87,6 +87,9 @@ export function ordersApi(sbg: SbgClient, did: string) {
     /** P3b — send the next trip to every truck in today's accepted plan that is ready for one. */
     sendPlan: (day: string): Promise<Result<PlanSendResult>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/plan/send', { params: { path }, body: { day } })) as never,
     planState: (day: string): Promise<Result<DayPlanState>> => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/plan', { params: { path, query: { day } } })) as never,
+    /** The fleet's own clock: which time zone its plans, its "today" and its deliveries are read on — and choosing it. */
+    clock: (): Promise<Result<FleetClock>> => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/clock', { params: { path } })) as never,
+    setClock: (timeZone: string): Promise<Result<FleetClock>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/clock', { params: { path }, body: { timeZone } })) as never,
     /** P5 — whether this service has an adviser at all, and saying something to it about the plan made with `ask`. */
     adviserStatus: (): Promise<Result<{ configured: boolean }>> => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/plan/adviser', { params: { path } })) as never,
     advise: (ask: PlanAsk, message: string, history: Array<{ role: 'user' | 'assistant'; text: string }>): Promise<Result<PlanAdvice>> =>
@@ -308,6 +311,55 @@ export function windowLine(stop: Pick<PlanStop, 'deliveryWindow' | 'window' | 'w
   if (stop.windowUnread) return { tone: 'warn', text: t('fleet.plan.win.unread', { words: stop.deliveryWindow ?? '' }) };
   if (stop.waitMin) return { tone: 'idle', text: t('fleet.plan.win.waits', { by: hoursWords(stop.waitMin), window: stop.window ?? '' }) };
   return null;
+}
+
+/**
+ * THE FLEET'S OWN CLOCK. `country` — its country keeps one time zone, so nobody chose it · `office` — the office chose
+ * it · `none` — its country keeps several and nobody has chosen yet.
+ */
+export interface FleetClock {
+  timeZone?: string;
+  name?: string;
+  now?: string;
+  today?: string;
+  source: 'country' | 'office' | 'none';
+  /** The clocks its country keeps: each with what people call it and what time it is there now. */
+  choices: Array<{ timeZone: string; name: string; now: string }>;
+}
+
+/**
+ * WHICH CLOCK A PLAN'S TIMES ARE ON, in a line — and, said louder, that there is none: then "today" is the day in UTC
+ * and nobody can be told whether a delivery was on time or is running late, which an office should know before it
+ * reads a time off the board.
+ */
+export function clockLine(clock: FleetClock, t: Translate): { tone: 'idle' | 'warn'; text: string } {
+  if (clock.source === 'none' || !clock.timeZone) return { tone: 'warn', text: t('fleet.plan.clock.none') };
+  return { tone: 'idle', text: t(clock.source === 'office' ? 'fleet.plan.clock.office' : 'fleet.plan.clock.country', { name: clock.name ?? clock.timeZone, zone: clock.timeZone, now: clock.now ?? '' }) };
+}
+
+/** May the office choose its clock here: it must where it has none, and it may where its country keeps several. */
+export function mayChooseClock(clock: FleetClock): boolean {
+  return clock.source === 'none' || clock.choices.length > 1;
+}
+
+/** Is this day the fleet's today — on its own clock where it has one, on this device's where it has not. */
+export function isFleetToday(day: string, clock: FleetClock | null, now: Date): boolean {
+  return day === (clock?.today ?? dayOf(now));
+}
+
+/**
+ * WHEN AN ORDER WAS HANDED OVER, on the office's own clock, and where that fell against what its shipper asked for —
+ * the same thing the shipper is told. Louder where it missed the window or the day: the office is the one that can do
+ * something about the next one. Nothing for a delivery made before the fleet had a clock.
+ */
+export function deliveredLine(o: Pick<FleetOrder, 'deliveryTiming' | 'deliverOn'>, t: Translate): { tone: 'idle' | 'warn'; text: string } | null {
+  const d = o.deliveryTiming;
+  if (!d) return null;
+  if (d.otherDay === 'late') return { tone: 'warn', text: t('fleet.orders.done.dayLate', { at: d.at, day: d.day, ordered: o.deliverOn }) };
+  if (d.otherDay === 'early') return { tone: 'idle', text: t('fleet.orders.done.dayEarly', { at: d.at, day: d.day, ordered: o.deliverOn }) };
+  if (d.window && d.lateMin) return { tone: 'warn', text: t('fleet.orders.done.after', { at: d.at, by: hoursWords(d.lateMin), window: d.window }) };
+  if (d.window && d.earlyMin) return { tone: 'warn', text: t('fleet.orders.done.before', { at: d.at, by: hoursWords(d.earlyMin), window: d.window }) };
+  return { tone: 'idle', text: d.window ? t('fleet.orders.done.inside', { at: d.at, window: d.window }) : t('fleet.orders.done.at', { at: d.at }) };
 }
 
 /**

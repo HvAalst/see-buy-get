@@ -2,6 +2,7 @@
 // own ID, joined by a flexible, re-assignable coupling (an Assignment) — a driver may run a bike on
 // the MDP→PUDO feeder today and a van tomorrow, and a vehicle may change hands between drivers.
 
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { TruckSubtype, VehicleClass } from './fleet.config';
 import { Equipment } from './cargo.types';
 import type { CarrierPaperKind, PaperKind } from './papers';
@@ -115,8 +116,37 @@ export class FleetManager {
   loginCode?: string; // issued on activation — the manager signs into the fleet console with it
   /** When the fleet last rotated its code. */
   codeRotatedAt?: string;
+  /**
+   * The time zone the office keeps, where it has said so. Most fleets never do: a fleet in a country with one time
+   * zone is on that zone's clock without anybody typing it. Read it through FleetManagerService.clockOf().
+   */
+  timeZone?: string;
   status: FleetManagerStatus;
   createdAt: string;
+}
+
+/**
+ * A FLEET'S OWN CLOCK, as its office is shown it. `source` says where it comes from: `country` its country keeps one
+ * time zone · `office` the office chose it · `none` its country keeps several and nobody has chosen — "today" is then
+ * the day in UTC, and nothing that needs a clock (was it delivered in its window, is it running late) can be said.
+ */
+export class FleetClockView {
+  @ApiPropertyOptional() timeZone?: string;
+  /** The zone as somebody names it: East Africa Time. */
+  @ApiPropertyOptional() name?: string;
+  /** The time and the day on that clock, at the moment this was asked. */
+  @ApiPropertyOptional() now?: string;
+  @ApiPropertyOptional() today?: string;
+  @ApiProperty({ enum: ['country', 'office', 'none'] }) source: 'country' | 'office' | 'none';
+  /** The clocks the fleet's country keeps: the ones an office chooses among. One, where there is nothing to choose. */
+  @ApiProperty({ type: () => [FleetClockChoice] }) choices: FleetClockChoice[];
+}
+
+/** A clock an office may keep, as it is offered: the zone, what people call it, and what time it is there now. */
+export class FleetClockChoice {
+  timeZone: string;
+  name: string;
+  now: string;
 }
 
 /** FP4 — one paper's state today, DERIVED at read time from its expiry date (see papers.ts); never stored. */

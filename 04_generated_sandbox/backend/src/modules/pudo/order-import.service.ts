@@ -37,7 +37,7 @@ export class OrderImportService {
   run(fleet: { did: string; name: string }, contract: CarriageContract, input: { text?: string; workbook?: Buffer; pickupLabel?: string; pickupLocation?: GeoPoint }, by: string, dryRun: boolean, now: number = Date.now()): OrderImportResult {
     if (contract.fleetDid !== fleet.did) throw new GlosError('NOT_FOUND', 'No such contract', { field: 'contractId' });
     if (contract.status !== 'active') throw new GlosError('INVALID_STATE', 'This contract has ended — orders under it cannot be placed');
-    const today = new Date(now).toISOString().slice(0, 10);
+    const today = this.dispatch.fleetDay(fleet.did, now);
     if (input.workbook && input.text?.trim()) throw new GlosError('INVALID_INPUT', 'Send the sheet as text or as a workbook, not both', { field: 'workbook' });
     let reading: SheetReading;
     let read: { sheet?: string; otherSheets?: string[] } = {};

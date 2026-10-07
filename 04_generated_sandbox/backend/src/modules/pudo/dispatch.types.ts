@@ -134,6 +134,30 @@ export class LeftOutOfPlan {
   @ApiProperty({ enum: PLAN_LEFT_WHYS }) why: PlanLeftWhy;
 }
 
+/**
+ * WHERE A HANDOVER FELL AGAINST WHAT WAS ASKED — read at the handover, on the carrier's own clock, and KEPT: a
+ * delivery's time is a fact of that day, and must not move when the fleet changes its clock or the shipper rewords
+ * its window afterwards. Absent where the carrier had no clock that day: nothing was read, and nothing is claimed.
+ */
+export class DeliveryTiming {
+  /** The carrier's time zone it was read on. */
+  timeZone: string;
+  /** The day and the time of the handover, on that clock. */
+  day: string;
+  at: string;
+  /** Handed over on another day than it was ordered for: before it, or after it. */
+  @ApiPropertyOptional({ enum: ['early', 'late'] }) otherDay?: 'early' | 'late';
+  /** The window asked for, as it read at the handover. Absent: none was asked for, or it was not written as hours. */
+  @ApiPropertyOptional() window?: string;
+  /** Minutes after the window closed, or before it opened. Neither, with a window and on its day: inside it. */
+  @ApiPropertyOptional() lateMin?: number;
+  @ApiPropertyOptional() earlyMin?: number;
+}
+
+/** `hour` — the hour its plan had it at the door has passed · `day` — the day it was ordered for has gone. */
+export const RUNNING_LATE = ['hour', 'day'] as const;
+export type RunningLate = (typeof RUNNING_LATE)[number];
+
 /** A load as the tracking page lists it beside the others of its order. */
 export class TrackLoad {
   no: number;
@@ -465,6 +489,10 @@ export class Freight {
    * has it on a vehicle, and when the order is split into loads (the plan was about the order as it was).
    */
   @ApiPropertyOptional() planLeft?: { day: string; why: PlanLeftWhy; at: string };
+  /** Read at the handover and kept: when it was delivered on its carrier's clock, against the day and window asked for. */
+  @ApiPropertyOptional({ type: DeliveryTiming }) deliveryTiming?: DeliveryTiming;
+  /** What its shipper was last told about it running late, so that it is said once for the hour and once for the day. */
+  @ApiPropertyOptional() lateTold?: { what: RunningLate; at: string };
   /**
    * WHO the network owed for this haul, and on whose books — fixed when it was accrued at delivery. A claim
    * upheld weeks later takes the money back from this same party: never from whichever fleet the driver has
@@ -567,6 +595,8 @@ export class FleetOrderRow {
   @ApiPropertyOptional() indivisible?: boolean;
   /** P3 — where the accepted plan for its day puts it. */
   @ApiPropertyOptional({ type: PlannedOn }) planned?: PlannedOn;
+  /** Delivered: when, on this fleet's own clock, and where that fell against the day and the window asked for. */
+  @ApiPropertyOptional({ type: DeliveryTiming }) deliveryTiming?: DeliveryTiming;
   /**
    * P4 — how the fleet reading this stands to the order: `own` it was ordered from this fleet (whoever carries it now)
    * · `offered` a partner is offering it to this fleet · `partner` this fleet took it from a partner and carries it.
@@ -1023,6 +1053,10 @@ export class PostedFreightRow {
   @ApiPropertyOptional({ type: PlannedAbout }) plannedAbout?: PlannedAbout;
   /** The carrier's accepted plan for its day leaves it on no vehicle. Gone once a plan has it on one. */
   @ApiPropertyOptional({ type: LeftOutOfPlan }) leftOut?: LeftOutOfPlan;
+  /** Not delivered, and late on its carrier's own clock: the planned hour has passed, or the whole day. */
+  @ApiPropertyOptional({ enum: RUNNING_LATE }) runningLate?: RunningLate;
+  /** Delivered: when, on the carrier's clock, and where that fell against the day and the window asked for. */
+  @ApiPropertyOptional({ type: DeliveryTiming }) deliveryTiming?: DeliveryTiming;
   description: string;
   destLabel: string;
   weightKg: number;
@@ -1346,6 +1380,11 @@ export class FreightTrackView {
    */
   @ApiPropertyOptional() expectedOn?: string;
   @ApiPropertyOptional() expectedAbout?: string;
+  /**
+   * It is late, on its carrier's own clock: `day` the day it was expected has gone · `hour` it is on the road and
+   * the hour above has passed. Without this the page went on saying "expected" of a day that was over.
+   */
+  @ApiPropertyOptional({ enum: RUNNING_LATE }) late?: RunningLate;
   /**
    * Where the goods travel: `board` a load a carrier took off the open board (absent means this) · `run` space
    * booked on a carrier's scheduled run, which leaves at `scheduledPickupAt` whether or not anybody else is aboard.

@@ -294,6 +294,20 @@
   margin: 0 0 10px;
   font-size: 17px;
 }
+/* Choosing the office's clock: one select and its button, side by side. */
+.plan__clock {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 4px 0 12px;
+}
+.plan__clock .field {
+  flex: 1;
+  min-width: 220px;
+  margin: 0;
+}
+
 .plan__acts {
   display: flex;
   flex-wrap: wrap;

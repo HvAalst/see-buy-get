@@ -545,8 +545,10 @@ export class SbgController {
     if (actor?.role !== 'business' || !actor.tenant) throw new GlosError('FORBIDDEN', 'Only the business that linked a contract orders under it');
     if (!this.contracts) throw new GlosError('INVALID_STATE', 'Contracts are not running in this deployment');
     if (!deliverOn || !isDay(deliverOn)) throw new GlosError('FIELD_REQUIRED', 'Say which day it must arrive', { field: 'deliverOn' });
-    if (deliverOn < new Date().toISOString().slice(0, 10)) throw new GlosError('INVALID_INPUT', 'That day has gone — an order is for today or later', { field: 'deliverOn' });
-    const contract = this.contracts.orderable(this.contracts.requireForShipper(actor.tenant, contractId), deliverOn);
+    // "Today" is the carrier's: an order is for a day on the clock of the fleet that must bring it.
+    const linked = this.contracts.requireForShipper(actor.tenant, contractId);
+    if (deliverOn < this.dispatch.fleetDay(linked.fleetDid)) throw new GlosError('INVALID_INPUT', 'That day has gone — an order is for today or later', { field: 'deliverOn' });
+    const contract = this.contracts.orderable(linked, deliverOn);
     const ref = orderRef?.trim();
     // The shipper's own number is used once under a contract — the same rule a sheet is held to.
     if (ref && this.dispatch.contractOrderByRef(contractId, ref)) throw new GlosError('CONFLICT', `Order ${ref} is already with ${contract.fleetName}`, { field: 'orderRef' });

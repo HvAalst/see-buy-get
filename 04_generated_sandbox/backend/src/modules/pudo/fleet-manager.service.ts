@@ -8,7 +8,8 @@ import { OperationalStore } from '../../foundation/data-firewall/operational-sto
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { Geocoder, GEOCODER } from './geocoder';
-import { CarrierPapers, FleetManager, FleetManagerKyc, FleetManagerRequirements, FleetManagerStatus } from './fleet.types';
+import { CarrierPapers, FleetClockView, FleetManager, FleetManagerKyc, FleetManagerRequirements, FleetManagerStatus } from './fleet.types';
+import { clockAt, clocksOfCountry, isTimeZone, utcDay, zoneName } from './fleet-clock';
 import { CARRIER_PAPER_KINDS, fleetPapers, lapsedOf, offRoadLine, paperLabel, paperLapsesAt, type CarrierPaperKind, type PaperStatus } from './papers';
 import { MediaService } from './media.service';
 import { EntityService } from '../../foundation/entity/entity.service';
@@ -498,6 +499,51 @@ export class FleetManagerService {
 
   private transition(m: FleetManager, status: FleetManagerStatus): FleetManager {
     m.status = status;
+    return m;
+  }
+
+  /* ---------------------------------------------------------------- the fleet's own clock -- */
+
+  /**
+   * THE TIME ZONE A FLEET KEEPS. What its office said, where it said; otherwise its country's, where the country
+   * keeps exactly one clock. A country with several is not guessed at: the fleet has no clock until its office
+   * chooses. Never throws — it is asked about fleets from places that only hold a DID.
+   */
+  zoneOf(did: string | undefined, now: number = Date.now()): string | undefined {
+    const m = did ? this.managers.get(did) : undefined;
+    if (!m) return undefined;
+    if (m.timeZone && isTimeZone(m.timeZone)) return m.timeZone;
+    const kept = clocksOfCountry(m.jurisdiction ?? NETWORK_JURISDICTION, now);
+    return kept.length === 1 ? kept[0] : undefined;
+  }
+
+  /** The day it is for this fleet: on its own clock, or in UTC where it has none. */
+  todayOf(did: string | undefined, now: number = Date.now()): string {
+    const zone = this.zoneOf(did, now);
+    return zone ? clockAt(now, zone).day : utcDay(now);
+  }
+
+  /** The clock as the office is shown it: which zone, where it comes from, what time it is there, what it may choose. */
+  clockOf(did: string, now: number = Date.now()): FleetClockView {
+    const m = this.require(did);
+    const choices = clocksOfCountry(m.jurisdiction ?? NETWORK_JURISDICTION, now).map((timeZone) => ({ timeZone, name: zoneName(timeZone, now), now: clockAt(now, timeZone).clock }));
+    const zone = this.zoneOf(did, now);
+    if (!zone) return { source: 'none', choices };
+    const t = clockAt(now, zone);
+    return { timeZone: zone, name: zoneName(zone, now), now: t.clock, today: t.day, source: m.timeZone === zone ? 'office' : 'country', choices };
+  }
+
+  /**
+   * The office says which clock it keeps. Any place's own zone: a fleet near a border may well keep its neighbour's.
+   * Changing it changes what "today" is from the next request on, and nothing already recorded: a delivery's time
+   * was written down on the clock the fleet kept that day.
+   */
+  setTimeZone(did: string, zone: string): FleetManager {
+    const m = this.require(did);
+    const z = (zone ?? '').trim();
+    if (!isTimeZone(z)) throw new GlosError('INVALID_INPUT', 'That is not a time zone — choose a place’s own, such as Africa/Nairobi', { field: 'timeZone' });
+    m.timeZone = z;
+    this.managers.set(did, m);
     return m;
   }
 

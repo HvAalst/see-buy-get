@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { ADVISER_HISTORY, acceptTellsShippers, base64Of, distanceLine, evenLoads, historyOf, isWorkbook, keptOff, loadLine, mayRejoin, maySplit, passOnState, putOnto, ruleLine, windowLine, rulesAsk, withoutRule, type PlanRule } from './orders';
+import { ADVISER_HISTORY, acceptTellsShippers, base64Of, clockLine, deliveredLine, isFleetToday, mayChooseClock, distanceLine, evenLoads, historyOf, isWorkbook, keptOff, loadLine, mayRejoin, maySplit, passOnState, putOnto, ruleLine, windowLine, rulesAsk, withoutRule, type PlanRule } from './orders';
 import { askOf, byDay, dayOf, daySummary, dayWord, handOnLine, hoursWords, mayHandOn, importVerdictLine, leftByReason, mayWithdraw, notASheet, orderTag, sendLine, weightWords, type DayPlan, type FleetOrder, type PlanLeft, type PlanSendTruck } from './orders';
 
 const order = (over: Partial<FleetOrder> = {}): FleetOrder =>
@@ -342,6 +342,48 @@ describe('P1 — a fleet’s orders', () => {
     expect(acceptTellsShippers(plan(4, 0, 2))).toBe(true);
     // Nothing on a vehicle: it cannot be accepted, so nobody is told and the board does not say they will be.
     expect(acceptTellsShippers(plan(0, 3, 0))).toBe(false);
+  });
+
+  const congo = [
+    { timeZone: 'Africa/Kinshasa', name: 'West Africa Standard Time', now: '22:30' },
+    { timeZone: 'Africa/Lubumbashi', name: 'Central Africa Time', now: '23:30' },
+  ];
+  const nairobiOnly = [{ timeZone: 'Africa/Nairobi', name: 'East Africa Time', now: '00:30' }];
+
+  it('says which clock a plan’s times are on — and says it louder when the fleet has none', () => {
+    const kept = { timeZone: 'Africa/Nairobi', name: 'East Africa Time', now: '14:32', today: '2026-10-07', choices: [{ timeZone: 'Africa/Nairobi', name: 'East Africa Time', now: '14:32' }] };
+    expect(clockLine({ ...kept, source: 'country' }, t)).toEqual({ tone: 'idle', text: 'Times are on your office’s clock: East Africa Time (Africa/Nairobi), where it is 14:32 now.' });
+    expect(clockLine({ ...kept, source: 'office' }, t)).toEqual({ tone: 'idle', text: 'Times are on the clock your office chose: East Africa Time (Africa/Nairobi), where it is 14:32 now.' });
+    const none = clockLine({ source: 'none', choices: congo }, t);
+    expect(none.tone).toBe('warn');
+    expect(none.text).toMatch(/not known.*more than one time zone.*“today” is the day in UTC.*on time or is running late/);
+  });
+
+  it('lets an office choose its clock where it must, and where its country keeps several — not where there is nothing to choose', () => {
+    expect(mayChooseClock({ source: 'none', choices: congo })).toBe(true);
+    expect(mayChooseClock({ source: 'office', timeZone: 'Africa/Lubumbashi', choices: congo })).toBe(true);
+    expect(mayChooseClock({ source: 'country', timeZone: 'Africa/Nairobi', choices: nairobiOnly })).toBe(false);
+  });
+
+  it('takes "today" from the fleet’s clock, and from this device only where the fleet has none', () => {
+    // Half past midnight on the 7th in Nairobi; this device, somewhere to the west, still says the 6th.
+    const device = new Date(2026, 9, 6, 23, 30);
+    const nairobi = { source: 'country' as const, timeZone: 'Africa/Nairobi', today: '2026-10-07', choices: nairobiOnly };
+    expect([isFleetToday('2026-10-07', nairobi, device), isFleetToday('2026-10-06', nairobi, device)]).toEqual([true, false]);
+    expect([isFleetToday('2026-10-06', { source: 'none', choices: [] }, device), isFleetToday('2026-10-06', null, device)]).toEqual([true, true]);
+  });
+
+  it('shows the office its own deliveries against what was asked — louder where one missed', () => {
+    const day = '2026-10-07';
+    const at = { timeZone: 'Africa/Nairobi', day, at: '10:52' };
+    expect(deliveredLine({ deliverOn: day }, t)).toBeNull();
+    expect(deliveredLine({ deliverOn: day, deliveryTiming: at }, t)).toEqual({ tone: 'idle', text: 'Handed over at 10:52' });
+    expect(deliveredLine({ deliverOn: day, deliveryTiming: { ...at, window: '08:00–12:00' } }, t)).toEqual({ tone: 'idle', text: 'Handed over at 10:52, inside its window (08:00–12:00)' });
+    expect(deliveredLine({ deliverOn: day, deliveryTiming: { ...at, at: '13:10', window: '08:00–12:00', lateMin: 70 } }, t)).toEqual({ tone: 'warn', text: 'Handed over at 13:10 — 1 h 10 after its window (08:00–12:00)' });
+    expect(deliveredLine({ deliverOn: day, deliveryTiming: { ...at, at: '07:10', window: '08:00–12:00', earlyMin: 50 } }, t)).toEqual({ tone: 'warn', text: 'Handed over at 07:10 — 50 min before its window (08:00–12:00)' });
+    // Another day than it was ordered for: the day is what is said, whatever the hour.
+    expect(deliveredLine({ deliverOn: day, deliveryTiming: { ...at, day: '2026-10-08', otherDay: 'late', window: '08:00–12:00' } }, t)).toEqual({ tone: 'warn', text: 'Handed over at 10:52 on 2026-10-08 — it was ordered for 2026-10-07' });
+    expect(deliveredLine({ deliverOn: day, deliveryTiming: { ...at, day: '2026-10-06', otherDay: 'early' } }, t)).toEqual({ tone: 'idle', text: 'Handed over at 10:52 on 2026-10-06, before the day it was ordered for (2026-10-07)' });
   });
 
   it('weighs a day in tonnes and a small order in kilos', () => {

@@ -102,7 +102,8 @@ export class FleetPlanService implements OnModuleInit {
     if (!vehicleId) return;
     const managerDid = this.vehicles.get(vehicleId).managerDid;
     if (!managerDid) return;
-    const today = new Date(now).toISOString().slice(0, 10);
+    // Today on the fleet's own clock: a shift that starts at 01:00 in Nairobi starts on that day's plan, not on yesterday's.
+    const today = this.managers.todayOf(managerDid, now);
     const plan = this.accepted.get(keyOf(managerDid, today));
     if (!plan?.routes.some((r) => r.vehicleId === vehicleId)) return;
     this.sendNext(managerDid, today, vehicleId, plan, now);
@@ -116,13 +117,13 @@ export class FleetPlanService implements OnModuleInit {
    * routing server gives nothing, it is the estimate, and the plan says so and why.
    */
   async proposeRouted(fleetDid: string, ask: PlanAsk, now: number = Date.now()): Promise<DayPlanView> {
-    this.checked(ask, now);
+    this.checked(fleetDid, ask, now);
     return this.propose(fleetDid, ask, now, await this.distancesFor(fleetDid, ask.day));
   }
 
   /** Accept a plan made on road distances: worked out again here, on distances asked for again here. */
   async acceptRouted(fleetDid: string, ask: PlanAsk, by: string, now: number = Date.now()): Promise<DayPlanView> {
-    this.checked(ask, now);
+    this.checked(fleetDid, ask, now);
     return this.accept(fleetDid, ask, by, now, await this.distancesFor(fleetDid, ask.day));
   }
 
@@ -134,17 +135,17 @@ export class FleetPlanService implements OnModuleInit {
     return this.roads.between([depot, ...places]);
   }
 
-  /** What a plan is asked with, checked: its settings within their limits, its day a day that has not gone. */
-  private checked(ask: PlanAsk, now: number): PlanSettings {
+  /** What a plan is asked with, checked: its settings within their limits, its day a day that has not gone — on the fleet's own clock. */
+  private checked(fleetDid: string, ask: PlanAsk, now: number): PlanSettings {
     const settings = this.settingsOf(ask);
-    const today = new Date(now).toISOString().slice(0, 10);
+    const today = this.managers.todayOf(fleetDid, now);
     if (!isDay(ask.day)) throw new GlosError('INVALID_INPUT', 'A day is YYYY-MM-DD', { field: 'day' });
     if (ask.day < today) throw new GlosError('INVALID_INPUT', 'That day has gone — a plan is for today or later', { field: 'day' });
     return settings;
   }
 
   propose(fleetDid: string, ask: PlanAsk, now: number = Date.now(), roads?: RoadDistances): DayPlanView {
-    const settings = this.checked(ask, now);
+    const settings = this.checked(fleetDid, ask, now);
     const manager = this.managers.get(fleetDid);
     const orders = this.dispatch.contractOrdersForDay(fleetDid, ask.day);
     const excluded = new Set(ask.excludeVehicleIds ?? []);
@@ -263,6 +264,7 @@ export class FleetPlanService implements OnModuleInit {
       settings,
       vehicles: fleet.map(({ v, excluded: out, offRoad }) => ({ vehicleId: v.vehicleId, plate: v.plate, vehicleClass: v.vehicleClass, capacityKg: v.capacityKg, excluded: out, ...(offRoad.length ? { offRoad } : {}) })),
       rules,
+      ...(this.managers.zoneOf(fleetDid) ? { timeZone: this.managers.zoneOf(fleetDid) } : {}),
       distances: { source: roads?.source ?? 'estimate', ...(roads?.why ? { why: roads.why } : {}), ...(roads?.gaps ? { gaps: roads.gaps } : {}) },
     };
   }
@@ -295,7 +297,7 @@ export class FleetPlanService implements OnModuleInit {
    */
   send(fleetDid: string, day: string, now: number = Date.now()): PlanSendResult {
     if (!isDay(day)) throw new GlosError('INVALID_INPUT', 'A day is YYYY-MM-DD', { field: 'day' });
-    const today = new Date(now).toISOString().slice(0, 10);
+    const today = this.managers.todayOf(fleetDid, now);
     if (day !== today) throw new GlosError('INVALID_STATE', day > today ? 'That day has not come — its trips go out on the day itself' : 'That day has gone', { field: 'day' });
     const plan = this.accepted.get(keyOf(fleetDid, day));
     if (!plan) throw new GlosError('INVALID_STATE', 'No plan has been accepted for today');

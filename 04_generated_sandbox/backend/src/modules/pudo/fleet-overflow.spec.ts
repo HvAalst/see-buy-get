@@ -69,6 +69,7 @@ import { OtpService } from './otp.service';
 import { AuthService } from '../../foundation/auth/auth.service';
 import type { UnclaimedService } from './unclaimed.service';
 import type { OrderHandedOn } from './fleet-overflow.types';
+import { clockAt } from './fleet-clock';
 import { requiredLoadKeys, requiredUnloadKeys } from './heavy-cargo';
 
 const DAY = 86_400_000;
@@ -156,6 +157,7 @@ describe('handing orders on', () => {
     let partners: FleetPartnerService;
     let overflow: FleetOverflowService;
     let heard: OrderHandedOn[];
+    let dispatcher: NotificationDispatcher;
     let seq = 0;
     const settle = async () => {
       for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
@@ -193,7 +195,8 @@ describe('handing orders on', () => {
       overflow = new FleetOverflowService(dispatch, partners, events);
       heard = [];
       events.subscribe<OrderHandedOn>(GlosEvent.Pudo.OrderHandedOn, (e) => void heard.push(e.payload));
-      new NotificationDispatcher(events, notifications, moduleRef.get(ParcelService), moduleRef.get(PersonService), moduleRef.get(AgentService), fleet, moduleRef.get(ToteService), moduleRef.get(MdpService), dispatch, { sweep: () => [] } as unknown as UnclaimedService, moduleRef.get(VendorService)).onModuleInit();
+      dispatcher = new NotificationDispatcher(events, notifications, moduleRef.get(ParcelService), moduleRef.get(PersonService), moduleRef.get(AgentService), fleet, moduleRef.get(ToteService), moduleRef.get(MdpService), dispatch, { sweep: () => [] } as unknown as UnclaimedService, moduleRef.get(VendorService));
+      dispatcher.onModuleInit();
     });
 
     function aFleet(name: string) {
@@ -224,7 +227,8 @@ describe('handing orders on', () => {
     }
     const yard = { lat: -1.3, lng: 36.85 };
     const site = { lat: -1.25, lng: 36.9 };
-    const tomorrow = () => new Date(Date.now() + DAY).toISOString().slice(0, 10);
+    // The fleets here are Kenyan: their days are Nairobi's, which for three hours of every day are not UTC's.
+    const tomorrow = () => clockAt(Date.now() + DAY, 'Africa/Nairobi').day;
     const anOrder = (a: { did: string; name: string }, kg = 4000) => {
       seq += 1;
       return dispatch.registerFreight({ description: `Bricks ${seq}`, pickupLocation: yard, pickupLabel: 'Jenga yard', destLabel: 'Kitengela site', destLocation: site, weightKg: kg, packaging: 'palletised', postedByDid: a.did, postedByName: 'Amina', contract: { contractId: 'ctr_ov', fleetDid: a.did, fleetName: a.name, shipperName: 'Jenga Bricks', reference: 'KL-07' }, deliverOn: tomorrow(), orderRef: `WS-${seq}` });
@@ -257,7 +261,9 @@ describe('handing orders on', () => {
       const f = anOrder(a);
       const g = anOrder(a, 2000);
       const out = overflow.offer(a, [f.freightId, g.freightId, 'frt_nonsense'], 'Amina');
-      expect(out).toMatchObject({ done: [f.code, g.code], to: ['Pwani Haulage', 'Rift Carriers'] });
+      expect(out).toMatchObject({ done: [f.code, g.code] });
+      // Both partners, in whichever order they were linked: two links made in the same millisecond have no order.
+      expect([...out.to].sort()).toEqual(['Pwani Haulage', 'Rift Carriers']);
       expect(out.refused).toEqual([{ freightId: 'frt_nonsense', why: expect.stringMatching(/not found|No such/i) }]);
       for (const p of [b, c]) {
         const row = rowFor(p.did, f.freightId)!;
@@ -719,9 +725,10 @@ describe('handing orders on', () => {
       expect(delivered(shipper)).toEqual([]);
       const f = dispatch.listFreight().find((x) => x.freightId === theirs.freightId)!;
       dispatch.pickupFreight(theirs.freightId, own.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_test' });
-      dispatch.deliverFreight(theirs.freightId, own.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' });
+      dispatch.deliverFreight(theirs.freightId, own.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' }, Date.parse(tomorrow() + 'T10:30:00+03:00'));
       await settle();
-      expect(delivered(shipper).map((n) => [n.title, n.body])).toEqual([[theirs.code + ' was delivered', 'Handed over to Wanjiru at the gate at Machakos junction: Bricks, 4 pallets.']]);
+      // On its day, with no window asked for: when, to whom, where, what — and nothing held against it.
+      expect(delivered(shipper).map((n) => [n.title, n.body])).toEqual([[theirs.code + ' was delivered', 'Handed over at 10:30 to Wanjiru at the gate at Machakos junction: Bricks, 4 pallets.']]);
       // An order the carrier's own office typed in: its customer is not ours to write to, and the office saw it done.
       const typed = placed(a.did, 'WS-DEL-2', 'Cement');
       carry(typed.freightId);
@@ -797,6 +804,200 @@ describe('handing orders on', () => {
       // A load off the open board was ordered for no day: the page says nothing of one.
       const board = dispatch.registerFreight({ description: 'Sand', pickupLocation: yard, pickupLabel: 'Jenga yard', destLabel: 'Kitengela site', destLocation: site, weightKg: 500, packaging: 'palletised', postedByDid: 'did:glos:jenga-bricks' });
       expect(when(board.freightId)).toEqual([undefined, undefined]);
+    });
+
+    /**
+     * ON THE CARRIER’S OWN CLOCK. The user, 2026-10-07: "so time zone first you say, that would work." With a clock,
+     * two things can be said that could not: where a handover fell against the day and the window asked for — read at
+     * the handover and kept — and that a load which should have arrived has not.
+     */
+    describe('on the carrier’s own clock', () => {
+      const shipper = 'did:glos:jenga-bricks';
+      const dayAfter = (day: string) => new Date(Date.parse(day + 'T12:00:00Z') + DAY).toISOString().slice(0, 10);
+      const dayBefore = (day: string) => new Date(Date.parse(day + 'T12:00:00Z') - DAY).toISOString().slice(0, 10);
+      // A moment on the carrier's clock, which is Nairobi's: three hours ahead of UTC, all year.
+      const nairobi = (day: string, hhmm: string) => Date.parse(day + 'T' + hhmm + ':00+03:00');
+      function aCarrier() {
+        const { a } = threeFleets();
+        const own = onShift(a.did);
+        const day = tomorrow();
+        const placed = (postedByDid: string, ref: string, window?: string) => dispatch.registerFreight({ description: 'Blocks', pickupLocation: yard, pickupLabel: 'Jenga yard', destLabel: 'Machakos junction', destLocation: site, weightKg: 2000, packaging: 'palletised', postedByDid, postedByName: 'Wanjiru', contract: { contractId: 'ctr_ov', fleetDid: a.did, fleetName: a.name, shipperName: 'Jenga Bricks' }, deliverOn: day, orderRef: ref, ...(window ? { deliveryWindow: window } : {}) });
+        const handOver = (id: string, at: number) => {
+          dispatch.assign(id, own.did, { managerDid: a.did, name: 'Amina' });
+          const f = dispatch.listFreight().find((x) => x.freightId === id)!;
+          dispatch.pickupFreight(id, own.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_test' });
+          return dispatch.deliverFreight(id, own.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' }, at);
+        };
+        const row = (id: string, at?: number) => dispatch.postedBy(shipper, at).find((r) => r.freightId === id)!;
+        const told = (kind: string) => notifications.inboxFor(shipper).filter((n) => n.kind === kind);
+        const stamp = (arrive: string) => ({ day, vehicleId: 'veh_1', plate: 'KPL 008T', tripNo: 1, seq: 1, arrive, at: new Date().toISOString() });
+        return { a, own, day, placed, handOver, row, told, stamp };
+      }
+
+      it('reads a handover against the window at the handover: inside it, after it, before it', async () => {
+        const { day, placed, handOver, row, told } = aCarrier();
+        const said = async (ref: string, hhmm: string) => {
+          const o = placed(shipper, ref, '8-12');
+          handOver(o.freightId, nairobi(day, hhmm));
+          await settle();
+          return { timing: row(o.freightId).deliveryTiming, body: told('freight_delivered').find((n) => n.title.startsWith(o.code))!.body };
+        };
+        const inside = await said('WS-CLK-1', '10:30');
+        expect(inside.timing).toEqual({ timeZone: 'Africa/Nairobi', day, at: '10:30', window: '08:00–12:00' });
+        expect(inside.body).toBe('Handed over at 10:30 to Wanjiru at the gate at Machakos junction: Blocks. That is inside the window you asked for (08:00–12:00).');
+        // The last minute of the window is inside it; the minute after is one minute late.
+        expect((await said('WS-CLK-2', '12:00')).timing).toEqual({ timeZone: 'Africa/Nairobi', day, at: '12:00', window: '08:00–12:00' });
+        expect((await said('WS-CLK-3', '12:01')).timing).toMatchObject({ at: '12:01', lateMin: 1 });
+        const late = await said('WS-CLK-4', '13:10');
+        expect(late.timing).toEqual({ timeZone: 'Africa/Nairobi', day, at: '13:10', window: '08:00–12:00', lateMin: 70 });
+        expect(late.body).toBe('Handed over at 13:10 to Wanjiru at the gate at Machakos junction: Blocks. That is 1 hour 10 minutes after the window you asked for (08:00–12:00).');
+        const early = await said('WS-CLK-5', '07:10');
+        expect(early.timing).toEqual({ timeZone: 'Africa/Nairobi', day, at: '07:10', window: '08:00–12:00', earlyMin: 50 });
+        expect(early.body).toMatch(/That is 50 minutes before the window you asked for/);
+        expect((await said('WS-CLK-6', '08:00')).timing).toEqual({ timeZone: 'Africa/Nairobi', day, at: '08:00', window: '08:00–12:00' });
+      });
+
+      it('reads the day before the window: on another day than it was ordered for, the hour is beside the point', async () => {
+        const { day, placed, handOver, row, told } = aCarrier();
+        const nextDay = placed(shipper, 'WS-CLK-7', '8-12');
+        handOver(nextDay.freightId, nairobi(dayAfter(day), '10:30'));
+        const dayEarly = placed(shipper, 'WS-CLK-8', '8-12');
+        handOver(dayEarly.freightId, nairobi(dayBefore(day), '10:30'));
+        await settle();
+        expect(row(nextDay.freightId).deliveryTiming).toEqual({ timeZone: 'Africa/Nairobi', day: dayAfter(day), at: '10:30', otherDay: 'late', window: '08:00–12:00' });
+        expect(row(dayEarly.freightId).deliveryTiming).toEqual({ timeZone: 'Africa/Nairobi', day: dayBefore(day), at: '10:30', otherDay: 'early', window: '08:00–12:00' });
+        const body = (code: string) => told('freight_delivered').find((n) => n.title.startsWith(code))!.body;
+        expect(body(nextDay.code)).toBe('Handed over at 10:30 to Wanjiru at the gate at Machakos junction: Blocks. It was ordered for ' + day + ' and arrived on ' + dayAfter(day) + '.');
+        expect(body(dayEarly.code)).toBe('Handed over at 10:30 to Wanjiru at the gate at Machakos junction: Blocks. It was ordered for ' + day + ' and arrived early, on ' + dayBefore(day) + '.');
+        // Half past midnight in Nairobi is the next day there, though in UTC it is still the evening of its day.
+        const justAfter = placed(shipper, 'WS-CLK-9');
+        handOver(justAfter.freightId, Date.parse(day + 'T21:30:00Z'));
+        expect(row(justAfter.freightId).deliveryTiming).toEqual({ timeZone: 'Africa/Nairobi', day: dayAfter(day), at: '00:30', otherDay: 'late' });
+      });
+
+      it('claims nothing it did not read: no window, a window not written as hours, a carrier with no clock', async () => {
+        const { a, day, placed, handOver, row, told } = aCarrier();
+        const plain = placed(shipper, 'WS-CLK-10');
+        handOver(plain.freightId, nairobi(day, '10:30'));
+        const words = placed(shipper, 'WS-CLK-11', 'in the morning, call first');
+        handOver(words.freightId, nairobi(day, '10:30'));
+        await settle();
+        expect(row(plain.freightId).deliveryTiming).toEqual({ timeZone: 'Africa/Nairobi', day, at: '10:30' });
+        expect(row(words.freightId).deliveryTiming).toEqual({ timeZone: 'Africa/Nairobi', day, at: '10:30' });
+        expect(told('freight_delivered').find((n) => n.title.startsWith(plain.code))!.body).toBe('Handed over at 10:30 to Wanjiru at the gate at Machakos junction: Blocks.');
+        // A carrier in a country of several zones that has not chosen: no time is put on the wrong clock.
+        managers.get(a.did).jurisdiction = 'CD';
+        const noClock = placed(shipper, 'WS-CLK-12', '8-12');
+        handOver(noClock.freightId, nairobi(day, '10:30'));
+        await settle();
+        expect(row(noClock.freightId).deliveryTiming).toBeUndefined();
+        expect(told('freight_delivered').find((n) => n.title.startsWith(noClock.code))!.body).toBe('Handed over to Wanjiru at the gate at Machakos junction: Blocks.');
+      });
+
+      it('keeps what it read: the fleet changing its clock afterwards does not move a delivery', () => {
+        const { a, day, placed, handOver, row } = aCarrier();
+        const o = placed(shipper, 'WS-CLK-13', '8-12');
+        handOver(o.freightId, nairobi(day, '10:30'));
+        managers.setTimeZone(a.did, 'America/Los_Angeles');
+        expect(row(o.freightId).deliveryTiming).toEqual({ timeZone: 'Africa/Nairobi', day, at: '10:30', window: '08:00–12:00' });
+        // The carrier's own queue shows its own deliveries the same way.
+        expect(dispatch.ordersForFleet(a.did).find((r) => r.freightId === o.freightId)!.deliveryTiming).toMatchObject({ at: '10:30' });
+      });
+
+      it('calls a load late once the hour its plan had it at the door is half an hour gone — or its whole day', () => {
+        const { a, own, day, placed, row, stamp } = aCarrier();
+        const o = placed(shipper, 'WS-CLK-14');
+        const f = () => dispatch.listFreight().find((x) => x.freightId === o.freightId)!;
+        const late = (hhmm: string, on = day) => dispatch.lateOf(f(), nairobi(on, hhmm));
+        // In no plan: nothing is late by the hour; only its day can go.
+        expect([late('23:59'), late('00:00', dayAfter(day))]).toEqual([undefined, 'day']);
+        dispatch.stampPlan(a.did, day, new Map([[o.freightId, stamp('10:40')]]));
+        expect([late('10:40'), late('11:10'), late('11:11'), late('23:59')]).toEqual([undefined, undefined, 'hour', 'hour']);
+        // The day before its day nothing is late, whatever the hour.
+        expect(late('23:00', dayBefore(day))).toBeUndefined();
+        expect(late('00:00', dayAfter(day))).toBe('day');
+        // The shipper's list says the same at the moment it is read.
+        expect([row(o.freightId, nairobi(day, '10:40')).runningLate, row(o.freightId, nairobi(day, '11:30')).runningLate, row(o.freightId, nairobi(dayAfter(day), '06:00')).runningLate]).toEqual([undefined, 'hour', 'day']);
+        // It missed its trip: the hour of that trip says nothing any more; the day still will.
+        dispatch.holdPlanned(o.freightId, 'The truck is full');
+        expect([late('12:00'), late('06:00', dayAfter(day))]).toEqual([undefined, 'day']);
+        dispatch.holdPlanned(o.freightId, undefined);
+        // Delivered or withdrawn, it is not late.
+        dispatch.assign(o.freightId, own.did, { managerDid: a.did, name: 'Amina' });
+        expect(late('12:00')).toBe('hour');
+        dispatch.pickupFreight(o.freightId, own.did, { confirmed: requiredLoadKeys(f()), securementPhotoId: 'med_test' });
+        expect(late('12:00')).toBe('hour');
+        dispatch.deliverFreight(o.freightId, own.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' }, nairobi(day, '12:30'));
+        expect([late('13:00'), late('06:00', dayAfter(day))]).toEqual([undefined, undefined]);
+        const gone = placed(shipper, 'WS-CLK-15');
+        dispatch.cancelFreight(gone.freightId, { did: shipper, role: 'shipper' }, 'Not needed any more');
+        expect(dispatch.lateOf(dispatch.listFreight().find((x) => x.freightId === gone.freightId)!, nairobi(dayAfter(day), '06:00'))).toBeUndefined();
+        // A carrier with no clock is not judged on somebody else's.
+        const other = placed(shipper, 'WS-CLK-16');
+        managers.get(a.did).jurisdiction = 'CD';
+        expect(dispatch.lateOf(dispatch.listFreight().find((x) => x.freightId === other.freightId)!, nairobi(dayAfter(day), '06:00'))).toBeUndefined();
+      });
+
+      it('tells the shipper a load is running late once for its hour and once more for its day — nobody else, and never twice', async () => {
+        const { a, day, placed, told, stamp } = aCarrier();
+        const theirs = placed(shipper, 'WS-CLK-17');
+        const typed = placed(a.did, 'WS-CLK-18');
+        const fine = placed(shipper, 'WS-CLK-19');
+        dispatch.stampPlan(a.did, day, new Map([[theirs.freightId, stamp('10:40')], [typed.freightId, stamp('10:40')], [fine.freightId, stamp('16:00')]]));
+        expect(await dispatcher.sweepLate(nairobi(day, '11:00'))).toBe(0);
+        expect(await dispatcher.sweepLate(nairobi(day, '11:30'))).toBe(1);
+        expect(told('order_late').map((n) => [n.title, n.body])).toEqual([[theirs.code + ' is running late', 'Kilima Logistics planned to be at the door about 10:40 and has not delivered it. It has not gone out yet. A plan’s time is an estimate; speak to Kilima Logistics if you need to know more.']]);
+        // Swept again and again through the day: said once.
+        expect(await dispatcher.sweepLate(nairobi(day, '11:40'))).toBe(0);
+        expect(await dispatcher.sweepLate(nairobi(day, '15:00'))).toBe(0);
+        // The other one's hour goes too, and each is said for itself.
+        expect(await dispatcher.sweepLate(nairobi(day, '17:00'))).toBe(1);
+        // The day goes: said once more for each, in the day's own words, and then never again.
+        expect(await dispatcher.sweepLate(nairobi(dayAfter(day), '00:05'))).toBe(2);
+        expect(told('order_late').find((n) => n.title === theirs.code + ' did not arrive on ' + day)!.body).toBe('It was ordered for that day, and Kilima Logistics has not delivered it. It has not gone out yet. Speak to Kilima Logistics now.');
+        expect(await dispatcher.sweepLate(nairobi(dayAfter(day), '09:00'))).toBe(0);
+        expect(await dispatcher.sweepLate(nairobi(dayAfter(dayAfter(day)), '09:00'))).toBe(0);
+        expect(told('order_late')).toHaveLength(4);
+        // The carrier's own office is told nothing about an order it typed in itself.
+        expect(notifications.inboxFor(a.did).some((n) => n.kind === 'order_late')).toBe(false);
+      });
+
+      it('says where a late load is, and says the day straight away when nobody looked while its hour passed', async () => {
+        const { a, own, day, placed, told, stamp } = aCarrier();
+        const onRoad = placed(shipper, 'WS-CLK-20');
+        const onDriver = placed(shipper, 'WS-CLK-21');
+        dispatch.stampPlan(a.did, day, new Map([[onRoad.freightId, stamp('10:40')], [onDriver.freightId, stamp('10:50')]]));
+        dispatch.assign(onRoad.freightId, own.did, { managerDid: a.did, name: 'Amina' });
+        dispatch.pickupFreight(onRoad.freightId, own.did, { confirmed: requiredLoadKeys(dispatch.listFreight().find((x) => x.freightId === onRoad.freightId)!), securementPhotoId: 'med_test' });
+        dispatch.assign(onDriver.freightId, own.did, { managerDid: a.did, name: 'Amina' });
+        expect(await dispatcher.sweepLate(nairobi(day, '12:00'))).toBe(2);
+        const body = (code: string) => told('order_late').find((n) => n.title.startsWith(code))!.body;
+        expect(body(onRoad.code)).toContain('has not delivered it. It is on the road. A plan’s time');
+        expect(body(onDriver.code)).toContain('has not delivered it. It is with its driver and has not been collected yet. A plan’s time');
+        // An order nobody swept for while its hour passed is told of its day, once — not of an hour that is history.
+        const unseen = placed(shipper, 'WS-CLK-22');
+        dispatch.stampPlan(a.did, day, new Map([[unseen.freightId, stamp('10:40')]]));
+        expect(await dispatcher.sweepLate(nairobi(dayAfter(day), '08:00'))).toBe(3);
+        expect(told('order_late').filter((n) => n.title.startsWith(unseen.code)).map((n) => n.title)).toEqual([unseen.code + ' did not arrive on ' + day]);
+      });
+
+      it('stops the tracking page saying "expected" of a day that is over, and says a passed hour only where the hour is shown', () => {
+        const { a, own, day, placed, stamp } = aCarrier();
+        const o = placed(shipper, 'WS-CLK-23');
+        const seen = (hhmm: string, on = day) => {
+          const v = notes.trackView(dispatch.listFreight().find((x) => x.freightId === o.freightId)!, nairobi(on, hhmm));
+          return [v.expectedOn, v.expectedAbout, v.late];
+        };
+        dispatch.stampPlan(a.did, day, new Map([[o.freightId, stamp('10:40')]]));
+        // Not on the road: the hour is not on the page, so its passing is not said either. The day going is.
+        expect(seen('12:00')).toEqual([day, undefined, undefined]);
+        expect(seen('06:00', dayAfter(day))).toEqual([day, undefined, 'day']);
+        dispatch.assign(o.freightId, own.did, { managerDid: a.did, name: 'Amina' });
+        dispatch.pickupFreight(o.freightId, own.did, { confirmed: requiredLoadKeys(dispatch.listFreight().find((x) => x.freightId === o.freightId)!), securementPhotoId: 'med_test' });
+        expect(seen('10:50')).toEqual([day, '10:40', undefined]);
+        expect(seen('11:30')).toEqual([day, '10:40', 'hour']);
+        expect(seen('06:00', dayAfter(day))).toEqual([day, '10:40', 'day']);
+      });
     });
 
     /**

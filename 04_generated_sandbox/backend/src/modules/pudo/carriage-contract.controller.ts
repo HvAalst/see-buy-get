@@ -15,10 +15,11 @@ import { BusinessMemberGuard } from './business-member.guard';
 import { BusinessService } from './business.service';
 import { CarriageContractService } from './carriage-contract.service';
 import { CarriageContractList, CarriageContractView, ContractInviteIssued } from './carriage-contract.types';
-import { AdvisePlanDto, CreateContractDto, EndContractDto, SplitOrderDto, FleetOrdersQueryDto, ImportOrdersDto, LinkContractDto, PinOrderDto, PlanDayDto, PlanStateQueryDto, WithdrawOrderDto } from './carriage-contract.dto';
+import { AdvisePlanDto, CreateContractDto, EndContractDto, SetFleetClockDto, SplitOrderDto, FleetOrdersQueryDto, ImportOrdersDto, LinkContractDto, PinOrderDto, PlanDayDto, PlanStateQueryDto, WithdrawOrderDto } from './carriage-contract.dto';
 import { DispatchService } from './dispatch.service';
 import { FleetOrderList, OrderLoads } from './dispatch.types';
 import { FleetManagerService } from './fleet-manager.service';
+import { FleetClockView } from './fleet.types';
 
 /**
  * P1 — STANDING CONTRACTS, AND THE ORDERS THAT ARRIVE UNDER THEM.
@@ -174,6 +175,25 @@ export class CarriageContractController {
   planState(@Param('did') did: string, @Query() q: PlanStateQueryDto, @Actor() actor: IntrospectionResult): DayPlanState {
     this.assertFleet(did, actor);
     return this.plans.state(did, q.day);
+  }
+
+  /**
+   * THE FLEET'S OWN CLOCK — which time zone its plans, its "today" and its deliveries are read on, where that comes
+   * from, and what time it is there now. The office's alone to read, and to set.
+   */
+  @Roles('fleet_manager', 'operator')
+  @Get('fleet/managers/:did/clock')
+  clock(@Param('did') did: string, @Actor() actor: IntrospectionResult): FleetClockView {
+    this.assertFleet(did, actor);
+    return this.managers.clockOf(did);
+  }
+
+  @Roles('fleet_manager', 'operator')
+  @Post('fleet/managers/:did/clock')
+  setClock(@Param('did') did: string, @Body() dto: SetFleetClockDto, @Actor() actor: IntrospectionResult): FleetClockView {
+    this.assertFleet(did, actor);
+    this.managers.setTimeZone(did, dto.timeZone);
+    return this.managers.clockOf(did);
   }
 
   /** P5 — can this server reach the adviser at all? The screen asks before it offers one. */

@@ -127,6 +127,12 @@ export const NOTIFICATION_KINDS = [
    * after all is said as an `order_window` notice, with about when.
    */
   'order_left_out',
+  /**
+   * A load is running late, on its carrier's own clock: the hour its plan had it at the door has passed, or the whole
+   * day it was ordered for. Nothing happens when a load does not arrive, so a sweep says it — once for the hour, and
+   * once more for the day.
+   */
+  'order_late',
   /** A fleet offered this driver a place, or took the offer back. Only the driver can answer it, so only they are told. */
   'fleet_offer',
   /**

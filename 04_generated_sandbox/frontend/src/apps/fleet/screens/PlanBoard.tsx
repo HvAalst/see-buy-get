@@ -3,7 +3,7 @@ import { Button, Card, ErrorNote, Icon, Note, Pill } from '../../../shared/ui';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { PlanAdviser } from './PlanAdviser';
 import { SplitOrder } from './SplitOrder';
-import { acceptTellsShippers, askOf, dayOf, dayWord, distanceLine, handOnLine, hoursWords, keptOff, leftByReason, putOnto, ruleLine, windowLine, sendLine, weightWords, withoutRule, type DayPlan, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi } from '../orders';
+import { acceptTellsShippers, askOf, clockLine, dayWord, distanceLine, isFleetToday, mayChooseClock, handOnLine, hoursWords, keptOff, leftByReason, putOnto, ruleLine, windowLine, sendLine, weightWords, withoutRule, type DayPlan, type FleetClock, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi } from '../orders';
 
 const REASON: Record<PlanLeftReason, { title: MessageKey; what: MessageKey }> = {
   no_pin: { title: 'fleet.plan.left.noPin', what: 'fleet.plan.left.noPinDo' },
@@ -39,6 +39,16 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
   const [error, setError] = useState<unknown>(null);
   const [tune, setTune] = useState(false);
   const [done, setDone] = useState(false);
+  // The fleet's own clock: which time zone the times below are on, and what "today" is. Read once, with the board.
+  const [clock, setClock] = useState<FleetClock | null>(null);
+  const [zone, setZone] = useState('');
+  const [choosing, setChoosing] = useState(false);
+
+  useEffect(() => {
+    void api.clock().then((r) => {
+      if (r.data) setClock(r.data);
+    });
+  }, [api]);
 
   const propose = useCallback(
     async (next: PlanAsk) => {
@@ -102,7 +112,17 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
   };
 
   const now = new Date();
-  const isToday = day === dayOf(now);
+  const isToday = isFleetToday(day, clock, now);
+  const saveClock = async () => {
+    if (!zone) return;
+    setError(null);
+    const r = await api.setClock(zone);
+    if (r.error || !r.data) return setError(r.error);
+    setClock(r.data);
+    setChoosing(false);
+    // The day and every "today" may read differently now: the plan is asked for again.
+    if (!plan?.accepted) await propose(ask);
+  };
   const s = plan?.settings;
   const left = plan ? leftByReason(plan.unplanned) : [];
   // A plan kept from before there were rules has none.
@@ -151,6 +171,40 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
               const d = distanceLine(plan.distances, t);
               return <p class={'hint' + (d.tone === 'warn' ? ' plan__win--warn' : '')}>{d.text}</p>;
             })()}
+            {/* WHICH CLOCK the times are on — and, where the fleet has none, that, with the choice beside it. */}
+            {clock ? (
+              <>
+                <p class={'hint' + (clockLine(clock, t).tone === 'warn' ? ' plan__win--warn' : '')}>
+                  {clockLine(clock, t).text}
+                  {mayChooseClock(clock) && clock.source !== 'none' && !choosing ? (
+                    <>
+                      {' '}
+                      <button type="button" class="btn btn--link" onClick={() => setChoosing(true)}>
+                        {t('fleet.plan.clock.change')}
+                      </button>
+                    </>
+                  ) : null}
+                </p>
+                {mayChooseClock(clock) && (clock.source === 'none' || choosing) ? (
+                  <div class="plan__clock">
+                    <label class="field">
+                      <span class="field__label">{t('fleet.plan.clock.choose')}</span>
+                      <select class="input" value={zone} onChange={(e) => setZone((e.target as HTMLSelectElement).value)}>
+                        <option value="">{t('fleet.plan.clock.pick')}</option>
+                        {clock.choices.map((c) => (
+                          <option key={c.timeZone} value={c.timeZone}>
+                            {t('fleet.plan.clock.option', { name: c.name, zone: c.timeZone, now: c.now })}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <Button variant="outline" chevron={false} disabled={!zone} onClick={() => void saveClock()}>
+                      {t('fleet.plan.clock.save')}
+                    </Button>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
 
             <div class="plan__acts">
               {plan.accepted ? (

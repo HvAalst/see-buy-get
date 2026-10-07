@@ -102,6 +102,11 @@ export class PinOrderDto {
   @Type(() => Number) @IsNumber() @Min(-180) @Max(180) lng!: number;
 }
 
+/** The time zone a fleet's office keeps: a place's own, such as Africa/Nairobi. */
+export class SetFleetClockDto {
+  @IsString() @MinLength(3) @MaxLength(64) timeZone!: string;
+}
+
 /** The loads an order is split into, by weight. They add up to the order. */
 export class SplitOrderDto {
   @IsArray() @ArrayMinSize(2) @ArrayMaxSize(20) @Type(() => Number) @IsNumber({}, { each: true }) @Min(1, { each: true }) loadsKg!: number[];

@@ -1,4 +1,7 @@
 ﻿import type { PlannedOn } from './fleet-plan.types';
+import { FleetManagerService } from './fleet-manager.service';
+import { clockAt, minutesOf, utcDay } from './fleet-clock';
+import { windowOf, windowWords } from './delivery-window';
 import type { ContractRef } from './carriage-contract.types';
 import type { ClientRef } from './business-client.types';
 import { Inject, Injectable, Optional } from '@nestjs/common';
@@ -42,7 +45,7 @@ import { DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPAT
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
-import { BoardRow, Claimable, ClaimableKind, FleetOrderRow, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, LeftOutOfPlan, MarketRow, MarketSeries, Offer, OutsideWindow, PlannedAbout, PostedFreightRow, RoutePlan, shipperWhy, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS } from './dispatch.types';
+import { BoardRow, Claimable, ClaimableKind, DeliveryTiming, FleetOrderRow, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, LeftOutOfPlan, MarketRow, MarketSeries, Offer, OutsideWindow, PlannedAbout, PostedFreightRow, RoutePlan, RunningLate, shipperWhy, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS } from './dispatch.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 import { buildOfferResponse, type OfferResponse } from './offer-response';
 
@@ -349,8 +352,16 @@ export class DispatchService {
     // BL1 — who may move uncleared goods. Optional for the same reason as borders above: the specs that
     // build dispatch by hand keep working, and app.boot.spec is what catches it missing from the module.
     @Optional() private readonly transit?: TransitAuthorityService,
+    // The fleets' own clocks: which day it is for a fleet, and what time a delivery was made on it. Optional for the
+    // same reason as the two above; without it a fleet's day is the day in UTC, as it always was.
+    @Optional() private readonly managers?: FleetManagerService,
   ) {
     this.freightSeq = [...this.freights.values()].length; // continue the human FRT-NNN sequence after a restart
+  }
+
+  /** The day it is for a fleet, on its own clock — and in UTC for a fleet that has none, or where nobody can be asked. */
+  fleetDay(fleetDid: string | undefined, now: number = Date.now()): string {
+    return this.managers ? this.managers.todayOf(fleetDid, now) : utcDay(now);
   }
 
   // --- publishing ---
@@ -1509,7 +1520,7 @@ export class DispatchService {
    * Matches on postedByDid OR shipperDid — usually the same party, but a counter booking has a shop that
    * posted it and no shipper at all, and a diverted vendor order has a shipper who never touched a counter.
    */
-  postedBy(did: string): PostedFreightRow[] {
+  postedBy(did: string, now: number = Date.now()): PostedFreightRow[] {
     if (!did) return [];
     const open = new Map<string, number>();
     for (const p of this.proposals.values()) {
@@ -1535,6 +1546,8 @@ export class DispatchService {
         ...(this.outsideWindowOf(f) ? { outsideWindow: this.outsideWindowOf(f) } : {}),
         ...(this.plannedAboutOf(f) ? { plannedAbout: this.plannedAboutOf(f) } : {}),
         ...(this.leftOutOf(f) ? { leftOut: this.leftOutOf(f) } : {}),
+        ...(this.lateOf(f, now) ? { runningLate: this.lateOf(f, now) } : {}),
+        ...(f.deliveryTiming ? { deliveryTiming: f.deliveryTiming } : {}),
         ...(f.contract ? { contract: f.contract, deliverOn: f.deliverOn, ...(f.orderRef ? { orderRef: f.orderRef } : {}) } : {}),
         agreedPrice: f.lockedPrice,
         pickedUpAt: f.pickedUpAt,
@@ -1595,7 +1608,7 @@ export class DispatchService {
    * has become of it, so the office plans tomorrow and still sees what yesterday left undone. Read for one fleet only.
    */
   ordersForFleet(fleetDid: string, q: { from?: string; to?: string } = {}, now: number = Date.now()): FleetOrderRow[] {
-    const today = new Date(now).toISOString().slice(0, 10);
+    const today = this.fleetDay(fleetDid, now);
     const rows: FleetOrderRow[] = [];
     for (const f of this.freights.values()) {
       if (!f.contract || !f.deliverOn || f.rejoinedInto) continue;
@@ -1646,6 +1659,7 @@ export class DispatchService {
         ...(f.indivisible ? { indivisible: true } : {}),
         // A plan is the carrier's: the fleet that handed an order on does not see the partner's trucks.
         ...(f.planned && this.carrierOfOrder(f) === fleetDid ? { planned: f.planned } : {}),
+        ...(f.deliveryTiming && this.carrierOfOrder(f) === fleetDid ? { deliveryTiming: f.deliveryTiming } : {}),
         role,
         // A fleet being offered an order sees itself on the offer, never who else was asked.
         ...(h ? { handOn: role === 'offered' ? { ...h, ...(h.offeredTo ? { offeredTo: mine(h.offeredTo) } : {}), ...(h.onward ? { onward: { ...h.onward, offeredTo: mine(h.onward.offeredTo) } } : {}) } : h } : {}),
@@ -1804,6 +1818,68 @@ export class DispatchService {
     if (!p || p.held) return undefined;
     if (f.status !== 'ordered' && f.status !== 'claimed' && f.status !== 'in_transit') return undefined;
     return { day: p.day, arrive: p.arrive, ...(p.window ? { window: p.window } : {}) };
+  }
+
+  /* --------------------------------------------------------- on the carrier's own clock -- */
+
+  /** The time zone of the fleet that must carry an order — the clock its day, its plan and its deliveries are read on. */
+  private zoneOfCarrier(f: Freight): string | undefined {
+    return f.contract ? this.managers?.zoneOf(this.carrierOfOrder(f) ?? f.contract.fleetDid) : undefined;
+  }
+
+  /**
+   * WHERE A HANDOVER FELL AGAINST WHAT WAS ASKED, read on the carrier's clock at the moment of the handover. The day
+   * first: on another day than it was ordered for, the window is beside the point. Then the window, as the order asks
+   * for it now and where it is written as hours. Nothing where the carrier has no clock: a time on the wrong clock is
+   * worse than no time.
+   */
+  private deliveryTimingOf(f: Freight, now: number): DeliveryTiming | undefined {
+    const zone = f.deliverOn ? this.zoneOfCarrier(f) : undefined;
+    if (!zone || !f.deliverOn) return undefined;
+    const t = clockAt(now, zone);
+    const otherDay = t.day < f.deliverOn ? ('early' as const) : t.day > f.deliverOn ? ('late' as const) : undefined;
+    const w = windowOf(this.deliveryWindowOf(f));
+    const lateMin = !otherDay && w?.toMin !== undefined && t.minutes > w.toMin ? t.minutes - w.toMin : 0;
+    const earlyMin = !otherDay && w?.fromMin !== undefined && t.minutes < w.fromMin ? w.fromMin - t.minutes : 0;
+    return { timeZone: zone, day: t.day, at: t.clock, ...(otherDay ? { otherDay } : {}), ...(w ? { window: windowWords(w) } : {}), ...(lateMin ? { lateMin } : {}), ...(earlyMin ? { earlyMin } : {}) };
+  }
+
+  /**
+   * IS IT RUNNING LATE, on its carrier's own clock? `day` — the day it was ordered for has gone and it has not been
+   * delivered. `hour` — it is still its day, and the hour its accepted plan had it at the door passed more than
+   * LATE_GRACE_MIN ago: a plan's time is an estimate, and a quarter of an hour is not news. Wherever it is — on the
+   * road, on its driver, or not gone out at all. Nothing for an order in no plan, one that missed its trip (the day
+   * will say it), or a carrier with no clock.
+   */
+  lateOf(f: Freight, now: number = Date.now()): RunningLate | undefined {
+    if (!f.contract || !f.deliverOn) return undefined;
+    if (f.status !== 'ordered' && f.status !== 'available' && f.status !== 'claimed' && f.status !== 'in_transit') return undefined;
+    const zone = this.zoneOfCarrier(f);
+    if (!zone) return undefined;
+    const t = clockAt(now, zone);
+    if (t.day > f.deliverOn) return 'day';
+    if (t.day < f.deliverOn) return undefined;
+    const due = f.planned && !f.planned.held && f.planned.day === f.deliverOn ? minutesOf(f.planned.arrive) : undefined;
+    return due !== undefined && t.minutes > due + LATE_GRACE_MIN ? 'hour' : undefined;
+  }
+
+  /**
+   * THE ORDERS WHOSE SHIPPER IS NOW TO BE TOLD THEY ARE LATE — and marked as told, so each is said once for its hour
+   * and once more if its whole day goes. Nothing happens when a load does not arrive, which is why nobody was ever
+   * told: only a sweep can say it. An order the carrier's own office typed in has nobody here to tell.
+   */
+  takeLateToTell(now: number = Date.now()): Array<{ freightId: string; code: string; shipperDid: string; fleetName: string; what: RunningLate; day: string; arrive?: string; status: FreightStatus }> {
+    const out: ReturnType<DispatchService['takeLateToTell']> = [];
+    for (const f of this.freights.values()) {
+      const shipperDid = this.shipperToTell(f);
+      if (!shipperDid || f.rejoinedInto) continue;
+      const what = this.lateOf(f, now);
+      if (!what || f.lateTold?.what === what || f.lateTold?.what === 'day') continue;
+      f.lateTold = { what, at: new Date(now).toISOString() };
+      this.freights.set(f.freightId, f);
+      out.push({ freightId: f.freightId, code: f.code, shipperDid, fleetName: f.contract?.fleetName ?? '', what, day: f.deliverOn!, ...(what === 'hour' && f.planned ? { arrive: f.planned.arrive } : {}), status: f.status });
+    }
+    return out;
   }
 
   /** That the accepted plan for its day leaves an order out — for as long as that is still what the plan says of it. */
@@ -2612,7 +2688,7 @@ export class DispatchService {
     void this.events.publish(GlosEvent.Pudo.FreightPickedUp, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy }, { source: 'pudo' }).catch(() => undefined);
     return f;
   }
-  deliverFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string }): Freight {
+  deliverFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected in_transit`);
@@ -2627,7 +2703,10 @@ export class DispatchService {
     const podPhotoId = check?.podPhotoId;
     if (!podPhotoId) throw new GlosError('DELIVERY_PHOTO_REQUIRED', 'Attach a photo of the goods as delivered');
     f.status = 'delivered'; // no longer counts against the driver's remaining capacity
-    f.deliveredAt = new Date().toISOString();
+    f.deliveredAt = new Date(now).toISOString();
+    // Read against the day and the window asked for NOW, on the carrier's clock, and kept with the delivery.
+    const timing = this.deliveryTimingOf(f, now);
+    if (timing) f.deliveryTiming = timing;
     f.unloadReport = { confirmed: [...new Set(check?.confirmed ?? [])], at: f.deliveredAt, by: driverDid };
     const remarks = check?.remarks?.trim();
     f.proofOfDelivery = { receiverName: receiverName.slice(0, 120), photoRef: podPhotoId, ...(remarks ? { remarks: remarks.slice(0, 500) } : {}), at: f.deliveredAt, by: driverDid };
@@ -2653,7 +2732,7 @@ export class DispatchService {
     const sender = f.postedByDid ?? (f.shipperDid && this.vendors.has(f.shipperDid) ? this.vendors.get(f.shipperDid).did : f.shipperDid);
     const posterDid = sender && sender !== f.contract?.fleetDid && sender !== f.claimedBy ? sender : undefined;
     void this.events
-      .publish(GlosEvent.Pudo.FreightDelivered, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy, ...(posterDid ? { posterDid } : {}), description: f.description, destLabel: f.destLabel, receivedBy: f.proofOfDelivery.receiverName }, { source: 'pudo' })
+      .publish(GlosEvent.Pudo.FreightDelivered, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy, ...(posterDid ? { posterDid } : {}), description: f.description, destLabel: f.destLabel, receivedBy: f.proofOfDelivery.receiverName, ...(timing ? { timing, orderedFor: f.deliverOn } : {}) }, { source: 'pudo' })
       .catch(() => undefined);
     return f;
   }
@@ -3312,3 +3391,6 @@ export const MAX_ORDER_LOADS = 20;
 
 /** A plan that still misses a window is said to the shipper again only when it has moved by this many minutes. */
 export const WINDOW_RETELL_MIN = 30;
+
+/** How long past its planned hour a load is before it is called late: a plan's time is an estimate. */
+export const LATE_GRACE_MIN = 30;

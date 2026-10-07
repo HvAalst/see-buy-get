@@ -112,6 +112,8 @@ export interface FreightTrackView {
   /** The day it was ordered for, while it is still to come — and, once it is on the road, about when its carrier's plan has it at the door. */
   expectedOn?: string;
   expectedAbout?: string;
+  /** It is late on its carrier's own clock: the day it was expected has gone, or the hour above has passed. */
+  late?: 'hour' | 'day';
   /** `run` — space booked on a carrier's scheduled run, which leaves at `scheduledPickupAt`. Absent: a load off the board. */
   on?: 'board' | 'run';
 }

@@ -60,6 +60,7 @@ import type { ContractRef } from './carriage-contract.types';
 
 import { FleetPlanService } from './fleet-plan.service';
 import type { RoadDistances, RoadMatrix } from './road-matrix';
+import { clockAt } from './fleet-clock';
 import { ROUTER as ROUTER_TOKEN, type Router } from './router';
 import { requiredLoadKeys, requiredUnloadKeys } from './heavy-cargo';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -120,7 +121,8 @@ describe('a fleet’s plan for a day', () => {
   const depot = { lat: -1.2, lng: 36.8 };
   const yard = { lat: -1.3, lng: 36.85 };
   const site = (n: number) => ({ lat: -1.25 + n * 0.02, lng: 36.9 + n * 0.02 });
-  const dayPlus = (n: number) => new Date(Date.now() + n * DAY).toISOString().slice(0, 10);
+  // The fleets here are Kenyan: their days are Nairobi's, which for three hours of every day are not UTC's.
+  const dayPlus = (n: number) => clockAt(Date.now() + n * DAY, 'Africa/Nairobi').day;
   const tomorrow = () => dayPlus(1);
 
   function aFleet(name: string) {
@@ -513,6 +515,118 @@ describe('a fleet’s plan for a day', () => {
       plans.accept(fleet.did, { day: tomorrow() }, 'Amina');
       expect(mine(heavy.freightId).leftOut).toBeUndefined();
       expect(mine(heavy.freightId).plannedAbout).toMatchObject({ day: tomorrow() });
+    });
+  });
+
+  /* ------------------------------------------------------- the fleet's own clock -- */
+
+  /**
+   * THE FLEET’S OWN CLOCK. The user, 2026-10-07: "so time zone first you say, that would work." A plan is all clock
+   * times, and "today" decides which plan a starting shift belongs to; both were read in UTC. Pinned here: a fleet
+   * keeps its country's clock without anybody choosing, "today" is read on it in both directions, a country with
+   * several zones is not guessed at, and the office's own choice wins.
+   */
+  describe('the fleet’s own clock', () => {
+    const dayBefore = (day: string) => new Date(Date.parse(day + 'T12:00:00Z') - DAY).toISOString().slice(0, 10);
+    const dayAfter = (day: string) => new Date(Date.parse(day + 'T12:00:00Z') + DAY).toISOString().slice(0, 10);
+    const utc = (day: string, hhmm: string) => Date.parse(day + 'T' + hhmm + ':00Z');
+
+    it('keeps its country’s clock without anybody choosing, and says which on every plan', () => {
+      const { fleet } = setUp();
+      anOrder(fleet, { kg: 1000, n: 1 });
+      expect(managers.clockOf(fleet.did, utc('2026-10-06', '21:30'))).toEqual({ timeZone: 'Africa/Nairobi', name: 'East Africa Time', now: '00:30', today: '2026-10-07', source: 'country', choices: [{ timeZone: 'Africa/Nairobi', name: 'East Africa Time', now: '00:30' }] });
+      expect(managers.zoneOf(fleet.did)).toBe('Africa/Nairobi');
+      expect(plans.propose(fleet.did, { day: tomorrow() }).timeZone).toBe('Africa/Nairobi');
+    });
+
+    it('reads "today" on that clock, both ways: gone in Nairobi is gone, and still today in Los Angeles is still today', () => {
+      const { fleet } = setUp();
+      const day = dayPlus(3);
+      anOrder(fleet, { kg: 1000, n: 1, day });
+      // Half past midnight in Nairobi on that day: in UTC it is still the evening before.
+      const justAfterMidnight = utc(dayBefore(day), '21:30');
+      expect(managers.todayOf(fleet.did, justAfterMidnight)).toBe(day);
+      expect(() => plans.propose(fleet.did, { day: dayBefore(day) }, justAfterMidnight)).toThrow(/That day has gone/);
+      expect(plans.propose(fleet.did, { day }, justAfterMidnight).totals.orders).toBe(1);
+      // The office keeps Los Angeles' clock instead: at 03:00 UTC on the day after, it is still that day there.
+      managers.setTimeZone(fleet.did, 'America/Los_Angeles');
+      const stillThatDay = utc(dayAfter(day), '03:00');
+      expect(managers.todayOf(fleet.did, stillThatDay)).toBe(day);
+      const plan = plans.propose(fleet.did, { day }, stillThatDay);
+      expect([plan.timeZone, plan.totals.orders]).toEqual(['America/Los_Angeles', 1]);
+      // And the evening before in UTC is, there, the day before: a plan for that day is for today, not for a day gone.
+      expect(() => plans.propose(fleet.did, { day: dayBefore(day) }, justAfterMidnight)).not.toThrow();
+    });
+
+    it('sends today’s trips, and calls an order late, by the fleet’s own day', () => {
+      const { fleet } = setUp();
+      const day = dayPlus(3);
+      const o = anOrder(fleet, { kg: 1000, n: 1, day });
+      const justAfterMidnight = utc(dayBefore(day), '21:30');
+      plans.accept(fleet.did, { day }, 'Amina', justAfterMidnight);
+      // It is that day in Nairobi: its plan goes out, the day before has gone, the day after has not come.
+      expect(plans.send(fleet.did, day, justAfterMidnight).trucks.length).toBeGreaterThan(0);
+      expect(() => plans.send(fleet.did, dayBefore(day), justAfterMidnight)).toThrow(/That day has gone/);
+      expect(() => plans.send(fleet.did, dayAfter(day), justAfterMidnight)).toThrow(/has not come/);
+      // The queue's "late": not at 23:59 on its day, and from midnight on.
+      const row = (now: number) => dispatch.ordersForFleet(fleet.did, {}, now).find((r) => r.freightId === o.freightId)!;
+      expect(row(utc(day, '20:59')).late).toBe(false);
+      expect(row(utc(day, '21:00')).late).toBe(true);
+    });
+
+    it('gives a shift that starts at half past midnight in Nairobi that day’s trips, not the day before’s', async () => {
+      const fleet = aFleet('Kilima Logistics');
+      const truck = aTruck(fleet.did, 'KPL 005T', 5000);
+      const driver = aDriver(fleet.did);
+      const day = dayPlus(3);
+      const o = anOrder(fleet, { kg: 3000, n: 1, day });
+      const justAfterMidnight = utc(dayBefore(day), '21:30');
+      plans.accept(fleet.did, { day }, 'Amina', justAfterMidnight);
+      expect(dispatch.freightStatusOf(o.freightId)).toBe('ordered');
+      // The shift starts then. In UTC it is still the evening before, and the plan for THAT day is not this one.
+      jest.useFakeTimers({ now: justAfterMidnight, doNotFake: ['nextTick', 'queueMicrotask', 'setImmediate', 'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] });
+      try {
+        fleetSvc.couple(driver.did, truck.vehicleId);
+        await settle();
+      } finally {
+        jest.useRealTimers();
+      }
+      expect(dispatch.freightStatusOf(o.freightId)).toBe('claimed');
+    });
+
+    it('has no clock where its country keeps several and nobody has chosen — and takes the office’s choice', () => {
+      const { fleet } = setUp();
+      const day = dayPlus(3);
+      managers.get(fleet.did).jurisdiction = 'CD';
+      const none = managers.clockOf(fleet.did);
+      expect([none.source, none.timeZone, none.now, none.today]).toEqual(['none', undefined, undefined, undefined]);
+      // What it may choose among is said as what it is: a name, and what time it is there now.
+      expect(managers.clockOf(fleet.did, Date.parse('2026-10-06T21:30:00Z')).choices).toEqual([
+        { timeZone: 'Africa/Kinshasa', name: expect.stringMatching(/Africa/), now: '22:30' },
+        { timeZone: 'Africa/Lubumbashi', name: expect.stringMatching(/Africa/), now: '23:30' },
+      ]);
+      // A country whose zones are one clock under two names is not asked anything.
+      managers.get(fleet.did).jurisdiction = 'DE';
+      expect(managers.clockOf(fleet.did)).toMatchObject({ timeZone: 'Europe/Berlin', source: 'country' });
+      expect(managers.clockOf(fleet.did).choices).toHaveLength(1);
+      managers.get(fleet.did).jurisdiction = 'CD';
+      // No clock: today is the day in UTC, as it always was, and a plan names no zone.
+      const evening = utc(day, '21:30');
+      expect(managers.todayOf(fleet.did, evening)).toBe(day);
+      anOrder(fleet, { kg: 1000, n: 1, day });
+      expect(plans.propose(fleet.did, { day }, evening).timeZone).toBeUndefined();
+      // Only a place's own zone is a clock a fleet can keep.
+      for (const bad of ['+02:00', 'Africa/Atlantis', 'CAT', '']) expect(() => managers.setTimeZone(fleet.did, bad)).toThrow(/not a time zone/);
+      expect(managers.clockOf(fleet.did).source).toBe('none');
+      managers.setTimeZone(fleet.did, 'Africa/Lubumbashi');
+      expect(managers.clockOf(fleet.did, evening)).toMatchObject({ timeZone: 'Africa/Lubumbashi', source: 'office', now: '23:30', today: day });
+      // The office of a one-zone country may keep another clock all the same: its choice wins over its country's.
+      managers.get(fleet.did).jurisdiction = 'KE';
+      expect(managers.clockOf(fleet.did, evening)).toMatchObject({ timeZone: 'Africa/Lubumbashi', source: 'office' });
+      // Whoever only holds a DID is answered, not refused: nobody there, no clock, the day in UTC.
+      expect(managers.zoneOf('did:glos:nobody')).toBeUndefined();
+      expect(managers.zoneOf(undefined)).toBeUndefined();
+      expect(managers.todayOf('did:glos:nobody', evening)).toBe(day);
     });
   });
 

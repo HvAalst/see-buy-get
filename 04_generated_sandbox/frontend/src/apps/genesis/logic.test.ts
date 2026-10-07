@@ -253,6 +253,14 @@ describe('track', () => {
     expect(expectedLine({ expectedAbout: '10:40' }, t, 'en-GB')).toBeNull();
   });
 
+  it('stops saying "expected" of a day that is over, and says an hour that has passed only where the hour is on the page', () => {
+    expect(expectedLine({ expectedOn: '2026-10-22', late: 'day' }, t, 'en-GB')).toBe('It was expected on Thursday 22 October and has not arrived yet.');
+    expect(expectedLine({ expectedOn: '2026-10-22', expectedAbout: '10:40', late: 'day' }, t, 'en-GB')).toBe('It was expected on Thursday 22 October and has not arrived yet.');
+    expect(expectedLine({ expectedOn: '2026-10-22', expectedAbout: '10:40', late: 'hour' }, t, 'en-GB')).toBe('Expected on Thursday 22 October. It is on the road, and it is running late: its carrier planned to be at the door about 10:40, and that time has passed.');
+    // An hour said to have passed with no hour given: the page says the day and nothing it was not told.
+    expect(expectedLine({ expectedOn: '2026-10-22', late: 'hour' }, t, 'en-GB')).toBe('Expected on Thursday 22 October.');
+  });
+
   it('reads the day aloud with the rest: whoever listens is waiting at the same door', () => {
     const load = { kind: 'freight', ref: 'FRT-018', status: 'in_transit', description: 'Bricks', weightKg: 3000, pickupLabel: 'Jenga yard', destLabel: 'Riverside Corner', steps: [] } as FreightTrackView;
     expect(freightTrackSummary(load, t, 'en-GB')).toBe('Load FRT-018: on the road, going to Riverside Corner.');

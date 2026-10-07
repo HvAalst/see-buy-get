@@ -320,10 +320,15 @@ export function dayWords(day: string, locale?: string): string {
  * WHEN A LOAD IS EXPECTED, for whoever is waiting at the door. The day, from the moment it is ordered; and once it is
  * on the road, about when its carrier's plan has it there — said as the plan's word and an estimate, never as a
  * promise: the page cannot know the road. Nothing for a load that was not ordered for a day.
+ *
+ * And when that has passed, it says so. A page that goes on saying "expected on Tuesday" on Thursday is worse than a
+ * page that says nothing: the day gone first, then an hour that has passed while it is on the road.
  */
-export function expectedLine(view: Pick<FreightTrackView, 'expectedOn' | 'expectedAbout'>, t: Translate, locale?: string): string | null {
+export function expectedLine(view: Pick<FreightTrackView, 'expectedOn' | 'expectedAbout' | 'late'>, t: Translate, locale?: string): string | null {
   if (!view.expectedOn) return null;
   const day = dayWords(view.expectedOn, locale);
+  if (view.late === 'day') return t('send.freight.overdue', { day });
+  if (view.late === 'hour' && view.expectedAbout) return t('send.freight.expectedLate', { day, at: view.expectedAbout });
   return view.expectedAbout ? t('send.freight.expectedAbout', { day, at: view.expectedAbout }) : t('send.freight.expectedOn', { day });
 }
 

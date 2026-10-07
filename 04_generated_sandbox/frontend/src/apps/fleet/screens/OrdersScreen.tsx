@@ -4,7 +4,7 @@ import { Button, Card, CodeCard, ErrorNote, Explainer, Note, Pill, PlacePicker, 
 import type { GeoPoint } from '../../../shared/geo';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { PACKAGING_OPTIONS } from '../../agent/logic';
-import { TAG_TONE, byDay, dayOf, daySummary, dayWord, hoursWords, loadLine, mayRejoin, maySplit, mayWithdraw, orderTag, ordersApi, weightWords, type Contract, type DayPlanState, type FleetOrder, type InviteIssued, type PartnerLists } from '../orders';
+import { TAG_TONE, byDay, dayOf, daySummary, dayWord, deliveredLine, hoursWords, loadLine, mayRejoin, maySplit, mayWithdraw, orderTag, ordersApi, weightWords, type Contract, type DayPlanState, type FleetOrder, type InviteIssued, type PartnerLists } from '../orders';
 import { OrderHandOn, PartnersCard } from './HandOn';
 import { RejoinOrder, SplitOrder } from './SplitOrder';
 import { PlanBoard } from './PlanBoard';
@@ -184,6 +184,7 @@ function OrderRows({ orders, onOpen, showDay }: { orders: FleetOrder[]; onOpen: 
     <div class="rows" role="list">
       {orders.map((o) => {
         const tag = orderTag(o);
+        const handed = deliveredLine(o, t);
         return (
           <button key={o.freightId} type="button" class="row" role="listitem" onClick={() => onOpen(o)}>
             <span class="row__body">
@@ -209,6 +210,8 @@ function OrderRows({ orders, onOpen, showDay }: { orders: FleetOrder[]; onOpen: 
                 <span class="row__s orders__nopin">{o.planned.lateMin ? t('fleet.orders.plannedLate', { by: hoursWords(o.planned.lateMin) }) : t('fleet.orders.plannedEarly', { by: hoursWords(o.planned.earlyMin ?? 0) })}</span>
               ) : null}
               {o.planned?.held && o.status === 'ordered' ? <span class="row__s orders__nopin">{t('fleet.orders.planHeld', { plate: o.planned.plate, why: o.planned.held.why })}</span> : null}
+              {/* Delivered: when, on the office's own clock, and where that fell against what the shipper asked for. */}
+              {handed ? <span class={'row__s' + (handed.tone === 'warn' ? ' orders__nopin' : '')}>{handed.text}</span> : null}
             </span>
             <span class="row__end">
               <Pill tone={TAG_TONE[tag]} dot>

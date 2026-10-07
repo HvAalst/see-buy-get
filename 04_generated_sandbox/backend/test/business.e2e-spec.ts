@@ -274,6 +274,23 @@ describe('a customer’s business, over the wire', () => {
     const shop = made.body.token.access_token;
     // A business sign-in is not the fleet's office.
     await http().get(`/v1/sbg/fleet/managers/${fleet.did}/orders`).set(bearer(shop)).expect(403);
+    // The fleet's own clock. Its country keeps one time zone, so nobody chose it; it is the office's alone to read and
+    // to set, and only a place's own zone is a clock a fleet can keep.
+    const clockAt = `/v1/sbg/fleet/managers/${fleet.did}/clock`;
+    await http().get(clockAt).set(bearer(shop)).expect(403);
+    await http().get(clockAt).expect(401);
+    const clock = (await http().get(clockAt).set(bearer(setupKey)).expect(200)).body;
+    expect(clock).toMatchObject({ timeZone: 'Africa/Nairobi', name: 'East Africa Time', source: 'country', choices: [{ timeZone: 'Africa/Nairobi', name: 'East Africa Time' }] });
+    expect(clock.choices).toHaveLength(1);
+    expect(clock.now).toMatch(/^\d{2}:\d{2}$/);
+    expect(clock.today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    await http().post(clockAt).set(bearer(shop)).send({ timeZone: 'Africa/Kampala' }).expect(403);
+    await http().post(clockAt).set(bearer(setupKey)).send({ timeZone: '+03:00' }).expect(400);
+    await http().post(clockAt).set(bearer(setupKey)).send({ timeZone: 'Africa/Atlantis' }).expect(400);
+    await http().post(clockAt).set(bearer(setupKey)).send({}).expect(400);
+    expect((await http().post(clockAt).set(bearer(setupKey)).send({ timeZone: 'Africa/Kampala' }).expect(201)).body).toMatchObject({ timeZone: 'Africa/Kampala', source: 'office' });
+    expect((await http().get(clockAt).set(bearer(setupKey)).expect(200)).body).toMatchObject({ timeZone: 'Africa/Kampala', source: 'office' });
+    await http().post(clockAt).set(bearer(setupKey)).send({ timeZone: 'Africa/Nairobi' }).expect(201);
     const linked = await http().post('/v1/sbg/business/me/contracts/link').set(bearer(shop)).send({ code: invite.code }).expect(201);
     expect(linked.body).toMatchObject({ contractId: contract.contractId, fleetName: `Kilima ${tag}`, shipper: { name: `Jenga Bricks ${tag}`, linkedBy: 'Baraka Owner' } });
     expect(linked.body).not.toHaveProperty('invite');
@@ -395,6 +412,8 @@ describe('a customer’s business, over the wire', () => {
     expect(proposal.body.settings).toMatchObject({ dayStart: '07:00', dayHours: 10 });
     // No routing server is configured here: the plan is the estimate it always was, and says so.
     expect(proposal.body.distances).toEqual({ source: 'estimate' });
+    // …and which clock its times are on.
+    expect(proposal.body.timeZone).toBe('Africa/Nairobi');
     await http().post(`${planAt}/accept`).set(bearer(setupKey)).send({ day: tomorrow }).expect(400);
     expect((await http().get(planAt).query({ day: tomorrow }).set(bearer(setupKey)).expect(200)).body).toEqual({ day: tomorrow, leftOut: 0, newSince: 0, withdrawnSince: 0 });
     // What this server is connected to is the operator's to read, and nobody else's: not a business, not a person.

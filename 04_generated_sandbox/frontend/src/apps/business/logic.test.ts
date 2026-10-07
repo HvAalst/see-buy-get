@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkStep, checkTone, contractPeriod, digitsReady, isLastOwner, loadGaps, loadStage, mayAct, mayManage, newBusinessGaps, nextDay, openOnArrival, orderableContracts, phoneReady, planSays, sectionsFor, spanWords, windowMiss } from './logic';
+import { checkStep, checkTone, contractPeriod, digitsReady, isLastOwner, loadGaps, loadStage, mayAct, mayManage, newBusinessGaps, nextDay, openOnArrival, orderableContracts, phoneReady, planSays, deliverySays, sectionsFor, spanWords, windowMiss } from './logic';
 import { t } from '../../shared/i18n';
 import type { CarriageContract } from './api';
 import type { Membership } from './api';
@@ -165,6 +165,48 @@ describe('the Business app', () => {
       expect(planSays({ leftOut: { day, why: 'place' } }, t)!.row).toBe('the place it goes to has no point on the map, so it could not be planned');
       // Whatever else an older answer still carries, a load on no vehicle is not also said to be planned.
       expect(planSays({ leftOut: { day, why: 'room' }, plannedAbout: { day, arrive: '10:40' }, outsideWindow: { day, arrive: '12:40', lateMin: 40 } }, t)!.state).toBe('left');
+    });
+  });
+
+  describe('a load that should have arrived, and one that has', () => {
+    const day = '2026-10-07';
+    const planned = { plannedAbout: { day, arrive: '10:40', window: '08:00–12:00' }, deliverOn: day };
+    it('says a passed hour above a plan in time, and a day that has gone above everything', () => {
+      expect(planSays({ ...planned, runningLate: 'hour' }, t)).toEqual({
+        state: 'late',
+        row: 'it was planned for about 10:40 and has not been delivered',
+        full: 'Running late: your carrier’s plan had it at the door about 10:40 on 2026-10-07, and it has not been delivered.',
+      });
+      expect(planSays({ ...planned, runningLate: 'day' }, t)).toEqual({ state: 'late', row: 'it was ordered for 2026-10-07 and has not been delivered', full: 'Late: it was ordered for 2026-10-07 and has not been delivered.' });
+      // On no vehicle, its hour is nobody's: it says it is on no vehicle. Its day going is said all the same.
+      expect(planSays({ deliverOn: day, leftOut: { day, why: 'room' }, runningLate: 'hour' }, t)!.state).toBe('left');
+      expect(planSays({ deliverOn: day, leftOut: { day, why: 'room' }, runningLate: 'day' }, t)!.state).toBe('late');
+      // An hour that has passed outranks a plan that was already outside its window.
+      expect(planSays({ ...planned, outsideWindow: { day, arrive: '12:40', lateMin: 40 }, runningLate: 'hour' }, t)!.state).toBe('late');
+      // No hour on record: there is nothing to say has passed.
+      expect(planSays({ deliverOn: day, runningLate: 'hour' }, t)).toBeNull();
+    });
+
+    it('says when a load was handed over, and where that fell against what was asked — in colour only where it missed', () => {
+      const at = { timeZone: 'Africa/Nairobi', day, at: '10:52' };
+      expect(deliverySays({}, t)).toBeNull();
+      expect(deliverySays({ deliverOn: day, deliveryTiming: at }, t)).toEqual({ tone: 'quiet', row: 'handed over at 10:52', full: 'Handed over at 10:52.' });
+      expect(deliverySays({ deliverOn: day, deliveryTiming: { ...at, window: '08:00–12:00' } }, t)).toEqual({ tone: 'quiet', row: 'handed over at 10:52, inside your window', full: 'Handed over at 10:52, inside the window you asked for (08:00–12:00).' });
+      expect(deliverySays({ deliverOn: day, deliveryTiming: { ...at, at: '13:10', window: '08:00–12:00', lateMin: 70 } }, t)).toEqual({
+        tone: 'warn',
+        tag: 'After your window',
+        row: 'handed over at 13:10, 1 hour 10 minutes after your window',
+        full: 'Handed over at 13:10, 1 hour 10 minutes after the window you asked for (08:00–12:00).',
+      });
+      expect(deliverySays({ deliverOn: day, deliveryTiming: { ...at, at: '07:10', window: '08:00–12:00', earlyMin: 50 } }, t)).toMatchObject({ tone: 'warn', tag: 'Before your window', row: 'handed over at 07:10, 50 minutes before your window' });
+      // Another day than it was ordered for: the day is what is said, not the hour against a window.
+      expect(deliverySays({ deliverOn: day, deliveryTiming: { ...at, day: '2026-10-08', otherDay: 'late', window: '08:00–12:00' } }, t)).toEqual({
+        tone: 'warn',
+        tag: 'After its day',
+        row: 'handed over on 2026-10-08; it was ordered for 2026-10-07',
+        full: 'Handed over at 10:52 on 2026-10-08. It was ordered for 2026-10-07.',
+      });
+      expect(deliverySays({ deliverOn: day, deliveryTiming: { ...at, day: '2026-10-06', otherDay: 'early' } }, t)).toEqual({ tone: 'quiet', row: 'handed over early, on 2026-10-06', full: 'Handed over at 10:52 on 2026-10-06, before the day it was ordered for (2026-10-07).' });
     });
   });
 

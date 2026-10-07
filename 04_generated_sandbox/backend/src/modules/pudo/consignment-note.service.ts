@@ -180,7 +180,7 @@ export class ConsignmentNoteService implements OnModuleInit {
    * knows the parties; what leaves here is the subset a stranger with the link may see: the journey, the carrier
    * as they would meet them at the door, who signed. No phone, no money, no reasons, no proposals.
    */
-  trackView(f: Freight): FreightTrackView {
+  trackView(f: Freight, now: number = Date.now()): FreightTrackView {
     const carrier = this.carrierOf(f);
     // P1 — an order under a contract starts WITH its carrier: it never waited on a board for one.
     const steps: FreightTrackView['steps'] = [{ status: f.contract ? 'ordered' : f.scheduledPickupAt ? 'scheduled' : 'available', at: f.createdAt }];
@@ -193,6 +193,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     const coming = f.status === 'ordered' || f.status === 'available' || f.status === 'claimed' || f.status === 'in_transit';
     const expectedOn = coming ? f.deliverOn : undefined;
     const expectedAbout = expectedOn && f.status === 'in_transit' && f.planned && !f.planned.held && f.planned.day === expectedOn && !f.deliveryAttempts?.length ? f.planned.arrive : undefined;
+    // …and whether that has passed, on the carrier's own clock. The hour only where the hour is on the page.
+    const late = expectedOn ? this.dispatch.lateOf(f, now) : undefined;
     return {
       kind: 'freight',
       ref: f.code,
@@ -210,6 +212,7 @@ export class ConsignmentNoteService implements OnModuleInit {
       ...(f.scheduledPickupAt ? { scheduledPickupAt: f.scheduledPickupAt } : {}),
       ...(expectedOn ? { expectedOn } : {}),
       ...(expectedAbout ? { expectedAbout } : {}),
+      ...(late === 'day' || (late === 'hour' && expectedAbout) ? { late } : {}),
       // Handed to a partner: the partner is who will come. Released to the board: nobody has it yet, and the fleet
       // the shipper ordered from is still who answers for it.
       ...(!carrier && f.contract ? { carrier: { name: f.handOn?.state === 'partner' && f.handOn.partner ? f.handOn.partner.fleetName : f.contract.fleetName } } : {}),

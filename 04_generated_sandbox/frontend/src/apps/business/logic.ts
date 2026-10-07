@@ -155,21 +155,27 @@ export function windowMiss(o: PostedLoad['outsideWindow'], t: Translate): { row:
 }
 
 /**
- * WHAT THE CARRIER'S PLAN SAYS OF A LOAD, as one thing: `left` it is on no vehicle · `outside` it is planned outside
- * the window asked for · `planned` it is planned, in time or with no window to keep. The worst comes first, because a
- * row says one thing. Nothing while there is no accepted plan to speak of.
+ * WHAT THE CARRIER'S PLAN SAYS OF A LOAD, as one thing: `late` it should have arrived and has not · `left` it is on
+ * no vehicle · `outside` it is planned outside the window asked for · `planned` it is planned, in time or with no
+ * window to keep. The worst comes first, because a row says one thing: a day that has gone outranks everything, then
+ * an order on no vehicle, then an hour that has passed. Nothing while there is no accepted plan to speak of.
  *
  * The first two are said in the colour of something to act on. The third is said quietly and never rings: an order
  * that is going to plan needs nobody — and the same few words are where a shipper looks when somebody asks "when?".
  */
 export interface PlanSays {
-  state: 'left' | 'outside' | 'planned';
+  state: 'late' | 'left' | 'outside' | 'planned';
   /** A few words for the load's row. */
   row: string;
   /** The whole of it, on the load itself. */
   full: string;
 }
-export function planSays(l: Pick<PostedLoad, 'leftOut' | 'outsideWindow' | 'plannedAbout'>, t: Translate): PlanSays | null {
+export function planSays(l: Pick<PostedLoad, 'leftOut' | 'outsideWindow' | 'plannedAbout' | 'runningLate' | 'deliverOn'>, t: Translate): PlanSays | null {
+  if (l.runningLate === 'day') return { state: 'late', row: t('business.loads.late.day', { day: l.deliverOn ?? '' }), full: t('business.loads.late.dayFull', { day: l.deliverOn ?? '' }) };
+  if (l.runningLate === 'hour' && l.plannedAbout) {
+    const at = l.plannedAbout.arrive;
+    return { state: 'late', row: t('business.loads.late.hour', { at }), full: t('business.loads.late.hourFull', { at, day: l.plannedAbout.day }) };
+  }
   if (l.leftOut) {
     const why = t(`business.loads.left.${l.leftOut.why}` as MessageKey, { day: l.leftOut.day });
     return { state: 'left', row: why, full: t('business.loads.left.full', { why }) };
@@ -181,6 +187,29 @@ export function planSays(l: Pick<PostedLoad, 'leftOut' | 'outsideWindow' | 'plan
   return p.window
     ? { state: 'planned', row: t('business.loads.plan.rowIn', { at: p.arrive }), full: t('business.loads.plan.fullIn', { at: p.arrive, day: p.day, window: p.window }) }
     : { state: 'planned', row: t('business.loads.plan.row', { at: p.arrive }), full: t('business.loads.plan.full', { at: p.arrive, day: p.day }) };
+}
+
+/**
+ * WHERE A HANDOVER FELL AGAINST WHAT WAS ASKED, as the shipper reads it: when it was handed over on the carrier's own
+ * clock, and whether that was the day and the window asked for. "Inside your window" is said too — it is the answer
+ * somebody asks for. Nothing where the carrier had no clock: no time was read, and none is made up.
+ */
+export interface DeliverySays {
+  /** `warn` — after or before the window, or after its day · `quiet` — as asked, or with nothing to hold it against. */
+  tone: 'warn' | 'quiet';
+  tag?: string;
+  row: string;
+  full: string;
+}
+export function deliverySays(l: Pick<PostedLoad, 'deliveryTiming' | 'deliverOn'>, t: Translate): DeliverySays | null {
+  const d = l.deliveryTiming;
+  if (!d) return null;
+  if (d.otherDay === 'late') return { tone: 'warn', tag: t('business.loads.done.tagDay'), row: t('business.loads.done.dayLate', { day: d.day, ordered: l.deliverOn ?? '' }), full: t('business.loads.done.dayLateFull', { at: d.at, day: d.day, ordered: l.deliverOn ?? '' }) };
+  if (d.otherDay === 'early') return { tone: 'quiet', row: t('business.loads.done.dayEarly', { day: d.day }), full: t('business.loads.done.dayEarlyFull', { at: d.at, day: d.day, ordered: l.deliverOn ?? '' }) };
+  if (d.window && d.lateMin) return { tone: 'warn', tag: t('business.loads.done.tagAfter'), row: t('business.loads.done.after', { at: d.at, by: spanWords(d.lateMin) }), full: t('business.loads.done.afterFull', { at: d.at, by: spanWords(d.lateMin), window: d.window }) };
+  if (d.window && d.earlyMin) return { tone: 'warn', tag: t('business.loads.done.tagBefore'), row: t('business.loads.done.before', { at: d.at, by: spanWords(d.earlyMin) }), full: t('business.loads.done.beforeFull', { at: d.at, by: spanWords(d.earlyMin), window: d.window }) };
+  if (d.window) return { tone: 'quiet', row: t('business.loads.done.inside', { at: d.at }), full: t('business.loads.done.insideFull', { at: d.at, window: d.window }) };
+  return { tone: 'quiet', row: t('business.loads.done.at', { at: d.at }), full: t('business.loads.done.atFull', { at: d.at }) };
 }
 
 /** P1 — the day after `now`, as YYYY-MM-DD in the reader's own calendar: next-day delivery is the ordinary order. */

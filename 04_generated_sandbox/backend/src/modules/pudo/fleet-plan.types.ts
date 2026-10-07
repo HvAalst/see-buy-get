@@ -174,6 +174,8 @@ export class DayPlanView {
   @ApiProperty({ type: [PlanRuleView] }) rules: PlanRuleView[];
   /** What its distances are. A plan kept from before there was a routing server to ask has none: it was an estimate. */
   @ApiPropertyOptional({ type: PlanDistances }) distances?: PlanDistances;
+  /** The clock its times are on: the fleet's own time zone when the plan was made. Absent: the fleet had none. */
+  @ApiPropertyOptional() timeZone?: string;
   /** Set on the plan the office accepted for this day. A proposal has none. */
   @ApiPropertyOptional({ type: PlanAccepted }) accepted?: PlanAccepted;
 }

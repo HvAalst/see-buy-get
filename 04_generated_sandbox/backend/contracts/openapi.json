@@ -20761,6 +20761,70 @@
         }
       }
     },
+    "/v1/sbg/fleet/managers/{did}/clock": {
+      "get": {
+        "operationId": "CarriageContract.clock",
+        "summary": "",
+        "description": "THE FLEET'S OWN CLOCK — which time zone its plans, its \"today\" and its deliveries are read on, where that comes\nfrom, and what time it is there now. The office's alone to read, and to set.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetClockView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "CarriageContract.setClock",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetFleetClockDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetClockView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/managers/{did}/plan/adviser": {
       "get": {
         "operationId": "CarriageContract.adviserStatus",
@@ -31764,6 +31828,10 @@
           "codeRotatedAt": {
             "type": "string"
           },
+          "timeZone": {
+            "type": "string",
+            "description": "The time zone the office keeps, where it has said so. Most fleets never do: a fleet in a country with one time\nzone is on that zone's clock without anybody typing it. Read it through FleetManagerService.clockOf()."
+          },
           "status": {
             "type": "object"
           },
@@ -32211,6 +32279,46 @@
           "orderKg",
           "at",
           "by"
+        ]
+      },
+      "DeliveryTiming": {
+        "type": "object",
+        "properties": {
+          "otherDay": {
+            "type": "string",
+            "description": "Handed over on another day than it was ordered for: before it, or after it.",
+            "enum": [
+              "early",
+              "late"
+            ]
+          },
+          "window": {
+            "type": "string",
+            "description": "The window asked for, as it read at the handover. Absent: none was asked for, or it was not written as hours."
+          },
+          "lateMin": {
+            "type": "number",
+            "description": "Minutes after the window closed, or before it opened. Neither, with a window and on its day: inside it."
+          },
+          "earlyMin": {
+            "type": "number"
+          },
+          "timeZone": {
+            "type": "string",
+            "description": "The carrier's time zone it was read on."
+          },
+          "day": {
+            "type": "string",
+            "description": "The day and the time of the handover, on that clock."
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "timeZone",
+          "day",
+          "at"
         ]
       },
       "FreightInstructions": {
@@ -32770,6 +32878,27 @@
               }
             }
           },
+          "deliveryTiming": {
+            "description": "Read at the handover and kept: when it was delivered on its carrier's clock, against the day and window asked for.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DeliveryTiming"
+              }
+            ]
+          },
+          "lateTold": {
+            "type": "object",
+            "properties": {
+              "what": {
+                "required": true,
+                "type": "object"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
           "driverPayee": {
             "type": "object",
             "properties": {
@@ -33123,6 +33252,7 @@
           "cancellation",
           "windowTold",
           "planLeft",
+          "lateTold",
           "driverPayee",
           "status",
           "assignedBy",
@@ -36625,6 +36755,22 @@
               }
             ]
           },
+          "runningLate": {
+            "type": "string",
+            "description": "Not delivered, and late on its carrier's own clock: the planned hour has passed, or the whole day.",
+            "enum": [
+              "hour",
+              "day"
+            ]
+          },
+          "deliveryTiming": {
+            "description": "Delivered: when, on the carrier's clock, and where that fell against the day and the window asked for.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DeliveryTiming"
+              }
+            ]
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -39296,6 +39442,14 @@
               }
             ]
           },
+          "deliveryTiming": {
+            "description": "Delivered: when, on this fleet's own clock, and where that fell against the day and the window asked for.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DeliveryTiming"
+              }
+            ]
+          },
           "role": {
             "type": "string",
             "description": "P4 — how the fleet reading this stands to the order: `own` it was ordered from this fleet (whoever carries it now)\n· `offered` a partner is offering it to this fleet · `partner` this fleet took it from a partner and carries it.",
@@ -40273,6 +40427,10 @@
               }
             ]
           },
+          "timeZone": {
+            "type": "string",
+            "description": "The clock its times are on: the fleet's own time zone when the plan was made. Absent: the fleet had none."
+          },
           "accepted": {
             "description": "Set on the plan the office accepted for this day. A proposal has none.",
             "allOf": [
@@ -40423,6 +40581,76 @@
           "leftOut",
           "newSince",
           "withdrawnSince"
+        ]
+      },
+      "FleetClockChoice": {
+        "type": "object",
+        "properties": {
+          "timeZone": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "now": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "timeZone",
+          "name",
+          "now"
+        ]
+      },
+      "FleetClockView": {
+        "type": "object",
+        "properties": {
+          "timeZone": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "The zone as somebody names it: East Africa Time."
+          },
+          "now": {
+            "type": "string",
+            "description": "The time and the day on that clock, at the moment this was asked."
+          },
+          "today": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "country",
+              "office",
+              "none"
+            ]
+          },
+          "choices": {
+            "description": "The clocks the fleet's country keeps: the ones an office chooses among. One, where there is nothing to choose.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FleetClockChoice"
+            }
+          }
+        },
+        "required": [
+          "source",
+          "choices"
+        ]
+      },
+      "SetFleetClockDto": {
+        "type": "object",
+        "properties": {
+          "timeZone": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "timeZone"
         ]
       },
       "PlanAdviserStatus": {

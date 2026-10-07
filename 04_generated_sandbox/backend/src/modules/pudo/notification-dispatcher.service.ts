@@ -1,5 +1,5 @@
 import type { OrderHandedOn } from './fleet-overflow.types';
-import type { PlanLeftWhy } from './dispatch.types';
+import type { DeliveryTiming, PlanLeftWhy } from './dispatch.types';
 import { UNCOLLECTED_H } from './pudo.config';
 import { appUrl } from '../../foundation/mail/mail.templates';
 import { MailService } from '../../foundation/mail/mail.service';
@@ -85,6 +85,20 @@ const LEFT_OUT_BECAUSE: Record<PlanLeftWhy, (day: string) => string> = {
   place: () => 'The place it goes to has no point on the map, so it could not be planned. A fuller address will help.',
 };
 
+/**
+ * Where a handover fell against what was asked, as a sentence to whoever sent the load — or nothing, where there was
+ * nothing to hold it against. The day first; then the window. "Inside" is said too: it is the answer a sender wants.
+ */
+export function againstWhatWasAsked(t: DeliveryTiming | undefined, orderedFor: string | undefined): string {
+  if (!t) return '';
+  if (t.otherDay === 'late') return ` It was ordered for ${orderedFor ?? 'an earlier day'} and arrived on ${t.day}.`;
+  if (t.otherDay === 'early') return ` It was ordered for ${orderedFor ?? 'a later day'} and arrived early, on ${t.day}.`;
+  if (!t.window) return '';
+  if (t.lateMin) return ` That is ${spanWords(t.lateMin)} after the window you asked for (${t.window}).`;
+  if (t.earlyMin) return ` That is ${spanWords(t.earlyMin)} before the window you asked for (${t.window}).`;
+  return ` That is inside the window you asked for (${t.window}).`;
+}
+
 interface BookingGivenBack { departureId: string; bookingId: string; managerDid: string; company: string; lineName: string; shipperDid: string; kind: 'sold' | 'own'; by: string; description: string; reason?: string; note?: string }
 
 /**
@@ -108,6 +122,8 @@ import { HOLDING_FEE_PER_DAY, MARKET_SUPPLY_STALE_MIN, NETWORK_CURRENCY, NUDGE_C
 
 /** How often to look for somebody who started joining and stopped. */
 const SIGNUP_SWEEP_MS = 60 * 60 * 1000;
+/** How often the loads that should have arrived are looked at. A shipper learns of a late load within this long. */
+const LATE_SWEEP_MS = 10 * 60 * 1000;
 
 /**
  * The missing documents as a sentence, NAMED rather than counted.
@@ -174,6 +190,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   /** The stalled-sign-up sweep's timer, self-unref'd for the same reason. */
   private signupTimer?: ReturnType<typeof setInterval>;
 
+  /** The running-late sweep's timer, self-unref'd for the same reason. */
+  private lateTimer?: ReturnType<typeof setInterval>;
+
   onApplicationBootstrap(): void {
     // Every other notification here is a REACTION to an event. This one cannot be: nothing happens when a
     // parcel is not collected, which is exactly why nobody was ever told. A sweep is the only shape that
@@ -186,11 +205,16 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     void this.sweepSignups().catch(() => undefined);
     this.signupTimer = setInterval(() => void this.sweepSignups().catch(() => undefined), SIGNUP_SWEEP_MS);
     this.signupTimer.unref?.();
+    // And a load that has not arrived: the third absence nobody was told about.
+    void this.sweepLate().catch(() => undefined);
+    this.lateTimer = setInterval(() => void this.sweepLate().catch(() => undefined), LATE_SWEEP_MS);
+    this.lateTimer.unref?.();
   }
 
   onModuleDestroy(): void {
     if (this.uncollectedTimer) clearInterval(this.uncollectedTimer);
     if (this.signupTimer) clearInterval(this.signupTimer);
+    if (this.lateTimer) clearInterval(this.lateTimer);
   }
 
   onModuleInit(): void {
@@ -530,11 +554,31 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     }
   }
 
+  /**
+   * RUNNING LATE. A load that should have arrived and has not is the absence of an event, so it is swept for: each
+   * shipper is told once that the hour its carrier planned has passed, and once more if the whole day goes. On the
+   * carrier's own clock — which is why this could not exist before a fleet had one. Answers how many were told.
+   */
+  async sweepLate(now: number = Date.now()): Promise<number> {
+    const due = this.dispatch.takeLateToTell(now);
+    for (const l of due) {
+      const where = l.status === 'in_transit' ? 'It is on the road.' : l.status === 'claimed' ? 'It is with its driver and has not been collected yet.' : 'It has not gone out yet.';
+      const data = { freightId: l.freightId };
+      if (l.what === 'hour') {
+        await this.tell(l.shipperDid, { kind: 'order_late', title: `${l.code} is running late`, body: `${l.fleetName} planned to be at the door about ${l.arrive} and has not delivered it. ${where} A plan’s time is an estimate; speak to ${l.fleetName} if you need to know more.`, tag: `late:${l.code}:hour`, data });
+      } else {
+        await this.tell(l.shipperDid, { kind: 'order_late', title: `${l.code} did not arrive on ${l.day}`, body: `It was ordered for that day, and ${l.fleetName} has not delivered it. ${where} Speak to ${l.fleetName} now.`, tag: `late:${l.code}:day`, data });
+      }
+    }
+    return due.length;
+  }
+
   /** A load reached the other end. Whoever sent it hears it once, with who signed for it. */
-  private async onFreightDelivered(p: { freightId: string; code: string; posterDid?: string; description?: string; destLabel?: string; receivedBy?: string }): Promise<void> {
+  private async onFreightDelivered(p: { freightId: string; code: string; posterDid?: string; description?: string; destLabel?: string; receivedBy?: string; timing?: DeliveryTiming; orderedFor?: string }): Promise<void> {
     if (!p.posterDid) return;
+    const when = p.timing ? ` at ${p.timing.at}` : '';
     const goods = p.description ? `: ${p.description.replace(/\.+$/, '')}` : '';
-    await this.tell(p.posterDid, { kind: 'freight_delivered', title: `${p.code} was delivered`, body: `Handed over${p.receivedBy ? ` to ${p.receivedBy}` : ''}${p.destLabel ? ` at ${p.destLabel}` : ''}${goods}.`, tag: `freight:${p.freightId}:delivered`, data: { freightId: p.freightId } });
+    await this.tell(p.posterDid, { kind: 'freight_delivered', title: `${p.code} was delivered`, body: `Handed over${when}${p.receivedBy ? ` to ${p.receivedBy}` : ''}${p.destLabel ? ` at ${p.destLabel}` : ''}${goods}.${againstWhatWasAsked(p.timing, p.orderedFor)}`, tag: `freight:${p.freightId}:delivered`, data: { freightId: p.freightId } });
   }
 
   private async onOrderHandedOn(p: OrderHandedOn): Promise<void> {

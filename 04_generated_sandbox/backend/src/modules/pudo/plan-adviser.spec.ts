@@ -63,6 +63,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { ClaudeGateway, ClaudeReply, ClaudeRequest } from './claude.gateway';
 import { ADVISER_BRIEF, ADVISER_MAX_HISTORY, ADVISER_MAX_MESSAGE, ADVISER_MAX_STEPS, PlanAdviserService, REPLAN_TOOL } from './plan-adviser.service';
 import type { RoadDistances, RoadMatrix } from './road-matrix';
+import { clockAt } from './fleet-clock';
 import { ROUTER as ROUTER_TOKEN, type Router } from './router';
 import { requiredLoadKeys, requiredUnloadKeys } from './heavy-cargo';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -148,7 +149,8 @@ describe('the adviser over a day’s plan', () => {
   const depot = { lat: -1.2, lng: 36.8 };
   const yard = { lat: -1.3, lng: 36.85 };
   const site = (n: number) => ({ lat: -1.25 + n * 0.02, lng: 36.9 + n * 0.02 });
-  const dayPlus = (n: number) => new Date(Date.now() + n * DAY).toISOString().slice(0, 10);
+  // The fleets here are Kenyan: their days are Nairobi's, which for three hours of every day are not UTC's.
+  const dayPlus = (n: number) => clockAt(Date.now() + n * DAY, 'Africa/Nairobi').day;
   const tomorrow = () => dayPlus(1);
 
   function aFleet(name: string) {

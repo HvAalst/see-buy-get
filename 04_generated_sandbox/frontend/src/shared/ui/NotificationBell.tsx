@@ -62,6 +62,8 @@ const KIND_ICON: Record<string, IconName> = {
   order_window: 'clock',
   // The carrier's accepted plan leaves an order on no vehicle: the one of these to act on today.
   order_left_out: 'warning',
+  // A load that should have arrived and has not: its planned hour has passed, or its whole day.
+  order_late: 'clock',
   // Five wrong PINs locked the way they sign in — somebody may know their number.
   security: 'lock',
 };
