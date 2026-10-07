@@ -1,3 +1,5 @@
+import { DISPLAY_FACE, LOGO_SHOWN, MailImage, TEXT_FACE, brandLogo, fontFaceCss } from './mail.brand';
+
 /**
  * The pieces every SeeBuyGet email is built from, and the one layout they sit in.
  *
@@ -5,9 +7,11 @@
  * for everyone whose client shows text (and for the spam filters that read it). Writing the two by hand drifts — the
  * text version of a reset email ends up without the code — so neither is ever written by hand.
  *
- * The HTML is deliberately old-fashioned: tables, inline styles, no web fonts, no images unless `MAIL_LOGO_URL` is
- * set. Mail clients strip <style>, ignore flexbox and block remote images by default, and a security email that only
- * looks right in one client is a security email people learn to distrust.
+ * The HTML is deliberately old-fashioned: tables and inline styles. Mail clients strip <style>, ignore flexbox and
+ * block remote images by default, and a security email that only looks right in one client is a security email
+ * people learn to distrust. So the house style is carried in ways that survive that (mail.brand.ts): the logo is
+ * INSIDE the message, the colours are inline, and the two typefaces are named first with the reader's own behind
+ * them — the one <style> there is only tells a client that can fetch a typeface where it is.
  */
 
 export type MailBlock =
@@ -35,6 +39,8 @@ export interface RenderedMail {
   preheader: string;
   html: string;
   text: string;
+  /** The pictures the HTML points at by content id — the logo. Sent inside the email, never fetched. */
+  images: MailImage[];
 }
 
 /** Brand colours from brand/README.md: Deep Navy for ink and the header, Bright Orange where the eye must land,
@@ -51,7 +57,12 @@ const C = {
   warnGround: '#FFF4EC',
   white: '#FFFFFF',
 };
-const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+/** What every reader has, behind the identity's own faces: Gmail and Outlook never load a typeface, so this is theirs. */
+const OWN = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+/** Everything that is read. */
+const FONT = `${TEXT_FACE},${OWN}`;
+/** What is noticed: the heading. Set a little looser than the text face — it is wider, and closes up when tight. */
+const DISPLAY = `'${DISPLAY_FACE}',${TEXT_FACE},${OWN}`;
 const MONO = "ui-monospace,SFMono-Regular,Menlo,Consolas,'Courier New',monospace";
 
 export function escapeHtml(value: string): string {
@@ -67,7 +78,7 @@ function blockHtml(block: MailBlock): string {
   const e = escapeHtml;
   switch (block.kind) {
     case 'heading':
-      return `<h1 style="margin:0 0 16px;font:700 24px/1.25 ${FONT};color:${C.navy};">${e(block.text)}</h1>`;
+      return `<h1 style="margin:0 0 16px;font:700 26px/1.2 ${DISPLAY};letter-spacing:-.005em;color:${C.navy};">${e(block.text)}</h1>`;
     case 'paragraph':
       return `<p style="margin:0 0 16px;font:400 16px/1.55 ${FONT};color:${C.ink};">${e(block.text)}</p>`;
     case 'note':
@@ -129,32 +140,42 @@ function blockText(block: MailBlock): string {
   }
 }
 
-/** The brand mark in the header: the real logo when it is hosted somewhere mail clients can fetch, else type. */
-function markHtml(logoUrl?: string): string {
-  if (logoUrl && /^https:\/\//i.test(logoUrl)) {
-    return `<img src="${escapeHtml(logoUrl)}" width="140" alt="seebuyget" style="display:block;border:0;height:auto;max-width:140px;" />`;
-  }
+/**
+ * The logo in the header. Inside the email unless the operator hosts it (`MAIL_LOGO_URL`, https) — then the email is
+ * smaller and the picture is fetched. Its alt text is set like the wordmark, so a client that shows no pictures still
+ * shows the name. And if the logo's file is not there at all, the name in type: the email goes all the same.
+ */
+function markHtml(logoUrl: string | undefined, logo: MailImage | undefined): string {
+  const img = (src: string) =>
+    `<img src="${src}" width="${LOGO_SHOWN.width}" height="${LOGO_SHOWN.height}" alt="seebuyget" style="display:block;border:0;outline:none;width:${LOGO_SHOWN.width}px;height:auto;max-width:100%;font:700 19px/${LOGO_SHOWN.height}px ${DISPLAY};color:${C.white};" />`;
+  if (logoUrl && /^https:\/\//i.test(logoUrl)) return img(escapeHtml(logoUrl));
+  if (logo) return img(`cid:${logo.cid}`);
   return (
     `<table role="presentation" cellpadding="0" cellspacing="0"><tr>` +
     `<td style="background:${C.orange};border-radius:8px;width:34px;height:34px;text-align:center;font:800 14px/34px ${FONT};color:${C.white};">sbg</td>` +
-    `<td style="padding-left:10px;font:700 19px/1 ${FONT};color:${C.white};letter-spacing:-.01em;">seebuyget</td>` +
+    `<td style="padding-left:10px;font:700 19px/1 ${DISPLAY};color:${C.white};">seebuyget</td>` +
     `</tr></table>`
   );
 }
 
-export function renderDocument(doc: MailDocument, opts: { helpUrl: string; logoUrl?: string }): RenderedMail {
+export function renderDocument(doc: MailDocument, opts: { helpUrl: string; logoUrl?: string; fontsUrl?: string }): RenderedMail {
   const e = escapeHtml;
+  const hosted = Boolean(opts.logoUrl && /^https:\/\//i.test(opts.logoUrl));
+  const logo = hosted ? undefined : brandLogo();
   const html =
     `<!doctype html><html lang="en"><head><meta charset="utf-8" />` +
     `<meta name="viewport" content="width=device-width,initial-scale=1" />` +
     `<meta name="color-scheme" content="light" /><meta name="supported-color-schemes" content="light" />` +
-    `<title>${e(doc.subject)}</title></head>` +
+    `<title>${e(doc.subject)}</title>` +
+    // Where a client that can fetch a typeface finds the identity's two. The caller vouches for the address.
+    (opts.fontsUrl ? `<style>${fontFaceCss(opts.fontsUrl)}</style>` : '') +
+    `</head>` +
     `<body style="margin:0;padding:0;background:${C.ground};-webkit-text-size-adjust:100%;">` +
     // The preheader: shown in the inbox list, hidden in the message.
     `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${e(doc.preheader)}</div>` +
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.ground};"><tr><td align="center" style="padding:24px 12px;">` +
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:${C.white};border-radius:16px;overflow:hidden;">` +
-    `<tr><td style="background:${C.navy};padding:20px 28px;">${markHtml(opts.logoUrl)}</td></tr>` +
+    `<tr><td style="background:${C.navy};padding:20px 28px;">${markHtml(opts.logoUrl, logo)}</td></tr>` +
     `<tr><td style="padding:32px 28px 8px;">${doc.blocks.map(blockHtml).join('')}</td></tr>` +
     `<tr><td style="padding:4px 28px 28px;"><div style="border-top:1px solid ${C.line};padding-top:16px;">` +
     `<p style="margin:0 0 8px;font:400 13px/1.5 ${FONT};color:${C.muted};">${e(doc.reason)}</p>` +
@@ -162,5 +183,5 @@ export function renderDocument(doc: MailDocument, opts: { helpUrl: string; logoU
     `</div></td></tr>` +
     `</table></td></tr></table></body></html>`;
   const text = ['SEEBUYGET', '', ...doc.blocks.flatMap((b) => [blockText(b), '']), '--', doc.reason, `Please do not reply — this address is not read. Help: ${opts.helpUrl}`].join('\n');
-  return { subject: doc.subject, preheader: doc.preheader, html, text };
+  return { subject: doc.subject, preheader: doc.preheader, html, text, images: logo ? [logo] : [] };
 }

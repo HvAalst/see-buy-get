@@ -55,7 +55,10 @@ describe('the network’s emails', () => {
       client_reference: 'welcome:abc',
       track_clicks: false,
       track_opens: false,
+      // The logo, inside the email: what the HTML's `cid:` points at (mail.brand.spec.ts).
+      inline_images: mail.images.map((i) => ({ mime_type: i.mimeType, name: i.name, content: i.base64, cid: i.cid })),
     });
+    expect(mail.images).toHaveLength(1);
   });
 
   it('records what it would send, and never throws when sending fails', async () => {

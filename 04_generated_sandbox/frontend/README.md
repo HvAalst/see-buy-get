@@ -150,6 +150,15 @@ started with, never off a variable that happens to be set.
   to the provider — so a sandbox given a real token does not mail its seeded people.
   NOT YET SENT THROUGH THE REAL PROVIDER: it is tested against a stand-in that answers in the provider's
   documented shapes (`foundation/mail/zeptomail.sender.spec.ts`). Watch the first real send on Connections.
+- **The emails' house style** (`foundation/mail/mail.brand.ts`, rules in `brand/README.md`). Every email is one
+  layout in the identity's colours. The LOGO is the identity's `logo-horizontal-on-dark`, carried INSIDE each
+  email as an inline picture — it needs no hosting, shows where remote pictures are blocked, and tells nobody
+  the email was opened; `MAIL_LOGO_URL` (https) hosts it instead and makes each email 11 KB smaller. The
+  TYPEFACES are the identity's two, named first in every email with the reader's own behind them: Bricolage
+  Grotesque for the heading, Inter for everything read. A mail client that fetches typefaces (Apple Mail does;
+  Gmail and Outlook never do) is told where they are only when `MAIL_FONT_URL` is set — this server serves
+  them itself at `/v1/mail/font`, so that is usually `https://<the API's public address>/v1/mail/font`.
+  See all of them on a sandbox at `/v1/mail/preview`, each also "as Gmail and Outlook show it".
 - **Push** is still kept by `OutboxPushSender`: no push leaves the server. The keys (`GLOS_VAPID_PUBLIC`,
   `GLOS_VAPID_PRIVATE`) are judged from the pair: the server's own, the pair written in the source, or two that
   do not belong together.

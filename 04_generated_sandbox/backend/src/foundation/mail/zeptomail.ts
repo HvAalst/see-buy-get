@@ -18,6 +18,8 @@ export interface ZeptoMailRequest {
   client_reference: string;
   track_clicks: boolean;
   track_opens: boolean;
+  /** Pictures the HTML points at by content id: carried in the email, not fetched by the reader. */
+  inline_images?: Array<{ mime_type: string; name: string; content: string; cid: string }>;
 }
 
 /** The address this server starts with. It is on a domain nobody owns: no provider will send for it. */
@@ -42,6 +44,7 @@ export function toZeptoMailRequest(mail: OutgoingMail, from: MailAddress = mailF
     client_reference: mail.reference,
     track_clicks: mail.tracking,
     track_opens: mail.tracking,
+    ...(mail.images.length ? { inline_images: mail.images.map((i) => ({ mime_type: i.mimeType, name: i.name, content: i.base64, cid: i.cid })) } : {}),
   };
 }
 

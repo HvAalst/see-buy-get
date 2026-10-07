@@ -67,7 +67,7 @@
       "get": {
         "operationId": "Mail.previewOne",
         "summary": "",
-        "description": "One email, as the mail client would show it — or `?format=text` for the plain-text version.",
+        "description": "One email, as a mail client would show it — `?fonts=off` as one that fetches no typeface does, `?format=text`\nfor the plain-text version.",
         "parameters": [
           {
             "name": "template",
@@ -84,6 +84,36 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "fonts",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/mail/font/{file}": {
+      "get": {
+        "operationId": "Mail.font",
+        "summary": "",
+        "description": "One of the typeface files. NOT sandbox-only: this is where `MAIL_FONT_URL` points a mail client that can fetch a\ntypeface, and a client asks from wherever the reader is. Only the files the emails name are served, by exact name;\nthey are public, they never change, and anybody's page may use them.",
+        "parameters": [
+          {
+            "name": "file",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -97,7 +127,7 @@
       "get": {
         "operationId": "Mail.outboxList",
         "summary": "",
-        "description": "What this sandbox would have sent, newest first — the reset codes included.",
+        "description": "What this sandbox would have sent, newest first — the reset codes included. The pictures are named, not dumped.",
         "parameters": [
           {
             "name": "to",

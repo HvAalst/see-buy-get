@@ -188,6 +188,11 @@ describe('the mail transport', () => {
       // The receiving end has the email itself: who from, who to, both bodies, our reference, and no tracking.
       expect(JSON.parse(seen[0].body)).toEqual(toZeptoMailRequest(mail));
       expect(JSON.parse(seen[0].body)).toMatchObject({ to: [{ email_address: { address: 'amina@example.com', name: 'Amina' } }], subject: mail.subject, htmlbody: mail.html, textbody: mail.text, client_reference: 'welcome:abc', track_clicks: false, track_opens: false });
+      // …and the logo arrived with it, as the picture the HTML points at.
+      const [logo] = JSON.parse(seen[0].body).inline_images;
+      expect(logo).toMatchObject({ cid: 'sbg-logo', mime_type: 'image/png', name: 'seebuyget.png' });
+      expect(Buffer.from(logo.content, 'base64').subarray(1, 4).toString('latin1')).toBe('PNG');
+      expect(mail.html).toContain(`src="cid:${logo.cid}"`);
     });
 
     it('does not call an email sent because something answered: a page that is not the provider’s answer is a failure', async () => {

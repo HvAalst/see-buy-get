@@ -1,4 +1,5 @@
 import { MailDocument, RenderedMail, renderDocument } from './mail.blocks';
+import { fontsBase } from './mail.brand';
 
 /**
  * EVERY EMAIL THE NETWORK SENDS — its words, what it needs to be written, and when it goes.
@@ -552,7 +553,10 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
 };
 
 /** Write one email: the words for these parameters, rendered to HTML and text inside the shared layout. */
-export function renderMail<K extends MailTemplateId>(template: K, params: MailParams[K]): RenderedMail {
+export function renderMail<K extends MailTemplateId>(template: K, params: MailParams[K], look?: { fontsUrl?: string }): RenderedMail {
   const def = MAIL_TEMPLATES[template] as MailTemplate<MailParams[K]>;
-  return renderDocument(def.build(params), { helpUrl: helpUrl(), logoUrl: process.env.MAIL_LOGO_URL });
+  // `MAIL_FONT_URL` — where the typeface files are served (this server serves them at /v1/mail/font). A look that is
+  // passed in is the preview's, which points a browser at this server's own copy.
+  const fontsUrl = look?.fontsUrl ?? fontsBase(process.env.MAIL_FONT_URL);
+  return renderDocument(def.build(params), { helpUrl: helpUrl(), logoUrl: process.env.MAIL_LOGO_URL, ...(fontsUrl ? { fontsUrl } : {}) });
 }
