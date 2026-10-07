@@ -1675,7 +1675,7 @@ export const enTowerQueues = {
   'tower.nav.connections': 'Connections',
   'tower.conn.title': 'Connections',
   'tower.conn.lede':
-    'What this server is connected to for the fleets\u2019 planning: a routing server for road distances, and the adviser. Both are set where the server runs. This says whether each is set up, and whether it is answering.',
+    'What this server is connected to: a routing server and the adviser for the fleets\u2019 planning, and email and push for everybody. All are set where the server runs. This says whether each is set up, whether it is answering, and whether what is written here leaves at all.',
   'tower.conn.unread': 'This could not be read. Try again in a moment.',
   'tower.conn.tag.off': 'Not set up',
   'tower.conn.tag.invalid': 'Set, and not an address',
@@ -1722,6 +1722,58 @@ export const enTowerQueues = {
   'tower.conn.fact.keySet': 'Set',
   'tower.conn.fact.keyNone': 'None set',
   'tower.conn.fact.model': 'Model',
+  'tower.conn.tag.kept': 'Kept, not sent',
+  'tower.conn.tag.unsent': 'Set up, nothing sent yet',
+  'tower.conn.tag.sending': 'Sending',
+  'tower.conn.tag.notSending': 'Not getting through',
+  'tower.conn.tag.noFrom': 'No sender address',
+  'tower.conn.tag.keysMismatched': 'Keys do not match',
+  'tower.conn.tag.keysBuiltIn': 'Keys anybody can read',
+  'tower.conn.mail.title': 'Email',
+  'tower.conn.mail.kept':
+    'No email leaves this server. Each one is written and kept here instead, and reaches nobody — {n} since it started. That is how a sandbox is meant to run.',
+  'tower.conn.mail.keptLive':
+    'No email leaves this server. Reset codes, invitations and notices are written and reach nobody — {n} since it started. This is not a sandbox: the people they were for are waiting. A mail sender has to be put in before this server is relied on.',
+  'tower.conn.mail.tokenUnused': 'A provider’s token is set, and nothing on this server uses it: setting it does not start the sending.',
+  'tower.conn.mail.noFrom':
+    'Email is sent as {from}, the address this server starts with. It is on a domain nobody owns, and no provider delivers for it. Set the address the provider has verified.',
+  'tower.conn.mail.unsent': 'No email has been written since this server started ({since}).',
+  'tower.conn.mail.sent': 'The last email, at {when}, was handed to the provider: “{what}”. Whether it arrived is the provider’s to say.',
+  'tower.conn.mail.failed': 'The last email, at {when}, could not be handed to the provider: “{what}”. The person it was for was not told.',
+  'tower.conn.mail.someFailed': 'Since this server started, {failed} of {n} could not be handed over.',
+  'tower.conn.mail.where':
+    'Sending is not switched on by a setting: the sender itself has to be built into the server. Until it is, ZEPTOMAIL_TOKEN is read and not used. The address email is sent as is MAIL_FROM_ADDRESS.',
+  'tower.conn.mail.whereKept': 'On a sandbox, what was kept can be read at /v1/mail/outbox on this server, and every email looked at with sample words at /v1/mail/preview.',
+  'tower.conn.push.title': 'Push to a phone',
+  'tower.conn.push.kept':
+    'No push leaves this server. A notification is always written to the person’s bell in their app; the push that would light a phone whose app is closed is kept here instead. That is how a sandbox is meant to run.',
+  'tower.conn.push.keptLive':
+    'No push leaves this server. A notification is written to the person’s bell and waits there until they open their app; no phone is woken. This is not a sandbox: a driver handed a trip finds out when they next look. A push sender has to be put in before this server is relied on.',
+  'tower.conn.push.mismatched':
+    'The two keys this server signs with do not belong together: one was set and the other left as it was, or they were copied from two different pairs. A phone enrols against one and the server signs with the other, so every push is refused. Set both, from the same pair.',
+  'tower.conn.push.builtIn':
+    'This server signs with the pair of keys written in its own source code, and anybody who can read the code can sign with them too. Set a pair of its own before this server is relied on.',
+  'tower.conn.push.unsent': 'No push has been handed to a phone since this server started ({since}).',
+  'tower.conn.push.sent': 'The last push, at {when}, was handed to the phone’s push service.',
+  'tower.conn.push.failed': 'The last push, at {when}, could not be handed over. The notification is in the person’s bell all the same.',
+  'tower.conn.push.someFailed': 'Since this server started, {failed} of {n} could not be handed over.',
+  'tower.conn.push.where':
+    'The keys are set on the server as GLOS_VAPID_PUBLIC and GLOS_VAPID_PRIVATE; the private one is never shown, here or anywhere. Changing them ends every enrolment: each phone has to turn notifications on again.',
+  'tower.conn.fact.leaves': 'Leaves this server',
+  'tower.conn.fact.leavesYes': 'Yes',
+  'tower.conn.fact.leavesNo': 'No — kept here',
+  'tower.conn.fact.token': 'Provider’s token',
+  'tower.conn.fact.from': 'Sent as',
+  'tower.conn.fact.fromPlaceholder': '{from} — the address this server starts with',
+  'tower.conn.fact.written': 'Written since it started',
+  'tower.conn.fact.handed': 'Handed over since it started',
+  'tower.conn.fact.countFailed': '{n} — {failed} could not be handed over',
+  'tower.conn.fact.keys': 'Keys',
+  'tower.conn.fact.keys.own': 'Its own pair',
+  'tower.conn.fact.keys.built_in': 'The pair written in the source code',
+  'tower.conn.fact.keys.mismatched': 'Two that do not belong together',
+  'tower.conn.fact.devices': 'Phones and browsers enrolled',
+  'tower.conn.fact.people': 'People they belong to',
   'tower.conn.since': 'What each last met is kept since this server started, {since}. A restart forgets it.',
   'tower.conn.again': 'Read again',
 

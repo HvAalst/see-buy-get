@@ -1,7 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { createHash, randomBytes } from 'crypto';
+import { createECDH, createHash, randomBytes } from 'crypto';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { GlosError } from '../../foundation/http/glos-error';
+import { PushConnection, PushKeys, PushLast } from './connections.types';
+import { OutboxPushSender } from './push-sender';
 import {
   NotificationPayload,
   NotificationRecord,
@@ -22,10 +24,32 @@ import {
  * accepts it and a browser genuinely subscribes. In production, set GLOS_VAPID_PUBLIC/PRIVATE to a
  * freshly generated pair (rotating the default) and GLOS_VAPID_SUBJECT to a real mailto:/https: contact.
  */
-const VAPID_PUBLIC =
-  process.env.GLOS_VAPID_PUBLIC || 'BGdKs8o8SwKFtZWmRYPEy5j8tccJ2bbBzExTX0xJW2qzb6ft9Rot26iGI9p4u5_5e0jXTskaRLJrNW7p3oIP37U';
-const VAPID_PRIVATE = process.env.GLOS_VAPID_PRIVATE || 'oREOkpH8LKZI0b2iVJ8hPeuhCqJTMLBppOQsoml4Cc8';
+const BUILT_IN_PUBLIC = 'BGdKs8o8SwKFtZWmRYPEy5j8tccJ2bbBzExTX0xJW2qzb6ft9Rot26iGI9p4u5_5e0jXTskaRLJrNW7p3oIP37U';
+const BUILT_IN_PRIVATE = 'oREOkpH8LKZI0b2iVJ8hPeuhCqJTMLBppOQsoml4Cc8';
+const VAPID_PUBLIC = process.env.GLOS_VAPID_PUBLIC || BUILT_IN_PUBLIC;
+const VAPID_PRIVATE = process.env.GLOS_VAPID_PRIVATE || BUILT_IN_PRIVATE;
 const VAPID_SUBJECT = process.env.GLOS_VAPID_SUBJECT || 'mailto:ops@seebuyget.example';
+
+/**
+ * WHOSE KEYS A PAIR IS, worked out from the pair itself rather than from which variables are set.
+ *
+ * `mismatched` — the public key is not the one the private key makes. That is one of the two set and the other left
+ * at the built-in, or a pair pasted from two places: a browser enrols against the public key, the server signs with
+ * a private key that is not its partner, and every push service refuses it. `built_in` — the pair written in this
+ * file, which anybody who can read the source can sign with. `own` — a matching pair that is nobody else's.
+ */
+export function vapidKeysOf(publicKey: string, privateKey: string): PushKeys {
+  let made: string | undefined;
+  try {
+    const ecdh = createECDH('prime256v1');
+    ecdh.setPrivateKey(Buffer.from(privateKey, 'base64url'));
+    made = ecdh.getPublicKey().toString('base64url');
+  } catch {
+    made = undefined; // not a private key at all
+  }
+  if (!made || made !== publicKey.trim().replace(/=+$/, '')) return 'mismatched';
+  return made === BUILT_IN_PUBLIC ? 'built_in' : 'own';
+}
 
 /**
  * NotificationService — the push spine (N1). It owns the VAPID identity, the per-device subscription
@@ -47,6 +71,11 @@ export class NotificationService {
   // notification centre shows history + an unread count even for a device that never enabled push or
   // was offline when the live message fired. Keyed by record id.
   private readonly inbox = new PersistentMap<string, NotificationRecord>('sbg-notifications');
+
+  /** Since this server started: kept in memory, and a restart forgets it. */
+  private handed = 0;
+  private failed = 0;
+  private last?: PushLast;
 
   constructor(@Inject(PUSH_SENDER) private readonly sender: PushSender) {}
 
@@ -98,12 +127,40 @@ export class NotificationService {
     const targets = this.subscriptionsFor(ownerDid);
     await Promise.all(
       targets.map((sub) =>
-        this.sender.send(sub, payload).catch((err) => {
-          this.logger.warn(`push to ${ownerDid} (${sub.endpoint.slice(0, 40)}…) failed: ${(err as Error).message}`);
-        }),
+        this.sender.send(sub, payload).then(
+          () => this.pushed(true),
+          (err) => {
+            this.pushed(false);
+            this.logger.warn(`push to ${ownerDid} (${sub.endpoint.slice(0, 40)}…) failed: ${(err as Error).message}`);
+          },
+        ),
       ),
     );
     return targets.length;
+  }
+
+  private pushed(ok: boolean): void {
+    this.handed += 1;
+    if (!ok) this.failed += 1;
+    this.last = { at: new Date().toISOString(), ok };
+  }
+
+  /**
+   * Where a push goes, for staff. `sends` is READ OFF THE SENDER, as the mail's is: the outbox keeps, and anything
+   * put in its place sends. The keys are judged from the pair this server signs with. Counted per device, since a
+   * push is to a device: a person with a phone and a laptop enrolled is two.
+   */
+  connection(): PushConnection {
+    const devices = [...this.subs.values()];
+    return {
+      sends: !(this.sender instanceof OutboxPushSender),
+      keys: vapidKeysOf(VAPID_PUBLIC, VAPID_PRIVATE),
+      devices: devices.length,
+      people: new Set(devices.map((s) => s.ownerDid)).size,
+      handed: this.handed,
+      failed: this.failed,
+      ...(this.last ? { last: { ...this.last } } : {}),
+    };
   }
 
   private key(ownerDid: string, endpoint: string): string {

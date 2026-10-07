@@ -324,19 +324,24 @@ export const ARTICLES: GuideArticle[] = [
     apps: [
       "console"
     ],
-    title: "Connections: the routing server and the adviser",
-    summary: "The Connections screen says whether the two services behind the fleets’ planning are set up, and whether they are answering.",
+    title: "Connections: routing, the adviser, email and push",
+    summary: "The Connections screen says whether the services this server leans on are set up and answering: the routing server and the adviser behind the fleets’ planning, and email and push for everybody.",
     steps: [
       "Open Connections, under Setup. Only SeeBuyGet staff see it.",
       "Read the word beside each service: Not set up, Set up and not asked yet, Answering, or Not answering. The line under it says what the last plan, or the last office to ask, met.",
-      "For the routing server, tap Check it now. It asks for the road distance between a fleet’s depot and a place a little way off it, and says what came back."
+      "For the routing server, tap Check it now. It asks for the road distance between a fleet’s depot and a place a little way off it, and says what came back.",
+      "For Email and for Push to a phone, read whether anything leaves this server at all. Kept, not sent means each one is written and kept on the server, and reaches nobody."
     ],
     notes: [
       "A routing server that is not set up, or not answering, stops nothing. Each day’s plan is made on estimated distances instead, and says so to the office that made it.",
       "If a check answers with a distance that cannot be right for two places that close together, the routing server may hold another country’s map.",
       "The adviser is not checked from here, because every question to it is paid for. What the last office’s question met says whether it is answering.",
-      "Both services are set where the server runs, not on this screen. The routing server’s address is shown without anything secret in it, and the adviser’s key is never shown.",
-      "What each service last met is kept only since the server started. After a restart, check the routing server again."
+      "All four are set where the server runs, not on this screen. The routing server’s address is shown without anything secret in it. The adviser’s key, the mail provider’s token and the private push key are never shown. Nobody’s email address is shown either: the last email is named by what it was, not by who it was for.",
+      "What each service last met, and the counts of emails and pushes, are kept only since the server started. After a restart, check the routing server again.",
+      "Kept, not sent is how a sandbox is meant to run. On a server that real people rely on it is said in red: reset codes, invitations and notices are written and reach nobody, and no phone is woken.",
+      "A provider’s token being set does not mean email is sent. Sending has to be built into the server; until it is, the screen says the token is set and that nothing uses it.",
+      "A notification is always written to the person’s bell in their app, whatever becomes of the push. Push is only what lights a phone whose app is closed.",
+      "Push is signed with a pair of keys. The screen says whether the server has a pair of its own, is using the pair written in its source code, which anybody who can read the code can sign with, or has two keys that do not belong together, which every push service refuses. Changing the keys ends every enrolment: each phone has to turn notifications on again."
     ]
   },
   {
@@ -466,7 +471,8 @@ export const ARTICLES: GuideArticle[] = [
       "If your carrier’s plan for the day leaves a load on no vehicle, you are told under the bell, and the load says Not on a vehicle with the reason: no room that day, no vehicle that can carry it, heavier than their largest vehicle, or a place that could not be found on the map. Speak to your carrier, because the day can still be planned again. You are told again when the load is on a vehicle.",
       "The time a load is planned for is your carrier’s estimate. You see it in the Business app as soon as your carrier accepts its plan. Whoever holds the tracking link sees the day from the start, and about when only once the load is on the road.",
       "When a load is delivered, the notice and the load say what time it was handed over and whether that was inside the window you asked for: inside it, how long after it, or how long before. The time is on your carrier’s own clock.",
-      "If a load has not arrived half an hour after the time your carrier planned, you are told under the bell that it is running late, and the load says Running late. You are told once more if its whole day passes. A plan’s time is an estimate, so this is a reason to ring your carrier, not proof that something is wrong."
+      "If a load has not arrived half an hour after the time your carrier planned, you are told under the bell that it is running late, and the load says Running late. You are told once more if its whole day passes. A plan’s time is an estimate, so this is a reason to ring your carrier, not proof that something is wrong.",
+      "If a load is for today and your carrier has it on no vehicle once the day’s work has begun — seven in the morning on your carrier’s clock — you are told under the bell, and the load says Not on a vehicle. That is a day your carrier has not planned, a load ordered after the plan was made, or a load that missed its trip. A load ordered for the same day is given an hour first. You are told again when it is on a vehicle, whether your carrier planned the day again or put it on a driver by hand."
     ]
   },
   {
@@ -701,7 +707,8 @@ export const ARTICLES: GuideArticle[] = [
       "Accepting a plan tells shippers two things, and the plan says so above the Accept button when either applies. The shipper of an order the plan leaves out is told it is on no vehicle and why: no room that day, no vehicle that can carry it, heavier than your largest vehicle, or no point on the map. They are never told anything about your drivers. The shipper of an order planned outside its window is told about when, and by how much.",
       "Accepting the same day again repeats nothing. A shipper hears again only when something changed: another reason for being left out, a time that moved by half an hour or more, or an order that is on a vehicle after all. A shipper also sees, in its own app, about when each of its planned orders arrives. Whoever holds an order’s tracking link sees its day, and about when once the load is on the road. An order your own office typed in or uploaded has nobody to tell.",
       "Every time on a plan is on your office’s own clock, and the plan says which under its first lines. You do not set it: a fleet keeps the time zone of its country. Only where a country keeps more than one does the board ask you to choose, once. “Today” is today on that clock, so a shift that starts just after midnight gets that day’s trips.",
-      "With a clock, shippers can be told two more things, and are. When a load is handed over, its shipper is told the time and whether that was inside the window they asked for. When a load has not arrived half an hour after the time your plan gave, its shipper is told it is running late, and told once more if the whole day passes."
+      "With a clock, shippers can be told two more things, and are. When a load is handed over, its shipper is told the time and whether that was inside the window they asked for. When a load has not arrived half an hour after the time your plan gave, its shipper is told it is running late, and told once more if the whole day passes.",
+      "A shipper is also told when an order for today is on no vehicle at seven in the morning on your clock, or an hour after it was ordered if that is later. That is a day with no accepted plan, an order placed after the plan, or an order that missed its trip. Nobody is told during the night. They are told again when it is on a vehicle: when you accept a plan with it in, or put it on a driver by hand."
     ]
   },
   {

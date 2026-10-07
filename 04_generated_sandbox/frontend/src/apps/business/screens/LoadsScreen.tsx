@@ -6,7 +6,7 @@ import { SitePicker, type SiteView } from '../../tower/screens/SitePicker';
 import { QuotePanel } from '../../tower/screens/QuotePanel';
 import { NATURES, PACKAGING_OPTIONS } from '../../agent/logic';
 import type { BusinessClient, BusinessView, CarriageContract, LoadProposal, PostedLoad } from '../api';
-import { deliverySays, loadGaps, loadStage, mayAct, nextDay, orderableContracts, planSays, type LoadForm, type LoadStage } from '../logic';
+import { deliverySays, loadGaps, loadStage, mayAct, nextDay, orderableContracts, planDo, planSays, type LoadForm, type LoadStage } from '../logic';
 import { SentFor } from './SentFor';
 import type { BusinessActions } from '../useBusinessApp';
 
@@ -444,7 +444,7 @@ function LoadDetail({ row, client, act, onClose, onChanged }: { row: PostedLoad;
               <dt class="cons__factk">{t('business.loads.fact.plan')}</dt>
               <dd class="cons__factv">
                 {says.full}
-                <span class="chint"> {says.state === 'planned' ? t('business.loads.plan.estimate') : t(says.state === 'late' ? 'business.loads.late.do' : says.state === 'left' ? 'business.loads.left.do' : 'business.loads.win.estimate', { fleet: row.contract?.fleetName ?? '' })}</span>
+                <span class="chint"> {planDo(says, row.contract?.fleetName ?? '', t)}</span>
               </dd>
             </div>
           ) : null}

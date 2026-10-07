@@ -10,6 +10,10 @@ import type { Translate } from '../../shared/i18n';
  *
  * "Configured" is never said on its own. An address that is set and unreachable is configured, and every plan made on
  * it is an estimate.
+ *
+ * Mail and push stand behind everybody. They do not fall back: each is handed to a sender, and the sender this server
+ * starts with keeps what it is handed. Their states are: kept, not sent · set, and wrong · nothing sent yet · sending
+ * · not getting through.
  */
 
 export interface RouterAsk {
@@ -32,9 +36,31 @@ export interface AdviserConnection {
   model: string;
   last?: { at: string; ok: boolean; failed?: AdviserFailure };
 }
+export interface MailConnection {
+  sends: boolean;
+  tokenSet: boolean;
+  from: string;
+  fromIsPlaceholder: boolean;
+  written: number;
+  failed: number;
+  last?: { at: string; ok: boolean; what: string };
+}
+export type PushKeys = 'own' | 'built_in' | 'mismatched';
+export interface PushConnection {
+  sends: boolean;
+  keys: PushKeys;
+  devices: number;
+  people: number;
+  handed: number;
+  failed: number;
+  last?: { at: string; ok: boolean };
+}
 export interface Connections {
   router: RouterConnection;
   adviser: AdviserConnection;
+  mail: MailConnection;
+  push: PushConnection;
+  sandbox: boolean;
   since: string;
 }
 export interface RouterCheck {
@@ -84,6 +110,46 @@ export function adviserSays(c: AdviserConnection, since: string, t: Translate): 
   // A key that was refused is the operator's to put right, and is said louder than a service that was busy.
   if (c.last.failed === 'not_configured') return { tone: 'danger', tag: t('tower.conn.tag.refused'), line: t('tower.conn.adviser.refused', { when }) };
   return { tone: 'warn', tag: t('tower.conn.tag.silent'), line: t(c.last.failed === 'busy' ? 'tower.conn.adviser.busy' : 'tower.conn.adviser.unreachable', { when }) };
+}
+
+/** A count since the server started, with how many of them failed said beside it only when some did. */
+export function countWords(n: number, failed: number, t: Translate): string {
+  return failed > 0 ? t('tower.conn.fact.countFailed', { n, failed }) : String(n);
+}
+
+/**
+ * Mail. The first question is not whether it is answering but whether anything LEAVES: the sender this server starts
+ * with keeps what it is handed. That is said first — in a sandbox as the way it is meant to run, anywhere else as
+ * people who are not being told. A token that is set is never taken for sending: it is said as a token nothing uses.
+ */
+export function mailSays(c: MailConnection, sandbox: boolean, since: string, t: Translate): ConnectionSays {
+  if (!c.sends) {
+    const line = t(sandbox ? 'tower.conn.mail.kept' : 'tower.conn.mail.keptLive', { n: c.written });
+    return { tone: sandbox ? 'info' : 'danger', tag: t('tower.conn.tag.kept'), line: c.tokenSet ? `${line} ${t('tower.conn.mail.tokenUnused')}` : line };
+  }
+  // It sends, as an address no provider delivers for: said before anything the last email met.
+  if (c.fromIsPlaceholder) return { tone: 'danger', tag: t('tower.conn.tag.noFrom'), line: t('tower.conn.mail.noFrom', { from: c.from }) };
+  if (!c.last) return { tone: 'info', tag: t('tower.conn.tag.unsent'), line: t('tower.conn.mail.unsent', { since: momentWords(since) }) };
+  const when = momentWords(c.last.at);
+  const earlier = c.failed > 0 ? ` ${t('tower.conn.mail.someFailed', { failed: c.failed, n: c.written })}` : '';
+  if (c.last.ok) return { tone: 'ok', tag: t('tower.conn.tag.sending'), line: t('tower.conn.mail.sent', { when, what: c.last.what }) + earlier };
+  return { tone: 'warn', tag: t('tower.conn.tag.notSending'), line: t('tower.conn.mail.failed', { when, what: c.last.what }) + earlier };
+}
+
+/**
+ * Push — the message that lights a phone whose app is closed. Kept or sent is said first, as the mail's is. Then the
+ * keys, which can be wrong in two ways no push would show until it is refused: a pair that does not belong together,
+ * and the pair written in the source, which anybody can sign with.
+ */
+export function pushSays(c: PushConnection, sandbox: boolean, since: string, t: Translate): ConnectionSays {
+  if (!c.sends) return { tone: sandbox ? 'info' : 'danger', tag: t('tower.conn.tag.kept'), line: t(sandbox ? 'tower.conn.push.kept' : 'tower.conn.push.keptLive') };
+  if (c.keys === 'mismatched') return { tone: 'danger', tag: t('tower.conn.tag.keysMismatched'), line: t('tower.conn.push.mismatched') };
+  if (c.keys === 'built_in') return { tone: 'danger', tag: t('tower.conn.tag.keysBuiltIn'), line: t('tower.conn.push.builtIn') };
+  if (!c.last) return { tone: 'info', tag: t('tower.conn.tag.unsent'), line: t('tower.conn.push.unsent', { since: momentWords(since) }) };
+  const when = momentWords(c.last.at);
+  const earlier = c.failed > 0 ? ` ${t('tower.conn.push.someFailed', { failed: c.failed, n: c.handed })}` : '';
+  if (c.last.ok) return { tone: 'ok', tag: t('tower.conn.tag.sending'), line: t('tower.conn.push.sent', { when }) + earlier };
+  return { tone: 'warn', tag: t('tower.conn.tag.notSending'), line: t('tower.conn.push.failed', { when }) + earlier };
 }
 
 /**

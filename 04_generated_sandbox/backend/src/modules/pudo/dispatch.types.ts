@@ -154,9 +154,16 @@ export class DeliveryTiming {
   @ApiPropertyOptional() earlyMin?: number;
 }
 
-/** `hour` — the hour its plan had it at the door has passed · `day` — the day it was ordered for has gone. */
-export const RUNNING_LATE = ['hour', 'day'] as const;
+/**
+ * WHAT IS WRONG WITH AN ORDER'S TIMING, from the least to the worst: `unplanned` — its day has begun and it is on no
+ * vehicle (in no accepted plan, on no driver) · `hour` — the hour its plan had it at the door has passed · `day` — the
+ * day it was ordered for has gone.
+ */
+export const RUNNING_LATE = ['unplanned', 'hour', 'day'] as const;
 export type RunningLate = (typeof RUNNING_LATE)[number];
+/** The two of them a tracking page says: that it is on no vehicle yet is between the shipper and the carrier. */
+export const TRACK_LATE = ['hour', 'day'] as const;
+export type TrackLate = (typeof TRACK_LATE)[number];
 
 /** A load as the tracking page lists it beside the others of its order. */
 export class TrackLoad {
@@ -1053,7 +1060,7 @@ export class PostedFreightRow {
   @ApiPropertyOptional({ type: PlannedAbout }) plannedAbout?: PlannedAbout;
   /** The carrier's accepted plan for its day leaves it on no vehicle. Gone once a plan has it on one. */
   @ApiPropertyOptional({ type: LeftOutOfPlan }) leftOut?: LeftOutOfPlan;
-  /** Not delivered, and late on its carrier's own clock: the planned hour has passed, or the whole day. */
+  /** Not delivered, and wrong on its carrier's own clock: on no vehicle on its day, its planned hour passed, or its whole day. */
   @ApiPropertyOptional({ enum: RUNNING_LATE }) runningLate?: RunningLate;
   /** Delivered: when, on the carrier's clock, and where that fell against the day and the window asked for. */
   @ApiPropertyOptional({ type: DeliveryTiming }) deliveryTiming?: DeliveryTiming;
@@ -1384,7 +1391,7 @@ export class FreightTrackView {
    * It is late, on its carrier's own clock: `day` the day it was expected has gone · `hour` it is on the road and
    * the hour above has passed. Without this the page went on saying "expected" of a day that was over.
    */
-  @ApiPropertyOptional({ enum: RUNNING_LATE }) late?: RunningLate;
+  @ApiPropertyOptional({ enum: TRACK_LATE }) late?: TrackLate;
   /**
    * Where the goods travel: `board` a load a carrier took off the open board (absent means this) · `run` space
    * booked on a carrier's scheduled run, which leaves at `scheduledPickupAt` whether or not anybody else is aboard.

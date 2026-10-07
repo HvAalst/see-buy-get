@@ -909,8 +909,8 @@ describe('handing orders on', () => {
         const o = placed(shipper, 'WS-CLK-14');
         const f = () => dispatch.listFreight().find((x) => x.freightId === o.freightId)!;
         const late = (hhmm: string, on = day) => dispatch.lateOf(f(), nairobi(on, hhmm));
-        // In no plan: nothing is late by the hour; only its day can go.
-        expect([late('23:59'), late('00:00', dayAfter(day))]).toEqual([undefined, 'day']);
+        // In no plan: nothing is late by the hour. On its day it is on no vehicle, and then its day goes.
+        expect([late('23:59'), late('00:00', dayAfter(day))]).toEqual(['unplanned', 'day']);
         dispatch.stampPlan(a.did, day, new Map([[o.freightId, stamp('10:40')]]));
         expect([late('10:40'), late('11:10'), late('11:11'), late('23:59')]).toEqual([undefined, undefined, 'hour', 'hour']);
         // The day before its day nothing is late, whatever the hour.
@@ -918,9 +918,9 @@ describe('handing orders on', () => {
         expect(late('00:00', dayAfter(day))).toBe('day');
         // The shipper's list says the same at the moment it is read.
         expect([row(o.freightId, nairobi(day, '10:40')).runningLate, row(o.freightId, nairobi(day, '11:30')).runningLate, row(o.freightId, nairobi(dayAfter(day), '06:00')).runningLate]).toEqual([undefined, 'hour', 'day']);
-        // It missed its trip: the hour of that trip says nothing any more; the day still will.
+        // It missed its trip: the hour of that trip says nothing any more. It is on no vehicle, and the day still will go.
         dispatch.holdPlanned(o.freightId, 'The truck is full');
-        expect([late('12:00'), late('06:00', dayAfter(day))]).toEqual([undefined, 'day']);
+        expect([late('12:00'), late('06:00', dayAfter(day))]).toEqual(['unplanned', 'day']);
         dispatch.holdPlanned(o.freightId, undefined);
         // Delivered or withdrawn, it is not late.
         dispatch.assign(o.freightId, own.did, { managerDid: a.did, name: 'Amina' });
@@ -936,6 +936,100 @@ describe('handing orders on', () => {
         const other = placed(shipper, 'WS-CLK-16');
         managers.get(a.did).jurisdiction = 'CD';
         expect(dispatch.lateOf(dispatch.listFreight().find((x) => x.freightId === other.freightId)!, nairobi(dayAfter(day), '06:00'))).toBeUndefined();
+      });
+
+      it('tells the shipper when the day’s work has begun and its order is on no vehicle — the day nobody planned, the order placed after the plan', async () => {
+        const { a, own, day, placed, row, told, stamp } = aCarrier();
+        const f = (id: string) => dispatch.listFreight().find((x) => x.freightId === id)!;
+        // Placed at noon the day before, on the carrier's clock: well over an hour before any of the moments below.
+        const aged = (ref: string, postedByDid = shipper, at = nairobi(dayBefore(day), '12:00')) => {
+          const o = placed(postedByDid, ref);
+          f(o.freightId).createdAt = new Date(at).toISOString();
+          return o;
+        };
+        const inNoPlan = aged('WS-CLK-30');
+        const planned = aged('WS-CLK-31');
+        const leftOut = aged('WS-CLK-32');
+        aged('WS-CLK-33', a.did);
+        const byHand = aged('WS-CLK-34');
+        // The office accepts a plan: one order on a vehicle, one left out (and said so then); a third came too late for it.
+        dispatch.stampPlan(a.did, day, new Map([[planned.freightId, stamp('16:00')]]), nairobi(dayBefore(day), '15:00'), new Map([[leftOut.freightId, 'no_time']]));
+        dispatch.assign(byHand.freightId, own.did, { managerDid: a.did, name: 'Amina' });
+        await settle();
+        const leftOutTold = () => told('order_left_out').map((n) => n.title);
+        const onVehicleTold = () => told('order_window').map((n) => n.title);
+        expect(leftOutTold()).toEqual(['Kilima Logistics has not put ' + leftOut.code + ' on a vehicle for ' + day]);
+        // Put on a driver by hand before anybody was told anything of it: nothing is said of that.
+        expect(onVehicleTold()).toEqual([]);
+        const late = (id: string, hhmm: string, on = day) => dispatch.lateOf(f(id), nairobi(on, hhmm));
+        // The evening before, and through the night of its day: no office is at work, and nobody is woken to be told so.
+        expect([late(inNoPlan.freightId, '23:59', dayBefore(day)), late(inNoPlan.freightId, '00:05'), late(inNoPlan.freightId, '06:59')]).toEqual([undefined, undefined, undefined]);
+        expect(await dispatcher.sweepLate(nairobi(day, '06:59'))).toBe(0);
+        // Seven, the hour a planned day starts: on no vehicle. Planned, or on a driver by hand, it is not.
+        expect([late(inNoPlan.freightId, '07:00'), late(planned.freightId, '07:00'), late(byHand.freightId, '07:00'), late(leftOut.freightId, '07:00')]).toEqual(['unplanned', undefined, undefined, 'unplanned']);
+        // Its shipper is told once — not the one who was told when the plan left its order out, not the carrier's own office.
+        expect(await dispatcher.sweepLate(nairobi(day, '07:00'))).toBe(1);
+        expect(leftOutTold()).toHaveLength(2);
+        const said = told('order_left_out').find((n) => n.title.includes(inNoPlan.code))!;
+        expect([said.title, said.body]).toEqual(['Kilima Logistics has not put ' + inNoPlan.code + ' on a vehicle, and it is for today', inNoPlan.code + ' was ordered for ' + day + '. The day’s work has begun, and Kilima Logistics has it on no vehicle. Speak to Kilima Logistics now.']);
+        expect(notifications.inboxFor(a.did).some((n) => n.kind === 'order_left_out')).toBe(false);
+        expect(await dispatcher.sweepLate(nairobi(day, '08:00'))).toBe(0);
+        // The shipper's list says so too; the tracking page does not — that is between the shipper and the carrier.
+        expect(row(inNoPlan.freightId, nairobi(day, '08:00')).runningLate).toBe('unplanned');
+        expect(notes.trackView(f(inNoPlan.freightId), nairobi(day, '08:00')).late).toBeUndefined();
+
+        // An order placed ON its day is left alone for its first hour, and said after it. One placed before the day's
+        // work begins waits for both: the hour, and seven.
+        const early = aged('WS-CLK-35', shipper, nairobi(day, '06:30'));
+        const sameDay = aged('WS-CLK-36', shipper, nairobi(day, '09:00'));
+        expect([late(early.freightId, '07:00'), late(early.freightId, '07:29'), late(early.freightId, '07:30')]).toEqual([undefined, undefined, 'unplanned']);
+        expect([late(sameDay.freightId, '09:30'), late(sameDay.freightId, '09:59'), late(sameDay.freightId, '10:00')]).toEqual([undefined, undefined, 'unplanned']);
+        expect(await dispatcher.sweepLate(nairobi(day, '09:59'))).toBe(1);
+        expect(await dispatcher.sweepLate(nairobi(day, '10:00'))).toBe(1);
+
+        // WHAT HAPPENS AFTER. It is planned after all: told by the clock that it was on no vehicle, its shipper is told
+        // it is on one, and about when.
+        dispatch.stampPlan(a.did, day, new Map([[planned.freightId, stamp('16:00')], [inNoPlan.freightId, stamp('13:00')]]), nairobi(day, '11:00'));
+        await settle();
+        expect(onVehicleTold()).toEqual(['Kilima Logistics now has ' + inNoPlan.code + ' on a vehicle for ' + day]);
+        expect(late(inNoPlan.freightId, '12:00')).toBeUndefined();
+        // Put on a driver by the office's own hand — after the clock said it was on none, and after a plan left it
+        // out: each shipper is told, with no hour, because nothing planned one.
+        dispatch.assign(early.freightId, own.did, { managerDid: a.did, name: 'Amina' });
+        dispatch.assign(leftOut.freightId, own.did, { managerDid: a.did, name: 'Amina' });
+        await settle();
+        const byHandSaid = told('order_window').filter((n) => !n.title.includes(' for ' + day));
+        expect(byHandSaid.map((n) => n.title).sort()).toEqual(['Kilima Logistics now has ' + early.code + ' on a vehicle', 'Kilima Logistics now has ' + leftOut.code + ' on a vehicle'].sort());
+        expect(byHandSaid[0].body.endsWith(' on a vehicle. There is no planned hour for it; you are told when it is delivered.')).toBe(true);
+        expect(byHandSaid.some((n) => n.body.includes('Amina') || n.body.includes(own.did))).toBe(false);
+        // Said, and over: neither is on no vehicle any more, to the list or to the clock.
+        expect([row(early.freightId, nairobi(day, '12:00')).runningLate, row(leftOut.freightId, nairobi(day, '12:00')).leftOut]).toEqual([undefined, undefined]);
+        expect(await dispatcher.sweepLate(nairobi(day, '12:00'))).toBe(0);
+
+        // The hour its plan gave it passes: told it is late. Then it misses its trip and is on no vehicle again — and
+        // is not told that: never back down the ladder.
+        expect(await dispatcher.sweepLate(nairobi(day, '14:00'))).toBe(1);
+        expect(told('order_late').map((n) => n.title)).toEqual([inNoPlan.code + ' is running late']);
+        dispatch.holdPlanned(inNoPlan.freightId, 'The truck is full');
+        expect(late(inNoPlan.freightId, '15:00')).toBe('unplanned');
+        expect(await dispatcher.sweepLate(nairobi(day, '15:00'))).toBe(0);
+        // But one told it was on a vehicle, which then misses its trip before its hour, IS told: it believes it is coming.
+        dispatch.stampPlan(a.did, day, new Map([[planned.freightId, stamp('16:00')], [inNoPlan.freightId, stamp('13:00')], [sameDay.freightId, stamp('17:00')]]), nairobi(day, '15:05'));
+        await settle();
+        expect(onVehicleTold()).toContain('Kilima Logistics now has ' + sameDay.code + ' on a vehicle for ' + day);
+        dispatch.holdPlanned(sameDay.freightId, 'The truck is full');
+        expect(await dispatcher.sweepLate(nairobi(day, '15:30'))).toBe(1);
+        expect(leftOutTold().filter((t) => t.includes(sameDay.code))).toHaveLength(2);
+        // The ladder goes up. What stopped it comes off, so it has its planned hour again; that hour passes, and it
+        // is told — being told it was on no vehicle does not stand in the way of being told it is late.
+        dispatch.holdPlanned(sameDay.freightId, undefined);
+        expect([late(sameDay.freightId, '17:30'), late(sameDay.freightId, '17:31')]).toEqual([undefined, 'hour']);
+        await dispatcher.sweepLate(nairobi(day, '17:31'));
+        expect(told('order_late').map((n) => n.title)).toContain(sameDay.code + ' is running late');
+        // And up again: its day goes. Each rung once.
+        await dispatcher.sweepLate(nairobi(dayAfter(day), '00:01'));
+        expect(told('order_late').filter((n) => n.title.startsWith(sameDay.code)).map((n) => n.title).sort()).toEqual([sameDay.code + ' did not arrive on ' + day, sameDay.code + ' is running late']);
+        expect(await dispatcher.sweepLate(nairobi(dayAfter(day), '09:00'))).toBe(0);
       });
 
       it('tells the shipper a load is running late once for its hour and once more for its day — nobody else, and never twice', async () => {

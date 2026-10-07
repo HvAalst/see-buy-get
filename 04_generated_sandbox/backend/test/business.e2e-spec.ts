@@ -426,6 +426,13 @@ describe('a customer’s business, over the wire', () => {
     expect(conn.router).toEqual({ configured: false, profile: 'driving', maxPoints: 100 });
     expect(conn.adviser).toMatchObject({ model: 'claude-opus-5-5' });
     expect(Date.parse(conn.since)).toBeLessThanOrEqual(Date.now());
+    // Mail and push, as this server was really started: both kept, neither sent — and it says so of itself. The
+    // people enrolled above were emailed a code, so emails have been written; none of it names anybody.
+    expect(conn.sandbox).toBe(true);
+    expect(conn.mail).toMatchObject({ sends: false, failed: 0, last: { ok: true, what: expect.any(String) } });
+    expect(conn.mail.written).toBeGreaterThan(0);
+    expect(conn.push).toMatchObject({ sends: false, keys: 'built_in', failed: 0 });
+    expect(JSON.stringify(conn)).not.toMatch(/@example\.com|oREOkpH8/);
     expect((await http().post('/v1/sbg/connections/router/check').set(bearer(setupKey)).expect(201)).body).toMatchObject({ ok: false, why: 'no routing server is configured' });
     // An address nothing answers on: set, and the check says in a plan's own words what it met. No key is echoed.
     process.env.GLOS_ROUTER_URL = 'http://user:hunter2@127.0.0.1:9/osrm';

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
-import { adviserSays, checkSays, momentWords, routerSays, type Connections, type RouterCheck } from '../connections';
+import { adviserSays, checkSays, countWords, mailSays, momentWords, pushSays, routerSays, type Connections, type RouterCheck } from '../connections';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
 /**
- * WHAT THIS SERVER IS CONNECTED TO — the routing server and the adviser behind a fleet's planning panel.
+ * WHAT THIS SERVER IS CONNECTED TO — the routing server and the adviser behind a fleet's planning panel, and the
+ * email and push behind everybody.
  *
  * Both are set where the server runs, and until this the only place that said so was a README. A fleet's office is
  * told what it needs where it works (its plan says which distances it was made on); whether the service behind that
@@ -45,6 +46,8 @@ export function ConnectionsScreen({ actions }: { state: TowerState; actions: Tow
 
   const router = view ? routerSays(view.router, view.since, t) : null;
   const adviser = view ? adviserSays(view.adviser, view.since, t) : null;
+  const mail = view ? mailSays(view.mail, view.sandbox, view.since, t) : null;
+  const push = view ? pushSays(view.push, view.sandbox, view.since, t) : null;
   const checked = check ? checkSays(check, t) : null;
 
   return (
@@ -116,6 +119,67 @@ export function ConnectionsScreen({ actions }: { state: TowerState; actions: Tow
               </div>
             </dl>
             <p class="chint">{t('tower.conn.adviser.where')}</p>
+          </section>
+
+          <section class="cons__panel">
+            <div class="cons__panelhead">
+              <span class="cons__panelt">{t('tower.conn.mail.title')}</span>
+              <span class={`ctag ctag--${mail!.tone}`}>{mail!.tag}</span>
+            </div>
+            <p class="cons__lede">{mail!.line}</p>
+            <dl class="cons__facts">
+              <div class="cons__fact">
+                <dt class="cons__factk">{t('tower.conn.fact.leaves')}</dt>
+                <dd class="cons__factv">{t(view.mail.sends ? 'tower.conn.fact.leavesYes' : 'tower.conn.fact.leavesNo')}</dd>
+              </div>
+              <div class="cons__fact">
+                <dt class="cons__factk">{t('tower.conn.fact.token')}</dt>
+                <dd class="cons__factv">{t(view.mail.tokenSet ? 'tower.conn.fact.keySet' : 'tower.conn.fact.keyNone')}</dd>
+              </div>
+              <div class="cons__fact">
+                <dt class="cons__factk">{t('tower.conn.fact.from')}</dt>
+                <dd class="cons__factv">{view.mail.fromIsPlaceholder ? t('tower.conn.fact.fromPlaceholder', { from: view.mail.from }) : view.mail.from}</dd>
+              </div>
+              <div class="cons__fact">
+                <dt class="cons__factk">{t('tower.conn.fact.written')}</dt>
+                <dd class="cons__factv">{countWords(view.mail.written, view.mail.failed, t)}</dd>
+              </div>
+            </dl>
+            <p class="chint">
+              {t('tower.conn.mail.where')}
+              {view.sandbox && !view.mail.sends ? ` ${t('tower.conn.mail.whereKept')}` : ''}
+            </p>
+          </section>
+
+          <section class="cons__panel">
+            <div class="cons__panelhead">
+              <span class="cons__panelt">{t('tower.conn.push.title')}</span>
+              <span class={`ctag ctag--${push!.tone}`}>{push!.tag}</span>
+            </div>
+            <p class="cons__lede">{push!.line}</p>
+            <dl class="cons__facts">
+              <div class="cons__fact">
+                <dt class="cons__factk">{t('tower.conn.fact.leaves')}</dt>
+                <dd class="cons__factv">{t(view.push.sends ? 'tower.conn.fact.leavesYes' : 'tower.conn.fact.leavesNo')}</dd>
+              </div>
+              <div class="cons__fact">
+                <dt class="cons__factk">{t('tower.conn.fact.keys')}</dt>
+                <dd class="cons__factv">{t(`tower.conn.fact.keys.${view.push.keys}`)}</dd>
+              </div>
+              <div class="cons__fact">
+                <dt class="cons__factk">{t('tower.conn.fact.devices')}</dt>
+                <dd class="cons__factv">{view.push.devices}</dd>
+              </div>
+              <div class="cons__fact">
+                <dt class="cons__factk">{t('tower.conn.fact.people')}</dt>
+                <dd class="cons__factv">{view.push.people}</dd>
+              </div>
+              <div class="cons__fact">
+                <dt class="cons__factk">{t('tower.conn.fact.handed')}</dt>
+                <dd class="cons__factv">{countWords(view.push.handed, view.push.failed, t)}</dd>
+              </div>
+            </dl>
+            <p class="chint">{t('tower.conn.push.where')}</p>
           </section>
 
           <p class="chint">{t('tower.conn.since', { since: momentWords(view.since) })}</p>

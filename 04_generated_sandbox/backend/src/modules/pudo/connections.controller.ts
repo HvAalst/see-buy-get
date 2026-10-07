@@ -1,7 +1,10 @@
 import { Controller, Get, Post } from '@nestjs/common';
 import { Roles } from '../../foundation/auth/scopes.decorator';
+import { MailService } from '../../foundation/mail/mail.service';
+import { isSandbox } from '../../foundation/runtime/sandbox';
 import { ConnectionsView, RouterCheck } from './connections.types';
 import { FleetManagerService } from './fleet-manager.service';
+import { NotificationService } from './notification.service';
 import { PlanAdviserService } from './plan-adviser.service';
 import { OsrmRoadMatrix } from './road-matrix';
 import { haversineKm } from './geo';
@@ -16,6 +19,10 @@ const SINCE = new Date().toISOString();
  * says when it is not set up. Whether the two services behind that are set up, and answering, is the operator's to
  * know and to put right — and until this there was no screen that said it, only a paragraph in a README.
  *
+ * Mail and push are here for the same reason, and are read the same way: each service says what the sender it was
+ * started with does with what it is handed. Nothing is sent from here to find out — a test email is an email to
+ * somebody, and a test push needs somebody's phone.
+ *
  * Reading changes nothing. Checking asks the routing server one question about two places near a fleet's depot:
  * coordinates, as a plan sends — no order, no name. The adviser is not asked anything from here: a model is not
  * pinged, and what the last office's question met says whether it is answering.
@@ -26,12 +33,14 @@ export class ConnectionsController {
     private readonly roads: OsrmRoadMatrix,
     private readonly adviser: PlanAdviserService,
     private readonly managers: FleetManagerService,
+    private readonly mail: MailService,
+    private readonly notifications: NotificationService,
   ) {}
 
   @Roles('operator')
   @Get()
   view(): ConnectionsView {
-    return { router: this.roads.status(), adviser: this.adviser.connection(), since: SINCE };
+    return { router: this.roads.status(), adviser: this.adviser.connection(), mail: this.mail.connection(), push: this.notifications.connection(), sandbox: isSandbox(), since: SINCE };
   }
 
   /**

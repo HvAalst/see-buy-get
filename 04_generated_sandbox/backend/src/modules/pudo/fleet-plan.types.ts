@@ -10,6 +10,12 @@ import { VEHICLE_CLASSES, VehicleClass } from './fleet.config';
 export const PLAN_LEFT_REASONS = ['no_pin', 'too_heavy', 'no_truck_can_carry', 'no_time', 'no_driver', 'no_trucks'] as const;
 export type PlanLeftReason = (typeof PLAN_LEFT_REASONS)[number];
 
+/**
+ * The hour a fleet's planned day starts, where its office has not said otherwise — and so the hour from which an
+ * order for that day that is on no vehicle is something its shipper should hear (dispatch.service.ts, lateOf).
+ */
+export const DEFAULT_DAY_START = '07:00';
+
 export class PlanStopView {
   freightId: string;
   code: string;

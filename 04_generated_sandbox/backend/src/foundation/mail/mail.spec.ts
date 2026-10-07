@@ -70,4 +70,58 @@ describe('the network’s emails', () => {
     expect(await quiet.send('fleet-code-due', { address: 'not-an-address' }, { company: 'Kilima', days: 120 })).toBe(false);
     expect(maskAddress('amina@example.com')).toBe('a…@example.com');
   });
+
+  describe('where an email goes, as staff are shown it', () => {
+    const env = { ...process.env };
+    afterEach(() => {
+      process.env = { ...env };
+    });
+    const due = { company: 'Kilima', days: 120 };
+
+    it('says nothing leaves while the outbox is the sender — whatever is set in the environment', async () => {
+      delete process.env.ZEPTOMAIL_TOKEN;
+      delete process.env.MAIL_FROM_ADDRESS;
+      const mail = new MailService(new OutboxMailSender());
+      expect(mail.connection()).toEqual({ sends: false, tokenSet: false, from: 'noreply@seebuyget.example', fromIsPlaceholder: true, written: 0, failed: 0 });
+
+      // A token and a real address are settings. Neither is a sender: emails are still kept, and that is still said.
+      process.env.ZEPTOMAIL_TOKEN = ' a-token ';
+      process.env.MAIL_FROM_ADDRESS = 'noreply@kilima.example';
+      expect(mail.connection()).toMatchObject({ sends: false, tokenSet: true, from: 'noreply@kilima.example', fromIsPlaceholder: false });
+      process.env.ZEPTOMAIL_TOKEN = '   ';
+      expect(mail.connection().tokenSet).toBe(false);
+
+      // What it wrote is counted, and the last is named by what it was — never by who it was for.
+      await mail.send('fleet-code-due', { address: 'ops@kilima.example' }, due);
+      const said = mail.connection();
+      expect(said).toMatchObject({ written: 1, failed: 0, last: { ok: true, what: MAIL_TEMPLATES['fleet-code-due'].title } });
+      expect(JSON.stringify(said)).not.toContain('ops@kilima.example');
+      expect(JSON.stringify(said)).not.toContain('a-token');
+    });
+
+    it('says it sends once anything but the outbox is the sender, and counts what could not be handed over', async () => {
+      let down = false;
+      const real: MailSender = { send: async () => (down ? Promise.reject(new Error('provider down')) : undefined) };
+      const mail = new MailService(real);
+      (mail as unknown as { logger: { error: () => void } }).logger = { error: () => undefined };
+      expect(mail.connection()).toMatchObject({ sends: true, written: 0, failed: 0 });
+      expect(mail.connection().last).toBeUndefined();
+
+      await mail.send('fleet-code-due', { address: 'ops@kilima.example' }, due);
+      expect(mail.connection()).toMatchObject({ written: 1, failed: 0, last: { ok: true } });
+      down = true;
+      await mail.send('fleet-code-due', { address: 'ops@kilima.example' }, due);
+      expect(mail.connection()).toMatchObject({ written: 2, failed: 1, last: { ok: false, what: MAIL_TEMPLATES['fleet-code-due'].title } });
+      down = false;
+      await mail.send('fleet-code-due', { address: 'ops@kilima.example' }, due);
+      expect(mail.connection()).toMatchObject({ written: 3, failed: 1, last: { ok: true } });
+
+      // Something that is not an address was never an email: it is not counted as one that failed.
+      await mail.send('fleet-code-due', { address: 'not-an-address' }, due);
+      expect(mail.connection()).toMatchObject({ written: 3, failed: 1 });
+      // What is handed back is a copy: nobody reading it can change what the next reader is told.
+      mail.connection().last!.ok = false;
+      expect(mail.connection().last!.ok).toBe(true);
+    });
+  });
 });

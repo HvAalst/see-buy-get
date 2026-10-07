@@ -169,7 +169,21 @@ export interface PlanSays {
   row: string;
   /** The whole of it, on the load itself. */
   full: string;
+  /** On no vehicle by the CLOCK, not by a plan: no accepted plan said anything of it, and it is not said that one did. */
+  noPlan?: true;
 }
+
+/**
+ * What to do about it, said after it. Whose word it is comes first: a plan's own time is an estimate and the plan can
+ * be made again — but an order the clock found on no vehicle is in no plan, and is not said to be what a plan says.
+ */
+export function planDo(says: PlanSays, fleet: string, t: Translate): string {
+  if (says.state === 'planned') return t('business.loads.plan.estimate');
+  if (says.state === 'late') return t('business.loads.late.do', { fleet });
+  if (says.state === 'left') return t(says.noPlan ? 'business.loads.left.doToday' : 'business.loads.left.do', { fleet });
+  return t('business.loads.win.estimate', { fleet });
+}
+
 export function planSays(l: Pick<PostedLoad, 'leftOut' | 'outsideWindow' | 'plannedAbout' | 'runningLate' | 'deliverOn'>, t: Translate): PlanSays | null {
   if (l.runningLate === 'day') return { state: 'late', row: t('business.loads.late.day', { day: l.deliverOn ?? '' }), full: t('business.loads.late.dayFull', { day: l.deliverOn ?? '' }) };
   if (l.runningLate === 'hour' && l.plannedAbout) {
@@ -180,6 +194,9 @@ export function planSays(l: Pick<PostedLoad, 'leftOut' | 'outsideWindow' | 'plan
     const why = t(`business.loads.left.${l.leftOut.why}` as MessageKey, { day: l.leftOut.day });
     return { state: 'left', row: why, full: t('business.loads.left.full', { why }) };
   }
+  // The day's work has begun and it is on no vehicle — in no plan, or off the trip it was planned on: the same thing
+  // to a shipper as a plan that left it out, without a why.
+  if (l.runningLate === 'unplanned') return { state: 'left', noPlan: true, row: t('business.loads.left.today'), full: t('business.loads.left.todayFull', { day: l.deliverOn ?? '' }) };
   const miss = windowMiss(l.outsideWindow, t);
   if (miss) return { state: 'outside', ...miss };
   const p = l.plannedAbout;

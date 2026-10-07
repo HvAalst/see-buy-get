@@ -135,6 +135,14 @@ Staff read where both stand in the operator console, under Setup → **Connectio
 plan (or the last office to ask the adviser) met since the server started, and a "Check it now" for the routing
 server. The address is shown as its host only and the key never; nothing is changed from that screen.
 
+The same screen says where **email and push** go. Neither is switched on by a setting: the senders the server
+starts with (`OutboxMailSender`, `OutboxPushSender`) KEEP what they are handed, and the screen reads "does anything
+leave" off the sender itself — so a `ZEPTOMAIL_TOKEN` in the environment is shown as set and unused until a real
+sender is wired in (`foundation/mail/mail.types.ts` says how). The push keys (`GLOS_VAPID_PUBLIC`,
+`GLOS_VAPID_PRIVATE`) are judged from the pair: the server's own, the pair written in the source, or two that do
+not belong together. "Kept, not sent" is the normal state of a sandbox; with `GLOS_ENV=production` the same
+state is said as a fault, because there it is people who are never told.
+
 ## Conventions
 - **Every slice names its screens.** A backend change with no surface is tracked ui-debt, not a shipped slice.
 - **i18n per slice**: new English keys go in `src/shared/i18n/catalogs/`; the other locales get a central

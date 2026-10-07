@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkStep, checkTone, contractPeriod, digitsReady, isLastOwner, loadGaps, loadStage, mayAct, mayManage, newBusinessGaps, nextDay, openOnArrival, orderableContracts, phoneReady, planSays, deliverySays, sectionsFor, spanWords, windowMiss } from './logic';
+import { checkStep, checkTone, contractPeriod, digitsReady, isLastOwner, loadGaps, loadStage, mayAct, mayManage, newBusinessGaps, nextDay, openOnArrival, orderableContracts, phoneReady, planDo, planSays, deliverySays, sectionsFor, spanWords, windowMiss } from './logic';
 import { t } from '../../shared/i18n';
 import type { CarriageContract } from './api';
 import type { Membership } from './api';
@@ -183,6 +183,17 @@ describe('the Business app', () => {
       expect(planSays({ deliverOn: day, leftOut: { day, why: 'room' }, runningLate: 'day' }, t)!.state).toBe('late');
       // An hour that has passed outranks a plan that was already outside its window.
       expect(planSays({ ...planned, outsideWindow: { day, arrive: '12:40', lateMin: 40 }, runningLate: 'hour' }, t)!.state).toBe('late');
+      // Its day has begun and it is in no plan: said as on no vehicle — below a plan's own reason, where there is one.
+      const byClock = planSays({ deliverOn: day, runningLate: 'unplanned' }, t)!;
+      expect(byClock).toEqual({ state: 'left', noPlan: true, row: 'it is for today and is on no vehicle yet', full: 'On no vehicle: it was ordered for 2026-10-07, the day’s work has begun, and your carrier has not put it on a vehicle.' });
+      const byPlan = planSays({ deliverOn: day, leftOut: { day, why: 'heavy' }, runningLate: 'unplanned' }, t)!;
+      expect([byPlan.row, byPlan.noPlan]).toEqual(['it is heavier than your carrier’s largest vehicle carries', undefined]);
+      // What to do about it never says a plan said so when none did (found in a real run: the load's own page did).
+      expect(planDo(byPlan, 'Kilima Logistics', t)).toBe('This is what your carrier’s plan for the day says, and the day can still be planned again. Speak to Kilima Logistics now.');
+      expect(planDo(byClock, 'Kilima Logistics', t)).toBe('No plan says this: it is in none your carrier has accepted for today, or it missed the trip it was planned on. It can still be planned, or put on a driver by hand. Speak to Kilima Logistics now.');
+      expect(planDo(planSays({ ...planned, runningLate: 'hour' }, t)!, 'Kilima Logistics', t)).toBe('Speak to Kilima Logistics now.');
+      expect(planDo(planSays(planned, t)!, 'Kilima Logistics', t)).toBe('This is what your carrier’s plan for the day says. Its time is an estimate, and the day can still be planned again.');
+      expect(planDo(planSays({ ...planned, outsideWindow: { day, arrive: '12:40', lateMin: 40 } }, t)!, 'Kilima Logistics', t)).toMatch(/If this cannot work, speak to Kilima Logistics now\.$/);
       // No hour on record: there is nothing to say has passed.
       expect(planSays({ deliverOn: day, runningLate: 'hour' }, t)).toBeNull();
     });

@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { MailConnection } from '../../foundation/mail/mail.types';
 import { ADVISER_FAILURES, AdviserFailure } from './plan-adviser.types';
 
 /*
@@ -9,6 +10,10 @@ import { ADVISER_FAILURES, AdviserFailure } from './plan-adviser.types';
  * adviser says it is not set up — which is right for the office using them and leaves staff unable to see a routing
  * server that is set and silent. So each says three things: whether it is set up, what became of the last time it was
  * asked since this server started, and (the routing server) what it answers when asked now.
+ *
+ * And two things everybody leans on: mail and push. Neither falls back — each is handed to a sender, and the sender
+ * this server starts with KEEPS what it is handed. So the question for those is not "is it answering" but "does
+ * anything leave", and it is read off the sender that is wired in, never off a variable that happens to be set.
  *
  * Nothing here is a secret and nothing here can become one: an address is shown as its host only, because an address
  * can carry a key, and a credential is shown as set or not set.
@@ -49,9 +54,46 @@ export class AdviserConnection {
   @ApiPropertyOptional({ type: AdviserAsk }) last?: AdviserAsk;
 }
 
+/**
+ * `own` — a matching pair that is this server's alone · `built_in` — the pair written in the source, which anybody
+ * who can read it can sign with · `mismatched` — the public key is not the one the private key makes.
+ */
+export const PUSH_KEYS = ['own', 'built_in', 'mismatched'] as const;
+export type PushKeys = (typeof PUSH_KEYS)[number];
+
+/** What became of the last push this server handed to a device. */
+export class PushLast {
+  at: string;
+  ok: boolean;
+}
+
+/**
+ * WHERE A PUSH GOES — the message that lights a phone whose app is closed. The bell inside each app is not this: a
+ * notification is written to the person's inbox first, whatever becomes of the push.
+ */
+export class PushConnection {
+  /** A push leaves this server. `false`: it is kept here instead, and no phone is woken. */
+  sends: boolean;
+  @ApiProperty({ enum: PUSH_KEYS }) keys: PushKeys;
+  /** Devices that have turned notifications on, and how many people they belong to. */
+  devices: number;
+  people: number;
+  /** Pushes handed to a device since this server started, and how many of those failed. */
+  handed: number;
+  failed: number;
+  @ApiPropertyOptional({ type: PushLast }) last?: PushLast;
+}
+
 export class ConnectionsView {
   @ApiProperty({ type: RouterConnection }) router: RouterConnection;
   @ApiProperty({ type: AdviserConnection }) adviser: AdviserConnection;
+  @ApiProperty({ type: MailConnection }) mail: MailConnection;
+  @ApiProperty({ type: PushConnection }) push: PushConnection;
+  /**
+   * This is a sandbox, where mail and push are MEANT to be kept and not sent. Off a sandbox the same state is
+   * people who are never told.
+   */
+  sandbox: boolean;
   /** When this server started. "Last asked" is since then: it is kept in memory, and a restart forgets it. */
   since: string;
 }

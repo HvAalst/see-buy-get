@@ -1,4 +1,5 @@
-import { NotificationService } from './notification.service';
+import { createECDH } from 'crypto';
+import { NotificationService, vapidKeysOf } from './notification.service';
 import { OutboxPushSender } from './push-sender';
 import { NotificationPayload, PushSender, PushSubscriptionRecord, WebPushSubscription } from './notification.types';
 
@@ -104,6 +105,66 @@ describe('NotificationService — the push spine (N1)', () => {
       svc.subscribe('did:person:a', 'consumer', sub('https://push/bad'));
       svc.subscribe('did:person:a', 'consumer', sub('https://push/good'));
       await expect(svc.pushToOwner('did:person:a', payload)).resolves.toBe(2);
+    });
+  });
+
+  describe('where a push goes, as staff are shown it', () => {
+    it('says no phone is woken while the outbox is the sender, and counts devices and the people they belong to', async () => {
+      const svc = new NotificationService(new OutboxPushSender());
+      const before = svc.connection();
+      svc.subscribe('did:person:conn-a', 'consumer', sub('https://push/conn-phone'));
+      svc.subscribe('did:person:conn-a', 'consumer', sub('https://push/conn-laptop'));
+      svc.subscribe('did:person:conn-b', 'driver', sub('https://push/conn-b'));
+      // The registry is kept across instances, so what was there before is counted from.
+      expect(svc.connection()).toEqual({ sends: false, keys: 'built_in', devices: before.devices + 3, people: before.people + 2, handed: 0, failed: 0 });
+
+      // The bell is not the push: a notification to somebody with no device is written, and nothing is handed over.
+      await svc.notify('did:person:conn-nobody', payload);
+      expect(svc.connection()).toMatchObject({ handed: 0, failed: 0 });
+      expect(svc.connection().last).toBeUndefined();
+      // Per device: a phone and a laptop are two.
+      await svc.notify('did:person:conn-a', payload);
+      expect(svc.connection()).toMatchObject({ sends: false, handed: 2, failed: 0, last: { ok: true } });
+    });
+
+    it('says it sends once anything but the outbox is the sender, and counts each device that could not be reached', async () => {
+      let down = false;
+      const real: PushSender = { send: () => (down ? Promise.reject(new Error('gone')) : Promise.resolve()) };
+      const svc = new NotificationService(real);
+      (svc as unknown as { logger: { warn: () => void } }).logger = { warn: () => undefined };
+      svc.subscribe('did:person:conn-c', 'consumer', sub('https://push/conn-c'));
+      expect(svc.connection()).toMatchObject({ sends: true, handed: 0, failed: 0 });
+      await svc.pushToOwner('did:person:conn-c', payload);
+      expect(svc.connection()).toMatchObject({ handed: 1, failed: 0, last: { ok: true } });
+      down = true;
+      await svc.pushToOwner('did:person:conn-c', payload);
+      expect(svc.connection()).toMatchObject({ handed: 2, failed: 1, last: { ok: false } });
+      down = false;
+      await svc.pushToOwner('did:person:conn-c', payload);
+      expect(svc.connection()).toMatchObject({ handed: 3, failed: 1, last: { ok: true } });
+      svc.connection().last!.ok = false;
+      expect(svc.connection().last!.ok).toBe(true);
+    });
+
+    it('judges the keys from the pair itself: its own, the pair written in the source, or two that do not belong together', () => {
+      const pair = () => {
+        const ecdh = createECDH('prime256v1');
+        ecdh.generateKeys();
+        return { pub: ecdh.getPublicKey().toString('base64url'), priv: ecdh.getPrivateKey().toString('base64url') };
+      };
+      const builtIn = new NotificationService(new OutboxPushSender()).vapidCredentials();
+      const [mine, theirs] = [pair(), pair()];
+      expect(vapidKeysOf(builtIn.publicKey, builtIn.privateKey)).toBe('built_in');
+      expect(vapidKeysOf(mine.pub, mine.priv)).toBe('own');
+      // Padded as some tools write it: still the same key.
+      expect(vapidKeysOf(mine.pub + '=', mine.priv)).toBe('own');
+      // One of the two set, the other left as it was — in either direction — and a pair pasted from two places.
+      expect(vapidKeysOf(mine.pub, builtIn.privateKey)).toBe('mismatched');
+      expect(vapidKeysOf(builtIn.publicKey, mine.priv)).toBe('mismatched');
+      expect(vapidKeysOf(mine.pub, theirs.priv)).toBe('mismatched');
+      // Not a key at all.
+      expect(vapidKeysOf(mine.pub, 'not a key')).toBe('mismatched');
+      expect(vapidKeysOf('', '')).toBe('mismatched');
     });
   });
 

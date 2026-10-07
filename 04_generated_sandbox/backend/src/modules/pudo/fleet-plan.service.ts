@@ -11,13 +11,12 @@ import { DispatchService } from './dispatch.service';
 import { Freight } from './dispatch.types';
 import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
-import { DayPlanState, DayPlanView, PlanLeftView, PlanRouteView, PlanRuleView, PlanSendResult, PlanSendTruck, PlanSettings, PlannedOn } from './fleet-plan.types';
+import { DEFAULT_DAY_START, DayPlanState, DayPlanView, PlanLeftView, PlanRouteView, PlanRuleView, PlanSendResult, PlanSendTruck, PlanSettings, PlannedOn } from './fleet-plan.types';
 import { ROAD_MATRIX, type RoadDistances, type RoadMatrix } from './road-matrix';
 import { ROUTER, Router } from './router';
 import { VehicleService } from './vehicle.service';
 
-/** A fleet's own planning day, where it has not said otherwise. The solver's defaults for the rest. */
-export const DEFAULT_DAY_START = '07:00';
+/** A fleet's own planning day starts at DEFAULT_DAY_START where it has not said otherwise. The solver's defaults for the rest. */
 export const DEFAULT_DAY_HOURS = 10;
 /** No plan asks a driver for more than this, whatever the office types: the shift limit is the law's, not the plan's. */
 export const MAX_DAY_HOURS = 13;

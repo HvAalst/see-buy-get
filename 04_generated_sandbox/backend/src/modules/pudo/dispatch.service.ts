@@ -1,4 +1,5 @@
 ﻿import type { PlannedOn } from './fleet-plan.types';
+import { DEFAULT_DAY_START } from './fleet-plan.types';
 import { FleetManagerService } from './fleet-manager.service';
 import { clockAt, minutesOf, utcDay } from './fleet-clock';
 import { windowOf, windowWords } from './delivery-window';
@@ -1192,6 +1193,8 @@ export class DispatchService {
     } else {
       f.paidStatus = 'unpaid';
     }
+    // Its shipper was told it is on no vehicle. It is on one now, and that is said.
+    this.tellOnDriver(f);
     this.freights.set(f.freightId, f);
     return f;
   }
@@ -1759,12 +1762,16 @@ export class DispatchService {
       const stamp = stamps.get(f.freightId);
       if (stamp) {
         f.planned = stamp;
-        // Said to be on no vehicle, and on one now: that is said too — as late or early where it is, as planned where
+        // Said to be on no vehicle — by a plan, or by the clock on its day — and on one now: that is said too, as late
+        // or early where it is, as planned where
         // it is not. What was said of its window before it was left out no longer stands in the way of saying it.
-        const back = Boolean(f.planLeft);
+        const byClock = f.lateTold?.what === 'unplanned';
+        const back = Boolean(f.planLeft) || byClock;
         if (back) {
           delete f.planLeft;
           delete f.windowTold;
+          // Off the order, so that if it comes off its vehicle again the clock can say so again.
+          if (byClock) delete f.lateTold;
         }
         if (back && !stamp.lateMin && !stamp.earlyMin) this.tellOnVehicle(f, stamp);
         else this.tellWindow(f, stamp, now);
@@ -1812,6 +1819,23 @@ export class DispatchService {
       .catch(() => undefined);
   }
 
+  /**
+   * WHAT HAPPENS AFTER THE ALARM. A shipper told an order is on no vehicle — when a plan left it out, or by the clock
+   * on its day — is told when it is on one after all. A new plan says that itself (stampPlan). This is every other
+   * way onto a vehicle: the office's own hand, or the plan sending a trip the order had missed. No hour is said,
+   * because nothing planned one. What was said comes off the order, so that if it comes off its vehicle again the
+   * clock can say so again.
+   */
+  private tellOnDriver(f: Freight): void {
+    const byClock = f.lateTold?.what === 'unplanned';
+    if (!f.planLeft && !byClock) return;
+    delete f.planLeft;
+    if (byClock) delete f.lateTold;
+    const shipperDid = this.shipperToTell(f);
+    if (!shipperDid) return;
+    void this.events.publish(GlosEvent.Pudo.OrderLeftOut, { freightId: f.freightId, code: f.code, shipperDid, fleetName: f.contract?.fleetName ?? '', day: f.deliverOn ?? '', left: false }, { source: 'pudo' }).catch(() => undefined);
+  }
+
   /** About when the accepted plan has an order at the door, while it is on its way and nothing has stopped it loading. */
   private plannedAboutOf(f: Freight): PlannedAbout | undefined {
     const p = f.planned;
@@ -1848,8 +1872,17 @@ export class DispatchService {
    * IS IT RUNNING LATE, on its carrier's own clock? `day` — the day it was ordered for has gone and it has not been
    * delivered. `hour` — it is still its day, and the hour its accepted plan had it at the door passed more than
    * LATE_GRACE_MIN ago: a plan's time is an estimate, and a quarter of an hour is not news. Wherever it is — on the
-   * road, on its driver, or not gone out at all. Nothing for an order in no plan, one that missed its trip (the day
-   * will say it), or a carrier with no clock.
+   * road, on its driver, or not gone out at all. No hour is judged for an order in no plan or one that missed its
+   * trip: it has none. Nothing at all for a carrier with no clock.
+   *
+   * And `unplanned` — the user, 2026-10-07, of the two silences left: "some of them can be worked on already". The
+   * day's work has begun and it is on NO VEHICLE: in no plan anybody accepted for that day (or it missed its trip),
+   * and on no driver. That is the day a plan put nothing on a vehicle and so could not be accepted, the day nobody
+   * planned, and the order placed after the plan was accepted — all of which told the shipper nothing.
+   *
+   * FROM THE HOUR A PLANNED DAY STARTS, not from midnight: an office that plans its day at seven has not failed to
+   * plan it at five past twelve, and a shipper woken to be told so has been told nothing true. And not in an
+   * order's first hour: one placed for today is given time to be planned before anybody is told it has not been.
    */
   lateOf(f: Freight, now: number = Date.now()): RunningLate | undefined {
     if (!f.contract || !f.deliverOn) return undefined;
@@ -1860,7 +1893,10 @@ export class DispatchService {
     if (t.day > f.deliverOn) return 'day';
     if (t.day < f.deliverOn) return undefined;
     const due = f.planned && !f.planned.held && f.planned.day === f.deliverOn ? minutesOf(f.planned.arrive) : undefined;
-    return due !== undefined && t.minutes > due + LATE_GRACE_MIN ? 'hour' : undefined;
+    if (due !== undefined && t.minutes > due + LATE_GRACE_MIN) return 'hour';
+    const onNoVehicle = (f.status === 'ordered' || f.status === 'available') && due === undefined;
+    if (!onNoVehicle || t.minutes < (minutesOf(DEFAULT_DAY_START) ?? 0)) return undefined;
+    return now - Date.parse(f.createdAt) >= UNPLANNED_GRACE_MIN * 60_000 ? 'unplanned' : undefined;
   }
 
   /**
@@ -1874,7 +1910,10 @@ export class DispatchService {
       const shipperDid = this.shipperToTell(f);
       if (!shipperDid || f.rejoinedInto) continue;
       const what = this.lateOf(f, now);
-      if (!what || f.lateTold?.what === what || f.lateTold?.what === 'day') continue;
+      // Once for each, and never back down the ladder: on no vehicle, then its hour, then its day.
+      if (!what || LATE_RANK[what] <= (f.lateTold ? LATE_RANK[f.lateTold.what] : 0)) continue;
+      // Told when the plan was accepted that it leaves this order out: the morning does not say it again.
+      if (what === 'unplanned' && f.planLeft?.day === f.deliverOn) continue;
       f.lateTold = { what, at: new Date(now).toISOString() };
       this.freights.set(f.freightId, f);
       out.push({ freightId: f.freightId, code: f.code, shipperDid, fleetName: f.contract?.fleetName ?? '', what, day: f.deliverOn!, ...(what === 'hour' && f.planned ? { arrive: f.planned.arrive } : {}), status: f.status });
@@ -3394,3 +3433,8 @@ export const WINDOW_RETELL_MIN = 30;
 
 /** How long past its planned hour a load is before it is called late: a plan's time is an estimate. */
 export const LATE_GRACE_MIN = 30;
+
+/** How long an order is left alone after it is placed before anybody is told it is on no vehicle. */
+export const UNPLANNED_GRACE_MIN = 60;
+
+const LATE_RANK: Record<RunningLate, number> = { unplanned: 1, hour: 2, day: 3 };

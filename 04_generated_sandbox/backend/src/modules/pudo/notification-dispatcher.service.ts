@@ -548,6 +548,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     if (p.left) {
       const because = LEFT_OUT_BECAUSE[p.why ?? 'room'](p.day);
       await this.tell(p.shipperDid, { kind: 'order_left_out', title: `${p.fleetName} has not put ${p.code} on a vehicle for ${p.day}`, body: `${because} As its plan stands, ${p.code} is on no vehicle. The day can still be planned again: speak to ${p.fleetName} now.`, tag: `left:${p.code}:${p.day}:${p.why}`, data });
+    } else if (!p.arrive) {
+      // On a vehicle by the office's own hand, or on a trip it had missed: no plan gave it an hour, and none is made up.
+      await this.tell(p.shipperDid, { kind: 'order_window', title: `${p.fleetName} now has ${p.code} on a vehicle`, body: `${p.fleetName} has put ${p.code} on a vehicle. There is no planned hour for it; you are told when it is delivered.`, tag: `left:${p.code}:${p.day}:on`, data });
     } else {
       const inside = p.window ? `, inside the window you asked for (${p.window})` : '';
       await this.tell(p.shipperDid, { kind: 'order_window', title: `${p.fleetName} now has ${p.code} on a vehicle for ${p.day}`, body: `Its plan has ${p.code} at the door about ${p.arrive}${inside}. A plan’s time is an estimate, and the day can still be planned again.`, tag: `left:${p.code}:${p.day}:planned`, data });
@@ -556,7 +559,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
 
   /**
    * RUNNING LATE. A load that should have arrived and has not is the absence of an event, so it is swept for: each
-   * shipper is told once that the hour its carrier planned has passed, and once more if the whole day goes. On the
+   * shipper is told once that its order is on no vehicle on its day, once that the hour its carrier planned has
+   * passed, and once more if the whole day goes. On the
    * carrier's own clock — which is why this could not exist before a fleet had one. Answers how many were told.
    */
   async sweepLate(now: number = Date.now()): Promise<number> {
@@ -564,7 +568,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     for (const l of due) {
       const where = l.status === 'in_transit' ? 'It is on the road.' : l.status === 'claimed' ? 'It is with its driver and has not been collected yet.' : 'It has not gone out yet.';
       const data = { freightId: l.freightId };
-      if (l.what === 'hour') {
+      if (l.what === 'unplanned') {
+        // The same fact as an order a plan left out, found by the clock instead of by a plan: its day is here.
+        await this.tell(l.shipperDid, { kind: 'order_left_out', title: `${l.fleetName} has not put ${l.code} on a vehicle, and it is for today`, body: `${l.code} was ordered for ${l.day}. The day’s work has begun, and ${l.fleetName} has it on no vehicle. Speak to ${l.fleetName} now.`, tag: `left:${l.code}:${l.day}:today`, data });
+      } else if (l.what === 'hour') {
         await this.tell(l.shipperDid, { kind: 'order_late', title: `${l.code} is running late`, body: `${l.fleetName} planned to be at the door about ${l.arrive} and has not delivered it. ${where} A plan’s time is an estimate; speak to ${l.fleetName} if you need to know more.`, tag: `late:${l.code}:hour`, data });
       } else {
         await this.tell(l.shipperDid, { kind: 'order_late', title: `${l.code} did not arrive on ${l.day}`, body: `It was ordered for that day, and ${l.fleetName} has not delivered it. ${where} Speak to ${l.fleetName} now.`, tag: `late:${l.code}:day`, data });

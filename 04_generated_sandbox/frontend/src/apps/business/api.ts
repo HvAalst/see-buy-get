@@ -166,8 +166,8 @@ export interface PostedLoad {
   plannedAbout?: { day: string; arrive: string; window?: string };
   /** The carrier's accepted plan for its day leaves it on no vehicle, and why as a shipper is told it. */
   leftOut?: { day: string; why: 'room' | 'fit' | 'heavy' | 'place' };
-  /** Not delivered, and late on its carrier's own clock: the planned hour has passed, or its whole day. */
-  runningLate?: 'hour' | 'day';
+  /** Not delivered, and wrong on its carrier's own clock: on no vehicle on its day, its planned hour passed, or its whole day. */
+  runningLate?: 'unplanned' | 'hour' | 'day';
   /** Delivered: when, on the carrier's clock, and where that fell against the day and the window asked for. */
   deliveryTiming?: { timeZone: string; day: string; at: string; otherDay?: 'early' | 'late'; window?: string; lateMin?: number; earlyMin?: number };
   description: string;

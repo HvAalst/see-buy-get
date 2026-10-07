@@ -19,10 +19,13 @@ export interface ZeptoMailRequest {
   track_opens: boolean;
 }
 
+/** The address this server starts with. It is on a domain nobody owns: no provider will send for it. */
+export const PLACEHOLDER_FROM = 'noreply@seebuyget.example';
+
 /** The sender address. Must be verified on the ZeptoMail domain before production can send. */
 export function mailFrom(): MailAddress {
   return {
-    address: process.env.MAIL_FROM_ADDRESS?.trim() || 'noreply@seebuyget.example',
+    address: process.env.MAIL_FROM_ADDRESS?.trim() || PLACEHOLDER_FROM,
     name: process.env.MAIL_FROM_NAME?.trim() || 'SeeBuyGet',
   };
 }

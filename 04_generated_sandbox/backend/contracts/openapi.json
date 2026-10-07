@@ -36757,8 +36757,9 @@
           },
           "runningLate": {
             "type": "string",
-            "description": "Not delivered, and late on its carrier's own clock: the planned hour has passed, or the whole day.",
+            "description": "Not delivered, and wrong on its carrier's own clock: on no vehicle on its day, its planned hour passed, or its whole day.",
             "enum": [
+              "unplanned",
               "hour",
               "day"
             ]
@@ -41155,6 +41156,122 @@
           "model"
         ]
       },
+      "MailLast": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "what": {
+            "type": "string",
+            "description": "Which email it was, by its name — never who it was for."
+          }
+        },
+        "required": [
+          "at",
+          "ok",
+          "what"
+        ]
+      },
+      "MailConnection": {
+        "type": "object",
+        "properties": {
+          "last": {
+            "$ref": "#/components/schemas/MailLast"
+          },
+          "sends": {
+            "type": "boolean",
+            "description": "An email leaves this server. `false`: it is kept here instead, and reaches nobody."
+          },
+          "tokenSet": {
+            "type": "boolean",
+            "description": "A provider's token is set. Set while `sends` is false, it is a token nothing on this server uses."
+          },
+          "from": {
+            "type": "string",
+            "description": "Who an email says it is from."
+          },
+          "fromIsPlaceholder": {
+            "type": "boolean",
+            "description": "That address is the one this server starts with, which no provider will send for."
+          },
+          "written": {
+            "type": "number",
+            "description": "Emails written since this server started, and how many of those could not be handed over."
+          },
+          "failed": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "sends",
+          "tokenSet",
+          "from",
+          "fromIsPlaceholder",
+          "written",
+          "failed"
+        ]
+      },
+      "PushLast": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "at",
+          "ok"
+        ]
+      },
+      "PushConnection": {
+        "type": "object",
+        "properties": {
+          "keys": {
+            "type": "string",
+            "enum": [
+              "own",
+              "built_in",
+              "mismatched"
+            ]
+          },
+          "last": {
+            "$ref": "#/components/schemas/PushLast"
+          },
+          "sends": {
+            "type": "boolean",
+            "description": "A push leaves this server. `false`: it is kept here instead, and no phone is woken."
+          },
+          "devices": {
+            "type": "number",
+            "description": "Devices that have turned notifications on, and how many people they belong to."
+          },
+          "people": {
+            "type": "number"
+          },
+          "handed": {
+            "type": "number",
+            "description": "Pushes handed to a device since this server started, and how many of those failed."
+          },
+          "failed": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "keys",
+          "sends",
+          "devices",
+          "people",
+          "handed",
+          "failed"
+        ]
+      },
       "ConnectionsView": {
         "type": "object",
         "properties": {
@@ -41164,6 +41281,16 @@
           "adviser": {
             "$ref": "#/components/schemas/AdviserConnection"
           },
+          "mail": {
+            "$ref": "#/components/schemas/MailConnection"
+          },
+          "push": {
+            "$ref": "#/components/schemas/PushConnection"
+          },
+          "sandbox": {
+            "type": "boolean",
+            "description": "This is a sandbox, where mail and push are MEANT to be kept and not sent. Off a sandbox the same state is\npeople who are never told."
+          },
           "since": {
             "type": "string",
             "description": "When this server started. \"Last asked\" is since then: it is kept in memory, and a restart forgets it."
@@ -41172,6 +41299,9 @@
         "required": [
           "router",
           "adviser",
+          "mail",
+          "push",
+          "sandbox",
           "since"
         ]
       },
