@@ -168,7 +168,10 @@ started with, never off a variable that happens to be set.
   party it was made for reads it; it stops after 30 days, after 25 openings, when it is cancelled, or when the
   document passes its keeping; it is NOT used up by being looked at (mail scanners follow links). The party sees
   each link on the note (address masked, times opened) and can cancel it. Public routes:
-  `POST /v1/sbg/document-links/look|fetch`, rate-limited.
+  `POST /v1/sbg/document-links/look|fetch`, rate-limited. A party also MAKES a link itself to pass on
+  (`POST consignment-notes/:docId/links`): the address comes back once and is never kept; at most five links
+  per party per note work at a time; staff cannot make one; and a business's view-only member can neither make
+  nor cancel one (`BusinessMemberGuard` on the controller). The Business app has no screen for any of this yet.
 - **Push** is still kept by `OutboxPushSender`: no push leaves the server. The keys (`GLOS_VAPID_PUBLIC`,
   `GLOS_VAPID_PRIVATE`) are judged from the pair: the server's own, the pair written in the source, or two that
   do not belong together.

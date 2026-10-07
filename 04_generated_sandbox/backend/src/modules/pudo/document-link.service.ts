@@ -16,6 +16,8 @@ import { NoteBundleService } from './note-bundle.service';
 export const LINK_DAYS = 30;
 /** How often one link hands the file over. A link passed round an office is opened a handful of times, not hundreds. */
 export const LINK_MAX_OPENS = 25;
+/** How many links to one note a party may have working at once. Each is a way in: a handful, never a pile nobody remembers. */
+export const LINK_MAX_LIVE = 5;
 const DAY_MS = 86_400_000;
 
 /** What is kept of a link. NEVER THE KEY: only its fingerprint, so that reading this store opens nothing. */
@@ -26,6 +28,7 @@ export interface DocumentLink {
   /** The party it was made for. The link reads the document as that party does, and that party alone may cancel it. */
   forDid: string;
   sentTo?: string;
+  madeBy?: string;
   createdAt: string;
   expiresAt: string;
   opened: number;
@@ -71,7 +74,7 @@ export class DocumentLinkService implements OnModuleInit {
    * document: the email this is for goes all the same, and says where the note is instead.
    * The key is in what this returns and nowhere else, ever again.
    */
-  issue(docId: string, forDid: string, opts: { sentTo?: string; now?: number } = {}): { token: string; link: DocumentLink } | undefined {
+  issue(docId: string, forDid: string, opts: { sentTo?: string; madeBy?: string; now?: number } = {}): { token: string; link: DocumentLink } | undefined {
     if (!this.archive.hasFor(docId, forDid)) return undefined;
     const now = opts.now ?? Date.now();
     const token = randomBytes(32).toString('base64url');
@@ -81,12 +84,37 @@ export class DocumentLinkService implements OnModuleInit {
       docId,
       forDid,
       ...(opts.sentTo ? { sentTo: maskAddress(opts.sentTo) } : {}),
+      ...(opts.madeBy ? { madeBy: opts.madeBy.slice(0, 80) } : {}),
       createdAt: new Date(now).toISOString(),
       expiresAt: new Date(now + LINK_DAYS * DAY_MS).toISOString(),
       opened: 0,
     };
     this.links.set(link.tokenHash, link);
     return { token, link };
+  }
+
+  /**
+   * A PARTY MAKES A LINK ITSELF, TO PASS ON — into a chat, a text, its own mail. The same key as the one a receipt
+   * carries, with the same limits; what differs is who holds it first.
+   *
+   * For the caller's own reading of the note and nobody else's: whoever may take the file may make a link to it,
+   * and no more than that. NOT STAFF: staff read every note, and a link made by staff would be a way in that no
+   * party to the note made, could see on its note, or could cancel.
+   *
+   * AT MOST A HANDFUL WORK AT ONCE. Each link is a way in. A party that wants another cancels one — which is also
+   * what makes it look at the ones it has.
+   *
+   * The address is handed back ONCE. The key is not kept, so it cannot be shown again.
+   */
+  make(docId: string, actor: IntrospectionResult | undefined, now: number = Date.now()): { url: string; link: DocumentLinkRow } {
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A link is made by a party to the note, for its own copy. Staff read the note itself.');
+    // Whether the caller is a party to this note is asked where the link is made (`issue`) — once, in one place.
+    const forDid = actingDid(actor);
+    const live = [...this.links.values()].filter((l) => l.docId === docId && l.forDid === forDid && this.stateOf(l, now) === 'ready').length;
+    if (live >= LINK_MAX_LIVE) throw new GlosError('INVALID_STATE', `This note already has ${LINK_MAX_LIVE} links that work. Cancel one to make another.`, { field: 'docId' });
+    const made = this.issue(docId, forDid, { now, ...(actor?.actorName ? { madeBy: actor.actorName } : {}) });
+    if (!made) throw new GlosError('NOT_FOUND', 'No such consignment note in the archive');
+    return { url: linkUrl(made.token), link: this.row(made.link, now) };
   }
 
   /** What this link is — said before the file is taken, and said plainly when it no longer opens. */
@@ -148,6 +176,7 @@ export class DocumentLinkService implements OnModuleInit {
       linkId: l.linkId,
       state: this.stateOf(l, now),
       ...(l.sentTo ? { sentTo: l.sentTo } : {}),
+      ...(l.madeBy ? { madeBy: l.madeBy } : {}),
       createdAt: l.createdAt,
       expiresAt: l.expiresAt,
       opened: l.opened,

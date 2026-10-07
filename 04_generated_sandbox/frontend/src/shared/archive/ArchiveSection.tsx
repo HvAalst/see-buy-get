@@ -4,7 +4,8 @@ import { useT, type Translate } from '../i18n';
 import { useDebounced } from '../useDebounced';
 import { ARCHIVE_LIMIT, type ArchiveApiState } from './useArchive';
 import { day, documentGoingSoon, pathWord, retentionLines, routeLine, shortPrint, stageWord } from './words';
-import { linkRowSays } from './documentLink';
+import { linkRowSays, splitLinks } from './documentLink';
+import { passOnLink, waysToPassOn, type PassedOn } from './handOver';
 import { NoteCheck } from './NoteCheck';
 import { DestinationCard } from './DestinationCard';
 import type { DestinationApiState } from './useDestination';
@@ -273,11 +274,15 @@ function NoteSheet({ archive }: { archive: ArchiveApiState }) {
 /* --------------------------------------------------------------------------- links -- */
 
 /**
- * THE LINKS TO THIS NOTE that were emailed for this reader — with a receipt, when the load was delivered.
+ * THE LINKS TO THIS NOTE that are this reader's: the one emailed with a receipt when the load was delivered, and the
+ * ones this party made itself to pass on.
  *
- * A link opens the note with nobody signed in, so the party it was made for is shown each one: the address it
- * went to, how often the file was taken with it, and until when it works. And can stop it now. Nothing is shown
- * while there are none: most notes have no link, and a heading over nothing is a question with no answer.
+ * A link opens the note with nobody signed in, so the party it was made for is shown each one: where it came from,
+ * how often the file was taken with it, and until when it works. And can stop it now.
+ *
+ * MAKING ONE is for somebody who should have the note and has no account here — a bookkeeper, an insurer, the
+ * other side — sent by the party itself, in a chat, a text or its own mail. Its address is shown ONCE: the server
+ * keeps no copy, so there is nothing to show a second time. Lost, it is cancelled and another is made.
  *
  * Cancelling asks once more, in place: it cannot be switched back on, and the button is a finger's width from a
  * row somebody was only reading.
@@ -285,13 +290,63 @@ function NoteSheet({ archive }: { archive: ArchiveApiState }) {
 function NoteLinks({ archive }: { archive: ArchiveApiState }) {
   const t = useT();
   const [asking, setAsking] = useState('');
-  if (archive.links.length === 0) return null;
+  const [passed, setPassed] = useState<PassedOn | null>(null);
+  const [showStopped, setShowStopped] = useState(false);
+  const { live, stopped } = splitLinks(archive.links);
+  const ways = waysToPassOn();
+  const made = archive.made;
+  const pass = async (how: 'share' | 'copy') => {
+    if (!made || !archive.open) return;
+    setPassed(await passOnLink(made.url, archive.open.number, how, ways));
+  };
   return (
     <>
       <h3 class="scr__section">{t('archive.links.title')}</h3>
       <p class="hint">{t('archive.links.lede')}</p>
+
+      {made ? (
+        <>
+          <Note tone="warn" icon="warning" title={t('archive.links.madeTitle')} detail={t('archive.links.madeDetail', { date: day(made.expiresAt) })} />
+          <div class="field">
+            <label class="field__label" for="made-link">
+              {t('archive.links.madeLabel')}
+            </label>
+            <input id="made-link" class="input mono-t" type="text" readOnly value={made.url} onFocus={(e) => e.currentTarget.select()} />
+          </div>
+          {ways.share ? (
+            <Button onClick={() => void pass('share')}>{t('archive.links.send')}</Button>
+          ) : null}
+          {ways.copy ? (
+            <Button variant={ways.share ? 'outline' : 'primary'} onClick={() => void pass('copy')}>
+              {t('archive.links.copy')}
+            </Button>
+          ) : null}
+          {passed === 'shared' || passed === 'copied' || passed === 'shown' ? (
+            <p class="hint" role="status">
+              {t(passed === 'shared' ? 'archive.links.passedShared' : passed === 'copied' ? 'archive.links.passedCopied' : 'archive.links.passedShown')}
+            </p>
+          ) : null}
+        </>
+      ) : (
+        <>
+          <Button variant="outline" busy={archive.making} onClick={() => void archive.makeLink().then(() => setPassed(null))}>
+            {t('archive.links.make')}
+          </Button>
+          <p class="hint">{t('archive.links.makeHint')}</p>
+        </>
+      )}
+      {archive.makeProblem ? (
+        <p class="hint" role="alert">
+          {archive.makeProblem}
+        </p>
+      ) : null}
+
+      {/* The links that still open are the ones that matter, and are what is shown. The ones that have stopped are
+          the note's history — who was sent it, and when that ended — and a year of them above the fold would bury the
+          one link that is still a way in. They are one tap away, never gone. */}
+      {archive.links.length === 0 ? <p class="hint">{t('archive.links.none')}</p> : live.length === 0 ? <p class="hint">{t('archive.links.noneLive')}</p> : null}
       <div class="rows" role="list">
-        {archive.links.map((l) => {
+        {(showStopped ? [...live, ...stopped] : live).map((l) => {
           const says = linkRowSays(l, t);
           return (
             <div key={l.linkId} class="row row--static" role="listitem">
@@ -325,6 +380,11 @@ function NoteLinks({ archive }: { archive: ArchiveApiState }) {
           );
         })}
       </div>
+      {stopped.length > 0 ? (
+        <Button variant="link" full={false} onClick={() => setShowStopped((v) => !v)}>
+          {showStopped ? t('archive.links.hideStopped') : stopped.length === 1 ? t('archive.links.showStoppedOne') : t('archive.links.showStoppedMany', { n: stopped.length })}
+        </Button>
+      ) : null}
     </>
   );
 }

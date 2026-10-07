@@ -3,7 +3,7 @@ import { narrow, type Result, type SbgClient, type SbgError } from '../../lib/sb
 import { createArchiveApi } from '../../lib/sbg/personas/archive';
 import type { ArchiveQuery, ArchivedNoteDoc, ArchivedNoteRow, ProofAnswer } from '../../lib/sbg/personas/archive';
 import { triggerDownload, triggerDownloadBlob } from '../download';
-import type { DocumentLinkRow } from './documentLink';
+import type { DocumentLinkRow, MadeLink } from './documentLink';
 import { canShareFiles as browserSharesFiles, fileNameFor, handOverFile } from './handOver';
 
 export const ARCHIVE_LIMIT = 20;
@@ -26,6 +26,12 @@ export interface ArchiveApiState {
   /** The link being cancelled, while it is. */
   cancelling: string;
   cancelLink: (linkId: string) => Promise<void>;
+  /** A link just made on the open document: its address, held only until the sheet shuts. The server kept no copy. */
+  made: MadeLink | null;
+  making: boolean;
+  /** Why a link could not be made, in the server's own words — it has a limit, and says what to do about it. */
+  makeProblem: string;
+  makeLink: () => Promise<void>;
   busy: '' | 'csv' | 'bundle' | 'bundles' | 'print';
   load: () => Promise<void>;
   setQuery: (patch: Partial<ArchiveQuery>) => void;
@@ -58,6 +64,9 @@ export function useArchive(client: SbgClient | null, enabled = true): ArchiveApi
   const [openPhase, setOpenPhase] = useState<Phase>('idle');
   const [links, setLinks] = useState<DocumentLinkRow[]>([]);
   const [cancelling, setCancelling] = useState('');
+  const [made, setMade] = useState<MadeLink | null>(null);
+  const [making, setMaking] = useState(false);
+  const [makeProblem, setMakeProblem] = useState('');
   const [busy, setBusy] = useState<ArchiveApiState['busy']>('');
 
   // The archive is not a persona of its own — every app already has one. Built here so the hook takes a
@@ -113,6 +122,8 @@ export function useArchive(client: SbgClient | null, enabled = true): ArchiveApi
       setOpenPhase('loading');
       setOpen(null);
       setLinks([]);
+      setMade(null);
+      setMakeProblem('');
       const r: Result<unknown> = await api.note(docId);
       if (r.error || !r.data) {
         setOpenPhase('error');
@@ -146,7 +157,23 @@ export function useArchive(client: SbgClient | null, enabled = true): ArchiveApi
     setOpen(null);
     setOpenPhase('idle');
     setLinks([]);
+    // The address of a link just made goes with the sheet: it was only ever here.
+    setMade(null);
+    setMakeProblem('');
   }, []);
+
+  /** Make a link on the open document. Its address is in the answer and nowhere else, so it is held here to be passed on. */
+  const makeLink = useCallback(async () => {
+    if (!api || !open) return;
+    setMaking(true);
+    setMakeProblem('');
+    const r: Result<unknown> = await api.makeNoteLink(open.docId);
+    setMaking(false);
+    if (r.error || !r.data) return setMakeProblem(r.error?.detail || r.error?.title || '');
+    const answer = narrow<{ url: string; link: DocumentLinkRow }>(r.data);
+    setMade({ url: answer.url, expiresAt: answer.link.expiresAt });
+    setLinks((all) => [answer.link, ...all]);
+  }, [api, open]);
 
   const exportCsv = useCallback(async () => {
     if (!api) return;
@@ -224,7 +251,7 @@ export function useArchive(client: SbgClient | null, enabled = true): ArchiveApi
    */
   const canShareFiles = useMemo(() => browserSharesFiles(), []);
 
-  return { rows, total, phase, error, query, open, openPhase, links, cancelling, cancelLink, busy, load, setQuery, openDoc, closeDoc, exportCsv, exportBundle, exportAll, printCopy, verifyNote, canShareFiles };
+  return { rows, total, phase, error, query, open, openPhase, links, cancelling, cancelLink, made, making, makeProblem, makeLink, busy, load, setQuery, openDoc, closeDoc, exportCsv, exportBundle, exportAll, printCopy, verifyNote, canShareFiles };
 }
 
 /** Show a fetched page in its own window. Falls back to a download where a popup is blocked. */

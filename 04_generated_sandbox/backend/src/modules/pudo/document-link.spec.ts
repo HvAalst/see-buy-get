@@ -4,7 +4,7 @@ import { GlosEvent } from '../../foundation/events/glos-events';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { renderMail } from '../../foundation/mail/mail.templates';
 import { ConsignmentNoteService } from './consignment-note.service';
-import { DocumentLink, DocumentLinkService, LINK_DAYS, LINK_MAX_OPENS, linkUrl } from './document-link.service';
+import { DocumentLink, DocumentLinkService, LINK_DAYS, LINK_MAX_LIVE, LINK_MAX_OPENS, linkUrl } from './document-link.service';
 import type { Freight } from './dispatch.types';
 import { NoteArchiveService } from './note-archive.service';
 import { boardDocId } from './note-archive.types';
@@ -444,6 +444,104 @@ describe('a link to a document, in the email', () => {
       expect(links.look(other.token, at).state).toBe('ready');
       expect(links.fetch(other.token, at).filename).toBe('CMR-FRT-010.zip');
       expect(links.cancel(docId, other.link.linkId, asStaff, at).state).toBe('cancelled');
+    });
+  });
+
+  /*
+   * A LINK A PARTY MAKES ITSELF, TO PASS ON. The user, 2026-10-07: "pick one of the last gaps of your choice." This
+   * one, because the only link there was came in one email, and cancelling it was a dead end — and because a link
+   * somebody can put into a chat or a text is the whole of "keep the files on our own server" for everybody who is
+   * not emailed a receipt.
+   */
+  describe('a link a party makes itself, to pass on', () => {
+    it('hands the address over once — and it is the same kind of key, opening the same note, kept nowhere', async () => {
+      const { links, kept, deliver, tokenOf, sent } = setUp();
+      await deliver();
+      const docId = boardDocId('fr_1');
+      const at = Date.now() + 1000;
+      const made = links.make(docId, asShop, at);
+      expect(made.url).toMatch(/^http:\/\/localhost:5180\/#doc=[A-Za-z0-9_-]{43}$/);
+      expect(made.link).toEqual({ linkId: expect.stringMatching(/^dl_[0-9a-f]{16}$/), state: 'ready', createdAt: new Date(at).toISOString(), expiresAt: new Date(at + LINK_DAYS * DAY).toISOString(), opened: 0 });
+      const token = tokenOf(made.url);
+      expect(token).not.toBe(tokenOf(sent[0].params.noteUrl));
+      expect(links.look(token, at)).toMatchObject({ state: 'ready', number: 'CMR-FRT-010', opensLeft: LINK_MAX_OPENS });
+      expect(links.fetch(token, at).filename).toBe('CMR-FRT-010.zip');
+      // Not kept: it cannot be shown a second time, by the list or by anything else.
+      expect(JSON.stringify(kept())).not.toContain(token);
+      expect(JSON.stringify(links.listFor(docId, asShop, at))).not.toContain(token);
+      // On the note beside the receipt's: no address, because nobody emailed it; opened once.
+      expect(links.listFor(docId, asShop, at + 1)[0]).toEqual({ ...made.link, opened: 1, lastOpenedAt: new Date(at).toISOString() });
+      expect(links.listFor(docId, asShop, at + 1)[0]).not.toHaveProperty('sentTo');
+    });
+
+    it('says which of a company’s people made it, where the sign-in names one', async () => {
+      const { links, deliver } = setUp();
+      await deliver();
+      const docId = boardDocId('fr_1');
+      const amina = { ...asFleet, actorName: 'Amina Otieno' } as IntrospectionResult;
+      expect(links.make(docId, amina).link.madeBy).toBe('Amina Otieno');
+      expect(links.listFor(docId, asFleet)[0].madeBy).toBe('Amina Otieno');
+      // No name on the sign-in: none is made up. A very long one is cut, not kept whole.
+      expect(links.make(docId, asShop).link).not.toHaveProperty('madeBy');
+      expect(links.make(docId, { ...asDriver, actorName: 'x'.repeat(300) } as IntrospectionResult).link.madeBy).toHaveLength(80);
+    });
+
+    it('is made by a party, for that party’s own reading — not by a stranger, not by nobody, and not by staff', async () => {
+      const { links, kept, deliver, tokenOf } = setUp();
+      await deliver();
+      const docId = boardDocId('fr_1');
+      const before = kept().length;
+      expect(() => links.make(docId, asStranger)).toThrow('No such consignment note in the archive');
+      expect(() => links.make(boardDocId('fr_other'), asShop)).toThrow('No such consignment note in the archive');
+      expect(() => links.make(docId, undefined)).toThrow();
+      // Staff read every note. A link made by staff would be a way in that no party made, could see, or could cancel.
+      expect(() => links.make(docId, asStaff)).toThrow('A link is made by a party to the note, for its own copy. Staff read the note itself.');
+      expect(kept()).toHaveLength(before);
+      // Each party's link is its own: the carrier's is the carrier's to see and to cancel, and the shop's is the shop's.
+      const carriers = links.make(docId, asFleet);
+      const shops = links.make(docId, asShop);
+      expect(links.listFor(docId, asFleet).map((r) => r.linkId)).toEqual([carriers.link.linkId]);
+      expect(links.listFor(docId, asShop).map((r) => r.linkId)).toContain(shops.link.linkId);
+      expect(links.listFor(docId, asShop).map((r) => r.linkId)).not.toContain(carriers.link.linkId);
+      expect(() => links.cancel(docId, carriers.link.linkId, asShop)).toThrow('No such link on this document');
+      expect(links.look(tokenOf(carriers.url)).state).toBe('ready');
+      expect(kept().find((l) => l.linkId === carriers.link.linkId)).toMatchObject({ forDid: FLEET });
+    });
+
+    it('lets a handful work at once and no more — the receipt’s among them — and only the ones that still open count', async () => {
+      const { links, sent, deliver, tokenOf } = setUp();
+      await deliver();
+      const docId = boardDocId('fr_1');
+      const at = Date.now() + 1000;
+      // The receipt's link is one. Four more, and the note has all it may.
+      const mine = Array.from({ length: LINK_MAX_LIVE - 1 }, (_, i) => links.make(docId, asShop, at + i));
+      expect(links.listFor(docId, asShop, at + 10).filter((r) => r.state === 'ready')).toHaveLength(LINK_MAX_LIVE);
+      expect(() => links.make(docId, asShop, at + 10)).toThrow(`This note already has ${LINK_MAX_LIVE} links that work. Cancel one to make another.`);
+      expect(links.listFor(docId, asShop, at + 10)).toHaveLength(LINK_MAX_LIVE);
+      // The limit is each party's own: the carrier is not held to what the shop has made.
+      expect(links.make(docId, asFleet, at + 10).link.state).toBe('ready');
+      // …and each NOTE's own: a second note the shop is a party to is not held to what the first one has.
+      await deliver('fr_2', { code: 'FRT-011' });
+      expect(links.make(boardDocId('fr_2'), asShop, at + 10).link.state).toBe('ready');
+      expect(() => links.make(docId, asShop, at + 10)).toThrow(/already has 5 links that work/);
+      // Cancel one, and there is room for one — which is also what makes a party look at the links it has.
+      links.cancel(docId, mine[0].link.linkId, asShop, at + 20);
+      const again = links.make(docId, asShop, at + 30);
+      expect(() => links.make(docId, asShop, at + 40)).toThrow(/already has 5 links that work/);
+      // The receipt's link, cancelled, is no longer a dead end: another can be made in its place.
+      const receipts = links.listFor(docId, asShop, at + 40).find((r) => r.sentTo)!;
+      links.cancel(docId, receipts.linkId, asShop, at + 50);
+      expect(links.look(tokenOf(sent[0].params.noteUrl), at + 50).state).toBe('cancelled');
+      expect(links.look(tokenOf(links.make(docId, asShop, at + 60).url), at + 60).state).toBe('ready');
+      // One that is used up no longer counts either.
+      for (let i = 0; i < LINK_MAX_OPENS; i++) links.fetch(tokenOf(again.url), at + 100 + i);
+      expect(links.make(docId, asShop, at + 200).link.state).toBe('ready');
+      expect(() => links.make(docId, asShop, at + 210)).toThrow(/Cancel one to make another/);
+      // And a month on, every one of them has stopped by its date: five more can be made.
+      const later = at + (LINK_DAYS + 1) * DAY;
+      expect(links.listFor(docId, asShop, later).every((r) => r.state !== 'ready')).toBe(true);
+      for (let i = 0; i < LINK_MAX_LIVE; i++) links.make(docId, asShop, later + i);
+      expect(() => links.make(docId, asShop, later + 10)).toThrow(/already has 5 links that work/);
     });
   });
 });

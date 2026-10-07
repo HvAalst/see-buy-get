@@ -21617,6 +21617,33 @@
             }
           }
         }
+      },
+      "post": {
+        "operationId": "DocumentLink.make",
+        "summary": "",
+        "description": "Make a link to pass on. The address in the answer is shown this once: the key is not kept.",
+        "parameters": [
+          {
+            "name": "docId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MadeDocumentLink"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/sbg/consignment-notes/{docId}/links/{linkId}/cancel": {
@@ -41596,7 +41623,11 @@
           },
           "sentTo": {
             "type": "string",
-            "description": "The address it was emailed to, masked."
+            "description": "The address it was emailed to, masked. Absent on a link somebody made to pass on themselves."
+          },
+          "madeBy": {
+            "type": "string",
+            "description": "Who made it, where a person did and the sign-in names one: in a company, which of its people."
           },
           "lastOpenedAt": {
             "type": "string"
@@ -41638,6 +41669,21 @@
         },
         "required": [
           "items"
+        ]
+      },
+      "MadeDocumentLink": {
+        "type": "object",
+        "properties": {
+          "link": {
+            "$ref": "#/components/schemas/DocumentLinkRow"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "link",
+          "url"
         ]
       },
       "MilestoneTermDto": {

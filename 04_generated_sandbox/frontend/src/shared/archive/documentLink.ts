@@ -27,6 +27,7 @@ export interface DocumentLinkRow {
   linkId: string;
   state: LinkState;
   sentTo?: string;
+  madeBy?: string;
   createdAt: string;
   expiresAt: string;
   opened: number;
@@ -110,6 +111,20 @@ export function linkSays(answer: LinkAnswer, t: Translate): LinkSays {
   };
 }
 
+/**
+ * The links that still open, and the ones that have stopped — each in the order it came. A note is opened to see
+ * what is still a way in to it; what used to be one is its history, kept and shown on asking.
+ */
+export function splitLinks(rows: DocumentLinkRow[]): { live: DocumentLinkRow[]; stopped: DocumentLinkRow[] } {
+  return { live: rows.filter((r) => r.state === 'ready'), stopped: rows.filter((r) => r.state !== 'ready') };
+}
+
+/** A link just made: the address, shown once, and until when it works. */
+export interface MadeLink {
+  url: string;
+  expiresAt: string;
+}
+
 /** A link on the party's own document: who it went to, and whether it still opens. */
 export function linkRowSays(row: DocumentLinkRow, t: Translate): { title: string; state: string; used: string; canCancel: boolean } {
   const state =
@@ -123,5 +138,11 @@ export function linkRowSays(row: DocumentLinkRow, t: Translate): { title: string
             ? t('archive.links.gone')
             : t('archive.links.until', { date: day(row.expiresAt) });
   const used = row.opened === 0 ? t('archive.links.neverOpened') : row.opened === 1 ? t('archive.links.openedOne', { date: day(row.lastOpenedAt) }) : t('archive.links.openedMany', { n: row.opened, date: day(row.lastOpenedAt) });
-  return { title: row.sentTo ? t('archive.links.sentTo', { to: row.sentTo, date: day(row.createdAt) }) : t('archive.links.made', { date: day(row.createdAt) }), state, used, canCancel: row.state === 'ready' };
+  // Where it came from: an email we sent, one of the company's own people, or simply this party.
+  const title = row.sentTo
+    ? t('archive.links.sentTo', { to: row.sentTo, date: day(row.createdAt) })
+    : row.madeBy
+      ? t('archive.links.madeBy', { name: row.madeBy, date: day(row.createdAt) })
+      : t('archive.links.made', { date: day(row.createdAt) });
+  return { title, state, used, canCancel: row.state === 'ready' };
 }

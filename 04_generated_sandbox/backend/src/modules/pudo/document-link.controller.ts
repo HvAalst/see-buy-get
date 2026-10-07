@@ -4,8 +4,9 @@ import { Actor } from '../../foundation/auth/actor.decorator';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Public } from '../../foundation/auth/public.decorator';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
+import { BusinessMemberGuard } from './business-member.guard';
 import { DocumentLinkService } from './document-link.service';
-import { DocumentLinkList, DocumentLinkRow, DocumentLinkTokenDto, DocumentLinkView } from './document-link.types';
+import { DocumentLinkList, DocumentLinkRow, DocumentLinkTokenDto, DocumentLinkView, MadeDocumentLink } from './document-link.types';
 
 /**
  * A LINK TO A DOCUMENT, from both ends.
@@ -15,8 +16,13 @@ import { DocumentLinkList, DocumentLinkRow, DocumentLinkTokenDto, DocumentLinkVi
  * everything else here a stranger can ask for; guessing a key is hopeless long before the limit matters, and the
  * limit is there for the one thing a real key can be used for a thousand times: making this server build a file.
  *
- * The party the link was made for sees it on the document, signed in, and can cancel it.
+ * The party the link was made for sees it on the document, signed in, and can cancel it — and can make one itself.
+ *
+ * A BUSINESS'S VIEWER READS. Making a link and cancelling one are changes, and the guard that says so for every
+ * other route a business reaches says so here. The first version of this controller left it off: a viewer could
+ * have cancelled a link. (Nobody signed in passes straight through it, so the two public routes are as they were.)
  */
+@UseGuards(BusinessMemberGuard)
 @Controller('sbg')
 export class DocumentLinkController {
   constructor(private readonly links: DocumentLinkService) {}
@@ -48,6 +54,14 @@ export class DocumentLinkController {
   @Get('consignment-notes/:docId/links')
   list(@Param('docId') docId: string, @Actor() actor: IntrospectionResult): DocumentLinkList {
     return { items: this.links.listFor(docId, actor) };
+  }
+
+  /** Make a link to pass on. The address in the answer is shown this once: the key is not kept. */
+  @UseGuards(RateLimitGuard)
+  @RateLimit(20, 15 * 60)
+  @Post('consignment-notes/:docId/links')
+  make(@Param('docId') docId: string, @Actor() actor: IntrospectionResult): MadeDocumentLink {
+    return this.links.make(docId, actor);
   }
 
   /** Cancel one: it opens nothing from now on. */

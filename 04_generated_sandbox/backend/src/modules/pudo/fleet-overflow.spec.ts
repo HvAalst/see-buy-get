@@ -280,11 +280,15 @@ describe('handing orders on', () => {
       // And cannot take what it cannot see: an open offer answers only the fleets it was made to.
       expect(() => overflow.answer(stranger, f.freightId, true, 'Stranger')).toThrow(/No such offer/);
       expect(() => overflow.answer(stranger, f.freightId, false, 'Stranger')).toThrow(/No such offer/);
-      expect(rowFor(a.did, f.freightId)!.handOn).toMatchObject({ state: 'offered', offeredTo: [{ fleetName: 'Pwani Haulage' }, { fleetName: 'Rift Carriers' }] });
-      expect(rowFor(a.did, f.freightId)).toMatchObject({ role: 'own', handOn: { state: 'offered', by: 'Amina', offeredTo: [{ fleetName: 'Pwani Haulage' }, { fleetName: 'Rift Carriers' }] } });
+      // Offered to BOTH — read as the set it is: two partners linked in the same millisecond are listed either way round.
+      const offer = rowFor(a.did, f.freightId)!.handOn as { state: string; offeredTo?: Array<{ fleetName: string }> };
+      expect([offer.state, (offer.offeredTo ?? []).map((o) => o.fleetName).sort()]).toEqual(['offered', ['Pwani Haulage', 'Rift Carriers']]);
+      expect(rowFor(a.did, f.freightId)).toMatchObject({ role: 'own', handOn: { state: 'offered', by: 'Amina' } });
       // One message a partner for the batch — not one an order.
       await settle();
-      expect(heard).toEqual([expect.objectContaining({ what: 'offered', count: 2, weightKg: 6000, days: [tomorrow()], toFleetDids: [b.did, c.did] })]);
+      expect(heard).toEqual([expect.objectContaining({ what: 'offered', count: 2, weightKg: 6000, days: [tomorrow()] })]);
+      // To both partners, whichever way round they were linked.
+      expect([...(heard[0] as { toFleetDids: string[] }).toFleetDids].sort()).toEqual([b.did, c.did].sort());
       expect(notifications.inboxFor(b.did).map((n) => n.title)).toEqual(['Kilima Logistics offers you 2 orders']);
       expect(notifications.inboxFor(c.did)).toHaveLength(1);
     });

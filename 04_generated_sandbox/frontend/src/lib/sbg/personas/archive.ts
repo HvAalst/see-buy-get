@@ -151,6 +151,10 @@ export function createArchiveApi(sbg: SbgClient) {
     noteLinks: (docId: string) =>
       sbg.request((c) => c.GET('/v1/sbg/consignment-notes/{docId}/links' as never, { params: { path: { docId } } } as never)),
 
+    /** Make a link to pass on. The address comes back this once: the server does not keep it. */
+    makeNoteLink: (docId: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/consignment-notes/{docId}/links' as never, { params: { path: { docId } } } as never)),
+
     /** Cancel one: it opens nothing from now on, whoever holds the email. */
     cancelNoteLink: (docId: string, linkId: string) =>
       sbg.request((c) => c.POST('/v1/sbg/consignment-notes/{docId}/links/{linkId}/cancel' as never, { params: { path: { docId, linkId } } } as never)),

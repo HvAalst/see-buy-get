@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../i18n';
-import { FEW_LEFT, linkRowSays, linkSays, looksLikeAKey, readLinkKey, type DocumentLinkRow, type DocumentLinkView } from './documentLink';
-import { fileNameFor } from './handOver';
+import { FEW_LEFT, linkRowSays, linkSays, looksLikeAKey, readLinkKey, splitLinks, type DocumentLinkRow, type DocumentLinkView } from './documentLink';
+import { fileNameFor, passOnLink } from './handOver';
 import { day } from './words';
 
 const KEY = 'Qm9v-a2V5X3Ro_YXRfaXNfNDNfY2hhcnNfbG9uZw'.padEnd(43, '0').slice(0, 43); // 43 characters of the alphabet a key is written in
@@ -106,6 +106,51 @@ describe('a link to a document', () => {
       expect(linkRowSays(row({ opened: 1, lastOpenedAt: '2026-10-08T09:00:00.000Z' }), t).used).toBe(`Opened once, on ${day('2026-10-08T09:00:00.000Z')}`);
       expect(linkRowSays(row({ opened: 7, lastOpenedAt: '2026-10-12T09:00:00.000Z' }), t).used).toBe(`Opened 7 times, last on ${day('2026-10-12T09:00:00.000Z')}`);
       expect(linkRowSays(row({ opened: 0 }), t).used).toBe('Not opened yet');
+    });
+  });
+
+  describe('a link the party made itself, to pass on', () => {
+    it('says where each link came from: an email we sent, one of the company’s own people, or simply this party', () => {
+      const made = '2026-10-07T12:04:00.000Z';
+      expect(linkRowSays(row({ sentTo: undefined, madeBy: 'Amina Otieno' }), t).title).toBe(`Made by Amina Otieno on ${day(made)}`);
+      expect(linkRowSays(row({ sentTo: undefined }), t).title).toBe(`Made on ${day(made)}`);
+      // One we emailed says the address, whoever caused the email.
+      expect(linkRowSays(row({ madeBy: 'Amina Otieno' }), t).title).toBe(`Emailed to m…@kilima.co.ke on ${day(made)}`);
+      // A link somebody made is cancelled like any other, and counted like any other.
+      expect(linkRowSays(row({ sentTo: undefined, madeBy: 'Amina Otieno', opened: 3, lastOpenedAt: made }), t)).toMatchObject({ canCancel: true, used: `Opened 3 times, last on ${day(made)}` });
+    });
+
+    it('shows the links that still open, and keeps the ones that have stopped one tap away — a note is not buried under its history', () => {
+      const rows = [row({ linkId: 'a', state: 'cancelled' }), row({ linkId: 'b' }), row({ linkId: 'c', state: 'expired' }), row({ linkId: 'd' }), row({ linkId: 'e', state: 'used_up' }), row({ linkId: 'f', state: 'gone' })];
+      const { live, stopped } = splitLinks(rows);
+      expect(live.map((r) => r.linkId)).toEqual(['b', 'd']);
+      expect(stopped.map((r) => r.linkId)).toEqual(['a', 'c', 'e', 'f']);
+      // Nothing is lost between the two, and nothing is in both.
+      expect([...live, ...stopped].map((r) => r.linkId).sort()).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
+      expect(splitLinks([])).toEqual({ live: [], stopped: [] });
+      // The words for the fold: one, several — never "1 that no longer work".
+      expect([t('archive.links.showStoppedOne'), t('archive.links.showStoppedMany', { n: 4 })]).toEqual(['Show the one that no longer works', 'Show the 4 that no longer work']);
+    });
+
+    it('passes it on by the share sheet, falls back to the clipboard, and never ends in nothing', async () => {
+      const url = 'https://seebuyget.com/#doc=key';
+      const calls: string[] = [];
+      const abort = Object.assign(new Error('backed out'), { name: 'AbortError' });
+      const share = async (d: { url: string; title: string }) => void calls.push(`share ${d.title} ${d.url}`);
+      const copy = async (text: string) => void calls.push(`copy ${text}`);
+      expect(await passOnLink(url, 'CMR-FRT-010', 'share', { share, copy })).toBe('shared');
+      expect(await passOnLink(url, 'CMR-FRT-010', 'copy', { share, copy })).toBe('copied');
+      expect(calls).toEqual([`share CMR-FRT-010 ${url}`, `copy ${url}`]);
+      // Backing out of the sheet is not a failure — and nothing is copied behind somebody's back because they did.
+      calls.length = 0;
+      expect(await passOnLink(url, 'x', 'share', { share: () => Promise.reject(abort), copy })).toBe('cancelled');
+      expect(calls).toEqual([]);
+      // A sheet that fails for any other reason falls through to the clipboard; a clipboard that refuses, to the screen.
+      expect(await passOnLink(url, 'x', 'share', { share: () => Promise.reject(new Error('no target')), copy })).toBe('copied');
+      expect(await passOnLink(url, 'x', 'share', { share: () => Promise.reject(new Error('no target')), copy: () => Promise.reject(new Error('denied')) })).toBe('shown');
+      expect(await passOnLink(url, 'x', 'share', { copy })).toBe('copied');
+      expect(await passOnLink(url, 'x', 'copy', { share })).toBe('shown');
+      expect(await passOnLink(url, 'x', 'share', {})).toBe('shown');
     });
   });
 

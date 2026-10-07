@@ -120,6 +120,14 @@ describe('a customer’s business, over the wire', () => {
     expect((await http().get('/v1/sbg/notifications/inbox').set(bearer(viewerBiz)).expect(200)).body).toEqual({ items: [], unread: 0 });
     await http().post('/v1/sbg/notifications/inbox/read-all').set(bearer(viewerBiz)).expect(403);
     await http().post('/v1/sbg/notifications/inbox/ntf_none/read').set(bearer(viewerBiz)).expect(403);
+    // A link to a consignment note is a way in to it. Making one, or cancelling one, is a change: a viewer is refused
+    // before anything is looked up, and somebody who may act is told there is no such note. Reading is a viewer's too.
+    expect((await http().post('/v1/sbg/consignment-notes/board:nothing/links').set(bearer(viewerBiz)).expect(403)).body.detail).toMatch(/You can see this business but not change anything in it/);
+    await http().post('/v1/sbg/consignment-notes/board:nothing/links/dl_0/cancel').set(bearer(viewerBiz)).expect(403);
+    await http().get('/v1/sbg/consignment-notes/board:nothing/links').set(bearer(viewerBiz)).expect(404);
+    expect((await http().post('/v1/sbg/consignment-notes/board:nothing/links').set(bearer(bookerBiz)).expect(404)).body.detail).toBe('No such consignment note in the archive');
+    await http().post('/v1/sbg/consignment-notes/board:nothing/links/dl_0/cancel').set(bearer(bookerBiz)).expect(404);
+    await http().post('/v1/sbg/consignment-notes/board:nothing/links').expect(401);
     await http().get('/v1/sbg/notifications/inbox').set(bearer(bookerBiz)).expect(200);
     // Only an owner manages people.
     await http().post('/v1/sbg/business/me/members').set(bearer(bookerBiz)).send({ phone: '+251911000999', name: 'X', role: 'owner' }).expect(403);

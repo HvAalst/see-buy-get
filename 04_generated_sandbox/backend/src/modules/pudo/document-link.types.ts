@@ -46,14 +46,25 @@ export class DocumentLinkView {
 export class DocumentLinkRow {
   linkId: string;
   @ApiProperty({ enum: LINK_STATES }) state: LinkState;
-  /** The address it was emailed to, masked. */
+  /** The address it was emailed to, masked. Absent on a link somebody made to pass on themselves. */
   @ApiPropertyOptional() sentTo?: string;
+  /** Who made it, where a person did and the sign-in names one: in a company, which of its people. */
+  @ApiPropertyOptional() madeBy?: string;
   createdAt: string;
   expiresAt: string;
   /** How many times the file was taken with it, and when last. */
   opened: number;
   @ApiPropertyOptional() lastOpenedAt?: string;
   @ApiPropertyOptional() cancelledAt?: string;
+}
+
+/**
+ * A LINK JUST MADE. `url` is the only time the key exists outside whoever is handed this: it is not kept, so it
+ * cannot be shown again — the one who made it passes it on now, or cancels it and makes another.
+ */
+export class MadeDocumentLink {
+  url: string;
+  @ApiProperty({ type: DocumentLinkRow }) link: DocumentLinkRow;
 }
 
 export class DocumentLinkList {
