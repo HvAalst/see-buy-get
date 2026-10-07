@@ -1,9 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { randomBytes } from 'crypto';
-import { MAIL_SENDER, MailAddress, MailConnection, MailLast, MailSender, OutgoingMail } from './mail.types';
+import { MAIL_SENDER, MailAddress, MailConnection, MailLast, MailSendError, MailSender, OutgoingMail } from './mail.types';
 import { MAIL_TEMPLATES, MailParams, MailTemplateId, renderMail } from './mail.templates';
 import { OutboxMailSender } from './outbox-mail.sender';
-import { PLACEHOLDER_FROM, mailFrom } from './zeptomail';
+import { mailFrom, zeptoMailConfig } from './zeptomail';
 
 /**
  * Send one of the network's emails.
@@ -19,12 +19,20 @@ export class MailService {
   /** Since this server started: kept in memory, and a restart forgets it. */
   private written = 0;
   private failed = 0;
+  private reserved = 0;
   private last?: MailLast;
 
   constructor(@Inject(MAIL_SENDER) private readonly sender: MailSender) {}
 
   async send<K extends MailTemplateId>(template: K, to: MailAddress, params: MailParams[K]): Promise<boolean> {
     if (!to?.address || !to.address.includes('@')) return false;
+    // SENDING FOR REAL, an address that cannot exist is not handed over. It could only bounce, and bounces are what a
+    // provider judges an account by — a sandbox given a real token would otherwise mail every made-up person its
+    // seeds are full of, on the reminders' own timetable. The outbox keeps them, as it keeps everything.
+    if (this.sends() && isReservedAddress(to.address)) {
+      this.reserved += 1;
+      return false;
+    }
     this.written += 1;
     try {
       const mail: OutgoingMail = {
@@ -39,7 +47,9 @@ export class MailService {
       return true;
     } catch (err) {
       this.failed += 1;
-      this.last = { at: new Date().toISOString(), ok: false, what: MAIL_TEMPLATES[template]?.title ?? template };
+      // Whose it is to put right, where the sender said; a fault of nobody's naming otherwise.
+      const why = err instanceof MailSendError ? err : undefined;
+      this.last = { at: new Date().toISOString(), ok: false, what: MAIL_TEMPLATES[template]?.title ?? template, failed: why?.kind ?? 'failed', ...(why?.code ? { code: why.code } : {}) };
       this.logger.error(`Could not send "${template}" to ${maskAddress(to.address)}: ${(err as Error).message}`);
       return false;
     }
@@ -47,21 +57,45 @@ export class MailService {
 
   /**
    * Where an email goes, for staff. `sends` is READ OFF THE SENDER: the outbox keeps, and anything put in its place
-   * sends. Nobody states it, so it cannot be stated wrongly — a token set in the environment is not a sender, and
-   * until one is wired in (mail.types.ts) this says that emails are written and reach nobody.
+   * sends. Nobody states it, so it cannot be stated wrongly — a token set in the environment is not a sender. Where
+   * a token is set and the provider is still not used, `problem` says why (`zeptoMailConfig`): the same reading of
+   * the environment that chose the sender when the server started.
    */
   connection(): MailConnection {
     const from = mailFrom().address;
+    const given = zeptoMailConfig();
     return {
-      sends: !(this.sender instanceof OutboxMailSender),
-      tokenSet: Boolean(process.env.ZEPTOMAIL_TOKEN?.trim()),
+      sends: this.sends(),
+      tokenSet: given.tokenSet,
+      ...(given.host ? { host: given.host } : {}),
+      ...(given.problem ? { problem: given.problem } : {}),
       from,
-      fromIsPlaceholder: from === PLACEHOLDER_FROM,
+      // The address the server starts with is one; so is any other on a domain nobody can own.
+      fromIsPlaceholder: isReservedAddress(from),
       written: this.written,
       failed: this.failed,
+      reserved: this.reserved,
       ...(this.last ? { last: { ...this.last } } : {}),
     };
   }
+
+  /** The outbox keeps; anything in its place sends. Read off the sender, never off a setting. */
+  private sends(): boolean {
+    return !(this.sender instanceof OutboxMailSender);
+  }
+}
+
+/**
+ * An address nobody can have: on a domain set aside for examples and tests (RFC 2606, RFC 6761) — `example.com`,
+ * `.example`, `.test`, `.invalid`, `.localhost`. Nothing else is guessed at: a domain that merely looks made up may
+ * be somebody's.
+ */
+export function isReservedAddress(address: string): boolean {
+  const domain = address.slice(address.lastIndexOf('@') + 1).trim().toLowerCase().replace(/\.$/, '');
+  if (!domain) return false;
+  const labels = domain.split('.');
+  if (['example', 'test', 'invalid', 'localhost'].includes(labels[labels.length - 1])) return true;
+  return ['example.com', 'example.net', 'example.org'].includes(labels.slice(-2).join('.'));
 }
 
 /** "a…@example.com" — enough to find the case in a log, not enough to harvest. */

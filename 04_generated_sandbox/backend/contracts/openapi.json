@@ -41159,6 +41159,20 @@
       "MailLast": {
         "type": "object",
         "properties": {
+          "failed": {
+            "type": "string",
+            "enum": [
+              "unreachable",
+              "refused",
+              "limit",
+              "rejected",
+              "failed"
+            ]
+          },
+          "code": {
+            "type": "string",
+            "description": "The provider's own code for the failure, for looking up. A code only: its words may name an address."
+          },
           "at": {
             "type": "string"
           },
@@ -41179,6 +41193,19 @@
       "MailConnection": {
         "type": "object",
         "properties": {
+          "host": {
+            "type": "string",
+            "description": "The host of the provider's sending address. Never the address itself, and never the token."
+          },
+          "problem": {
+            "type": "string",
+            "description": "A token is set and the provider is not used, and this is why.",
+            "enum": [
+              "no_address",
+              "not_an_address",
+              "not_https"
+            ]
+          },
           "last": {
             "$ref": "#/components/schemas/MailLast"
           },
@@ -41196,7 +41223,7 @@
           },
           "fromIsPlaceholder": {
             "type": "boolean",
-            "description": "That address is the one this server starts with, which no provider will send for."
+            "description": "That address is on a domain set aside for examples — the one this server starts with is — which nobody owns, so\nno provider can verify it or will send for it."
           },
           "written": {
             "type": "number",
@@ -41204,6 +41231,10 @@
           },
           "failed": {
             "type": "number"
+          },
+          "reserved": {
+            "type": "number",
+            "description": "Emails NOT handed to the provider since this server started because their address cannot exist: it is on a\ndomain reserved for examples and tests. Nought while nothing is sent — the outbox keeps those like any other."
           }
         },
         "required": [
@@ -41212,7 +41243,8 @@
           "from",
           "fromIsPlaceholder",
           "written",
-          "failed"
+          "failed",
+          "reserved"
         ]
       },
       "PushLast": {

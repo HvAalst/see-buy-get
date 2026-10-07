@@ -36,7 +36,7 @@ section{background:#fff;border-radius:14px;padding:16px;box-shadow:0 1px 2px rgb
 header p{margin:4px 0;color:#5f6270;font-size:14px}.subject{color:#1b1d2a}span.on,span.off{font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;margin-left:6px;vertical-align:2px}
 span.on{background:#e3f5ea;color:#1c7c54}span.off{background:#fff1e6;color:#b4690e}iframe{width:100%;height:760px;border:1px solid #e6e6ea;border-radius:10px;margin-top:10px;background:#f4f4f6}
 a{color:#4c46e0}</style></head><body><div class="wrap"><h1>Every email the network sends</h1>
-<p class="lede">Rendered with sample data. What was actually sent on this sandbox is at <a href="outbox">/v1/mail/outbox</a>. Production sends through ZeptoMail once its token is set.</p>
+<p class="lede">Rendered with sample data. What this sandbox wrote and kept is at <a href="outbox">/v1/mail/outbox</a>. Email is sent through ZeptoMail when the server is started with its token and its sending address; without both, every email is kept.</p>
 <div class="grid">${cards}</div></div></body></html>`);
   }
 

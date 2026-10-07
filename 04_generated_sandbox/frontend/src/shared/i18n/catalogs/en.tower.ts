@@ -1727,22 +1727,46 @@ export const enTowerQueues = {
   'tower.conn.tag.sending': 'Sending',
   'tower.conn.tag.notSending': 'Not getting through',
   'tower.conn.tag.noFrom': 'No sender address',
+  'tower.conn.tag.mailRefused': 'Refused by the provider',
+  'tower.conn.tag.mailLimit': 'Sending limit reached',
+  'tower.conn.tag.mailRejected': 'One email turned down',
   'tower.conn.tag.keysMismatched': 'Keys do not match',
   'tower.conn.tag.keysBuiltIn': 'Keys anybody can read',
   'tower.conn.mail.title': 'Email',
   'tower.conn.mail.kept':
     'No email leaves this server. Each one is written and kept here instead, and reaches nobody — {n} since it started. That is how a sandbox is meant to run.',
   'tower.conn.mail.keptLive':
-    'No email leaves this server. Reset codes, invitations and notices are written and reach nobody — {n} since it started. This is not a sandbox: the people they were for are waiting. A mail sender has to be put in before this server is relied on.',
-  'tower.conn.mail.tokenUnused': 'A provider’s token is set, and nothing on this server uses it: setting it does not start the sending.',
+    'No email leaves this server. Reset codes, invitations and notices are written and reach nobody — {n} since it started. This is not a sandbox: the people they were for are waiting. The provider’s token and its sending address have to be set before this server is relied on.',
+  'tower.conn.mail.tokenUnused': 'A provider’s token is set, and this server is not sending with it. It reads the token when it starts: restart it.',
+  'tower.conn.mail.problem.no_address':
+    'A token is set and the provider’s sending address is not, so nothing uses the token. Set ZEPTOMAIL_URL to the address your provider account shows on its API page, and restart the server.',
+  'tower.conn.mail.problem.not_an_address':
+    'A token is set, and what is set as the provider’s sending address is not a web address, so nothing is sent to it. Copy it again from your provider account’s API page, and restart the server.',
+  'tower.conn.mail.problem.not_https':
+    'A token is set, and the provider’s sending address is not an https address. The token would travel where anybody on the way could read it, so nothing is sent to it.',
   'tower.conn.mail.noFrom':
-    'Email is sent as {from}, the address this server starts with. It is on a domain nobody owns, and no provider delivers for it. Set the address the provider has verified.',
+    'Email is sent as {from}. That is on a domain set aside for examples, which nobody owns, so no provider delivers for it. Set MAIL_FROM_ADDRESS to an address on a domain your provider has verified.',
   'tower.conn.mail.unsent': 'No email has been written since this server started ({since}).',
   'tower.conn.mail.sent': 'The last email, at {when}, was handed to the provider: “{what}”. Whether it arrived is the provider’s to say.',
-  'tower.conn.mail.failed': 'The last email, at {when}, could not be handed to the provider: “{what}”. The person it was for was not told.',
+  'tower.conn.mail.failed.unreachable':
+    'The last email, at {when}, could not be handed over: the provider could not be reached, or did not answer in time. It was “{what}”, and the person it was for was not told.',
+  'tower.conn.mail.failed.failed':
+    'The last email, at {when}, could not be handed over: what came back from the provider’s address was a fault, or was not the provider’s answer at all. It was “{what}”, and the person it was for was not told.',
+  'tower.conn.mail.failed.rejected':
+    'The last email, at {when}, was turned down by the provider. It was “{what}”, and the person it was for was not told. That is one email: others may be going.',
+  'tower.conn.mail.failed.limit':
+    'The last email, at {when}, was not taken: the provider’s sending limit or credit is used up, and nothing is delivered until that is put right. It was “{what}”.',
+  'tower.conn.mail.failed.refused': 'The last email, at {when}, was refused by the provider, and nothing is delivered until that is put right. It was “{what}”.',
+  'tower.conn.mail.refusedWhy.token': 'It did not accept the token.',
+  'tower.conn.mail.refusedWhy.sender': 'The address email is sent as is on a domain the provider has not verified for this account.',
+  'tower.conn.mail.refusedWhy.review': 'The provider has not approved the account for sending yet.',
+  'tower.conn.mail.refusedWhy.blocked': 'The provider has blocked the account.',
+  'tower.conn.mail.refusedWhy.unknown':
+    'It will not send for this account as it is set up. Check the token, that the sending address is the one your account shows, and that email is sent as an address on a domain the provider has verified.',
+  'tower.conn.mail.code': 'The provider’s code for it: {code}.',
   'tower.conn.mail.someFailed': 'Since this server started, {failed} of {n} could not be handed over.',
   'tower.conn.mail.where':
-    'Sending is not switched on by a setting: the sender itself has to be built into the server. Until it is, ZEPTOMAIL_TOKEN is read and not used. The address email is sent as is MAIL_FROM_ADDRESS.',
+    'Email is sent through ZeptoMail (Zoho CPaaS) when the server is started with both ZEPTOMAIL_TOKEN and ZEPTOMAIL_URL: the token and the sending address, each as your provider account shows it on its API page. The token is never shown, here or anywhere, and the address is shown as its host only. The address email is sent as is MAIL_FROM_ADDRESS. An email that fails is not sent again later. An email to an address that cannot exist (example.com, or one ending .example or .test) is not handed to the provider: it could only bounce.',
   'tower.conn.mail.whereKept': 'On a sandbox, what was kept can be read at /v1/mail/outbox on this server, and every email looked at with sample words at /v1/mail/preview.',
   'tower.conn.push.title': 'Push to a phone',
   'tower.conn.push.kept':
@@ -1763,8 +1787,11 @@ export const enTowerQueues = {
   'tower.conn.fact.leavesYes': 'Yes',
   'tower.conn.fact.leavesNo': 'No — kept here',
   'tower.conn.fact.token': 'Provider’s token',
+  'tower.conn.fact.providerAddress': 'Provider’s sending address',
+  'tower.conn.fact.reserved': 'Left unsent: addresses that cannot exist',
+  'tower.conn.fact.notHttps': '{host} — not an https address',
   'tower.conn.fact.from': 'Sent as',
-  'tower.conn.fact.fromPlaceholder': '{from} — the address this server starts with',
+  'tower.conn.fact.fromPlaceholder': '{from} — on a domain nobody owns',
   'tower.conn.fact.written': 'Written since it started',
   'tower.conn.fact.handed': 'Handed over since it started',
   'tower.conn.fact.countFailed': '{n} — {failed} could not be handed over',

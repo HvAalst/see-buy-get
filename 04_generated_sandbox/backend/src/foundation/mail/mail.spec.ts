@@ -66,7 +66,7 @@ describe('the network’s emails', () => {
     const broken: MailSender = { send: async () => Promise.reject(new Error('provider down')) };
     const quiet = new MailService(broken);
     (quiet as unknown as { logger: { error: () => void } }).logger = { error: () => undefined };
-    await expect(quiet.send('fleet-code-due', { address: 'ops@kilima.example' }, { company: 'Kilima', days: 120 })).resolves.toBe(false);
+    await expect(quiet.send('fleet-code-due', { address: 'ops@kilima.co.ke' }, { company: 'Kilima', days: 120 })).resolves.toBe(false);
     expect(await quiet.send('fleet-code-due', { address: 'not-an-address' }, { company: 'Kilima', days: 120 })).toBe(false);
     expect(maskAddress('amina@example.com')).toBe('a…@example.com');
   });
@@ -82,12 +82,16 @@ describe('the network’s emails', () => {
       delete process.env.ZEPTOMAIL_TOKEN;
       delete process.env.MAIL_FROM_ADDRESS;
       const mail = new MailService(new OutboxMailSender());
-      expect(mail.connection()).toEqual({ sends: false, tokenSet: false, from: 'noreply@seebuyget.example', fromIsPlaceholder: true, written: 0, failed: 0 });
+      expect(mail.connection()).toEqual({ sends: false, tokenSet: false, from: 'noreply@seebuyget.example', fromIsPlaceholder: true, written: 0, failed: 0, reserved: 0 });
 
       // A token and a real address are settings. Neither is a sender: emails are still kept, and that is still said.
       process.env.ZEPTOMAIL_TOKEN = ' a-token ';
+      process.env.MAIL_FROM_ADDRESS = 'noreply@kilima.co.ke';
+      expect(mail.connection()).toMatchObject({ sends: false, tokenSet: true, from: 'noreply@kilima.co.ke', fromIsPlaceholder: false });
+      // An address of the operator's own choosing on a domain nobody can own is no better than the one it starts with.
       process.env.MAIL_FROM_ADDRESS = 'noreply@kilima.example';
-      expect(mail.connection()).toMatchObject({ sends: false, tokenSet: true, from: 'noreply@kilima.example', fromIsPlaceholder: false });
+      expect(mail.connection()).toMatchObject({ from: 'noreply@kilima.example', fromIsPlaceholder: true });
+      process.env.MAIL_FROM_ADDRESS = 'noreply@kilima.co.ke';
       process.env.ZEPTOMAIL_TOKEN = '   ';
       expect(mail.connection().tokenSet).toBe(false);
 
@@ -107,13 +111,13 @@ describe('the network’s emails', () => {
       expect(mail.connection()).toMatchObject({ sends: true, written: 0, failed: 0 });
       expect(mail.connection().last).toBeUndefined();
 
-      await mail.send('fleet-code-due', { address: 'ops@kilima.example' }, due);
+      await mail.send('fleet-code-due', { address: 'ops@kilima.co.ke' }, due);
       expect(mail.connection()).toMatchObject({ written: 1, failed: 0, last: { ok: true } });
       down = true;
-      await mail.send('fleet-code-due', { address: 'ops@kilima.example' }, due);
+      await mail.send('fleet-code-due', { address: 'ops@kilima.co.ke' }, due);
       expect(mail.connection()).toMatchObject({ written: 2, failed: 1, last: { ok: false, what: MAIL_TEMPLATES['fleet-code-due'].title } });
       down = false;
-      await mail.send('fleet-code-due', { address: 'ops@kilima.example' }, due);
+      await mail.send('fleet-code-due', { address: 'ops@kilima.co.ke' }, due);
       expect(mail.connection()).toMatchObject({ written: 3, failed: 1, last: { ok: true } });
 
       // Something that is not an address was never an email: it is not counted as one that failed.

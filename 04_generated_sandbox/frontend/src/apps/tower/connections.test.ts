@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { adviserSays, checkSays, countWords, mailSays, momentWords, plausible, pushSays, routerSays, type AdviserConnection, type MailConnection, type PushConnection, type RouterConnection } from './connections';
+import { adviserSays, checkSays, countWords, mailAddressWords, mailSays, momentWords, plausible, pushSays, refusedWhy, routerSays, type AdviserConnection, type MailConnection, type PushConnection, type RouterConnection } from './connections';
 
 const since = '2026-10-06T06:00:00Z';
 const at = '2026-10-06T08:15:00Z';
 const router = (over: Partial<RouterConnection> = {}): RouterConnection => ({ configured: true, host: 'osrm.example:5000', profile: 'driving', maxPoints: 100, ...over });
 const adviser = (over: Partial<AdviserConnection> = {}): AdviserConnection => ({ configured: true, model: 'claude-opus-5-5', ...over });
 // As a server that really sends, with nothing wrong: each test says what is different about its own.
-const mail = (over: Partial<MailConnection> = {}): MailConnection => ({ sends: true, tokenSet: true, from: 'noreply@kilima.example', fromIsPlaceholder: false, written: 0, failed: 0, ...over });
+const mail = (over: Partial<MailConnection> = {}): MailConnection => ({ sends: true, tokenSet: true, from: 'noreply@kilima.example', fromIsPlaceholder: false, written: 0, failed: 0, reserved: 0, ...over });
 const push = (over: Partial<PushConnection> = {}): PushConnection => ({ sends: true, keys: 'own', devices: 0, people: 0, handed: 0, failed: 0, ...over });
 
 describe('what this server is connected to', () => {
@@ -101,11 +101,23 @@ describe('what this server is connected to', () => {
       expect(live.line).toMatch(/reach nobody — 4 since it started\. This is not a sandbox: the people they were for are waiting\./);
     });
 
-    it('never takes a token for sending: set, with nothing using it, is said in so many words', () => {
-      const s = mailSays(mail({ sends: false, tokenSet: true }), false, since, t);
-      expect(s.tone).toBe('danger');
-      expect(s.line).toMatch(/A provider’s token is set, and nothing on this server uses it: setting it does not start the sending\.$/);
-      expect(mailSays(mail({ sends: false, tokenSet: false }), false, since, t).line).not.toMatch(/token/);
+    it('never takes a token for sending: set and not used, it is said with why it is not used', () => {
+      const kept = (over: Partial<MailConnection>, sandbox = false) => mailSays(mail({ sends: false, tokenSet: true, ...over }), sandbox, since, t);
+      const noAddress = kept({ problem: 'no_address' });
+      expect([noAddress.tone, noAddress.tag]).toEqual(['danger', 'Kept, not sent']);
+      expect(noAddress.line).toMatch(/A token is set and the provider’s sending address is not, so nothing uses the token\. Set ZEPTOMAIL_URL to the address your provider account shows on its API page, and restart the server\.$/);
+      expect(kept({ problem: 'not_an_address' }).line).toMatch(/is not a web address, so nothing is sent to it\./);
+      expect(kept({ problem: 'not_https', host: 'api.zeptomail.com' }).line).toMatch(/is not an https address\. The token would travel where anybody on the way could read it, so nothing is sent to it\.$/);
+      // No reason known: still said, and never passed over as fine.
+      expect(kept({}).line).toMatch(/A provider’s token is set, and this server is not sending with it\. It reads the token when it starts: restart it\.$/);
+      // On a sandbox, kept with nothing set is how it should be; kept with a token set is somebody's unfinished setup.
+      expect([kept({ problem: 'no_address' }, true).tone, kept({}, true).tone, mailSays(mail({ sends: false, tokenSet: false }), true, since, t).tone]).toEqual(['warn', 'warn', 'info']);
+      expect(mailSays(mail({ sends: false, tokenSet: false }), false, since, t).line).not.toMatch(/token is set/);
+      // The address, as the screen may show it: a host, or what is wrong with what was set — never the address itself.
+      expect(mailAddressWords(mail({ host: 'api.zeptomail.eu' }), t)).toBe('api.zeptomail.eu');
+      expect(mailAddressWords(mail({ sends: false, problem: 'no_address' }), t)).toBe('None set');
+      expect(mailAddressWords(mail({ sends: false, problem: 'not_an_address' }), t)).toBe('Set, and not a web address');
+      expect(mailAddressWords(mail({ sends: false, problem: 'not_https', host: 'api.zeptomail.com' }), t)).toBe('api.zeptomail.com — not an https address');
       // Kept is said before anything else that is wrong with it, and before any old success.
       expect(mailSays(mail({ sends: false, fromIsPlaceholder: true, last: { at, ok: true, what: 'A code' } }), true, since, t).tag).toBe('Kept, not sent');
     });
@@ -113,7 +125,7 @@ describe('what this server is connected to', () => {
     it('sends as an address nobody delivers for: said loudest, whatever the last email met', () => {
       const s = mailSays(mail({ from: 'noreply@seebuyget.example', fromIsPlaceholder: true, last: { at, ok: true, what: 'A code' } }), false, since, t);
       expect([s.tone, s.tag]).toEqual(['danger', 'No sender address']);
-      expect(s.line).toMatch(/^Email is sent as noreply@seebuyget\.example, the address this server starts with\./);
+      expect(s.line).toBe('Email is sent as noreply@seebuyget.example. That is on a domain set aside for examples, which nobody owns, so no provider delivers for it. Set MAIL_FROM_ADDRESS to an address on a domain your provider has verified.');
     });
 
     it('says nothing has been sent yet rather than that it works, then what the last email met', () => {
@@ -124,11 +136,48 @@ describe('what this server is connected to', () => {
       expect([good.tone, good.tag]).toEqual(['ok', 'Sending']);
       // Handed over is not arrived, and is not called it.
       expect(good.line).toBe(`The last email, at ${momentWords(at)}, was handed to the provider: “A code for your email address”. Whether it arrived is the provider’s to say.`);
-      const bad = mailSays(mail({ written: 3, failed: 1, last: { at, ok: false, what: 'A code for your email address' } }), false, since, t);
-      expect([bad.tone, bad.tag]).toEqual(['warn', 'Not getting through']);
-      expect(bad.line).toBe(`The last email, at ${momentWords(at)}, could not be handed to the provider: “A code for your email address”. The person it was for was not told. Since this server started, 1 of 3 could not be handed over.`);
       // It is getting through again: the earlier failures are still said.
       expect(mailSays(mail({ written: 9, failed: 2, last: { at, ok: true, what: 'A code' } }), false, since, t)).toMatchObject({ tone: 'ok', line: expect.stringMatching(/2 of 9 could not be handed over\.$/) });
+    });
+
+    it('says a failed email by whose it is: the account’s in red, one email or a bad minute as that', () => {
+      const what = 'A code for your email address';
+      const failed = (last: Partial<NonNullable<MailConnection['last']>>, over: Partial<MailConnection> = {}) => mailSays(mail({ written: 3, failed: 1, last: { at, ok: false, what, ...last }, ...over }), false, since, t);
+      const when = momentWords(at);
+      const counted = ' Since this server started, 1 of 3 could not be handed over.';
+
+      const unreachable = failed({ failed: 'unreachable' });
+      expect([unreachable.tone, unreachable.tag]).toEqual(['warn', 'Not getting through']);
+      expect(unreachable.line).toBe(`The last email, at ${when}, could not be handed over: the provider could not be reached, or did not answer in time. It was “${what}”, and the person it was for was not told.${counted}`);
+      const fault = failed({ failed: 'failed', code: 'TM_5001' });
+      expect([fault.tone, fault.tag]).toEqual(['warn', 'Not getting through']);
+      expect(fault.line).toBe(`The last email, at ${when}, could not be handed over: what came back from the provider’s address was a fault, or was not the provider’s answer at all. It was “${what}”, and the person it was for was not told. The provider’s code for it: TM_5001.${counted}`);
+      // A sender that did not say why is said as a fault, never left blank.
+      expect(failed({}).line).toMatch(/was a fault, or was not the provider’s answer at all/);
+
+      const turnedDown = failed({ failed: 'rejected', code: 'GE_102' });
+      expect([turnedDown.tone, turnedDown.tag]).toEqual(['warn', 'One email turned down']);
+      expect(turnedDown.line).toBe(`The last email, at ${when}, was turned down by the provider. It was “${what}”, and the person it was for was not told. That is one email: others may be going. The provider’s code for it: GE_102.${counted}`);
+
+      const limit = failed({ failed: 'limit', code: 'LE_102' });
+      expect([limit.tone, limit.tag]).toEqual(['danger', 'Sending limit reached']);
+      expect(limit.line).toBe(`The last email, at ${when}, was not taken: the provider’s sending limit or credit is used up, and nothing is delivered until that is put right. It was “${what}”. The provider’s code for it: LE_102.${counted}`);
+
+      const refused = failed({ failed: 'refused', code: 'SERR_157' });
+      expect([refused.tone, refused.tag]).toEqual(['danger', 'Refused by the provider']);
+      expect(refused.line).toBe(`The last email, at ${when}, was refused by the provider, and nothing is delivered until that is put right. It was “${what}”. It did not accept the token. The provider’s code for it: SERR_157.${counted}`);
+    });
+
+    it('says what a refusal is about only where the provider’s code says — and what is known otherwise', () => {
+      expect([refusedWhy('SERR_157'), refusedWhy('SM_111'), refusedWhy('SM_128'), refusedWhy('AE_101'), refusedWhy('TM_4001'), refusedWhy(undefined)]).toEqual(['token', 'sender', 'review', 'blocked', 'unknown', 'unknown']);
+      const line = (code?: string) => mailSays(mail({ written: 1, failed: 1, last: { at, ok: false, what: 'A code', failed: 'refused', ...(code ? { code } : {}) } }), false, since, t).line;
+      expect(line('SM_111')).toMatch(/The address email is sent as is on a domain the provider has not verified for this account\. The provider’s code for it: SM_111\./);
+      expect(line('SM_128')).toMatch(/The provider has not approved the account for sending yet\./);
+      expect(line('AE_101')).toMatch(/The provider has blocked the account\./);
+      // A refusal with no code, or one whose meaning is not stated: not blamed on the token alone.
+      expect(line()).toMatch(/It will not send for this account as it is set up\. Check the token, that the sending address is the one your account shows, and that email is sent as an address on a domain the provider has verified\. Since/);
+      expect(line()).not.toMatch(/code for it/);
+      expect(line('TM_4001')).toMatch(/It will not send for this account as it is set up\..* The provider’s code for it: TM_4001\./);
     });
   });
 

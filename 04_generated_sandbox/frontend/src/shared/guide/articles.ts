@@ -339,9 +339,13 @@ export const ARTICLES: GuideArticle[] = [
       "All four are set where the server runs, not on this screen. The routing server’s address is shown without anything secret in it. The adviser’s key, the mail provider’s token and the private push key are never shown. Nobody’s email address is shown either: the last email is named by what it was, not by who it was for.",
       "What each service last met, and the counts of emails and pushes, are kept only since the server started. After a restart, check the routing server again.",
       "Kept, not sent is how a sandbox is meant to run. On a server that real people rely on it is said in red: reset codes, invitations and notices are written and reach nobody, and no phone is woken.",
-      "A provider’s token being set does not mean email is sent. Sending has to be built into the server; until it is, the screen says the token is set and that nothing uses it.",
+      "Email is sent only when the server was started with both the provider’s token and its sending address, each copied from the provider account’s API page. A token on its own sends nothing, and the screen says what is missing or wrong with the address.",
       "A notification is always written to the person’s bell in their app, whatever becomes of the push. Push is only what lights a phone whose app is closed.",
-      "Push is signed with a pair of keys. The screen says whether the server has a pair of its own, is using the pair written in its source code, which anybody who can read the code can sign with, or has two keys that do not belong together, which every push service refuses. Changing the keys ends every enrolment: each phone has to turn notifications on again."
+      "Push is signed with a pair of keys. The screen says whether the server has a pair of its own, is using the pair written in its source code, which anybody who can read the code can sign with, or has two keys that do not belong together, which every push service refuses. Changing the keys ends every enrolment: each phone has to turn notifications on again.",
+      "When an email cannot be handed over, the screen says whose it is to put right. Refused by the provider and Sending limit reached are about the account: the token, the domain email is sent from, or the provider’s credit. They stop every email and are shown in red. One email turned down is about that email only. Not getting through means the provider could not be reached, or answered with a fault.",
+      "The screen shows the provider’s own code for a failure, to look up with the provider. It never shows the token, the full sending address, or who an email was for.",
+      "An email that fails is not sent again later, and the person it was for is not told. A reset code that did not go has to be asked for again.",
+      "An email to an address that cannot exist is never handed to the provider, because it could only bounce: example.com, or an address ending .example or .test. The screen counts them. A sandbox given a real token therefore does not email its made-up people."
     ]
   },
   {

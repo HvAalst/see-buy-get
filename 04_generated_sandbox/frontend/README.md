@@ -135,13 +135,27 @@ Staff read where both stand in the operator console, under Setup → **Connectio
 plan (or the last office to ask the adviser) met since the server started, and a "Check it now" for the routing
 server. The address is shown as its host only and the key never; nothing is changed from that screen.
 
-The same screen says where **email and push** go. Neither is switched on by a setting: the senders the server
-starts with (`OutboxMailSender`, `OutboxPushSender`) KEEP what they are handed, and the screen reads "does anything
-leave" off the sender itself — so a `ZEPTOMAIL_TOKEN` in the environment is shown as set and unused until a real
-sender is wired in (`foundation/mail/mail.types.ts` says how). The push keys (`GLOS_VAPID_PUBLIC`,
-`GLOS_VAPID_PRIVATE`) are judged from the pair: the server's own, the pair written in the source, or two that do
-not belong together. "Kept, not sent" is the normal state of a sandbox; with `GLOS_ENV=production` the same
-state is said as a fault, because there it is people who are never told.
+The same screen says where **email and push** go, and reads "does anything leave" off the sender the server was
+started with, never off a variable that happens to be set.
+
+- **Email** is sent through ZeptoMail (renamed Zoho CPaaS in 2026) when the server starts with BOTH
+  `ZEPTOMAIL_TOKEN` (the account's Send Mail token, with or without its `Zoho-enczapikey ` prefix) and
+  `ZEPTOMAIL_URL` (the sending address exactly as the account's own API page shows it — a host, or the whole
+  `…/v1.1/email`). There is no default address: the host differs by data centre, and a token sent to the wrong
+  one is refused in words that blame the token. It must be https. Without both, `OutboxMailSender` KEEPS every
+  email (readable on a sandbox at `/v1/mail/outbox`) and the screen says what is missing. `MAIL_FROM_ADDRESS`
+  must be on a domain the provider has verified. A failed email is tried once more only where nothing says the
+  first was taken; there is no queue behind that, and the screen counts what failed and says whose it is to
+  put right. An address on a domain reserved for examples (`example.com`, `.example`, `.test`) is never handed
+  to the provider — so a sandbox given a real token does not mail its seeded people.
+  NOT YET SENT THROUGH THE REAL PROVIDER: it is tested against a stand-in that answers in the provider's
+  documented shapes (`foundation/mail/zeptomail.sender.spec.ts`). Watch the first real send on Connections.
+- **Push** is still kept by `OutboxPushSender`: no push leaves the server. The keys (`GLOS_VAPID_PUBLIC`,
+  `GLOS_VAPID_PRIVATE`) are judged from the pair: the server's own, the pair written in the source, or two that
+  do not belong together.
+
+"Kept, not sent" is the normal state of a sandbox; with `GLOS_ENV=production` the same state is said as a fault,
+because there it is people who are never told.
 
 ## Conventions
 - **Every slice names its screens.** A backend change with no surface is tracked ui-debt, not a shipped slice.

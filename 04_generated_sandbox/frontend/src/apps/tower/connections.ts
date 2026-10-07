@@ -36,14 +36,20 @@ export interface AdviserConnection {
   model: string;
   last?: { at: string; ok: boolean; failed?: AdviserFailure };
 }
+export type MailFailure = 'unreachable' | 'refused' | 'limit' | 'rejected' | 'failed';
+export type MailProblem = 'no_address' | 'not_an_address' | 'not_https';
 export interface MailConnection {
   sends: boolean;
   tokenSet: boolean;
+  host?: string;
+  problem?: MailProblem;
   from: string;
   fromIsPlaceholder: boolean;
   written: number;
   failed: number;
-  last?: { at: string; ok: boolean; what: string };
+  /** Not handed to the provider: their address is on a domain reserved for examples and tests, and cannot exist. */
+  reserved: number;
+  last?: { at: string; ok: boolean; what: string; failed?: MailFailure; code?: string };
 }
 export type PushKeys = 'own' | 'built_in' | 'mismatched';
 export interface PushConnection {
@@ -118,14 +124,20 @@ export function countWords(n: number, failed: number, t: Translate): string {
 }
 
 /**
- * Mail. The first question is not whether it is answering but whether anything LEAVES: the sender this server starts
- * with keeps what it is handed. That is said first — in a sandbox as the way it is meant to run, anywhere else as
- * people who are not being told. A token that is set is never taken for sending: it is said as a token nothing uses.
+ * Mail. The first question is not whether it is answering but whether anything LEAVES: without the provider's token
+ * and its sending address, the sender this server starts with keeps what it is handed. That is said first — in a
+ * sandbox as the way it is meant to run, anywhere else as people who are not being told. A token that is set is never
+ * taken for sending: it is said as a token nothing uses, with why where the server knows why.
+ *
+ * Where email does leave, a failure is said by WHOSE IT IS: a refusal or a used-up limit is the account's, stops
+ * every email, and is said in red; one email turned down, or a provider that could not be reached, is said as that.
  */
 export function mailSays(c: MailConnection, sandbox: boolean, since: string, t: Translate): ConnectionSays {
   if (!c.sends) {
     const line = t(sandbox ? 'tower.conn.mail.kept' : 'tower.conn.mail.keptLive', { n: c.written });
-    return { tone: sandbox ? 'info' : 'danger', tag: t('tower.conn.tag.kept'), line: c.tokenSet ? `${line} ${t('tower.conn.mail.tokenUnused')}` : line };
+    const why = c.problem ? t(`tower.conn.mail.problem.${c.problem}`) : c.tokenSet ? t('tower.conn.mail.tokenUnused') : '';
+    // On a sandbox with nothing set this is how it should be. With a token set, somebody meant it to send.
+    return { tone: !sandbox ? 'danger' : why ? 'warn' : 'info', tag: t('tower.conn.tag.kept'), line: why ? `${line} ${why}` : line };
   }
   // It sends, as an address no provider delivers for: said before anything the last email met.
   if (c.fromIsPlaceholder) return { tone: 'danger', tag: t('tower.conn.tag.noFrom'), line: t('tower.conn.mail.noFrom', { from: c.from }) };
@@ -133,7 +145,41 @@ export function mailSays(c: MailConnection, sandbox: boolean, since: string, t: 
   const when = momentWords(c.last.at);
   const earlier = c.failed > 0 ? ` ${t('tower.conn.mail.someFailed', { failed: c.failed, n: c.written })}` : '';
   if (c.last.ok) return { tone: 'ok', tag: t('tower.conn.tag.sending'), line: t('tower.conn.mail.sent', { when, what: c.last.what }) + earlier };
-  return { tone: 'warn', tag: t('tower.conn.tag.notSending'), line: t('tower.conn.mail.failed', { when, what: c.last.what }) + earlier };
+  const kind: MailFailure = c.last.failed ?? 'failed';
+  const account = kind === 'refused' || kind === 'limit';
+  const line = [
+    t(`tower.conn.mail.failed.${kind}`, { when, what: c.last.what }),
+    ...(kind === 'refused' ? [t(`tower.conn.mail.refusedWhy.${refusedWhy(c.last.code)}`)] : []),
+    ...(c.last.code ? [t('tower.conn.mail.code', { code: c.last.code })] : []),
+  ].join(' ');
+  return { tone: account ? 'danger' : 'warn', tag: t(MAIL_FAILED_TAG[kind]), line: line + earlier };
+}
+
+const MAIL_FAILED_TAG = {
+  refused: 'tower.conn.tag.mailRefused',
+  limit: 'tower.conn.tag.mailLimit',
+  rejected: 'tower.conn.tag.mailRejected',
+  unreachable: 'tower.conn.tag.notSending',
+  failed: 'tower.conn.tag.notSending',
+} as const;
+
+/**
+ * What a refusal is about, from the provider's own code — only the codes whose meaning its documentation states.
+ * Anything else is said as what is known: it will not send for this account as it is set up.
+ */
+export function refusedWhy(code: string | undefined): 'token' | 'sender' | 'review' | 'blocked' | 'unknown' {
+  if (code === 'SERR_157') return 'token';
+  if (code === 'SM_111') return 'sender';
+  if (code === 'SM_128') return 'review';
+  if (code === 'AE_101') return 'blocked';
+  return 'unknown';
+}
+
+/** The provider's sending address, as the screen may show it: its host, or what is wrong with what was set. */
+export function mailAddressWords(c: MailConnection, t: Translate): string {
+  if (c.problem === 'not_an_address') return t('tower.conn.fact.notAnAddress');
+  if (c.problem === 'not_https' && c.host) return t('tower.conn.fact.notHttps', { host: c.host });
+  return c.host ?? t('tower.conn.fact.none');
 }
 
 /**

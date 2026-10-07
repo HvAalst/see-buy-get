@@ -11,9 +11,11 @@ import { ADVISER_FAILURES, AdviserFailure } from './plan-adviser.types';
  * server that is set and silent. So each says three things: whether it is set up, what became of the last time it was
  * asked since this server started, and (the routing server) what it answers when asked now.
  *
- * And two things everybody leans on: mail and push. Neither falls back — each is handed to a sender, and the sender
- * this server starts with KEEPS what it is handed. So the question for those is not "is it answering" but "does
- * anything leave", and it is read off the sender that is wired in, never off a variable that happens to be set.
+ * And two things everybody leans on: mail and push. Neither falls back — each is handed to a sender. Push's sender
+ * KEEPS what it is handed; mail's does too unless the server was started with the provider's token and its sending
+ * address. So the first question for those is not "is it answering" but "does anything leave", and it is read off the
+ * sender that is wired in, never off a variable that happens to be set. For mail that does leave, the second is what
+ * the last one met — and, where it failed, whose that is to put right.
  *
  * Nothing here is a secret and nothing here can become one: an address is shown as its host only, because an address
  * can carry a key, and a credential is shown as set or not set.
