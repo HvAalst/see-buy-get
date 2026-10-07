@@ -21,6 +21,13 @@ import { IsString, MaxLength, MinLength } from 'class-validator';
 export const LINK_STATES = ['ready', 'expired', 'cancelled', 'used_up', 'gone'] as const;
 export type LinkState = (typeof LINK_STATES)[number];
 
+/**
+ * A link cancelled by nobody's hand. `left` — it was emailed to one of a business's people, and they are no longer in
+ * that business: what they were sent as one of its people stops with their place in it.
+ */
+export const LINK_CANCEL_REASONS = ['left'] as const;
+export type LinkCancelReason = (typeof LINK_CANCEL_REASONS)[number];
+
 /** The key itself, as the page that was opened from the email sends it. In the body, never in an address. */
 export class DocumentLinkTokenDto {
   @IsString() @MinLength(20) @MaxLength(100) token: string;
@@ -56,6 +63,10 @@ export class DocumentLinkRow {
   opened: number;
   @ApiPropertyOptional() lastOpenedAt?: string;
   @ApiPropertyOptional() cancelledAt?: string;
+  /** Who cancelled it, where a person did and the sign-in names one. */
+  @ApiPropertyOptional() cancelledBy?: string;
+  /** Why, when nobody cancelled it by hand. */
+  @ApiPropertyOptional({ enum: LINK_CANCEL_REASONS }) cancelledWhy?: LinkCancelReason;
 }
 
 /**

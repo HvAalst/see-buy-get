@@ -83,7 +83,7 @@ export interface MailParams {
   'papers-due': { company: string; lapsed: string[]; due: string[] };
   'order-on-its-way': { store: string; orderRef?: string; shop: string; trackingUrl: string };
   'ready-for-collection': { shop: string; address?: string; collectBy: string; openUrl?: string };
-  'freight-delivered': { code: string; description: string; destination: string; deliveredAt: string; carrier: string; driver?: string; receiverName?: string; amount?: number; currency?: string; noteNumber: string; /** A link that opens the note with nobody signed in, and when it stops. */ noteUrl?: string; noteUntil?: string };
+  'freight-delivered': { code: string; description: string; destination: string; deliveredAt: string; carrier: string; driver?: string; receiverName?: string; amount?: number; currency?: string; noteNumber: string; /** A link that opens the note with nobody signed in, and when it stops. */ noteUrl?: string; noteUntil?: string; /** It goes to one of a BUSINESS's people: its name, and whether they posted the load or are an owner told in the poster's place. */ business?: { name: string; as: 'poster' | 'owner' } };
   /** A code to an address: to confirm it is theirs, to get back into the account, or to undo a number change. */
   'email-code': { code: string; minutes: number; why: 'confirm' | 'recover' | 'undo' };
   /** Something happened to the way somebody signs in. Always sent; cannot be turned off. */
@@ -107,6 +107,8 @@ export interface MailTemplate<P> {
   wired: boolean;
   /** Believable data, for the preview page and the tests. */
   sample: P;
+  /** The same email as somebody else gets it, where who it goes to changes what it says. For the preview page. */
+  also?: Array<{ key: string; label: string; sample: P }>;
   build(params: P): MailDocument;
 }
 
@@ -504,9 +506,16 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
 
   'freight-delivered': {
     title: 'Load delivered — receipt (shipper)',
-    sentWhen: 'A driver delivers a load, to the email of the shop that posted it.',
+    sentWhen: 'A driver delivers a load: to the email of the shop that posted it; for a business, to the person who posted it, or to its owners when that person cannot be emailed.',
     wired: true,
     sample: { code: 'FRT-010', description: 'Maize, 20 sacks', destination: 'Riverside Corner', deliveredAt: '2026-09-14T12:04:00Z', carrier: 'Kilima Logistics', driver: 'Amos K.', receiverName: 'Wanjiru (Riverside Corner)', amount: 350, currency: 'KES', noteNumber: 'CMR-FRT-010', noteUrl: `${appUrl('home')}#doc=a-sample-key-that-opens-nothing-at-all-0000`, noteUntil: '2026-10-14T12:04:00Z' },
+    also: [
+      {
+        key: 'business',
+        label: 'as a business gets it',
+        sample: { code: 'FRT-204', description: 'Cement, 12 pallets', destination: 'Thika Road Depot', deliveredAt: '2026-10-07T12:04:00Z', carrier: 'Kilima Logistics', driver: 'Amos K.', receiverName: 'Njeri (Thika Road Depot)', amount: 18500, currency: 'KES', noteNumber: 'CMR-FRT-204', noteUrl: `${appUrl('home')}#doc=a-sample-key-that-opens-nothing-at-all-0000`, noteUntil: '2026-11-06T12:04:00Z', business: { name: 'Abebe Import & Export PLC', as: 'poster' } },
+      },
+    ],
     build: (p) => ({
       subject: `Delivered: ${p.code} — ${p.description}`,
       preheader: `Your load reached ${p.destination} on ${formatWhen(p.deliveredAt)}.`,
@@ -520,7 +529,7 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
             ['Delivered', formatWhen(p.deliveredAt)],
             ...(p.receiverName ? [['Received by', p.receiverName] as [string, string]] : []),
             ['Carrier', p.carrier],
-            ...(p.amount != null ? [['Carriage charges', `${p.amount.toFixed(2)} ${p.currency ?? ''}`.trim()] as [string, string]] : []),
+            ...(p.amount != null ? [[p.business ? 'Price agreed' : 'Carriage charges', `${p.amount.toFixed(2)} ${p.currency ?? ''}`.trim()] as [string, string]] : []),
             ['Consignment note', p.noteNumber],
           ],
         },
@@ -531,16 +540,29 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
               {
                 kind: 'warning',
                 title: 'This button works without signing in',
-                text: `${p.noteUntil ? `Until ${formatWhen(p.noteUntil)}, it` : 'It'} opens the note for whoever has this email — so forward it only to somebody who should have the note. You can see how often it was opened, and cancel it, on the note itself: in the Shop app, Records, then Notes. The note stays there after the button stops.`,
+                text: `${p.noteUntil ? `Until ${formatWhen(p.noteUntil)}, it` : 'It'} opens the note for whoever has this email — so forward it only to somebody who should have the note. You can see how often it was opened, and cancel it, ${p.business ? `on the load itself: in the ${APP_NAMES.business}, under Loads` : 'on the note itself: in the Shop app, Records, then Notes'}. The note stays there after the button stops.`,
               },
             ] as MailBlock[])
-          : ([
-              { kind: 'paragraph', text: 'The consignment note — sender, carrier, vehicle, goods, taking over and delivery — is on the load in the Shop app under Freight. Open it there to print or save it for your books.' },
-              { kind: 'button', label: 'Open the Shop app', href: appUrl('agent') },
-            ] as MailBlock[])),
+          : p.business
+            ? ([
+                { kind: 'paragraph', text: `The consignment note — sender, carrier, vehicle, goods, taking over and delivery — is on the load in the ${APP_NAMES.business} under Loads. Open it there to print or save it for your books.` },
+                { kind: 'button', label: `Open the ${APP_NAMES.business}`, href: appUrl('business') },
+              ] as MailBlock[])
+            : ([
+                { kind: 'paragraph', text: 'The consignment note — sender, carrier, vehicle, goods, taking over and delivery — is on the load in the Shop app under Freight. Open it there to print or save it for your books.' },
+                { kind: 'button', label: 'Open the Shop app', href: appUrl('agent') },
+              ] as MailBlock[])),
+        // We never handle a business's payments (the user, 2026-10-04): a figure in a receipt must not read as our bill.
+        ...(p.business && p.amount != null
+          ? ([{ kind: 'note', text: `The price is what ${p.business.name} and the carrier agreed, and it is settled between the two of you. SeeBuyGet holds no money for this load, and this email is not an invoice.` }] as MailBlock[])
+          : []),
         { kind: 'note', text: 'Something wrong with the delivery? Say so from the load in the app; a note that says “not recorded” is one the receiver has not yet confirmed.' },
       ],
-      reason: 'You are getting this email because your shop posted this load on SeeBuyGet.',
+      reason: !p.business
+        ? 'You are getting this email because your shop posted this load on SeeBuyGet.'
+        : p.business.as === 'poster'
+          ? `You are getting this email because you posted this load for ${p.business.name} on SeeBuyGet.`
+          : `You are getting this email because you are an owner of ${p.business.name}, which posted this load on SeeBuyGet, and the person who posted it cannot be emailed.`,
     }),
   },
 

@@ -2,6 +2,9 @@ import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { EventBus } from '../src/foundation/events/event-bus.service';
+import { GlosEvent } from '../src/foundation/events/glos-events';
+import { DispatchService } from '../src/modules/pudo/dispatch.service';
 
 /**
  * B1 — A CUSTOMER'S BUSINESS, OVER THE WIRE: as the guards, the route roles and the live membership check see it.
@@ -20,7 +23,7 @@ describe('a customer’s business, over the wire', () => {
   const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
 
   /** A person through the ordinary phone door: a code to the phone, a PIN, a confirmed recovery email. */
-  async function aPerson(): Promise<{ phone: string; token: string }> {
+  async function aPerson(): Promise<{ phone: string; token: string; email: string; personDid: string }> {
     seq += 1;
     const phone = `+2519${String(Math.floor(Math.random() * 9_000_000) + 1_000_000)}${seq}`.slice(0, 13);
     const asked = await http().post('/v1/sbg/auth/phone/request').send({ phone });
@@ -28,7 +31,7 @@ describe('a customer’s business, over the wire', () => {
     const email = `biz-${tag}-${seq}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
     const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '4826', email, emailCode: mailed.body.code }).expect(201);
-    return { phone, token: enrolled.body.token.access_token };
+    return { phone, token: enrolled.body.token.access_token, email, personDid: enrolled.body.personId };
   }
 
   /** A member of staff with a named sign-in, so two approvals are two people. */
@@ -195,6 +198,115 @@ describe('a customer’s business, over the wire', () => {
     // The old way, where staff recorded money arriving on our books, is gone.
     await http().post(`/v1/sbg/imports/${imp.body.importId}/fee/receipt`).set(bearer(setupKey)).send({ reference: 'X' }).expect(404);
     expect(entityId).toBeTruthy();
+  });
+
+  it('emails a delivered load’s receipt to whoever posted it, shows its link on the load, and stops it when they leave', async () => {
+    const owner = await aPerson();
+    const created = await http().post('/v1/sbg/business').set(bearer(owner.token)).send({ name: `Receipt Traders ${tag}`, country: 'KE', registrationNo: `REG11-${tag}`, activities: ['shipper'], yourName: 'Wambui Owner' }).expect(201);
+    const ownerBiz = created.body.token.access_token;
+    const entityId = created.body.business.entityId;
+    const booker = await aPerson();
+    const viewer = await aPerson();
+    expect(booker.personDid).toBeTruthy();
+    const bookerRow = await http().post('/v1/sbg/business/me/members').set(bearer(ownerBiz)).send({ phone: booker.phone, name: 'Bekele Booker', role: 'booker' }).expect(201);
+    await http().post('/v1/sbg/business/me/members').set(bearer(ownerBiz)).send({ phone: viewer.phone, name: 'Vera Viewer', role: 'viewer' }).expect(201);
+    const join = async (who: { token: string }) => {
+      const invite = (await http().get('/v1/sbg/business/mine').set(bearer(who.token)).expect(200)).body.items.find((i: { entityId: string }) => i.entityId === entityId);
+      await http().post(`/v1/sbg/business/invitations/${invite.memberId}/accept`).set(bearer(who.token)).expect(201);
+      return (await http().post(`/v1/sbg/business/${entityId}/session`).set(bearer(who.token)).expect(201)).body.token.access_token as string;
+    };
+    const bookerBiz = await join(booker);
+    const viewerBiz = await join(viewer);
+
+    // The booker posts a load. WHICH person did is the business's own affair: it is not in the answer, and not on
+    // the board every carrier reads.
+    const posted = await http()
+      .post('/v1/sbg/dispatch/freight')
+      .set(bearer(bookerBiz))
+      .send({ description: 'Tea, 40 chests', pickupLocation: { lat: -0.37, lng: 35.28 }, pickupLabel: 'Kericho store', destLabel: 'Mombasa godown', weightKg: 2400, packaging: 'palletised', pickupCountry: 'KE', destCountry: 'KE' })
+      .expect(201);
+    const freightId = posted.body.freightId as string;
+    expect(posted.body).toMatchObject({ postedByName: 'Bekele Booker', settlement: 'between_parties' });
+    expect(JSON.stringify(posted.body)).not.toContain(booker.personDid);
+    expect(JSON.stringify((await http().get('/v1/sbg/dispatch/freight').set(bearer(setupKey)).expect(200)).body)).not.toContain(booker.personDid);
+    // Nothing is kept of its note before the goods are taken over: the load says so by saying nothing, and there is
+    // no note to make a link to.
+    const mine = async (as: string) => (await http().get('/v1/sbg/dispatch/posted').set(bearer(as)).expect(200)).body.items.find((r: { freightId: string }) => r.freightId === freightId);
+    expect((await mine(bookerBiz)).noteId).toBeUndefined();
+    const noteId = `freight~${freightId}`;
+    await http().post(`/v1/sbg/consignment-notes/${noteId}/links`).set(bearer(bookerBiz)).expect(404);
+
+    // Carried and delivered. The driver's own acts are proved where they live; here the load is moved in the
+    // running app's own store and the two events are said on its own bus — so that everything AFTER the delivery is
+    // the booted app's real wiring: the archive, the receipt, the people, the link.
+    const store = (app.get(DispatchService) as unknown as { freights: { get(id: string): Record<string, unknown>; set(id: string, f: Record<string, unknown>): void } }).freights;
+    const bus = app.get(EventBus);
+    const settle = async () => {
+      for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r));
+    };
+    store.set(freightId, { ...store.get(freightId), status: 'in_transit', pickedUpAt: new Date().toISOString(), lockedPrice: 42000 });
+    await bus.publish(GlosEvent.Pudo.FreightPickedUp, { freightId, code: posted.body.code }, { source: 'test' });
+    await settle();
+    expect((await mine(bookerBiz)).noteId).toBe(noteId);
+    const at = new Date().toISOString();
+    store.set(freightId, { ...store.get(freightId), status: 'delivered', deliveredAt: at, proofOfDelivery: { receiverName: 'Juma at the godown', photoRef: 'med_pod', confirmed: [], at } });
+    await bus.publish(GlosEvent.Pudo.FreightDelivered, { freightId, code: posted.body.code }, { source: 'test' });
+    await settle();
+
+    // The receipt: to the booker's own address, in a business's words — and to nobody else in the office.
+    const receiptsFor = async (address: string) => ((await http().get('/v1/mail/outbox').query({ to: address }).expect(200)).body.items as Array<{ template: string; subject: string; text: string }>).filter((m) => m.template === 'freight-delivered');
+    const [receipt, ...more] = await receiptsFor(booker.email);
+    expect(more).toEqual([]);
+    expect(receipt.subject).toContain(posted.body.code);
+    expect(receipt.text).toContain(`because you posted this load for Receipt Traders ${tag}`);
+    expect(receipt.text).toContain('Business app');
+    expect(receipt.text).not.toContain('Shop app');
+    expect(receipt.text).toContain('Price agreed');
+    expect(receipt.text).toContain('this email is not an invoice');
+    expect(await receiptsFor(owner.email)).toEqual([]);
+    expect(await receiptsFor(viewer.email)).toEqual([]);
+
+    // Its link opens the business's note with nobody signed in.
+    const key = /#doc=([A-Za-z0-9_-]{43})/.exec(receipt.text)![1];
+    const look = async () => (await http().post('/v1/sbg/document-links/look').send({ token: key }).expect(200)).body;
+    expect(await look()).toMatchObject({ state: 'ready', from: 'Kericho store', to: 'Mombasa godown' });
+    const file = await http().post('/v1/sbg/document-links/fetch').send({ token: key }).buffer(true).parse((res, done) => { const chunks: Buffer[] = []; res.on('data', (c: Buffer) => chunks.push(c)); res.on('end', () => done(null, Buffer.concat(chunks))); }).expect(200);
+    expect((file.body as Buffer).subarray(0, 2).toString()).toBe('PK');
+
+    // On the load, where the business sees it — a viewer too, who may look and change nothing.
+    const linksAs = async (as: string) => (await http().get(`/v1/sbg/consignment-notes/${noteId}/links`).set(bearer(as)).expect(200)).body.items as Array<Record<string, unknown>>;
+    const seen = await linksAs(viewerBiz);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ state: 'ready', opened: 1 });
+    expect(String(seen[0].sentTo)).toMatch(/@example\.com$/);
+    expect(String(seen[0].sentTo)).not.toBe(booker.email);
+    expect(JSON.stringify(seen)).not.toContain(booker.personDid);
+    await http().post(`/v1/sbg/consignment-notes/${noteId}/links/${seen[0].linkId}/cancel`).set(bearer(viewerBiz)).expect(403);
+    await http().post(`/v1/sbg/consignment-notes/${noteId}/links`).set(bearer(viewerBiz)).expect(403);
+    // The whole file is a viewer's to take: that is reading.
+    await http().get(`/v1/sbg/consignment-notes/${noteId}/bundle.zip`).set(bearer(viewerBiz)).expect(200);
+    // The booker makes one to pass on, for the business.
+    const passedOn = await http().post(`/v1/sbg/consignment-notes/${noteId}/links`).set(bearer(bookerBiz)).expect(201);
+    expect(passedOn.body.link).toMatchObject({ state: 'ready', madeBy: 'Bekele Booker' });
+    const passedKey = /#doc=([A-Za-z0-9_-]{43})/.exec(passedOn.body.url)![1];
+    // Another business is a stranger to all of it.
+    const stranger = await aPerson();
+    const strangerBiz = (await http().post('/v1/sbg/business').set(bearer(stranger.token)).send({ name: `Stranger ${tag}`, country: 'KE', registrationNo: `REG12-${tag}`, activities: ['shipper'], yourName: 'S' }).expect(201)).body.token.access_token;
+    await http().get(`/v1/sbg/consignment-notes/${noteId}/links`).set(bearer(strangerBiz)).expect(404);
+
+    // The booker is taken out of the business. Their sign-in stops on the next request — and so does the link in
+    // their own mailbox. The one they made for the business to pass on is the business's, and goes on working.
+    await http().delete(`/v1/sbg/business/me/members/${bookerRow.body.memberId}`).set(bearer(ownerBiz)).expect(200);
+    await http().get(`/v1/sbg/consignment-notes/${noteId}/links`).set(bearer(bookerBiz)).expect(403);
+    expect(await look()).toEqual({ state: 'cancelled', expiresAt: expect.any(String) });
+    expect((await http().post('/v1/sbg/document-links/fetch').send({ token: key }).expect(400)).body.detail).toBe('This link was cancelled');
+    expect((await http().post('/v1/sbg/document-links/look').send({ token: passedKey }).expect(200)).body.state).toBe('ready');
+    const after = await linksAs(ownerBiz);
+    expect(after.map((l) => [l.state, l.cancelledWhy, l.madeBy])).toEqual([['ready', undefined, 'Bekele Booker'], ['cancelled', 'left', undefined]]);
+    // The owner stops the other one by hand, and the note says who did.
+    const stopped = await http().post(`/v1/sbg/consignment-notes/${noteId}/links/${after[0].linkId}/cancel`).set(bearer(ownerBiz)).expect(200);
+    expect(stopped.body).toMatchObject({ state: 'cancelled', cancelledBy: 'Wambui Owner' });
+    expect((await http().post('/v1/sbg/document-links/look').send({ token: passedKey }).expect(200)).body.state).toBe('cancelled');
   });
 
   it('lets an expeditor send for a client of its own, as their agent: the client is the sender on the note', async () => {

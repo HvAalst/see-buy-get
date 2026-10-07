@@ -132,6 +132,26 @@ describe('a link to a document', () => {
       expect([t('archive.links.showStoppedOne'), t('archive.links.showStoppedMany', { n: 4 })]).toEqual(['Show the one that no longer works', 'Show the 4 that no longer work']);
     });
 
+    it('says who cancelled a link, or why it stopped by itself — and only “cancelled” when neither is known', () => {
+      const at = '2026-10-09T08:00:00.000Z';
+      const cancelled = (over: Partial<DocumentLinkRow>) => linkRowSays(row({ state: 'cancelled', cancelledAt: at, ...over }), t);
+      expect(cancelled({}).state).toBe(t('archive.links.cancelled', { date: day(at) }));
+      expect(cancelled({ cancelledBy: 'Abebe Kebede' }).state).toBe(t('archive.links.cancelledBy', { name: 'Abebe Kebede', date: day(at) }));
+      expect(cancelled({ cancelledBy: 'Abebe Kebede' }).state).toContain('Abebe Kebede');
+      // Nobody cancelled it: the person it was emailed to left the business. Said as that, not as somebody's act.
+      const left = cancelled({ cancelledWhy: 'left' });
+      expect(left.state).toBe(t('archive.links.cancelledLeft', { date: day(at) }));
+      expect(left.state).toContain('no longer in the business');
+      expect(left.state).not.toMatch(/Cancelled/);
+      // Why wins over who: it stopped by itself, whatever name is on the record.
+      expect(cancelled({ cancelledWhy: 'left', cancelledBy: 'Abebe Kebede' }).state).toBe(left.state);
+      // Stopped either way: nothing left to cancel, and it is with the ones that no longer work.
+      expect(left.canCancel).toBe(false);
+      expect(splitLinks([row({ linkId: 'a' }), row({ linkId: 'b', state: 'cancelled', cancelledAt: at, cancelledWhy: 'left' })]).stopped.map((r) => r.linkId)).toEqual(['b']);
+      // The reason is only ever said of a link that WAS cancelled: one still working says until when it works.
+      expect(linkRowSays(row({ cancelledBy: 'Abebe Kebede' }), t).state).toBe(t('archive.links.until', { date: day(until) }));
+    });
+
     it('passes it on by the share sheet, falls back to the clipboard, and never ends in nothing', async () => {
       const url = 'https://seebuyget.com/#doc=key';
       const calls: string[] = [];

@@ -259,3 +259,26 @@ export function digitsReady(value: string, length: number): boolean {
 
 export const ACTIVITIES: BusinessActivity[] = ['shipper', 'importer', 'expeditor', 'clearing_agent', 'depot'];
 export const ROLES: MemberRole[] = ['owner', 'booker', 'finance', 'viewer'];
+
+/**
+ * WHAT A LOAD SHOWS OF ITS KEPT NOTE.
+ *
+ * `kept` — a copy is in the archive: the whole file can be taken, and links to it made · `not_yet` — a carrier has
+ * the load but has not taken the goods over, so nothing is kept yet, and the load says so rather than showing an
+ * empty place · `none` — nothing to say: no carrier yet, or it ended before any goods moved.
+ *
+ * From what the SERVER says is kept (`noteId`), never worked out from the stage: a stage is this screen's reading
+ * of the load, and a note is kept or it is not.
+ */
+export type NoteKept = 'kept' | 'not_yet' | 'none';
+
+export function noteKept(row: { noteId?: string }, stage: LoadStage): NoteKept {
+  if (row.noteId) return 'kept';
+  return stage === 'taken' ? 'not_yet' : 'none';
+}
+
+/** How many links to a note work right now, as the tag beside the heading says it. Quiet when none does. */
+export function linksTag(live: number, t: Translate): { tone: 'info' | 'quiet'; label: string } {
+  if (live <= 0) return { tone: 'quiet', label: t('business.note.liveNone') };
+  return { tone: 'info', label: t('business.note.live', { n: live }) };
+}

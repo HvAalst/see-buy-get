@@ -384,7 +384,7 @@ export const ARTICLES: GuideArticle[] = [
     steps: [
       "People, then Add someone: their phone number, their name, and what they may do.",
       "Owner: everything, including the people. Booker: the day-to-day work. Finance: the same, and the person your payments will be connected through. Viewer: sees everything, changes nothing.",
-      "To take somebody out, press Remove on their row. It holds from their next click.",
+      "To take somebody out, press Remove on their row. It holds from their next click. Links to consignment notes that were emailed to them stop at the same moment.",
       "Leave takes you out of a business yourself. The only owner cannot leave until somebody else is an owner."
     ]
   },
@@ -434,11 +434,34 @@ export const ARTICLES: GuideArticle[] = [
       "Loads, then Post a load. Choose where it is collected and where it goes from your saved places — Save a new place adds one.",
       "Say what it is, its weight, how it is packed and what kind of goods. Carriers read exactly this, and it goes on the consignment note.",
       "Choose how the price is set: carriers name their price and you accept one, or the first carrier at the board price takes it.",
-      "Open the load to see the prices offered, who is carrying it, the tracking link to share, and the consignment note."
+      "Open the load to see the prices offered, who is carrying it, the tracking link to share, and the consignment note with the links to it."
     ],
     notes: [
       "SeeBuyGet does not take, hold or send the money for your loads. You pay the carrier directly, or through your own payment system.",
-      "You are told under the bell when a load is delivered, with who received it."
+      "You are told under the bell when a load is delivered, with who received it.",
+      "The person who posted the load is also emailed a receipt when it is delivered, with a link to the consignment note."
+    ]
+  },
+  {
+    id: "business-note",
+    apps: [
+      "business"
+    ],
+    title: "A load’s consignment note: the file, the receipt, and links to it",
+    summary: "Once the carrier has taken the goods over, the note is kept. Download it as one file, or make a link for somebody who has no account. When the load is delivered, a receipt is emailed with such a link in it.",
+    steps: [
+      "Loads, then open the load. Consignment note opens the note to read or print.",
+      "Once the carrier has taken the goods over, press Download this note and its photographs. You get one file: the note, every copy of it as it was signed, and its photographs. On a phone the button says Share, and opens your phone’s own share sheet.",
+      "To give the note to somebody with no account, look under Links to this note and press Make a link to pass on. Then press Send it or Copy it, and send the link in a chat, a text or your own mail. The link is shown only once, because we keep no copy of it.",
+      "To stop a link, press Cancel it on its row, then Yes, cancel it. A cancelled link cannot be switched back on. The row then says who cancelled it."
+    ],
+    notes: [
+      "When a load is delivered, the person who posted it is emailed a receipt at their own recovery email, with a button: Get the consignment note. If that person has left the business, or has given no email address, the owners are emailed instead.",
+      "The button in the email is a link like the others. It is listed under Links to this note, with the address it went to, how often the file was taken, and until when it works.",
+      "When somebody is taken out of the business, or leaves it, the links that were emailed to them stop at once. Links they made for the business to pass on keep working until you cancel them.",
+      "A link opens the note without signing in, for whoever has it. It works for 30 days and hands the file over 25 times at most. A note can have five links that work at the same time. Cancel one to make another.",
+      "The price in the receipt is the price you and the carrier agreed. SeeBuyGet holds no money for your loads, and the receipt is not an invoice.",
+      "A viewer sees the links and can download the file, but cannot make or cancel a link."
     ]
   },
   {
@@ -574,7 +597,8 @@ export const ARTICLES: GuideArticle[] = [
       "The shop sees that link on the note itself. Shop app: Records, then Notes, then open the note, and look under Links to this note. It shows the address the email went to, how often the file was taken, and until when the link works. Tap Cancel it to stop the link at once. A cancelled link cannot be switched back on.",
       "A link hands the file over 25 times at most, and opens nothing once the note itself is no longer kept. The file is the copy to keep: the link stops, the file does not.",
       "You can also make a link yourself, for somebody who should have the note and has no account: a bookkeeper, an insurer, the other side. Open the note in your records and, under Links to this note, tap Make a link to pass on. Then tap Send it or Copy it, and send the link in a chat, a text or your own mail. The link is shown only once, because we keep no copy of it. If it goes astray, cancel it and make another.",
-      "A note can have five links that work at the same time. Cancel one to make another. Links that no longer work are folded away under Show the ones that no longer work, with who made each and how often it was opened."
+      "A note can have five links that work at the same time. Cancel one to make another. Links that no longer work are folded away under Show the ones that no longer work, with who made each, how often it was opened, and who cancelled it.",
+      "A business has no archive: it finds the same file and the same links on the load itself, in the Business app under Loads."
     ]
   },
   {

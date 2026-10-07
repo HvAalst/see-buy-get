@@ -171,7 +171,18 @@ started with, never off a variable that happens to be set.
   `POST /v1/sbg/document-links/look|fetch`, rate-limited. A party also MAKES a link itself to pass on
   (`POST consignment-notes/:docId/links`): the address comes back once and is never kept; at most five links
   per party per note work at a time; staff cannot make one; and a business's view-only member can neither make
-  nor cancel one (`BusinessMemberGuard` on the controller). The Business app has no screen for any of this yet.
+  nor cancel one (`BusinessMemberGuard` on the controller). A cancelled link says who cancelled it.
+- **A business's receipt goes to a person**, because a business has no mailbox of its own
+  (`BusinessService.receiptPeople`): whoever posted the load, at their own recovery email; its owners when that
+  person has left or has given no address. Which person posted is kept by the business (`notePosted`), never on
+  the load — a load is read by every carrier on the board. Each person gets their own link, the receipt's links
+  count against the five, and **when somebody is taken out of a business or leaves it, the links emailed to
+  them stop at once** (`onMemberGone` → `DocumentLinkService.cancelSentTo`; the row says `cancelledWhy: left`).
+  Links they made for the business to pass on are the business's, and keep working. In the Business app the
+  file and the links are on the load itself (`apps/business/screens/LoadNote.tsx`), driven by the same hook as
+  the archive in the other apps (`shared/archive/useNoteLinks.ts`); `GET dispatch/posted` says where a load's
+  note is (`noteId`) once a copy is kept. See the business's variant of the email at
+  `/v1/mail/preview/freight-delivered?as=business`.
 - **Push** is still kept by `OutboxPushSender`: no push leaves the server. The keys (`GLOS_VAPID_PUBLIC`,
   `GLOS_VAPID_PRIVATE`) are judged from the pair: the server's own, the pair written in the source, or two that
   do not belong together.

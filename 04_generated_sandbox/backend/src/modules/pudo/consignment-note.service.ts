@@ -19,6 +19,7 @@ import { tempBand } from './heavy-cargo';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { NETWORK_CURRENCY } from './pudo.config';
 import { VendorService } from './vendor.service';
+import { BusinessService } from './business.service';
 import { ConsignmentNote, NoteParty } from './consignment-note.types';
 import { noteFingerprint } from './note-archive.types';
 import { retentionFor, retentionWords } from './retention';
@@ -28,8 +29,19 @@ import { retentionFor, retentionWords } from './retention';
  * a printable page, decides who may read it, and — when the load is delivered — sends the shipper the receipt that
  * points at it.
  */
-/** Issue a link to a load's note for one of its parties, sent to an address. Nothing when it cannot be made. */
-export type ReceiptLink = (freightId: string, forDid: string, sentTo: string) => { url: string; until: string } | undefined;
+/**
+ * Issue a link to a load's note for one of its parties, sent to an address. Nothing when it cannot be made.
+ * `person` — the one it is sent to, when it goes to them as one of a business's people: it stops when they leave it.
+ */
+export type ReceiptLink = (freightId: string, forDid: string, sentTo: string, person?: string) => { url: string; until: string } | undefined;
+
+/** Somebody a receipt is sent to. `business` — they are one of a business's people, and as which. */
+interface ReceiptTo {
+  address: string;
+  name: string;
+  personDid?: string;
+  business?: { name: string; as: 'poster' | 'owner' };
+}
 
 @Injectable()
 export class ConsignmentNoteService implements OnModuleInit {
@@ -45,6 +57,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     @Optional() private readonly mail?: MailService,
     // B2 — a customer's business is named as the sender. Optional so the specs that build this by hand keep compiling.
     @Optional() private readonly entities?: EntityService,
+    // A business has no account email of its own: its receipt goes to its people, and it says which.
+    @Optional() private readonly businesses?: BusinessService,
   ) {}
 
   onModuleInit(): void {
@@ -364,39 +378,60 @@ export class ConsignmentNoteService implements OnModuleInit {
     this.receiptLink = issue;
   }
 
-  /** The load is delivered: the shipper is told, with the charge and where the note is. A shop has an email; a store's system hears through its callbacks. */
+  /**
+   * The load is delivered: whoever sent it is told, with the charge and where the note is. A shop at its account's
+   * email; a business through its own people (BusinessService.receiptPeople says which); a store's system hears
+   * through its callbacks.
+   */
   private async sendReceipt(freightId: string): Promise<void> {
-    if (!this.mail || !this.accounts) return;
+    if (!this.mail) return;
     try {
       const f = this.dispatch.requireFreightPublic(freightId) as Freight;
       const shipperDid = this.shipperDidOf(f) ?? f.postedByDid;
       if (!shipperDid) return;
-      const email = this.accounts.emailForDid(shipperDid);
-      if (!email) return;
       const note = this.build(f);
-      // The note itself, by a link — never as a file in somebody's mailbox (the user, 2026-10-07). No link, and the
-      // email says where the note is instead: a receipt goes whether or not one could be made.
-      let link: ReturnType<ReceiptLink>;
-      try {
-        link = this.receiptLink?.(freightId, shipperDid, email);
-      } catch {
-        link = undefined;
+      for (const to of this.receiptTo(f, shipperDid, note.sender.name)) {
+        // One at a time, each on its own: an address that fails is not a reason for the next person to hear nothing.
+        try {
+          await this.sendReceiptTo(f, note, shipperDid, to);
+        } catch {
+          /* the next one still goes */
+        }
       }
-      await this.mail.send('freight-delivered', { address: email, name: note.sender.name }, {
-        code: f.code,
-        description: f.description,
-        destination: f.destLabel,
-        deliveredAt: f.deliveredAt ?? new Date().toISOString(),
-        ...(f.proofOfDelivery ? { receiverName: f.proofOfDelivery.receiverName } : {}),
-        carrier: note.carrier?.name ?? 'the carrier',
-        ...(note.carrier?.driverName ? { driver: note.carrier.driverName } : {}),
-        ...(note.carriage.amount != null ? { amount: note.carriage.amount, currency: note.carriage.currency ?? NETWORK_CURRENCY } : {}),
-        noteNumber: note.number,
-        ...(link ? { noteUrl: link.url, noteUntil: link.until } : {}),
-      });
     } catch {
       /* a receipt that cannot be sent never fails a delivery */
     }
+  }
+
+  private receiptTo(f: Freight, shipperDid: string, senderName: string): ReceiptTo[] {
+    const shop = this.accounts?.emailForDid(shipperDid);
+    if (shop) return [{ address: shop, name: senderName }];
+    return (this.businesses?.receiptPeople(shipperDid, f.freightId) ?? []).map((p) => ({ address: p.address, name: p.name, personDid: p.personDid, business: { name: p.business, as: p.as } }));
+  }
+
+  private async sendReceiptTo(f: Freight, note: ConsignmentNote, shipperDid: string, to: ReceiptTo): Promise<void> {
+    // The note itself, by a link — never as a file in somebody's mailbox (the user, 2026-10-07). No link, and the
+    // email says where the note is instead: a receipt goes whether or not one could be made. Each person their own
+    // link: it is counted, and cancelled, by who it was sent to.
+    let link: ReturnType<ReceiptLink>;
+    try {
+      link = this.receiptLink?.(f.freightId, shipperDid, to.address, to.personDid);
+    } catch {
+      link = undefined;
+    }
+    await this.mail!.send('freight-delivered', { address: to.address, name: to.name }, {
+      code: f.code,
+      description: f.description,
+      destination: f.destLabel,
+      deliveredAt: f.deliveredAt ?? new Date().toISOString(),
+      ...(f.proofOfDelivery ? { receiverName: f.proofOfDelivery.receiverName } : {}),
+      carrier: note.carrier?.name ?? 'the carrier',
+      ...(note.carrier?.driverName ? { driver: note.carrier.driverName } : {}),
+      ...(note.carriage.amount != null ? { amount: note.carriage.amount, currency: note.carriage.currency ?? NETWORK_CURRENCY } : {}),
+      noteNumber: note.number,
+      ...(link ? { noteUrl: link.url, noteUntil: link.until } : {}),
+      ...(to.business ? { business: to.business } : {}),
+    });
   }
 
   /* ------------------------------------------------------------------ the page -- */

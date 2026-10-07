@@ -35,8 +35,9 @@ export class MailController {
       .map((id) => {
         const def = MAIL_TEMPLATES[id];
         const subject = renderMail(id, def.sample as never).subject;
+        const also = (def.also ?? []).map((v) => ` · <a href="preview/${id}?as=${encodeURIComponent(v.key)}">${escapeHtml(v.label)}</a>`).join('');
         return `<section><header><h2>${escapeHtml(def.title)} <span class="${def.wired ? 'on' : 'off'}">${def.wired ? 'sent' : 'designed, not sent yet'}</span></h2>
-<p>${escapeHtml(def.sentWhen)}</p><p class="subject">Subject: <b>${escapeHtml(subject)}</b> · <a href="preview/${id}">open</a> · <a href="preview/${id}?fonts=off">as Gmail and Outlook show it</a> · <a href="preview/${id}?format=text">plain text</a></p></header>
+<p>${escapeHtml(def.sentWhen)}</p><p class="subject">Subject: <b>${escapeHtml(subject)}</b> · <a href="preview/${id}">open</a> · <a href="preview/${id}?fonts=off">as Gmail and Outlook show it</a> · <a href="preview/${id}?format=text">plain text</a>${also}</p></header>
 <iframe title="${escapeHtml(def.title)}" src="preview/${id}" loading="lazy"></iframe></section>`;
       })
       .join('\n');
@@ -56,15 +57,17 @@ a{color:#4c46e0}</style></head><body><div class="wrap"><h1>Every email the netwo
 
   /**
    * One email, as a mail client would show it — `?fonts=off` as one that fetches no typeface does, `?format=text`
-   * for the plain-text version.
+   * for the plain-text version, `?as=` for the same email as somebody else gets it (a template's `also`).
    */
   @Public()
   @Get('preview/:template')
-  previewOne(@Param('template') template: string, @Res() res: Response, @Query('format') format?: string, @Query('fonts') fonts?: string): void {
+  previewOne(@Param('template') template: string, @Res() res: Response, @Query('format') format?: string, @Query('fonts') fonts?: string, @Query('as') as?: string): void {
     this.sandboxOnly();
     const def = MAIL_TEMPLATES[template as MailTemplateId];
     if (!def) throw new NotFoundException(`No email called ${template}`);
-    const mail = renderMail(template as MailTemplateId, def.sample as never, fonts === 'off' ? { fontsUrl: '' } : { fontsUrl: PREVIEW_FONTS });
+    const variant = as ? (def.also ?? []).find((v) => v.key === as) : undefined;
+    if (as && !variant) throw new NotFoundException(`No email called ${template} as ${as}`);
+    const mail = renderMail(template as MailTemplateId, (variant?.sample ?? def.sample) as never, fonts === 'off' ? { fontsUrl: '' } : { fontsUrl: PREVIEW_FONTS });
     if (format === 'text') res.type('text/plain; charset=utf-8').send(`Subject: ${mail.subject}\n\n${mail.text}`);
     else res.type('html').send(htmlForBrowser(mail));
   }

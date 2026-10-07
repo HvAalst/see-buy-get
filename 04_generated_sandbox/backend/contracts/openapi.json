@@ -67,7 +67,7 @@
       "get": {
         "operationId": "Mail.previewOne",
         "summary": "",
-        "description": "One email, as a mail client would show it — `?fonts=off` as one that fetches no typeface does, `?format=text`\nfor the plain-text version.",
+        "description": "One email, as a mail client would show it — `?fonts=off` as one that fetches no typeface does, `?format=text`\nfor the plain-text version, `?as=` for the same email as somebody else gets it (a template's `also`).",
         "parameters": [
           {
             "name": "template",
@@ -87,6 +87,14 @@
           },
           {
             "name": "fonts",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "as",
             "required": true,
             "in": "query",
             "schema": {
@@ -36989,6 +36997,10 @@
           "orderRef": {
             "type": "string"
           },
+          "noteId": {
+            "type": "string",
+            "description": "Its consignment note's id in the archive, once a copy is kept there (from taking over on): what its links hang on."
+          },
           "attempts": {
             "description": "FP3b — the door the driver stood at and could not hand over at, most recent last.",
             "type": "array",
@@ -41634,6 +41646,17 @@
           },
           "cancelledAt": {
             "type": "string"
+          },
+          "cancelledBy": {
+            "type": "string",
+            "description": "Who cancelled it, where a person did and the sign-in names one."
+          },
+          "cancelledWhy": {
+            "type": "string",
+            "description": "Why, when nobody cancelled it by hand.",
+            "enum": [
+              "left"
+            ]
           },
           "linkId": {
             "type": "string"

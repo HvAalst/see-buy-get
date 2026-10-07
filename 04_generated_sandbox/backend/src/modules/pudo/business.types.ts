@@ -46,6 +46,26 @@ export interface BusinessMember {
   removedBy?: string;
 }
 
+/**
+ * Which of a business's people posted a load. Kept by the business, NEVER ON THE LOAD: a load is read by every carrier
+ * on the board, and which person in an office posted it is that office's own affair.
+ */
+export interface LoadPoster {
+  freightId: string;
+  entityId: string;
+  personDid: string;
+  at: string;
+}
+
+/** Somebody in a business who is sent a load's receipt, and as what: the one who posted it, or an owner in their place. */
+export interface ReceiptPerson {
+  address: string;
+  name: string;
+  personDid: string;
+  as: 'poster' | 'owner';
+  business: string;
+}
+
 export class BusinessMemberView {
   @ApiProperty() memberId: string;
   @ApiProperty() name: string;

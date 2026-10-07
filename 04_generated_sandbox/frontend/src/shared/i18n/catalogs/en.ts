@@ -1062,6 +1062,8 @@ export const en = {
   'archive.links.until': 'Works until {date}',
   'archive.links.expired': 'Stopped on {date}',
   'archive.links.cancelled': 'Cancelled on {date}',
+  'archive.links.cancelledBy': 'Cancelled by {name} on {date}',
+  'archive.links.cancelledLeft': 'Stopped on {date}: the person it was emailed to is no longer in the business',
   'archive.links.usedUp': 'Used as often as one link can be',
   'archive.links.gone': 'The note is no longer kept',
   'archive.links.neverOpened': 'Not opened yet',

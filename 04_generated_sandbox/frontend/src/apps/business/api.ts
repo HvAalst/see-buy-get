@@ -183,6 +183,8 @@ export interface PostedLoad {
   deliveredAt?: string;
   receiverName?: string;
   cancelledAt?: string;
+  /** Its consignment note in the archive, once a copy is kept there (from taking over on): what its links hang on. */
+  noteId?: string;
   canCancel: boolean;
   trackingKey?: string;
   trackingUrl?: string;

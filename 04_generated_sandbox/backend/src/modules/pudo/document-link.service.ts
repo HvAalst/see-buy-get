@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit, Optional } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import { actingDid } from '../../foundation/auth/acting';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
@@ -6,8 +6,9 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { maskAddress } from '../../foundation/mail/mail.service';
 import { appUrl } from '../../foundation/mail/mail.templates';
 import { PersistentMap } from '../../foundation/store/persistent-map';
+import { BusinessService } from './business.service';
 import { ConsignmentNoteService } from './consignment-note.service';
-import { DocumentLinkRow, DocumentLinkView, LinkState } from './document-link.types';
+import { DocumentLinkRow, DocumentLinkView, LinkCancelReason, LinkState } from './document-link.types';
 import { NoteArchiveService } from './note-archive.service';
 import { boardDocId } from './note-archive.types';
 import { NoteBundleService } from './note-bundle.service';
@@ -28,12 +29,19 @@ export interface DocumentLink {
   /** The party it was made for. The link reads the document as that party does, and that party alone may cancel it. */
   forDid: string;
   sentTo?: string;
+  /**
+   * The person it was emailed to, when it went to them AS ONE OF A BUSINESS'S PEOPLE. Never shown: it is here so that
+   * the link stops when they are no longer in that business.
+   */
+  person?: string;
   madeBy?: string;
   createdAt: string;
   expiresAt: string;
   opened: number;
   lastOpenedAt?: string;
   cancelledAt?: string;
+  cancelledBy?: string;
+  cancelledWhy?: LinkCancelReason;
 }
 
 /**
@@ -58,15 +66,23 @@ export class DocumentLinkService implements OnModuleInit {
     private readonly archive: NoteArchiveService,
     private readonly bundles: NoteBundleService,
     private readonly notes: ConsignmentNoteService,
+    // Optional so the specs that build this by hand keep compiling; app.boot.spec catches it missing from the module.
+    @Optional() private readonly businesses?: BusinessService,
   ) {}
 
   onModuleInit(): void {
     // The receipt for a delivered load carries a link to its note. Registered here rather than injected there: this
     // reads the archive and the bundle, which both read that.
-    this.notes.registerReceiptLink((freightId, forDid, sentTo) => {
-      const made = this.issue(boardDocId(freightId), forDid, { sentTo });
+    this.notes.registerReceiptLink((freightId, forDid, sentTo, person) => {
+      const docId = boardDocId(freightId);
+      // A receipt's link is one of the handful a party may have working on a note. Past that the email goes without
+      // one and says where the note is: six owners are not six ways in.
+      if (this.liveCount(docId, forDid, Date.now()) >= LINK_MAX_LIVE) return undefined;
+      const made = this.issue(docId, forDid, { sentTo, ...(person ? { person } : {}) });
       return made ? { url: linkUrl(made.token), until: made.link.expiresAt } : undefined;
     });
+    // Somebody is taken out of a business, or leaves it: what was emailed to them as one of its people stops there.
+    this.businesses?.onMemberGone((businessDid, personDid) => void this.cancelSentTo(businessDid, personDid));
   }
 
   /**
@@ -74,7 +90,7 @@ export class DocumentLinkService implements OnModuleInit {
    * document: the email this is for goes all the same, and says where the note is instead.
    * The key is in what this returns and nowhere else, ever again.
    */
-  issue(docId: string, forDid: string, opts: { sentTo?: string; madeBy?: string; now?: number } = {}): { token: string; link: DocumentLink } | undefined {
+  issue(docId: string, forDid: string, opts: { sentTo?: string; person?: string; madeBy?: string; now?: number } = {}): { token: string; link: DocumentLink } | undefined {
     if (!this.archive.hasFor(docId, forDid)) return undefined;
     const now = opts.now ?? Date.now();
     const token = randomBytes(32).toString('base64url');
@@ -84,6 +100,7 @@ export class DocumentLinkService implements OnModuleInit {
       docId,
       forDid,
       ...(opts.sentTo ? { sentTo: maskAddress(opts.sentTo) } : {}),
+      ...(opts.person ? { person: opts.person } : {}),
       ...(opts.madeBy ? { madeBy: opts.madeBy.slice(0, 80) } : {}),
       createdAt: new Date(now).toISOString(),
       expiresAt: new Date(now + LINK_DAYS * DAY_MS).toISOString(),
@@ -110,8 +127,7 @@ export class DocumentLinkService implements OnModuleInit {
     if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A link is made by a party to the note, for its own copy. Staff read the note itself.');
     // Whether the caller is a party to this note is asked where the link is made (`issue`) — once, in one place.
     const forDid = actingDid(actor);
-    const live = [...this.links.values()].filter((l) => l.docId === docId && l.forDid === forDid && this.stateOf(l, now) === 'ready').length;
-    if (live >= LINK_MAX_LIVE) throw new GlosError('INVALID_STATE', `This note already has ${LINK_MAX_LIVE} links that work. Cancel one to make another.`, { field: 'docId' });
+    if (this.liveCount(docId, forDid, now) >= LINK_MAX_LIVE) throw new GlosError('INVALID_STATE', `This note already has ${LINK_MAX_LIVE} links that work. Cancel one to make another.`, { field: 'docId' });
     const made = this.issue(docId, forDid, { now, ...(actor?.actorName ? { madeBy: actor.actorName } : {}) });
     if (!made) throw new GlosError('NOT_FOUND', 'No such consignment note in the archive');
     return { url: linkUrl(made.token), link: this.row(made.link, now) };
@@ -166,9 +182,31 @@ export class DocumentLinkService implements OnModuleInit {
     const link = [...this.links.values()].find((l) => l.linkId === linkId && l.docId === docId);
     // Somebody else's link is answered as one that does not exist: that it exists is theirs to know.
     if (!link || (actor?.role !== 'operator' && link.forDid !== actingDid(actor))) throw new GlosError('NOT_FOUND', 'No such link on this document');
-    const cancelled = link.cancelledAt ? link : { ...link, cancelledAt: new Date(now).toISOString() };
+    // Who did it is kept, where the sign-in names a person: in an office of five, "cancelled" is half an answer.
+    const by = actor?.role === 'operator' ? 'SeeBuyGet staff' : actor?.actorName?.slice(0, 80);
+    const cancelled: DocumentLink = link.cancelledAt ? link : { ...link, cancelledAt: new Date(now).toISOString(), ...(by ? { cancelledBy: by } : {}) };
     this.links.set(link.tokenHash, cancelled);
     return this.row(cancelled, now);
+  }
+
+  /**
+   * SOMEBODY IS NO LONGER IN A BUSINESS: every link that was emailed to them as one of its people stops now.
+   *
+   * Their sign-in stops on their next click (membership is read live). Without this, the receipt in their own mailbox
+   * would go on opening the business's notes for a month. Only the links sent TO THEM: one they made in the app and
+   * passed to a customer was made for the business, is on its note for the business to see, and is the business's to
+   * cancel. Kept, and it says why — the owners see what became of it. How many it stopped.
+   */
+  cancelSentTo(forDid: string, personDid: string, now: number = Date.now()): number {
+    if (!forDid || !personDid) return 0;
+    const theirs = [...this.links.values()].filter((l) => l.forDid === forDid && l.person === personDid && !l.cancelledAt);
+    for (const l of theirs) this.links.set(l.tokenHash, { ...l, cancelledAt: new Date(now).toISOString(), cancelledWhy: 'left' });
+    return theirs.length;
+  }
+
+  /** How many links to this document work for this party right now. Counted in one place, for every way one is made. */
+  private liveCount(docId: string, forDid: string, now: number): number {
+    return [...this.links.values()].filter((l) => l.docId === docId && l.forDid === forDid && this.stateOf(l, now) === 'ready').length;
   }
 
   private row(l: DocumentLink, now: number): DocumentLinkRow {
@@ -182,6 +220,8 @@ export class DocumentLinkService implements OnModuleInit {
       opened: l.opened,
       ...(l.lastOpenedAt ? { lastOpenedAt: l.lastOpenedAt } : {}),
       ...(l.cancelledAt ? { cancelledAt: l.cancelledAt } : {}),
+      ...(l.cancelledBy ? { cancelledBy: l.cancelledBy } : {}),
+      ...(l.cancelledWhy ? { cancelledWhy: l.cancelledWhy } : {}),
     };
   }
 

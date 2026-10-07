@@ -1091,6 +1091,8 @@ export class PostedFreightRow {
   /** FP3 — who signed for the goods (box 24), once delivered. */
   receiverName?: string;
   cancelledAt?: string;
+  /** Its consignment note's id in the archive, once a copy is kept there (from taking over on): what its links hang on. */
+  @ApiPropertyOptional() noteId?: string;
   /** FP3 — true while the sender may still withdraw the load: before the goods are taken over. */
   canCancel: boolean;
   /** FP3b — the door the driver stood at and could not hand over at, most recent last. */

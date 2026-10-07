@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkStep, checkTone, contractPeriod, digitsReady, isLastOwner, loadGaps, loadStage, mayAct, mayManage, newBusinessGaps, nextDay, openOnArrival, orderableContracts, phoneReady, planDo, planSays, deliverySays, sectionsFor, spanWords, windowMiss } from './logic';
+import { checkStep, checkTone, contractPeriod, digitsReady, isLastOwner, linksTag, noteKept, loadGaps, loadStage, mayAct, mayManage, newBusinessGaps, nextDay, openOnArrival, orderableContracts, phoneReady, planDo, planSays, deliverySays, sectionsFor, spanWords, windowMiss } from './logic';
 import { t } from '../../shared/i18n';
 import type { CarriageContract } from './api';
 import type { Membership } from './api';
@@ -218,6 +218,25 @@ describe('the Business app', () => {
         full: 'Handed over at 10:52 on 2026-10-08. It was ordered for 2026-10-07.',
       });
       expect(deliverySays({ deliverOn: day, deliveryTiming: { ...at, day: '2026-10-06', otherDay: 'early' } }, t)).toEqual({ tone: 'quiet', row: 'handed over early, on 2026-10-06', full: 'Handed over at 10:52 on 2026-10-06, before the day it was ordered for (2026-10-07).' });
+    });
+  });
+
+  describe('a load’s kept note', () => {
+    it('is shown once the server says a copy is kept — whatever stage this screen reads the load as', () => {
+      for (const stage of ['posted', 'offers', 'ordered', 'taken', 'moving', 'delivered', 'cancelled'] as const) expect(noteKept({ noteId: 'freight~fr_1' }, stage)).toBe('kept');
+    });
+    it('says “not yet” only while a carrier has the load and has not taken the goods over; before that, and after it ended, nothing', () => {
+      expect(noteKept({}, 'taken')).toBe('not_yet');
+      for (const stage of ['posted', 'offers', 'ordered', 'cancelled'] as const) expect(noteKept({}, stage)).toBe('none');
+      // Moving or delivered with no copy kept is not this screen's to explain away: it promises nothing.
+      for (const stage of ['moving', 'delivered'] as const) expect(noteKept({}, stage)).toBe('none');
+      expect(noteKept({ noteId: '' }, 'delivered')).toBe('none');
+    });
+    it('counts the links that work beside the heading, in words that need no plural — and is quiet when none does', () => {
+      expect(linksTag(0, t)).toEqual({ tone: 'quiet', label: t('business.note.liveNone') });
+      expect(linksTag(0, t).label).not.toContain('0');
+      expect(linksTag(1, t)).toEqual({ tone: 'info', label: '1 working' });
+      expect(linksTag(3, t)).toEqual({ tone: 'info', label: '3 working' });
     });
   });
 

@@ -5,6 +5,7 @@ import type { ArchiveQuery, ArchivedNoteDoc, ArchivedNoteRow, ProofAnswer } from
 import { triggerDownload, triggerDownloadBlob } from '../download';
 import type { DocumentLinkRow, MadeLink } from './documentLink';
 import { canShareFiles as browserSharesFiles, fileNameFor, handOverFile } from './handOver';
+import { useNoteLinks } from './useNoteLinks';
 
 export const ARCHIVE_LIMIT = 20;
 
@@ -29,7 +30,7 @@ export interface ArchiveApiState {
   /** A link just made on the open document: its address, held only until the sheet shuts. The server kept no copy. */
   made: MadeLink | null;
   making: boolean;
-  /** Why a link could not be made, in the server's own words — it has a limit, and says what to do about it. */
+  /** Why a link could not be made or cancelled, in the server's own words — it has a limit, and says what to do about it. */
   makeProblem: string;
   makeLink: () => Promise<void>;
   busy: '' | 'csv' | 'bundle' | 'bundles' | 'print';
@@ -62,11 +63,9 @@ export function useArchive(client: SbgClient | null, enabled = true): ArchiveApi
   const [query, setQueryState] = useState<ArchiveQuery>(EMPTY_QUERY);
   const [open, setOpen] = useState<ArchivedNoteDoc | null>(null);
   const [openPhase, setOpenPhase] = useState<Phase>('idle');
-  const [links, setLinks] = useState<DocumentLinkRow[]>([]);
-  const [cancelling, setCancelling] = useState('');
-  const [made, setMade] = useState<MadeLink | null>(null);
-  const [making, setMaking] = useState(false);
-  const [makeProblem, setMakeProblem] = useState('');
+  // The links to the open document — listed, made and cancelled by the one hook every place a note is read uses.
+  // They follow the document: opened with it, gone when the sheet shuts or another note is opened.
+  const noteLinks = useNoteLinks(client, open?.docId);
   const [busy, setBusy] = useState<ArchiveApiState['busy']>('');
 
   // The archive is not a persona of its own — every app already has one. Built here so the hook takes a
@@ -121,59 +120,24 @@ export function useArchive(client: SbgClient | null, enabled = true): ArchiveApi
       if (!api) return;
       setOpenPhase('loading');
       setOpen(null);
-      setLinks([]);
-      setMade(null);
-      setMakeProblem('');
       const r: Result<unknown> = await api.note(docId);
       if (r.error || !r.data) {
         setOpenPhase('error');
         setError(r.error ?? null);
         return;
       }
+      // Its links are asked for beside it, not before it: a note is readable whether or not they could be listed.
       setOpen(narrow<ArchivedNoteDoc>(r.data));
       setOpenPhase('ready');
-      // Beside the document, not before it: a note is readable whether or not its links could be listed.
-      const l: Result<unknown> = await api.noteLinks(docId);
-      if (!l.error && l.data) setLinks(narrow<{ items: DocumentLinkRow[] }>(l.data).items ?? []);
     },
     [api],
   );
 
-  /** Cancel a link on the open document. What comes back is the link as it now stands, and replaces the row. */
-  const cancelLink = useCallback(
-    async (linkId: string) => {
-      if (!api || !open) return;
-      setCancelling(linkId);
-      const r: Result<unknown> = await api.cancelNoteLink(open.docId, linkId);
-      setCancelling('');
-      if (r.error || !r.data) return setError(r.error ?? null);
-      const row = narrow<DocumentLinkRow>(r.data);
-      setLinks((all) => all.map((x) => (x.linkId === row.linkId ? row : x)));
-    },
-    [api, open],
-  );
-
   const closeDoc = useCallback(() => {
     setOpen(null);
+    // The address of a link just made goes with the sheet: it was only ever here (useNoteLinks drops it).
     setOpenPhase('idle');
-    setLinks([]);
-    // The address of a link just made goes with the sheet: it was only ever here.
-    setMade(null);
-    setMakeProblem('');
   }, []);
-
-  /** Make a link on the open document. Its address is in the answer and nowhere else, so it is held here to be passed on. */
-  const makeLink = useCallback(async () => {
-    if (!api || !open) return;
-    setMaking(true);
-    setMakeProblem('');
-    const r: Result<unknown> = await api.makeNoteLink(open.docId);
-    setMaking(false);
-    if (r.error || !r.data) return setMakeProblem(r.error?.detail || r.error?.title || '');
-    const answer = narrow<{ url: string; link: DocumentLinkRow }>(r.data);
-    setMade({ url: answer.url, expiresAt: answer.link.expiresAt });
-    setLinks((all) => [answer.link, ...all]);
-  }, [api, open]);
 
   const exportCsv = useCallback(async () => {
     if (!api) return;
@@ -251,6 +215,7 @@ export function useArchive(client: SbgClient | null, enabled = true): ArchiveApi
    */
   const canShareFiles = useMemo(() => browserSharesFiles(), []);
 
+  const { links, cancelling, cancelLink, made, making, makeLink, problem: makeProblem } = noteLinks;
   return { rows, total, phase, error, query, open, openPhase, links, cancelling, cancelLink, made, making, makeProblem, makeLink, busy, load, setQuery, openDoc, closeDoc, exportCsv, exportBundle, exportAll, printCopy, verifyNote, canShareFiles };
 }
 

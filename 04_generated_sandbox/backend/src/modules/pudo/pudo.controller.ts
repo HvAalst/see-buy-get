@@ -21,6 +21,8 @@ import { appUrl } from '../../foundation/mail/mail.templates';
 import { InterestService } from '../../foundation/interest/interest.service';
 import { DepartureService } from './departure.service';
 import { BusinessMemberGuard } from './business-member.guard';
+import { BusinessService } from './business.service';
+import { boardDocId } from './note-archive.types';
 import { isSandbox } from '../../foundation/runtime/sandbox';
 import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Req, Res, StreamableFile, Optional, UseGuards } from '@nestjs/common';
 import { staffNetworkAllows } from '../../foundation/auth/staff-network';
@@ -260,6 +262,7 @@ export class SbgController {
     @Optional() private readonly fleetOffers?: FleetOfferService,
     @Optional() private readonly pulse?: NetworkPulseService,
     @Optional() private readonly contracts?: CarriageContractService,
+    @Optional() private readonly businesses?: BusinessService,
   ) {}
 
   // --- phone verification (mandatory at onboarding — control-tower contact + GPS) ---
@@ -5117,7 +5120,11 @@ export class SbgController {
     this.requireActiveTerm(dto.incoterm, dto.pickupCountry, dto.destCountry);
     // B2 — a business's DID is shared by everybody in it, so the person who posted is kept by name as well.
     const { forClientId, contractId, deliverOn, orderRef, ...load } = dto;
-    return this.dispatch.registerFreight({ ...load, dimensionsCm, ...this.contractOrder(actor, contractId, deliverOn, orderRef), bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did, ...(actor?.role === 'business' && actor.actorName ? { postedByName: actor.actorName } : {}), ...this.onBehalfOf(actor, forClientId) });
+    const posted = this.dispatch.registerFreight({ ...load, dimensionsCm, ...this.contractOrder(actor, contractId, deliverOn, orderRef), bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did, ...(actor?.role === 'business' && actor.actorName ? { postedByName: actor.actorName } : {}), ...this.onBehalfOf(actor, forClientId) });
+    // …and WHICH person, kept by the business itself and never on the load, which every carrier on the board reads:
+    // it is who the receipt goes to when the load is delivered.
+    this.businesses?.notePosted(posted.freightId, actor);
+    return posted;
   }
 
   @Get('dispatch/freight')
@@ -5348,7 +5355,10 @@ export class SbgController {
     const who = actingDid(actor, did);
     // …and a store's own freight is recorded under its store id, so it is looked up under both.
     const store = this.vendors.byDid(who);
-    return { items: store ? [...this.dispatch.postedBy(who), ...this.dispatch.postedBy(store.vendorId)] : this.dispatch.postedBy(who) };
+    const rows = store ? [...this.dispatch.postedBy(who), ...this.dispatch.postedBy(store.vendorId)] : this.dispatch.postedBy(who);
+    // Where its note is in the archive, once there is a copy this party may read: what the note's links hang on.
+    // Said here so that no screen builds a document's id.
+    return { items: rows.map((r) => (this.archive.hasFor(boardDocId(r.freightId), who) ? { ...r, noteId: boardDocId(r.freightId) } : r)) };
   }
 
   /** A driver names their price for a load posted 'negotiate'. Reserves nothing — the poster's accept claims it. */

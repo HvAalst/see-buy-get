@@ -19,6 +19,8 @@ import {
   BusinessMembershipView,
   BusinessStaffRow,
   BusinessView,
+  LoadPoster,
+  ReceiptPerson,
 } from './business.types';
 
 /** What a business needs on record before it may ask to be checked: who it is, and who is speaking for it. */
@@ -54,6 +56,10 @@ export interface ActingMember {
 @Injectable()
 export class BusinessService {
   private readonly members = new PersistentMap<string, BusinessMember>('business-members');
+  /** Which of its people posted each load (business.types.ts says why this is here and not on the load). */
+  private readonly posters = new PersistentMap<string, LoadPoster>('business-load-posters');
+  /** Whoever has to hear that somebody is no longer in a business. Registered, not injected: they depend on this. */
+  private readonly whenGone: Array<(businessDid: string, personDid: string) => void> = [];
 
   constructor(
     private readonly entities: EntityService,
@@ -262,7 +268,52 @@ export class BusinessService {
     member.removedAt = new Date().toISOString();
     member.removedBy = acting.member.name;
     this.members.set(member.memberId, member);
+    // What was sent to them as one of this business's people stops with their place in it — their sign-in stops on
+    // the next click, and a link in their own mailbox would otherwise go on opening the business's notes for a month.
+    if (member.personDid) for (const tell of this.whenGone) tell(acting.entity.did, member.personDid);
     return memberView(member, acting.member.personDid);
+  }
+
+  /** Be told when somebody is taken out of a business, or leaves it. */
+  onMemberGone(listener: (businessDid: string, personDid: string) => void): void {
+    this.whenGone.push(listener);
+  }
+
+  /* ------------------------------------------------------- a load and its receipt -- */
+
+  /** A load was posted with a business's sign-in: keep which of its people did it. Nothing for any other sign-in. */
+  notePosted(freightId: string, actor: IntrospectionResult | undefined, now: number = Date.now()): void {
+    if (actor?.role !== 'business' || !actor.tenant || !actor.personDid || !freightId) return;
+    this.posters.set(freightId, { freightId, entityId: actor.tenant, personDid: actor.personDid, at: new Date(now).toISOString() });
+  }
+
+  /**
+   * WHO IN A BUSINESS IS SENT A LOAD'S RECEIPT.
+   *
+   * The person who posted it, at their own recovery email: they are the one waiting to hear. When they cannot be
+   * emailed — they have left the business, or have given no address — it goes to the owners in their place, so that a
+   * delivery is never known to nobody.
+   *
+   * ASKED WHEN THE LOAD IS DELIVERED, not when it was posted: somebody taken out of the business in between is sent
+   * nothing. Nobody, and not an error, for a DID that is not a business.
+   */
+  receiptPeople(businessDid: string, freightId: string): ReceiptPerson[] {
+    const entity = this.entities.byDid(businessDid);
+    if (!entity?.business) return [];
+    const inIt = this.liveMembers(entity.entityId).filter((m) => m.joinedAt && m.personDid);
+    const reach = (m: BusinessMember, as: ReceiptPerson['as']): ReceiptPerson[] => {
+      const person = this.persons.findByDid(m.personDid!);
+      const address = person ? this.persons.emailOf(person) : undefined;
+      return address ? [{ address, name: m.name, personDid: m.personDid!, as, business: entity.name }] : [];
+    };
+    const posted = this.posters.get(freightId);
+    const poster = posted && posted.entityId === entity.entityId ? inIt.find((m) => m.personDid === posted.personDid) : undefined;
+    const first = poster ? reach(poster, 'poster') : [];
+    if (first.length) return first;
+    return inIt
+      .filter((m) => m.role === 'owner')
+      .sort((a, b) => (a.joinedAt ?? '').localeCompare(b.joinedAt ?? ''))
+      .flatMap((m) => reach(m, 'owner'));
   }
 
   /* ------------------------------------------------------------------ sessions -- */

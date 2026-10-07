@@ -164,3 +164,32 @@
   gap: 6px;
   margin-top: 10px;
 }
+
+/* A load's kept note. What became of a download, and how long the note is kept, take the full width under the
+   buttons rather than squeezing in beside them. */
+.biz-note__line {
+  flex: 1 0 100%;
+  margin-top: 0;
+}
+/* A link just made. Its address is read, pressed on and copied: set like something to copy, the whole width, and
+   stacked — the sentence that says it is shown once comes before it, the two ways to pass it on after. */
+.biz-link {
+  display: grid;
+  gap: 8px;
+}
+.biz-link__url {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: var(--c-fs-sm);
+}
+/* Where a link went is a sentence, not a code: on a phone it wraps rather than losing its date to an ellipsis. */
+.biz-link__name {
+  white-space: normal;
+  overflow: visible;
+}
+.biz-link__fold {
+  margin-top: 10px;
+}
+.biz-link__make {
+  margin-top: 12px;
+}

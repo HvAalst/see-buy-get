@@ -6,7 +6,8 @@ import { SitePicker, type SiteView } from '../../tower/screens/SitePicker';
 import { QuotePanel } from '../../tower/screens/QuotePanel';
 import { NATURES, PACKAGING_OPTIONS } from '../../agent/logic';
 import type { BusinessClient, BusinessView, CarriageContract, LoadProposal, PostedLoad } from '../api';
-import { deliverySays, loadGaps, loadStage, mayAct, nextDay, orderableContracts, planDo, planSays, type LoadForm, type LoadStage } from '../logic';
+import { deliverySays, loadGaps, loadStage, mayAct, nextDay, noteKept, orderableContracts, planDo, planSays, type LoadForm, type LoadStage } from '../logic';
+import { NoteFile, NoteLinksPanel } from './LoadNote';
 import { SentFor } from './SentFor';
 import type { BusinessActions } from '../useBusinessApp';
 
@@ -364,6 +365,7 @@ function LoadDetail({ row, client, act, onClose, onChanged }: { row: PostedLoad;
   const stage = loadStage(row);
   const says = planSays(row, t);
   const handed = deliverySays(row, t);
+  const kept = noteKept(row, stage);
   const [proposals, setProposals] = useState<LoadProposal[] | null>(null);
   const [quote, setQuote] = useState<QuoteView | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
@@ -489,7 +491,10 @@ function LoadDetail({ row, client, act, onClose, onChanged }: { row: PostedLoad;
           <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void note()}>
             {t('business.loads.note')}
           </button>
+          {/* Once a copy is kept: the whole file — the note, every copy as it was signed, its photographs. */}
+          {kept === 'kept' ? <NoteFile client={client} noteId={row.noteId!} code={row.code} /> : null}
         </div>
+        {kept === 'not_yet' ? <p class="chint">{t('business.note.notYet')}</p> : null}
       </section>
 
       {proposals && proposals.some((p) => p.status === 'open') ? (
@@ -575,6 +580,10 @@ function LoadDetail({ row, client, act, onClose, onChanged }: { row: PostedLoad;
           ) : null}
         </section>
       ) : null}
+
+      {/* The links to its note — the one a receipt was emailed with, and the ones the business made to pass on. Shown to
+          a viewer too: what is a way into the business's papers is everybody's in it to see. */}
+      {kept === 'kept' ? <NoteLinksPanel client={client} noteId={row.noteId!} title={`${row.code} · ${row.description}`} act={act} /> : null}
 
       {act && row.canCancel ? (
         <section class="cons__panel">
