@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { renderDocument } from './mail.blocks';
 import { DISPLAY_FACE, LOGO_CID, LOGO_SHOWN, MAIL_FONTS, TEXT_FACE, brandLogo, fontFaceCss, fontsBase, mailFont } from './mail.brand';
+import { MailBounces } from './mail-bounces.service';
 import { MailController, htmlForBrowser } from './mail.controller';
 import { MAIL_TEMPLATES, MailTemplateId, renderMail } from './mail.templates';
 import { OutgoingMail } from './mail.types';
@@ -182,7 +183,7 @@ describe('the house style in an email', () => {
       };
       return { res, api: api as never };
     }
-    const controller = () => new MailController(new OutboxMailSender());
+    const controller = () => new MailController(new OutboxMailSender(), new MailBounces());
 
     it('shows one email as a client that fetches the typefaces shows it — or, asked, as one that does not', () => {
       const withFaces = answer();
@@ -236,7 +237,7 @@ describe('the house style in an email', () => {
     it('names the pictures an email kept in the outbox carried, without pouring them out', async () => {
       const outbox = new OutboxMailSender();
       await outbox.send({ ...renderMail('welcome', MAIL_TEMPLATES.welcome.sample), template: 'welcome', to: { address: 'amina@example.com' }, reference: 'welcome:abc', tracking: false });
-      const listed = new MailController(outbox).outboxList().items;
+      const listed = new MailController(outbox, new MailBounces()).outboxList().items;
       expect(listed).toHaveLength(1);
       expect(listed[0]).toMatchObject({ template: 'welcome', images: ['seebuyget.png'], htmlLength: expect.any(Number) });
       expect(JSON.stringify(listed)).not.toContain(brandLogo()!.base64.slice(0, 60));

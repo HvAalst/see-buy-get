@@ -38,6 +38,7 @@ export interface AdviserConnection {
 }
 export type MailFailure = 'unreachable' | 'refused' | 'limit' | 'rejected' | 'failed';
 export type MailProblem = 'no_address' | 'not_an_address' | 'not_https';
+export type BounceRefusal = 'unsigned' | 'algorithm' | 'stale' | 'mismatch' | 'unreadable' | 'not_raw';
 export interface MailConnection {
   sends: boolean;
   tokenSet: boolean;
@@ -49,6 +50,10 @@ export interface MailConnection {
   failed: number;
   /** Not handed to the provider: their address is on a domain reserved for examples and tests, and cannot exist. */
   reserved: number;
+  /** Not handed to the provider since it started: email to the address came back. A code still goes. */
+  bounced: number;
+  /** The provider's bounce notices: listened for or not, how many came, how many were refused and why the last was. */
+  bounces: { listening: boolean; stopped: number; received: number; refused: number; unsigned: number; lastAt?: string; lastRefused?: BounceRefusal; lastRefusedAt?: string };
   /** Could not be handed over and being tried again: how many wait now, and since when the oldest. In memory only. */
   waiting: number;
   waitingSince?: string;
@@ -149,12 +154,17 @@ export function mailSays(c: MailConnection, sandbox: boolean, since: string, t: 
   }
   // It sends, as an address no provider delivers for: said before anything the last email met.
   if (c.fromIsPlaceholder) return { tone: 'danger', tag: t('tower.conn.tag.noFrom'), line: t('tower.conn.mail.noFrom', { from: c.from }) };
-  if (!c.last) return { tone: 'info', tag: t('tower.conn.tag.unsent'), line: t('tower.conn.mail.unsent', { since: momentWords(since) }) };
+  if (!c.last) {
+    const heard = mailBounceWords(c, t);
+    return { tone: heard.length ? 'warn' : 'info', tag: t('tower.conn.tag.unsent'), line: [t('tower.conn.mail.unsent', { since: momentWords(since) }), ...heard].join(' ') };
+  }
   const when = momentWords(c.last.at);
-  const earlier = [...(c.failed > 0 ? [t('tower.conn.mail.someFailed', { failed: c.failed, n: c.written })] : []), ...mailAgainWords(c, t)].map((x) => ` ${x}`).join('');
+  const heard = mailBounceWords(c, t);
+  const earlier = [...(c.failed > 0 ? [t('tower.conn.mail.someFailed', { failed: c.failed, n: c.written })] : []), ...mailAgainWords(c, t), ...heard].map((x) => ` ${x}`).join('');
   if (c.last.ok) {
     // It is getting through now — and some from before are still waiting, or were lost. Not a clean bill.
-    const behind = c.waiting > 0 || c.gaveUp > 0;
+    // …or nobody is listening for what comes back, or what comes is being refused.
+    const behind = c.waiting > 0 || c.gaveUp > 0 || heard.length > 0;
     return { tone: behind ? 'warn' : 'ok', tag: t(c.waiting > 0 ? 'tower.conn.tag.catchingUp' : 'tower.conn.tag.sending'), line: t('tower.conn.mail.sent', { when, what: c.last.what }) + earlier };
   }
   const kind: MailFailure = c.last.failed ?? 'failed';
@@ -180,6 +190,30 @@ export function mailAgainWords(c: MailConnection, t: Translate): string[] {
     ...(c.sentLater > 0 ? [t('tower.conn.mail.sentLater', { n: c.sentLater })] : []),
     ...(c.gaveUp > 0 ? [t('tower.conn.mail.gaveUp', { n: c.gaveUp })] : []),
   ];
+}
+
+/**
+ * What is WRONG about hearing of email that comes back — nothing when all is as it should be. Not listening at all,
+ * on a server that sends: an address that bounces goes on being written to, which is what a provider judges an
+ * account by. Or SIGNED notices arriving and being refused — which means the key here is not the provider's, or the
+ * receiver (built from its documentation, and never yet sent a real one) reads them wrongly. Said only while that
+ * is the newest thing that happened: once a notice has been taken since, it is history, and is left to the counts.
+ *
+ * A request with NO signature is not warned of at all. The address is public and something will always find it;
+ * a warning that never clears is one nobody reads, and it would sit on top of the one that matters.
+ */
+export function mailBounceWords(c: MailConnection, t: Translate): string[] {
+  if (!c.bounces.listening) return [t('tower.conn.mail.bounces.deaf')];
+  if (c.bounces.refused === 0) return [];
+  if (c.bounces.lastAt && c.bounces.lastRefusedAt && c.bounces.lastAt > c.bounces.lastRefusedAt) return [];
+  return [t('tower.conn.mail.bounces.refused', { n: c.bounces.refused, when: momentWords(c.bounces.lastRefusedAt ?? '') }) + ' ' + t(`tower.conn.mail.bounces.why.${c.bounces.lastRefused ?? 'mismatch'}`)];
+}
+
+/** The fact beside "Bounce notices": not listened for; listened for and none yet; or how many were taken and refused. */
+export function bounceListenWords(c: MailConnection, t: Translate): string {
+  if (!c.bounces.listening) return t('tower.conn.fact.bouncesDeaf');
+  if (c.bounces.received === 0 && c.bounces.refused === 0 && c.bounces.unsigned === 0) return t('tower.conn.fact.bouncesNone');
+  return t('tower.conn.fact.bouncesSome', { received: c.bounces.received, refused: c.bounces.refused, unsigned: c.bounces.unsigned });
 }
 
 /** The fact beside "Waiting to be tried again": none, or how many and since when. */

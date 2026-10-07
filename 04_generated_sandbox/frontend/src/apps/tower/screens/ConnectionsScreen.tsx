@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
-import { adviserSays, checkSays, countWords, mailAddressWords, mailSays, momentWords, pushSays, routerSays, waitingWords, type Connections, type RouterCheck } from '../connections';
+import { adviserSays, bounceListenWords, checkSays, countWords, mailAddressWords, mailSays, momentWords, pushSays, routerSays, waitingWords, type Connections, type RouterCheck } from '../connections';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
 /**
@@ -166,13 +166,26 @@ export function ConnectionsScreen({ actions }: { state: TowerState; actions: Tow
                     <dt class="cons__factk">{t('tower.conn.fact.reserved')}</dt>
                     <dd class="cons__factv">{view.mail.reserved}</dd>
                   </div>
+                  <div class="cons__fact">
+                    <dt class="cons__factk">{t('tower.conn.fact.bounced')}</dt>
+                    <dd class="cons__factv">{view.mail.bounced}</dd>
+                  </div>
                 </>
               ) : null}
+              <div class="cons__fact">
+                <dt class="cons__factk">{t('tower.conn.fact.bounces')}</dt>
+                <dd class="cons__factv">{bounceListenWords(view.mail, t)}</dd>
+              </div>
+              <div class="cons__fact">
+                <dt class="cons__factk">{t('tower.conn.fact.stopped')}</dt>
+                <dd class="cons__factv">{view.mail.bounces.stopped}</dd>
+              </div>
             </dl>
             <p class="chint">
               {t('tower.conn.mail.where')}
               {view.sandbox && !view.mail.sends ? ` ${t('tower.conn.mail.whereKept')}` : ''}
             </p>
+            <p class="chint">{t('tower.conn.mail.whereBounces')}</p>
           </section>
 
           <section class="cons__panel">

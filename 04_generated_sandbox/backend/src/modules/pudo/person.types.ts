@@ -108,6 +108,11 @@ export interface PersonView {
   pinChangedAt?: string;
   /** Self-view only: the recovery email, masked ("a…@example.com"). Absent: none confirmed yet. */
   email?: string;
+  /**
+   * Email to that address CAME BACK, for good — so the one way we have of reaching this person without their phone
+   * does not work, and they would not otherwise know. Gone once they confirm the address again, or replace it.
+   */
+  emailBounced?: boolean;
   /** Self-view only: a number change that can still be undone, and until when. */
   numberChange?: { at: string; undoUntil: string };
 }

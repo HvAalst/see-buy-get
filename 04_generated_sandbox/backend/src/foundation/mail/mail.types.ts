@@ -1,6 +1,7 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { RenderedMail } from './mail.blocks';
 import type { MailTemplateId } from './mail.templates';
+import { MailBounceConnection } from './mail-bounces.service';
 
 /**
  * MAIL — the seam between "an email should go" and the service that delivers it.
@@ -119,6 +120,13 @@ export class MailConnection {
    * domain reserved for examples and tests. Nought while nothing is sent — the outbox keeps those like any other.
    */
   reserved: number;
+  /**
+   * Emails NOT handed to the provider since this server started because email to their address came back: writing
+   * to it again would only bounce again. A code still goes — it is how such an address proves itself.
+   */
+  bounced: number;
+  /** The provider's bounce notices: whether they are listened for, and what became of the ones that came. */
+  @ApiProperty({ type: MailBounceConnection }) bounces: MailBounceConnection;
   /**
    * Emails that could not be handed over and are being tried again: how many wait NOW, and since when the oldest.
    * They wait in memory — an address and a link's key are not written to disk to wait — so a restart forgets them.

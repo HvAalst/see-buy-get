@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SbgError } from '../../lib/sbg';
-import { asksForEmail, asksForNationalId, looksLikeEmail } from './recovery';
+import { asksForEmail, asksForNationalId, looksLikeEmail, recoveryEmailSays } from './recovery';
 
 const refusal = (code: string, field?: string): SbgError => ({ code, status: 400, title: '', detail: '', retryable: false, ...(field ? { params: { field } } : {}) });
 
@@ -28,5 +28,17 @@ describe('what the server is asking for at a sign-in screen', () => {
     expect(looksLikeEmail('amos@example')).toBe(false);
     expect(looksLikeEmail('amos example.com')).toBe(false);
     expect(looksLikeEmail('')).toBe(false);
+  });
+});
+
+describe('the recovery email row in Settings', () => {
+  const say = ((key: string, vars?: Record<string, string | number>) => `${key}${vars ? ':' + Object.values(vars).join(',') : ''}`) as never;
+  it('says the address, that there is none — or that email to it is coming back, for as long as that is true', () => {
+    expect(recoveryEmailSays({ email: 'a…@kilima.co.ke' }, say)).toEqual({ sub: 'a…@kilima.co.ke', bounced: false });
+    expect(recoveryEmailSays({}, say)).toEqual({ sub: 'account.settings.emailNone', bounced: false });
+    expect(recoveryEmailSays(null, say)).toEqual({ sub: 'account.settings.emailNone', bounced: false });
+    expect(recoveryEmailSays({ email: 'a…@kilima.co.ke', emailBounced: true }, say)).toEqual({ sub: 'account.settings.emailBouncedSub:a…@kilima.co.ke', bounced: true });
+    // A flag with no address behind it warns of nothing: there is nothing to put right.
+    expect(recoveryEmailSays({ emailBounced: true }, say)).toEqual({ sub: 'account.settings.emailNone', bounced: false });
   });
 });

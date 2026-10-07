@@ -152,7 +152,18 @@ started with, never off a variable that happens to be set.
   After a minute, five, fifteen, then hourly; at most 500 wait; one "no" to the account ends that look, so a
   provider's bad minute is not answered with a flood. WHAT WAITS, WAITS IN MEMORY — an address is vault-kept
   and a link's key is kept nowhere, so neither is written to disk to wait — and a restart forgets it: the
-  screen says how many are waiting, went late, or were given up on, and whose a failure is to put right. An
+  screen says how many are waiting, went late, or were given up on, and whose a failure is to put right.
+  **Email that comes back** is heard of when `ZEPTOMAIL_WEBHOOK_KEY` is set: add a webhook at the provider
+  for hard and soft bounces, pointed at `https://<the API>/v1/mail/provider/events`, and set its
+  "authentication key" as that variable. Without the key the address answers 404. A notice is taken only when
+  its `producer-signature` (HMAC-SHA256) matches the body — read as RAW BYTES, which `main.ts` arranges with
+  `readProviderEventsRaw(app)` before any parser (a module cannot; left out, every notice is refused and the
+  screen says "not_raw"). The receiver is built from the provider's documentation, which leaves open how the
+  body is wrapped, so it accepts the forms that documentation implies (`foundation/mail/mail-bounces.ts`) and
+  has NEVER received a real one. A hard bounce stops an address being written to until its owner reads a code
+  sent there and types it in (`MailService.addressWorks`); a code always goes (`MailTemplate.asked`); a soft
+  bounce pauses an address for a day. Only the address's key is kept (`hashEmail`), never the address, and a
+  person whose recovery email came back is told in Settings in their own app (`PersonView.emailBounced`). An
   address on a domain reserved for examples (`example.com`, `.example`, `.test`) is never handed
   to the provider — so a sandbox given a real token does not mail its seeded people.
   NOT YET SENT THROUGH THE REAL PROVIDER: it is tested against a stand-in that answers in the provider's

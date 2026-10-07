@@ -50,6 +50,35 @@
         }
       }
     },
+    "/v1/mail/provider/events": {
+      "post": {
+        "operationId": "Mail.providerEvents",
+        "summary": "",
+        "description": "THE MAIL PROVIDER TELLS US AN EMAIL CAME BACK. Nobody is signed in: the provider is believed by its signature\nover the body (`MailBounces.take`), and by nothing else. With no key set on this server, the address answers\nas if it were not there. The body is read as bytes (`readProviderEventsRaw`, where the server starts).\n\nGenerously limited: a provider sends one notice for every email that comes back, from few addresses of its own.",
+        "parameters": [
+          {
+            "name": "producer-signature",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderEventsAnswer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/mail/preview": {
       "get": {
         "operationId": "Mail.previewIndex",
@@ -22058,6 +22087,17 @@
       }
     },
     "schemas": {
+      "ProviderEventsAnswer": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ]
+      },
       "ConfirmFundingDto": {
         "type": "object",
         "properties": {
@@ -41344,6 +41384,28 @@
           "model"
         ]
       },
+      "MailBounceConnection": {
+        "type": "object",
+        "properties": {
+          "lastAt": {
+            "type": "string"
+          },
+          "lastRefused": {
+            "type": "string",
+            "enum": [
+              "unsigned",
+              "algorithm",
+              "stale",
+              "mismatch",
+              "unreadable",
+              "not_raw"
+            ]
+          },
+          "lastRefusedAt": {
+            "type": "string"
+          }
+        }
+      },
       "MailLast": {
         "type": "object",
         "properties": {
@@ -41398,6 +41460,14 @@
               "not_https"
             ]
           },
+          "bounces": {
+            "description": "The provider's bounce notices: whether they are listened for, and what became of the ones that came.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MailBounceConnection"
+              }
+            ]
+          },
           "waitingSince": {
             "type": "string"
           },
@@ -41431,6 +41501,10 @@
             "type": "number",
             "description": "Emails NOT handed to the provider since this server started because their address cannot exist: it is on a\ndomain reserved for examples and tests. Nought while nothing is sent — the outbox keeps those like any other."
           },
+          "bounced": {
+            "type": "number",
+            "description": "Emails NOT handed to the provider since this server started because email to their address came back: writing\nto it again would only bounce again. A code still goes — it is how such an address proves itself."
+          },
           "waiting": {
             "type": "number",
             "description": "Emails that could not be handed over and are being tried again: how many wait NOW, and since when the oldest.\nThey wait in memory — an address and a link's key are not written to disk to wait — so a restart forgets them."
@@ -41444,6 +41518,7 @@
           }
         },
         "required": [
+          "bounces",
           "sends",
           "tokenSet",
           "from",
@@ -41451,6 +41526,7 @@
           "written",
           "failed",
           "reserved",
+          "bounced",
           "waiting",
           "sentLater",
           "gaveUp"

@@ -7,6 +7,7 @@ import type { SbgError } from '../../lib/sbg';
 import { CredentialAge } from './CredentialAge';
 import { EmailStep } from './EmailStep';
 import { pinChangeBlocker } from './password';
+import { recoveryEmailSays } from './recovery';
 import type { AccountApi } from './useAccount';
 
 type View = 'list' | 'pin' | 'email' | 'phone' | 'phone-done';
@@ -68,6 +69,8 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
         <>
           <p class="t-body">{t('account.settings.lede')}</p>
           {saved ? <Note tone="ok" icon="check" title={t('account.settings.emailSaved')} /> : null}
+          {/* A live fact about the account, said for as long as it is true — never something to dismiss. */}
+          {me?.hasPin && recoveryEmailSays(me, t as never).bounced ? <Note tone="warn" icon="warning" title={t('account.settings.emailBounced.title')} detail={t('account.settings.emailBounced.detail', { email: me.email ?? '' })} /> : null}
           <div class="rows" role="list">
             {me?.hasPin ? (
               <Row icon="keypad" label={t('account.menu.pin')} sub={me.pinChangedAt ? undefined : t('account.menu.pinSub')} onClick={() => setView('pin')}>
@@ -75,7 +78,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
               </Row>
             ) : null}
             {onChangePassword ? <Row icon="lock" label={t('account.menu.password')} sub={t('account.menu.passwordSub')} onClick={() => { onClose(); onChangePassword(); }} /> : null}
-            {me?.hasPin ? <Row icon="mail" label={t('account.settings.email')} sub={me.email ?? t('account.settings.emailNone')} onClick={() => setView('email')} /> : null}
+            {me?.hasPin ? <Row icon="mail" label={t('account.settings.email')} sub={recoveryEmailSays(me, t as never).sub} onClick={() => setView('email')} /> : null}
             {me?.hasPin ? <Row icon="phone" label={t('account.settings.phone')} sub={t('account.settings.phoneSub')} onClick={() => setView('phone')} /> : null}
           </div>
           {me?.numberChange ? <Note tone="info" icon="info" title={t('account.settings.changed', { when: when(me.numberChange.at), until: when(me.numberChange.undoUntil) })} /> : null}
@@ -196,6 +199,7 @@ function EmailForm({ api, onDone }: { api: AccountApi; onDone: () => void }) {
   return (
     <>
       <p class="t-body">{t('account.settings.emailBody')}</p>
+      {api.account?.emailBounced ? <Note tone="warn" icon="warning" title={t('account.settings.emailBounced.title')} detail={t('account.settings.emailBounced.how')} /> : null}
       <EmailStep id="acct" email={email} code={code} onEmail={setEmail} onCode={setCode} send={api.sendEmailCode} disabled={busy} label={api.account?.email ? t('account.settings.emailNew') : undefined} />
       <div class="field">
         <span class="field__label">{t('account.settings.pinToConfirm')}</span>

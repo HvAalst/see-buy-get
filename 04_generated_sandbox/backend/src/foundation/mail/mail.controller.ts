@@ -1,6 +1,8 @@
-import { Controller, Get, NotFoundException, Param, Query, Res } from '@nestjs/common';
-import type { Response } from 'express';
+import { Controller, Get, Headers, HttpCode, NotFoundException, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { Public } from '../auth/public.decorator';
+import { RateLimit, RateLimitGuard } from '../http/rate-limit.guard';
+import { MailBounces, ProviderEventsAnswer } from './mail-bounces.service';
 import { isSandbox } from '../runtime/sandbox';
 import { OutboxMailSender } from './outbox-mail.sender';
 import { MAIL_TEMPLATES, MailTemplateId, renderMail } from './mail.templates';
@@ -24,7 +26,27 @@ export function htmlForBrowser(mail: RenderedMail): string {
  */
 @Controller('mail')
 export class MailController {
-  constructor(private readonly outbox: OutboxMailSender) {}
+  constructor(
+    private readonly outbox: OutboxMailSender,
+    private readonly bounces: MailBounces,
+  ) {}
+
+  /**
+   * THE MAIL PROVIDER TELLS US AN EMAIL CAME BACK. Nobody is signed in: the provider is believed by its signature
+   * over the body (`MailBounces.take`), and by nothing else. With no key set on this server, the address answers
+   * as if it were not there. The body is read as bytes (`readProviderEventsRaw`, where the server starts).
+   *
+   * Generously limited: a provider sends one notice for every email that comes back, from few addresses of its own.
+   */
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(600, 15 * 60)
+  @Post('provider/events')
+  @HttpCode(200)
+  providerEvents(@Req() req: Request, @Headers('producer-signature') signature?: string): ProviderEventsAnswer {
+    this.bounces.take(req.body, signature);
+    return { ok: true };
+  }
 
   /** Every email, rendered with its sample data, on one page. */
   @Public()

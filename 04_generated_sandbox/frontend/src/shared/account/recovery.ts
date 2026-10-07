@@ -55,3 +55,14 @@ export function asksForNationalId(error: SbgError | null | undefined): boolean {
 export function looksLikeEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
+
+/**
+ * WHAT THE SETTINGS ROW SAYS UNDER "Recovery email": the address (masked, as the server gives it), that there is
+ * none — or that email to it is COMING BACK. That last one is a live fact about the account, not teaching: it is
+ * said for as long as it is true, on the row somebody would press to put it right.
+ */
+export function recoveryEmailSays(me: { email?: string; emailBounced?: boolean } | null | undefined, t: (key: never, vars?: Record<string, string | number>) => string): { sub: string; bounced: boolean } {
+  const say = t as (key: string, vars?: Record<string, string | number>) => string;
+  if (!me?.email) return { sub: say('account.settings.emailNone'), bounced: false };
+  return me.emailBounced ? { sub: say('account.settings.emailBouncedSub', { email: me.email }), bounced: true } : { sub: me.email, bounced: false };
+}

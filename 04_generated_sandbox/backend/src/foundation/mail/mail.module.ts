@@ -1,4 +1,5 @@
 import { Global, Module } from '@nestjs/common';
+import { MailBounces } from './mail-bounces.service';
 import { MailController } from './mail.controller';
 import { MailService } from './mail.service';
 import { OutboxMailSender } from './outbox-mail.sender';
@@ -23,10 +24,11 @@ export function chooseMailSender(outbox: OutboxMailSender, provider: ZeptoMailSe
   controllers: [MailController],
   providers: [
     MailService,
+    MailBounces,
     OutboxMailSender,
     { provide: ZeptoMailSender, useFactory: () => new ZeptoMailSender(zeptoMailConfig()) },
     { provide: MAIL_SENDER, useFactory: chooseMailSender, inject: [OutboxMailSender, ZeptoMailSender] },
   ],
-  exports: [MailService, OutboxMailSender],
+  exports: [MailService, MailBounces, OutboxMailSender],
 })
 export class MailModule {}

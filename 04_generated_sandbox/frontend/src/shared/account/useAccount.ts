@@ -28,6 +28,8 @@ export interface AccountView {
   handle?: string;
   /** The recovery email, masked by the server ("a…@example.com"). Absent: none confirmed yet. */
   email?: string;
+  /** Email to that address came back, for good: the way to reach them without their phone does not work. */
+  emailBounced?: boolean;
   /** A number change that can still be undone, and until when. */
   numberChange?: { at: string; undoUntil: string };
 }

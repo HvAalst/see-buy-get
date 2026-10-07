@@ -1,5 +1,6 @@
-import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleDestroy, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { MailBounces } from './mail-bounces.service';
 import { MAIL_SENDER, MailAddress, MailConnection, MailLast, MailSendError, MailSender, OutgoingMail } from './mail.types';
 import { MAIL_TEMPLATES, MailParams, MailTemplateId, renderMail } from './mail.templates';
 import { OutboxMailSender } from './outbox-mail.sender';
@@ -51,6 +52,7 @@ export class MailService implements OnModuleDestroy {
   private written = 0;
   private failed = 0;
   private reserved = 0;
+  private bounced = 0;
   private sentLater = 0;
   private gaveUp = 0;
   private last?: MailLast;
@@ -59,7 +61,11 @@ export class MailService implements OnModuleDestroy {
   private timer?: ReturnType<typeof setInterval>;
   private looking = false;
 
-  constructor(@Inject(MAIL_SENDER) private readonly sender: MailSender) {}
+  constructor(
+    @Inject(MAIL_SENDER) private readonly sender: MailSender,
+    // Optional so everything that builds this by hand keeps compiling: without it no address is ever held back.
+    @Optional() private readonly bounces?: MailBounces,
+  ) {}
 
   onModuleDestroy(): void {
     this.stopLooking();
@@ -72,6 +78,13 @@ export class MailService implements OnModuleDestroy {
     // seeds are full of, on the reminders' own timetable. The outbox keeps them, as it keeps everything.
     if (this.sends() && isReservedAddress(to.address)) {
       this.reserved += 1;
+      return false;
+    }
+    // An address email CAME BACK from is not written to again: it would bounce again, and bounces are what a
+    // provider judges an account by. A code goes all the same — somebody is at a screen asking for it, and reading
+    // it is the only way that address proves it works (`addressWorks`).
+    if (this.sends() && !MAIL_TEMPLATES[template]?.asked && this.bounces?.stopped(to.address, now)) {
+      this.bounced += 1;
       return false;
     }
     this.written += 1;
@@ -103,6 +116,11 @@ export class MailService implements OnModuleDestroy {
           this.giveUp(w, 'it waited too long to be worth sending');
           continue;
         }
+        // It came back from this address while this one waited: it is not sent to bounce too.
+        if (this.bounces?.stopped(w.to.address, now)) {
+          this.giveUp(w, 'email to its address came back in the meantime');
+          continue;
+        }
         if (notThere) continue;
         const failure = await this.handOver(w.template, w.to, w.params, w.reference, now);
         if (!failure) {
@@ -125,13 +143,18 @@ export class MailService implements OnModuleDestroy {
     }
   }
 
+  /** Somebody read a code we sent to this address and typed it in: the address works, whatever came back before. */
+  addressWorks(address: string): void {
+    this.bounces?.works(address);
+  }
+
   /**
    * Where an email goes, for staff. `sends` is READ OFF THE SENDER: the outbox keeps, and anything put in its place
    * sends. Nobody states it, so it cannot be stated wrongly — a token set in the environment is not a sender. Where
    * a token is set and the provider is still not used, `problem` says why (`zeptoMailConfig`): the same reading of
    * the environment that chose the sender when the server started.
    */
-  connection(): MailConnection {
+  connection(now: number = Date.now()): MailConnection {
     const from = mailFrom().address;
     const given = zeptoMailConfig();
     const oldest = this.waiting.length ? Math.min(...this.waiting.map((w) => w.firstAt)) : undefined;
@@ -146,6 +169,8 @@ export class MailService implements OnModuleDestroy {
       written: this.written,
       failed: this.failed,
       reserved: this.reserved,
+      bounced: this.bounced,
+      bounces: this.bounces?.connection(now) ?? { listening: false, stopped: 0, received: 0, refused: 0, unsigned: 0 },
       waiting: this.waiting.length,
       ...(oldest !== undefined ? { waitingSince: new Date(oldest).toISOString() } : {}),
       sentLater: this.sentLater,

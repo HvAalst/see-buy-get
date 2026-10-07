@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { adviserSays, checkSays, countWords, mailAddressWords, mailAgainWords, mailSays, momentWords, plausible, pushSays, refusedWhy, routerSays, waitingWords, type AdviserConnection, type MailConnection, type PushConnection, type RouterConnection } from './connections';
+import { adviserSays, bounceListenWords, checkSays, countWords, mailBounceWords, mailAddressWords, mailAgainWords, mailSays, momentWords, plausible, pushSays, refusedWhy, routerSays, waitingWords, type AdviserConnection, type MailConnection, type PushConnection, type RouterConnection } from './connections';
 
 const since = '2026-10-06T06:00:00Z';
 const at = '2026-10-06T08:15:00Z';
 const router = (over: Partial<RouterConnection> = {}): RouterConnection => ({ configured: true, host: 'osrm.example:5000', profile: 'driving', maxPoints: 100, ...over });
 const adviser = (over: Partial<AdviserConnection> = {}): AdviserConnection => ({ configured: true, model: 'claude-opus-5-5', ...over });
 // As a server that really sends, with nothing wrong: each test says what is different about its own.
-const mail = (over: Partial<MailConnection> = {}): MailConnection => ({ sends: true, tokenSet: true, from: 'noreply@kilima.example', fromIsPlaceholder: false, written: 0, failed: 0, reserved: 0, waiting: 0, sentLater: 0, gaveUp: 0, ...over });
+const mail = (over: Partial<MailConnection> = {}): MailConnection => ({ sends: true, tokenSet: true, from: 'noreply@kilima.example', fromIsPlaceholder: false, written: 0, failed: 0, reserved: 0, bounced: 0, bounces: { listening: true, stopped: 0, received: 0, refused: 0, unsigned: 0 }, waiting: 0, sentLater: 0, gaveUp: 0, ...over });
 const push = (over: Partial<PushConnection> = {}): PushConnection => ({ sends: true, keys: 'own', devices: 0, people: 0, handed: 0, failed: 0, ...over });
 
 describe('what this server is connected to', () => {
@@ -205,6 +205,54 @@ describe('what this server is connected to', () => {
       const lostSome = mailSays(mail({ written: 6, failed: 2, gaveUp: 2, last }), false, since, t);
       expect([lostSome.tone, lostSome.tag]).toEqual(['warn', 'Sending']);
       expect(lostSome.line).toMatch(/Given up on since it started: 2 — turned down, possibly already sent, or no longer worth sending\.$/);
+    });
+
+    it('says when nothing listens for email that comes back — a server that sends, and goes on writing to addresses that bounce', () => {
+      const deaf = { listening: false, stopped: 0, received: 0, refused: 0, unsigned: 0 };
+      const words = 'Nothing listens for email that comes back, so an address that bounces goes on being written to.';
+      expect(mailBounceWords(mail({ bounces: deaf }), t)).toEqual([words]);
+      // Before anything was sent, and after: said either way, and it is never a clean bill.
+      expect(mailSays(mail({ bounces: deaf }), false, since, t)).toMatchObject({ tone: 'warn', tag: 'Set up, nothing sent yet', line: expect.stringContaining(words) });
+      const sending = mailSays(mail({ written: 2, bounces: deaf, last: { at, ok: true, what: 'Password changed' } }), false, since, t);
+      expect([sending.tone, sending.tag]).toEqual(['warn', 'Sending']);
+      expect(sending.line.endsWith(words)).toBe(true);
+      // Listening, and nothing wrong: nothing is said, and sending is a clean bill.
+      expect(mailBounceWords(mail(), t)).toEqual([]);
+      expect(mailSays(mail({ written: 2, last: { at, ok: true, what: 'Password changed' } }), false, since, t).tone).toBe('ok');
+      // Where nothing is sent at all, there is nothing to come back: kept is kept, and that is what is said.
+      expect(mailSays(mail({ sends: false, tokenSet: false, bounces: deaf }), true, since, t).line).not.toContain('comes back');
+      expect([bounceListenWords(mail({ bounces: deaf }), t), bounceListenWords(mail(), t)]).toEqual(['Not listened for — no key is set', 'Listened for — none has come since it started']);
+    });
+
+    it('says when bounce notices come and are refused — how many, when the last, and what to compare', () => {
+      const refused = (lastRefused: MailConnection['bounces']['lastRefused'], n = 4, over: Partial<MailConnection['bounces']> = {}) =>
+        mail({ written: 2, last: { at, ok: true, what: 'Password changed' }, bounces: { listening: true, stopped: 0, received: 0, refused: n, unsigned: 0, lastRefused, lastRefusedAt: at, ...over } });
+      const says = mailSays(refused('mismatch'), false, since, t);
+      expect(says.tone).toBe('warn');
+      expect(says.line).toMatch(new RegExp(`Signed bounce notices are being refused: 4 since it started, the last at ${momentWords(at)}, and none has been taken since\\. Its signature is not this server’s key’s: compare ZEPTOMAIL_WEBHOOK_KEY with the authentication key on the provider’s webhook\\.$`));
+      // Each way of being refused has its own words, and ours — the server not reading raw — is said as ours.
+      const whys = (['unsigned', 'algorithm', 'stale', 'mismatch', 'unreadable', 'not_raw'] as const).map((w) => mailBounceWords(refused(w), t)[0]);
+      expect(new Set(whys).size).toBe(6);
+      expect(whys[5]).toContain('how the server is started, not in the provider');
+      expect(whys[2]).toContain('check this server’s clock');
+      expect(bounceListenWords(refused('mismatch'), t)).toBe('Listened for — 0 taken, 4 signed and refused, 0 with no signature');
+      // One was taken AFTER the last refusal: the key matches now. It is history, left to the counts — and a clean bill.
+      const later = new Date(Date.parse(at) + 60_000).toISOString();
+      const since1 = refused('mismatch', 4, { received: 1, lastAt: later });
+      expect(mailBounceWords(since1, t)).toEqual([]);
+      expect(mailSays(since1, false, since, t).tone).toBe('ok');
+      // One taken BEFORE the last refusal does not excuse it: something changed since.
+      const earlier = new Date(Date.parse(at) - 60_000).toISOString();
+      expect(mailBounceWords(refused('mismatch', 4, { received: 1, lastAt: earlier }), t)).toHaveLength(1);
+      // Requests with no signature are anybody's: counted, and never a warning — however many, taken or not.
+      const found = mail({ written: 2, last: { at, ok: true, what: 'Password changed' }, bounces: { listening: true, stopped: 0, received: 0, refused: 0, unsigned: 250 } });
+      expect(mailBounceWords(found, t)).toEqual([]);
+      expect(mailSays(found, false, since, t).tone).toBe('ok');
+      expect(bounceListenWords(found, t)).toBe('Listened for — 0 taken, 0 signed and refused, 250 with no signature');
+      // Taken, and none refused: a fact on the screen, and nothing to warn of.
+      const fine = mail({ bounces: { listening: true, stopped: 3, received: 5, refused: 0, unsigned: 0, lastAt: at } });
+      expect(mailBounceWords(fine, t)).toEqual([]);
+      expect(bounceListenWords(fine, t)).toBe('Listened for — 5 taken, 0 signed and refused, 0 with no signature');
     });
 
     it('says what a refusal is about only where the provider’s code says — and what is known otherwise', () => {

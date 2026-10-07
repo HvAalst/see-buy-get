@@ -111,6 +111,11 @@ export interface MailTemplate<P> {
    * sent once and lost, or a code arriving after the one that replaced it.
    */
   sendLater: number | false;
+  /**
+   * SOMEBODY AT A SCREEN ASKED FOR IT, to an address they typed: a code. It goes even to an address email has come
+   * back from — it is the one way such an address proves it works again — and it is never sent late.
+   */
+  asked?: true;
   /** Believable data, for the preview page and the tests. */
   sample: P;
   /** The same email as somebody else gets it, where who it goes to changes what it says. For the preview page. */
@@ -206,6 +211,7 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     wired: true,
     // A code is asked for by somebody waiting at a screen. Late, it has run out or been replaced by the one they asked for next.
     sendLater: false,
+    asked: true,
     sample: { code: '482915', minutes: 15, why: 'confirm' },
     build: (p) => {
       const WHY = {
@@ -288,6 +294,7 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     wired: true,
     // A code for somebody waiting at a screen: they ask again.
     sendLater: false,
+    asked: true,
     sample: { email: 'amina@example.com', code: 'RST-4F9A2C1B', minutes: 30, app: 'agent' },
     build: (p) => ({
       subject: 'Your SeeBuyGet password reset code',

@@ -3,6 +3,7 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { SwaggerModule } from '@nestjs/swagger';
 import { json } from 'express';
 import { AppModule } from './app.module';
+import { readProviderEventsRaw } from './foundation/mail/provider-events.raw';
 import { buildOpenApiDocument } from './spec/openapi';
 
 async function bootstrap() {
@@ -25,6 +26,9 @@ async function bootstrap() {
   // MediaService still hard-caps decoded bytes at MEDIA_MAX_BYTES).
   // CA4 — a company document (a certificate scan, a licence) arrives as base64 and may run to 8 MB of bytes. Only that
   // route gets the larger body; it is registered first, so the global parser below leaves an already-parsed body alone.
+  // The mail provider's notices (a bounce) are believed by a signature over their BYTES: that one address is read
+  // raw, before any parser below turns a body into an object and throws the bytes away.
+  readProviderEventsRaw(app);
   app.use(/^\/v1\/sbg\/entities\/[^/]+\/documents$/, json({ limit: '12mb' }));
   app.use(json({ limit: '2mb' }));
 

@@ -211,7 +211,8 @@ export const ARTICLES: GuideArticle[] = [
       "A first PIN cannot be chosen without a recovery email. We write to it when your PIN is locked and when your phone number changes.",
       "Drivers and shops are also asked for the national ID number they registered with when they get back in by email.",
       "After a number change the old number is kept for you for 24 hours. After that it is free for a new person.",
-      "Undoing a number change locks the PIN. Use the forgot-PIN link on the sign-in screen to choose a new one."
+      "Undoing a number change locks the PIN. Use the forgot-PIN link on the sign-in screen to choose a new one.",
+      "If email to your recovery address comes back undelivered, Settings says so under Recovery email, and we stop writing to that address. To keep the same address, open Recovery email, enter it, send the code and type in the code you receive: that proves it works again. Or enter another address."
     ]
   },
   {
@@ -347,7 +348,10 @@ export const ARTICLES: GuideArticle[] = [
       "A notice that could not be handed over is kept and tried again: after a minute, then five minutes, then fifteen, then every hour, for one to three days depending on the notice. A code is never sent late: a reset code that did not go has to be asked for again.",
       "An email to an address that cannot exist is never handed to the provider, because it could only bounce: example.com, or an address ending .example or .test. The screen counts them. A sandbox given a real token therefore does not email its made-up people.",
       "Waiting to be tried again says how many notices are kept, and since when the oldest. They are kept in the server’s memory and nowhere else, so restarting the server loses them. If some are waiting, put right what the provider refused before you restart, or wait until the count is back to none.",
-      "Given up on counts the emails that will not be sent: the provider turned that one email down, it may already have gone, or it waited too long to be worth sending. The person it was for was not told. Under the line about the last email, the screen says whether that email is kept or will not be sent again."
+      "Given up on counts the emails that will not be sent: the provider turned that one email down, it may already have gone, or it waited too long to be worth sending. The person it was for was not told. Under the line about the last email, the screen says whether that email is kept or will not be sent again.",
+      "Bounce notices says whether this server hears of email that comes back. It listens only when ZEPTOMAIL_WEBHOOK_KEY is set to the authentication key of a webhook you add at the provider, for hard and soft bounces, pointed at /v1/mail/provider/events on this server’s public address. A notice is taken only when it is signed with that key.",
+      "An address email came back from for good is not written to again, and its owner is told in Settings in their own app. It is written to again once they confirm it with a code, and a code is always sent. After a soft bounce, such as a full mailbox, the address is left alone for a day. The screen counts the addresses not being written to. It never shows an address.",
+      "If signed bounce notices are being refused, the screen says how many and why, until one is taken again. Refused because the signature does not match means the key set here is not the one on the provider’s webhook. Requests with no signature are only counted: the address is public, and anything can find it. If the provider’s own notices are counted there, its webhook has no authentication key. No notice has yet come from the real provider, so watch the first one here."
     ]
   },
   {

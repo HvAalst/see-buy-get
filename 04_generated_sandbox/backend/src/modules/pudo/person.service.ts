@@ -7,6 +7,7 @@ import { AuthService } from '../../foundation/auth/auth.service';
 import { AccessToken } from '../../foundation/auth/auth.types';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
+import { MailBounces } from '../../foundation/mail/mail-bounces.service';
 import { hashEmail, hashPhone, isPlausiblePhone, normalizePhone } from '../../foundation/identity/phone';
 import { isPlausibleEmail, normalizeEmail } from './email-code.service';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
@@ -82,6 +83,8 @@ export class PersonService {
     private readonly media: MediaService,
     // Optional so a hand-built module keeps compiling; without it a locked PIN is still locked, just not announced.
     @Optional() private readonly events?: EventBus,
+    // Optional for the same reason; without it nobody is told their email came back, and nothing else changes.
+    @Optional() private readonly bounces?: MailBounces,
   ) {
     for (const p of this.persons.values()) {
       this.byDid.set(p.personDid, p.phoneHash);
@@ -253,7 +256,13 @@ export class PersonService {
 
   /** The full self-view: the PII-free projection plus the revealed profile. For the acting person ONLY. */
   view(person: Person): PersonView {
-    return { ...toView(person), ...this.profile(person), ...(person.pinChangedAt ? { pinChangedAt: person.pinChangedAt } : {}) };
+    return {
+      ...toView(person),
+      ...this.profile(person),
+      ...(person.pinChangedAt ? { pinChangedAt: person.pinChangedAt } : {}),
+      // Only a bounce for good: a full mailbox clears by itself, and is not a thing to alarm somebody about.
+      ...(person.emailVerifiedAt && this.bounces?.stoppedKey(person.emailHash) === 'hard' ? { emailBounced: true } : {}),
+    };
   }
 
   // --- consumer auth (phone + OTP → PIN) ---

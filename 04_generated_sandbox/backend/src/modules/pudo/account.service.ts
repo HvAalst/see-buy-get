@@ -252,6 +252,8 @@ export class AccountService implements OnApplicationBootstrap {
     this.accounts.set(account.email, account); // persist the new password hash
     // Whoever had the old password — which is presumably why it was reset — is signed out everywhere.
     this.auth.revokeAll(account.did);
+    // The reset code reached them and was typed in: email to this address works, whatever came back before.
+    this.mail?.addressWorks(account.email);
     this.tellPasswordChanged(account);
     return { ok: true };
   }
