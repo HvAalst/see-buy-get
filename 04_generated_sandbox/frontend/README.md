@@ -144,9 +144,16 @@ started with, never off a variable that happens to be set.
   `…/v1.1/email`). There is no default address: the host differs by data centre, and a token sent to the wrong
   one is refused in words that blame the token. It must be https. Without both, `OutboxMailSender` KEEPS every
   email (readable on a sandbox at `/v1/mail/outbox`) and the screen says what is missing. `MAIL_FROM_ADDRESS`
-  must be on a domain the provider has verified. A failed email is tried once more only where nothing says the
-  first was taken; there is no queue behind that, and the screen counts what failed and says whose it is to
-  put right. An address on a domain reserved for examples (`example.com`, `.example`, `.test`) is never handed
+  must be on a domain the provider has verified. A failed email is tried once more at once only where nothing
+  says the first was taken. **Then it is tried again later** (`MailService.tryWaiting`) when three things hold:
+  nothing says the provider took it (`MailSendError.later` — it was unreachable, a gateway said it was not there,
+  or it refused the ACCOUNT, which somebody can put right), the email is one still worth having late (every
+  template states `sendLater`: hours, or `false` — a code is never sent late), and it has not waited past that.
+  After a minute, five, fifteen, then hourly; at most 500 wait; one "no" to the account ends that look, so a
+  provider's bad minute is not answered with a flood. WHAT WAITS, WAITS IN MEMORY — an address is vault-kept
+  and a link's key is kept nowhere, so neither is written to disk to wait — and a restart forgets it: the
+  screen says how many are waiting, went late, or were given up on, and whose a failure is to put right. An
+  address on a domain reserved for examples (`example.com`, `.example`, `.test`) is never handed
   to the provider — so a sandbox given a real token does not mail its seeded people.
   NOT YET SENT THROUGH THE REAL PROVIDER: it is tested against a stand-in that answers in the provider's
   documented shapes (`foundation/mail/zeptomail.sender.spec.ts`). Watch the first real send on Connections.

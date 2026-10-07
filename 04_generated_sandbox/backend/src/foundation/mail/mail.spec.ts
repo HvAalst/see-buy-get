@@ -85,7 +85,7 @@ describe('the network’s emails', () => {
       delete process.env.ZEPTOMAIL_TOKEN;
       delete process.env.MAIL_FROM_ADDRESS;
       const mail = new MailService(new OutboxMailSender());
-      expect(mail.connection()).toEqual({ sends: false, tokenSet: false, from: 'noreply@seebuyget.example', fromIsPlaceholder: true, written: 0, failed: 0, reserved: 0 });
+      expect(mail.connection()).toEqual({ sends: false, tokenSet: false, from: 'noreply@seebuyget.example', fromIsPlaceholder: true, written: 0, failed: 0, reserved: 0, waiting: 0, sentLater: 0, gaveUp: 0 });
 
       // A token and a real address are settings. Neither is a sender: emails are still kept, and that is still said.
       process.env.ZEPTOMAIL_TOKEN = ' a-token ';

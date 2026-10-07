@@ -105,6 +105,12 @@ export interface MailTemplate<P> {
   sentWhen: string;
   /** False while nothing sends it yet: designed, waiting for its event to be plumbed. */
   wired: boolean;
+  /**
+   * HOW LONG IT STAYS WORTH SENDING, in hours, once it could not be handed over — or `false`: never sent late.
+   * Every email answers this for itself; there is no default, because the two wrong answers are both bad: a notice
+   * sent once and lost, or a code arriving after the one that replaced it.
+   */
+  sendLater: number | false;
   /** Believable data, for the preview page and the tests. */
   sample: P;
   /** The same email as somebody else gets it, where who it goes to changes what it says. For the preview page. */
@@ -140,6 +146,8 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     title: 'Thanks for asking about your country',
     sentWhen: 'Somebody leaves a message from a country the network does not reach yet.',
     wired: true,
+    // A thank-you is still one two days on.
+    sendLater: 48,
     sample: { country: 'the Netherlands', kind: 'carrier' },
     build: (p) => ({
       subject: `Thanks — we have your note about ${p.country}`,
@@ -167,6 +175,8 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     title: 'Your country is switched on',
     sentWhen: 'Two members of staff switch on a country somebody had asked about.',
     wired: true,
+    // They asked to be told; late is still told.
+    sendLater: 72,
     sample: { country: 'the Netherlands', settles: false, joinUrl: 'https://seebuyget.com/' },
     build: (p) => ({
       subject: `SeeBuyGet is now in ${p.country}`,
@@ -194,6 +204,8 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     title: 'A code for your email address',
     sentWhen: 'Somebody confirms a recovery email, recovers an account whose number is gone, or undoes a number change.',
     wired: true,
+    // A code is asked for by somebody waiting at a screen. Late, it has run out or been replaced by the one they asked for next.
+    sendLater: false,
     sample: { code: '482915', minutes: 15, why: 'confirm' },
     build: (p) => {
       const WHY = {
@@ -219,6 +231,8 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     title: 'Your business was checked',
     sentWhen: 'A second member of staff verifies a business, or a member of staff refuses to, with the reason.',
     wired: true,
+    // The decision stands; the app shows it either way.
+    sendLater: 72,
     sample: { business: 'Abebe Import & Export PLC', outcome: 'verified', when: '2026-10-04T10:12:00Z' },
     build: (p) =>
       p.outcome === 'verified'
@@ -251,6 +265,8 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     title: 'Something changed about how you sign in',
     sentWhen: 'A PIN is locked by wrong guesses, a phone number is changed or put back, an account is recovered, or the recovery email is replaced.',
     wired: true,
+    // An alarm is worth having late: it is how somebody learns their sign-in was changed.
+    sendLater: 48,
     sample: { headline: 'Your phone number was changed', what: 'Your SeeBuyGet account now signs in with a different phone number.', next: 'If it was not you: within 24 hours, open any SeeBuyGet app, choose “Trouble signing in?” and then “Undo a number change”.', when: '2026-10-01T17:42:00Z', until: '2026-10-02T17:42:00Z' },
     build: (p) => ({
       subject: `SeeBuyGet: ${p.headline.charAt(0).toLowerCase()}${p.headline.slice(1)}`,
@@ -270,6 +286,8 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     title: 'Password reset code',
     sentWhen: 'Somebody taps “I forgot my password” in the Shop or Hub app.',
     wired: true,
+    // A code for somebody waiting at a screen: they ask again.
+    sendLater: false,
     sample: { email: 'amina@example.com', code: 'RST-4F9A2C1B', minutes: 30, app: 'agent' },
     build: (p) => ({
       subject: 'Your SeeBuyGet password reset code',
@@ -294,6 +312,8 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     title: 'Password changed',
     sentWhen: 'A password is changed or reset — Shop and Hub accounts, company administrators, network staff.',
     wired: true,
+    // An alarm, like the one above.
+    sendLater: 48,
     sample: { email: 'amina@example.com', when: '2026-09-13T17:42:00Z', app: 'agent', recovery: 'self-reset' },
     build: (p) => ({
       subject: 'Your SeeBuyGet password was changed',
@@ -321,6 +341,7 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     title: 'Welcome',
     sentWhen: 'A shop, hub or courier signs up with an email address.',
     wired: true,
+    sendLater: 48,
     sample: { name: 'Mama Sarah Shop', email: 'amina@example.com', role: 'shop' },
     build: (p) => ({
       subject: `Welcome to SeeBuyGet, ${p.name}`,
@@ -340,6 +361,7 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     title: 'Company administrator added',
     sentWhen: 'Somebody creates an administrator login for a company in the operator console.',
     wired: true,
+    sendLater: 48,
     sample: { name: 'Wanjiru Kamau', email: 'wanjiru@sbg-ke.example', company: 'SeeBuyGet Kenya', addedBy: 'Amina Otieno' },
     build: (p) => ({
       subject: `You now administer ${p.company} on SeeBuyGet`,
@@ -360,6 +382,7 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     title: 'Network staff account added',
     sentWhen: 'A member of staff (or the setup key) creates a staff account.',
     wired: true,
+    sendLater: 48,
     sample: { name: 'Chloe Wanjiru', email: 'chloe@seebuyget.example', addedBy: 'Amina Otieno' },
     build: (p) => ({
       subject: 'Your SeeBuyGet staff sign-in',
@@ -380,6 +403,8 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     title: 'Staff two-step sign-in reset',
     sentWhen: 'Two other members of staff reset somebody’s two-step sign-in, because they lost their authenticator.',
     wired: true,
+    // An alarm.
+    sendLater: 48,
     sample: { name: 'Chloe Wanjiru', what: 'Your two-step sign-in was reset by Amina Otieno and Brian Kamau.', next: 'You were signed out. The next time you sign in, scan the new QR code with your authenticator app. If you did not ask for this, tell them at once.', when: '2026-10-03T09:12:00Z' },
     build: (p) => ({
       subject: 'SeeBuyGet: your staff two-step sign-in was reset',
@@ -399,6 +424,8 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     title: 'Sign-in removed',
     sentWhen: 'A company administrator or a staff account is taken away.',
     wired: true,
+    // An alarm.
+    sendLater: 48,
     sample: { email: 'wanjiru@sbg-ke.example', what: 'administrator login for SeeBuyGet Kenya', removedBy: 'Amina Otieno', when: '2026-09-13T17:42:00Z' },
     build: (p) => ({
       subject: 'Your SeeBuyGet sign-in was removed',
@@ -417,6 +444,7 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     title: 'New fleet code issued',
     sentWhen: 'A fleet manager or network staff issue a new fleet sign-in code (to the fleet’s contact email).',
     wired: true,
+    sendLater: 48,
     sample: { company: 'Kilima Logistics', when: '2026-09-13T17:42:00Z', byStaff: false },
     build: (p) => ({
       subject: `A new fleet code for ${p.company}`,
@@ -437,6 +465,8 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     title: 'Fleet code over 90 days old',
     sentWhen: 'A daily check finds a fleet code over 90 days old — once per code.',
     wired: true,
+    // Sent once per code: nothing else would send it again.
+    sendLater: 48,
     sample: { company: 'Kilima Logistics', days: 104 },
     build: (p) => ({
       subject: `Time for a new ${p.company} fleet code`,
@@ -456,6 +486,8 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     title: 'Papers running out, and vehicles off the road (fleet)',
     sentWhen: 'The six-hourly papers check finds a vehicle or driver paper lapsed or due within 30 days — once per paper per expiry date.',
     wired: true,
+    // Sent once per paper per expiry date: nothing else would send it again.
+    sendLater: 48,
     sample: { company: 'Kilima Logistics', lapsed: ['Vehicle KLM 002B — Insurance lapsed 3 Sep 2026'], due: ['Vehicle KLM 001V — Inspection certificate runs out 12 Oct 2026 (28 days)', 'Driver Amos K. — Driving licence runs out 20 Oct 2026 (36 days)'] },
     build: (p) => ({
       subject: p.lapsed.length ? `${p.lapsed.length} off the road at ${p.company} — papers lapsed` : `Papers running out at ${p.company}`,
@@ -486,6 +518,8 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     title: 'Order on its way (buyer)',
     sentWhen: 'A store hands an order to the network, to the email the buyer gave the store.',
     wired: true,
+    // After a day the parcel is likely there, and the next email says so.
+    sendLater: 24,
     sample: { store: 'Nairobi Threads', orderRef: '#10482', shop: 'Mama Sarah Shop', trackingUrl: 'http://localhost:5176/send/' },
     build: (p) => ({
       subject: `Your ${p.store} order is on its way`,
@@ -508,6 +542,8 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     title: 'Load delivered — receipt (shipper)',
     sentWhen: 'A driver delivers a load: to the email of the shop that posted it; for a business, to the person who posted it, or to its owners when that person cannot be emailed.',
     wired: true,
+    // A receipt is for the books; its link works for a month.
+    sendLater: 72,
     sample: { code: 'FRT-010', description: 'Maize, 20 sacks', destination: 'Riverside Corner', deliveredAt: '2026-09-14T12:04:00Z', carrier: 'Kilima Logistics', driver: 'Amos K.', receiverName: 'Wanjiru (Riverside Corner)', amount: 350, currency: 'KES', noteNumber: 'CMR-FRT-010', noteUrl: `${appUrl('home')}#doc=a-sample-key-that-opens-nothing-at-all-0000`, noteUntil: '2026-10-14T12:04:00Z' },
     also: [
       {
@@ -570,6 +606,8 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     title: 'Ready to collect (buyer)',
     sentWhen: 'A parcel is shelved at the collection shop, to the email the buyer gave the store.',
     wired: true,
+    // The parcel waits for days.
+    sendLater: 48,
     sample: { shop: 'Mama Sarah Shop', address: 'Biashara St 12, Nairobi', collectBy: '2026-09-20T18:00:00Z' },
     build: (p) => ({
       subject: `Your parcel is ready at ${p.shop}`,

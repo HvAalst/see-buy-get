@@ -344,8 +344,10 @@ export const ARTICLES: GuideArticle[] = [
       "Push is signed with a pair of keys. The screen says whether the server has a pair of its own, is using the pair written in its source code, which anybody who can read the code can sign with, or has two keys that do not belong together, which every push service refuses. Changing the keys ends every enrolment: each phone has to turn notifications on again.",
       "When an email cannot be handed over, the screen says whose it is to put right. Refused by the provider and Sending limit reached are about the account: the token, the domain email is sent from, or the provider’s credit. They stop every email and are shown in red. One email turned down is about that email only. Not getting through means the provider could not be reached, or answered with a fault.",
       "The screen shows the provider’s own code for a failure, to look up with the provider. It never shows the token, the full sending address, or who an email was for.",
-      "An email that fails is not sent again later, and the person it was for is not told. A reset code that did not go has to be asked for again.",
-      "An email to an address that cannot exist is never handed to the provider, because it could only bounce: example.com, or an address ending .example or .test. The screen counts them. A sandbox given a real token therefore does not email its made-up people."
+      "A notice that could not be handed over is kept and tried again: after a minute, then five minutes, then fifteen, then every hour, for one to three days depending on the notice. A code is never sent late: a reset code that did not go has to be asked for again.",
+      "An email to an address that cannot exist is never handed to the provider, because it could only bounce: example.com, or an address ending .example or .test. The screen counts them. A sandbox given a real token therefore does not email its made-up people.",
+      "Waiting to be tried again says how many notices are kept, and since when the oldest. They are kept in the server’s memory and nowhere else, so restarting the server loses them. If some are waiting, put right what the provider refused before you restart, or wait until the count is back to none.",
+      "Given up on counts the emails that will not be sent: the provider turned that one email down, it may already have gone, or it waited too long to be worth sending. The person it was for was not told. Under the line about the last email, the screen says whether that email is kept or will not be sent again."
     ]
   },
   {

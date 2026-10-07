@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { adviserSays, checkSays, countWords, mailAddressWords, mailSays, momentWords, plausible, pushSays, refusedWhy, routerSays, type AdviserConnection, type MailConnection, type PushConnection, type RouterConnection } from './connections';
+import { adviserSays, checkSays, countWords, mailAddressWords, mailAgainWords, mailSays, momentWords, plausible, pushSays, refusedWhy, routerSays, waitingWords, type AdviserConnection, type MailConnection, type PushConnection, type RouterConnection } from './connections';
 
 const since = '2026-10-06T06:00:00Z';
 const at = '2026-10-06T08:15:00Z';
 const router = (over: Partial<RouterConnection> = {}): RouterConnection => ({ configured: true, host: 'osrm.example:5000', profile: 'driving', maxPoints: 100, ...over });
 const adviser = (over: Partial<AdviserConnection> = {}): AdviserConnection => ({ configured: true, model: 'claude-opus-5-5', ...over });
 // As a server that really sends, with nothing wrong: each test says what is different about its own.
-const mail = (over: Partial<MailConnection> = {}): MailConnection => ({ sends: true, tokenSet: true, from: 'noreply@kilima.example', fromIsPlaceholder: false, written: 0, failed: 0, reserved: 0, ...over });
+const mail = (over: Partial<MailConnection> = {}): MailConnection => ({ sends: true, tokenSet: true, from: 'noreply@kilima.example', fromIsPlaceholder: false, written: 0, failed: 0, reserved: 0, waiting: 0, sentLater: 0, gaveUp: 0, ...over });
 const push = (over: Partial<PushConnection> = {}): PushConnection => ({ sends: true, keys: 'own', devices: 0, people: 0, handed: 0, failed: 0, ...over });
 
 describe('what this server is connected to', () => {
@@ -137,35 +137,74 @@ describe('what this server is connected to', () => {
       // Handed over is not arrived, and is not called it.
       expect(good.line).toBe(`The last email, at ${momentWords(at)}, was handed to the provider: “A code for your email address”. Whether it arrived is the provider’s to say.`);
       // It is getting through again: the earlier failures are still said.
-      expect(mailSays(mail({ written: 9, failed: 2, last: { at, ok: true, what: 'A code' } }), false, since, t)).toMatchObject({ tone: 'ok', line: expect.stringMatching(/2 of 9 could not be handed over\.$/) });
+      expect(mailSays(mail({ written: 9, failed: 2, last: { at, ok: true, what: 'A code' } }), false, since, t)).toMatchObject({ tone: 'ok', line: expect.stringMatching(/2 of 9 could not be handed over at the first try\.$/) });
     });
 
     it('says a failed email by whose it is: the account’s in red, one email or a bad minute as that', () => {
       const what = 'A code for your email address';
       const failed = (last: Partial<NonNullable<MailConnection['last']>>, over: Partial<MailConnection> = {}) => mailSays(mail({ written: 3, failed: 1, last: { at, ok: false, what, ...last }, ...over }), false, since, t);
       const when = momentWords(at);
-      const counted = ' Since this server started, 1 of 3 could not be handed over.';
+      const counted = ' Since this server started, 1 of 3 could not be handed over at the first try.';
+      const lost = ' That email will not be sent again, and the person it was for was not told.';
 
       const unreachable = failed({ failed: 'unreachable' });
       expect([unreachable.tone, unreachable.tag]).toEqual(['warn', 'Not getting through']);
-      expect(unreachable.line).toBe(`The last email, at ${when}, could not be handed over: the provider could not be reached, or did not answer in time. It was “${what}”, and the person it was for was not told.${counted}`);
+      expect(unreachable.line).toBe(`The last email, at ${when}, could not be handed over: the provider could not be reached, or did not answer in time. It was “${what}”.${lost}${counted}`);
       const fault = failed({ failed: 'failed', code: 'TM_5001' });
       expect([fault.tone, fault.tag]).toEqual(['warn', 'Not getting through']);
-      expect(fault.line).toBe(`The last email, at ${when}, could not be handed over: what came back from the provider’s address was a fault, or was not the provider’s answer at all. It was “${what}”, and the person it was for was not told. The provider’s code for it: TM_5001.${counted}`);
+      expect(fault.line).toBe(`The last email, at ${when}, could not be handed over: what came back from the provider’s address was a fault, or was not the provider’s answer at all. It was “${what}”. The provider’s code for it: TM_5001.${lost}${counted}`);
       // A sender that did not say why is said as a fault, never left blank.
       expect(failed({}).line).toMatch(/was a fault, or was not the provider’s answer at all/);
 
       const turnedDown = failed({ failed: 'rejected', code: 'GE_102' });
       expect([turnedDown.tone, turnedDown.tag]).toEqual(['warn', 'One email turned down']);
-      expect(turnedDown.line).toBe(`The last email, at ${when}, was turned down by the provider. It was “${what}”, and the person it was for was not told. That is one email: others may be going. The provider’s code for it: GE_102.${counted}`);
+      expect(turnedDown.line).toBe(`The last email, at ${when}, was turned down by the provider. It was “${what}”. That is one email: others may be going. The provider’s code for it: GE_102.${lost}${counted}`);
 
       const limit = failed({ failed: 'limit', code: 'LE_102' });
       expect([limit.tone, limit.tag]).toEqual(['danger', 'Sending limit reached']);
-      expect(limit.line).toBe(`The last email, at ${when}, was not taken: the provider’s sending limit or credit is used up, and nothing is delivered until that is put right. It was “${what}”. The provider’s code for it: LE_102.${counted}`);
+      expect(limit.line).toBe(`The last email, at ${when}, was not taken: the provider’s sending limit or credit is used up, and nothing is delivered until that is put right. It was “${what}”. The provider’s code for it: LE_102.${lost}${counted}`);
 
       const refused = failed({ failed: 'refused', code: 'SERR_157' });
       expect([refused.tone, refused.tag]).toEqual(['danger', 'Refused by the provider']);
-      expect(refused.line).toBe(`The last email, at ${when}, was refused by the provider, and nothing is delivered until that is put right. It was “${what}”. It did not accept the token. The provider’s code for it: SERR_157.${counted}`);
+      expect(refused.line).toBe(`The last email, at ${when}, was refused by the provider, and nothing is delivered until that is put right. It was “${what}”. It did not accept the token. The provider’s code for it: SERR_157.${lost}${counted}`);
+    });
+
+    it('says of the email that failed whether THAT one is kept to be tried again, or lost — from what the server did with it', () => {
+      const failed = (last: Partial<NonNullable<MailConnection['last']>>, over: Partial<MailConnection> = {}) => mailSays(mail({ written: 3, failed: 1, last: { at, ok: false, what: 'Password changed', ...last }, ...over }), false, since, t).line;
+      const kept = failed({ failed: 'refused', code: 'SERR_157', again: true }, { waiting: 1, waitingSince: at });
+      expect(kept).toContain('That email is kept, and will be tried again.');
+      expect(kept).not.toContain('was not told');
+      // The same failure, of an email that is not kept — a code — is said as lost. The kind of failure does not decide it.
+      const lostOne = failed({ failed: 'refused', code: 'SERR_157' });
+      expect(lostOne).toContain('That email will not be sent again, and the person it was for was not told.');
+      expect(lostOne).not.toContain('is kept');
+    });
+
+    it('says how many wait to be tried again and since when — and that a restart loses them', () => {
+      const waiting = mail({ written: 5, failed: 3, waiting: 3, waitingSince: at, last: { at, ok: false, what: 'Password changed', failed: 'unreachable', again: true } });
+      expect(mailAgainWords(waiting, t)).toEqual([`Waiting to be tried again: 3, the oldest since ${momentWords(at)}. They wait in this server’s memory: restarting it loses them.`]);
+      expect(mailSays(waiting, false, since, t).line).toMatch(/could not be handed over at the first try\. Waiting to be tried again: 3, the oldest since .*restarting it loses them\.$/);
+      expect(waitingWords(waiting, t)).toBe(`3 — the oldest since ${momentWords(at)}`);
+      // One reads the same way as many: a count, not a sentence that needs a plural.
+      expect(mailAgainWords(mail({ waiting: 1, waitingSince: at }), t)[0]).toMatch(/^Waiting to be tried again: 1, the oldest since /);
+      expect(waitingWords(mail(), t)).toBe('None');
+      // Nothing waiting, nothing went late, nothing lost: nothing is said.
+      expect(mailAgainWords(mail({ written: 9, failed: 2 }), t)).toEqual([]);
+    });
+
+    it('does not call it a clean bill while some are still waiting or were given up on, even though the last one went', () => {
+      const last = { at, ok: true, what: 'Password changed' };
+      const catching = mailSays(mail({ written: 6, failed: 2, waiting: 1, waitingSince: at, sentLater: 1, last }), false, since, t);
+      expect([catching.tone, catching.tag]).toEqual(['warn', 'Sending, and catching up']);
+      expect(catching.line).toMatch(/2 of 6 could not be handed over at the first try\. Waiting to be tried again: 1, .* Handed over on a later try since it started: 1\.$/);
+      // All caught up: sending, and the ones that went late are still said — they were late.
+      const caughtUp = mailSays(mail({ written: 6, failed: 2, sentLater: 2, last }), false, since, t);
+      expect([caughtUp.tone, caughtUp.tag]).toEqual(['ok', 'Sending']);
+      expect(caughtUp.line).toMatch(/Handed over on a later try since it started: 2\.$/);
+      // Some were lost for good: sending again, and not a clean bill.
+      const lostSome = mailSays(mail({ written: 6, failed: 2, gaveUp: 2, last }), false, since, t);
+      expect([lostSome.tone, lostSome.tag]).toEqual(['warn', 'Sending']);
+      expect(lostSome.line).toMatch(/Given up on since it started: 2 — turned down, possibly already sent, or no longer worth sending\.$/);
     });
 
     it('says what a refusal is about only where the provider’s code says — and what is known otherwise', () => {
@@ -175,7 +214,7 @@ describe('what this server is connected to', () => {
       expect(line('SM_128')).toMatch(/The provider has not approved the account for sending yet\./);
       expect(line('AE_101')).toMatch(/The provider has blocked the account\./);
       // A refusal with no code, or one whose meaning is not stated: not blamed on the token alone.
-      expect(line()).toMatch(/It will not send for this account as it is set up\. Check the token, that the sending address is the one your account shows, and that email is sent as an address on a domain the provider has verified\. Since/);
+      expect(line()).toMatch(/It will not send for this account as it is set up\. Check the token, that the sending address is the one your account shows, and that email is sent as an address on a domain the provider has verified\. That email will not be sent again, and the person it was for was not told\. Since/);
       expect(line()).not.toMatch(/code for it/);
       expect(line('TM_4001')).toMatch(/It will not send for this account as it is set up\..* The provider’s code for it: TM_4001\./);
     });
@@ -216,6 +255,9 @@ describe('what this server is connected to', () => {
   it('says a count plainly, and how many of them failed only when some did', () => {
     expect(countWords(7, 0, t)).toBe('7');
     expect(countWords(7, 2, t)).toBe('7 — 2 could not be handed over');
+    // Email is tried again, so its count is of the first try — and a count with no failures says neither.
+    expect(countWords(7, 2, t, true)).toBe('7 — 2 could not be handed over at the first try');
+    expect(countWords(7, 0, t, true)).toBe('7');
     expect(countWords(0, 0, t)).toBe('0');
   });
 

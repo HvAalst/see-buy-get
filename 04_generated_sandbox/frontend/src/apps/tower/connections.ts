@@ -49,7 +49,14 @@ export interface MailConnection {
   failed: number;
   /** Not handed to the provider: their address is on a domain reserved for examples and tests, and cannot exist. */
   reserved: number;
-  last?: { at: string; ok: boolean; what: string; failed?: MailFailure; code?: string };
+  /** Could not be handed over and being tried again: how many wait now, and since when the oldest. In memory only. */
+  waiting: number;
+  waitingSince?: string;
+  /** Since the server started: handed over on a later try · given up on. */
+  sentLater: number;
+  gaveUp: number;
+  /** `again` — it failed, and is kept to be tried again. */
+  last?: { at: string; ok: boolean; what: string; failed?: MailFailure; code?: string; again?: boolean };
 }
 export type PushKeys = 'own' | 'built_in' | 'mismatched';
 export interface PushConnection {
@@ -119,8 +126,9 @@ export function adviserSays(c: AdviserConnection, since: string, t: Translate): 
 }
 
 /** A count since the server started, with how many of them failed said beside it only when some did. */
-export function countWords(n: number, failed: number, t: Translate): string {
-  return failed > 0 ? t('tower.conn.fact.countFailed', { n, failed }) : String(n);
+export function countWords(n: number, failed: number, t: Translate, triedAgain = false): string {
+  // Where what failed may still go later (email), the count says it is of the first try.
+  return failed > 0 ? t(triedAgain ? 'tower.conn.fact.countFailedFirst' : 'tower.conn.fact.countFailed', { n, failed }) : String(n);
 }
 
 /**
@@ -143,16 +151,40 @@ export function mailSays(c: MailConnection, sandbox: boolean, since: string, t: 
   if (c.fromIsPlaceholder) return { tone: 'danger', tag: t('tower.conn.tag.noFrom'), line: t('tower.conn.mail.noFrom', { from: c.from }) };
   if (!c.last) return { tone: 'info', tag: t('tower.conn.tag.unsent'), line: t('tower.conn.mail.unsent', { since: momentWords(since) }) };
   const when = momentWords(c.last.at);
-  const earlier = c.failed > 0 ? ` ${t('tower.conn.mail.someFailed', { failed: c.failed, n: c.written })}` : '';
-  if (c.last.ok) return { tone: 'ok', tag: t('tower.conn.tag.sending'), line: t('tower.conn.mail.sent', { when, what: c.last.what }) + earlier };
+  const earlier = [...(c.failed > 0 ? [t('tower.conn.mail.someFailed', { failed: c.failed, n: c.written })] : []), ...mailAgainWords(c, t)].map((x) => ` ${x}`).join('');
+  if (c.last.ok) {
+    // It is getting through now — and some from before are still waiting, or were lost. Not a clean bill.
+    const behind = c.waiting > 0 || c.gaveUp > 0;
+    return { tone: behind ? 'warn' : 'ok', tag: t(c.waiting > 0 ? 'tower.conn.tag.catchingUp' : 'tower.conn.tag.sending'), line: t('tower.conn.mail.sent', { when, what: c.last.what }) + earlier };
+  }
   const kind: MailFailure = c.last.failed ?? 'failed';
   const account = kind === 'refused' || kind === 'limit';
   const line = [
     t(`tower.conn.mail.failed.${kind}`, { when, what: c.last.what }),
     ...(kind === 'refused' ? [t(`tower.conn.mail.refusedWhy.${refusedWhy(c.last.code)}`)] : []),
     ...(c.last.code ? [t('tower.conn.mail.code', { code: c.last.code })] : []),
+    // Of THAT email: kept to be tried again, or lost. Said from what the server did with it, not guessed from the kind.
+    t(c.last.again ? 'tower.conn.mail.lastKept' : 'tower.conn.mail.lastLost'),
   ].join(' ');
   return { tone: account ? 'danger' : 'warn', tag: t(MAIL_FAILED_TAG[kind]), line: line + earlier };
+}
+
+/**
+ * What became of the emails that could not be handed over: how many WAIT to be tried again — with the one thing
+ * staff must know about them, that they wait in memory and a restart loses them — and how many were given up on.
+ * Nothing when there is nothing to say. Worded as counts, so one and many read the same.
+ */
+export function mailAgainWords(c: MailConnection, t: Translate): string[] {
+  return [
+    ...(c.waiting > 0 ? [t('tower.conn.mail.waiting', { n: c.waiting, since: momentWords(c.waitingSince ?? '') })] : []),
+    ...(c.sentLater > 0 ? [t('tower.conn.mail.sentLater', { n: c.sentLater })] : []),
+    ...(c.gaveUp > 0 ? [t('tower.conn.mail.gaveUp', { n: c.gaveUp })] : []),
+  ];
+}
+
+/** The fact beside "Waiting to be tried again": none, or how many and since when. */
+export function waitingWords(c: MailConnection, t: Translate): string {
+  return c.waiting > 0 ? t('tower.conn.fact.waitingSome', { n: c.waiting, since: momentWords(c.waitingSince ?? '') }) : t('tower.conn.fact.waitingNone');
 }
 
 const MAIL_FAILED_TAG = {

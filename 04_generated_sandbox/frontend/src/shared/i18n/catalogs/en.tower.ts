@@ -1725,6 +1725,7 @@ export const enTowerQueues = {
   'tower.conn.tag.kept': 'Kept, not sent',
   'tower.conn.tag.unsent': 'Set up, nothing sent yet',
   'tower.conn.tag.sending': 'Sending',
+  'tower.conn.tag.catchingUp': 'Sending, and catching up',
   'tower.conn.tag.notSending': 'Not getting through',
   'tower.conn.tag.noFrom': 'No sender address',
   'tower.conn.tag.mailRefused': 'Refused by the provider',
@@ -1749,11 +1750,11 @@ export const enTowerQueues = {
   'tower.conn.mail.unsent': 'No email has been written since this server started ({since}).',
   'tower.conn.mail.sent': 'The last email, at {when}, was handed to the provider: “{what}”. Whether it arrived is the provider’s to say.',
   'tower.conn.mail.failed.unreachable':
-    'The last email, at {when}, could not be handed over: the provider could not be reached, or did not answer in time. It was “{what}”, and the person it was for was not told.',
+    'The last email, at {when}, could not be handed over: the provider could not be reached, or did not answer in time. It was “{what}”.',
   'tower.conn.mail.failed.failed':
-    'The last email, at {when}, could not be handed over: what came back from the provider’s address was a fault, or was not the provider’s answer at all. It was “{what}”, and the person it was for was not told.',
+    'The last email, at {when}, could not be handed over: what came back from the provider’s address was a fault, or was not the provider’s answer at all. It was “{what}”.',
   'tower.conn.mail.failed.rejected':
-    'The last email, at {when}, was turned down by the provider. It was “{what}”, and the person it was for was not told. That is one email: others may be going.',
+    'The last email, at {when}, was turned down by the provider. It was “{what}”. That is one email: others may be going.',
   'tower.conn.mail.failed.limit':
     'The last email, at {when}, was not taken: the provider’s sending limit or credit is used up, and nothing is delivered until that is put right. It was “{what}”.',
   'tower.conn.mail.failed.refused': 'The last email, at {when}, was refused by the provider, and nothing is delivered until that is put right. It was “{what}”.',
@@ -1764,9 +1765,14 @@ export const enTowerQueues = {
   'tower.conn.mail.refusedWhy.unknown':
     'It will not send for this account as it is set up. Check the token, that the sending address is the one your account shows, and that email is sent as an address on a domain the provider has verified.',
   'tower.conn.mail.code': 'The provider’s code for it: {code}.',
-  'tower.conn.mail.someFailed': 'Since this server started, {failed} of {n} could not be handed over.',
+  'tower.conn.mail.lastKept': 'That email is kept, and will be tried again.',
+  'tower.conn.mail.lastLost': 'That email will not be sent again, and the person it was for was not told.',
+  'tower.conn.mail.waiting': 'Waiting to be tried again: {n}, the oldest since {since}. They wait in this server’s memory: restarting it loses them.',
+  'tower.conn.mail.sentLater': 'Handed over on a later try since it started: {n}.',
+  'tower.conn.mail.gaveUp': 'Given up on since it started: {n} — turned down, possibly already sent, or no longer worth sending.',
+  'tower.conn.mail.someFailed': 'Since this server started, {failed} of {n} could not be handed over at the first try.',
   'tower.conn.mail.where':
-    'Email is sent through ZeptoMail (Zoho CPaaS) when the server is started with both ZEPTOMAIL_TOKEN and ZEPTOMAIL_URL: the token and the sending address, each as your provider account shows it on its API page. The token is never shown, here or anywhere, and the address is shown as its host only. The address email is sent as is MAIL_FROM_ADDRESS. An email that fails is not sent again later. An email to an address that cannot exist (example.com, or one ending .example or .test) is not handed to the provider: it could only bounce.',
+    'Email is sent through ZeptoMail (Zoho CPaaS) when the server is started with both ZEPTOMAIL_TOKEN and ZEPTOMAIL_URL: the token and the sending address, each as your provider account shows it on its API page. The token is never shown, here or anywhere, and the address is shown as its host only. The address email is sent as is MAIL_FROM_ADDRESS. A notice that could not be handed over is tried again — after a minute, then five, fifteen, and every hour, for one to three days — while it waits in this server’s memory; a code is never sent late. An email to an address that cannot exist (example.com, or one ending .example or .test) is not handed to the provider: it could only bounce.',
   'tower.conn.mail.whereKept': 'On a sandbox, what was kept can be read at /v1/mail/outbox on this server, and every email looked at with sample words at /v1/mail/preview.',
   'tower.conn.push.title': 'Push to a phone',
   'tower.conn.push.kept':
@@ -1789,12 +1795,18 @@ export const enTowerQueues = {
   'tower.conn.fact.token': 'Provider’s token',
   'tower.conn.fact.providerAddress': 'Provider’s sending address',
   'tower.conn.fact.reserved': 'Left unsent: addresses that cannot exist',
+  'tower.conn.fact.waiting': 'Waiting to be tried again',
+  'tower.conn.fact.waitingNone': 'None',
+  'tower.conn.fact.waitingSome': '{n} — the oldest since {since}',
+  'tower.conn.fact.sentLater': 'Handed over on a later try',
+  'tower.conn.fact.gaveUp': 'Given up on',
   'tower.conn.fact.notHttps': '{host} — not an https address',
   'tower.conn.fact.from': 'Sent as',
   'tower.conn.fact.fromPlaceholder': '{from} — on a domain nobody owns',
   'tower.conn.fact.written': 'Written since it started',
   'tower.conn.fact.handed': 'Handed over since it started',
   'tower.conn.fact.countFailed': '{n} — {failed} could not be handed over',
+  'tower.conn.fact.countFailedFirst': '{n} — {failed} could not be handed over at the first try',
   'tower.conn.fact.keys': 'Keys',
   'tower.conn.fact.keys.own': 'Its own pair',
   'tower.conn.fact.keys.built_in': 'The pair written in the source code',

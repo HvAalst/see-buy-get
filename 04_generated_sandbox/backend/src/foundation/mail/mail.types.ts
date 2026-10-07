@@ -65,6 +65,13 @@ export class MailSendError extends Error {
     message: string,
     /** The provider's own code for it, where it gave one. */
     readonly code?: string,
+    /**
+     * NOTHING SAYS THE PROVIDER TOOK IT, and nothing about the email itself is wrong — so trying again later is safe
+     * and may work: it could not be reached, a gateway said it was not there, or it refused the ACCOUNT (which
+     * somebody can put right). False where it may have gone (no answer in time, a plain fault) or never will (this
+     * one email was turned down).
+     */
+    readonly later: boolean = false,
   ) {
     super(message);
     this.name = 'MailSendError';
@@ -80,6 +87,8 @@ export class MailLast {
   @ApiPropertyOptional({ enum: MAIL_FAILURES }) failed?: MailFailure;
   /** The provider's own code for the failure, for looking up. A code only: its words may name an address. */
   @ApiPropertyOptional() code?: string;
+  /** It could not be handed over, and it is KEPT to be tried again. Absent on one that failed and will not be. */
+  @ApiPropertyOptional() again?: boolean;
 }
 
 /**
@@ -110,5 +119,14 @@ export class MailConnection {
    * domain reserved for examples and tests. Nought while nothing is sent — the outbox keeps those like any other.
    */
   reserved: number;
+  /**
+   * Emails that could not be handed over and are being tried again: how many wait NOW, and since when the oldest.
+   * They wait in memory — an address and a link's key are not written to disk to wait — so a restart forgets them.
+   */
+  waiting: number;
+  @ApiPropertyOptional() waitingSince?: string;
+  /** Since this server started: handed over on a later try · given up on (turned down, or no longer worth sending). */
+  sentLater: number;
+  gaveUp: number;
   @ApiPropertyOptional({ type: MailLast }) last?: MailLast;
 }

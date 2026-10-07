@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
-import { adviserSays, checkSays, countWords, mailAddressWords, mailSays, momentWords, pushSays, routerSays, type Connections, type RouterCheck } from '../connections';
+import { adviserSays, checkSays, countWords, mailAddressWords, mailSays, momentWords, pushSays, routerSays, waitingWords, type Connections, type RouterCheck } from '../connections';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
 /**
@@ -146,13 +146,27 @@ export function ConnectionsScreen({ actions }: { state: TowerState; actions: Tow
               </div>
               <div class="cons__fact">
                 <dt class="cons__factk">{t('tower.conn.fact.written')}</dt>
-                <dd class="cons__factv">{countWords(view.mail.written, view.mail.failed, t)}</dd>
+                <dd class="cons__factv">{countWords(view.mail.written, view.mail.failed, t, true)}</dd>
               </div>
               {view.mail.sends ? (
-                <div class="cons__fact">
-                  <dt class="cons__factk">{t('tower.conn.fact.reserved')}</dt>
-                  <dd class="cons__factv">{view.mail.reserved}</dd>
-                </div>
+                <>
+                  <div class="cons__fact">
+                    <dt class="cons__factk">{t('tower.conn.fact.waiting')}</dt>
+                    <dd class="cons__factv">{waitingWords(view.mail, t)}</dd>
+                  </div>
+                  <div class="cons__fact">
+                    <dt class="cons__factk">{t('tower.conn.fact.sentLater')}</dt>
+                    <dd class="cons__factv">{view.mail.sentLater}</dd>
+                  </div>
+                  <div class="cons__fact">
+                    <dt class="cons__factk">{t('tower.conn.fact.gaveUp')}</dt>
+                    <dd class="cons__factv">{view.mail.gaveUp}</dd>
+                  </div>
+                  <div class="cons__fact">
+                    <dt class="cons__factk">{t('tower.conn.fact.reserved')}</dt>
+                    <dd class="cons__factv">{view.mail.reserved}</dd>
+                  </div>
+                </>
               ) : null}
             </dl>
             <p class="chint">
