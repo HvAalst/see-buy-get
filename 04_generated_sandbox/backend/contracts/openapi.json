@@ -21537,6 +21537,125 @@
         }
       }
     },
+    "/v1/sbg/document-links/look": {
+      "post": {
+        "operationId": "DocumentLink.look",
+        "summary": "",
+        "description": "What this link is, before the file is taken: what it opens and until when — or which way it stopped.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentLinkTokenDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentLinkView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/document-links/fetch": {
+      "post": {
+        "operationId": "DocumentLink.fetch",
+        "summary": "",
+        "description": "The file: the note, every copy of it and its photographs, as the party the link was made for may read them.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentLinkTokenDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/consignment-notes/{docId}/links": {
+      "get": {
+        "operationId": "DocumentLink.list",
+        "summary": "",
+        "description": "The links made for the caller on one of their documents.",
+        "parameters": [
+          {
+            "name": "docId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentLinkList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/consignment-notes/{docId}/links/{linkId}/cancel": {
+      "post": {
+        "operationId": "DocumentLink.cancel",
+        "summary": "",
+        "description": "Cancel one: it opens nothing from now on.",
+        "parameters": [
+          {
+            "name": "docId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "linkId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentLinkRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/settlement/module-info": {
       "get": {
         "operationId": "Sse.info",
@@ -41403,6 +41522,122 @@
         "required": [
           "at",
           "ok"
+        ]
+      },
+      "DocumentLinkTokenDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 100
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "DocumentLinkView": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "expired",
+              "cancelled",
+              "used_up",
+              "gone"
+            ]
+          },
+          "number": {
+            "type": "string",
+            "description": "The note's number, and where the goods went from and to. Only while the link opens it."
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "deliveredAt": {
+            "type": "string"
+          },
+          "opensLeft": {
+            "type": "number",
+            "description": "How many more times it can be opened."
+          },
+          "documentUntil": {
+            "type": "string",
+            "description": "Until when the document itself is kept: after that nobody can be given another copy."
+          },
+          "expiresAt": {
+            "type": "string",
+            "description": "When it stops, or stopped."
+          }
+        },
+        "required": [
+          "state",
+          "expiresAt"
+        ]
+      },
+      "DocumentLinkRow": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "expired",
+              "cancelled",
+              "used_up",
+              "gone"
+            ]
+          },
+          "sentTo": {
+            "type": "string",
+            "description": "The address it was emailed to, masked."
+          },
+          "lastOpenedAt": {
+            "type": "string"
+          },
+          "cancelledAt": {
+            "type": "string"
+          },
+          "linkId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "opened": {
+            "type": "number",
+            "description": "How many times the file was taken with it, and when last."
+          }
+        },
+        "required": [
+          "state",
+          "linkId",
+          "createdAt",
+          "expiresAt",
+          "opened"
+        ]
+      },
+      "DocumentLinkList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentLinkRow"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "MilestoneTermDto": {

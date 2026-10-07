@@ -4,6 +4,7 @@ import { useT, type Translate } from '../i18n';
 import { useDebounced } from '../useDebounced';
 import { ARCHIVE_LIMIT, type ArchiveApiState } from './useArchive';
 import { day, documentGoingSoon, pathWord, retentionLines, routeLine, shortPrint, stageWord } from './words';
+import { linkRowSays } from './documentLink';
 import { NoteCheck } from './NoteCheck';
 import { DestinationCard } from './DestinationCard';
 import type { DestinationApiState } from './useDestination';
@@ -261,9 +262,70 @@ function NoteSheet({ archive }: { archive: ArchiveApiState }) {
             {t(archive.canShareFiles ? 'archive.shareBundle' : 'archive.exportBundle')}
           </Button>
           <p class="hint">{t(archive.canShareFiles ? 'archive.shareBundleHint' : 'archive.exportBundleHint')}</p>
+
+          <NoteLinks archive={archive} />
         </>
       ) : null}
     </Sheet>
+  );
+}
+
+/* --------------------------------------------------------------------------- links -- */
+
+/**
+ * THE LINKS TO THIS NOTE that were emailed for this reader — with a receipt, when the load was delivered.
+ *
+ * A link opens the note with nobody signed in, so the party it was made for is shown each one: the address it
+ * went to, how often the file was taken with it, and until when it works. And can stop it now. Nothing is shown
+ * while there are none: most notes have no link, and a heading over nothing is a question with no answer.
+ *
+ * Cancelling asks once more, in place: it cannot be switched back on, and the button is a finger's width from a
+ * row somebody was only reading.
+ */
+function NoteLinks({ archive }: { archive: ArchiveApiState }) {
+  const t = useT();
+  const [asking, setAsking] = useState('');
+  if (archive.links.length === 0) return null;
+  return (
+    <>
+      <h3 class="scr__section">{t('archive.links.title')}</h3>
+      <p class="hint">{t('archive.links.lede')}</p>
+      <div class="rows" role="list">
+        {archive.links.map((l) => {
+          const says = linkRowSays(l, t);
+          return (
+            <div key={l.linkId} class="row row--static" role="listitem">
+              <span class="row__body">
+                <span class="row__t">{says.title}</span>
+                <span class="row__s">{asking === l.linkId ? t('archive.links.cancelAsk') : says.state}</span>
+                <span class="row__meta">{says.used}</span>
+              </span>
+              {says.canCancel && asking !== l.linkId ? (
+                <Button variant="link" danger full={false} onClick={() => setAsking(l.linkId)}>
+                  {t('archive.links.cancel')}
+                </Button>
+              ) : null}
+              {says.canCancel && asking === l.linkId ? (
+                <span class="row__end">
+                  <Button
+                    variant="link"
+                    danger
+                    full={false}
+                    busy={archive.cancelling === l.linkId}
+                    onClick={() => void archive.cancelLink(l.linkId).then(() => setAsking(''))}
+                  >
+                    {t('archive.links.cancelYes')}
+                  </Button>
+                  <Button variant="link" full={false} onClick={() => setAsking('')}>
+                    {t('archive.links.cancelNo')}
+                  </Button>
+                </span>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 }
 

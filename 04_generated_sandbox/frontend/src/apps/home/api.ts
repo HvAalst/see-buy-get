@@ -1,4 +1,5 @@
-import { makeConfig, publicRequest, type Result, type SbgConfig } from '../../lib/sbg';
+import { makeConfig, publicDownload, publicRequest, type Result, type SbgConfig } from '../../lib/sbg';
+import type { DocumentLinkView, LinkAnswer } from '../../shared/archive/documentLink';
 import type { ProofAnswer } from '../../lib/sbg/personas/archive';
 
 const APP_VERSION = '1.0.0';
@@ -32,6 +33,25 @@ export function requestCode(phone: string): Promise<Result<OtpRequestView>> {
  */
 export function verifyNote(sha256: string): Promise<Result<ProofAnswer>> {
   return publicRequest<ProofAnswer>(homeConfig(), '/v1/sbg/consignment-notes/verify', { body: { sha256 } });
+}
+
+/**
+ * A LINK TO A DOCUMENT, opened from an email with nobody signed in. Public for the reason the check above is: the
+ * person holding the link was sent a document, not an invitation. The key goes in the BODY of both calls — a key
+ * in an address is a key in every log the address passes through.
+ */
+export async function lookAtDocumentLink(token: string): Promise<LinkAnswer> {
+  const r = await publicRequest<DocumentLinkView>(homeConfig(), '/v1/sbg/document-links/look', { body: { token } });
+  if (r.data && !r.error) return { view: r.data };
+  // Not found, or not even shaped like a key: either way it is not a link of ours, and that is all there is to say.
+  if (r.status === 404 || r.status === 400) return { failed: 'not_ours' };
+  return { failed: r.status === 429 ? 'busy' : 'unreachable' };
+}
+
+/** The file. Null when it could not be had — the page then asks what the link is now, which says why. */
+export async function takeDocumentLink(token: string): Promise<Blob | null> {
+  const r = await publicDownload(homeConfig(), '/v1/sbg/document-links/fetch', { body: { token } });
+  return r.error || !r.data ? null : r.data;
 }
 
 export function verifyCode(phone: string, code: string): Promise<Result<{ verified?: boolean }>> {

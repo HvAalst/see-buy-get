@@ -181,6 +181,40 @@ export async function publicRequest<T>(
   }
 }
 
+/**
+ * One unauthenticated call that answers with a FILE. The same envelope and the same timeout as `publicRequest` — a
+ * refusal is still read as the server's own JSON, so the caller can say why — and what is asked goes in the body,
+ * never in the address: the one caller of this sends a key.
+ */
+export async function publicDownload(config: SbgConfig, path: string, init: { body: unknown; fetch?: typeof fetch }): Promise<Result<Blob>> {
+  const doFetch = init.fetch ?? fetch;
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), config.timeoutMs);
+  try {
+    let res: Response;
+    try {
+      res = await doFetch(`${config.baseUrl}${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'X-SBG-Client': config.clientId, 'X-SBG-Trace-Id': traceId() },
+        body: JSON.stringify(init.body),
+        signal: ctl.signal,
+      });
+    } catch (e) {
+      if (ctl.signal.aborted) return { data: null, error: clientError('TIMEOUT', `No answer within ${config.timeoutMs} ms.`), status: 0 };
+      markOffline();
+      return { data: null, error: clientError(isBrowserOffline() ? 'OFFLINE' : 'NETWORK', String((e as Error)?.message ?? e)), status: 0 };
+    }
+    markOnline();
+    if (!res.ok) return { data: null, error: toSbgError(await res.json().catch(() => null), res.status), status: res.status };
+    return { data: await res.blob(), error: null, status: res.status };
+  } catch (e) {
+    if (ctl.signal.aborted) return { data: null, error: clientError('TIMEOUT', `No answer within ${config.timeoutMs} ms.`), status: 0 };
+    return { data: null, error: clientError('NETWORK', String((e as Error)?.message ?? e)), status: 0 };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /* ----------------------------------------------------------- login surface -- */
 
 /** What POST /v1/sbg/auth/login and /auth/signup resolve to (S2 account service). */

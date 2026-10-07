@@ -27,6 +27,7 @@ export {
   narrow,
   preferMintFailure,
   publicRequest,
+  publicDownload,
   purgeTokens,
   sbgForgot,
   sbgLogin,

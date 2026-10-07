@@ -3,6 +3,8 @@ import { narrow, type Result, type SbgClient, type SbgError } from '../../lib/sb
 import { createArchiveApi } from '../../lib/sbg/personas/archive';
 import type { ArchiveQuery, ArchivedNoteDoc, ArchivedNoteRow, ProofAnswer } from '../../lib/sbg/personas/archive';
 import { triggerDownload, triggerDownloadBlob } from '../download';
+import type { DocumentLinkRow } from './documentLink';
+import { canShareFiles as browserSharesFiles, fileNameFor, handOverFile } from './handOver';
 
 export const ARCHIVE_LIMIT = 20;
 
@@ -19,6 +21,11 @@ export interface ArchiveApiState {
   /** The document a reader has opened, with its copies. Null when the sheet is shut. */
   open: ArchivedNoteDoc | null;
   openPhase: Phase;
+  /** The links to the open document that were made for this reader — emailed with a receipt. Empty for most. */
+  links: DocumentLinkRow[];
+  /** The link being cancelled, while it is. */
+  cancelling: string;
+  cancelLink: (linkId: string) => Promise<void>;
   busy: '' | 'csv' | 'bundle' | 'bundles' | 'print';
   load: () => Promise<void>;
   setQuery: (patch: Partial<ArchiveQuery>) => void;
@@ -49,6 +56,8 @@ export function useArchive(client: SbgClient | null, enabled = true): ArchiveApi
   const [query, setQueryState] = useState<ArchiveQuery>(EMPTY_QUERY);
   const [open, setOpen] = useState<ArchivedNoteDoc | null>(null);
   const [openPhase, setOpenPhase] = useState<Phase>('idle');
+  const [links, setLinks] = useState<DocumentLinkRow[]>([]);
+  const [cancelling, setCancelling] = useState('');
   const [busy, setBusy] = useState<ArchiveApiState['busy']>('');
 
   // The archive is not a persona of its own — every app already has one. Built here so the hook takes a
@@ -103,6 +112,7 @@ export function useArchive(client: SbgClient | null, enabled = true): ArchiveApi
       if (!api) return;
       setOpenPhase('loading');
       setOpen(null);
+      setLinks([]);
       const r: Result<unknown> = await api.note(docId);
       if (r.error || !r.data) {
         setOpenPhase('error');
@@ -111,13 +121,31 @@ export function useArchive(client: SbgClient | null, enabled = true): ArchiveApi
       }
       setOpen(narrow<ArchivedNoteDoc>(r.data));
       setOpenPhase('ready');
+      // Beside the document, not before it: a note is readable whether or not its links could be listed.
+      const l: Result<unknown> = await api.noteLinks(docId);
+      if (!l.error && l.data) setLinks(narrow<{ items: DocumentLinkRow[] }>(l.data).items ?? []);
     },
     [api],
+  );
+
+  /** Cancel a link on the open document. What comes back is the link as it now stands, and replaces the row. */
+  const cancelLink = useCallback(
+    async (linkId: string) => {
+      if (!api || !open) return;
+      setCancelling(linkId);
+      const r: Result<unknown> = await api.cancelNoteLink(open.docId, linkId);
+      setCancelling('');
+      if (r.error || !r.data) return setError(r.error ?? null);
+      const row = narrow<DocumentLinkRow>(r.data);
+      setLinks((all) => all.map((x) => (x.linkId === row.linkId ? row : x)));
+    },
+    [api, open],
   );
 
   const closeDoc = useCallback(() => {
     setOpen(null);
     setOpenPhase('idle');
+    setLinks([]);
   }, []);
 
   const exportCsv = useCallback(async () => {
@@ -148,28 +176,8 @@ export function useArchive(client: SbgClient | null, enabled = true): ArchiveApi
       setBusy('');
       if (r.error || !r.data) return setError(r.error ?? null);
 
-      const blob = narrow<Blob>(r.data);
-      const name = `${number.replace(/[^A-Za-z0-9._-]+/g, '-')}.zip`;
-      const file = typeof File === 'function' ? new File([blob], name, { type: 'application/zip' }) : null;
-      if (file && navigator.canShare?.({ files: [file] })) {
-        try {
-          await navigator.share({ files: [file], title: number });
-          return;
-        } catch (err) {
-          /*
-           * A CANCELLED SHEET IS NOT A FAILURE — that is the person changing their mind, and putting a
-           * file in their downloads because they backed out would be presumptuous.
-           *
-           * Anything else IS a failure, and must not end in nothing happening. canShare() is the
-           * browser's opinion that it could share, and browsers are wrong about it: a desktop Chrome
-           * with no share target says yes and then rejects. Found by driving — the button did nothing
-           * at all, silently, which is the worst outcome for the one control that gets somebody their
-           * evidence.
-           */
-          if ((err as Error)?.name === 'AbortError') return;
-        }
-      }
-      triggerDownloadBlob(name, blob);
+      // The share sheet, or their downloads — and why a cancelled sheet is neither: handOver.ts.
+      await handOverFile(fileNameFor(number), narrow<Blob>(r.data), number);
     },
     [api],
   );
@@ -214,16 +222,9 @@ export function useArchive(client: SbgClient | null, enabled = true): ArchiveApi
    * Asked ONCE with a representative file rather than per render: canShare() is a capability question
    * about the browser, and a zero-byte probe answers it the same way a real bundle would.
    */
-  const canShareFiles = useMemo(() => {
-    if (typeof File !== 'function' || typeof navigator === 'undefined' || !navigator.canShare) return false;
-    try {
-      return navigator.canShare({ files: [new File([new Uint8Array(0)], 'x.zip', { type: 'application/zip' })] });
-    } catch {
-      return false;
-    }
-  }, []);
+  const canShareFiles = useMemo(() => browserSharesFiles(), []);
 
-  return { rows, total, phase, error, query, open, openPhase, busy, load, setQuery, openDoc, closeDoc, exportCsv, exportBundle, exportAll, printCopy, verifyNote, canShareFiles };
+  return { rows, total, phase, error, query, open, openPhase, links, cancelling, cancelLink, busy, load, setQuery, openDoc, closeDoc, exportCsv, exportBundle, exportAll, printCopy, verifyNote, canShareFiles };
 }
 
 /** Show a fetched page in its own window. Falls back to a download where a popup is blocked. */

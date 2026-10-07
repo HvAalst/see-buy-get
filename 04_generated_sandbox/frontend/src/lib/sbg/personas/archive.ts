@@ -147,6 +147,14 @@ export function createArchiveApi(sbg: SbgClient) {
     noteBundles: (query?: ArchiveQuery) =>
       sbg.request((c) => c.GET('/v1/sbg/consignment-notes/bundle.zip' as never, { params: { query: clean(query) }, parseAs: 'blob' } as never)),
 
+    /** The links to this document that were made for the caller: where each went, how it was used, whether it still opens. */
+    noteLinks: (docId: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/consignment-notes/{docId}/links' as never, { params: { path: { docId } } } as never)),
+
+    /** Cancel one: it opens nothing from now on, whoever holds the email. */
+    cancelNoteLink: (docId: string, linkId: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/consignment-notes/{docId}/links/{linkId}/cancel' as never, { params: { path: { docId, linkId } } } as never)),
+
     /**
      * Is a copy somebody handed us the one the network issued?
      *

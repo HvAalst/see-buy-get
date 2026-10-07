@@ -1,4 +1,4 @@
-import { MailDocument, RenderedMail, renderDocument } from './mail.blocks';
+import { MailBlock, MailDocument, RenderedMail, renderDocument } from './mail.blocks';
 import { fontsBase } from './mail.brand';
 
 /**
@@ -83,7 +83,7 @@ export interface MailParams {
   'papers-due': { company: string; lapsed: string[]; due: string[] };
   'order-on-its-way': { store: string; orderRef?: string; shop: string; trackingUrl: string };
   'ready-for-collection': { shop: string; address?: string; collectBy: string; openUrl?: string };
-  'freight-delivered': { code: string; description: string; destination: string; deliveredAt: string; carrier: string; driver?: string; receiverName?: string; amount?: number; currency?: string; noteNumber: string };
+  'freight-delivered': { code: string; description: string; destination: string; deliveredAt: string; carrier: string; driver?: string; receiverName?: string; amount?: number; currency?: string; noteNumber: string; /** A link that opens the note with nobody signed in, and when it stops. */ noteUrl?: string; noteUntil?: string };
   /** A code to an address: to confirm it is theirs, to get back into the account, or to undo a number change. */
   'email-code': { code: string; minutes: number; why: 'confirm' | 'recover' | 'undo' };
   /** Something happened to the way somebody signs in. Always sent; cannot be turned off. */
@@ -506,7 +506,7 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     title: 'Load delivered — receipt (shipper)',
     sentWhen: 'A driver delivers a load, to the email of the shop that posted it.',
     wired: true,
-    sample: { code: 'FRT-010', description: 'Maize, 20 sacks', destination: 'Riverside Corner', deliveredAt: '2026-09-14T12:04:00Z', carrier: 'Kilima Logistics', driver: 'Amos K.', receiverName: 'Wanjiru (Riverside Corner)', amount: 350, currency: 'KES', noteNumber: 'CMR-FRT-010' },
+    sample: { code: 'FRT-010', description: 'Maize, 20 sacks', destination: 'Riverside Corner', deliveredAt: '2026-09-14T12:04:00Z', carrier: 'Kilima Logistics', driver: 'Amos K.', receiverName: 'Wanjiru (Riverside Corner)', amount: 350, currency: 'KES', noteNumber: 'CMR-FRT-010', noteUrl: `${appUrl('home')}#doc=a-sample-key-that-opens-nothing-at-all-0000`, noteUntil: '2026-10-14T12:04:00Z' },
     build: (p) => ({
       subject: `Delivered: ${p.code} — ${p.description}`,
       preheader: `Your load reached ${p.destination} on ${formatWhen(p.deliveredAt)}.`,
@@ -524,8 +524,20 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
             ['Consignment note', p.noteNumber],
           ],
         },
-        { kind: 'paragraph', text: 'The consignment note — sender, carrier, vehicle, goods, taking over and delivery — is on the load in the Shop app under Freight. Open it there to print or save it for your books.' },
-        { kind: 'button', label: 'Open the Shop app', href: appUrl('agent') },
+        ...(p.noteUrl
+          ? ([
+              { kind: 'paragraph', text: 'The consignment note — sender, carrier, vehicle, goods, taking over and delivery, with its photographs — is one file to keep for your books.' },
+              { kind: 'button', label: 'Get the consignment note', href: p.noteUrl },
+              {
+                kind: 'warning',
+                title: 'This button works without signing in',
+                text: `${p.noteUntil ? `Until ${formatWhen(p.noteUntil)}, it` : 'It'} opens the note for whoever has this email — so forward it only to somebody who should have the note. You can see how often it was opened, and cancel it, on the note itself: in the Shop app, Records, then Notes. The note stays there after the button stops.`,
+              },
+            ] as MailBlock[])
+          : ([
+              { kind: 'paragraph', text: 'The consignment note — sender, carrier, vehicle, goods, taking over and delivery — is on the load in the Shop app under Freight. Open it there to print or save it for your books.' },
+              { kind: 'button', label: 'Open the Shop app', href: appUrl('agent') },
+            ] as MailBlock[])),
         { kind: 'note', text: 'Something wrong with the delivery? Say so from the load in the app; a note that says “not recorded” is one the receiver has not yet confirmed.' },
       ],
       reason: 'You are getting this email because your shop posted this load on SeeBuyGet.',

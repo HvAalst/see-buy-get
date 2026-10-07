@@ -426,6 +426,18 @@ describe('a customer’s business, over the wire', () => {
     expect(conn.router).toEqual({ configured: false, profile: 'driving', maxPoints: 100 });
     expect(conn.adviser).toMatchObject({ model: 'claude-opus-5-5' });
     expect(Date.parse(conn.since)).toBeLessThanOrEqual(Date.now());
+    // A link to a document, over the wire. Asked with nobody signed in: something that is not a key is refused as
+    // malformed, a key nobody made is not found — and neither answer says anything about any document. What the
+    // party it was made for sees of it is behind a sign-in like everything else about the note.
+    await http().post('/v1/sbg/document-links/look').send({ token: 'short' }).expect(400);
+    await http().post('/v1/sbg/document-links/look').send({}).expect(400);
+    const nobodysKey = 'A'.repeat(43);
+    expect((await http().post('/v1/sbg/document-links/look').send({ token: nobodysKey }).expect(404)).body.detail).toBe('This is not a link we made');
+    expect((await http().post('/v1/sbg/document-links/fetch').send({ token: nobodysKey }).expect(404)).body.detail).toBe('This is not a link we made');
+    await http().get('/v1/sbg/document-links/look').expect(404);
+    await http().get('/v1/sbg/consignment-notes/frt-nothing/links').expect(401);
+    await http().post('/v1/sbg/consignment-notes/frt-nothing/links/dl_0/cancel').expect(401);
+    expect((await http().get('/v1/sbg/consignment-notes/frt-nothing/links').set(bearer(shop)).expect(404)).body.detail).toBe('No such consignment note in the archive');
     // Mail and push, as this server was really started: both kept, neither sent — and it says so of itself. The
     // people enrolled above were emailed a code, so emails have been written; none of it names anybody.
     expect(conn.sandbox).toBe(true);

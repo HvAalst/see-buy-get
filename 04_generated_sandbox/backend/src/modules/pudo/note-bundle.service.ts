@@ -6,7 +6,7 @@ import { ZipEntry, zip } from '../../foundation/archive/zip';
 import { ConsignmentNoteService } from './consignment-note.service';
 import { MediaService } from './media.service';
 import { ArchiveQuery, NoteArchiveService } from './note-archive.service';
-import { STAGE_WORDS } from './note-archive.types';
+import { NoteVersion, STAGE_WORDS } from './note-archive.types';
 import { retentionWords } from './retention';
 
 /**
@@ -35,8 +35,24 @@ export class NoteBundleService {
 
   /** One document: every copy, every photograph, and a manifest that reconciles the two. */
   one(docId: string, actor: IntrospectionResult | undefined): { filename: string; bytes: Buffer } {
-    const doc = this.archive.document(docId, actor);
-    const entries = this.entriesFor(docId, actor, '');
+    return this.bundleOf(this.readAs(docId, actor));
+  }
+
+  /**
+   * The same file for a party by name, with nobody signed in: what a link that party was sent hands over
+   * (document-link.service). It is the party's own reading of the document — the archive checks that it is one.
+   */
+  oneAsParty(docId: string, partyDid: string): { filename: string; bytes: Buffer } {
+    return this.bundleOf({ document: () => this.archive.documentAsParty(docId, partyDid), version: (seq) => this.archive.versionAsParty(docId, seq, partyDid) });
+  }
+
+  private readAs(docId: string, actor: IntrospectionResult | undefined): NoteReader {
+    return { document: () => this.archive.document(docId, actor), version: (seq) => this.archive.version(docId, seq, actor) };
+  }
+
+  private bundleOf(read: NoteReader): { filename: string; bytes: Buffer } {
+    const doc = read.document();
+    const entries = this.entriesFor(read, '');
     entries.unshift({
       name: 'README.txt',
       bytes: Buffer.from(this.readme([doc.number]), 'utf8'),
@@ -55,7 +71,7 @@ export class NoteBundleService {
     if (!items.length) throw new GlosError('NOT_FOUND', 'No consignment notes match that — there is nothing to export');
 
     const entries: ZipEntry[] = [];
-    for (const row of items) entries.push(...this.entriesFor(row.docId, actor, `${safe(row.number)}/`));
+    for (const row of items) entries.push(...this.entriesFor(this.readAs(row.docId, actor), `${safe(row.number)}/`));
     entries.unshift({
       name: 'README.txt',
       bytes: Buffer.from(
@@ -71,16 +87,16 @@ export class NoteBundleService {
 
   /* ------------------------------------------------------------------ the files -- */
 
-  private entriesFor(docId: string, actor: IntrospectionResult | undefined, prefix: string): ZipEntry[] {
-    const doc = this.archive.document(docId, actor);
+  private entriesFor(read: NoteReader, prefix: string): ZipEntry[] {
+    const doc = read.document();
     const entries: ZipEntry[] = [];
 
     // The newest copy at the top level, because that is the one somebody opens.
-    const newest = this.archive.version(docId, 0, actor);
+    const newest = read.version(0);
     entries.push({ name: `${prefix}consignment-note.html`, bytes: Buffer.from(this.notes.htmlFor(newest.note), 'utf8'), at: new Date(newest.at) });
 
     for (const v of doc.versions) {
-      const copy = this.archive.version(docId, v.seq, actor);
+      const copy = read.version(v.seq);
       const stem = `${prefix}copies/${String(v.seq).padStart(2, '0')}-${v.stage}`;
       entries.push({ name: `${stem}.html`, bytes: Buffer.from(this.notes.htmlFor(copy.note), 'utf8'), at: new Date(v.at) });
       entries.push({ name: `${stem}.json`, bytes: Buffer.from(JSON.stringify(copy.note, null, 2), 'utf8'), at: new Date(v.at) });
@@ -173,6 +189,12 @@ export class NoteBundleService {
       '',
     ].join('\n');
   }
+}
+
+/** One document as one reader may read it: the signed-in caller, or the party a link was sent to. */
+interface NoteReader {
+  document(): ReturnType<NoteArchiveService['document']>;
+  version(seq: number): NoteVersion;
 }
 
 /** A filename somebody can save on any operating system. */

@@ -159,6 +159,16 @@ started with, never off a variable that happens to be set.
   Gmail and Outlook never do) is told where they are only when `MAIL_FONT_URL` is set — this server serves
   them itself at `/v1/mail/font`, so that is usually `https://<the API's public address>/v1/mail/font`.
   See all of them on a sandbox at `/v1/mail/preview`, each also "as Gmail and Outlook show it".
+- **A file goes by LINK, never in the email** (decided 2026-10-07: "keep the files on our own server, and put a
+  link in the email … attachments only as an occasional extra"). A file in a mailbox cannot follow the
+  twelve-month keeping rule, cannot be taken back and cannot be seen to have been opened. So the receipt for a
+  delivered load carries a button to its consignment-note bundle (`modules/pudo/document-link.service.ts`): a
+  256-bit key the server never keeps (only its SHA-256), carried after the `#` of the front door's address
+  (`/#doc=…`) so that no server or log sees it, and sent back in a request BODY. It opens one document as the
+  party it was made for reads it; it stops after 30 days, after 25 openings, when it is cancelled, or when the
+  document passes its keeping; it is NOT used up by being looked at (mail scanners follow links). The party sees
+  each link on the note (address masked, times opened) and can cancel it. Public routes:
+  `POST /v1/sbg/document-links/look|fetch`, rate-limited.
 - **Push** is still kept by `OutboxPushSender`: no push leaves the server. The keys (`GLOS_VAPID_PUBLIC`,
   `GLOS_VAPID_PRIVATE`) are judged from the pair: the server's own, the pair written in the source, or two that
   do not belong together.

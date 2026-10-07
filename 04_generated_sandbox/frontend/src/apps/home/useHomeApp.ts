@@ -28,9 +28,10 @@ import {
   type VendorRegisteredView,
 } from './api';
 import { currentPath, townSlugFromPath } from './prerendered';
+import { readLinkKey } from '../../shared/archive/documentLink';
 import { EMPTY_JOIN, nextStep, readDeepLink, normalizePhone, onlyJoinable, prevStep, roleById, signupBody, stepBlocker, type JoinForm, type JoinStep, type RoleSpec } from './logic';
 
-export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents' | 'verify' | 'town';
+export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents' | 'verify' | 'document' | 'town';
 
 /** FB3b — how far the visitor cares to look. `null` IS a choice: the whole market. */
 export type MarketReach = number | null;
@@ -40,6 +41,8 @@ export interface HomeState {
   screen: Screen;
   /** A fingerprint carried in on ?note=, so a printed address lands straight on the answer. */
   verifyInitial?: string;
+  /** The key of a link to a document, carried in on #doc= and taken out of the address the moment it is read. */
+  docKey?: string;
   role: RoleSpec | null;
   step: JoinStep;
   form: JoinForm;
@@ -294,6 +297,24 @@ export function useHomeApp() {
   useEffect(() => {
     const note = new URLSearchParams(globalThis.location?.search ?? '').get('note');
     if (note) setState((s) => ({ ...s, screen: 'verify', verifyInitial: note }));
+  }, []);
+
+  /**
+   * #doc=<key> — the button in an email: a consignment note, for whoever holds the link, with nobody signed in.
+   *
+   * After the `#`, so that no server ever saw it. Read once and TAKEN OUT OF THE ADDRESS, unlike the fingerprint
+   * above: this one opens a document, and an address bar is photographed, bookmarked and synced to other devices.
+   * The key lives in this page's memory from here; a refresh sends somebody back to the email, which still has it.
+   */
+  useEffect(() => {
+    const key = readLinkKey(globalThis.location?.hash);
+    if (key === undefined) return;
+    try {
+      history.replaceState(null, '', `${location.pathname}${location.search}`);
+    } catch {
+      /* a browser that refuses the rewrite still shows the document */
+    }
+    setState((s) => ({ ...s, screen: 'document', docKey: key }));
   }, []);
 
   /*

@@ -11,7 +11,8 @@ import { SignInScreen } from './screens/SignInScreen';
 import { WelcomeScreen } from './screens/WelcomeScreen';
 import { TownScreen } from './screens/TownScreen';
 import { NoteCheck } from '../../shared/archive/NoteCheck';
-import { verifyNote } from './api';
+import { lookAtDocumentLink, takeDocumentLink, verifyNote } from './api';
+import { DocumentLinkPage } from '../../shared/archive/DocumentLinkPage';
 import { roleMeta } from './logic';
 import { useHomeApp } from './useHomeApp';
 import '../../shared/screens.css';
@@ -104,6 +105,9 @@ export function App() {
             initial={state.verifyInitial}
             bare
           />
+        ) : null}
+        {state.screen === 'document' && state.docKey !== undefined ? (
+          <DocumentLinkPage linkKey={state.docKey} look={lookAtDocumentLink} take={takeDocumentLink} onVerify={() => actions.go('verify')} />
         ) : null}
         {state.screen === 'welcome' ? <WelcomeScreen actions={actions} /> : null}
         {state.screen === 'town' && state.townSlug ? <TownScreen slug={state.townSlug} /> : null}

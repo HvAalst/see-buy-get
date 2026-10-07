@@ -28,6 +28,9 @@ import { retentionFor, retentionWords } from './retention';
  * a printable page, decides who may read it, and — when the load is delivered — sends the shipper the receipt that
  * points at it.
  */
+/** Issue a link to a load's note for one of its parties, sent to an address. Nothing when it cannot be made. */
+export type ReceiptLink = (freightId: string, forDid: string, sentTo: string) => { url: string; until: string } | undefined;
+
 @Injectable()
 export class ConsignmentNoteService implements OnModuleInit {
   constructor(
@@ -351,6 +354,16 @@ export class ConsignmentNoteService implements OnModuleInit {
 
   /* ------------------------------------------------------------------ the receipt -- */
 
+  /**
+   * Where a receipt gets its link to the note from. Registered by the service that issues links rather than
+   * injected: that service reads the archive and the bundle, which both read this one.
+   */
+  private receiptLink?: ReceiptLink;
+
+  registerReceiptLink(issue: ReceiptLink): void {
+    this.receiptLink = issue;
+  }
+
   /** The load is delivered: the shipper is told, with the charge and where the note is. A shop has an email; a store's system hears through its callbacks. */
   private async sendReceipt(freightId: string): Promise<void> {
     if (!this.mail || !this.accounts) return;
@@ -361,6 +374,14 @@ export class ConsignmentNoteService implements OnModuleInit {
       const email = this.accounts.emailForDid(shipperDid);
       if (!email) return;
       const note = this.build(f);
+      // The note itself, by a link — never as a file in somebody's mailbox (the user, 2026-10-07). No link, and the
+      // email says where the note is instead: a receipt goes whether or not one could be made.
+      let link: ReturnType<ReceiptLink>;
+      try {
+        link = this.receiptLink?.(freightId, shipperDid, email);
+      } catch {
+        link = undefined;
+      }
       await this.mail.send('freight-delivered', { address: email, name: note.sender.name }, {
         code: f.code,
         description: f.description,
@@ -371,6 +392,7 @@ export class ConsignmentNoteService implements OnModuleInit {
         ...(note.carrier?.driverName ? { driver: note.carrier.driverName } : {}),
         ...(note.carriage.amount != null ? { amount: note.carriage.amount, currency: note.carriage.currency ?? NETWORK_CURRENCY } : {}),
         noteNumber: note.number,
+        ...(link ? { noteUrl: link.url, noteUntil: link.until } : {}),
       });
     } catch {
       /* a receipt that cannot be sent never fails a delivery */

@@ -506,7 +506,10 @@ export class NoteArchiveService implements OnModuleInit, OnModuleDestroy {
     docId: string,
     actor: IntrospectionResult | undefined,
   ): Omit<ArchivedNote, 'versions'> & { versions: NoteVersionRow[]; retention: RetentionStatement } {
-    const doc = this.require(docId, actor);
+    return this.statementOf(this.require(docId, actor));
+  }
+
+  private statementOf(doc: ArchivedNote): Omit<ArchivedNote, 'versions'> & { versions: NoteVersionRow[]; retention: RetentionStatement } {
     const { versions, ...rest } = doc;
     const hasClaim = versions.some((v) => v.stage === 'claimed' || v.stage === 'answered');
     // A load that was never delivered has no clock running, and the statement says so by leaving the
@@ -521,7 +524,10 @@ export class NoteArchiveService implements OnModuleInit, OnModuleDestroy {
 
   /** One copy, exactly as it was frozen. `seq` 0 means the newest. */
   version(docId: string, seq: number, actor: IntrospectionResult | undefined): NoteVersion {
-    const doc = this.require(docId, actor);
+    return this.copyOf(this.require(docId, actor), seq);
+  }
+
+  private copyOf(doc: ArchivedNote, seq: number): NoteVersion {
     const v = seq > 0 ? doc.versions.find((x) => x.seq === seq) : doc.versions[doc.versions.length - 1];
     if (!v) throw new GlosError('NOT_FOUND', 'No such copy of this consignment note');
     return v;
@@ -551,6 +557,32 @@ export class NoteArchiveService implements OnModuleInit, OnModuleDestroy {
   private latest(docId: string): NoteVersion | undefined {
     const doc = this.docs.get(docId);
     return doc?.versions[doc.versions.length - 1];
+  }
+
+  /**
+   * THE SAME TWO READS FOR A PARTY BY NAME, with nobody signed in — a link that party was sent (document-link.service).
+   *
+   * The rule is the one above and no wider: the party must be one of the document's own, and a document it is not
+   * a party to is answered as one that does not exist. Nothing here reads as staff do. Whoever calls this has
+   * already decided that the caller stands for that party — that decision is the link's, and is made there.
+   */
+  documentAsParty(docId: string, partyDid: string) {
+    return this.statementOf(this.requireParty(docId, partyDid));
+  }
+
+  versionAsParty(docId: string, seq: number, partyDid: string): NoteVersion {
+    return this.copyOf(this.requireParty(docId, partyDid), seq);
+  }
+
+  /** Is there a document with this id that this party may read? Without building anything. */
+  hasFor(docId: string, partyDid: string): boolean {
+    return Boolean(partyDid) && Boolean(this.docs.get(docId)?.parties.includes(partyDid));
+  }
+
+  private requireParty(docId: string, partyDid: string): ArchivedNote {
+    const doc = this.docs.get(docId);
+    if (!doc || !partyDid || !doc.parties.includes(partyDid)) throw new GlosError('NOT_FOUND', 'No such consignment note in the archive');
+    return doc;
   }
 
   private require(docId: string, actor: IntrospectionResult | undefined): ArchivedNote {
