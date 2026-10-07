@@ -143,6 +143,13 @@ describe('a link to a document', () => {
       expect(left.state).toBe(t('archive.links.cancelledLeft', { date: day(at) }));
       expect(left.state).toContain('no longer in the business');
       expect(left.state).not.toMatch(/Cancelled/);
+      // The other way it stops by itself: they replaced the address it went to. Its own words, and nobody's act.
+      const moved = cancelled({ cancelledWhy: 'address' });
+      expect(moved.state).toBe(t('archive.links.cancelledAddress', { date: day(at) }));
+      expect(moved.state).toContain('changed their email address');
+      expect(moved.state).not.toBe(left.state);
+      expect(moved.state).not.toMatch(/Cancelled/);
+      expect(cancelled({ cancelledWhy: 'address', cancelledBy: 'Abebe Kebede' }).state).toBe(moved.state);
       // Why wins over who: it stopped by itself, whatever name is on the record.
       expect(cancelled({ cancelledWhy: 'left', cancelledBy: 'Abebe Kebede' }).state).toBe(left.state);
       // Stopped either way: nothing left to cancel, and it is with the ones that no longer work.

@@ -23,9 +23,10 @@ export type LinkState = (typeof LINK_STATES)[number];
 
 /**
  * A link cancelled by nobody's hand. `left` — it was emailed to one of a business's people, and they are no longer in
- * that business: what they were sent as one of its people stops with their place in it.
+ * that business: what they were sent as one of its people stops with their place in it · `address` — the person it
+ * was emailed to has replaced that email address with another: it sits in a mailbox they no longer vouch for.
  */
-export const LINK_CANCEL_REASONS = ['left'] as const;
+export const LINK_CANCEL_REASONS = ['left', 'address'] as const;
 export type LinkCancelReason = (typeof LINK_CANCEL_REASONS)[number];
 
 /** The key itself, as the page that was opened from the email sends it. In the body, never in an address. */

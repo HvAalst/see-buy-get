@@ -458,10 +458,11 @@ export const ARTICLES: GuideArticle[] = [
     notes: [
       "When a load is delivered, the person who posted it is emailed a receipt at their own recovery email, with a button: Get the consignment note. If that person has left the business, or has given no email address, the owners are emailed instead.",
       "The button in the email is a link like the others. It is listed under Links to this note, with the address it went to, how often the file was taken, and until when it works.",
-      "When somebody is taken out of the business, or leaves it, the links that were emailed to them stop at once. Links they made for the business to pass on keep working until you cancel them.",
+      "When somebody is taken out of the business, or leaves it, the links that were emailed to them stop at once. The same happens when somebody changes their own recovery email: the links sent to the old address stop. Links made for the business to pass on keep working until you cancel them.",
       "A link opens the note without signing in, for whoever has it. It works for 30 days and hands the file over 25 times at most. A note can have five links that work at the same time. Cancel one to make another.",
       "The price in the receipt is the price you and the carrier agreed. SeeBuyGet holds no money for your loads, and the receipt is not an invoice.",
-      "A viewer sees the links and can download the file, but cannot make or cancel a link."
+      "A viewer sees the links and can download the file, but cannot make or cancel a link.",
+      "If your own link stopped because you changed your email address, open the load and make a new one. The note itself is still there."
     ]
   },
   {

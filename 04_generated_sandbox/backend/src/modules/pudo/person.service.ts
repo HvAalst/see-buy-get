@@ -72,6 +72,8 @@ export class PersonService {
   private readonly byDid = new Map<string, string>();
   // And emailHash → personDid: one inbox, one account, found without the address.
   private readonly byEmail = new Map<string, string>();
+  /** Whoever has to hear that somebody's recovery email is no longer the one it was. Registered, not injected. */
+  private readonly whenEmailChanged: Array<(personDid: string) => void> = [];
 
   constructor(
     private readonly dids: DidService,
@@ -407,12 +409,21 @@ export class PersonService {
     const address = normalizeEmail(email);
     this.assertEmailFree(address, personDid);
     this.mergeVault(person, { email: address }, 'account-safety-update');
+    // REPLACED, not set for the first time and not confirmed again as the same one: what was sent to the old
+    // address was sent to a mailbox this person no longer vouches for.
+    const replaced = Boolean(person.emailHash) && person.emailHash !== hashEmail(address);
     if (person.emailHash) this.byEmail.delete(person.emailHash);
     person.emailHash = hashEmail(address);
     person.emailMasked = maskEmail(address);
     person.emailVerifiedAt = new Date(now).toISOString();
     this.save(person);
+    if (replaced) for (const tell of this.whenEmailChanged) tell(person.personDid);
     return person;
+  }
+
+  /** Be told when somebody's recovery email is replaced by another address. Not when it is first given. */
+  onEmailChanged(listener: (personDid: string) => void): void {
+    this.whenEmailChanged.push(listener);
   }
 
   /** The address itself, for sending — revealed from the vault, never kept beside the person. */

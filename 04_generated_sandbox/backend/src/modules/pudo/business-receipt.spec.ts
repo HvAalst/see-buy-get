@@ -86,7 +86,7 @@ describe('the receipt for a business’s delivered load', () => {
     archive.onModuleInit();
     archives.push(archive);
     const bundles = new NoteBundleService(archive, notes, { get: () => undefined, blob: () => { throw new Error('no photograph'); } } as never);
-    const links = new DocumentLinkService(archive, bundles, notes, businesses);
+    const links = new DocumentLinkService(archive, bundles, notes, businesses, persons);
     links.onModuleInit();
 
     /** A person who signed in with their phone and chose a PIN — and, unless told otherwise, confirmed a recovery email. */
@@ -408,6 +408,81 @@ describe('the receipt for a business’s delivered load', () => {
       o.join(o.biz.entityId, o.abebe.personDid, o.selam, 'Selam Tesfaye', 'booker');
 
       expect(o.links.look(token).state).toBe('cancelled');
+    });
+  });
+
+  describe('when somebody replaces their recovery email', () => {
+    it('stops every link that was emailed to the old address, for whichever business it was sent — and says why', async () => {
+      const s = await setUp();
+      const abebe = s.aPerson();
+      const selam = s.aPerson();
+      const one = s.aBusiness(abebe.personDid, 'One PLC');
+      const two = s.aBusiness(abebe.personDid, 'Two PLC');
+      s.join(one.entityId, abebe.personDid, selam, 'Selam Tesfaye', 'booker');
+      s.join(two.entityId, abebe.personDid, selam, 'Selam Tesfaye', 'booker');
+      await s.deliver('one-1', one.did, s.signIn(selam.personDid, one.entityId));
+      await s.deliver('two-1', two.did, s.signIn(selam.personDid, two.entityId));
+      const [fromOne, fromTwo] = s.receipts().map((m) => s.tokenOf(m.params.noteUrl));
+
+      s.persons.setEmail(selam.personDid, `moved-${Date.now()}@kilima.co.ke`);
+
+      expect(s.links.look(fromOne)).toEqual({ state: 'cancelled', expiresAt: expect.any(String) });
+      expect(s.links.look(fromTwo).state).toBe('cancelled');
+      expect(() => s.links.fetch(fromOne)).toThrow(/cancelled/);
+      expect(s.links.listFor(boardDocId('one-1'), s.signIn(abebe.personDid, one.entityId))).toEqual([
+        expect.objectContaining({ state: 'cancelled', sentTo: maskAddress(selam.email), cancelledWhy: 'address', cancelledAt: expect.any(String) }),
+      ]);
+    });
+
+    it('stops nothing when the same address is only confirmed again', async () => {
+      const o = await anOffice();
+      await o.deliver('b1', o.biz.did, o.signIn(o.selam.personDid, o.biz.entityId));
+      const token = o.tokenOf(o.receipts()[0].params.noteUrl);
+
+      o.persons.setEmail(o.selam.personDid, o.selam.email.toUpperCase());
+
+      expect(o.links.look(token).state).toBe('ready');
+    });
+
+    it('stops only what went to THAT person’s mailbox: a colleague’s receipt and a link made to pass on go on working', async () => {
+      const o = await anOffice();
+      const second = o.aPerson();
+      o.join(o.biz.entityId, o.abebe.personDid, second, 'Hana Bekele', 'owner');
+      await o.deliver('b1', o.biz.did);
+      const [abebes, hanas] = o.receipts().map((m) => o.tokenOf(m.params.noteUrl));
+      const passedOn = o.tokenOf(o.links.make(boardDocId('b1'), o.signIn(second.personDid, o.biz.entityId)).url);
+
+      o.persons.setEmail(second.personDid, `hana-${Date.now()}@kilima.co.ke`);
+
+      expect(o.links.look(hanas).state).toBe('cancelled');
+      expect(o.links.look(abebes).state).toBe('ready');
+      expect(o.links.look(passedOn).state).toBe('ready');
+    });
+
+    it('sends the next receipt to the new address, with a link that works', async () => {
+      const o = await anOffice();
+      const posted = o.signIn(o.selam.personDid, o.biz.entityId);
+      await o.deliver('b1', o.biz.did, posted);
+      const moved = `selam-${Date.now()}@kilima.co.ke`;
+      o.persons.setEmail(o.selam.personDid, moved);
+      await o.deliver('b2', o.biz.did, posted);
+
+      expect(o.receipts().map((m) => m.to.address)).toEqual([o.selam.email, moved]);
+      expect(o.links.look(o.tokenOf(o.receipts()[1].params.noteUrl)).state).toBe('ready');
+    });
+
+    it('never applies a reason that belongs to one business to them all: “left” without saying which stops nothing', async () => {
+      const o = await anOffice();
+      await o.deliver('b1', o.biz.did, o.signIn(o.selam.personDid, o.biz.entityId));
+      const token = o.tokenOf(o.receipts()[0].params.noteUrl);
+
+      expect(o.links.stopSentTo(o.selam.personDid, 'left')).toBe(0);
+      expect(o.links.stopSentTo('', 'address')).toBe(0);
+      expect(o.links.look(token).state).toBe('ready');
+      // Stopped once, it is stopped: the first reason stays, and a second stop finds nothing to do.
+      expect(o.links.stopSentTo(o.selam.personDid, 'address')).toBe(1);
+      expect(o.links.stopSentTo(o.selam.personDid, 'left', o.biz.did)).toBe(0);
+      expect(o.links.listFor(boardDocId('b1'), o.signIn(o.abebe.personDid, o.biz.entityId))[0].cancelledWhy).toBe('address');
     });
   });
 

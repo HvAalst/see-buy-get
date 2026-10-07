@@ -35,8 +35,11 @@ export interface DocumentLinkRow {
   cancelledAt?: string;
   /** Who cancelled it, where a person did and their sign-in names them. */
   cancelledBy?: string;
-  /** Stopped by nobody's hand: `left` — the person it was emailed to is no longer in the business. */
-  cancelledWhy?: 'left';
+  /**
+   * Stopped by nobody's hand: `left` — the person it was emailed to is no longer in the business · `address` — they
+   * replaced the email address it was sent to.
+   */
+  cancelledWhy?: 'left' | 'address';
 }
 
 /** What became of asking about a link: the server's answer, or why there is none. */
@@ -136,9 +139,11 @@ export function linkRowSays(row: DocumentLinkRow, t: Translate): { title: string
       ? // Who or why, where it is known: in an office of five, "cancelled" alone sends somebody round asking.
         row.cancelledWhy === 'left'
         ? t('archive.links.cancelledLeft', { date: day(row.cancelledAt) })
-        : row.cancelledBy
-          ? t('archive.links.cancelledBy', { name: row.cancelledBy, date: day(row.cancelledAt) })
-          : t('archive.links.cancelled', { date: day(row.cancelledAt) })
+        : row.cancelledWhy === 'address'
+          ? t('archive.links.cancelledAddress', { date: day(row.cancelledAt) })
+          : row.cancelledBy
+            ? t('archive.links.cancelledBy', { name: row.cancelledBy, date: day(row.cancelledAt) })
+            : t('archive.links.cancelled', { date: day(row.cancelledAt) })
       : row.state === 'expired'
         ? t('archive.links.expired', { date: day(row.expiresAt) })
         : row.state === 'used_up'

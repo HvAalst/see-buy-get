@@ -200,7 +200,7 @@ describe('a customer’s business, over the wire', () => {
     expect(entityId).toBeTruthy();
   });
 
-  it('emails a delivered load’s receipt to whoever posted it, shows its link on the load, and stops it when they leave', async () => {
+  it('emails a delivered load’s receipt to whoever posted it, shows its link on the load, and stops it when their address changes or they leave', async () => {
     const owner = await aPerson();
     const created = await http().post('/v1/sbg/business').set(bearer(owner.token)).send({ name: `Receipt Traders ${tag}`, country: 'KE', registrationNo: `REG11-${tag}`, activities: ['shipper'], yourName: 'Wambui Owner' }).expect(201);
     const ownerBiz = created.body.token.access_token;
@@ -244,14 +244,20 @@ describe('a customer’s business, over the wire', () => {
     const settle = async () => {
       for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r));
     };
-    store.set(freightId, { ...store.get(freightId), status: 'in_transit', pickedUpAt: new Date().toISOString(), lockedPrice: 42000 });
-    await bus.publish(GlosEvent.Pudo.FreightPickedUp, { freightId, code: posted.body.code }, { source: 'test' });
-    await settle();
+    const takeOver = async (id: string, code: string) => {
+      store.set(id, { ...store.get(id), status: 'in_transit', pickedUpAt: new Date().toISOString(), lockedPrice: 42000 });
+      await bus.publish(GlosEvent.Pudo.FreightPickedUp, { freightId: id, code }, { source: 'test' });
+      await settle();
+    };
+    const handOver = async (id: string, code: string) => {
+      const at = new Date().toISOString();
+      store.set(id, { ...store.get(id), status: 'delivered', deliveredAt: at, proofOfDelivery: { receiverName: 'Juma at the godown', photoRef: 'med_pod', confirmed: [], at } });
+      await bus.publish(GlosEvent.Pudo.FreightDelivered, { freightId: id, code }, { source: 'test' });
+      await settle();
+    };
+    await takeOver(freightId, posted.body.code);
     expect((await mine(bookerBiz)).noteId).toBe(noteId);
-    const at = new Date().toISOString();
-    store.set(freightId, { ...store.get(freightId), status: 'delivered', deliveredAt: at, proofOfDelivery: { receiverName: 'Juma at the godown', photoRef: 'med_pod', confirmed: [], at } });
-    await bus.publish(GlosEvent.Pudo.FreightDelivered, { freightId, code: posted.body.code }, { source: 'test' });
-    await settle();
+    await handOver(freightId, posted.body.code);
 
     // The receipt: to the booker's own address, in a business's words — and to nobody else in the office.
     const receiptsFor = async (address: string) => ((await http().get('/v1/mail/outbox').query({ to: address }).expect(200)).body.items as Array<{ template: string; subject: string; text: string }>).filter((m) => m.template === 'freight-delivered');
@@ -294,15 +300,41 @@ describe('a customer’s business, over the wire', () => {
     const strangerBiz = (await http().post('/v1/sbg/business').set(bearer(stranger.token)).send({ name: `Stranger ${tag}`, country: 'KE', registrationNo: `REG12-${tag}`, activities: ['shipper'], yourName: 'S' }).expect(201)).body.token.access_token;
     await http().get(`/v1/sbg/consignment-notes/${noteId}/links`).set(bearer(strangerBiz)).expect(404);
 
+    // The booker replaces their recovery email — the PIN again, and a code to the new address. The link that sits in
+    // the old mailbox stops at that moment, and the load says why. What they made to pass on is untouched.
+    const moved = `biz-${tag}-moved@example.com`;
+    const proof = await http().post('/v1/sbg/identity/email/request').send({ email: moved });
+    await http().post('/v1/sbg/account/email').set(bearer(booker.token)).send({ pin: '4826', email: moved, code: proof.body.code }).expect(201);
+    expect(await look()).toEqual({ state: 'cancelled', expiresAt: expect.any(String) });
+    expect((await http().post('/v1/sbg/document-links/fetch').send({ token: key }).expect(400)).body.detail).toBe('This link was cancelled');
+    expect((await http().post('/v1/sbg/document-links/look').send({ token: passedKey }).expect(200)).body.state).toBe('ready');
+    expect((await linksAs(ownerBiz)).map((l) => [l.state, l.cancelledWhy, l.madeBy])).toEqual([['ready', undefined, 'Bekele Booker'], ['cancelled', 'address', undefined]]);
+
+    // The next load they post is delivered: its receipt goes to the NEW address, with a link that works.
+    const second = await http()
+      .post('/v1/sbg/dispatch/freight')
+      .set(bearer(bookerBiz))
+      .send({ description: 'Tea, 10 chests', pickupLocation: { lat: -0.37, lng: 35.28 }, pickupLabel: 'Kericho store', destLabel: 'Mombasa godown', weightKg: 600, packaging: 'palletised', pickupCountry: 'KE', destCountry: 'KE' })
+      .expect(201);
+    await takeOver(second.body.freightId, second.body.code);
+    await handOver(second.body.freightId, second.body.code);
+    expect((await receiptsFor(booker.email)).map((m) => m.subject)).toEqual([expect.stringContaining(posted.body.code)]);
+    const [newer] = await receiptsFor(moved);
+    expect(newer.subject).toContain(second.body.code);
+    const newKey = /#doc=([A-Za-z0-9_-]{43})/.exec(newer.text)![1];
+    expect((await http().post('/v1/sbg/document-links/look').send({ token: newKey }).expect(200)).body.state).toBe('ready');
+
     // The booker is taken out of the business. Their sign-in stops on the next request — and so does the link in
     // their own mailbox. The one they made for the business to pass on is the business's, and goes on working.
     await http().delete(`/v1/sbg/business/me/members/${bookerRow.body.memberId}`).set(bearer(ownerBiz)).expect(200);
     await http().get(`/v1/sbg/consignment-notes/${noteId}/links`).set(bearer(bookerBiz)).expect(403);
-    expect(await look()).toEqual({ state: 'cancelled', expiresAt: expect.any(String) });
-    expect((await http().post('/v1/sbg/document-links/fetch').send({ token: key }).expect(400)).body.detail).toBe('This link was cancelled');
+    expect((await http().post('/v1/sbg/document-links/look').send({ token: newKey }).expect(200)).body).toEqual({ state: 'cancelled', expiresAt: expect.any(String) });
+    expect((await http().post('/v1/sbg/document-links/fetch').send({ token: newKey }).expect(400)).body.detail).toBe('This link was cancelled');
+    const secondNote = `freight~${second.body.freightId}`;
+    expect(((await http().get(`/v1/sbg/consignment-notes/${secondNote}/links`).set(bearer(ownerBiz)).expect(200)).body.items as Array<Record<string, unknown>>).map((l) => [l.state, l.cancelledWhy])).toEqual([['cancelled', 'left']]);
     expect((await http().post('/v1/sbg/document-links/look').send({ token: passedKey }).expect(200)).body.state).toBe('ready');
     const after = await linksAs(ownerBiz);
-    expect(after.map((l) => [l.state, l.cancelledWhy, l.madeBy])).toEqual([['ready', undefined, 'Bekele Booker'], ['cancelled', 'left', undefined]]);
+    expect(after.map((l) => [l.state, l.cancelledWhy, l.madeBy])).toEqual([['ready', undefined, 'Bekele Booker'], ['cancelled', 'address', undefined]]);
     // The owner stops the other one by hand, and the note says who did.
     const stopped = await http().post(`/v1/sbg/consignment-notes/${noteId}/links/${after[0].linkId}/cancel`).set(bearer(ownerBiz)).expect(200);
     expect(stopped.body).toMatchObject({ state: 'cancelled', cancelledBy: 'Wambui Owner' });

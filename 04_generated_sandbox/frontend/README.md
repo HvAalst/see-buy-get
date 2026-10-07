@@ -178,7 +178,10 @@ started with, never off a variable that happens to be set.
   the load — a load is read by every carrier on the board. Each person gets their own link, the receipt's links
   count against the five, and **when somebody is taken out of a business or leaves it, the links emailed to
   them stop at once** (`onMemberGone` → `DocumentLinkService.cancelSentTo`; the row says `cancelledWhy: left`).
-  Links they made for the business to pass on are the business's, and keep working. In the Business app the
+  Links they made for the business to pass on are the business's, and keep working. The same when somebody
+  REPLACES their recovery email: every link sent to the old address stops (`PersonService.onEmailChanged`,
+  fired where the address is set; `cancelledWhy: address`) — a mailbox no longer vouched for is not a place
+  to leave a way into anybody's papers. In the Business app the
   file and the links are on the load itself (`apps/business/screens/LoadNote.tsx`), driven by the same hook as
   the archive in the other apps (`shared/archive/useNoteLinks.ts`); `GET dispatch/posted` says where a load's
   note is (`noteId`) once a copy is kept. See the business's variant of the email at

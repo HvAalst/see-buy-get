@@ -12,6 +12,7 @@ import { DocumentLinkRow, DocumentLinkView, LinkCancelReason, LinkState } from '
 import { NoteArchiveService } from './note-archive.service';
 import { boardDocId } from './note-archive.types';
 import { NoteBundleService } from './note-bundle.service';
+import { PersonService } from './person.service';
 
 /** How long a link opens its document. A month: long enough for somebody's bookkeeping, short for a forwarded email. */
 export const LINK_DAYS = 30;
@@ -68,6 +69,7 @@ export class DocumentLinkService implements OnModuleInit {
     private readonly notes: ConsignmentNoteService,
     // Optional so the specs that build this by hand keep compiling; app.boot.spec catches it missing from the module.
     @Optional() private readonly businesses?: BusinessService,
+    @Optional() private readonly persons?: PersonService,
   ) {}
 
   onModuleInit(): void {
@@ -82,7 +84,11 @@ export class DocumentLinkService implements OnModuleInit {
       return made ? { url: linkUrl(made.token), until: made.link.expiresAt } : undefined;
     });
     // Somebody is taken out of a business, or leaves it: what was emailed to them as one of its people stops there.
-    this.businesses?.onMemberGone((businessDid, personDid) => void this.cancelSentTo(businessDid, personDid));
+    this.businesses?.onMemberGone((businessDid, personDid) => void this.stopSentTo(personDid, 'left', businessDid));
+    // Somebody replaces their recovery email: every link that went to the old address stops, for whichever business
+    // it was sent. People change an address because they lost the mailbox, or lost control of it — and nobody says
+    // which. The note is still on the load; a new link is one press away.
+    this.persons?.onEmailChanged((personDid) => void this.stopSentTo(personDid, 'address'));
   }
 
   /**
@@ -190,17 +196,23 @@ export class DocumentLinkService implements OnModuleInit {
   }
 
   /**
-   * SOMEBODY IS NO LONGER IN A BUSINESS: every link that was emailed to them as one of its people stops now.
+   * WHAT WAS EMAILED TO SOMEBODY STOPS, by nobody's hand, and says why.
+   *
+   * `left`, for one business — they are no longer in it:
    *
    * Their sign-in stops on their next click (membership is read live). Without this, the receipt in their own mailbox
    * would go on opening the business's notes for a month. Only the links sent TO THEM: one they made in the app and
    * passed to a customer was made for the business, is on its note for the business to see, and is the business's to
    * cancel. Kept, and it says why — the owners see what became of it. How many it stopped.
+   *
+   * `address`, for every business — they replaced the address it was sent to. A mailbox somebody has stopped
+   * vouching for is not a place to leave a way into anybody's papers.
    */
-  cancelSentTo(forDid: string, personDid: string, now: number = Date.now()): number {
-    if (!forDid || !personDid) return 0;
-    const theirs = [...this.links.values()].filter((l) => l.forDid === forDid && l.person === personDid && !l.cancelledAt);
-    for (const l of theirs) this.links.set(l.tokenHash, { ...l, cancelledAt: new Date(now).toISOString(), cancelledWhy: 'left' });
+  stopSentTo(personDid: string, why: LinkCancelReason, forDid?: string, now: number = Date.now()): number {
+    // A reason that belongs to one business is never applied to them all for want of saying which.
+    if (!personDid || (why === 'left' && !forDid)) return 0;
+    const theirs = [...this.links.values()].filter((l) => l.person === personDid && (forDid === undefined || l.forDid === forDid) && !l.cancelledAt);
+    for (const l of theirs) this.links.set(l.tokenHash, { ...l, cancelledAt: new Date(now).toISOString(), cancelledWhy: why });
     return theirs.length;
   }
 

@@ -41655,7 +41655,8 @@
             "type": "string",
             "description": "Why, when nobody cancelled it by hand.",
             "enum": [
-              "left"
+              "left",
+              "address"
             ]
           },
           "linkId": {
