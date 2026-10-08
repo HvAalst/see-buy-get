@@ -864,6 +864,7 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   private admitBooked(parcel: Parcel, agentDid: string): void {
     const agent = this.agents.get(agentDid);
+    this.agents.assertMayTakeIn(agentDid);
     const promise = this.presence.takeInPromise(this.agents.countryOf(agent), this.payerJurisdictionOf(parcel));
     if (promise === 'none') {
       throw new GlosError('FORBIDDEN', `Nothing can be taken in at ${agent.shopName}: the network does not operate in ${this.agents.countryOf(agent)} yet`);
@@ -921,6 +922,9 @@ export class ParcelService implements OnApplicationBootstrap {
       // at the far end of a money path the shopkeeper cannot see.
       throw new GlosError('FORBIDDEN', `Nothing can be taken in at ${agent.shopName}: the network does not operate in ${country} yet`);
     }
+
+    // A shop held over its national ID takes nothing new in, however it is paid for.
+    this.agents.assertMayTakeIn(input.agentDid);
 
     const mode: PaymentMode = input.paymentMode ?? 'cash';
 

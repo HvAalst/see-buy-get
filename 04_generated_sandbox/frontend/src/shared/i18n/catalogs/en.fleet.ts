@@ -1111,6 +1111,8 @@ export const enFleet = {
   'fleet.remove.doneToast': '{name} is off your fleet',
   'fleet.remove.doneDetail': 'They have been told why.',
   'fleet.drivers.dupTypo': 'If the number is wrong, correct it above and add them again.',
+  'fleet.drivers.dupDispute':
+    'If the ID number is right and it is theirs, somebody else registered with it. The driver disputes that themselves, with their own phone: on any SeeBuyGet sign-in screen, “Trouble signing in?”, then “Somebody else registered with my national ID”. When it is decided for them, add them here with that same phone number.',
   'fleet.adviser.title': 'Ask about this plan',
   'fleet.adviser.what': 'Ask why the plan is the way it is, or say what should be different — "keep FRT-142 off KLM 808T", "start at six", "the small truck is in the workshop". The adviser is an AI. It explains the plan, and it asks the planner again; the plan itself is always worked out by the planner.',
   'fleet.adviser.label': 'Your question, or what to change',

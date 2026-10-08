@@ -71,6 +71,12 @@ interface PrintRecord {
   /** The account that holds it — a DID, never the detail itself. */
   ownerDid: string;
   at: string;
+  /**
+   * KEPT FOR SOMEBODY WHO HAS NOT REGISTERED YET: the keyed print of the phone they will register with. A decision
+   * gave them this detail (id-dispute.service.ts) and they have no registration to hold it — so it is held for
+   * them, and only a registration made with that phone gets past it.
+   */
+  forPhone?: string;
 }
 
 export class RegistrationPrints {
@@ -85,9 +91,14 @@ export class RegistrationPrints {
    * not a clash: a licence number re-typed with a space is still their licence.
    */
   taken(fields: IdentityFields, askerDid?: string): PrintField | undefined {
+    const phone = fields.find(([field]) => field === 'phone')?.[1];
+    const phonePrint = printOf(this.register, 'phone', phone);
     for (const [field, value] of fields) {
       const held = this.prints.get(printOf(this.register, field, value));
-      if (held && held.ownerDid !== askerDid) return field;
+      if (!held || held.ownerDid === askerDid) continue;
+      // Kept for whoever registers with this phone — and this is them.
+      if (held.forPhone && phonePrint && held.forPhone === phonePrint) continue;
+      return field;
     }
     return undefined;
   }
@@ -114,6 +125,24 @@ export class RegistrationPrints {
   /** Which account holds this detail, if any. */
   holder(field: PrintField, value: string | undefined): string | undefined {
     return this.prints.get(printOf(this.register, field, value))?.ownerDid;
+  }
+
+  /* --- a detail passes from one account to another BY A DECISION (id-dispute.service.ts) — never by either of them --- */
+
+  /** Who holds the detail kept under this key: an account's DID, a keeping for somebody not yet registered, or nobody. */
+  holderOfKey(key: string): string | undefined {
+    return key ? this.prints.get(key)?.ownerDid : undefined;
+  }
+
+  /** The detail under this key is now this account's. Whoever held it before no longer does. */
+  moveKey(key: string, field: PrintField, toDid: string): void {
+    if (key) this.prints.set(key, { field, ownerDid: toDid, at: new Date().toISOString() });
+  }
+
+  /** Keep the detail under this key for whoever registers with this phone. `by` names what decided it. */
+  keepFor(key: string, field: PrintField, phone: string, by: string): void {
+    const forPhone = printOf(this.register, 'phone', phone);
+    if (key && forPhone) this.prints.set(key, { field, ownerDid: by, at: new Date().toISOString(), forPhone });
   }
 
   /** Free one detail — only by the account holding it, so nobody can release somebody else's. */

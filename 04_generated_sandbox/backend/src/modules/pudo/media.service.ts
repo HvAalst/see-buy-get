@@ -334,6 +334,25 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   /**
+   * A PHOTOGRAPH SENT FOR AN IDENTITY CHECK starts its clock at the decision — and starts it again when that
+   * decision is to be looked at once more in person, which is the one reason to keep it longer. This bin only.
+   */
+  anchorIdentityCheck(mediaId: string | undefined, at: Date = new Date()): void {
+    if (!mediaId) return;
+    const ref = this.refs.get(mediaId);
+    if (!ref || ref.status !== 'active' || ref.retentionClass !== 'identity-check') return;
+    ref.expiresAt = new Date(at.getTime() + RETENTION_DAYS['identity-check'] * DAY_MS).toISOString();
+    this.refs.set(mediaId, ref);
+  }
+
+  /** A photograph for an identity check was taken again: the one it replaces is deleted now. This bin only. */
+  dropIdentityCheck(mediaId: string | undefined): void {
+    if (!mediaId) return;
+    const ref = this.refs.get(mediaId);
+    if (ref && ref.retentionClass === 'identity-check') this.purge(ref);
+  }
+
+  /**
    * CL5 — STOP HOLDING A PHOTOGRAPH OF AN OFFICIAL DOCUMENT, NOW, and keep the fact that we did.
    *
    * Taking a photograph back off an observation used to unlink it and leave the bytes on disk for the rest

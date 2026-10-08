@@ -109,6 +109,12 @@ export class PersonService {
   }
 
   /** For an authenticated request: resolve the person the token acts as, or 404. */
+  /** The person a driver's or a shop's registration belongs to — whoever signs in as it. Nobody, for a record no person was ever linked to. */
+  findByEntity(entityDid: string): Person | undefined {
+    for (const person of this.persons.values()) if (person.roles.some((r) => r.entityDid === entityDid && r.role !== 'consumer')) return person;
+    return undefined;
+  }
+
   requireByDid(personDid: string): Person {
     const person = this.findByDid(personDid);
     if (!person) throw new GlosError('NOT_FOUND', 'No such person');

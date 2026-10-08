@@ -3,10 +3,13 @@ import { Button, CodeBoxes, CodeCard, Note, RefusalNote, Sheet } from '../ui';
 import { useT } from '../i18n';
 import type { SbgError } from '../../lib/sbg';
 import { EmailStep } from './EmailStep';
+import { IdDisputeCase } from './IdDisputeCase';
+import { IdDisputeOpen } from './IdDisputeOpen';
+import { looksLikeIdReference } from './idDispute';
 import { looksLikeReference, moveStatusSays, supportLines, type MoveAsked, type MoveStatus } from './move';
 import { asksForNationalId, type RecoveryApi } from './recovery';
 
-type Mode = 'choose' | 'gone' | 'undo' | 'staff' | 'status' | 'done-gone' | 'done-undo';
+type Mode = 'choose' | 'gone' | 'undo' | 'staff' | 'id' | 'status' | 'done-gone' | 'done-undo';
 
 /**
  * "TROUBLE SIGNING IN?" — on every sign-in screen, the same sheet.
@@ -24,6 +27,10 @@ type Mode = 'choose' | 'gone' | 'undo' | 'staff' | 'status' | 'done-gone' | 'don
  *    move it — after checking who is asking. Here they confirm the new number, are handed a reference to give to
  *    staff, and are told who to speak to. And here they come back, with the reference, to read what became of it:
  *    nothing we send can reach them.
+ *
+ *  - THEY COULD NOT REGISTER AT ALL: somebody else holds their national ID. They open a dispute, send three
+ *    photographs of themselves with their card, and come back with the reference — as above, and for the same
+ *    reason: they may have no account for anything to be sent to.
  *
  * Somebody who still knows their PIN and only wants a new number is told where that is: signed in, in the menu.
  */
@@ -59,6 +66,12 @@ export function TroubleSheet({ open, onClose, api }: { open: boolean; onClose: (
                 <span class="row__s">{t('account.trouble.staffSub')}</span>
               </span>
             </button>
+            <button type="button" class="row" role="listitem" onClick={() => setMode('id')}>
+              <span class="row__body">
+                <span class="row__t">{t('account.trouble.id')}</span>
+                <span class="row__s">{t('account.trouble.idSub')}</span>
+              </span>
+            </button>
             <button type="button" class="row" role="listitem" onClick={() => setMode('status')}>
               <span class="row__body">
                 <span class="row__t">{t('account.trouble.status')}</span>
@@ -72,11 +85,12 @@ export function TroubleSheet({ open, onClose, api }: { open: boolean; onClose: (
       {mode === 'gone' ? <Gone api={api} onDone={() => setMode('done-gone')} /> : null}
       {mode === 'undo' ? <Undo api={api} onDone={() => setMode('done-undo')} /> : null}
       {mode === 'staff' ? <AskStaff api={api} /> : null}
+      {mode === 'id' ? <IdDisputeOpen api={api} /> : null}
       {mode === 'status' ? <MoveOutcome api={api} onAskAgain={() => setMode('staff')} /> : null}
       {mode === 'done-gone' ? <Note tone="ok" icon="check" title={t('account.trouble.goneDoneTitle')} detail={t('account.trouble.goneDone')} /> : null}
       {mode === 'done-undo' ? <Note tone="ok" icon="check" title={t('account.trouble.undoDoneTitle')} detail={t('account.trouble.undoDone')} /> : null}
-      <Button variant="link" onClick={mode === 'gone' || mode === 'undo' || mode === 'staff' || mode === 'status' ? () => setMode('choose') : close}>
-        {t(mode === 'gone' || mode === 'undo' || mode === 'staff' || mode === 'status' ? 'common.back' : 'account.trouble.close')}
+      <Button variant="link" onClick={mode === 'gone' || mode === 'undo' || mode === 'staff' || mode === 'id' || mode === 'status' ? () => setMode('choose') : close}>
+        {t(mode === 'gone' || mode === 'undo' || mode === 'staff' || mode === 'id' || mode === 'status' ? 'common.back' : 'account.trouble.close')}
       </Button>
     </Sheet>
   );
@@ -313,10 +327,13 @@ function MoveOutcome({ api, onAskAgain }: { api: RecoveryApi; onAskAgain: () => 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<SbgError | null>(null);
   const [status, setStatus] = useState<MoveStatus | null>(null);
+  const [idRef, setIdRef] = useState<string | null>(null);
 
   const look = async () => {
-    setBusy(true);
+    setIdRef(null);
     setStatus(null);
+    if (looksLikeIdReference(reference)) return setIdRef(reference.trim());
+    setBusy(true);
     const r = await api.moveStatus(reference.trim());
     setBusy(false);
     setError(r.error ?? null);
@@ -331,12 +348,13 @@ function MoveOutcome({ api, onAskAgain }: { api: RecoveryApi; onAskAgain: () => 
         <label class="field__label" for="move-ref">
           {t('account.move.reference')}
         </label>
-        <input id="move-ref" class="input input--mono" value={reference} onInput={(e) => setReference(e.currentTarget.value)} placeholder="MV-XXXX-XXXX" spellcheck={false} autocapitalize="characters" disabled={busy} />
+        <input id="move-ref" class="input input--mono" value={reference} onInput={(e) => setReference(e.currentTarget.value)} placeholder="MV-XXXX-XXXX · ID-XXXX-XXXX" spellcheck={false} autocapitalize="characters" disabled={busy} />
       </div>
       {error ? <RefusalNote error={error} /> : null}
-      <Button chevron={false} disabled={!looksLikeReference(reference)} busy={busy} onClick={() => void look()}>
+      <Button chevron={false} disabled={!looksLikeReference(reference) && !looksLikeIdReference(reference)} busy={busy} onClick={() => void look()}>
         {t('account.move.statusCta')}
       </Button>
+      {idRef ? <IdDisputeCase key={idRef} api={api.idDispute} reference={idRef} /> : null}
       {says && status ? (
         <>
           <Note tone={says.tone} icon={says.icon} title={says.title} detail={says.lines.join(' ')} />

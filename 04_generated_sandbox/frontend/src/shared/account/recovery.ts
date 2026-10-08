@@ -1,4 +1,5 @@
 import { publicRequest, type Result, type SbgConfig, type SbgError } from '../../lib/sbg';
+import { idDisputeApi, type DisputeOpened, type IdDisputeApi, type IdRegister } from './idDispute';
 import type { MoveAsked, MoveStatus } from './move';
 
 /**
@@ -22,6 +23,10 @@ export interface RecoveryApi {
   askStaff: (body: { oldPhone: string; newPhone: string; nationalId?: string; note?: string }) => Promise<Result<MoveAsked>>;
   /** What became of it, by the reference that was handed back. */
   moveStatus: (reference: string) => Promise<Result<MoveStatus>>;
+  /** Refused at registration because somebody else holds the national ID: open a dispute. The phone is already confirmed by a code. */
+  openIdDispute: (body: { register: IdRegister; nationalId: string; phone: string }) => Promise<Result<DisputeOpened>>;
+  /** Either person's side of a dispute over a national ID, by their own reference. */
+  idDispute: IdDisputeApi;
 }
 
 export function recoveryApi(config: SbgConfig): RecoveryApi {
@@ -35,6 +40,8 @@ export function recoveryApi(config: SbgConfig): RecoveryApi {
     recover: (body) => post('/v1/sbg/identity/recover', body),
     askStaff: (body) => post('/v1/sbg/identity/move-requests', body),
     moveStatus: (reference) => post('/v1/sbg/identity/move-requests/status', { reference }),
+    openIdDispute: (body) => post('/v1/sbg/identity/id-disputes', body),
+    idDispute: idDisputeApi(post),
   };
 }
 

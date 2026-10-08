@@ -39,17 +39,25 @@ export const MEDIA_KINDS = [
    * person's. See FieldObservationService for both, and for why neither substitutes for the other.
    */
   'field_evidence',
+  /**
+   * A PERSON HOLDING THEIR OWN ID CARD, and the card close up — sent when two people say one national ID is
+   * theirs (id-dispute.service.ts). Seen by the two members of staff who decide, and by nobody else.
+   */
+  'id_check',
 ] as const;
 
 export type MediaKind = (typeof MEDIA_KINDS)[number];
 
-export type RetentionClass = 'shipment-proof' | 'dispute-evidence' | 'account-doc' | 'vehicle-asset' | 'road-report' | 'field-evidence';
+/** How long a photograph of somebody holding their ID is kept after the decision it was sent for. */
+export const IDENTITY_CHECK_DAYS = 30;
+
+export type RetentionClass = 'shipment-proof' | 'dispute-evidence' | 'account-doc' | 'vehicle-asset' | 'road-report' | 'field-evidence' | 'identity-check';
 export type MediaStatus = 'active' | 'expired';
 
 /** What a media item is attached to — drives who may see it and when its retention clock starts. */
 export interface MediaLink {
   /** `fleet` — a fleet OPERATOR's own papers (its transport licence, its cover), sent from the fleet app. */
-  type: 'parcel' | 'vehicle' | 'agent' | 'driver' | 'person' | 'freight' | 'constraint' | 'box' | 'fleet';
+  type: 'parcel' | 'vehicle' | 'agent' | 'driver' | 'person' | 'freight' | 'constraint' | 'box' | 'fleet' | 'id-dispute';
   id: string;
 }
 
@@ -108,6 +116,12 @@ export const RETENTION_DAYS: Record<RetentionClass, number> = {
    * the same shape as an operator stripping a photograph off by hand.
    */
   'field-evidence': 90,
+  /**
+   * A FACE AND A GOVERNMENT ID IN ONE PICTURE — the most sensitive thing this store holds, sent for one decision.
+   * Its clock starts when that decision is made (and again if the decision is looked at in person), and it is
+   * short: what stays afterwards is who decided, when and what they checked, never the pictures.
+   */
+  'identity-check': IDENTITY_CHECK_DAYS,
 };
 
 /** The bin a kind lands in. */
@@ -130,6 +144,7 @@ export const KIND_RETENTION: Record<MediaKind, RetentionClass> = {
   // evidence is kept on the dispute clock rather than the shipment one.
   interchange: 'dispute-evidence',
   field_evidence: 'field-evidence',
+  id_check: 'identity-check',
 };
 
 /** Only real raster image types — no SVG (it can carry script), no arbitrary bytes. */

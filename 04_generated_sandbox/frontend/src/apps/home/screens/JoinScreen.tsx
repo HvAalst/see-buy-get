@@ -1,8 +1,11 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PlaceMap, ReadAloud, ShopDetailSheet } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PlaceMap, ReadAloud, Sheet, ShopDetailSheet } from '../../../shared/ui';
 import { toPlaceWords } from '../../../shared/placewords';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { duplicateField, isIdentityDocument, type DuplicateField } from '../../../shared/duplicate';
+import { IdDisputeOpen } from '../../../shared/account/IdDisputeOpen';
+import { recoveryApi } from '../../../shared/account/recovery';
+import { homeConfig } from '../api';
 
 import { DRIVER_CLASSES, joinSpoken, needsLicence, pickedClasses, pickedVehicle, roleMeta, stepBlocker, stepsFor, vehicleClassFor } from '../logic';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE, leaveInterest, type OperatingCountry } from '../api';
@@ -85,11 +88,16 @@ function dupDetail(role: string, field: DuplicateField): MessageKey {
  * and other details would make a second identity. So: sign in with the account that exists; put right a number
  * that was mistyped; or, where neither is possible, be told honestly that the app cannot fix it yet.
  */
+const recovery = recoveryApi(homeConfig());
+
 function AlreadyRegistered({ state, actions }: JoinScreenProps) {
   const t = useT();
   const role = state.role!;
   const field = duplicateField(state.error)!;
   const signsIn = role.id === 'driver' || role.id === 'pudo';
+  // The ID is theirs and somebody else holds it: the dispute is opened here, where they were refused, with what they typed.
+  const [disputing, setDisputing] = useState(false);
+  const disputable = field === 'nationalId' && signsIn;
   return (
     <div class="dup">
       <Note tone="warn" icon="lock" title={t(DUP_TITLE[field])} detail={t(dupDetail(role.id, field))} />
@@ -104,7 +112,17 @@ function AlreadyRegistered({ state, actions }: JoinScreenProps) {
             {t('home.dup.checkTyped')}
           </Button>
         ) : null}
+        {disputable ? (
+          <Button variant="link" full={false} onClick={() => setDisputing(true)}>
+            {t('home.dup.dispute')}
+          </Button>
+        ) : null}
       </div>
+      {disputable ? (
+        <Sheet open={disputing} onClose={() => setDisputing(false)} title={t('home.dup.disputeTitle')}>
+          {disputing ? <IdDisputeOpen api={recovery} preset={{ register: role.id === 'driver' ? 'driver' : 'shop', nationalId: state.form.nationalId, phone: state.form.phone }} /> : null}
+        </Sheet>
+      ) : null}
     </div>
   );
 }

@@ -1,0 +1,183 @@
+import { Test } from '@nestjs/testing';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
+import request from 'supertest';
+import { AppModule } from '../src/app.module';
+
+/**
+ * TWO PEOPLE SAY ONE NATIONAL ID IS THEIRS, OVER THE WIRE — as the guards and the route roles see it.
+ *
+ * The user, 2026-10-08: staff decide from photographs of each person holding their card; still disputed, an
+ * appointment in person with a ticket. What has to hold on the wire is who may do which part: either of the two
+ * people acts by their own reference and by nothing else; only the holder's own sign-in can say the number was never
+ * theirs; only staff see the photographs and decide — and never the same member of staff both halves.
+ */
+describe('two people say one national ID is theirs, over the wire', () => {
+  let app: INestApplication;
+  let http: () => ReturnType<typeof request>;
+  let setupKey = '';
+  const tag = Math.random().toString(36).slice(2, 8);
+  let seq = 0;
+  const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
+  const aNumber = () => `+2547${String(Math.floor(Math.random() * 9_000_000) + 1_000_000)}${(seq += 1)}`.slice(0, 13);
+  const anId = () => `${Math.floor(Math.random() * 90_000_000) + 10_000_000}`;
+  const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    app = moduleRef.createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    app.setGlobalPrefix('v1');
+    await app.init();
+    http = () => request(app.getHttpServer());
+    setupKey = (await http().post('/v1/auth/token').send({ role: 'operator' })).body.access_token;
+  }, 60_000);
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  async function aVerifiedNumber(): Promise<string> {
+    const phone = aNumber();
+    const asked = await http().post('/v1/sbg/auth/phone/request').send({ phone });
+    await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
+    return phone;
+  }
+  /** A person with a PIN who is also a driver, registered with this national ID. */
+  async function aDriver(nationalId: string): Promise<{ phone: string; token: string; did: string }> {
+    const phone = await aVerifiedNumber();
+    const email = `idd-${tag}-${(seq += 1)}@example.com`;
+    const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '4826', email, emailCode: mailed.body.code }).expect(201);
+    const driver = await http().post('/v1/sbg/drivers/onboard').set(bearer(setupKey)).send({ displayName: `Rider ${seq}`, fullName: `Rider ${seq}`, nationalId, mobile: phone, licenceClasses: ['bike'] }).expect(201);
+    return { phone, token: enrolled.body.token.access_token, did: driver.body.did };
+  }
+  async function aStaff(name: string): Promise<string> {
+    const made = await http().post('/v1/sbg/operators').set(bearer(setupKey)).send({ email: `${name}-${tag}@sbg.test`, name: `${name} ${tag}` }).expect(201);
+    const login = await http().post('/v1/sbg/operators/login').send({ email: made.body.email, password: made.body.temporaryPassword }).expect(201);
+    return login.body.token.access_token;
+  }
+  const idOf = async (reference: string, as: string) => ((await http().get('/v1/sbg/id-disputes').set(bearer(as)).expect(200)).body.items as Array<{ reference: string; disputeId: string }>).find((d) => d.reference === reference)!.disputeId;
+  const status = async (reference: string) => (await http().post('/v1/sbg/identity/id-disputes/status').send({ reference }).expect(200)).body;
+  const sendAll = async (reference: string) => {
+    for (const which of ['face', 'front', 'back']) await http().post('/v1/sbg/identity/id-disputes/photo').send({ reference, which, dataUrl: PNG }).expect(200);
+    return (await http().post('/v1/sbg/identity/id-disputes/send').send({ reference }).expect(200)).body;
+  };
+  const me = async (token: string) => (await http().get('/v1/sbg/account/me').set(bearer(token)).expect(200)).body;
+
+  it('is opened by whoever was refused, answered by the holder, decided by two members of staff — and the loser is held, not removed', async () => {
+    const amina = await aStaff('amina-id');
+    const brian = await aStaff('brian-id');
+    const nationalId = anId();
+    const holder = await aDriver(nationalId);
+    const bystander = await aDriver(anId());
+
+    // Refused at registration: this is what sends somebody here.
+    await http().post('/v1/sbg/drivers/onboard').set(bearer(setupKey)).send({ displayName: 'X', fullName: 'X', nationalId, mobile: aNumber(), licenceClasses: ['bike'] }).expect(409);
+
+    // Opening: a confirmed phone, a register we know, a number.
+    await http().post('/v1/sbg/identity/id-disputes').send({ register: 'driver', nationalId, phone: aNumber() }).expect(400);
+    const phone = await aVerifiedNumber();
+    await http().post('/v1/sbg/identity/id-disputes').send({ register: 'pilot', nationalId, phone }).expect(400);
+    await http().post('/v1/sbg/identity/id-disputes').send({ register: 'driver', phone }).expect(400);
+    const opened = await http().post('/v1/sbg/identity/id-disputes').send({ register: 'driver', nationalId, phone }).expect(201);
+    expect(opened.body.reference).toMatch(/^ID-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+    await http().post('/v1/sbg/identity/id-disputes/status').send({ reference: 'ID-AAAA-AAAA' }).expect(404);
+    await http().post('/v1/sbg/identity/id-disputes/status').send({}).expect(400);
+
+    // Nothing has been sent, so the holder has not been told.
+    expect((await me(holder.token)).idDispute).toBeUndefined();
+    await http().post('/v1/sbg/identity/id-disputes/photo').send({ reference: opened.body.reference, which: 'chin', dataUrl: PNG }).expect(400);
+    await http().post('/v1/sbg/identity/id-disputes/photo').send({ reference: opened.body.reference, which: 'face', dataUrl: 'not a picture' }).expect(400);
+    await http().post('/v1/sbg/identity/id-disputes/send').send({ reference: opened.body.reference }).expect(400);
+    expect(await sendAll(opened.body.reference)).toMatchObject({ side: 'claimant', state: 'answering', sent: true });
+
+    // The holder sees it on their own account, with a reference of THEIR own. Nobody else's account says anything.
+    const mine = (await me(holder.token)).idDispute;
+    expect(mine).toMatchObject({ register: 'driver', state: 'answering', answerBy: expect.any(String) });
+    expect(mine.reference).toMatch(/^ID-/);
+    expect(mine.reference).not.toBe(opened.body.reference);
+    expect((await me(bystander.token)).idDispute).toBeUndefined();
+    // Only the claimant withdraws; only the holder's own sign-in says the number was never theirs.
+    await http().post('/v1/sbg/identity/id-disputes/withdraw').send({ reference: mine.reference }).expect(403);
+    await http().post('/v1/sbg/account/id-disputes/own-id').send({ nationalId: anId() }).expect(401);
+    await http().post('/v1/sbg/account/id-disputes/own-id').set(bearer(bystander.token)).send({ nationalId: anId() }).expect(400);
+    expect(await sendAll(mine.reference)).toMatchObject({ side: 'holder', state: 'ready' });
+
+    // Staff alone read the disputes and see the photographs.
+    await http().get('/v1/sbg/id-disputes').expect(401);
+    await http().get('/v1/sbg/id-disputes').set(bearer(holder.token)).expect(403);
+    const disputeId = await idOf(opened.body.reference, amina);
+    await http().get(`/v1/sbg/id-disputes/${disputeId}`).set(bearer(holder.token)).expect(403);
+    await http().post(`/v1/sbg/id-disputes/${disputeId}/approve`).set(bearer(holder.token)).send({}).expect(403);
+    const row = (await http().get(`/v1/sbg/id-disputes/${disputeId}`).set(bearer(amina)).expect(200)).body;
+    expect(row).toMatchObject({ state: 'ready', register: 'driver', holderReference: mine.reference, claimant: { phoneEnds: phone.slice(-3), face: expect.stringMatching(/^med_/) }, holder: { who: expect.stringMatching(/^Driver: Rider/), back: expect.stringMatching(/^med_/) } });
+    expect(JSON.stringify(row)).not.toContain(nationalId);
+    expect(JSON.stringify(row)).not.toContain(phone);
+    expect(JSON.stringify(row)).not.toContain(holder.phone);
+    const picture = await http().get(`/v1/sbg/media/${row.claimant.face}`).set(bearer(amina)).expect(200);
+    expect(picture.headers['content-type']).toMatch(/^image\/png/);
+    // Not the other person, and not even the one who is in it: these are staff's to look at, for one decision.
+    await http().get(`/v1/sbg/media/${row.claimant.face}`).set(bearer(holder.token)).expect(403);
+    await http().get(`/v1/sbg/media/${row.holder.face}`).set(bearer(holder.token)).expect(403);
+
+    // Reading the cards: only an answer comes back.
+    await http().post(`/v1/sbg/id-disputes/${disputeId}/card`).set(bearer(amina)).send({ side: 'referee', number: nationalId }).expect(400);
+    expect((await http().post(`/v1/sbg/id-disputes/${disputeId}/card`).set(bearer(amina)).send({ side: 'claimant', number: nationalId }).expect(200)).body.claimant.card).toBe('matches');
+    expect((await http().post(`/v1/sbg/id-disputes/${disputeId}/card`).set(bearer(amina)).send({ side: 'holder', number: nationalId }).expect(200)).body.holder.card).toBe('matches');
+
+    // One says whose it is; that one cannot approve; another does.
+    await http().post(`/v1/sbg/id-disputes/${disputeId}/approve`).set(bearer(brian)).send({}).expect(400);
+    await http().post(`/v1/sbg/id-disputes/${disputeId}/check`).set(bearer(amina)).send({ to: 'claimant', what: 'Face and card match.' }).expect(400);
+    const proposed = await http().post(`/v1/sbg/id-disputes/${disputeId}/check`).set(bearer(amina)).send({ to: 'claimant', what: 'Face and card match; reference in the picture.', reason: 'The card you showed is not yours.' }).expect(200);
+    expect(proposed.body).toMatchObject({ state: 'checked', proposedTo: 'claimant', proposedBy: `amina-id ${tag}`, proposedByYou: true });
+    expect((await http().post(`/v1/sbg/id-disputes/${disputeId}/approve`).set(bearer(amina)).send({}).expect(409)).body.detail).toMatch(/A second member of staff has to approve/);
+    await http().post(`/v1/sbg/id-disputes/${disputeId}/approve`).set(bearer(amina)).send({ by: 'Somebody Else' }).expect(409);
+    const decided = await http().post(`/v1/sbg/id-disputes/${disputeId}/approve`).set(bearer(brian)).send({}).expect(200);
+    expect(decided.body).toMatchObject({ state: 'decided', decidedTo: 'claimant', decidedBy: `brian-id ${tag}`, holderEffect: 'held', contestBy: expect.any(String) });
+
+    // Each is told their own half, by their own reference.
+    expect(await status(opened.body.reference)).toMatchObject({ yours: true });
+    expect(await status(mine.reference)).toMatchObject({ yours: false, held: true, reason: 'The card you showed is not yours.', contestBy: expect.any(String) });
+    expect((await me(holder.token)).idDispute).toMatchObject({ state: 'decided', held: true });
+
+    // Kept for the claimant alone: a stranger is still refused, their own phone gets through.
+    await http().post('/v1/sbg/drivers/onboard').set(bearer(setupKey)).send({ displayName: 'Y', fullName: 'Y', nationalId, mobile: aNumber(), licenceClasses: ['bike'] }).expect(409);
+    await http().post('/v1/sbg/drivers/onboard').set(bearer(setupKey)).send({ displayName: 'Claimant', fullName: 'Claimant', nationalId, mobile: phone, licenceClasses: ['bike'] }).expect(201);
+
+    // The held registration puts an ID of its own on record, and the hold is over.
+    await http().post('/v1/sbg/account/id-disputes/own-id').set(bearer(holder.token)).send({ nationalId }).expect(409);
+    await http().post('/v1/sbg/account/id-disputes/own-id').set(bearer(holder.token)).send({}).expect(400);
+    expect((await http().post('/v1/sbg/account/id-disputes/own-id').set(bearer(holder.token)).send({ nationalId: anId() }).expect(200)).body).toEqual({ saved: true });
+    expect((await status(mine.reference)).held).toBeUndefined();
+  });
+
+  it('still disputed: whoever did not get it makes an appointment and is given a ticket — on a sandbox’s shared key, two names are two people', async () => {
+    const nationalId = anId();
+    const holder = await aDriver(nationalId);
+    const phone = await aVerifiedNumber();
+    const opened = await http().post('/v1/sbg/identity/id-disputes').send({ register: 'driver', nationalId, phone }).expect(201);
+    await sendAll(opened.body.reference);
+    const mine = (await me(holder.token)).idDispute;
+    await sendAll(mine.reference);
+    const disputeId = await idOf(opened.body.reference, setupKey);
+    await http().post(`/v1/sbg/id-disputes/${disputeId}/card`).set(bearer(setupKey)).send({ side: 'holder', number: nationalId, by: 'Amina Otieno' }).expect(200);
+    await http().post(`/v1/sbg/id-disputes/${disputeId}/check`).set(bearer(setupKey)).send({ to: 'holder', what: 'Their card carries it.', reason: 'The holder showed the card with this number.', by: 'Amina Otieno' }).expect(200);
+    await http().post(`/v1/sbg/id-disputes/${disputeId}/approve`).set(bearer(setupKey)).send({ by: 'Amina Otieno' }).expect(409);
+    // A second member of staff may send it back instead — and then it waits to be proposed again.
+    expect((await http().post(`/v1/sbg/id-disputes/${disputeId}/send-back`).set(bearer(setupKey)).send({ why: 'Read the claimant’s card too.', by: 'Brian Kamau' }).expect(200)).body).toMatchObject({ state: 'ready' });
+    await http().post(`/v1/sbg/id-disputes/${disputeId}/check`).set(bearer(setupKey)).send({ to: 'holder', what: 'Both read.', reason: 'The holder showed the card with this number.', by: 'Amina Otieno' }).expect(200);
+    expect((await http().post(`/v1/sbg/id-disputes/${disputeId}/approve`).set(bearer(setupKey)).send({ by: 'Brian Kamau' }).expect(200)).body).toMatchObject({ state: 'decided', decidedTo: 'holder', holderEffect: 'none' });
+
+    // The holder got it: there is nothing for them to contest. The claimant did not, and names a day.
+    const tomorrow = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10);
+    await http().post('/v1/sbg/identity/id-disputes/appointment').send({ reference: mine.reference, date: tomorrow }).expect(400);
+    await http().post('/v1/sbg/identity/id-disputes/appointment').send({ reference: opened.body.reference, date: 'next Tuesday' }).expect(400);
+    const made = await http().post('/v1/sbg/identity/id-disputes/appointment').send({ reference: opened.body.reference, date: tomorrow }).expect(200);
+    expect(made.body).toMatchObject({ state: 'appointment', ticket: { reference: opened.body.reference, date: tomorrow, yours: true, bring: ['id_card', 'phone', 'reference', 'second_document'] } });
+    expect((await status(mine.reference)).ticket).toMatchObject({ reference: mine.reference, date: tomorrow, yours: false, changesLeft: 0 });
+    expect((await me(holder.token)).idDispute).toMatchObject({ state: 'appointment' });
+    // What was seen in person is recorded from the day itself, not before.
+    const early = await http().post(`/v1/sbg/id-disputes/${disputeId}/check`).set(bearer(setupKey)).send({ to: 'claimant', what: 'x', reason: 'y', claimantCame: true, holderCame: false, by: 'Amina Otieno' }).expect(400);
+    expect(early.body.detail).toMatch(/The appointment is on/);
+    expect((await http().get(`/v1/sbg/id-disputes/${disputeId}`).set(bearer(setupKey)).expect(200)).body).toMatchObject({ state: 'appointment', appointmentDate: tomorrow, appointmentBy: 'claimant' });
+  });
+});

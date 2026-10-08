@@ -6,6 +6,7 @@ import { PersonService } from './person.service';
 import { HandleService } from '../../foundation/handle/handle.service';
 import { AccountProfileDto, AccountPinDto, AccountEmailDto, ChangeNumberDto } from './pudo.dto';
 import { AccountMoveService } from './account-move.service';
+import { IdDisputeService } from './id-dispute.service';
 import { AccountRecoveryService } from './account-recovery.service';
 
 /**
@@ -41,6 +42,7 @@ export class AccountController {
     private readonly handles: HandleService,
     private readonly recovery: AccountRecoveryService,
     private readonly moves: AccountMoveService,
+    private readonly idDisputes: IdDisputeService,
   ) {}
 
   /**
@@ -57,9 +59,13 @@ export class AccountController {
     // Somebody has asked staff to move THIS account to another number. Its holder is shown it wherever they look
     // at their own account — they are the one person who knows whether it was them.
     const moveAsked = this.moves.openAgainst(person.personDid);
+    // Somebody says the national ID on one of this person's registrations is theirs — or it has gone to them, and
+    // the registration is held. Shown with THEIR reference: it is what they answer with.
+    const idDispute = this.idDisputes.against(person.personDid);
     return {
       ...this.persons.view(person),
       ...(moveAsked ? { moveAsked } : {}),
+      ...(idDispute ? { idDispute } : {}),
       /** The role this token is acting as — what the menu heads itself with. */
       actingAs: actor.role,
       actingDid: actor.did,

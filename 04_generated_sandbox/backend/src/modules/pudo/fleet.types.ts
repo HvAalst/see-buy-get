@@ -327,6 +327,12 @@ export class FleetDriver {
    */
   removedFrom?: FleetRemoval;
   /**
+   * THE NATIONAL ID THEY REGISTERED WITH WENT TO SOMEBODY ELSE, by a decision of two members of staff
+   * (id-dispute.service.ts). They finish what they carry and start nothing new until an ID of their own is on
+   * record — which they put there themselves, from Settings. `reference` is theirs to quote to staff.
+   */
+  idHold?: { reference: string; at: string };
+  /**
    * Legal residence — and ONLY for an independent courier, who the network contracts with directly.
    * A fleet-attached driver has none, deliberately: the network pays their fleet, not them, so asking
    * where they live would be collecting data for a payment we never make. We move parcels; we do not

@@ -215,7 +215,11 @@ export const ARTICLES: GuideArticle[] = [
       "If email to your recovery address comes back undelivered, Settings says so under Recovery email, and we stop writing to that address. To keep the same address, open Recovery email, enter it, send the code and type in the code you receive: that proves it works again. Or enter another address.",
       "No number, no PIN and no recovery email you can read? Two members of SeeBuyGet staff can move your account. On the sign-in screen choose Trouble signing in, then Ask SeeBuyGet staff to move my account. Enter the number your account is on, confirm your new number with the code sent to it, and write down the reference you are given. Then speak to staff and give them the reference: they check who you are.",
       "To see what became of it, choose Trouble signing in, then I already asked staff, and enter your reference. When it says your account was moved, sign in with the new number: choose First time here, or forgot your PIN, enter the code, and choose a new PIN. A request waits two weeks, then lapses.",
-      "If somebody asks staff to move YOUR account, you are told at once, in the app and by email, and Settings shows it with a button: It was not me: stop it. Signing in with your PIN stops it too. Then change your PIN. If an account is moved all the same, it can be undone for 24 hours with the old number and the PIN as it was."
+      "If somebody asks staff to move YOUR account, you are told at once, in the app and by email, and Settings shows it with a button: It was not me: stop it. Signing in with your PIN stops it too. Then change your PIN. If an account is moved all the same, it can be undone for 24 hours with the old number and the PIN as it was.",
+      "Could not register as a driver or a shop because your national ID is already registered? Check the number first: one wrong digit is the usual reason. If it is right, somebody else is using your number. On any sign-in screen choose Trouble signing in, then Somebody else registered with my national ID. Confirm your phone number, and you are given a reference.",
+      "Write the reference on paper. Take three photographs: yourself holding your ID card under your chin with the paper beside it, then the front of the card close up, then the back. Somebody else may take them for you. Look at each one before you send it: if you cannot read the number, staff cannot either. Only the two members of staff who decide see them, and they are deleted 30 days after the decision.",
+      "If somebody says the ID on YOUR registration is theirs, you are told in the app and by email, and Settings shows it. You have a week. Either send the same three photographs with your own reference, or, if the number on your record was simply mistyped, put the right one there: that ends it at once and nothing else changes for you.",
+      "Two members of staff decide from the photographs. If the ID goes to the other person, your account is not removed: your driver or shop registration is held. You finish what you have in hand and start nothing new until you put the number of your own ID card on record, in Settings. If you do not accept the decision, you have two weeks to choose a day to come in: you are given a ticket that says where, when and what to bring."
     ]
   },
   {
@@ -347,6 +351,34 @@ export const ARTICLES: GuideArticle[] = [
       "After a move the holder can undo it for 24 hours with the old number and the PIN as it was, or with a code to their email. The old number is kept for them until then.",
       "A request nobody decides lapses after two weeks. The person can ask again.",
       "Outside a sandbox this needs a named sign-in for each member of staff. The shared operator key cannot say who is at the keyboard, so it is refused."
+    ]
+  },
+  {
+    id: "console-id-disputes",
+    apps: [
+      "console"
+    ],
+    title: "ID disputes: two of us say whose national ID it is",
+    summary: "Two people say one national ID number is theirs. One holds it on a driver or shop registration; the other was refused. Each sends three photographs. One member of staff says whose it is, and a second approves.",
+    steps: [
+      "Open ID disputes, under Waiting on you, and open the dispute. The two people are side by side: the one who was refused, and the one who holds the number.",
+      "Look at each first picture. It should show the person’s face, their ID card, and their own reference handwritten on paper. The reference to look for is shown beside each person. A picture without it was not taken for this.",
+      "Open the close-ups and read the number on each card. Type it under that person and press Check this number. You are told whether it is the disputed number. The number is not kept.",
+      "If a picture is blurred, has glare on the card, or has no reference in it, write what is wrong and press Ask them to take the photographs again. They read your words and have another week.",
+      "Read What to weigh. Then choose whose ID it is, write what you checked and how, write the reason the other person will read, and press Propose this. Nothing changes yet.",
+      "A second member of staff opens the same dispute, reads what you wrote, and presses Approve. Both people are told. To disagree instead, write why and press Send it back."
+    ],
+    notes: [
+      "The same member of staff can never propose and approve.",
+      "The ID can only go to somebody whose card you read as carrying the number. If the claimant’s own card carries a different number, they typed somebody else’s: the ID stays where it is.",
+      "If the holder’s own card carries a different number, theirs was mistyped. When the ID goes to the claimant, the holder’s record takes the number you read, and nobody is held.",
+      "If the holder sends nothing in their week, the dispute can be decided without them.",
+      "If both cards carry the number, one is not genuine, and a photograph cannot always say which. Compare each face with its card, and with what the holder sent when they registered. If you cannot tell, leave it with the holder and say so in the reason: the other person can come in with the card itself.",
+      "A registration that loses its ID is held, not removed. A driver cannot start a shift, a run or a load; a shop takes nothing new in at the counter. Both finish what they have in hand. The hold ends when they put the number of their own ID card on record, in Settings.",
+      "Whoever does not get the ID has two weeks to choose a day to come in. Both people are given a ticket. From that day, say who came, read the card in the hand, and propose again; a second member of staff approves, and that is final. The decision can change only for somebody who came.",
+      "The ticket sends people to the address your country’s company wrote under Company record. If none is written, the ticket says to ask staff, and the dispute tells you so: write the address, and tell both people where to come.",
+      "The ID number and whole phone numbers are never shown. The photographs are deleted 30 days after the decision, or 30 days after an appointment.",
+      "Outside a sandbox this needs a named sign-in for each member of staff."
     ]
   },
   {

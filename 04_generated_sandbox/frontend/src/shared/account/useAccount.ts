@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'preact/hooks';
+import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 import { narrow, type Result, type SbgClient, type SbgError } from '../../lib/sbg';
+import { idDisputeApi, type DisputeAgainstMe, type IdDisputeApi } from './idDispute';
 
 /**
  * THE ACCOUNT, THE SAME IN EVERY APP.
@@ -37,6 +38,11 @@ export interface AccountView {
    * the PIN. Its holder, who is looking at this, is the one person who knows whether that was them.
    */
   moveAsked?: { askedAt: string; toEnds: string };
+  /**
+   * Somebody says the national ID on one of this person's registrations is theirs — or it has gone to them, and
+   * the registration is held. With THIS person's own reference: it is what they answer with.
+   */
+  idDispute?: DisputeAgainstMe;
 }
 
 type Sent = { sent: boolean; code?: string };
@@ -72,6 +78,10 @@ export interface AccountApi {
   changeNumber: (pin: string, newPhone: string) => Promise<Result<unknown>>;
   /** "That was not me": end every request waiting to move this account. Being signed in is what makes it theirs to say. */
   stopMove: () => Promise<Result<{ stopped: number }>>;
+  /** This person's side of a dispute over their national ID, by their own reference. */
+  idDispute: IdDisputeApi;
+  /** "The number on my record is not mine — this one is." Ends a dispute at once, or a hold it left. */
+  ownId: (nationalId: string) => Promise<Result<{ saved: boolean }>>;
 }
 
 const NO_CLIENT = { data: null, error: null } as unknown as Result<never>;
@@ -93,6 +103,8 @@ const IDLE: AccountApi = {
   confirmPhoneCode: async () => NO_CLIENT,
   changeNumber: async () => NO_CLIENT,
   stopMove: async () => NO_CLIENT,
+  idDispute: idDisputeApi(async () => NO_CLIENT),
+  ownId: async () => NO_CLIENT,
 };
 
 export function useAccount(client: SbgClient | null, enabled = true): AccountApi {
@@ -223,6 +235,9 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
     return r;
   }, [post]);
 
+  const idDispute = useMemo(() => idDisputeApi(post), [post]);
+  const ownId = useCallback((nationalId: string) => post<{ saved: boolean }>('/v1/sbg/account/id-disputes/own-id', { nationalId }), [post]);
+
   if (!client) return IDLE;
-  return { account, loading, error, busy, reload, save, changePin, saveAvatar, loadMedia, sendEmailCode, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber, stopMove };
+  return { account, loading, error, busy, reload, save, changePin, saveAvatar, loadMedia, sendEmailCode, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber, stopMove, idDispute, ownId };
 }

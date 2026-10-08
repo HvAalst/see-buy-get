@@ -75,6 +75,12 @@ export class Agent {
   did: string;
   vaultRef: string; // Golden Record PII (name, national ID, mobile) in the IdentityVault
   shopName: string;
+  /**
+   * THE NATIONAL ID IT REGISTERED WITH WENT TO SOMEBODY ELSE, by a decision of two members of staff
+   * (id-dispute.service.ts). Nothing new is taken in at the counter until an ID of the shopkeeper's own is on
+   * record; what is on the shelf is still collected.
+   */
+  idHold?: { reference: string; at: string };
   zone: string;
   /** The country this shop stands in (ISO-3166 alpha-2). It decides which sister contracts it, and a
    *  journey that leaves it crosses a border. Absent on every pre-slice record, which reads as this

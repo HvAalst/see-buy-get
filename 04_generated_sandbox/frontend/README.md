@@ -234,7 +234,42 @@ so every app has them — `shared/account/SettingsSheet.tsx`, `TroubleSheet.tsx`
   the vault until the request ends, then is blanked) and the national ID the asker typed (only whether it
   matched). The asker reads the outcome with the reference (`POST identity/move-requests/status`) — nothing we
   send can reach somebody with no number, PIN or inbox.
-- Not built: a national ID that somebody ELSE registered (a disputed ID).
+
+## A national ID two people say is theirs
+A driver and a shop each register with a national ID number and the network keeps one of each, so somebody whose
+number another registration holds cannot register at all. The user decided how it is settled (2026-10-08): staff
+see "a selfie with the holder showing it's ID back and front"; "staff decide from the photos, if that is still
+disputed they can make an appointment in person. our system will generate a ticket with instructions and what
+they need to bring for the appointment date." `modules/pudo/id-dispute.service.ts`.
+- **Two people, a reference each** (`ID-XXXX-XXXX`), and everything either of them does is by their own
+  reference (`POST identity/id-disputes/…`): the one refused may have no account at all. They OPEN it with a
+  phone confirmed by a code; the holder is shown theirs in Settings. One sheet for both:
+  `shared/account/IdDisputeCase.tsx`, reached from Trouble signing in, from Settings, and from the refusal
+  itself where somebody registers (`apps/home` JoinScreen).
+- **Three photographs each**: the person holding the card with the reference handwritten beside it, the card's
+  front, the card's back. The reference in the picture is what makes it one taken for THIS. They are an
+  `id_check` in the media store: owned by the dispute (no token signs in as it), seen by staff only, and gone 30
+  days after the decision — or after an appointment, the one reason to keep them longer.
+- **The holder is told when the claimant's photographs are sent**, not before, and has a week. They answer the
+  same way — or say the number on their record was mistyped and put their own there
+  (`POST account/id-disputes/own-id`, signed in), which ends it at once.
+- **Two members of staff** (console → ID disputes): they type the number they read on each card and are told
+  only whether it is the disputed one; one proposes whose it is, a second, different one approves (`staffOf`).
+  The ID can go only to somebody whose card was read as carrying it.
+- **Whoever loses keeps their account.** A registration that loses its ID is HELD (`idHold` on the driver or the
+  shop): a driver fails `canOperate` — the question every way behind a wheel already asks — and a shop takes
+  nothing new in at the counter (`AgentService.assertMayTakeIn`); both finish what they have in hand. It ends
+  when an ID of their own is on record. Where the holder's own card carried a different number, their record
+  takes that instead and nobody is held.
+- **The ID is kept for whoever won** until they register: `RegistrationPrints.keepFor` lets only a registration
+  made with the phone they opened the dispute with past it.
+- **Still disputed**: whoever did not get it names a day within two weeks (`…/appointment`), and both are given
+  a ticket — where (the country's company's own contact card), when, what to bring. From that day two members
+  of staff decide again, the decision changes only for somebody who came, and that is final.
+- **Never kept or shown**: the ID number outside the vault (a keyed print finds it; "matches / differs" is all
+  staff see), a whole phone number, the other person's reference.
+- Not built: an office calendar. A person can choose a day the office is closed; the ticket tells them to keep
+  to its opening hours. And a held shop is still listed to senders: it is the counter that refuses.
 
 ## Conventions
 - **Every slice names its screens.** A backend change with no surface is tracked ui-debt, not a shipped slice.

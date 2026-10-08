@@ -18566,6 +18566,444 @@
         }
       }
     },
+    "/v1/sbg/identity/id-disputes": {
+      "post": {
+        "operationId": "IdDispute.open",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenDisputeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisputeOpened"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/id-disputes/status": {
+      "post": {
+        "operationId": "IdDispute.status",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisputeReferenceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisputeStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/id-disputes/photo": {
+      "post": {
+        "operationId": "IdDispute.photo",
+        "summary": "",
+        "description": "One of the three photographs. Taken again, it replaces the one before.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisputePhotoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisputeStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/id-disputes/send": {
+      "post": {
+        "operationId": "IdDispute.send",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisputeReferenceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisputeStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/id-disputes/withdraw": {
+      "post": {
+        "operationId": "IdDispute.withdraw",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisputeReferenceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisputeStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/id-disputes/appointment": {
+      "post": {
+        "operationId": "IdDispute.appoint",
+        "summary": "",
+        "description": "Still disputed: a day to come in. Answers with the ticket.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppointmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisputeStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/id-disputes/own-id": {
+      "post": {
+        "operationId": "IdDispute.ownId",
+        "summary": "",
+        "description": "\"The number on my record is not mine — this one is.\" Ends a dispute over their ID at once, or a hold it left.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OwnIdDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnIdSaved"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/id-disputes": {
+      "get": {
+        "operationId": "IdDispute.list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisputeList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/id-disputes/{disputeId}": {
+      "get": {
+        "operationId": "IdDispute.one",
+        "parameters": [
+          {
+            "name": "disputeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisputeRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/id-disputes/{disputeId}/card": {
+      "post": {
+        "operationId": "IdDispute.card",
+        "summary": "",
+        "description": "The number read on a card: only whether it is the disputed one comes back, and is kept.",
+        "parameters": [
+          {
+            "name": "disputeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadCardDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisputeRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/id-disputes/{disputeId}/retake": {
+      "post": {
+        "operationId": "IdDispute.retake",
+        "parameters": [
+          {
+            "name": "disputeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetakeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisputeRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/id-disputes/{disputeId}/check": {
+      "post": {
+        "operationId": "IdDispute.check",
+        "summary": "",
+        "description": "The first member of staff says whose it is — from the photographs, or after an appointment. Changes nothing.",
+        "parameters": [
+          {
+            "name": "disputeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckDisputeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisputeRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/id-disputes/{disputeId}/approve": {
+      "post": {
+        "operationId": "IdDispute.approve",
+        "summary": "",
+        "description": "The second, different member of staff approves — and it is done.",
+        "parameters": [
+          {
+            "name": "disputeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveDisputeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisputeRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/id-disputes/{disputeId}/send-back": {
+      "post": {
+        "operationId": "IdDispute.sendBack",
+        "parameters": [
+          {
+            "name": "disputeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendBackDisputeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisputeRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/media": {
       "post": {
         "operationId": "Media.upload",
@@ -24111,6 +24549,19 @@
           "shopName": {
             "type": "string"
           },
+          "idHold": {
+            "type": "object",
+            "properties": {
+              "reference": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
           "zone": {
             "type": "string"
           },
@@ -24203,6 +24654,7 @@
           "did",
           "vaultRef",
           "shopName",
+          "idHold",
           "zone",
           "location",
           "landmark",
@@ -34146,6 +34598,19 @@
           "removedFrom": {
             "$ref": "#/components/schemas/FleetRemoval"
           },
+          "idHold": {
+            "type": "object",
+            "properties": {
+              "reference": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
           "jurisdiction": {
             "type": "string",
             "description": "Legal residence — and ONLY for an independent courier, who the network contracts with directly.\nA fleet-attached driver has none, deliberately: the network pays their fleet, not them, so asking\nwhere they live would be collecting data for a payment we never make. We move parcels; we do not\ndo payroll or employment. Read through DriverService.settlingEntityIdOf(), which sends a fleet\ndriver's answer to their fleet."
@@ -34253,6 +34718,7 @@
         "required": [
           "driverId",
           "did",
+          "idHold",
           "vaultRef",
           "displayName",
           "registry",
@@ -38911,6 +39377,648 @@
           "reason"
         ]
       },
+      "OpenDisputeDto": {
+        "type": "object",
+        "properties": {
+          "register": {
+            "type": "string",
+            "enum": [
+              "driver",
+              "shop"
+            ]
+          },
+          "nationalId": {
+            "type": "string",
+            "description": "The number on their own ID card — the one registration refused.",
+            "minLength": 3,
+            "maxLength": 40
+          },
+          "phone": {
+            "type": "string",
+            "description": "Their phone number, already confirmed by a code (auth/phone/request + verify).",
+            "maxLength": 24
+          }
+        },
+        "required": [
+          "register",
+          "nationalId",
+          "phone"
+        ]
+      },
+      "DisputePlace": {
+        "type": "object",
+        "properties": {
+          "contactName": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "phoneAlt": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "hours": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "company"
+        ]
+      },
+      "DisputeOpened": {
+        "type": "object",
+        "properties": {
+          "support": {
+            "$ref": "#/components/schemas/DisputePlace"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "photosBy": {
+            "type": "string",
+            "description": "Their photographs are due by then."
+          }
+        },
+        "required": [
+          "reference",
+          "photosBy"
+        ]
+      },
+      "DisputeReferenceDto": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string",
+            "minLength": 6,
+            "maxLength": 20
+          }
+        },
+        "required": [
+          "reference"
+        ]
+      },
+      "DisputeTicket": {
+        "type": "object",
+        "properties": {
+          "bring": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "id_card",
+                "phone",
+                "reference",
+                "second_document"
+              ]
+            }
+          },
+          "place": {
+            "$ref": "#/components/schemas/DisputePlace"
+          },
+          "reference": {
+            "type": "string",
+            "description": "Their own reference: what they say at the desk."
+          },
+          "date": {
+            "type": "string",
+            "description": "The day, `YYYY-MM-DD`."
+          },
+          "yours": {
+            "type": "boolean",
+            "description": "This person made the appointment. False: the other did, and this one may come too."
+          },
+          "changesLeft": {
+            "type": "number",
+            "description": "How many more times the day can be changed, by whoever made it."
+          }
+        },
+        "required": [
+          "bring",
+          "reference",
+          "date",
+          "yours",
+          "changesLeft"
+        ]
+      },
+      "DisputeStatus": {
+        "type": "object",
+        "properties": {
+          "side": {
+            "type": "string",
+            "enum": [
+              "claimant",
+              "holder"
+            ]
+          },
+          "register": {
+            "type": "string",
+            "enum": [
+              "driver",
+              "shop"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "opened",
+              "answering",
+              "ready",
+              "checked",
+              "decided",
+              "appointment",
+              "rechecked",
+              "final",
+              "conceded",
+              "withdrawn",
+              "lapsed"
+            ]
+          },
+          "photos": {
+            "type": "array",
+            "description": "Which of their three photographs are in.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "face",
+                "front",
+                "back"
+              ]
+            }
+          },
+          "photosDueBy": {
+            "type": "string",
+            "description": "They may send, or send again, now — and until when."
+          },
+          "retakeWhy": {
+            "type": "string",
+            "description": "Staff asked for the photographs again, and why."
+          },
+          "yours": {
+            "type": "boolean",
+            "description": "Decided: the ID is theirs. Absent until there is a decision."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why, in staff's words — written for the one who did not get it."
+          },
+          "held": {
+            "type": "boolean",
+            "description": "The holder, after losing it: their registration is held until an ID of their own is on record."
+          },
+          "contestBy": {
+            "type": "string",
+            "description": "They did not get it, and may still make an appointment — until when."
+          },
+          "ticket": {
+            "$ref": "#/components/schemas/DisputeTicket"
+          },
+          "support": {
+            "$ref": "#/components/schemas/DisputePlace"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "openedAt": {
+            "type": "string"
+          },
+          "sent": {
+            "type": "boolean",
+            "description": "Their photographs have been sent to staff."
+          }
+        },
+        "required": [
+          "side",
+          "register",
+          "state",
+          "photos",
+          "reference",
+          "openedAt",
+          "sent"
+        ]
+      },
+      "DisputePhotoDto": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string",
+            "minLength": 6,
+            "maxLength": 20
+          },
+          "which": {
+            "type": "string",
+            "enum": [
+              "face",
+              "front",
+              "back"
+            ]
+          },
+          "dataUrl": {
+            "type": "string",
+            "description": "A downscaled image as a data URL, the way every photograph reaches this network."
+          },
+          "thumbDataUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reference",
+          "which",
+          "dataUrl"
+        ]
+      },
+      "AppointmentDto": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string",
+            "minLength": 6,
+            "maxLength": 20
+          },
+          "date": {
+            "type": "string",
+            "description": "The day they will come, `YYYY-MM-DD`.",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/"
+          }
+        },
+        "required": [
+          "reference",
+          "date"
+        ]
+      },
+      "OwnIdDto": {
+        "type": "object",
+        "properties": {
+          "nationalId": {
+            "type": "string",
+            "description": "The number on their own ID card.",
+            "minLength": 3,
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "nationalId"
+        ]
+      },
+      "OwnIdSaved": {
+        "type": "object",
+        "properties": {
+          "saved": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "saved"
+        ]
+      },
+      "DisputeParty": {
+        "type": "object",
+        "properties": {
+          "sentAt": {
+            "type": "string",
+            "description": "Their photographs have been sent, and when."
+          },
+          "face": {
+            "type": "string",
+            "description": "The photographs — media ids, only when one dispute is opened."
+          },
+          "front": {
+            "type": "string"
+          },
+          "back": {
+            "type": "string"
+          },
+          "card": {
+            "type": "string",
+            "description": "What the number staff read on their card came to.",
+            "enum": [
+              "matches",
+              "differs"
+            ]
+          },
+          "who": {
+            "type": "string",
+            "description": "Who they are on the network: \"Driver: Amos K., with Kilima Logistics\", \"Shop: Mama Sarah Shop\"."
+          },
+          "since": {
+            "type": "string",
+            "description": "Since when they have had an account."
+          },
+          "phoneEnds": {
+            "type": "string",
+            "description": "The last digits of the claimant's phone."
+          },
+          "onRecord": {
+            "description": "What the holder sent when they registered, where they sent anything: an ID copy, a portrait. Media ids.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "retakeWhy": {
+            "type": "string",
+            "description": "Staff asked for the photographs again."
+          },
+          "came": {
+            "type": "boolean",
+            "description": "After an appointment: they came."
+          }
+        }
+      },
+      "DisputeRow": {
+        "type": "object",
+        "properties": {
+          "register": {
+            "type": "string",
+            "enum": [
+              "driver",
+              "shop"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "opened",
+              "answering",
+              "ready",
+              "checked",
+              "decided",
+              "appointment",
+              "rechecked",
+              "final",
+              "conceded",
+              "withdrawn",
+              "lapsed"
+            ]
+          },
+          "photosBy": {
+            "type": "string"
+          },
+          "answerBy": {
+            "type": "string"
+          },
+          "claimant": {
+            "$ref": "#/components/schemas/DisputeParty"
+          },
+          "holder": {
+            "$ref": "#/components/schemas/DisputeParty"
+          },
+          "proposedTo": {
+            "type": "string",
+            "description": "The proposal waiting for a second member of staff — from the photographs, or after an appointment.",
+            "enum": [
+              "claimant",
+              "holder"
+            ]
+          },
+          "proposedBy": {
+            "type": "string"
+          },
+          "proposedAt": {
+            "type": "string"
+          },
+          "proposedWhat": {
+            "type": "string"
+          },
+          "proposedReason": {
+            "type": "string"
+          },
+          "proposedByYou": {
+            "type": "boolean",
+            "description": "The member of staff reading this made the proposal, so cannot be the one to approve it."
+          },
+          "sentBackWhy": {
+            "type": "string",
+            "description": "A second member of staff sent it back, and why."
+          },
+          "decidedTo": {
+            "type": "string",
+            "description": "The decision from the photographs.",
+            "enum": [
+              "claimant",
+              "holder"
+            ]
+          },
+          "decidedBy": {
+            "type": "string"
+          },
+          "decidedAt": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "holderEffect": {
+            "type": "string",
+            "enum": [
+              "held",
+              "corrected",
+              "none"
+            ]
+          },
+          "contestBy": {
+            "type": "string"
+          },
+          "appointmentDate": {
+            "type": "string",
+            "description": "An appointment: the day, and which of the two made it."
+          },
+          "appointmentBy": {
+            "type": "string",
+            "enum": [
+              "claimant",
+              "holder"
+            ]
+          },
+          "appointmentPlace": {
+            "type": "string",
+            "description": "Where their tickets send them. Absent: the country's company has written no address, and the ticket says to ask."
+          },
+          "finalTo": {
+            "type": "string",
+            "description": "The decision in person.",
+            "enum": [
+              "claimant",
+              "holder"
+            ]
+          },
+          "finalBy": {
+            "type": "string"
+          },
+          "finalAt": {
+            "type": "string"
+          },
+          "endedAt": {
+            "type": "string"
+          },
+          "disputeId": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string",
+            "description": "The claimant's reference; the holder has their own."
+          },
+          "holderReference": {
+            "type": "string"
+          },
+          "openedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "register",
+          "state",
+          "claimant",
+          "holder",
+          "disputeId",
+          "reference",
+          "holderReference",
+          "openedAt"
+        ]
+      },
+      "DisputeList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DisputeRow"
+            }
+          },
+          "waiting": {
+            "type": "number",
+            "description": "How many wait on a member of staff."
+          }
+        },
+        "required": [
+          "items",
+          "waiting"
+        ]
+      },
+      "ReadCardDto": {
+        "type": "object",
+        "properties": {
+          "side": {
+            "type": "string",
+            "enum": [
+              "claimant",
+              "holder"
+            ]
+          },
+          "number": {
+            "type": "string",
+            "description": "The number as read off the card — in the photograph, or in the hand. Only whether it is the disputed one is kept.",
+            "minLength": 3,
+            "maxLength": 40
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "side",
+          "number"
+        ]
+      },
+      "RetakeDto": {
+        "type": "object",
+        "properties": {
+          "side": {
+            "type": "string",
+            "enum": [
+              "claimant",
+              "holder"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why the photographs will not do — written for the person who has to take them again.",
+            "maxLength": 300
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "side",
+          "reason"
+        ]
+      },
+      "CheckDisputeDto": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string",
+            "description": "Whose ID it is.",
+            "enum": [
+              "claimant",
+              "holder"
+            ]
+          },
+          "what": {
+            "type": "string",
+            "description": "What was checked, and how. Kept: the second member of staff approves on the strength of it.",
+            "maxLength": 500
+          },
+          "reason": {
+            "type": "string",
+            "description": "Written for the one who does not get it: they read it.",
+            "maxLength": 500
+          },
+          "claimantCame": {
+            "type": "boolean",
+            "description": "After an appointment: who came."
+          },
+          "holderCame": {
+            "type": "boolean"
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "to",
+          "what",
+          "reason"
+        ]
+      },
+      "ApproveDisputeDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "maxLength": 80
+          }
+        }
+      },
+      "SendBackDisputeDto": {
+        "type": "object",
+        "properties": {
+          "why": {
+            "type": "string",
+            "description": "Why the second member of staff does not approve it as it stands.",
+            "maxLength": 300
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "why"
+        ]
+      },
       "UploadMediaDto": {
         "type": "object",
         "properties": {
@@ -38932,7 +40040,8 @@
               "securement",
               "hazard",
               "interchange",
-              "field_evidence"
+              "field_evidence",
+              "id_check"
             ]
           },
           "dataUrl": {

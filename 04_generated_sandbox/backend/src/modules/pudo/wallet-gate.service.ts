@@ -186,8 +186,10 @@ export class WalletGateService {
     // move at that counter (the take-in door refuses cash there by country). Found in the browser — the shop
     // was told to "top up your wallet first" with no wallet it could ever top up.
     const funded = float === null || spendable >= LOCK_THRESHOLD;
-    const ok = this.agents.canScan(did) && funded;
-    const code = ok ? null : !funded ? 'WALLET_INSUFFICIENT' : 'AGENT_LOCKED';
+    // Held over its national ID: said first, because topping up would not open the counter.
+    const held = Boolean(this.agents.idHoldOf(did));
+    const ok = !held && this.agents.canScan(did) && funded;
+    const code = ok ? null : held ? 'ID_HELD' : !funded ? 'WALLET_INSUFFICIENT' : 'AGENT_LOCKED';
     const shortfall = funded ? 0 : Math.round((LOCK_THRESHOLD - spendable) * 100) / 100;
     const used = this.agents.creditOwed(did);
     return {

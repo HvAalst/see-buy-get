@@ -68,6 +68,16 @@ describe('gateNotice', () => {
     expect(n?.title).toBe('Account locked');
   });
 
+  it('a shop held over its national ID is told so — never to top up, which would open nothing', () => {
+    // Said even on a shop the float has locked as well: the hold is the one that topping up cannot lift.
+    const n = gateNotice(agent({ status: 'LOCKED' }), gate({ ok: false, code: 'ID_HELD', balance: -3, shortfall: 8 }), t);
+    expect(n?.tone).toBe('danger');
+    expect(n?.title).toBe('Nothing new can be taken in for now');
+    expect(n?.detail).toContain('put the number of your own ID card on record');
+    expect(n?.detail).toContain('collected as usual');
+    expect(n?.detail).not.toMatch(/top up/i);
+  });
+
   it('a thin wallet names the exact top-up needed', () => {
     const n = gateNotice(agent(), gate({ ok: false, code: 'WALLET_INSUFFICIENT', balance: 0.4, shortfall: 4.6 }), t);
     expect(n?.tone).toBe('warn');

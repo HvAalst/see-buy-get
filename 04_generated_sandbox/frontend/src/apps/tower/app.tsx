@@ -20,8 +20,10 @@ import { NetworkScreen } from './screens/NetworkScreen';
 import { RatesScreen } from './screens/RatesScreen';
 import { ImportsScreen } from './screens/ImportsScreen';
 import { AccountMovesScreen } from './screens/AccountMovesScreen';
+import { IdDisputesScreen } from './screens/IdDisputesScreen';
 import { BusinessesScreen } from './screens/BusinessesScreen';
 import { movesWaiting } from './accountMoves';
+import { disputesWaiting } from './idDisputes';
 import { waitingOnStaff } from './businesses';
 import { MarketScreen } from './screens/MarketScreen';
 import { DepotsScreen } from './screens/DepotsScreen';
@@ -101,7 +103,7 @@ export function App() {
      * company administrator saw on signing in. COMPANY moved out, because their own record is theirs to
      * keep — an operator picks a company from a list, an administrator IS one.
      */
-    ...(isOperator ? (['network', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'borders', 'movers', 'rates', 'connections'] as Screen[]) : []),
+    ...(isOperator ? (['network', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'borders', 'movers', 'rates', 'connections'] as Screen[]) : []),
     ...(manyCompanies ? (['companies'] as Screen[]) : []),
     // Their own books and what they are owed — never the network's ledger, which is not theirs to read.
     'money',
@@ -132,6 +134,8 @@ export function App() {
     businesses: waitingOnStaff(state.businesses),
     // Every one that is still open waits on one of us: a first look, or a second person's approval.
     accountmoves: movesWaiting(state.accountMoves),
+    // Waiting on us: to be decided, to be approved, or an appointment whose day has come.
+    iddisputes: disputesWaiting(state.idDisputes),
     // FP4 — who is waiting on somebody HERE: off the road, or a renewed card sent and not yet read. A courier
     // whose licence is merely running out is waiting on nobody; one who has sent the new card is waiting on us.
     papers: waitingCount(state.papers),
@@ -244,6 +248,8 @@ export function App() {
             <BusinessesScreen state={state} actions={actions} />
           ) : state.screen === 'accountmoves' ? (
             <AccountMovesScreen state={state} actions={actions} />
+          ) : state.screen === 'iddisputes' ? (
+            <IdDisputesScreen state={state} actions={actions} />
           ) : state.screen === 'approvals' ? (
             <ApprovalsScreen state={state} actions={actions} />
           ) : state.screen === 'papers' ? (

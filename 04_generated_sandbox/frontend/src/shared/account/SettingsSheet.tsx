@@ -6,11 +6,13 @@ import { useT } from '../i18n';
 import type { SbgError } from '../../lib/sbg';
 import { CredentialAge } from './CredentialAge';
 import { EmailStep } from './EmailStep';
+import { IdDisputeCase } from './IdDisputeCase';
+import { settingsIdSays } from './idDispute';
 import { pinChangeBlocker } from './password';
 import { recoveryEmailSays } from './recovery';
 import type { AccountApi } from './useAccount';
 
-type View = 'list' | 'pin' | 'email' | 'phone' | 'phone-done';
+type View = 'list' | 'pin' | 'email' | 'phone' | 'phone-done' | 'id';
 
 export interface SettingsSheetProps {
   open: boolean;
@@ -29,7 +31,7 @@ export interface SettingsSheetProps {
 
 /** True when there is anything to put in Settings for this person — the row that opens it is omitted otherwise. */
 export function hasSettings(api: AccountApi, onChangePassword?: () => void): boolean {
-  return Boolean(api.account?.hasPin || onChangePassword);
+  return Boolean(api.account?.hasPin || onChangePassword || api.account?.idDispute);
 }
 
 /**
@@ -53,6 +55,8 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
   const [stopping, setStopping] = useState(false);
   const [stopped, setStopped] = useState(false);
   const [stopError, setStopError] = useState<SbgError | null>(null);
+  // Kept from the moment it is opened: once it is settled the account stops saying it, and the sheet must not go blank under the reader.
+  const [idRef, setIdRef] = useState<string | null>(null);
   useEffect(() => {
     if (open) {
       setView('list');
@@ -72,7 +76,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
   const me = api.account;
   // Once the number has moved the token is dead: every way out of the sheet is the sign-in screen.
   const close = view === 'phone-done' ? () => { onClose(); onSignOut(); } : onClose;
-  const title = view === 'pin' ? t('account.menu.pin') : view === 'email' ? t('account.settings.email') : view === 'phone' || view === 'phone-done' ? t('account.settings.phone') : t('account.settings.title');
+  const title = view === 'id' ? t('account.settings.id.viewTitle') : view === 'pin' ? t('account.menu.pin') : view === 'email' ? t('account.settings.email') : view === 'phone' || view === 'phone-done' ? t('account.settings.phone') : t('account.settings.title');
   const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
   return (
@@ -93,6 +97,28 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
             </>
           ) : null}
           {stopped ? <Note tone="ok" icon="check" title={t('account.settings.moveAsked.stoppedTitle')} detail={t('account.settings.moveAsked.stopped')} /> : null}
+          {/* SOMEBODY SAYS THE NATIONAL ID ON THIS PERSON'S REGISTRATION IS THEIRS — or it went to them, and the
+              registration is held. A live fact, said for as long as it is true, with the way to act on it. */}
+          {me?.idDispute ? (
+            <>
+              <Note
+                tone="warn"
+                icon="warning"
+                title={settingsIdSays(me.idDispute, t as never).title}
+                detail={settingsIdSays(me.idDispute, t as never).detail}
+              />
+              <Button
+                variant="outline"
+                chevron={false}
+                onClick={() => {
+                  setIdRef(me.idDispute!.reference);
+                  setView('id');
+                }}
+              >
+                {settingsIdSays(me.idDispute, t as never).cta}
+              </Button>
+            </>
+          ) : null}
           {/* A live fact about the account, said for as long as it is true — never something to dismiss. */}
           {me?.hasPin && recoveryEmailSays(me, t as never).bounced ? <Note tone="warn" icon="warning" title={t('account.settings.emailBounced.title')} detail={t('account.settings.emailBounced.detail', { email: me.email ?? '' })} /> : null}
           <div class="rows" role="list">
@@ -123,6 +149,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
       ) : null}
       {view === 'email' ? <EmailForm api={api} onDone={() => { setSaved(true); setView('list'); }} /> : null}
       {view === 'phone' ? <PhoneForm api={api} onDone={() => setView('phone-done')} /> : null}
+      {view === 'id' && idRef ? <IdDisputeCase api={api.idDispute} reference={idRef} ownId={api.ownId} onChanged={() => void api.reload()} /> : null}
       {view === 'phone-done' ? (
         <>
           <Note tone="ok" icon="check" title={t('account.settings.phoneDoneTitle')} detail={t('account.settings.phoneDone')} />

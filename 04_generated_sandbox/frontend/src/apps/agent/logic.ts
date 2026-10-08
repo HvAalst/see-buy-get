@@ -77,6 +77,8 @@ export interface GateNotice {
  */
 export function gateNotice(agent: Pick<AgentView, 'status'> | null, gate: GateView | null, t: Translate): GateNotice | null {
   if (!agent || !gate || gate.ok) return null;
+  // Held over its national ID: said as what it is. Topping up would not open the counter, so it must not be asked for.
+  if (gate.code === 'ID_HELD') return { tone: 'danger', title: t('agent.logic.gateIdHeldTitle'), detail: t('agent.logic.gateIdHeldDetail') };
   if (agent.status === 'LOCKED' || gate.code === 'AGENT_LOCKED') {
     return {
       tone: 'danger',

@@ -106,7 +106,7 @@ export interface ShelfGrid {
 export interface GateView {
   ok: boolean;
   canTransact?: boolean;
-  code?: 'WALLET_INSUFFICIENT' | 'AGENT_LOCKED' | string;
+  code?: 'WALLET_INSUFFICIENT' | 'AGENT_LOCKED' | 'ID_HELD' | string;
   balance: number;
   shortfall?: number;
 }

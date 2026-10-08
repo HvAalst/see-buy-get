@@ -55,6 +55,10 @@ export function betweenFleets(driver: Pick<FleetDriver, 'managerDid' | 'removedF
   return !driver.managerDid && Boolean(driver.removedFrom);
 }
 
+/** Why a driver whose ID went to somebody else cannot start a shift — and the one thing that ends it. */
+export const idHoldLine = (reference: string): string =>
+  `the national ID on your registration went to somebody else (reference ${reference}) — put the number of your own ID card on record, in Settings, and you can drive again`;
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function dayOf(iso: string): string {
   const d = new Date(iso);
@@ -439,6 +443,8 @@ export class DriverService {
   canOperate(did: string, now: number = Date.now()): boolean {
     const driver = this.drivers.get(did);
     if (!driver || driver.status !== 'ACTIVE') return false;
+    // The ID they registered with went to somebody else: nothing new until an ID of their own is on record.
+    if (driver.idHold) return false;
     if (betweenFleets(driver)) return false;
     return lapsedOf(driverPapers(driver, now)).length === 0;
   }
@@ -447,7 +453,7 @@ export class DriverService {
   offRoadReasons(did: string, now: number = Date.now()): string[] {
     const driver = this.drivers.get(did);
     if (!driver) return [];
-    const papers = lapsedOf(driverPapers(driver, now)).map(offRoadLine);
+    const papers = [...(driver.idHold ? [idHoldLine(driver.idHold.reference)] : []), ...lapsedOf(driverPapers(driver, now)).map(offRoadLine)];
     if (!betweenFleets(driver)) return papers;
     const off = driver.removedFrom!;
     return [`you are not in a fleet — ${off.companyName} took you off on ${dayOf(off.at)}, and a fleet has to offer you a place first`, ...papers];
@@ -533,6 +539,76 @@ export class DriverService {
   /** Whether this registration was made with that national ID number — the question an email recovery has to answer. */
   holdsNationalId(did: string, nationalId: string | undefined): boolean {
     return Boolean(nationalId?.trim()) && this.prints.holder('nationalId', nationalId) === did;
+  }
+
+  /* --- a national ID two people say is theirs (id-dispute.service.ts) --- */
+
+  /** The key a national ID number is kept under. The number itself is never stored beside it. */
+  nationalIdKey(nationalId: string | undefined): string {
+    return this.prints.keyOf('nationalId', nationalId);
+  }
+
+  /** Who holds the national ID kept under this key: a registration's DID, a keeping for somebody not yet registered, or nobody. */
+  nationalIdHolderOfKey(key: string): string | undefined {
+    return this.prints.holderOfKey(key);
+  }
+
+  /**
+   * THE ID GOES FROM THIS REGISTRATION, BY A DECISION. The number under the key is not theirs: it leaves the
+   * register for them and it leaves the vault, where it was kept under their name.
+   */
+  loseNationalId(did: string, key: string): void {
+    const driver = this.require(did);
+    this.prints.releaseKey(key, did);
+    if (driver.vaultRef && this.vault.exists(driver.vaultRef)) {
+      const pii = this.vault.reveal(driver.vaultRef, { purpose: 'id-dispute', requesterDid: did });
+      if (this.prints.keyOf('nationalId', typeof pii.governmentId === 'string' ? pii.governmentId : undefined) === key) this.vault.update(driver.vaultRef, { ...pii, governmentId: undefined });
+    }
+  }
+
+  /**
+   * HELD: nothing new until an ID of their own is on record. Asked where every way behind a wheel already asks
+   * (`canOperate`) — so a run under way is finished, and no shift, run or load is started.
+   */
+  holdForId(did: string, hold: { reference: string; at: string }): void {
+    const driver = this.require(did);
+    driver.idHold = hold;
+    this.drivers.set(did, driver);
+  }
+
+  idHoldOf(did: string): { reference: string; at: string } | undefined {
+    return this.drivers.get(did)?.idHold;
+  }
+
+  /**
+   * THIS REGISTRATION IS ON RECORD WITH THIS NUMBER — its own, typed by its holder or read off their card by staff.
+   * Refused when another registration holds it. Having an ID of their own on record is what ends a hold.
+   */
+  takeNationalId(did: string, nationalId: string): void {
+    const driver = this.require(did);
+    const number = nationalId?.trim();
+    if (!number) throw new GlosError('FIELD_REQUIRED', 'Enter the number on the ID card', { field: 'nationalId' });
+    if (this.prints.taken([['nationalId', number]], did)) throw new GlosError('DUPLICATE', 'A driver with this national ID already exists', { field: 'nationalId', register: 'driver' });
+    this.prints.claim([['nationalId', number]], did);
+    if (driver.vaultRef && this.vault.exists(driver.vaultRef)) {
+      const pii = this.vault.reveal(driver.vaultRef, { purpose: 'id-dispute', requesterDid: did });
+      this.vault.update(driver.vaultRef, { ...pii, governmentId: number });
+    }
+    delete driver.idHold;
+    this.drivers.set(did, driver);
+  }
+
+  /** The ID under this key is this registration's, by a decision — given, or given back. A hold on it ends. */
+  giveNationalId(did: string, key: string): void {
+    const driver = this.require(did);
+    this.prints.moveKey(key, 'nationalId', did);
+    delete driver.idHold;
+    this.drivers.set(did, driver);
+  }
+
+  /** Keep the ID under this key for whoever registers with this phone: a decision gave it to somebody with no registration yet. */
+  keepNationalIdFor(key: string, phone: string, by: string): void {
+    this.prints.keepFor(key, 'nationalId', phone, by);
   }
 
   setAssignedVehicle(did: string, vehicleId?: string): void {

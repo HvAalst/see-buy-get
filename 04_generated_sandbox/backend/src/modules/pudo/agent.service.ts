@@ -561,6 +561,84 @@ export class AgentService {
     return Boolean(nationalId?.trim()) && this.prints.holder('nationalId', nationalId) === did;
   }
 
+  /* --- a national ID two people say is theirs (id-dispute.service.ts) --- */
+
+  /** The key a national ID number is kept under. The number itself is never stored beside it. */
+  nationalIdKey(nationalId: string | undefined): string {
+    return this.prints.keyOf('nationalId', nationalId);
+  }
+
+  /** Who holds the national ID kept under this key: a registration's DID, a keeping for somebody not yet registered, or nobody. */
+  nationalIdHolderOfKey(key: string): string | undefined {
+    return this.prints.holderOfKey(key);
+  }
+
+  /**
+   * THE ID GOES FROM THIS REGISTRATION, BY A DECISION. The number under the key is not theirs: it leaves the
+   * register for them and it leaves the vault, where it was kept under their name.
+   */
+  loseNationalId(did: string, key: string): void {
+    const agent = this.require(did);
+    this.prints.releaseKey(key, did);
+    if (agent.vaultRef && this.vault.exists(agent.vaultRef)) {
+      const pii = this.vault.reveal(agent.vaultRef, { purpose: 'id-dispute', requesterDid: did });
+      if (this.prints.keyOf('nationalId', typeof pii.governmentId === 'string' ? pii.governmentId : undefined) === key) this.vault.update(agent.vaultRef, { ...pii, governmentId: undefined });
+    }
+  }
+
+  /**
+   * HELD: nothing new is taken in at the counter until an ID of their own is on record. What is already on the
+   * shelf is still collected, and what is already on its way still arrives: a hold stops new work, never old.
+   */
+  holdForId(did: string, hold: { reference: string; at: string }): void {
+    const agent = this.require(did);
+    agent.idHold = hold;
+    this.agents.set(did, agent);
+  }
+
+  idHoldOf(did: string): { reference: string; at: string } | undefined {
+    return this.agents.get(did)?.idHold;
+  }
+
+  /**
+   * THIS REGISTRATION IS ON RECORD WITH THIS NUMBER — its own, typed by its holder or read off their card by staff.
+   * Refused when another registration holds it. Having an ID of their own on record is what ends a hold.
+   */
+  takeNationalId(did: string, nationalId: string): void {
+    const agent = this.require(did);
+    const number = nationalId?.trim();
+    if (!number) throw new GlosError('FIELD_REQUIRED', 'Enter the number on the ID card', { field: 'nationalId' });
+    if (this.prints.taken([['nationalId', number]], did)) throw new GlosError('DUPLICATE', 'An agent with this national ID already exists', { field: 'nationalId', register: 'shop' });
+    this.prints.claim([['nationalId', number]], did);
+    if (agent.vaultRef && this.vault.exists(agent.vaultRef)) {
+      const pii = this.vault.reveal(agent.vaultRef, { purpose: 'id-dispute', requesterDid: did });
+      this.vault.update(agent.vaultRef, { ...pii, governmentId: number });
+    }
+    delete agent.idHold;
+    this.agents.set(did, agent);
+  }
+
+  /** The ID under this key is this registration's, by a decision — given, or given back. A hold on it ends. */
+  giveNationalId(did: string, key: string): void {
+    const agent = this.require(did);
+    this.prints.moveKey(key, 'nationalId', did);
+    delete agent.idHold;
+    this.agents.set(did, agent);
+  }
+
+  /** Keep the ID under this key for whoever registers with this phone: a decision gave it to somebody with no registration yet. */
+  keepNationalIdFor(key: string, phone: string, by: string): void {
+    this.prints.keepFor(key, 'nationalId', phone, by);
+  }
+
+  /** The counter's take-in doors ask this. Says what happened, and the one thing that ends it. */
+  assertMayTakeIn(did: string): void {
+    const hold = this.agents.get(did)?.idHold;
+    if (hold) {
+      throw new GlosError('FORBIDDEN', `Nothing new can be taken in at this shop for now: the national ID it registered with went to somebody else (reference ${hold.reference}). What is already here is collected as usual. Put the number of your own ID card on record, in Settings, to take parcels in again.`, { reason: 'id_held', reference: hold.reference });
+    }
+  }
+
   private require(did: string): Agent {
     const agent = this.agents.get(did);
     if (!agent) throw new GlosError('NOT_FOUND', `PUDO agent not found: ${did}`);

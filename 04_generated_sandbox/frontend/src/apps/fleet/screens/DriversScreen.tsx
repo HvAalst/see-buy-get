@@ -140,7 +140,7 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
               tone="warn"
               icon="lock"
               title={t(DUP_TITLE[state.driverDuplicate.field] ?? 'fleet.drivers.dupTitle.phone')}
-              detail={[t('fleet.drivers.dupOffer'), state.driverDuplicate.field === 'phone' ? '' : t('fleet.drivers.dupTypo')].filter(Boolean).join(' ')}
+              detail={[t('fleet.drivers.dupOffer'), state.driverDuplicate.field === 'phone' ? '' : t('fleet.drivers.dupTypo'), state.driverDuplicate.field === 'nationalId' ? t('fleet.drivers.dupDispute') : ''].filter(Boolean).join(' ')}
             />
             {f.mobile.trim() ? (
               <Button variant="outline" chevron={false} busy={state.busy === 'offer'} onClick={() => void offer(f.mobile)}>

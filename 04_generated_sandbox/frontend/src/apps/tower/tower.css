@@ -288,6 +288,26 @@
   border-radius: var(--r-ctl);
 }
 
+/* ID disputes: the two people side by side, so the two sets of photographs are compared rather than remembered. */
+.twr-ids {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  align-items: start;
+  min-width: 0;
+}
+
+.twr-ids > .cons__panel {
+  margin: 0;
+  min-width: 0;
+}
+
+.twr-ids__choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .twr-evidence {
   margin-bottom: 14px;
 }

@@ -774,6 +774,25 @@ export function createOperatorApi(sbg: SbgClient) {
     refuseAccountMove: (moveId: string, reason: string, by?: string) =>
       sbg.request((c) => c.POST('/v1/sbg/account-moves/{moveId}/refuse', { params: { path: { moveId } }, body: { reason, ...(by ? { by } : {}) } })),
     /**
+     * ID DISPUTES — two people say one national ID is theirs, and two members of staff say whose: one proposes, a
+     * second approves. The list never carries the photographs; `idDispute` reads one dispute with both sets.
+     */
+    idDisputes: () => sbg.request((c) => c.GET('/v1/sbg/id-disputes', {})),
+    idDispute: (disputeId: string) => sbg.request((c) => c.GET('/v1/sbg/id-disputes/{disputeId}', { params: { path: { disputeId } } })),
+    /** The number as read off a card. Only whether it is the disputed one comes back. */
+    readIdCard: (disputeId: string, side: 'claimant' | 'holder', number: string, by?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/id-disputes/{disputeId}/card', { params: { path: { disputeId } }, body: { side, number, ...(by ? { by } : {}) } })),
+    /** `reason` is read by the person who has to take them again. */
+    retakeIdPhotos: (disputeId: string, side: 'claimant' | 'holder', reason: string, by?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/id-disputes/{disputeId}/retake', { params: { path: { disputeId } }, body: { side, reason, ...(by ? { by } : {}) } })),
+    /** Whose it is, what was checked, and the reason the other one reads. After an appointment: who came. */
+    checkIdDispute: (disputeId: string, input: { to: 'claimant' | 'holder'; what: string; reason: string; claimantCame?: boolean; holderCame?: boolean }, by?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/id-disputes/{disputeId}/check', { params: { path: { disputeId } }, body: { ...input, ...(by ? { by } : {}) } })),
+    approveIdDispute: (disputeId: string, by?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/id-disputes/{disputeId}/approve', { params: { path: { disputeId } }, body: { ...(by ? { by } : {}) } })),
+    sendBackIdDispute: (disputeId: string, why: string, by?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/id-disputes/{disputeId}/send-back', { params: { path: { disputeId } }, body: { why, ...(by ? { by } : {}) } })),
+    /**
      * What this server is connected to for the fleets' planning — the routing server and the adviser: set up or not,
      * and what the last ask met. Staff only. `checkRouter` asks the routing server one question now.
      */
