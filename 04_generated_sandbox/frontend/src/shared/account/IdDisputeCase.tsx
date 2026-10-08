@@ -3,7 +3,7 @@ import { Button, CodeCard, Icon, Note, RefusalNote } from '../ui';
 import { useT } from '../i18n';
 import type { Result, SbgError } from '../../lib/sbg';
 import { downscaleImage } from '../media';
-import { DISPUTE_PHOTOS, appointmentDays, bringLines, dayChoices, dayLabel, hoursOn, idActions, idStatusSays, readyToAppoint, ticketLines, visitingWords, type DisputePhoto, type DisputeStatus, type IdDisputeApi } from './idDispute';
+import { DISPUTE_PHOTOS, appointmentDays, bringLines, dayChoices, dayLabel, hoursOn, idActions, idStatusSays, readyToAppoint, reminderLine, ticketLines, visitingWords, type DisputePhoto, type DisputeStatus, type IdDisputeApi } from './idDispute';
 
 export interface IdDisputeCaseProps {
   api: IdDisputeApi;
@@ -136,6 +136,8 @@ export function IdDisputeCase({ api, reference, initial, ownId, onChanged }: IdD
           </dl>
           {ticket.offDay ? <Note tone="warn" icon="warning" title={t('account.id.ticket.offDay')} detail={t(ticket.yours ? 'account.id.ticket.offDayYours' : 'account.id.ticket.offDayTheirs')} /> : null}
           <p class="hint">{t(ticket.yours ? 'account.id.ticket.noShow' : 'account.id.ticket.mayCome')}</p>
+          {/* The day before, a reminder with all of this — or, with no account to reach, that none can come. */}
+          <p class="hint">{reminderLine(ticket, t as never)}</p>
         </section>
       ) : null}
 

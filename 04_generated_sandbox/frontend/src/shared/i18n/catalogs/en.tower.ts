@@ -2314,6 +2314,8 @@ export const enTowerBusinesses = {
   'tower.ids.fact.appointmentBy': '{date}, made by {who}',
   'tower.ids.fact.appointmentByAt': '{date} at {at}, made by {who}',
   'tower.ids.fact.appointmentOffDay': 'The company no longer receives visitors then: it changed its days, its hours or its closed dates. Both tickets say so, and the person who made the appointment can choose again.',
+  'tower.ids.fact.reminded': 'Whoever of the two has an account was reminded on {when}, in the app and by email, with what to bring.',
+  'tower.ids.fact.willRemind': 'Whoever of the two has an account is reminded the day before, in the app and by email, with what to bring.',
   'tower.ids.fact.place': 'Where people are sent',
   'tower.ids.place.noAddress': 'No address written',
   'tower.ids.place.visiting': 'Visitors: {when}',

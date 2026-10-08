@@ -39579,6 +39579,10 @@
               ]
             }
           },
+          "remindedAt": {
+            "type": "string",
+            "description": "The reminder went, and when."
+          },
           "offDay": {
             "type": "boolean",
             "description": "The company has since changed its days, hours or closures, and this day or hour no longer fits them."
@@ -39601,6 +39605,10 @@
           "changesLeft": {
             "type": "number",
             "description": "How many more times the day can be changed, by whoever made it."
+          },
+          "willRemind": {
+            "type": "boolean",
+            "description": "They will be reminded the day before, in the app and by email — or cannot be: they have no account to reach."
           }
         },
         "required": [
@@ -39608,7 +39616,8 @@
           "reference",
           "date",
           "yours",
-          "changesLeft"
+          "changesLeft",
+          "willRemind"
         ]
       },
       "DisputeHour": {
@@ -39988,6 +39997,10 @@
           "appointmentAt": {
             "type": "string",
             "description": "The hour of the appointment, where there is one."
+          },
+          "appointmentRemindedAt": {
+            "type": "string",
+            "description": "The day-before reminder went to whoever of the two has an account, and when."
           },
           "appointmentOffDay": {
             "type": "boolean",

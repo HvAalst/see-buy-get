@@ -285,15 +285,20 @@ describe('an email that could not be handed over', () => {
   describe('each email’s own answer', () => {
     it('is stated by every template — hours it stays worth sending, or never — and only a code says never', () => {
       const never: MailTemplateId[] = [];
+      const briefly: MailTemplateId[] = [];
       for (const id of Object.keys(MAIL_TEMPLATES) as MailTemplateId[]) {
         const later = MAIL_TEMPLATES[id].sendLater;
         if (later === false) never.push(id);
         else {
           expect(typeof later).toBe('number');
-          expect(later).toBeGreaterThanOrEqual(24);
           expect(later).toBeLessThanOrEqual(72);
+          if ((later as number) < 24) briefly.push(id);
         }
       }
+      // A notice stays worth sending for a day or more — except the one that says "tomorrow": a day late it would
+      // say it of today, so it is worth sending for hours and no longer.
+      expect(briefly).toEqual(['appointment-reminder']);
+      expect(MAIL_TEMPLATES['appointment-reminder'].sendLater).toBeGreaterThanOrEqual(6);
       expect(never.sort()).toEqual(['email-code', 'password-reset']);
       // The two that say never are the two that carry a code somebody is waiting for.
       for (const id of never) expect(JSON.stringify(MAIL_TEMPLATES[id].sample)).toMatch(/"code"/);

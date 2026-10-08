@@ -1,8 +1,9 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { randomBytes, randomInt } from 'crypto';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { GlosError } from '../../foundation/http/glos-error';
+import { MailService } from '../../foundation/mail/mail.service';
 import { hashPhone, isPlausiblePhone, normalizePhone } from '../../foundation/identity/phone';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { countryOfPhone } from './account-move.service';
@@ -13,6 +14,7 @@ import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import {
   APPOINTMENT_CHANGES,
+  APPOINTMENT_REMINDER_HOURS,
   APPOINTMENT_WITHIN_DAYS,
   BRING,
   CardAnswer,
@@ -101,7 +103,11 @@ interface StoredDispute {
   sentBack?: { by: string; at: string; why: string };
   decided?: { to: DisputeSide; by: string; at: string; reason: string; holderEffect: HolderEffect };
   contestBy?: string;
-  appointment?: { by: DisputeSide; date: string; at?: string; madeAt: string; changes: number };
+  /**
+   * `setAt` — when it was made, or last moved. `reminded` — the day-before reminder was dealt with for THIS day and
+   * hour (`for`), and whether it was sent: it is not, when the appointment was made after the reminder was due.
+   */
+  appointment?: { by: DisputeSide; date: string; at?: string; madeAt: string; setAt?: string; changes: number; reminded?: { for: string; at: string; sent: boolean } };
   final?: { to: DisputeSide; by: string; at: string; reason: string; came?: { claimant: boolean; holder: boolean } };
   endedAt?: string;
   country?: string;
@@ -112,6 +118,8 @@ const ALIVE: DisputeState[] = ['opened', 'answering', 'ready', 'checked', 'decid
 /** Before any decision. */
 const UNDECIDED: DisputeState[] = ['opened', 'answering', 'ready', 'checked'];
 const WORD: Record<IdRegister, string> = { driver: 'driver', shop: 'shop' };
+/** How often the clock is looked at for reminders that have come due. */
+const REMINDER_SWEEP_MS = 30 * 60 * 1000;
 
 /**
  * TWO PEOPLE SAY ONE NATIONAL ID IS THEIRS (id-dispute.types.ts says what the user decided, and why each step).
@@ -121,7 +129,7 @@ const WORD: Record<IdRegister, string> = { driver: 'driver', shop: 'shop' };
  * mistyped, which only they can say and which costs nobody anything.
  */
 @Injectable()
-export class IdDisputeService {
+export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(IdDisputeService.name);
   private readonly disputes = new PersistentMap<string, StoredDispute>('id-disputes');
 
@@ -137,7 +145,26 @@ export class IdDisputeService {
     @Optional() private readonly notifications?: NotificationService,
     @Optional() private readonly entities?: EntityService,
     @Optional() private readonly contacts?: ContactCardService,
+    @Optional() private readonly mail?: MailService,
   ) {}
+
+  private timer?: NodeJS.Timeout;
+
+  /** The reminders go by the clock, not by anybody remembering: looked at every half hour while the server runs. */
+  onModuleInit(): void {
+    this.timer = setInterval(() => {
+      try {
+        this.remindAppointments();
+      } catch (err) {
+        this.logger.warn(`appointment reminders failed: ${(err as Error).message}`);
+      }
+    }, REMINDER_SWEEP_MS);
+    this.timer.unref?.();
+  }
+
+  onModuleDestroy(): void {
+    if (this.timer) clearInterval(this.timer);
+  }
 
   /* ------------------------------------------------------------ the one who was refused -- */
 
@@ -307,14 +334,14 @@ export class IdDisputeService {
       if (!dispute.decided || dispute.decided.to === side) throw new GlosError('INVALID_STATE', 'The ID is yours: there is nothing for you to contest.');
       if (!dispute.contestBy || now >= Date.parse(dispute.contestBy)) throw new GlosError('INVALID_STATE', 'The time to contest this decision has passed.');
       const hour = hourOn();
-      dispute.appointment = { by: side, date, ...(hour ? { at: hour } : {}), madeAt: iso(now), changes: 0 };
+      dispute.appointment = { by: side, date, ...(hour ? { at: hour } : {}), madeAt: iso(now), setAt: iso(now), changes: 0 };
       dispute.state = 'appointment';
     } else if (dispute.state === 'appointment' && dispute.appointment) {
       if (dispute.appointment.by !== side) throw new GlosError('FORBIDDEN', 'Only the person who made the appointment can change its day.');
       if (dispute.appointment.date <= today) throw new GlosError('INVALID_STATE', 'The day has come: it can no longer be changed.');
       if (dispute.appointment.changes >= APPOINTMENT_CHANGES) throw new GlosError('INVALID_STATE', 'The day has been changed as often as it can be. Speak to SeeBuyGet staff.');
       const hour = hourOn();
-      dispute.appointment = { by: dispute.appointment.by, date, ...(hour ? { at: hour } : {}), madeAt: dispute.appointment.madeAt, changes: dispute.appointment.changes + 1 };
+      dispute.appointment = { by: dispute.appointment.by, date, ...(hour ? { at: hour } : {}), madeAt: dispute.appointment.madeAt, setAt: iso(now), changes: dispute.appointment.changes + 1 };
     } else {
       throw new GlosError('INVALID_STATE', 'There is nothing here to make an appointment for.');
     }
@@ -336,6 +363,65 @@ export class IdDisputeService {
       });
     }
     return this.statusOf(dispute, side, now);
+  }
+
+  /**
+   * THE DAY BEFORE, EACH OF THE TWO IS REMINDED — in the app and by email: when, where, and what to bring. The user,
+   * 2026-10-08: "a reminder notification/email with which docs to bring along a day before the appointment".
+   *
+   * ONCE for each day and hour: moved, an appointment is reminded of again. NOT when it was made or moved after
+   * the reminder was already due — they were told all of it a moment ago — and not once the day itself has come,
+   * when "tomorrow" would be wrong. Where the office has since changed when it receives visitors, the reminder says
+   * to choose again instead of what to bring. Somebody with no account cannot be reached: their ticket says so.
+   * How many appointments were reminded of.
+   */
+  remindAppointments(now: number = Date.now()): number {
+    let sent = 0;
+    const today = iso(now).slice(0, 10);
+    for (const d of this.all(now)) {
+      const a = d.appointment;
+      if (d.state !== 'appointment' || !a) continue;
+      const key = a.at ? `${a.date} ${a.at}` : a.date;
+      if (a.reminded?.for === key) continue;
+      const due = Date.parse(`${a.date}T00:00:00.000Z`) - APPOINTMENT_REMINDER_HOURS * 3_600_000;
+      if (now < due) continue;
+      const tell = Date.parse(a.setAt ?? a.madeAt) < due && today < a.date;
+      if (tell) {
+        this.remind(d);
+        sent += 1;
+      }
+      a.reminded = { for: key, at: iso(now), sent: tell };
+      this.disputes.set(d.disputeId, d);
+    }
+    return sent;
+  }
+
+  private remind(d: StoredDispute): void {
+    const a = d.appointment!;
+    const place = this.placeFor(d.country);
+    const fits = !offDay(place, a.date, a.at);
+    const hour = a.at ? `${a.at} to ${hourAfter(a.at)}` : undefined;
+    const when = hour ? `${dayOf(a.date)}, ${hour}` : dayOf(a.date);
+    const where = place ? `${place.company}${place.address ? `, ${place.address}` : ''}` : 'the SeeBuyGet office for your country';
+    for (const side of ['claimant', 'holder'] as const) {
+      const person = d[side].personDid ? this.persons.findByDid(d[side].personDid as string) : undefined;
+      if (!person) continue;
+      const yours = a.by === side;
+      const bring = bringWords(d.register, d[side].reference);
+      const title = !fits ? 'Your appointment tomorrow no longer fits' : yours ? 'Your appointment about the national ID is tomorrow' : 'The appointment about the national ID is tomorrow';
+      const body = !fits
+        ? `The office has changed when it receives visitors, and ${when} is no longer one of its times. ${yours ? 'Open the app with your reference and choose another day, today.' : 'The other person has been asked to choose another day: look at your ticket before you travel.'}`
+        : `Tomorrow, ${when}, at ${where}. ${yours ? '' : 'The other person is coming in; you may come too, with your card. '}Bring: ${bring.join('; ')}.`;
+      // The person's own bell, and the bell of the app they drive in: wherever they look first.
+      const drivers = person.roles.filter((r) => r.role === 'driver' && r.status === 'active').map((r) => r.entityDid);
+      for (const to of [person.personDid, ...drivers]) {
+        void this.notifications
+          ?.notify(to, { kind: 'security', title, body, link: '/', tag: `id-dispute:${d.disputeId}:reminder:${a.date}${a.at ?? ''}` })
+          .catch((err) => this.logger.warn(`appointment reminder failed: ${(err as Error).message}`));
+      }
+      const address = this.persons.emailOf(person);
+      if (address) void this.mail?.send('appointment-reminder', { address }, { yours, fits, day: dayOf(a.date), ...(hour ? { hour } : {}), where, reference: d[side].reference, bring: fits ? bring : [] });
+    }
   }
 
   /** How many OTHER appointments at this country's office are already made for that hour of that day. */
@@ -745,6 +831,9 @@ export class IdDisputeService {
       yours,
       bring: [...BRING],
       changesLeft: yours ? Math.max(0, APPOINTMENT_CHANGES - d.appointment.changes) : 0,
+      // Only somebody with an account can be reminded: the one refused at registration may have none.
+      willRemind: Boolean(d[side].personDid && this.persons.findByDid(d[side].personDid as string)),
+      ...(d.appointment.reminded?.sent && d[side].personDid ? { remindedAt: d.appointment.reminded.at } : {}),
       ...(offDay(place, d.appointment.date, d.appointment.at) ? { offDay: true } : {}),
       ...(place ? { place } : {}),
     };
@@ -774,7 +863,7 @@ export class IdDisputeService {
       ...(d.sentBack ? { sentBackWhy: `${d.sentBack.by}: ${d.sentBack.why}` } : {}),
       ...(d.decided ? { decidedTo: d.decided.to, decidedBy: d.decided.by, decidedAt: d.decided.at, reason: d.final?.reason ?? d.decided.reason, holderEffect: d.decided.holderEffect } : {}),
       ...(d.state === 'decided' && d.contestBy ? { contestBy: d.contestBy } : {}),
-      ...(d.appointment ? { appointmentDate: d.appointment.date, appointmentBy: d.appointment.by, ...(d.appointment.at ? { appointmentAt: d.appointment.at } : {}) } : {}),
+      ...(d.appointment ? { appointmentDate: d.appointment.date, appointmentBy: d.appointment.by, ...(d.appointment.at ? { appointmentAt: d.appointment.at } : {}), ...(d.appointment.reminded?.sent ? { appointmentRemindedAt: d.appointment.reminded.at } : {}) } : {}),
       ...(d.appointment && d.state === 'appointment' && offDay(this.placeFor(d.country), d.appointment.date, d.appointment.at) ? { appointmentOffDay: true } : {}),
       ...(place ? { place } : {}),
       ...(d.final ? { finalTo: d.final.to, finalBy: d.final.by, finalAt: d.final.at } : {}),
@@ -989,6 +1078,16 @@ function offDay(place: DisputePlace | undefined, date: string, at?: string): boo
   if (notVisitingDay(place, date) || Boolean(closedOn(place, date))) return true;
   if (!place?.visitorsPerHour) return false;
   return !at || !visitingHours(place).includes(at);
+}
+
+/** What to bring, as the reminder says it — the same four things the ticket lists, in the same order. */
+function bringWords(register: IdRegister, reference: string): string[] {
+  return [
+    'Your ID card itself — not a copy or a photograph',
+    'The phone you use with SeeBuyGet',
+    `Your reference: ${reference}`,
+    `A second document in your name, if you have one: your ${register === 'driver' ? 'driving licence' : 'trading licence'}`,
+  ];
 }
 
 const PHOTO_WORD: Record<DisputePhoto, string> = { face: 'you holding the card', front: 'the front of the card', back: 'the back of the card' };

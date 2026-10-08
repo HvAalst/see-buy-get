@@ -54,6 +54,8 @@ export interface DisputeRow {
   appointmentBy?: DisputeSide;
   /** The hour of the appointment, where the company counts its visitors by the hour. */
   appointmentAt?: string;
+  /** The day-before reminder went to whoever of the two has an account, and when. */
+  appointmentRemindedAt?: string;
   /** The appointment is on a day the country's company no longer receives visitors. */
   appointmentOffDay?: boolean;
   /** Where people are sent and when visitors are received — the country's company's own entry. Absent: it wrote nothing. */
@@ -185,6 +187,17 @@ export function placeWords(row: Pick<DisputeRow, 'place'>, t: Translate): { wher
     closed: p?.closedDates?.length ? t('tower.ids.place.closed', { dates: p.closedDates.slice(0, 6).map((c) => (c.note ? `${c.date} (${c.note})` : c.date)).join(', ') + (p.closedDates.length > 6 ? ` +${p.closedDates.length - 6}` : '') }) : '',
     missing: !p?.address || !days.length,
   };
+}
+
+/**
+ * WHAT IS SAID UNDER AN APPOINTMENT: that it no longer fits what the company says now — which outranks everything,
+ * because somebody is about to travel for nothing — or else where the day-before reminder stands.
+ */
+export function appointmentHint(row: Pick<DisputeRow, 'state' | 'appointmentOffDay' | 'appointmentRemindedAt'>, t: Translate, when: (iso: string) => string): string {
+  if (row.appointmentOffDay) return t('tower.ids.fact.appointmentOffDay');
+  if (row.appointmentRemindedAt) return t('tower.ids.fact.reminded', { when: when(row.appointmentRemindedAt) });
+  // Once it is over, a reminder that never went is not something still to come.
+  return row.state === 'appointment' ? t('tower.ids.fact.willRemind') : '';
 }
 
 /** What the decision did, in a line — for the facts of a dispute that is decided. */

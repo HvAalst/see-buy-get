@@ -88,6 +88,12 @@ export interface MailParams {
   'email-code': { code: string; minutes: number; why: 'confirm' | 'recover' | 'undo' };
   /** Something happened to the way somebody signs in. Always sent; cannot be turned off. */
   'account-safety': { headline: string; what: string; next: string; when: string; until?: string };
+  /**
+   * The day before somebody is expected in person: when, where, and what to bring. `yours` — they made the
+   * appointment; false, the other person did and this one may come too. `fits` false: the office has since changed
+   * when it receives visitors, and the reminder says to choose again instead of what to bring.
+   */
+  'appointment-reminder': { yours: boolean; fits: boolean; day: string; hour?: string; where: string; reference: string; bring: string[] };
   /** Somebody asked to be told when the network reaches their country. Sent the moment they ask. */
   'interest-received': { country: string; kind: string };
   /** Two members of staff switched that country on. Sent by the approval itself, not by anybody remembering. */
@@ -286,6 +292,58 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
       ],
       reason: 'You are getting this email because it is the recovery address on a SeeBuyGet account. We always tell you — this email cannot be turned off.',
     }),
+  },
+
+  /*
+   * SENT BY THE CLOCK, the day before — not by anybody remembering. The person was told all of this when the
+   * appointment was made, possibly weeks ago; this is the copy they will have open on the way there, so it leads
+   * with when and where and lists what to bring one thing to a line.
+   */
+  'appointment-reminder': {
+    title: 'Your appointment is tomorrow',
+    sentWhen: 'The day before somebody is expected in person about a disputed national ID — to each of the two people who has an account.',
+    wired: true,
+    // Worth having a few hours late, on the day before. Not a day late: by then it says "tomorrow" of today.
+    sendLater: 12,
+    sample: { yours: true, fits: true, day: '9 Oct 2026', hour: '10:00 to 11:00', where: 'SeeBuyGet Kenya, Mombasa Road, gate 4, Nairobi', reference: 'ID-ABCD-2345', bring: ['Your ID card itself — not a copy or a photograph', 'The phone you use with SeeBuyGet', 'Your reference: ID-ABCD-2345', 'A second document in your name, if you have one: your driving licence'] },
+    also: [
+      { key: 'theirs', label: 'To the other person, who may come too', sample: { yours: false, fits: true, day: '9 Oct 2026', hour: '10:00 to 11:00', where: 'SeeBuyGet Kenya, Mombasa Road, gate 4, Nairobi', reference: 'ID-WXYZ-6789', bring: ['Your ID card itself — not a copy or a photograph', 'The phone you use with SeeBuyGet', 'Your reference: ID-WXYZ-6789', 'A second document in your name, if you have one: your driving licence'] } },
+      { key: 'no-longer-fits', label: 'When the office has changed its days or hours since', sample: { yours: true, fits: false, day: '9 Oct 2026', hour: '10:00 to 11:00', where: 'SeeBuyGet Kenya, Mombasa Road, gate 4, Nairobi', reference: 'ID-ABCD-2345', bring: [] } },
+    ],
+    build: (p) => {
+      const when = p.hour ? `${p.day}, ${p.hour}` : p.day;
+      if (!p.fits) {
+        return {
+          subject: 'SeeBuyGet: your appointment tomorrow no longer fits',
+          preheader: 'The office has changed when it receives visitors.',
+          blocks: [
+            { kind: 'heading', text: 'Your appointment tomorrow no longer fits' },
+            { kind: 'paragraph', text: `The office has changed when it receives visitors, and ${when} is no longer one of its times.` },
+            { kind: 'facts', rows: [['It was for', when], ['Where', p.where], ['Your reference', p.reference]] },
+            { kind: 'warning', title: 'What to do', text: p.yours ? 'Open any SeeBuyGet app with your reference and choose another day, today. Do not travel tomorrow.' : 'The other person has been asked to choose another day. Look at your ticket in the app before you travel.' },
+            { kind: 'button', label: 'Help with a disputed ID', href: helpUrl('account-recovery') },
+          ],
+          reason: 'You are getting this email because it is the recovery address on a SeeBuyGet account with an appointment tomorrow.',
+        };
+      }
+      return {
+        subject: 'SeeBuyGet: your appointment is tomorrow',
+        preheader: `${when} — and what to bring.`,
+        blocks: [
+          { kind: 'heading', text: p.yours ? 'Your appointment is tomorrow' : 'The appointment is tomorrow' },
+          {
+            kind: 'paragraph',
+            text: p.yours
+              ? 'You asked for the decision about the national ID to be looked at again, in person. Two members of staff decide on what they see, and that decision is final.'
+              : 'The other person does not accept the decision about the national ID and is coming in. You may come too, with your card, so that yours is looked at as well.',
+          },
+          { kind: 'facts', rows: [['When', when], ['Where', p.where], ['Your reference', p.reference], ...p.bring.map((item, i) => [i === 0 ? 'Bring' : '', item] as [string, string])] },
+          { kind: 'warning', title: p.yours ? 'If you cannot come' : 'If you do not come', text: p.yours ? 'Change the day today, in the app, with your reference. Tomorrow it can no longer be changed, and if you do not come the decision stands.' : 'You do not have to. Staff then decide on what the other person shows them.' },
+          { kind: 'button', label: 'Help with a disputed ID', href: helpUrl('account-recovery') },
+        ],
+        reason: 'You are getting this email because it is the recovery address on a SeeBuyGet account with an appointment tomorrow.',
+      };
+    },
   },
 
   'password-reset': {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { DISPUTE_LABEL, DISPUTE_TONE, cardWords, decidedWords, disputeNotes, disputeStep, disputeSub, disputesWaiting, finalWords, mayPropose, photoRefs, placeWords, waitsOnThem, waitsOnUs, type DisputeRow, type DisputeState } from './idDisputes';
+import { DISPUTE_LABEL, DISPUTE_TONE, appointmentHint, cardWords, decidedWords, disputeNotes, disputeStep, disputeSub, disputesWaiting, finalWords, mayPropose, photoRefs, placeWords, waitsOnThem, waitsOnUs, type DisputeRow, type DisputeState } from './idDisputes';
 
 const when = (iso: string) => `[${iso.slice(0, 16)}]`;
 const NOW = Date.parse('2026-10-15T10:00:00.000Z');
@@ -143,6 +143,16 @@ describe('ID disputes, as the console says them', () => {
     expect(placeWords(row({ place: { company: 'SeeBuyGet Kenya', visitDays: ['mon'] } }), t)).toMatchObject({ where: 'No address written', visiting: 'Visitors: Monday', missing: true });
     // And whose it is to put right is said in so many words: the company's, in its own Settings.
     expect(t('tower.ids.place.theirs')).toContain('under Settings, How to reach you');
+  });
+
+  it('says under an appointment where the reminder stands — and, before that, that the appointment no longer fits', () => {
+    expect(appointmentHint({ state: 'appointment' }, t, when)).toContain('is reminded the day before, in the app and by email, with what to bring');
+    expect(appointmentHint({ state: 'appointment', appointmentRemindedAt: '2026-10-08T06:00:00.000Z' }, t, when)).toContain('was reminded on [2026-10-08T06:00]');
+    // Somebody about to travel for nothing outranks whether they were reminded.
+    expect(appointmentHint({ state: 'appointment', appointmentOffDay: true, appointmentRemindedAt: '2026-10-08T06:00:00.000Z' }, t, when)).toContain('no longer receives visitors then');
+    // Over, a reminder that never went is not still to come.
+    expect(appointmentHint({ state: 'final' }, t, when)).toBe('');
+    expect(appointmentHint({ state: 'final', appointmentRemindedAt: '2026-10-08T06:00:00.000Z' }, t, when)).toContain('was reminded on');
   });
 
   it('says how it was decided — for whom, by whom, and what it did to the holder — and whether the decision stood in person', () => {

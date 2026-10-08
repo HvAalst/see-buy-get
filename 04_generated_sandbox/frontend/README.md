@@ -294,6 +294,13 @@ they need to bring for the appointment date." `modules/pudo/id-dispute.service.t
 - **If the company changes any of it after an appointment was made** — its days, hours or closed dates, or
   starts counting by the hour — both tickets and the console say it no longer fits (`offDay`), and whoever
   made the appointment can choose again.
+- **The day before, both are reminded** (the user, 2026-10-08: "a reminder notification/email with which docs to
+  bring along a day before the appointment"). `IdDisputeService.remindAppointments`, looked at every half hour
+  while the server runs: 18 hours before the day begins (06:00 UTC the day before — no time zone is kept per
+  country), once per day-and-hour, in the app and by its own email (`appointment-reminder`: when, where, the
+  reference, what to bring one to a line). Moved, an appointment is reminded of again; made after the reminder
+  was due, it is not; where the office has since changed its times, the reminder says to choose again instead.
+  Somebody with no account cannot be reached, and their ticket says so (`willRemind`).
 - **Part of the turn-on process** (the user: "it's part of the turn on process"): a company of ours is not
   ready to be switched on until its own entry has an address and visiting days with hours. `ContactCardService`
   says so to `CompanyReadinessService.also(…)`, so both are on the Company record's list of what is missing and

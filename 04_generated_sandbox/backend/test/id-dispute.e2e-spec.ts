@@ -209,6 +209,11 @@ describe('two people say one national ID is theirs, over the wire', () => {
     expect((await status(mine.reference)).choices).toBeUndefined();
     const made = await http().post('/v1/sbg/identity/id-disputes/appointment').send({ reference: opened.body.reference, date: tomorrow, at: '10:00' }).expect(200);
     expect(made.body.ticket).toMatchObject({ at: '10:00', until: '11:00' });
+    // The reminder the day before can reach only somebody with an account: the one who was refused has none here,
+    // and is told so; the holder has, and is told one will come.
+    expect(made.body.ticket.willRemind).toBe(false);
+    expect((await status(mine.reference)).ticket).toMatchObject({ willRemind: true });
+    expect((await status(mine.reference)).ticket.remindedAt).toBeUndefined();
     expect(made.body).toMatchObject({ state: 'appointment', ticket: { reference: opened.body.reference, date: tomorrow, yours: true, bring: ['id_card', 'phone', 'reference', 'second_document'], place: { address: 'Mombasa Road, gate 4', visitFrom: '09:00', visitTo: '16:00' } } });
     expect(made.body.ticket.place.visitDays).toContain(theDay);
     expect((await status(mine.reference)).ticket).toMatchObject({ reference: mine.reference, date: tomorrow, yours: false, changesLeft: 0 });

@@ -219,7 +219,8 @@ export const ARTICLES: GuideArticle[] = [
       "Could not register as a driver or a shop because your national ID is already registered? Check the number first: one wrong digit is the usual reason. If it is right, somebody else is using your number. On any sign-in screen choose Trouble signing in, then Somebody else registered with my national ID. Confirm your phone number, and you are given a reference.",
       "Write the reference on paper. Take three photographs: yourself holding your ID card under your chin with the paper beside it, then the front of the card close up, then the back. Somebody else may take them for you. Look at each one before you send it: if you cannot read the number, staff cannot either. Only the two members of staff who decide see them, and they are deleted 30 days after the decision.",
       "If somebody says the ID on YOUR registration is theirs, you are told in the app and by email, and Settings shows it. You have a week. Either send the same three photographs with your own reference, or, if the number on your record was simply mistyped, put the right one there: that ends it at once and nothing else changes for you.",
-      "Two members of staff decide from the photographs. If the ID goes to the other person, your account is not removed: your driver or shop registration is held. You finish what you have in hand and start nothing new until you put the number of your own ID card on record, in Settings. If you do not accept the decision, you have two weeks to choose a day to come in, from the days the office for your country receives visitors. Where the office gives each visitor an hour, you choose the hour too; an hour that is full is not offered. You are given a ticket that says where, when and what to bring."
+      "Two members of staff decide from the photographs. If the ID goes to the other person, your account is not removed: your driver or shop registration is held. You finish what you have in hand and start nothing new until you put the number of your own ID card on record, in Settings. If you do not accept the decision, you have two weeks to choose a day to come in, from the days the office for your country receives visitors. Where the office gives each visitor an hour, you choose the hour too; an hour that is full is not offered. You are given a ticket that says where, when and what to bring.",
+      "The day before an appointment you are reminded, in the app and by email: when, where, and what to bring. Bring your ID card itself, not a copy; the phone you use with SeeBuyGet; your reference; and a second document in your name if you have one. If you have no SeeBuyGet account, no reminder can reach you: write the day down."
     ]
   },
   {
@@ -380,7 +381,8 @@ export const ARTICLES: GuideArticle[] = [
       "The ID number and whole phone numbers are never shown. The photographs are deleted 30 days after the decision, or 30 days after an appointment.",
       "Outside a sandbox this needs a named sign-in for each member of staff.",
       "If the company changes its days, its hours or its closed dates after an appointment was made, both tickets say that it no longer fits, and the person who made the appointment can choose again.",
-      "A country’s company cannot be switched on until it has written its address and set its visiting days and hours. Both are on its Company record, in the list of what is still missing."
+      "A country’s company cannot be switched on until it has written its address and set its visiting days and hours. Both are on its Company record, in the list of what is still missing.",
+      "The day before an appointment, whoever of the two has an account is reminded in the app and by email, with what to bring. The dispute shows when the reminder went. Somebody with no account cannot be reminded, and their ticket tells them so."
     ]
   },
   {

@@ -66,7 +66,7 @@ import { ContactCardService, hourAfter, visitingHours, weekdayOf } from './conta
 import { CompanyReadinessService } from '../../foundation/entity/company-readiness.service';
 import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
 import { IdDisputeService, normalizeIdReference } from './id-dispute.service';
-import { APPOINTMENT_CHANGES, APPOINTMENT_WITHIN_DAYS, DISPUTE_ANSWER_DAYS, DISPUTE_CONTEST_DAYS, DISPUTE_OPENS_PER_DAY, type DisputePhoto, type IdRegister } from './id-dispute.types';
+import { APPOINTMENT_CHANGES, APPOINTMENT_REMINDER_HOURS, APPOINTMENT_WITHIN_DAYS, DISPUTE_ANSWER_DAYS, DISPUTE_CONTEST_DAYS, DISPUTE_OPENS_PER_DAY, type DisputePhoto, type IdRegister } from './id-dispute.types';
 import { IDENTITY_CHECK_DAYS } from './media.types';
 
 /**
@@ -734,6 +734,7 @@ describe('two people say one national ID is theirs', () => {
         yours: true,
         bring: ['id_card', 'phone', 'reference', 'second_document'],
         changesLeft: APPOINTMENT_CHANGES,
+        willRemind: true,
         place: { company: ke.name, contactName: 'Grace at the front desk', phone: '+254 20 000 111', address: 'Mombasa Road, gate 4', hours: 'Mon–Fri 8–17', visitDays: [visitDay], visitFrom: '09:00', visitTo: '16:00' },
       });
       // Staff are shown where the tickets send them.
@@ -919,6 +920,154 @@ describe('two people say one national ID is theirs', () => {
       // A partner's office is not ours to send anybody to: it is not asked.
       const partner = entities.createCompany({ kind: 'partner', jurisdiction: 'zm', name: 'Lusaka Logistics' }, 'Amina');
       expect(readiness.readinessOf(partner.entityId).items.some((i) => i.key === 'visitors_address' || i.key === 'visiting_days')).toBe(false);
+    });
+
+    /* ------------------------------------------------------------ the day before -- */
+
+    const HOUR = 3_600_000;
+    /** When the reminder for an appointment on this day comes due: the morning of the day before. */
+    const dueOf = (date: string) => Date.parse(date + 'T00:00:00.000Z') - APPOINTMENT_REMINDER_HOURS * HOUR;
+    const reminders = (address: string) => outbox.recent(address).filter((m) => m.template === 'appointment-reminder');
+    /** Decided for a claimant who HAS an account and an inbox — so both of the two people can be reached. */
+    function wonByKnownClaimant() {
+      const d = aDriver();
+      const phone = aVerifiedNumber();
+      const me = persons.ensurePerson(phone);
+      const email = 'claimant' + (seq += 1) + '@example.com';
+      persons.setEmail(me.personDid, email);
+      const opened = disputes.open({ register: 'driver', nationalId: d.nationalId, phone }, T0);
+      const disputeId = idOf(opened.reference);
+      const holderReference = holderRef(opened.reference);
+      sendAll(opened.reference);
+      const at = T0 + DISPUTE_ANSWER_DAYS * DAY + 1000;
+      disputes.readCard(disputeId, AMINA, 'claimant', d.nationalId, at);
+      disputes.check(disputeId, AMINA, { to: 'claimant', what: 'w', reason: 'You showed no card.' }, at);
+      disputes.approve(disputeId, BRIAN, at);
+      return { d, me, email, reference: opened.reference, holderReference, disputeId, at };
+    }
+
+    it('the day before, each of the two is reminded — once — of when, where and what to bring', () => {
+      const ke = entities.forJurisdiction('KE')!;
+      contacts.set(ke.entityId, { address: 'Mombasa Road, gate 4', visitDays: EVERY_DAY, visitFrom: '09:00', visitTo: '12:00', visitorsPerHour: 2 }, 'Grace');
+      const k = wonByKnownClaimant();
+      const day = dayStr(k.at + 3 * DAY);
+      appoint(k.holderReference, day, k.at, '10:00');
+      const due = dueOf(day);
+      // Not before its time: and the ticket says a reminder WILL come, not that one went.
+      expect(disputes.remindAppointments(due - 1000)).toBe(0);
+      expect(reminders(k.d.email)).toHaveLength(0);
+      expect(disputes.status(k.holderReference, due - 1000).ticket).toMatchObject({ willRemind: true });
+      expect(disputes.status(k.holderReference, due - 1000).ticket!.remindedAt).toBeUndefined();
+
+      // The morning of the day before: one appointment, and both of its people.
+      expect(disputes.remindAppointments(due + 1000)).toBe(1);
+      const [mine] = reminders(k.d.email);
+      expect(mine.subject).toBe('SeeBuyGet: your appointment is tomorrow');
+      for (const said of ['10:00 to 11:00', 'Mombasa Road, gate 4', k.holderReference, 'Your ID card itself — not a copy or a photograph', 'The phone you use with SeeBuyGet', 'your driving licence', 'Change the day today']) expect(mine.text).toContain(said);
+      // Their own reference, never the other person's.
+      expect(mine.text).not.toContain(k.reference);
+      const [theirs] = reminders(k.email);
+      expect(theirs.subject).toBe('SeeBuyGet: your appointment is tomorrow');
+      for (const said of ['You may come too', k.reference, '10:00 to 11:00', 'Your ID card itself']) expect(theirs.text).toContain(said);
+      expect(theirs.text).not.toContain(k.holderReference);
+      expect(theirs.text).not.toContain('Change the day today');
+      // In the app as well — the person's own bell, and the bell of the app they drive in.
+      const inApp = notifications.inboxFor(k.d.personDid).find((n) => n.title === 'Your appointment about the national ID is tomorrow')!;
+      expect(inApp.body).toMatch(/^Tomorrow, \d+ \w+ \d{4}, 10:00 to 11:00, at .+Mombasa Road, gate 4\. Bring: Your ID card itself/);
+      expect(inApp.body).toContain('your driving licence');
+      expect(notifications.inboxFor(k.d.did).some((n) => n.title === 'Your appointment about the national ID is tomorrow')).toBe(true);
+      expect(notifications.inboxFor(k.me.personDid).some((n) => n.title === 'The appointment about the national ID is tomorrow' && /you may come too/.test(n.body))).toBe(true);
+
+      // Once: looked at again an hour later, and the next morning, nothing more goes.
+      expect(disputes.remindAppointments(due + 2 * HOUR)).toBe(0);
+      expect(disputes.remindAppointments(due + 20 * HOUR)).toBe(0);
+      expect(reminders(k.d.email)).toHaveLength(1);
+      expect(reminders(k.email)).toHaveLength(1);
+      // The ticket and the console say it went, and when.
+      expect(disputes.status(k.holderReference, due + 2000).ticket!.remindedAt).toBe(new Date(due + 1000).toISOString());
+      expect(disputes.one(k.disputeId, AMINA, due + 2000).appointmentRemindedAt).toBe(new Date(due + 1000).toISOString());
+    });
+
+    it('moved, it is reminded of again when the NEW day comes; made after the reminder was due, or on a day that has come, it is not', () => {
+      const k = wonByKnownClaimant();
+      const day = dayStr(k.at + 3 * DAY);
+      appoint(k.holderReference, day, k.at);
+      expect(disputes.remindAppointments(dueOf(day) + 1000)).toBe(1);
+      // Moved, the day before, to a later day: nothing has been said of THAT day yet.
+      const later = dayStr(k.at + 6 * DAY);
+      appoint(k.holderReference, later, dueOf(day) + 2000);
+      expect(disputes.status(k.holderReference, dueOf(day) + 3000).ticket!.remindedAt).toBeUndefined();
+      expect(disputes.remindAppointments(dueOf(later) - 1000)).toBe(0);
+      expect(disputes.remindAppointments(dueOf(later) + 1000)).toBe(1);
+      expect(reminders(k.d.email)).toHaveLength(2);
+
+      // Made when the reminder was already due: they were told all of it a moment ago, and are not told twice.
+      const q = wonByKnownClaimant();
+      const soon = dayStr(q.at + 2 * DAY);
+      appoint(q.holderReference, soon, dueOf(soon) + HOUR);
+      expect(disputes.remindAppointments(dueOf(soon) + 2 * HOUR)).toBe(0);
+      expect(reminders(q.d.email)).toHaveLength(0);
+      expect(disputes.status(q.holderReference, dueOf(soon) + 3 * HOUR).ticket!.remindedAt).toBeUndefined();
+
+      // Nobody looked the day before, and the day has come: "tomorrow" would be wrong, so nothing goes.
+      const r = wonByKnownClaimant();
+      const then = dayStr(r.at + 3 * DAY);
+      appoint(r.holderReference, then, r.at);
+      expect(disputes.remindAppointments(Date.parse(then + 'T08:00:00.000Z'))).toBe(0);
+      expect(reminders(r.d.email)).toHaveLength(0);
+      // And an appointment that is over is not reminded of: only one that is still to come.
+      expect(disputes.remindAppointments(Date.parse(then + 'T08:00:00.000Z') + 5 * DAY)).toBe(0);
+    });
+
+    it('somebody with no account cannot be reminded, and their ticket says so; an office that changed its times is said instead of what to bring', () => {
+      const ke = entities.forJurisdiction('KE')!;
+      contacts.set(ke.entityId, { address: 'Mombasa Road, gate 4', visitDays: EVERY_DAY, visitFrom: '09:00', visitTo: '12:00' }, 'Grace');
+      const d = aDriver();
+      const o = wonByClaimant(d);
+      const day = dayStr(o.at + 3 * DAY);
+      appoint(o.holderReference, day, o.at);
+      // The one refused at registration never made an account: nothing we send reaches them, and the ticket says it.
+      expect(disputes.status(o.reference, o.at).ticket).toMatchObject({ willRemind: false });
+      expect(disputes.status(o.holderReference, o.at).ticket).toMatchObject({ willRemind: true });
+      // The office closes that day afterwards.
+      contacts.set(ke.entityId, { closedDates: [{ date: day, note: 'Burst pipe' }] }, 'Grace', o.at);
+      expect(disputes.remindAppointments(dueOf(day) + 1000)).toBe(1);
+      const [mail] = reminders(d.email);
+      expect(mail.subject).toBe('SeeBuyGet: your appointment tomorrow no longer fits');
+      expect(mail.text).toContain('choose another day, today');
+      expect(mail.text).toContain('Do not travel tomorrow');
+      expect(mail.text).not.toContain('Your ID card itself');
+      const inApp = notifications.inboxFor(d.personDid).find((n) => n.title === 'Your appointment tomorrow no longer fits')!;
+      expect(inApp.body).toContain('choose another day, today');
+      expect(inApp.body).not.toContain('Bring:');
+      // For the one with no account nothing went, and nothing claims to have.
+      expect(disputes.status(o.reference, dueOf(day) + 2000).ticket!.remindedAt).toBeUndefined();
+      expect(disputes.status(o.holderReference, dueOf(day) + 2000).ticket!.remindedAt).toBeTruthy();
+    });
+
+    it('goes by the clock: while the server runs it looks every half hour, and stops when the server stops', () => {
+      const k = wonByKnownClaimant();
+      const day = dayStr(k.at + 3 * DAY);
+      appoint(k.holderReference, day, k.at);
+      jest.useFakeTimers({ now: dueOf(day) + 60_000 });
+      try {
+        disputes.onModuleInit();
+        // Nobody called anything: only time passed.
+        expect(reminders(k.d.email)).toHaveLength(0);
+        jest.advanceTimersByTime(31 * 60 * 1000);
+        expect(reminders(k.d.email)).toHaveLength(1);
+        expect(reminders(k.email)).toHaveLength(1);
+        // Stopped, it looks no more: an appointment that comes due afterwards is left alone.
+        disputes.onModuleDestroy();
+        const later = dayStr(k.at + 6 * DAY);
+        appoint(k.holderReference, later, Date.now());
+        jest.setSystemTime(dueOf(later) + 60_000);
+        jest.advanceTimersByTime(3 * HOUR);
+        expect(reminders(k.d.email)).toHaveLength(1);
+      } finally {
+        disputes.onModuleDestroy();
+        jest.useRealTimers();
+      }
     });
 
     it('follows visiting days and hours the company sets for itself — days of the week, times of day, merged like the rest of its entry', () => {

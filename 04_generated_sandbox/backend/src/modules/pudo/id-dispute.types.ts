@@ -64,6 +64,11 @@ export const DISPUTE_CONTEST_DAYS = 14;
 /** How far ahead an appointment may be made, and how often its day may be changed. */
 export const APPOINTMENT_WITHIN_DAYS = 21;
 export const APPOINTMENT_CHANGES = 2;
+/**
+ * WHEN THE REMINDER GOES: this many hours before the day of the appointment begins — 06:00 UTC the day before,
+ * which is the morning across Africa and Europe. No time zone is kept for a country, so it is one moment for all.
+ */
+export const APPOINTMENT_REMINDER_HOURS = 18;
 /** How many disputes one phone number may open in a day. Each can come to a notice to somebody. */
 export const DISPUTE_OPENS_PER_DAY = 3;
 
@@ -202,6 +207,10 @@ export class DisputeTicket {
   @ApiProperty({ enum: BRING, isArray: true }) bring: Bring[];
   /** How many more times the day can be changed, by whoever made it. */
   changesLeft: number;
+  /** They will be reminded the day before, in the app and by email — or cannot be: they have no account to reach. */
+  willRemind: boolean;
+  /** The reminder went, and when. */
+  @ApiPropertyOptional() remindedAt?: string;
   /** The company has since changed its days, hours or closures, and this day or hour no longer fits them. */
   @ApiPropertyOptional() offDay?: boolean;
   @ApiPropertyOptional({ type: DisputePlace }) place?: DisputePlace;
@@ -319,6 +328,8 @@ export class DisputeRow {
   @ApiPropertyOptional({ enum: DISPUTE_SIDES }) appointmentBy?: DisputeSide;
   /** The hour of the appointment, where there is one. */
   @ApiPropertyOptional() appointmentAt?: string;
+  /** The day-before reminder went to whoever of the two has an account, and when. */
+  @ApiPropertyOptional() appointmentRemindedAt?: string;
   /** The appointment is on a day the country's company no longer receives visitors. */
   @ApiPropertyOptional() appointmentOffDay?: boolean;
   /**

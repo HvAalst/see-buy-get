@@ -4,6 +4,7 @@ import { ConsoleDetail } from '../ConsoleDetail';
 import {
   DISPUTE_LABEL,
   DISPUTE_TONE,
+  appointmentHint,
   cardWords,
   decidedWords,
   disputeNotes,
@@ -170,7 +171,7 @@ function Detail({ disputeId, state, actions, onClose }: { disputeId: string; sta
           {row.answerBy ? <Fact k={t('tower.ids.fact.answerBy')} v={dayOf(row.answerBy)} /> : null}
           {row.decidedTo ? <Fact k={t('tower.ids.fact.decided')} v={decidedWords(row, t, when)} hint={row.finalTo ? undefined : row.reason} /> : null}
           {row.state === 'decided' && row.contestBy ? <Fact k={t('tower.ids.fact.contestBy')} v={dayOf(row.contestBy)} /> : null}
-          {row.appointmentDate ? <Fact k={t('tower.ids.fact.appointment')} v={t(row.appointmentAt ? 'tower.ids.fact.appointmentByAt' : 'tower.ids.fact.appointmentBy', { date: dayOf(row.appointmentDate), at: row.appointmentAt ?? '', who: t(row.appointmentBy === 'claimant' ? 'tower.ids.side.claimant' : 'tower.ids.side.holder') })} hint={row.appointmentOffDay ? t('tower.ids.fact.appointmentOffDay') : undefined} /> : null}
+          {row.appointmentDate ? <Fact k={t('tower.ids.fact.appointment')} v={t(row.appointmentAt ? 'tower.ids.fact.appointmentByAt' : 'tower.ids.fact.appointmentBy', { date: dayOf(row.appointmentDate), at: row.appointmentAt ?? '', who: t(row.appointmentBy === 'claimant' ? 'tower.ids.side.claimant' : 'tower.ids.side.holder') })} hint={appointmentHint(row, t, when) || undefined} /> : null}
           {row.finalTo ? <Fact k={t('tower.ids.fact.final')} v={finalWords(row, t, when)} hint={row.reason} /> : null}
           {/* Where somebody who contests it is sent, and when: the country's company's own words, never ours. */}
           <Fact k={t('tower.ids.fact.place')} v={placeWords(row, t).where} hint={[placeWords(row, t).visiting, placeWords(row, t).closed].filter(Boolean).join(' · ')} />

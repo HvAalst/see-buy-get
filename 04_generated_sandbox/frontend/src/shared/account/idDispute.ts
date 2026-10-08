@@ -53,6 +53,10 @@ export interface DisputeTicket {
   yours: boolean;
   bring: Bring[];
   changesLeft: number;
+  /** They will be reminded the day before, in the app and by email — or cannot be: they have no account to reach. */
+  willRemind?: boolean;
+  /** The reminder went, and when. */
+  remindedAt?: string;
   /** The company changed its visiting days since, and this day is no longer one of them. */
   offDay?: boolean;
   place?: DisputePlace;
@@ -270,6 +274,17 @@ export function ticketLines(ticket: DisputeTicket, t: T): { when: string; where:
         ]
       : [say('account.id.ticket.noPlace')],
   };
+}
+
+/**
+ * WHAT THE TICKET SAYS ABOUT THE REMINDER. The user, 2026-10-08: "a reminder notification/email with which docs to
+ * bring along a day before the appointment". It went (and when); it will; or it CANNOT — somebody refused at
+ * registration may have no account for anything to reach, and is told so while they can still write the day down.
+ */
+export function reminderLine(ticket: Pick<DisputeTicket, 'willRemind' | 'remindedAt'>, t: T): string {
+  const say = t as Say;
+  if (ticket.remindedAt) return say('account.id.ticket.reminded', { when: new Date(ticket.remindedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) });
+  return say(ticket.willRemind ? 'account.id.ticket.willRemind' : 'account.id.ticket.cannotRemind');
 }
 
 /** What to bring, in the order it is asked for. The second document depends on what they registered as. */

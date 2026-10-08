@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../i18n';
-import { appointmentDays, bringLines, dayChoices, dayLabel, hoursOn, idActions, idStatusSays, looksLikeIdReference, readyToAppoint, settingsIdSays, ticketLines, visitingWords, type DisputeState, type DisputeStatus, type DisputeTicket } from './idDispute';
+import { appointmentDays, bringLines, dayChoices, dayLabel, hoursOn, idActions, idStatusSays, looksLikeIdReference, readyToAppoint, reminderLine, settingsIdSays, ticketLines, visitingWords, type DisputeState, type DisputeStatus, type DisputeTicket } from './idDispute';
 
 const status = (over: Partial<DisputeStatus> = {}): DisputeStatus => ({ reference: 'ID-ABCD-2345', side: 'claimant', register: 'driver', state: 'opened', openedAt: '2026-10-08T09:00:00.000Z', photos: [], sent: false, ...over });
 const ticket = (over: Partial<DisputeTicket> = {}): DisputeTicket => ({ reference: 'ID-WXYZ-6789', date: '2026-10-15', yours: true, bring: ['id_card', 'phone', 'reference', 'second_document'], changesLeft: 2, ...over });
@@ -155,6 +155,16 @@ describe('a dispute over a national ID, as each of the two is told it', () => {
       expect(readyToAppoint(s, '2026-10-13', '')).toBe(true);
       // No list at all — the office set no days — and any day typed will do.
       expect(readyToAppoint({}, '2026-10-14', '')).toBe(true);
+    });
+
+    it('says a reminder will come the day before — or that it went, or that none can reach somebody with no account', () => {
+      expect(reminderLine({ willRemind: true }, t as never)).toBe('We remind you the day before, here and by email: when, where and what to bring.');
+      expect(reminderLine({ willRemind: true, remindedAt: '2026-10-08T06:00:00.000Z' }, t as never)).toMatch(/^A reminder went to you on .*2026/);
+      const none = reminderLine({ willRemind: false }, t as never);
+      expect(none).toContain('We cannot remind you');
+      expect(none).toContain('Write the day down');
+      // Not said of somebody the server did not say it of.
+      expect(reminderLine({}, t as never)).toContain('We cannot remind you');
     });
 
     it('says the hour on the ticket where there is one', () => {
