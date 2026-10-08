@@ -70,6 +70,9 @@ export class UnclaimedService {
       // would reset the clock every time somebody fumbled their collection code, so it is left alone.
       if (!parcel.readyAt) continue;
       if (now - new Date(parcel.readyAt).getTime() <= UNCOLLECTED_H * 3_600_000) continue;
+      // Its receiver is not being shown the code (their account was moved without its PIN): the free window does not
+      // run out on somebody who cannot collect. It closes on the first sweep after the code shows again.
+      if (this.parcels.codeHeldUntil(parcel, now)) continue;
       moved.push(this.parcels.markUnclaimed(parcel.parcelId, now));
     }
     return moved;

@@ -61,6 +61,8 @@ function harness(opts: HarnessOpts) {
     // No account is named for any parcel here: each side is found by the number it was addressed to.
     receiverOf: (p: { receiverPhoneHash?: string }) => ({ hash: p.receiverPhoneHash }),
     senderOf: (p: { senderPhoneHash?: string }) => ({ hash: p.senderPhoneHash }),
+    // …and nobody's account was moved without its PIN: every code is shown to whoever it belongs to.
+    codeHeldUntil: () => undefined,
   } as unknown as ParcelService;
   const persons = { findByHash: (hash: string) => opts.personByHash?.[hash] } as unknown as PersonService;
   const agents = {

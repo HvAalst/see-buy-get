@@ -1865,6 +1865,11 @@ export class ChangeNumberDto {
   @IsString() @MaxLength(40) newPhone!: string;
 }
 
+/** The signed-in person blocks the number their account used to have: the PIN again, as for everything else under Settings. */
+export class BlockOldNumberDto {
+  @IsString() @MaxLength(8) pin!: string;
+}
+
 /** The signed-in person sets or replaces their recovery email: the PIN again, and the code sent to the new address. */
 export class AccountEmailDto {
   @IsString() @MaxLength(8) pin!: string;

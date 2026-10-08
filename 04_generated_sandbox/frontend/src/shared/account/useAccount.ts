@@ -34,6 +34,11 @@ export interface AccountView {
   /** A number change that can still be undone, and until when. */
   numberChange?: { at: string; undoUntil: string };
   /**
+   * The number this account moved off is still its own until then: what is sent to it arrives here. `canBlock` once
+   * the move can no longer be undone — the holder lets the old number go themselves, or it is let go at `until`.
+   */
+  oldNumber?: { since: string; until: string; canBlock: boolean };
+  /**
    * Somebody has asked SeeBuyGet staff to move THIS account to another number — saying they lost the number and
    * the PIN. Its holder, who is looking at this, is the one person who knows whether that was them.
    */
@@ -76,6 +81,8 @@ export interface AccountApi {
   confirmPhoneCode: (phone: string, code: string) => Promise<Result<unknown>>;
   /** Move the account to a number already confirmed by code. On success EVERY session is over, this one included. */
   changeNumber: (pin: string, newPhone: string) => Promise<Result<unknown>>;
+  /** "The old number is not mine any more": the PIN again. From then a parcel sent to it does not reach this account. */
+  blockOldNumber: (pin: string) => Promise<Result<unknown>>;
   /** "That was not me": end every request waiting to move this account. Being signed in is what makes it theirs to say. */
   stopMove: () => Promise<Result<{ stopped: number }>>;
   /** This person's side of a dispute over their national ID, by their own reference. */
@@ -102,6 +109,7 @@ const IDLE: AccountApi = {
   sendPhoneCode: async () => NO_CLIENT,
   confirmPhoneCode: async () => NO_CLIENT,
   changeNumber: async () => NO_CLIENT,
+  blockOldNumber: async () => NO_CLIENT,
   stopMove: async () => NO_CLIENT,
   idDispute: idDisputeApi(async () => NO_CLIENT),
   ownId: async () => NO_CLIENT,
@@ -228,6 +236,16 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
   const confirmPhoneCode = useCallback((phone: string, code: string) => post<unknown>('/v1/sbg/auth/phone/verify', { phone, code }), [post]);
   const changeNumber = useCallback((pin: string, newPhone: string) => post<unknown>('/v1/sbg/account/phone/change', { pin, newPhone }), [post]);
 
+  const blockOldNumber = useCallback(
+    async (pin: string) => {
+      const r = await post<unknown>('/v1/sbg/account/phone/old/block', { pin });
+      // Gone from the account as the server now has it: the note and the button go with it.
+      if (!r.error) setAccount((prev) => (prev ? { ...prev, oldNumber: undefined } : prev));
+      return r;
+    },
+    [post],
+  );
+
   const stopMove = useCallback(async () => {
     const r = await post<{ stopped: number }>('/v1/sbg/account/move-requests/stop', {});
     // Gone from the account as the server now sees it — read again rather than assumed.
@@ -239,5 +257,5 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
   const ownId = useCallback((nationalId: string) => post<{ saved: boolean }>('/v1/sbg/account/id-disputes/own-id', { nationalId }), [post]);
 
   if (!client) return IDLE;
-  return { account, loading, error, busy, reload, save, changePin, saveAvatar, loadMedia, sendEmailCode, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber, stopMove, idDispute, ownId };
+  return { account, loading, error, busy, reload, save, changePin, saveAvatar, loadMedia, sendEmailCode, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, idDispute, ownId };
 }

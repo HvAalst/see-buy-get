@@ -69,6 +69,8 @@ export interface Person {
   emailVerifiedAt?: string;
   /** A number change still inside its 24 hours — see PhoneChange. Cleared when it is undone or the window closes. */
   phoneChange?: PhoneChange;
+  /** The number this account moved off, once that can no longer be undone and while it is still the account's — see OldNumber. */
+  oldNumber?: OldNumber;
   roles: RoleLink[];
   createdAt: string;
 }
@@ -96,6 +98,30 @@ export interface PhoneChange {
   held: Array<{ register: 'driver' | 'shop'; did: string; key: string }>;
 }
 
+/**
+ * THE NUMBER AN ACCOUNT USED TO BE ON, WHILE IT IS STILL THE ACCOUNT'S.
+ *
+ * The user, 2026-10-08: "the user blocks their own old phone number in the account. We remind them to do that for 7
+ * days, after that we free the account and a dual phone number doesn't work anymore."
+ *
+ * For a week after a move the account has two numbers in one sense only: what is SENT to the old one still reaches the
+ * account, and nobody else can open an account on it. It does not sign in. The week is for telling the people and the
+ * stores that send to you; when that is done the holder blocks the old number themselves, and at the end of the week it
+ * is let go whether they did or not. The first day of the week is the day the move can still be undone (PhoneChange),
+ * and the number cannot be blocked in it: there has to be somewhere to move back to.
+ */
+export interface OldNumber {
+  hash: string;
+  /** When the account moved off it. */
+  since: string;
+  /** When it stops being the account's, if its holder has not blocked it sooner. */
+  until: string;
+  /** Register prints still held on it (a driver's, a shop's) — freed when it is let go. */
+  held: PhoneChange['held'];
+  /** The day (UTC) its holder was last reminded of it. Once a day, and no more. */
+  remindedOn?: string;
+}
+
 /** The safe, PII-free projection returned to a signed-in person (no hashes, no vault ref, no PIN). */
 export interface PersonView {
   personId: string; // the personDid
@@ -120,6 +146,11 @@ export interface PersonView {
   emailBounced?: boolean;
   /** Self-view only: a number change that can still be undone, and until when. */
   numberChange?: { at: string; undoUntil: string };
+  /**
+   * Self-view only: the number this account moved off is still its own until then — what is sent to it arrives here.
+   * `canBlock` once the move can no longer be undone: the holder lets the old number go themselves.
+   */
+  oldNumber?: { since: string; until: string; canBlock: boolean };
 }
 
 /**

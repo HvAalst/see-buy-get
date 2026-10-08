@@ -26,7 +26,8 @@ import { BagPlanService } from './bag-plan.service';
 import { ForthcomingService } from './forthcoming.service';
 import { DockService } from './dock.service';
 import { FleetManagerService } from './fleet-manager.service';
-import { PersonService, NUMBER_UNDO_MS } from './person.service';
+import { PersonService, NUMBER_UNDO_MS, OLD_NUMBER_KEPT_MS } from './person.service';
+import { hashPhone } from '../../foundation/identity/phone';
 import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { EmailCodeService } from './email-code.service';
@@ -154,6 +155,157 @@ describe('account recovery', () => {
   }
   const mailTo = (address: string, template = 'account-safety') => outbox.recent(address).filter((m) => m.template === template);
 
+  /* ------------------------------------------------------------------ the old number, for a week -- */
+
+  /**
+   * The user, 2026-10-08: "the user blocks their own old phone number in the account. We remind them to do that for 7
+   * days, after that we free the account and a dual phone number doesn't work anymore."
+   */
+  describe('the old number, for the week it is still the account’s', () => {
+    const DAY = 24 * 3_600_000;
+    const iso = (ms: number) => new Date(ms).toISOString();
+    const codeOf = (fn: () => unknown) => {
+      try {
+        fn();
+        return 'DID NOT REFUSE';
+      } catch (e) {
+        return (e as { code?: string }).code;
+      }
+    };
+    const aboutTheOldNumber = (did: string) => notifications.inboxFor(did).map((n) => n.title).filter((x) => /old number/i.test(x));
+
+    it('its holder blocks it themselves — the PIN again, and not while the move can still be undone — and it is free at once', async () => {
+      const d = aDriver();
+      const t0 = Date.now();
+      recovery.changeNumber(d.personDid, PIN, aVerifiedNumber(), t0);
+      // Their own Settings say it from the first minute: still theirs until when, and not to be blocked yet.
+      expect(persons.view(persons.requireByDid(d.personDid), t0 + 1000).oldNumber).toEqual({ since: iso(t0), until: iso(t0 + OLD_NUMBER_KEPT_MS), canBlock: false });
+      expect(codeOf(() => recovery.blockOldNumber(d.personDid, '0000', t0 + 1000))).toBe('PIN_WRONG');
+      expect(() => recovery.blockOldNumber(d.personDid, PIN, t0 + 1000)).toThrow(/can still be undone/);
+      // Refused, and nothing given up: the old number is still where the account can go back to.
+      expect(persons.keptFor(hashPhone(d.phone), t0 + 2000)!.personDid).toBe(d.personDid);
+
+      // The day over — whether or not the sweep has been round.
+      const later = t0 + NUMBER_UNDO_MS + 1000;
+      expect(persons.view(persons.requireByDid(d.personDid), later).oldNumber).toEqual({ since: iso(t0), until: iso(t0 + OLD_NUMBER_KEPT_MS), canBlock: true });
+      expect(codeOf(() => recovery.blockOldNumber(d.personDid, '0000', later))).toBe('PIN_WRONG');
+      expect(persons.keptFor(hashPhone(d.phone), later)!.personDid).toBe(d.personDid);
+      const after = recovery.blockOldNumber(d.personDid, PIN, later);
+      expect(persons.view(after, later).oldNumber).toBeUndefined();
+      expect(persons.keptFor(hashPhone(d.phone), later)).toBeUndefined();
+
+      // Free at once, for a person and for a registration — and there is nothing left to block, or to let go later.
+      expect(drivers.register({ displayName: 'New', fullName: 'New Holder', nationalId: 'ID-RC-BLOCKED', mobile: d.phone, licenceClasses: ['bike'] as never }).did).not.toBe(d.did);
+      expect(persons.ensurePerson(d.phone).personDid).not.toBe(d.personDid);
+      expect(() => recovery.blockOldNumber(d.personDid, PIN, later)).toThrow(/no old number any more/);
+      expect(recovery.settle(t0 + OLD_NUMBER_KEPT_MS + 1)).toBe(0);
+
+      // Told in the app and by email — so that somebody who did NOT block it hears that it was done.
+      await settle();
+      const told = notifications.inboxFor(d.personDid)[0];
+      expect(told).toMatchObject({ kind: 'security', title: 'Your old number is no longer part of your account' });
+      expect(told.body).toContain('You blocked the phone number your account used to have.');
+      expect(told.body).toContain('If you did not block it yourself');
+      expect(mailTo(d.email).some((m) => /old number is no longer part of your account/i.test(m.subject))).toBe(true);
+    });
+
+    it('reminds its holder once a day for as long as it is theirs — in the app every day, by email the day before it ends', async () => {
+      const d = aDriver();
+      // Moved on a Monday at ten in the morning (UTC). It can be undone until Tuesday at ten; it is theirs until the Monday after.
+      const midnight = Date.parse('2026-11-02T00:00:00.000Z');
+      const at = (day: number, hour: number) => midnight + day * DAY + hour * 3_600_000;
+      recovery.changeNumber(d.personDid, PIN, aVerifiedNumber(), at(0, 10));
+      const run = (now: number) => {
+        recovery.settle(now);
+        return recovery.remindOldNumbers(now);
+      };
+      // While it can still be undone they were told everything a moment ago: nothing more is said.
+      expect(run(at(0, 12))).toBe(0);
+      expect(run(at(1, 7))).toBe(0);
+      // From the day that is over: once a day, in the morning and never in the night.
+      expect(run(at(1, 12))).toBe(1);
+      expect(run(at(1, 18))).toBe(0);
+      expect(run(at(2, 3))).toBe(0);
+      expect(run(at(2, 6))).toBe(1);
+      for (const day of [3, 4, 5, 6, 7]) expect(run(at(day, 6))).toBe(1);
+      expect(run(at(7, 9))).toBe(0);
+      await settle();
+      expect(aboutTheOldNumber(d.personDid).sort()).toEqual(
+        ['Your old number: 6 days left', 'Your old number: 5 days left', 'Your old number: 4 days left', 'Your old number: 3 days left', 'Your old number: 2 days left', 'Your old number stops being yours tomorrow', 'Your old number stops being yours today'].sort(),
+      );
+      // The app the driver works in hears it as well as their own bell.
+      expect(aboutTheOldNumber(d.did)).toHaveLength(7);
+      const reminder = notifications.inboxFor(d.personDid).find((n) => n.title === 'Your old number: 6 days left')!;
+      expect(reminder.body).toContain('For 6 more days, a parcel sent to the phone number your account used to have still reaches you.');
+      expect(reminder.body).toContain('open Settings and block the old number');
+      // One email, the day before — not seven.
+      const mailed = mailTo(d.email).map((m) => m.subject).filter((s) => /old number/i.test(s));
+      expect(mailed).toHaveLength(1);
+      expect(mailed[0]).toMatch(/stops being yours tomorrow/i);
+
+      // The week is over: it is let go, said once, and nobody is reminded of what they no longer have.
+      expect(recovery.settle(at(7, 11))).toBe(1);
+      expect(recovery.remindOldNumbers(at(8, 6))).toBe(0);
+      await settle();
+      expect(aboutTheOldNumber(d.personDid).filter((x) => x === 'Your old number is no longer part of your account')).toHaveLength(1);
+    });
+
+    it('goes by the clock, with nobody calling anything: the hourly sweep closes the day, reminds each morning, and lets the number go', () => {
+      const d = aDriver();
+      recovery.onModuleDestroy();
+      jest.useFakeTimers({ now: Date.parse('2026-11-02T10:00:00.000Z') });
+      try {
+        recovery.onModuleInit();
+        recovery.changeNumber(d.personDid, PIN, aVerifiedNumber());
+        jest.advanceTimersByTime(23 * 3_600_000);
+        expect(persons.requireByDid(d.personDid).phoneChange).toBeDefined();
+        // Tuesday, eleven: the day is over, and it is morning.
+        jest.advanceTimersByTime(2 * 3_600_000);
+        expect(persons.requireByDid(d.personDid).phoneChange).toBeUndefined();
+        expect(persons.oldNumberOf(d.personDid)!.remindedOn).toBe('2026-11-03');
+        jest.advanceTimersByTime(DAY);
+        expect(persons.oldNumberOf(d.personDid)!.remindedOn).toBe('2026-11-04');
+        // The Monday after: let go.
+        jest.advanceTimersByTime(5 * DAY);
+        expect(persons.requireByDid(d.personDid).oldNumber).toBeUndefined();
+        expect(persons.keptFor(hashPhone(d.phone))).toBeUndefined();
+        // And stopped with the server: nothing more is swept.
+        recovery.onModuleDestroy();
+        expect(jest.getTimerCount()).toBe(0);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('stops reminding the moment it is blocked', () => {
+      const d = aDriver();
+      const t0 = Date.parse('2026-11-02T10:00:00.000Z');
+      recovery.changeNumber(d.personDid, PIN, aVerifiedNumber(), t0);
+      recovery.settle(t0 + 2 * DAY);
+      expect(recovery.remindOldNumbers(t0 + 2 * DAY)).toBe(1);
+      recovery.blockOldNumber(d.personDid, PIN, t0 + 2 * DAY + 3_600_000);
+      expect(recovery.remindOldNumbers(t0 + 3 * DAY)).toBe(0);
+    });
+
+    it('an account has one old number: moving again lets the earlier one go, there and then', () => {
+      const d = aDriver();
+      const second = aVerifiedNumber();
+      const third = aVerifiedNumber();
+      const t0 = Date.now();
+      recovery.changeNumber(d.personDid, PIN, second, t0);
+      // Three days on — the first number still kept — they move again.
+      const t1 = t0 + 3 * DAY;
+      expect(persons.keptFor(hashPhone(d.phone), t1)!.personDid).toBe(d.personDid);
+      recovery.changeNumber(d.personDid, PIN, third, t1);
+      expect(persons.keptFor(hashPhone(d.phone), t1 + 1000)).toBeUndefined();
+      expect(persons.keptFor(hashPhone(second), t1 + 1000)!.personDid).toBe(d.personDid);
+      // …with the registration that was held on it: somebody else can drive with that number now.
+      expect(drivers.register({ displayName: 'New', fullName: 'New Holder', nationalId: 'ID-RC-EARLIER', mobile: d.phone, licenceClasses: ['bike'] as never }).did).not.toBe(d.did);
+      // And the second move can be undone like any other, back onto the number it left.
+      expect(recovery.undoWithOldNumber(second, PIN, t1 + 60_000).personDid).toBe(d.personDid);
+    });
+  });
+
   /* ------------------------------------------------------------------ still know your PIN -- */
 
   describe('somebody who still knows their PIN moves their own account', () => {
@@ -171,19 +323,40 @@ describe('account recovery', () => {
       expect(auth.introspect(session.access_token)).toMatchObject({ active: false, reason: 'revoked' });
     });
 
-    it('holds the old number for 24 hours, then frees it for a new person', () => {
+    it('holds the old number for its owner — a day to move back to, a week for what is still sent to it — then frees it for a new person', async () => {
       const d = aDriver();
       const t0 = Date.now();
       recovery.changeNumber(d.personDid, PIN, aVerifiedNumber(), t0);
       const newcomer = { displayName: 'New', fullName: 'New Holder', nationalId: 'ID-RC-NEWCOMER', mobile: d.phone, licenceClasses: ['bike'] as never };
-      // Inside the window the number is still its old owner's to take back: not a driver's, not a person's.
+      // Inside the first day the number is still its old owner's to take back: not a driver's, not a person's.
       expect(() => drivers.register(newcomer)).toThrow(/mobile already exists/);
-      expect(() => persons.ensurePerson(d.phone)).toThrow(/moved off another account in the last 24 hours/);
+      expect(() => persons.ensurePerson(d.phone)).toThrow(/moved off another account less than 7 days ago/);
       expect(recovery.settle(t0 + NUMBER_UNDO_MS - 1000)).toBe(0);
+      expect(persons.requireByDid(d.personDid).phoneChange).toBeDefined();
 
-      expect(recovery.settle(t0 + NUMBER_UNDO_MS + 1)).toBe(1);
-      expect(drivers.register(newcomer).did).not.toBe(d.did);
+      // The day passes: the move stands and can no longer be undone — and the number is still not anybody else's.
+      expect(recovery.settle(t0 + NUMBER_UNDO_MS + 1)).toBe(0);
       expect(persons.requireByDid(d.personDid).phoneChange).toBeUndefined();
+      expect(() => recovery.undoWithOldNumber(d.phone, PIN, t0 + NUMBER_UNDO_MS + 2)).toThrow(/Wrong phone or PIN/);
+      expect(() => drivers.register(newcomer)).toThrow(/mobile already exists/);
+      expect(() => persons.ensurePerson(d.phone)).toThrow(/moved off another account less than 7 days ago/);
+      // Its week is judged by the clock, not by whether the sweep has been round: the moment it is over the number is
+      // nobody's, and the account's own Settings stop saying it is theirs.
+      expect(persons.keptFor(hashPhone(d.phone), t0 + OLD_NUMBER_KEPT_MS - 1000)!.personDid).toBe(d.personDid);
+      expect(persons.keptFor(hashPhone(d.phone), t0 + OLD_NUMBER_KEPT_MS + 1)).toBeUndefined();
+      expect(persons.view(persons.requireByDid(d.personDid), t0 + OLD_NUMBER_KEPT_MS - 1000).oldNumber).toMatchObject({ canBlock: true });
+      expect(persons.view(persons.requireByDid(d.personDid), t0 + OLD_NUMBER_KEPT_MS + 1).oldNumber).toBeUndefined();
+      expect(recovery.settle(t0 + OLD_NUMBER_KEPT_MS - 1000)).toBe(0);
+
+      // The week passes: it is let go, its holder is told, and somebody else may have it.
+      expect(recovery.settle(t0 + OLD_NUMBER_KEPT_MS + 1)).toBe(1);
+      expect(recovery.settle(t0 + OLD_NUMBER_KEPT_MS + 2)).toBe(0);
+      expect(drivers.register(newcomer).did).not.toBe(d.did);
+      expect(persons.ensurePerson(d.phone).personDid).not.toBe(d.personDid);
+      await settle();
+      expect(notifications.inboxFor(d.personDid)[0]).toMatchObject({ kind: 'security', title: 'Your old number is no longer part of your account' });
+      expect(notifications.inboxFor(d.personDid)[0].body).toContain('Seven days have passed');
+      expect(mailTo(d.email).some((m) => /old number is no longer part of your account/i.test(m.subject))).toBe(true);
     });
 
     it('refuses a number another account or another driver already holds, and moves nothing', () => {
@@ -215,10 +388,10 @@ describe('account recovery', () => {
       const first = sender('held-first@example.com');
       const second = sender('held-second@example.com');
       recovery.changeNumber(first.personDid, PIN, aVerifiedNumber());
-      // The old number is the first person's to take back for 24 hours; nobody else's account may land on it.
+      // The old number is the first person's — to take back for a day, and kept for a week; nobody else's account may land on it.
       // (Its code-proof from sign-up still stands in this test, so the refusal below is about the hold and nothing else.)
       expect(otp.isVerified(first.phone)).toBe(true);
-      expect(() => recovery.changeNumber(second.personDid, PIN, first.phone)).toThrow(/moved off another account in the last 24 hours/);
+      expect(() => recovery.changeNumber(second.personDid, PIN, first.phone)).toThrow(/moved off another account less than 7 days ago/);
       expect(recovery.undoWithOldNumber(first.phone, PIN).personDid).toBe(first.personDid);
     });
 

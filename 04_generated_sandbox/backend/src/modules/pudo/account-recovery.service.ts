@@ -13,12 +13,19 @@ import { EmailCodeService, normalizeEmail } from './email-code.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { NotificationService } from './notification.service';
 import { OtpService } from './otp.service';
+import { ParcelService } from './parcel.service';
 import { PersonService } from './person.service';
 import type { Person, PhoneChange } from './person.types';
 
 /** Wrong tries at undoing a number change with the old number, or at the ID on a recovery, before that way is shut. */
 export const MAX_RECOVERY_MISSES = 5;
 const SWEEP_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+/**
+ * The hour (UTC) from which the day's reminder of an old number goes: the morning across Africa and Europe, and never
+ * the middle of somebody's night. No time zone is kept for a person, so it is one hour for everybody.
+ */
+export const OLD_NUMBER_REMINDER_HOUR_UTC = 6;
 
 type Safety = MailParams['account-safety'];
 
@@ -35,8 +42,17 @@ type Safety = MailParams['account-safety'];
  *    the account, it can undo a number change, and when the number is gone AND the PIN is forgotten it is the
  *    way back in — with the national ID number, where we hold one.
  *  - Whoever knows the PIN can move the account to THEIR number. So a move can be undone for 24 hours, with the
- *    old number and the PIN as it was, or with the inbox; and for those 24 hours the old number is held, then
- *    freed for a new person.
+ *    old number and the PIN as it was, or with the inbox.
+ *
+ * And on 2026-10-08, to strengthen whoever holds the account:
+ *
+ *  - The old number stays the account's for SEVEN DAYS — what is sent to it still arrives, and nobody else can open
+ *    an account on it. "The user blocks their own old phone number in the account. We remind them to do that for 7
+ *    days, after that we free the account and a dual phone number doesn't work anymore."
+ *  - An account moved WITHOUT its PIN (by its inbox, by staff) is not shown its parcels' collection codes for the day
+ *    in which the move can be undone: collecting the goods is the one thing an undo cannot give back.
+ *  - The codes an account could read are REPLACED when a move is undone, and when it is recovered without its PIN —
+ *    whoever had the account for those hours, or the phone that was lost, is left holding codes that open nothing.
  *
  * No PIN and no inbox either: two members of staff move it (account-move.service.ts decides WHETHER; the move itself
  * is the one here, with the same notices and the same 24 hours to undo it). An ID somebody else registered is not
@@ -61,6 +77,9 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
     private readonly events: EventBus,
     @Optional() private readonly notifications?: NotificationService,
     @Optional() private readonly mail?: MailService,
+    // The parcels, for the codes an account could read and for how many are waiting. Optional so a hand-built module
+    // keeps compiling; without it a move changes no code and its notice counts no parcels.
+    @Optional() private readonly parcels?: ParcelService,
   ) {}
 
   onModuleInit(): void {
@@ -69,7 +88,10 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
       const person = this.persons.findByDid(e.payload.personDid);
       if (person) this.tellByMail(person, { headline: 'Your PIN was locked', what: 'Somebody typed a wrong PIN five times for your phone number, so nobody can sign in with it now.', next: 'To sign in again, verify your phone by code and choose a new PIN. If it was not you, somebody knows your number: choose a PIN they cannot guess.' });
     });
-    this.timer = setInterval(() => this.settle(), SWEEP_MS);
+    this.timer = setInterval(() => {
+      this.settle();
+      this.remindOldNumbers();
+    }, SWEEP_MS);
     this.timer.unref?.();
   }
 
@@ -192,18 +214,71 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * THE WINDOWS THAT HAVE CLOSED: the change stands, and the old number — held for a day so its owner could take
-   * it back — is freed for whoever has it now. Run on a timer and safe to run at any time.
+   * WHAT TIME HAS CLOSED. After a day a move can no longer be undone. After a week the old number — kept so that
+   * what is still sent to it reaches the account — is let go for whoever has it now, and its holder is told. Returns
+   * how many old numbers were let go. Run on a timer and safe to run at any time.
    */
   settle(now: number = Date.now()): number {
-    let settled = 0;
+    let freed = 0;
     for (const person of this.persons.withNumberChange()) {
-      const held = this.persons.settleMove(person.personDid, now);
-      if (person.phoneChange) continue; // still inside its window
-      for (const h of held) (h.register === 'driver' ? this.drivers : this.agents).releaseHeldPhone(h.key, h.did);
-      settled += 1;
+      const done = this.persons.settleMove(person.personDid, now);
+      if (!done.freed) continue;
+      this.release(done.held);
+      this.tellOldNumberGone(person, 'time');
+      freed += 1;
     }
-    return settled;
+    return freed;
+  }
+
+  /**
+   * THE HOLDER BLOCKS THEIR OWN OLD NUMBER — "the user blocks their own old phone number in the account". The PIN
+   * again, as for everything else under Settings: an open session is not proof of who holds the phone. From now a
+   * parcel sent to that number is no longer theirs, and somebody else can open an account on it. They are told, in the
+   * app and by email, so that somebody who did NOT do it hears that it was done.
+   */
+  blockOldNumber(personDid: string, pin: string, now: number = Date.now()): Person {
+    this.persons.confirmPin(personDid, pin);
+    this.release(this.persons.blockOldNumber(personDid, now));
+    const person = this.persons.requireByDid(personDid);
+    this.tellOldNumberGone(person, 'blocked');
+    return person;
+  }
+
+  /**
+   * "WE REMIND THEM TO DO THAT FOR 7 DAYS." Once a day, from the day the move can no longer be undone until the old
+   * number is let go, its holder is reminded that it is still theirs, what to do with the days, and that they can block
+   * it themselves. In the app every day; by email on the last one, when it is about to stop. It ends the moment they
+   * block it. Returns how many were reminded.
+   */
+  remindOldNumbers(now: number = Date.now()): number {
+    if (new Date(now).getUTCHours() < OLD_NUMBER_REMINDER_HOUR_UTC) return 0;
+    const today = new Date(now).toISOString().slice(0, 10);
+    let sent = 0;
+    for (const person of this.persons.withNumberChange()) {
+      const old = this.persons.oldNumberOf(person.personDid, now);
+      if (!old || old.remindedOn === today) continue;
+      // Counted in days of the calendar, so "tomorrow" is the day after the one this is read on.
+      const days = Math.round((Date.parse(old.until.slice(0, 10)) - Date.parse(today)) / DAY_MS);
+      this.tell(
+        person,
+        {
+          headline: days <= 0 ? 'Your old number stops being yours today' : days === 1 ? 'Your old number stops being yours tomorrow' : `Your old number: ${days} days left`,
+          what:
+            days <= 0
+              ? 'After today, a parcel sent to the phone number your account used to have will no longer reach you.'
+              : days === 1
+                ? 'A parcel sent to the phone number your account used to have still reaches you until tomorrow.'
+                : `For ${days} more days, a parcel sent to the phone number your account used to have still reaches you.`,
+          next: 'Give your new number to the people and the stores that send to you. When they have it, open Settings and block the old number: it is yours to let go.',
+          until: old.until,
+        },
+        // The inbox hears it once, the day before: an email a day for a week is how an address gets ignored.
+        days === 1,
+      );
+      this.persons.noteOldNumberReminded(person.personDid, today);
+      sent += 1;
+    }
+    return sent;
   }
 
   /* ------------------------------------------------------------------ internals -- */
@@ -215,7 +290,13 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
     // Asked of every register BEFORE anything moves, so a number another driver or shop holds refuses the whole thing.
     for (const l of links) (l.role === 'driver' ? this.drivers : this.agents).assertPhoneFree(l.entityDid, newPhone);
 
-    const { person, fromHash } = this.persons.movePhone(personDid, newPhone, how, now);
+    const { person, fromHash, freed } = this.persons.movePhone(personDid, newPhone, how, now);
+    // An account has one old number: an earlier one still kept was let go by this move.
+    this.release(freed);
+    // Moved WITHOUT its PIN, the number being gone: the phone it was on may be in somebody's hands with the codes on
+    // its screen. They are replaced now — and not shown on the new number for a day (PersonService.codesHeldUntil).
+    const waiting = this.parcels?.waitingFor(personDid) ?? 0;
+    if (how !== 'self') this.parcels?.rotateCodesOf(personDid);
     const held: PhoneChange['held'] = [];
     for (const l of links) {
       const key = (l.role === 'driver' ? this.drivers : this.agents).moveMobile(l.entityDid, newPhone);
@@ -226,14 +307,18 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
     this.auth.revokeAll(personDid);
 
     const until = person.phoneChange!.undoUntil;
+    const moved =
+      how === 'email'
+        ? 'Your SeeBuyGet account was recovered with this email address and moved to a new phone number, with a new PIN.'
+        : how === 'staff'
+          ? 'Two members of SeeBuyGet staff moved your account to a new phone number. Somebody told them they had lost the number and the PIN, and staff checked who was asking.'
+          : 'Your SeeBuyGet account now signs in with a different phone number.';
+    // What is at stake, said in the notice itself: a holder who did NOT do this has a day, and should know why to hurry.
+    const parcels = waiting === 0 ? '' : waiting === 1 ? ' One parcel of yours is waiting to be collected.' : ` ${waiting} parcels of yours are waiting to be collected.`;
+    const codes = how === 'self' ? '' : ' Because it was moved without your PIN, the collection codes of your parcels were changed, and they are not shown for 24 hours.';
     this.tell(person, {
       headline: 'Your phone number was changed',
-      what:
-        how === 'email'
-          ? 'Your SeeBuyGet account was recovered with this email address and moved to a new phone number, with a new PIN.'
-          : how === 'staff'
-            ? 'Two members of SeeBuyGet staff moved your account to a new phone number. Somebody told them they had lost the number and the PIN, and staff checked who was asking.'
-            : 'Your SeeBuyGet account now signs in with a different phone number.',
+      what: `${moved}${parcels}${codes} For seven days, a parcel sent to your old number still reaches the account.`,
       next: 'If it was you, there is nothing to do. If it was NOT you: within 24 hours, open any SeeBuyGet app, choose “Trouble signing in?” and then “Undo a number change” — with your old number and PIN, or with a code to this address. The account goes back to your number and the PIN is locked until you choose a new one.',
       until,
     });
@@ -247,9 +332,11 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
     const movedTo = person.phoneHash;
     const back = this.persons.undoMove(person.personDid, now);
     this.accounts.rephone(movedTo, back.phoneHash);
+    // Whoever had the account for those hours could read the codes of its parcels. They open nothing now.
+    const rotated = this.parcels?.rotateCodesOf(back.personDid) ?? 0;
     this.tell(back, {
       headline: 'The number change was undone',
-      what: 'Your SeeBuyGet account is back on the phone number it had before. Every phone was signed out and the PIN is locked.',
+      what: `Your SeeBuyGet account is back on the phone number it had before. Every phone was signed out and the PIN is locked.${rotated ? ' The collection codes of your parcels were changed: open a parcel for its new one.' : ''}`,
       next: 'To sign in, choose “First time here, or forgot your PIN?”: a code goes to your number and you choose a new PIN. Pick one nobody around you could guess or has seen you type.',
     });
     this.tellFleets(back, 'had a change of phone number undone');
@@ -271,15 +358,31 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
     throw new GlosError('FORBIDDEN', 'That national ID number is not the one on this account', { field: 'nationalId' });
   }
 
-  /** The person hears it everywhere they read: their own inbox in the app, each driver record's, and the email. */
-  private tell(person: Person, s: Omit<Safety, 'when'>): void {
+  /** The register prints an old number still held are given up with it. */
+  private release(held: PhoneChange['held']): void {
+    for (const h of held) (h.register === 'driver' ? this.drivers : this.agents).releaseHeldPhone(h.key, h.did);
+  }
+
+  private tellOldNumberGone(person: Person, why: 'blocked' | 'time'): void {
+    this.tell(person, {
+      headline: 'Your old number is no longer part of your account',
+      what: why === 'blocked' ? 'You blocked the phone number your account used to have.' : 'Seven days have passed since your account moved to its new phone number, so the old one was let go.',
+      next:
+        why === 'blocked'
+          ? 'A parcel sent to the old number will not reach you any more: it belongs to whoever has that number. If you did not block it yourself, somebody has your phone and knows your PIN: change your PIN now.'
+          : 'A parcel sent to the old number will not reach you any more: it belongs to whoever has that number. Anybody who still sends to it needs your new one.',
+    });
+  }
+
+  /** The person hears it everywhere they read: their own inbox in the app, each driver record's, and — unless told not to — the email. */
+  private tell(person: Person, s: Omit<Safety, 'when'>, byMail = true): void {
     const drivers = person.roles.filter((r) => r.role === 'driver' && r.status === 'active').map((r) => r.entityDid);
     for (const to of [person.personDid, ...drivers]) {
       void this.notifications
         ?.notify(to, { kind: 'security', title: s.headline, body: `${s.what} ${s.next}`, link: '/', tag: `account:${person.personDid}:${s.headline}` })
         .catch((err) => this.logger.warn(`security notice failed: ${(err as Error).message}`));
     }
-    this.tellByMail(person, s);
+    if (byMail) this.tellByMail(person, s);
   }
 
   private tellByMail(person: Person, s: Omit<Safety, 'when'>): void {

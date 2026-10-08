@@ -26,7 +26,7 @@ import { BagPlanService } from './bag-plan.service';
 import { ForthcomingService } from './forthcoming.service';
 import { DockService } from './dock.service';
 import { FleetManagerService } from './fleet-manager.service';
-import { PersonService, NUMBER_UNDO_MS } from './person.service';
+import { PersonService, NUMBER_UNDO_MS, OLD_NUMBER_KEPT_MS } from './person.service';
 import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { EmailCodeService } from './email-code.service';
@@ -96,6 +96,8 @@ describe('a parcel is kept by the account, not by the number', () => {
   let businesses: BusinessService;
   let auth: AuthService;
   let events: EventBus;
+  let unclaimed: UnclaimedService;
+  let vendors: VendorService;
 
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -135,6 +137,8 @@ describe('a parcel is kept by the account, not by the number', () => {
     businesses = moduleRef.get(BusinessService);
     auth = moduleRef.get(AuthService);
     events = moduleRef.get(EventBus);
+    unclaimed = moduleRef.get(UnclaimedService);
+    vendors = moduleRef.get(VendorService);
     dispatcher.onModuleInit(); // compile() runs no lifecycle hooks: the notices that answer an event are subscribed here
   });
 
@@ -146,7 +150,10 @@ describe('a parcel is kept by the account, not by the number', () => {
 
   let seq = 0;
   const PIN = '4826';
+  /** Past the day in which a move can be undone. The old number is still the account's. */
   const DAY_AND_A_BIT = NUMBER_UNDO_MS + 1000;
+  /** Past the week the old number is kept: it has been let go. */
+  const WEEK_AND_A_BIT = OLD_NUMBER_KEPT_MS + 1000;
 
   /** A shop that takes parcels in at its counter, with money to do it. */
   function aShop(zone: string) {
@@ -169,8 +176,9 @@ describe('a parcel is kept by the account, not by the number', () => {
   function aPerson(phone = aNumber()) {
     const person = persons.ensurePerson(phone);
     persons.setPin(person.personDid, PIN);
-    persons.setEmail(person.personDid, `person${(seq += 1)}@example.com`);
-    return { personDid: person.personDid, phone };
+    const email = `person${(seq += 1)}@example.com`;
+    persons.setEmail(person.personDid, email);
+    return { personDid: person.personDid, phone, email };
   }
   /** A fresh number, confirmed by a code as the app would. */
   function aVerifiedNumber() {
@@ -245,7 +253,7 @@ describe('a parcel is kept by the account, not by the number', () => {
       expect(ids(parcels.partyTo(me(p.personDid)).received)).toEqual([waiting.parcelId]);
       expect(ids(parcels.partyTo(me(p.personDid)).sent)).toEqual([sentEarlier.parcelId]);
       // And the number, freed, brings nothing of theirs to the next person on it.
-      recovery.settle(t0 + DAY_AND_A_BIT);
+      recovery.settle(t0 + WEEK_AND_A_BIT);
       expect(parcels.partyTo(aPersonAt(phone)).received).toEqual([]);
     });
 
@@ -254,7 +262,7 @@ describe('a parcel is kept by the account, not by the number', () => {
       const incoming = aParcel({ to: p.phone });
       const t0 = Date.now();
       recovery.changeNumber(p.personDid, PIN, aVerifiedNumber(), t0);
-      recovery.settle(t0 + DAY_AND_A_BIT);
+      recovery.settle(t0 + WEEK_AND_A_BIT);
       const newcomer = aPersonAt(p.phone);
 
       // It has been on the shelf for more than a day: the one reminder is due.
@@ -283,7 +291,7 @@ describe('a parcel is kept by the account, not by the number', () => {
       const outgoing = aParcel({ from: p.phone, to: aNumber() });
       const t0 = Date.now();
       recovery.changeNumber(p.personDid, PIN, aVerifiedNumber(), t0);
-      recovery.settle(t0 + DAY_AND_A_BIT);
+      recovery.settle(t0 + WEEK_AND_A_BIT);
       return { p, incoming, outgoing, newcomer: aPersonAt(p.phone) };
     }
 
@@ -345,7 +353,7 @@ describe('a parcel is kept by the account, not by the number', () => {
       const t0 = Date.now();
       recovery.changeNumber(sender.personDid, PIN, aVerifiedNumber(), t0);
       recovery.changeNumber(p.personDid, PIN, aVerifiedNumber(), t0);
-      recovery.settle(t0 + DAY_AND_A_BIT);
+      recovery.settle(t0 + WEEK_AND_A_BIT);
       const newcomer = aPersonAt(p.phone);
       const stored = parcels.get(parcel.parcelId);
       const titles = (did: string) => notifications.inboxFor(did).filter((n) => n.kind === 'parcel_ready').map((n) => n.title);
@@ -379,18 +387,6 @@ describe('a parcel is kept by the account, not by the number', () => {
   /* ------------------------------------------------------------------ the day in which it can be undone -- */
 
   describe('in the 24 hours a move can still be undone', () => {
-    it('a parcel sent to the OLD number is the account’s: the number is held for it and nobody else can be on it', () => {
-      const p = aPerson();
-      const t0 = Date.now();
-      recovery.changeNumber(p.personDid, PIN, aVerifiedNumber(), t0);
-      const late = aParcel({ to: p.phone });
-      expect(ids(parcels.partyTo(me(p.personDid)).received)).toEqual([late.parcelId]);
-
-      recovery.settle(t0 + DAY_AND_A_BIT);
-      expect(parcels.partyTo(aPersonAt(p.phone)).received).toEqual([]);
-      expect(ids(parcels.partyTo(me(p.personDid)).received)).toEqual([late.parcelId]);
-    });
-
     it('a parcel sent to the NEW number is shown to the account, and does not go back with it when the move is undone', () => {
       const p = aPerson();
       const before = aParcel({ to: p.phone });
@@ -416,6 +412,247 @@ describe('a parcel is kept by the account, not by the number', () => {
       recovery.settle(t0 + DAY_AND_A_BIT);
       const later = aParcel({ to: fresh });
       expect(keptBy(later.parcelId).receiver).toBe(p.personDid);
+    });
+  });
+
+  /* ------------------------------------------------------------------ the week the old number is still theirs -- */
+
+  /**
+   * The user, 2026-10-08: "the user blocks their own old phone number in the account. We remind them to do that for 7
+   * days, after that we free the account and a dual phone number doesn't work anymore."
+   */
+  describe('for a week the old number is still the account’s', () => {
+    it('a parcel sent to it on any of the seven days reaches the account, and says where it was sent', () => {
+      const p = aPerson();
+      const fresh = aVerifiedNumber();
+      const t0 = Date.now();
+      recovery.changeNumber(p.personDid, PIN, fresh, t0);
+      const firstDay = aParcel({ to: p.phone });
+      // The day in which it could be undone has passed; the number is theirs for six more, and nobody else's.
+      recovery.settle(t0 + DAY_AND_A_BIT);
+      expect(() => persons.ensurePerson(p.phone)).toThrow(/moved off another account less than 7 days ago/);
+      const thirdDay = aParcel({ to: p.phone });
+      const mine = parcels.partyTo(me(p.personDid)).received;
+      expect(ids(mine).sort()).toEqual([firstDay.parcelId, thirdDay.parcelId].sort());
+      // The sender does not know the number changed. The receiver is the one who can tell them.
+      expect(mine.map((v) => v.sentToOldNumber)).toEqual([true, true]);
+      const direct = aParcel({ to: fresh });
+      expect(parcels.consumerParcel(direct.parcelId, me(p.personDid)).sentToOldNumber).toBeUndefined();
+
+      // The week over, it is let go: what is sent to it now is the number's — and the newcomer's, when there is one.
+      expect(recovery.settle(t0 + WEEK_AND_A_BIT)).toBe(1);
+      const after = aParcel({ to: p.phone });
+      expect(ids(parcels.partyTo(aPersonAt(p.phone)).received)).toEqual([after.parcelId]);
+      expect(ids(parcels.partyTo(me(p.personDid)).received)).not.toContain(after.parcelId);
+      expect(ids(parcels.partyTo(me(p.personDid)).received)).toEqual(expect.arrayContaining([firstDay.parcelId, thirdDay.parcelId]));
+    });
+
+    it('until its holder blocks it: from that moment a parcel sent to it is the number’s', () => {
+      const p = aPerson();
+      const t0 = Date.now();
+      recovery.changeNumber(p.personDid, PIN, aVerifiedNumber(), t0);
+      const kept = aParcel({ to: p.phone });
+      recovery.settle(t0 + DAY_AND_A_BIT);
+      recovery.blockOldNumber(p.personDid, PIN, t0 + DAY_AND_A_BIT + 1000);
+      const after = aParcel({ to: p.phone });
+      // What reached the account while the number was its own stays its own; what comes after does not.
+      expect(ids(parcels.partyTo(me(p.personDid)).received)).toEqual([kept.parcelId]);
+      expect(ids(parcels.partyTo(aPersonAt(p.phone)).received)).toEqual([after.parcelId]);
+    });
+  });
+
+  /* ------------------------------------------------------------------ moved without its PIN -- */
+
+  /**
+   * The user, 2026-10-08: hiding the code for a day when the account was moved without its PIN "is a right move".
+   * Collecting the goods is the one thing an undo cannot give back.
+   */
+  describe('an account moved WITHOUT its PIN is not shown its collection codes for a day', () => {
+    const codeOf = (parcelId: string) => parcels.get(parcelId).otp as string;
+
+    it('two members of staff moved it: the parcel is there, the code is not — and the screen is told from when', () => {
+      const p = aPerson();
+      const incoming = aParcel({ to: p.phone });
+      const outgoing = aParcel({ from: p.phone, to: aNumber() });
+      recovery.moveByStaff(p.personDid, aVerifiedNumber());
+      const until = me(p.personDid).phoneChange!.undoUntil;
+
+      const received = parcels.consumerParcel(incoming.parcelId, me(p.personDid));
+      expect(received.parcelId).toBe(incoming.parcelId);
+      expect([received.collectToken, received.codeHeldUntil]).toEqual([undefined, until]);
+      // The SENDING side of a person-to-person parcel shows its code too. Not this day.
+      const sent = parcels.consumerParcel(outgoing.parcelId, me(p.personDid));
+      expect([sent.collectToken, sent.codeHeldUntil]).toEqual([undefined, until]);
+      const everything = JSON.stringify([received, sent, parcels.partyTo(me(p.personDid))]);
+      expect(everything).not.toContain(codeOf(incoming.parcelId));
+      expect(everything).not.toContain(codeOf(outgoing.parcelId));
+    });
+
+    it('recovered by its inbox: the same', () => {
+      const p = aPerson();
+      const incoming = aParcel({ to: p.phone });
+      const { code } = recovery.sendAccountCode(p.email, 'recover');
+      recovery.recoverByEmail({ email: p.email, code, newPhone: aVerifiedNumber(), pin: '7391' });
+      const view = parcels.consumerParcel(incoming.parcelId, me(p.personDid));
+      expect([view.collectToken, view.codeHeldUntil]).toEqual([undefined, me(p.personDid).phoneChange!.undoUntil]);
+    });
+
+    it('moved by its holder with their own PIN: the code is shown as before', () => {
+      const p = aPerson();
+      const incoming = aParcel({ to: p.phone });
+      recovery.changeNumber(p.personDid, PIN, aVerifiedNumber());
+      const view = parcels.consumerParcel(incoming.parcelId, me(p.personDid));
+      expect(view.collectToken!.code).toBe(codeOf(incoming.parcelId));
+      expect(view.codeHeldUntil).toBeUndefined();
+    });
+
+    it('the day over, the code shows again', () => {
+      const p = aPerson();
+      const incoming = aParcel({ to: p.phone });
+      recovery.moveByStaff(p.personDid, aVerifiedNumber(), Date.now() - DAY_AND_A_BIT);
+      const view = parcels.consumerParcel(incoming.parcelId, me(p.personDid));
+      expect(view.collectToken!.code).toBe(codeOf(incoming.parcelId));
+      expect(view.codeHeldUntil).toBeUndefined();
+    });
+
+    it('hides it from the moved account only: the other side of the parcel reads its code as ever', () => {
+      const sender = aPerson();
+      const p = aPerson();
+      const parcel = aParcel({ from: sender.phone, to: p.phone });
+      recovery.moveByStaff(p.personDid, aVerifiedNumber());
+      expect(parcels.consumerParcel(parcel.parcelId, me(sender.personDid)).collectToken!.code).toBe(codeOf(parcel.parcelId));
+      expect(parcels.consumerParcel(parcel.parcelId, me(p.personDid)).collectToken).toBeUndefined();
+    });
+
+    it('nor the code of somebody they named to collect — in the list or on the parcel', () => {
+      const p = aPerson();
+      const incoming = aParcel({ to: p.phone });
+      parcels.get(incoming.parcelId).status = 'Ready_For_Pickup';
+      const named = unclaimed.nominate(incoming.parcelId, 'A neighbour');
+      expect(parcels.partyTo(me(p.personDid)).received[0].collectProxy).toEqual({ name: 'A neighbour', code: named.code });
+      recovery.moveByStaff(p.personDid, aVerifiedNumber());
+      // Who they named is theirs to see; what would let that person through the door is not.
+      expect(parcels.partyTo(me(p.personDid)).received[0].collectProxy).toEqual({ name: 'A neighbour' });
+      expect(parcels.consumerParcel(incoming.parcelId, me(p.personDid)).collectProxy).toEqual({ name: 'A neighbour' });
+    });
+
+    it('the free collection time does not run out on somebody who cannot read their code, and nobody tells them to bring it', async () => {
+      const p = aPerson();
+      const incoming = aParcel({ to: p.phone });
+      const stored = parcels.get(incoming.parcelId);
+      const t0 = Date.now();
+      // On the shelf since before the free window ran out.
+      stored.status = 'Ready_For_Pickup';
+      stored.readyAt = new Date(t0 - (UNCOLLECTED_H + 1) * 3_600_000).toISOString();
+      recovery.moveByStaff(p.personDid, aVerifiedNumber(), t0);
+      expect(await dispatcher.sweepShelf(t0 + 3_600_000)).toEqual({ reminded: 0, closed: 0 });
+      expect(parcels.get(incoming.parcelId).status).toBe('Ready_For_Pickup');
+      expect(parcels.get(incoming.parcelId).uncollectedRemindedAt).toBeUndefined();
+      // The day over, the shelf is swept as for anybody.
+      expect(await dispatcher.sweepShelf(t0 + DAY_AND_A_BIT)).toEqual({ reminded: 1, closed: 1 });
+    });
+
+    it('the notice that the number changed says what is at stake', async () => {
+      const said = (personDid: string) => notifications.inboxFor(personDid).find((n) => n.title === 'Your phone number was changed')!.body;
+      const waitingFor = (phone: string, howMany: number) => {
+        for (let i = 0; i < howMany; i++) parcels.get(aParcel({ to: phone }).parcelId).status = 'Ready_For_Pickup';
+      };
+      const two = aPerson();
+      waitingFor(two.phone, 2);
+      aParcel({ to: two.phone }); // still on its way: not one that is waiting
+      recovery.moveByStaff(two.personDid, aVerifiedNumber());
+      const one = aPerson();
+      waitingFor(one.phone, 1);
+      recovery.changeNumber(one.personDid, PIN, aVerifiedNumber());
+      const none = aPerson();
+      recovery.changeNumber(none.personDid, PIN, aVerifiedNumber());
+      await flush();
+
+      expect(said(two.personDid)).toContain('2 parcels of yours are waiting to be collected.');
+      expect(said(two.personDid)).toContain('Because it was moved without your PIN, the collection codes of your parcels were changed, and they are not shown for 24 hours.');
+      expect(said(two.personDid)).toContain('For seven days, a parcel sent to your old number still reaches the account.');
+      expect(said(one.personDid)).toContain('One parcel of yours is waiting to be collected.');
+      // With their own PIN: nothing was changed and nothing is hidden, so nothing is said of it.
+      expect(said(one.personDid)).not.toMatch(/collection codes/);
+      expect(said(none.personDid)).not.toMatch(/waiting to be collected/);
+      expect(said(none.personDid)).toContain('For seven days');
+    });
+  });
+
+  /* ------------------------------------------------------------------ the codes somebody could have read -- */
+
+  describe('the codes an account could read are replaced', () => {
+    const codeOf = (parcelId: string) => parcels.get(parcelId).otp as string;
+
+    it('when a move is undone: whoever had the account for those hours holds codes that open nothing', async () => {
+      const friend = aPerson();
+      const p = aPerson();
+      const incoming = aParcel({ from: friend.phone, to: p.phone });
+      const outgoing = aParcel({ from: p.phone, to: friend.phone });
+      const somebodyElses = aParcel({ to: friend.phone });
+      const before = [incoming, outgoing, somebodyElses].map((x) => codeOf(x.parcelId));
+      const t0 = Date.now();
+      // Moved with the PIN, by somebody who knew it: nothing changes yet, and the codes are theirs to read.
+      recovery.changeNumber(p.personDid, PIN, aVerifiedNumber(), t0);
+      expect([incoming, outgoing, somebodyElses].map((x) => codeOf(x.parcelId))).toEqual(before);
+      expect(parcels.consumerParcel(incoming.parcelId, me(p.personDid)).collectToken!.code).toBe(before[0]);
+
+      recovery.undoWithOldNumber(p.phone, PIN, t0 + 60_000);
+      await flush();
+      const after = [incoming, outgoing, somebodyElses].map((x) => codeOf(x.parcelId));
+      expect(after[0]).not.toBe(before[0]);
+      expect(after[1]).not.toBe(before[1]);
+      expect(after[2]).toBe(before[2]);
+      // The owner, back on their number, reads the new ones — and so does the other side of each parcel.
+      expect(parcels.consumerParcel(incoming.parcelId, me(p.personDid)).collectToken!.code).toBe(after[0]);
+      expect(parcels.consumerParcel(outgoing.parcelId, me(friend.personDid)).collectToken!.code).toBe(after[1]);
+      // The other side is told its code changed; the account itself is told by the notice about the undo.
+      const titles = (did: string) => notifications.inboxFor(did).map((n) => n.title);
+      expect(titles(friend.personDid).filter((x) => x === 'The pickup code has changed')).toHaveLength(2);
+      expect(titles(p.personDid)).not.toContain('The pickup code has changed');
+      expect(notifications.inboxFor(p.personDid).find((n) => n.title === 'The number change was undone')!.body).toContain('The collection codes of your parcels were changed');
+      // A parcel's history is read by both sides: it says a code changed, and nothing about whose account moved or why.
+      const history = parcels.consumerParcel(incoming.parcelId, me(friend.personDid)).timeline.map((x) => x.note).join(' | ');
+      expect(history).toContain('collection code changed');
+      expect(history).not.toMatch(/number|undone|account|recover/i);
+    });
+
+    it('when it is recovered without its PIN — the phone it was on may be in somebody’s hands — and not when its holder moved it themselves', () => {
+      const lost = aPerson();
+      const own = aPerson();
+      const a = aParcel({ to: lost.phone });
+      const b = aParcel({ to: own.phone });
+      const before = [codeOf(a.parcelId), codeOf(b.parcelId)];
+      recovery.moveByStaff(lost.personDid, aVerifiedNumber());
+      recovery.changeNumber(own.personDid, PIN, aVerifiedNumber());
+      expect(codeOf(a.parcelId)).not.toBe(before[0]);
+      expect(codeOf(b.parcelId)).toBe(before[1]);
+    });
+
+    it('exactly the ones it could read: not a store’s order still on its way, not a parcel already collected — and the code of somebody it named, too', () => {
+      const p = aPerson();
+      const store = vendors.register({ name: 'A Store' });
+      const onItsWay = aParcel({ to: p.phone });
+      const atTheShop = aParcel({ to: p.phone });
+      const collected = aParcel({ to: p.phone });
+      const waiting = aParcel({ to: p.phone });
+      // A store's order carries a code from the day it is made; the buyer's screen shows it only once it can be collected.
+      Object.assign(parcels.get(onItsWay.parcelId), { vendorId: store.vendorId, collectionCode: 'COL-AAAA1111', otp: undefined, status: 'On_Bus' });
+      Object.assign(parcels.get(atTheShop.parcelId), { vendorId: store.vendorId, collectionCode: 'COL-BBBB2222', otp: undefined, status: 'Ready_For_Pickup' });
+      parcels.get(collected.parcelId).status = 'Delivered';
+      parcels.get(waiting.parcelId).status = 'Ready_For_Pickup';
+      const named = unclaimed.nominate(waiting.parcelId, 'A neighbour');
+      const before = { collected: codeOf(collected.parcelId), waiting: codeOf(waiting.parcelId) };
+
+      recovery.moveByStaff(p.personDid, aVerifiedNumber());
+
+      expect(parcels.get(onItsWay.parcelId).collectionCode).toBe('COL-AAAA1111');
+      expect(parcels.get(atTheShop.parcelId).collectionCode).toMatch(/^COL-[0-9A-F]{8}$/);
+      expect(parcels.get(atTheShop.parcelId).collectionCode).not.toBe('COL-BBBB2222');
+      expect(codeOf(collected.parcelId)).toBe(before.collected);
+      expect(codeOf(waiting.parcelId)).not.toBe(before.waiting);
+      expect(parcels.get(waiting.parcelId).collectProxy).toMatchObject({ name: 'A neighbour' });
+      expect(parcels.get(waiting.parcelId).collectProxy!.code).not.toBe(named.code);
     });
   });
 
@@ -483,7 +720,7 @@ describe('a parcel is kept by the account, not by the number', () => {
       const t0 = Date.now();
       recovery.changeNumber(p.personDid, PIN, aVerifiedNumber(), t0);
       expect(dispatch.freightsFor(me(p.personDid)).map((f) => f.freightId)).toEqual([order.freightId]);
-      recovery.settle(t0 + DAY_AND_A_BIT);
+      recovery.settle(t0 + WEEK_AND_A_BIT);
       expect(dispatch.freightsFor(aPersonAt(p.phone))).toEqual([]);
       // The load goes whole to every driver who lists the board: the buyer's account is not on it.
       expect(dispatch.buyerOf(order).owner).toBe(p.personDid);
@@ -497,7 +734,7 @@ describe('a parcel is kept by the account, not by the number', () => {
       expect(dispatch.freightsFor(me(p.personDid)).map((f) => f.freightId)).toEqual([order.freightId]);
       const t0 = Date.now();
       recovery.changeNumber(p.personDid, PIN, aVerifiedNumber(), t0);
-      recovery.settle(t0 + DAY_AND_A_BIT);
+      recovery.settle(t0 + WEEK_AND_A_BIT);
       expect(dispatch.freightsFor(me(p.personDid)).map((f) => f.freightId)).toEqual([order.freightId]);
       expect(dispatch.freightsFor(aPersonAt(phone))).toEqual([]);
     });
@@ -507,9 +744,11 @@ describe('a parcel is kept by the account, not by the number', () => {
       const t0 = Date.now();
       recovery.changeNumber(p.personDid, PIN, aVerifiedNumber(), t0);
       const held = anOrder(p.phone, t0 + 3_600_000);
-      // The same number a day and an hour later, on the order's own clock: nobody's yet.
-      const free = anOrder(p.phone, t0 + DAY_AND_A_BIT + 3_600_000);
-      expect(dispatch.freightsFor(me(p.personDid)).map((f) => f.freightId)).toEqual([held.freightId]);
+      // Three days on it is still held for them; a week and an hour on, on the order's own clock, it is nobody's.
+      const third = anOrder(p.phone, t0 + 3 * 24 * 3_600_000);
+      expect(dispatch.buyerOf(third).owner).toBe(p.personDid);
+      const free = anOrder(p.phone, t0 + WEEK_AND_A_BIT + 3_600_000);
+      expect(dispatch.freightsFor(me(p.personDid)).map((f) => f.freightId).sort()).toEqual([held.freightId, third.freightId].sort());
       expect(dispatch.buyerOf(free).owner).toBeUndefined();
     });
   });
@@ -532,7 +771,7 @@ describe('a parcel is kept by the account, not by the number', () => {
       recovery.changeNumber(p.personDid, PIN, aVerifiedNumber(), t0);
       expect(businesses.mine(p.personDid).map((m) => [m.memberId, m.state])).toEqual([[memberId, 'invited']]);
 
-      recovery.settle(t0 + DAY_AND_A_BIT);
+      recovery.settle(t0 + WEEK_AND_A_BIT);
       const newcomer = aPersonAt(p.phone);
       expect(businesses.mine(newcomer.personDid)).toEqual([]);
       expect(() => businesses.accept(newcomer.personDid, memberId)).toThrow(/No such invitation/);
@@ -555,7 +794,7 @@ describe('a parcel is kept by the account, not by the number', () => {
       const t0 = Date.now();
       recovery.changeNumber(p.personDid, PIN, aVerifiedNumber(), t0);
       expect(businesses.mine(p.personDid).map((m) => m.memberId)).toEqual([b.memberId]);
-      recovery.settle(t0 + DAY_AND_A_BIT);
+      recovery.settle(t0 + WEEK_AND_A_BIT);
       const newcomer = aPersonAt(phone);
       expect(businesses.mine(newcomer.personDid)).toEqual([]);
       expect(() => businesses.accept(newcomer.personDid, b.memberId)).toThrow(/No such invitation/);
@@ -568,7 +807,7 @@ describe('a parcel is kept by the account, not by the number', () => {
       recovery.changeNumber(p.personDid, PIN, aVerifiedNumber(), t0);
       const { memberId } = businesses.invite(acting, { phone: p.phone, name: 'Selam Tesfaye', role: 'booker' });
       expect(businesses.mine(p.personDid).map((m) => m.memberId)).toEqual([memberId]);
-      recovery.settle(t0 + DAY_AND_A_BIT);
+      recovery.settle(t0 + WEEK_AND_A_BIT);
       expect(businesses.mine(aPersonAt(p.phone).personDid)).toEqual([]);
     });
 
@@ -615,7 +854,7 @@ describe('a parcel is kept by the account, not by the number', () => {
 
       const t0 = Date.now();
       recovery.changeNumber(first.personDid, PIN, aVerifiedNumber(), t0);
-      recovery.settle(t0 + DAY_AND_A_BIT);
+      recovery.settle(t0 + WEEK_AND_A_BIT);
       // Somebody else has the number now, and moves on from it too.
       const second = aPersonAt(first.phone);
       persons.setPin(second.personDid, PIN);
@@ -640,7 +879,7 @@ describe('a parcel is kept by the account, not by the number', () => {
       expect(asked).toBe(0);
     });
 
-    it('says whose a number certainly is: held for a day for the account that left it, and not yet the account’s that arrived', () => {
+    it('says whose a number certainly is: kept a week for the account that left it, and for a day not yet the account’s that arrived', () => {
       const p = aPerson();
       const from = me(p.personDid).phoneHash;
       expect(persons.settledAt(from)!.personDid).toBe(p.personDid);
@@ -650,9 +889,15 @@ describe('a parcel is kept by the account, not by the number', () => {
 
       expect(persons.settledAt(from, t0 + 1000)!.personDid).toBe(p.personDid);
       expect(persons.settledAt(to, t0 + 1000)).toBeUndefined();
-      // The day has passed: the new number is theirs, the old one is nobody's.
-      expect(persons.settledAt(from, t0 + DAY_AND_A_BIT)).toBeUndefined();
+      // The day has passed: the new number is theirs — and the old one still is.
+      expect(persons.settledAt(from, t0 + DAY_AND_A_BIT)!.personDid).toBe(p.personDid);
       expect(persons.settledAt(to, t0 + DAY_AND_A_BIT)!.personDid).toBe(p.personDid);
+      // Judged from when it moved, whether or not the sweep has been round: there is no hour in which it is nobody's.
+      expect(me(p.personDid).phoneChange).toBeDefined();
+      expect(persons.keptFor(from, t0 + WEEK_AND_A_BIT - 2000)!.personDid).toBe(p.personDid);
+      // The week has passed: the old one is nobody's.
+      expect(persons.settledAt(from, t0 + WEEK_AND_A_BIT)).toBeUndefined();
+      expect(persons.settledAt(to, t0 + WEEK_AND_A_BIT)!.personDid).toBe(p.personDid);
       expect(persons.settledAt('')).toBeUndefined();
     });
   });

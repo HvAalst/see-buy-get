@@ -12,7 +12,7 @@ import { hashEmail, hashPhone, isPlausiblePhone, normalizePhone } from '../../fo
 import { isPlausibleEmail, normalizeEmail } from './email-code.service';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
 import { MediaService } from './media.service';
-import { Person, PersonRole, PersonView, PhoneChange, ROLE_TO_ACTOR, RoleLink, toView } from './person.types';
+import { OldNumber, Person, PersonRole, PersonView, PhoneChange, ROLE_TO_ACTOR, RoleLink, toView } from './person.types';
 
 /** Wrong-PIN attempts before the PIN locks. From then on only a code sent to the phone opens it again. */
 export const MAX_PIN_ATTEMPTS = 5;
@@ -38,8 +38,16 @@ export function isGuessablePin(pin: string): boolean {
   return pin === '2580' || pin === '0852';
 }
 
-/** How long a number change can be undone, and the old number is held for its owner. */
+/** How long a number change can be undone. */
 export const NUMBER_UNDO_MS = 24 * 60 * 60 * 1000;
+/**
+ * How long the old number stays the account's after a move, counted from the move: what is sent to it still arrives,
+ * and nobody else can open an account on it. The user, 2026-10-08: seven days, in which the holder is reminded to block
+ * it themselves; then it is let go.
+ */
+export const OLD_NUMBER_KEPT_MS = 7 * 24 * 60 * 60 * 1000;
+const KEPT_DAYS = OLD_NUMBER_KEPT_MS / (24 * 60 * 60 * 1000);
+const KEPT_FOR_ANOTHER = `That number was moved off another account less than ${KEPT_DAYS} days ago. It can be used again after that.`;
 
 /** "a…@example.com" — enough for its owner to recognise, not enough for anybody else to use. */
 function maskEmail(email: string): string {
@@ -136,8 +144,9 @@ export class PersonService {
     const phoneHash = hashPhone(phone);
     const existing = this.persons.get(phoneHash);
     if (existing) return existing;
-    // A number moved off an account in the last day is still that account's to move back to.
-    if (this.movedFrom(phoneHash)) throw new GlosError('INVALID_STATE', 'That number was moved off another account in the last 24 hours. It can be used again after that.', { field: 'phone' });
+    // A number an account moved off in the last week is still that account's: to move back to in the first day, and
+    // for what is sent to it in all seven.
+    if (this.keptFor(phoneHash)) throw new GlosError('INVALID_STATE', KEPT_FOR_ANOTHER, { field: 'phone' });
 
     const personDid = this.dids.generate(`person:${phoneHash}`, { role: 'person' }).id;
     const person: Person = { personDid, phoneHash, roles: [], createdAt: new Date().toISOString() };
@@ -263,9 +272,10 @@ export class PersonService {
   }
 
   /** The full self-view: the PII-free projection plus the revealed profile. For the acting person ONLY. */
-  view(person: Person): PersonView {
+  view(person: Person, now: number = Date.now()): PersonView {
     return {
       ...toView(person),
+      ...this.oldNumberView(person, now),
       ...this.profile(person),
       ...(person.pinChangedAt ? { pinChangedAt: person.pinChangedAt } : {}),
       // Only a bounce for good: a full mailbox clears by itself, and is not a thing to alarm somebody about.
@@ -462,13 +472,14 @@ export class PersonService {
   /**
    * WHOSE A NUMBER IS, FOR CERTAIN, RIGHT NOW — the account that something addressed to it should be kept by.
    *
-   * A number moved OFF an account in the last day is still that account's: nobody else can take it meanwhile, and its
-   * owner may put the account back on it. A number an account moved ONTO in the last day is not certain yet: the move
-   * can be undone, and what was addressed to that number must not go back to another number with the account.
+   * A number an account moved OFF is still that account's while it is kept for it (`keptFor`: a week, unless its
+   * holder blocks it sooner): nobody else can take it meanwhile. A number an account moved ONTO in the last day is not
+   * certain yet: the move can be undone, and what was addressed to that number must not go back to another number with
+   * the account.
    */
   settledAt(phoneHash: string, now: number = Date.now()): Person | undefined {
     if (!phoneHash) return undefined;
-    const held = this.movedFrom(phoneHash, now);
+    const held = this.keptFor(phoneHash, now);
     if (held) return held;
     const here = this.persons.get(phoneHash);
     if (!here) return undefined;
@@ -484,30 +495,67 @@ export class PersonService {
     this.whenNumberLeft.push(listener);
   }
 
-  /** Every account with a number change on record — open or past its window and waiting to be settled. */
+  /**
+   * THE ACCOUNT A NUMBER IS STILL KEPT FOR: it moved off it less than a week ago and its holder has not blocked it.
+   * Judged from WHEN it moved, never from whether the sweep has been round yet — or there would be an hour, between
+   * the undo window closing and the sweep noticing, in which the number was nobody's.
+   */
+  keptFor(phoneHash: string, now: number = Date.now()): Person | undefined {
+    if (!phoneHash) return undefined;
+    for (const p of this.persons.values()) {
+      if (p.phoneChange?.fromHash === phoneHash && Date.parse(p.phoneChange.at) + OLD_NUMBER_KEPT_MS > now) return p;
+      if (p.oldNumber?.hash === phoneHash && Date.parse(p.oldNumber.until) > now) return p;
+    }
+    return undefined;
+  }
+
+  /** Every account with an old number on record — still to be undone, still kept, or waiting to be let go. */
   withNumberChange(): Person[] {
-    return [...this.persons.values()].filter((p) => p.phoneChange);
+    return [...this.persons.values()].filter((p) => p.phoneChange || p.oldNumber);
+  }
+
+  /**
+   * The collection codes of this account's parcels are NOT SHOWN until then. The user, 2026-10-08: right, for an
+   * account that was moved WITHOUT its PIN — by its inbox, or by two members of staff. Collecting the goods is the one
+   * thing an undo cannot give back, so for the day in which the move can be undone, whoever moved it cannot read what
+   * a shop will ask for. Not for somebody who moved their own account with their PIN.
+   */
+  codesHeldUntil(personDid: string | undefined, now: number = Date.now()): string | undefined {
+    const change = personDid ? this.findByDid(personDid)?.phoneChange : undefined;
+    if (!change || change.how === 'self' || Date.parse(change.undoUntil) <= now) return undefined;
+    return change.undoUntil;
+  }
+
+  /** The move of this account can still be undone until then — however it was moved. What cannot be taken back waits for it. */
+  undoOpenUntil(personDid: string | undefined, now: number = Date.now()): string | undefined {
+    const change = personDid ? this.findByDid(personDid)?.phoneChange : undefined;
+    return change && Date.parse(change.undoUntil) > now ? change.undoUntil : undefined;
   }
 
   /**
    * MOVE THE ACCOUNT TO ANOTHER NUMBER. The caller has proved who is asking (their PIN, their inbox, or two
    * members of staff) and that the new number is theirs (a code to it). Everything the person is — roles, PIN,
    * name, history keyed to them — stays; the key they are found under changes. The old number is remembered for
-   * 24 hours so the move can be undone, and nobody else can take it meanwhile.
+   * 24 hours so the move can be undone, and stays the account's for a week (OldNumber); nobody else can take it
+   * meanwhile. An account has ONE old number: an earlier one still kept is let go by this move, and its register
+   * prints come back in `freed` for the caller to release.
    */
-  movePhone(personDid: string, newPhone: string, how: PhoneChange['how'], now: number = Date.now()): { person: Person; fromHash: string } {
+  movePhone(personDid: string, newPhone: string, how: PhoneChange['how'], now: number = Date.now()): { person: Person; fromHash: string; freed: PhoneChange['held'] } {
     if (!isPlausiblePhone(newPhone)) throw new GlosError('PHONE_INVALID', 'Enter a valid phone number', { field: 'phone' });
     const person = this.requireByDid(personDid);
     const toHash = hashPhone(newPhone);
     if (toHash === person.phoneHash) throw new GlosError('INVALID_STATE', 'That is the number you already sign in with', { field: 'phone' });
     if (this.persons.get(toHash)) throw new GlosError('DUPLICATE', 'That number already has an account', { field: 'phone', register: 'person' });
-    if (this.movedFrom(toHash, now)) throw new GlosError('INVALID_STATE', 'That number was moved off another account in the last 24 hours. It can be used again after that.', { field: 'phone' });
+    if (this.keptFor(toHash, now)) throw new GlosError('INVALID_STATE', KEPT_FOR_ANOTHER, { field: 'phone' });
     if (person.phoneChange && Date.parse(person.phoneChange.undoUntil) > now) {
       throw new GlosError('INVALID_STATE', 'Your number was changed less than a day ago. Undo that change, or wait until it can no longer be undone.');
     }
     const fromHash = person.phoneHash;
     // First, and before anything of the person's changes: a keeper that fails here has stopped a move that had not begun.
     for (const keep of this.whenNumberLeft) keep(person.personDid, fromHash);
+    this.closeUndo(person, now);
+    const freed = person.oldNumber?.held ?? [];
+    person.oldNumber = undefined;
     person.phoneChange = {
       fromHash,
       at: new Date(now).toISOString(),
@@ -520,7 +568,7 @@ export class PersonService {
     person.phoneHash = toHash;
     this.mergeVault(person, { phone: normalizePhone(newPhone) }, 'number-change');
     this.save(person);
-    return { person, fromHash };
+    return { person, fromHash, freed };
   }
 
   /** Note the register prints still held on the old number, so the sweep can free them when the window closes. */
@@ -569,14 +617,70 @@ export class PersonService {
     return person;
   }
 
-  /** The window closed: the change stands, and what was kept to undo it is dropped. Returns the prints to free. */
-  settleMove(personDid: string, now: number = Date.now()): PhoneChange['held'] {
-    const person = this.requireByDid(personDid);
+  /**
+   * The undo window closed: the change stands, and what was kept to undo it — the PIN as it was — is dropped. The old
+   * number stays the account's for the rest of its week.
+   */
+  private closeUndo(person: Person, now: number): void {
     const change = person.phoneChange;
-    if (!change || Date.parse(change.undoUntil) > now) return [];
+    if (!change || Date.parse(change.undoUntil) > now) return;
     person.phoneChange = undefined;
+    person.oldNumber = { hash: change.fromHash, since: change.at, until: new Date(Date.parse(change.at) + OLD_NUMBER_KEPT_MS).toISOString(), held: change.held };
     this.save(person);
-    return change.held;
+  }
+
+  /**
+   * WHAT TIME HAS CLOSED, for one account: the undo window, and then the week the old number is kept. `freed` when the
+   * old number was let go just now, with the register prints for the caller to release.
+   */
+  settleMove(personDid: string, now: number = Date.now()): { freed: boolean; held: PhoneChange['held'] } {
+    const person = this.requireByDid(personDid);
+    this.closeUndo(person, now);
+    const old = person.oldNumber;
+    if (!old || Date.parse(old.until) > now) return { freed: false, held: [] };
+    person.oldNumber = undefined;
+    this.save(person);
+    return { freed: true, held: old.held };
+  }
+
+  /**
+   * THE HOLDER BLOCKS THEIR OWN OLD NUMBER: it stops being the account's now instead of at the end of its week. Not
+   * while the move can still be undone — the old number is where the account would go back to. Returns the register
+   * prints to release.
+   */
+  blockOldNumber(personDid: string, now: number = Date.now()): PhoneChange['held'] {
+    const person = this.requireByDid(personDid);
+    const undo = this.undoOpenUntil(personDid, now);
+    if (undo) throw new GlosError('INVALID_STATE', 'Your number change can still be undone, so the old number is kept for that. You can block it once the 24 hours have passed.', { until: undo });
+    this.closeUndo(person, now);
+    const old = person.oldNumber;
+    if (!old) throw new GlosError('INVALID_STATE', 'This account has no old number any more');
+    person.oldNumber = undefined;
+    this.save(person);
+    return old.held;
+  }
+
+  /** The old number an account still has, the move being past undoing: what its holder is reminded of, once a day. */
+  oldNumberOf(personDid: string, now: number = Date.now()): OldNumber | undefined {
+    const old = this.findByDid(personDid)?.oldNumber;
+    return old && Date.parse(old.until) > now ? old : undefined;
+  }
+
+  /** The holder was reminded of their old number today. */
+  noteOldNumberReminded(personDid: string, day: string): void {
+    const person = this.requireByDid(personDid);
+    if (!person.oldNumber) return;
+    person.oldNumber.remindedOn = day;
+    this.save(person);
+  }
+
+  /** What the account's own Settings say of the old number: kept until when, and whether it can be blocked yet. */
+  private oldNumberView(person: Person, now: number): Pick<PersonView, 'oldNumber'> {
+    const change = person.phoneChange;
+    const since = person.oldNumber?.since ?? change?.at;
+    const until = person.oldNumber?.until ?? (change ? new Date(Date.parse(change.at) + OLD_NUMBER_KEPT_MS).toISOString() : undefined);
+    if (!since || !until || Date.parse(until) <= now) return {};
+    return { oldNumber: { since, until, canBlock: !this.undoOpenUntil(person.personDid, now) } };
   }
 
   // --- role switching ---

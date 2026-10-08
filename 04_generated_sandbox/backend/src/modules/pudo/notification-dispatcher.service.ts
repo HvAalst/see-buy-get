@@ -228,8 +228,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     // likely standing at the counter right now, so this is urgent and must NOT collapse onto the
     // parcel-ready notification (a fresh tag), or the one message telling them their code changed
     // would be swallowed by the one they already read.
-    this.events.subscribe<{ parcelId: string }>(GlosEvent.Pudo.ParcelReleaseCodeReissued, (e) =>
-      this.onReleaseCodeReissued(e.payload.parcelId),
+    this.events.subscribe<{ parcelId: string; quietFor?: string }>(GlosEvent.Pudo.ParcelReleaseCodeReissued, (e) =>
+      this.onReleaseCodeReissued(e.payload.parcelId, e.payload.quietFor),
     );
     // Rule 2 (driver) — a tote was published to the claim marketplace; ping active drivers near its pickup.
     this.events.subscribe<{ code: string; weightKg?: number; destination?: string }>(GlosEvent.Pudo.ToteAvailable, (e) =>
@@ -943,6 +943,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       if (!since) continue; // written before the fact was stamped — no honest clock to age it from
       if (now - new Date(since).getTime() < UNCOLLECTED_REMINDER_H * 3_600_000) continue;
       if (parcel.uncollectedRemindedAt) continue; // said once
+      // "Bring your collection code" to somebody who is not being shown it is a reminder they cannot act on: it waits.
+      if (this.parcels.codeHeldUntil(parcel, now)) continue;
       const person = accountFor(this.parcels.receiverOf(parcel), this.persons);
       // Stamped even when there is nobody to tell, so a receiver who signs up next week is not greeted by
       // a reminder about a parcel that has been waiting a fortnight.
@@ -1122,7 +1124,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
    * no longer works. Push them the new one's existence — the code itself lives in their twin, never in a
    * notification body (a lock-screen preview is readable by anyone holding the phone).
    */
-  private async onReleaseCodeReissued(parcelId: string): Promise<void> {
+  private async onReleaseCodeReissued(parcelId: string, quietFor?: string): Promise<void> {
     try {
       const parcel = this.parcels.get(parcelId);
       const where = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'your pickup point';
@@ -1135,6 +1137,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       for (const side of targets) {
         const person = accountFor(side, this.persons);
         if (!person || seen.has(person.personDid)) continue; // a person sending to themselves is told once
+        // The code changed BECAUSE this account's number did: it is told by the notice about that, which says when
+        // the code shows again — "open the app for the new code" would be untrue for a day.
+        if (person.personDid === quietFor) continue;
         seen.add(person.personDid);
         await this.notifications.notify(person.personDid, {
           kind: 'parcel_ready',

@@ -621,6 +621,76 @@ export class ParcelService implements OnApplicationBootstrap {
     return { hash: p.senderPhoneHash, owner: this.keptBy.get(p.parcelId)?.sender };
   }
 
+  /** How many parcels this account has waiting to be collected — said in the notice that its number was changed. */
+  waitingFor(personDid: string): number {
+    let waiting = 0;
+    for (const p of this.parcels.values()) if (isCollectable(p.status) && this.keptBy.get(p.parcelId)?.receiver === personDid) waiting += 1;
+    return waiting;
+  }
+
+  /**
+   * THE RELEASE CODE A SIDE OF A PARCEL IS SHOWN, or none. Who may see it, and when, differs by how the parcel was
+   * born (see toConsumerView) — stated once here, because the same question is asked when codes have to be replaced:
+   * exactly the ones an account could have read.
+   */
+  private codeShownTo(p: Parcel, relation: 'received' | 'sent'): string | undefined {
+    const isPeerSend = !p.vendorId;
+    const secret = p.collectionCode ?? p.otp;
+    const audienceOk = relation === 'received' || isPeerSend; // the sender is a party only on a peer send
+    // isCollectable, not Ready_For_Pickup: a parcel whose free window has run out is still collectable,
+    // and hiding the receiver's own code at exactly the moment they are being urged to come would be a
+    // notice telling somebody to collect a parcel and an app refusing to show them how.
+    const stageOk = isPeerSend ? !TERMINAL_STATUSES.has(p.status) : isCollectable(p.status);
+    return secret && audienceOk && stageOk ? secret : undefined;
+  }
+
+  /** Until when this parcel's receiver is not shown its code — their account was moved without its PIN — or not at all. */
+  codeHeldUntil(p: Parcel, now: number = Date.now()): string | undefined {
+    return this.persons?.codesHeldUntil(this.receiverOf(p).owner, now);
+  }
+
+  /**
+   * THE CODES AN ACCOUNT COULD READ ARE REPLACED. When a number change is undone, whoever had the account for those
+   * hours read them; when an account is recovered without its PIN, the phone it was on may be in somebody's hands
+   * with them on its screen. Exactly the codes its own screens showed — its parcels' release codes, on whichever
+   * side it stands, and the code of anybody it named to collect — and never one it could not have seen. The other
+   * side of a parcel is told its code has changed, as for any reissue; this account is told by the notice about the
+   * move itself. A locked code stays locked: this replaces what was read, it does not forgive wrong tries.
+   */
+  rotateCodesOf(personDid: string): number {
+    let rotated = 0;
+    for (const p of this.parcels.values()) {
+      const kept = this.keptBy.get(p.parcelId);
+      const receives = kept?.receiver === personDid;
+      if (!receives && kept?.sender !== personDid) continue;
+      const read = this.codeShownTo(p, receives ? 'received' : 'sent');
+      const proxy = receives && !TERMINAL_STATUSES.has(p.status) ? p.collectProxy : undefined;
+      if (!read && !proxy) continue;
+      if (read && p.collectionCode) {
+        do p.collectionCode = `COL-${randomBytes(4).toString('hex').toUpperCase()}`;
+        while (p.collectionCode === read);
+      } else if (read) {
+        do p.otp = releaseOtp();
+        while (p.otp === read);
+      }
+      if (proxy) {
+        const was = proxy.code;
+        do proxy.code = `COL-${randomBytes(4).toString('hex').toUpperCase()}`;
+        while (proxy.code === was);
+      }
+      // The history is read by both sides of a parcel: it says the code changed, and nothing of whose account moved.
+      this.scan(p, p.status, 'network', 'collection code changed');
+      this.persist(p);
+      if (read) {
+        void this.events
+          .publish(GlosEvent.Pudo.ParcelReleaseCodeReissued, { parcelId: p.parcelId, destAgentDid: p.destAgentDid, vendorId: p.vendorId, externalOrderId: p.externalOrderId, quietFor: personDid }, { source: 'pudo' })
+          .catch(() => undefined);
+      }
+      rotated += 1;
+    }
+    return rotated;
+  }
+
   /** Name the account a side of a parcel belongs to. It only ever ADDS: a side an account has is never given to another. */
   private keep(parcelId: string, side: { receiver?: string; sender?: string }): void {
     const had = this.keptBy.get(parcelId) ?? {};
@@ -807,6 +877,9 @@ export class ParcelService implements OnApplicationBootstrap {
 
   private toConsumerView(p: Parcel, who: Reader, withToken = false): ConsumerParcelView {
     const relation = isFor(this.receiverOf(p), who) ? 'received' : 'sent';
+    // An account moved WITHOUT its PIN is not shown a code for the day in which the move can be undone — neither a
+    // parcel's own, nor the one of somebody named to collect it. Asked of the account that is READING.
+    const heldUntil = this.persons?.codesHeldUntil(who.personDid);
     const view: ConsumerParcelView = {
       parcelId: p.parcelId,
       did: p.did, // DT — the twin's stable id
@@ -837,7 +910,10 @@ export class ParcelService implements OnApplicationBootstrap {
             extensionsUsed: p.extensionsUsed,
             receiverResponse: p.receiverResponse,
             relinquishedAt: p.relinquishedAt,
-            ...(p.collectProxy ? { collectProxy: { name: p.collectProxy.name, code: p.collectProxy.code } } : {}),
+            ...(p.collectProxy ? { collectProxy: { name: p.collectProxy.name, ...(heldUntil ? {} : { code: p.collectProxy.code }) } } : {}),
+            // It was sent to a number this account has moved off, and reached it because the number is still its own.
+            // The sender does not know: the receiver is the one who can tell them.
+            ...(Boolean(p.receiverPhoneHash) && p.receiverPhoneHash !== who.phoneHash && !TERMINAL_STATUSES.has(p.status) ? { sentToOldNumber: true } : {}),
             ...(p.unclaimedAt && holdingFeeFor({ unclaimedAt: p.unclaimedAt, shipmentCost: p.shipmentCost, settled: p.holdingSettled }) > 0
               ? { holdingOwed: holdingFeeFor({ unclaimedAt: p.unclaimedAt, shipmentCost: p.shipmentCost, settled: p.holdingSettled }) }
               : {}),
@@ -857,16 +933,10 @@ export class ParcelService implements OnApplicationBootstrap {
     //    from mint too: there is nothing to collect early, and a code you can look up before you travel is
     //    the difference between a wasted trip and a collected parcel.
     if (withToken) {
-      const isPeerSend = !p.vendorId;
-      const secret = p.collectionCode ?? p.otp;
-      const audienceOk = relation === 'received' || isPeerSend; // the sender is a party only on a peer send
-      // isCollectable, not Ready_For_Pickup: a parcel whose free window has run out is still collectable,
-      // and hiding the receiver's own code at exactly the moment they are being urged to come would be a
-      // notice telling somebody to collect a parcel and an app refusing to show them how.
-      const stageOk = isPeerSend ? !TERMINAL_STATUSES.has(p.status) : isCollectable(p.status);
-      if (secret && audienceOk && stageOk) {
-        view.collectToken = { code: secret, qrPayload: `sbg:collect:${secret}` };
-      }
+      const secret = this.codeShownTo(p, relation);
+      // Said, not just withheld: the screen tells them from when it shows, so nobody stands at a counter wondering.
+      if (secret && heldUntil) view.codeHeldUntil = heldUntil;
+      else if (secret) view.collectToken = { code: secret, qrPayload: `sbg:collect:${secret}` };
     }
     return view;
   }

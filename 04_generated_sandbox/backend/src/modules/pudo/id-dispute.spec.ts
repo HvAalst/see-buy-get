@@ -1162,8 +1162,8 @@ describe('two people say one national ID is theirs', () => {
       const fresh = aNumber();
       persons.movePhone(me.personDid, fresh, 'self', o.at);
       const heldKey = drivers.moveMobile(mine.did, fresh);
-      // A day later the old number is free, and somebody else registers to drive with it.
-      persons.settleMove(me.personDid, o.at + 25 * 3_600_000);
+      // A week later the old number is free, and somebody else registers to drive with it.
+      persons.settleMove(me.personDid, o.at + 8 * 24 * 3_600_000);
       if (heldKey) drivers.releaseHeldPhone(heldKey, mine.did);
       const other = drivers.register({ displayName: 'Newcomer', fullName: 'N', nationalId: '9900' + String((seq += 1)).padStart(4, '0'), mobile: o.phone, licenceClasses: ['bike'] });
       const stranger = persons.attachRole(o.phone, 'driver', other.did);
@@ -1195,11 +1195,11 @@ describe('two people say one national ID is theirs', () => {
       const opener = persons.ensurePerson(phone);
       const opened = disputes.open({ register: 'driver', nationalId: aDriver().nationalId, phone }, T0);
       expect(claimantOn(opened.reference)).toBe(opener.personDid);
-      // They move on; a day later somebody else is on the number, and moves on from it in their turn.
+      // They move on; a week later somebody else is on the number, and moves on from it in their turn.
       persons.movePhone(opener.personDid, aNumber(), 'self', T0);
-      persons.settleMove(opener.personDid, T0 + 25 * 3_600_000);
+      persons.settleMove(opener.personDid, T0 + 8 * 24 * 3_600_000);
       const next = persons.ensurePerson(phone);
-      persons.movePhone(next.personDid, aNumber(), 'self', T0 + 26 * 3_600_000);
+      persons.movePhone(next.personDid, aNumber(), 'self', T0 + 9 * 24 * 3_600_000);
       expect(claimantOn(opened.reference)).toBe(opener.personDid);
 
       // Opened from a number nobody had an account on: it names nobody, until the account that came to it moves on.

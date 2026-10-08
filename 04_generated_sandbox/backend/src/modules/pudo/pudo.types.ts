@@ -661,6 +661,13 @@ export interface ConsumerParcelView {
    */
   collectToken?: { code: string; qrPayload: string };
   /**
+   * There IS a code, and it is not shown until then: this account was moved to a new number without its PIN, and for
+   * the day in which that can be undone nobody on it reads what a shop will ask for. In place of `collectToken`.
+   */
+  codeHeldUntil?: string;
+  /** Receiver only: it was sent to a number this account has moved off. The sender does not know the new one. */
+  sentToOldNumber?: boolean;
+  /**
    * The closed-window facts, on the RECEIVER's twin only.
    *
    * A sender does not get these. They own the shipment, and it was delivered to the shelf they paid for;
@@ -676,8 +683,8 @@ export interface ConsumerParcelView {
   extensionsUsed?: number;
   /** What they already answered, so a screen does not ask a question they have answered. */
   receiverResponse?: ReceiverResponse;
-  /** Who they named to collect, and the code to pass on. Their own nomination, so their own code. */
-  collectProxy?: { name: string; code: string };
+  /** Who they named to collect, and the code to pass on. Their own nomination, so their own code — not shown while `codeHeldUntil`. */
+  collectProxy?: { name: string; code?: string };
   /** They gave up their claim. The parcel is still on a shelf; this says they are no longer coming. */
   relinquishedAt?: string;
 }

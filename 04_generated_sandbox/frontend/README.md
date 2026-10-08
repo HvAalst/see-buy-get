@@ -245,8 +245,8 @@ opened it) are ADDRESSED to a phone number and KEPT by an account (`modules/pudo
   would tell a shop, for any number it types, whether that number has an account. Do not add it to `Parcel` or
   `Freight`. An invitation carries it (`BusinessMember.forPersonDid`), and no view hands that out.
 - **Named when it is made**, if an account is certain on that number (`PersonService.settledAt`): the account
-  on it, or — for 24 hours after a move — the account it is still held for. NOT an account that moved onto the
-  number less than a day ago: the move can be undone, and the parcel must not go back with it.
+  on it, or — for a week after a move — the account it is still kept for (`keptFor`). NOT an account that moved
+  onto the number less than a day ago: the move can be undone, and the parcel must not go back with it.
 - **Named when an account moves off a number**: `PersonService.onNumberLeft` is asked BEFORE the account
   moves, and the parcel, order and business services each keep what was addressed to that number and to no
   account. A keeper that fails stops the move. An undo asks nobody.
@@ -256,6 +256,30 @@ opened it) are ADDRESSED to a phone number and KEPT by an account (`modules/pudo
   number later sees only what is sent to it from then on. The number change sheet says so
   (`account.settings.phoneParcels`), as does help (`account-recovery`).
 - Not changed: the number written on the parcel itself (what the sender typed, and what a shop would ring).
+
+### After a move: a day to undo it, a week the old number is kept
+Decided by the user on 2026-10-08, to strengthen whoever holds the account. Two clocks, both counted from the
+move (`NUMBER_UNDO_MS` = 24 h, `OLD_NUMBER_KEPT_MS` = 7 days), and neither waits for a sweep to be true.
+- **The old number stays the account's for seven days** (`Person.oldNumber`, `PersonService.keptFor`): what is
+  sent to it still arrives (the parcel says "sent to your old number", `sentToOldNumber`), and nobody else can
+  open an account on it. It does not sign in. "The user blocks their own old phone number in the account. We
+  remind them to do that for 7 days, after that we free the account."
+  - **Block**: Settings → "Block my old number", the PIN again (`POST sbg/account/phone/old/block`). Refused in
+    the first 24 hours: the old number is where the account would go back to. `me.oldNumber.canBlock` says when.
+  - **Reminders**: `AccountRecoveryService.remindOldNumbers`, on the hourly sweep. Once a day from 06:00 UTC, from
+    the day the move can no longer be undone; in the app every day, by email the day before it ends. No time
+    zone is kept for a person, so it is one hour for everybody.
+  - A second move lets an earlier old number go at once: an account has one.
+- **Moved without its PIN** (by its inbox, by staff): the collection codes are not shown for the 24 hours
+  (`PersonService.codesHeldUntil` → `ConsumerParcelView.codeHeldUntil` in place of `collectToken`; the parcel
+  screen says from when). The free collection window does not close, and "bring your code" is not sent, while
+  a code is hidden. Not for a move made with the holder's own PIN.
+- **Codes are replaced** (`ParcelService.rotateCodesOf`) when a move is undone, and when an account is recovered
+  without its PIN — exactly the codes its screens could show, the code of somebody it named included. The other
+  side of a parcel is told as for any reissue; a parcel's history says only that the code changed.
+- **What cannot be taken back waits for the undo day**: giving a parcel up and naming a collector are refused
+  for 24 hours after any move (`identity.controller.ts`, `refuseWhileUndoable`).
+- Not done: a parcel already past its free window still costs its holding fee during a hidden day.
 
 ## A national ID two people say is theirs
 A driver and a shop each register with a national ID number and the network keeps one of each, so somebody whose

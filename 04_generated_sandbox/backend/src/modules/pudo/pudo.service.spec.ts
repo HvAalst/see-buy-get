@@ -4199,8 +4199,8 @@ describe('PUDO Light', () => {
     accounts.rephone(fromHash, persons.requireByDid(person.personDid).phoneHash);
     expect(asked(receiver.did, order.freightId)).not.toBe('NOT_THE_CLAIMANT');
 
-    // A day later the old number is somebody else's — and the goods are not.
-    persons.settleMove(person.personDid, t0 + 25 * 3_600_000);
+    // A week later the old number is somebody else's — and the goods are not.
+    persons.settleMove(person.personDid, t0 + 8 * 24 * 3_600_000);
     if (heldKey) agents.releaseHeldPhone(heldKey, receiver.did);
     const newcomer = anAccount(phone, 3);
     expect(asked(newcomer.did, order.freightId)).toBe('NOT_THE_CLAIMANT');

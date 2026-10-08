@@ -18328,6 +18328,36 @@
         }
       }
     },
+    "/v1/sbg/account/phone/old/block": {
+      "post": {
+        "operationId": "Account.blockOldNumber",
+        "summary": "",
+        "description": "BLOCK MY OLD NUMBER — the user, 2026-10-08: \"the user blocks their own old phone number in the account.\"\n\nFor a week after a move, what is sent to the old number still reaches the account. When the people and the stores\nthat send to them have the new one, the holder lets the old number go here, rather than waiting for the week to\nend. The PIN again; keyed to the token, never to a number in the body. Refused while the move can still be undone:\nthe old number is where the account would go back to. Answers with the account as it now stands.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BlockOldNumberDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/identity/move-requests": {
       "post": {
         "operationId": "AccountMove.ask",
@@ -39079,6 +39109,18 @@
         "required": [
           "pin",
           "newPhone"
+        ]
+      },
+      "BlockOldNumberDto": {
+        "type": "object",
+        "properties": {
+          "pin": {
+            "type": "string",
+            "maxLength": 8
+          }
+        },
+        "required": [
+          "pin"
         ]
       },
       "AskMoveDto": {

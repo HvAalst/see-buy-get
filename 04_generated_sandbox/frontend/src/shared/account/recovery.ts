@@ -75,6 +75,22 @@ export function looksLikeEmail(email: string): boolean {
  * none — or that email to it is COMING BACK. That last one is a live fact about the account, not teaching: it is
  * said for as long as it is true, on the row somebody would press to put it right.
  */
+/**
+ * What Settings say of the number an account moved off, for as long as it is still the account's: until when a parcel
+ * sent to it arrives, and whether its holder can block it yet. A live fact, said for as long as it is true.
+ */
+export function oldNumberSays(
+  me: { oldNumber?: { until: string; canBlock: boolean } } | null | undefined,
+  t: (key: never, vars?: Record<string, string | number>) => string,
+  when: (iso: string) => string,
+): { title: string; detail: string; canBlock: boolean } | null {
+  const say = t as (key: string, vars?: Record<string, string | number>) => string;
+  const old = me?.oldNumber;
+  if (!old) return null;
+  const until = when(old.until);
+  return { title: say('account.settings.oldNumber.kept', { until }), detail: say(old.canBlock ? 'account.settings.oldNumber.blockWhenReady' : 'account.settings.oldNumber.notYet', { until }), canBlock: old.canBlock };
+}
+
 export function recoveryEmailSays(me: { email?: string; emailBounced?: boolean } | null | undefined, t: (key: never, vars?: Record<string, string | number>) => string): { sub: string; bounced: boolean } {
   const say = t as (key: string, vars?: Record<string, string | number>) => string;
   if (!me?.email) return { sub: say('account.settings.emailNone'), bounced: false };

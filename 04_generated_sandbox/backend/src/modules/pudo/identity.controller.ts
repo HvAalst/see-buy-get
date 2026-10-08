@@ -306,6 +306,7 @@ export class IdentityController {
   collectionResponse(@Param('id') id: string, @Body() dto: CollectionResponseDto, @Actor() actor: IntrospectionResult) {
     const person = this.persons.requireByDid(actor.did!);
     this.parcels.requireReceiver(id, person);
+    if (dto.choice === 'relinquish') this.refuseWhileUndoable(person.personDid, 'give a parcel up');
     const { outcome } = this.unclaimed.respond(id, dto.choice, dto.note);
     return { outcome, parcel: this.parcels.consumerParcel(id, person) };
   }
@@ -322,6 +323,7 @@ export class IdentityController {
   nominateCollector(@Param('id') id: string, @Body() dto: NominateCollectorDto, @Actor() actor: IntrospectionResult) {
     const person = this.persons.requireByDid(actor.did!);
     this.parcels.requireReceiver(id, person);
+    this.refuseWhileUndoable(person.personDid, 'name somebody to collect for you');
     return this.unclaimed.nominate(id, dto.name, dto.phone ? hashPhone(dto.phone) : undefined);
   }
 
@@ -338,6 +340,17 @@ export class IdentityController {
   rateStore(@Param('id') id: string, @Body() dto: RateMerchantDto, @Actor() actor: IntrospectionResult) {
     const person = this.persons.requireByDid(actor.did!);
     return this.merchants.rate({ parcelId: id, phoneHash: person.phoneHash, personDid: person.personDid, stars: dto.stars, tags: dto.tags });
+  }
+
+  /**
+   * WHAT CANNOT BE TAKEN BACK WAITS FOR THE DAY IN WHICH A NUMBER CHANGE CAN BE UNDONE. Giving a parcel up, and naming
+   * somebody else to collect it, are the two things on this surface that an undo could not put right — and for that
+   * day the account may be in the hands of whoever moved it. Refused outright, with the hour it ends, rather than
+   * held: the same way a second number change is refused in that day.
+   */
+  private refuseWhileUndoable(personDid: string, what: string): void {
+    const until = this.persons.undoOpenUntil(personDid);
+    if (until) throw new GlosError('INVALID_STATE', `Your account’s phone number was changed less than a day ago, and that can still be undone. You can ${what} once it no longer can.`, { until });
   }
 
   /** The receiver files a delivery dispute (reason + photo) → routed to the vendor / sender + control tower. */

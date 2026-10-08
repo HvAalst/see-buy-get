@@ -4,7 +4,7 @@ import { actingPerson } from '../../foundation/auth/acting';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { PersonService } from './person.service';
 import { HandleService } from '../../foundation/handle/handle.service';
-import { AccountProfileDto, AccountPinDto, AccountEmailDto, ChangeNumberDto } from './pudo.dto';
+import { AccountProfileDto, AccountPinDto, AccountEmailDto, BlockOldNumberDto, ChangeNumberDto } from './pudo.dto';
 import { AccountMoveService } from './account-move.service';
 import { IdDisputeService } from './id-dispute.service';
 import { AccountRecoveryService } from './account-recovery.service';
@@ -124,5 +124,18 @@ export class AccountController {
   changeNumber(@Body() dto: ChangeNumberDto, @Actor() actor: IntrospectionResult) {
     const person = this.recovery.changeNumber(actingPerson(actor), dto.pin, dto.newPhone);
     return { changed: true, undoUntil: person.phoneChange?.undoUntil, signedOutEverywhere: true };
+  }
+
+  /**
+   * BLOCK MY OLD NUMBER — the user, 2026-10-08: "the user blocks their own old phone number in the account."
+   *
+   * For a week after a move, what is sent to the old number still reaches the account. When the people and the stores
+   * that send to them have the new one, the holder lets the old number go here, rather than waiting for the week to
+   * end. The PIN again; keyed to the token, never to a number in the body. Refused while the move can still be undone:
+   * the old number is where the account would go back to. Answers with the account as it now stands.
+   */
+  @Post('phone/old/block')
+  blockOldNumber(@Body() dto: BlockOldNumberDto, @Actor() actor: IntrospectionResult) {
+    return this.persons.view(this.recovery.blockOldNumber(actingPerson(actor), dto.pin));
   }
 }

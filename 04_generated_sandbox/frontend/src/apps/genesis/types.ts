@@ -237,6 +237,10 @@ export interface ConsumerParcelView {
   timeline: Array<{ at: string; status: ParcelStatus | 'CREATED'; note?: string }>;
   /** The in-app collection token (S22) — only on the single-parcel detail, for the receiver, when ready. */
   collectToken?: { code: string; qrPayload: string };
+  /** There is a code and it is not shown until then: the account was moved to a new number without its PIN. */
+  codeHeldUntil?: string;
+  /** It was sent to a number this account has moved off. The sender does not know the new one. */
+  sentToOldNumber?: boolean;
   /** S23: the receiver's own photos + reason (present only on their own — received — view). */
   podPhotoRef?: string;
   disputePhotoRef?: string;
@@ -247,7 +251,7 @@ export interface ConsumerParcelView {
   holdingOwed?: number;
   extensionsUsed?: number;
   receiverResponse?: { choice: 'coming' | 'proxy' | 'relinquish' | 'not-mine'; at: string; note?: string };
-  collectProxy?: { name: string; code: string };
+  collectProxy?: { name: string; code?: string };
   relinquishedAt?: string;
 }
 

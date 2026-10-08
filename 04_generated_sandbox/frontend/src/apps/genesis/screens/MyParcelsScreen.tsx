@@ -10,6 +10,9 @@ import { MERCHANT_TAGS, POSITIVE_TAGS, type MerchantTag } from '../../../lib/sbg
 import type { ConsumerParcelView, FreightShipmentView, ParcelStatus } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
 
+/** The day and the hour a hidden code shows again, as somebody would say it: "Fri, 14:05". */
+const codeShowsAt = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+
 export interface MyParcelsScreenProps {
   state: SendState;
   actions: SendActions;
@@ -298,16 +301,31 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
           purpose was to be passed on. It belongs next to the receiver's own code because that is what it
           is: a second key to the same parcel, and the person holding it is the one who has to hand it
           over. The shop learns neither. */}
-      {parcel.relation === 'received' && (state.proxyCode ?? parcel.collectProxy) ? (
+      {parcel.relation === 'received' && (state.proxyCode ?? parcel.collectProxy)?.code ? (
         <>
           <CodeCard
             label={t('send.notice.proxyCode', { name: (state.proxyCode ?? parcel.collectProxy)!.name })}
-            code={(state.proxyCode ?? parcel.collectProxy)!.code}
+            code={(state.proxyCode ?? parcel.collectProxy)!.code!}
             sayLabel={t('send.parcels.hearCode')}
           />
           <p class="hint">{t('send.notice.proxyHint', { name: (state.proxyCode ?? parcel.collectProxy)!.name })}</p>
         </>
       ) : null}
+
+      {/* THE CODE IS THERE AND IS NOT SHOWN — the account was moved to a new number without its PIN, and for the day
+          in which that can be undone nobody on it reads what a shop will ask for. Said with the hour it shows again,
+          in the place the code would be: an empty space would look like a parcel with no way to collect it. */}
+      {parcel.codeHeldUntil ? (
+        <Note
+          tone="info"
+          icon="lock"
+          title={t('send.parcels.codeHeld.title', { when: codeShowsAt(parcel.codeHeldUntil) })}
+          detail={t(parcel.collectProxy ? 'send.parcels.codeHeld.detailNamed' : 'send.parcels.codeHeld.detail', { name: parcel.collectProxy?.name ?? '' })}
+        />
+      ) : null}
+
+      {/* It came by the number they moved off. The sender does not know there is a new one, and only they can say. */}
+      {parcel.relation === 'received' && parcel.sentToOldNumber ? <Note tone="info" icon="info" title={t('send.parcels.oldNumber.title')} detail={t('send.parcels.oldNumber.detail')} /> : null}
 
       {/* S22: the in-app release token — the receiver shows this QR (or reads the code) at the shop; the
           PUDO scans it. Delivered in the app, never by SMS. On a parcel you SENT it is the same code seen

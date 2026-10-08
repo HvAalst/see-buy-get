@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SbgError } from '../../lib/sbg';
-import { asksForEmail, asksForNationalId, looksLikeEmail, recoveryEmailSays } from './recovery';
+import { asksForEmail, asksForNationalId, looksLikeEmail, oldNumberSays, recoveryEmailSays } from './recovery';
 
 const refusal = (code: string, field?: string): SbgError => ({ code, status: 400, title: '', detail: '', retryable: false, ...(field ? { params: { field } } : {}) });
 
@@ -40,5 +40,27 @@ describe('the recovery email row in Settings', () => {
     expect(recoveryEmailSays({ email: 'a…@kilima.co.ke', emailBounced: true }, say)).toEqual({ sub: 'account.settings.emailBouncedSub:a…@kilima.co.ke', bounced: true });
     // A flag with no address behind it warns of nothing: there is nothing to put right.
     expect(recoveryEmailSays({ emailBounced: true }, say)).toEqual({ sub: 'account.settings.emailNone', bounced: false });
+  });
+});
+
+describe('the number an account moved off, in Settings', () => {
+  const say = ((key: string, vars?: Record<string, string | number>) => `${key}${vars ? ':' + Object.values(vars).join(',') : ''}`) as never;
+  const when = (iso: string) => `on ${iso.slice(0, 10)}`;
+  it('says nothing when there is none', () => {
+    expect(oldNumberSays({}, say, when)).toBeNull();
+    expect(oldNumberSays(null, say, when)).toBeNull();
+  });
+  it('says until when a parcel sent to it still arrives — and offers to block it only once the move can no longer be undone', () => {
+    const until = '2026-10-15T10:00:00.000Z';
+    expect(oldNumberSays({ oldNumber: { until, canBlock: false } }, say, when)).toEqual({
+      title: 'account.settings.oldNumber.kept:on 2026-10-15',
+      detail: 'account.settings.oldNumber.notYet:on 2026-10-15',
+      canBlock: false,
+    });
+    expect(oldNumberSays({ oldNumber: { until, canBlock: true } }, say, when)).toEqual({
+      title: 'account.settings.oldNumber.kept:on 2026-10-15',
+      detail: 'account.settings.oldNumber.blockWhenReady:on 2026-10-15',
+      canBlock: true,
+    });
   });
 });

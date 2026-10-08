@@ -9,10 +9,10 @@ import { EmailStep } from './EmailStep';
 import { IdDisputeCase } from './IdDisputeCase';
 import { settingsIdSays } from './idDispute';
 import { pinChangeBlocker } from './password';
-import { recoveryEmailSays } from './recovery';
+import { oldNumberSays, recoveryEmailSays } from './recovery';
 import type { AccountApi } from './useAccount';
 
-type View = 'list' | 'pin' | 'email' | 'phone' | 'phone-done' | 'id';
+type View = 'list' | 'pin' | 'email' | 'phone' | 'phone-done' | 'old-number' | 'id';
 
 export interface SettingsSheetProps {
   open: boolean;
@@ -55,6 +55,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
   const [stopping, setStopping] = useState(false);
   const [stopped, setStopped] = useState(false);
   const [stopError, setStopError] = useState<SbgError | null>(null);
+  const [blocked, setBlocked] = useState(false);
   // Kept from the moment it is opened: once it is settled the account stops saying it, and the sheet must not go blank under the reader.
   const [idRef, setIdRef] = useState<string | null>(null);
   useEffect(() => {
@@ -63,6 +64,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
       setSaved(false);
       setStopped(false);
       setStopError(null);
+      setBlocked(false);
     }
   }, [open]);
   const stopMove = async () => {
@@ -76,8 +78,9 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
   const me = api.account;
   // Once the number has moved the token is dead: every way out of the sheet is the sign-in screen.
   const close = view === 'phone-done' ? () => { onClose(); onSignOut(); } : onClose;
-  const title = view === 'id' ? t('account.settings.id.viewTitle') : view === 'pin' ? t('account.menu.pin') : view === 'email' ? t('account.settings.email') : view === 'phone' || view === 'phone-done' ? t('account.settings.phone') : t('account.settings.title');
+  const title = view === 'old-number' ? t('account.settings.oldNumber.title') : view === 'id' ? t('account.settings.id.viewTitle') : view === 'pin' ? t('account.menu.pin') : view === 'email' ? t('account.settings.email') : view === 'phone' || view === 'phone-done' ? t('account.settings.phone') : t('account.settings.title');
   const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  const old = oldNumberSays(me, t as never, when);
 
   return (
     <Sheet open={open} onClose={close} title={title}>
@@ -132,6 +135,20 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
             {me?.hasPin ? <Row icon="phone" label={t('account.settings.phone')} sub={t('account.settings.phoneSub')} onClick={() => setView('phone')} /> : null}
           </div>
           {me?.numberChange ? <Note tone="info" icon="info" title={t('account.settings.changed', { when: when(me.numberChange.at), until: when(me.numberChange.undoUntil) })} /> : null}
+          {/* THE NUMBER THEY MOVED OFF IS STILL THEIRS FOR A WEEK — the user, 2026-10-08: "the user blocks their own old
+              phone number in the account". Said for as long as it is true; the button comes when the move can no longer
+              be undone, because until then the old number is where the account would go back to. */}
+          {old ? (
+            <>
+              <Note tone="info" icon="info" title={old.title} detail={old.detail} />
+              {old.canBlock ? (
+                <Button variant="outline" chevron={false} onClick={() => setView('old-number')}>
+                  {t('account.settings.oldNumber.block')}
+                </Button>
+              ) : null}
+            </>
+          ) : null}
+          {blocked ? <Note tone="ok" icon="check" title={t('account.settings.oldNumber.blockedTitle')} detail={t('account.settings.oldNumber.blocked')} /> : null}
         </>
       ) : null}
 
@@ -149,6 +166,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
       ) : null}
       {view === 'email' ? <EmailForm api={api} onDone={() => { setSaved(true); setView('list'); }} /> : null}
       {view === 'phone' ? <PhoneForm api={api} onDone={() => setView('phone-done')} /> : null}
+      {view === 'old-number' ? <OldNumberForm api={api} onDone={() => { setBlocked(true); setView('list'); }} /> : null}
       {view === 'id' && idRef ? <IdDisputeCase api={api.idDispute} reference={idRef} ownId={api.ownId} onChanged={() => void api.reload()} /> : null}
       {view === 'phone-done' ? (
         <>
@@ -268,6 +286,40 @@ function EmailForm({ api, onDone }: { api: AccountApi; onDone: () => void }) {
  * Moving the account to a new number: a code to the NEW number proves the person holds it, the PIN proves they
  * are who is signed in. What it costs is said first — signed out everywhere — and so is the way back.
  */
+/**
+ * BLOCK MY OLD NUMBER. What it gives up is said before the PIN is asked: from that moment a parcel sent to the old
+ * number is no longer theirs. The PIN, as for everything else here — a phone left unlocked is not its owner.
+ */
+function OldNumberForm({ api, onDone }: { api: AccountApi; onDone: () => void }) {
+  const t = useT();
+  const [pin, setPin] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<SbgError | null>(null);
+
+  const block = async () => {
+    setBusy(true);
+    setError(null);
+    const r = await api.blockOldNumber(pin);
+    setBusy(false);
+    if (r.error) return setError(r.error);
+    onDone();
+  };
+
+  return (
+    <>
+      <p class="t-body">{t('account.settings.oldNumber.blockBody')}</p>
+      <div class="field">
+        <span class="field__label">{t('account.settings.pinToConfirm')}</span>
+        <CodeBoxes id="acct-old-pin" label={t('account.settings.pinToConfirm')} length={4} value={pin} onInput={(v) => { setPin(v); setError(null); }} disabled={busy} mask />
+      </div>
+      <Refused error={error} />
+      <Button chevron={false} busy={busy} disabled={pin.length !== 4} onClick={() => void block()}>
+        {t('account.settings.oldNumber.blockSave')}
+      </Button>
+    </>
+  );
+}
+
 function PhoneForm({ api, onDone }: { api: AccountApi; onDone: () => void }) {
   const t = useT();
   const [phone, setPhone] = useState('');

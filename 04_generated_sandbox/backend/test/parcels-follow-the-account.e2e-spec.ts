@@ -115,11 +115,33 @@ describe('a parcel is kept by the account, over the wire', () => {
     expect((await myParcels(token)).freights.map((x) => x.freightId)).toEqual([order.freightId]);
     expect((await http().get(`/v1/sbg/identity/parcels/${parcelId}`).set(bearer(token)).expect(200)).body.collectToken.code).toBe(code);
 
-    // And everything a receiver may DO about a parcel is still theirs to do — each of these routes has to hand over
-    // the account that is signed in. A refusal for the parcel's state is an answer about THEIR parcel; a 404 is not.
     const mine = (path: string) => http().post(`/v1/sbg/identity/parcels/${parcelId}/${path}`).set(bearer(token));
     const stored = app.get(ParcelService).get(parcelId);
     const was = { status: stored.status, vendorId: stored.vendorId };
+    const me = async () => (await http().get('/v1/sbg/account/me').set(bearer(token)).expect(200)).body as { oldNumber?: { until: string; canBlock: boolean } };
+    const block = (pin: string) => http().post('/v1/sbg/account/phone/old/block').set(bearer(token)).send({ pin });
+
+    // THE DAY IN WHICH THE MOVE CAN BE UNDONE. The old number is still theirs, and not theirs to block yet; and the two
+    // things that could not be put right by an undo — naming somebody else to collect, giving the parcel up — wait.
+    expect(await me()).toMatchObject({ oldNumber: { canBlock: false } });
+    expect((await block('0000').expect(403)).body.code).toBe('PIN_WRONG');
+    expect((await block(PIN)).body).toMatchObject({ code: 'INVALID_STATE', message: expect.stringContaining('can still be undone') });
+    stored.status = 'Ready_For_Pickup';
+    for (const refused of [await mine('nominate-collector').send({ name: 'A neighbour' }), await mine('collection-response').send({ choice: 'relinquish' })]) {
+      expect(refused.body).toMatchObject({ code: 'INVALID_STATE', message: expect.stringContaining('changed less than a day ago') });
+    }
+    expect(stored.collectProxy).toBeUndefined();
+    expect(stored.relinquishedAt).toBeUndefined();
+    // Only what cannot be taken back waits. Saying "I am coming" is theirs to say on any day.
+    expect((await mine('collection-response').send({ choice: 'coming' }).expect(201)).body.parcel.parcelId).toBe(parcelId);
+    Object.assign(stored, was);
+
+    // The day passes. Nothing is let go: the old number is theirs for the rest of its week, and now theirs to block.
+    expect(app.get(AccountRecoveryService).settle(Date.now() + NUMBER_UNDO_MS + 1000)).toBe(0);
+    expect(await me()).toMatchObject({ oldNumber: { canBlock: true } });
+
+    // And everything a receiver may DO about a parcel is theirs to do — each of these routes has to hand over the
+    // account that is signed in. A refusal for the parcel's state is an answer about THEIR parcel; a 404 is not.
     // Still at the first shop: a dispute is refused because nothing was delivered — not because it is not theirs.
     expect((await mine('dispute').send({ reason: 'It is broken', photoRef: 'x.jpg' })).body.code).toBe('INVALID_STATE');
     // On the shelf at the collection shop: they may name somebody to collect it, and answer for it.
@@ -134,12 +156,27 @@ describe('a parcel is kept by the account, over the wire', () => {
     expect((await mine('rate-store').send({ stars: 5 }).expect(201)).body.rating.stars).toBe(5);
     Object.assign(stored, was);
 
-    // A day passes: the old number is free, and somebody else signs up with it.
-    expect(app.get(AccountRecoveryService).settle(Date.now() + NUMBER_UNDO_MS + 1000)).toBeGreaterThanOrEqual(1);
+    // STILL IN ITS WEEK: a parcel sent to the old number reaches the account and says where it was sent; and nobody
+    // else can open an account on that number.
+    const late = `PFA-${digits()}`;
+    await http().post('/v1/sbg/parcels/accept').set(operator).send({ agentDid: origin, parcelId: late, size: 'M', destZone: 'SouthTown', destPudoDid: dest, senderMobile: `+2547${digits()}5`, receiverMobile: OLD, dropoffPhotoRef: 'drop.jpg' }).expect(201);
+    expect((await myParcels(token)).received.map((p) => p.parcelId).sort()).toEqual([parcelId, late].sort());
+    expect((await http().get(`/v1/sbg/identity/parcels/${late}`).set(bearer(token)).expect(200)).body.sentToOldNumber).toBe(true);
+    await confirm(OLD);
+    const tryEmail = `pfa${digits()}@example.com`;
+    const tryCode = (await http().post('/v1/sbg/identity/email/request').send({ email: tryEmail }).expect(201)).body.code as string;
+    const refusedSignUp = await http().post('/v1/sbg/identity/enroll').send({ phone: OLD, pin: PIN, email: tryEmail, emailCode: tryCode });
+    expect(refusedSignUp.body).toMatchObject({ code: 'INVALID_STATE', message: expect.stringContaining('less than 7 days ago') });
+
+    // THE HOLDER BLOCKS THEIR OLD NUMBER: it is free at once, and somebody else signs up with it.
+    expect((await block(PIN).expect(201)).body.oldNumber).toBeUndefined();
+    expect((await me()).oldNumber).toBeUndefined();
+    expect((await block(PIN)).body.code).toBe('INVALID_STATE');
     const newcomer = await signUp(OLD);
     expect(await myParcels(newcomer)).toMatchObject({ sent: [], received: [], freights: [] });
     // Not by its id either, and not told that it exists.
     await http().get(`/v1/sbg/identity/parcels/${parcelId}`).set(bearer(newcomer)).expect(404);
+    await http().get(`/v1/sbg/identity/parcels/${late}`).set(bearer(newcomer)).expect(404);
     await http().post(`/v1/sbg/identity/parcels/${parcelId}/nominate-collector`).set(bearer(newcomer)).send({ name: 'A friend' }).expect(404);
     await http().post(`/v1/sbg/identity/parcels/${parcelId}/dispute`).set(bearer(newcomer)).send({ reason: 'It is broken', photoRef: 'x.jpg' }).expect(404);
 
@@ -147,6 +184,32 @@ describe('a parcel is kept by the account, over the wire', () => {
     const next = `PFA-${digits()}`;
     await http().post('/v1/sbg/parcels/accept').set(operator).send({ agentDid: origin, parcelId: next, size: 'M', destZone: 'SouthTown', destPudoDid: dest, senderMobile: `+2547${digits()}4`, receiverMobile: OLD, dropoffPhotoRef: 'drop.jpg' }).expect(201);
     expect((await myParcels(newcomer)).received.map((p) => p.parcelId)).toEqual([next]);
-    expect((await myParcels(token)).received.map((p) => p.parcelId)).toEqual([parcelId]);
+    expect((await myParcels(token)).received.map((p) => p.parcelId).sort()).toEqual([parcelId, late].sort());
+  });
+
+  it('an account moved without its PIN reads its parcel with no code on it, and is told from when it shows', async () => {
+    const OLD = `+2547${digits()}6`;
+    const NEW = `+2541${digits()}7`;
+    const origin = await aShop('North PFB', 'NorthTown');
+    const dest = await aShop('South PFB', 'SouthTown');
+    let token = await signUp(OLD);
+    const parcelId = `PFB-${digits()}`;
+    await http().post('/v1/sbg/parcels/accept').set(operator).send({ agentDid: origin, parcelId, size: 'M', destZone: 'SouthTown', destPudoDid: dest, senderMobile: `+2547${digits()}8`, receiverMobile: OLD, dropoffPhotoRef: 'drop.jpg' }).expect(201);
+    const code = (await http().get(`/v1/sbg/identity/parcels/${parcelId}`).set(bearer(token)).expect(200)).body.collectToken.code as string;
+
+    // Two members of staff move it (their checking is another suite's to prove; the move is the one they end in).
+    const moved = app.get(AccountRecoveryService).moveByStaff(await idOf(token), NEW);
+    token = (await http().post('/v1/sbg/identity/login').send({ phone: NEW, pin: PIN }).expect(201)).body.token.access_token;
+
+    const seen = (await http().get(`/v1/sbg/identity/parcels/${parcelId}`).set(bearer(token)).expect(200)).body as { parcelId: string; collectToken?: unknown; codeHeldUntil?: string };
+    expect(seen.parcelId).toBe(parcelId);
+    expect(seen.collectToken).toBeUndefined();
+    expect(seen.codeHeldUntil).toBe(moved.phoneChange!.undoUntil);
+    // Neither the code it had — which opens nothing now — nor the one that replaced it is anywhere in what they are sent.
+    const everything = JSON.stringify([seen, await myParcels(token)]);
+    expect(everything).not.toContain(code);
+    const now = app.get(ParcelService).get(parcelId).otp as string;
+    expect(now).not.toBe(code);
+    expect(everything).not.toContain(`"${now}"`);
   });
 });
