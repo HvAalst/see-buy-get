@@ -358,6 +358,18 @@ export const enTower = {
   'tower.contact.f.addressPh': 'Off Mombasa Road, past the weighbridge',
   'tower.contact.f.hours': 'When somebody is there',
   'tower.contact.f.hoursPh': '6am–6pm, closed Sunday',
+  'tower.contact.visit.title': 'When you receive visitors',
+  'tower.contact.visit.hint':
+    'For somebody who has to come to you in person. They are offered the days you tick here and no other, and are sent to the address above, between these hours. Until you tick a day, they may choose any day and are told to ask first.',
+  'tower.contact.visit.from': 'From',
+  'tower.contact.visit.to': 'Until',
+  'tower.contact.day.mon': 'Monday',
+  'tower.contact.day.tue': 'Tuesday',
+  'tower.contact.day.wed': 'Wednesday',
+  'tower.contact.day.thu': 'Thursday',
+  'tower.contact.day.fri': 'Friday',
+  'tower.contact.day.sat': 'Saturday',
+  'tower.contact.day.sun': 'Sunday',
   'tower.depots.noContact': 'No contact details yet.',
   /* Y4 — a yard that wants to be findable, and what is on its way to it. What is deliberately NOT here is
      the layout: planning needs the yard's geometry and the rules binding a slot to a box (a powered row
@@ -2290,9 +2302,14 @@ export const enTowerBusinesses = {
   'tower.ids.fact.contestBy': 'May be contested until',
   'tower.ids.fact.appointment': 'Appointment',
   'tower.ids.fact.appointmentBy': '{date}, made by {who}',
-  'tower.ids.fact.appointmentAt': 'Their tickets send them to {where}.',
-  'tower.ids.fact.appointmentNoPlace':
-    'No address is written for this country’s company, so their tickets say to ask staff where to go. Write it under Company record, and tell both people where to come.',
+  'tower.ids.fact.appointmentOffDay': 'The company no longer receives visitors on that day. Both tickets say so, and the person who made the appointment can change the day.',
+  'tower.ids.fact.place': 'Where people are sent',
+  'tower.ids.place.noAddress': 'No address written',
+  'tower.ids.place.visiting': 'Visitors: {when}',
+  'tower.ids.place.hours': '{from} to {to}',
+  'tower.ids.place.noDays': 'No visiting days set, so a person may choose any day and is told to ask first',
+  'tower.ids.place.theirs':
+    'The address and the visiting days are the country’s own company’s to set: signed in to this console as that company, under Settings, How to reach you. We do not type them here. Until it has, a ticket says to ask staff.',
   'tower.ids.fact.final': 'In person',
   'tower.ids.fact.who': 'Who',
   'tower.ids.fact.since': 'Account since',

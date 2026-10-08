@@ -1344,6 +1344,40 @@
   letter-spacing: 0.06em;
 }
 
+/* ------------------------------------------------- tap one of a few -- */
+
+/*
+ * A ROW OF THINGS TO CHOOSE ONE OF — a day, a kind, a way. For the sheets every app opens (Trouble signing in,
+ * Settings): `.chips` is styled in a few apps' own stylesheets and not here, so a shared sheet that used it had
+ * buttons with no padding and no gap wherever those were absent. Each is a full tap target.
+ */
+.tapset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tapset__btn {
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1.5px solid var(--bd);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--tx);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.tapset__btn--on {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.tapset__btn:disabled {
+  opacity: 0.55;
+}
+
 /* ------------------------------------------- a dispute over a national ID -- */
 
 /* One person's side of it (shared/account/IdDisputeCase.tsx): the same in every app, so its styles live here. */

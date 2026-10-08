@@ -86,6 +86,8 @@ describe('selectablePoints', () => {
     ];
     expect(selectablePoints(pts, 'x').map((p) => p.shopName)).toEqual(['Apex', 'Bees', 'Zed']);
     expect(selectablePoints(null)).toEqual([]);
+    // A shop that takes no new parcels is not offered at all — open or not. One that does not say is offered as before.
+    expect(selectablePoints([...pts, point({ did: 'h', shopName: 'Held', takesNew: false }), point({ did: 'n', shopName: 'Named', takesNew: true })], 'x').map((p) => p.shopName)).toEqual(['Apex', 'Bees', 'Named', 'Zed']);
   });
 
   it('with a reference point (typed place words), open shops sort nearest-first with a distance label', () => {

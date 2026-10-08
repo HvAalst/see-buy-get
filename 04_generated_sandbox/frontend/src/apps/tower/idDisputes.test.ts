@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { DISPUTE_LABEL, DISPUTE_TONE, cardWords, decidedWords, disputeNotes, disputeStep, disputeSub, disputesWaiting, finalWords, mayPropose, photoRefs, waitsOnThem, waitsOnUs, type DisputeRow, type DisputeState } from './idDisputes';
+import { DISPUTE_LABEL, DISPUTE_TONE, cardWords, decidedWords, disputeNotes, disputeStep, disputeSub, disputesWaiting, finalWords, mayPropose, photoRefs, placeWords, waitsOnThem, waitsOnUs, type DisputeRow, type DisputeState } from './idDisputes';
 
 const when = (iso: string) => `[${iso.slice(0, 16)}]`;
 const NOW = Date.parse('2026-10-15T10:00:00.000Z');
@@ -123,6 +123,19 @@ describe('ID disputes, as the console says them', () => {
       // Nothing older to compare with: said, because it changes how much the photographs have to carry.
       expect(disputeNotes(row({ holder: { sentAt: 'x' } }), t).slice(-1)[0].text).toContain('nothing older to compare');
     });
+  });
+
+  it('says where people are sent and when, in the company’s own words — and says what it has not written, never a blank', () => {
+    const full = placeWords(row({ place: { company: 'SeeBuyGet Kenya', address: 'Mombasa Road, gate 4', visitDays: ['fri', 'mon'], visitFrom: '09:00', visitTo: '16:00' } }), t);
+    expect(full).toEqual({ where: 'SeeBuyGet Kenya, Mombasa Road, gate 4', visiting: 'Visitors: Monday, Friday · 09:00 to 16:00', missing: false });
+    const nothing = placeWords(row(), t);
+    expect(nothing).toMatchObject({ where: 'No address written', missing: true });
+    expect(nothing.visiting).toContain('may choose any day');
+    // Either one missing is still something for the company to put right.
+    expect(placeWords(row({ place: { company: 'SeeBuyGet Kenya', address: 'Mombasa Road, gate 4' } }), t)).toMatchObject({ where: 'SeeBuyGet Kenya, Mombasa Road, gate 4', missing: true });
+    expect(placeWords(row({ place: { company: 'SeeBuyGet Kenya', visitDays: ['mon'] } }), t)).toMatchObject({ where: 'No address written', visiting: 'Visitors: Monday', missing: true });
+    // And whose it is to put right is said in so many words: the company's, in its own Settings.
+    expect(t('tower.ids.place.theirs')).toContain('under Settings, How to reach you');
   });
 
   it('says how it was decided — for whom, by whom, and what it did to the holder — and whether the decision stood in person', () => {

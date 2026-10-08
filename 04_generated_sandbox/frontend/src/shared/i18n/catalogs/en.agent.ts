@@ -108,9 +108,9 @@ export const enAgent = {
   // logic.ts sentence builders (each takes `t` and returns the finished string).
   'agent.logic.gateLockedTitle': 'Account locked',
   'agent.logic.gateLockedDetail': 'Top up your wallet to start accepting parcels again.',
-  'agent.logic.gateIdHeldTitle': 'Nothing new can be taken in for now',
+  'agent.logic.gateIdHeldTitle': 'No new parcel can be started here for now',
   'agent.logic.gateIdHeldDetail':
-    'The national ID this shop registered with went to somebody else, after a check by SeeBuyGet staff. What is already on your shelf is collected as usual. Open Settings and put the number of your own ID card on record to take parcels in again.',
+    'The national ID this shop registered with went to somebody else, after a check by SeeBuyGet staff. Nobody can choose your shop for a new parcel, and a walk-up cannot be taken in. Parcels already booked to be handed in here, and everything on your shelf, go on as usual. Open Settings and put the number of your own ID card on record to start new ones again.',
   'agent.logic.gateLowTitle': 'Wallet is low',
   'agent.logic.gateLowShortfall': 'Top up at least {amount} to keep accepting parcels.',
   'agent.logic.gateLowDetail': 'Top up to keep accepting parcels.',

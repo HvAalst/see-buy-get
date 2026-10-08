@@ -28300,6 +28300,22 @@
             "type": "string",
             "maxLength": 120
           },
+          "visitDays": {
+            "description": "The days visitors are received: `mon` … `sun`. An empty list clears them.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "visitFrom": {
+            "type": "string",
+            "description": "From when until when on those days, `HH:MM`. An empty string clears one.",
+            "maxLength": 5
+          },
+          "visitTo": {
+            "type": "string",
+            "maxLength": 5
+          },
           "entityId": {
             "type": "string"
           },
@@ -28335,6 +28351,19 @@
           "hours": {
             "type": "string",
             "description": "When somebody is there. The second question a haulier asks, after where."
+          },
+          "visitDays": {
+            "description": "The days visitors are received — `mon` … `sun` — and from when until when (`HH:MM`). Theirs to set.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "visitFrom": {
+            "type": "string"
+          },
+          "visitTo": {
+            "type": "string"
           },
           "saidAt": {
             "type": "string"
@@ -39426,6 +39455,20 @@
           "hours": {
             "type": "string"
           },
+          "visitDays": {
+            "description": "The days it receives visitors (`mon` … `sun`), set by the company itself. Absent: it has set none.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "visitFrom": {
+            "type": "string",
+            "description": "From when until when on those days, `HH:MM`."
+          },
+          "visitTo": {
+            "type": "string"
+          },
           "company": {
             "type": "string"
           }
@@ -39480,6 +39523,10 @@
                 "second_document"
               ]
             }
+          },
+          "offDay": {
+            "type": "boolean",
+            "description": "The company has since changed its visiting days, and this day is no longer one of them."
           },
           "place": {
             "$ref": "#/components/schemas/DisputePlace"
@@ -39838,9 +39885,17 @@
               "holder"
             ]
           },
-          "appointmentPlace": {
-            "type": "string",
-            "description": "Where their tickets send them. Absent: the country's company has written no address, and the ticket says to ask."
+          "appointmentOffDay": {
+            "type": "boolean",
+            "description": "The appointment is on a day the country's company no longer receives visitors."
+          },
+          "place": {
+            "description": "Where the two people are sent, and when visitors are received there — the country's company's own entry, set\nin its own admin. Absent: it has written nothing, and a ticket says to ask.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DisputePlace"
+              }
+            ]
           },
           "finalTo": {
             "type": "string",

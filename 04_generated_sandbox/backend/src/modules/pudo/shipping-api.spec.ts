@@ -189,6 +189,36 @@ describe('the public shipping quote', () => {
     expect(() => shipping.quote({ from: { pointId: from.did }, to: { country: 'KE', area: 'Kisumu' }, size: 'M' })).toThrow(/no collection point in Kisumu/);
   });
 
+  it('offers no shop that is held over its national ID — by id, by area or by address — and offers it again once the hold is over', () => {
+    // The user, 2026-10-08: "the pause should be at mint indeed." A buyer is never sent to a shop that takes nothing new.
+    const from = shop('Nairobi CBD', 'Nairobi', NAIROBI);
+    const to = shop('Kisumu Duka', 'Kisumu', KISUMU);
+    corridors.addCorridor({ name: 'Nairobi–Kisumu', originZone: 'Nairobi', destZone: 'Kisumu' });
+    const ask = (where: Record<string, string>) => shipping.quote({ from: { pointId: from.did }, to: where as never, size: 'M' });
+    const found = (where: Record<string, string>) => {
+      try {
+        return ask(where).to.pointId;
+      } catch {
+        return 'refused';
+      }
+    };
+    expect(found({ pointId: to.did })).toBe(to.did);
+    expect(found({ country: 'KE', area: 'Kisumu' })).toBe(to.did);
+    expect(found({ address: 'Kisumu', country: 'KE' })).toBe(to.did);
+    expect(shipping.areas().find((c) => c.country === 'KE')!.areas).toContain('Kisumu');
+
+    agents.holdForId(to.did, { reference: 'ID-TEST-HELD', at: new Date().toISOString() });
+    // Told which shop, and to choose another — never why.
+    expect(() => ask({ pointId: to.did })).toThrow(/^Kisumu Duka is not taking new parcels for now — choose another collection point$/);
+    expect(() => ask({ country: 'KE', area: 'Kisumu' })).toThrow(/no collection point in Kisumu/);
+    expect(found({ address: 'Kisumu', country: 'KE' })).not.toBe(to.did);
+    expect(shipping.areas().find((c) => c.country === 'KE')!.areas).not.toContain('Kisumu');
+
+    agents.takeNationalId(to.did, '99887766');
+    expect(found({ pointId: to.did })).toBe(to.did);
+    expect(found({ country: 'KE', area: 'Kisumu' })).toBe(to.did);
+  });
+
   describe('an address in the buyer’s own words', () => {
     it('places what they typed and finds the nearest point, saying how it read them', () => {
       const { to } = domesticPair();
@@ -514,6 +544,14 @@ describe('the public shipping quote', () => {
       agents.refreshLock(to.did);
       expect(agents.get(to.did).status).toBe('LOCKED');
       expect(() => shipping.mint({ quoteId: second.quoteId, buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller)).toThrow(/no longer taking parcels/);
+    });
+
+    it('will not mint a held price into a shop that has since been held over its ID', () => {
+      const { to } = domesticPair();
+      const { caller } = merchant();
+      const quoted = shipping.quote({ from: { country: 'KE', area: 'Nairobi' }, to: { pointId: to.did }, size: 'M' }, caller);
+      agents.holdForId(to.did, { reference: 'ID-TEST-HELD', at: new Date().toISOString() });
+      expect(() => shipping.mint({ quoteId: quoted.quoteId, buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller)).toThrow(/no longer taking parcels/);
     });
 
     it('will not be told two different things about one shipment', () => {

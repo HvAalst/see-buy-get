@@ -62,7 +62,7 @@ import { MailService } from '../../foundation/mail/mail.service';
 import { OutboxMailSender } from '../../foundation/mail/outbox-mail.sender';
 import { MAIL_SENDER } from '../../foundation/mail/mail.types';
 
-import { ContactCardService } from './contact-card.service';
+import { ContactCardService, weekdayOf } from './contact-card.service';
 import { IdDisputeService, normalizeIdReference } from './id-dispute.service';
 import { APPOINTMENT_CHANGES, APPOINTMENT_WITHIN_DAYS, DISPUTE_ANSWER_DAYS, DISPUTE_CONTEST_DAYS, DISPUTE_OPENS_PER_DAY, type DisputePhoto, type IdRegister } from './id-dispute.types';
 import { IDENTITY_CHECK_DAYS } from './media.types';
@@ -90,6 +90,7 @@ describe('two people say one national ID is theirs', () => {
   let media: MediaService;
   let gate: WalletGateService;
   let parcels: ParcelService;
+  let routing: RoutingService;
   let entities: EntityService;
   let contacts: ContactCardService;
 
@@ -127,6 +128,7 @@ describe('two people say one national ID is theirs', () => {
     media = moduleRef.get(MediaService);
     gate = moduleRef.get(WalletGateService);
     parcels = moduleRef.get(ParcelService);
+    routing = moduleRef.get(RoutingService);
     entities = moduleRef.get(EntityService);
     contacts = moduleRef.get(ContactCardService);
     recovery.onModuleInit();
@@ -620,7 +622,7 @@ describe('two people say one national ID is theirs', () => {
       expect(disputes.status(o.holderReference, o.at).held).toBeUndefined();
     });
 
-    it('a shop takes nothing new in at the counter — said as what it is, not as an empty float — until then', () => {
+    it('a shop starts no new parcel and is named by none — said as what it is, not as an empty float — until then', () => {
       const s = aShop();
       agents.submitKyc(s.did, { idCopyRef: 'med_idcopy', tradingLicenceRef: 'med_licence', shopPhotoRefs: ['med_front'] });
       agents.decideKyc(s.did, true);
@@ -635,24 +637,63 @@ describe('two people say one national ID is theirs', () => {
       expect(() => agents.assertMayTakeIn(s.did)).not.toThrow();
       // The counter's own doors, asked BEFORE and AFTER: a walk-up, and a parcel booked to be handed in here.
       const walkUp = () => failure(() => parcels.accept({ parcelId: 'PUD-IDH-' + (seq += 1), agentDid: s.did, destZone: 'Kisumu', size: 'M', paymentMode: 'credit', senderMobile: '+254700111', receiverMobile: '+254700222', dropoffPhotoRef: 'p.jpg' } as never));
+      const mint = (dids: Array<string | undefined>) => failure(() => (parcels as unknown as { requireSellable(q: unknown, dids: Array<string | undefined>): void }).requireSellable({ nodes: [] }, dids));
+      const refusal = /^FORBIDDEN: Duka \d+ is not taking new parcels for now\. Choose another shop\.$/;
+      expect(mint([s.did, undefined])).not.toMatch(refusal);
       const booked = () => failure(() => (parcels as unknown as { admitBooked(p: unknown, did: string): void }).admitBooked({ originAgentDid: s.did }, s.did));
-      expect(walkUp()).not.toMatch(/Nothing new can be taken in/);
-      expect(booked()).not.toMatch(/Nothing new can be taken in/);
+      expect(walkUp()).not.toMatch(/No new parcel can be started/);
+      expect(booked()).not.toMatch(/No new parcel can be started/);
+      const money = gate.canTransact(s.did).ok;
       expect(disputes.approve(o.disputeId, BRIAN, late).holderEffect).toBe('held');
-      expect(walkUp()).toMatch(/^FORBIDDEN: Nothing new can be taken in at this shop for now/);
-      expect(booked()).toMatch(/^FORBIDDEN: Nothing new can be taken in at this shop for now/);
+      expect(walkUp()).toMatch(/^FORBIDDEN: No new parcel can be started at this shop for now/);
+      // What was booked to be handed in here BEFORE the hold is still taken in: the hold is where a parcel is made.
+      expect(booked()).not.toMatch(/No new parcel can be started|is not taking new parcels/);
+      // AT MINT no new parcel names it, as the place to hand in or the place to collect. The sender is told which
+      // shop, and to choose another — never why: that is the shopkeeper's own business.
+      expect(mint([s.did, undefined])).toMatch(refusal);
+      expect(mint([undefined, s.did])).toMatch(refusal);
+      expect(mint([s.did])).not.toMatch(/national|reference|held/i);
+      const other = aShop();
+      agents.submitKyc(other.did, { idCopyRef: 'med_idcopy', tradingLicenceRef: 'med_licence', shopPhotoRefs: ['med_front'] });
+      agents.decideKyc(other.did, true);
+      // A walk-up at ANOTHER counter, to be collected at the held shop: made nowhere.
+      expect(failure(() => parcels.accept({ parcelId: 'PUD-IDH-' + (seq += 1), agentDid: other.did, destPudoDid: s.did, destZone: 'NorthTown', size: 'M', paymentMode: 'credit', senderMobile: '+254700111', receiverMobile: '+254700222', dropoffPhotoRef: 'p.jpg' } as never))).toMatch(refusal);
+      expect(agents.takesNew(agents.get(s.did))).toBe(false);
+      // The money side is judged apart: a parcel booked before the hold is not refused for a float that is fine.
+      expect(gate.canTransact(s.did).moneyOk).toBe(money);
 
-      expect(failure(() => agents.assertMayTakeIn(s.did))).toMatch(new RegExp('^FORBIDDEN: Nothing new can be taken in at this shop for now.*reference ' + o.holderReference));
+      expect(failure(() => agents.assertMayTakeIn(s.did))).toMatch(new RegExp('^FORBIDDEN: No new parcel can be started at this shop for now.*reference ' + o.holderReference));
       expect(gate.canTransact(s.did)).toMatchObject({ ok: false, code: 'ID_HELD' });
       expect(agents.holdsNationalId(s.did, s.nationalId)).toBe(false);
       expect(disputes.against(s.personDid, late)).toMatchObject({ register: 'shop', held: true });
 
       disputes.ownId(s.personDid, '44556677', late);
       expect(() => agents.assertMayTakeIn(s.did)).not.toThrow();
-      expect(walkUp()).not.toMatch(/Nothing new can be taken in/);
-      expect(booked()).not.toMatch(/Nothing new can be taken in/);
+      expect(walkUp()).not.toMatch(/No new parcel can be started/);
+      expect(booked()).not.toMatch(/No new parcel can be started/);
       expect(gate.canTransact(s.did).code).not.toBe('ID_HELD');
+      expect(mint([s.did, undefined])).not.toMatch(refusal);
       expect(agents.holdsNationalId(s.did, '44556677')).toBe(true);
+    });
+
+    it('a held shop is offered to nobody choosing where a new parcel starts — and to everybody again afterwards', () => {
+      const s = aShop();
+      agents.submitKyc(s.did, { idCopyRef: 'med_idcopy', tradingLicenceRef: 'med_licence', shopPhotoRefs: ['med_front'] });
+      agents.decideKyc(s.did, true);
+      gate.topUp(s.did, 50);
+      expect(agents.get(s.did).status).toBe('ACTIVE');
+      expect(agents.takesNew(agents.get(s.did))).toBe(true);
+      expect(JSON.stringify(routing.assignFirstMileNode({ zone: 'NorthTown' }))).toContain(s.did);
+      agents.holdForId(s.did, { reference: 'ID-TEST-HELD', at: new Date().toISOString() });
+      // Still trading, as far as its float goes — and still not somewhere a new parcel starts.
+      expect(agents.get(s.did).status).toBe('ACTIVE');
+      expect(agents.takesNew(agents.get(s.did))).toBe(false);
+      expect(failure(() => routing.assignFirstMileNode({ zone: 'NorthTown' }))).toMatch(/^NO_CAPACITY_AVAILABLE/);
+      agents.takeNationalId(s.did, '44001122');
+      expect(JSON.stringify(routing.assignFirstMileNode({ zone: 'NorthTown' }))).toContain(s.did);
+      // A shop the float has locked was never offered either: one question, asked everywhere a shop is chosen.
+      expect(agents.takesNew({ status: 'LOCKED' })).toBe(false);
+      expect(agents.takesNew({ status: 'ACTIVE' })).toBe(true);
     });
   });
 
@@ -663,11 +704,19 @@ describe('two people say one national ID is theirs', () => {
 
     it('is made by whoever did not get it, in time, for a day ahead — and both are given a ticket', () => {
       const ke = entities.forJurisdiction('KE')!;
-      contacts.set(ke.entityId, { contactName: 'Grace at the front desk', phone: '+254 20 000 111', address: 'Mombasa Road, gate 4', hours: 'Mon–Fri 8–17' }, 'Grace');
       const d = aDriver();
       const o = wonByClaimant(d);
       const day = dayStr(o.at + 3 * DAY);
       expect(failure(() => disputes.appoint(o.reference, day, o.at))).toMatch(/^INVALID_STATE: The ID is yours/);
+      // The country's company says, in its own admin, where it is and when it receives visitors — one day a week here.
+      const visitDay = weekdayOf(day)!;
+      contacts.set(ke.entityId, { contactName: 'Grace at the front desk', phone: '+254 20 000 111', address: 'Mombasa Road, gate 4', hours: 'Mon–Fri 8–17', visitDays: [visitDay], visitFrom: '09:00', visitTo: '16:00' }, 'Grace');
+      // Before any day is chosen, the app is told which days there are to choose from.
+      expect(disputes.status(o.holderReference, o.at).support).toMatchObject({ address: 'Mombasa Road, gate 4', visitDays: [visitDay], visitFrom: '09:00', visitTo: '16:00' });
+      const wrongDay = failure(() => disputes.appoint(o.holderReference, dayStr(o.at + 4 * DAY), o.at));
+      expect(wrongDay).toMatch(/^INVALID_INPUT: .+ does not receive visitors on a \w+day\. It does on \w+day\.$/);
+      expect(wrongDay).toContain(ke.name);
+      expect(disputes.status(o.holderReference, o.at).state).toBe('decided');
       expect(failure(() => disputes.appoint(o.holderReference, dayStr(o.at), o.at))).toMatch(/^INVALID_INPUT: Choose a day from tomorrow on/);
       expect(failure(() => disputes.appoint(o.holderReference, dayStr(o.at + (APPOINTMENT_WITHIN_DAYS + 2) * DAY), o.at))).toMatch(/^INVALID_INPUT: Choose a day within/);
 
@@ -679,19 +728,53 @@ describe('two people say one national ID is theirs', () => {
         yours: true,
         bring: ['id_card', 'phone', 'reference', 'second_document'],
         changesLeft: APPOINTMENT_CHANGES,
-        place: { company: ke.name, contactName: 'Grace at the front desk', phone: '+254 20 000 111', address: 'Mombasa Road, gate 4', hours: 'Mon–Fri 8–17' },
+        place: { company: ke.name, contactName: 'Grace at the front desk', phone: '+254 20 000 111', address: 'Mombasa Road, gate 4', hours: 'Mon–Fri 8–17', visitDays: [visitDay], visitFrom: '09:00', visitTo: '16:00' },
       });
       // Staff are shown where the tickets send them.
-      expect(disputes.one(o.disputeId, AMINA, o.at)).toMatchObject({ appointmentDate: day, appointmentBy: 'holder', appointmentPlace: ke.name + ', Mombasa Road, gate 4' });
+      expect(disputes.one(o.disputeId, AMINA, o.at)).toMatchObject({ appointmentDate: day, appointmentBy: 'holder', place: { company: ke.name, address: 'Mombasa Road, gate 4', visitDays: [visitDay], visitFrom: '09:00', visitTo: '16:00' } });
+      expect(disputes.one(o.disputeId, AMINA, o.at).appointmentOffDay).toBeUndefined();
+      // Read one dispute at a time, like the photographs: the list carries nobody's address.
+      expect(disputes.list(AMINA, o.at).items.find((x) => x.disputeId === o.disputeId)).toMatchObject({ appointmentDate: day });
+      expect(disputes.list(AMINA, o.at).items.find((x) => x.disputeId === o.disputeId)!.place).toBeUndefined();
       // The other person's ticket is their own: their reference, and nothing to change.
       expect(disputes.status(o.reference, o.at).ticket).toMatchObject({ reference: o.reference, date: day, yours: false, changesLeft: 0 });
       const told = mailTo(d.email).find((m) => about(m, 'your appointment'))!;
       expect(told.text).toContain('Mombasa Road, gate 4');
+      expect(told.text).toContain('between 09:00 and 16:00');
       expect(told.text).toContain('your ID card itself');
       expect(told.text).toContain(o.holderReference);
       // The photographs are kept until the day has come and gone.
       const photo = stored()[0].claimant.photos.face as string;
       expect(Date.parse(media.get(photo)!.expiresAt!)).toBe(Date.parse(day + 'T00:00:00.000Z') + IDENTITY_CHECK_DAYS * DAY);
+
+      // The company changes its days afterwards: the ticket and the console both say the day no longer fits.
+      const another = (['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const).find((x) => x !== visitDay)!;
+      contacts.set(ke.entityId, { visitDays: [another] }, 'Grace');
+      expect(disputes.status(o.holderReference, o.at).ticket).toMatchObject({ offDay: true, place: { visitDays: [another] } });
+      expect(disputes.one(o.disputeId, AMINA, o.at).appointmentOffDay).toBe(true);
+      // Clearing them is the company's to do as well: every day is taken again, and nothing is off.
+      contacts.set(ke.entityId, { visitDays: [] }, 'Grace');
+      expect(disputes.status(o.holderReference, o.at).ticket!.offDay).toBeUndefined();
+      expect(disputes.one(o.disputeId, AMINA, o.at).appointmentOffDay).toBeUndefined();
+    });
+
+    it('follows visiting days and hours the company sets for itself — days of the week, times of day, merged like the rest of its entry', () => {
+      const ke = entities.forJurisdiction('KE')!;
+      expect(contacts.set(ke.entityId, { address: 'Mombasa Road, gate 4', visitDays: ['fri', 'mon', 'mon'], visitFrom: '09:00', visitTo: '16:30' }, 'Grace')).toMatchObject({ visitDays: ['mon', 'fri'], visitFrom: '09:00', visitTo: '16:30' });
+      // Putting a telephone number right does not drop them, or the address.
+      expect(contacts.set(ke.entityId, { phone: '+254 20 000 111' }, 'Grace')).toMatchObject({ visitDays: ['mon', 'fri'], visitFrom: '09:00', address: 'Mombasa Road, gate 4' });
+      expect(failure(() => contacts.set(ke.entityId, { visitDays: ['mon', 'someday'] }, 'Grace'))).toMatch(/^VALIDATION_FAILED: A visiting day is a day of the week/);
+      expect(failure(() => contacts.set(ke.entityId, { visitFrom: '9am' }, 'Grace'))).toMatch(/^VALIDATION_FAILED: Visiting hours are a time of day/);
+      expect(failure(() => contacts.set(ke.entityId, { visitFrom: '17:00' }, 'Grace'))).toMatch(/^VALIDATION_FAILED: Visiting hours end after they begin/);
+      // A refusal changed nothing.
+      expect(contacts.of(ke.entityId)).toMatchObject({ visitDays: ['mon', 'fri'], visitFrom: '09:00', visitTo: '16:30' });
+      const cleared = contacts.set(ke.entityId, { visitDays: [], visitFrom: '', visitTo: '' }, 'Grace');
+      expect(cleared.visitDays).toBeUndefined();
+      expect(cleared.visitFrom).toBeUndefined();
+      expect(cleared.visitTo).toBeUndefined();
+      expect(cleared.address).toBe('Mombasa Road, gate 4');
+      // A date is a weekday wherever it is read.
+      expect([weekdayOf('2026-10-11'), weekdayOf('2026-10-12'), weekdayOf('2026-10-17'), weekdayOf('nonsense')]).toEqual(['sun', 'mon', 'sat', undefined]);
     });
 
     it('cannot be made once the two weeks are over', () => {
@@ -709,7 +792,7 @@ describe('two people say one national ID is theirs', () => {
       expect(disputes.appoint(o.holderReference, dayStr(o.at + 6 * DAY), o.at).ticket).toMatchObject({ date: dayStr(o.at + 6 * DAY), changesLeft: APPOINTMENT_CHANGES - 1 });
       // No address written for this country's company: the ticket carries no place, and staff are not shown one.
       expect(disputes.status(o.holderReference, o.at).ticket!.place).toBeUndefined();
-      expect(disputes.one(o.disputeId, AMINA, o.at).appointmentPlace).toBeUndefined();
+      expect(disputes.one(o.disputeId, AMINA, o.at).place).toBeUndefined();
       expect(disputes.appoint(o.holderReference, dayStr(o.at + 7 * DAY), o.at).ticket!.changesLeft).toBe(0);
       expect(failure(() => disputes.appoint(o.holderReference, dayStr(o.at + 8 * DAY), o.at))).toMatch(/^INVALID_STATE: The day has been changed as often/);
       const d2 = aDriver();

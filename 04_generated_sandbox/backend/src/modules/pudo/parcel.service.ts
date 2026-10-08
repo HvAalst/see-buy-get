@@ -864,7 +864,6 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   private admitBooked(parcel: Parcel, agentDid: string): void {
     const agent = this.agents.get(agentDid);
-    this.agents.assertMayTakeIn(agentDid);
     const promise = this.presence.takeInPromise(this.agents.countryOf(agent), this.payerJurisdictionOf(parcel));
     if (promise === 'none') {
       throw new GlosError('FORBIDDEN', `Nothing can be taken in at ${agent.shopName}: the network does not operate in ${this.agents.countryOf(agent)} yet`);
@@ -878,6 +877,8 @@ export class ParcelService implements OnApplicationBootstrap {
    * may we charge anyone anywhere on this route, and may the shops at its ends take goods in at all.
    */
   private requireSellable(quote: ShipmentQuote, shopDids: Array<string | undefined>): void {
+    // A shop held over its national ID is named by no new parcel, at either end.
+    for (const did of shopDids) this.agents.assertNamedAtMint(did);
     // A purchased stop (P4) is bought by the seller, so it only has to be allowed to take goods in.
     for (const node of quote.nodes ?? []) this.presence.require(node.country, node.purchased ? 'takeIn' : 'merchantOfRecord');
     if (quote.sellerEntityId) this.presence.require(this.entities.get(quote.sellerEntityId).jurisdiction, 'merchantOfRecord');
@@ -923,8 +924,10 @@ export class ParcelService implements OnApplicationBootstrap {
       throw new GlosError('FORBIDDEN', `Nothing can be taken in at ${agent.shopName}: the network does not operate in ${country} yet`);
     }
 
-    // A shop held over its national ID takes nothing new in, however it is paid for.
+    // A walk-up is a parcel MADE here: a shop held over its national ID starts none, however it is paid for —
+    // and none is made here for a held shop to hand out.
     this.agents.assertMayTakeIn(input.agentDid);
+    this.agents.assertNamedAtMint(input.destPudoDid);
 
     const mode: PaymentMode = input.paymentMode ?? 'cash';
 
@@ -1679,7 +1682,7 @@ export class ParcelService implements OnApplicationBootstrap {
     this.admitBooked(parcel, agentDid);
     const due = parcel.shipmentCost ?? 0;
     const gate = this.gate.canTransact(agentDid);
-    if (!gate.ok || gate.balance < due) throw new GlosError('WALLET_INSUFFICIENT', 'Insufficient funds to remit this parcel — top up first.');
+    if (!gate.moneyOk || gate.balance < due) throw new GlosError('WALLET_INSUFFICIENT', 'Insufficient funds to remit this parcel — top up first.');
     parcel.status = 'At_PUDO';
     parcel.acceptedAt = new Date().toISOString();
     parcel.dropoffPhotoRef = dropoffPhotoRef;

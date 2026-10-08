@@ -573,7 +573,7 @@ export function createOperatorApi(sbg: SbgClient) {
      */
     setContactCard: (
       entityId: string,
-      body: { contactName?: string; phone?: string; phoneAlt?: string; email?: string; website?: string; address?: string; hours?: string; by?: string },
+      body: { contactName?: string; phone?: string; phoneAlt?: string; email?: string; website?: string; address?: string; hours?: string; visitDays?: string[]; visitFrom?: string; visitTo?: string; by?: string },
     ) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/contact', { params: { path: { entityId } }, body: body as never })),
 
     contactCard: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/contact', { params: { path: { entityId } } })),

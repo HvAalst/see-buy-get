@@ -3,7 +3,7 @@ import { Button, CodeCard, Icon, Note, RefusalNote } from '../ui';
 import { useT } from '../i18n';
 import type { Result, SbgError } from '../../lib/sbg';
 import { downscaleImage } from '../media';
-import { DISPUTE_PHOTOS, appointmentDays, bringLines, idActions, idStatusSays, ticketLines, type DisputePhoto, type DisputeStatus, type IdDisputeApi } from './idDispute';
+import { DISPUTE_PHOTOS, appointmentChoices, appointmentDays, bringLines, dayLabel, idActions, idStatusSays, ticketLines, visitingWords, type DisputePhoto, type DisputeStatus, type IdDisputeApi } from './idDispute';
 
 export interface IdDisputeCaseProps {
   api: IdDisputeApi;
@@ -66,6 +66,8 @@ export function IdDisputeCase({ api, reference, initial, ownId, onChanged }: IdD
   const says = idStatusSays(status, t as never);
   const can = idActions(status);
   const days = appointmentDays();
+  // The country's company's own visiting days, where it has set them: those are offered, and no other.
+  const choices = appointmentChoices(status.support);
   const ticket = status.ticket;
 
   return (
@@ -129,6 +131,7 @@ export function IdDisputeCase({ api, reference, initial, ownId, onChanged }: IdD
               </ul>
             </dd>
           </dl>
+          {ticket.offDay ? <Note tone="warn" icon="warning" title={t('account.id.ticket.offDay')} detail={t(ticket.yours ? 'account.id.ticket.offDayYours' : 'account.id.ticket.offDayTheirs')} /> : null}
           <p class="hint">{t(ticket.yours ? 'account.id.ticket.noShow' : 'account.id.ticket.mayCome')}</p>
         </section>
       ) : null}
@@ -138,7 +141,26 @@ export function IdDisputeCase({ api, reference, initial, ownId, onChanged }: IdD
           <label class="field__label" for="id-day">
             {t(can.changeDay ? 'account.id.changeDay' : 'account.id.chooseDay')}
           </label>
-          <input id="id-day" class="input" type="date" min={days.min} max={days.max} value={date} onInput={(e) => setDate(e.currentTarget.value)} disabled={busy !== null} />
+          {choices ? (
+            <>
+              <p class="hint">{t('account.id.chooseDayFrom', { when: visitingWords(status.support, t as never) ?? '' })}</p>
+              {choices.length ? (
+                <div id="id-day" class="tapset" role="group">
+                  {/* Changing the day: the day already on the ticket is not a change to offer. */}
+                  {choices.filter((d) => d !== ticket?.date).map((d) => (
+                    <button type="button" key={d} class={`tapset__btn${date === d ? ' tapset__btn--on' : ''}`} aria-pressed={date === d} disabled={busy !== null} onClick={() => setDate(d)}>
+                      {dayLabel(d)}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <input id="id-day" class="input" type="date" min={days.min} max={days.max} value={date} onInput={(e) => setDate(e.currentTarget.value)} disabled={busy !== null} />
+              <p class="hint">{t('account.id.chooseDayNoDays')}</p>
+            </>
+          )}
           <p class="hint">{can.changeDay ? t('account.id.changeDayHint', { n: ticket?.changesLeft ?? 0 }) : t('account.id.chooseDayHint')}</p>
           <Button
             variant={can.changeDay ? 'outline' : undefined}

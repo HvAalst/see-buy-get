@@ -173,7 +173,7 @@ export class WalletGateService {
    * new field; `ok` is kept as an alias so the shipped agent app keeps working. `code` lets a
    * low-literacy UI pick the right icon (top-up vs unlock) and `shortfall` names the exact gap.
    */
-  canTransact(did: string): { ok: boolean; canTransact: boolean; code: string | null; balance: number; threshold: number; shortfall: number; credit: { limit: number; used: number; available: number } } {
+  canTransact(did: string): { ok: boolean; canTransact: boolean; moneyOk: boolean; code: string | null; balance: number; threshold: number; shortfall: number; credit: { limit: number; used: number; available: number } } {
     // Null where we hold no money in that country; the paths below are money paths, so it is refused
     // upstream by entityIdOf before this is ever reached.
     const float = this.agents.balance(did);
@@ -188,13 +188,16 @@ export class WalletGateService {
     const funded = float === null || spendable >= LOCK_THRESHOLD;
     // Held over its national ID: said first, because topping up would not open the counter.
     const held = Boolean(this.agents.idHoldOf(did));
-    const ok = !held && this.agents.canScan(did) && funded;
+    // The money side alone: what a parcel booked BEFORE the hold is judged by when it is handed in.
+    const moneyOk = this.agents.canScan(did) && funded;
+    const ok = !held && moneyOk;
     const code = ok ? null : held ? 'ID_HELD' : !funded ? 'WALLET_INSUFFICIENT' : 'AGENT_LOCKED';
     const shortfall = funded ? 0 : Math.round((LOCK_THRESHOLD - spendable) * 100) / 100;
     const used = this.agents.creditOwed(did);
     return {
       ok,
       canTransact: ok,
+      moneyOk,
       code,
       balance,
       threshold: LOCK_THRESHOLD,

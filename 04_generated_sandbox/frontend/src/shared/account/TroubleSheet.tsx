@@ -393,11 +393,11 @@ function Undo({ api, onDone }: { api: RecoveryApi; onDone: () => void }) {
   return (
     <>
       <p class="t-body">{t('account.trouble.undoLede')}</p>
-      <div class="chips" role="group">
-        <button type="button" class={`chip chip--tap${by === 'number' ? ' chip--on' : ''}`} aria-pressed={by === 'number'} onClick={() => setBy('number')}>
+      <div class="tapset" role="group">
+        <button type="button" class={`tapset__btn${by === 'number' ? ' tapset__btn--on' : ''}`} aria-pressed={by === 'number'} onClick={() => setBy('number')}>
           {t('account.trouble.undoByNumber')}
         </button>
-        <button type="button" class={`chip chip--tap${by === 'email' ? ' chip--on' : ''}`} aria-pressed={by === 'email'} onClick={() => setBy('email')}>
+        <button type="button" class={`tapset__btn${by === 'email' ? ' tapset__btn--on' : ''}`} aria-pressed={by === 'email'} onClick={() => setBy('email')}>
           {t('account.trouble.undoByEmail')}
         </button>
       </div>

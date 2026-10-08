@@ -19,6 +19,10 @@ export class ContactCardView {
   @ApiPropertyOptional() address?: string;
   /** When somebody is there. The second question a haulier asks, after where. */
   @ApiPropertyOptional() hours?: string;
+  /** The days visitors are received — `mon` … `sun` — and from when until when (`HH:MM`). Theirs to set. */
+  @ApiPropertyOptional({ type: [String] }) visitDays?: string[];
+  @ApiPropertyOptional() visitFrom?: string;
+  @ApiPropertyOptional() visitTo?: string;
   @ApiProperty() saidAt: string;
   @ApiProperty() saidBy: string;
   /** Said out loud on every screen that shows it: this is their claim and nobody checked it. */

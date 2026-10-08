@@ -8,7 +8,7 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { countryOfPhone } from './account-move.service';
 import { AccountRecoveryService } from './account-recovery.service';
 import { AgentService } from './agent.service';
-import { ContactCardService } from './contact-card.service';
+import { ContactCardService, WEEKDAYS, weekdayOf, type Weekday } from './contact-card.service';
 import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import {
@@ -282,6 +282,11 @@ export class IdDisputeService {
     const dayOk = () => {
       if (Number.isNaN(day) || date <= today) throw new GlosError('INVALID_INPUT', 'Choose a day from tomorrow on.', { field: 'date' });
       if (day > now + APPOINTMENT_WITHIN_DAYS * DAY_MS) throw new GlosError('INVALID_INPUT', `Choose a day within the next ${APPOINTMENT_WITHIN_DAYS} days.`, { field: 'date' });
+      // "It's up to the countries to set visiting days and visiting hours." Where one has, no other day is taken.
+      const visiting = this.placeFor(dispute.country);
+      if (offDay(visiting, date)) {
+        throw new GlosError('INVALID_INPUT', `${visiting!.company} does not receive visitors on a ${DAY_NAME[weekdayOf(date) as Weekday]}. It does on ${daysInWords(visiting!.visitDays as Weekday[])}.`, { field: 'date', visitDays: visiting!.visitDays });
+      }
     };
     if (dispute.state === 'decided') {
       if (!dispute.decided || dispute.decided.to === side) throw new GlosError('INVALID_STATE', 'The ID is yours: there is nothing for you to contest.');
@@ -302,7 +307,8 @@ export class IdDisputeService {
     this.anchorPhotos(dispute, day);
     this.disputes.set(dispute.disputeId, dispute);
     const place = this.placeFor(dispute.country);
-    const where = place ? `${place.company}${place.address ? `, ${place.address}` : ''}${place.hours ? ` (${place.hours})` : ''}` : 'the SeeBuyGet office for your country';
+    const visitors = place?.visitFrom && place?.visitTo ? `, between ${place.visitFrom} and ${place.visitTo}` : '';
+    const where = place ? `${place.company}${place.address ? `, ${place.address}` : ''}${visitors}` : 'the SeeBuyGet office for your country';
     for (const s of ['claimant', 'holder'] as const) {
       const mine = dispute.appointment!.by === s;
       this.tell(dispute[s].personDid, {
@@ -682,7 +688,15 @@ export class IdDisputeService {
   private ticketFor(d: StoredDispute, side: DisputeSide, place: DisputePlace | undefined): DisputeTicket | undefined {
     if (!d.appointment || (d.state !== 'appointment' && d.state !== 'rechecked')) return undefined;
     const yours = d.appointment.by === side;
-    return { reference: d[side].reference, date: d.appointment.date, yours, bring: [...BRING], changesLeft: yours ? Math.max(0, APPOINTMENT_CHANGES - d.appointment.changes) : 0, ...(place ? { place } : {}) };
+    return {
+      reference: d[side].reference,
+      date: d.appointment.date,
+      yours,
+      bring: [...BRING],
+      changesLeft: yours ? Math.max(0, APPOINTMENT_CHANGES - d.appointment.changes) : 0,
+      ...(offDay(place, d.appointment.date) ? { offDay: true } : {}),
+      ...(place ? { place } : {}),
+    };
   }
 
   private opened(d: StoredDispute): DisputeOpened {
@@ -692,7 +706,7 @@ export class IdDisputeService {
 
   private row(d: StoredDispute, staff: DisputeStaff | undefined, full: boolean): DisputeRow {
     const p = d.proposal;
-    const place = d.appointment ? this.placeFor(d.country) : undefined;
+    const place = full ? this.placeFor(d.country) : undefined;
     return {
       disputeId: d.disputeId,
       reference: d.claimant.reference,
@@ -710,7 +724,8 @@ export class IdDisputeService {
       ...(d.decided ? { decidedTo: d.decided.to, decidedBy: d.decided.by, decidedAt: d.decided.at, reason: d.final?.reason ?? d.decided.reason, holderEffect: d.decided.holderEffect } : {}),
       ...(d.state === 'decided' && d.contestBy ? { contestBy: d.contestBy } : {}),
       ...(d.appointment ? { appointmentDate: d.appointment.date, appointmentBy: d.appointment.by } : {}),
-      ...(place?.address ? { appointmentPlace: `${place.company}, ${place.address}` } : {}),
+      ...(d.appointment && d.state === 'appointment' && offDay(this.placeFor(d.country), d.appointment.date) ? { appointmentOffDay: true } : {}),
+      ...(place ? { place } : {}),
       ...(d.final ? { finalTo: d.final.to, finalBy: d.final.by, finalAt: d.final.at } : {}),
       ...(d.endedAt ? { endedAt: d.endedAt } : {}),
     };
@@ -873,7 +888,7 @@ export class IdDisputeService {
   private placeFor(country: string | undefined): DisputePlace | undefined {
     const sister = country ? this.entities?.forJurisdiction(country) : undefined;
     const card = sister ? this.contacts?.of(sister.entityId) : undefined;
-    if (!sister || !card || (!card.phone && !card.email && !card.address)) return undefined;
+    if (!sister || !card || (!card.phone && !card.email && !card.address && !card.visitDays?.length)) return undefined;
     return {
       company: sister.name,
       ...(card.contactName ? { contactName: card.contactName } : {}),
@@ -882,6 +897,9 @@ export class IdDisputeService {
       ...(card.email ? { email: card.email } : {}),
       ...(card.address ? { address: card.address } : {}),
       ...(card.hours ? { hours: card.hours } : {}),
+      ...(card.visitDays?.length ? { visitDays: [...card.visitDays] } : {}),
+      ...(card.visitFrom ? { visitFrom: card.visitFrom } : {}),
+      ...(card.visitTo ? { visitTo: card.visitTo } : {}),
     };
   }
 
@@ -892,6 +910,19 @@ export class IdDisputeService {
       if (![...this.disputes.values()].some((d) => d.claimant.reference === reference || d.holder.reference === reference)) return reference;
     }
   }
+}
+
+const DAY_NAME: Record<Weekday, string> = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
+/** "Monday, Tuesday and Friday" — the days as somebody would say them. */
+function daysInWords(days: Weekday[]): string {
+  const names = WEEKDAYS.filter((d) => days.includes(d)).map((d) => DAY_NAME[d]);
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : (names[0] ?? '');
+}
+/** Has this company said which days it receives visitors — and is this date not one of them? */
+function offDay(place: DisputePlace | undefined, date: string): boolean {
+  const days = place?.visitDays;
+  const day = weekdayOf(date);
+  return Boolean(days?.length) && Boolean(day) && !days!.includes(day as string);
 }
 
 const PHOTO_WORD: Record<DisputePhoto, string> = { face: 'you holding the card', front: 'the front of the card', back: 'the back of the card' };

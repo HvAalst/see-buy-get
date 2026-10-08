@@ -257,19 +257,37 @@ they need to bring for the appointment date." `modules/pudo/id-dispute.service.t
   only whether it is the disputed one; one proposes whose it is, a second, different one approves (`staffOf`).
   The ID can go only to somebody whose card was read as carrying it.
 - **Whoever loses keeps their account.** A registration that loses its ID is HELD (`idHold` on the driver or the
-  shop): a driver fails `canOperate` — the question every way behind a wheel already asks — and a shop takes
-  nothing new in at the counter (`AgentService.assertMayTakeIn`); both finish what they have in hand. It ends
-  when an ID of their own is on record. Where the holder's own card carried a different number, their record
-  takes that instead and nobody is held.
+  shop): a driver fails `canOperate` — the question every way behind a wheel already asks. For a shop THE PAUSE
+  IS AT MINT (the user, 2026-10-08: "the pause should be at mint indeed"): no new parcel can name it, as the
+  place to hand in or to collect (`AgentService.assertNamedAtMint`, asked by `ParcelService.requireSellable`
+  for every quoted mint and by the public quote routes), a walk-up cannot be taken in (`assertMayTakeIn`), and
+  nothing that offers a shop for a new parcel offers it (`AgentService.takesNew`: the checkout API, first-mile
+  routing, and `takesNew` on `GET network/points` for the apps' pickers). What was booked to it BEFORE the hold
+  is still handed in, and everything on its shelf is still collected — so it stays on the public map. A sender
+  is told which shop and to choose another, never why. Both finish what they have in hand; a hold ends when an
+  ID of their own is on record. Where the holder's own card carried a different number, their record takes
+  that instead and nobody is held.
 - **The ID is kept for whoever won** until they register: `RegistrationPrints.keepFor` lets only a registration
   made with the phone they opened the dispute with past it.
 - **Still disputed**: whoever did not get it names a day within two weeks (`…/appointment`), and both are given
-  a ticket — where (the country's company's own contact card), when, what to bring. From that day two members
-  of staff decide again, the decision changes only for somebody who came, and that is final.
+  a ticket — where, when, what to bring. From that day two members of staff decide again, the decision changes
+  only for somebody who came, and that is final.
+- **Where and on which days is the country's own to say** (the user, 2026-10-08: "it's up to the countries to
+  set visiting days and visiting hours"; "the country needs to set its address info in their admin from there
+  we fetch"). Its admin is the console signed in as that company: Settings → How to reach you
+  (`apps/tower/screens/ContactCardPanel.tsx`, `POST entities/:entityId/contact`): the address, the visiting days
+  (`visitDays`, mon…sun) and hours (`visitFrom`/`visitTo`). An appointment is taken only on one of those days
+  (`weekdayOf` — a date is a weekday wherever it is read), the app offers them as buttons rather than a
+  calendar, and the ticket carries the address and the hours. Staff are shown what the company wrote and type
+  none of it. Until it has written an address or ticked a day, any day may be chosen and the ticket says to ask
+  first — and the dispute tells staff what is missing. If it changes its days after an appointment was made,
+  both tickets and the console say the day no longer fits.
 - **Never kept or shown**: the ID number outside the vault (a keyed print finds it; "matches / differs" is all
   staff see), a whole phone number, the other person's reference.
-- Not built: an office calendar. A person can choose a day the office is closed; the ticket tells them to keep
-  to its opening hours. And a held shop is still listed to senders: it is the counter that refuses.
+- A shared sheet styles itself: `.chips` and the photo button are styled in a few apps' own stylesheets, so
+  the sheets every app opens use `.tapset` and `.idshot` from `shared/ui/ui.css`.
+- Not built: public holidays and one-off closures (a country sets the days of a week, not dates), and a limit on
+  how many people may come on one day.
 
 ## Conventions
 - **Every slice names its screens.** A backend change with no surface is tracked ui-debt, not a shipped slice.

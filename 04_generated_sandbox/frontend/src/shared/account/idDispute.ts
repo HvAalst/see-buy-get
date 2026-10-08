@@ -28,6 +28,10 @@ export interface DisputePlace {
   email?: string;
   address?: string;
   hours?: string;
+  /** The days it receives visitors (`mon` … `sun`), as the company set them in its own admin. Absent: it set none. */
+  visitDays?: string[];
+  visitFrom?: string;
+  visitTo?: string;
 }
 
 export interface DisputeTicket {
@@ -36,6 +40,8 @@ export interface DisputeTicket {
   yours: boolean;
   bring: Bring[];
   changesLeft: number;
+  /** The company changed its visiting days since, and this day is no longer one of them. */
+  offDay?: boolean;
   place?: DisputePlace;
 }
 
@@ -184,6 +190,42 @@ export function idActions(status: DisputeStatus): { photos: boolean; withdraw: b
   };
 }
 
+const WEEK = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+/** The weekday a calendar date falls on — the same wherever it is read. */
+const weekdayOf = (date: string): string => WEEK[(new Date(`${date}T00:00:00.000Z`).getUTCDay() + 6) % 7];
+
+/**
+ * THE DAYS THERE ARE TO CHOOSE FROM. The user, 2026-10-08: "it's up to the countries to set visiting days and
+ * visiting hours." Where the country's company has set them, these are its visiting days in the next three weeks,
+ * and they are offered as they are — nobody is left to guess at a calendar. NULL where it has set none: then any
+ * day may be chosen, and the person is told to ask first.
+ */
+export function appointmentChoices(place: DisputePlace | undefined, now: number = Date.now()): string[] | null {
+  const days = place?.visitDays;
+  if (!days?.length) return null;
+  const out: string[] = [];
+  for (let i = 1; i <= 21; i++) {
+    const date = new Date(now + i * 86_400_000).toISOString().slice(0, 10);
+    if (days.includes(weekdayOf(date))) out.push(date);
+  }
+  return out;
+}
+
+/** A day as a button says it: "Mon 12 Oct". */
+export function dayLabel(date: string): string {
+  return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+/** When the company receives visitors, in a line: its days in the week's order, then its hours. Null where it has set no days. */
+export function visitingWords(place: DisputePlace | undefined, t: T): string | null {
+  const say = t as Say;
+  const days = place?.visitDays;
+  if (!days?.length) return null;
+  const names = WEEK.filter((d) => days.includes(d)).map((d) => say(`account.id.day.${d}`));
+  const hours = place?.visitFrom && place?.visitTo ? say('account.id.visitHours', { from: place.visitFrom, to: place.visitTo }) : '';
+  return [names.join(', '), hours].filter(Boolean).join(' · ');
+}
+
 /** The ticket, as lines to read at a glance and say at a desk: when, where, who to ask for. */
 export function ticketLines(ticket: DisputeTicket, t: T): { when: string; where: string[] } {
   const say = t as Say;
@@ -193,8 +235,10 @@ export function ticketLines(ticket: DisputeTicket, t: T): { when: string; where:
     where: p
       ? [
           p.company,
-          ...(p.address ? [p.address] : []),
-          ...(p.hours ? [p.hours] : []),
+          // Its address, or that it has written none — said beside whatever else it did write.
+          ...(p.address ? [p.address] : [say('account.id.ticket.noAddress')]),
+          // When it receives VISITORS, where it has said; the gate's own hours only where it has not.
+          ...(visitingWords(p, t) ? [say('account.id.ticket.visiting', { when: visitingWords(p, t) as string })] : p.hours ? [p.hours, say('account.id.ticket.noDays')] : [say('account.id.ticket.noDays')]),
           ...(p.contactName ? [say('account.id.ticket.askFor', { name: p.contactName })] : []),
           ...(p.phone ? [say('account.move.supportPhone', { phone: [p.phone, p.phoneAlt].filter(Boolean).join(' / ') })] : []),
         ]

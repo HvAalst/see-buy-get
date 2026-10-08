@@ -635,7 +635,7 @@ export function useVendorApp() {
       setState((s) => ({ ...s, form: { ...s.form, destDid, originDid: '' }, mintStep: 'origin', originState: 'loading', originOptions: null }));
       const f = stateRef.current.form;
       const size = f.derivedSize ?? 'M';
-      const origins = stateRef.current.points.filter((p) => p.did !== destDid && p.openState === 'open').map((p) => p.did);
+      const origins = stateRef.current.points.filter((p) => p.did !== destDid && p.openState === 'open' && p.takesNew !== false).map((p) => p.did);
       const r = await client.api.quoteOrigins(destDid, origins, size, measureOf(f));
       if (r.error) {
         setState((s) => ({ ...s, originState: 'error' }));

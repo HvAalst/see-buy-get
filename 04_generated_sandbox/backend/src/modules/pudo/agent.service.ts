@@ -631,11 +631,34 @@ export class AgentService {
     this.prints.keepFor(key, 'nationalId', phone, by);
   }
 
-  /** The counter's take-in doors ask this. Says what happened, and the one thing that ends it. */
+  /**
+   * IS THIS SHOP SOMEWHERE A NEW PARCEL CAN NAME — to be handed in at, or collected from? Trading, and not held
+   * over its national ID. Every place a shop is OFFERED for a new parcel asks this, so a held shop is never
+   * chosen; what it already holds, and what was already booked to it, goes on.
+   */
+  takesNew(agent: Pick<Agent, 'status' | 'idHold'>): boolean {
+    return agent.status === 'ACTIVE' && !agent.idHold;
+  }
+
+  /**
+   * THE PAUSE, AT MINT. The user, 2026-10-08: "the pause should be at mint indeed." A parcel being made cannot
+   * name a held shop, at either end. Said to the sender as what they can act on — which shop, and to choose
+   * another — and never why: that is the shopkeeper's own business.
+   */
+  assertNamedAtMint(did: string | undefined): void {
+    const agent = did ? this.agents.get(did) : undefined;
+    if (agent?.idHold) throw new GlosError('FORBIDDEN', `${agent.shopName} is not taking new parcels for now. Choose another shop.`, { reason: 'shop_held', shop: agent.did });
+  }
+
+  /**
+   * A WALK-UP AT THE COUNTER is a parcel made there and then, so a held shop refuses it. Says what happened, and
+   * the one thing that ends it. (A parcel booked to be handed in here was made BEFORE the hold — none can be made
+   * after it — and is still taken in: a hold stops new work, never the finishing of old.)
+   */
   assertMayTakeIn(did: string): void {
     const hold = this.agents.get(did)?.idHold;
     if (hold) {
-      throw new GlosError('FORBIDDEN', `Nothing new can be taken in at this shop for now: the national ID it registered with went to somebody else (reference ${hold.reference}). What is already here is collected as usual. Put the number of your own ID card on record, in Settings, to take parcels in again.`, { reason: 'id_held', reference: hold.reference });
+      throw new GlosError('FORBIDDEN', `No new parcel can be started at this shop for now: the national ID it registered with went to somebody else (reference ${hold.reference}). Parcels already booked to be handed in here, and everything on the shelf, go on as usual. Put the number of your own ID card on record, in Settings, to start new ones again.`, { reason: 'id_held', reference: hold.reference });
     }
   }
 

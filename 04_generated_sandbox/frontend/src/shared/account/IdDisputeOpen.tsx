@@ -65,9 +65,9 @@ export function IdDisputeOpen({ api, preset }: { api: RecoveryApi; preset?: { re
       <p class="t-body">{t('account.id.open.lede')}</p>
       <div class="field">
         <span class="field__label">{t('account.id.open.as')}</span>
-        <div class="chips" role="group">
+        <div class="tapset" role="group">
           {(['driver', 'shop'] as const).map((r) => (
-            <button type="button" key={r} class={`chip chip--tap${register === r ? ' chip--on' : ''}`} aria-pressed={register === r} onClick={() => setRegister(r)} disabled={busy}>
+            <button type="button" key={r} class={`tapset__btn${register === r ? ' tapset__btn--on' : ''}`} aria-pressed={register === r} onClick={() => setRegister(r)} disabled={busy}>
               {t(r === 'driver' ? 'account.id.open.driver' : 'account.id.open.shop')}
             </button>
           ))}

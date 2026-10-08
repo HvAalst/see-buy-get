@@ -72,9 +72,10 @@ describe('gateNotice', () => {
     // Said even on a shop the float has locked as well: the hold is the one that topping up cannot lift.
     const n = gateNotice(agent({ status: 'LOCKED' }), gate({ ok: false, code: 'ID_HELD', balance: -3, shortfall: 8 }), t);
     expect(n?.tone).toBe('danger');
-    expect(n?.title).toBe('Nothing new can be taken in for now');
+    expect(n?.title).toBe('No new parcel can be started here for now');
     expect(n?.detail).toContain('put the number of your own ID card on record');
-    expect(n?.detail).toContain('collected as usual');
+    expect(n?.detail).toContain('already booked to be handed in here');
+    expect(n?.detail).toContain('go on as usual');
     expect(n?.detail).not.toMatch(/top up/i);
   });
 

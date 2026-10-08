@@ -171,13 +171,75 @@ describe('two people say one national ID is theirs, over the wire', () => {
     const tomorrow = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10);
     await http().post('/v1/sbg/identity/id-disputes/appointment').send({ reference: mine.reference, date: tomorrow }).expect(400);
     await http().post('/v1/sbg/identity/id-disputes/appointment').send({ reference: opened.body.reference, date: 'next Tuesday' }).expect(400);
+
+    // "It's up to the countries to set visiting days and visiting hours" — in their own entry, which is where the
+    // ticket fetches the address from too. A signed-in person cannot write a company's entry; the company does.
+    const listed = (await http().get('/v1/sbg/entities').set(bearer(setupKey)).expect(200)).body;
+    const ke = ((Array.isArray(listed) ? listed : (listed.items ?? listed.entities)) as Array<{ entityId: string; jurisdiction?: string; kind?: string }>).find((e) => e.jurisdiction === 'KE' && e.kind !== 'group')!;
+    const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    const theDay = DAYS[new Date(tomorrow + 'T00:00:00.000Z').getUTCDay()];
+    const anotherDay = DAYS.find((x) => x !== theDay)!;
+    await http().post(`/v1/sbg/entities/${ke.entityId}/contact`).set(bearer(holder.token)).send({ address: 'Nowhere' }).expect(403);
+    await http().post(`/v1/sbg/entities/${ke.entityId}/contact`).set(bearer(setupKey)).send({ visitDays: ['someday'], by: 'Grace' }).expect(400);
+    await http().post(`/v1/sbg/entities/${ke.entityId}/contact`).set(bearer(setupKey)).send({ address: 'Mombasa Road, gate 4', visitDays: [anotherDay], visitFrom: '09:00', visitTo: '16:00', by: 'Grace' }).expect(201);
+    // The app is told which days there are before anybody chooses one — and a day that is not one of them is refused.
+    expect((await status(opened.body.reference)).support).toMatchObject({ address: 'Mombasa Road, gate 4', visitDays: [anotherDay], visitFrom: '09:00', visitTo: '16:00' });
+    const closed = await http().post('/v1/sbg/identity/id-disputes/appointment').send({ reference: opened.body.reference, date: tomorrow }).expect(400);
+    expect(closed.body.detail).toMatch(/does not receive visitors on a \w+day\. It does on \w+day\./);
+    await http().post(`/v1/sbg/entities/${ke.entityId}/contact`).set(bearer(setupKey)).send({ visitDays: [anotherDay, theDay], by: 'Grace' }).expect(201);
     const made = await http().post('/v1/sbg/identity/id-disputes/appointment').send({ reference: opened.body.reference, date: tomorrow }).expect(200);
-    expect(made.body).toMatchObject({ state: 'appointment', ticket: { reference: opened.body.reference, date: tomorrow, yours: true, bring: ['id_card', 'phone', 'reference', 'second_document'] } });
+    expect(made.body).toMatchObject({ state: 'appointment', ticket: { reference: opened.body.reference, date: tomorrow, yours: true, bring: ['id_card', 'phone', 'reference', 'second_document'], place: { address: 'Mombasa Road, gate 4', visitFrom: '09:00', visitTo: '16:00' } } });
+    expect(made.body.ticket.place.visitDays).toContain(theDay);
     expect((await status(mine.reference)).ticket).toMatchObject({ reference: mine.reference, date: tomorrow, yours: false, changesLeft: 0 });
     expect((await me(holder.token)).idDispute).toMatchObject({ state: 'appointment' });
     // What was seen in person is recorded from the day itself, not before.
     const early = await http().post(`/v1/sbg/id-disputes/${disputeId}/check`).set(bearer(setupKey)).send({ to: 'claimant', what: 'x', reason: 'y', claimantCame: true, holderCame: false, by: 'Amina Otieno' }).expect(400);
     expect(early.body.detail).toMatch(/The appointment is on/);
-    expect((await http().get(`/v1/sbg/id-disputes/${disputeId}`).set(bearer(setupKey)).expect(200)).body).toMatchObject({ state: 'appointment', appointmentDate: tomorrow, appointmentBy: 'claimant' });
+    expect((await http().get(`/v1/sbg/id-disputes/${disputeId}`).set(bearer(setupKey)).expect(200)).body).toMatchObject({ state: 'appointment', appointmentDate: tomorrow, appointmentBy: 'claimant', place: { address: 'Mombasa Road, gate 4' } });
+  });
+
+  it('the pause is at mint: a shop held over its ID is on the public list as taking nothing new, and no price is given for it', async () => {
+    const aShop = async (nationalId: string) =>
+      (
+        await http()
+          .post('/v1/sbg/agents')
+          .set(bearer(setupKey))
+          .send({
+            shopName: `Duka ${tag} ${(seq += 1)}`, zone: 'NorthTown', location: { lat: -1.2, lng: 36.8 }, landmark: 'blue gate', openingHours: { mon: { open: '08:00', close: '18:00' } }, shelf: { rows: 3, cols: 3 },
+            fullName: 'Shop Keeper', nationalId, mobile: aNumber(), deviceImei: `IMEI-${tag}-${seq}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true },
+          })
+          .expect(201)
+      ).body as { did: string; shopName: string };
+    const nationalId = anId();
+    const shop = await aShop(nationalId);
+    const other = await aShop(anId());
+    const listed = async () => ((await http().get('/v1/sbg/network/points').expect(200)).body as Array<{ did: string; takesNew?: boolean }>).find((p) => p.did === shop.did);
+    // The list has this shop on it, and says a new parcel may name it.
+    expect(await listed()).toMatchObject({ did: shop.did, takesNew: true });
+
+    // Its ID is disputed and goes to the other person: the shop is held.
+    const phone = await aVerifiedNumber();
+    const opened = await http().post('/v1/sbg/identity/id-disputes').send({ register: 'shop', nationalId, phone }).expect(201);
+    await sendAll(opened.body.reference);
+    const disputeId = await idOf(opened.body.reference, setupKey);
+    const row = (await http().get(`/v1/sbg/id-disputes/${disputeId}`).set(bearer(setupKey)).expect(200)).body;
+    await sendAll(row.holderReference);
+    for (const side of ['claimant', 'holder']) await http().post(`/v1/sbg/id-disputes/${disputeId}/card`).set(bearer(setupKey)).send({ side, number: nationalId, by: 'Amina Otieno' }).expect(200);
+    await http().post(`/v1/sbg/id-disputes/${disputeId}/check`).set(bearer(setupKey)).send({ to: 'claimant', what: 'Both cards carry it.', reason: 'The face on the card you showed is not yours.', by: 'Amina Otieno' }).expect(200);
+    expect((await http().post(`/v1/sbg/id-disputes/${disputeId}/approve`).set(bearer(setupKey)).send({ by: 'Brian Kamau' }).expect(200)).body).toMatchObject({ decidedTo: 'claimant', holderEffect: 'held' });
+
+    // Still on the public list — it hands out what it holds — and the list says no new parcel may name it.
+    expect(await listed()).toMatchObject({ did: shop.did, takesNew: false });
+    // No price for a parcel that would start there, or end there. Told which shop and to choose another; never why.
+    const q = (origin: string, dest: string) => `/v1/sbg/quote?origin=${encodeURIComponent(origin)}&dest=${encodeURIComponent(dest)}&size=M`;
+    const from = await http().get(q(shop.did, other.did)).expect(403);
+    expect(from.body.detail).toBe(`${shop.shopName} is not taking new parcels for now. Choose another shop.`);
+    expect((await http().get(q(other.did, shop.did)).expect(403)).body.detail).toBe(`${shop.shopName} is not taking new parcels for now. Choose another shop.`);
+    expect(JSON.stringify(from.body)).not.toMatch(/national|held over|reference/i);
+    // On the map of many pins, its pin carries the refusal in place of a price.
+    const pins = (await http().get(`/v1/sbg/quote/options?origin=${encodeURIComponent(other.did)}&dests=${encodeURIComponent(shop.did)}&size=M`).expect(200)).body.options as Array<{ did: string; quote?: unknown; error?: string }>;
+    expect(pins).toHaveLength(1);
+    expect(pins[0]).toMatchObject({ did: shop.did, error: expect.stringMatching(/is not taking new parcels for now/) });
+    expect(pins[0].quote).toBeUndefined();
   });
 });

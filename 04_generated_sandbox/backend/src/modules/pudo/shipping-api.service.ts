@@ -403,7 +403,7 @@ export class ShippingApiService {
   private heldAsQuote(held: HeldQuote, caller: Caller): PublicQuote {
     for (const [pointId, side] of [[held.fromPointId, 'collect from'], [held.toPointId, 'send to']] as const) {
       const agent = this.agents.list().find((a) => a.did === pointId);
-      if (!agent || agent.status !== 'ACTIVE') {
+      if (!agent || !this.agents.takesNew(agent)) {
         throw new GlosError('NOT_FOUND', `The point this quote would ${side} is no longer taking parcels — ask for a new quote`, { quoteId: held.quoteId });
       }
     }
@@ -526,7 +526,7 @@ export class ShippingApiService {
   areas(): Array<{ country: string; areas: string[] }> {
     const byCountry = new Map<string, Set<string>>();
     for (const a of this.agents.list()) {
-      if (a.status !== 'ACTIVE') continue; // an area with no shop anyone can collect at is not an area we serve
+      if (!this.agents.takesNew(a)) continue; // an area with no shop anyone can collect at is not an area we serve
       const country = this.agents.countryOf(a);
       const set = byCountry.get(country) ?? new Set<string>();
       set.add(a.zone);
@@ -547,6 +547,7 @@ export class ShippingApiService {
       const agent = this.agents.list().find((a) => a.did === where.pointId);
       if (!agent) throw new GlosError('NOT_FOUND', `No collection point ${where.pointId} — check the network directory`);
       if (agent.status !== 'ACTIVE') throw new GlosError('NOT_FOUND', `${agent.shopName} is not taking parcels yet`);
+      if (!this.agents.takesNew(agent)) throw new GlosError('NOT_FOUND', `${agent.shopName} is not taking new parcels for now — choose another collection point`);
       return { agent };
     }
     // A typed address, which is what a person actually has. Tried BEFORE the area list, because somebody
@@ -560,7 +561,7 @@ export class ShippingApiService {
     const area = where.area.trim();
     const candidates = this.agents
       .list()
-      .filter((a) => a.status === 'ACTIVE' && this.agents.countryOf(a) === country && a.zone.toLowerCase() === area.toLowerCase());
+      .filter((a) => this.agents.takesNew(a) && this.agents.countryOf(a) === country && a.zone.toLowerCase() === area.toLowerCase());
     if (!candidates.length) throw new GlosError('NOT_FOUND', `We have no collection point in ${area}, ${country} yet`);
     // The one with the most room, then by name so the same ask gives the same answer twice. Nothing is
     // reserved by choosing it — this is where they WOULD collect, not a slot held for them.
@@ -593,7 +594,7 @@ export class ShippingApiService {
     const wanted = country ? requireCountryCode(country) : undefined;
     const candidates = this.agents
       .list()
-      .filter((a) => a.status === 'ACTIVE' && (!wanted || this.agents.countryOf(a) === wanted))
+      .filter((a) => this.agents.takesNew(a) && (!wanted || this.agents.countryOf(a) === wanted))
       .filter((a) => side !== 'to' || this.shelf.available(a.did) > 0)
       .map((a) => ({ a, km: this.router.roadKm(placed.location, a.location) }))
       .sort((x, y) => x.km - y.km || x.a.shopName.localeCompare(y.a.shopName));
@@ -611,7 +612,7 @@ export class ShippingApiService {
     const wanted = country ? requireCountryCode(country) : undefined;
     return this.agents
       .list()
-      .some((a) => a.status === 'ACTIVE' && a.zone.toLowerCase() === area.trim().toLowerCase() && (!wanted || this.agents.countryOf(a) === wanted));
+      .some((a) => this.agents.takesNew(a) && a.zone.toLowerCase() === area.trim().toLowerCase() && (!wanted || this.agents.countryOf(a) === wanted));
   }
 
   private point(resolved: Resolved): QuotedPoint {

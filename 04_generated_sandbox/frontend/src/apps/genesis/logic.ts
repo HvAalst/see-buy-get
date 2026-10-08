@@ -97,7 +97,8 @@ export function money(v: number | null | undefined): string {
  */
 export function selectablePoints(points: NetworkPoint[] | null, excludeDid?: string, near?: GeoPoint | null): NetworkPoint[] {
   return (points ?? [])
-    .filter((p) => p.did !== excludeDid)
+    // A shop that takes no new parcels is not somewhere to send one from or to: it is simply not offered.
+    .filter((p) => p.did !== excludeDid && p.takesNew !== false)
     .sort((a, b) => {
       if (a.openState !== b.openState) return a.openState === 'open' ? -1 : 1;
       if (near) {

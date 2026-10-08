@@ -209,6 +209,8 @@ export interface NetworkPoint {
   location?: { lat: number; lng: number };
   landmark?: string;
   openState: 'open' | 'closed';
+  /** False: no new parcel can name this shop — it is not offered as a place to hand one in. */
+  takesNew?: boolean;
   pricePerParcel: number;
   rating?: { count: number; average: number } | null;
   freeSlots?: number;

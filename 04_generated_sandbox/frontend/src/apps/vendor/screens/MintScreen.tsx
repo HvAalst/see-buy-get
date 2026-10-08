@@ -223,7 +223,7 @@ function DestStep({ state, actions }: MintScreenProps) {
   const [openShop, setOpenShop] = useState<string | null>(null);
   const near = fromPlaceWords(wordsText);
   const points = state.points
-    .filter((p) => p.openState === 'open')
+    .filter((p) => p.openState === 'open' && p.takesNew !== false)
     .sort((a, b) => {
       if (near) {
         const da = a.location ? haversineKm(near, a.location) : Number.POSITIVE_INFINITY;

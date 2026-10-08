@@ -582,6 +582,11 @@ export class ContactCardDto {
   @IsOptional() @IsString() @MaxLength(160) website?: string;
   @IsOptional() @IsString() @MaxLength(300) address?: string;
   @IsOptional() @IsString() @MaxLength(120) hours?: string;
+  /** The days visitors are received: `mon` … `sun`. An empty list clears them. */
+  @IsOptional() @IsArray() @IsString({ each: true }) visitDays?: string[];
+  /** From when until when on those days, `HH:MM`. An empty string clears one. */
+  @IsOptional() @IsString() @MaxLength(5) visitFrom?: string;
+  @IsOptional() @IsString() @MaxLength(5) visitTo?: string;
   @IsOptional() @IsString() entityId?: string;
   @IsOptional() @IsString() by?: string;
 }

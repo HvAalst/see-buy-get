@@ -159,6 +159,8 @@ describe('originRows', () => {
     const rows = originRows(pts, 'dest', options);
     expect(rows.map((r) => r.point.did)).toEqual(['cheap', 'dear', 'nowhere']);
     expect(rows[0].total).toBe(3);
+    // A shop that takes no new parcels is not somewhere to hand one in, whatever it would have cost.
+    expect(originRows([...pts, point({ did: 'held', shopName: 'Held', takesNew: false })], 'dest', [...options, { did: 'held', quote: quote(1) }]).map((r) => r.point.did)).toEqual(['cheap', 'dear', 'nowhere']);
     expect(rows[2].total).toBeNull();
   });
 });

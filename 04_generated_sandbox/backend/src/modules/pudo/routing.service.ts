@@ -435,7 +435,7 @@ export class RoutingService {
   assignFirstMileNode(input: { location?: { lat: number; lng: number }; zone?: string }): NodePick {
     const candidates = this.agents
       .list()
-      .filter((a) => a.status === 'ACTIVE' && a.openState === 'open' && this.shelf.hasSpace(a.did) && (!input.zone || a.zone === input.zone));
+      .filter((a) => this.agents.takesNew(a) && a.openState === 'open' && this.shelf.hasSpace(a.did) && (!input.zone || a.zone === input.zone));
     if (!candidates.length) throw new GlosError('NO_CAPACITY_AVAILABLE', 'No open PUDO with free shelf capacity available');
 
     const ranked = input.location

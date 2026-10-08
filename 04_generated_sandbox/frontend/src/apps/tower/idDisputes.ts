@@ -52,7 +52,10 @@ export interface DisputeRow {
   contestBy?: string;
   appointmentDate?: string;
   appointmentBy?: DisputeSide;
-  appointmentPlace?: string;
+  /** The appointment is on a day the country's company no longer receives visitors. */
+  appointmentOffDay?: boolean;
+  /** Where people are sent and when visitors are received — the country's company's own entry. Absent: it wrote nothing. */
+  place?: { company: string; address?: string; hours?: string; visitDays?: string[]; visitFrom?: string; visitTo?: string };
   finalTo?: DisputeSide;
   finalBy?: string;
   finalAt?: string;
@@ -158,6 +161,25 @@ export function disputeNotes(row: DisputeRow, t: Translate): Array<{ tone: 'dang
   if (row.claimant.card === 'matches' && row.holder.card === 'matches') notes.push({ tone: 'danger', text: t('tower.ids.note.bothMatch') });
   if (!row.holder.onRecord?.length) notes.push({ tone: 'info', text: t('tower.ids.note.nothingOnRecord') });
   return notes;
+}
+
+const WEEK = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
+/**
+ * WHERE THE TWO PEOPLE ARE SENT, AND WHEN — as the country's company wrote it in its own admin (the user,
+ * 2026-10-08: "the country needs to set its address info in their admin from there we fetch"; "it's up to the
+ * countries to set visiting days and visiting hours"). Staff type neither. What it has NOT written is said, with
+ * what that means for a ticket, because a blank here would read as nothing being wrong.
+ */
+export function placeWords(row: Pick<DisputeRow, 'place'>, t: Translate): { where: string; visiting: string; missing: boolean } {
+  const p = row.place;
+  const days = p?.visitDays?.length ? WEEK.filter((d) => p.visitDays!.includes(d)).map((d) => t(`tower.contact.day.${d}` as never)) : [];
+  const hours = p?.visitFrom && p?.visitTo ? t('tower.ids.place.hours', { from: p.visitFrom, to: p.visitTo }) : '';
+  return {
+    where: p?.address ? `${p.company}, ${p.address}` : t('tower.ids.place.noAddress'),
+    visiting: days.length ? t('tower.ids.place.visiting', { when: [days.join(', '), hours].filter(Boolean).join(' · ') }) : t('tower.ids.place.noDays'),
+    missing: !p?.address || !days.length,
+  };
 }
 
 /** What the decision did, in a line — for the facts of a dispute that is decided. */

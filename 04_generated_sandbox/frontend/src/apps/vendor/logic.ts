@@ -202,7 +202,7 @@ export interface OriginRow {
 export function originRows(points: NetworkPoint[] | null, destDid: string, options: OriginOption[] | null): OriginRow[] {
   const totals = new Map((options ?? []).map((o) => [o.did, o.quote?.locked.total ?? null]));
   return (points ?? [])
-    .filter((p) => p.did !== destDid && p.openState === 'open')
+    .filter((p) => p.did !== destDid && p.openState === 'open' && p.takesNew !== false)
     .map((point) => ({ point, total: totals.get(point.did) ?? null }))
     .sort((a, b) => {
       if (a.total === null && b.total === null) return a.point.shopName.localeCompare(b.point.shopName);

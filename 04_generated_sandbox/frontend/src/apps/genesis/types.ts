@@ -27,6 +27,8 @@ export interface NetworkPoint {
   location?: { lat: number; lng: number };
   landmark?: string;
   openState: 'open' | 'closed';
+  /** False: no new parcel can name this shop. It still hands out what it holds, so it is on the map — and is not offered here. */
+  takesNew?: boolean;
   pricePerParcel: number;
   // REP1 — the PII-free public reputation: the aggregate + a cold-start flag (a mean of one review is noise,
   // so below the backend's floor `isNew` is true and the UI shows "New" instead of a headline average).

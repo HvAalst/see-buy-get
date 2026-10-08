@@ -9,10 +9,16 @@ export interface ContactCardView {
   website?: string;
   address?: string;
   hours?: string;
+  visitDays?: string[];
+  visitFrom?: string;
+  visitTo?: string;
   saidAt: string;
   saidBy: string;
   basis: string;
 }
+
+/** The days of a week, in the order a company ticks them. */
+export const VISIT_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 
 /**
  * A COMPANY'S OWN ENTRY — how to reach them, written by them, changed by them whenever they like.
@@ -25,6 +31,11 @@ export interface ContactCardView {
  * It is PUBLISHED — on the public page and in every directory — which is the point of writing one. The
  * screen says so plainly, because the difference between the gate's number and somebody's private one is
  * a decision only the person typing it can make.
+ *
+ * AND WHEN IT RECEIVES VISITORS. The user, 2026-10-08: "it's up to the countries to set visiting days and visiting
+ * hours", and "the country needs to set its address info in their admin from there we fetch." This is that admin:
+ * somebody who has to come in person — over a disputed ID, for one — is offered the days ticked here and no other,
+ * and their ticket carries the address and the hours written here. Nobody at SeeBuyGet types either for them.
  */
 export function ContactCardPanel({
   entityId,
@@ -37,7 +48,7 @@ export function ContactCardPanel({
 }) {
   const t = useT();
   const [card, setCard] = useState<ContactCardView | null>(null);
-  const [form, setForm] = useState({ contactName: '', phone: '', phoneAlt: '', email: '', website: '', address: '', hours: '' });
+  const [form, setForm] = useState({ contactName: '', phone: '', phoneAlt: '', email: '', website: '', address: '', hours: '', visitDays: [] as string[], visitFrom: '', visitTo: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -57,6 +68,9 @@ export function ContactCardPanel({
         website: got.website ?? '',
         address: got.address ?? '',
         hours: got.hours ?? '',
+        visitDays: got.visitDays ?? [],
+        visitFrom: got.visitFrom ?? '',
+        visitTo: got.visitTo ?? '',
       });
     }
   }, [client, entityId]);
@@ -70,9 +84,9 @@ export function ContactCardPanel({
     setBusy(true);
     setError(null);
     setDone(null);
-    // Every field travels, including the empty ones: an empty string is how the server is told to CLEAR a
-    // field, and sending only what changed would leave a wrong number on the page for ever.
-    const r = await (client.api as never as { setContactCard: (id: string, body: Record<string, string>) => Promise<{ error?: { detail?: string; title?: string } | null }> }).setContactCard(entityId, {
+    // Every field travels, including the empty ones: an empty string — or an empty list of days — is how the
+    // server is told to CLEAR a field, and sending only what changed would leave a wrong number on the page for ever.
+    const r = await (client.api as never as { setContactCard: (id: string, body: Record<string, unknown>) => Promise<{ error?: { detail?: string; title?: string } | null }> }).setContactCard(entityId, {
       ...form,
       ...(who ? { by: who } : {}),
     });
@@ -124,6 +138,34 @@ export function ContactCardPanel({
         <label class="twr-knob cfield">
           <span class="cfield__label">{t('tower.contact.f.hours')}</span>
           <input class="cinput" value={form.hours} onChange={(e) => setForm({ ...form, hours: (e.target as HTMLInputElement).value })} placeholder={t('tower.contact.f.hoursPh')} />
+        </label>
+      </div>
+
+      {/* WHEN VISITORS ARE RECEIVED. Theirs to set, like everything else here: the days, then from when until when. */}
+      <div class="cfield" style="margin-top:14px">
+        <span class="cfield__label">{t('tower.contact.visit.title')}</span>
+        <span class="chint">{t('tower.contact.visit.hint')}</span>
+        <div role="group" aria-label={t('tower.contact.visit.title')} style="display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:6px">
+          {VISIT_DAYS.map((d) => (
+            <label class="cfield cfield--check" key={d}>
+              <input
+                type="checkbox"
+                checked={form.visitDays.includes(d)}
+                onChange={(e) => setForm({ ...form, visitDays: (e.target as HTMLInputElement).checked ? [...form.visitDays.filter((x) => x !== d), d] : form.visitDays.filter((x) => x !== d) })}
+              />
+              <span>{t(`tower.contact.day.${d}` as never)}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+      <div class="twr-knobs__row">
+        <label class="twr-knob cfield">
+          <span class="cfield__label">{t('tower.contact.visit.from')}</span>
+          <input class="cinput" type="time" value={form.visitFrom} onChange={(e) => setForm({ ...form, visitFrom: (e.target as HTMLInputElement).value })} />
+        </label>
+        <label class="twr-knob cfield">
+          <span class="cfield__label">{t('tower.contact.visit.to')}</span>
+          <input class="cinput" type="time" value={form.visitTo} onChange={(e) => setForm({ ...form, visitTo: (e.target as HTMLInputElement).value })} />
         </label>
       </div>
 

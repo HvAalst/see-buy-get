@@ -156,6 +156,11 @@ export class DisputePlace {
   @ApiPropertyOptional() email?: string;
   @ApiPropertyOptional() address?: string;
   @ApiPropertyOptional() hours?: string;
+  /** The days it receives visitors (`mon` … `sun`), set by the company itself. Absent: it has set none. */
+  @ApiPropertyOptional({ type: [String] }) visitDays?: string[];
+  /** From when until when on those days, `HH:MM`. */
+  @ApiPropertyOptional() visitFrom?: string;
+  @ApiPropertyOptional() visitTo?: string;
 }
 
 /** THE TICKET for an appointment: where, when, and what to bring. One for each of the two people. */
@@ -169,6 +174,8 @@ export class DisputeTicket {
   @ApiProperty({ enum: BRING, isArray: true }) bring: Bring[];
   /** How many more times the day can be changed, by whoever made it. */
   changesLeft: number;
+  /** The company has since changed its visiting days, and this day is no longer one of them. */
+  @ApiPropertyOptional() offDay?: boolean;
   @ApiPropertyOptional({ type: DisputePlace }) place?: DisputePlace;
 }
 
@@ -276,8 +283,13 @@ export class DisputeRow {
   /** An appointment: the day, and which of the two made it. */
   @ApiPropertyOptional() appointmentDate?: string;
   @ApiPropertyOptional({ enum: DISPUTE_SIDES }) appointmentBy?: DisputeSide;
-  /** Where their tickets send them. Absent: the country's company has written no address, and the ticket says to ask. */
-  @ApiPropertyOptional() appointmentPlace?: string;
+  /** The appointment is on a day the country's company no longer receives visitors. */
+  @ApiPropertyOptional() appointmentOffDay?: boolean;
+  /**
+   * Where the two people are sent, and when visitors are received there — the country's company's own entry, set
+   * in its own admin. Absent: it has written nothing, and a ticket says to ask.
+   */
+  @ApiPropertyOptional({ type: DisputePlace }) place?: DisputePlace;
   /** The decision in person. */
   @ApiPropertyOptional({ enum: DISPUTE_SIDES }) finalTo?: DisputeSide;
   @ApiPropertyOptional() finalBy?: string;

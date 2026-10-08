@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../i18n';
-import { appointmentDays, bringLines, idActions, idStatusSays, looksLikeIdReference, settingsIdSays, ticketLines, type DisputeState, type DisputeStatus, type DisputeTicket } from './idDispute';
+import { appointmentChoices, appointmentDays, bringLines, dayLabel, idActions, idStatusSays, looksLikeIdReference, settingsIdSays, ticketLines, visitingWords, type DisputeState, type DisputeStatus, type DisputeTicket } from './idDispute';
 
 const status = (over: Partial<DisputeStatus> = {}): DisputeStatus => ({ reference: 'ID-ABCD-2345', side: 'claimant', register: 'driver', state: 'opened', openedAt: '2026-10-08T09:00:00.000Z', photos: [], sent: false, ...over });
 const ticket = (over: Partial<DisputeTicket> = {}): DisputeTicket => ({ reference: 'ID-WXYZ-6789', date: '2026-10-15', yours: true, bring: ['id_card', 'phone', 'reference', 'second_document'], changesLeft: 2, ...over });
@@ -107,11 +107,36 @@ describe('a dispute over a national ID, as each of the two is told it', () => {
   });
 
   describe('the ticket', () => {
-    it('says when, where and who to ask for — or, with no address written down, to ring first', () => {
-      const lines = ticketLines(ticket({ place: { company: 'SeeBuyGet Kenya', address: 'Mombasa Road, gate 4', hours: 'Mon–Fri 8–17', contactName: 'Grace', phone: '+254 20 000 111' } }), t as never);
+    it('says when, where, when visitors are received and who to ask for — as the country’s company wrote it', () => {
+      const place = { company: 'SeeBuyGet Kenya', address: 'Mombasa Road, gate 4', hours: 'Gate 6am–6pm', visitDays: ['fri', 'mon'], visitFrom: '09:00', visitTo: '16:00', contactName: 'Grace', phone: '+254 20 000 111' };
+      const lines = ticketLines(ticket({ place }), t as never);
       expect(lines.when).toContain('2026');
-      expect(lines.where).toEqual(['SeeBuyGet Kenya', 'Mombasa Road, gate 4', 'Mon–Fri 8–17', 'Ask for Grace', 'Telephone +254 20 000 111']);
-      expect(ticketLines(ticket(), t as never).where[0]).toContain('ask SeeBuyGet staff where to go before you travel');
+      // The VISITING days and hours, in the week's order — not the gate's hours, which are for a haulier.
+      expect(lines.where).toEqual(['SeeBuyGet Kenya', 'Mombasa Road, gate 4', 'Visitors: Monday, Friday · 09:00 to 16:00', 'Ask for Grace', 'Telephone +254 20 000 111']);
+      expect(visitingWords({ company: 'x', visitDays: ['sun', 'sat'] }, t as never)).toBe('Saturday, Sunday');
+      expect(visitingWords({ company: 'x' }, t as never)).toBeNull();
+    });
+
+    it('says what the company has not written, beside what it has — and to ask before travelling', () => {
+      // Days, no address.
+      expect(ticketLines(ticket({ place: { company: 'SeeBuyGet Kenya', visitDays: ['mon'] } }), t as never).where).toEqual(['SeeBuyGet Kenya', 'Its address is not written down here yet: ask SeeBuyGet staff where to go before you travel.', 'Visitors: Monday']);
+      // An address, no days: the gate's hours if it wrote any, and that visiting days are not said.
+      expect(ticketLines(ticket({ place: { company: 'SeeBuyGet Kenya', address: 'Mombasa Road, gate 4', hours: 'Gate 6am–6pm' } }), t as never).where).toEqual(['SeeBuyGet Kenya', 'Mombasa Road, gate 4', 'Gate 6am–6pm', 'It has not said which days it receives visitors: ask before you travel.']);
+      expect(ticketLines(ticket({ place: { company: 'SeeBuyGet Kenya', address: 'Mombasa Road, gate 4' } }), t as never).where[2]).toContain('has not said which days');
+      // Nothing at all.
+      expect(ticketLines(ticket(), t as never).where).toEqual(['The SeeBuyGet office for your country. Its address is not written down here yet: ask SeeBuyGet staff where to go before you travel.']);
+    });
+
+    it('offers the company’s own visiting days in the next three weeks, and no other — or any day where it has set none', () => {
+      const thursday = Date.parse('2026-10-08T15:00:00.000Z');
+      expect(appointmentChoices({ company: 'x', visitDays: ['fri', 'mon'] }, thursday)).toEqual(['2026-10-09', '2026-10-12', '2026-10-16', '2026-10-19', '2026-10-23', '2026-10-26']);
+      // Never today, even when today is one of its days.
+      expect(appointmentChoices({ company: 'x', visitDays: ['thu'] }, thursday)).toEqual(['2026-10-15', '2026-10-22', '2026-10-29']);
+      // It has set none: nothing to offer, and the screen falls back to any day with a warning.
+      expect(appointmentChoices({ company: 'x', address: 'Somewhere' }, thursday)).toBeNull();
+      expect(appointmentChoices({ company: 'x', visitDays: [] }, thursday)).toBeNull();
+      expect(appointmentChoices(undefined, thursday)).toBeNull();
+      expect(dayLabel('2026-10-12')).toMatch(/12/);
     });
 
     it('lists what to bring in the order it is asked for, with the second document that fits what they registered as', () => {

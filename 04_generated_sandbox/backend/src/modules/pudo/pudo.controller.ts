@@ -1435,7 +1435,7 @@ export class SbgController {
     if (own !== entityId) throw new GlosError('FORBIDDEN', 'A company’s own entry is its own');
     const card = this.contacts.set(
       own,
-      { contactName: dto.contactName, phone: dto.phone, phoneAlt: dto.phoneAlt, email: dto.email, website: dto.website, address: dto.address, hours: dto.hours },
+      { contactName: dto.contactName, phone: dto.phone, phoneAlt: dto.phoneAlt, email: dto.email, website: dto.website, address: dto.address, hours: dto.hours, visitDays: dto.visitDays, visitFrom: dto.visitFrom, visitTo: dto.visitTo },
       this.namedActor(actor, dto.by),
     );
     return { ...card, basis: CONTACT_BASIS } as never;
@@ -2875,6 +2875,8 @@ export class SbgController {
     const m = this.measuredFrom(l, w, h, kg);
     // `publicQuote`, not the raw quote: this endpoint is @Public(), and the raw shape carries the sister's
     // three rate layers, which were decided to be internal. A buyer sees a price; a merchant sees one fee.
+    this.agents.assertNamedAtMint(origin);
+    this.agents.assertNamedAtMint(dest);
     return publicQuote(this.routing.quoteShipment(origin, dest, m?.size ?? ((size as 'S' | 'M' | 'L' | 'HEAVY') || 'M'), m?.factor));
   }
 
@@ -2902,7 +2904,7 @@ export class SbgController {
     if (!list) throw new GlosError('FIELD_REQUIRED', 'provide origin+dests or dest+origins');
     const variable = origin ? 1 : 0; // which side varies → the `did` the pin represents
     return { options: list.filter(([a, b]) => a && b).map(([o, d]) => {
-      try { return { did: [o, d][variable], quote: publicQuote(this.routing.quoteShipment(o, d, sz, m?.factor)) }; }
+      try { this.agents.assertNamedAtMint(o); this.agents.assertNamedAtMint(d); return { did: [o, d][variable], quote: publicQuote(this.routing.quoteShipment(o, d, sz, m?.factor)) }; }
       catch (e) { return { did: [o, d][variable], error: e instanceof Error ? e.message : 'no route' }; }
     }) };
   }
@@ -3152,6 +3154,9 @@ export class SbgController {
       location: a.location,
       landmark: a.landmark,
       openState: a.openState,
+      // False: no NEW parcel can name this shop, as the place to hand in or to collect. It still hands out what it
+      // holds — so it stays on the map for whoever is collecting — and a picker simply does not offer it.
+      takesNew: !a.idHold,
       pricePerParcel: a.pricePerParcel,
       rating: this.ratings.agentRating(a.did),
       freeSlots: this.shelf.available(a.did),
