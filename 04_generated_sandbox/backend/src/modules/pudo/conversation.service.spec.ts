@@ -382,6 +382,8 @@ describe('conversations about a load', () => {
           if (!parcelsById[id]) throw new Error('Parcel not found');
           return parcelsById[id];
         },
+        // No account is named for any parcel here: each is found by the number it was addressed to.
+        receiverOf: (p: { receiverPhoneHash?: string }) => ({ hash: p.receiverPhoneHash }),
       };
       const persons = {
         findByDid: (did: string) => personsByDid[did],

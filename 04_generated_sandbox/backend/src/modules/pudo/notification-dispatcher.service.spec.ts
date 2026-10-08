@@ -58,6 +58,9 @@ function harness(opts: HarnessOpts) {
     // The uncollected sweep reads the shelf rather than reacting to an event — there IS no event when
     // nothing happens, which is the whole reason nobody was being told.
     list: () => opts.onShelf ?? [],
+    // No account is named for any parcel here: each side is found by the number it was addressed to.
+    receiverOf: (p: { receiverPhoneHash?: string }) => ({ hash: p.receiverPhoneHash }),
+    senderOf: (p: { senderPhoneHash?: string }) => ({ hash: p.senderPhoneHash }),
   } as unknown as ParcelService;
   const persons = { findByHash: (hash: string) => opts.personByHash?.[hash] } as unknown as PersonService;
   const agents = {

@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { ParcelService } from './parcel.service';
+import { isFor } from './addressed-to';
 import { VendorService } from './vendor.service';
 import { MIN_PUBLIC_RATINGS } from './rating.service';
 import { Parcel } from './pudo.types';
@@ -106,12 +107,13 @@ export class MerchantRatingService {
    *
    * A peer send has no merchant, so there is nothing to rate.
    */
-  rate(input: { parcelId: string; phoneHash: string; stars: number; tags?: MerchantTag[] }): { rating: MerchantRatingRecord; scorecard: MerchantScorecard } {
+  rate(input: { parcelId: string; phoneHash: string; personDid?: string; stars: number; tags?: MerchantTag[] }): { rating: MerchantRatingRecord; scorecard: MerchantScorecard } {
     const parcel = this.parcels.get(input.parcelId);
     if (!parcel.vendorId) throw new GlosError('INVALID_STATE', 'That parcel did not come from a store');
     // 404 rather than FORBIDDEN, the same rule every owner-scoped read here keeps: telling a stranger a
     // parcel exists but is not theirs tells them something about somebody else's business.
-    if (!input.phoneHash || parcel.receiverPhoneHash !== input.phoneHash) throw new GlosError('NOT_FOUND', 'No such parcel');
+    // Theirs by the account once the parcel belongs to one — never by a number somebody else used to have.
+    if (!input.phoneHash || !isFor(this.parcels.receiverOf(parcel), input)) throw new GlosError('NOT_FOUND', 'No such parcel');
     if (parcel.status !== 'Delivered') throw new GlosError('INVALID_STATE', 'You can rate the store once the parcel is delivered');
     const stars = Math.round(input.stars);
     if (!(stars >= 1 && stars <= 5)) throw new GlosError('VALIDATION_FAILED', 'Stars must be 1 to 5');

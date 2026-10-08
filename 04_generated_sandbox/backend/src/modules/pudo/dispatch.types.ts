@@ -382,6 +382,8 @@ export class Freight {
   // shows in "my shipments") — never the cleartext number, since the raw Freight is returned to drivers /
   // operators (listFreight, pickup/deliver) — plus a public tracking key, the order ref, and per-transition
   // timestamps → a timeline. Absent for a bulletin freight (no buyer).
+  // The ACCOUNT that buyer is, once one is certain, is NOT here: this record goes whole to every driver who lists the
+  // board. It is kept beside the loads — DispatchService.buyerOf (see addressed-to.ts).
   buyerPhoneHash?: string;
   trackingKey?: string;
   externalOrderId?: string;

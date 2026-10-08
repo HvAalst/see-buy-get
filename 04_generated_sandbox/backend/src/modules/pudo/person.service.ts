@@ -75,6 +75,8 @@ export class PersonService {
   private readonly byEmail = new Map<string, string>();
   /** Whoever has to hear that somebody's recovery email is no longer the one it was. Registered, not injected. */
   private readonly whenEmailChanged: Array<(personDid: string) => void> = [];
+  /** Whoever keeps something addressed to a phone number, and has to hear that an account is moving off one. */
+  private readonly whenNumberLeft: Array<(personDid: string, fromHash: string) => void> = [];
 
   constructor(
     private readonly dids: DidService,
@@ -457,6 +459,31 @@ export class PersonService {
     return undefined;
   }
 
+  /**
+   * WHOSE A NUMBER IS, FOR CERTAIN, RIGHT NOW — the account that something addressed to it should be kept by.
+   *
+   * A number moved OFF an account in the last day is still that account's: nobody else can take it meanwhile, and its
+   * owner may put the account back on it. A number an account moved ONTO in the last day is not certain yet: the move
+   * can be undone, and what was addressed to that number must not go back to another number with the account.
+   */
+  settledAt(phoneHash: string, now: number = Date.now()): Person | undefined {
+    if (!phoneHash) return undefined;
+    const held = this.movedFrom(phoneHash, now);
+    if (held) return held;
+    const here = this.persons.get(phoneHash);
+    if (!here) return undefined;
+    return here.phoneChange && Date.parse(here.phoneChange.undoUntil) > now ? undefined : here;
+  }
+
+  /**
+   * Be told when an account moves off a number, BEFORE it does: what is addressed to that number and to no account is
+   * theirs, and has to be kept by the account before the number can be anybody else's. Not told of an undo — the
+   * account goes back to a number that was held for it, and takes nothing from the one it leaves.
+   */
+  onNumberLeft(listener: (personDid: string, fromHash: string) => void): void {
+    this.whenNumberLeft.push(listener);
+  }
+
   /** Every account with a number change on record — open or past its window and waiting to be settled. */
   withNumberChange(): Person[] {
     return [...this.persons.values()].filter((p) => p.phoneChange);
@@ -479,6 +506,8 @@ export class PersonService {
       throw new GlosError('INVALID_STATE', 'Your number was changed less than a day ago. Undo that change, or wait until it can no longer be undone.');
     }
     const fromHash = person.phoneHash;
+    // First, and before anything of the person's changes: a keeper that fails here has stopped a move that had not begun.
+    for (const keep of this.whenNumberLeft) keep(person.personDid, fromHash);
     person.phoneChange = {
       fromHash,
       at: new Date(now).toISOString(),

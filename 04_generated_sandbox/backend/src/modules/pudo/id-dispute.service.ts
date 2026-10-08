@@ -41,6 +41,7 @@ import { MediaService } from './media.service';
 import { NotificationService } from './notification.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
+import { accountFor, waitsAt, type Addressed } from './addressed-to';
 
 const DAY_MS = 86_400_000;
 /** Letters and digits nobody mistakes for one another — it is written on paper by hand and read off a photograph. */
@@ -146,7 +147,24 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
     @Optional() private readonly entities?: EntityService,
     @Optional() private readonly contacts?: ContactCardService,
     @Optional() private readonly mail?: MailService,
-  ) {}
+  ) {
+    // Whoever opened a dispute is known by the phone they opened it with, until an account answers for it. When that
+    // account moves to another number the dispute goes with the ACCOUNT (addressed-to.ts) — or the registration it
+    // holds, or gives back, would be looked for under whoever has the old number next.
+    this.persons.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
+  }
+
+  /** An account is moving off a number: every dispute opened from that number, and named for no account yet, is theirs. */
+  keepWith(personDid: string, fromHash: string): number {
+    let kept = 0;
+    for (const d of this.disputes.values()) {
+      if (!waitsAt(claimantOf(d), fromHash)) continue;
+      d.claimant.personDid = personDid;
+      this.disputes.set(d.disputeId, d);
+      kept += 1;
+    }
+    return kept;
+  }
 
   private timer?: NodeJS.Timeout;
 
@@ -761,7 +779,8 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
 
   /** The claimant's own registration in this register, once they have one. */
   private claimantRecord(d: StoredDispute): string | undefined {
-    const person = this.persons.findByHash(d.claimant.phoneHash);
+    // Their account where one is named; until then, the account on the phone they opened this with.
+    const person = accountFor(claimantOf(d), this.persons);
     const role = d.register === 'driver' ? 'driver' : 'agent';
     return person?.roles.find((r) => r.role === role && r.status === 'active' && r.entityDid !== d.holder.did)?.entityDid;
   }
@@ -1056,6 +1075,11 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
 
 const DAY_NAME: Record<Weekday, string> = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
 /** "Monday, Tuesday and Friday" — the days as somebody would say them. */
+/** The phone a dispute was opened from, and the account that answers for it once one is named. See addressed-to.ts. */
+function claimantOf(d: StoredDispute): Addressed {
+  return { hash: d.claimant.phoneHash, owner: d.claimant.personDid };
+}
+
 function daysInWords(days: Weekday[]): string {
   const names = WEEKDAYS.filter((d) => days.includes(d)).map((d) => DAY_NAME[d]);
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : (names[0] ?? '');

@@ -732,6 +732,9 @@ export class Parcel {
   // retroactively (O4). Absent when the counterpart is not a person (e.g. a vendor sender).
   senderPhoneHash?: string;
   receiverPhoneHash?: string;
+  // The ACCOUNT each side belongs to is deliberately NOT here. This record is handed back whole to the shop that
+  // takes the parcel in; an account's id on it would tell a shop, for any number it types, whether that number has an
+  // account. It is kept beside the parcels: ParcelService.receiverOf / senderOf (see addressed-to.ts).
   dropoffPhotoRef?: string; // mandatory for outbound drop-off (fraud defence)
   deliveredPhotoRef?: string;
   paymentMode: PaymentMode;

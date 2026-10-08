@@ -1,5 +1,6 @@
 import { PersonService } from './person.service';
 import { ParcelService } from './parcel.service';
+import { accountFor, isFor } from './addressed-to';
 import { AgentService } from './agent.service';
 import { Injectable, Optional } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
@@ -131,8 +132,9 @@ export class ConversationService {
   /**
    * CV5 — TALK ABOUT A PARCEL WAITING AT A SHOP: the person collecting it and the shop holding it.
    *
-   * Either side may start it. The person collecting proves they are the receiver by being the person the parcel's
-   * receiver phone resolves to; the shop proves itself by being the parcel's collection shop. A stranger, on either
+   * Either side may start it. The person collecting proves they are the receiver by being the account the parcel
+   * belongs to — or, while it belongs to none, the one on the number it was addressed to; the shop proves itself by
+   * being the parcel's collection shop. A stranger, on either
    * side, is told the parcel does not exist — the thread must not confirm that a parcel is waiting for somebody.
    *
    * The shop can only reach a customer who HAS an account: a message needs a person to arrive at. Told plainly,
@@ -148,14 +150,14 @@ export class ConversationService {
 
     let askerDid: string;
     if (did === shopDid) {
-      const person = parcel.receiverPhoneHash ? this.persons.findByHash(parcel.receiverPhoneHash) : undefined;
+      const person = accountFor(this.parcels.receiverOf(parcel), this.persons);
       if (!person) {
         throw new GlosError('NOT_FOUND', 'This customer has no SeeBuyGet account yet, so there is nobody to message. They can sign in to the Send app with the phone number they gave, and the parcel will be there.');
       }
       askerDid = person.personDid;
     } else {
       const person = this.persons.findByDid(did);
-      if (!person || !parcel.receiverPhoneHash || person.phoneHash !== parcel.receiverPhoneHash) throw new GlosError('NOT_FOUND', 'Parcel not found');
+      if (!person || !isFor(this.parcels.receiverOf(parcel), person)) throw new GlosError('NOT_FOUND', 'Parcel not found');
       askerDid = did;
     }
 

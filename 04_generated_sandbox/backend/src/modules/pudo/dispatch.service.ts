@@ -6,6 +6,8 @@ import { windowOf, windowWords } from './delivery-window';
 import type { ContractRef } from './carriage-contract.types';
 import type { ClientRef } from './business-client.types';
 import { Inject, Injectable, Optional } from '@nestjs/common';
+import { PersonService } from './person.service';
+import { isFor, readerOf, waitsAt, type Addressed, type Reader } from './addressed-to';
 import { TransitAuthorityService, transitRefusal } from './transit-authority.service';
 import { BorderRuleService } from './border-rules.service';
 import type { BorderAdvice, BorderRefusal } from './border-rules.types';
@@ -315,6 +317,12 @@ export class DispatchService {
   // Durable: a freight job is a real transport obligation (a diverted P4+ order is a paid commitment),
   // so — unlike the ephemeral offer bulletin — it must survive a restart.
   private readonly freights = new PersistentMap<string, Freight>('pudo-freights');
+  /**
+   * WHICH ACCOUNT A DIVERTED ORDER'S BUYER IS — kept here, beside the loads, never on one: a load goes whole to every
+   * driver who lists the board, and an account's id on it would follow one person across every number they ever gave a
+   * store. Keyed by freight id.
+   */
+  private readonly buyerAccounts = new PersistentMap<string, string>('pudo-freight-buyer-accounts');
   private readonly offers = new Map<string, Offer>();
   // FB0c — durable like the freight it negotiates over, and for the same reason: a price a driver named is a
   // commercial position the shipper is weighing, not a bulletin entry that may quietly vanish on a restart.
@@ -356,8 +364,29 @@ export class DispatchService {
     // The fleets' own clocks: which day it is for a fleet, and what time a delivery was made on it. Optional for the
     // same reason as the two above; without it a fleet's day is the day in UTC, as it always was.
     @Optional() private readonly managers?: FleetManagerService,
+    // The accounts, to know whose a buyer's number certainly is. Optional for the same reason; without it an order
+    // belongs to no account and is found by its number alone, as it always was.
+    @Optional() private readonly persons?: PersonService,
   ) {
     this.freightSeq = [...this.freights.values()].length; // continue the human FRT-NNN sequence after a restart
+    // An account moving off a number takes the orders addressed to that number with it.
+    this.persons?.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
+  }
+
+  /** An account is moving off a number: every order still addressed to that number and to no account is theirs. */
+  keepWith(personDid: string, fromHash: string): number {
+    let kept = 0;
+    for (const f of this.freights.values()) {
+      if (!waitsAt(this.buyerOf(f), fromHash)) continue;
+      this.buyerAccounts.set(f.freightId, personDid);
+      kept += 1;
+    }
+    return kept;
+  }
+
+  /** The number a diverted order's buyer gave, and the account that buyer is once one is certain. See addressed-to.ts. */
+  buyerOf(f: Freight): Addressed {
+    return { hash: f.buyerPhoneHash, owner: this.buyerAccounts.get(f.freightId) };
   }
 
   /** The day it is for a fleet, on its own clock — and in UTC for a fleet that has none, or where nobody can be asked. */
@@ -467,6 +496,8 @@ export class DispatchService {
     const equipmentGaps: Array<'origin' | 'dest'> = [];
     if (input.originEquipment != null && !siteHandles(input.originEquipment)) equipmentGaps.push('origin');
     if (input.destEquipment != null && !siteHandles(input.destEquipment)) equipmentGaps.push('dest');
+    // The account the buyer's number is certainly for today, so the order stays theirs if the number moves on.
+    const buyerAccount = input.buyerMobile ? this.persons?.settledAt(hashPhone(input.buyerMobile), now)?.personDid : undefined;
     const freight: Freight = {
       freightId: `frt_${randomBytes(5).toString('hex')}`,
       code: `FRT-${String(this.freightSeq).padStart(3, '0')}`,
@@ -547,6 +578,7 @@ export class DispatchService {
       createdAt: new Date().toISOString(),
     };
     this.freights.set(freight.freightId, freight);
+    if (buyerAccount) this.buyerAccounts.set(freight.freightId, buyerAccount);
     // Ping nearby drivers NOW for a ship-now load OR an early-claimable scheduled one (so a scarce truck can
     // commit ahead of the date). A no-early-claim scheduled load stays silent until due (publishReadyFreight).
     // A contract order pings nobody: it is not for whoever is nearby.
@@ -620,11 +652,15 @@ export class DispatchService {
     return activated;
   }
 
-  /** Every diverted freight a buyer (by phone hash) is a party to — the "my shipments" freight section. */
-  freightsForPhoneHash(phoneHash: string): FreightShipmentView[] {
-    if (!phoneHash) return [];
+  /**
+   * Every diverted freight somebody is the buyer of — the "my shipments" freight section. Theirs by the account once
+   * the order belongs to one, by the number it was addressed to until then (addressed-to.ts).
+   */
+  freightsFor(reader: Reader | string): FreightShipmentView[] {
+    const who = readerOf(reader);
+    if (!who.phoneHash) return [];
     return [...this.freights.values()]
-      .filter((f) => f.buyerPhoneHash === phoneHash)
+      .filter((f) => isFor(this.buyerOf(f), who))
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
       .map((f) => DispatchService.toShipmentView(f));
   }

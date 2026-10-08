@@ -235,6 +235,28 @@ so every app has them — `shared/account/SettingsSheet.tsx`, `TroubleSheet.tsx`
   matched). The asker reads the outcome with the reference (`POST identity/move-requests/status`) — nothing we
   send can reach somebody with no number, PIN or inbox.
 
+### What moves with the account: its parcels
+A parcel, a store's order that went as freight, an invitation into a business, and an ID dispute (whoever
+opened it) are ADDRESSED to a phone number and KEPT by an account (`modules/pudo/addressed-to.ts` — one rule,
+`isFor`, read everywhere). A fifth thing of that kind joins the same file and registers with `onNumberLeft`.
+- **Where the account is kept: beside the record, never on it.** `ParcelService.receiverOf` / `senderOf` and
+  `DispatchService.buyerOf` read it from a store of their own. The parcel record is handed back whole to the
+  shop that takes it in, and a load goes whole to every driver who lists the board: an account's id on either
+  would tell a shop, for any number it types, whether that number has an account. Do not add it to `Parcel` or
+  `Freight`. An invitation carries it (`BusinessMember.forPersonDid`), and no view hands that out.
+- **Named when it is made**, if an account is certain on that number (`PersonService.settledAt`): the account
+  on it, or — for 24 hours after a move — the account it is still held for. NOT an account that moved onto the
+  number less than a day ago: the move can be undone, and the parcel must not go back with it.
+- **Named when an account moves off a number**: `PersonService.onNumberLeft` is asked BEFORE the account
+  moves, and the parcel, order and business services each keep what was addressed to that number and to no
+  account. A keeper that fails stops the move. An undo asks nobody.
+- **Read**: the account's, by the account, whatever number it signs in with; while no account is named, by
+  whoever signs in with the number (how a parcel waits for somebody who has not signed up yet).
+- So an account that moves keeps its parcels and their collection codes, and whoever signs up with the old
+  number later sees only what is sent to it from then on. The number change sheet says so
+  (`account.settings.phoneParcels`), as does help (`account-recovery`).
+- Not changed: the number written on the parcel itself (what the sender typed, and what a shop would ring).
+
 ## A national ID two people say is theirs
 A driver and a shop each register with a national ID number and the network keeps one of each, so somebody whose
 number another registration holds cannot register at all. The user decided how it is settled (2026-10-08): staff

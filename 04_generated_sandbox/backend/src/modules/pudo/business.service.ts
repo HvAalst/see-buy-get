@@ -11,6 +11,7 @@ import { HandleService } from '../../foundation/handle/handle.service';
 import { MailService } from '../../foundation/mail/mail.service';
 import { hashPhone, isPlausiblePhone, normalizePhone } from '../../foundation/identity/phone';
 import { PersonService } from './person.service';
+import { isFor, waitsAt, type Addressed } from './addressed-to';
 import {
   BUSINESS_MEMBER_ROLES,
   BusinessMember,
@@ -68,7 +69,22 @@ export class BusinessService {
     private readonly documents: CompanyDocumentService,
     private readonly handles: HandleService,
     @Optional() private readonly mail?: MailService,
-  ) {}
+  ) {
+    // An account moving off a number takes its unanswered invitations with it.
+    this.persons.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
+  }
+
+  /** An account is moving off a number: every open invitation still addressed to that number and to no account is theirs. */
+  keepWith(personDid: string, fromHash: string): number {
+    let kept = 0;
+    for (const m of this.members.values()) {
+      if (m.joinedAt || m.removedAt || m.declinedAt || !waitsAt(invitedOf(m), fromHash)) continue;
+      m.forPersonDid = personDid;
+      this.members.set(m.memberId, m);
+      kept += 1;
+    }
+    return kept;
+  }
 
   /* ------------------------------------------------------------------ setting up -- */
 
@@ -168,11 +184,14 @@ export class BusinessService {
 
   /* ---------------------------------------------------------------- the people -- */
 
-  /** Every business this person is in, and every one they are invited to. Found by their own phone. */
+  /**
+   * Every business this person is in, and every one they are invited to. An invitation is theirs when it is for their
+   * account — or, while it is for no account, for the number they sign in with.
+   */
   mine(personDid: string): BusinessMembershipView[] {
     const person = this.persons.requireByDid(personDid);
     return [...this.members.values()]
-      .filter((m) => !m.removedAt && !m.declinedAt && (m.personDid === personDid || (!m.joinedAt && m.phoneHash === person.phoneHash)))
+      .filter((m) => !m.removedAt && !m.declinedAt && (m.personDid === personDid || (!m.joinedAt && isFor(invitedOf(m), person))))
       .flatMap((m) => {
         const entity = this.entities.find(m.entityId);
         if (!entity?.business) return [];
@@ -204,6 +223,7 @@ export class BusinessService {
     if (!name) throw new GlosError('FIELD_REQUIRED', 'Say who this is — what they do is recorded under this name', { field: 'name' });
     const role = cleanRole(input.role);
     const phoneHash = hashPhone(input.phone);
+    const invited = this.persons.settledAt(phoneHash);
     const live = this.liveMembers(acting.entity.entityId);
     if (live.some((m) => m.phoneHash === phoneHash)) throw new GlosError('CONFLICT', 'That number is already in this business, or invited to it', { field: 'phone' });
     if (live.length >= MAX_MEMBERS) throw new GlosError('INVALID_STATE', `A business can have ${MAX_MEMBERS} people`);
@@ -211,6 +231,8 @@ export class BusinessService {
       memberId: newId(),
       entityId: acting.entity.entityId,
       phoneHash,
+      // The account that number is certainly for today, if any: the invitation then stays theirs if the number moves on.
+      ...(invited ? { forPersonDid: invited.personDid } : {}),
       phoneEnds: normalizePhone(input.phone).replace(/\D/g, '').slice(-3),
       name,
       role,
@@ -494,7 +516,7 @@ export class BusinessService {
     const person = this.persons.requireByDid(personDid);
     const member = this.members.get(memberId);
     // One answer for "no such invitation" and "not yours": an invitation id is not a way to learn whose number is whose.
-    if (!member || member.joinedAt || member.removedAt || member.declinedAt || member.phoneHash !== person.phoneHash) {
+    if (!member || member.joinedAt || member.removedAt || member.declinedAt || !isFor(invitedOf(member), person)) {
       throw new GlosError('NOT_FOUND', 'No such invitation');
     }
     return member;
@@ -521,6 +543,11 @@ function cleanActivities(raw: string[] | undefined): BusinessActivity[] {
 function cleanRole(raw: string): BusinessMemberRole {
   if (!BUSINESS_MEMBER_ROLES.includes(raw as BusinessMemberRole)) throw new GlosError('VALIDATION_FAILED', 'A person is an owner, a booker, finance or a viewer', { field: 'role' });
   return raw as BusinessMemberRole;
+}
+
+/** The number an invitation was sent to, and the account it is for once one is certain. */
+function invitedOf(m: BusinessMember): Addressed {
+  return { hash: m.phoneHash, owner: m.forPersonDid };
 }
 
 function memberView(m: BusinessMember, readerPersonDid?: string): BusinessMemberView {

@@ -312,6 +312,7 @@ function PhoneForm({ api, onDone }: { api: AccountApi; onDone: () => void }) {
   return (
     <>
       <p class="t-body">{t('account.settings.phoneBody')}</p>
+      <p class="t-body">{t('account.settings.phoneParcels')}</p>
       <div class="field">
         <label class="field__label" for="acct-new-phone">
           {t('account.settings.phoneNew')}

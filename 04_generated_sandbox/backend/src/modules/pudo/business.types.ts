@@ -34,6 +34,13 @@ export interface BusinessMember {
   phoneEnds: string;
   /** Set when they accept. */
   personDid?: string;
+  /**
+   * WHO AN OPEN INVITATION IS FOR, from the moment an account is certain on that number (addressed-to.ts). An owner
+   * invites the person they know by a number; if that person's account moves to another number before they answer,
+   * the invitation goes with them — and whoever signs up with the old number later is not shown a way into the business.
+   * Never shown to the owner: nothing is learned about whether a number has an account.
+   */
+  forPersonDid?: string;
   /** How they appear and what every act of theirs is recorded under. Given by whoever added them. */
   name: string;
   role: BusinessMemberRole;

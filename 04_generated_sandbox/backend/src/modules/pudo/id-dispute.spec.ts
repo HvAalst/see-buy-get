@@ -1153,6 +1153,63 @@ describe('two people say one national ID is theirs', () => {
       expect(failure(() => appoint(o.reference, tomorrow(then), then))).toMatch(/^INVALID_STATE/);
     });
 
+    it('finds whoever opened it by their ACCOUNT once they have one — on a new number still, and never whoever has their old one', () => {
+      const d = aDriver();
+      const o = wonByClaimant(d);
+      // The claimant registered with it, and then moved their account to another number — as anybody may.
+      const mine = drivers.register({ displayName: 'Claimant', fullName: 'C', nationalId: d.nationalId, mobile: o.phone, licenceClasses: ['bike'] });
+      const me = persons.attachRole(o.phone, 'driver', mine.did);
+      const fresh = aNumber();
+      persons.movePhone(me.personDid, fresh, 'self', o.at);
+      const heldKey = drivers.moveMobile(mine.did, fresh);
+      // A day later the old number is free, and somebody else registers to drive with it.
+      persons.settleMove(me.personDid, o.at + 25 * 3_600_000);
+      if (heldKey) drivers.releaseHeldPhone(heldKey, mine.did);
+      const other = drivers.register({ displayName: 'Newcomer', fullName: 'N', nationalId: '9900' + String((seq += 1)).padStart(4, '0'), mobile: o.phone, licenceClasses: ['bike'] });
+      const stranger = persons.attachRole(o.phone, 'driver', other.did);
+
+      // The holder comes to the appointment and the decision goes back to them.
+      const day = dayStr(o.at + 3 * DAY);
+      appoint(o.holderReference, day, o.at);
+      const then = Date.parse(day + 'T09:00:00.000Z');
+      const say = { what: 'Card in the hand: genuine, and theirs.', reason: 'The other person did not come; this card is the real one.' };
+      disputes.check(o.disputeId, AMINA, { to: 'holder', ...say, claimantCame: false, holderCame: true }, then);
+      disputes.approve(o.disputeId, BRIAN, then);
+
+      // The registration made with the ID since is the claimant's own, wherever their account is now: that one is held.
+      expect(drivers.holdsNationalId(d.did, d.nationalId)).toBe(true);
+      expect(drivers.holdsNationalId(mine.did, d.nationalId)).toBe(false);
+      expect(drivers.canOperate(mine.did)).toBe(false);
+      expect(disputes.status(o.reference, then)).toMatchObject({ state: 'final', held: true });
+      expect(disputes.against(me.personDid, then)).toMatchObject({ reference: o.reference, held: true });
+      // Whoever has the old number has nothing to do with any of it.
+      expect(drivers.canOperate(other.did)).toBe(true);
+      expect(drivers.idHoldOf(other.did)).toBeUndefined();
+      expect(disputes.against(stranger.personDid, then)).toBeUndefined();
+    });
+
+    it('a dispute goes with the account that answers for it, and is never taken by the next account on the number', () => {
+      const claimantOn = (reference: string) => stored().find((x) => x.claimant.reference === reference)!.claimant.personDid;
+      // Opened by somebody who already had an account: it names that account from the start.
+      const phone = aVerifiedNumber();
+      const opener = persons.ensurePerson(phone);
+      const opened = disputes.open({ register: 'driver', nationalId: aDriver().nationalId, phone }, T0);
+      expect(claimantOn(opened.reference)).toBe(opener.personDid);
+      // They move on; a day later somebody else is on the number, and moves on from it in their turn.
+      persons.movePhone(opener.personDid, aNumber(), 'self', T0);
+      persons.settleMove(opener.personDid, T0 + 25 * 3_600_000);
+      const next = persons.ensurePerson(phone);
+      persons.movePhone(next.personDid, aNumber(), 'self', T0 + 26 * 3_600_000);
+      expect(claimantOn(opened.reference)).toBe(opener.personDid);
+
+      // Opened from a number nobody had an account on: it names nobody, until the account that came to it moves on.
+      const o2 = open(aDriver().nationalId);
+      expect(claimantOn(o2.reference)).toBeUndefined();
+      const later = persons.ensurePerson(o2.phone);
+      persons.movePhone(later.personDid, aNumber(), 'self', T0);
+      expect(claimantOn(o2.reference)).toBe(later.personDid);
+    });
+
     it('where nobody came, or what was seen changes nothing, the decision stands — and that is final too', () => {
       const d = aDriver();
       const o = wonByClaimant(d);

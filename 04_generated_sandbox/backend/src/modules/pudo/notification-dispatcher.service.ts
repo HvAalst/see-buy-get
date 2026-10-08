@@ -8,6 +8,7 @@ import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { NotificationService } from './notification.service';
 import { ParcelService } from './parcel.service';
+import { accountFor } from './addressed-to';
 import { PersonService } from './person.service';
 import { AgentService, signupGapOf } from './agent.service';
 import { FleetService } from './fleet.service';
@@ -853,8 +854,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
 
   /**
    * The buyer scenario: on ParcelReadyForPickup, tell the RECEIVER their parcel is waiting. The event
-   * carries only the parcelId, so we read the parcel for the receiver's phoneHash, resolve it to their
-   * person account, and push. A receiver with no account yet (never signed up) is silently skipped —
+   * carries only the parcelId, so we read the parcel for the account it belongs to — or, while it belongs to
+   * none, the account on the number it was addressed to — and push. Never the number alone once an account has it:
+   * the account may have moved to another number, and somebody else may be on this one.
+   * A receiver with no account yet (never signed up) is silently skipped —
    * there is nowhere to push to, and the collection code is still delivered in-app when they sign in.
    */
   /**
@@ -900,10 +903,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
           openUrl: `${appUrl('send')}?parcel=${encodeURIComponent(parcel.parcelId)}`,
         });
       }
-      const hash = parcel.receiverPhoneHash;
-      if (!hash) return; // no receiver identity on this parcel (e.g. a legacy record) — nothing to target
-      const person = this.persons.findByHash(hash);
-      if (!person) return; // the receiver has no account — nothing to push to (they'll see it in-app later)
+      const person = accountFor(this.parcels.receiverOf(parcel), this.persons);
+      if (!person) return; // no receiver we can name, or one with no account — nothing to push to (they'll see it in-app later)
 
       const where = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'your pickup point';
       await this.notifications.notify(person.personDid, {
@@ -942,8 +943,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       if (!since) continue; // written before the fact was stamped — no honest clock to age it from
       if (now - new Date(since).getTime() < UNCOLLECTED_REMINDER_H * 3_600_000) continue;
       if (parcel.uncollectedRemindedAt) continue; // said once
-      const hash = parcel.receiverPhoneHash;
-      const person = hash ? this.persons.findByHash(hash) : undefined;
+      const person = accountFor(this.parcels.receiverOf(parcel), this.persons);
       // Stamped even when there is nobody to tell, so a receiver who signs up next week is not greeted by
       // a reminder about a parcel that has been waiting a fortnight.
       parcel.uncollectedRemindedAt = new Date(now).toISOString();
@@ -1086,8 +1086,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     try {
       const parcel = this.parcels.get(parcelId);
       const where = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'your pickup point';
-      const hash = parcel.receiverPhoneHash;
-      const person = hash ? this.persons.findByHash(hash) : undefined;
+      const person = accountFor(this.parcels.receiverOf(parcel), this.persons);
       if (person) {
         await this.notifications.notify(person.personDid, {
           kind: 'parcel_ready',
@@ -1131,11 +1130,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       // role the store plays on a vendor order), so a rotated code that reached only the receiver would
       // strand exactly the person the relay exists for. A vendor order tells the buyer only — its store
       // gets the new code over the callback instead.
-      const targets = parcel.vendorId ? [parcel.receiverPhoneHash] : [parcel.receiverPhoneHash, parcel.senderPhoneHash];
+      const targets = parcel.vendorId ? [this.parcels.receiverOf(parcel)] : [this.parcels.receiverOf(parcel), this.parcels.senderOf(parcel)];
       const seen = new Set<string>();
-      for (const hash of targets) {
-        if (!hash) continue;
-        const person = this.persons.findByHash(hash);
+      for (const side of targets) {
+        const person = accountFor(side, this.persons);
         if (!person || seen.has(person.personDid)) continue; // a person sending to themselves is told once
         seen.add(person.personDid);
         await this.notifications.notify(person.personDid, {

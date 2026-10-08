@@ -1050,6 +1050,26 @@ describe('PUDO Light', () => {
   const enrollPerson = (phone: string) => persons.enroll(phone, true).person;
   const asConsumer = (personDid: string) => ({ role: 'consumer', did: personDid }) as never;
 
+  it('a store’s order and an in-app send are the receiver’s ACCOUNT’s from the moment they are made, where the receiver has one', () => {
+    const buyer = enrollPerson('+254700500077');
+    const origin = onboardAgent('OWN O', 'NorthTown', 50);
+    const dest = onboardAgent('OWN D', 'NorthTown', 50);
+    const vendor = vendors.register({ name: 'OwnVendor' });
+    vendors.topUp(vendor.vendorId, 50);
+    const order = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700500077', size: 'M', contentPhotoRef: 'c.jpg' } as never, { role: 'genesis', did: vendor.did } as never) as { parcel: any };
+    expect(parcels.receiverOf(parcels.get(order.parcel.parcelId)).owner).toBe(buyer.personDid);
+    // The store is handed its order back, and learns nothing about whether its buyer has an account with us.
+    expect(JSON.stringify(order)).not.toContain(buyer.personDid);
+    const sender = enrollPerson('+254700500078');
+    const sent: any = identity.createParcel({ receiverMobile: '+254700500077', originPudoDid: origin.did, destPudoDid: dest.did, dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 1.6 } as never, asConsumer(sender.personDid));
+    expect(parcels.receiverOf(parcels.get(sent.parcel.parcelId)).owner).toBe(buyer.personDid);
+    // The record the drop-off shop will work with names the receiver by nothing but the number the sender typed.
+    expect(JSON.stringify(parcels.get(sent.parcel.parcelId))).not.toContain(buyer.personDid);
+    // Both are in the buyer's home, asked as the account — and neither by the number alone.
+    expect(parcels.partyTo(buyer).received.map((v) => v.parcelId).sort()).toEqual([order.parcel.parcelId, sent.parcel.parcelId].sort());
+    expect(parcels.partyTo(buyer.phoneHash).received).toEqual([]);
+  });
+
   it('PG1: a signed-in sender mints in-app — DID, locked price, journey twin and label at creation', async () => {
     const flush = () => new Promise((r) => setImmediate(r));
     twin.onModuleInit();
@@ -1073,20 +1093,24 @@ describe('PUDO Light', () => {
     expect(res.journey.hops.length).toBeGreaterThanOrEqual(2);
     // Nothing in the response leaks the receiver's number.
     expect(JSON.stringify(res)).not.toContain('+254700500002');
-    // The raw record: cash-at-counter, price-locked, both parties joined by hash.
+    // The raw record: cash-at-counter, price-locked, both parties joined by hash — and the sender by their ACCOUNT,
+    // because they made it signed in: it stays theirs whatever number they sign in with later.
     const p = parcels.get(res.parcel.parcelId);
     expect(p.paymentMode).toBe('cash');
     expect(p.paidStatus).toBe('unpaid');
     expect(p.shipmentCost).toBe(res.price.total);
     expect(p.senderPhoneHash).toBe(sender.phoneHash);
+    expect(parcels.senderOf(p).owner).toBe(sender.personDid);
     expect(p.receiverPhoneHash).toBeDefined();
     await flush();
     // The twin is BORN at mint with its planned journey — before any drop-off (the DT invariant, now for people).
     expect(twin.shipment(p.parcelId)?.state).toBe('created');
     expect(context.has(p.parcelId)).toBe(true);
     // And it lands in the sender's home as 'sent' + the receiver's as 'received' immediately.
-    expect(parcels.forPhoneHash(sender.phoneHash).sent.some((v) => v.parcelId === p.parcelId)).toBe(true);
-    expect(parcels.forPhoneHash(hashPhone('+254700500002')!).received.some((v) => v.parcelId === p.parcelId)).toBe(true);
+    expect(parcels.partyTo(sender).sent.some((v) => v.parcelId === p.parcelId)).toBe(true);
+    expect(parcels.partyTo(hashPhone('+254700500002')!).received.some((v) => v.parcelId === p.parcelId)).toBe(true);
+    // Asked by the number alone — with no account behind the asking — it is not found: it is the account's.
+    expect(parcels.partyTo(sender.phoneHash).sent.some((v) => v.parcelId === p.parcelId)).toBe(false);
   });
 
   it('PG1: genesis parity — a person mint and a vendor mint of the SAME box price identically', () => {
@@ -1159,7 +1183,7 @@ describe('PUDO Light', () => {
     const sender = enrollPerson('+254700500005');
     expect(() => identity.createParcel({ receiverMobile: '+254700500006', originPudoDid: origin.did, destPudoDid: dest.did, dimensionsCm: { l: 120, w: 100, h: 100 }, weightKg: 300 } as never, asConsumer(sender.personDid))).toThrow(/dedicated freight/);
     // No orphaned freight was minted for either party.
-    expect(dispatch.freightsForPhoneHash(hashPhone('+254700500006')!)).toHaveLength(0);
+    expect(dispatch.freightsFor(hashPhone('+254700500006')!)).toHaveLength(0);
     const home: any = identity.myParcels(asConsumer(sender.personDid));
     expect(home.freights).toHaveLength(0);
     expect(home.sent).toHaveLength(0);
@@ -2029,7 +2053,7 @@ describe('PUDO Light', () => {
       expect(parcels.consumerParcel('QR-GEN', rx).collectToken).toEqual({ code, qrPayload: `sbg:collect:${code}` });
       expect(parcels.consumerParcel('QR-GEN', tx).collectToken).toEqual({ code, qrPayload: `sbg:collect:${code}` });
       // ...but never on the list surface, and never to a stranger.
-      expect(parcels.forPhoneHash(rx).received.every((p) => !p.collectToken)).toBe(true);
+      expect(parcels.partyTo(rx).received.every((p) => !p.collectToken)).toBe(true);
       expect(() => parcels.consumerParcel('QR-GEN', hashPhone('+254700900009')!)).toThrow(/No such parcel/);
 
       // Arrival hands the destination shop a shelf slot and nothing else — no secret in the response.
@@ -2198,7 +2222,7 @@ describe('PUDO Light', () => {
     expect(twin.collectToken).toEqual({ code: parcel.collectionCode, qrPayload: `sbg:collect:${parcel.collectionCode}` });
 
     // Exposure minimised: the token is NOT in the list view — only the owner-scoped detail carries it.
-    expect(parcels.forPhoneHash(rx).received[0].collectToken).toBeUndefined();
+    expect(parcels.partyTo(rx).received[0].collectToken).toBeUndefined();
   });
 
   it('S23 — the receiver files a delivery dispute + PoD from their app; routed to the vendor + the control tower', async () => {
@@ -3889,11 +3913,11 @@ describe('PUDO Light', () => {
     parcels.accept({ agentDid: origin.did, parcelId: 'S21-1', size: 'M', destZone: 'EastTown', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: 'p.jpg', paymentMode: 'prepaid' });
 
     // The receiver sees it as 'received'; the sender as 'sent' — one parcel, two authenticated views.
-    const recv = parcels.forPhoneHash(hashPhone(receiver));
+    const recv = parcels.partyTo(hashPhone(receiver));
     expect(recv.received.map((v) => v.parcelId)).toContain('S21-1');
     expect(recv.received[0].relation).toBe('received');
     expect(recv.sent).toHaveLength(0);
-    expect(parcels.forPhoneHash(hashPhone(sender)).sent[0].relation).toBe('sent');
+    expect(parcels.partyTo(hashPhone(sender)).sent[0].relation).toBe('sent');
 
     // Owner-scoped single fetch; a non-party gets 404 (the parcel's existence is not confirmed to them).
     expect(parcels.consumerParcel('S21-1', hashPhone(receiver)).relation).toBe('received');
@@ -4137,6 +4161,50 @@ describe('PUDO Light', () => {
     const bogus = dispatch.registerFreight({ description: 'Machinery', pickupLocation: at, pickupLabel: 'Depot', destLabel: 'Site', destLocation: at, weightKg: 200, packaging: 'palletised', incoterm: 'NOPE' });
     expect(bogus.incoterm).toBeUndefined();
     expect(dispatch.claimantOf(bogus).party).toBe('sender');
+  });
+
+  it('CL1: the receiver who may claim is the ACCOUNT the goods were for — on its new number still, and never whoever has its old one', () => {
+    const vendor = vendors.register({ name: 'ClaimVendor' });
+    const at = { lat: -1.2, lng: 36.8 };
+    /** Somebody who signs in by email, with a number of their own behind it. */
+    const anAccount = (phone: string, n: number) => {
+      (otp as unknown as { rates: Map<string, unknown> }).rates.clear(); // the same number asks for a code twice in this test
+      otp.verify(phone, otp.request(phone).code);
+      const profile = { shopName: `Claim Shop ${n}`, zone: 'NorthTown', location: { lat: -1.2 - n / 100, lng: 36.8 }, landmark: 'x', openingHours: uniformHours(), shelf: defaultShelf, fullName: 'Owner', nationalId: `ID-CLM-${n}`, mobile: phone, deviceImei: `IMEI-CLM-${n}`, requirements: eligibleReqs() };
+      return accounts.signup({ role: 'pudo', email: `claim${n}@store.test`, password: 'secret1', phone, profile: { agent: profile, kyc: kycDocs } });
+    };
+    /** Past the question of WHO, a claim on a load nobody has delivered is refused for that — which is a different answer. */
+    const asked = (did: string, freightId: string) => {
+      try {
+        controller.freightClaim(freightId, { kind: 'damaged', description: 'Crushed' } as never, { role: 'agent', did } as never);
+        return 'opened';
+      } catch (err) {
+        return (err as { code?: string }).code ?? 'other';
+      }
+    };
+    const phone = '+254700888001';
+    const receiver = anAccount(phone, 1);
+    // CIF: a loss in transit is the receiver's. One order placed while the account was on the number, one before it existed.
+    const order = dispatch.registerFreight({ description: 'Machinery', pickupLocation: at, pickupLabel: 'Depot', destLabel: 'Site', destLocation: at, weightKg: 200, packaging: 'palletised', shipperDid: vendor.vendorId, buyerMobile: phone, incoterm: 'CIF' });
+    const stranger = anAccount('+254700888002', 2);
+    expect(asked(receiver.did, order.freightId)).not.toBe('NOT_THE_CLAIMANT');
+    expect(asked(stranger.did, order.freightId)).toBe('NOT_THE_CLAIMANT');
+
+    // The account moves to another number — the three things the move does: the person, the shop register, and the
+    // email sign-in that resolves to them.
+    const person = persons.findByPhone(phone)!;
+    const t0 = Date.now();
+    const { fromHash } = persons.movePhone(person.personDid, '+254700888003', 'self', t0);
+    const heldKey = agents.moveMobile(receiver.did, '+254700888003');
+    accounts.rephone(fromHash, persons.requireByDid(person.personDid).phoneHash);
+    expect(asked(receiver.did, order.freightId)).not.toBe('NOT_THE_CLAIMANT');
+
+    // A day later the old number is somebody else's — and the goods are not.
+    persons.settleMove(person.personDid, t0 + 25 * 3_600_000);
+    if (heldKey) agents.releaseHeldPhone(heldKey, receiver.did);
+    const newcomer = anAccount(phone, 3);
+    expect(asked(newcomer.did, order.freightId)).toBe('NOT_THE_CLAIMANT');
+    expect(asked(receiver.did, order.freightId)).not.toBe('NOT_THE_CLAIMANT');
   });
 
   it('CL1: the shop sees the term it agreed, the place it names, and who it puts the loss on', () => {
@@ -7017,7 +7085,7 @@ describe('PUDO Light', () => {
     expect(res.freight.trackingKey).toMatch(/^T-/);
 
     // The buyer (by phone hash) finds their freight in "my shipments" — just created so far.
-    const mine = dispatch.freightsForPhoneHash(hashPhone(buyer));
+    const mine = dispatch.freightsFor(hashPhone(buyer));
     expect(mine).toHaveLength(1);
     expect(mine[0].code).toBe(res.freight.code);
     expect(mine[0].externalOrderId).toBe('ORD-99');
@@ -7034,7 +7102,7 @@ describe('PUDO Light', () => {
     pickupOk(res.freight, d.did);
     deliverOk(res.freight, d.did);
 
-    const done = dispatch.freightsForPhoneHash(hashPhone(buyer))[0];
+    const done = dispatch.freightsFor(hashPhone(buyer))[0];
     expect(done.status).toBe('delivered');
     expect(done.timeline.map((t: { status: string }) => t.status)).toEqual(['available', 'claimed', 'in_transit', 'delivered']);
   });

@@ -71,6 +71,7 @@ import { VehicleService } from './vehicle.service';
 import { DriverService } from './driver.service';
 import { FleetService } from './fleet.service';
 import { DispatchService } from './dispatch.service';
+import { isFor } from './addressed-to';
 import { RouteConstraintService } from './route-constraint.service';
 import { ConstraintView, ConstraintsResponse, RouteConstraintsResponse } from './route-constraint.types';
 import { FreightBoardResponse, FreightProposalsResponse, MarketResponse, MarketSeries, LaneCarriers, PostedFreightResponse, FreightCancelledResponse, FreightClaimResponse, FreightClaimQueueRow } from './dispatch.types';
@@ -5462,8 +5463,8 @@ export class SbgController {
     const standing = this.dispatch.claimantOf(f);
     if (actor?.role === 'operator') return { did: actor.did ?? 'operator', why: standing.why };
     if (standing.party === 'sender') return { did: this.assertFreightSender(freightId, actor).did, why: standing.why };
-    // A freight records its buyer as a phone hash and never as a party, so that is the only honest way to
-    // recognise the receiver.
+    // A freight records its buyer as the number they gave — and, once one is certain, the account that number was —
+    // and never as a party, so that is the only honest way to recognise the receiver.
     if (!f.buyerPhoneHash) {
       throw new GlosError(
         'NOT_THE_CLAIMANT',
@@ -5471,7 +5472,9 @@ export class SbgController {
       );
     }
     const mine = actor?.did ? this.accounts.phoneHashForDid(actor.did) : undefined;
-    if (!mine || mine !== f.buyerPhoneHash) {
+    // By the account where the order belongs to one: a sign-in that moved to a new number is still the receiver, and
+    // whoever has the old number now is not.
+    if (!mine || !isFor(this.dispatch.buyerOf(f), { phoneHash: mine, personDid: this.persons.findByHash(mine)?.personDid })) {
       throw new GlosError('NOT_THE_CLAIMANT', standing.why + '. Sign in as the receiver of these goods to claim for them.');
     }
     return { did: actor.did!, why: standing.why };

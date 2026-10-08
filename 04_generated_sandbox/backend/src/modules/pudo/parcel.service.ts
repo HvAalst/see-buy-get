@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap, Optional } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes } from 'crypto';
 import { PersistentMap } from '../../foundation/store/persistent-map';
@@ -25,6 +25,8 @@ import { CargoNature } from './cargo.types';
 import { declareFor } from './customs';
 import type { ShipmentQuote } from './routing.service';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
+import { PersonService } from './person.service';
+import { isFor, readerOf, waitsAt, type Addressed, type Reader } from './addressed-to';
 
 const LABEL_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -573,6 +575,13 @@ export class ParcelService implements OnApplicationBootstrap {
   // Durable: a parcel in flight (money charged, custody held) must survive a restart. Persistence is
   // driven through scan() — the near-universal transition point — plus the few post-scan mutations.
   private readonly parcels = new PersistentMap<string, Parcel>('pudo-parcels');
+  /**
+   * WHICH ACCOUNT EACH SIDE OF A PARCEL BELONGS TO — kept here, beside the parcels, and never on one. A parcel is
+   * handed back whole to the shop that takes it in and read by every desk that works it; an account's id on it would
+   * tell a shop, for any number it cares to type, whether that number has an account. (The same reason a business
+   * keeps who posted a load beside the load.) Keyed by parcel id.
+   */
+  private readonly keptBy = new PersistentMap<string, { receiver?: string; sender?: string }>('pudo-parcel-accounts');
 
   constructor(
     private readonly agents: AgentService,
@@ -589,7 +598,55 @@ export class ParcelService implements OnApplicationBootstrap {
     private readonly cargo: CargoService,
     private readonly dids: DidService,
     private readonly entities: EntityService,
-  ) {}
+    // The accounts, to know whose a number certainly is when a parcel is addressed to it. Optional so the specs that
+    // build this by hand keep working: without it a parcel belongs to no account and is found by its number alone.
+    @Optional() private readonly persons?: PersonService,
+  ) {
+    // Registered here rather than called from the move: an account cannot leave a number without this being asked.
+    this.persons?.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
+  }
+
+  /** The account a number is certainly for right now — who a parcel being addressed to it is kept by. */
+  private accountAt(phoneHash: string | undefined): string | undefined {
+    return phoneHash ? this.persons?.settledAt(phoneHash)?.personDid : undefined;
+  }
+
+  /** Who the goods are addressed to, and the account they belong to once one is certain. See addressed-to.ts. */
+  receiverOf(p: Parcel): Addressed {
+    return { hash: p.receiverPhoneHash, owner: this.keptBy.get(p.parcelId)?.receiver };
+  }
+
+  /** The same for whoever sent it. A store is not a person and has neither. */
+  senderOf(p: Parcel): Addressed {
+    return { hash: p.senderPhoneHash, owner: this.keptBy.get(p.parcelId)?.sender };
+  }
+
+  /** Name the account a side of a parcel belongs to. It only ever ADDS: a side an account has is never given to another. */
+  private keep(parcelId: string, side: { receiver?: string; sender?: string }): void {
+    const had = this.keptBy.get(parcelId) ?? {};
+    const receiver = had.receiver ?? side.receiver;
+    const sender = had.sender ?? side.sender;
+    if (receiver === had.receiver && sender === had.sender) return;
+    this.keptBy.set(parcelId, { ...(receiver ? { receiver } : {}), ...(sender ? { sender } : {}) });
+  }
+
+  /**
+   * AN ACCOUNT IS MOVING OFF A NUMBER: every parcel still addressed to that number and to no account is theirs, on
+   * whichever side, and is kept by the account from now on. Without this the parcels stay behind with the number —
+   * out of the sight of the person they are for, and, once the number is free, in the sight of whoever has it next,
+   * collection code and all. Returns how many it kept.
+   */
+  keepWith(personDid: string, fromHash: string): number {
+    let kept = 0;
+    for (const p of this.parcels.values()) {
+      const received = waitsAt(this.receiverOf(p), fromHash);
+      const sent = waitsAt(this.senderOf(p), fromHash);
+      if (!received && !sent) continue;
+      this.keep(p.parcelId, { ...(received ? { receiver: personDid } : {}), ...(sent ? { sender: personDid } : {}) });
+      kept += 1;
+    }
+    return kept;
+  }
 
   /**
    * The tax on a flat WHOLESALE charge to a shop — the walk-up cash path, which has no quote to carry one.
@@ -635,27 +692,35 @@ export class ParcelService implements OnApplicationBootstrap {
 
   // --- the authenticated consumer's parcels (S21) ---
 
-  /** Every parcel the person (by phoneHash) is a party to, split by their side, newest first. */
-  forPhoneHash(phoneHash: string): { sent: ConsumerParcelView[]; received: ConsumerParcelView[] } {
-    if (!phoneHash) return { sent: [], received: [] };
+  /**
+   * Every parcel somebody is a party to, split by their side, newest first.
+   *
+   * THEIRS means the account's once a parcel belongs to one, and the number's until then (addressed-to.ts) — so an
+   * account that moved to a new number still has every parcel it had, and whoever signs up with the old number
+   * afterwards has none of them.
+   */
+  partyTo(reader: Reader | string): { sent: ConsumerParcelView[]; received: ConsumerParcelView[] } {
+    const who = readerOf(reader);
+    if (!who.phoneHash) return { sent: [], received: [] };
     const sent: ConsumerParcelView[] = [];
     const received: ConsumerParcelView[] = [];
     for (const p of this.parcels.values()) {
       // Receiver takes precedence if (rarely) a person sends to themselves — it is the actionable side.
-      if (p.receiverPhoneHash === phoneHash) received.push(ParcelService.toConsumerView(p, phoneHash));
-      else if (p.senderPhoneHash === phoneHash) sent.push(ParcelService.toConsumerView(p, phoneHash));
+      if (isFor(this.receiverOf(p), who)) received.push(this.toConsumerView(p, who));
+      else if (isFor(this.senderOf(p), who)) sent.push(this.toConsumerView(p, who));
     }
     const byNewest = (a: ConsumerParcelView, b: ConsumerParcelView) => (a.updatedAt < b.updatedAt ? 1 : -1);
     return { sent: sent.sort(byNewest), received: received.sort(byNewest) };
   }
 
   /** One parcel the caller is a party to (owner-scoped) — the authenticated twin + timeline, or 404. */
-  consumerParcel(id: string, phoneHash: string): ConsumerParcelView {
+  consumerParcel(id: string, reader: Reader | string): ConsumerParcelView {
+    const who = readerOf(reader);
     const p = this.parcels.get(id);
-    if (!p || !phoneHash || (p.receiverPhoneHash !== phoneHash && p.senderPhoneHash !== phoneHash)) {
+    if (!p || !who.phoneHash || (!isFor(this.receiverOf(p), who) && !isFor(this.senderOf(p), who))) {
       throw new GlosError('NOT_FOUND', 'No such parcel'); // do not confirm a parcel exists to a non-party
     }
-    return ParcelService.toConsumerView(p, phoneHash, true); // detail: carries the in-app collect token
+    return this.toConsumerView(p, who, true); // detail: carries the in-app collect token
   }
 
   /**
@@ -665,14 +730,14 @@ export class ParcelService implements OnApplicationBootstrap {
    * telling a stranger that a parcel exists but is not theirs is telling them something about somebody
    * else's business.
    */
-  requireReceiver(id: string, phoneHash: string): Parcel {
-    return this.receiverParcel(id, phoneHash);
+  requireReceiver(id: string, reader: Reader | string): Parcel {
+    return this.receiverParcel(id, readerOf(reader));
   }
 
   /** The parcel a RECEIVER may act on (PoD / dispute) — receiver-scoped, or 404 (existence not confirmed). */
-  private receiverParcel(id: string, phoneHash: string): Parcel {
+  private receiverParcel(id: string, who: Reader): Parcel {
     const p = this.parcels.get(id);
-    if (!p || !phoneHash || p.receiverPhoneHash !== phoneHash) throw new GlosError('NOT_FOUND', 'No such parcel');
+    if (!p || !who.phoneHash || !isFor(this.receiverOf(p), who)) throw new GlosError('NOT_FOUND', 'No such parcel');
     return p;
   }
 
@@ -680,15 +745,16 @@ export class ParcelService implements OnApplicationBootstrap {
    * S23 — the receiver attaches their own delivered-state photo (proof of what they received). Their
    * record, kept alongside the agent's handover photo; not a dispute. Only after delivery, only theirs.
    */
-  attachPod(id: string, phoneHash: string, byDid: string, photoRef: string): ConsumerParcelView {
-    const p = this.receiverParcel(id, phoneHash);
+  attachPod(id: string, reader: Reader | string, byDid: string, photoRef: string): ConsumerParcelView {
+    const who = readerOf(reader);
+    const p = this.receiverParcel(id, who);
     if (p.status !== 'Delivered') throw new GlosError('INVALID_STATE', 'Add a photo once the parcel is delivered');
     if (!photoRef) throw new GlosError('PHOTO_REQUIRED', 'A photo is required');
     p.buyerPodPhotoRef = photoRef;
     this.media.link(photoRef, { type: 'parcel', id: p.parcelId }, 'pod'); // shipment-proof; already terminal → anchor
     this.media.anchorParcelTerminal(p.parcelId);
     this.persist(p);
-    return ParcelService.toConsumerView(p, phoneHash, true);
+    return this.toConsumerView(p, who, true);
   }
 
   /**
@@ -697,8 +763,9 @@ export class ParcelService implements OnApplicationBootstrap {
    * relay skips non-vendor parcels); a PEER send routes to the control tower (the Buyer_Dispute flag) and
    * the sender (their sent twin flips to Disputed). Adjudication stays control-tower/ops.
    */
-  buyerDispute(id: string, phoneHash: string, byDid: string, reason: string, photoRef: string): ConsumerParcelView {
-    const p = this.receiverParcel(id, phoneHash);
+  buyerDispute(id: string, reader: Reader | string, byDid: string, reason: string, photoRef: string): ConsumerParcelView {
+    const who = readerOf(reader);
+    const p = this.receiverParcel(id, who);
     if (p.status !== 'Delivered') throw new GlosError('INVALID_STATE', 'You can report a problem once the parcel is delivered');
     if (!reason?.trim() || !photoRef) throw new GlosError('DISPUTE_INCOMPLETE', 'A reason and a photo are required to report a problem');
     // The problem photo must be its OWN media, not the delivered-state PoD reused — else one image serves
@@ -721,7 +788,7 @@ export class ParcelService implements OnApplicationBootstrap {
     // is never copied into the timeline, which both parties (including the sender) can read.
     this.scan(p, 'Disputed', byDid, 'buyer dispute');
     void this.events.publish(GlosEvent.Pudo.ParcelDisputed, { parcelId: id, reason, photoProofRef: photoRef, vendorId: p.vendorId, externalOrderId: p.externalOrderId, origin: 'buyer' }, { source: 'pudo' }).catch(() => undefined);
-    return ParcelService.toConsumerView(p, phoneHash, true);
+    return this.toConsumerView(p, who, true);
   }
 
   /**
@@ -738,8 +805,8 @@ export class ParcelService implements OnApplicationBootstrap {
     return vendorOrderDetailOf(p);
   }
 
-  private static toConsumerView(p: Parcel, phoneHash: string, withToken = false): ConsumerParcelView {
-    const relation = p.receiverPhoneHash === phoneHash ? 'received' : 'sent';
+  private toConsumerView(p: Parcel, who: Reader, withToken = false): ConsumerParcelView {
+    const relation = isFor(this.receiverOf(p), who) ? 'received' : 'sent';
     const view: ConsumerParcelView = {
       parcelId: p.parcelId,
       did: p.did, // DT — the twin's stable id
@@ -1015,6 +1082,8 @@ export class ParcelService implements OnApplicationBootstrap {
     // shows the public tracking key, not a collection code. Persisted so it can be reprinted.
     parcel.label = this.label(parcel);
     this.parcels.set(parcel.parcelId, parcel);
+    // The account each number is certainly for today, so the parcel stays theirs when the number does not.
+    this.keep(parcel.parcelId, { sender: this.accountAt(parcel.senderPhoneHash), receiver: this.accountAt(parcel.receiverPhoneHash) });
     // S26: attach the drop-off proof to this parcel → shipment-proof bin (clock starts at terminal state).
     this.media.link(input.dropoffPhotoRef, { type: 'parcel', id: parcel.parcelId }, 'dropoff');
 
@@ -1477,6 +1546,8 @@ export class ParcelService implements OnApplicationBootstrap {
       scans: [{ at: now, status: 'CREATED', by: input.vendorId, note: `inbound · order ${input.externalOrderId ?? '—'}`, anchorTxId }],
     };
     this.parcels.set(parcelId, parcel);
+    // The buyer's account, where the number they gave the store is certainly theirs today.
+    this.keep(parcelId, { receiver: this.accountAt(parcel.receiverPhoneHash) });
     // S26: attach the vendor's content photo (the baseline a dispute is judged against) to the parcel →
     // shipment-proof bin. Without this link the orphan-reaper would delete it before the parcel is delivered.
     this.media.link(input.contentPhotoRef, { type: 'parcel', id: parcelId }, 'content');
@@ -1604,6 +1675,8 @@ export class ParcelService implements OnApplicationBootstrap {
     };
     parcel.label = this.label(parcel, dest.shopName); // outbound branch: tracking key, no handover secret
     this.parcels.set(parcelId, parcel);
+    // Made BY the sender's account, not addressed to a number: theirs whatever number they are on, or go back to.
+    this.keep(parcelId, { sender: input.senderPersonDid, receiver: this.accountAt(parcel.receiverPhoneHash) });
     void this.events.publish(GlosEvent.Pudo.ParcelMinted, { parcelId, originAgentDid: input.originAgentDid, destAgentDid: input.destAgentDid }, { source: 'pudo' }).catch(() => undefined);
     return { parcel, label: parcel.label };
   }

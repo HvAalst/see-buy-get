@@ -194,8 +194,10 @@ export class IdentityController {
   }
 
   /**
-   * The receiver/sender home: every parcel this person is a party to (sent + received), matched by their
-   * verified phone — retroactively (O4). PII-free authenticated twins; the counterpart stays hashed. S32d
+   * The receiver/sender home: every parcel this person is a party to (sent + received). Theirs is what belongs to
+   * their ACCOUNT, and — retroactively (O4) — what is addressed to the number they sign in with and belongs to no
+   * account yet; never what belonged to whoever had that number before. PII-free authenticated twins; the counterpart
+   * stays hashed. S32d
    * also returns `freights` — any order of theirs that was too big for the parcel network and diverted to
    * dedicated freight, so a diverted order never vanishes from the buyer's home.
    */
@@ -203,7 +205,7 @@ export class IdentityController {
   @Get('parcels')
   myParcels(@Actor() actor: IntrospectionResult) {
     const person = this.persons.requireByDid(actor.did!);
-    return { ...this.parcels.forPhoneHash(person.phoneHash), freights: this.dispatch.freightsForPhoneHash(person.phoneHash) };
+    return { ...this.parcels.partyTo(person), freights: this.dispatch.freightsFor(person) };
   }
 
   /**
@@ -264,7 +266,7 @@ export class IdentityController {
       journey = undefined; // best-effort, like the public track surface — the mint itself already succeeded
     }
     return {
-      parcel: this.parcels.consumerParcel(parcel.parcelId, person.phoneHash),
+      parcel: this.parcels.consumerParcel(parcel.parcelId, person),
       label,
       // `total` is the GROSS — the cash this sender hands over at the counter. `tax` names the part of it
       // that is not ours, because a person is entitled to see the tax they paid and, in most places, a
@@ -279,7 +281,7 @@ export class IdentityController {
   @Get('parcels/:id')
   parcel(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     const person = this.persons.requireByDid(actor.did!);
-    return this.parcels.consumerParcel(id, person.phoneHash);
+    return this.parcels.consumerParcel(id, person);
   }
 
   /** The receiver attaches their own delivered-state photo (proof of what they received) — S23. */
@@ -287,7 +289,7 @@ export class IdentityController {
   @Post('parcels/:id/pod')
   addPod(@Param('id') id: string, @Body() dto: PodDto, @Actor() actor: IntrospectionResult) {
     const person = this.persons.requireByDid(actor.did!);
-    return this.parcels.attachPod(id, person.phoneHash, person.personDid, dto.photoRef);
+    return this.parcels.attachPod(id, person, person.personDid, dto.photoRef);
   }
 
   /**
@@ -303,9 +305,9 @@ export class IdentityController {
   @Post('parcels/:id/collection-response')
   collectionResponse(@Param('id') id: string, @Body() dto: CollectionResponseDto, @Actor() actor: IntrospectionResult) {
     const person = this.persons.requireByDid(actor.did!);
-    this.parcels.requireReceiver(id, person.phoneHash);
+    this.parcels.requireReceiver(id, person);
     const { outcome } = this.unclaimed.respond(id, dto.choice, dto.note);
-    return { outcome, parcel: this.parcels.consumerParcel(id, person.phoneHash) };
+    return { outcome, parcel: this.parcels.consumerParcel(id, person) };
   }
 
   /**
@@ -319,7 +321,7 @@ export class IdentityController {
   @Post('parcels/:id/nominate-collector')
   nominateCollector(@Param('id') id: string, @Body() dto: NominateCollectorDto, @Actor() actor: IntrospectionResult) {
     const person = this.persons.requireByDid(actor.did!);
-    this.parcels.requireReceiver(id, person.phoneHash);
+    this.parcels.requireReceiver(id, person);
     return this.unclaimed.nominate(id, dto.name, dto.phone ? hashPhone(dto.phone) : undefined);
   }
 
@@ -335,7 +337,7 @@ export class IdentityController {
   @Post('parcels/:id/rate-store')
   rateStore(@Param('id') id: string, @Body() dto: RateMerchantDto, @Actor() actor: IntrospectionResult) {
     const person = this.persons.requireByDid(actor.did!);
-    return this.merchants.rate({ parcelId: id, phoneHash: person.phoneHash, stars: dto.stars, tags: dto.tags });
+    return this.merchants.rate({ parcelId: id, phoneHash: person.phoneHash, personDid: person.personDid, stars: dto.stars, tags: dto.tags });
   }
 
   /** The receiver files a delivery dispute (reason + photo) → routed to the vendor / sender + control tower. */
@@ -343,7 +345,7 @@ export class IdentityController {
   @Post('parcels/:id/dispute')
   disputeParcel(@Param('id') id: string, @Body() dto: BuyerDisputeDto, @Actor() actor: IntrospectionResult) {
     const person = this.persons.requireByDid(actor.did!);
-    return this.parcels.buyerDispute(id, person.phoneHash, person.personDid, dto.reason, dto.photoRef);
+    return this.parcels.buyerDispute(id, person, person.personDid, dto.reason, dto.photoRef);
   }
 
   /** Create (or return) an invite for a contact → a token the app turns into a shareable /send/ link (S24). */
