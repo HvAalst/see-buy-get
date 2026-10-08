@@ -38,7 +38,9 @@ type Safety = MailParams['account-safety'];
  *    old number and the PIN as it was, or with the inbox; and for those 24 hours the old number is held, then
  *    freed for a new person.
  *
- * What only two members of staff can do — no PIN, no inbox, or an ID somebody else registered — is not here.
+ * No PIN and no inbox either: two members of staff move it (account-move.service.ts decides WHETHER; the move itself
+ * is the one here, with the same notices and the same 24 hours to undo it). An ID somebody else registered is not
+ * here.
  */
 @Injectable()
 export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
@@ -151,6 +153,20 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
     return this.persons.requireByDid(moved.personDid);
   }
 
+  /**
+   * TWO MEMBERS OF STAFF MOVED IT. The caller has made sure of that; this is the move, and nothing about it is
+   * gentler for having been staff's doing: the holder is told everywhere they read, every session ends, the old
+   * number is held for a day, and for that day the move can be undone with the old number and the PIN as it was.
+   */
+  moveByStaff(personDid: string, newPhone: string, now: number = Date.now()): Person {
+    return this.move(personDid, newPhone, 'staff', now);
+  }
+
+  /** Tell an account's holder something about its safety — in their app, on each driver record, and by email. */
+  tellHolder(person: Person, s: Omit<Safety, 'when'>): void {
+    this.tell(person, s);
+  }
+
   /** Undo a number change with the OLD number and the PIN as it was. Wrong five times and only the inbox can undo it. */
   undoWithOldNumber(oldPhone: string, pin: string, now: number = Date.now()): Person {
     const person = this.persons.movedFrom(hashPhone(oldPhone), now);
@@ -212,7 +228,12 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
     const until = person.phoneChange!.undoUntil;
     this.tell(person, {
       headline: 'Your phone number was changed',
-      what: how === 'email' ? 'Your SeeBuyGet account was recovered with this email address and moved to a new phone number, with a new PIN.' : 'Your SeeBuyGet account now signs in with a different phone number.',
+      what:
+        how === 'email'
+          ? 'Your SeeBuyGet account was recovered with this email address and moved to a new phone number, with a new PIN.'
+          : how === 'staff'
+            ? 'Two members of SeeBuyGet staff moved your account to a new phone number. Somebody told them they had lost the number and the PIN, and staff checked who was asking.'
+            : 'Your SeeBuyGet account now signs in with a different phone number.',
       next: 'If it was you, there is nothing to do. If it was NOT you: within 24 hours, open any SeeBuyGet app, choose “Trouble signing in?” and then “Undo a number change” — with your old number and PIN, or with a code to this address. The account goes back to your number and the PIN is locked until you choose a new one.',
       until,
     });

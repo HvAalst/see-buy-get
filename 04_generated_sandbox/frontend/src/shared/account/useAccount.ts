@@ -32,6 +32,11 @@ export interface AccountView {
   emailBounced?: boolean;
   /** A number change that can still be undone, and until when. */
   numberChange?: { at: string; undoUntil: string };
+  /**
+   * Somebody has asked SeeBuyGet staff to move THIS account to another number — saying they lost the number and
+   * the PIN. Its holder, who is looking at this, is the one person who knows whether that was them.
+   */
+  moveAsked?: { askedAt: string; toEnds: string };
 }
 
 type Sent = { sent: boolean; code?: string };
@@ -65,6 +70,8 @@ export interface AccountApi {
   confirmPhoneCode: (phone: string, code: string) => Promise<Result<unknown>>;
   /** Move the account to a number already confirmed by code. On success EVERY session is over, this one included. */
   changeNumber: (pin: string, newPhone: string) => Promise<Result<unknown>>;
+  /** "That was not me": end every request waiting to move this account. Being signed in is what makes it theirs to say. */
+  stopMove: () => Promise<Result<{ stopped: number }>>;
 }
 
 const NO_CLIENT = { data: null, error: null } as unknown as Result<never>;
@@ -85,6 +92,7 @@ const IDLE: AccountApi = {
   sendPhoneCode: async () => NO_CLIENT,
   confirmPhoneCode: async () => NO_CLIENT,
   changeNumber: async () => NO_CLIENT,
+  stopMove: async () => NO_CLIENT,
 };
 
 export function useAccount(client: SbgClient | null, enabled = true): AccountApi {
@@ -208,6 +216,13 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
   const confirmPhoneCode = useCallback((phone: string, code: string) => post<unknown>('/v1/sbg/auth/phone/verify', { phone, code }), [post]);
   const changeNumber = useCallback((pin: string, newPhone: string) => post<unknown>('/v1/sbg/account/phone/change', { pin, newPhone }), [post]);
 
+  const stopMove = useCallback(async () => {
+    const r = await post<{ stopped: number }>('/v1/sbg/account/move-requests/stop', {});
+    // Gone from the account as the server now sees it — read again rather than assumed.
+    if (!r.error) setAccount((prev) => (prev ? { ...prev, moveAsked: undefined } : prev));
+    return r;
+  }, [post]);
+
   if (!client) return IDLE;
-  return { account, loading, error, busy, reload, save, changePin, saveAvatar, loadMedia, sendEmailCode, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber };
+  return { account, loading, error, busy, reload, save, changePin, saveAvatar, loadMedia, sendEmailCode, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber, stopMove };
 }

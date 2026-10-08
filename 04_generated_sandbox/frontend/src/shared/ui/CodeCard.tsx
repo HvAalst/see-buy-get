@@ -15,6 +15,11 @@ export interface CodeCardProps {
    * faster path. Give the payload kind; omit to render digits only.
    */
   scanAs?: 'collect' | 'parcel' | 'track';
+  /**
+   * A longer code — a reference somebody reads to another person, not four digits. It is kept on ONE line at any
+   * width, giving up size to do it: a code broken across two lines reads as two codes.
+   */
+  long?: boolean;
 }
 
 /**
@@ -23,10 +28,10 @@ export interface CodeCardProps {
  * action. Spoken digit-by-digit ("4, 7, 2, 9"): a synthesiser reading "4729" as
  * four-thousand-something is useless to the person at the counter.
  */
-export function CodeCard({ label, code, sayLabel = 'Hear the code', scanAs }: CodeCardProps) {
+export function CodeCard({ label, code, sayLabel = 'Hear the code', scanAs, long }: CodeCardProps) {
   const spoken = () => code.split('').join(', ');
   return (
-    <section class="codecard" aria-label={`${label}: ${code.split('').join(' ')}`}>
+    <section class={`codecard${long ? ' codecard--long' : ''}`} aria-label={`${label}: ${code.split('').join(' ')}`}>
       <div class={scanAs ? 'codecard__row' : undefined}>
         <div>
           <p class="codecard__label">{label}</p>

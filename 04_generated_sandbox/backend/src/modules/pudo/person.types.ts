@@ -45,6 +45,11 @@ export interface Person {
    */
   pinAttempts?: number;
   pinLockedAt?: string;
+  /**
+   * When the RIGHT PIN was last given — at the door, or asked again inside an app. It is evidence, kept for one
+   * question: was this account's PIN used after somebody told staff they had lost it?
+   */
+  pinUsedAt?: string;
   /** The old fifteen-minute window, still honoured while it runs so a record written before the change stays locked. */
   pinLockedUntil?: number;
   /** When the PIN was last set or changed. */

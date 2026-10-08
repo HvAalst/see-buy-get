@@ -212,7 +212,10 @@ export const ARTICLES: GuideArticle[] = [
       "Drivers and shops are also asked for the national ID number they registered with when they get back in by email.",
       "After a number change the old number is kept for you for 24 hours. After that it is free for a new person.",
       "Undoing a number change locks the PIN. Use the forgot-PIN link on the sign-in screen to choose a new one.",
-      "If email to your recovery address comes back undelivered, Settings says so under Recovery email, and we stop writing to that address. To keep the same address, open Recovery email, enter it, send the code and type in the code you receive: that proves it works again. Or enter another address."
+      "If email to your recovery address comes back undelivered, Settings says so under Recovery email, and we stop writing to that address. To keep the same address, open Recovery email, enter it, send the code and type in the code you receive: that proves it works again. Or enter another address.",
+      "No number, no PIN and no recovery email you can read? Two members of SeeBuyGet staff can move your account. On the sign-in screen choose Trouble signing in, then Ask SeeBuyGet staff to move my account. Enter the number your account is on, confirm your new number with the code sent to it, and write down the reference you are given. Then speak to staff and give them the reference: they check who you are.",
+      "To see what became of it, choose Trouble signing in, then I already asked staff, and enter your reference. When it says your account was moved, sign in with the new number: choose First time here, or forgot your PIN, enter the code, and choose a new PIN. A request waits two weeks, then lapses.",
+      "If somebody asks staff to move YOUR account, you are told at once, in the app and by email, and Settings shows it with a button: It was not me: stop it. Signing in with your PIN stops it too. Then change your PIN. If an account is moved all the same, it can be undone for 24 hours with the old number and the PIN as it was."
     ]
   },
   {
@@ -318,6 +321,32 @@ export const ARTICLES: GuideArticle[] = [
     ],
     notes: [
       "Importers, clearing agents and other customers do not sign in here: they use the Business app."
+    ]
+  },
+  {
+    id: "console-account-moves",
+    apps: [
+      "console"
+    ],
+    title: "Account moves: two of us move an account for somebody locked out",
+    summary: "Somebody who has lost their phone number, forgotten their PIN and cannot read their recovery email asks for their account to be moved to a new number. One member of staff checks who is asking, and a second approves.",
+    steps: [
+      "Open Account moves, under Waiting on you. The person gives you a reference, such as MV-ABCD-2345: open the request with that reference.",
+      "Ask them for both phone numbers and compare the last three digits with the screen. No whole phone number is ever shown.",
+      "Read The account it names: who is on it, whether a national ID is on record, and anything shown in red or orange. Check who is asking. Where the account has an ID on record, ask to see it.",
+      "Write what you checked and how, then press I checked who is asking. Nothing moves yet.",
+      "A second member of staff opens the same request, reads what you wrote, and presses Approve: move the account. The account moves at once.",
+      "To refuse instead, write why and press Refuse. The person reads your reason when they enter their reference, so say what they can do next."
+    ],
+    notes: [
+      "The same member of staff can never check and approve. Either one can refuse, at either step.",
+      "The account’s holder is told as soon as somebody asks, in their app and by email. They can stop it from Settings, or simply by signing in with their PIN. A stopped request says which of the two happened.",
+      "If the screen says the account’s PIN was used after the request was made, do not approve: the person asking said they had lost it. Pressing Check or Approve stops the request instead.",
+      "If the number they gave names no account, there is nothing to move. Refuse it, and do not tell them whether that number has an account: the person asking may not be its owner.",
+      "An account that only sends and collects parcels has no ID on record and no name we can see. There is little to check against, so ask what they sent or collected lately, and from where.",
+      "After a move the holder can undo it for 24 hours with the old number and the PIN as it was, or with a code to their email. The old number is kept for them until then.",
+      "A request nobody decides lapses after two weeks. The person can ask again.",
+      "Outside a sandbox this needs a named sign-in for each member of staff. The shared operator key cannot say who is at the keyboard, so it is refused."
     ]
   },
   {

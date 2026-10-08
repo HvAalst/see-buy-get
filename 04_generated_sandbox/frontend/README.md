@@ -211,6 +211,31 @@ started with, never off a variable that happens to be set.
 "Kept, not sent" is the normal state of a sandbox; with `GLOS_ENV=production` the same state is said as a fault,
 because there it is people who are never told.
 
+## Getting back into an account: what a person can do, and what takes two of us
+The account is the phone number. Three ways back, in the order a person meets them (all in the shared sheets,
+so every app has them — `shared/account/SettingsSheet.tsx`, `TroubleSheet.tsx`):
+- **Still knows the PIN**: moves the number themselves, signed in (Settings → Phone number).
+- **Number gone, PIN forgotten**: the recovery email is the way back (Trouble signing in → the number is gone),
+  with the national ID where the account has one.
+- **No number, no PIN, no inbox**: two members of staff move it (decided 2026-10-01: "2 seebuyget staff can
+  move an account"). `modules/pudo/account-move.service.ts`. The person ASKS, signed out (Trouble signing in →
+  Ask SeeBuyGet staff): the new number is proved by a code, a reference `MV-XXXX-XXXX` is handed back, and the
+  answer is the same whether or not the old number has an account. One member of staff CHECKS who is asking
+  and writes down what was checked; a SECOND, different one approves (console → Account moves; `staffOf` tells
+  two people apart by their sign-in, so outside a sandbox the shared operator key is refused). The move is the
+  ordinary one (`AccountRecoveryService.moveByStaff`): the holder is told, every session ends, and it can be
+  undone for 24 hours with the old number and the PIN as it was.
+- **What stops it** — because it is also what somebody after another person's account would ask for: the
+  holder is told the moment it is asked (app + email); signed in, Settings shows it with "It was not me: stop
+  it" (`POST account/move-requests/stop`, keyed to the token); and if the account's PIN is used after the
+  request was made — `Person.pinUsedAt`, written by the one check every PIN goes through — the request is
+  stopped at the next staff step instead of moving anything. A request lapses after 14 days.
+- **What is never kept or shown**: a whole phone number (keys and last three digits; the new number sits in
+  the vault until the request ends, then is blanked) and the national ID the asker typed (only whether it
+  matched). The asker reads the outcome with the reference (`POST identity/move-requests/status`) — nothing we
+  send can reach somebody with no number, PIN or inbox.
+- Not built: a national ID that somebody ELSE registered (a disputed ID).
+
 ## Conventions
 - **Every slice names its screens.** A backend change with no surface is tracked ui-debt, not a shipped slice.
 - **i18n per slice**: new English keys go in `src/shared/i18n/catalogs/`; the other locales get a central

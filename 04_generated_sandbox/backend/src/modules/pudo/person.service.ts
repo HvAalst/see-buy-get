@@ -348,11 +348,11 @@ export class PersonService {
       }
       throw new GlosError(code, wrong);
     }
-    if (person.pinAttempts || person.pinLockedUntil) {
-      person.pinAttempts = 0;
-      person.pinLockedUntil = undefined;
-      this.save(person);
-    }
+    // The right PIN, and when: what is read when somebody tells staff this account's PIN is lost.
+    person.pinAttempts = 0;
+    person.pinLockedUntil = undefined;
+    person.pinUsedAt = new Date().toISOString();
+    this.save(person);
   }
 
   /** Who is told a PIN locked: the person themselves, and every driver record they sign in as. */

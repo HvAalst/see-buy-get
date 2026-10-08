@@ -1,3 +1,4 @@
+import type { MoveRow } from './accountMoves';
 import type { BusinessRow } from './businesses';
 import type { CourierContact, PapersNetworkView } from './papers';
 import type { MoversView } from './movers';
@@ -19,7 +20,7 @@ import type { HelpOption } from './pictures';
 import { resolveBaseUrl } from '../../lib/sbg';
 
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
-export type Screen = 'network' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'businesses' | 'papers' | 'imports' | 'market' | 'movers' | 'reports' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'company' | 'corridors' | 'borders' | 'presence' | 'depots' | 'settings' | 'connections';
+export type Screen = 'network' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'businesses' | 'accountmoves' | 'papers' | 'imports' | 'market' | 'movers' | 'reports' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'company' | 'corridors' | 'borders' | 'presence' | 'depots' | 'settings' | 'connections';
 
 export interface TowerState {
   phase: Phase;
@@ -81,6 +82,8 @@ export interface TowerState {
   approvals: ApprovalRow[] | null;
   /** B1 — customers' businesses, those waiting on a check first. Null while unread, like every queue. */
   businesses: BusinessRow[] | null;
+  /** Requests to move an account for somebody who has lost number, PIN and inbox. Two of us decide each. Null while unread. */
+  accountMoves: MoveRow[] | null;
   /** Shops that started signing up and stopped — read beside the applications, counted with none of
    *  them. Null while unread, like every other list here. */
   stalled: StalledRow[] | null;
@@ -338,6 +341,7 @@ const INITIAL: TowerState = {
   disposal: null,
   approvals: null,
   businesses: null,
+  accountMoves: null,
   stalled: null,
   driverApplications: null,
   presence: null,
@@ -598,7 +602,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
    */
   const loadQueues = useCallback(async (client: TowerClient) => {
     setState((s) => ({ ...s, loading: true }));
-    const [claims, freightClaims, disposal, approvals, stalled, driverApplications, businesses] = await Promise.all([
+    const [claims, freightClaims, disposal, approvals, stalled, driverApplications, businesses, accountMoves] = await Promise.all([
       client.api.disputes(),
       client.api.freightClaims(),
       client.api.disposalQueue(),
@@ -610,6 +614,8 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       client.api.driverKycQueue(),
       // B1 — a business asking to be checked is a decision we owe, and it takes two of us.
       client.api.businesses(),
+      // Somebody locked out of their account is waiting on two of us — and so, perhaps, is somebody after another's.
+      client.api.accountMoves(),
     ]);
     setState((s) => ({
       ...s,
@@ -621,6 +627,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       stalled: stalled.error ? null : (narrow<{ items: StalledRow[] }>(stalled.data)?.items ?? []),
       driverApplications: driverApplications.error ? null : (narrow<DriverApplication[]>(driverApplications.data) ?? []),
       businesses: businesses.error ? null : (narrow<{ items: BusinessRow[] }>(businesses.data)?.items ?? []),
+      accountMoves: accountMoves.error ? null : (narrow<{ items: MoveRow[] }>(accountMoves.data)?.items ?? []),
       readAt: Date.now(),
     }));
   }, []);
@@ -897,7 +904,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     else if (state.screen === 'presence') await loadPresence(client);
     else if (state.screen === 'companies') await loadEntities(client);
     else if (state.screen === 'papers') await loadPapers(client);
-    else if (state.screen === 'businesses') await loadQueues(client);
+    else if (state.screen === 'businesses' || state.screen === 'accountmoves') await loadQueues(client);
     else if (state.screen === 'movers') await loadMovers(client);
     else if (state.screen === 'support') {
       // Refreshing the support screen means re-reading the parcel somebody is on the phone about, not
@@ -989,7 +996,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         if (screen === 'companies' && client) void loadEntities(client);
         if (screen === 'papers' && client) void loadPapers(client);
         // B1 — fresh: a colleague may have just given the first approval, and the second is yours to give.
-        if (screen === 'businesses' && client) void loadQueues(client);
+        if ((screen === 'businesses' || screen === 'accountmoves') && client) void loadQueues(client);
         // Read fresh every time: a hand-back that happened this morning is the reason somebody opened it.
         if (screen === 'movers' && client) void loadMovers(client);
       },

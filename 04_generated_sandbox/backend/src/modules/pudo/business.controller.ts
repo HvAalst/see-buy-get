@@ -3,6 +3,7 @@ import { BusinessClientService } from './business-client.service';
 import { BusinessClient } from './business-client.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
+import { staffOf } from './staff-of';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { auditActor } from '../../foundation/auth/acting';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -188,16 +189,3 @@ function personOf(actor: IntrospectionResult): string {
   return did;
 }
 
-/**
- * WHICH MEMBER OF STAFF — by name for the record, and by the key their sessions answer to for telling two apart.
- *
- * The shared operator key cannot say who holds it, so outside a sandbox a check that needs two people refuses it. On a
- * laptop the typed name stands in, so a demo can play both people.
- */
-function staffOf(actor: IntrospectionResult, typed?: string): { name: string; key: string } {
-  if (!isSandbox() && !actor?.actorName) {
-    throw new GlosError('FORBIDDEN', 'A decision that needs two people needs a named sign-in — the shared operator key cannot say who is at the keyboard');
-  }
-  const name = auditActor(actor, typed);
-  return { name, key: actor?.actorName && actor.revocationKey ? actor.revocationKey : `typed:${name}` };
-}

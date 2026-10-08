@@ -1,4 +1,5 @@
 import { publicRequest, type Result, type SbgConfig, type SbgError } from '../../lib/sbg';
+import type { MoveAsked, MoveStatus } from './move';
 
 /**
  * THE DOORS A PERSON USES BEFORE THEY ARE SIGNED IN — the same in every app.
@@ -17,6 +18,10 @@ export interface RecoveryApi {
   accountCode: (email: string, why: 'recover' | 'undo') => Promise<Result<{ sent: boolean; code?: string }>>;
   undo: (body: { phone?: string; pin?: string; email?: string; code?: string }) => Promise<Result<{ undone: boolean }>>;
   recover: (body: { email: string; code: string; nationalId?: string; newPhone: string; pin: string }) => Promise<Result<{ recovered: boolean; undoUntil?: string }>>;
+  /** No number, no PIN, no inbox: ask two members of staff to move the account. The new number is already confirmed by a code. */
+  askStaff: (body: { oldPhone: string; newPhone: string; nationalId?: string; note?: string }) => Promise<Result<MoveAsked>>;
+  /** What became of it, by the reference that was handed back. */
+  moveStatus: (reference: string) => Promise<Result<MoveStatus>>;
 }
 
 export function recoveryApi(config: SbgConfig): RecoveryApi {
@@ -28,6 +33,8 @@ export function recoveryApi(config: SbgConfig): RecoveryApi {
     accountCode: (email, why) => post('/v1/sbg/identity/account-code', { email, why }),
     undo: (body) => post('/v1/sbg/identity/phone/undo', body),
     recover: (body) => post('/v1/sbg/identity/recover', body),
+    askStaff: (body) => post('/v1/sbg/identity/move-requests', body),
+    moveStatus: (reference) => post('/v1/sbg/identity/move-requests/status', { reference }),
   };
 }
 

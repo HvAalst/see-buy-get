@@ -50,12 +50,24 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
   const t = useT();
   const [view, setView] = useState<View>('list');
   const [saved, setSaved] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const [stopped, setStopped] = useState(false);
+  const [stopError, setStopError] = useState<SbgError | null>(null);
   useEffect(() => {
     if (open) {
       setView('list');
       setSaved(false);
+      setStopped(false);
+      setStopError(null);
     }
   }, [open]);
+  const stopMove = async () => {
+    setStopping(true);
+    const r = await api.stopMove();
+    setStopping(false);
+    setStopError(r.error ?? null);
+    if (!r.error) setStopped(true);
+  };
 
   const me = api.account;
   // Once the number has moved the token is dead: every way out of the sheet is the sign-in screen.
@@ -69,6 +81,18 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
         <>
           <p class="t-body">{t('account.settings.lede')}</p>
           {saved ? <Note tone="ok" icon="check" title={t('account.settings.emailSaved')} /> : null}
+          {/* SOMEBODY ASKED STAFF TO MOVE THIS ACCOUNT. Its holder is the one person who knows whether that was them,
+              and being signed in is the proof the asker said they could not give. One press ends it. */}
+          {me?.moveAsked ? (
+            <>
+              <Note tone="warn" icon="warning" title={t('account.settings.moveAsked.title')} detail={t('account.settings.moveAsked.detail', { when: when(me.moveAsked.askedAt), ends: me.moveAsked.toEnds })} />
+              <Button variant="outline" chevron={false} busy={stopping} onClick={() => void stopMove()}>
+                {t('account.settings.moveAsked.stop')}
+              </Button>
+              <Refused error={stopError} />
+            </>
+          ) : null}
+          {stopped ? <Note tone="ok" icon="check" title={t('account.settings.moveAsked.stoppedTitle')} detail={t('account.settings.moveAsked.stopped')} /> : null}
           {/* A live fact about the account, said for as long as it is true — never something to dismiss. */}
           {me?.hasPin && recoveryEmailSays(me, t as never).bounced ? <Note tone="warn" icon="warning" title={t('account.settings.emailBounced.title')} detail={t('account.settings.emailBounced.detail', { email: me.email ?? '' })} /> : null}
           <div class="rows" role="list">

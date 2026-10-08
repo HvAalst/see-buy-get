@@ -18328,6 +18328,244 @@
         }
       }
     },
+    "/v1/sbg/identity/move-requests": {
+      "post": {
+        "operationId": "AccountMove.ask",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskMoveDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveAsked"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/move-requests/status": {
+      "post": {
+        "operationId": "AccountMove.status",
+        "summary": "",
+        "description": "What became of a request. The reference goes in the body: it is not a thing to leave in an address.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveStatusDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/move-requests/stop": {
+      "post": {
+        "operationId": "AccountMove.stop",
+        "summary": "",
+        "description": "\"That was not me.\" Ends every request waiting against the account of whoever is signed in.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveStopped"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/account-moves": {
+      "get": {
+        "operationId": "AccountMove.list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/account-moves/{moveId}": {
+      "get": {
+        "operationId": "AccountMove.one",
+        "parameters": [
+          {
+            "name": "moveId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/account-moves/{moveId}/check": {
+      "post": {
+        "operationId": "AccountMove.check",
+        "summary": "",
+        "description": "The first member of staff: who is asking was checked, and this is what was checked. Moves nothing.",
+        "parameters": [
+          {
+            "name": "moveId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckMoveDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/account-moves/{moveId}/approve": {
+      "post": {
+        "operationId": "AccountMove.approve",
+        "summary": "",
+        "description": "The second, different member of staff approves — and the account moves.",
+        "parameters": [
+          {
+            "name": "moveId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveMoveDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/account-moves/{moveId}/refuse": {
+      "post": {
+        "operationId": "AccountMove.refuse",
+        "parameters": [
+          {
+            "name": "moveId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefuseMoveDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/media": {
       "post": {
         "operationId": "Media.upload",
@@ -38323,6 +38561,354 @@
         "required": [
           "pin",
           "newPhone"
+        ]
+      },
+      "AskMoveDto": {
+        "type": "object",
+        "properties": {
+          "oldPhone": {
+            "type": "string",
+            "description": "The number the account is on — the one they can no longer use.",
+            "maxLength": 24
+          },
+          "newPhone": {
+            "type": "string",
+            "description": "The number it should move to. Already confirmed by a code (auth/phone/request + verify).",
+            "maxLength": 24
+          },
+          "nationalId": {
+            "type": "string",
+            "description": "The national ID number they registered with, where they did: a driver's, a shopkeeper's.",
+            "maxLength": 40
+          },
+          "note": {
+            "type": "string",
+            "description": "What happened, in their own words. For the member of staff who reads it.",
+            "maxLength": 280
+          }
+        },
+        "required": [
+          "oldPhone",
+          "newPhone"
+        ]
+      },
+      "MoveSupport": {
+        "type": "object",
+        "properties": {
+          "contactName": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "phoneAlt": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "hours": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "company"
+        ]
+      },
+      "MoveAsked": {
+        "type": "object",
+        "properties": {
+          "support": {
+            "$ref": "#/components/schemas/MoveSupport"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "lapsesAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reference",
+          "lapsesAt"
+        ]
+      },
+      "MoveStatusDto": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string",
+            "minLength": 6,
+            "maxLength": 20
+          }
+        },
+        "required": [
+          "reference"
+        ]
+      },
+      "MoveStatus": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "asked",
+              "checked",
+              "moved",
+              "refused",
+              "stopped",
+              "lapsed"
+            ]
+          },
+          "lapsesAt": {
+            "type": "string",
+            "description": "While it waits: when it lapses if nobody decides it."
+          },
+          "decidedAt": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Refused: why, in staff's words for the person."
+          },
+          "support": {
+            "$ref": "#/components/schemas/MoveSupport"
+          },
+          "askedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "askedAt"
+        ]
+      },
+      "MoveStopped": {
+        "type": "object",
+        "properties": {
+          "stopped": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "stopped"
+        ]
+      },
+      "MoveRoleLine": {
+        "type": "object",
+        "properties": {
+          "with": {
+            "type": "string",
+            "description": "A driver's fleet, where they drive for one."
+          },
+          "role": {
+            "type": "string",
+            "description": "`driver` or `shop`."
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "name"
+        ]
+      },
+      "MoveAccount": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The recovery email, masked. The asker says they cannot read it."
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MoveRoleLine"
+            }
+          },
+          "pinUsedSince": {
+            "type": "string",
+            "description": "The PIN was used — or chosen again by a code to the number — AFTER this was asked. The asker said they could do neither."
+          },
+          "numberChangedAt": {
+            "type": "string",
+            "description": "The number was changed less than a day ago, and that can still be undone."
+          },
+          "since": {
+            "type": "string"
+          },
+          "hasPin": {
+            "type": "boolean"
+          },
+          "nationalIdOnRecord": {
+            "type": "boolean",
+            "description": "A driver or shop record on it was registered with a national ID."
+          }
+        },
+        "required": [
+          "roles",
+          "since",
+          "hasPin",
+          "nationalIdOnRecord"
+        ]
+      },
+      "MoveRow": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "asked",
+              "checked",
+              "moved",
+              "refused",
+              "stopped",
+              "lapsed"
+            ]
+          },
+          "nationalId": {
+            "type": "string",
+            "enum": [
+              "matches",
+              "differs",
+              "none_on_record"
+            ]
+          },
+          "note": {
+            "type": "string"
+          },
+          "checkedBy": {
+            "type": "string"
+          },
+          "checkedAt": {
+            "type": "string"
+          },
+          "checkedWhat": {
+            "type": "string"
+          },
+          "decidedBy": {
+            "type": "string"
+          },
+          "decidedAt": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "stoppedBy": {
+            "type": "string",
+            "description": "Stopped from the account itself: its `holder` said no, signed in — or its `pin` was used after this was asked.",
+            "enum": [
+              "holder",
+              "pin"
+            ]
+          },
+          "checkedByYou": {
+            "type": "boolean",
+            "description": "The member of staff reading this is the one who checked it, so cannot be the one to approve it."
+          },
+          "account": {
+            "$ref": "#/components/schemas/MoveAccount"
+          },
+          "moveId": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "askedAt": {
+            "type": "string"
+          },
+          "lapsesAt": {
+            "type": "string"
+          },
+          "oldEnds": {
+            "type": "string"
+          },
+          "newEnds": {
+            "type": "string"
+          },
+          "namesAccount": {
+            "type": "boolean",
+            "description": "The old number names an account. False: there is nothing to move, and the request can only be refused."
+          }
+        },
+        "required": [
+          "state",
+          "moveId",
+          "reference",
+          "askedAt",
+          "lapsesAt",
+          "oldEnds",
+          "newEnds",
+          "namesAccount"
+        ]
+      },
+      "MoveList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MoveRow"
+            }
+          },
+          "waiting": {
+            "type": "number",
+            "description": "How many wait on a member of staff."
+          }
+        },
+        "required": [
+          "items",
+          "waiting"
+        ]
+      },
+      "CheckMoveDto": {
+        "type": "object",
+        "properties": {
+          "what": {
+            "type": "string",
+            "description": "What was checked, and how: the ID seen, the questions answered. Kept on the request.",
+            "maxLength": 500
+          },
+          "by": {
+            "type": "string",
+            "description": "Sandbox only: the name of the member of staff, where the shared key is in use.",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "what"
+        ]
+      },
+      "ApproveMoveDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "maxLength": 80
+          }
+        }
+      },
+      "RefuseMoveDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Written for the person who asked: they read it with their reference.",
+            "maxLength": 500
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "reason"
         ]
       },
       "UploadMediaDto": {

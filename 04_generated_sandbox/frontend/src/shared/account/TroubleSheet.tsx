@@ -1,11 +1,12 @@
 import { useState } from 'preact/hooks';
-import { Button, CodeBoxes, Note, RefusalNote, Sheet } from '../ui';
+import { Button, CodeBoxes, CodeCard, Note, RefusalNote, Sheet } from '../ui';
 import { useT } from '../i18n';
 import type { SbgError } from '../../lib/sbg';
 import { EmailStep } from './EmailStep';
+import { looksLikeReference, moveStatusSays, supportLines, type MoveAsked, type MoveStatus } from './move';
 import { asksForNationalId, type RecoveryApi } from './recovery';
 
-type Mode = 'choose' | 'gone' | 'undo' | 'done-gone' | 'done-undo';
+type Mode = 'choose' | 'gone' | 'undo' | 'staff' | 'status' | 'done-gone' | 'done-undo';
 
 /**
  * "TROUBLE SIGNING IN?" — on every sign-in screen, the same sheet.
@@ -18,6 +19,11 @@ type Mode = 'choose' | 'gone' | 'undo' | 'done-gone' | 'done-undo';
  *    confirmed by its own code, a new PIN.
  *  - SOMEBODY MOVED THE ACCOUNT TO THEIR NUMBER. For 24 hours it can be put back — with the old number and the PIN
  *    as it was, or with a code to the email.
+ *
+ *  - NO NUMBER, NO PIN AND NO INBOX THEY CAN READ. Nothing they hold opens the account, so two members of staff
+ *    move it — after checking who is asking. Here they confirm the new number, are handed a reference to give to
+ *    staff, and are told who to speak to. And here they come back, with the reference, to read what became of it:
+ *    nothing we send can reach them.
  *
  * Somebody who still knows their PIN and only wants a new number is told where that is: signed in, in the menu.
  */
@@ -47,16 +53,30 @@ export function TroubleSheet({ open, onClose, api }: { open: boolean; onClose: (
                 <span class="row__s">{t('account.trouble.undoSub')}</span>
               </span>
             </button>
+            <button type="button" class="row" role="listitem" onClick={() => setMode('staff')}>
+              <span class="row__body">
+                <span class="row__t">{t('account.trouble.staff')}</span>
+                <span class="row__s">{t('account.trouble.staffSub')}</span>
+              </span>
+            </button>
+            <button type="button" class="row" role="listitem" onClick={() => setMode('status')}>
+              <span class="row__body">
+                <span class="row__t">{t('account.trouble.status')}</span>
+                <span class="row__s">{t('account.trouble.statusSub')}</span>
+              </span>
+            </button>
           </div>
           <Note tone="info" icon="info" title={t('account.trouble.knowPinTitle')} detail={t('account.trouble.knowPin')} />
         </>
       ) : null}
       {mode === 'gone' ? <Gone api={api} onDone={() => setMode('done-gone')} /> : null}
       {mode === 'undo' ? <Undo api={api} onDone={() => setMode('done-undo')} /> : null}
+      {mode === 'staff' ? <AskStaff api={api} /> : null}
+      {mode === 'status' ? <MoveOutcome api={api} onAskAgain={() => setMode('staff')} /> : null}
       {mode === 'done-gone' ? <Note tone="ok" icon="check" title={t('account.trouble.goneDoneTitle')} detail={t('account.trouble.goneDone')} /> : null}
       {mode === 'done-undo' ? <Note tone="ok" icon="check" title={t('account.trouble.undoDoneTitle')} detail={t('account.trouble.undoDone')} /> : null}
-      <Button variant="link" onClick={mode === 'gone' || mode === 'undo' ? () => setMode('choose') : close}>
-        {t(mode === 'gone' || mode === 'undo' ? 'common.back' : 'account.trouble.close')}
+      <Button variant="link" onClick={mode === 'gone' || mode === 'undo' || mode === 'staff' || mode === 'status' ? () => setMode('choose') : close}>
+        {t(mode === 'gone' || mode === 'undo' || mode === 'staff' || mode === 'status' ? 'common.back' : 'account.trouble.close')}
       </Button>
     </Sheet>
   );
@@ -163,6 +183,171 @@ function Gone({ api, onDone }: { api: RecoveryApi; onDone: () => void }) {
       <Button chevron={false} disabled={!ready} busy={busy} onClick={() => void submit()}>
         {t('account.trouble.goneCta')}
       </Button>
+    </>
+  );
+}
+
+/**
+ * NO NUMBER, NO PIN, NO INBOX: ask staff. The new number is confirmed by a code first — it is the one thing the
+ * asker can prove here. Then the reference, shown large and said plainly to be written down: it is all they have.
+ */
+function AskStaff({ api }: { api: RecoveryApi }) {
+  const t = useT();
+  const [oldPhone, setOldPhone] = useState('');
+  const [phone, setPhone] = useState('');
+  const [phoneCode, setPhoneCode] = useState('');
+  const [phoneSent, setPhoneSent] = useState(false);
+  const [phoneVerified, setPhoneVerified] = useState(false);
+  const [testPhoneCode, setTestPhoneCode] = useState('');
+  const [nationalId, setNationalId] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<SbgError | null>(null);
+  const [asked, setAsked] = useState<MoveAsked | null>(null);
+
+  const sendPhone = async () => {
+    setBusy(true);
+    const r = await api.phoneCode(phone.trim());
+    setBusy(false);
+    setError(r.error ?? null);
+    if (r.error) return;
+    setPhoneSent(true);
+    setPhoneVerified(false);
+    setPhoneCode('');
+    setTestPhoneCode(r.data?.code ?? '');
+  };
+
+  const submit = async () => {
+    setBusy(true);
+    setError(null);
+    if (!phoneVerified) {
+      const v = await api.verifyPhone(phone.trim(), phoneCode);
+      if (v.error) {
+        setBusy(false);
+        return setError(v.error);
+      }
+      setPhoneVerified(true);
+    }
+    const r = await api.askStaff({ oldPhone: oldPhone.trim(), newPhone: phone.trim(), ...(nationalId.trim() ? { nationalId: nationalId.trim() } : {}), ...(note.trim() ? { note: note.trim() } : {}) });
+    setBusy(false);
+    if (r.error || !r.data) return setError(r.error ?? null);
+    setAsked(r.data);
+  };
+
+  if (asked) {
+    return (
+      <>
+        <Note tone="ok" icon="check" title={t('account.move.askedTitle')} detail={t('account.move.askedDetail', { date: new Date(asked.lapsesAt).toLocaleDateString(undefined, { dateStyle: 'medium' }) })} />
+        {/* The card every code somebody has to carry is shown in: large, and it can be heard — it is read down a
+            telephone, and it is all they have. */}
+        <CodeCard label={t('account.move.reference')} code={asked.reference} sayLabel={t('account.move.hear')} long />
+        <Note tone="info" icon="info" title={t('account.move.whoTitle')} detail={supportLines(asked.support, t as never).join(' · ')} />
+      </>
+    );
+  }
+
+  const ready = oldPhone.trim() && phone.trim() && (phoneVerified || phoneCode.length === 6);
+  return (
+    <>
+      <p class="t-body">{t('account.move.lede')}</p>
+      <div class="field">
+        <label class="field__label" for="staff-old">
+          {t('account.move.oldPhone')}
+        </label>
+        <input id="staff-old" class="input" type="tel" inputMode="tel" value={oldPhone} onInput={(e) => setOldPhone(e.currentTarget.value)} placeholder="+2547…" disabled={busy} />
+      </div>
+      <div class="field">
+        <label class="field__label" for="staff-new">
+          {t('account.move.newPhone')}
+        </label>
+        <input
+          id="staff-new"
+          class="input"
+          type="tel"
+          inputMode="tel"
+          value={phone}
+          disabled={busy}
+          onInput={(e) => {
+            setPhone(e.currentTarget.value);
+            setPhoneSent(false);
+            setPhoneVerified(false);
+          }}
+          placeholder="+2547…"
+        />
+      </div>
+      <Button variant="outline" chevron={false} disabled={busy || !phone.trim()} onClick={() => void sendPhone()}>
+        {t(phoneSent ? 'account.safety.sendAgain' : 'account.safety.sendPhoneCode')}
+      </Button>
+      {phoneSent ? (
+        <div class="field">
+          <span class="field__label">{t('account.safety.phoneCodeLabel')}</span>
+          <CodeBoxes id="staff-phone-code" label={t('account.safety.phoneCodeLabel')} length={6} value={phoneCode} onInput={setPhoneCode} disabled={busy || phoneVerified} />
+          {testPhoneCode ? <p class="hint">{t('account.safety.testCode', { code: testPhoneCode })}</p> : null}
+        </div>
+      ) : null}
+      <div class="field">
+        <label class="field__label" for="staff-id">
+          {t('account.move.nationalId')}
+        </label>
+        <input id="staff-id" class="input input--mono" value={nationalId} onInput={(e) => setNationalId(e.currentTarget.value)} spellcheck={false} disabled={busy} />
+        <p class="hint">{t('account.move.nationalIdHint')}</p>
+      </div>
+      <div class="field">
+        <label class="field__label" for="staff-note">
+          {t('account.move.note')}
+        </label>
+        <input id="staff-note" class="input" maxLength={280} value={note} onInput={(e) => setNote(e.currentTarget.value)} disabled={busy} />
+      </div>
+      {error ? <RefusalNote error={error} /> : null}
+      <Button chevron={false} disabled={!ready} busy={busy} onClick={() => void submit()}>
+        {t('account.move.cta')}
+      </Button>
+    </>
+  );
+}
+
+/** "I already asked": the reference, and what became of it — with what to do next, since nothing we send reaches them. */
+function MoveOutcome({ api, onAskAgain }: { api: RecoveryApi; onAskAgain: () => void }) {
+  const t = useT();
+  const [reference, setReference] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<SbgError | null>(null);
+  const [status, setStatus] = useState<MoveStatus | null>(null);
+
+  const look = async () => {
+    setBusy(true);
+    setStatus(null);
+    const r = await api.moveStatus(reference.trim());
+    setBusy(false);
+    setError(r.error ?? null);
+    if (!r.error && r.data) setStatus(r.data);
+  };
+  const says = status ? moveStatusSays(status, t as never) : null;
+
+  return (
+    <>
+      <p class="t-body">{t('account.move.statusLede')}</p>
+      <div class="field">
+        <label class="field__label" for="move-ref">
+          {t('account.move.reference')}
+        </label>
+        <input id="move-ref" class="input input--mono" value={reference} onInput={(e) => setReference(e.currentTarget.value)} placeholder="MV-XXXX-XXXX" spellcheck={false} autocapitalize="characters" disabled={busy} />
+      </div>
+      {error ? <RefusalNote error={error} /> : null}
+      <Button chevron={false} disabled={!looksLikeReference(reference)} busy={busy} onClick={() => void look()}>
+        {t('account.move.statusCta')}
+      </Button>
+      {says && status ? (
+        <>
+          <Note tone={says.tone} icon={says.icon} title={says.title} detail={says.lines.join(' ')} />
+          {status.state === 'asked' || status.state === 'checked' ? <Note tone="info" icon="info" title={t('account.move.whoTitle')} detail={supportLines(status.support, t as never).join(' · ')} /> : null}
+          {says.canAskAgain ? (
+            <Button variant="outline" chevron={false} onClick={onAskAgain}>
+              {t('account.move.askAgain')}
+            </Button>
+          ) : null}
+        </>
+      ) : null}
     </>
   );
 }

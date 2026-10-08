@@ -1334,6 +1334,16 @@
   margin: 2px 0 4px;
 }
 
+/*
+ * A LONGER CODE — a reference read to another person — stays on one line at any width. It gives up size to do it,
+ * never a character: broken across two lines it reads as two codes. Four digits never need this.
+ */
+.codecard--long .codecard__code {
+  white-space: nowrap;
+  font-size: min(46px, 8.6vw);
+  letter-spacing: 0.06em;
+}
+
 /* ------------------------------------------------------------- place map -- */
 
 /* The shared dependency-free plot: relative positions on a grid ground, no tiles.

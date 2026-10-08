@@ -5,6 +5,7 @@ import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { PersonService } from './person.service';
 import { HandleService } from '../../foundation/handle/handle.service';
 import { AccountProfileDto, AccountPinDto, AccountEmailDto, ChangeNumberDto } from './pudo.dto';
+import { AccountMoveService } from './account-move.service';
 import { AccountRecoveryService } from './account-recovery.service';
 
 /**
@@ -39,6 +40,7 @@ export class AccountController {
     private readonly persons: PersonService,
     private readonly handles: HandleService,
     private readonly recovery: AccountRecoveryService,
+    private readonly moves: AccountMoveService,
   ) {}
 
   /**
@@ -52,8 +54,12 @@ export class AccountController {
   me(@Actor() actor: IntrospectionResult) {
     const person = this.persons.requireByDid(actingPerson(actor));
     const handle = actor.did ? this.handles.list().find((h) => h.id === actor.did)?.handle : undefined;
+    // Somebody has asked staff to move THIS account to another number. Its holder is shown it wherever they look
+    // at their own account — they are the one person who knows whether it was them.
+    const moveAsked = this.moves.openAgainst(person.personDid);
     return {
       ...this.persons.view(person),
+      ...(moveAsked ? { moveAsked } : {}),
       /** The role this token is acting as — what the menu heads itself with. */
       actingAs: actor.role,
       actingDid: actor.did,

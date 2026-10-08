@@ -759,6 +759,21 @@ export function createOperatorApi(sbg: SbgClient) {
      */
     businesses: () => sbg.request((c) => c.GET('/v1/sbg/businesses', {})),
     /**
+     * ACCOUNT MOVES — somebody with no number, no PIN and no inbox they can read asked for their account to be moved,
+     * and it takes two members of staff: one checks who is asking, a second approves. The list never carries whose
+     * account it is; `accountMove` reads one request with what there is to check the asker against.
+     */
+    accountMoves: () => sbg.request((c) => c.GET('/v1/sbg/account-moves', {})),
+    accountMove: (moveId: string) => sbg.request((c) => c.GET('/v1/sbg/account-moves/{moveId}', { params: { path: { moveId } } })),
+    /** `what` is what was checked and how — kept, and what the second member of staff approves on the strength of. */
+    checkAccountMove: (moveId: string, what: string, by?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/account-moves/{moveId}/check', { params: { path: { moveId } }, body: { what, ...(by ? { by } : {}) } })),
+    approveAccountMove: (moveId: string, by?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/account-moves/{moveId}/approve', { params: { path: { moveId } }, body: { ...(by ? { by } : {}) } })),
+    /** `reason` is read by whoever asked, with their reference. */
+    refuseAccountMove: (moveId: string, reason: string, by?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/account-moves/{moveId}/refuse', { params: { path: { moveId } }, body: { reason, ...(by ? { by } : {}) } })),
+    /**
      * What this server is connected to for the fleets' planning — the routing server and the adviser: set up or not,
      * and what the last ask met. Staff only. `checkRouter` asks the routing server one question now.
      */
