@@ -32,11 +32,24 @@ export interface DisputePlace {
   visitDays?: string[];
   visitFrom?: string;
   visitTo?: string;
+  /** How many visitors it sees in an hour, where it has said — then an appointment is for an hour. */
+  visitorsPerHour?: number;
+  /** The dates it is closed: public holidays, one-off closures. */
+  closedDates?: Array<{ date: string; note?: string }>;
+}
+
+/** A day an appointment can be made for — with its hours and the places left in each, where the office counts by the hour. */
+export interface DisputeDay {
+  date: string;
+  hours?: Array<{ at: string; free: number }>;
 }
 
 export interface DisputeTicket {
   reference: string;
   date: string;
+  /** The hour, from `at` until `until`, where the office counts its visitors by the hour. */
+  at?: string;
+  until?: string;
   yours: boolean;
   bring: Bring[];
   changesLeft: number;
@@ -66,6 +79,8 @@ export interface DisputeStatus {
   held?: boolean;
   contestBy?: string;
   ticket?: DisputeTicket;
+  /** The days — and hours — there are to choose from, as the server worked them out. Absent: the office has set no visiting days. */
+  choices?: DisputeDay[];
   support?: DisputePlace;
 }
 
@@ -96,7 +111,7 @@ export interface IdDisputeApi {
   photo: (reference: string, which: DisputePhoto, dataUrl: string, thumbDataUrl?: string) => Promise<Result<DisputeStatus>>;
   send: (reference: string) => Promise<Result<DisputeStatus>>;
   withdraw: (reference: string) => Promise<Result<DisputeStatus>>;
-  appoint: (reference: string, date: string) => Promise<Result<DisputeStatus>>;
+  appoint: (reference: string, date: string, at?: string) => Promise<Result<DisputeStatus>>;
 }
 
 /** Built on whatever can post: a public request at a sign-in screen, or a signed-in client in Settings. */
@@ -107,7 +122,7 @@ export function idDisputeApi(post: <T>(path: string, body: unknown) => Promise<R
     photo: (reference, which, dataUrl, thumbDataUrl) => post(`${at}/photo`, { reference, which, dataUrl, ...(thumbDataUrl ? { thumbDataUrl } : {}) }),
     send: (reference) => post(`${at}/send`, { reference }),
     withdraw: (reference) => post(`${at}/withdraw`, { reference }),
-    appoint: (reference, date) => post(`${at}/appointment`, { reference, date }),
+    appoint: (reference, date, hour) => post(`${at}/appointment`, { reference, date, ...(hour ? { at: hour } : {}) }),
   };
 }
 
@@ -191,24 +206,31 @@ export function idActions(status: DisputeStatus): { photos: boolean; withdraw: b
 }
 
 const WEEK = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
-/** The weekday a calendar date falls on — the same wherever it is read. */
-const weekdayOf = (date: string): string => WEEK[(new Date(`${date}T00:00:00.000Z`).getUTCDay() + 6) % 7];
-
 /**
- * THE DAYS THERE ARE TO CHOOSE FROM. The user, 2026-10-08: "it's up to the countries to set visiting days and
- * visiting hours." Where the country's company has set them, these are its visiting days in the next three weeks,
- * and they are offered as they are — nobody is left to guess at a calendar. NULL where it has set none: then any
- * day may be chosen, and the person is told to ask first.
+ * THE DAYS THERE ARE TO CHOOSE FROM — the server's own list, never worked out here. The user, 2026-10-08: "it's up
+ * to the countries to set visiting days and visiting hours"; "the country should set it's own public holidays
+ * and/or one off closure"; "the limitation is set by the country as an actual number of visitors per hour." Only
+ * the server knows all three together, and what other people have already taken.
+ *
+ * NULL where the office has set no visiting days: then any day may be asked for, and the person is told to ask
+ * first. When MOVING an appointment, the day it is already on is not a change — unless it has hours, and the
+ * change is to another hour of the same day.
  */
-export function appointmentChoices(place: DisputePlace | undefined, now: number = Date.now()): string[] | null {
-  const days = place?.visitDays;
-  if (!days?.length) return null;
-  const out: string[] = [];
-  for (let i = 1; i <= 21; i++) {
-    const date = new Date(now + i * 86_400_000).toISOString().slice(0, 10);
-    if (days.includes(weekdayOf(date))) out.push(date);
-  }
-  return out;
+export function dayChoices(status: Pick<DisputeStatus, 'choices' | 'ticket'>): DisputeDay[] | null {
+  if (!status.choices) return null;
+  return status.choices.filter((c) => Boolean(c.hours) || c.date !== status.ticket?.date);
+}
+
+/** The hours of the day that was chosen, where the office counts by the hour. Null: a day is all there is to choose. */
+export function hoursOn(status: Pick<DisputeStatus, 'choices'>, date: string): Array<{ at: string; free: number }> | null {
+  return status.choices?.find((c) => c.date === date)?.hours ?? null;
+}
+
+/** Is there enough chosen to make the appointment: a day — and, where the day has hours, one of them with a place left. */
+export function readyToAppoint(status: Pick<DisputeStatus, 'choices'>, date: string, at: string): boolean {
+  if (!date) return false;
+  const hours = hoursOn(status, date);
+  return hours ? hours.some((h) => h.at === at && h.free > 0) : true;
 }
 
 /** A day as a button says it: "Mon 12 Oct". */
@@ -231,7 +253,11 @@ export function ticketLines(ticket: DisputeTicket, t: T): { when: string; where:
   const say = t as Say;
   const p = ticket.place;
   return {
-    when: new Date(`${ticket.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+    // The day — and the hour, where the office gave one: somebody told "Friday" and somebody told "Friday, ten to
+    // eleven" plan a different morning.
+    when:
+      new Date(`${ticket.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) +
+      (ticket.at && ticket.until ? `, ${say('account.id.ticket.hour', { from: ticket.at, until: ticket.until })}` : ''),
     where: p
       ? [
           p.company,

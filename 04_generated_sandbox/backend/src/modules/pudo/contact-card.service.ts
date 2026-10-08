@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { GlosError } from '../../foundation/http/glos-error';
+import { CompanyReadinessService } from '../../foundation/entity/company-readiness.service';
 import { EntityService } from '../../foundation/entity/entity.service';
 
 /**
@@ -30,6 +31,35 @@ export function weekdayOf(date: string): Weekday | undefined {
   return Number.isNaN(at) ? undefined : WEEKDAYS[(new Date(at).getUTCDay() + 6) % 7];
 }
 
+/** A day the company is closed: a public holiday, a one-off closure — and what the day is, in its own words. */
+export interface ClosedDate {
+  date: string;
+  note?: string;
+}
+export const MAX_CLOSED_DATES = 120;
+export const MAX_VISITORS_PER_HOUR = 200;
+
+const minutesOf = (clock: string | undefined): number | undefined => (clock && CLOCK.test(clock) ? Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3)) : undefined);
+const clockOf = (minutes: number): string => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+
+/**
+ * THE HOURS A COMPANY RECEIVES VISITORS IN, as the time each starts: from when it opens to visitors, an hour each,
+ * for as long as a whole hour still fits before it closes to them. "09:00 to 16:00" is seven: 09:00 … 15:00.
+ */
+export function visitingHours(card: { visitFrom?: string; visitTo?: string } | undefined): string[] {
+  const from = minutesOf(card?.visitFrom);
+  const to = minutesOf(card?.visitTo);
+  if (from === undefined || to === undefined) return [];
+  const out: string[] = [];
+  for (let m = from; m + 60 <= to; m += 60) out.push(clockOf(m));
+  return out;
+}
+
+/** An hour later — when the hour that starts at `at` ends. */
+export function hourAfter(at: string): string {
+  return clockOf(((minutesOf(at) ?? 0) + 60) % (24 * 60));
+}
+
 export interface ContactCard {
   entityId: string;
   /** Who to ask for — "ask for Grace at the gate". A role or a name, whichever they prefer. */
@@ -52,6 +82,16 @@ export interface ContactCard {
   /** `HH:MM`, on the clock of wherever the company is. */
   visitFrom?: string;
   visitTo?: string;
+  /**
+   * THE DATES IT IS CLOSED — public holidays, one-off closures. The user, 2026-10-08: "the country should set it's
+   * own public holidays and/or one off closure." No appointment is offered or taken on one.
+   */
+  closedDates?: ClosedDate[];
+  /**
+   * HOW MANY VISITORS IT SEES IN AN HOUR — its own number: "They themselves can decide how many desk workers they
+   * will dedicate for these visitation hours." With it, an appointment is for an hour and an hour fills up.
+   */
+  visitorsPerHour?: number;
   saidAt: string;
   saidBy: string;
 }
@@ -67,7 +107,24 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 export class ContactCardService {
   private readonly cards = new PersistentMap<string, ContactCard>('contact-cards');
 
-  constructor(private readonly entities: EntityService) {}
+  constructor(
+    private readonly entities: EntityService,
+    @Optional() readiness?: CompanyReadinessService,
+  ) {
+    /*
+     * PART OF THE TURN-ON PROCESS. A company of ours is not switched on until it has said, in this entry of its
+     * own, where people are sent and when it receives them: from that day somebody in its country can be handed a
+     * ticket to come in, and a ticket with no address on it is a promise the company has not made yet.
+     */
+    readiness?.also((entity) => {
+      if (entity.kind !== 'sister') return [];
+      const card = this.cards.get(entity.entityId);
+      return [
+        { key: 'visitors_address', met: Boolean(card?.address), label: 'Where people are sent when they have to come in person: its address, written by the company in its own Settings' },
+        { key: 'visiting_days', met: Boolean(card?.visitDays?.length && card.visitFrom && card.visitTo), label: 'The days and hours it receives visitors, set by the company in its own Settings' },
+      ];
+    });
+  }
 
   /**
    * Write or change the card. A MERGE, deliberately: a company correcting its telephone number should not
@@ -78,7 +135,7 @@ export class ContactCardService {
    */
   set(
     entityId: string,
-    patch: { contactName?: string; phone?: string; phoneAlt?: string; email?: string; website?: string; address?: string; hours?: string; visitDays?: string[]; visitFrom?: string; visitTo?: string },
+    patch: { contactName?: string; phone?: string; phoneAlt?: string; email?: string; website?: string; address?: string; hours?: string; visitDays?: string[]; visitFrom?: string; visitTo?: string; closedDates?: ClosedDate[]; visitorsPerHour?: number | null },
     by: string,
     now = Date.now(),
   ): ContactCard {
@@ -138,6 +195,38 @@ export class ContactCardService {
     clock('visitFrom', patch.visitFrom);
     clock('visitTo', patch.visitTo);
     if (card.visitFrom && card.visitTo && card.visitFrom >= card.visitTo) throw new GlosError('VALIDATION_FAILED', 'Visiting hours end after they begin');
+
+    // Closed dates: absent is unchanged; a list REPLACES the list (an empty one clears it). Sorted, one of each,
+    // and what is already behind us is let go — a closure last spring is nobody's appointment.
+    if (patch.closedDates !== undefined) {
+      if (!Array.isArray(patch.closedDates)) throw new GlosError('VALIDATION_FAILED', 'Closed dates are a list of dates');
+      const since = new Date(now - 86_400_000).toISOString().slice(0, 10);
+      const byDate = new Map<string, ClosedDate>();
+      for (const raw of patch.closedDates) {
+        const date = String(raw?.date ?? '').trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !weekdayOf(date) || new Date(`${date}T00:00:00.000Z`).toISOString().slice(0, 10) !== date) {
+          throw new GlosError('VALIDATION_FAILED', 'A closed date is a date, such as 2026-12-25');
+        }
+        const note = String(raw?.note ?? '').trim().slice(0, 60);
+        if (date >= since) byDate.set(date, { date, ...(note ? { note } : {}) });
+      }
+      if (byDate.size > MAX_CLOSED_DATES) throw new GlosError('VALIDATION_FAILED', `That is more closed dates than can be kept (${MAX_CLOSED_DATES})`);
+      const dates = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+      if (dates.length) card.closedDates = dates;
+      else delete card.closedDates;
+    }
+
+    // Visitors an hour: absent is unchanged; nothing, or zero, clears it — and then no hour ever fills.
+    if (patch.visitorsPerHour !== undefined) {
+      const n = patch.visitorsPerHour;
+      if (n === null || n === 0) delete card.visitorsPerHour;
+      else if (!Number.isInteger(n) || n < 0 || n > MAX_VISITORS_PER_HOUR) throw new GlosError('VALIDATION_FAILED', `Visitors an hour is a whole number, up to ${MAX_VISITORS_PER_HOUR}`);
+      else card.visitorsPerHour = n;
+    }
+    // A number of visitors AN HOUR needs hours to count in: at least one whole one.
+    if (card.visitorsPerHour && !visitingHours(card).length) {
+      throw new GlosError('VALIDATION_FAILED', 'Say from when until when you receive visitors — at least an hour — before saying how many an hour');
+    }
 
     this.cards.set(company.entityId, card);
     return card;

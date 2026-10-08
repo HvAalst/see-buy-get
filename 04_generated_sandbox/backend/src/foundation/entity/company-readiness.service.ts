@@ -4,6 +4,7 @@ import { catalogueEntry } from '../countries/catalogue';
 import { CompanyDocumentService } from './company-documents.service';
 import { lapsesAt } from './company-record.types';
 import { EntityService } from './entity.service';
+import type { Entity } from './entity.types';
 
 /**
  * CA3 — IS THIS COMPANY READY TO BE SWITCHED ON?
@@ -29,10 +30,21 @@ export class CompanyReadiness {
 
 @Injectable()
 export class CompanyReadinessService {
+  /**
+   * WHAT ELSE A COMPANY HAS TO HAVE BEFORE IT IS SWITCHED ON, said by whatever part of the system holds it — its own
+   * published entry, for one: where people are sent and when it receives visitors (the user, 2026-10-08: "it's part
+   * of the turn on process"). They say so here rather than being imported, so this stays the foundation's.
+   */
+  private readonly others: Array<(entity: Entity) => ReadinessItem[]> = [];
+
   constructor(
     private readonly entities: EntityService,
     private readonly documents: CompanyDocumentService,
   ) {}
+
+  also(check: (entity: Entity) => ReadinessItem[]): void {
+    this.others.push(check);
+  }
 
   readinessOf(entityId: string, now = Date.now()): CompanyReadiness {
     const entity = this.entities.get(entityId);
@@ -73,6 +85,8 @@ export class CompanyReadinessService {
       const met = record.obligations.some((o) => o.key === obligation.key && o.reference) && verified('obligation_registration', obligation.key);
       add(`obligation:${obligation.key}`, met, `${obligation.name}${obligation.authority ? ` (${obligation.authority})` : ''}: registered, and its paper verified by a second person`);
     }
+
+    for (const check of this.others) items.push(...check(entity));
 
     return { entityId, ready: items.every((i) => i.met), items };
   }

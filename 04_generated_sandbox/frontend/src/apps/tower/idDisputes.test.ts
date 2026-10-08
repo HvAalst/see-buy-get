@@ -127,7 +127,14 @@ describe('ID disputes, as the console says them', () => {
 
   it('says where people are sent and when, in the company’s own words — and says what it has not written, never a blank', () => {
     const full = placeWords(row({ place: { company: 'SeeBuyGet Kenya', address: 'Mombasa Road, gate 4', visitDays: ['fri', 'mon'], visitFrom: '09:00', visitTo: '16:00' } }), t);
-    expect(full).toEqual({ where: 'SeeBuyGet Kenya, Mombasa Road, gate 4', visiting: 'Visitors: Monday, Friday · 09:00 to 16:00', missing: false });
+    expect(full).toEqual({ where: 'SeeBuyGet Kenya, Mombasa Road, gate 4', visiting: 'Visitors: Monday, Friday · 09:00 to 16:00', closed: '', missing: false });
+    // How many it sees in an hour, and the dates it is closed — its own, said as it said them.
+    const counted = placeWords(row({ place: { company: 'SeeBuyGet Kenya', address: 'Gate 4', visitDays: ['mon'], visitFrom: '09:00', visitTo: '12:00', visitorsPerHour: 3, closedDates: [{ date: '2026-10-20', note: 'Mashujaa Day' }, { date: '2026-12-25' }] } }), t);
+    expect(counted.visiting).toBe('Visitors: Monday · 09:00 to 12:00 · 3 visitor(s) an hour');
+    expect(counted.closed).toBe('Closed: 2026-10-20 (Mashujaa Day), 2026-12-25');
+    // A long list is cut, and says how many more there are.
+    const many = Array.from({ length: 9 }, (_, i) => ({ date: `2026-11-0${i + 1}` }));
+    expect(placeWords(row({ place: { company: 'x', address: 'y', visitDays: ['mon'], closedDates: many } }), t).closed).toMatch(/2026-11-06 \+3$/);
     const nothing = placeWords(row(), t);
     expect(nothing).toMatchObject({ where: 'No address written', missing: true });
     expect(nothing.visiting).toContain('may choose any day');

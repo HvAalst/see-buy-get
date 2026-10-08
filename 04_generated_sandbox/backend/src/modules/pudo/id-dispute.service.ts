@@ -8,7 +8,7 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { countryOfPhone } from './account-move.service';
 import { AccountRecoveryService } from './account-recovery.service';
 import { AgentService } from './agent.service';
-import { ContactCardService, WEEKDAYS, weekdayOf, type Weekday } from './contact-card.service';
+import { ContactCardService, WEEKDAYS, hourAfter, visitingHours, weekdayOf, type Weekday } from './contact-card.service';
 import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import {
@@ -21,6 +21,7 @@ import {
   DISPUTE_OPENS_PER_DAY,
   DISPUTE_PHOTOS,
   DisputeAgainstMe,
+  DisputeDay,
   DisputeList,
   DisputeOpened,
   DisputeParty,
@@ -100,7 +101,7 @@ interface StoredDispute {
   sentBack?: { by: string; at: string; why: string };
   decided?: { to: DisputeSide; by: string; at: string; reason: string; holderEffect: HolderEffect };
   contestBy?: string;
-  appointment?: { by: DisputeSide; date: string; madeAt: string; changes: number };
+  appointment?: { by: DisputeSide; date: string; at?: string; madeAt: string; changes: number };
   final?: { to: DisputeSide; by: string; at: string; reason: string; came?: { claimant: boolean; holder: boolean } };
   endedAt?: string;
   country?: string;
@@ -274,52 +275,99 @@ export class IdDisputeService {
   /**
    * STILL DISPUTED: AN APPOINTMENT IN PERSON. Whoever did not get the ID names a day, and both are given a ticket —
    * where, when, what to bring. Whoever made it may change the day, twice, before it comes.
+   *
+   * WHICH DAYS AND HOURS is the country's own to say, in its own entry: the days of the week it receives visitors,
+   * the dates it is closed, and how many it sees in an hour. Each is asked here, of what it says NOW.
    */
-  appoint(reference: string, date: string, now: number = Date.now()): DisputeStatus {
+  appoint(reference: string, date: string, at?: string, now: number = Date.now()): DisputeStatus {
     const { dispute, side } = this.byReference(reference, now);
     const today = iso(now).slice(0, 10);
     const day = Date.parse(`${date}T00:00:00.000Z`);
-    const dayOk = () => {
+    const place = this.placeFor(dispute.country);
+    /** Is this a day — and, where the country counts by the hour, an hour — that can be taken? Answers the hour. */
+    const hourOn = (): string | undefined => {
       if (Number.isNaN(day) || date <= today) throw new GlosError('INVALID_INPUT', 'Choose a day from tomorrow on.', { field: 'date' });
       if (day > now + APPOINTMENT_WITHIN_DAYS * DAY_MS) throw new GlosError('INVALID_INPUT', `Choose a day within the next ${APPOINTMENT_WITHIN_DAYS} days.`, { field: 'date' });
       // "It's up to the countries to set visiting days and visiting hours." Where one has, no other day is taken.
-      const visiting = this.placeFor(dispute.country);
-      if (offDay(visiting, date)) {
-        throw new GlosError('INVALID_INPUT', `${visiting!.company} does not receive visitors on a ${DAY_NAME[weekdayOf(date) as Weekday]}. It does on ${daysInWords(visiting!.visitDays as Weekday[])}.`, { field: 'date', visitDays: visiting!.visitDays });
+      if (notVisitingDay(place, date)) {
+        throw new GlosError('INVALID_INPUT', `${place!.company} does not receive visitors on a ${DAY_NAME[weekdayOf(date) as Weekday]}. It does on ${daysInWords(place!.visitDays as Weekday[])}.`, { field: 'date', visitDays: place!.visitDays });
       }
+      // "The country should set it's own public holidays and/or one off closure."
+      const closed = closedOn(place, date);
+      if (closed) throw new GlosError('INVALID_INPUT', `${place!.company} is closed on ${dayOf(date)}${closed.note ? ` (${closed.note})` : ''}. Choose another day.`, { field: 'date' });
+      // "The limitation is set by the country as an actual number of visitors per hour." Where it has set one, the
+      // appointment is for an hour, and an hour that is full is refused. Where it has not, a day is enough.
+      if (!place?.visitorsPerHour) return undefined;
+      const hours = visitingHours(place);
+      if (!at || !hours.includes(at)) throw new GlosError('INVALID_INPUT', `Choose the hour you will come: ${hours.join(', ')}.`, { field: 'at', hours });
+      if (this.takenAt(dispute, date, at, now) >= place.visitorsPerHour) throw new GlosError('CONFLICT', `${at} on ${dayOf(date)} is full. Choose another hour.`, { field: 'at' });
+      return at;
     };
     if (dispute.state === 'decided') {
       if (!dispute.decided || dispute.decided.to === side) throw new GlosError('INVALID_STATE', 'The ID is yours: there is nothing for you to contest.');
       if (!dispute.contestBy || now >= Date.parse(dispute.contestBy)) throw new GlosError('INVALID_STATE', 'The time to contest this decision has passed.');
-      dayOk();
-      dispute.appointment = { by: side, date, madeAt: iso(now), changes: 0 };
+      const hour = hourOn();
+      dispute.appointment = { by: side, date, ...(hour ? { at: hour } : {}), madeAt: iso(now), changes: 0 };
       dispute.state = 'appointment';
     } else if (dispute.state === 'appointment' && dispute.appointment) {
       if (dispute.appointment.by !== side) throw new GlosError('FORBIDDEN', 'Only the person who made the appointment can change its day.');
       if (dispute.appointment.date <= today) throw new GlosError('INVALID_STATE', 'The day has come: it can no longer be changed.');
       if (dispute.appointment.changes >= APPOINTMENT_CHANGES) throw new GlosError('INVALID_STATE', 'The day has been changed as often as it can be. Speak to SeeBuyGet staff.');
-      dayOk();
-      dispute.appointment = { ...dispute.appointment, date, changes: dispute.appointment.changes + 1 };
+      const hour = hourOn();
+      dispute.appointment = { by: dispute.appointment.by, date, ...(hour ? { at: hour } : {}), madeAt: dispute.appointment.madeAt, changes: dispute.appointment.changes + 1 };
     } else {
       throw new GlosError('INVALID_STATE', 'There is nothing here to make an appointment for.');
     }
     // The photographs are kept until the day has come and gone: it is the one reason to keep them longer.
     this.anchorPhotos(dispute, day);
     this.disputes.set(dispute.disputeId, dispute);
-    const place = this.placeFor(dispute.country);
-    const visitors = place?.visitFrom && place?.visitTo ? `, between ${place.visitFrom} and ${place.visitTo}` : '';
+    const hour = dispute.appointment!.at;
+    const when = hour ? `${dayOf(date)} at ${hour}` : dayOf(date);
+    const visitors = !hour && place?.visitFrom && place?.visitTo ? `, between ${place.visitFrom} and ${place.visitTo}` : '';
     const where = place ? `${place.company}${place.address ? `, ${place.address}` : ''}${visitors}` : 'the SeeBuyGet office for your country';
     for (const s of ['claimant', 'holder'] as const) {
       const mine = dispute.appointment!.by === s;
       this.tell(dispute[s].personDid, {
         headline: mine ? 'Your appointment about the national ID' : 'The decision about the national ID is being looked at again, in person',
         what: mine
-          ? `You are expected on ${dayOf(date)} at ${where}. Two members of staff decide again on what they see, and that decision is final.`
-          : `The other person does not accept the decision and comes in on ${dayOf(date)} to ${where}. You may come too, with your card, so that yours is looked at as well: staff decide on what they see.`,
+          ? `You are expected on ${when} at ${where}. Two members of staff decide again on what they see, and that decision is final.`
+          : `The other person does not accept the decision and comes in on ${when} to ${where}. You may come too, with your card, so that yours is looked at as well: staff decide on what they see.`,
         next: `Bring: your ID card itself — not a copy or a photograph; the phone you use with SeeBuyGet; your reference, ${dispute[s].reference}; and a second document in your name if you have one. Your ticket is in the app, under the same reference.`,
       });
     }
     return this.statusOf(dispute, side, now);
+  }
+
+  /** How many OTHER appointments at this country's office are already made for that hour of that day. */
+  private takenAt(d: StoredDispute, date: string, at: string, now: number): number {
+    return this.all(now).filter((x) => x.disputeId !== d.disputeId && x.country === d.country && x.state === 'appointment' && x.appointment?.date === date && x.appointment?.at === at).length;
+  }
+
+  /**
+   * THE DAYS — AND HOURS — THERE ARE TO CHOOSE FROM, for somebody who may make an appointment or move the one they
+   * made. Worked out HERE, because only here are the company's days, its closed dates and what is already taken
+   * known together: its visiting days in the next three weeks, without the dates it is closed, and — where it
+   * counts visitors by the hour — only the days that still have a free hour, each hour with its places left.
+   * Nothing where it has set no visiting days: then any day may be asked for, and the person is told to ask first.
+   */
+  private choicesFor(d: StoredDispute, side: DisputeSide, now: number): DisputeDay[] | undefined {
+    const today = iso(now).slice(0, 10);
+    const mayMove = d.state === 'appointment' && d.appointment?.by === side && d.appointment.changes < APPOINTMENT_CHANGES && d.appointment.date > today;
+    if (!this.mayContest(d, side, now) && !mayMove) return undefined;
+    const place = this.placeFor(d.country);
+    if (!place?.visitDays?.length) return undefined;
+    const days: DisputeDay[] = [];
+    for (let i = 1; i <= APPOINTMENT_WITHIN_DAYS; i++) {
+      const date = iso(now + i * DAY_MS).slice(0, 10);
+      if (notVisitingDay(place, date) || closedOn(place, date)) continue;
+      if (!place.visitorsPerHour) {
+        days.push({ date });
+        continue;
+      }
+      const hours = visitingHours(place).map((at) => ({ at, free: Math.max(0, (place.visitorsPerHour as number) - this.takenAt(d, date, at, now)) }));
+      if (hours.some((h) => h.free > 0)) days.push({ date, hours });
+    }
+    return days;
   }
 
   /* ---------------------------------------------------------------------- the holder -- */
@@ -665,6 +713,7 @@ export class IdDisputeService {
     const reason = d.final?.reason ?? d.decided?.reason;
     const support = this.placeFor(d.country);
     const ticket = this.ticketFor(d, side, support);
+    const choices = this.choicesFor(d, side, now);
     const due = side === 'claimant' ? d.photosBy : d.answerBy;
     return {
       reference: party.reference,
@@ -681,6 +730,7 @@ export class IdDisputeService {
       ...(this.heldOf(d, side) ? { held: true } : {}),
       ...(this.mayContest(d, side, now) ? { contestBy: d.contestBy } : {}),
       ...(ticket ? { ticket } : {}),
+      ...(choices ? { choices } : {}),
       ...(support ? { support } : {}),
     };
   }
@@ -691,10 +741,11 @@ export class IdDisputeService {
     return {
       reference: d[side].reference,
       date: d.appointment.date,
+      ...(d.appointment.at ? { at: d.appointment.at, until: hourAfter(d.appointment.at) } : {}),
       yours,
       bring: [...BRING],
       changesLeft: yours ? Math.max(0, APPOINTMENT_CHANGES - d.appointment.changes) : 0,
-      ...(offDay(place, d.appointment.date) ? { offDay: true } : {}),
+      ...(offDay(place, d.appointment.date, d.appointment.at) ? { offDay: true } : {}),
       ...(place ? { place } : {}),
     };
   }
@@ -723,8 +774,8 @@ export class IdDisputeService {
       ...(d.sentBack ? { sentBackWhy: `${d.sentBack.by}: ${d.sentBack.why}` } : {}),
       ...(d.decided ? { decidedTo: d.decided.to, decidedBy: d.decided.by, decidedAt: d.decided.at, reason: d.final?.reason ?? d.decided.reason, holderEffect: d.decided.holderEffect } : {}),
       ...(d.state === 'decided' && d.contestBy ? { contestBy: d.contestBy } : {}),
-      ...(d.appointment ? { appointmentDate: d.appointment.date, appointmentBy: d.appointment.by } : {}),
-      ...(d.appointment && d.state === 'appointment' && offDay(this.placeFor(d.country), d.appointment.date) ? { appointmentOffDay: true } : {}),
+      ...(d.appointment ? { appointmentDate: d.appointment.date, appointmentBy: d.appointment.by, ...(d.appointment.at ? { appointmentAt: d.appointment.at } : {}) } : {}),
+      ...(d.appointment && d.state === 'appointment' && offDay(this.placeFor(d.country), d.appointment.date, d.appointment.at) ? { appointmentOffDay: true } : {}),
       ...(place ? { place } : {}),
       ...(d.final ? { finalTo: d.final.to, finalBy: d.final.by, finalAt: d.final.at } : {}),
       ...(d.endedAt ? { endedAt: d.endedAt } : {}),
@@ -900,6 +951,8 @@ export class IdDisputeService {
       ...(card.visitDays?.length ? { visitDays: [...card.visitDays] } : {}),
       ...(card.visitFrom ? { visitFrom: card.visitFrom } : {}),
       ...(card.visitTo ? { visitTo: card.visitTo } : {}),
+      ...(card.visitorsPerHour ? { visitorsPerHour: card.visitorsPerHour } : {}),
+      ...(card.closedDates?.length ? { closedDates: card.closedDates.map((c) => ({ ...c })) } : {}),
     };
   }
 
@@ -919,10 +972,23 @@ function daysInWords(days: Weekday[]): string {
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : (names[0] ?? '');
 }
 /** Has this company said which days it receives visitors — and is this date not one of them? */
-function offDay(place: DisputePlace | undefined, date: string): boolean {
+function notVisitingDay(place: DisputePlace | undefined, date: string): boolean {
   const days = place?.visitDays;
   const day = weekdayOf(date);
   return Boolean(days?.length) && Boolean(day) && !days!.includes(day as string);
+}
+/** Is it closed on this date — a public holiday, a one-off closure — as it said itself? */
+function closedOn(place: DisputePlace | undefined, date: string): { date: string; note?: string } | undefined {
+  return place?.closedDates?.find((c) => c.date === date);
+}
+/**
+ * AN APPOINTMENT THAT NO LONGER FITS what the company says now: not one of its days, a date it has since closed,
+ * or — once it counts visitors by the hour — no hour chosen, or an hour it no longer keeps.
+ */
+function offDay(place: DisputePlace | undefined, date: string, at?: string): boolean {
+  if (notVisitingDay(place, date) || Boolean(closedOn(place, date))) return true;
+  if (!place?.visitorsPerHour) return false;
+  return !at || !visitingHours(place).includes(at);
 }
 
 const PHOTO_WORD: Record<DisputePhoto, string> = { face: 'you holding the card', front: 'the front of the card', back: 'the back of the card' };

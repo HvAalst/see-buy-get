@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
+import { addClosedDate, closedDateWords, removeClosedDate, visitorsPerHourOf, type ClosedDate } from '../contactCard';
 
 export interface ContactCardView {
   contactName?: string;
@@ -12,6 +13,8 @@ export interface ContactCardView {
   visitDays?: string[];
   visitFrom?: string;
   visitTo?: string;
+  closedDates?: ClosedDate[];
+  visitorsPerHour?: number;
   saidAt: string;
   saidBy: string;
   basis: string;
@@ -36,6 +39,11 @@ export const VISIT_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as c
  * hours", and "the country needs to set its address info in their admin from there we fetch." This is that admin:
  * somebody who has to come in person — over a disputed ID, for one — is offered the days ticked here and no other,
  * and their ticket carries the address and the hours written here. Nobody at SeeBuyGet types either for them.
+ *
+ * AND WHEN IT IS CLOSED, AND HOW MANY IT CAN SEE. "The country should set it's own public holidays and/or one off
+ * closure"; "the limitation is set by the country as an actual number of visitors per hour. They themselves can
+ * decide how many desk workers they will dedicate for these visitation hours." Both are here too, and both are
+ * saved with the rest of the entry: nothing takes effect until the company presses Save.
  */
 export function ContactCardPanel({
   entityId,
@@ -48,7 +56,9 @@ export function ContactCardPanel({
 }) {
   const t = useT();
   const [card, setCard] = useState<ContactCardView | null>(null);
-  const [form, setForm] = useState({ contactName: '', phone: '', phoneAlt: '', email: '', website: '', address: '', hours: '', visitDays: [] as string[], visitFrom: '', visitTo: '' });
+  const [form, setForm] = useState({ contactName: '', phone: '', phoneAlt: '', email: '', website: '', address: '', hours: '', visitDays: [] as string[], visitFrom: '', visitTo: '', visitorsPerHour: '', closedDates: [] as ClosedDate[] });
+  // The date being added to the closed dates, before it joins the list.
+  const [closing, setClosing] = useState({ date: '', note: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -71,6 +81,8 @@ export function ContactCardPanel({
         visitDays: got.visitDays ?? [],
         visitFrom: got.visitFrom ?? '',
         visitTo: got.visitTo ?? '',
+        visitorsPerHour: got.visitorsPerHour ? String(got.visitorsPerHour) : '',
+        closedDates: got.closedDates ?? [],
       });
     }
   }, [client, entityId]);
@@ -88,6 +100,8 @@ export function ContactCardPanel({
     // server is told to CLEAR a field, and sending only what changed would leave a wrong number on the page for ever.
     const r = await (client.api as never as { setContactCard: (id: string, body: Record<string, unknown>) => Promise<{ error?: { detail?: string; title?: string } | null }> }).setContactCard(entityId, {
       ...form,
+      // A number, or zero to say none — and the whole list of closed dates, which replaces the one before.
+      visitorsPerHour: visitorsPerHourOf(form.visitorsPerHour),
       ...(who ? { by: who } : {}),
     });
     setBusy(false);
@@ -167,6 +181,61 @@ export function ContactCardPanel({
           <span class="cfield__label">{t('tower.contact.visit.to')}</span>
           <input class="cinput" type="time" value={form.visitTo} onChange={(e) => setForm({ ...form, visitTo: (e.target as HTMLInputElement).value })} />
         </label>
+        {/* Their own number: how many desks they give to visitors is theirs to decide, and this is what follows from it. */}
+        <label class="twr-knob cfield">
+          <span class="cfield__label">{t('tower.contact.visit.perHour')}</span>
+          <input class="cinput" type="number" min="0" max="200" step="1" inputMode="numeric" value={form.visitorsPerHour} onChange={(e) => setForm({ ...form, visitorsPerHour: (e.target as HTMLInputElement).value })} />
+          <span class="chint">{t('tower.contact.visit.perHourHint')}</span>
+        </label>
+      </div>
+
+      {/* WHEN IT IS CLOSED: public holidays and one-off closures, each a date and what the day is. */}
+      <div class="cfield" style="margin-top:14px">
+        <span class="cfield__label">{t('tower.contact.closed.title')}</span>
+        <span class="chint">{t('tower.contact.closed.hint')}</span>
+        {form.closedDates.length ? (
+          <div class="crows" style="margin-top:6px">
+            {form.closedDates.map((c) => (
+              <div class="crow" key={c.date}>
+                <span class="crow__body">
+                  <span class="crow__top">
+                    <span class="crow__name">{closedDateWords(c.date)}</span>
+                  </span>
+                  {c.note ? <span class="crow__sub">{c.note}</span> : null}
+                </span>
+                <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setForm({ ...form, closedDates: removeClosedDate(form.closedDates, c.date) })}>
+                  {t('tower.contact.closed.remove')}
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <span class="chint">{t('tower.contact.closed.none')}</span>
+        )}
+      </div>
+      <div class="twr-knobs__row">
+        <label class="twr-knob cfield">
+          <span class="cfield__label">{t('tower.contact.closed.date')}</span>
+          <input class="cinput" type="date" value={closing.date} onChange={(e) => setClosing({ ...closing, date: (e.target as HTMLInputElement).value })} />
+        </label>
+        <label class="twr-knob cfield">
+          <span class="cfield__label">{t('tower.contact.closed.note')}</span>
+          <input class="cinput" maxLength={60} value={closing.note} onChange={(e) => setClosing({ ...closing, note: (e.target as HTMLInputElement).value })} placeholder={t('tower.contact.closed.notePh')} />
+        </label>
+        <div class="twr-knob cfield">
+          <span class="cfield__label">&nbsp;</span>
+          <button
+            type="button"
+            class="cbtn cbtn--ghost"
+            disabled={!closing.date}
+            onClick={() => {
+              setForm({ ...form, closedDates: addClosedDate(form.closedDates, closing.date, closing.note) });
+              setClosing({ date: '', note: '' });
+            }}
+          >
+            {t('tower.contact.closed.add')}
+          </button>
+        </div>
       </div>
 
       <div class="twr-panelend">

@@ -1435,7 +1435,7 @@ export class SbgController {
     if (own !== entityId) throw new GlosError('FORBIDDEN', 'A company’s own entry is its own');
     const card = this.contacts.set(
       own,
-      { contactName: dto.contactName, phone: dto.phone, phoneAlt: dto.phoneAlt, email: dto.email, website: dto.website, address: dto.address, hours: dto.hours, visitDays: dto.visitDays, visitFrom: dto.visitFrom, visitTo: dto.visitTo },
+      { contactName: dto.contactName, phone: dto.phone, phoneAlt: dto.phoneAlt, email: dto.email, website: dto.website, address: dto.address, hours: dto.hours, visitDays: dto.visitDays, visitFrom: dto.visitFrom, visitTo: dto.visitTo, closedDates: dto.closedDates, visitorsPerHour: dto.visitorsPerHour },
       this.namedActor(actor, dto.by),
     );
     return { ...card, basis: CONTACT_BASIS } as never;

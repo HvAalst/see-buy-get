@@ -103,6 +103,8 @@ export class AppointmentDto {
   @IsString() @MinLength(6) @MaxLength(20) reference!: string;
   /** The day they will come, `YYYY-MM-DD`. */
   @Matches(/^\d{4}-\d{2}-\d{2}$/) date!: string;
+  /** The hour, `HH:MM` — where the country's company counts its visitors by the hour. */
+  @IsOptional() @Matches(/^\d{2}:\d{2}$/) at?: string;
 }
 
 export class OwnIdDto {
@@ -147,6 +149,25 @@ export class SendBackDisputeDto {
   @IsOptional() @IsString() @MaxLength(80) by?: string;
 }
 
+/** A day the country's company is closed, as it said itself. */
+export class DisputeClosedDate {
+  date: string;
+  @ApiPropertyOptional() note?: string;
+}
+
+/** An hour of a day, and how many places are still free in it. */
+export class DisputeHour {
+  /** When it starts, `HH:MM`. It lasts an hour. */
+  at: string;
+  free: number;
+}
+
+/** A day an appointment can be made for — with its hours, where the company counts visitors by the hour. */
+export class DisputeDay {
+  date: string;
+  @ApiPropertyOptional({ type: [DisputeHour] }) hours?: DisputeHour[];
+}
+
 /** Where to go, and who to ask for — the country's company, as it wrote its own entry. */
 export class DisputePlace {
   company: string;
@@ -161,6 +182,10 @@ export class DisputePlace {
   /** From when until when on those days, `HH:MM`. */
   @ApiPropertyOptional() visitFrom?: string;
   @ApiPropertyOptional() visitTo?: string;
+  /** How many visitors it sees in an hour, where it has said. With it, an appointment is for an hour. */
+  @ApiPropertyOptional() visitorsPerHour?: number;
+  /** The dates it is closed: public holidays, one-off closures. */
+  @ApiPropertyOptional({ type: [DisputeClosedDate] }) closedDates?: DisputeClosedDate[];
 }
 
 /** THE TICKET for an appointment: where, when, and what to bring. One for each of the two people. */
@@ -169,12 +194,15 @@ export class DisputeTicket {
   reference: string;
   /** The day, `YYYY-MM-DD`. */
   date: string;
+  /** The hour — from `at` until `until`, `HH:MM` — where the company counts its visitors by the hour. */
+  @ApiPropertyOptional() at?: string;
+  @ApiPropertyOptional() until?: string;
   /** This person made the appointment. False: the other did, and this one may come too. */
   yours: boolean;
   @ApiProperty({ enum: BRING, isArray: true }) bring: Bring[];
   /** How many more times the day can be changed, by whoever made it. */
   changesLeft: number;
-  /** The company has since changed its visiting days, and this day is no longer one of them. */
+  /** The company has since changed its days, hours or closures, and this day or hour no longer fits them. */
   @ApiPropertyOptional() offDay?: boolean;
   @ApiPropertyOptional({ type: DisputePlace }) place?: DisputePlace;
 }
@@ -211,6 +239,12 @@ export class DisputeStatus {
   /** They did not get it, and may still make an appointment — until when. */
   @ApiPropertyOptional() contestBy?: string;
   @ApiPropertyOptional({ type: DisputeTicket }) ticket?: DisputeTicket;
+  /**
+   * THE DAYS THERE ARE TO CHOOSE FROM, while this person may make or move an appointment: the company's visiting
+   * days in the next three weeks, without the dates it is closed — and, where it counts visitors by the hour, the
+   * hours of each with the places still free. Absent where it has set no visiting days: then any day may be asked.
+   */
+  @ApiPropertyOptional({ type: [DisputeDay] }) choices?: DisputeDay[];
   @ApiPropertyOptional({ type: DisputePlace }) support?: DisputePlace;
 }
 
@@ -283,6 +317,8 @@ export class DisputeRow {
   /** An appointment: the day, and which of the two made it. */
   @ApiPropertyOptional() appointmentDate?: string;
   @ApiPropertyOptional({ enum: DISPUTE_SIDES }) appointmentBy?: DisputeSide;
+  /** The hour of the appointment, where there is one. */
+  @ApiPropertyOptional() appointmentAt?: string;
   /** The appointment is on a day the country's company no longer receives visitors. */
   @ApiPropertyOptional() appointmentOffDay?: boolean;
   /**

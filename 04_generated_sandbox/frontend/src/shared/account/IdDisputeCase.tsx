@@ -3,7 +3,7 @@ import { Button, CodeCard, Icon, Note, RefusalNote } from '../ui';
 import { useT } from '../i18n';
 import type { Result, SbgError } from '../../lib/sbg';
 import { downscaleImage } from '../media';
-import { DISPUTE_PHOTOS, appointmentChoices, appointmentDays, bringLines, dayLabel, idActions, idStatusSays, ticketLines, visitingWords, type DisputePhoto, type DisputeStatus, type IdDisputeApi } from './idDispute';
+import { DISPUTE_PHOTOS, appointmentDays, bringLines, dayChoices, dayLabel, hoursOn, idActions, idStatusSays, readyToAppoint, ticketLines, visitingWords, type DisputePhoto, type DisputeStatus, type IdDisputeApi } from './idDispute';
 
 export interface IdDisputeCaseProps {
   api: IdDisputeApi;
@@ -37,6 +37,7 @@ export function IdDisputeCase({ api, reference, initial, ownId, onChanged }: IdD
   const [error, setError] = useState<SbgError | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [date, setDate] = useState('');
+  const [at, setAt] = useState('');
   const [number, setNumber] = useState('');
   const [correcting, setCorrecting] = useState(false);
 
@@ -66,8 +67,10 @@ export function IdDisputeCase({ api, reference, initial, ownId, onChanged }: IdD
   const says = idStatusSays(status, t as never);
   const can = idActions(status);
   const days = appointmentDays();
-  // The country's company's own visiting days, where it has set them: those are offered, and no other.
-  const choices = appointmentChoices(status.support);
+  // The days — and hours — the SERVER says there are: the company's visiting days, without the dates it is closed
+  // and the hours that are full. Offered as they are, and nothing else is.
+  const choices = dayChoices(status);
+  const hours = date ? hoursOn(status, date) : null;
   const ticket = status.ticket;
 
   return (
@@ -146,13 +149,37 @@ export function IdDisputeCase({ api, reference, initial, ownId, onChanged }: IdD
               <p class="hint">{t('account.id.chooseDayFrom', { when: visitingWords(status.support, t as never) ?? '' })}</p>
               {choices.length ? (
                 <div id="id-day" class="tapset" role="group">
-                  {/* Changing the day: the day already on the ticket is not a change to offer. */}
-                  {choices.filter((d) => d !== ticket?.date).map((d) => (
-                    <button type="button" key={d} class={`tapset__btn${date === d ? ' tapset__btn--on' : ''}`} aria-pressed={date === d} disabled={busy !== null} onClick={() => setDate(d)}>
-                      {dayLabel(d)}
+                  {choices.map((c) => (
+                    <button
+                      type="button"
+                      key={c.date}
+                      class={`tapset__btn${date === c.date ? ' tapset__btn--on' : ''}`}
+                      aria-pressed={date === c.date}
+                      disabled={busy !== null}
+                      onClick={() => {
+                        setDate(c.date);
+                        setAt('');
+                      }}
+                    >
+                      {dayLabel(c.date)}
                     </button>
                   ))}
                 </div>
+              ) : (
+                <Note tone="warn" icon="warning" title={t('account.id.noDayFree')} detail={t('account.id.noDayFreeDetail')} />
+              )}
+              {/* Where the office counts its visitors by the hour: the hours of that day, and which are full. */}
+              {hours ? (
+                <>
+                  <p class="hint">{t('account.id.chooseHour')}</p>
+                  <div id="id-hour" class="tapset" role="group">
+                    {hours.map((h) => (
+                      <button type="button" key={h.at} class={`tapset__btn${at === h.at ? ' tapset__btn--on' : ''}`} aria-pressed={at === h.at} disabled={busy !== null || h.free < 1} onClick={() => setAt(h.at)}>
+                        {h.free < 1 ? t('account.id.hourFull', { at: h.at }) : h.at}
+                      </button>
+                    ))}
+                  </div>
+                </>
               ) : null}
             </>
           ) : (
@@ -165,10 +192,13 @@ export function IdDisputeCase({ api, reference, initial, ownId, onChanged }: IdD
           <Button
             variant={can.changeDay ? 'outline' : undefined}
             chevron={false}
-            disabled={!date}
+            disabled={!readyToAppoint(status, date, at)}
             busy={busy === 'day'}
             onClick={async () => {
-              if (await act('day', () => api.appoint(status.reference, date))) setDate('');
+              if (await act('day', () => api.appoint(status.reference, date, at || undefined))) {
+                setDate('');
+                setAt('');
+              }
             }}
           >
             {t(can.changeDay ? 'account.id.changeDayCta' : 'account.id.chooseDayCta')}

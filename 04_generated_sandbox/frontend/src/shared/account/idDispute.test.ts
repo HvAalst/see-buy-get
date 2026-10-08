@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../i18n';
-import { appointmentChoices, appointmentDays, bringLines, dayLabel, idActions, idStatusSays, looksLikeIdReference, settingsIdSays, ticketLines, visitingWords, type DisputeState, type DisputeStatus, type DisputeTicket } from './idDispute';
+import { appointmentDays, bringLines, dayChoices, dayLabel, hoursOn, idActions, idStatusSays, looksLikeIdReference, readyToAppoint, settingsIdSays, ticketLines, visitingWords, type DisputeState, type DisputeStatus, type DisputeTicket } from './idDispute';
 
 const status = (over: Partial<DisputeStatus> = {}): DisputeStatus => ({ reference: 'ID-ABCD-2345', side: 'claimant', register: 'driver', state: 'opened', openedAt: '2026-10-08T09:00:00.000Z', photos: [], sent: false, ...over });
 const ticket = (over: Partial<DisputeTicket> = {}): DisputeTicket => ({ reference: 'ID-WXYZ-6789', date: '2026-10-15', yours: true, bring: ['id_card', 'phone', 'reference', 'second_document'], changesLeft: 2, ...over });
@@ -127,16 +127,40 @@ describe('a dispute over a national ID, as each of the two is told it', () => {
       expect(ticketLines(ticket(), t as never).where).toEqual(['The SeeBuyGet office for your country. Its address is not written down here yet: ask SeeBuyGet staff where to go before you travel.']);
     });
 
-    it('offers the company’s own visiting days in the next three weeks, and no other — or any day where it has set none', () => {
-      const thursday = Date.parse('2026-10-08T15:00:00.000Z');
-      expect(appointmentChoices({ company: 'x', visitDays: ['fri', 'mon'] }, thursday)).toEqual(['2026-10-09', '2026-10-12', '2026-10-16', '2026-10-19', '2026-10-23', '2026-10-26']);
-      // Never today, even when today is one of its days.
-      expect(appointmentChoices({ company: 'x', visitDays: ['thu'] }, thursday)).toEqual(['2026-10-15', '2026-10-22', '2026-10-29']);
-      // It has set none: nothing to offer, and the screen falls back to any day with a warning.
-      expect(appointmentChoices({ company: 'x', address: 'Somewhere' }, thursday)).toBeNull();
-      expect(appointmentChoices({ company: 'x', visitDays: [] }, thursday)).toBeNull();
-      expect(appointmentChoices(undefined, thursday)).toBeNull();
+    it('offers the days the SERVER says there are — never its own reckoning — and any day only where the office set none', () => {
+      const days = [{ date: '2026-10-09' }, { date: '2026-10-12' }, { date: '2026-10-16' }];
+      expect(dayChoices({ choices: days })).toEqual(days);
+      // An empty list is an answer — no day is free — and is not the same as no list at all.
+      expect(dayChoices({ choices: [] })).toEqual([]);
+      expect(dayChoices({})).toBeNull();
+      // Moving an appointment: the day it is already on is not a change to offer …
+      expect(dayChoices({ choices: days, ticket: ticket({ date: '2026-10-12' }) })!.map((d) => d.date)).toEqual(['2026-10-09', '2026-10-16']);
+      // … unless that day has hours, and the change is to another hour of it.
+      const withHours = [{ date: '2026-10-12', hours: [{ at: '09:00', free: 1 }, { at: '10:00', free: 0 }] }];
+      expect(dayChoices({ choices: withHours, ticket: ticket({ date: '2026-10-12', at: '09:00', until: '10:00' }) })).toEqual(withHours);
       expect(dayLabel('2026-10-12')).toMatch(/12/);
+    });
+
+    it('asks for an hour where the office counts its visitors by the hour — and a full hour, or none, is not enough to go on', () => {
+      const s = { choices: [{ date: '2026-10-12', hours: [{ at: '09:00', free: 2 }, { at: '10:00', free: 0 }] }, { date: '2026-10-13' }] };
+      expect(hoursOn(s, '2026-10-12')).toEqual([{ at: '09:00', free: 2 }, { at: '10:00', free: 0 }]);
+      // A day without hours: a day is all there is to choose.
+      expect(hoursOn(s, '2026-10-13')).toBeNull();
+      expect(hoursOn({}, '2026-10-12')).toBeNull();
+      expect(readyToAppoint(s, '', '')).toBe(false);
+      expect(readyToAppoint(s, '2026-10-12', '')).toBe(false);
+      expect(readyToAppoint(s, '2026-10-12', '10:00')).toBe(false);
+      expect(readyToAppoint(s, '2026-10-12', '11:00')).toBe(false);
+      expect(readyToAppoint(s, '2026-10-12', '09:00')).toBe(true);
+      expect(readyToAppoint(s, '2026-10-13', '')).toBe(true);
+      // No list at all — the office set no days — and any day typed will do.
+      expect(readyToAppoint({}, '2026-10-14', '')).toBe(true);
+    });
+
+    it('says the hour on the ticket where there is one', () => {
+      expect(ticketLines(ticket({ at: '10:00', until: '11:00' }), t as never).when).toMatch(/2026, 10:00 to 11:00$/);
+      expect(ticketLines(ticket(), t as never).when).toMatch(/2026$/);
+      expect(t('account.id.hourFull', { at: '10:00' })).toBe('10:00 · full');
     });
 
     it('lists what to bring in the order it is asked for, with the second document that fits what they registered as', () => {

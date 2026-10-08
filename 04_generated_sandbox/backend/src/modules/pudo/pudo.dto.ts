@@ -587,6 +587,10 @@ export class ContactCardDto {
   /** From when until when on those days, `HH:MM`. An empty string clears one. */
   @IsOptional() @IsString() @MaxLength(5) visitFrom?: string;
   @IsOptional() @IsString() @MaxLength(5) visitTo?: string;
+  /** The dates it is closed: public holidays, one-off closures. The list REPLACES the list; an empty one clears it. */
+  @IsOptional() @IsArray() closedDates?: Array<{ date: string; note?: string }>;
+  /** How many visitors it sees in an hour. Zero clears it: then no hour fills. */
+  @IsOptional() @IsNumber() @Min(0) @Max(200) visitorsPerHour?: number;
   @IsOptional() @IsString() entityId?: string;
   @IsOptional() @IsString() by?: string;
 }

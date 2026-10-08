@@ -62,7 +62,9 @@ import { MailService } from '../../foundation/mail/mail.service';
 import { OutboxMailSender } from '../../foundation/mail/outbox-mail.sender';
 import { MAIL_SENDER } from '../../foundation/mail/mail.types';
 
-import { ContactCardService, weekdayOf } from './contact-card.service';
+import { ContactCardService, hourAfter, visitingHours, weekdayOf } from './contact-card.service';
+import { CompanyReadinessService } from '../../foundation/entity/company-readiness.service';
+import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
 import { IdDisputeService, normalizeIdReference } from './id-dispute.service';
 import { APPOINTMENT_CHANGES, APPOINTMENT_WITHIN_DAYS, DISPUTE_ANSWER_DAYS, DISPUTE_CONTEST_DAYS, DISPUTE_OPENS_PER_DAY, type DisputePhoto, type IdRegister } from './id-dispute.types';
 import { IDENTITY_CHECK_DAYS } from './media.types';
@@ -91,6 +93,7 @@ describe('two people say one national ID is theirs', () => {
   let gate: WalletGateService;
   let parcels: ParcelService;
   let routing: RoutingService;
+  let readiness: CompanyReadinessService;
   let entities: EntityService;
   let contacts: ContactCardService;
 
@@ -101,7 +104,7 @@ describe('two people say one national ID is theirs', () => {
         GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService,
         BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, VehicleService,
         DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService,
-        PersonService, AccountService, OtpService, AuthService, EmailCodeService, AccountRecoveryService, IdDisputeService, ContactCardService,
+        PersonService, AccountService, OtpService, AuthService, EmailCodeService, AccountRecoveryService, IdDisputeService, ContactCardService, CompanyReadinessService, CompanyDocumentService,
         NotificationService, OutboxPushSender, { provide: PUSH_SENDER, useExisting: OutboxPushSender },
         MailService, OutboxMailSender, { provide: MAIL_SENDER, useExisting: OutboxMailSender },
         MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
@@ -129,6 +132,7 @@ describe('two people say one national ID is theirs', () => {
     gate = moduleRef.get(WalletGateService);
     parcels = moduleRef.get(ParcelService);
     routing = moduleRef.get(RoutingService);
+    readiness = moduleRef.get(CompanyReadinessService);
     entities = moduleRef.get(EntityService);
     contacts = moduleRef.get(ContactCardService);
     recovery.onModuleInit();
@@ -142,6 +146,8 @@ describe('two people say one national ID is theirs', () => {
   const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
   const T0 = Date.now();
   const dayStr = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  /** Make, or move, an appointment at a moment — for an hour, where the country counts its visitors by the hour. */
+  const appoint = (reference: string, date: string, now: number, at?: string) => disputes.appoint(reference, date, at, now);
 
   function aFleet() {
     seq += 1;
@@ -707,20 +713,20 @@ describe('two people say one national ID is theirs', () => {
       const d = aDriver();
       const o = wonByClaimant(d);
       const day = dayStr(o.at + 3 * DAY);
-      expect(failure(() => disputes.appoint(o.reference, day, o.at))).toMatch(/^INVALID_STATE: The ID is yours/);
+      expect(failure(() => appoint(o.reference, day, o.at))).toMatch(/^INVALID_STATE: The ID is yours/);
       // The country's company says, in its own admin, where it is and when it receives visitors — one day a week here.
       const visitDay = weekdayOf(day)!;
       contacts.set(ke.entityId, { contactName: 'Grace at the front desk', phone: '+254 20 000 111', address: 'Mombasa Road, gate 4', hours: 'Mon–Fri 8–17', visitDays: [visitDay], visitFrom: '09:00', visitTo: '16:00' }, 'Grace');
       // Before any day is chosen, the app is told which days there are to choose from.
       expect(disputes.status(o.holderReference, o.at).support).toMatchObject({ address: 'Mombasa Road, gate 4', visitDays: [visitDay], visitFrom: '09:00', visitTo: '16:00' });
-      const wrongDay = failure(() => disputes.appoint(o.holderReference, dayStr(o.at + 4 * DAY), o.at));
+      const wrongDay = failure(() => appoint(o.holderReference, dayStr(o.at + 4 * DAY), o.at));
       expect(wrongDay).toMatch(/^INVALID_INPUT: .+ does not receive visitors on a \w+day\. It does on \w+day\.$/);
       expect(wrongDay).toContain(ke.name);
       expect(disputes.status(o.holderReference, o.at).state).toBe('decided');
-      expect(failure(() => disputes.appoint(o.holderReference, dayStr(o.at), o.at))).toMatch(/^INVALID_INPUT: Choose a day from tomorrow on/);
-      expect(failure(() => disputes.appoint(o.holderReference, dayStr(o.at + (APPOINTMENT_WITHIN_DAYS + 2) * DAY), o.at))).toMatch(/^INVALID_INPUT: Choose a day within/);
+      expect(failure(() => appoint(o.holderReference, dayStr(o.at), o.at))).toMatch(/^INVALID_INPUT: Choose a day from tomorrow on/);
+      expect(failure(() => appoint(o.holderReference, dayStr(o.at + (APPOINTMENT_WITHIN_DAYS + 2) * DAY), o.at))).toMatch(/^INVALID_INPUT: Choose a day within/);
 
-      const mine = disputes.appoint(o.holderReference, day, o.at);
+      const mine = appoint(o.holderReference, day, o.at);
       expect(mine).toMatchObject({ state: 'appointment' });
       expect(mine.ticket).toEqual({
         reference: o.holderReference,
@@ -758,6 +764,163 @@ describe('two people say one national ID is theirs', () => {
       expect(disputes.one(o.disputeId, AMINA, o.at).appointmentOffDay).toBeUndefined();
     });
 
+    /** Every day of the week, nine to twelve: three hours a day, so what is being proved is the closures and the count. */
+    const EVERY_DAY = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
+    it('is not offered or taken on a date the company says it is closed — a public holiday, a one-off closure', () => {
+      const ke = entities.forJurisdiction('KE')!;
+      const d = aDriver();
+      const o = wonByClaimant(d);
+      const holiday = dayStr(o.at + 3 * DAY);
+      const oneOff = dayStr(o.at + 5 * DAY);
+      contacts.set(ke.entityId, { address: 'Mombasa Road, gate 4', visitDays: EVERY_DAY, visitFrom: '09:00', visitTo: '12:00', closedDates: [{ date: oneOff, note: 'Stocktaking' }, { date: holiday, note: 'Mashujaa Day' }, { date: holiday, note: 'Mashujaa Day' }] }, 'Grace', o.at);
+      // Kept in date order, one of each.
+      expect(contacts.of(ke.entityId)!.closedDates).toEqual([{ date: holiday, note: 'Mashujaa Day' }, { date: oneOff, note: 'Stocktaking' }]);
+      // Not offered …
+      const offered = disputes.status(o.holderReference, o.at).choices!.map((c) => c.date);
+      expect(offered).toHaveLength(21 - 2);
+      expect(offered).not.toContain(holiday);
+      expect(offered).not.toContain(oneOff);
+      expect(offered).toContain(dayStr(o.at + 4 * DAY));
+      // … and not taken, in words that say what the day is.
+      expect(failure(() => appoint(o.holderReference, holiday, o.at))).toMatch(/^INVALID_INPUT: .+ is closed on \d+ \w+ \d{4} \(Mashujaa Day\)\. Choose another day\.$/);
+      expect(appoint(o.holderReference, dayStr(o.at + 4 * DAY), o.at).ticket).toMatchObject({ date: dayStr(o.at + 4 * DAY) });
+      // A closure announced AFTER somebody chose that day: their ticket and the console say it no longer fits.
+      contacts.set(ke.entityId, { closedDates: [{ date: dayStr(o.at + 4 * DAY), note: 'Burst pipe' }] }, 'Grace', o.at);
+      expect(disputes.status(o.holderReference, o.at).ticket).toMatchObject({ offDay: true });
+      expect(disputes.one(o.disputeId, AMINA, o.at)).toMatchObject({ appointmentOffDay: true, place: { closedDates: [{ date: dayStr(o.at + 4 * DAY), note: 'Burst pipe' }] } });
+      // The day they are moved to is not that one; the holiday that was replaced is open again.
+      expect(disputes.status(o.holderReference, o.at).choices!.map((c) => c.date)).toContain(holiday);
+      expect(appoint(o.holderReference, holiday, o.at).ticket!.offDay).toBeUndefined();
+    });
+
+    it('closed dates are dates, said by the company — replaced as a list, cleared by an empty one, and let go once they are past', () => {
+      const ke = entities.forJurisdiction('KE')!;
+      const at = Date.parse('2026-10-08T10:00:00.000Z');
+      for (const bad of ['25 December', '2026-13-01', '2026-02-30', '']) expect(failure(() => contacts.set(ke.entityId, { closedDates: [{ date: bad }] }, 'Grace', at))).toMatch(/^VALIDATION_FAILED: A closed date is a date/);
+      const set = contacts.set(ke.entityId, { closedDates: [{ date: '2026-12-25', note: 'Christmas Day' }, { date: '2026-10-07' }, { date: '2026-10-01', note: 'long gone' }, { date: '2026-10-20' }] }, 'Grace', at);
+      // Yesterday is still said (somebody may be reading a ticket for it); last week is not.
+      expect(set.closedDates).toEqual([{ date: '2026-10-07' }, { date: '2026-10-20' }, { date: '2026-12-25', note: 'Christmas Day' }]);
+      // Putting a telephone number right leaves them alone; a new list replaces the list; an empty one clears it.
+      expect(contacts.set(ke.entityId, { phone: '+254 20 000 111' }, 'Grace', at).closedDates).toHaveLength(3);
+      expect(contacts.set(ke.entityId, { closedDates: [{ date: '2026-11-02' }] }, 'Grace', at).closedDates).toEqual([{ date: '2026-11-02' }]);
+      expect(contacts.set(ke.entityId, { closedDates: [] }, 'Grace', at).closedDates).toBeUndefined();
+    });
+
+    it('is for an HOUR where the company says how many visitors it sees in one — and an hour that is full is not offered or taken', () => {
+      const ke = entities.forJurisdiction('KE')!;
+      // Two visitors an hour, nine to twelve: three hours, two places in each.
+      contacts.set(ke.entityId, { address: 'Mombasa Road, gate 4', visitDays: EVERY_DAY, visitFrom: '09:00', visitTo: '12:00', visitorsPerHour: 2 }, 'Grace');
+      expect(visitingHours(contacts.of(ke.entityId))).toEqual(['09:00', '10:00', '11:00']);
+      const [a, b, c] = [wonByClaimant(aDriver()), wonByClaimant(aDriver()), wonByClaimant(aDriver())];
+      const day = dayStr(a.at + 2 * DAY);
+      const hoursOf = (ref: string) => disputes.status(ref, a.at).choices!.find((x) => x.date === day)!.hours;
+      expect(hoursOf(a.holderReference)).toEqual([{ at: '09:00', free: 2 }, { at: '10:00', free: 2 }, { at: '11:00', free: 2 }]);
+
+      // A day alone is not enough any more, and an hour has to be one of its hours.
+      expect(failure(() => appoint(a.holderReference, day, a.at))).toMatch(/^INVALID_INPUT: Choose the hour you will come: 09:00, 10:00, 11:00\.$/);
+      expect(failure(() => appoint(a.holderReference, day, a.at, '12:00'))).toMatch(/^INVALID_INPUT: Choose the hour you will come/);
+      expect(failure(() => appoint(a.holderReference, day, a.at, '09:30'))).toMatch(/^INVALID_INPUT: Choose the hour you will come/);
+
+      const mine = appoint(a.holderReference, day, a.at, '10:00');
+      expect(mine.ticket).toMatchObject({ date: day, at: '10:00', until: '11:00', yours: true });
+      expect(disputes.status(a.reference, a.at).ticket).toMatchObject({ date: day, at: '10:00', until: '11:00', yours: false });
+      expect(disputes.one(a.disputeId, AMINA, a.at)).toMatchObject({ appointmentDate: day, appointmentAt: '10:00', place: { visitorsPerHour: 2 } });
+      expect(mine.ticket!.offDay).toBeUndefined();
+      // One place is gone from that hour, for everybody else. Their own does not count against themselves.
+      expect(hoursOf(b.holderReference)).toEqual([{ at: '09:00', free: 2 }, { at: '10:00', free: 1 }, { at: '11:00', free: 2 }]);
+      expect(hoursOf(a.holderReference)!.find((h) => h.at === '10:00')).toEqual({ at: '10:00', free: 2 });
+      appoint(b.holderReference, day, a.at, '10:00');
+      // Full: said as full, and refused.
+      expect(hoursOf(c.holderReference)!.find((h) => h.at === '10:00')).toEqual({ at: '10:00', free: 0 });
+      expect(failure(() => appoint(c.holderReference, day, a.at, '10:00'))).toMatch(/^CONFLICT: 10:00 on \d+ \w+ \d{4} is full\. Choose another hour\.$/);
+      expect(disputes.status(c.holderReference, a.at).state).toBe('decided');
+      expect(appoint(c.holderReference, day, a.at, '11:00').ticket).toMatchObject({ at: '11:00', until: '12:00' });
+      // An appointment at ANOTHER country's office takes no place at this one.
+      const elsewhere = stored().find((x) => x.disputeId === b.disputeId)!;
+      elsewhere.country = 'TZ';
+      expect(hoursOf(c.holderReference)!.find((h) => h.at === '10:00')).toEqual({ at: '10:00', free: 1 });
+      elsewhere.country = 'KE';
+      expect(hoursOf(c.holderReference)!.find((h) => h.at === '10:00')).toEqual({ at: '10:00', free: 0 });
+      // Somebody moves away, and the place is free again.
+      appoint(b.holderReference, day, a.at, '09:00');
+      expect(hoursOf(c.holderReference)!.find((h) => h.at === '10:00')).toEqual({ at: '10:00', free: 1 });
+      // The notice says the hour.
+      expect(notifications.inboxFor(stored().find((x) => x.disputeId === a.disputeId)!.holder.personDid).some((n) => / at 10:00 at /.test(n.body))).toBe(true);
+    });
+
+    it('a day with no hour left is not offered at all; and the number is the company’s own — a whole one, with hours to count in', () => {
+      const ke = entities.forJurisdiction('KE')!;
+      contacts.set(ke.entityId, { visitDays: EVERY_DAY, visitFrom: '09:00', visitTo: '10:00', visitorsPerHour: 1 }, 'Grace');
+      const [a, b] = [wonByClaimant(aDriver()), wonByClaimant(aDriver())];
+      const day = dayStr(a.at + 2 * DAY);
+      appoint(a.holderReference, day, a.at, '09:00');
+      const offered = disputes.status(b.holderReference, a.at).choices!.map((x) => x.date);
+      expect(offered).toHaveLength(20);
+      expect(offered).not.toContain(day);
+
+      for (const bad of [1.5, -1, 201]) expect(failure(() => contacts.set(ke.entityId, { visitorsPerHour: bad }, 'Grace'))).toMatch(/^VALIDATION_FAILED: Visitors an hour is a whole number/);
+      // Hours that no longer hold a whole hour cannot carry a number an hour — and are refused, not half-saved.
+      expect(failure(() => contacts.set(ke.entityId, { visitTo: '09:30' }, 'Grace'))).toMatch(/^VALIDATION_FAILED: Say from when until when you receive visitors/);
+      expect(contacts.of(ke.entityId)).toMatchObject({ visitTo: '10:00', visitorsPerHour: 1 });
+      // Taken off again — by zero — no hour is asked for and none fills: the day is offered to everybody.
+      expect(contacts.set(ke.entityId, { visitorsPerHour: 0 }, 'Grace').visitorsPerHour).toBeUndefined();
+      expect(disputes.status(b.holderReference, a.at).choices!.find((x) => x.date === day)).toEqual({ date: day });
+      expect(appoint(b.holderReference, day, a.at).ticket!.at).toBeUndefined();
+      // And a number brought in after somebody chose only a day: their ticket says to choose again.
+      contacts.set(ke.entityId, { visitorsPerHour: 3 }, 'Grace');
+      expect(disputes.status(b.holderReference, a.at).ticket).toMatchObject({ offDay: true });
+      expect(hourAfter('09:00')).toBe('10:00');
+      expect(visitingHours({ visitFrom: '08:30', visitTo: '11:00' })).toEqual(['08:30', '09:30']);
+      expect(visitingHours({ visitFrom: '09:00' })).toEqual([]);
+    });
+
+    it('the days to choose from are told only to somebody who may choose — and nothing is told where the company set no days', () => {
+      const ke = entities.forJurisdiction('KE')!;
+      const d = aDriver();
+      const o = wonByClaimant(d);
+      // No visiting days set: nothing to offer, and any day is taken as before.
+      expect(disputes.status(o.holderReference, o.at).choices).toBeUndefined();
+      // An address alone is not days: still nothing to offer.
+      contacts.set(ke.entityId, { address: 'Mombasa Road, gate 4' }, 'Grace');
+      expect(disputes.status(o.holderReference, o.at).choices).toBeUndefined();
+      contacts.set(ke.entityId, { visitDays: EVERY_DAY, visitFrom: '09:00', visitTo: '12:00' }, 'Grace');
+      // The one who lost may choose; the one who got it has nothing to choose.
+      expect(disputes.status(o.holderReference, o.at).choices).toHaveLength(21);
+      expect(disputes.status(o.holderReference, o.at).choices![0]).toEqual({ date: dayStr(o.at + DAY) });
+      expect(disputes.status(o.reference, o.at).choices).toBeUndefined();
+      // Once made: the maker may still move it, the other may not — and on the day itself nobody may.
+      const day = dayStr(o.at + 2 * DAY);
+      appoint(o.holderReference, day, o.at);
+      expect(disputes.status(o.holderReference, o.at).choices).toHaveLength(21);
+      expect(disputes.status(o.reference, o.at).choices).toBeUndefined();
+      expect(disputes.status(o.holderReference, o.at + 2 * DAY).choices).toBeUndefined();
+      // After the time to contest has passed, nobody is offered a day.
+      const late = wonByClaimant(aDriver());
+      expect(disputes.status(late.holderReference, late.at + DISPUTE_CONTEST_DAYS * DAY + 1000).choices).toBeUndefined();
+    });
+
+    it('is part of switching a country on: a company of ours is not ready until its own entry says where and when', () => {
+      const ke = entities.forJurisdiction('KE')!;
+      const item = (key: string) => readiness.readinessOf(ke.entityId).items.find((i) => i.key === key)!;
+      expect(item('visitors_address')).toMatchObject({ met: false, label: expect.stringContaining('written by the company in its own Settings') });
+      expect(item('visiting_days').met).toBe(false);
+      expect(readiness.readinessOf(ke.entityId).ready).toBe(false);
+      contacts.set(ke.entityId, { address: 'Mombasa Road, gate 4' }, 'Grace');
+      expect(item('visitors_address').met).toBe(true);
+      // Days without hours are half an answer: a ticket would say which day and not when.
+      contacts.set(ke.entityId, { visitDays: ['mon', 'fri'] }, 'Grace');
+      expect(item('visiting_days').met).toBe(false);
+      contacts.set(ke.entityId, { visitFrom: '09:00', visitTo: '16:00' }, 'Grace');
+      expect(item('visiting_days').met).toBe(true);
+      // Taken away again, it is missing again: derived from what the company says now, never ticked once.
+      contacts.set(ke.entityId, { address: '' }, 'Grace');
+      expect(item('visitors_address').met).toBe(false);
+      // A partner's office is not ours to send anybody to: it is not asked.
+      const partner = entities.createCompany({ kind: 'partner', jurisdiction: 'zm', name: 'Lusaka Logistics' }, 'Amina');
+      expect(readiness.readinessOf(partner.entityId).items.some((i) => i.key === 'visitors_address' || i.key === 'visiting_days')).toBe(false);
+    });
+
     it('follows visiting days and hours the company sets for itself — days of the week, times of day, merged like the rest of its entry', () => {
       const ke = entities.forJurisdiction('KE')!;
       expect(contacts.set(ke.entityId, { address: 'Mombasa Road, gate 4', visitDays: ['fri', 'mon', 'mon'], visitFrom: '09:00', visitTo: '16:30' }, 'Grace')).toMatchObject({ visitDays: ['mon', 'fri'], visitFrom: '09:00', visitTo: '16:30' });
@@ -781,24 +944,24 @@ describe('two people say one national ID is theirs', () => {
       const d = aDriver();
       const o = wonByClaimant(d);
       const late = o.at + DISPUTE_CONTEST_DAYS * DAY + 1000;
-      expect(failure(() => disputes.appoint(o.holderReference, tomorrow(late), late))).toMatch(/^INVALID_STATE: The time to contest this decision has passed/);
+      expect(failure(() => appoint(o.holderReference, tomorrow(late), late))).toMatch(/^INVALID_STATE: The time to contest this decision has passed/);
     });
 
     it('can be moved by whoever made it — twice, and not on the day', () => {
       const d = aDriver();
       const o = wonByClaimant(d);
-      disputes.appoint(o.holderReference, dayStr(o.at + 5 * DAY), o.at);
-      expect(failure(() => disputes.appoint(o.reference, dayStr(o.at + 6 * DAY), o.at))).toMatch(/^FORBIDDEN: Only the person who made the appointment/);
-      expect(disputes.appoint(o.holderReference, dayStr(o.at + 6 * DAY), o.at).ticket).toMatchObject({ date: dayStr(o.at + 6 * DAY), changesLeft: APPOINTMENT_CHANGES - 1 });
+      appoint(o.holderReference, dayStr(o.at + 5 * DAY), o.at);
+      expect(failure(() => appoint(o.reference, dayStr(o.at + 6 * DAY), o.at))).toMatch(/^FORBIDDEN: Only the person who made the appointment/);
+      expect(appoint(o.holderReference, dayStr(o.at + 6 * DAY), o.at).ticket).toMatchObject({ date: dayStr(o.at + 6 * DAY), changesLeft: APPOINTMENT_CHANGES - 1 });
       // No address written for this country's company: the ticket carries no place, and staff are not shown one.
       expect(disputes.status(o.holderReference, o.at).ticket!.place).toBeUndefined();
       expect(disputes.one(o.disputeId, AMINA, o.at).place).toBeUndefined();
-      expect(disputes.appoint(o.holderReference, dayStr(o.at + 7 * DAY), o.at).ticket!.changesLeft).toBe(0);
-      expect(failure(() => disputes.appoint(o.holderReference, dayStr(o.at + 8 * DAY), o.at))).toMatch(/^INVALID_STATE: The day has been changed as often/);
+      expect(appoint(o.holderReference, dayStr(o.at + 7 * DAY), o.at).ticket!.changesLeft).toBe(0);
+      expect(failure(() => appoint(o.holderReference, dayStr(o.at + 8 * DAY), o.at))).toMatch(/^INVALID_STATE: The day has been changed as often/);
       const d2 = aDriver();
       const o2 = wonByClaimant(d2);
-      disputes.appoint(o2.holderReference, dayStr(o2.at + 2 * DAY), o2.at);
-      expect(failure(() => disputes.appoint(o2.holderReference, dayStr(o2.at + 4 * DAY), o2.at + 2 * DAY))).toMatch(/^INVALID_STATE: The day has come/);
+      appoint(o2.holderReference, dayStr(o2.at + 2 * DAY), o2.at);
+      expect(failure(() => appoint(o2.holderReference, dayStr(o2.at + 4 * DAY), o2.at + 2 * DAY))).toMatch(/^INVALID_STATE: The day has come/);
     });
 
     it('is decided again by two members of staff, from the day on — and the decision changes only for somebody who came', () => {
@@ -808,7 +971,7 @@ describe('two people say one national ID is theirs', () => {
       const mine = drivers.register({ displayName: 'Claimant', fullName: 'C', nationalId: d.nationalId, mobile: o.phone, licenceClasses: ['bike'] });
       const me = persons.attachRole(o.phone, 'driver', mine.did);
       const day = dayStr(o.at + 3 * DAY);
-      disputes.appoint(o.holderReference, day, o.at);
+      appoint(o.holderReference, day, o.at);
       const say = { what: 'Card in the hand: genuine, and theirs.', reason: 'The other person did not come; this card is the real one.' };
       expect(disputes.list(undefined, o.at).waiting).toBe(0);
       expect(failure(() => disputes.check(o.disputeId, AMINA, { to: 'holder', ...say, claimantCame: false, holderCame: true }, o.at))).toMatch(/^INVALID_STATE: The appointment is on/);
@@ -838,14 +1001,14 @@ describe('two people say one national ID is theirs', () => {
       expect(disputes.against(me.personDid, then)).toMatchObject({ reference: o.reference, held: true });
       // Final: no ticket any more, and nothing further to make.
       expect(disputes.status(o.reference, then).ticket).toBeUndefined();
-      expect(failure(() => disputes.appoint(o.reference, tomorrow(then), then))).toMatch(/^INVALID_STATE/);
+      expect(failure(() => appoint(o.reference, tomorrow(then), then))).toMatch(/^INVALID_STATE/);
     });
 
     it('where nobody came, or what was seen changes nothing, the decision stands — and that is final too', () => {
       const d = aDriver();
       const o = wonByClaimant(d);
       const day = dayStr(o.at + 2 * DAY);
-      disputes.appoint(o.holderReference, day, o.at);
+      appoint(o.holderReference, day, o.at);
       const then = Date.parse(day + 'T12:00:00.000Z');
       disputes.check(o.disputeId, AMINA, { to: 'claimant', what: 'Nobody came.', reason: 'You made an appointment and did not come.', claimantCame: false, holderCame: false }, then);
       expect(disputes.sendBack(o.disputeId, BRIAN, 'They rang: they are on their way.', then).state).toBe('appointment');

@@ -187,7 +187,28 @@ describe('two people say one national ID is theirs, over the wire', () => {
     const closed = await http().post('/v1/sbg/identity/id-disputes/appointment').send({ reference: opened.body.reference, date: tomorrow }).expect(400);
     expect(closed.body.detail).toMatch(/does not receive visitors on a \w+day\. It does on \w+day\./);
     await http().post(`/v1/sbg/entities/${ke.entityId}/contact`).set(bearer(setupKey)).send({ visitDays: [anotherDay, theDay], by: 'Grace' }).expect(201);
-    const made = await http().post('/v1/sbg/identity/id-disputes/appointment').send({ reference: opened.body.reference, date: tomorrow }).expect(200);
+
+    // "The country should set it's own public holidays and/or one off closure." A date it closes is refused, by name.
+    await http().post(`/v1/sbg/entities/${ke.entityId}/contact`).set(bearer(setupKey)).send({ closedDates: [{ date: 'the 25th' }], by: 'Grace' }).expect(400);
+    await http().post(`/v1/sbg/entities/${ke.entityId}/contact`).set(bearer(setupKey)).send({ closedDates: [{ date: tomorrow, note: 'Public holiday' }], by: 'Grace' }).expect(201);
+    const holiday = await http().post('/v1/sbg/identity/id-disputes/appointment').send({ reference: opened.body.reference, date: tomorrow }).expect(400);
+    expect(holiday.body.detail).toMatch(/is closed on .+ \(Public holiday\)\. Choose another day\./);
+    expect(((await status(opened.body.reference)).choices as Array<{ date: string }>).map((c) => c.date)).not.toContain(tomorrow);
+    await http().post(`/v1/sbg/entities/${ke.entityId}/contact`).set(bearer(setupKey)).send({ closedDates: [], by: 'Grace' }).expect(201);
+
+    // "The limitation is set by the country as an actual number of visitors per hour." Then the appointment is for an hour.
+    await http().post(`/v1/sbg/entities/${ke.entityId}/contact`).set(bearer(setupKey)).send({ visitorsPerHour: 2.5, by: 'Grace' }).expect(400);
+    await http().post(`/v1/sbg/entities/${ke.entityId}/contact`).set(bearer(setupKey)).send({ visitorsPerHour: 1, by: 'Grace' }).expect(201);
+    const offered = ((await status(opened.body.reference)).choices as Array<{ date: string; hours?: Array<{ at: string; free: number }> }>).find((c) => c.date === tomorrow)!;
+    expect(offered.hours![0]).toEqual({ at: '09:00', free: 1 });
+    expect(offered.hours).toHaveLength(7);
+    const noHour = await http().post('/v1/sbg/identity/id-disputes/appointment').send({ reference: opened.body.reference, date: tomorrow }).expect(400);
+    expect(noHour.body.detail).toMatch(/^Choose the hour you will come: 09:00, 10:00/);
+    await http().post('/v1/sbg/identity/id-disputes/appointment').send({ reference: opened.body.reference, date: tomorrow, at: 'ten' }).expect(400);
+    // The one who got the ID is not offered days: there is nothing for them to contest.
+    expect((await status(mine.reference)).choices).toBeUndefined();
+    const made = await http().post('/v1/sbg/identity/id-disputes/appointment').send({ reference: opened.body.reference, date: tomorrow, at: '10:00' }).expect(200);
+    expect(made.body.ticket).toMatchObject({ at: '10:00', until: '11:00' });
     expect(made.body).toMatchObject({ state: 'appointment', ticket: { reference: opened.body.reference, date: tomorrow, yours: true, bring: ['id_card', 'phone', 'reference', 'second_document'], place: { address: 'Mombasa Road, gate 4', visitFrom: '09:00', visitTo: '16:00' } } });
     expect(made.body.ticket.place.visitDays).toContain(theDay);
     expect((await status(mine.reference)).ticket).toMatchObject({ reference: mine.reference, date: tomorrow, yours: false, changesLeft: 0 });
@@ -195,7 +216,16 @@ describe('two people say one national ID is theirs, over the wire', () => {
     // What was seen in person is recorded from the day itself, not before.
     const early = await http().post(`/v1/sbg/id-disputes/${disputeId}/check`).set(bearer(setupKey)).send({ to: 'claimant', what: 'x', reason: 'y', claimantCame: true, holderCame: false, by: 'Amina Otieno' }).expect(400);
     expect(early.body.detail).toMatch(/The appointment is on/);
-    expect((await http().get(`/v1/sbg/id-disputes/${disputeId}`).set(bearer(setupKey)).expect(200)).body).toMatchObject({ state: 'appointment', appointmentDate: tomorrow, appointmentBy: 'claimant', place: { address: 'Mombasa Road, gate 4' } });
+    expect((await http().get(`/v1/sbg/id-disputes/${disputeId}`).set(bearer(setupKey)).expect(200)).body).toMatchObject({ state: 'appointment', appointmentDate: tomorrow, appointmentAt: '10:00', appointmentBy: 'claimant', place: { address: 'Mombasa Road, gate 4', visitorsPerHour: 1 } });
+    // PART OF THE TURN-ON PROCESS: the company's record counts its address and its visiting days among what it must have.
+    const record = (await http().get(`/v1/sbg/entities/${ke.entityId}/record`).set(bearer(setupKey)).expect(200)).body;
+    const item = (key: string) => (record.readiness.items as Array<{ key: string; met: boolean }>).find((i) => i.key === key);
+    expect(item('visitors_address')).toMatchObject({ met: true });
+    expect(item('visiting_days')).toMatchObject({ met: true });
+    await http().post(`/v1/sbg/entities/${ke.entityId}/contact`).set(bearer(setupKey)).send({ visitorsPerHour: 0, visitDays: [], address: '', by: 'Grace' }).expect(201);
+    const bare = (await http().get(`/v1/sbg/entities/${ke.entityId}/record`).set(bearer(setupKey)).expect(200)).body;
+    expect((bare.readiness.items as Array<{ key: string; met: boolean }>).filter((i) => i.key === 'visitors_address' || i.key === 'visiting_days').map((i) => i.met)).toEqual([false, false]);
+    expect(bare.readiness.ready).toBe(false);
   });
 
   it('the pause is at mint: a shop held over its ID is on the public list as taking nothing new, and no price is given for it', async () => {

@@ -28316,6 +28316,19 @@
             "type": "string",
             "maxLength": 5
           },
+          "closedDates": {
+            "description": "The dates it is closed: public holidays, one-off closures. The list REPLACES the list; an empty one clears it.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "visitorsPerHour": {
+            "type": "number",
+            "description": "How many visitors it sees in an hour. Zero clears it: then no hour fills.",
+            "minimum": 0,
+            "maximum": 200
+          },
           "entityId": {
             "type": "string"
           },
@@ -28364,6 +28377,16 @@
           },
           "visitTo": {
             "type": "string"
+          },
+          "closedDates": {
+            "description": "The dates it is closed — `{ date: 'YYYY-MM-DD', note? }` — and how many visitors it sees in an hour. Theirs to set.",
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "visitorsPerHour": {
+            "type": "number"
           },
           "saidAt": {
             "type": "string"
@@ -39434,6 +39457,20 @@
           "phone"
         ]
       },
+      "DisputeClosedDate": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "date"
+        ]
+      },
       "DisputePlace": {
         "type": "object",
         "properties": {
@@ -39468,6 +39505,17 @@
           },
           "visitTo": {
             "type": "string"
+          },
+          "visitorsPerHour": {
+            "type": "number",
+            "description": "How many visitors it sees in an hour, where it has said. With it, an appointment is for an hour."
+          },
+          "closedDates": {
+            "description": "The dates it is closed: public holidays, one-off closures.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DisputeClosedDate"
+            }
           },
           "company": {
             "type": "string"
@@ -39512,6 +39560,13 @@
       "DisputeTicket": {
         "type": "object",
         "properties": {
+          "at": {
+            "type": "string",
+            "description": "The hour — from `at` until `until`, `HH:MM` — where the company counts its visitors by the hour."
+          },
+          "until": {
+            "type": "string"
+          },
           "bring": {
             "type": "array",
             "items": {
@@ -39526,7 +39581,7 @@
           },
           "offDay": {
             "type": "boolean",
-            "description": "The company has since changed its visiting days, and this day is no longer one of them."
+            "description": "The company has since changed its days, hours or closures, and this day or hour no longer fits them."
           },
           "place": {
             "$ref": "#/components/schemas/DisputePlace"
@@ -39554,6 +39609,39 @@
           "date",
           "yours",
           "changesLeft"
+        ]
+      },
+      "DisputeHour": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "description": "When it starts, `HH:MM`. It lasts an hour."
+          },
+          "free": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "at",
+          "free"
+        ]
+      },
+      "DisputeDay": {
+        "type": "object",
+        "properties": {
+          "hours": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DisputeHour"
+            }
+          },
+          "date": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "date"
         ]
       },
       "DisputeStatus": {
@@ -39628,6 +39716,13 @@
           "ticket": {
             "$ref": "#/components/schemas/DisputeTicket"
           },
+          "choices": {
+            "description": "THE DAYS THERE ARE TO CHOOSE FROM, while this person may make or move an appointment: the company's visiting\ndays in the next three weeks, without the dates it is closed — and, where it counts visitors by the hour, the\nhours of each with the places still free. Absent where it has set no visiting days: then any day may be asked.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DisputeDay"
+            }
+          },
           "support": {
             "$ref": "#/components/schemas/DisputePlace"
           },
@@ -39694,6 +39789,11 @@
             "type": "string",
             "description": "The day they will come, `YYYY-MM-DD`.",
             "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/"
+          },
+          "at": {
+            "type": "string",
+            "description": "The hour, `HH:MM` — where the country's company counts its visitors by the hour.",
+            "pattern": "/^\\d{2}:\\d{2}$/"
           }
         },
         "required": [
@@ -39884,6 +39984,10 @@
               "claimant",
               "holder"
             ]
+          },
+          "appointmentAt": {
+            "type": "string",
+            "description": "The hour of the appointment, where there is one."
           },
           "appointmentOffDay": {
             "type": "boolean",

@@ -4070,6 +4070,38 @@ describe('PUDO Light', () => {
     expect(presence.resolve('UG').incoterms.origin).toEqual(['FCA']);
   });
 
+  it('the turn-on: a company of ours is refused Established until its own entry says where it is and when it receives visitors', () => {
+    // The user, 2026-10-08, on a country's company having to write its address and its visiting days before the
+    // country goes live: "it's part of the turn on process." Asked at the gate itself, by name.
+    const contacts = (controller as unknown as { contacts: ContactCardService }).contacts;
+    entities.createCompany({ kind: 'sister', jurisdiction: 'zm', name: 'SeeBuyGet Zambia' }, 'Amina');
+    const gate = () => {
+      try {
+        (controller as unknown as { requireReadyCompanyFor(jurisdiction: string, level: string): unknown }).requireReadyCompanyFor('ZM', 'established');
+        return 'SWITCHED ON';
+      } catch (e) {
+        return (e as Error).message;
+      }
+    };
+    const before = gate();
+    expect(before).toMatch(/^SeeBuyGet Zambia is not ready to be switched on\. Still missing: /);
+    expect(before).toContain('Where people are sent when they have to come in person');
+    expect(before).toContain('The days and hours it receives visitors');
+
+    // An address, and days without hours: half an answer is still missing.
+    contacts.set('sbg-zm', { address: 'Cairo Road, Lusaka', visitDays: ['mon', 'tue'] }, 'Chanda');
+    expect(gate()).not.toContain('Where people are sent');
+    expect(gate()).toContain('The days and hours it receives visitors');
+    contacts.set('sbg-zm', { visitFrom: '09:00', visitTo: '15:00' }, 'Chanda');
+    // Still not ready — its record and its papers are another matter — but no longer for this.
+    const after = gate();
+    expect(after).toMatch(/Still missing: /);
+    expect(after).not.toContain('Where people are sent');
+    expect(after).not.toContain('The days and hours it receives visitors');
+    // A lower rung asks nothing of the company at all.
+    expect((controller as unknown as { requireReadyCompanyFor(jurisdiction: string, level: string): unknown }).requireReadyCompanyFor('ZM', 'observed')).toBeUndefined();
+  });
+
   it('CL1: presence floors the menu — a term that bills duty cannot be switched on where we cannot bill', () => {
     // ZM is recorded and observed: no tax, no payouts, no money of ours at all.
     presence.set({ jurisdiction: 'MW', level: 'observed' });

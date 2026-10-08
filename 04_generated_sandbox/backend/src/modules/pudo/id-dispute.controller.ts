@@ -93,7 +93,7 @@ export class IdDisputeController {
   @Post('identity/id-disputes/appointment')
   @HttpCode(200)
   appoint(@Body() dto: AppointmentDto): DisputeStatus {
-    return this.disputes.appoint(dto.reference, dto.date);
+    return this.disputes.appoint(dto.reference, dto.date, dto.at);
   }
 
   /** "The number on my record is not mine — this one is." Ends a dispute over their ID at once, or a hold it left. */

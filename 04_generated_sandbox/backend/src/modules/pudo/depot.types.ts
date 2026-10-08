@@ -23,6 +23,9 @@ export class ContactCardView {
   @ApiPropertyOptional({ type: [String] }) visitDays?: string[];
   @ApiPropertyOptional() visitFrom?: string;
   @ApiPropertyOptional() visitTo?: string;
+  /** The dates it is closed — `{ date: 'YYYY-MM-DD', note? }` — and how many visitors it sees in an hour. Theirs to set. */
+  @ApiPropertyOptional({ type: [Object] }) closedDates?: Array<{ date: string; note?: string }>;
+  @ApiPropertyOptional() visitorsPerHour?: number;
   @ApiProperty() saidAt: string;
   @ApiProperty() saidBy: string;
   /** Said out loud on every screen that shows it: this is their claim and nobody checked it. */

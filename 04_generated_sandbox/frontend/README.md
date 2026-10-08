@@ -280,14 +280,29 @@ they need to bring for the appointment date." `modules/pudo/id-dispute.service.t
   (`weekdayOf` — a date is a weekday wherever it is read), the app offers them as buttons rather than a
   calendar, and the ticket carries the address and the hours. Staff are shown what the company wrote and type
   none of it. Until it has written an address or ticked a day, any day may be chosen and the ticket says to ask
-  first — and the dispute tells staff what is missing. If it changes its days after an appointment was made,
-  both tickets and the console say the day no longer fits.
+  first — and the dispute tells staff what is missing.
+- **Its closed dates and its count are its own too** (the user, 2026-10-08: "the country should set it's own
+  public holidays and/or one off closure"; "the limitation is set by the country as an actual number of
+  visitors per hour. They themselves can decide how many desk workers they will dedicate for these visitation
+  hours"). On the same entry: `closedDates` (a date and what the day is; the list replaces the list) and
+  `visitorsPerHour`. No appointment is offered or taken on a closed date. With a number an hour, an appointment
+  is for an HOUR (`visitingHours`: whole hours from when it opens to visitors), a full hour is refused, and a
+  day with no hour left is not offered. One appointment counts as one visitor, whoever comes with it.
+- **The days to choose from are the server's answer** (`DisputeStatus.choices`), never worked out in the app:
+  only the server knows the company's days, its closed dates and what others have taken, together. The app
+  shows them as buttons — days, then hours.
+- **If the company changes any of it after an appointment was made** — its days, hours or closed dates, or
+  starts counting by the hour — both tickets and the console say it no longer fits (`offDay`), and whoever
+  made the appointment can choose again.
+- **Part of the turn-on process** (the user: "it's part of the turn on process"): a company of ours is not
+  ready to be switched on until its own entry has an address and visiting days with hours. `ContactCardService`
+  says so to `CompanyReadinessService.also(…)`, so both are on the Company record's list of what is missing and
+  the switch-on is refused by name without them.
 - **Never kept or shown**: the ID number outside the vault (a keyed print finds it; "matches / differs" is all
   staff see), a whole phone number, the other person's reference.
 - A shared sheet styles itself: `.chips` and the photo button are styled in a few apps' own stylesheets, so
   the sheets every app opens use `.tapset` and `.idshot` from `shared/ui/ui.css`.
-- Not built: public holidays and one-off closures (a country sets the days of a week, not dates), and a limit on
-  how many people may come on one day.
+- Not built: different hours on different days (one span of hours for every visiting day), and half-days.
 
 ## Conventions
 - **Every slice names its screens.** A backend change with no surface is tracked ui-debt, not a shipped slice.

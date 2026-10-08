@@ -52,10 +52,12 @@ export interface DisputeRow {
   contestBy?: string;
   appointmentDate?: string;
   appointmentBy?: DisputeSide;
+  /** The hour of the appointment, where the company counts its visitors by the hour. */
+  appointmentAt?: string;
   /** The appointment is on a day the country's company no longer receives visitors. */
   appointmentOffDay?: boolean;
   /** Where people are sent and when visitors are received — the country's company's own entry. Absent: it wrote nothing. */
-  place?: { company: string; address?: string; hours?: string; visitDays?: string[]; visitFrom?: string; visitTo?: string };
+  place?: { company: string; address?: string; hours?: string; visitDays?: string[]; visitFrom?: string; visitTo?: string; visitorsPerHour?: number; closedDates?: Array<{ date: string; note?: string }> };
   finalTo?: DisputeSide;
   finalBy?: string;
   finalAt?: string;
@@ -171,13 +173,16 @@ const WEEK = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
  * countries to set visiting days and visiting hours"). Staff type neither. What it has NOT written is said, with
  * what that means for a ticket, because a blank here would read as nothing being wrong.
  */
-export function placeWords(row: Pick<DisputeRow, 'place'>, t: Translate): { where: string; visiting: string; missing: boolean } {
+export function placeWords(row: Pick<DisputeRow, 'place'>, t: Translate): { where: string; visiting: string; closed: string; missing: boolean } {
   const p = row.place;
   const days = p?.visitDays?.length ? WEEK.filter((d) => p.visitDays!.includes(d)).map((d) => t(`tower.contact.day.${d}` as never)) : [];
   const hours = p?.visitFrom && p?.visitTo ? t('tower.ids.place.hours', { from: p.visitFrom, to: p.visitTo }) : '';
   return {
     where: p?.address ? `${p.company}, ${p.address}` : t('tower.ids.place.noAddress'),
-    visiting: days.length ? t('tower.ids.place.visiting', { when: [days.join(', '), hours].filter(Boolean).join(' · ') }) : t('tower.ids.place.noDays'),
+    // Its days, its hours, and — where it has said — how many it sees in an hour: then an appointment is for an hour.
+    visiting: days.length ? t('tower.ids.place.visiting', { when: [days.join(', '), hours, p?.visitorsPerHour ? t('tower.ids.place.perHour', { n: p.visitorsPerHour }) : ''].filter(Boolean).join(' · ') }) : t('tower.ids.place.noDays'),
+    // The dates it has said it is closed, soonest first: nobody is offered one, and nobody can take one.
+    closed: p?.closedDates?.length ? t('tower.ids.place.closed', { dates: p.closedDates.slice(0, 6).map((c) => (c.note ? `${c.date} (${c.note})` : c.date)).join(', ') + (p.closedDates.length > 6 ? ` +${p.closedDates.length - 6}` : '') }) : '',
     missing: !p?.address || !days.length,
   };
 }
