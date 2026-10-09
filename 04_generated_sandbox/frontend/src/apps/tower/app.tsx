@@ -12,6 +12,7 @@ import { HazardsScreen } from './screens/HazardsScreen';
 import { PapersScreen } from './screens/PapersScreen';
 import { waitingCount } from './papers';
 import { papersWaiting } from './company';
+import { casesWaiting } from './paperReports';
 import { ApprovalsScreen, ClaimsScreen, DisposalScreen } from './screens/QueuesScreen';
 import { ReportsScreen } from './screens/ReportsScreen';
 import { MoneyScreen } from './screens/MoneyScreen';
@@ -21,6 +22,7 @@ import { NetworkScreen } from './screens/NetworkScreen';
 import { RatesScreen } from './screens/RatesScreen';
 import { ImportsScreen } from './screens/ImportsScreen';
 import { AccountMovesScreen } from './screens/AccountMovesScreen';
+import { PaperReportsScreen } from './screens/PaperReportsScreen';
 import { IdDisputesScreen } from './screens/IdDisputesScreen';
 import { BusinessesScreen } from './screens/BusinessesScreen';
 import { movesWaiting } from './accountMoves';
@@ -104,7 +106,7 @@ export function App() {
      * company administrator saw on signing in. COMPANY moved out, because their own record is theirs to
      * keep — an operator picks a company from a list, an administrator IS one.
      */
-    ...(isOperator ? (['network', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'borders', 'movers', 'rates', 'connections'] as Screen[]) : []),
+    ...(isOperator ? (['network', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'borders', 'movers', 'rates', 'connections'] as Screen[]) : []),
     ...(manyCompanies ? (['companies'] as Screen[]) : []),
     // Their own books and what they are owed — never the network's ledger, which is not theirs to read.
     'money',
@@ -137,6 +139,8 @@ export function App() {
     accountmoves: movesWaiting(state.accountMoves),
     // Waiting on us: to be decided, to be approved, or an appointment whose day has come.
     iddisputes: disputesWaiting(state.idDisputes),
+    // Every open one waits on one of us: to dismiss it, or — two of us — to strike the paper.
+    paperreports: casesWaiting(state.paperReports),
     // FP4 — who is waiting on somebody HERE: off the road, or a renewed card sent and not yet read. A courier
     // whose licence is merely running out is waiting on nobody; one who has sent the new card is waiting on us.
     papers: waitingCount(state.papers),
@@ -254,6 +258,8 @@ export function App() {
             <AccountMovesScreen state={state} actions={actions} />
           ) : state.screen === 'iddisputes' ? (
             <IdDisputesScreen state={state} actions={actions} />
+          ) : state.screen === 'paperreports' ? (
+            <PaperReportsScreen state={state} actions={actions} />
           ) : state.screen === 'approvals' ? (
             <ApprovalsScreen state={state} actions={actions} />
           ) : state.screen === 'papers' ? (

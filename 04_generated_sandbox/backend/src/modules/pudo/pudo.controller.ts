@@ -136,6 +136,7 @@ import { EntityAdminView, OperatorAccountView, EntityChanges, EntityPricing } fr
 import { EntityAdminService } from '../../foundation/entity/entity-admin.service';
 import { CompanyPapersWatch } from '../../foundation/entity/company-papers-watch.service';
 import { CompanyDeclarationService, COMPANY_PAPER_KINDS, PAPER_BOUND_SECTIONS, recordKeeper } from '../../foundation/entity/company-declarations.service';
+import { CompanyPaperReportService } from '../../foundation/entity/company-paper-reports.service';
 import { OperatorAccountService, staffIdOf } from '../../foundation/entity/operator-account.service';
 import { CARGO_LANES } from './cargo.types';
 import { ReturnService } from './return.service';
@@ -269,6 +270,7 @@ export class SbgController {
     @Optional() private readonly businesses?: BusinessService,
     @Optional() private readonly companyPapers?: CompanyPapersWatch,
     @Optional() private readonly declarations?: CompanyDeclarationService,
+    @Optional() private readonly paperReports?: CompanyPaperReportService,
   ) {}
 
   // --- phone verification (mandatory at onboarding — control-tower contact + GPS) ---
@@ -819,6 +821,9 @@ export class SbgController {
       record: this.entities.recordOf(entityId),
       // The company's own changes to the parts that switch something, each with what it was, what it is, and its paper.
       declarations: this.declarations?.list(entityId).slice(0, 50) ?? [],
+      // What has been said against its papers, and what was decided: in full for staff; for the company and the company
+      // above it, what was said — never by whom, and never what the reporter attached.
+      reports: this.paperReports?.forEntity(entityId, actor?.role === 'operator' ? 'staff' : 'company') ?? [],
       readiness: entity.kind === 'group' ? null : this.readiness.readinessOf(entityId),
       documents: this.companyDocuments.list(entityId),
       obligations: catalogueEntry(entity.jurisdiction)?.obligations ?? [],
@@ -3645,17 +3650,26 @@ export class SbgController {
      */
     const contact = company ? this.contacts.of(company.entityId) : undefined;
 
-    // A paper that COUNTS is named, with its date — verified by a second person before the company was switched on,
-    // or put on record by the company itself since. An empty list is a real answer shown as one. Only a COMPANY has
-    // a document register; the rest carry what their own record can honestly attest.
+    // A verified paper is named, with its date, and an empty list is a real answer shown as one. Only a
+    // COMPANY has a document register; the rest carry what their own record can honestly attest.
     const verified = company
       ? this.companyDocuments
           .list(company.entityId)
-          .filter((d) => d.status === 'verified' || d.status === 'declared')
+          .filter((d) => d.status === 'verified')
           .map((d) => ({ what: d.kind.replace(/_/g, ' '), at: d.verifiedAt ?? d.uploadedAt }))
       : shop?.kyc
         ? [{ what: 'identity and trading licence', at: shop.kyc.submittedAt }]
         : [];
+
+    // WHAT THE COMPANY PUT ON RECORD ITSELF since it was switched on. It counts — and nobody here checked it, so it
+    // is said apart from what we checked: under one heading the page would vouch for a paper no member of staff has
+    // looked at. (Only a paper a company keeps about itself is ever `declared`; a consignment's never is.)
+    const onRecord = company
+      ? this.companyDocuments
+          .list(company.entityId)
+          .filter((d) => d.status === 'declared')
+          .map((d) => ({ what: d.kind.replace(/_/g, ' '), at: d.uploadedAt }))
+      : [];
 
     return {
       handle: held.handle,
@@ -3681,6 +3695,7 @@ export class SbgController {
       // describe the business is the chicken-and-egg the directory exists to end.
       does: clears || offer ? profileDoes('clearing-agent') : profileDoes(held.kind),
       verified,
+      ...(onRecord.length ? { onRecord } : {}),
       ...(moves ? { moves, movesMeasured: MOBILISATION_MEASURED } : {}),
       ...(clears ? { clears, clearsMeasured: AGENT_MEASURED } : {}),
       ...(offer ? { offer } : {}),

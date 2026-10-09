@@ -92,15 +92,22 @@ describe('a company keeps its own record, over the wire', () => {
     expect((await http().post(`/v1/sbg/entities/sbg-ke/documents/${put.body.documentId}/reject`).set(bearer(operator)).send({ by: 'Amina Otieno', reason: 'I doubt it' })).body.code).toBe('INVALID_STATE');
     expect((await http().post(`/v1/sbg/entities/sbg-ke/documents/${put.body.documentId}/verify`).set(bearer(operator)).send({ by: 'Amina Otieno' })).body.code).toBe('INVALID_STATE');
 
-    // THE COMPANY'S PUBLIC PAGE names the papers that count — and one it put on record itself counts.
+    // THE COMPANY'S PUBLIC PAGE says it — as what the company put on record ITSELF, and never under what we checked:
+    // nobody here has looked at it.
     const handle = (await recordAs(wanjiru.token, 'sbg-ke')).handle as string;
     expect(handle).toBeTruthy();
-    const page = (await http().get(`/v1/sbg/profiles/${handle}`).expect(200)).body as { verified: Array<{ what: string; at: string }> };
-    expect(page.verified).toEqual(expect.arrayContaining([{ what: 'certificate of incorporation', at: put.body.uploadedAt }]));
+    const page = (await http().get(`/v1/sbg/profiles/${handle}`).expect(200)).body as { verified: Array<{ what: string; at: string }>; onRecord?: Array<{ what: string; at: string }> };
+    expect(page.onRecord).toEqual(expect.arrayContaining([{ what: 'certificate of incorporation', at: put.body.uploadedAt }]));
+    expect(page.verified).toEqual([]);
 
     // A packing list belongs to one container, not to the company: it waits for a second person, as before.
     const packing = await http().post('/v1/sbg/entities/sbg-ke/documents').set(bearer(operator)).send({ by: 'Amina Otieno', kind: 'packing_list', title: 'Packing list', relatesTo: 'MSKU1234567', dataUrl: pdf('packing') }).expect(201);
     expect(packing.body.status).toBe('awaiting_verification');
+    // Verified by a second person, it is still nobody's to read on the company's public page: it is one container's paper.
+    await http().post(`/v1/sbg/entities/sbg-ke/documents/${packing.body.documentId}/verify`).set(bearer(operator)).send({ by: 'Baraka Mwangi' }).expect(201);
+    const after = (await http().get(`/v1/sbg/profiles/${handle}`).expect(200)).body as { verified: Array<{ what: string }>; onRecord?: Array<{ what: string }> };
+    expect(after.onRecord?.map((p) => p.what)).not.toContain('packing list');
+    expect(after.onRecord?.map((p) => p.what)).toContain('certificate of incorporation');
   });
 
   it('SWITCHING A COMPANY ON IS UNCHANGED: until then staff enter its record, its own administrator cannot, and its papers wait to be verified', async () => {

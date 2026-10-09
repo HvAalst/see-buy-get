@@ -5,7 +5,7 @@ import { GlosError } from '../http/glos-error';
 import { MailService } from '../mail/mail.service';
 import { PersistentMap } from '../store/persistent-map';
 import { CompanyDocument, CompanyDocumentService, type DocumentKind } from './company-documents.service';
-import { normaliseRecordPatch, type CompanyRecord } from './company-record.types';
+import { lapsesAt, normaliseRecordPatch, type CompanyRecord } from './company-record.types';
 import { adminKey, EntityAdminService } from './entity-admin.service';
 import { EntityService } from './entity.service';
 import type { Entity } from './entity.types';
@@ -105,6 +105,8 @@ export class CompanyDeclaration {
   @ApiPropertyOptional() documentId?: string;
   @ApiProperty() by: string;
   @ApiProperty() at: string;
+  /** Its paper was struck, and what it changed was put back. */
+  @ApiPropertyOptional() struckAt?: string;
 }
 
 export interface DeclareInput {
@@ -181,6 +183,9 @@ export class CompanyDeclarationService {
       const next = items.filter((_, i) => i !== at);
       const declaration = this.keep({ entity, section, change: 'removed', before, by, now });
       this.entities.updateRecord(entity.entityId, { [section]: next }, by, { from: itemWords(section, before), to: 'taken off the record' });
+      // Its paper is no longer the paper for anything: left as it was, it would go on counting — on the company's
+      // public page, and as something that can be reported — for an account or a person no longer on the record.
+      for (const kind of PAPER_FOR[section]) this.documents.retire(entity.entityId, kind, String(before[field]));
       return { declaration, told: await this.tell(entity, declaration, input.byKey, now) };
     }
 
@@ -229,6 +234,50 @@ export class CompanyDeclarationService {
     const declaration = this.keep({ entity, section, change: before ? 'changed' : 'added', before, after, documentId: document.documentId, by, now });
     this.entities.updateRecord(entity.entityId, { [section]: next } as Partial<CompanyRecord> as Record<string, unknown>, by, { from: itemWords(section, before), to: `${itemWords(section, after)} — with its paper` });
     return { declaration, document, told: await this.tell(entity, declaration, input.byKey, now) };
+  }
+
+  /**
+   * A PAPER IS STRUCK — two members of staff, on a report (company-paper-reports). It stops counting, and what it
+   * changed on the record is put back:
+   *   · it came with a CHANGE: the item is as it was before — a struck renewal, and the previous date counts again;
+   *   · it came with something NEW: that is taken off the record again;
+   *   · it was on record from before the company was switched on, and is the paper for a licence or a policy: there
+   *     is nothing to put back, so that licence counts as run out from today.
+   * Returns what was done, in words, for the people who are told. `by` is both members of staff.
+   */
+  strike(entityId: string, documentId: string, by: string, reason: string, now: number = Date.now()): { effect: string; document: CompanyDocument } {
+    const entity = this.entities.get(entityId);
+    const { document } = this.documents.strike(entityId, documentId, by, reason, now);
+    const record = this.entities.recordOf(entityId);
+    const declaration = this.ofDocument(documentId);
+
+    if (declaration?.after) {
+      const section = declaration.section;
+      const field = REFERENCE_FIELD[section];
+      const items = record[section] as unknown as Item[];
+      const at = items.findIndex((i) => same(i[field], declaration.now));
+      if (at < 0) return { effect: `${entity.name}’s record no longer carried what this paper was for.`, document };
+      const before = declaration.before;
+      const next = before ? items.map((i, n) => (n === at ? before : i)) : items.filter((_, n) => n !== at);
+      this.entities.updateRecord(entityId, { [section]: next }, by, { from: declaration.nowWords, to: before ? `struck — back as it was: ${declaration.wasWords}` : 'struck — taken off the record' });
+      this.declarations.set(declaration.declarationId, { ...declaration, struckAt: new Date(now).toISOString() });
+      return { effect: before ? `The record is back as it was: ${declaration.wasWords}.` : `Taken off the record: ${declaration.nowWords}.`, document };
+    }
+
+    const section = document.kind === 'licence' ? 'licences' : document.kind === 'insurance_policy' ? 'insurance' : undefined;
+    if (section && document.relatesTo) {
+      const field = REFERENCE_FIELD[section];
+      const items = record[section] as unknown as Item[];
+      const at = items.findIndex((i) => same(i[field], document.relatesTo));
+      const item = at >= 0 ? items[at] : undefined;
+      if (item && lapsesAt(String(item.expiresAt)) > now) {
+        // Good THROUGH its date, so the day before today: from today it has run out, and what it permits is off.
+        const cut = { ...item, expiresAt: new Date(now - 86_400_000).toISOString().slice(0, 10) };
+        this.entities.updateRecord(entityId, { [section]: items.map((i, n) => (n === at ? cut : i)) }, by, { from: itemWords(section, item), to: 'struck — counts as run out from today' });
+        return { effect: `It counts as run out from today: ${itemWords(section, item)}.`, document };
+      }
+    }
+    return { effect: 'The paper no longer counts. Nothing else on the record rested on it.', document };
   }
 
   private keep(d: { entity: Entity; section: PaperBoundSection; change: CompanyDeclaration['change']; before?: Item; after?: Item; documentId?: string; by: string; now: number }): CompanyDeclaration {

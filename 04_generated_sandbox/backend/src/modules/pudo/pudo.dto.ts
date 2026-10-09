@@ -1,4 +1,5 @@
 import { DESTINATION_KINDS } from './destination.types';
+import { PaperCaseView } from '../../foundation/entity/company-paper-reports.service';
 import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { INCOTERM_CODES } from '../../foundation/incoterms/catalogue';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE } from '../../foundation/interest/interest.service';
@@ -270,6 +271,32 @@ export class CompanyDeclarationDto {
   @IsOptional() @IsString() paperKind?: string;
   @IsOptional() @IsString() paperTitle?: string;
   @IsOptional() @IsString() paperDataUrl?: string;
+}
+
+/** A REPORT ON A COMPANY'S PAPER: what is wrong, in a category and in words, and what shows it — a screenshot or a photograph, as a data URL. */
+export class ReportPaperDto {
+  @IsString() category!: string;
+  @IsOptional() @IsString() note?: string;
+  @IsOptional() @IsString() evidenceDataUrl?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+/** The company's answer to a report: what is right, and optionally what shows it. */
+export class AnswerPaperReportDto {
+  @IsOptional() @IsString() note?: string;
+  @IsOptional() @IsString() evidenceDataUrl?: string;
+}
+
+/** A member of staff deciding a report: the reason (for a dismissal, or for the strike they propose), and who they are on a shared key. */
+export class DecidePaperReportDto {
+  @IsOptional() @IsString() reason?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+export class PaperCaseList {
+  @ApiProperty({ type: [PaperCaseView] }) items!: PaperCaseView[];
+  /** How many wait on staff. */
+  waiting!: number;
 }
 
 /** CA4 — a company document, as a base64 data URL (PDF, PNG or JPEG), fingerprinted on arrival. */

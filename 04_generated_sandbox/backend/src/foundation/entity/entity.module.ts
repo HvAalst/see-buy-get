@@ -6,11 +6,12 @@ import { CompanyDocumentService } from './company-documents.service';
 import { CompanyReadinessService } from './company-readiness.service';
 import { CompanyPapersWatch } from './company-papers-watch.service';
 import { CompanyDeclarationService } from './company-declarations.service';
+import { CompanyPaperReportService } from './company-paper-reports.service';
 
 /** Global: every module that names who collects, who performs, or who owns an account needs this. */
 @Global()
 @Module({
-  providers: [EntityService, EntityAdminService, OperatorAccountService, CompanyDocumentService, CompanyReadinessService, CompanyPapersWatch, CompanyDeclarationService],
-  exports: [EntityService, EntityAdminService, OperatorAccountService, CompanyDocumentService, CompanyReadinessService, CompanyPapersWatch, CompanyDeclarationService],
+  providers: [EntityService, EntityAdminService, OperatorAccountService, CompanyDocumentService, CompanyReadinessService, CompanyPapersWatch, CompanyDeclarationService, CompanyPaperReportService],
+  exports: [EntityService, EntityAdminService, OperatorAccountService, CompanyDocumentService, CompanyReadinessService, CompanyPapersWatch, CompanyDeclarationService, CompanyPaperReportService],
 })
 export class EntityModule {}

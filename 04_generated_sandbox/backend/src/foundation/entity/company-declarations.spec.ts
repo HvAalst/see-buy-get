@@ -199,6 +199,12 @@ describe('a company that is switched on keeps its own record', () => {
     const gone = await declare(wanjiru, { section: 'representatives', was: 'otieno odhiambo' });
     expect(gone.declaration.change).toBe('removed');
     expect(entities.recordOf(KE).representatives).toEqual([]);
+    // WHAT IS TAKEN OFF LEAVES NO PAPER COUNTING BEHIND IT: his paper is kept, and is the paper for nothing.
+    expect(documents.get(KE, rep.document!.documentId)).toMatchObject({ status: 'superseded', supersededFrom: 'declared' });
+    expect(documents.get(KE, rep.document!.documentId).supersededBy).toBeUndefined();
+    expect(documents.currentOf(KE, 'memorandum_and_articles', 'Otieno Odhiambo')).toBeUndefined();
+    // The bank account is still on record, and so is its paper.
+    expect(documents.get(KE, bank.document!.documentId).status).toBe('declared');
     // The parts that switch nothing do not come this way.
     await expect(declare(wanjiru, { section: 'beneficialOwners', item: { name: 'Hans', sharePct: 100 }, paper: { dataUrl: pdf('q') } })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
   });

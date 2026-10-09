@@ -944,8 +944,24 @@
   padding-top: 12px;
 }
 
-.twr-declare > .cfield__label {
+.twr-declare > .cfield__label,
+.twr-declare > .chint {
   padding: 0 16px;
+}
+
+/* One thing somebody said about a paper — a report, or the company's answer: who and when, the words, what they attached. */
+.twr-said {
+  padding: 10px 16px 12px;
+  border-bottom: 1px solid var(--bd);
+}
+
+.twr-said:last-child {
+  border-bottom: 0;
+}
+
+.twr-said .cons__lede {
+  margin: 4px 0 8px;
+  white-space: pre-wrap;
 }
 
 /* -------------------------------------------------------------- presence -- */

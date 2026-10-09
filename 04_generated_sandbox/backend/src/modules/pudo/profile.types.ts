@@ -199,6 +199,14 @@ export class ProfileView {
   verified: ProfileVerification[];
 
   /**
+   * What the company has put on record ITSELF, with the paper, since it was switched on — and which NOBODY HERE HAS
+   * CHECKED. Kept apart from `verified` on purpose: listed together, the page would be vouching for a paper no member
+   * of staff has looked at. It counts, and anybody connected to the company who can see the paper may report it.
+   */
+  @ApiPropertyOptional({ type: [ProfileVerification] })
+  onRecord?: ProfileVerification[];
+
+  /**
    * CL4 — THE MOBILISATION RECORD: whether they find and move trucks.
    *
    * On the PUBLIC page on purpose. An operator-only signal does not remove our influence over who gets

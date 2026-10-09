@@ -19088,6 +19088,267 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/documents/{documentId}/report": {
+      "post": {
+        "operationId": "CompanyPaperReport.report",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportPaperDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/paper-reports/{caseId}/answer": {
+      "post": {
+        "operationId": "CompanyPaperReport.answer",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerPaperReportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaperCaseView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/paper-reports": {
+      "get": {
+        "operationId": "CompanyPaperReport.list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaperCaseList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/paper-reports/{caseId}": {
+      "get": {
+        "operationId": "CompanyPaperReport.one",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaperCaseView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/paper-reports/{caseId}/evidence/{evidenceId}": {
+      "get": {
+        "operationId": "CompanyPaperReport.evidence",
+        "summary": "",
+        "description": "What a reporter, or the company, attached — with the fingerprint it arrived under and whether the bytes still match it.",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "evidenceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/paper-reports/{caseId}/dismiss": {
+      "post": {
+        "operationId": "CompanyPaperReport.dismiss",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecidePaperReportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaperCaseView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/paper-reports/{caseId}/strike/propose": {
+      "post": {
+        "operationId": "CompanyPaperReport.proposeStrike",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecidePaperReportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaperCaseView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/paper-reports/{caseId}/strike/approve": {
+      "post": {
+        "operationId": "CompanyPaperReport.approveStrike",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecidePaperReportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaperCaseView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/media": {
       "post": {
         "operationId": "Media.upload",
@@ -26164,7 +26425,8 @@
               "verified",
               "rejected",
               "superseded",
-              "declared"
+              "declared",
+              "struck"
             ]
           },
           "verifiedBy": {
@@ -26183,6 +26445,26 @@
             "type": "string"
           },
           "supersededBy": {
+            "type": "string"
+          },
+          "supersededFrom": {
+            "type": "string",
+            "enum": [
+              "awaiting_verification",
+              "verified",
+              "rejected",
+              "superseded",
+              "declared",
+              "struck"
+            ]
+          },
+          "struckBy": {
+            "type": "string"
+          },
+          "struckAt": {
+            "type": "string"
+          },
+          "strikeReason": {
             "type": "string"
           }
         },
@@ -32342,6 +32624,13 @@
           },
           "verified": {
             "description": "What the network has VERIFIED about them, and when. Empty is a real answer and shows as one.\n\nNever a badge and never a score: the list is what staff checked, so a reader can weigh it themselves\nrather than trusting a tick.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProfileVerification"
+            }
+          },
+          "onRecord": {
+            "description": "What the company has put on record ITSELF, with the paper, since it was switched on — and which NOBODY HERE HAS\nCHECKED. Kept apart from `verified` on purpose: listed together, the page would be vouching for a paper no member\nof staff has looked at. It counts, and anybody connected to the company who can see the paper may report it.",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ProfileVerification"
@@ -40313,6 +40602,173 @@
         "required": [
           "why"
         ]
+      },
+      "ReportPaperDto": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "evidenceDataUrl": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "category"
+        ]
+      },
+      "AnswerPaperReportDto": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string"
+          },
+          "evidenceDataUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "PaperReportView": {
+        "type": "object",
+        "properties": {
+          "reportId": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "expired",
+              "not_genuine",
+              "not_theirs",
+              "wrong_details",
+              "other"
+            ]
+          },
+          "note": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "evidenceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reportId",
+          "at",
+          "category",
+          "note"
+        ]
+      },
+      "PaperCaseView": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "documentId": {
+            "type": "string"
+          },
+          "paper": {
+            "type": "object"
+          },
+          "claimed": {
+            "type": "object"
+          },
+          "openedAt": {
+            "type": "string"
+          },
+          "answerBy": {
+            "type": "string"
+          },
+          "strikeFrom": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "dismissed",
+              "struck"
+            ]
+          },
+          "reports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PaperReportView"
+            }
+          },
+          "answer": {
+            "type": "object"
+          },
+          "proposal": {
+            "type": "object"
+          },
+          "decision": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "caseId",
+          "entityId",
+          "company",
+          "documentId",
+          "paper",
+          "openedAt",
+          "answerBy",
+          "strikeFrom",
+          "state",
+          "reports"
+        ]
+      },
+      "PaperCaseList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PaperCaseView"
+            }
+          },
+          "waiting": {
+            "type": "number",
+            "description": "How many wait on staff."
+          }
+        },
+        "required": [
+          "items",
+          "waiting"
+        ]
+      },
+      "DecidePaperReportDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        }
       },
       "UploadMediaDto": {
         "type": "object",

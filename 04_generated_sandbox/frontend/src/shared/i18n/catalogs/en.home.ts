@@ -25,6 +25,8 @@ export const enHome = {
   'home.profile.checkedTitle': 'What we have checked',
   'home.profile.nothingCheckedTitle': 'We have checked nothing yet',
   'home.profile.nothingCheckedBody': 'That is not a mark against them — it means no paper has been through our hands. Ask them directly for what matters to you.',
+  'home.profile.onRecordTitle': 'What they have put on record themselves',
+  'home.profile.onRecordFoot': 'Put on record by the company itself, each with its paper, since it was switched on. We have not checked these. Somebody connected to the company who sees one that is not right can report it, and then we look.',
   'home.profile.checkedFoot': 'We list what we looked at and when. A check is not a recommendation, and this page carries no score.',
   /* CL4 — the mobilisation record. Counts read correctly at one; the catalogue has no plural machinery. */
   'home.profile.movesTitle': 'Loads they have moved',

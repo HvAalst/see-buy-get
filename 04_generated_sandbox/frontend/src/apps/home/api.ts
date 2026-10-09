@@ -244,6 +244,8 @@ export interface ProfileView {
   presence?: { level: string; says: string };
   does: string;
   verified: Array<{ what: string; at: string }>;
+  /** What the company put on record itself since it was switched on. It counts; nobody at SeeBuyGet checked it. */
+  onRecord?: Array<{ what: string; at: string }>;
   /** CL4 — what they did with the loads they took. Absent for a kind that mobilises nothing. */
   moves?: {
     claimed: number;

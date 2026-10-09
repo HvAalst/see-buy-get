@@ -258,6 +258,23 @@ export function ProfileScreen({ state }: ProfileScreenProps) {
         {/* Said once, plainly, on every profile: a check is not a recommendation. */}
         <p class="card__note">{t('home.profile.checkedFoot')}</p>
       </Card>
+
+      {/* WHAT THEY SAY OF THEMSELVES, apart from what we checked. A company that is switched on puts its own papers on
+          record and they count at once; listed under "what we have checked" this page would vouch for a paper nobody
+          here has looked at. */}
+      {p.onRecord?.length ? (
+        <Card>
+          <h2 class="h2">{t('home.profile.onRecordTitle')}</h2>
+          <ul class="list">
+            {p.onRecord.map((v) => (
+              <li key={`${v.what}-${v.at}`}>
+                {v.what} · <span class="card__note">{new Date(v.at).toLocaleDateString()}</span>
+              </li>
+            ))}
+          </ul>
+          <p class="card__note">{t('home.profile.onRecordFoot')}</p>
+        </Card>
+      ) : null}
     </>
   );
 }

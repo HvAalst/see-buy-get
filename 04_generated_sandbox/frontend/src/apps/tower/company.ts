@@ -1,6 +1,7 @@
 import type { MessageKey } from '../../shared/i18n';
 import { PRESENCE_CAPABILITIES, samePerson, type CatalogueCountry, type PresenceCapability } from './presence';
 import type { EntityRow } from './money';
+import type { PaperCase } from './paperReports';
 
 /**
  * CA3–CA8 — A COMPANY, RECORDED PROPERLY, as the console reads and edits it.
@@ -82,7 +83,11 @@ export interface CompanyDocument {
   uploadedAt: string;
   expiresAt?: string;
   /** `declared`: put on record by a company that keeps its own record. It counts from that moment. */
-  status: 'awaiting_verification' | 'verified' | 'rejected' | 'superseded' | 'declared';
+  status: 'awaiting_verification' | 'verified' | 'rejected' | 'superseded' | 'declared' | 'struck';
+  /** `struck`: two members of staff decided, on a report, that it does not count. */
+  struckBy?: string;
+  struckAt?: string;
+  strikeReason?: string;
   verifiedBy?: string;
   verifiedAt?: string;
   rejectedBy?: string;
@@ -135,6 +140,8 @@ export interface CompanyRecordView {
   keeper?: 'staff' | 'company';
   record: CompanyRecord;
   declarations?: CompanyDeclaration[];
+  /** What has been said against its papers, and what was decided. For the company: what was said, never by whom. */
+  reports?: PaperCase[];
   readiness: { entityId: string; ready: boolean; items: ReadinessItem[] } | null;
   documents: CompanyDocument[];
   obligations: LocalObligation[];

@@ -354,6 +354,37 @@ should only interact at dispute." Until then staff typed every line, including a
   paper" list; `recordLede`, `runningOutHint`, `declareBlocker`, `declarationBody`, `mayTakeOff` in
   `apps/tower/company.ts`. A switched-on company no longer sees the switch-on checklist.
 
+## A company's paper is reported, answered, dismissed or struck
+The other half of the same decision: "we need rather a reporting system like BB, with screenshot"; "logged in
+users that are connected, paper keeps counting, … two people decision to strike a paper." Modelled on
+BondBridge's content reports (the server resolves the target, the reporter is not named to the reported party,
+a report removes nothing).
+- **Report** (`POST sbg/entities/:id/documents/:documentId/report`: category, note, evidence as a data URL): a
+  paper that counts (`declared` or `verified`), about the company itself, on a record the company keeps. Words
+  and what shows them are both required. Several people on one paper are one case; nobody reports it twice.
+- **Who is connected** (`CompanyPaperReportController.connected`): network staff, and the administrators of the
+  company and of the company above it: the people a company's papers are shown to today. Anybody else is told
+  there is no such company. Nobody outside that family can see a licence yet (see the progress page).
+- **Nothing changes by reporting.** The company's administrators and those above are emailed what was said,
+  never by whom (`company-paper-reported`), and have `REPORT_ANSWER_DAYS` = 7 to answer
+  (`POST sbg/paper-reports/:caseId/answer`: the company's own administrator, never staff in its place).
+- **Staff decide** (`GET sbg/paper-reports`, console → Reported papers): one member dismisses with the reason
+  (`…/dismiss`); a strike is proposed by one (`…/strike/propose`) and approved by another
+  (`…/strike/approve`, told apart by `staffOf(actor).key`). A strike is not proposed before the company has
+  answered or its time has run out; a dismissal does not wait.
+- **What a strike puts back** (`CompanyDeclarationService.strike`): the paper becomes `struck` (kept, with who
+  and why) and every paper it replaced is current again as it stood (`supersededFrom`). A struck change: the
+  item is as it was before. A struck addition: taken off again. A paper from before the company was switched
+  on, for a licence or policy: that licence counts as run out from today. The struck file cannot be put back.
+- **Who reads what**: `GET sbg/entities/:id/record` carries `reports`: in full for staff; for the company and
+  the company above it, what was said, never who or what was attached. Evidence
+  (`GET sbg/paper-reports/:caseId/evidence/:evidenceId`) is staff's.
+- Console: `screens/PaperReportsScreen.tsx` (queue + detail), `SayForm` and the report lines on each paper in
+  `CompanyRecordScreen.tsx`, `strikeStep`, `mayReport`, `openCaseOf`, `caseSub` in `apps/tower/paperReports.ts`.
+- Request shapes for a route live in `pudo.dto.ts` (or another file the swagger plugin reads): a class declared
+  inside a controller file is published as an empty body, and the OpenAPI gate says so.
+- Drive: `scratchpad/drive-rpt.mjs` (the strike) and `drive-rpt.mjs dismiss`.
+
 ## A national ID two people say is theirs
 A driver and a shop each register with a national ID number and the network keeps one of each, so somebody whose
 number another registration holds cannot register at all. The user decided how it is settled (2026-10-08): staff

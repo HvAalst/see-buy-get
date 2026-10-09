@@ -89,6 +89,10 @@ export interface MailParams {
   'company-paper-lapsing': { company: string; country?: string; paper: string; reference: string; expiresOn: string; daysLeft: number; lapsed: boolean; stops: string[]; where: 'licence' | 'insurance'; /** The company keeps its own record (it is switched on): it enters the new date itself, with the paper. */ own: boolean };
   /** A company's own administrator changed a part of its record that switches something. Sent to the OTHER administrators, and those of the company above it. */
   'company-record-changed': { company: string; by: string; part: string; change: 'added' | 'changed' | 'removed'; was: string; now: string; paper: boolean };
+  /** A paper on a company's record was reported as not right. To its administrators and those of the company above it: what was said, never by whom. */
+  'company-paper-reported': { company: string; paper: string; said: string; note: string; answerBy: string };
+  /** The report was decided: dismissed by one member of staff, or the paper struck by two. `effect`: what a strike put back, in words. */
+  'company-paper-decided': { company: string; paper: string; outcome: 'dismissed' | 'struck'; reason: string; effect: string };
   'order-on-its-way': { store: string; orderRef?: string; shop: string; trackingUrl: string };
   'ready-for-collection': { shop: string; address?: string; collectBy: string; openUrl?: string };
   'freight-delivered': { code: string; description: string; destination: string; deliveredAt: string; carrier: string; driver?: string; receiverName?: string; amount?: number; currency?: string; noteNumber: string; /** A link that opens the note with nobody signed in, and when it stops. */ noteUrl?: string; noteUntil?: string; /** It goes to one of a BUSINESS's people: its name, and whether they posted the load or are an owner told in the poster's place. */ business?: { name: string; as: 'poster' | 'owner' } };
@@ -635,10 +639,68 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
             text: `${p.by} ${did} ${p.part}${tail} ${p.company}’s record.${p.paper ? ' The paper behind it was put on record in the same act, and the change counts from now: nobody at SeeBuyGet checks it first.' : ''}`,
           },
           { kind: 'facts', rows: [['Company', p.company], ['By', p.by], ['Was', p.was], ['Now', p.now]] },
-          { kind: 'note', text: `You are told because a company that is switched on keeps its own record, and the people who would know whether a change is right are its own. If this one is not right, speak to ${p.by}, or open Company record in the console and read the paper.` },
+          { kind: 'note', text: `You are told because a company that is switched on keeps its own record, and the people who would know whether a change is right are its own. If this one is not right: open Company record in the console, find the paper under Papers and press “Report this paper” — say what is wrong and attach what shows it.` },
           { kind: 'button', label: 'Open the operator console', href: appUrl('console') },
         ],
         reason: `You are getting this email because you administer ${p.company}, or the company above it, on SeeBuyGet. It is about what that company trades on, so it cannot be turned off.`,
+      };
+    },
+  },
+
+  'company-paper-reported': {
+    title: 'A paper on a company’s record was reported as not right',
+    sentWhen: 'Somebody signed in and connected to a company reports one of its papers — the first time that paper is questioned. Sent to every administrator of the company and of the company above it. It says what was said, never by whom.',
+    wired: true,
+    // The time to answer runs from the report, not from this email: still worth reading two days late.
+    sendLater: 48,
+    sample: { company: 'SeeBuyGet Kenya', paper: 'courier licence CA/CL/0042, good until 2027-11-12', said: 'it has run out, or been withdrawn', note: 'The Communications Authority’s public register shows this licence as expired on 12 Nov 2026.', answerBy: '2026-10-16' },
+    build: (p) => ({
+      subject: `A paper on ${p.company}’s record was reported — answer by ${formatDate(p.answerBy)}`,
+      preheader: 'It keeps counting while this is looked at.',
+      blocks: [
+        { kind: 'heading', text: 'A paper on your record was reported' },
+        { kind: 'paragraph', text: `Somebody who can see ${p.company}’s papers has told SeeBuyGet that one of them is not right: ${p.said}. The paper keeps counting while this is looked at: a report changes nothing by itself.` },
+        { kind: 'facts', rows: [['Company', p.company], ['Paper', p.paper], ['What was said', p.note], ['Answer by', formatDate(p.answerBy)]] },
+        {
+          kind: 'warning',
+          title: 'What to do',
+          text: `Sign in to the console, open Company record, and under Papers find this paper and press “Answer”: say what is right, and attach what shows it. If the report is right, put the right paper on record instead, with “Change, with its paper”. Once you have answered, or after ${formatDate(p.answerBy)}, SeeBuyGet staff decide: one of them may dismiss the report; striking the paper takes two.`,
+        },
+        { kind: 'button', label: 'Open the operator console', href: appUrl('console') },
+        { kind: 'note', text: 'We do not say who reported it.' },
+      ],
+      reason: `You are getting this email because you administer ${p.company}, or the company above it, on SeeBuyGet. It is about a paper that company trades on, so it cannot be turned off.`,
+    }),
+  },
+
+  'company-paper-decided': {
+    title: 'A report on a company’s paper was decided',
+    sentWhen: 'A member of staff dismisses a report on a company’s paper, or two of them strike the paper. Sent to every administrator of the company and of the company above it.',
+    wired: true,
+    // Whatever was decided has already happened; the reason is still worth reading two days late.
+    sendLater: 48,
+    sample: { company: 'SeeBuyGet Kenya', paper: 'courier licence CA/CL/0042, good until 2027-11-12', outcome: 'struck', reason: 'The regulator’s register shows the licence expired on 12 Nov 2026, and the paper on record is dated before that.', effect: 'The record is back as it was: courier licence CA/CL/0042, good until 2026-11-12.' },
+    also: [{ key: 'dismissed', label: 'Dismissed', sample: { company: 'SeeBuyGet Kenya', paper: 'courier licence CA/CL/0042, good until 2027-11-12', outcome: 'dismissed', reason: 'The register was checked on 10 Oct 2026 and shows the licence renewed until 12 Nov 2027.', effect: '' } }],
+    build: (p) => {
+      const struck = p.outcome === 'struck';
+      return {
+        subject: struck ? `A paper was struck from ${p.company}’s record` : `The report on ${p.company}’s paper was dismissed`,
+        preheader: struck ? p.effect : 'Nothing on the record changed.',
+        blocks: [
+          { kind: 'heading', text: struck ? 'A paper was struck from your record' : 'The report was dismissed' },
+          {
+            kind: 'paragraph',
+            text: struck
+              ? `Two members of SeeBuyGet staff looked at the report on this paper, and at what ${p.company} answered, and decided that the paper does not count. ${p.effect}`
+              : `A member of SeeBuyGet staff looked at the report on this paper and dismissed it. Nothing on ${p.company}’s record changed, and the paper counts as before.`,
+          },
+          { kind: 'facts', rows: [['Company', p.company], ['Paper', p.paper], ['Reason', p.reason]] },
+          ...(struck
+            ? [{ kind: 'warning', title: 'What to do', text: 'Put the right paper on record: in the console, open Company record and press “Change, with its paper”, or “Add one, with its paper”. It counts from that moment.' } as const]
+            : []),
+          { kind: 'button', label: 'Open the operator console', href: appUrl('console') },
+        ],
+        reason: `You are getting this email because you administer ${p.company}, or the company above it, on SeeBuyGet. It is about a paper that company trades on, so it cannot be turned off.`,
       };
     },
   },

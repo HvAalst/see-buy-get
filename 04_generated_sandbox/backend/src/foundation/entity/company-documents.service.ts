@@ -43,8 +43,11 @@ export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
  * `declared` — put on record by a company that keeps its own record (one that is switched on). It counts from that
  * moment, with nobody checking it first; what is left is that anybody who can see it may say it is not right. The
  * two-person verification is how a company is switched ON, and stays that.
+ *
+ * `struck` — two members of staff decided, on a report, that a paper which counted does not. Kept, with who and why;
+ * what it had replaced is the current paper again.
  */
-export const DOCUMENT_STATUSES = ['awaiting_verification', 'verified', 'rejected', 'superseded', 'declared'] as const;
+export const DOCUMENT_STATUSES = ['awaiting_verification', 'verified', 'rejected', 'superseded', 'declared', 'struck'] as const;
 export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
 
 /** A certificate scan is a few hundred kilobytes; eight megabytes is a generous ceiling, not a target. */
@@ -72,6 +75,11 @@ export class CompanyDocument {
   @ApiPropertyOptional() rejectedAt?: string;
   @ApiPropertyOptional() rejectionReason?: string;
   @ApiPropertyOptional() supersededBy?: string;
+  /** What it was when it was replaced — so that if the paper that replaced it is struck, it is that again. */
+  @ApiPropertyOptional({ enum: DOCUMENT_STATUSES }) supersededFrom?: DocumentStatus;
+  @ApiPropertyOptional() struckBy?: string;
+  @ApiPropertyOptional() struckAt?: string;
+  @ApiPropertyOptional() strikeReason?: string;
 }
 
 @Injectable()
@@ -104,13 +112,19 @@ export class CompanyDocumentService {
     if (previous?.fingerprint === fingerprint) {
       throw new GlosError('CONFLICT', `That exact file is already on record as version ${previous.version}`);
     }
+    // The very file two of us struck is not put back on record as though nothing had been decided.
+    const versions = this.versionsOf(entity.entityId, input.kind, relatesTo);
+    if (versions.some((d) => d.status === 'struck' && d.fingerprint === fingerprint)) {
+      throw new GlosError('CONFLICT', 'That exact file was struck from the record. Put the right paper on record');
+    }
     const document: CompanyDocument = {
       documentId: `doc_${randomBytes(8).toString('hex')}`,
       entityId: entity.entityId,
       kind: input.kind as DocumentKind,
       title,
       ...(relatesTo ? { relatesTo } : {}),
-      version: (previous?.version ?? 0) + 1,
+      // Counted over every version there has been, a struck one included: no two papers share a number.
+      version: Math.max(0, ...versions.map((d) => d.version)) + 1,
       fingerprint,
       contentType,
       size: bytes.length,
@@ -123,7 +137,7 @@ export class CompanyDocumentService {
     this.documents.set(document.documentId, document);
     if (previous) {
       // Kept, never replaced in place: "which certificate did we rely on in March" outlives the new one.
-      Object.assign(previous, { status: 'superseded', supersededBy: document.documentId });
+      Object.assign(previous, { supersededFrom: previous.status, status: 'superseded', supersededBy: document.documentId });
       this.documents.set(previous.documentId, previous);
     }
     return document;
@@ -145,7 +159,7 @@ export class CompanyDocumentService {
   /** Say a paper is not good enough — including one verified earlier and found wanting — always with a reason. */
   reject(entityId: string, documentId: string, by?: string, reason?: string, now = Date.now()): CompanyDocument {
     const document = this.require(entityId, documentId);
-    if (document.status === 'superseded' || document.status === 'rejected') throw new GlosError('INVALID_STATE', `This document is already ${document.status}`);
+    if (document.status === 'superseded' || document.status === 'rejected' || document.status === 'struck') throw new GlosError('INVALID_STATE', `This document is already ${document.status}`);
     // One person turning down a paper that COUNTS would be one person switching a company's licence off.
     if (document.status === 'declared') throw new GlosError('INVALID_STATE', 'The company put this paper on record itself, and it counts. It is not rejected by one person');
     const who = by?.trim();
@@ -157,13 +171,14 @@ export class CompanyDocumentService {
   }
 
   /**
-   * A paper is no longer the paper for anything: the licence it was for was renewed under a NEW number, and the new
-   * paper says so. Kept, marked as replaced by that one — the same as a new version of the same paper.
+   * A paper is no longer the paper for anything. Either the licence it was for was renewed under a NEW number, and
+   * the new paper (`replacedBy`) says so; or what it was for was taken off the record, and nothing replaces it.
+   * Kept either way, and no longer counting.
    */
-  retire(entityId: string, kind: string, relatesTo: string, replacedBy: string): void {
+  retire(entityId: string, kind: string, relatesTo: string, replacedBy?: string): void {
     const old = this.currentOf(entityId, kind, relatesTo);
     if (!old || old.documentId === replacedBy) return;
-    Object.assign(old, { status: 'superseded', supersededBy: replacedBy });
+    Object.assign(old, { supersededFrom: old.status, status: 'superseded', ...(replacedBy ? { supersededBy: replacedBy } : {}) });
     this.documents.set(old.documentId, old);
   }
 
@@ -179,8 +194,45 @@ export class CompanyDocumentService {
   currentOf(entityId: string, kind: string, relatesTo?: string): CompanyDocument | undefined {
     const key = (relatesTo ?? '').trim().toUpperCase();
     return [...this.documents.values()]
-      .filter((d) => d.entityId === entityId && d.kind === kind && (d.relatesTo ?? '').toUpperCase() === key && d.status !== 'superseded')
+      .filter((d) => d.entityId === entityId && d.kind === kind && (d.relatesTo ?? '').toUpperCase() === key && d.status !== 'superseded' && d.status !== 'struck')
       .sort((a, b) => b.version - a.version)[0];
+  }
+
+  /** Every version there has been of one paper, whatever became of it. */
+  private versionsOf(entityId: string, kind: string, relatesTo?: string): CompanyDocument[] {
+    const key = (relatesTo ?? '').trim().toUpperCase();
+    return [...this.documents.values()].filter((d) => d.entityId === entityId && d.kind === kind && (d.relatesTo ?? '').toUpperCase() === key);
+  }
+
+  /** One paper of a company's. */
+  get(entityId: string, documentId: string): CompanyDocument {
+    return this.require(entityId, documentId);
+  }
+
+  /** DOES THIS PAPER COUNT: verified by a second person before the company was switched on, or put on record by the company since. */
+  counts(document: Pick<CompanyDocument, 'status'>): boolean {
+    return document.status === 'verified' || document.status === 'declared';
+  }
+
+  /**
+   * STRUCK: two members of staff decided, on a report, that this paper does not count. It is kept — who, when, why —
+   * and every paper it had replaced is the current one again, exactly as it stood. What it changed on the RECORD is
+   * put back by whoever calls this (CompanyDeclarationService.strike): this is the paper only.
+   */
+  strike(entityId: string, documentId: string, by: string, reason: string, now = Date.now()): { document: CompanyDocument; reinstated: CompanyDocument[] } {
+    const document = this.require(entityId, documentId);
+    if (!this.counts(document)) throw new GlosError('INVALID_STATE', `This paper is ${document.status.replace(/_/g, ' ')}: there is nothing to strike`);
+    if (!by?.trim() || !reason?.trim()) throw new GlosError('FIELD_REQUIRED', 'A struck paper is kept with who struck it and why');
+    Object.assign(document, { status: 'struck', struckBy: by.trim(), struckAt: new Date(now).toISOString(), strikeReason: reason.trim() });
+    this.documents.set(document.documentId, document);
+    const reinstated = [...this.documents.values()].filter((d) => d.entityId === entityId && d.supersededBy === documentId);
+    for (const prior of reinstated) {
+      prior.status = prior.supersededFrom ?? (prior.verifiedBy ? 'verified' : 'awaiting_verification');
+      delete prior.supersededBy;
+      delete prior.supersededFrom;
+      this.documents.set(prior.documentId, prior);
+    }
+    return { document, reinstated };
   }
 
   /** Whether the current version of a paper has been verified by a second person. */

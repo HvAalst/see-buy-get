@@ -1,4 +1,5 @@
 import type { MoveRow } from './accountMoves';
+import type { PaperCase } from './paperReports';
 import type { DisputeRow } from './idDisputes';
 import type { BusinessRow } from './businesses';
 import type { CourierContact, PapersNetworkView } from './papers';
@@ -21,7 +22,7 @@ import type { HelpOption } from './pictures';
 import { resolveBaseUrl } from '../../lib/sbg';
 
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
-export type Screen = 'network' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'businesses' | 'accountmoves' | 'iddisputes' | 'papers' | 'imports' | 'market' | 'movers' | 'reports' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'company' | 'corridors' | 'borders' | 'presence' | 'depots' | 'settings' | 'connections';
+export type Screen = 'network' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'businesses' | 'accountmoves' | 'iddisputes' | 'paperreports' | 'papers' | 'imports' | 'market' | 'movers' | 'reports' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'company' | 'corridors' | 'borders' | 'presence' | 'depots' | 'settings' | 'connections';
 
 export interface TowerState {
   phase: Phase;
@@ -87,6 +88,8 @@ export interface TowerState {
   accountMoves: MoveRow[] | null;
   /** Two people say one national ID is theirs. Null while unread. */
   idDisputes: DisputeRow[] | null;
+  /** A company's paper somebody reported as not right. One of us dismisses; two strike. Null while unread. */
+  paperReports: PaperCase[] | null;
   /** Shops that started signing up and stopped — read beside the applications, counted with none of
    *  them. Null while unread, like every other list here. */
   stalled: StalledRow[] | null;
@@ -253,8 +256,8 @@ export interface TowerActions {
   savePresence(jurisdiction: string): Promise<void>;
   /** CA3 — open one company's record. */
   openCompany(entityId: string): void;
-  /** A company's record changed: re-read what is running out, which the number in the menu is counted from. */
-  reloadLapsing(): void;
+  /** A company's record changed, or one of its papers was reported: re-read what the numbers in the menu are counted from. */
+  recordChanged(): void;
   /** CA3/CA7 — create a draft company of ours or a partner; true when it was created. */
   createCompany(kind: 'sister' | 'partner', jurisdiction: string, name: string): Promise<boolean>;
   /** The API client, for a screen that owns its own reads (the company record). Null before sign-in. */
@@ -348,6 +351,7 @@ const INITIAL: TowerState = {
   businesses: null,
   accountMoves: null,
   idDisputes: null,
+  paperReports: null,
   stalled: null,
   driverApplications: null,
   presence: null,
@@ -501,6 +505,12 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     setState((s) => ({ ...s, expiring: expiring.error ? null : (narrow<{ items: ExpiringItem[] }>(expiring.data)?.items ?? []) }));
   }, []);
 
+  /** The papers somebody has reported — read by itself after a report, so the number beside the queue is true at once. A failed read keeps what was known. */
+  const loadPaperReports = useCallback(async (client: TowerClient) => {
+    const reports = await client.api.paperReports();
+    setState((s) => ({ ...s, paperReports: reports.error ? s.paperReports : (narrow<{ items: PaperCase[] }>(reports.data)?.items ?? []) }));
+  }, []);
+
   /**
    * What the selected company holds and owes, and what it has raised for the people it owes.
    *
@@ -618,7 +628,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
    */
   const loadQueues = useCallback(async (client: TowerClient) => {
     setState((s) => ({ ...s, loading: true }));
-    const [claims, freightClaims, disposal, approvals, stalled, driverApplications, businesses, accountMoves, idDisputes] = await Promise.all([
+    const [claims, freightClaims, disposal, approvals, stalled, driverApplications, businesses, accountMoves, idDisputes, paperReports] = await Promise.all([
       client.api.disputes(),
       client.api.freightClaims(),
       client.api.disposalQueue(),
@@ -633,6 +643,8 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       // Somebody locked out of their account is waiting on two of us — and so, perhaps, is somebody after another's.
       client.api.accountMoves(),
       client.api.idDisputes(),
+      // The one time staff step into the record of a company that keeps its own: somebody said a paper is not right.
+      client.api.paperReports(),
     ]);
     setState((s) => ({
       ...s,
@@ -646,6 +658,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       businesses: businesses.error ? null : (narrow<{ items: BusinessRow[] }>(businesses.data)?.items ?? []),
       accountMoves: accountMoves.error ? null : (narrow<{ items: MoveRow[] }>(accountMoves.data)?.items ?? []),
       idDisputes: idDisputes.error ? null : (narrow<{ items: DisputeRow[] }>(idDisputes.data)?.items ?? []),
+      paperReports: paperReports.error ? null : (narrow<{ items: PaperCase[] }>(paperReports.data)?.items ?? []),
       readAt: Date.now(),
     }));
   }, []);
@@ -922,7 +935,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     else if (state.screen === 'presence') await loadPresence(client);
     else if (state.screen === 'companies') await loadEntities(client);
     else if (state.screen === 'papers') await loadPapers(client);
-    else if (state.screen === 'businesses' || state.screen === 'accountmoves' || state.screen === 'iddisputes') await loadQueues(client);
+    else if (state.screen === 'businesses' || state.screen === 'accountmoves' || state.screen === 'iddisputes' || state.screen === 'paperreports') await loadQueues(client);
     else if (state.screen === 'movers') await loadMovers(client);
     else if (state.screen === 'support') {
       // Refreshing the support screen means re-reading the parcel somebody is on the phone about, not
@@ -1014,7 +1027,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         if (screen === 'companies' && client) void loadEntities(client);
         if (screen === 'papers' && client) void loadPapers(client);
         // B1 — fresh: a colleague may have just given the first approval, and the second is yours to give.
-        if ((screen === 'businesses' || screen === 'accountmoves' || screen === 'iddisputes') && client) void loadQueues(client);
+        if ((screen === 'businesses' || screen === 'accountmoves' || screen === 'iddisputes' || screen === 'paperreports') && client) void loadQueues(client);
         // Read fresh every time: a hand-back that happened this morning is the reason somebody opened it.
         if (screen === 'movers' && client) void loadMovers(client);
       },
@@ -1101,9 +1114,12 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         await loadPresence(client);
       },
       openCompany: (entityId: string) => setState((s) => ({ ...s, screen: 'company', companyId: entityId || null, done: null, queueError: null })),
-      reloadLapsing: () => {
+      recordChanged: () => {
         const client = clientRef.current;
-        if (client) void loadExpiring(client);
+        if (!client) return;
+        void loadExpiring(client);
+        // A report made from a record is one more waiting on staff. Only staff have that queue.
+        if (stateRef.current.who?.mode === 'operator') void loadPaperReports(client);
       },
       client: () => clientRef.current,
       createCompany: async (kind: 'sister' | 'partner', jurisdiction: string, name: string) => {

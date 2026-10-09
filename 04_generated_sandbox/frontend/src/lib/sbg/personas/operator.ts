@@ -262,6 +262,27 @@ export function createOperatorApi(sbg: SbgClient) {
     declareCompanyChange: (entityId: string, body: Record<string, unknown>) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/record/declare', { params: { path: { entityId } }, body: body as never })),
 
+    /**
+     * A PAPER REPORTED AS NOT RIGHT. Anybody signed in and connected to the company reports, with what shows it; the
+     * company answers; one member of staff dismisses, two strike. The paper keeps counting until it is struck.
+     */
+    reportCompanyPaper: (entityId: string, documentId: string, body: { category: string; note: string; evidenceDataUrl: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/documents/{documentId}/report', { params: { path: { entityId, documentId } }, body: body as never })),
+    answerPaperReport: (caseId: string, body: { note: string; evidenceDataUrl?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/paper-reports/{caseId}/answer', { params: { path: { caseId } }, body: body as never })),
+    paperReports: () => sbg.request((c) => c.GET('/v1/sbg/paper-reports', {})),
+    paperReport: (caseId: string) => sbg.request((c) => c.GET('/v1/sbg/paper-reports/{caseId}', { params: { path: { caseId } } })),
+    paperReportEvidence: (caseId: string, evidenceId: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/paper-reports/{caseId}/evidence/{evidenceId}', { params: { path: { caseId, evidenceId } }, parseAs: 'blob' })),
+    /** `reason` is read by the company. */
+    dismissPaperReport: (caseId: string, reason: string, by?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/paper-reports/{caseId}/dismiss', { params: { path: { caseId } }, body: { reason, ...(by ? { by } : {}) } })),
+    /** The first member of staff: the reason the second approves on the strength of. It strikes nothing. */
+    proposePaperStrike: (caseId: string, reason: string, by?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/paper-reports/{caseId}/strike/propose', { params: { path: { caseId } }, body: { reason, ...(by ? { by } : {}) } })),
+    approvePaperStrike: (caseId: string, by?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/paper-reports/{caseId}/strike/approve', { params: { path: { caseId } }, body: { ...(by ? { by } : {}) } })),
+
     /** CA4 — papers: fingerprinted on arrival, verified by a second person. */
     uploadCompanyDocument: (entityId: string, body: { kind: string; title: string; dataUrl: string; relatesTo?: string; expiresAt?: string; by?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/documents', { params: { path: { entityId } }, body: body as never })),

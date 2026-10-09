@@ -43,6 +43,7 @@ import {
 import { CAPABILITY_LABEL, type PresenceCapability } from '../presence';
 import type { TowerActions, TowerState } from '../useTowerApp';
 import { LapsingPapers } from './LapsingPapers';
+import { CATEGORY_LABEL, REPORT_CATEGORIES, lastDecidedOf, mayReport, openCaseOf, reportBlocker, type PaperCase, type ReportCategory } from '../paperReports';
 
 /**
  * CA3–CA8 — ONE COMPANY, RECORDED PROPERLY.
@@ -98,8 +99,8 @@ export function CompanyRecordScreen({ state, actions }: { state: TowerState; act
     }
     setDone(message);
     await load();
-    // A renewed licence is no longer running out: the number beside this screen in the menu is counted again.
-    actions.reloadLapsing();
+    // A renewed licence is no longer running out, and a reported paper waits on staff: the numbers in the menu are counted again.
+    actions.recordChanged();
     return true;
   };
   const saveRecord = (key: string, patch: Record<string, unknown>) =>
@@ -172,6 +173,9 @@ export function CompanyRecordScreen({ state, actions }: { state: TowerState; act
             who={who}
             canVerify={reader === 'operator'}
             canUpload={reader === 'company' || hands.keeper === 'staff'}
+            reader={reader}
+            onReport={(documentId, body) => (client && entityId ? run(`report:${documentId}`, () => client.api.reportCompanyPaper(entityId, documentId, { ...body, ...(who ? { by: who } : {}) }), t('tower.paperReport.sent')) : Promise.resolve(false))}
+            onAnswer={(caseId, body) => (client ? run(`answer:${caseId}`, () => client.api.answerPaperReport(caseId, body), t('tower.paperReport.answerSent')) : Promise.resolve(false))}
             busy={busy}
             onUpload={(body) => (client && entityId ? run('upload', () => client.api.uploadCompanyDocument(entityId, { ...body, ...(who ? { by: who } : {}) }), t('tower.company.doc.uploaded')) : Promise.resolve(false))}
             onVerify={(documentId) => (client && entityId ? run(documentId, () => client.api.verifyCompanyDocument(entityId, documentId, who), t('tower.company.doc.verified')) : Promise.resolve(false))}
@@ -650,11 +654,14 @@ function Documents({
   who,
   canVerify,
   canUpload,
+  reader,
   busy,
   onUpload,
   onVerify,
   onReject,
   onOpen,
+  onReport,
+  onAnswer,
 }: {
   view: CompanyRecordView;
   who: string | undefined;
@@ -662,6 +669,11 @@ function Documents({
   canVerify: boolean;
   /** A company's administrator always; staff only while the record is still theirs to enter. */
   canUpload: boolean;
+  reader: 'operator' | 'company';
+  /** Say a paper that counts is not right, with what shows it. Anybody who can read this record may. */
+  onReport: (documentId: string, body: { category: string; note: string; evidenceDataUrl: string }) => Promise<boolean>;
+  /** The company's own answer to what was said. */
+  onAnswer: (caseId: string, body: { note: string; evidenceDataUrl?: string }) => Promise<boolean>;
   busy: string | null;
   onUpload: (body: { kind: string; title: string; dataUrl: string; relatesTo?: string; expiresAt?: string }) => Promise<boolean>;
   onVerify: (documentId: string) => Promise<boolean>;
@@ -682,7 +694,22 @@ function Documents({
         <table class="ctbl">
           <tbody>
             {view.documents.map((d) => (
-              <DocumentRow key={d.documentId} document={d} who={who} canVerify={canVerify} busy={busy === d.documentId} onVerify={onVerify} onReject={onReject} onOpen={onOpen} />
+              <DocumentRow
+                key={d.documentId}
+                document={d}
+                who={who}
+                canVerify={canVerify}
+                reader={reader}
+                reportable={mayReport(d, view.keeper)}
+                asked={openCaseOf(view.reports, d.documentId)}
+                decided={lastDecidedOf(view.reports, d.documentId)}
+                busy={busy === d.documentId || busy === `report:${d.documentId}`}
+                onVerify={onVerify}
+                onReject={onReject}
+                onOpen={onOpen}
+                onReport={onReport}
+                onAnswer={onAnswer}
+              />
             ))}
           </tbody>
         </table>
@@ -781,22 +808,39 @@ function DocumentRow({
   document: d,
   who,
   canVerify,
+  reader,
+  reportable,
+  asked,
+  decided,
   busy,
   onVerify,
   onReject,
   onOpen,
+  onReport,
+  onAnswer,
 }: {
   document: CompanyDocument;
   who: string | undefined;
   canVerify: boolean;
+  reader: 'operator' | 'company';
+  /** It counts, on a record the company keeps itself: anybody reading it may say it is not right. */
+  reportable: boolean;
+  /** The open question about this paper, if somebody has reported it. */
+  asked?: PaperCase;
+  /** The last thing decided about it. */
+  decided?: PaperCase;
   busy: boolean;
   onVerify: (documentId: string) => Promise<boolean>;
   onReject: (documentId: string, reason: string) => Promise<boolean>;
   onOpen: (document: CompanyDocument) => Promise<void>;
+  onReport: (documentId: string, body: { category: string; note: string; evidenceDataUrl: string }) => Promise<boolean>;
+  onAnswer: (caseId: string, body: { note: string; evidenceDataUrl?: string }) => Promise<boolean>;
 }) {
   const t = useT();
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
+  const [panel, setPanel] = useState<'report' | 'answer' | null>(null);
+  const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
   const blocker = documentBlocker(d, who);
   const status =
     d.status === 'verified'
@@ -807,9 +851,12 @@ function DocumentRow({
           ? t('tower.company.doc.status.superseded')
           : d.status === 'declared'
             ? t('tower.company.doc.status.declared', { who: d.uploadedBy })
-            : t('tower.company.doc.status.awaiting');
+            : d.status === 'struck'
+              ? t('tower.company.doc.status.struck')
+              : t('tower.company.doc.status.awaiting');
 
   return (
+    <>
     <tr class={d.status === 'superseded' ? 'is-quiet' : undefined}>
       <td>
         <div class="ctbl__strong">{d.title}</div>
@@ -817,6 +864,23 @@ function DocumentRow({
           {t(DOCUMENT_LABEL[d.kind])}
           {d.relatesTo ? ` · ${d.relatesTo}` : ''} · {t('tower.company.doc.version', { n: d.version })}
         </div>
+        {/* SOMEBODY HAS SAID THIS PAPER IS NOT RIGHT. It keeps counting; the company reads what was said (never by
+            whom) and until when it may answer; staff read that it waits under Reported papers. */}
+        {asked ? <div class="ctbl__sub ctbl__sub--warn">{t(reader === 'company' ? 'tower.paperReport.row.openOwn' : 'tower.paperReport.row.open', { n: asked.reports.length, when: day(asked.answerBy) })}</div> : null}
+        {asked && reader === 'company'
+          ? asked.reports.map((r) => (
+              <div key={r.reportId} class="ctbl__sub">
+                {t('tower.paperReport.row.said', { what: t(CATEGORY_LABEL[r.category]), note: r.note })}
+              </div>
+            ))
+          : null}
+        {asked?.answer ? <div class="ctbl__sub">{t('tower.paperReport.row.answered', { who: asked.answer.by, when: day(asked.answer.at) })}</div> : null}
+        {!asked && decided?.decision ? (
+          <div class="ctbl__sub">
+            {t(decided.state === 'struck' ? 'tower.paperReport.row.struck' : 'tower.paperReport.row.dismissed', { when: day(decided.decision.at), reason: decided.decision.reason })}
+            {decided.decision.effect ? ` ${decided.decision.effect}` : ''}
+          </div>
+        ) : null}
       </td>
       <td class="ctbl__sub">
         <div>
@@ -825,13 +889,23 @@ function DocumentRow({
         <div>{t('tower.company.doc.by', { who: d.uploadedBy, when: when(d.uploadedAt) })}</div>
       </td>
       <td>
-        <span class={`ctag ${d.status === 'verified' || d.status === 'declared' ? 'ctag--ok' : d.status === 'rejected' ? 'ctag--warn' : d.status === 'superseded' ? 'ctag--quiet' : 'ctag--info'}`}>{status}</span>
+        <span class={`ctag ${d.status === 'verified' || d.status === 'declared' ? 'ctag--ok' : d.status === 'rejected' || d.status === 'struck' ? 'ctag--warn' : d.status === 'superseded' ? 'ctag--quiet' : 'ctag--info'}`}>{status}</span>
       </td>
       <td class="ctbl__num">
         <span class="twr-panelend">
           <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void onOpen(d)}>
             {t('tower.company.doc.open')}
           </button>
+          {asked && reader === 'company' ? (
+            <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy} onClick={() => setPanel(panel === 'answer' ? null : 'answer')}>
+              {t(asked.answer ? 'tower.paperReport.answerAgainCta' : 'tower.paperReport.answerCta')}
+            </button>
+          ) : null}
+          {reportable ? (
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => setPanel(panel === 'report' ? null : 'report')}>
+              {t('tower.paperReport.reportCta')}
+            </button>
+          ) : null}
           {canVerify && d.status === 'awaiting_verification' ? (
             rejecting ? (
               <>
@@ -855,6 +929,98 @@ function DocumentRow({
         {canVerify && blocker && d.status === 'awaiting_verification' && !rejecting ? <div class="chint">{t(blocker)}</div> : null}
       </td>
     </tr>
+    {panel === 'report' && reportable ? (
+      <tr>
+        <td colSpan={4}>
+          <SayForm
+            kind="report"
+            busy={busy}
+            onCancel={() => setPanel(null)}
+            onSend={async (body) => {
+              const ok = await onReport(d.documentId, { category: body.category, note: body.note, evidenceDataUrl: body.evidenceDataUrl ?? '' });
+              if (ok) setPanel(null);
+            }}
+          />
+        </td>
+      </tr>
+    ) : null}
+    {panel === 'answer' && asked ? (
+      <tr>
+        <td colSpan={4}>
+          <SayForm
+            kind="answer"
+            busy={busy}
+            onCancel={() => setPanel(null)}
+            onSend={async (body) => {
+              const ok = await onAnswer(asked.caseId, { note: body.note, ...(body.evidenceDataUrl ? { evidenceDataUrl: body.evidenceDataUrl } : {}) });
+              if (ok) setPanel(null);
+            }}
+          />
+        </td>
+      </tr>
+    ) : null}
+    </>
+  );
+}
+
+/**
+ * WORDS, AND WHAT SHOWS THEM — the one form behind both halves of a dispute. A REPORT says what is wrong with a paper
+ * and must attach what shows it (a screenshot of the regulator's register, a photograph); an ANSWER says what is
+ * right, and may attach something.
+ */
+function SayForm({ kind, busy, onSend, onCancel }: { kind: 'report' | 'answer'; busy: boolean; onSend: (body: { category: ReportCategory; note: string; evidenceDataUrl?: string }) => Promise<void>; onCancel: () => void }) {
+  const t = useT();
+  const [category, setCategory] = useState<ReportCategory>('expired');
+  const [note, setNote] = useState('');
+  const [file, setFile] = useState<{ dataUrl: string; name: string } | null>(null);
+  const blocker = kind === 'report' ? reportBlocker({ note, hasEvidence: Boolean(file) }) : note.trim() ? null : ('tower.paperReport.needAnswer' as const);
+
+  return (
+    <div class="twr-declare">
+      <p class="chint">{t(kind === 'report' ? 'tower.paperReport.form.reportHint' : 'tower.paperReport.form.answerHint')}</p>
+      <div class="twr-corridorform">
+        {kind === 'report' ? (
+          <label class="cfield">
+            <span class="cfield__label">{t('tower.paperReport.form.category')}</span>
+            <select class="cinput" value={category} onChange={(e) => setCategory(e.currentTarget.value as ReportCategory)}>
+              {REPORT_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {t(CATEGORY_LABEL[c])}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        <label class="cfield" style="grid-column: span 2">
+          <span class="cfield__label">{t(kind === 'report' ? 'tower.paperReport.form.note' : 'tower.paperReport.form.answerNote')}</span>
+          <textarea class="cinput" rows={3} maxLength={kind === 'report' ? 1000 : 2000} value={note} onInput={(e) => setNote((e.target as HTMLTextAreaElement).value)} />
+        </label>
+        <label class="cfield">
+          <span class="cfield__label">{t(kind === 'report' ? 'tower.paperReport.form.evidence' : 'tower.paperReport.form.answerEvidence')}</span>
+          <input
+            class="cinput"
+            type="file"
+            accept="image/png,image/jpeg,application/pdf"
+            onChange={(e) => {
+              const picked = e.currentTarget.files?.[0];
+              if (!picked) return setFile(null);
+              const reader = new FileReader();
+              reader.onload = () => setFile({ dataUrl: String(reader.result ?? ''), name: picked.name });
+              reader.readAsDataURL(picked);
+            }}
+          />
+        </label>
+      </div>
+      <div class="twr-corridorsave">
+        <button type="button" class="cbtn cbtn--primary" disabled={busy || blocker !== null} onClick={() => void onSend({ category, note: note.trim(), ...(file ? { evidenceDataUrl: file.dataUrl } : {}) })}>
+          {t(kind === 'report' ? 'tower.paperReport.form.send' : 'tower.paperReport.form.sendAnswer')}
+        </button>
+        <button type="button" class="cbtn cbtn--ghost" onClick={onCancel}>
+          {t('tower.company.declare.cancel')}
+        </button>
+        {blocker ? <span class="chint">{t(blocker)}</span> : null}
+      </div>
+    </div>
   );
 }
 
