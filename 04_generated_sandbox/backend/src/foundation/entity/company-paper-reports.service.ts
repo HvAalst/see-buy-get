@@ -140,6 +140,23 @@ export class CompanyPaperReportService {
     return this.view(this.require(caseId), 'staff', staffKey);
   }
 
+  /**
+   * WHAT BECAME OF ONE REPORTER'S OWN REPORTS on a company's papers — the latest about each paper, named by what the
+   * paper is FOR (a licence or policy number), because that is what the reporter was shown. Somebody who reported
+   * must be able to read back that it is being looked at, or what was decided and why; never anybody else's report.
+   */
+  byReporter(entityId: string, reporterKey: string): Array<{ kind: string; relatesTo?: string; at: string; state: PaperCaseState; reason?: string }> {
+    const latest = new Map<string, { kind: string; relatesTo?: string; at: string; state: PaperCaseState; reason?: string }>();
+    const theirs = [...this.cases.values()].filter((c) => c.entityId === entityId).sort((a, b) => a.openedAt.localeCompare(b.openedAt));
+    for (const c of theirs) {
+      const mine = c.reports.find((r) => r.reporter.key === reporterKey);
+      if (!mine) continue;
+      const document = this.documents.get(c.entityId, c.documentId);
+      latest.set(`${document.kind}|${(document.relatesTo ?? '').toUpperCase()}`, { kind: document.kind, ...(document.relatesTo ? { relatesTo: document.relatesTo } : {}), at: mine.at, state: c.state, ...(c.decision ? { reason: c.decision.reason } : {}) });
+    }
+    return [...latest.values()];
+  }
+
   /** How many wait on staff. */
   waiting(): number {
     return [...this.cases.values()].filter((c) => c.state === 'open').length;

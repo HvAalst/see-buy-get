@@ -2537,3 +2537,31 @@
   flex: none;
   opacity: 0.55;
 }
+
+/* WHO YOU CONTRACT WITH — one licence or policy of that company: what it is, its number (the thing a reader checks
+   against the issuer's register, so it is the largest line), until when, and the way to say it is not right. */
+.contract__paper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line, rgba(0, 0, 0, 0.1));
+}
+.contract__paper > p {
+  margin: 0;
+}
+.contract__number {
+  font-size: 1.15rem;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.contract__lapsed {
+  color: var(--danger, #b3261e);
+  font-weight: 600;
+}
+.contract__form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}

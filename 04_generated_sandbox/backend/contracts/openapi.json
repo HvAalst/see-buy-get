@@ -19126,6 +19126,47 @@
         }
       }
     },
+    "/v1/sbg/contract/company": {
+      "get": {
+        "operationId": "CompanyPaperReport.contractCompany",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractCompanyView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/contract/company/papers/report": {
+      "post": {
+        "operationId": "CompanyPaperReport.reportContractPaper",
+        "summary": "",
+        "description": "REPORT ONE OF THEM. What is reported is worked out HERE, from what this reader was shown: the company from their\nown record, the paper from the licence or policy they name on that company's record. Never a company or a\ndocument id from the request — a report could otherwise be aimed at any company's paper.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportContractPaperDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/paper-reports/{caseId}/answer": {
       "post": {
         "operationId": "CompanyPaperReport.answer",
@@ -40620,6 +40661,123 @@
           }
         },
         "required": [
+          "category"
+        ]
+      },
+      "ContractPaperView": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "licence",
+              "insurance"
+            ]
+          },
+          "yourReport": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "state": {
+                "required": true,
+                "type": "object"
+              },
+              "reason": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "kind": {
+            "type": "string"
+          },
+          "issuer": {
+            "type": "string",
+            "description": "Who issued the licence, or the insurer."
+          },
+          "number": {
+            "type": "string",
+            "description": "The licence or policy number: what a reader checks against the issuer's own register."
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "lapsed": {
+            "type": "boolean"
+          },
+          "reportable": {
+            "type": "boolean",
+            "description": "There is a paper on record behind it that counts, so it can be reported."
+          }
+        },
+        "required": [
+          "source",
+          "yourReport",
+          "kind",
+          "issuer",
+          "number",
+          "expiresAt",
+          "lapsed",
+          "reportable"
+        ]
+      },
+      "ContractCompanyView": {
+        "type": "object",
+        "properties": {
+          "company": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "required": true,
+                "type": "string"
+              },
+              "jurisdiction": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "papers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContractPaperView"
+            }
+          }
+        },
+        "required": [
+          "company",
+          "papers"
+        ]
+      },
+      "ReportContractPaperDto": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "licence",
+              "insurance"
+            ]
+          },
+          "number": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "evidenceDataUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "number",
           "category"
         ]
       },

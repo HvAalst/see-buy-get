@@ -191,6 +191,30 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "who-you-contract-with",
+    apps: [
+      "agent",
+      "mdp",
+      "fleet",
+      "driver",
+      "vendor",
+      "business"
+    ],
+    title: "Who you contract with, and its licences",
+    summary: "Settings shows the SeeBuyGet company you contract with and the licences and insurance it trades on, each with its number. If one is not right, you can say so.",
+    steps: [
+      "Open Settings, then “Who you contract with”. Shop, Hub, Driver, Fleet and Store app: tap your picture, then Settings. Business app: Settings.",
+      "Each licence and insurance policy shows what it is, its number, who issued it and until when it is good. Check the number with whoever issued it.",
+      "If one is not right, tap “This is not right”. Choose what is wrong, say it in your own words, and attach what shows it: a screenshot of the issuer’s register, or a photo.",
+      "Tap “Send the report”. Under the paper you will see that you reported it, and later what was decided and why."
+    ],
+    notes: [
+      "Nothing changes by reporting. The paper keeps counting. The company is told what you said, never who said it, and has seven days to answer. Then SeeBuyGet staff decide: one of them can dismiss a report, and striking a paper takes two.",
+      "You see licences and insurance only. A company’s bank account, the people who may sign for it and the papers themselves are not shown.",
+      "The row is not there where no SeeBuyGet company contracts with you in your country."
+    ]
+  },
+  {
     id: "account-recovery",
     apps: [
       "fleet",

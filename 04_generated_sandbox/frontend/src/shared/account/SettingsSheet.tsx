@@ -4,6 +4,8 @@ import { Button, CodeBoxes, ErrorNote, Icon, Note, RefusalNote, Sheet } from '..
 import type { IconName } from '../ui/Icon';
 import { useT } from '../i18n';
 import type { SbgError } from '../../lib/sbg';
+import { ContractCompany } from './ContractCompany';
+import { hasContract } from './contract';
 import { CredentialAge } from './CredentialAge';
 import { EmailStep } from './EmailStep';
 import { IdDisputeCase } from './IdDisputeCase';
@@ -12,7 +14,7 @@ import { pinChangeBlocker } from './password';
 import { oldNumberSays, recoveryEmailSays } from './recovery';
 import type { AccountApi } from './useAccount';
 
-type View = 'list' | 'pin' | 'email' | 'phone' | 'phone-done' | 'old-number' | 'id';
+type View = 'list' | 'pin' | 'email' | 'phone' | 'phone-done' | 'old-number' | 'id' | 'contract';
 
 export interface SettingsSheetProps {
   open: boolean;
@@ -31,7 +33,7 @@ export interface SettingsSheetProps {
 
 /** True when there is anything to put in Settings for this person — the row that opens it is omitted otherwise. */
 export function hasSettings(api: AccountApi, onChangePassword?: () => void): boolean {
-  return Boolean(api.account?.hasPin || onChangePassword || api.account?.idDispute);
+  return Boolean(api.account?.hasPin || onChangePassword || api.account?.idDispute || hasContract(api.contract));
 }
 
 /**
@@ -78,7 +80,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
   const me = api.account;
   // Once the number has moved the token is dead: every way out of the sheet is the sign-in screen.
   const close = view === 'phone-done' ? () => { onClose(); onSignOut(); } : onClose;
-  const title = view === 'old-number' ? t('account.settings.oldNumber.title') : view === 'id' ? t('account.settings.id.viewTitle') : view === 'pin' ? t('account.menu.pin') : view === 'email' ? t('account.settings.email') : view === 'phone' || view === 'phone-done' ? t('account.settings.phone') : t('account.settings.title');
+  const title = view === 'contract' ? t('account.contract.title') : view === 'old-number' ? t('account.settings.oldNumber.title') : view === 'id' ? t('account.settings.id.viewTitle') : view === 'pin' ? t('account.menu.pin') : view === 'email' ? t('account.settings.email') : view === 'phone' || view === 'phone-done' ? t('account.settings.phone') : t('account.settings.title');
   const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   const old = oldNumberSays(me, t as never, when);
 
@@ -133,6 +135,8 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
             {onChangePassword ? <Row icon="lock" label={t('account.menu.password')} sub={t('account.menu.passwordSub')} onClick={() => { onClose(); onChangePassword(); }} /> : null}
             {me?.hasPin ? <Row icon="mail" label={t('account.settings.email')} sub={recoveryEmailSays(me, t as never).sub} onClick={() => setView('email')} /> : null}
             {me?.hasPin ? <Row icon="phone" label={t('account.settings.phone')} sub={t('account.settings.phoneSub')} onClick={() => setView('phone')} /> : null}
+            {/* WHO THEY CONTRACT WITH, and the papers it trades on. Omitted where no company of ours contracts with them. */}
+            {hasContract(api.contract) ? <Row icon="badge" label={t('account.contract.title')} sub={api.contract?.company?.name} onClick={() => setView('contract')} /> : null}
           </div>
           {me?.numberChange ? <Note tone="info" icon="info" title={t('account.settings.changed', { when: when(me.numberChange.at), until: when(me.numberChange.undoUntil) })} /> : null}
           {/* THE NUMBER THEY MOVED OFF IS STILL THEIRS FOR A WEEK — the user, 2026-10-08: "the user blocks their own old
@@ -166,6 +170,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
       ) : null}
       {view === 'email' ? <EmailForm api={api} onDone={() => { setSaved(true); setView('list'); }} /> : null}
       {view === 'phone' ? <PhoneForm api={api} onDone={() => setView('phone-done')} /> : null}
+      {view === 'contract' ? <ContractCompany api={api} /> : null}
       {view === 'old-number' ? <OldNumberForm api={api} onDone={() => { setBlocked(true); setView('list'); }} /> : null}
       {view === 'id' && idRef ? <IdDisputeCase api={api.idDispute} reference={idRef} ownId={api.ownId} onChanged={() => void api.reload()} /> : null}
       {view === 'phone-done' ? (

@@ -385,6 +385,29 @@ a report removes nothing).
   inside a controller file is published as an empty body, and the OpenAPI gate says so.
 - Drive: `scratchpad/drive-rpt.mjs` (the strike) and `drive-rpt.mjs dismiss`.
 
+## Who you contract with, and its papers
+The user, 2026-10-09, on who outside a company may see its licences (and so report one): "I keep your
+recommendations. the number is enough and can be verified." The people most likely to know a licence has run out
+are the ones who contract with the company.
+- **`GET sbg/contract/company`** (roles agent, mdp, fleet_manager, driver, genesis, business): the company of ours
+  behind this sign-in, and its licences and insurance policies: kind, issuer, **number**, good until, `lapsed`,
+  `reportable`, and `yourReport` (what became of this reader's own report). Nothing else of the company's: no
+  bank account, nobody who may sign, no file, no document id.
+- **Whose company** (`contracted()` in `company-paper-report.controller.ts`): read off the sign-in's own record
+  by the lookups that decide who pays them (`AgentService` / `MdpService` / `FleetManagerService` /
+  `VendorService.entityIdOrNone`, `DriverService.payeeOrNone`, and for a business the company of its country).
+  Never from the request. No company where none of ours is there: then the Settings row is omitted.
+- **`POST sbg/contract/company/papers/report`** (`source`, `number`, `category`, `note`, `evidenceDataUrl`): the
+  server works out the company and the paper from who is asking and the number they were shown; a company or a
+  document id in the body is ignored. A licence with no counting paper behind it cannot be reported. From there
+  it is the same question as a report from the company's record: one case per paper, one voice per shop, fleet,
+  driver, store or business (`role:did`); staff read the reporter by the name on their record.
+- **Shared, once, for every app**: `useAccount` reads `contract` and has `reportContractPaper`; `SettingsSheet`
+  has the row "Who you contract with" and the face for it (`shared/account/ContractCompany.tsx`, logic in
+  `shared/account/contract.ts`). An image is downscaled in the browser before it is sent.
+- Not done: the reporter is not sent a notice when it is decided; they read it back under the paper.
+- Drive: `scratchpad/drive-cc.mjs` (Fleet app :5177 and Driver app :5173 at a phone's width).
+
 ## A national ID two people say is theirs
 A driver and a shop each register with a national ID number and the network keeps one of each, so somebody whose
 number another registration holds cannot register at all. The user decided how it is settled (2026-10-08): staff

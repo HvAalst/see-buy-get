@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 import { narrow, type Result, type SbgClient, type SbgError } from '../../lib/sbg';
+import type { ContractView } from './contract';
 import { idDisputeApi, type DisputeAgainstMe, type IdDisputeApi } from './idDispute';
 
 /**
@@ -54,6 +55,13 @@ type Sent = { sent: boolean; code?: string };
 
 export interface AccountApi {
   account: AccountView | null;
+  /**
+   * WHO THIS SIGN-IN CONTRACTS WITH, and that company's licences and insurance policies. Null until read, and where
+   * it could not be read (a sign-in that contracts with nobody is answered with no company, not with a refusal).
+   */
+  contract: ContractView | null;
+  /** Say one of those papers is not right: which, what is wrong, and what shows it. The list is read again after. */
+  reportContractPaper: (body: { source: 'licence' | 'insurance'; number: string; category: string; note: string; evidenceDataUrl: string }) => Promise<Result<{ reportId: string; answerBy: string }>>;
   loading: boolean;
   error: SbgError | null;
   busy: boolean;
@@ -96,6 +104,8 @@ const NO_CLIENT = { data: null, error: null } as unknown as Result<never>;
 /** No client yet (an app still booting, or signed out) — every call is a no-op rather than a crash. */
 const IDLE: AccountApi = {
   account: null,
+  contract: null,
+  reportContractPaper: async () => NO_CLIENT,
   loading: false,
   error: null,
   busy: false,
@@ -137,6 +147,18 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
   useEffect(() => {
     if (enabled && client) void reload();
   }, [enabled, client, reload]);
+
+  // WHO THEY CONTRACT WITH — read with the account and apart from it: whether Settings has that row depends on the
+  // answer, and a failure here must not take the person's own account off the screen.
+  const [contract, setContract] = useState<ContractView | null>(null);
+  const loadContract = useCallback(async () => {
+    if (!client) return;
+    const r: Result<unknown> = await client.request((raw) => raw.GET('/v1/sbg/contract/company' as never, {} as never) as never);
+    setContract(r.error || !r.data ? null : narrow<ContractView>(r.data));
+  }, [client]);
+  useEffect(() => {
+    if (enabled && client) void loadContract();
+  }, [enabled, client, loadContract]);
 
   const save = useCallback(
     async (patch: { displayName?: string; avatarMediaId?: string; address?: string }) => {
@@ -231,6 +253,15 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
     },
     [post],
   );
+  const reportContractPaper = useCallback(
+    async (body: { source: 'licence' | 'insurance'; number: string; category: string; note: string; evidenceDataUrl: string }) => {
+      const r = await post<{ reportId: string; answerBy: string }>('/v1/sbg/contract/company/papers/report', body);
+      // Read again: the paper now says "you reported this", and the button to report it goes with that.
+      if (!r.error) await loadContract();
+      return r;
+    },
+    [post, loadContract],
+  );
   const sendEmailCode = useCallback((email: string) => post<Sent>('/v1/sbg/identity/email/request', { email }), [post]);
   const sendPhoneCode = useCallback((phone: string) => post<Sent>('/v1/sbg/auth/phone/request', { phone }), [post]);
   const confirmPhoneCode = useCallback((phone: string, code: string) => post<unknown>('/v1/sbg/auth/phone/verify', { phone, code }), [post]);
@@ -257,5 +288,5 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
   const ownId = useCallback((nationalId: string) => post<{ saved: boolean }>('/v1/sbg/account/id-disputes/own-id', { nationalId }), [post]);
 
   if (!client) return IDLE;
-  return { account, loading, error, busy, reload, save, changePin, saveAvatar, loadMedia, sendEmailCode, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, idDispute, ownId };
+  return { account, contract, reportContractPaper, loading, error, busy, reload, save, changePin, saveAvatar, loadMedia, sendEmailCode, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, idDispute, ownId };
 }

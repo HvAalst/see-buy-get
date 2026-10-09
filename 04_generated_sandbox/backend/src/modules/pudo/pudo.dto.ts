@@ -293,6 +293,40 @@ export class DecidePaperReportDto {
   @IsOptional() @IsString() by?: string;
 }
 
+/**
+ * A report by somebody who CONTRACTS with the company: which licence or policy, by its number as they were shown it,
+ * and what is wrong with it. Never a company or a document: the server works both out from who is asking.
+ */
+export class ReportContractPaperDto {
+  @IsIn(['licence', 'insurance']) source!: 'licence' | 'insurance';
+  @IsString() number!: string;
+  @IsString() category!: string;
+  @IsOptional() @IsString() note?: string;
+  @IsOptional() @IsString() evidenceDataUrl?: string;
+}
+
+/** One licence or insurance policy of the company somebody contracts with, as that somebody is shown it. */
+export class ContractPaperView {
+  @ApiProperty({ enum: ['licence', 'insurance'] }) source!: 'licence' | 'insurance';
+  kind!: string;
+  /** Who issued the licence, or the insurer. */
+  issuer!: string;
+  /** The licence or policy number: what a reader checks against the issuer's own register. */
+  number!: string;
+  expiresAt!: string;
+  lapsed!: boolean;
+  /** There is a paper on record behind it that counts, so it can be reported. */
+  reportable!: boolean;
+  /** What became of THIS reader's own report on it, if they made one. */
+  @ApiPropertyOptional() yourReport?: { at: string; state: 'open' | 'dismissed' | 'struck'; reason?: string };
+}
+
+/** The company somebody contracts with, and the papers it trades on. No company: none of ours is there. */
+export class ContractCompanyView {
+  @ApiPropertyOptional() company?: { name: string; jurisdiction?: string };
+  @ApiProperty({ type: [ContractPaperView] }) papers!: ContractPaperView[];
+}
+
 export class PaperCaseList {
   @ApiProperty({ type: [PaperCaseView] }) items!: PaperCaseView[];
   /** How many wait on staff. */
