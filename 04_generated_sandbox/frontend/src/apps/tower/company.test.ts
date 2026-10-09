@@ -8,7 +8,9 @@ import {
   readinessCounts,
   relatesToChoices,
   SECTION_FIELDS,
+  papersWaiting,
   shortFingerprint,
+  toldWords,
   toEditRows,
   uploadBlocker,
   type CompanyDocument,
@@ -102,6 +104,36 @@ describe('CA3 + CA7 — creating a draft', () => {
     expect(companyCreateBlocker({ kind: 'partner', jurisdiction: 'ZM', name: 'Lusaka Freight' }, [zm], companies)).toBeNull();
     expect(companyCreateBlocker({ kind: 'partner', jurisdiction: '', name: 'X' }, [zm], companies)).toBe('tower.company.create.needCountry');
     expect(companyCreateBlocker({ kind: 'partner', jurisdiction: 'ZM', name: ' ' }, [zm], companies)).toBe('tower.company.create.needName');
+  });
+});
+
+describe('what a company was told about a paper that is running out', () => {
+  const say = ((key: string, vars?: Record<string, string | number>) => `${key}${vars ? ':' + Object.values(vars).join(',') : ''}`) as never;
+  const when = (iso: string) => iso.slice(0, 10);
+  const at = '2026-10-09T06:00:00.000Z';
+  it('says nothing where nothing was said yet', () => {
+    expect(toldWords({}, say, when)).toBeNull();
+  });
+  it('says how many administrators were emailed, and when', () => {
+    expect(toldWords({ told: { stage: 14, at, to: 1, of: 1 } }, say, when)).toEqual({ text: 'tower.companies.told.one:1,2026-10-09', tone: 'quiet' });
+    expect(toldWords({ told: { stage: 'lapsed', at, to: 3, of: 3 } }, say, when)).toEqual({ text: 'tower.companies.told.many:3,2026-10-09', tone: 'quiet' });
+  });
+  it('WARNS where the reminder went nowhere: nobody to tell, nothing handed over, or only some of them', () => {
+    expect(toldWords({ told: { stage: 30, at, to: 0, of: 0, nobody: true } }, say, when)).toEqual({ text: 'tower.companies.told.nobody:2026-10-09', tone: 'warn' });
+    expect(toldWords({ told: { stage: 30, at, to: 0, of: 2 } }, say, when)).toEqual({ text: 'tower.companies.told.notHandedOver:2,2026-10-09', tone: 'warn' });
+    expect(toldWords({ told: { stage: 7, at, to: 3, of: 5 } }, say, when)).toEqual({ text: 'tower.companies.told.some:3,5,2026-10-09', tone: 'warn' });
+  });
+});
+
+describe('how many papers need a company now — the number beside its own record', () => {
+  const paper = (daysLeft: number, lapsed = false) => ({ entityId: 'sbg-ke', name: 'SeeBuyGet Kenya', source: 'licence' as const, kind: 'courier', reference: 'CA/CL/0042', expiresAt: '2026-11-12', supports: [], lapsed, daysLeft });
+  it('counts the lapsed and the ones inside their last two weeks — not the ones still far out', () => {
+    expect(papersWaiting([paper(-3, true), paper(14), paper(15), paper(59)])).toBe(2);
+  });
+  it('is no number at all while unread, and none when nothing waits: a record is not a queue', () => {
+    expect(papersWaiting(null)).toBeNull();
+    expect(papersWaiting([])).toBeNull();
+    expect(papersWaiting([paper(40)])).toBeNull();
   });
 });
 

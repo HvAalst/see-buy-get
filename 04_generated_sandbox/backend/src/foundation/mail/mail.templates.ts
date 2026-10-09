@@ -81,6 +81,12 @@ export interface MailParams {
   'fleet-code-issued': { company: string; when: string; byStaff: boolean };
   'fleet-code-due': { company: string; days: number };
   'papers-due': { company: string; lapsed: string[]; due: string[] };
+  /**
+   * A licence or an insurance policy of one of OUR companies is running out, or has lapsed — to that company's own
+   * administrators. `stops`: what switches off the day after, in words; empty when nothing does by itself.
+   * `daysLeft` 0 is the expiry date itself.
+   */
+  'company-paper-lapsing': { company: string; country?: string; paper: string; reference: string; expiresOn: string; daysLeft: number; lapsed: boolean; stops: string[]; where: 'licence' | 'insurance' };
   'order-on-its-way': { store: string; orderRef?: string; shop: string; trackingUrl: string };
   'ready-for-collection': { shop: string; address?: string; collectBy: string; openUrl?: string };
   'freight-delivered': { code: string; description: string; destination: string; deliveredAt: string; carrier: string; driver?: string; receiverName?: string; amount?: number; currency?: string; noteNumber: string; /** A link that opens the note with nobody signed in, and when it stops. */ noteUrl?: string; noteUntil?: string; /** It goes to one of a BUSINESS's people: its name, and whether they posted the load or are an owner told in the poster's place. */ business?: { name: string; as: 'poster' | 'owner' } };
@@ -545,6 +551,58 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
       ],
       reason: 'You are getting this email because it is the contact address of a fleet on SeeBuyGet.',
     }),
+  },
+
+  /*
+   * SENT BY THE CLOCK to the people who can renew it. A licence or a policy of one of our own companies has an expiry
+   * date, and the day after it the capability it supports is off in that country. Until this existed only network
+   * staff saw a list; the company's own administrators heard nothing. It says WHICH paper, WHEN, WHAT STOPS — in the
+   * console's own words — and what to do, which is not "type the new date": a company's record is changed by network
+   * staff, so the company puts the renewed paper on record and staff enter the date.
+   */
+  'company-paper-lapsing': {
+    title: 'A licence or policy of one of our companies is running out',
+    sentWhen: 'The six-hourly check finds a licence or an insurance policy of one of our companies 60, 30, 14, 7 or 1 days from its expiry date, or lapsed — once per mark per expiry date, to every administrator of the company, and of its parent from a week out.',
+    wired: true,
+    // The next mark sends its own; this one is still worth reading two days late.
+    sendLater: 48,
+    sample: { company: 'SeeBuyGet Kenya', country: 'KE', paper: 'Courier licence', reference: 'CA/CL/0042', expiresOn: '2026-11-12', daysLeft: 14, lapsed: false, stops: ['charge customers'], where: 'licence' },
+    also: [
+      { key: 'tomorrow', label: 'The day before', sample: { company: 'SeeBuyGet Kenya', country: 'KE', paper: 'Courier licence', reference: 'CA/CL/0042', expiresOn: '2026-11-12', daysLeft: 1, lapsed: false, stops: ['charge customers'], where: 'licence' } },
+      { key: 'lapsed', label: 'It has lapsed', sample: { company: 'SeeBuyGet Kenya', country: 'KE', paper: 'Goods-in-transit insurance', reference: 'GIT-88-2025', expiresOn: '2026-10-07', daysLeft: 0, lapsed: true, stops: ['pay claims'], where: 'insurance' } },
+      { key: 'nothing-stops', label: 'A paper nothing depends on', sample: { company: 'SeeBuyGet Kenya', country: 'KE', paper: 'Public liability insurance', reference: 'PL-2025-17', expiresOn: '2026-11-12', daysLeft: 30, lapsed: false, stops: [], where: 'insurance' } },
+    ],
+    build: (p) => {
+      const when = p.lapsed ? 'has lapsed' : p.daysLeft <= 0 ? 'runs out today' : p.daysLeft === 1 ? 'runs out tomorrow' : `runs out in ${p.daysLeft} days`;
+      const list = p.stops.length > 1 ? `${p.stops.slice(0, -1).join(', ')} or ${p.stops[p.stops.length - 1]}` : (p.stops[0] ?? '');
+      const consequence = p.lapsed
+        ? p.stops.length
+          ? `${p.company} can no longer ${list} until a new one is on its record.`
+          : 'Nothing switched off by itself, and the company’s record now shows it as lapsed.'
+        : p.stops.length
+          ? `From the day after, ${p.company} can no longer ${list}.`
+          : 'Nothing switches off by itself when it does, but the company’s record will show it as lapsed.';
+      return {
+        subject: `${p.paper} ${when} — ${p.company}`,
+        preheader: consequence,
+        blocks: [
+          { kind: 'heading', text: `${p.paper} ${when}` },
+          { kind: 'paragraph', text: `${p.company}’s ${p.paper.charAt(0).toLowerCase()}${p.paper.slice(1)} ${p.lapsed ? 'was' : 'is'} good until ${formatDate(p.expiresOn)}. ${consequence}` },
+          {
+            kind: 'facts',
+            rows: [['Company', p.company], ['Paper', `${p.paper} · ${p.reference}`], ['Good until', formatDate(p.expiresOn)], ...(p.stops.length ? ([[p.lapsed ? 'Switched off' : 'Then switches off', p.stops.join(', ')]] as Array<[string, string]>) : [])],
+          },
+          {
+            kind: 'warning',
+            title: 'What to do',
+            text: `Renew it with whoever issued it. Then sign in to the console, open Company record, and under Papers put the renewed ${p.where === 'licence' ? 'licence' : 'policy'} on record with its new expiry date. SeeBuyGet staff check it and enter the new date on the company’s record: the old date counts until they have.${p.lapsed && p.stops.length ? ' What is switched off comes back the moment the new date is on record.' : ''}`,
+          },
+          { kind: 'button', label: 'Open the operator console', href: appUrl('console') },
+          { kind: 'note', text: 'You will hear again as the date comes closer, and on the day it has lapsed. Other administrators of the company get this too.' },
+        ],
+        reason: `You are getting this email because you administer ${p.company} on SeeBuyGet. It is about a paper your company trades on, so it cannot be turned off.`,
+      };
+    },
   },
 
   'papers-due': {

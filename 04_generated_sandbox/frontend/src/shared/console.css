@@ -606,6 +606,13 @@
   font-size: var(--c-fs-sm);
 }
 
+/* A second line that is a WARNING about the row rather than a description of it — the warn tag's colour, at a
+   sentence's length (a tag does not wrap). */
+.ctbl__sub--warn {
+  color: #8a3b00;
+  font-weight: 600;
+}
+
 .ctbl__mono {
   font-family: var(--font-mono);
   font-size: var(--c-fs-sm);

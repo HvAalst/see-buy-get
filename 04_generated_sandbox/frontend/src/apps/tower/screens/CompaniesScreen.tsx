@@ -2,8 +2,8 @@ import { useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { laneLabel, pctLabel } from '../money';
-import { companyCreateBlocker, expiryTone, INSURANCE_LABEL, LICENCE_LABEL } from '../company';
-import { CAPABILITY_LABEL } from '../presence';
+import { companyCreateBlocker } from '../company';
+import { LapsingPapers } from './LapsingPapers';
 import type { CompanyRow, TowerActions, TowerState } from '../useTowerApp';
 
 /**
@@ -53,7 +53,7 @@ export function CompaniesScreen({ state, actions }: { state: TowerState; actions
       ) : null}
       {state.queueError ? <p class="cerr">{state.queueError}</p> : null}
 
-      {isOperator ? <Expiring state={state} actions={actions} /> : null}
+      <Expiring state={state} actions={actions} own={!isOperator} />
 
       {rows === null ? (
         <p class="cons__empty">{t('tower.companies.loading')}</p>
@@ -70,54 +70,27 @@ export function CompaniesScreen({ state, actions }: { state: TowerState; actions
   );
 }
 
-/** CA5 — every licence and policy lapsing in the next sixty days, soonest first, and what each will switch off. */
-function Expiring({ state, actions }: { state: TowerState; actions: TowerActions }) {
+/**
+ * CA5 — every licence and policy lapsing in the next sixty days, soonest first, what each will switch off, and what
+ * the company was told about it. For network staff: every company's. For a company's own administrator (`own`):
+ * theirs — with what to do, because the date on a company's record is entered by staff and the list must not leave
+ * them looking for a field that is not theirs to change.
+ */
+function Expiring({ state, actions, own }: { state: TowerState; actions: TowerActions; own: boolean }) {
   const t = useT();
   const items = state.expiring;
   if (items === null) return null;
-  const kindLabel = (source: string, kind: string) =>
-    source === 'licence' ? t(LICENCE_LABEL[kind as keyof typeof LICENCE_LABEL] ?? 'tower.company.licence.other') : t(INSURANCE_LABEL[kind as keyof typeof INSURANCE_LABEL] ?? 'tower.company.insurance.other');
 
   return (
     <section class="cons__panel">
       <div class="cons__panelhead">
-        <span class="cons__panelt">{t('tower.companies.expiringTitle')}</span>
+        <span class="cons__panelt">{t(own ? 'tower.companies.expiringTitleOwn' : 'tower.companies.expiringTitle')}</span>
       </div>
+      {own && items.length > 0 ? <p class="chint">{t('tower.companies.expiringWhatToDo')}</p> : null}
       {items.length === 0 ? (
         <p class="cons__empty">{t('tower.companies.expiringNone')}</p>
       ) : (
-        <table class="ctbl">
-          <tbody>
-            {items.map((item) => {
-              const tone = expiryTone(item);
-              const caps = item.supports.map((c) => t(CAPABILITY_LABEL[c])).join(', ');
-              return (
-                <tr key={`${item.entityId}:${item.reference}`}>
-                  <td>
-                    <div class="ctbl__strong">{item.name}</div>
-                    <div class="ctbl__sub">
-                      {kindLabel(item.source, item.kind)} · {item.reference}
-                    </div>
-                  </td>
-                  <td>
-                    <span class={`ctag ${tone === 'bad' ? 'ctag--warn' : tone === 'warn' ? 'ctag--info' : 'ctag--quiet'}`}>
-                      {item.lapsed
-                        ? t('tower.companies.expiring.lapsed', { date: item.expiresAt, caps: caps || '—' })
-                        : caps
-                          ? t('tower.companies.expiring.left', { date: item.expiresAt, days: item.daysLeft, caps })
-                          : t('tower.companies.expiring.leftNone', { date: item.expiresAt, days: item.daysLeft })}
-                    </span>
-                  </td>
-                  <td class="ctbl__num">
-                    <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => actions.openCompany(item.entityId)}>
-                      {t('tower.companies.openRecord')}
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <LapsingPapers items={items} onOpen={actions.openCompany} />
       )}
     </section>
   );

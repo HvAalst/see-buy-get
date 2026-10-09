@@ -911,6 +911,31 @@
   max-width: 70ch;
 }
 
+/* A company's record as its own administrator reads it. Network staff keep the record, so every field is shown and
+   none is offered for change: a Save the server refuses is worse than no Save. The fieldset disables what is inside
+   it; this takes the buttons away, keeps what is written readable, and gives the wrapper no box of its own. */
+.twr-locked {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.twr-locked > .cons__panel:last-child {
+  border-bottom: 1px solid var(--bd);
+}
+
+.twr-locked:disabled .twr-corridorsave,
+.twr-locked:disabled .cbtn {
+  display: none;
+}
+
+.twr-locked:disabled .cinput {
+  color: var(--tx);
+  -webkit-text-fill-color: var(--tx);
+  opacity: 1;
+}
+
 /* -------------------------------------------------------------- presence -- */
 
 /* Capabilities read as a row of short words, not a list: what a country MAY do is a glance, and the

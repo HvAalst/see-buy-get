@@ -477,17 +477,26 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         };
       }),
     );
-    // CA3/CA5 — the catalogue for creating a company, and what is lapsing. Operator-only reads: a company
-    // administrator gets neither, and the screen draws neither panel for them.
-    // Asked only by network staff: a company administrator would be refused both, and a refusal is noise.
+    // CA3 — the catalogue for creating a company. Network staff's alone: a company administrator would be refused
+    // it, and a refusal is noise.
     const staff = stateRef.current.who?.mode === 'operator';
-    const [catalogue, expiring] = staff ? await Promise.all([client.api.countryCatalogue(), client.api.expiringCompanyPapers()]) : [null, null];
+    const catalogue = staff ? await client.api.countryCatalogue() : null;
     setState((s) => ({
       ...s,
       companies: results,
       catalogue: !catalogue || catalogue.error ? s.catalogue : (narrow<{ items: CatalogueCountry[] }>(catalogue.data)?.items ?? []),
-      expiring: !expiring || expiring.error ? null : (narrow<{ items: ExpiringItem[] }>(expiring.data)?.items ?? []),
     }));
+  }, []);
+
+  /**
+   * CA5 — the licences and policies that are running out, for whoever is signed in: every company's for network
+   * staff, a company administrator's own (the server cuts the list to what they reach). Read for EVERYBODY, not only
+   * for somebody who has the side-by-side view: an administrator of one company never sees that view, and is shown
+   * how many of their papers need them beside their Company record.
+   */
+  const loadExpiring = useCallback(async (client: TowerClient) => {
+    const expiring = await client.api.expiringCompanyPapers();
+    setState((s) => ({ ...s, expiring: expiring.error ? null : (narrow<{ items: ExpiringItem[] }>(expiring.data)?.items ?? []) }));
   }, []);
 
   /**
@@ -550,8 +559,9 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       // The side-by-side view only means anything with more than one company in it, and only somebody
       // who reaches more than one ever sees it. Reading it for a lone sister would be a table of one row.
       if (rows.length > 1) await loadCompanies(client, rows);
+      await loadExpiring(client);
     },
-    [loadPricing, loadCompanies],
+    [loadPricing, loadCompanies, loadExpiring],
   );
 
   /**

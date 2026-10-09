@@ -28,6 +28,7 @@ import {
 } from '../company';
 import { CAPABILITY_LABEL, type PresenceCapability } from '../presence';
 import type { TowerActions, TowerState } from '../useTowerApp';
+import { LapsingPapers } from './LapsingPapers';
 
 /**
  * CA3–CA8 — ONE COMPANY, RECORDED PROPERLY.
@@ -42,6 +43,10 @@ export function CompanyRecordScreen({ state, actions }: { state: TowerState; act
   const client = actions.client();
   const entityId = state.companyId;
   const who = state.who?.name;
+  // A COMPANY'S RECORD IS KEPT BY NETWORK STAFF — the server refuses a company's own administrator every change to
+  // it, and until now this screen offered them a Save under every section that could only answer "not allowed".
+  // They read all of it, change none of it, and put the PAPER behind a change on record, which is theirs to do.
+  const canEdit = state.who?.mode === 'operator';
   const [view, setView] = useState<CompanyRecordView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -88,7 +93,7 @@ export function CompanyRecordScreen({ state, actions }: { state: TowerState; act
     <>
       <header class="cons__head">
         <h1 class="cons__title">{view ? view.entity.name : t('tower.company.title')}</h1>
-        <p class="cons__lede">{t('tower.company.lede')}</p>
+        <p class="cons__lede">{t(canEdit ? 'tower.company.lede' : 'tower.company.ledeOwn')}</p>
       </header>
 
       <section class="cons__panel">
@@ -122,15 +127,20 @@ export function CompanyRecordScreen({ state, actions }: { state: TowerState; act
       ) : (
         <>
           <Readiness view={view} />
-          <LegalSection view={view} busy={busy === 'legal'} onSave={(patch) => saveRecord('legal', patch)} />
-          <AddressSection view={view} busy={busy === 'addresses'} onSave={(patch) => saveRecord('addresses', patch)} />
-          {(['representatives', 'beneficialOwners', 'taxRegistrations', ...(view.entity.kind === 'sister' ? (['bankAccounts'] as ListSection[]) : []), 'licences', 'insurance'] as ListSection[]).map((section) => (
-            <ListEditor key={section} section={section} view={view} busy={busy === section} onSave={(rows) => saveRecord(section, { [section]: rows })} />
-          ))}
-          <ObligationsSection view={view} busy={busy === 'obligations'} onSave={(rows) => saveRecord('obligations', { obligations: rows })} />
+          <RunningOut view={view} own={!canEdit} />
+          {/* Disabled as one: every field inside reads, and tower.css takes the Save, Add and Remove buttons away. */}
+          <fieldset class="twr-locked" disabled={!canEdit}>
+            <LegalSection view={view} busy={busy === 'legal'} onSave={(patch) => saveRecord('legal', patch)} />
+            <AddressSection view={view} busy={busy === 'addresses'} onSave={(patch) => saveRecord('addresses', patch)} />
+            {(['representatives', 'beneficialOwners', 'taxRegistrations', ...(view.entity.kind === 'sister' ? (['bankAccounts'] as ListSection[]) : []), 'licences', 'insurance'] as ListSection[]).map((section) => (
+              <ListEditor key={section} section={section} view={view} busy={busy === section} onSave={(rows) => saveRecord(section, { [section]: rows })} />
+            ))}
+            <ObligationsSection view={view} busy={busy === 'obligations'} onSave={(rows) => saveRecord('obligations', { obligations: rows })} />
+          </fieldset>
           <Documents
             view={view}
             who={who}
+            canVerify={canEdit}
             busy={busy}
             onUpload={(body) => (client && entityId ? run('upload', () => client.api.uploadCompanyDocument(entityId, { ...body, ...(who ? { by: who } : {}) }), t('tower.company.doc.uploaded')) : Promise.resolve(false))}
             onVerify={(documentId) => (client && entityId ? run(documentId, () => client.api.verifyCompanyDocument(entityId, documentId, who), t('tower.company.doc.verified')) : Promise.resolve(false))}
@@ -151,6 +161,26 @@ export function CompanyRecordScreen({ state, actions }: { state: TowerState; act
 }
 
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+
+/**
+ * CA5 — this company's licences and policies that are running out, and what its administrators were told. At the top
+ * of the record, because it is the one thing on it with a date coming. A company's own administrator (`own`) is told
+ * what to do; staff, where the new date goes.
+ */
+function RunningOut({ view, own }: { view: CompanyRecordView; own: boolean }) {
+  const t = useT();
+  const items = view.expiring ?? [];
+  if (!items.length) return null;
+  return (
+    <section class="cons__panel">
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t('tower.company.s.runningOut')}</span>
+      </div>
+      <p class="chint">{t(own ? 'tower.company.runningOut.own' : 'tower.company.runningOut.staff')}</p>
+      <LapsingPapers items={items} />
+    </section>
+  );
+}
 
 function Readiness({ view }: { view: CompanyRecordView }) {
   const t = useT();
@@ -412,6 +442,7 @@ function ObligationsSection({ view, busy, onSave }: { view: CompanyRecordView; b
 function Documents({
   view,
   who,
+  canVerify,
   busy,
   onUpload,
   onVerify,
@@ -420,6 +451,8 @@ function Documents({
 }: {
   view: CompanyRecordView;
   who: string | undefined;
+  /** Network staff verify and reject; a company's own administrator puts a paper on record and waits. */
+  canVerify: boolean;
   busy: string | null;
   onUpload: (body: { kind: string; title: string; dataUrl: string; relatesTo?: string; expiresAt?: string }) => Promise<boolean>;
   onVerify: (documentId: string) => Promise<boolean>;
@@ -444,7 +477,7 @@ function Documents({
         <table class="ctbl">
           <tbody>
             {view.documents.map((d) => (
-              <DocumentRow key={d.documentId} document={d} who={who} busy={busy === d.documentId} onVerify={onVerify} onReject={onReject} onOpen={onOpen} />
+              <DocumentRow key={d.documentId} document={d} who={who} canVerify={canVerify} busy={busy === d.documentId} onVerify={onVerify} onReject={onReject} onOpen={onOpen} />
             ))}
           </tbody>
         </table>
@@ -519,6 +552,7 @@ function Documents({
 function DocumentRow({
   document: d,
   who,
+  canVerify,
   busy,
   onVerify,
   onReject,
@@ -526,6 +560,7 @@ function DocumentRow({
 }: {
   document: CompanyDocument;
   who: string | undefined;
+  canVerify: boolean;
   busy: boolean;
   onVerify: (documentId: string) => Promise<boolean>;
   onReject: (documentId: string, reason: string) => Promise<boolean>;
@@ -567,7 +602,7 @@ function DocumentRow({
           <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void onOpen(d)}>
             {t('tower.company.doc.open')}
           </button>
-          {d.status === 'awaiting_verification' ? (
+          {canVerify && d.status === 'awaiting_verification' ? (
             rejecting ? (
               <>
                 <input class="cinput" value={reason} placeholder={t('tower.company.doc.rejectReason')} aria-label={t('tower.company.doc.rejectReason')} onInput={(e) => setReason(e.currentTarget.value)} />
@@ -587,7 +622,7 @@ function DocumentRow({
             )
           ) : null}
         </span>
-        {blocker && d.status === 'awaiting_verification' && !rejecting ? <div class="chint">{t(blocker)}</div> : null}
+        {canVerify && blocker && d.status === 'awaiting_verification' && !rejecting ? <div class="chint">{t(blocker)}</div> : null}
       </td>
     </tr>
   );

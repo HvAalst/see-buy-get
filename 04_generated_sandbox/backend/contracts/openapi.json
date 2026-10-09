@@ -4832,7 +4832,7 @@
       "get": {
         "operationId": "Sbg.expiringCompanyPapers",
         "summary": "",
-        "description": "CA5 — licences and policies lapsing soon, or already lapsed, across every company. Soonest first.",
+        "description": "CA5 — licences and policies lapsing soon, or already lapsed. Soonest first.\n\nNetwork staff see every company's. A COMPANY'S OWN ADMINISTRATOR sees their company's, and those of the companies\nunder it: it is their paper, and until now the list of what was about to stop them was one they could not read.\nEach row says what the company was last told and when — or that there was NOBODY to tell, which is the one row\nstaff must not miss.",
         "parameters": [
           {
             "name": "withinDays",

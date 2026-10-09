@@ -11,6 +11,7 @@ import { ConnectionsScreen } from './screens/ConnectionsScreen';
 import { HazardsScreen } from './screens/HazardsScreen';
 import { PapersScreen } from './screens/PapersScreen';
 import { waitingCount } from './papers';
+import { papersWaiting } from './company';
 import { ApprovalsScreen, ClaimsScreen, DisposalScreen } from './screens/QueuesScreen';
 import { ReportsScreen } from './screens/ReportsScreen';
 import { MoneyScreen } from './screens/MoneyScreen';
@@ -140,6 +141,9 @@ export function App() {
     // whose licence is merely running out is waiting on nobody; one who has sent the new card is waiting on us.
     papers: waitingCount(state.papers),
     reports: state.reports?.length ?? null,
+    // A company's own record is not a queue — except when a licence or a policy of theirs has lapsed or is in its last
+    // two weeks: that waits on them and on nobody else, and their console opens on another screen.
+    ...(isOperator ? {} : { company: papersWaiting(state.expiring) }),
   };
 
   return (

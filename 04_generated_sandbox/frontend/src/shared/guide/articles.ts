@@ -330,7 +330,9 @@ export const ARTICLES: GuideArticle[] = [
       "The company’s administrators are listed on its rates screen, where they can be added or taken away."
     ],
     notes: [
-      "Importers, clearing agents and other customers do not sign in here: they use the Business app."
+      "Importers, clearing agents and other customers do not sign in here: they use the Business app.",
+      "A licence or an insurance policy on a company’s record has an expiry date, and the day after it what the paper permits is switched off in that country: a courier licence, charging customers; a goods-in-transit policy, paying claims. The company’s own administrators are emailed 60, 30, 14, 7 and 1 days ahead, and on the day it has lapsed; from a week out the administrators of the company above it are emailed too. A company with no administrator login cannot be told: the Companies screen says so on that row.",
+      "As a company’s administrator you see your own papers that are running out at the top of your Company record, with a number beside it in the menu once one has lapsed or is in its last two weeks. To renew one: get the new paper from whoever issues it, then under Papers on the same screen put it on record with its new expiry date. SeeBuyGet staff check it and enter the new date on the record; the old date counts until they have. Your Company record is kept by SeeBuyGet staff: you read all of it, and put a paper on record to have something on it changed."
     ]
   },
   {

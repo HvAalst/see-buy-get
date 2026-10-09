@@ -133,6 +133,7 @@ import { classifySize, MAX_CLAIM_AWARD, measuredFactor, NETWORK_CURRENCY, SIZE_W
 import { EntityService } from '../../foundation/entity/entity.service';
 import { EntityAdminView, OperatorAccountView, EntityChanges, EntityPricing } from '../../foundation/entity/entity.types';
 import { EntityAdminService } from '../../foundation/entity/entity-admin.service';
+import { CompanyPapersWatch } from '../../foundation/entity/company-papers-watch.service';
 import { OperatorAccountService, staffIdOf } from '../../foundation/entity/operator-account.service';
 import { CARGO_LANES } from './cargo.types';
 import { ReturnService } from './return.service';
@@ -264,6 +265,7 @@ export class SbgController {
     @Optional() private readonly pulse?: NetworkPulseService,
     @Optional() private readonly contracts?: CarriageContractService,
     @Optional() private readonly businesses?: BusinessService,
+    @Optional() private readonly companyPapers?: CompanyPapersWatch,
   ) {}
 
   // --- phone verification (mandatory at onboarding — control-tower contact + GPS) ---
@@ -813,6 +815,9 @@ export class SbgController {
       documents: this.companyDocuments.list(entityId),
       obligations: catalogueEntry(entity.jurisdiction)?.obligations ?? [],
       lapses: this.entities.lapsesFor(entity.jurisdiction).filter((l) => l.entityId === entityId),
+      // What is running OUT, and what the company's administrators were told about it — beside what has already
+      // lapsed, on the one screen every administrator of a company has.
+      expiring: this.papersRunningOut(60, new Set([entityId])),
       changes: this.entities.changes(entityId, 50),
     };
   }
@@ -874,12 +879,26 @@ export class SbgController {
     return this.companyDocuments.reject(entityId, documentId, this.namedActor(actor, dto.by), dto.reason);
   }
 
-  /** CA5 — licences and policies lapsing soon, or already lapsed, across every company. Soonest first. */
-  @Roles('operator')
+  /**
+   * CA5 — licences and policies lapsing soon, or already lapsed. Soonest first.
+   *
+   * Network staff see every company's. A COMPANY'S OWN ADMINISTRATOR sees their company's, and those of the companies
+   * under it: it is their paper, and until now the list of what was about to stop them was one they could not read.
+   * Each row says what the company was last told and when — or that there was NOBODY to tell, which is the one row
+   * staff must not miss.
+   */
+  @Roles('operator', 'entity_admin')
   @Get('companies/expiring')
-  expiringCompanyPapers(@Query('withinDays') withinDays?: string) {
+  expiringCompanyPapers(@Actor() actor: IntrospectionResult, @Query('withinDays') withinDays?: string) {
     const days = Number(withinDays);
-    return { items: this.entities.expiring(Date.now(), Number.isFinite(days) && days > 0 ? Math.min(days, 365) : 60) };
+    const reach = actor?.role === 'operator' ? undefined : new Set(this.entities.administrable(actor?.tenant).map((e) => e.entityId));
+    const within = Number.isFinite(days) && days > 0 ? Math.min(days, 365) : 60;
+    return { items: this.papersRunningOut(within, reach) };
+  }
+
+  /** CA5 — the papers running out, with what each company was told. Without the watch (a hand-built module) it is the same list, saying nothing of who was told. */
+  private papersRunningOut(withinDays: number, reach?: Set<string>) {
+    return this.companyPapers ? this.companyPapers.list(Date.now(), withinDays, reach) : this.entities.expiring(Date.now(), withinDays).filter((p) => !reach || reach.has(p.entityId));
   }
 
   /* ------------------------------------------- CL2a — a container, and its papers -- */

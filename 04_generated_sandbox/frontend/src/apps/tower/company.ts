@@ -120,6 +120,8 @@ export interface CompanyRecordView {
   documents: CompanyDocument[];
   obligations: LocalObligation[];
   lapses: CapabilityLapse[];
+  /** CA5 — this company's licences and policies that are running out, with what its administrators were told. */
+  expiring?: ExpiringItem[];
   changes: CompanyChange[];
 }
 
@@ -135,6 +137,11 @@ export interface ExpiringItem {
   supports: PresenceCapability[];
   lapsed: boolean;
   daysLeft: number;
+  /**
+   * What the company's administrators were last told about this paper: at which mark (days before it runs out, or
+   * 'lapsed'), when, and to how many of how many. `nobody`: there was no administrator to tell. Absent: nothing said yet.
+   */
+  told?: { stage: number | 'lapsed'; at: string; to: number; of: number; nobody?: boolean };
 }
 
 /* ------------------------------------------------------------------ labels -- */
@@ -354,6 +361,37 @@ export function companyCreateBlocker(form: { kind: 'sister' | 'partner'; jurisdi
   if (!form.name.trim()) return 'tower.company.create.needName';
   if (form.kind === 'sister' && companies.some((c) => c.kind === 'sister' && c.jurisdiction === form.jurisdiction)) return 'tower.company.create.hasSister';
   return null;
+}
+
+/**
+ * WHAT THE COMPANY WAS TOLD about a paper that is running out — the line under it, for staff and for the company.
+ *
+ * The row that matters most is the one where the reminder went NOWHERE: a company with no administrator login hears
+ * nothing however often the clock comes round, and only somebody reading this list can know. That one is a warning;
+ * the rest are plain facts.
+ */
+export function toldWords(
+  item: Pick<ExpiringItem, 'told'>,
+  t: (key: MessageKey, vars?: Record<string, string | number>) => string,
+  when: (iso: string) => string,
+): { text: string; tone: 'warn' | 'quiet' } | null {
+  const told = item.told;
+  if (!told) return null;
+  if (told.nobody) return { text: t('tower.companies.told.nobody', { when: when(told.at) }), tone: 'warn' };
+  if (told.to === 0) return { text: t('tower.companies.told.notHandedOver', { of: told.of, when: when(told.at) }), tone: 'warn' };
+  // Some of them and not all: said as that, because "3 were emailed" hides the two who were not.
+  if (told.to < told.of) return { text: t('tower.companies.told.some', { to: told.to, of: told.of, when: when(told.at) }), tone: 'warn' };
+  return { text: t(told.to === 1 ? 'tower.companies.told.one' : 'tower.companies.told.many', { to: told.to, when: when(told.at) }), tone: 'quiet' };
+}
+
+/**
+ * HOW MANY PAPERS NEED THE COMPANY NOW: lapsed, or inside their last two weeks — the ones shown loudly. Null while the
+ * list is unread, and null when there are none: this is the number beside a company's own record, which is not a
+ * queue and earns a number only when something on it is waiting.
+ */
+export function papersWaiting(items: ExpiringItem[] | null): number | null {
+  if (!items) return null;
+  return items.filter((item) => expiryTone(item) !== 'quiet').length || null;
 }
 
 /** How loudly a lapsing paper should be shown: gone already, or within two weeks. */

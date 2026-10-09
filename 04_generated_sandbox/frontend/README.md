@@ -301,6 +301,37 @@ only when a driver tried something: a claim refused, a start refused. Now the dr
 - Checking it in a browser needs a shift that started hours ago: `scratchpad/drive-hrs.mjs setup | backdate |
   look` sets the start back in the sandbox's own file with the server stopped (it looks at the clocks at boot).
 
+## A company of ours is told before its own paper lapses
+A licence or an insurance policy on a company's record has an expiry date, and the day after it the capability it
+supports is off in that country (CA5). The console listed what was lapsing for network staff; the company's own
+administrators, the people who can renew it, heard nothing.
+- **By the clock** (`CompanyPapersWatch.sweep`, at boot and every 6 hours): each administrator of the company is
+  emailed at 60, 30, 14, 7 and 1 days ahead and on the day it has lapsed (`PAPER_REMINDER_DAYS`; template
+  `company-paper-lapsing`): which paper, when, what stops, and what to do. Once per mark per expiry date: a
+  renewed paper has a new date and starts again.
+- **The company above it** is emailed too from 7 days out (`PAPER_ESCALATES_AT_DAYS`), and whenever the company
+  has no administrator of its own.
+- **Nobody to tell is kept, not skipped**: the stamp says `nobody`, the Companies screen warns on that row, and
+  the first sweep after an administrator exists tells them at the same mark.
+- **What was said is kept beside the company record** (`company-paper-reminders`), stamped once the email was
+  attempted: `MailService` keeps what the provider did not take and retries for two days, so a second attempt
+  from the watch would send it twice. The list says how many it was handed over for, of how many.
+- **A company not switched on yet** is told its paper is running out and is not told that something stops:
+  nothing of a draft runs (`EntityService.lapsesFor` leaves it out for the same reason).
+- **The list is the company's own to read**: `GET sbg/companies/expiring` now answers a company administrator
+  with their company's papers and those of the companies under it (`EntityService.administrable`), each with
+  `told`; `GET sbg/entities/:id/record` carries the same rows for that one company as `expiring`.
+- **Where they see it**: at the top of their **Company record** (`RunningOut` in `CompanyRecordScreen.tsx`, rows
+  by `screens/LapsingPapers.tsx`), the one screen every company administrator has, with what to do and a
+  number beside it in the menu once a paper has lapsed or is in its last two weeks (`papersWaiting`). "The
+  companies" is only in the menu of somebody who reaches more than one company; there the same rows name each
+  company. `toldWords` warns where a reminder reached nobody, none, or only some.
+- **A company's record is read-only for its own administrator**: `POST sbg/entities/:id/record` is network
+  staff's, and the screen used to offer a Save under every section that could only be refused. Now one
+  `<fieldset class="twr-locked" disabled>` around the sections; they put the paper on record under Papers
+  (which is theirs to do) and staff verify it and change the record. Verify and Reject are shown to staff only.
+- Not done: the company cannot enter the new date itself; it puts the renewed paper on record and staff enter it.
+
 ## A national ID two people say is theirs
 A driver and a shop each register with a national ID number and the network keeps one of each, so somebody whose
 number another registration holds cannot register at all. The user decided how it is settled (2026-10-08): staff
