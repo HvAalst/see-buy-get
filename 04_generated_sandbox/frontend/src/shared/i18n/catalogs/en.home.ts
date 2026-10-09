@@ -372,6 +372,7 @@ export const enHome = {
   'home.block.zone': 'Pick the area you serve.',
   'home.block.email': 'Type an email you can open.',
   'home.block.password': 'Use at least 6 characters.',
+  'home.block.passwordStore': 'Use at least 8 characters.',
 
   // Join wizard — step: phone.
   'home.join.phone.lede': 'Your phone number is your key to the network. We send a code to check it works.',
@@ -478,17 +479,18 @@ export const enHome = {
   'home.join.login.email': 'Email',
   'home.join.login.password': 'Password',
   'home.join.login.passwordPh': 'At least 6 characters',
+  'home.join.login.passwordPhStore': 'At least 8 characters',
 
   // Join wizard — step: done.
   'home.join.done.title': 'You are in',
-  'home.join.done.ledeVendor': 'Your store is registered.',
+  'home.join.done.ledeVendor': 'Your store is registered. You sign in to the Store app with {email} and the password you chose.',
   'home.join.done.ledeWelcome': 'Welcome to SeeBuyGet, {name}.',
   'home.join.done.storeId': 'Store ID',
-  'home.join.done.storeSecret': 'Store secret — shown once',
-  'home.join.done.writeDown': 'Write these down now',
-  'home.join.done.secret1': 'The secret opens your store app',
-  'home.join.done.secret2': 'It also signs your order callbacks',
-  'home.join.done.secret3': 'SeeBuyGet cannot show it again',
+  'home.join.done.storeSecret': 'Signing secret — shown once',
+  'home.join.done.writeDown': 'For your shop system',
+  'home.join.done.secret1': 'The secret signs your order callbacks: give it to your shop system',
+  'home.join.done.secret2': 'It does not sign anybody in: you use your email and password',
+  'home.join.done.secret3': 'Lost it? Replace it from the Store app, with your password',
   'home.join.done.whatNext': 'What happens next',
   'home.join.done.active1': 'Your app is ready to open',
   'home.join.done.active2': 'Sign in with your email and password',

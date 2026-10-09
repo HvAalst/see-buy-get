@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import {
   EMPTY_MINT,
+  accountBlocker,
+  needsAccount,
   ORDER_CSV_HEADERS,
   dimsComplete,
   measureOf,
@@ -243,5 +245,24 @@ describe('speaking', () => {
     expect(ordersSummary(12.5, 3, 0, t)).toBe('Balance 12.50. 3 orders on the move.');
     expect(ordersSummary(0, 1, 1, t)).toContain('1 unpaid — top up to release it.');
     expect(money(undefined)).toBe('0.00');
+  });
+});
+
+describe('a store’s own account', () => {
+  it('is an email that looks like one and a password of at least eight characters', () => {
+    expect(accountBlocker('orders@dukabora.example', 'maziwa-lala')).toBeNull();
+    expect(accountBlocker('  orders@dukabora.example ', '12345678')).toBeNull();
+    expect(accountBlocker('', 'maziwa-lala')).toBe('vendor.account.needEmail');
+    expect(accountBlocker('orders', 'maziwa-lala')).toBe('vendor.account.needEmail');
+    expect(accountBlocker('orders@dukabora', 'maziwa-lala')).toBe('vendor.account.needEmail');
+    expect(accountBlocker('orders@dukabora.example', '1234567')).toBe('vendor.account.needPassword');
+  });
+  it('is asked for only where the server has said the store has none', () => {
+    expect(needsAccount({ hasAccount: false })).toBe(true);
+    expect(needsAccount({ hasAccount: true })).toBe(false);
+    // Not known yet is not "no": a store is never told to set up an account it already has.
+    expect(needsAccount({})).toBe(false);
+    expect(needsAccount(null)).toBe(false);
+    expect(needsAccount(undefined)).toBe(false);
   });
 });

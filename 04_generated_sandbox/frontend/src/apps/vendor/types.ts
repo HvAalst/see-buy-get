@@ -58,6 +58,8 @@ export interface VendorView {
   createdAt: string;
   /** When the signing secret was last changed; absent if never, since the store was made. */
   secretRotatedAt?: string;
+  /** The store has an account of its own (an email and a password). False: it still signs in with its secret, and is asked to set one up. */
+  hasAccount?: boolean;
 }
 
 /** What the dock should be bagging right now: paid parcels grouped by where they are going, the bags
@@ -71,11 +73,16 @@ export interface DockPlan {
 /** vendors/login → the public record plus the actor token the console carries. */
 export interface VendorLoginView extends VendorView {
   token: { access_token: string; expires_in?: number };
+  /** The account's address, where the sign-in was by account. */
+  email?: string;
 }
 
 /** vendors/register → shown ONCE: the record still carrying the signing secret. */
 export interface VendorRegisteredView extends VendorView {
   secret: string;
+  /** The account made with the store, and a sign-in for this device. */
+  email?: string;
+  token?: { access_token: string; expires_in?: number };
 }
 
 export interface OrderRow {

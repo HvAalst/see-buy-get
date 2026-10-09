@@ -5,7 +5,7 @@
  */
 
 import { toCsv } from '../../shared/csv';
-import type { Translate } from '../../shared/i18n';
+import type { MessageKey, Translate } from '../../shared/i18n';
 import type { IconName } from '../../shared/ui/Icon';
 import type { Measure } from '../../lib/sbg/personas/vendor';
 import type { CheckoutRow, NetworkPoint, OrderRow, OriginOption, ParcelStatus, QuoteLegPrice, QuoteView, SettlementRow, ShippingPolicy } from './types';
@@ -324,4 +324,24 @@ export function vendorWorkLine(stats: { unpaid?: number; active?: number } | nul
     stats.active ? t('vendor.bar.inFlight', { count: stats.active }) : null,
   ].filter(Boolean);
   return bits.length ? bits.join(' · ') : t('vendor.bar.clear');
+}
+
+/* ----------------------------------------------------------- the store's account -- */
+
+/**
+ * What stops an email and a password being a store's account — said before the server has to. Eight characters is
+ * the server's own floor for a password somebody chooses for an account that already exists.
+ */
+export function accountBlocker(email: string, password: string): MessageKey | null {
+  if (!/^\S+@\S+\.\S+$/.test(email.trim())) return 'vendor.account.needEmail';
+  if (password.length < 8) return 'vendor.account.needPassword';
+  return null;
+}
+
+/**
+ * IS THIS STORE STILL SIGNING IN WITH ITS SECRET? Only when the server has SAID it has no account: not known yet is
+ * not "no", and a store must not be told to set up an account it already has.
+ */
+export function needsAccount(vendor: { hasAccount?: boolean } | null | undefined): boolean {
+  return vendor?.hasAccount === false;
 }

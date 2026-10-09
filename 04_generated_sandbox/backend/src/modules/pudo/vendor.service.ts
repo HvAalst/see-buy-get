@@ -262,7 +262,16 @@ export class VendorService {
    * store's own system must be given it). Shown to the store exactly once, like the first.
    */
   rotateSecret(vendorId: string, current: string): Vendor {
-    const vendor = this.login(vendorId, current);
+    return this.replaceSecret(this.login(vendorId, current).vendorId);
+  }
+
+  /**
+   * A NEW SIGNING SECRET, WITH NO PROOF ASKED HERE — the caller has taken one already: the current secret
+   * (`rotateSecret`), or, for a store with an account, its password. That second door is what lets a store that
+   * has LOST its secret replace it; before, replacing the secret asked for the secret, and losing it was for good.
+   */
+  replaceSecret(vendorId: string): Vendor {
+    const vendor = this.get(vendorId);
     vendor.secret = `whsec_${randomBytes(12).toString('hex')}`;
     vendor.secretRotatedAt = new Date().toISOString();
     this.vendors.set(vendor.vendorId, vendor);

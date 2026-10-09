@@ -43,7 +43,7 @@ export const ARTICLES: GuideArticle[] = [
       "A shop or a hub: the email and password you signed up with.",
       "A fleet: your company code, then your own phone number and PIN.",
       "A driver: the phone number your fleet registered, and your PIN.",
-      "A store: your store ID and signing secret.",
+      "A store: the email and password you created the store with.",
       "Sending or collecting a parcel: your phone number and a PIN you choose.",
       "A business — a shipper, importer, expeditor, clearing agent or yard: the Business app, with your own phone number and PIN.",
       "Network staff: the email and password a colleague set up for you."
@@ -258,10 +258,13 @@ export const ARTICLES: GuideArticle[] = [
       "vendor"
     ],
     title: "Signing in to a store",
-    summary: "Sign in with your store ID and your signing secret. Both were shown when the store was created.",
+    summary: "Sign in with your store’s email and password. You chose them when you created the store.",
     steps: [
-      "Type the store ID (it starts with ven_) and the signing secret (it starts with whsec_).",
-      "Keep the secret in a password manager. It cannot be shown again, and a new one can only be made with the current one — so a lost secret cannot be recovered yet."
+      "Type the email and the password. Nothing that opens your store is kept on the device: when the sign-in ends, you type them again.",
+      "Forgot the password? Choose “I forgot my password”. A code goes to your store’s email address and works for 30 minutes; type it with a new password.",
+      "To change the password: Settings, then Change password. Every device signed in to your store is signed out, except the one you changed it on.",
+      "A store created before stores had an email and password: choose “My store has no email and password yet”, and sign in with the store ID and signing secret one last time. The app then asks you to set them up, on every screen until you have.",
+      "Once your store has an email and password, the signing secret no longer signs anybody in. It is only for your shop system."
     ]
   },
   {
@@ -270,15 +273,17 @@ export const ARTICLES: GuideArticle[] = [
       "vendor"
     ],
     title: "Rotating the signing secret",
-    summary: "The secret signs you in and signs every status update we send your shop system. Rotate it whenever it may have been seen.",
+    summary: "The secret signs every status update we send your shop system. It does not sign anybody in. Replace it whenever it may have been seen, or when you have lost it.",
     steps: [
       "My store, then Signing secret, then Rotate the secret.",
-      "Type the current secret to confirm.",
+      "Type your password to confirm. A store with no email and password yet types the current secret instead.",
       "The new secret is shown once. Save it before you close the sheet.",
       "Update your shop system: updates we send from now on are signed with the new secret."
     ],
     notes: [
-      "The card says when the secret was last changed, and suggests rotating it once it is over 90 days old."
+      "The card says when the secret was last changed, and suggests rotating it once it is over 90 days old.",
+      "A mistyped password here does not sign you out: the app says it was wrong and you try again.",
+      "Replacing the secret signs your store out on every other device."
     ]
   },
   {

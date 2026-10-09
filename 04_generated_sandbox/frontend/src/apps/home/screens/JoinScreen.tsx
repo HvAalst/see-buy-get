@@ -519,11 +519,10 @@ function AboutStep({ state, actions }: JoinScreenProps) {
 
       <div class="scr__cta">
         <Button
-          onClick={() => (role.kind === 'vendor' ? void actions.submit() : actions.advance())}
+          onClick={() => actions.advance()}
           disabled={Boolean(blocker)}
-          busy={state.busy === 'submit'}
         >
-          {role.kind === 'vendor' ? t('home.join.about.ctaVendor') : t('home.continue')}
+          {t('home.continue')}
         </Button>
         {blocker ? <p class="hint" style="margin-top:8px">{blocker}</p> : null}
       </div>
@@ -666,14 +665,14 @@ function LoginStep({ state, actions }: JoinScreenProps) {
             value={f.password}
             onInput={(e) => actions.setForm({ password: e.currentTarget.value })}
             autocomplete="new-password"
-            placeholder={t('home.join.login.passwordPh')}
+            placeholder={t(role.kind === 'vendor' ? 'home.join.login.passwordPhStore' : 'home.join.login.passwordPh')}
           />
         </div>
       </Card>
 
       <div class="scr__cta">
         <Button onClick={() => void actions.submit()} disabled={Boolean(blocker)} busy={state.busy === 'submit'}>
-          {t('home.join.joinAs', { role: roleMeta(role, t).labelLower })}
+          {role.kind === 'vendor' ? t('home.join.about.ctaVendor') : t('home.join.joinAs', { role: roleMeta(role, t).labelLower })}
         </Button>
         {blocker ? <p class="hint" style="margin-top:8px">{blocker}</p> : null}
       </div>
@@ -692,14 +691,17 @@ function DoneStep({ state, actions }: JoinScreenProps) {
   return (
     <>
       <h1 class="scr__title">{t('home.join.done.title')}</h1>
-      <p class="scr__lede">{role.id === 'vendor' ? t('home.join.done.ledeVendor') : t('home.join.done.ledeWelcome', { name: state.form.displayName })}</p>
+      <p class="scr__lede">{role.id === 'vendor' ? t('home.join.done.ledeVendor', { email: store?.email ?? state.form.email }) : t('home.join.done.ledeWelcome', { name: state.form.displayName })}</p>
 
       {store ? (
         <>
+          {/* Each said by name, in words on the page: a card's `label` is only read by a screen reader. */}
           <Card label={t('home.join.done.storeId')}>
+            <p class="t-label">{t('home.join.done.storeId')}</p>
             <p class="cred">{store.vendorId}</p>
           </Card>
           <Card label={t('home.join.done.storeSecret')}>
+            <p class="t-label">{t('home.join.done.storeSecret')}</p>
             <p class="cred">{store.secret}</p>
           </Card>
           <Card title={t('home.join.done.writeDown')} tone="soft">

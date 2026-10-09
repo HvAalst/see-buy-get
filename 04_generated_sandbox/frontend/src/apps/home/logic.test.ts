@@ -81,8 +81,10 @@ describe('phone + code', () => {
 });
 
 describe('wizard steps', () => {
-  it('a vendor skips the phone gate the backend never asks for', () => {
-    expect(stepsFor('vendor')).toEqual(['about', 'done']);
+  it('a vendor skips the phone gate the backend never asks for — and still says how it signs in', () => {
+    // A store is registered WITH its email and password: a signing secret is never its way in.
+    expect(stepsFor('vendor')).toEqual(['about', 'login', 'done']);
+    expect(nextStep('vendor', 'about')).toBe('login');
     expect(stepsFor('signup')[0]).toBe('phone');
   });
 
@@ -242,6 +244,14 @@ describe('stepBlocker', () => {
     expect(stepBlocker(role('vendor'), 'about', EMPTY_JOIN, t)).toContain('Name your store');
     expect(stepBlocker(role('vendor'), 'about', { ...EMPTY_JOIN, displayName: 'Nairobi Threads' }, t)).toContain('country');
     expect(stepBlocker(role('vendor'), 'about', { ...EMPTY_JOIN, displayName: 'Nairobi Threads', country: 'KE' }, t)).toBeNull();
+  });
+
+  it('a store’s account is an email and a password of at least eight characters', () => {
+    const store = { ...EMPTY_JOIN, displayName: 'Nairobi Threads', country: 'KE', email: 'orders@threads.example' };
+    expect(stepBlocker(role('vendor'), 'login', { ...store, email: 'orders' }, t)).toContain('email');
+    // Seven is enough for nobody; a shop's six is not enough for a store, whose server floor is eight.
+    expect(stepBlocker(role('vendor'), 'login', { ...store, password: '1234567' }, t)).toContain('8 characters');
+    expect(stepBlocker(role('vendor'), 'login', { ...store, password: '12345678' }, t)).toBeNull();
   });
 });
 

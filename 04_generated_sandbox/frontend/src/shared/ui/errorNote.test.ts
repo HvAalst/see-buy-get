@@ -13,12 +13,20 @@ const GENERIC = 'Something went wrong. Try again.';
  * pins the fix so the six can never silently fall back again.
  */
 describe('errorSentence — identity codes resolve to specific guidance (not the generic fallback)', () => {
-  const codes: SbgErrorCode[] = ['AUTH_FAILED', 'PIN_INVALID', 'PIN_LOCKED', 'PIN_WRONG', 'PIN_GUESSABLE', 'ROLE_NOT_HELD', 'PHONE_INVALID', 'PHONE_NOT_VERIFIED'];
+  const codes: SbgErrorCode[] = ['AUTH_FAILED', 'PIN_INVALID', 'PIN_LOCKED', 'PIN_WRONG', 'PASSWORD_WRONG', 'SECRET_WRONG', 'PIN_GUESSABLE', 'ROLE_NOT_HELD', 'PHONE_INVALID', 'PHONE_NOT_VERIFIED'];
   for (const code of codes) {
     it(`${code} has its own sentence`, () => {
       expect(errorSentence(mk(code))).not.toBe(GENERIC);
     });
   }
+
+  it('a refused sign-in names no credential: the same code answers a PIN, a password, a secret and a code', () => {
+    const sentence = errorSentence(mk('AUTH_FAILED')).toLowerCase();
+    for (const word of ['pin', 'password', 'secret', 'code']) expect(sentence).not.toContain(word);
+    // …while the two refusals that ARE about one thing say which.
+    expect(errorSentence(mk('PASSWORD_WRONG')).toLowerCase()).toContain('password');
+    expect(errorSentence(mk('SECRET_WRONG')).toLowerCase()).toContain('secret');
+  });
 
   it('PIN_LOCKED steers the user to the code recovery, not a dead "try again"', () => {
     const sentence = errorSentence(mk('PIN_LOCKED')).toLowerCase();

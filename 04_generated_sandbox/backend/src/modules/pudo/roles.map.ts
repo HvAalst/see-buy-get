@@ -5,7 +5,7 @@ import { AccountRole } from './account.service';
 /**
  * The bridge between three role systems that never spoke to each other (see the actor-taxonomy note).
  *
- *  - AccountRole ('pudo'|'driver'|'mdp') — how the PUDO field apps sign a participant in.
+ *  - AccountRole ('pudo'|'driver'|'mdp'|'vendor') — how the PUDO field apps, and a store's console, sign somebody in.
  *  - ActorRole   — WHICH APP the token belongs to (routing + UI register).
  *  - ParticipantRole (M1) — the shipper/carrier profile axis, orthogonal to the above.
  *
@@ -16,6 +16,8 @@ export const ACCOUNT_ROLE_TO_ACTOR: Record<AccountRole, ActorRole> = {
   pudo: 'agent',
   driver: 'driver',
   mdp: 'mdp',
+  // A store's console has always carried the 'genesis' role: its account signs in to the same thing.
+  vendor: 'genesis',
 };
 
 export function actorRoleForAccount(role: AccountRole): ActorRole {
@@ -27,4 +29,5 @@ export const ACCOUNT_ROLE_TO_PARTICIPANT: Record<AccountRole, ParticipantRole> =
   pudo: ParticipantRole.Carrier,
   driver: ParticipantRole.Carrier,
   mdp: ParticipantRole.WarehouseOperator,
+  vendor: ParticipantRole.Shipper,
 };

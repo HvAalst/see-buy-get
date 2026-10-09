@@ -18,10 +18,10 @@ import { PersonService } from './person.service';
 import { PersonRole } from './person.types';
 import { actorRoleForAccount } from './roles.map';
 
-export type AccountRole = 'pudo' | 'driver' | 'mdp';
+export type AccountRole = 'pudo' | 'driver' | 'mdp' | 'vendor';
 
 /** A PUDO account role → the person-facing role it links to (a 'pudo' account IS an agent). */
-const ACCOUNT_TO_PERSON_ROLE: Record<AccountRole, PersonRole> = { pudo: 'agent', driver: 'driver', mdp: 'mdp' };
+const ACCOUNT_TO_PERSON_ROLE: Record<AccountRole, PersonRole> = { pudo: 'agent', driver: 'driver', mdp: 'mdp', vendor: 'vendor' };
 
 interface Account {
   accountId: string;
@@ -42,8 +42,8 @@ interface Account {
 const RESET_TTL_MS = 30 * 60 * 1000;
 
 /** Which app an account signs in to — where its emails send people. */
-const ACCOUNT_APP: Record<AccountRole, MailApp> = { pudo: 'agent', mdp: 'mdp', driver: 'driver' };
-const WELCOME_ROLE = { pudo: 'shop', mdp: 'hub', driver: 'driver' } as const;
+const ACCOUNT_APP: Record<AccountRole, MailApp> = { pudo: 'agent', mdp: 'mdp', driver: 'driver', vendor: 'vendor' };
+const WELCOME_ROLE = { pudo: 'shop', mdp: 'hub', driver: 'driver', vendor: 'store' } as const;
 
 /**
  * AccountService — participant sign-in (email + password) for the PUDO field apps. Sign-up creates the
@@ -208,6 +208,70 @@ export class AccountService implements OnApplicationBootstrap {
     });
   }
 
+  /* ------------------------------------------------------------------ a store's own account -- */
+
+  /**
+   * WHAT STOPS A STORE'S ACCOUNT BEING MADE — asked BEFORE the store itself is registered, so that an email somebody
+   * already holds does not leave a store behind it with no way in.
+   */
+  checkNewAccount(email: string | undefined, password: string | undefined): string {
+    const address = (email || '').trim().toLowerCase();
+    if (!address.includes('@')) throw new GlosError('EMAIL_INVALID', 'A valid email is required');
+    if ((password || '').length < 8) throw new GlosError('PASSWORD_TOO_SHORT', 'A password needs at least 8 characters');
+    if (this.accounts.has(address)) throw new GlosError('DUPLICATE', 'An account with this email already exists', { field: 'email', register: 'account' });
+    return address;
+  }
+
+  /**
+   * A STORE'S OWN ACCOUNT (the user, 2026-10-09: "store needs a email and password account setup").
+   *
+   * A store signed in to its console with its store id and its SIGNING SECRET: a machine credential doing a
+   * person's job. It was kept on the device so the console could sign itself back in; whoever stood at the counter
+   * held it; and a store that lost it was locked out for good, because replacing the secret asked for the secret.
+   * So a store gets what a shop and a hub have — an email and a password, changed with the current one, reset by a
+   * code sent to the address — and the secret goes back to being what it is for: its own systems.
+   *
+   * No phone is asked for: a store is a business with an inbox. Where its operator gave their number, the account
+   * carries it, and the same person is one person across the apps.
+   */
+  setUpStore(input: { did: string; name: string; email: string; password: string; phone?: string }): { accountId: string; role: AccountRole; did: string; email: string; token: AccessToken } {
+    const email = this.checkNewAccount(input.email, input.password);
+    if (this.emailForDid(input.did)) throw new GlosError('CONFLICT', 'This store already has an account: sign in with its email and password');
+    const salt = randomBytes(16).toString('hex');
+    const account: Account = {
+      accountId: `acc_${randomBytes(8).toString('hex')}`,
+      email,
+      role: 'vendor',
+      salt,
+      hash: this.hash(input.password, salt),
+      did: input.did,
+      ...(input.phone?.trim() ? { phoneHash: hashPhone(input.phone) } : {}),
+      createdAt: new Date().toISOString(),
+    };
+    this.accounts.set(email, account);
+    void this.mail?.send('welcome', { address: email }, { name: input.name, email, role: 'store' });
+    return { accountId: account.accountId, role: account.role, did: account.did, email, token: this.mint(account) };
+  }
+
+  /**
+   * SIGN A STORE IN by its account. One answer for a wrong password, an email nobody holds, and an email that is a
+   * shop's or a courier's: this door tells nobody which accounts exist, or what kind they are.
+   */
+  storeLogin(email: string, password: string): { accountId: string; role: AccountRole; did: string; email: string; token: AccessToken } {
+    const account = this.accounts.get((email || '').trim().toLowerCase());
+    if (!account || account.role !== 'vendor' || !this.verify(password, account)) throw new GlosError('AUTH_FAILED', 'Wrong email or password');
+    return { accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account) };
+  }
+
+  /**
+   * IS THIS THE PASSWORD OF THE ACCOUNT BEHIND THAT DID? For a second proof from somebody already signed in — a
+   * console left open is not proof that the person at it holds the account.
+   */
+  passwordOpens(did: string, password: string | undefined): boolean {
+    for (const account of this.accounts.values()) if (account.did === did) return this.verify(password ?? '', account);
+    return false;
+  }
+
   /** Issue a password-reset token (returned for the sandbox — would be emailed in production). */
   forgot(email: string): { sent: boolean; resetToken?: string } {
     const account = this.accounts.get((email || '').trim().toLowerCase());
@@ -244,6 +308,9 @@ export class AccountService implements OnApplicationBootstrap {
     if ((password || '').length < 6) throw new GlosError('PASSWORD_TOO_SHORT', 'Password must be at least 6 characters');
     const account = [...this.accounts.values()].find((a) => a.resetToken && a.resetToken === (token || '').trim().toUpperCase());
     if (!account || !account.resetExpires || account.resetExpires < Date.now()) throw new GlosError('WINDOW_EXPIRED', 'Invalid or expired reset token');
+    // A store's password is eight or more wherever it is chosen: made, changed, or reset. (The code is not used up
+    // by a refusal: the store types a longer one and carries on.)
+    if (account.role === 'vendor' && password.length < 8) throw new GlosError('PASSWORD_TOO_SHORT', 'A password needs at least 8 characters');
     account.salt = randomBytes(16).toString('hex');
     account.hash = this.hash(password, account.salt);
     account.resetToken = undefined;
@@ -266,6 +333,8 @@ export class AccountService implements OnApplicationBootstrap {
   }
 
   private provision(role: AccountRole, profile: Record<string, unknown>): { did: string; entityStatus?: string; tenant?: string } {
+    // A store is registered at its own door (vendors), which makes its account in the same act (`setUpStore`).
+    if (role === 'vendor') throw new GlosError('VALIDATION_FAILED', 'A store is registered from the Store app, not here');
     if (role === 'pudo') {
       const agent = this.agents.register((profile.agent ?? {}) as never);
       if (profile.kyc) this.agents.submitKyc(agent.did, profile.kyc as never);

@@ -198,3 +198,12 @@
   background: var(--ok-light);
   color: var(--ok);
 }
+
+/* A store still signing in with its secret is asked to set its account up — above whatever screen it is on. */
+.acctsetup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* The page already has its side gutters: this lines up with the cards under it. */
+  padding-top: 16px;
+}

@@ -5,6 +5,7 @@ import { Button, Card, ErrorNote, PlaceMap, ReadAloud, Sheet, ShopDetailSheet } 
 import { useT } from '../../../shared/i18n';
 import { toPlaceWords } from '../../../shared/placewords';
 import type { GeoPoint } from '../../../shared/geo';
+import type { SbgError } from '../../../lib/sbg';
 import { ledgerTypeWord, money, policyLine } from '../logic';
 import type { VendorActions, VendorState } from '../useVendorApp';
 
@@ -377,12 +378,17 @@ function SecretCard({ state, actions }: { state: VendorState; actions: VendorAct
   const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState('');
   const [fresh, setFresh] = useState<string | null>(null);
+  // What the server refused, said in the sheet it was typed in.
+  const [refused, setRefused] = useState<SbgError | null>(null);
   const busy = state.busy === 'rotate-secret';
+  // WITH AN ACCOUNT the second proof is the password — so a lost secret can be replaced. Without one yet, it is the
+  // current secret, which is also still what opens this console.
+  const withAccount = state.vendor?.hasAccount === true;
 
   return (
     <>
       <Card title={t('vendor.secret.title')}>
-        <p class="card__note">{t('vendor.secret.body')}</p>
+        <p class="card__note">{t(withAccount ? 'vendor.secret.body' : 'vendor.secret.bodyNoAccount')}</p>
         <CredentialAge iso={state.vendor?.secretRotatedAt ?? state.vendor?.createdAt} machine />
         <Button
           variant="outline"
@@ -390,6 +396,7 @@ function SecretCard({ state, actions }: { state: VendorState; actions: VendorAct
           onClick={() => {
             setCurrent('');
             setFresh(null);
+            setRefused(null);
             setOpen(true);
           }}
         >
@@ -424,19 +431,23 @@ function SecretCard({ state, actions }: { state: VendorState; actions: VendorAct
         ) : (
           <>
             <p class="card__note">{t('vendor.secret.warn')}</p>
+            {refused ? <ErrorNote error={refused} /> : null}
             <div class="field">
               <label class="field__label" for="secret-current">
-                {t('vendor.secret.current')}
+                {t(withAccount ? 'vendor.secret.password' : 'vendor.secret.current')}
               </label>
-              <input id="secret-current" class="input input--mono" type="password" autocomplete="off" value={current} onInput={(e) => setCurrent(e.currentTarget.value)} />
+              <input id="secret-current" class={withAccount ? 'input' : 'input input--mono'} type="password" autocomplete={withAccount ? 'current-password' : 'off'} value={current} onInput={(e) => setCurrent(e.currentTarget.value)} />
             </div>
             <Button
               chevron={false}
               disabled={!current.trim()}
               busy={busy}
               onClick={async () => {
-                const secret = await actions.rotateSecret(current.trim());
-                if (secret) setFresh(secret);
+                setRefused(null);
+                // A password is sent as it was typed; a pasted secret loses the space a copy picked up.
+                const r = await actions.rotateSecret(withAccount ? current : current.trim());
+                if (r.error) setRefused(r.error);
+                if (r.secret) setFresh(r.secret);
               }}
             >
               {t('vendor.secret.confirm')}

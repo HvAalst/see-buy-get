@@ -150,6 +150,10 @@ export const ERROR_CODES = {
   // A wrong PIN from somebody ALREADY signed in (changing it, starting a shift). Deliberately not a 401: the
   // session is fine, and every app reads a 401 as 'your sign-in ended' and signs the person out.
   PIN_WRONG: { status: 403, title: 'That is not your PIN' },
+  // The same, for a store asked for its password (or, with no account yet, its current secret) before its signing
+  // secret is replaced: it is signed in, and a mistyped password must not be read as "your sign-in ended".
+  PASSWORD_WRONG: { status: 403, title: 'That is not the password' },
+  SECRET_WRONG: { status: 403, title: 'That is not the current secret' },
   ROLE_NOT_HELD: { status: 403, title: 'You do not hold that role' },
 
   // --- 403 Forbidden: media ---------------------------------------------------------------------

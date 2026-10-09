@@ -40,11 +40,16 @@ const SAY: Record<string, string> = {
   'error.wrong_code': 'That code is not right. Try again.',
   'error.wrong_destination': 'That parcel is going somewhere else. It belongs in another bag.',
   'error.code_locked': 'That code is locked. Ask for a new one.',
+  // A SIGN-IN THAT WAS REFUSED. One code answers every door — a phone and PIN, an email and password, a store's
+  // ID and secret, an authenticator code — so the sentence names none of them: it used to say "That PIN is not
+  // right" to somebody who had typed a password. The server's detail says which, where a screen shows it.
+  'error.wrong_sign_in': 'That is not right. Check what you typed and try again.',
   // Consumer phone + PIN sign-in (S20/S21).
-  'error.wrong_pin': 'That PIN is not right. Try again.',
   'error.pin_digits': 'Your PIN must be 4 digits.',
   'error.pin_locked': 'Too many wrong PINs. Tap "Forgot your PIN?" to sign in with a code.',
   'error.pin_wrong': 'That is not your PIN. Five wrong tries lock it.',
+  'error.password_wrong': 'That is not the password. Try again.',
+  'error.secret_wrong': 'That is not the current secret. Try again.',
   'error.pin_guessable': 'That PIN is too easy to guess. Avoid one digit four times, a run like 1234, and pairs like 1212.',
   'error.role_not_held': 'You cannot open that here.',
   'error.phone_invalid': 'That phone number is not right. Check it.',

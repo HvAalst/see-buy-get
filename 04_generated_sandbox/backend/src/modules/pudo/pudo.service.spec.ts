@@ -5093,7 +5093,8 @@ describe('PUDO Light', () => {
       const store = vendors.register({ name: 'Rotating Store' });
       const first = store.secret;
       const self = { role: 'genesis', did: store.did } as never;
-      expect(() => controller.rotateVendorSecret(store.vendorId, { secret: 'whsec_wrong' }, self)).toThrow(/Wrong store ID or secret/);
+      // A wrong one from a store that is signed in is its own refusal — never the 401 an app reads as "signed out".
+      expect(() => controller.rotateVendorSecret(store.vendorId, { secret: 'whsec_wrong' }, self)).toThrow(/not this store’s current secret/);
       const other = vendors.register({ name: 'Other Store' });
       expect(() => controller.rotateVendorSecret(store.vendorId, { secret: first }, { role: 'genesis', did: other.did } as never)).toThrow(/not yours/);
 

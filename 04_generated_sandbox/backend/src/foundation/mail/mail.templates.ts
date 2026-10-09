@@ -73,7 +73,7 @@ export function formatDate(iso: string): string {
 export interface MailParams {
   'password-reset': { email: string; code: string; minutes: number; app: MailApp };
   'password-changed': { email: string; when: string; app: MailApp; recovery: 'self-reset' | 'ask-admin' };
-  welcome: { name: string; email: string; role: 'shop' | 'hub' | 'driver' };
+  welcome: { name: string; email: string; role: 'shop' | 'hub' | 'driver' | 'store' };
   'company-admin-added': { name: string; email: string; company: string; addedBy: string };
   'staff-account-added': { name: string; email: string; addedBy: string };
   'staff-two-step': { name: string; what: string; next: string; when: string };
@@ -144,9 +144,10 @@ export interface MailTemplate<P> {
 const WELCOME_INTRO: Record<MailParams['welcome']['role'], string> = {
   shop: 'Your shop is signed up. Before it can take parcels in, we check the papers you sent, and you will see the answer in the Shop app.',
   hub: 'Your hub is signed up. You can sign in to the Hub app now and start receiving bags.',
+  store: 'Your store has an account. Sign in to the Store app with this email address and the password you chose. Your signing secret is for your own systems: it no longer signs anybody in, and you can replace it from the Store app with your password.',
   driver: 'Your driver account is ready. The first time you open the Driver app, we send a code to your phone and you choose a PIN.',
 };
-const WELCOME_APP: Record<MailParams['welcome']['role'], MailApp> = { shop: 'agent', hub: 'mdp', driver: 'driver' };
+const WELCOME_APP: Record<MailParams['welcome']['role'], MailApp> = { shop: 'agent', hub: 'mdp', driver: 'driver', store: 'vendor' };
 
 const WOULD_BE: Record<string, string> = {
   carrier: 'carry freight',
@@ -416,10 +417,11 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
 
   welcome: {
     title: 'Welcome',
-    sentWhen: 'A shop, hub or courier signs up with an email address.',
+    sentWhen: 'A shop, hub or courier signs up with an email address; a store is registered with one, or sets its account up.',
     wired: true,
     sendLater: 48,
     sample: { name: 'Mama Sarah Shop', email: 'amina@example.com', role: 'shop' },
+    also: [{ key: 'store', label: 'A store', sample: { name: 'Duka Bora', email: 'orders@dukabora.example', role: 'store' } }],
     build: (p) => ({
       subject: `Welcome to SeeBuyGet, ${p.name}`,
       preheader: WELCOME_INTRO[p.role],

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { isMintSourced, narrow, type SbgError } from '../../lib/sbg';
+import { isMintSourced, isSignInRequired, narrow, type SbgError } from '../../lib/sbg';
 import { t } from '../../shared/i18n'; // plain t(): toasts/notes are built at action time in the store's active locale
 import { triggerDownload } from '../../shared/download';
 import { topUpTermsOf, type TopUpTerms } from '../../shared/topup-fee';
@@ -10,9 +10,14 @@ import {
   fetchPoints,
   purgeVendorTokens,
   readCreds,
+  readEmail,
   saveCreds,
+  saveEmail,
+  vendorForgot,
   vendorLogin,
   vendorRegister,
+  vendorReset,
+  vendorSession,
 } from './api';
 import { EMPTY_MINT, dimsComplete, fromHandoff, measureOf, type MintForm } from './logic';
 import type {
@@ -217,8 +222,9 @@ export function phaseAfterFailure(phase: Phase, code: string): Phase {
 
 export function useVendorApp() {
   const [state, setState] = useState<VendorState>(INITIAL);
-  const [creds, setCreds] = useState<{ vendorId: string; secret: string } | null>(null);
-  const client = useMemo(() => (creds ? createVendorClient(creds.vendorId, creds.secret) : null), [creds]);
+  // WHICH STORE is open on this device — and nothing that could open it. The session holds the token a sign-in returned.
+  const [creds, setCreds] = useState<{ vendorId: string } | null>(null);
+  const client = useMemo(() => (creds ? createVendorClient(creds.vendorId) : null), [creds]);
   const toastSeq = useRef(0);
   const toastTimers = useRef(new Set<number>());
 
@@ -251,12 +257,12 @@ export function useVendorApp() {
   const signOutRef = useRef<() => void>(() => undefined);
 
   /**
-   * A mint-sourced AUTH_FAILED means the stored secret no longer opens the store (rotated,
-   * or the store is gone): the only way forward is sign-in. Everything else follows the
-   * shared shell rules.
+   * The sign-in on this device has ended (the token died, the password was changed elsewhere, the store is gone):
+   * the only way forward is the sign-in screen, because nothing that could sign the store back in is kept here.
+   * Everything else follows the shared shell rules.
    */
   const fail = useCallback((error: SbgError) => {
-    if (isMintSourced(error) && (error.code === 'AUTH_FAILED' || error.code === 'UNAUTHORIZED')) {
+    if (isSignInRequired(error) || (isMintSourced(error) && (error.code === 'AUTH_FAILED' || error.code === 'UNAUTHORIZED'))) {
       signOutRef.current();
       setState((s) => ({ ...INITIAL, phase: 'signin', error, toasts: s.toasts }));
       return;
@@ -470,39 +476,113 @@ export function useVendorApp() {
     if (client && creds) void refresh();
   }, [client, creds, refresh]);
 
-  const signIn = useCallback(async (vendorId: string, secret: string) => {
-    const id = vendorId.trim();
-    if (!id || !secret.trim()) return;
-    setState((s) => ({ ...s, busy: 'signin', error: null }));
-    const r = await vendorLogin(id, secret.trim());
-    if (r.error) {
-      setState((s) => ({ ...s, busy: null, error: r.error }));
-      return;
-    }
+  /**
+   * A SIGN-IN, HANDED TO THIS DEVICE. What is kept is which store it is, the email for next time, and the token —
+   * never the password, and never the signing secret. A fresh sign-in may be a different store on a shared
+   * computer: every other token goes first.
+   */
+  const enter = useCallback(async (vendorId: string, token: { access_token: string; expires_in?: number }, email?: string) => {
     purgeVendorTokens(null);
-    saveCreds(id, secret.trim());
+    saveCreds(vendorId);
+    if (email) saveEmail(email);
+    const next = createVendorClient(vendorId);
+    await next.client.seed({ access_token: token.access_token, expires_in: token.expires_in ?? 3600 });
     setState((s) => ({ ...INITIAL, phase: 'boot', toasts: s.toasts }));
-    setCreds({ vendorId: id, secret: secret.trim() });
+    setCreds({ vendorId });
   }, []);
 
-  const register = useCallback(async (name: string, country: string, address: string) => {
+  /** HOW A STORE SIGNS IN: its account's email and password. */
+  const signIn = useCallback(
+    async (email: string, password: string) => {
+      const mail = email.trim().toLowerCase();
+      if (!mail || !password) return;
+      setState((s) => ({ ...s, busy: 'signin', error: null }));
+      const r = await vendorSession(mail, password);
+      if (r.error || !r.data) {
+        setState((s) => ({ ...s, busy: null, error: r.error }));
+        return;
+      }
+      await enter(r.data.vendorId, r.data.token, mail);
+    },
+    [enter],
+  );
+
+  /**
+   * THE OLD DOOR, for a store that has set no account up yet: its store ID and signing secret, one last time. The
+   * secret is used for this one request and kept nowhere; once inside, the store is asked to set its account up.
+   * A store that HAS an account is refused here by the server, in words that say so.
+   */
+  const signInWithSecret = useCallback(
+    async (vendorId: string, secret: string) => {
+      const id = vendorId.trim();
+      if (!id || !secret.trim()) return;
+      setState((s) => ({ ...s, busy: 'signin', error: null }));
+      const r = await vendorLogin(id, secret.trim());
+      if (r.error || !r.data) {
+        setState((s) => ({ ...s, busy: null, error: r.error }));
+        return;
+      }
+      await enter(id, r.data.token);
+    },
+    [enter],
+  );
+
+  const register = useCallback(async (name: string, country: string, address: string, email: string, password: string) => {
     setState((s) => ({ ...s, busy: 'register', error: null }));
-    const r = await vendorRegister({ name: name.trim(), country: country.trim() || undefined, address: address.trim() || undefined });
+    const r = await vendorRegister({ name: name.trim(), country: country.trim() || undefined, address: address.trim() || undefined, email: email.trim().toLowerCase(), password });
     if (r.error) {
       setState((s) => ({ ...s, busy: null, error: r.error }));
       return;
     }
-    // The secret is on screen ONCE; signing in stores it as this device's credential.
+    // The secret is on screen ONCE, for the store's own systems. It is not how anybody signs in, and it is not kept here.
     setState((s) => ({ ...s, busy: null, registered: r.data }));
   }, []);
 
-  const adoptRegistration = useCallback(() => {
+  const adoptRegistration = useCallback(async () => {
     const reg = stateRef.current.registered;
     if (!reg) return;
-    purgeVendorTokens(null);
-    saveCreds(reg.vendorId, reg.secret);
-    setState((s) => ({ ...INITIAL, phase: 'boot', toasts: s.toasts }));
-    setCreds({ vendorId: reg.vendorId, secret: reg.secret });
+    // Registered with its account: the answer carried a sign-in. (One that did not goes to the sign-in screen.)
+    if (reg.token) return enter(reg.vendorId, reg.token, reg.email);
+    setState((s) => ({ ...INITIAL, phase: 'signin', toasts: s.toasts }));
+  }, [enter]);
+
+  /**
+   * A STORE THAT SIGNED IN WITH ITS SECRET SETS UP ITS ACCOUNT. From this moment it signs in with these, the secret
+   * signs nobody in, and this device carries the new sign-in. Answers the refusal, for the sheet it was typed in.
+   */
+  const setUpAccount = useCallback(
+    async (email: string, password: string): Promise<SbgError | null> => {
+      if (!client || !creds) return null;
+      const mail = email.trim().toLowerCase();
+      const r = await client.client.sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/account', { params: { path: { id: creds.vendorId } }, body: { email: mail, password } }));
+      if (r.error) return r.error;
+      const data = r.data as unknown as { email: string; token: { access_token: string; expires_in?: number } };
+      saveEmail(data.email);
+      await client.client.seed({ access_token: data.token.access_token, expires_in: data.token.expires_in ?? 3600 });
+      setState((s) => ({ ...s, vendor: s.vendor ? { ...s.vendor, hasAccount: true } : s.vendor }));
+      pushToast({ tone: 'ok', icon: 'check', title: t('vendor.toast.accountSetUp'), detail: t('vendor.toast.accountSetUpDetail', { email: data.email }) });
+      return null;
+    },
+    [client, creds, pushToast],
+  );
+
+  /** After a password change: the server signed every session out and handed this device a fresh sign-in. */
+  const adoptToken = useCallback(
+    async (token: { access_token: string; expires_in?: number }) => {
+      await client?.client.seed({ access_token: token.access_token, expires_in: token.expires_in ?? 3600 });
+    },
+    [client],
+  );
+
+  const forgot = useCallback(async (email: string) => {
+    const r = await vendorForgot(email.trim().toLowerCase());
+    if (r.error) return { error: r.error, resetToken: null as string | null };
+    return { error: null, resetToken: r.data?.resetToken ?? null };
+  }, []);
+
+  const reset = useCallback(async (token: string, password: string) => {
+    const r = await vendorReset(token.trim(), password);
+    return r.error ?? null;
   }, []);
 
   const signOut = useCallback(() => {
@@ -1011,25 +1091,34 @@ export function useVendorApp() {
   );
 
   /**
-   * Rotate the store's signing secret with the current one. The new secret replaces the stored credential on this
-   * device (so the console keeps opening), a fresh sign-in is seeded, and the secret is returned for the screen to
-   * show ONCE. Every other session holding the old secret is signed out by the server.
+   * Replace the store's signing secret. Being signed in is not enough: the second proof is the account's PASSWORD —
+   * so a store that has LOST its secret can still replace it — or, for a store with no account yet, the current
+   * secret. The new secret is returned for the screen to show ONCE and is kept nowhere on this device; every sign-in
+   * the store had is ended by the server, and the answer carries a fresh one for this device.
+   *
+   * A REFUSAL IS ANSWERED TO THE SHEET IT WAS TYPED IN — a wrong password said on the screen behind an open sheet is
+   * said to nobody. Only a sign-in that has really ended goes the shell's way, to the sign-in screen.
    */
   const rotateSecret = useCallback(
-    async (current: string): Promise<string | null> => {
-      if (!client || !creds) return null;
-      let fresh: string | null = null;
+    async (proof: string): Promise<{ secret: string | null; error: SbgError | null }> => {
+      if (!client || !creds) return { secret: null, error: null };
+      let secret: string | null = null;
+      let error: SbgError | null = null;
       await run('rotate-secret', async () => {
-        const r = await client.client.sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/secret/rotate', { params: { path: { id: creds.vendorId } }, body: { secret: current } }));
-        if (r.error) return fail(r.error);
-        const data = r.data as unknown as { secret: string; token: { access_token: string; expires_in?: number } };
-        saveCreds(creds.vendorId, data.secret);
-        purgeVendorTokens(null);
-        // The client signs itself in again with the SAVED secret, which is now the new one — nothing to seed by hand.
-        fresh = data.secret;
-        setCreds({ vendorId: creds.vendorId, secret: data.secret });
+        const withAccount = stateRef.current.vendor?.hasAccount === true;
+        const r = await client.client.sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/secret/rotate', { params: { path: { id: creds.vendorId } }, body: withAccount ? { password: proof } : { secret: proof } }));
+        if (r.error) {
+          if (isSignInRequired(r.error)) return fail(r.error);
+          error = r.error;
+          return;
+        }
+        const data = r.data as unknown as { secret: string; secretRotatedAt?: string; token: { access_token: string; expires_in?: number } };
+        await client.client.seed({ access_token: data.token.access_token, expires_in: data.token.expires_in ?? 3600 });
+        // The card says when the secret was last changed: now.
+        setState((s) => ({ ...s, vendor: s.vendor ? { ...s.vendor, secretRotatedAt: data.secretRotatedAt ?? s.vendor.secretRotatedAt } : s.vendor }));
+        secret = data.secret;
       });
-      return fresh;
+      return { secret, error };
     },
     [client, creds, run, fail],
   );
@@ -1069,8 +1158,14 @@ export function useVendorApp() {
       queryLedger,
       exportLedger,
       signIn,
+      signInWithSecret,
       register,
       adoptRegistration,
+      setUpAccount,
+      adoptToken,
+      forgot,
+      reset,
+      readEmail,
       signOut,
       go,
       startMint,

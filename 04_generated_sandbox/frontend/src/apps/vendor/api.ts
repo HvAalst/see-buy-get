@@ -1,6 +1,6 @@
 import {
   createConversationsApi,
-  createCredentialedClient,
+  createSeededClient,
   createNotificationsApi,
   createVendorApi,
   type ConversationsApi,
@@ -8,8 +8,10 @@ import {
   makeConfig,
   publicRequest,
   purgeTokens,
+  sbgForgot,
+  sbgReset,
   tokenKeyFor,
-  type AppClient,
+  type SeededAppClient,
   type Result,
   type SbgConfig,
   type VendorApi,
@@ -27,18 +29,35 @@ export function vendorConfig(): SbgConfig {
 
 /* ------------------------------------------------------------- public auth -- */
 
-/** @Public vendors/login — the store ID + the signing secret issued once at registration. */
+/** @Public vendors/session — the store's ACCOUNT: an email and a password. How a store signs in. */
+export function vendorSession(email: string, password: string): Promise<Result<VendorLoginView>> {
+  return publicRequest<VendorLoginView>(vendorConfig(), '/v1/sbg/vendors/session', { body: { email, password } });
+}
+
+/**
+ * @Public vendors/login — the store ID + the signing secret. Only for a store that has set no account up yet: it gets
+ * in this way one last time, and is asked to set one up. A store WITH an account is refused here by the server.
+ */
 export function vendorLogin(vendorId: string, secret: string): Promise<Result<VendorLoginView>> {
   return publicRequest<VendorLoginView>(vendorConfig(), '/v1/sbg/vendors/login', { body: { vendorId, secret } });
 }
 
-/** @Public vendors registration — a signup; the response carries the secret EXACTLY ONCE. */
+/** A code to the store's address, and the new password it opens. */
+export const vendorForgot = (email: string) => sbgForgot(vendorConfig(), email);
+export const vendorReset = (token: string, password: string) => sbgReset(vendorConfig(), token, password);
+
+/**
+ * @Public vendors registration — the store AND its account in one act. The response carries the signing secret
+ * EXACTLY ONCE (for the store's own systems), and a sign-in for this device.
+ */
 export function vendorRegister(body: {
   name: string;
   country?: string;
   address?: string;
   location?: { lat: number; lng: number };
   callbackUrl?: string;
+  email: string;
+  password: string;
 }): Promise<Result<VendorRegisteredView>> {
   return publicRequest<VendorRegisteredView>(vendorConfig(), '/v1/sbg/vendors', { body });
 }
@@ -69,7 +88,7 @@ export function fetchCountries(): Promise<Result<OperatingCountry[]>> {
 
 export interface VendorClient {
   api: VendorApi;
-  client: AppClient;
+  client: SeededAppClient;
   /** CV1 — questions drivers ask about this store's own freight. */
   conversations: ConversationsApi;
   /** The store's own notifications — a store is run by a person at a desk or on a phone, not only by
@@ -78,12 +97,14 @@ export interface VendorClient {
 }
 
 /**
- * The console's CREDENTIAL lives on this device (store ID + secret — the secret is issued
- * once and localStorage is its only home, like the driver's DID), so the session re-mints
- * by itself through vendors/login: an expired token never bounces the merchant to sign-in.
+ * NO CREDENTIAL LIVES ON THIS DEVICE. The console used to keep the store ID and the signing secret in localStorage
+ * and sign itself back in with them — so the secret that signs a store's callbacks sat readable in every browser
+ * the store had ever been opened in. Now the store signs in with its email and password, the token that sign-in
+ * returned is seeded into the session, and when it dies the shell returns to the sign-in screen: the password never
+ * lives here, as in the Shop and Hub apps.
  */
-export function createVendorClient(vendorId: string, secret: string): VendorClient {
-  const client = createCredentialedClient(vendorConfig(), tokenKeyFor(TOKEN_PREFIX, vendorId), () => vendorLogin(vendorId, secret));
+export function createVendorClient(vendorId: string): VendorClient {
+  const client = createSeededClient(vendorConfig(), tokenKeyFor(TOKEN_PREFIX, vendorId));
   return { api: createVendorApi(client.sbg), client, conversations: createConversationsApi(client.sbg), notifications: createNotificationsApi(client.sbg) };
 }
 
@@ -94,7 +115,9 @@ export function purgeVendorTokens(keepVendorId: string | null): void {
 /* --------------------------------------------------------------- identity -- */
 
 const ID_KEY = 'glos-vendor-id';
-const SECRET_KEY = 'glos-vendor-secret';
+const EMAIL_KEY = 'glos-vendor-email';
+/** Where an older version kept the signing secret as this device's way in. Nothing is kept there now; what was is removed. */
+const LEGACY_SECRET_KEY = 'glos-vendor-secret';
 
 function get(key: string): string | null {
   try {
@@ -118,16 +141,15 @@ function drop(key: string): void {
   }
 }
 
-export const readCreds = (): { vendorId: string; secret: string } | null => {
+/** Which store this device last opened — and never how. */
+export const readCreds = (): { vendorId: string } | null => {
+  // A secret an older version left on this device is taken off it the first time the app opens.
+  drop(LEGACY_SECRET_KEY);
   const vendorId = get(ID_KEY);
-  const secret = get(SECRET_KEY);
-  return vendorId && secret ? { vendorId, secret } : null;
+  return vendorId ? { vendorId } : null;
 };
-export const saveCreds = (vendorId: string, secret: string): void => {
-  set(ID_KEY, vendorId);
-  set(SECRET_KEY, secret);
-};
-export const clearCreds = (): void => {
-  drop(ID_KEY);
-  drop(SECRET_KEY);
-};
+export const saveCreds = (vendorId: string): void => set(ID_KEY, vendorId);
+export const clearCreds = (): void => drop(ID_KEY);
+/** The email that signed in last, to fill the next sign-in. Kept across a sign-out, like the Shop app's. */
+export const readEmail = (): string | null => get(EMAIL_KEY);
+export const saveEmail = (email: string): void => set(EMAIL_KEY, email);

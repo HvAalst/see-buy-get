@@ -211,11 +211,14 @@ export const EMPTY_JOIN: JoinForm = {
   truckSubtype: '',
 };
 
-/** The wizard's steps, per role. `vendor` skips the phone gate the backend does not ask for. */
+/**
+ * The wizard's steps, per role. `vendor` skips the phone gate the backend does not ask for — and, like everybody
+ * else, says how it signs in: a store is registered WITH its email and password, never with a secret as its way in.
+ */
 export type JoinStep = 'phone' | 'code' | 'about' | 'where' | 'login' | 'done';
 
 export function stepsFor(kind: JoinKind): JoinStep[] {
-  if (kind === 'vendor') return ['about', 'done'];
+  if (kind === 'vendor') return ['about', 'login', 'done'];
   return ['phone', 'code', 'about', 'where', 'login', 'done'];
 }
 
@@ -271,6 +274,8 @@ export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Tran
       return null;
     case 'login':
       if (!f.email.includes('@')) return t('home.block.email');
+      // A store's account asks for eight: the server's floor for it, and the same as when any password is changed.
+      if (role.kind === 'vendor') return f.password.length < 8 ? t('home.block.passwordStore') : null;
       if (f.password.length < 6) return t('home.block.password');
       return null;
     default:

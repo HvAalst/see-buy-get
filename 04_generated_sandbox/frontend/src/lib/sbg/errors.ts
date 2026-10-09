@@ -19,7 +19,7 @@ export type SbgErrorCode =
   | 'CANNOT_COUPLE' | 'HOURS_EXCEEDED' | 'CAPACITY_EXCEEDED' | 'NO_ROOM' | 'CARRIER_NOT_TRADING' | 'REASON_REQUIRED' | 'SAFETY_CHECK_INCOMPLETE' | 'RECEIVER_REQUIRED' | 'DELIVERY_PHOTO_REQUIRED' | 'FRAGILE_NOT_ALLOWED' | 'BAG_FULL' | 'BAG_EMPTY' | 'BAG_RESERVED'
   | 'BAG_MISADDRESSED' | 'ALREADY_IN_BAG' | 'STAGING_FULL' | 'SHELF_FULL' | 'NO_CAPACITY_AVAILABLE' | 'OTP_INVALID' | 'OTP_LOCKED' | 'PIN_INVALID' | 'UNAUTHORIZED'
   | 'AUTH_FAILED' | 'AUTH_CODE_INVALID' | 'AUTH_NOT_ACTIVE' | 'PAYMENT_REQUIRED' | 'WALLET_INSUFFICIENT'
-  | 'FORBIDDEN' | 'WRONG_PUDO' | 'AGENT_LOCKED' | 'PIN_LOCKED' | 'PIN_WRONG' | 'PIN_GUESSABLE' | 'ROLE_NOT_HELD' | 'MEDIA_LOCKED' | 'CARGO_REQUIRES_DEDICATED' | 'CARGO_INCOMPATIBLE' | 'VEHICLE_MISSING_CAPABILITY' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE' | 'INCOMPLETE_MANIFEST' | 'INVITE_LIMIT'
+  | 'FORBIDDEN' | 'WRONG_PUDO' | 'AGENT_LOCKED' | 'PIN_LOCKED' | 'PIN_WRONG' | 'PASSWORD_WRONG' | 'SECRET_WRONG' | 'PIN_GUESSABLE' | 'ROLE_NOT_HELD' | 'MEDIA_LOCKED' | 'CARGO_REQUIRES_DEDICATED' | 'CARGO_INCOMPATIBLE' | 'VEHICLE_MISSING_CAPABILITY' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE' | 'INCOMPLETE_MANIFEST' | 'INVITE_LIMIT'
   | 'MEDIA_EXPIRED' | 'MEDIA_TOO_LARGE' | 'UNSUPPORTED_MEDIA' | 'RATE_LIMITED' | 'PRICE_CHANGED'
   | 'INTERNAL'
   | 'NETWORK' | 'TIMEOUT' | 'OFFLINE' | 'CLIENT_OUTDATED'; // client-synthesised (no HTTP response)
@@ -85,11 +85,13 @@ const PRESENTATION: Partial<Record<SbgErrorCode, ErrorPresentation>> = {
   // The collection code's own lockout — the inbound half of the same custody check.
   CODE_LOCKED: { icon: 'lock', tone: 'danger', say: 'error.code_locked' },
   // Identity (S20/S21): a phone-first consumer signs in with a 4-digit PIN over their verified phone.
-  AUTH_FAILED: { icon: 'keypad', tone: 'warn', say: 'error.wrong_pin' },
+  AUTH_FAILED: { icon: 'lock', tone: 'warn', say: 'error.wrong_sign_in' },
   PIN_INVALID: { icon: 'keypad', tone: 'warn', say: 'error.pin_digits' },
   PIN_LOCKED: { icon: 'lock', tone: 'danger', say: 'error.pin_locked' },
   // A wrong PIN from somebody already signed in (changing it, starting a shift) — a 403, so nothing signs them out.
   PIN_WRONG: { icon: 'keypad', tone: 'warn', say: 'error.pin_wrong' },
+  PASSWORD_WRONG: { icon: 'lock', tone: 'warn', say: 'error.password_wrong' },
+  SECRET_WRONG: { icon: 'lock', tone: 'warn', say: 'error.secret_wrong' },
   PIN_GUESSABLE: { icon: 'keypad', tone: 'warn', say: 'error.pin_guessable' },
   ROLE_NOT_HELD: { icon: 'block', tone: 'warn', say: 'error.role_not_held' },
   PHONE_INVALID: { icon: 'keypad', tone: 'warn', say: 'error.phone_invalid' },

@@ -77,9 +77,12 @@ export interface VendorRegisteredView {
   name: string;
   secret: string;
   country: string;
+  /** The account made with the store: how it signs in. */
+  email?: string;
 }
 
-export function registerStore(body: { name: string; country?: string }): Promise<Result<VendorRegisteredView>> {
+/** A store is registered WITH its account: the email and password its people sign in to the Store app with. */
+export function registerStore(body: { name: string; country?: string; email: string; password: string }): Promise<Result<VendorRegisteredView>> {
   return publicRequest<VendorRegisteredView>(homeConfig(), '/v1/sbg/vendors', { body });
 }
 
@@ -488,6 +491,15 @@ export function handOff(role: 'pudo' | 'driver' | 'mdp', did: string, email: str
     }
   } catch {
     /* storage unavailable — the app will simply ask them to sign in */
+  }
+}
+
+/** The same for a store: the address it signs in with, already in the Store app's sign-in. Never the password. */
+export function handOffStore(email: string): void {
+  try {
+    globalThis.localStorage?.setItem('glos-vendor-email', email);
+  } catch {
+    /* storage unavailable — the Store app will simply ask for the address */
   }
 }
 

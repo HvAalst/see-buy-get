@@ -126,7 +126,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyDeclarationDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, SuggestVehicleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, FleetMoveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto } from './pudo.dto';
+  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, SuggestVehicleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, FleetMoveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto } from './pudo.dto';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
@@ -2636,10 +2636,50 @@ export class SbgController {
   @Public()
   @Post('vendors')
   registerVendor(@Body() dto: RegisterVendorDto) {
-    const vendor = this.vendors.register(dto);
+    const { email, password, ...store } = dto;
+    const withAccount = email !== undefined || password !== undefined;
+    // The account is checked BEFORE the store is made: an email somebody already holds must not leave a store behind it.
+    if (withAccount) this.accounts.checkNewAccount(email, password);
+    const vendor = this.vendors.register(store);
     // S20: if the operator gave a phone, link this store to their person identity — same human, one account.
     if (dto.ownerPhone) this.persons.tryAttachRole(dto.ownerPhone, 'vendor', vendor.did);
-    return vendor;
+    if (!withAccount) return vendor;
+    // ITS OWN ACCOUNT, in the same act: the store signs in with these from now on, and never with its secret.
+    const account = this.accounts.setUpStore({ did: vendor.did, name: vendor.name, email: email ?? '', password: password ?? '', phone: dto.ownerPhone });
+    return { ...vendor, email: account.email, token: account.token };
+  }
+
+  /**
+   * STORE SIGN-IN, BY ITS ACCOUNT: an email and a password → the same store-bound token the console has always
+   * carried. @Public for the reason every sign-in is. One answer for everything that can be wrong.
+   *
+   * EVERY TRY IS COUNTED. The secret this replaces as the way in was 96 random bits; a password is something a
+   * person chose, and a door that takes one without counting is a door that can be guessed at all night.
+   */
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(20, 15 * 60)
+  @Post('vendors/session')
+  vendorSession(@Body() dto: LoginDto) {
+    const account = this.accounts.storeLogin(dto.email, dto.password);
+    const vendor = this.vendors.byDid(account.did);
+    if (!vendor) throw new GlosError('AUTH_FAILED', 'Wrong email or password');
+    return { ...VendorService.publicView(vendor), email: account.email, hasAccount: true, token: account.token };
+  }
+
+  /**
+   * A STORE THAT ALREADY EXISTS SETS UP ITS ACCOUNT — signed in the old way, one last time. THE STORE'S OWN ACT AND
+   * NOBODY ELSE'S: every other store route lets network staff act for a store (`assertVendorOwner`), and here that
+   * would be staff choosing the password a store signs in with. So this route does not use that check. What refuses
+   * staff today is that a staff token carries no store; the role is named as well, so that it stays refused if one
+   * ever does.
+   */
+  @Post('vendors/:id/account')
+  setUpVendorAccount(@Param('id') id: string, @Body() dto: StoreAccountDto, @Actor() actor: IntrospectionResult) {
+    const vendor = this.vendors.get(id);
+    if (!actor?.did || actor.did !== vendor.did || actor.role === 'operator') throw new GlosError('FORBIDDEN', 'A store sets up its own account, signed in as that store');
+    const account = this.accounts.setUpStore({ did: vendor.did, name: vendor.name, email: dto.email, password: dto.password });
+    return { vendorId: vendor.vendorId, email: account.email, hasAccount: true, token: account.token };
   }
 
   /**
@@ -2651,17 +2691,39 @@ export class SbgController {
   @Post('vendors/login')
   vendorLogin(@Body() dto: VendorLoginDto) {
     const vendor = this.vendors.login(dto.vendorId, dto.secret);
-    return { ...VendorService.publicView(vendor), token: this.auth.mintActorToken({ role: 'genesis', did: vendor.did }) };
+    // ONCE A STORE HAS AN ACCOUNT, ITS SECRET SIGNS NOBODY IN. Said only to somebody who holds the right secret, so
+    // it tells a stranger nothing; and it is what makes the secret a machine's again rather than a second password.
+    if (this.accounts.emailForDid(vendor.did)) throw new GlosError('FORBIDDEN', 'This store has an account: sign in with its email and password. The signing secret is for your own systems');
+    return { ...VendorService.publicView(vendor), hasAccount: false, token: this.auth.mintActorToken({ role: 'genesis', did: vendor.did }) };
   }
 
   /**
-   * Rotate the store's signing secret. The store's own token AND the current secret — a console left open is not
-   * enough on its own. The new secret is returned exactly once, with a fresh sign-in for this device.
+   * Rotate the store's signing secret. The store's own token AND a second proof — a console left open is not
+   * enough on its own. For a store with an account that proof is its PASSWORD, so a store that has lost its secret
+   * can still replace it; for one without, it is the current secret, as before. The new secret is returned exactly
+   * once, with a fresh sign-in for this device. The tries are counted: this asks for the password too, and a console
+   * left open must not be a place to guess it from.
    */
+  @UseGuards(RateLimitGuard)
+  @RateLimit(20, 15 * 60)
   @Post('vendors/:id/secret/rotate')
   rotateVendorSecret(@Param('id') id: string, @Body() dto: RotateSecretDto, @Actor() actor: IntrospectionResult) {
     this.assertVendorOwner(id, actor);
-    const vendor = this.vendors.rotateSecret(id, dto.secret);
+    const store = this.vendors.get(id);
+    let vendor: ReturnType<VendorService['get']>;
+    // A WRONG PROOF HERE IS A 403 OF ITS OWN, never a 401: the store is signed in, and every app reads a 401 as
+    // "your sign-in ended" — one mistyped password would sign it out.
+    if (this.accounts.emailForDid(store.did)) {
+      if (!this.accounts.passwordOpens(store.did, dto.password)) throw new GlosError('PASSWORD_WRONG', 'That is not this store’s password');
+      vendor = this.vendors.replaceSecret(id);
+    } else {
+      try {
+        vendor = this.vendors.rotateSecret(id, dto.secret ?? '');
+      } catch (err) {
+        if (err instanceof GlosError && err.code === 'AUTH_FAILED') throw new GlosError('SECRET_WRONG', 'That is not this store’s current secret');
+        throw err;
+      }
+    }
     return { vendorId: vendor.vendorId, secret: vendor.secret, secretRotatedAt: vendor.secretRotatedAt, token: this.auth.mintActorToken({ role: 'genesis', did: vendor.did }) };
   }
 
@@ -2676,7 +2738,9 @@ export class SbgController {
    */
   @Get('vendors/:id')
   getVendor(@Param('id') id: string) {
-    return VendorService.publicView(this.vendors.get(id));
+    const vendor = this.vendors.get(id);
+    // Whether it has an account of its own — never the address: a console signed in the old way is told to set one up.
+    return { ...VendorService.publicView(vendor), hasAccount: Boolean(this.accounts.emailForDid(vendor.did)) };
   }
 
   /** Update the store profile: map pin (origin-PUDO ranking), address, callback URL, split policy.

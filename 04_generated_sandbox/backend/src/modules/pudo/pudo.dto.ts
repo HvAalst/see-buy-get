@@ -910,6 +910,18 @@ export class RegisterVendorDto {
    *  identity so the same human can also send, receive or drive under one account — never a duplicate. */
   @IsOptional() @IsString() ownerPhone?: string;
   @IsOptional() @ValidateNested() @Type(() => ShippingPolicyDto) shippingPolicy?: ShippingPolicyDto;
+  /**
+   * THE STORE'S OWN ACCOUNT: the email and the password its people sign in to the Store app with. Given together.
+   * A store registered without them (by a script, by an integration) sets them up the first time somebody signs in.
+   */
+  @IsOptional() @IsString() @MaxLength(200) email?: string;
+  @IsOptional() @IsString() @MaxLength(200) password?: string;
+}
+
+/** A store that already exists sets up its account: the email and password it will sign in with from now on. */
+export class StoreAccountDto {
+  @IsString() @MaxLength(200) email!: string;
+  @IsString() @MaxLength(200) password!: string;
 }
 
 export class VendorLoginDto {
@@ -1830,8 +1842,13 @@ export class ChangePinDto {
 }
 
 /** Rotate a store's signing secret, proven with the current one. */
+/**
+ * A second proof, beyond being signed in, for replacing a store's signing secret: the account's PASSWORD where the
+ * store has an account, the CURRENT secret where it does not.
+ */
 export class RotateSecretDto {
-  @IsString() @MaxLength(200) secret!: string;
+  @IsOptional() @IsString() @MaxLength(200) secret?: string;
+  @IsOptional() @IsString() @MaxLength(200) password?: string;
 }
 
 export class LoginDto {

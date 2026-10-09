@@ -14,6 +14,7 @@ import {
   fetchStoreReputation,
   geocode,
   handOff,
+  handOffStore,
   type MarketRow,
   type MarketSeriesView,
   type ProfileView,
@@ -459,13 +460,16 @@ export function useHomeApp() {
     if (!role) return;
 
     if (role.kind === 'vendor') {
-      if (stepBlocker(role, 'about', form, t)) return;
+      if (stepBlocker(role, 'about', form, t) || stepBlocker(role, 'login', form, t)) return;
       await run('submit', async () => {
-        const r = await registerStore({ name: form.displayName.trim(), country: form.country.trim() || undefined });
+        const email = form.email.trim().toLowerCase();
+        const r = await registerStore({ name: form.displayName.trim(), country: form.country.trim() || undefined, email, password: form.password });
         if (r.error) {
           setState((s) => ({ ...s, error: r.error }));
           return;
         }
+        // The Store app finds the address already filled in: the store signs in with it and the password just chosen.
+        handOffStore(email);
         setState((s) => ({ ...s, store: r.data, step: 'done' }));
       });
       return;

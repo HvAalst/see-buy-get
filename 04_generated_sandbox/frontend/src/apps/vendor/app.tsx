@@ -1,12 +1,17 @@
+import { useState } from 'preact/hooks';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { ConnectivityNote, BottomNav, Button, Checklist, Icon, NotificationBell, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { AccountMenu } from '../../shared/account/AccountMenu';
+import { ChangePasswordSheet } from '../../shared/account/ChangePasswordSheet';
+import { SettingsSheet } from '../../shared/account/SettingsSheet';
 import { useAccount } from '../../shared/account/useAccount';
 import { ArchiveSection } from '../../shared/archive/ArchiveSection';
 import { useArchive, type ArchiveApiState } from '../../shared/archive/useArchive';
 import { useDestination, type DestinationApiState } from '../../shared/archive/useDestination';
 import { useT } from '../../shared/i18n';
+import { vendorConfig } from './api';
 import { money, vendorWorkLine } from './logic';
+import { AccountSetup } from './screens/AccountSetup';
 import { BooksScreen } from './screens/BooksScreen';
 import { DockScreen } from './screens/DockScreen';
 import { MintScreen } from './screens/MintScreen';
@@ -20,9 +25,15 @@ import './vendor.css';
 export function App() {
   const t = useT();
   const { state, actions, sbg } = useVendorApp();
-  // The person behind this account — their photo, PIN, address and page. The menu is ABSENT where the
-  // sign-in is not a person at all (a store signs in with a shared secret), rather than opening onto a refusal.
+  // The person behind this account — their photo, PIN, address and page. The menu is ABSENT where there is no
+  // person behind the sign-in (a store's account is the store's, unless its operator gave their phone), rather than
+  // opening onto a refusal. Such a store still has SETTINGS: its password, and who it contracts with.
   const account = useAccount(sbg, state.phase === 'ready');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const noPerson = account.error?.code === 'FORBIDDEN' && !account.account;
+  // A password to change exists only once the store has an account.
+  const changePassword = state.vendor?.hasAccount ? () => setPasswordOpen(true) : undefined;
   // A store that ships is a party to a consignment note, and the note — not the order list — is what an
   // insurer, a customs officer or a buyer's lawyer asks for. Fetched only when the screen is open.
   const archive = useArchive(sbg, state.phase === 'ready' && state.screen === 'notes');
@@ -84,19 +95,28 @@ export function App() {
               </Pill>
             )}
             {/* Last in the bar: live state first, the place you visit last. */}
-            <AccountMenu api={account} app="vendor" onSignOut={actions.signOut} />
+            <AccountMenu api={account} app="vendor" onSignOut={actions.signOut} onChangePassword={changePassword} />
+            {noPerson ? (
+              <button type="button" class="topbar__lead" onClick={() => setSettingsOpen(true)} aria-label={t('account.settings.title')} title={t('account.settings.title')}>
+                <Icon name="settings" size={24} />
+              </button>
+            ) : null}
           </>
         }
       />
 
       <main class="app__scroll">
         <ConnectivityNote stale={state.stale} />
+        {/* Said above every screen until it is done: a store still signing in with its secret sets its account up. */}
+        <AccountSetup state={state} actions={actions} />
         <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} destination={destination} />
       </main>
 
       <BottomNav<Screen> items={tabs} active={state.screen} onSelect={(key) => (key === 'mint' ? actions.startMint() : actions.go(key))} labels={false} />
 
       <Toasts state={state} actions={actions} />
+      <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} api={account} onSignOut={actions.signOut} onChangePassword={changePassword} />
+      <ChangePasswordSheet open={passwordOpen} onClose={() => setPasswordOpen(false)} config={vendorConfig()} email={actions.readEmail()} onChanged={actions.adoptToken} />
     </div>
   );
 }

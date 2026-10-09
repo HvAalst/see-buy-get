@@ -92,9 +92,10 @@ export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onCha
   /*
    * NO PERSON, NO MENU — the omission rule applied to the whole thing rather than to a row.
    *
-   * Not every sign-in is a human being. A store signs in with a vendor id and a shared secret, which is a
-   * machine credential whoever is at the counter uses; there is no photo, no PIN and no address behind it,
-   * and the account surface says so with a 403. An avatar that opens onto "You are not allowed to do that"
+   * Not every sign-in is a human being. A store signs in with its own email and password — the STORE's account,
+   * which whoever is at the counter uses; unless its operator gave their phone there is no photo, no PIN and no
+   * address behind it, and the account surface says so with a 403. (Such a store still has Settings: the Store app
+   * puts them behind its own button.) An avatar that opens onto "You are not allowed to do that"
    * is worse than no avatar: it tells somebody the product has an account for them and then refuses it.
    *
    * Only on FORBIDDEN, which is the server saying "this token is nobody". A network failure or an expired
