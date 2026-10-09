@@ -33,6 +33,8 @@ const KIND_ICON: Record<string, IconName> = {
   test: 'bell',
   // FP4 — papers and their dates. Without these a licence about to stop somebody working arrived under the
   // same bell as everything else; the fallback is still the bell, so a kind added on the server is never a blank.
+  // A driver's hours, said by the clock: the last hour, the limit, the rest that is over.
+  shift_hours: 'clock',
   papers_due: 'clock',
   papers_lapsed: 'block',
   papers_checked: 'check',

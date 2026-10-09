@@ -919,8 +919,11 @@ export const ARTICLES: GuideArticle[] = [
     summary: "A shift has a limit — 13 hours — after which no new load is offered, shown as takeable or put on a driver, though what is already aboard is delivered. After a real working day of four hours or more, the next shift waits for 9 hours of rest.",
     steps: [
       "Driver app, Home: the clock on the shift shows the hours on duty against the limit. Past it, the board marks every load, no offer comes, and the start screen says so plainly.",
+      "The driver is told without asking: a notice less than an hour before the limit, and another at the limit, saying what is still theirs to do (deliver what is aboard), what is not (anything new), and that the next shift can start 9 hours after this one ends. The clock on the shift says “less than an hour left” in that last hour.",
       "Driver app, starting a shift too soon after a working day: the start is refused, and the refusal says how many hours since the last shift ended and how many are needed. A coupling of a few minutes — a wrong scan, a short move — owes no rest.",
-      "Fleet app, Dashboard and Shifts: a driver over the limit is marked. Dispatch will not put a load on them; end the shift and let them rest."
+      "Driver app, Home, after a working day: the start screen says from when the next shift can start, before anything is tried. Press “Tell me when I can start” to get a notice at that moment. Somebody who tries to start too early is told at that moment as well. Nobody else is: for most working days it falls in the night.",
+      "Fleet app, Dashboard and Shifts: a driver over the limit is marked. Dispatch will not put a load on them; end the shift and let them rest.",
+      "Fleet app, the bell: the office is told when one of its drivers passes the limit, with the vehicle, so that no new load is planned for them."
     ],
     notes: [
       "The limits are the network’s, between the EU’s daily driving limit and its reduced daily rest, and they are not a claim about any country’s law. Where a jurisdiction sets its own, that becomes the limit."

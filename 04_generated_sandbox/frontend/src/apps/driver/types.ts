@@ -155,8 +155,12 @@ export interface AssignmentView {
 
 export interface SessionView {
   active: boolean;
-  /** FP8 — the shift clock: hours on duty, the limit, whether it is passed, and the rest owed after a working day. */
-  hours?: { onDuty: number; limit: number; over: boolean; restHours: number };
+  /**
+   * FP8 — the shift clock: hours on duty, the limit, whether it is passed (`near`: in its last hour), and the rest
+   * owed after a working day (`restOwed`: this shift is one already, so ending it now owes the rest). Off duty and resting: `restUntil` is when the next shift can start, and
+   * `tellWhenRested` that they asked to be told at that moment.
+   */
+  hours?: { onDuty: number; limit: number; over: boolean; near?: boolean; restOwed?: boolean; restHours: number; restUntil?: string; tellWhenRested?: boolean };
   assignment?: AssignmentView;
   vehicle?: VehicleView;
   /**

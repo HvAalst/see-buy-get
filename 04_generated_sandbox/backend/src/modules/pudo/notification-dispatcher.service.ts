@@ -11,7 +11,7 @@ import { ParcelService } from './parcel.service';
 import { accountFor } from './addressed-to';
 import { PersonService } from './person.service';
 import { AgentService, signupGapOf } from './agent.service';
-import { FleetService } from './fleet.service';
+import { FleetService, MAX_ON_DUTY_HOURS, MIN_REST_HOURS } from './fleet.service';
 import { ToteService } from './tote.service';
 import { MdpService } from './mdp.service';
 import { DispatchService } from './dispatch.service';
@@ -125,6 +125,8 @@ import { HOLDING_FEE_PER_DAY, MARKET_SUPPLY_STALE_MIN, NETWORK_CURRENCY, NUDGE_C
 const SIGNUP_SWEEP_MS = 60 * 60 * 1000;
 /** How often the loads that should have arrived are looked at. A shipper learns of a late load within this long. */
 const LATE_SWEEP_MS = 10 * 60 * 1000;
+/** How often the shift clocks are looked at. A driver hears of the limit within this of passing it. */
+const HOURS_SWEEP_MS = 5 * 60 * 1000;
 
 /**
  * The missing documents as a sentence, NAMED rather than counted.
@@ -194,6 +196,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   /** The running-late sweep's timer, self-unref'd for the same reason. */
   private lateTimer?: ReturnType<typeof setInterval>;
 
+  /** The hours sweep's timer, self-unref'd for the same reason. */
+  private hoursTimer?: ReturnType<typeof setInterval>;
+
   onApplicationBootstrap(): void {
     // Every other notification here is a REACTION to an event. This one cannot be: nothing happens when a
     // parcel is not collected, which is exactly why nobody was ever told. A sweep is the only shape that
@@ -210,12 +215,57 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     void this.sweepLate().catch(() => undefined);
     this.lateTimer = setInterval(() => void this.sweepLate().catch(() => undefined), LATE_SWEEP_MS);
     this.lateTimer.unref?.();
+    // And a shift that has run long: nothing HAPPENS when thirteen hours pass, so nothing ever said so.
+    void this.sweepHours().catch(() => undefined);
+    this.hoursTimer = setInterval(() => void this.sweepHours().catch(() => undefined), HOURS_SWEEP_MS);
+    this.hoursTimer.unref?.();
+  }
+
+  /**
+   * THE DRIVER'S HOURS, SAID BY THE CLOCK.
+   *
+   * An hour before the shift limit; at the limit — what is still theirs to do, what is not, and when they may start
+   * again; and, to a driver who asked, the moment their rest is over. The fleet's office is told when one of its
+   * drivers passes the limit, because it is the office that would otherwise go on planning loads for them.
+   *
+   * What is due is TAKEN from the fleet service, which notes each as said before handing it over: a notice is sent
+   * once, however often this runs. Returns how many drivers were told.
+   */
+  async sweepHours(now: number = Date.now()): Promise<number> {
+    let told = 0;
+    for (const n of this.fleet.takeHoursNotices(now)) {
+      try {
+        const rest = MIN_REST_HOURS;
+        const limit = MAX_ON_DUTY_HOURS;
+        const say =
+          n.kind === 'near'
+            ? { title: 'Less than an hour until the shift limit', body: `You have been on shift ${n.onDuty} hours; the limit is ${limit}. After that no new load is offered or can be taken. What is already aboard you still deliver.` }
+            : n.kind === 'over'
+              ? { title: 'You have reached the shift limit', body: `You have been on shift ${n.onDuty} hours; the limit is ${limit}. Deliver what is aboard: no new load is offered or can be taken. Then end your shift and rest. You can start again ${rest} hours after you end it.` }
+              : { title: 'Your rest is over', body: `It is ${rest} hours since your last shift ended. You can start a shift again.` };
+        await this.notifications.notify(n.driverDid, { kind: 'shift_hours', ...say, link: '/', tag: `hours:${n.kind}:${n.driverDid}` });
+        told += 1;
+        if (n.kind === 'over' && n.managerDid) {
+          await this.notifications.notify(n.managerDid, {
+            kind: 'shift_hours',
+            title: `${n.driverName} has reached the shift limit`,
+            body: `On shift ${n.onDuty} hours${n.plate ? ` with ${n.plate}` : ''}; the limit is ${limit}. They deliver what is aboard and take nothing new, then rest ${rest} hours. Plan no new load for them until they have.`,
+            link: '/',
+            tag: `hours:over:${n.driverDid}`,
+          });
+        }
+      } catch (err) {
+        this.logger.warn(`hours notice failed for ${n.driverDid}: ${(err as Error).message}`);
+      }
+    }
+    return told;
   }
 
   onModuleDestroy(): void {
     if (this.uncollectedTimer) clearInterval(this.uncollectedTimer);
     if (this.signupTimer) clearInterval(this.signupTimer);
     if (this.lateTimer) clearInterval(this.lateTimer);
+    if (this.hoursTimer) clearInterval(this.hoursTimer);
   }
 
   onModuleInit(): void {

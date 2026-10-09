@@ -68,6 +68,9 @@ export function createDriverApi(sbg: SbgClient) {
     /** The current shift session (coupled vehicle, corridor) — null-ish when off shift. */
     session: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/session', { params: { path: { did } } })),
 
+    /** "Tell me when I can start": a driver resting after a working day asks to be told the moment the rest is over. */
+    tellWhenRested: (did: string) => sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/rest/tell-me', { params: { path: { did } } })),
+
     /** The driver's JOBS + EARNINGS register (R5): a searched/filtered/paged page of the freight hauls they
      *  claimed → { items, total }. Owner-scoped. */
     jobs: (did: string, query?: DriverJobsQuery) =>

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import {
+  afterShiftLine,
   hoursWords,
+  restSays,
   blockerTone,
   roadBlocks,
   roadMeasure,
@@ -503,6 +505,35 @@ describe('FP8 — the shift clock', () => {
     expect(hoursWords(undefined, t)).toBeNull();
     expect(hoursWords({ onDuty: 3.2, limit: 13, over: false }, t)).toBe('On duty 3.2 h of 13 h');
     expect(hoursWords({ onDuty: 13.4, limit: 13, over: true }, t)).toBe('On duty 13.4 h — over the 13 h limit');
+  });
+
+  it('says the last hour as the last hour — when the server says it is, and never by its own arithmetic', () => {
+    expect(hoursWords({ onDuty: 12.3, limit: 13, over: false, near: true }, t)).toBe('On duty 12.3 h of 13 h — less than an hour left');
+    expect(hoursWords({ onDuty: 12.3, limit: 13, over: false }, t)).toBe('On duty 12.3 h of 13 h');
+    // Past it, the limit is the news; "near" is not.
+    expect(hoursWords({ onDuty: 13.1, limit: 13, over: true, near: true }, t)).toBe('On duty 13.1 h — over the 13 h limit');
+  });
+
+  it('ending a shift: promises "any time" only where no rest will be owed', () => {
+    expect(afterShiftLine({ restHours: 9 }, t)).toBe('You can start a new shift any time');
+    expect(afterShiftLine(undefined, t)).toBe('You can start a new shift any time');
+    expect(afterShiftLine({ restHours: 9, restOwed: true }, t)).toBe('After a working day you rest: your next shift can start 9 hours from now');
+  });
+
+  it('off duty after a working day: says from when they can start, before they try — and whether they asked to be told', () => {
+    const clock = (iso: string) => iso.slice(11, 16);
+    expect(restSays(undefined, t, clock)).toBeNull();
+    expect(restSays({ restHours: 9 }, t, clock)).toBeNull();
+    expect(restSays({ restHours: 9, restUntil: '2026-10-10T05:10:00.000Z' }, t, clock)).toEqual({
+      title: 'Resting: you can start again from 05:10',
+      detail: 'After a working day the next shift waits for 9 hours of rest.',
+      asked: false,
+    });
+    expect(restSays({ restHours: 9, restUntil: '2026-10-10T05:10:00.000Z', tellWhenRested: true }, t, clock)).toEqual({
+      title: 'Resting: you can start again from 05:10',
+      detail: 'After a working day the next shift waits for 9 hours of rest. We will tell you when you can start.',
+      asked: true,
+    });
   });
 });
 

@@ -11,7 +11,9 @@ import {
   canStartShift,
   capacitySubLine,
   driverStatusNotice,
+  afterShiftLine,
   hoursWords,
+  restSays,
   isFull,
   minEarnFilter,
   offShiftSummary,
@@ -133,6 +135,7 @@ function OffShift({ state, actions, onOpenFleet }: HomeScreenProps) {
    */
   const namedClass = namedVehicleClass(state.vehicle, state.vehicles);
   const vehicle = vehicleWord(namedClass, t);
+  const rest = restSays(state.session.hours, t, (iso) => new Date(iso).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' }));
   const [sticker, setSticker] = useState<RecentVehicleView | null>(null);
   const [printBlocked, setPrintBlocked] = useState(false);
   const stickerRidden = isRidden(sticker?.vehicleClass);
@@ -163,6 +166,19 @@ function OffShift({ state, actions, onOpenFleet }: HomeScreenProps) {
       {/* A refused start names the paper (FP4) — that sentence was written for the driver, so it is shown. */}
       {/* FP8 — and a refused start after a working day names the rest owed (HOURS_EXCEEDED), the same way. */}
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} showDetail={state.error.code === 'CANNOT_COUPLE' || state.error.code === 'HOURS_EXCEEDED'} /> : null}
+      {/* RESTING — said before they try. Until now the only way to learn when the next shift could start was to start
+          one and be refused. "Tell me when" is theirs to press: for most working days that moment is in the night,
+          and only somebody waiting for it wants to hear it. */}
+      {rest ? (
+        <>
+          <Note tone="info" icon="clock" title={rest.title} detail={rest.detail} />
+          {rest.asked ? null : (
+            <Button variant="outline" chevron={false} busy={state.busy === 'rest'} onClick={() => void actions.tellWhenRested()}>
+              {t('driver.home.restTellMe')}
+            </Button>
+          )}
+        </>
+      ) : null}
       <DarkSpellNote />
 
       {/* Before the walk to the yard, which is the one calm moment in a driver's day. Below the notices,
@@ -821,7 +837,7 @@ function OnShift({ state, actions, onOpenFleet }: HomeScreenProps) {
 
       <Sheet open={confirm === 'end'} onClose={() => setConfirm(null)} title={t('driver.home.endSheetTitle')}>
         <p class="t-body">{t('driver.home.endBody', { plate: v.plate })}</p>
-        <Checklist items={[t('driver.home.end1'), t('driver.home.end2')]} />
+        <Checklist items={[t('driver.home.end1'), afterShiftLine(state.session.hours, t)]} />
         <Button
           chevron={false}
           busy={state.busy === 'end'}

@@ -1201,6 +1201,17 @@ export function useDriverApp() {
     });
   }, [client, did, run, fail, pushToast, refresh]);
 
+  /** "Tell me when I can start": asked while resting; the answer comes the moment the rest is over. */
+  const tellWhenRested = useCallback(async () => {
+    if (!client || !did) return;
+    await run('rest', async () => {
+      const r = await client.api.tellWhenRested(did);
+      if (r.error) return fail(r.error);
+      pushToast({ tone: 'ok', icon: 'check', title: t('driver.toast.restAsked'), detail: t('driver.toast.restAskedDetail') });
+      await refresh();
+    });
+  }, [client, did, run, fail, pushToast, refresh]);
+
   const matchRate = useCallback(
     async (vehicleId: string, price: number) => {
       if (!client) return;
@@ -1718,6 +1729,7 @@ export function useDriverApp() {
       loadNodes,
       startShift,
       endShift,
+      tellWhenRested,
       /** FP2 — the consignment note of a load this driver carries. */
       freightNote: (freightId: string) => client!.api.freightNote(freightId),
       matchRate,

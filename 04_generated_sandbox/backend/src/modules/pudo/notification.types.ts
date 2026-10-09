@@ -44,6 +44,12 @@ export const NOTIFICATION_KINDS = [
   'load_cancelled',
   'freight_problem',
   'claim_decided',
+  /**
+   * A DRIVER'S HOURS, said by the clock: an hour before the shift limit, at the limit, and — to somebody who asked —
+   * when their rest is over. The fleet's office hears the limit being passed too. Until this, everything about the
+   * limit waited to be asked: a driver at the wheel found out by being refused a load.
+   */
+  'shift_hours',
   'papers_due',
   'papers_lapsed',
   /** A renewed licence the courier sent was recorded, or refused with a reason they can act on. */

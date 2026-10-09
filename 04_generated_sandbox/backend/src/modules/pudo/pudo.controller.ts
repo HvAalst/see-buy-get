@@ -4559,6 +4559,19 @@ export class SbgController {
   }
 
   /**
+   * "TELL ME WHEN I CAN START" — a driver resting after a working day asks to be told the moment the rest is over.
+   * Asked for, never assumed: that moment is usually in the small hours, and only somebody waiting for it wants it.
+   * Answers with their hours as they now stand.
+   */
+  @Post('fleet/drivers/:did/rest/tell-me')
+  tellWhenRested(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    // The driver's own asking: their office may read their hours, and may not decide what wakes them.
+    this.assertDriverActs(did, actor);
+    this.fleet.askRestNotice(did);
+    return this.fleet.hoursFor(did);
+  }
+
+  /**
    * FP7 — the sender's instructions (CMR box 13). Rewritten until the goods are taken over; added to once
    * they are on the road. The sender or the store that shipped it; the driver holding the load is told.
    */

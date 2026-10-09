@@ -35,6 +35,32 @@ export const MAX_ON_DUTY_HOURS = 13;
 export const MIN_REST_HOURS = 9;
 /** A coupling shorter than this was not a working day — a wrong scan, a five-minute move — so no rest is owed after it. */
 export const REST_OWED_AFTER_HOURS = 4;
+/** How long before the limit a driver is told it is coming: time to finish, and to stop looking for more. */
+export const HOURS_NEAR_LIMIT_H = 1;
+/**
+ * "Your rest is over" is worth saying at the minute it is true, and not much later. If the server was not looking
+ * then — a restart, a long night — a driver told half a day afterwards is being told nothing; they have long since
+ * seen it on their own screen, or started.
+ */
+export const REST_NOTICE_LATE_MS = 30 * 60 * 1000;
+
+/**
+ * Something to tell a driver about their hours, by the clock and not because they tried something.
+ *
+ *   near    an hour before the shift limit: nothing changes yet, and it is the last moment the news is of any use
+ *   over    the limit is passed: what is aboard is delivered, nothing new is offered or taken
+ *   rested  the rest they were waiting for is over — told only to somebody who ASKED (see askRestNotice)
+ */
+export interface HoursNotice {
+  kind: 'near' | 'over' | 'rested';
+  driverDid: string;
+  driverName: string;
+  /** The fleet whose driver this is, where there is one: its office hears when the limit is passed. */
+  managerDid?: string;
+  plate?: string;
+  /** Whole hours on this shift, for the words. Absent for `rested`. */
+  onDuty?: number;
+}
 
 /** One vehicle a driver could start today on — projected for the picker, with whether it is free right now. */
 export interface RecentVehicle {
@@ -91,6 +117,17 @@ export class FleetService {
    * vehicle in the network.
    */
   private readonly vehicleHistory = new PersistentMap<string, string[]>('pudo-driver-vehicles');
+  /**
+   * What each shift's driver has already been told about its hours — kept beside the shifts, not on one: it is this
+   * service's bookkeeping, and a shift is read by the driver, their office and the counter. By assignment id.
+   */
+  private readonly hoursTold = new PersistentMap<string, { near?: string; over?: string }>('pudo-fleet-hours-told');
+  /**
+   * The drivers WAITING for their rest to end, and when it does. Somebody is here because they asked — by pressing
+   * "tell me when", or by trying to start and being turned away. Nobody else is told: nine hours after most working
+   * days is the middle of the night, and a driver asleep has no use for the news. By driver.
+   */
+  private readonly restAsks = new PersistentMap<string, { askedAt: string; until: string }>('pudo-fleet-rest-asks');
 
   constructor(
     private readonly drivers: DriverService,
@@ -133,7 +170,13 @@ export class FleetService {
     if (corridorId) this.corridors.requireUsableBy(corridorId, driver.managerDid);
     // FP8 — rest after a working day, before the next one starts. A short coupling owes none.
     const rest = this.restHoursSince(driverDid);
-    if (rest != null && rest < MIN_REST_HOURS) throw new GlosError('HOURS_EXCEEDED', `Rest first: ${rest.toFixed(1)} h since the last shift ended, ${MIN_REST_HOURS} h needed before the next`);
+    if (rest != null && rest < MIN_REST_HOURS) {
+      // Somebody turned away for rest has said, by trying, that they are waiting to start: they are told when they can.
+      this.askRestNotice(driverDid);
+      throw new GlosError('HOURS_EXCEEDED', `Rest first: ${rest.toFixed(1)} h since the last shift ended, ${MIN_REST_HOURS} h needed before the next. We will tell you when you can start.`);
+    }
+    // On shift again: whatever they were waiting to hear, they no longer are.
+    this.restAsks.delete(driverDid);
 
     const assignment: Assignment = {
       assignmentId: `asg_${randomBytes(6).toString('hex')}`,
@@ -401,10 +444,101 @@ export class FleetService {
     return this.hoursOnDuty(driverDid, now) > MAX_ON_DUTY_HOURS;
   }
 
-  /** The driver's hours as their app says them: on duty, the limit, and whether it is passed. */
-  hoursFor(driverDid: string, now: number = Date.now()): { onDuty: number; limit: number; over: boolean; restHours: number } {
+  /**
+   * The driver's hours as their app says them: on duty, the limit, and whether it is passed — and, off duty after a
+   * working day, until when they rest, so that the answer to "when can I start?" is on the screen and not behind a
+   * refused attempt. `tellWhenRested`: they have asked to be told at that moment.
+   */
+  hoursFor(driverDid: string, now: number = Date.now()): { onDuty: number; limit: number; over: boolean; near?: boolean; restOwed?: boolean; restHours: number; restUntil?: string; tellWhenRested?: boolean } {
     const onDuty = this.hoursOnDuty(driverDid, now);
-    return { onDuty, limit: MAX_ON_DUTY_HOURS, over: onDuty > MAX_ON_DUTY_HOURS, restHours: MIN_REST_HOURS };
+    const restUntil = this.restUntil(driverDid, now);
+    const over = onDuty > MAX_ON_DUTY_HOURS;
+    return {
+      onDuty,
+      limit: MAX_ON_DUTY_HOURS,
+      over,
+      // The last hour before the limit — the same hour the notice is sent in, said by the one place that decides it.
+      ...(!over && onDuty >= MAX_ON_DUTY_HOURS - HOURS_NEAR_LIMIT_H ? { near: true } : {}),
+      // This shift is already a working day: ending it now owes the rest. Said to the sheet that ends it, which used
+      // to promise "you can start a new shift any time".
+      ...(onDuty >= REST_OWED_AFTER_HOURS ? { restOwed: true } : {}),
+      restHours: MIN_REST_HOURS,
+      ...(restUntil ? { restUntil, ...(this.restAsks.get(driverDid)?.until === restUntil ? { tellWhenRested: true } : {}) } : {}),
+    };
+  }
+
+  /** When the rest owed after the last working day ends — only while it is still running, and the driver is off duty. */
+  restUntil(driverDid: string, now: number = Date.now()): string | undefined {
+    if (this.activeForDriver(driverDid)) return undefined;
+    const rested = this.restHoursSince(driverDid, now);
+    if (rested == null || rested >= MIN_REST_HOURS) return undefined;
+    const ended = [...this.assignments.values()]
+      .filter((a) => a.driverDid === driverDid && a.status === 'ended' && a.endedAt && new Date(a.endedAt).getTime() - new Date(a.startedAt).getTime() >= REST_OWED_AFTER_HOURS * 3_600_000)
+      .map((a) => new Date(a.endedAt as string).getTime())
+      .sort((x, y) => y - x)[0];
+    return new Date(ended + MIN_REST_HOURS * 3_600_000).toISOString();
+  }
+
+  /**
+   * "TELL ME WHEN I CAN START." A driver who is resting asks to be told the moment the rest is over. Asked for, never
+   * assumed: for most working days that moment is in the small hours, and only somebody waiting for it wants it.
+   * Asking twice is asking once. Refused for somebody who is not resting — there is nothing to wait for.
+   */
+  askRestNotice(driverDid: string, now: number = Date.now()): { restUntil: string; tellWhenRested: true } {
+    const until = this.restUntil(driverDid, now);
+    if (!until) throw new GlosError('INVALID_STATE', this.activeForDriver(driverDid) ? 'You are on shift: there is no rest to wait for' : 'You are not resting: you can start a shift now');
+    if (this.restAsks.get(driverDid)?.until !== until) this.restAsks.set(driverDid, { askedAt: new Date(now).toISOString(), until });
+    return { restUntil: until, tellWhenRested: true };
+  }
+
+  /**
+   * WHAT IS DUE TO BE SAID ABOUT HOURS, RIGHT NOW — taken: each is returned once, and noted as said before it is
+   * handed over, so a sweep that runs twice, or fails half-way, never says a thing twice.
+   *
+   * Everything else about the limit waits to be asked: the home screen shows a line, the board marks a row, a claim is
+   * refused. A driver who is DRIVING — the whole point of the limit — learned of it by being turned away, or by the
+   * offers going quiet, which looks exactly like a slow afternoon. This is the half that speaks first.
+   */
+  takeHoursNotices(now: number = Date.now()): HoursNotice[] {
+    const due: HoursNotice[] = [];
+    const who = (driverDid: string, vehicleId?: string): Pick<HoursNotice, 'driverDid' | 'driverName' | 'managerDid' | 'plate'> => {
+      let driverName = 'A driver';
+      let managerDid: string | undefined;
+      let plate: string | undefined;
+      try {
+        const d = this.drivers.get(driverDid);
+        driverName = d.displayName;
+        managerDid = d.managerDid;
+      } catch {
+        /* a shift whose driver record cannot be read is still a shift somebody is on */
+      }
+      try {
+        if (vehicleId) plate = this.vehicles.get(vehicleId).plate;
+      } catch {
+        /* the same for its vehicle */
+      }
+      return { driverDid, driverName, ...(managerDid ? { managerDid } : {}), ...(plate ? { plate } : {}) };
+    };
+    for (const a of this.assignments.values()) {
+      if (a.status !== 'active') continue;
+      const hours = (now - new Date(a.startedAt).getTime()) / 3_600_000;
+      const told = this.hoursTold.get(a.assignmentId) ?? {};
+      // Past the limit says everything the hour before it would have: one notice, the one that is true.
+      const kind = hours > MAX_ON_DUTY_HOURS ? 'over' : hours >= MAX_ON_DUTY_HOURS - HOURS_NEAR_LIMIT_H ? 'near' : undefined;
+      if (!kind || told[kind]) continue;
+      this.hoursTold.set(a.assignmentId, { ...told, [kind]: new Date(now).toISOString() });
+      due.push({ kind, ...who(a.driverDid, a.vehicleId), onDuty: Math.floor(hours) });
+    }
+    for (const [driverDid, ask] of [...this.restAsks.entries()]) {
+      const until = new Date(ask.until).getTime();
+      if (until > now) continue;
+      this.restAsks.delete(driverDid);
+      // The moment is long past: there is nothing left to tell. (Somebody back on shift is not here at all — starting
+      // a shift is what ends the waiting.)
+      if (now - until > REST_NOTICE_LATE_MS) continue;
+      due.push({ kind: 'rested', ...who(driverDid) });
+    }
+    return due;
   }
 
   /** The driver's current shift session (active coupling + the vehicle), or null when off duty. */

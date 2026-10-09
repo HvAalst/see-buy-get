@@ -281,6 +281,26 @@ move (`NUMBER_UNDO_MS` = 24 h, `OLD_NUMBER_KEPT_MS` = 7 days), and neither waits
   for 24 hours after any move (`identity.controller.ts`, `refuseWhileUndoable`).
 - Not done: a parcel already past its free window still costs its holding fee during a hidden day.
 
+## A driver's hours, said by the clock
+The shift limit (13 h) and the rest after a working day (9 h, owed after a shift of 4 h or more) were enforced
+only when a driver tried something: a claim refused, a start refused. Now the driver is told first.
+- **Three notices** (`FleetService.takeHoursNotices` → `NotificationDispatcher.sweepHours`, every 5 minutes;
+  kind `shift_hours`): less than an hour before the limit; at the limit — what is still theirs to do, what is
+  not, and that the next shift starts 9 h after this one ends; and "your rest is over". The fleet's office is
+  told when one of its drivers passes the limit.
+- **"Your rest is over" goes only to somebody who asked**: by pressing "Tell me when I can start"
+  (`POST sbg/fleet/drivers/:did/rest/tell-me`, the driver's own act) or by trying to start and being turned
+  away. Nine hours after most working days is the night; nobody else is told. Not sent more than 30 minutes
+  late, and never to somebody already back on shift.
+- **What was said is kept beside the shift** (`pudo-fleet-hours-told`, `pudo-fleet-rest-asks`), not on the
+  `Assignment`: taken once, noted before it is handed over.
+- **The screens read, they do not calculate**: `hours.near`, `hours.restOwed`, `hours.restUntil`,
+  `hours.tellWhenRested` come from `FleetService.hoursFor`. Driver app: the shift card's last-hour line, the
+  "End your shift?" sheet (no longer "start again any time" after a working day), and the start screen's
+  "Resting: you can start again from …" (`restSays`, `afterShiftLine`, `hoursWords` in `apps/driver/logic.ts`).
+- Checking it in a browser needs a shift that started hours ago: `scratchpad/drive-hrs.mjs setup | backdate |
+  look` sets the start back in the sandbox's own file with the server stopped (it looks at the clocks at boot).
+
 ## A national ID two people say is theirs
 A driver and a shop each register with a national ID number and the network keeps one of each, so somebody whose
 number another registration holds cannot register at all. The user decided how it is settled (2026-10-08): staff

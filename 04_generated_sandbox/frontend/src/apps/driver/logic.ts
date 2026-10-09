@@ -393,9 +393,30 @@ export function claimControl(claim: Claimable): ClaimControl {
 }
 
 /** FP8 — the shift clock in one line: how long on duty against the limit, and the plain word once it is passed. */
-export function hoursWords(h: { onDuty: number; limit: number; over: boolean } | undefined, t: Translate): string | null {
+export function hoursWords(h: { onDuty: number; limit: number; over: boolean; near?: boolean } | undefined, t: Translate): string | null {
   if (!h) return null;
-  return h.over ? t('driver.home.hoursOverLine', { onDuty: h.onDuty, limit: h.limit }) : t('driver.home.hoursLine', { onDuty: h.onDuty, limit: h.limit });
+  if (h.over) return t('driver.home.hoursOverLine', { onDuty: h.onDuty, limit: h.limit });
+  // The last hour is said as the last hour: it is the last moment the news is of any use.
+  return t(h.near ? 'driver.home.hoursNearLine' : 'driver.home.hoursLine', { onDuty: h.onDuty, limit: h.limit });
+}
+
+/** What ending the shift NOW means for the next one: a working day owes its rest, a short coupling owes nothing. */
+export function afterShiftLine(h: { restOwed?: boolean; restHours: number } | undefined, t: Translate): string {
+  return h?.restOwed ? t('driver.home.end2Rest', { rest: h.restHours }) : t('driver.home.end2');
+}
+
+/**
+ * OFF DUTY AFTER A WORKING DAY: from when the next shift can start — said before they try, because until now the only
+ * way to learn it was to start a shift and be refused — and whether they have asked to be told at that moment.
+ */
+export function restSays(
+  h: { restUntil?: string; tellWhenRested?: boolean; restHours: number } | undefined,
+  t: Translate,
+  clock: (iso: string) => string,
+): { title: string; detail: string; asked: boolean } | null {
+  if (!h?.restUntil) return null;
+  const asked = Boolean(h.tellWhenRested);
+  return { title: t('driver.home.restTitle', { time: clock(h.restUntil) }), detail: t(asked ? 'driver.home.restAsked' : 'driver.home.restDetail', { rest: h.restHours }), asked };
 }
 
 /** Loading a bag books the driver's payout against their badge; without one, nothing is booked. */

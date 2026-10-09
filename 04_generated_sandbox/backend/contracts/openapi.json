@@ -13730,6 +13730,28 @@
         }
       }
     },
+    "/v1/sbg/fleet/drivers/{did}/rest/tell-me": {
+      "post": {
+        "operationId": "Sbg.tellWhenRested",
+        "summary": "",
+        "description": "\"TELL ME WHEN I CAN START\" — a driver resting after a working day asks to be told the moment the rest is over.\nAsked for, never assumed: that moment is usually in the small hours, and only somebody waiting for it wants it.\nAnswers with their hours as they now stand.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/dispatch/freight/{id}/instructions": {
       "patch": {
         "operationId": "Sbg.setFreightInstructions",
