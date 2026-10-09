@@ -86,7 +86,9 @@ export interface MailParams {
    * administrators. `stops`: what switches off the day after, in words; empty when nothing does by itself.
    * `daysLeft` 0 is the expiry date itself.
    */
-  'company-paper-lapsing': { company: string; country?: string; paper: string; reference: string; expiresOn: string; daysLeft: number; lapsed: boolean; stops: string[]; where: 'licence' | 'insurance' };
+  'company-paper-lapsing': { company: string; country?: string; paper: string; reference: string; expiresOn: string; daysLeft: number; lapsed: boolean; stops: string[]; where: 'licence' | 'insurance'; /** The company keeps its own record (it is switched on): it enters the new date itself, with the paper. */ own: boolean };
+  /** A company's own administrator changed a part of its record that switches something. Sent to the OTHER administrators, and those of the company above it. */
+  'company-record-changed': { company: string; by: string; part: string; change: 'added' | 'changed' | 'removed'; was: string; now: string; paper: boolean };
   'order-on-its-way': { store: string; orderRef?: string; shop: string; trackingUrl: string };
   'ready-for-collection': { shop: string; address?: string; collectBy: string; openUrl?: string };
   'freight-delivered': { code: string; description: string; destination: string; deliveredAt: string; carrier: string; driver?: string; receiverName?: string; amount?: number; currency?: string; noteNumber: string; /** A link that opens the note with nobody signed in, and when it stops. */ noteUrl?: string; noteUntil?: string; /** It goes to one of a BUSINESS's people: its name, and whether they posted the load or are an owner told in the poster's place. */ business?: { name: string; as: 'poster' | 'owner' } };
@@ -566,11 +568,12 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     wired: true,
     // The next mark sends its own; this one is still worth reading two days late.
     sendLater: 48,
-    sample: { company: 'SeeBuyGet Kenya', country: 'KE', paper: 'Courier licence', reference: 'CA/CL/0042', expiresOn: '2026-11-12', daysLeft: 14, lapsed: false, stops: ['charge customers'], where: 'licence' },
+    sample: { company: 'SeeBuyGet Kenya', country: 'KE', paper: 'Courier licence', reference: 'CA/CL/0042', expiresOn: '2026-11-12', daysLeft: 14, lapsed: false, stops: ['charge customers'], where: 'licence', own: true },
     also: [
-      { key: 'tomorrow', label: 'The day before', sample: { company: 'SeeBuyGet Kenya', country: 'KE', paper: 'Courier licence', reference: 'CA/CL/0042', expiresOn: '2026-11-12', daysLeft: 1, lapsed: false, stops: ['charge customers'], where: 'licence' } },
-      { key: 'lapsed', label: 'It has lapsed', sample: { company: 'SeeBuyGet Kenya', country: 'KE', paper: 'Goods-in-transit insurance', reference: 'GIT-88-2025', expiresOn: '2026-10-07', daysLeft: 0, lapsed: true, stops: ['pay claims'], where: 'insurance' } },
-      { key: 'nothing-stops', label: 'A paper nothing depends on', sample: { company: 'SeeBuyGet Kenya', country: 'KE', paper: 'Public liability insurance', reference: 'PL-2025-17', expiresOn: '2026-11-12', daysLeft: 30, lapsed: false, stops: [], where: 'insurance' } },
+      { key: 'tomorrow', label: 'The day before', sample: { company: 'SeeBuyGet Kenya', country: 'KE', paper: 'Courier licence', reference: 'CA/CL/0042', expiresOn: '2026-11-12', daysLeft: 1, lapsed: false, stops: ['charge customers'], where: 'licence', own: true } },
+      { key: 'lapsed', label: 'It has lapsed', sample: { company: 'SeeBuyGet Kenya', country: 'KE', paper: 'Goods-in-transit insurance', reference: 'GIT-88-2025', expiresOn: '2026-10-07', daysLeft: 0, lapsed: true, stops: ['pay claims'], where: 'insurance', own: true } },
+      { key: 'nothing-stops', label: 'A paper nothing depends on', sample: { company: 'SeeBuyGet Kenya', country: 'KE', paper: 'Public liability insurance', reference: 'PL-2025-17', expiresOn: '2026-11-12', daysLeft: 30, lapsed: false, stops: [], where: 'insurance', own: true } },
+      { key: 'not-switched-on', label: 'A company not switched on yet', sample: { company: 'SeeBuyGet Uganda', country: 'UG', paper: 'Courier licence', reference: 'UCC/CL/0007', expiresOn: '2026-11-12', daysLeft: 14, lapsed: false, stops: [], where: 'licence', own: false } },
     ],
     build: (p) => {
       const when = p.lapsed ? 'has lapsed' : p.daysLeft <= 0 ? 'runs out today' : p.daysLeft === 1 ? 'runs out tomorrow' : `runs out in ${p.daysLeft} days`;
@@ -595,12 +598,47 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
           {
             kind: 'warning',
             title: 'What to do',
-            text: `Renew it with whoever issued it. Then sign in to the console, open Company record, and under Papers put the renewed ${p.where === 'licence' ? 'licence' : 'policy'} on record with its new expiry date. SeeBuyGet staff check it and enter the new date on the company’s record: the old date counts until they have.${p.lapsed && p.stops.length ? ' What is switched off comes back the moment the new date is on record.' : ''}`,
+            // Whose hands the new date is in: the company's own once it is switched on; until then staff enter it.
+            text: p.own
+              ? `Renew it with whoever issued it. Then sign in to the console, open Company record, and under ${p.where === 'licence' ? 'Licences' : 'Insurance'} press “Change, with its paper”: enter the new expiry date and attach the renewed ${p.where === 'licence' ? 'licence' : 'policy'}. It counts from that moment, and nobody at SeeBuyGet has to enter anything.${p.lapsed && p.stops.length ? ' What is switched off comes back the moment the new date is on record.' : ''}`
+              : `Renew it with whoever issued it. Then sign in to the console, open Company record, and under Papers put the renewed ${p.where === 'licence' ? 'licence' : 'policy'} on record with its new expiry date. The company is not switched on yet, so SeeBuyGet staff check it and enter the new date on its record.`,
           },
           { kind: 'button', label: 'Open the operator console', href: appUrl('console') },
           { kind: 'note', text: 'You will hear again as the date comes closer, and on the day it has lapsed. Other administrators of the company get this too.' },
         ],
         reason: `You are getting this email because you administer ${p.company} on SeeBuyGet. It is about a paper your company trades on, so it cannot be turned off.`,
+      };
+    },
+  },
+
+  'company-record-changed': {
+    title: 'A company’s own record was changed by one of its administrators',
+    sentWhen: 'An administrator of a company that is switched on changes a licence, an insurance policy, a bank account or who may sign — each with its paper — or takes one off the record. Sent to every OTHER administrator of the company and of the company above it, never to the person who did it.',
+    wired: true,
+    // The change stands whether or not this arrives; it is still worth reading two days late.
+    sendLater: 48,
+    sample: { company: 'SeeBuyGet Kenya', by: 'Wanjiru Kamau', part: 'licence', change: 'changed', was: 'courier licence CA/CL/0042, good until 2026-11-12', now: 'courier licence CA/CL/0042, good until 2027-11-12', paper: true },
+    also: [
+      { key: 'added', label: 'Something added', sample: { company: 'SeeBuyGet Kenya', by: 'Wanjiru Kamau', part: 'bank account', change: 'added', was: '—', now: 'KCB account 1100223344 (KES, SeeBuyGet Kenya Ltd)', paper: true } },
+      { key: 'removed', label: 'Something taken off', sample: { company: 'SeeBuyGet Kenya', by: 'Wanjiru Kamau', part: 'person who may sign', change: 'removed', was: 'Otieno Odhiambo, Director — signs alone', now: 'taken off the record', paper: false } },
+    ],
+    build: (p) => {
+      const did = p.change === 'added' ? 'added a' : p.change === 'removed' ? 'took a' : 'changed a';
+      const tail = p.change === 'removed' ? ' off' : ' on';
+      return {
+        subject: `${p.by} ${did} ${p.part}${tail} ${p.company}’s record`,
+        preheader: p.change === 'removed' ? `Was: ${p.was}` : `Now: ${p.now}`,
+        blocks: [
+          { kind: 'heading', text: `A change to ${p.company}’s record` },
+          {
+            kind: 'paragraph',
+            text: `${p.by} ${did} ${p.part}${tail} ${p.company}’s record.${p.paper ? ' The paper behind it was put on record in the same act, and the change counts from now: nobody at SeeBuyGet checks it first.' : ''}`,
+          },
+          { kind: 'facts', rows: [['Company', p.company], ['By', p.by], ['Was', p.was], ['Now', p.now]] },
+          { kind: 'note', text: `You are told because a company that is switched on keeps its own record, and the people who would know whether a change is right are its own. If this one is not right, speak to ${p.by}, or open Company record in the console and read the paper.` },
+          { kind: 'button', label: 'Open the operator console', href: appUrl('console') },
+        ],
+        reason: `You are getting this email because you administer ${p.company}, or the company above it, on SeeBuyGet. It is about what that company trades on, so it cannot be turned off.`,
       };
     },
   },

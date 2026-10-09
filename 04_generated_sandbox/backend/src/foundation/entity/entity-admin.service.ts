@@ -175,6 +175,7 @@ function viewOf(a: EntityAdmin): EntityAdminView {
 }
 
 /** The sign-out key of one administrator — their sessions share the company's DID, so the DID alone is too coarse. */
-function adminKey(adminId: string): string {
+/** The key one administrator's sessions answer to — which says WHICH administrator a token belongs to. */
+export function adminKey(adminId: string): string {
   return `entity-admin:${adminId}`;
 }

@@ -39,7 +39,12 @@ export const DOCUMENT_KINDS = [
 ] as const;
 export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
 
-export const DOCUMENT_STATUSES = ['awaiting_verification', 'verified', 'rejected', 'superseded'] as const;
+/**
+ * `declared` — put on record by a company that keeps its own record (one that is switched on). It counts from that
+ * moment, with nobody checking it first; what is left is that anybody who can see it may say it is not right. The
+ * two-person verification is how a company is switched ON, and stays that.
+ */
+export const DOCUMENT_STATUSES = ['awaiting_verification', 'verified', 'rejected', 'superseded', 'declared'] as const;
 export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
 
 /** A certificate scan is a few hundred kilobytes; eight megabytes is a generous ceiling, not a target. */
@@ -78,7 +83,7 @@ export class CompanyDocumentService {
   constructor(private readonly entities: EntityService) {}
 
   upload(
-    input: { entityId: string; kind: string; title: string; dataUrl: string; relatesTo?: string; expiresAt?: string; by?: string },
+    input: { entityId: string; kind: string; title: string; dataUrl: string; relatesTo?: string; expiresAt?: string; by?: string; /** The company's own, and it keeps its own record: it counts at once. */ declared?: boolean },
     now = Date.now(),
   ): CompanyDocument {
     const entity = this.entities.get(input.entityId);
@@ -112,7 +117,7 @@ export class CompanyDocumentService {
       uploadedBy: by,
       uploadedAt: new Date(now).toISOString(),
       ...(expiresAt ? { expiresAt } : {}),
-      status: 'awaiting_verification',
+      status: input.declared ? 'declared' : 'awaiting_verification',
     };
     this.files.set(document.documentId, bytes.toString('base64'));
     this.documents.set(document.documentId, document);
@@ -141,12 +146,25 @@ export class CompanyDocumentService {
   reject(entityId: string, documentId: string, by?: string, reason?: string, now = Date.now()): CompanyDocument {
     const document = this.require(entityId, documentId);
     if (document.status === 'superseded' || document.status === 'rejected') throw new GlosError('INVALID_STATE', `This document is already ${document.status}`);
+    // One person turning down a paper that COUNTS would be one person switching a company's licence off.
+    if (document.status === 'declared') throw new GlosError('INVALID_STATE', 'The company put this paper on record itself, and it counts. It is not rejected by one person');
     const who = by?.trim();
     if (!who) throw new GlosError('FIELD_REQUIRED', 'Say who is rejecting this');
     if (!reason?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say why — a rejected document is kept with its reason');
     Object.assign(document, { status: 'rejected', rejectedBy: who, rejectedAt: new Date(now).toISOString(), rejectionReason: reason.trim() });
     this.documents.set(document.documentId, document);
     return document;
+  }
+
+  /**
+   * A paper is no longer the paper for anything: the licence it was for was renewed under a NEW number, and the new
+   * paper says so. Kept, marked as replaced by that one — the same as a new version of the same paper.
+   */
+  retire(entityId: string, kind: string, relatesTo: string, replacedBy: string): void {
+    const old = this.currentOf(entityId, kind, relatesTo);
+    if (!old || old.documentId === replacedBy) return;
+    Object.assign(old, { status: 'superseded', supersededBy: replacedBy });
+    this.documents.set(old.documentId, old);
   }
 
   /** Every version of every paper a company has, current ones first. */

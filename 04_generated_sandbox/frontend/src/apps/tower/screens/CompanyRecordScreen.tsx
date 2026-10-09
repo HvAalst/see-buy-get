@@ -8,23 +8,37 @@ import {
   LEGAL_FORMS,
   LEGAL_FORM_LABEL,
   LICENCE_LABEL,
+  PAPER_KINDS_FOR,
   PRESENCE_CAPABILITIES,
+  REFERENCE_FIELD,
   SECTION_FIELDS,
   SECTION_TITLE,
+  declarationBody,
+  declareBlocker,
+  declareFields,
   documentBlocker,
   emptyRow,
   fromEditRows,
+  isPaperBound,
+  itemLine,
+  mayTakeOff,
   needsRelatesTo,
   readinessCounts,
+  recordHands,
+  recordLede,
   relatesToChoices,
+  runningOutHint,
   shortFingerprint,
   toEditRows,
   uploadBlocker,
   type CompanyAddress,
   type CompanyDocument,
+  type CompanyRecord,
   type CompanyRecordView,
+  type DocumentKind,
   type EditRow,
   type ListSection,
+  type PaperBoundSection,
 } from '../company';
 import { CAPABILITY_LABEL, type PresenceCapability } from '../presence';
 import type { TowerActions, TowerState } from '../useTowerApp';
@@ -43,11 +57,13 @@ export function CompanyRecordScreen({ state, actions }: { state: TowerState; act
   const client = actions.client();
   const entityId = state.companyId;
   const who = state.who?.name;
-  // A COMPANY'S RECORD IS KEPT BY NETWORK STAFF — the server refuses a company's own administrator every change to
-  // it, and until now this screen offered them a Save under every section that could only answer "not allowed".
-  // They read all of it, change none of it, and put the PAPER behind a change on record, which is theirs to do.
-  const canEdit = state.who?.mode === 'operator';
+  // WHOSE HANDS THE RECORD IS IN (the user, 2026-10-09): staff's until the company is switched on, the company's own
+  // from then — and the server refuses the other every change. So the screen offers a change only to whoever keeps
+  // it; the other reads every field and is offered none. A Save that can only answer "not allowed" is how this
+  // screen read to a company's administrator before, and how it would now read to staff.
+  const reader = state.who?.mode === 'operator' ? ('operator' as const) : ('company' as const);
   const [view, setView] = useState<CompanyRecordView | null>(null);
+  const hands = recordHands(view, reader);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -82,6 +98,8 @@ export function CompanyRecordScreen({ state, actions }: { state: TowerState; act
     }
     setDone(message);
     await load();
+    // A renewed licence is no longer running out: the number beside this screen in the menu is counted again.
+    actions.reloadLapsing();
     return true;
   };
   const saveRecord = (key: string, patch: Record<string, unknown>) =>
@@ -93,7 +111,7 @@ export function CompanyRecordScreen({ state, actions }: { state: TowerState; act
     <>
       <header class="cons__head">
         <h1 class="cons__title">{view ? view.entity.name : t('tower.company.title')}</h1>
-        <p class="cons__lede">{t(canEdit ? 'tower.company.lede' : 'tower.company.ledeOwn')}</p>
+        {view || reader === 'operator' ? <p class="cons__lede">{t(view ? recordLede(hands, reader) : 'tower.company.lede')}</p> : null}
       </header>
 
       <section class="cons__panel">
@@ -127,20 +145,33 @@ export function CompanyRecordScreen({ state, actions }: { state: TowerState; act
       ) : (
         <>
           <Readiness view={view} />
-          <RunningOut view={view} own={!canEdit} />
-          {/* Disabled as one: every field inside reads, and tower.css takes the Save, Add and Remove buttons away. */}
-          <fieldset class="twr-locked" disabled={!canEdit}>
+          <RunningOut view={view} hint={runningOutHint(hands, reader)} />
+          {/* Disabled as one for whoever does not keep it: every field inside reads, and tower.css takes the buttons away. */}
+          <fieldset class="twr-locked" disabled={!hands.mine}>
             <LegalSection view={view} busy={busy === 'legal'} onSave={(patch) => saveRecord('legal', patch)} />
             <AddressSection view={view} busy={busy === 'addresses'} onSave={(patch) => saveRecord('addresses', patch)} />
-            {(['representatives', 'beneficialOwners', 'taxRegistrations', ...(view.entity.kind === 'sister' ? (['bankAccounts'] as ListSection[]) : []), 'licences', 'insurance'] as ListSection[]).map((section) => (
-              <ListEditor key={section} section={section} view={view} busy={busy === section} onSave={(rows) => saveRecord(section, { [section]: rows })} />
-            ))}
+            {(['representatives', 'beneficialOwners', 'taxRegistrations', ...(view.entity.kind === 'sister' ? (['bankAccounts'] as ListSection[]) : []), 'licences', 'insurance'] as ListSection[]).map((section) =>
+              // In the company's own hands, the parts that switch something have no list to save: each item changes
+              // by itself, with its paper.
+              hands.keeper === 'company' && hands.mine && isPaperBound(section) ? (
+                <PaperBoundEditor
+                  key={section}
+                  section={section}
+                  view={view}
+                  busy={busy === section}
+                  onDeclare={(body) => (client && entityId ? run(section, () => client.api.declareCompanyChange(entityId, body), t(body.item ? 'tower.company.declare.done' : 'tower.company.declare.takenOff')) : Promise.resolve(false))}
+                />
+              ) : (
+                <ListEditor key={section} section={section} view={view} busy={busy === section} onSave={(rows) => saveRecord(section, { [section]: rows })} />
+              ),
+            )}
             <ObligationsSection view={view} busy={busy === 'obligations'} onSave={(rows) => saveRecord('obligations', { obligations: rows })} />
           </fieldset>
           <Documents
             view={view}
             who={who}
-            canVerify={canEdit}
+            canVerify={reader === 'operator'}
+            canUpload={reader === 'company' || hands.keeper === 'staff'}
             busy={busy}
             onUpload={(body) => (client && entityId ? run('upload', () => client.api.uploadCompanyDocument(entityId, { ...body, ...(who ? { by: who } : {}) }), t('tower.company.doc.uploaded')) : Promise.resolve(false))}
             onVerify={(documentId) => (client && entityId ? run(documentId, () => client.api.verifyCompanyDocument(entityId, documentId, who), t('tower.company.doc.verified')) : Promise.resolve(false))}
@@ -164,10 +195,9 @@ const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyl
 
 /**
  * CA5 — this company's licences and policies that are running out, and what its administrators were told. At the top
- * of the record, because it is the one thing on it with a date coming. A company's own administrator (`own`) is told
- * what to do; staff, where the new date goes.
+ * of the record, because it is the one thing on it with a date coming. The hint says whose hands the new date is in.
  */
-function RunningOut({ view, own }: { view: CompanyRecordView; own: boolean }) {
+function RunningOut({ view, hint }: { view: CompanyRecordView; hint: Parameters<ReturnType<typeof useT>>[0] }) {
   const t = useT();
   const items = view.expiring ?? [];
   if (!items.length) return null;
@@ -176,7 +206,7 @@ function RunningOut({ view, own }: { view: CompanyRecordView; own: boolean }) {
       <div class="cons__panelhead">
         <span class="cons__panelt">{t('tower.company.s.runningOut')}</span>
       </div>
-      <p class="chint">{t(own ? 'tower.company.runningOut.own' : 'tower.company.runningOut.staff')}</p>
+      <p class="chint">{t(hint)}</p>
       <LapsingPapers items={items} />
     </section>
   );
@@ -191,7 +221,7 @@ function Readiness({ view }: { view: CompanyRecordView }) {
   return (
     <section class="cons__panel">
       <div class="cons__panelhead">
-        <span class="cons__panelt">{t('tower.company.readyTitle')}</span>
+        <span class="cons__panelt">{t(view.keeper === 'company' ? 'tower.company.readyTitleOn' : 'tower.company.readyTitle')}</span>
         <span class="twr-panelend">
           <span class={`ctag ${view.entity.status === 'draft' ? 'ctag--warn' : 'ctag--ok'}`}>{t(view.entity.status === 'draft' ? 'tower.company.status.draft' : 'tower.company.status.active')}</span>
           <span class="ctag ctag--quiet">
@@ -199,7 +229,13 @@ function Readiness({ view }: { view: CompanyRecordView }) {
           </span>
         </span>
       </div>
-      {readiness?.ready ? (
+      {view.keeper === 'company' ? (
+        // The checklist is how a company is switched ON. Shown to one that is on, it would ask for "its paper verified
+        // by a second person" against a paper that now counts without one.
+        <p class="chint" style="margin:12px 0">
+          {t('tower.company.readyOn')}
+        </p>
+      ) : readiness?.ready ? (
         <p class="chint" style="margin:12px 0">
           {t('tower.company.readyYes', { level })}
         </p>
@@ -397,6 +433,176 @@ function ListEditor({ section, view, busy, onSave }: { section: ListSection; vie
   );
 }
 
+/**
+ * A PART THAT SWITCHES SOMETHING, IN THE COMPANY'S OWN HANDS. Each item is read, and changed ONE AT A TIME, WITH THE
+ * PAPER BEHIND IT. There is no Save for the list: that is the shape in which a date could move with no paper. What a
+ * licence or policy permits is not among the fields, and one that permits something has no "take off".
+ */
+function PaperBoundEditor({ section, view, busy, onDeclare }: { section: PaperBoundSection; view: CompanyRecordView; busy: boolean; onDeclare: (body: Record<string, unknown>) => Promise<boolean> }) {
+  const t = useT();
+  const items = view.record[section] as unknown as Array<Record<string, unknown>>;
+  const reference = (item: Record<string, unknown>) => String(item[REFERENCE_FIELD[section]] ?? '');
+  const [form, setForm] = useState<{ was?: string; row: EditRow } | null>(null);
+  const [paper, setPaper] = useState<{ dataUrl: string; name: string } | null>(null);
+  const [paperKind, setPaperKind] = useState<DocumentKind>(PAPER_KINDS_FOR[section][0]);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const blocker = form ? declareBlocker(section, form.row, Boolean(paper)) : null;
+  const start = (item?: Record<string, unknown>) => {
+    setPaper(null);
+    setRemoving(null);
+    setPaperKind(PAPER_KINDS_FOR[section][0]);
+    setForm(item ? { was: reference(item), row: toEditRows(section, { ...view.record, [section]: [item] } as CompanyRecord)[0] } : { row: emptyRow(SECTION_FIELDS[section]) });
+  };
+  const set = (key: string, value: string) => setForm((f) => (f ? { ...f, row: { ...f.row, [key]: value } } : f));
+
+  return (
+    <section class="cons__panel">
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t(SECTION_TITLE[section])}</span>
+      </div>
+      <p class="chint">{t('tower.company.declare.hint')}</p>
+      {items.length === 0 ? (
+        <p class="cons__empty">{t('tower.company.none')}</p>
+      ) : (
+        <table class="ctbl">
+          <tbody>
+            {items.map((item) => {
+              const line = itemLine(section, item, t);
+              const caps = (Array.isArray(item.supports) ? (item.supports as PresenceCapability[]) : []).map((c) => t(CAPABILITY_LABEL[c])).join(', ');
+              return (
+                <tr key={reference(item)}>
+                  <td>
+                    <div class="ctbl__strong">{line.title}</div>
+                    <div class="ctbl__sub">{line.detail}</div>
+                    {caps ? <div class="ctbl__sub">{t('tower.company.declare.permits', { caps })}</div> : null}
+                  </td>
+                  <td class="ctbl__num">
+                    {removing === reference(item) ? (
+                      <span class="twr-panelend">
+                        <span class="ctbl__sub">{t('tower.company.declare.takeOffSure', { what: reference(item) })}</span>
+                        <button
+                          type="button"
+                          class="cbtn cbtn--primary cbtn--sm"
+                          disabled={busy}
+                          onClick={async () => {
+                            await onDeclare({ section, was: reference(item) });
+                            setRemoving(null);
+                          }}
+                        >
+                          {t('tower.company.declare.takeOffYes')}
+                        </button>
+                        <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setRemoving(null)}>
+                          {t('tower.company.declare.keep')}
+                        </button>
+                      </span>
+                    ) : (
+                      <span class="twr-panelend">
+                        <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => start(item)}>
+                          {t('tower.company.declare.change')}
+                        </button>
+                        {mayTakeOff(section, item) ? (
+                          <button
+                            type="button"
+                            class="cbtn cbtn--ghost cbtn--sm"
+                            disabled={busy}
+                            onClick={() => {
+                              setForm(null);
+                              setRemoving(reference(item));
+                            }}
+                          >
+                            {t('tower.company.declare.takeOff')}
+                          </button>
+                        ) : null}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+      {form ? (
+        <div class="twr-declare">
+          <p class="cfield__label">{form.was ? t('tower.company.declare.changing', { what: form.was }) : t('tower.company.declare.adding')}</p>
+          <div class="twr-corridorform">
+            {declareFields(section, Boolean(form.was)).map((f) =>
+              f.type === 'select' ? (
+                <label key={f.key} class="cfield">
+                  <span class="cfield__label">{t(f.labelKey)}</span>
+                  <select class="cinput" value={form.row[f.key] as string} onChange={(e) => set(f.key, e.currentTarget.value)}>
+                    {(f.options ?? []).map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {t(o.labelKey)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <Text key={f.key} label={t(f.labelKey)} value={form.row[f.key] as string} type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'} onInput={(v) => set(f.key, v)} />
+              ),
+            )}
+            {PAPER_KINDS_FOR[section].length > 1 ? (
+              <label class="cfield">
+                <span class="cfield__label">{t('tower.company.doc.kind')}</span>
+                <select class="cinput" value={paperKind} onChange={(e) => setPaperKind(e.currentTarget.value as DocumentKind)}>
+                  {PAPER_KINDS_FOR[section].map((k) => (
+                    <option key={k} value={k}>
+                      {t(DOCUMENT_LABEL[k])}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <label class="cfield">
+              <span class="cfield__label">{t('tower.company.declare.paper')}</span>
+              <input
+                class="cinput"
+                type="file"
+                accept="application/pdf,image/png,image/jpeg"
+                onChange={(e) => {
+                  const file = e.currentTarget.files?.[0];
+                  if (!file) return setPaper(null);
+                  const reader = new FileReader();
+                  reader.onload = () => setPaper({ dataUrl: String(reader.result ?? ''), name: file.name });
+                  reader.readAsDataURL(file);
+                }}
+              />
+            </label>
+          </div>
+          <div class="twr-corridorsave">
+            <button
+              type="button"
+              class="cbtn cbtn--primary"
+              disabled={busy || blocker !== null}
+              onClick={async () => {
+                if (!paper) return;
+                const ok = await onDeclare(declarationBody(section, form.was, form.row, { dataUrl: paper.dataUrl, kind: paperKind }));
+                if (ok) {
+                  setForm(null);
+                  setPaper(null);
+                }
+              }}
+            >
+              {t('tower.company.declare.put')}
+            </button>
+            <button type="button" class="cbtn cbtn--ghost" onClick={() => setForm(null)}>
+              {t('tower.company.declare.cancel')}
+            </button>
+            {blocker ? <span class="chint">{t(blocker)}</span> : null}
+          </div>
+        </div>
+      ) : (
+        <div class="twr-corridorsave">
+          <button type="button" class="cbtn cbtn--ghost" disabled={busy} onClick={() => start()}>
+            {t('tower.company.declare.add')}
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 /** CA8 — what the company's country requires of it, one row per obligation in the catalogue. */
 function ObligationsSection({ view, busy, onSave }: { view: CompanyRecordView; busy: boolean; onSave: (rows: Array<Record<string, unknown>>) => Promise<boolean> }) {
   const t = useT();
@@ -443,6 +649,7 @@ function Documents({
   view,
   who,
   canVerify,
+  canUpload,
   busy,
   onUpload,
   onVerify,
@@ -451,8 +658,10 @@ function Documents({
 }: {
   view: CompanyRecordView;
   who: string | undefined;
-  /** Network staff verify and reject; a company's own administrator puts a paper on record and waits. */
+  /** Network staff verify and reject the papers of a company not switched on yet. */
   canVerify: boolean;
+  /** A company's administrator always; staff only while the record is still theirs to enter. */
+  canUpload: boolean;
   busy: string | null;
   onUpload: (body: { kind: string; title: string; dataUrl: string; relatesTo?: string; expiresAt?: string }) => Promise<boolean>;
   onVerify: (documentId: string) => Promise<boolean>;
@@ -460,10 +669,6 @@ function Documents({
   onOpen: (document: CompanyDocument) => Promise<void>;
 }) {
   const t = useT();
-  const empty = { kind: 'certificate_of_incorporation', relatesTo: '', title: '', expiresAt: '', dataUrl: '', fileName: '' };
-  const [form, setForm] = useState(empty);
-  const blocker = uploadBlocker(form);
-  const choices = relatesToChoices(form.kind, view.record, view.obligations);
 
   return (
     <section class="cons__panel">
@@ -483,6 +688,29 @@ function Documents({
         </table>
       )}
 
+      {canUpload ? <PutOnRecord view={view} busy={busy} onUpload={onUpload} /> : null}
+    </section>
+  );
+}
+
+/** Put a paper on record: which paper, what it is for, and the file. */
+function PutOnRecord({
+  view,
+  busy,
+  onUpload,
+}: {
+  view: CompanyRecordView;
+  busy: string | null;
+  onUpload: (body: { kind: string; title: string; dataUrl: string; relatesTo?: string; expiresAt?: string }) => Promise<boolean>;
+}) {
+  const t = useT();
+  const empty = { kind: 'certificate_of_incorporation', relatesTo: '', title: '', expiresAt: '', dataUrl: '', fileName: '' };
+  const [form, setForm] = useState(empty);
+  const blocker = uploadBlocker(form);
+  const choices = relatesToChoices(form.kind, view.record, view.obligations);
+
+  return (
+    <>
       <div class="twr-corridorform" style="margin-top:12px">
         <label class="cfield">
           <span class="cfield__label">{t('tower.company.doc.kind')}</span>
@@ -545,7 +773,7 @@ function Documents({
         </button>
         {blocker ? <span class="chint">{t(blocker)}</span> : null}
       </div>
-    </section>
+    </>
   );
 }
 
@@ -577,7 +805,9 @@ function DocumentRow({
         ? t('tower.company.doc.status.rejected', { who: d.rejectedBy ?? '', reason: d.rejectionReason ?? '' })
         : d.status === 'superseded'
           ? t('tower.company.doc.status.superseded')
-          : t('tower.company.doc.status.awaiting');
+          : d.status === 'declared'
+            ? t('tower.company.doc.status.declared', { who: d.uploadedBy })
+            : t('tower.company.doc.status.awaiting');
 
   return (
     <tr class={d.status === 'superseded' ? 'is-quiet' : undefined}>
@@ -595,7 +825,7 @@ function DocumentRow({
         <div>{t('tower.company.doc.by', { who: d.uploadedBy, when: when(d.uploadedAt) })}</div>
       </td>
       <td>
-        <span class={`ctag ${d.status === 'verified' ? 'ctag--ok' : d.status === 'rejected' ? 'ctag--warn' : d.status === 'superseded' ? 'ctag--quiet' : 'ctag--info'}`}>{status}</span>
+        <span class={`ctag ${d.status === 'verified' || d.status === 'declared' ? 'ctag--ok' : d.status === 'rejected' ? 'ctag--warn' : d.status === 'superseded' ? 'ctag--quiet' : 'ctag--info'}`}>{status}</span>
       </td>
       <td class="ctbl__num">
         <span class="twr-panelend">

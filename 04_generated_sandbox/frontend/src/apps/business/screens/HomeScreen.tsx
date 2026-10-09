@@ -19,10 +19,13 @@ const STEP_TEXT: Record<ReturnType<typeof checkStep>, MessageKey> = {
   done: 'business.home.step.done',
 };
 
-const STATUS_TONE: Record<CompanyDocument['status'], string> = { awaiting_verification: 'info', verified: 'ok', rejected: 'warn', superseded: 'quiet' };
+// `declared` is a paper one of OUR companies put on its own record; a customer's business never has one, and the
+// tables still name it so that no status a paper can have is drawn as nothing.
+const STATUS_TONE: Record<CompanyDocument['status'], string> = { awaiting_verification: 'info', verified: 'ok', rejected: 'warn', superseded: 'quiet', declared: 'ok' };
 const STATUS_LABEL: Record<CompanyDocument['status'], MessageKey> = {
   awaiting_verification: 'business.paper.awaiting',
   verified: 'business.paper.verified',
+  declared: 'business.paper.declared',
   rejected: 'business.paper.rejected',
   superseded: 'business.paper.superseded',
 };

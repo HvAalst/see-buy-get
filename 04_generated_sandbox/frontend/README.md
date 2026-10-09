@@ -326,11 +326,33 @@ administrators, the people who can renew it, heard nothing.
   number beside it in the menu once a paper has lapsed or is in its last two weeks (`papersWaiting`). "The
   companies" is only in the menu of somebody who reaches more than one company; there the same rows name each
   company. `toldWords` warns where a reminder reached nobody, none, or only some.
-- **A company's record is read-only for its own administrator**: `POST sbg/entities/:id/record` is network
-  staff's, and the screen used to offer a Save under every section that could only be refused. Now one
-  `<fieldset class="twr-locked" disabled>` around the sections; they put the paper on record under Papers
-  (which is theirs to do) and staff verify it and change the record. Verify and Reject are shown to staff only.
-- Not done: the company cannot enter the new date itself; it puts the renewed paper on record and staff enter it.
+- **Whose hands the record is in** decides who is offered a change (next section): one
+  `<fieldset class="twr-locked" disabled>` around the sections for whoever does not keep it.
+
+## A company that is switched on keeps its own record
+The user, 2026-10-09: "It would be good if the company themselves could update their docs and not by staff. sbg
+should only interact at dispute." Until then staff typed every line, including a renewed licence's new date.
+- **Who keeps it** (`recordKeeper` in `foundation/entity/company-declarations.service.ts`): staff until the
+  company is switched on (the readiness check, unchanged, papers verified by a second person); the company
+  itself from then. A customer's business keeps its own procedure. `GET sbg/entities/:id/record` says `keeper`.
+- **`POST sbg/entities/:id/record`** is written by whoever keeps it and refused to the other, by name. Staff can
+  no longer write a switched-on company's record: one of them could otherwise change a licence date alone.
+- **The parts that switch something** (a licence, an insurance policy, a bank account, who may sign) change one at
+  a time, each with the paper behind it, in one act: `POST sbg/entities/:id/record/declare` (`section`, `was`,
+  `item`, `paperDataUrl`). No paper, no change; a refused paper leaves the record as it was. It counts at once.
+- **What it cannot be used for**: what a paper permits (`supports`) and its kind are not the company's to change,
+  and a licence or policy that permits something cannot be taken off the record. Each would keep a capability
+  on after the paper behind it ran out, because the lapse rule reads what is on the record.
+- **The paper counts when it is put on record**: document status `declared` (never `verified`, never one
+  person's to reject). A renewal under a new number replaces the item and retires the old paper.
+- **Kept whole and told**: every such change is a `CompanyDeclaration` (before, after, who, when, which paper;
+  store `entity-declarations`), and the company's other administrators and those of the company above it are
+  emailed (`company-record-changed`), never the person who did it.
+- **The guard does not keep staff out of a route** ("operator satisfies everything" in `auth.guard.ts`): a route
+  that must refuse staff says so in its body. `declareCompanyChange` does; the wire test found it.
+- Console: `CompanyRecordScreen` reads `recordHands(view, reader)`; `PaperBoundEditor` is the "Change, with its
+  paper" list; `recordLede`, `runningOutHint`, `declareBlocker`, `declarationBody`, `mayTakeOff` in
+  `apps/tower/company.ts`. A switched-on company no longer sees the switch-on checklist.
 
 ## A national ID two people say is theirs
 A driver and a shop each register with a national ID number and the network keeps one of each, so somebody whose

@@ -97,9 +97,10 @@ describe('a company is told before its own paper lapses', () => {
     expect(mail.text).toContain('SeeBuyGet Kenya’s courier licence is good until 10 Dec 2026.');
     expect(mail.text).toContain('From the day after, SeeBuyGet Kenya can no longer charge customers.');
     expect(mail.text).toContain('CA/CL/0042');
-    // Not "type the new date": a company's record is changed by network staff, so the email must not send them to a form that refuses them.
-    expect(mail.text).toContain('under Papers put the renewed licence on record with its new expiry date');
-    expect(mail.text).toContain('SeeBuyGet staff check it and enter the new date');
+    // The company is switched on, so the new date is its own to enter, with the paper — and the email says where.
+    expect(mail.text).toContain('under Licences press “Change, with its paper”: enter the new expiry date and attach the renewed licence');
+    expect(mail.text).toContain('nobody at SeeBuyGet has to enter anything');
+    expect(mail.text).not.toContain('SeeBuyGet staff check it');
   });
 
   it('a lapsed paper says what is switched off and that it comes back; one nothing depends on says that nothing stops', async () => {
@@ -121,6 +122,7 @@ describe('a company is told before its own paper lapses', () => {
     const quiet = papersTo(wanjiru).find((m) => m.subject === 'Public liability insurance runs out in 29 days — SeeBuyGet Kenya')!;
     expect(quiet.text).toContain('Nothing switches off by itself when it does');
     expect(quiet.text).not.toContain('can no longer');
+    expect(quiet.text).toContain('under Insurance press “Change, with its paper”: enter the new expiry date and attach the renewed policy');
   });
 
   it('a company not switched on yet is told its paper is running out — and not that something stops, because nothing of its runs', async () => {
@@ -133,11 +135,16 @@ describe('a company is told before its own paper lapses', () => {
     expect(mail.subject).toBe('Courier licence runs out in 14 days — SeeBuyGet Uganda');
     expect(mail.text).not.toContain('can no longer');
     expect(mail.text).toContain('Nothing switches off by itself when it does');
+    // Its record is still staff's to enter, and the email does not send its administrator to a button they do not have.
+    expect(mail.text).toContain('under Papers put the renewed licence on record with its new expiry date. The company is not switched on yet, so SeeBuyGet staff check it and enter the new date on its record.');
+    expect(mail.text).not.toContain('Change, with its paper');
 
-    // Switched on, the same paper at its next mark says what stops.
+    // Switched on, the same paper at its next mark says what stops — and that the date is now theirs to enter.
     entities.activate(draft.entityId, 'Amina Otieno');
     await watch.sweep(daysBefore('2026-12-10', 7));
-    expect(papersTo(nakato).map((m) => m.text).filter((text) => text.includes('From the day after, SeeBuyGet Uganda can no longer charge customers.'))).toHaveLength(1);
+    const after = papersTo(nakato).filter((m) => m.text.includes('From the day after, SeeBuyGet Uganda can no longer charge customers.'));
+    expect(after).toHaveLength(1);
+    expect(after[0].text).toContain('press “Change, with its paper”');
   });
 
   it('a paper first seen close to its date is told the mark it is at, once — not every mark it has already passed', async () => {

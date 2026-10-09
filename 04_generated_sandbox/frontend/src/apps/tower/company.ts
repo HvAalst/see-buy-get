@@ -81,7 +81,8 @@ export interface CompanyDocument {
   uploadedBy: string;
   uploadedAt: string;
   expiresAt?: string;
-  status: 'awaiting_verification' | 'verified' | 'rejected' | 'superseded';
+  /** `declared`: put on record by a company that keeps its own record. It counts from that moment. */
+  status: 'awaiting_verification' | 'verified' | 'rejected' | 'superseded' | 'declared';
   verifiedBy?: string;
   verifiedAt?: string;
   rejectedBy?: string;
@@ -112,10 +113,28 @@ export interface CompanyChange {
   to: string;
 }
 
+/** One change a company made itself to a part of its record that switches something, with the paper it came with. */
+export interface CompanyDeclaration {
+  declarationId: string;
+  entityId: string;
+  section: PaperBoundSection;
+  change: 'added' | 'changed' | 'removed';
+  was?: string;
+  now?: string;
+  wasWords: string;
+  nowWords: string;
+  documentId?: string;
+  by: string;
+  at: string;
+}
+
 /** `GET /entities/:id/record`. */
 export interface CompanyRecordView {
   entity: { entityId: string; name: string; kind: 'group' | 'sister' | 'partner'; jurisdiction?: string; currency?: string; status: 'draft' | 'active' };
+  /** Who keeps this record: network staff until the company is switched on, the company itself from then. */
+  keeper?: 'staff' | 'company';
   record: CompanyRecord;
+  declarations?: CompanyDeclaration[];
   readiness: { entityId: string; ready: boolean; items: ReadinessItem[] } | null;
   documents: CompanyDocument[];
   obligations: LocalObligation[];
@@ -310,6 +329,86 @@ export function fromEditRows(section: ListSection, rows: EditRow[], touchedCaps:
     }
     return out;
   });
+}
+
+/* ------------------------------------------- a company that keeps its own record -- */
+
+/** The parts of a record that change only together with their paper — the server's list, said once for the screen. */
+export const PAPER_BOUND = ['licences', 'insurance', 'bankAccounts', 'representatives'] as const;
+export type PaperBoundSection = (typeof PAPER_BOUND)[number];
+export const isPaperBound = (section: ListSection): section is PaperBoundSection => (PAPER_BOUND as readonly string[]).includes(section);
+
+/** What each part calls one of its items: the thing a paper is "for". */
+export const REFERENCE_FIELD: Record<PaperBoundSection, string> = { licences: 'number', insurance: 'policyNumber', bankAccounts: 'accountNumber', representatives: 'name' };
+
+/** The kinds of paper that stand behind a change to each part. The first is what it is taken to be. */
+export const PAPER_KINDS_FOR: Record<PaperBoundSection, DocumentKind[]> = {
+  licences: ['licence'],
+  insurance: ['insurance_policy'],
+  bankAccounts: ['bank_confirmation'],
+  representatives: ['representative_id', 'memorandum_and_articles', 'other'],
+};
+
+/**
+ * WHOSE HANDS A RECORD IS IN, for the person looking at it.
+ *
+ * Staff keep it until the company is switched on; the company keeps it from then, and staff no longer change it.
+ * `mine`: this reader is offered a change. The other reads — every field shown, none offered — because a Save the
+ * server refuses is worse than no Save.
+ */
+export function recordHands(view: Pick<CompanyRecordView, 'keeper'> | null, reader: 'operator' | 'company'): { keeper: 'staff' | 'company'; mine: boolean } {
+  const keeper = view?.keeper ?? 'staff';
+  return { keeper, mine: keeper === 'staff' ? reader === 'operator' : reader === 'company' };
+}
+
+/** What is said over a record, to whoever is reading it: whose it is to change, and how. */
+export function recordLede(hands: { keeper: 'staff' | 'company' }, reader: 'operator' | 'company'): MessageKey {
+  if (reader === 'operator') return hands.keeper === 'staff' ? 'tower.company.lede' : 'tower.company.ledeTheirs';
+  return hands.keeper === 'company' ? 'tower.company.ledeOwn' : 'tower.company.ledeDraft';
+}
+
+/** What to do about a paper that is running out, to whoever is reading: it is in the company's hands once it is on. */
+export function runningOutHint(hands: { keeper: 'staff' | 'company' }, reader: 'operator' | 'company'): MessageKey {
+  if (reader === 'operator') return hands.keeper === 'company' ? 'tower.company.runningOut.staff' : 'tower.company.runningOut.staffDraft';
+  return hands.keeper === 'company' ? 'tower.company.runningOut.own' : 'tower.company.runningOut.ownDraft';
+}
+
+/**
+ * May the company take this off its record? A licence or policy that PERMITS something: never — what switches a
+ * capability off is a lapsed paper ON the record, so taking a lapsing one off would keep the company trading.
+ */
+export function mayTakeOff(section: PaperBoundSection, item: Record<string, unknown>): boolean {
+  if (section !== 'licences' && section !== 'insurance') return true;
+  return !Array.isArray(item.supports) || item.supports.length === 0;
+}
+
+/** The fields the company fills for one item: never what a paper permits, and never the kind of one already on record. */
+export function declareFields(section: PaperBoundSection, changing: boolean): FieldSpec[] {
+  return SECTION_FIELDS[section].filter((f) => f.type !== 'caps' && !(changing && f.key === 'kind'));
+}
+
+/** What stops a change with its paper from being sent — said before the server has to. */
+export function declareBlocker(section: PaperBoundSection, row: EditRow, hasPaper: boolean): MessageKey | null {
+  const filled = (key: string) => typeof row[key] === 'string' && (row[key] as string).trim() !== '';
+  if (!filled(REFERENCE_FIELD[section])) return 'tower.company.declare.needReference';
+  if ((section === 'licences' || section === 'insurance') && !filled('expiresAt')) return 'tower.company.declare.needDate';
+  if (!hasPaper) return 'tower.company.declare.needPaper';
+  return null;
+}
+
+/** What is sent: which item it replaces (absent: a new one), the item as typed, and the paper. Never what it permits. */
+export function declarationBody(section: PaperBoundSection, was: string | undefined, row: EditRow, paper: { dataUrl: string; kind?: DocumentKind }): Record<string, unknown> {
+  const [item] = fromEditRows(section, [row]);
+  return { section, ...(was ? { was } : {}), item, paperDataUrl: paper.dataUrl, ...(paper.kind && paper.kind !== PAPER_KINDS_FOR[section][0] ? { paperKind: paper.kind } : {}) };
+}
+
+/** One item of a paper-bound part, as two lines a reader recognises. */
+export function itemLine(section: PaperBoundSection, item: Record<string, unknown>, t: (key: MessageKey, vars?: Record<string, string | number>) => string): { title: string; detail: string } {
+  const s = (key: string) => String(item[key] ?? '');
+  if (section === 'licences') return { title: `${t(LICENCE_LABEL[s('kind') as keyof typeof LICENCE_LABEL] ?? 'tower.company.licence.other')} · ${s('number')}`, detail: t('tower.company.declare.goodUntil', { who: s('issuer'), date: s('expiresAt') }) };
+  if (section === 'insurance') return { title: `${t(INSURANCE_LABEL[s('kind') as keyof typeof INSURANCE_LABEL] ?? 'tower.company.insurance.other')} · ${s('policyNumber')}`, detail: t('tower.company.declare.goodUntil', { who: s('insurer'), date: s('expiresAt') }) };
+  if (section === 'bankAccounts') return { title: `${s('bankName')} · ${s('accountNumber')}`, detail: `${s('accountName')} · ${s('currency')} · ${t(PURPOSE_LABEL[s('purpose') as keyof typeof PURPOSE_LABEL] ?? 'tower.company.purpose.general')}` };
+  return { title: s('name'), detail: `${s('role')} · ${t(SIGNING_LABEL[s('signing') as keyof typeof SIGNING_LABEL] ?? 'tower.company.signing.none')}` };
 }
 
 /* ------------------------------------------------------------------ rules -- */

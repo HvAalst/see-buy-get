@@ -8,7 +8,15 @@ import {
   readinessCounts,
   relatesToChoices,
   SECTION_FIELDS,
+  declarationBody,
+  declareBlocker,
+  declareFields,
+  itemLine,
+  mayTakeOff,
   papersWaiting,
+  recordHands,
+  recordLede,
+  runningOutHint,
   shortFingerprint,
   toldWords,
   toEditRows,
@@ -122,6 +130,76 @@ describe('what a company was told about a paper that is running out', () => {
     expect(toldWords({ told: { stage: 30, at, to: 0, of: 0, nobody: true } }, say, when)).toEqual({ text: 'tower.companies.told.nobody:2026-10-09', tone: 'warn' });
     expect(toldWords({ told: { stage: 30, at, to: 0, of: 2 } }, say, when)).toEqual({ text: 'tower.companies.told.notHandedOver:2,2026-10-09', tone: 'warn' });
     expect(toldWords({ told: { stage: 7, at, to: 3, of: 5 } }, say, when)).toEqual({ text: 'tower.companies.told.some:3,5,2026-10-09', tone: 'warn' });
+  });
+});
+
+describe('whose hands a company’s record is in', () => {
+  it('staff keep it until the company is switched on; the company keeps it from then, and staff only read', () => {
+    expect(recordHands({ keeper: 'staff' }, 'operator')).toEqual({ keeper: 'staff', mine: true });
+    expect(recordHands({ keeper: 'staff' }, 'company')).toEqual({ keeper: 'staff', mine: false });
+    expect(recordHands({ keeper: 'company' }, 'company')).toEqual({ keeper: 'company', mine: true });
+    expect(recordHands({ keeper: 'company' }, 'operator')).toEqual({ keeper: 'company', mine: false });
+    // A server that does not say (an older one), or a record not read yet: as it always was — staff's.
+    expect(recordHands({}, 'company').mine).toBe(false);
+    expect(recordHands(null, 'operator').mine).toBe(true);
+  });
+  it('says to each reader whose it is to change, and where a renewed date goes', () => {
+    expect([recordLede({ keeper: 'staff' }, 'operator'), recordLede({ keeper: 'company' }, 'operator'), recordLede({ keeper: 'company' }, 'company'), recordLede({ keeper: 'staff' }, 'company')]).toEqual([
+      'tower.company.lede',
+      'tower.company.ledeTheirs',
+      'tower.company.ledeOwn',
+      'tower.company.ledeDraft',
+    ]);
+    expect([runningOutHint({ keeper: 'company' }, 'company'), runningOutHint({ keeper: 'staff' }, 'company'), runningOutHint({ keeper: 'company' }, 'operator'), runningOutHint({ keeper: 'staff' }, 'operator')]).toEqual([
+      'tower.company.runningOut.own',
+      'tower.company.runningOut.ownDraft',
+      'tower.company.runningOut.staff',
+      'tower.company.runningOut.staffDraft',
+    ]);
+  });
+});
+
+describe('a change with its paper — what the company fills in, and what it may not', () => {
+  const licence = { kind: 'courier', number: 'CA/CL/0042', issuer: 'Communications Authority', expiresAt: '2026-12-10', supports: ['merchantOfRecord'] };
+  it('never offers what a paper permits, nor the kind of one already on record', () => {
+    expect(declareFields('licences', false).map((f) => f.key)).toEqual(['kind', 'number', 'issuer', 'expiresAt']);
+    expect(declareFields('licences', true).map((f) => f.key)).toEqual(['number', 'issuer', 'expiresAt']);
+    expect(declareFields('insurance', true).map((f) => f.key)).toEqual(['insurer', 'policyNumber', 'coverAmount', 'expiresAt']);
+    expect(declareFields('representatives', true).map((f) => f.key)).toEqual(['name', 'role', 'signing']);
+  });
+  it('a licence or policy that permits something is not offered to be taken off; the rest are', () => {
+    expect(mayTakeOff('licences', licence)).toBe(false);
+    expect(mayTakeOff('insurance', { kind: 'public_liability', supports: [] })).toBe(true);
+    expect(mayTakeOff('bankAccounts', { accountNumber: '1' })).toBe(true);
+    expect(mayTakeOff('representatives', { name: 'Otieno Odhiambo' })).toBe(true);
+  });
+  it('is not sent without its number, its date, or its paper', () => {
+    const row = { kind: 'courier', number: 'CA/CL/0042', issuer: 'CA', expiresAt: '2027-12-10', supports: [] };
+    expect(declareBlocker('licences', { ...row, number: '  ' }, true)).toBe('tower.company.declare.needReference');
+    expect(declareBlocker('licences', { ...row, expiresAt: '' }, true)).toBe('tower.company.declare.needDate');
+    expect(declareBlocker('licences', row, false)).toBe('tower.company.declare.needPaper');
+    expect(declareBlocker('licences', row, true)).toBeNull();
+    // A signatory has no date to give.
+    expect(declareBlocker('representatives', { name: 'Otieno Odhiambo', role: 'Director', signing: 'alone' }, true)).toBeNull();
+    expect(declareBlocker('representatives', { name: '', role: 'Director', signing: 'alone' }, true)).toBe('tower.company.declare.needReference');
+  });
+  it('sends which one it replaces, the item as typed and the paper — and never what it permits', () => {
+    const row = { kind: 'courier', number: 'CA/CL/0099', issuer: 'Communications Authority', expiresAt: '2027-12-10', supports: ['merchantOfRecord'] as never };
+    expect(declarationBody('licences', 'CA/CL/0042', row, { dataUrl: 'data:application/pdf;base64,AAAA', kind: 'licence' })).toEqual({
+      section: 'licences',
+      was: 'CA/CL/0042',
+      item: { kind: 'courier', number: 'CA/CL/0099', issuer: 'Communications Authority', expiresAt: '2027-12-10' },
+      paperDataUrl: 'data:application/pdf;base64,AAAA',
+    });
+    // A new one names nothing it replaces; a paper of another kind says which.
+    const added = declarationBody('representatives', undefined, { name: 'Otieno Odhiambo', role: 'Director', signing: 'alone' }, { dataUrl: 'data:application/pdf;base64,BBBB', kind: 'memorandum_and_articles' });
+    expect(added).toEqual({ section: 'representatives', item: { name: 'Otieno Odhiambo', role: 'Director', signing: 'alone' }, paperDataUrl: 'data:application/pdf;base64,BBBB', paperKind: 'memorandum_and_articles' });
+  });
+  it('shows an item as two lines a reader recognises', () => {
+    const say = ((key: string, vars?: Record<string, string | number>) => `${key}${vars ? ':' + Object.values(vars).join(',') : ''}`) as never;
+    expect(itemLine('licences', licence, say)).toEqual({ title: 'tower.company.licence.courier · CA/CL/0042', detail: 'tower.company.declare.goodUntil:Communications Authority,2026-12-10' });
+    expect(itemLine('bankAccounts', { bankName: 'KCB', accountName: 'SeeBuyGet Kenya Ltd', accountNumber: '1100223344', currency: 'KES', purpose: 'general' }, say)).toEqual({ title: 'KCB · 1100223344', detail: 'SeeBuyGet Kenya Ltd · KES · tower.company.purpose.general' });
+    expect(itemLine('representatives', { name: 'Otieno Odhiambo', role: 'Director', signing: 'alone' }, say)).toEqual({ title: 'Otieno Odhiambo', detail: 'Director · tower.company.signing.alone' });
   });
 });
 

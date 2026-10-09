@@ -710,7 +710,7 @@ export class EntityService implements OnApplicationBootstrap {
   }
 
   /** Save sections of a company's record. Each section sent replaces the one on record, the way a form is saved. */
-  updateRecord(entityId: string, patch: Record<string, unknown>, by?: string): Entity {
+  updateRecord(entityId: string, patch: Record<string, unknown>, by?: string, said?: { from: string; to: string }): Entity {
     const entity = this.get(entityId);
     if (entity.kind === 'group') throw new GlosError('FORBIDDEN', 'The group keeps no operating record here — it is a party to nothing');
     const who = by?.trim();
@@ -720,7 +720,8 @@ export class EntityService implements OnApplicationBootstrap {
     if (!sections.length) throw new GlosError('VALIDATION_FAILED', 'Nothing to change');
     entity.record = { ...this.recordOf(entityId), ...clean };
     this.entities.set(entityId, entity);
-    this.record(entityId, { at: new Date().toISOString(), by: who, what: 'record', from: '—', to: sections.join(', ') });
+    // `said`: one item changed, and the caller can say it as a sentence. Otherwise: which sections were saved.
+    this.record(entityId, { at: new Date().toISOString(), by: who, what: 'record', from: said?.from ?? '—', to: said?.to ?? sections.join(', ') });
     return entity;
   }
 

@@ -4630,7 +4630,7 @@
       "post": {
         "operationId": "Sbg.saveCompanyRecord",
         "summary": "",
-        "description": "CA3 — save sections of a company's record. Operator-only.",
+        "description": "CA3 — save sections of a company's record. BY WHOEVER KEEPS IT, and by nobody else.\n\nUntil a company is switched on, that is network staff: entering the record is the readiness check, and it is\nunchanged. Once it is on, the company keeps its own record (the user, 2026-10-09: \"sbg should only interact at\ndispute\") — its administrators save it, and staff no longer can. That refusal is the point, not a side effect:\none member of staff who could still type a company's licence date could switch a country off alone, and\nstriking a paper takes two.\n\nThe parts that switch something do not come through here at all for a company: each changes with its paper,\none at a time (`record/declare`).",
         "parameters": [
           {
             "name": "entityId",
@@ -4661,6 +4661,38 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/record/declare": {
+      "post": {
+        "operationId": "Sbg.declareCompanyChange",
+        "summary": "",
+        "description": "ONE CHANGE TO A PART THAT SWITCHES SOMETHING, WITH ITS PAPER — the company's own act, and only the company's.\nIt counts at once; its other administrators and those of the company above it are told.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanyDeclarationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
           }
         }
       }
@@ -26014,6 +26046,32 @@
           }
         }
       },
+      "CompanyDeclarationDto": {
+        "type": "object",
+        "properties": {
+          "section": {
+            "type": "string"
+          },
+          "was": {
+            "type": "string"
+          },
+          "item": {
+            "type": "object"
+          },
+          "paperKind": {
+            "type": "string"
+          },
+          "paperTitle": {
+            "type": "string"
+          },
+          "paperDataUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "section"
+        ]
+      },
       "CompanyDocumentDto": {
         "type": "object",
         "properties": {
@@ -26105,7 +26163,8 @@
               "awaiting_verification",
               "verified",
               "rejected",
-              "superseded"
+              "superseded",
+              "declared"
             ]
           },
           "verifiedBy": {

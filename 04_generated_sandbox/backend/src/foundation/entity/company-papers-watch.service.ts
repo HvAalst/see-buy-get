@@ -4,6 +4,7 @@ import type { PresenceCapability } from '../presence/presence.types';
 import { PersistentMap } from '../store/persistent-map';
 import { EntityAdminService } from './entity-admin.service';
 import { EntityService } from './entity.service';
+import { recordKeeper } from './company-declarations.service';
 
 const SWEEP_MS = 6 * 60 * 60 * 1000;
 
@@ -171,7 +172,10 @@ export class CompanyPapersWatch implements OnApplicationBootstrap, OnModuleDestr
       }
       // A company not switched on yet has nothing running, so nothing of its stops (EntityService.lapsesFor leaves a
       // draft out for the same reason): it is told the paper is running out, and is not told a thing that is not so.
-      const running = this.entities.find(paper.entityId)?.status !== 'draft';
+      const entity = this.entities.find(paper.entityId);
+      const running = entity?.status !== 'draft';
+      // WHO PUTS THE NEW DATE ON RECORD: the company itself once it is switched on; staff until then.
+      const own = entity ? recordKeeper(entity) === 'company' : false;
       let sent = 0;
       for (const admin of recipients) {
         const ok = await this.mail.send(
@@ -187,6 +191,7 @@ export class CompanyPapersWatch implements OnApplicationBootstrap, OnModuleDestr
             lapsed: paper.lapsed,
             stops: running ? stopsWords(paper.supports) : [],
             where: paper.source,
+            own,
           },
           now,
         );

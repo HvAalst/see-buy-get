@@ -258,6 +258,10 @@ export function createOperatorApi(sbg: SbgClient) {
     saveCompanyRecord: (entityId: string, body: Record<string, unknown>) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/record', { params: { path: { entityId } }, body: body as never })),
 
+    /** A company's own change to a licence, a policy, a bank account or who may sign — with its paper, in one act. */
+    declareCompanyChange: (entityId: string, body: Record<string, unknown>) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/record/declare', { params: { path: { entityId } }, body: body as never })),
+
     /** CA4 — papers: fingerprinted on arrival, verified by a second person. */
     uploadCompanyDocument: (entityId: string, body: { kind: string; title: string; dataUrl: string; relatesTo?: string; expiresAt?: string; by?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/documents', { params: { path: { entityId } }, body: body as never })),

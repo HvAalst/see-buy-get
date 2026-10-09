@@ -257,6 +257,21 @@ export class CompanyRecordDto {
   @IsOptional() @IsString() by?: string;
 }
 
+/**
+ * A company's own change to a part of its record that switches something — a licence, an insurance policy, a bank
+ * account, who may sign — with the paper behind it, in one act. `was` names the item being changed or taken off (its
+ * number, or the person's name); `item` is how it is to be (absent: it is taken off); the paper is a base64 data URL
+ * like every company document.
+ */
+export class CompanyDeclarationDto {
+  @IsString() section!: string;
+  @IsOptional() @IsString() was?: string;
+  @IsOptional() @IsObject() item?: Record<string, unknown>;
+  @IsOptional() @IsString() paperKind?: string;
+  @IsOptional() @IsString() paperTitle?: string;
+  @IsOptional() @IsString() paperDataUrl?: string;
+}
+
 /** CA4 — a company document, as a base64 data URL (PDF, PNG or JPEG), fingerprinted on arrival. */
 export class CompanyDocumentDto {
   @IsString() kind!: string;

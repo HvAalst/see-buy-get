@@ -34,12 +34,16 @@ describe('a company’s papers that are running out, over the wire', () => {
   });
 
   /** An administrator of that company, signed in to the console as "A company". */
-  async function anAdmin(entityId: string, name: string): Promise<{ email: string; token: string }> {
+  async function anAdmin(entityId: string, name: string): Promise<{ email: string; token: string; adminId: string }> {
     const email = `${name.toLowerCase().replace(/\W+/g, '.')}.${digits()}@sbg.co.ke`;
     const made = await http().post(`/v1/sbg/entities/${entityId}/admins`).set(bearer(operator)).send({ email, name }).expect(201);
     const signedIn = await http().post('/v1/sbg/entities/admins/login').send({ email, password: made.body.temporaryPassword }).expect(201);
-    return { email, token: signedIn.body.token.access_token as string };
+    return { email, token: signedIn.body.token.access_token as string, adminId: made.body.adminId as string };
   }
+  const pdf = (label: string) => `data:application/pdf;base64,${Buffer.from(`%PDF-1.4\n% ${label}\n%%EOF\n`).toString('base64')}`;
+  /** A company that is switched on puts its own licence on record, with the paper: staff no longer type it. */
+  const licenceBy = (token: string, entityId: string, licence: Record<string, unknown>) =>
+    http().post(`/v1/sbg/entities/${entityId}/record/declare`).set(bearer(token)).send({ section: 'licences', item: licence, paperDataUrl: pdf(String(licence.number)) }).expect(201);
   const inDays = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
   type Row = { entityId: string; reference: string; daysLeft: number; supports: string[]; told?: { stage: number | string; to: number; of: number; nobody?: boolean } };
   const listAs = async (token: string) => ((await http().get('/v1/sbg/companies/expiring').set(bearer(token)).expect(200)).body.items as Row[]);
@@ -47,9 +51,12 @@ describe('a company’s papers that are running out, over the wire', () => {
   it('the company’s administrator reads their own company’s papers and what they were told — and nobody else’s', async () => {
     const ref = `CA/CL/${digits()}`;
     const other = `ET/CL/${digits()}`;
-    await http().post('/v1/sbg/entities/sbg-ke/record').set(bearer(operator)).send({ by: 'Amina Otieno', licences: [{ kind: 'courier', number: ref, issuer: 'Communications Authority', expiresAt: inDays(10) }] }).expect(201);
-    await http().post('/v1/sbg/entities/sbg-et/record').set(bearer(operator)).send({ by: 'Amina Otieno', licences: [{ kind: 'courier', number: other, issuer: 'ECA', expiresAt: inDays(20) }] }).expect(201);
     const wanjiru = await anAdmin('sbg-ke', 'Wanjiru Kamau');
+    await licenceBy(wanjiru.token, 'sbg-ke', { kind: 'courier', number: ref, issuer: 'Communications Authority', expiresAt: inDays(10) });
+    // Ethiopia's licence is put on record by an administrator who then leaves: the company is left with nobody to tell.
+    const abebe = await anAdmin('sbg-et', 'Abebe Bekele');
+    await licenceBy(abebe.token, 'sbg-et', { kind: 'courier', number: other, issuer: 'ECA', expiresAt: inDays(20) });
+    await http().delete(`/v1/sbg/entities/sbg-et/admins/${abebe.adminId}`).set(bearer(operator)).expect(200);
 
     // It is THEIR list now: until this it was staff's alone, and their first read of it was a refusal.
     const mine = await listAs(wanjiru.token);
@@ -74,9 +81,6 @@ describe('a company’s papers that are running out, over the wire', () => {
     const record = (await http().get('/v1/sbg/entities/sbg-ke/record').set(bearer(wanjiru.token)).expect(200)).body as { expiring: Row[] };
     expect(record.expiring.map((p) => p.reference)).toEqual([ref]);
     expect(record.expiring[0].told).toMatchObject({ stage: 14, to: 1, of: 1 });
-    // And the record is not hers to change — which is why the email and the screen send her to put the PAPER on record.
-    await http().post('/v1/sbg/entities/sbg-ke/record').set(bearer(wanjiru.token)).send({ by: 'Wanjiru Kamau', licences: [{ kind: 'courier', number: ref, issuer: 'Communications Authority', expiresAt: inDays(400) }] }).expect(403);
-    expect((await listAs(wanjiru.token))[0].daysLeft).toBe(mine[0].daysLeft);
 
     // Ethiopia's company has nobody to tell: its own administrator-to-be reads that it went nowhere — and none of Kenya's.
     const selam = await anAdmin('sbg-et', 'Selam Tesfaye');
@@ -87,5 +91,9 @@ describe('a company’s papers that are running out, over the wire', () => {
     await app.get(CompanyPapersWatch).sweep();
     expect(app.get(OutboxMailSender).recent(selam.email).filter((m) => m.template === 'company-paper-lapsing')).toHaveLength(1);
     expect((await listAs(selam.token))[0].told).toMatchObject({ stage: 30, to: 1, of: 1 });
+
+    // SHE RENEWS IT HERSELF, with the paper: it is off the list at once, with nobody at SeeBuyGet entering a date.
+    await http().post('/v1/sbg/entities/sbg-ke/record/declare').set(bearer(wanjiru.token)).send({ section: 'licences', was: ref, item: { number: ref, issuer: 'Communications Authority', expiresAt: inDays(400) }, paperDataUrl: pdf('renewed') }).expect(201);
+    expect(await listAs(wanjiru.token)).toEqual([]);
   });
 });

@@ -253,6 +253,8 @@ export interface TowerActions {
   savePresence(jurisdiction: string): Promise<void>;
   /** CA3 — open one company's record. */
   openCompany(entityId: string): void;
+  /** A company's record changed: re-read what is running out, which the number in the menu is counted from. */
+  reloadLapsing(): void;
   /** CA3/CA7 — create a draft company of ours or a partner; true when it was created. */
   createCompany(kind: 'sister' | 'partner', jurisdiction: string, name: string): Promise<boolean>;
   /** The API client, for a screen that owns its own reads (the company record). Null before sign-in. */
@@ -1099,6 +1101,10 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         await loadPresence(client);
       },
       openCompany: (entityId: string) => setState((s) => ({ ...s, screen: 'company', companyId: entityId || null, done: null, queueError: null })),
+      reloadLapsing: () => {
+        const client = clientRef.current;
+        if (client) void loadExpiring(client);
+      },
       client: () => clientRef.current,
       createCompany: async (kind: 'sister' | 'partner', jurisdiction: string, name: string) => {
         const client = clientRef.current;

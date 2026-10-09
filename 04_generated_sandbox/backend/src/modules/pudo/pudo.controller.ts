@@ -123,6 +123,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   PresenceDecisionDto,
   CreateCompanyDto,
   CompanyRecordDto,
+  CompanyDeclarationDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
   BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, SuggestVehicleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, FleetMoveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto } from './pudo.dto';
@@ -134,6 +135,7 @@ import { EntityService } from '../../foundation/entity/entity.service';
 import { EntityAdminView, OperatorAccountView, EntityChanges, EntityPricing } from '../../foundation/entity/entity.types';
 import { EntityAdminService } from '../../foundation/entity/entity-admin.service';
 import { CompanyPapersWatch } from '../../foundation/entity/company-papers-watch.service';
+import { CompanyDeclarationService, COMPANY_PAPER_KINDS, PAPER_BOUND_SECTIONS, recordKeeper } from '../../foundation/entity/company-declarations.service';
 import { OperatorAccountService, staffIdOf } from '../../foundation/entity/operator-account.service';
 import { CARGO_LANES } from './cargo.types';
 import { ReturnService } from './return.service';
@@ -266,6 +268,7 @@ export class SbgController {
     @Optional() private readonly contracts?: CarriageContractService,
     @Optional() private readonly businesses?: BusinessService,
     @Optional() private readonly companyPapers?: CompanyPapersWatch,
+    @Optional() private readonly declarations?: CompanyDeclarationService,
   ) {}
 
   // --- phone verification (mandatory at onboarding — control-tower contact + GPS) ---
@@ -810,7 +813,12 @@ export class SbgController {
       // shipper reads about them, and until now the only way to learn your own handle was to be an
       // appointed clearing agent and read it off the clearance record.
       ...(this.handleOf(entityId) ? { handle: this.handleOf(entityId) } : {}),
+      // WHO KEEPS THIS RECORD: staff until the company is switched on, the company itself from then. A screen offers
+      // a change only to whoever that is — the other reads.
+      keeper: recordKeeper(entity),
       record: this.entities.recordOf(entityId),
+      // The company's own changes to the parts that switch something, each with what it was, what it is, and its paper.
+      declarations: this.declarations?.list(entityId).slice(0, 50) ?? [],
       readiness: entity.kind === 'group' ? null : this.readiness.readinessOf(entityId),
       documents: this.companyDocuments.list(entityId),
       obligations: catalogueEntry(entity.jurisdiction)?.obligations ?? [],
@@ -822,12 +830,63 @@ export class SbgController {
     };
   }
 
-  /** CA3 — save sections of a company's record. Operator-only. */
-  @Roles('operator')
+  /**
+   * CA3 — save sections of a company's record. BY WHOEVER KEEPS IT, and by nobody else.
+   *
+   * Until a company is switched on, that is network staff: entering the record is the readiness check, and it is
+   * unchanged. Once it is on, the company keeps its own record (the user, 2026-10-09: "sbg should only interact at
+   * dispute") — its administrators save it, and staff no longer can. That refusal is the point, not a side effect:
+   * one member of staff who could still type a company's licence date could switch a country off alone, and
+   * striking a paper takes two.
+   *
+   * The parts that switch something do not come through here at all for a company: each changes with its paper,
+   * one at a time (`record/declare`).
+   */
+  @Roles('operator', 'entity_admin')
   @Post('entities/:entityId/record')
   saveCompanyRecord(@Param('entityId') entityId: string, @Body() dto: CompanyRecordDto, @Actor() actor: IntrospectionResult) {
+    this.requireReach(actor, entityId);
+    const entity = this.entities.get(entityId);
     const { by, ...patch } = dto;
-    return this.entities.updateRecord(entityId, patch as Record<string, unknown>, auditActor(actor, by));
+    if (recordKeeper(entity) === 'staff') {
+      if (actor?.role !== 'operator') {
+        throw new GlosError('FORBIDDEN', `${entity.name} is not switched on yet. Until it is, SeeBuyGet staff enter its record; put your papers on record, and they are verified before the country is switched on`);
+      }
+      return this.entities.updateRecord(entityId, patch as Record<string, unknown>, auditActor(actor, by));
+    }
+    if (actor?.role === 'operator') {
+      throw new GlosError('FORBIDDEN', `${entity.name} is switched on and keeps its own record: its administrators change it. Staff act on a report of one of its papers, and two of you decide`);
+    }
+    if (PAPER_BOUND_SECTIONS.some((section) => (patch as Record<string, unknown>)[section] !== undefined)) {
+      throw new GlosError('VALIDATION_FAILED', 'A licence, an insurance policy, a bank account and who may sign change one at a time, each with the paper behind it');
+    }
+    return this.entities.updateRecord(entityId, patch as Record<string, unknown>, auditActor(actor));
+  }
+
+  /**
+   * ONE CHANGE TO A PART THAT SWITCHES SOMETHING, WITH ITS PAPER — the company's own act, and only the company's.
+   * It counts at once; its other administrators and those of the company above it are told.
+   */
+  @Roles('entity_admin')
+  @Post('entities/:entityId/record/declare')
+  async declareCompanyChange(@Param('entityId') entityId: string, @Body() dto: CompanyDeclarationDto, @Actor() actor: IntrospectionResult) {
+    this.requireReach(actor, entityId);
+    // SAID HERE, NOT LEFT TO @Roles: the guard lets a staff token through every labelled route ("operator satisfies
+    // everything"), and this is the one act staff must not be able to do — it is a company's licence date, changed alone.
+    if (actor?.role !== 'entity_admin') {
+      throw new GlosError('FORBIDDEN', 'A company’s own administrator makes this change, with the paper. Staff act on a report of one of its papers, and two of you decide');
+    }
+    if (!this.declarations) throw new GlosError('INVALID_STATE', 'A company’s own changes are not available here');
+    const { declaration, document, told } = await this.declarations.declare({
+      entityId,
+      section: dto.section,
+      was: dto.was,
+      item: dto.item,
+      paper: dto.paperDataUrl ? { kind: dto.paperKind, title: dto.paperTitle, dataUrl: dto.paperDataUrl } : undefined,
+      by: auditActor(actor),
+      byKey: actor?.revocationKey,
+    });
+    return { declaration, document, told, record: this.entities.recordOf(entityId) };
   }
 
   /** CA4 — put a document on record: fingerprinted, versioned, waiting for a second person to verify it. */
@@ -835,6 +894,13 @@ export class SbgController {
   @Post('entities/:entityId/documents')
   uploadCompanyDocument(@Param('entityId') entityId: string, @Body() dto: CompanyDocumentDto, @Actor() actor: IntrospectionResult) {
     this.requireReach(actor, entityId);
+    // A paper a switched-on company keeps ABOUT ITSELF is its own to put on record, and counts when it does: staff do
+    // not put one there for it. The papers of one consignment live in the same store and keep their own readers.
+    const entity = this.entities.get(entityId);
+    const own = recordKeeper(entity) === 'company' && (COMPANY_PAPER_KINDS as readonly string[]).includes(dto.kind);
+    if (own && actor?.role === 'operator') {
+      throw new GlosError('FORBIDDEN', `${entity.name} is switched on and keeps its own papers: one of its administrators puts this on record`);
+    }
     return this.companyDocuments.upload({
       entityId,
       kind: dto.kind,
@@ -843,6 +909,7 @@ export class SbgController {
       relatesTo: dto.relatesTo,
       expiresAt: dto.expiresAt,
       by: this.namedActor(actor, dto.by),
+      declared: own,
     });
   }
 
@@ -3578,12 +3645,13 @@ export class SbgController {
      */
     const contact = company ? this.contacts.of(company.entityId) : undefined;
 
-    // A verified paper is named, with its date, and an empty list is a real answer shown as one. Only a
-    // COMPANY has a document register; the rest carry what their own record can honestly attest.
+    // A paper that COUNTS is named, with its date — verified by a second person before the company was switched on,
+    // or put on record by the company itself since. An empty list is a real answer shown as one. Only a COMPANY has
+    // a document register; the rest carry what their own record can honestly attest.
     const verified = company
       ? this.companyDocuments
           .list(company.entityId)
-          .filter((d) => d.status === 'verified')
+          .filter((d) => d.status === 'verified' || d.status === 'declared')
           .map((d) => ({ what: d.kind.replace(/_/g, ' '), at: d.verifiedAt ?? d.uploadedAt }))
       : shop?.kyc
         ? [{ what: 'identity and trading licence', at: shop.kyc.submittedAt }]

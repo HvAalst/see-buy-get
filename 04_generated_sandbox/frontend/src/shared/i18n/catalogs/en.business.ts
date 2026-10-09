@@ -112,6 +112,7 @@ export const enBusiness = {
 
   'business.paper.awaiting': 'Waiting for SeeBuyGet',
   'business.paper.verified': 'Verified',
+  'business.paper.declared': 'On record',
   'business.paper.rejected': 'Not accepted',
   'business.paper.superseded': 'Replaced',
   'business.paper.added': 'added by {who} on {when}',
