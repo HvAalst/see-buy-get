@@ -5437,6 +5437,120 @@ describe('PUDO Light', () => {
     });
   });
 
+  /**
+   * WHO IS CALLING. Twenty-four routes changed something and never asked: no role was written on them, so any valid
+   * sign-in passed the door, and inside they took no identity at all — the hub, the driver, the fleet, the offer
+   * was whatever the request named. (The door's own half — which roles each admits — is in who-is-calling.spec.ts.)
+   */
+  describe('the routes that changed something without asking who was calling', () => {
+    const as = (role: string, did?: string, tenant?: string) => ({ active: true, role, ...(did ? { did } : {}), ...(tenant ? { tenant } : {}), scopes: role === 'operator' ? ['*'] : [] }) as never;
+    const staff = as('operator');
+    const at = { lat: -1.2, lng: 36.8 };
+
+    it('an offer is its own driver’s to take or leave, and a load on a van is advanced by whoever is signed in — never by a name in the request', () => {
+      const d = coupleTipper('who1', { min: 0.8, max: 1.5 });
+      const other = coupleTipper('who2', { min: 0.8, max: 1.5 });
+      const f = dispatch.registerFreight({ description: 'Cement 5t', pickupLocation: at, pickupLabel: 'Depot', destLabel: 'Site', weightKg: 5000, packaging: 'loose' });
+      const [offer] = dispatch.suggest(d.did, { from: at, to: { lat: -1.25, lng: 36.85 } });
+
+      // Somebody else, signed in as themselves: knowing the offer's id is not being the driver it was made to.
+      for (const who of [asDriver(other.did), as('agent', 'did:glos:a-shop'), as('driver')]) {
+        expect(() => controller.claimOffer(offer.offerId, who)).toThrow('Only the driver can do this, from their own sign-in');
+        expect(() => controller.ignoreOffer(offer.offerId, who)).toThrow('Only the driver can do this, from their own sign-in');
+      }
+      expect(dispatch.remainingCapacity(d.did)).toBe(20_000);
+      controller.claimOffer(offer.offerId, asDriver(d.did));
+      expect(dispatch.remainingCapacity(d.did)).toBe(15_000);
+
+      // The other driver NAMES the one who claimed it, as the request always let them. They are still who they signed in as.
+      const load = { driverDid: d.did, confirmed: requiredLoadKeys(f), securementPhotoId: 'med_test' };
+      expect(() => controller.freightPickup(f.freightId, load as never, asDriver(other.did))).toThrow('This freight was claimed by another driver');
+      expect(dispatch.requireFreightPublic(f.freightId).status).toBe('claimed');
+      // The driver themselves — even with somebody else's name in the request: it is theirs, and they are themselves.
+      expect((controller.freightPickup(f.freightId, { ...load, driverDid: other.did } as never, asDriver(d.did)) as { status: string }).status).toBe('in_transit');
+
+      const failed = { driverDid: d.did, outcome: 'absent', note: 'Gate locked' };
+      expect(() => controller.freightDeliveryFailed(f.freightId, failed as never, asDriver(other.did))).toThrow('This freight was claimed by another driver');
+      expect(() => controller.freightTemp(f.freightId, { celsius: 4, driverDid: d.did } as never, asDriver(other.did))).toThrow('This freight was claimed by another driver');
+      const unload = { driverDid: d.did, confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' };
+      expect(() => controller.freightDeliver(f.freightId, unload as never, asDriver(other.did))).toThrow('This freight was claimed by another driver');
+      expect(dispatch.requireFreightPublic(f.freightId)).toMatchObject({ status: 'in_transit' });
+      expect(dispatch.requireFreightPublic(f.freightId).deliveryAttempts ?? []).toEqual([]);
+
+      // Network staff standing in NAME the driver; with nobody named there is nobody to stand in for.
+      expect(() => controller.freightDeliver(f.freightId, { ...unload, driverDid: undefined } as never, staff)).toThrow('Operator must specify the subject id');
+      expect((controller.freightDeliver(f.freightId, unload as never, staff) as { status: string }).status).toBe('delivered');
+    });
+
+    it('a hub’s price, its bags and what is dropped and sorted at it are the hub’s own to change', () => {
+      const hub = mdps.register({ name: 'Who Hub', zones: ['WhoZone'], location: at });
+      const elsewhere = mdps.register({ name: 'Another Hub', zones: ['WhoElse'], location: at });
+      const own = as('mdp', hub.did);
+      // Another hub, a shop, and a hub's role with no hub behind it.
+      for (const who of [as('mdp', elsewhere.did), as('agent', 'did:glos:a-shop'), as('mdp')]) {
+        expect(() => controller.setMdpPrice(hub.mdpId, { price: 99 } as never, who)).toThrow('Only the hub can do this, from its own sign-in');
+        expect(() => controller.registerTote(hub.mdpId, who)).toThrow('Only the hub can do this, from its own sign-in');
+        expect(() => controller.dropBag(hub.mdpId, { code: 'BAG-X' } as never, who)).toThrow('Only the hub can do this, from its own sign-in');
+        expect(() => controller.sortParcel(hub.mdpId, { parcelId: 'p-x' } as never, who)).toThrow('Only the hub can do this, from its own sign-in');
+      }
+      expect(mdps.require(hub.mdpId).pricePerParcel).not.toBe(99);
+      // A hub nobody registered is nobody's: said as that, before anything else.
+      expect(() => controller.setMdpPrice('mdp_nobody', { price: 1 } as never, own)).toThrow(/not found|No such|Unknown/i);
+
+      expect((controller.setMdpPrice(hub.mdpId, { price: 7 } as never, own) as { pricePerParcel: number }).pricePerParcel).toBe(7);
+      expect((controller.registerTote(hub.mdpId, own) as { code: string }).code).toBeTruthy();
+      // Network staff stand in for a hub.
+      expect((controller.setMdpPrice(hub.mdpId, { price: 8 } as never, staff) as { pricePerParcel: number }).pricePerParcel).toBe(8);
+    });
+
+    it('a vehicle goes into the fleet of the office that registers it, whatever fleet the request names', () => {
+      const aFleet = (tag: string) =>
+        managers.register({ companyName: `Who Fleet ${tag}`, contactPhone: `+2547008800${tag.charCodeAt(0)}`, ownerFullName: `${tag} Owner`, ownerNationalId: `WHO-${tag}`, location: at, requirements: { businessRegistrationNo: `BRN-${tag}`, transportOperatorLicence: `TOL-${tag}`, taxId: `TAX-${tag}` } });
+      const [fleetA, fleetB] = [aFleet('A'), aFleet('B')];
+      for (const m of [fleetA, fleetB]) {
+        managers.submitKyc(m.did, { businessRegCertRef: 'r', operatorLicenceRef: 'l', ownerIdRef: 'i', proofOfAddressRef: 'a' });
+        managers.decideKyc(m.did, true);
+        managers.recordBond(m.did);
+      }
+      const officeA = as('fleet_manager', fleetA.did, fleetA.did);
+      // The office of A, naming B: the vehicle is A's.
+      const van = controller.registerVehicle({ plate: 'WHO-1', vehicleClass: 'van', ownerName: 'A', managerDid: fleetB.did } as never, officeA) as { managerDid?: string; vehicleId: string };
+      expect(van.managerDid).toBe(fleetA.did);
+      expect(vehicles.list().filter((v) => v.managerDid === fleetB.did)).toEqual([]);
+      // A sign-in with the office's role and no fleet behind it registers nothing.
+      expect(() => controller.registerVehicle({ plate: 'WHO-2', vehicleClass: 'van', ownerName: 'X' } as never, as('fleet_manager'))).toThrow('A vehicle is registered by its fleet’s office');
+      // Network staff name the fleet — or none, for a courier who answers to no fleet.
+      expect((controller.registerVehicle({ plate: 'WHO-3', vehicleClass: 'van', ownerName: 'B', managerDid: fleetB.did } as never, staff) as { managerDid?: string }).managerDid).toBe(fleetB.did);
+      expect((controller.registerVehicle({ plate: 'WHO-4', vehicleClass: 'bike', ownerName: 'Solo' } as never, staff) as { managerDid?: string }).managerDid).toBeUndefined();
+    });
+
+    it('a store’s checkout is filed by that store, and a parcel’s rating by a shop that handled it', () => {
+      const store = vendors.register({ name: 'Who Store', contactEmail: 'who-store@sbg.test' } as never);
+      const stranger = as('genesis', 'did:glos:another-store');
+      expect(() => controller.captureCheckout(store.vendorId, { destPudoDid: 'did:glos:a-shop', buyerMobile: '+254700111222' } as never, stranger)).toThrow('This store is not yours to view');
+      expect(() => controller.captureCheckout('ven_nobody', {} as never, staff)).toThrow();
+
+      // A rating: recorded at the counter of a shop the parcel passed through — not by any shop that knows its number.
+      const shop = onboardAgent('Who Rated Shop', 'NorthTown', 50);
+      const elsewhere = onboardAgent('Who Other Shop', 'NorthTown', 50);
+      const corridor = corridors.addCorridor({ name: 'Who N-S', originZone: 'NorthTown', destZone: 'SouthTown' });
+      const bus = corridors.addDriver({ driverDid: 'did:glos:who-bus', name: 'D', corridorId: corridor.corridorId });
+      parcels.accept({ agentDid: shop.did, parcelId: 'QR-WHO', size: 'M', destZone: 'SouthTown', senderMobile: '+254700111001', receiverMobile: '+254700111002', dropoffPhotoRef: 'r.jpg' });
+      parcels.handover({ agentDid: shop.did, driverBadgeId: bus.badgeId, parcelIds: ['QR-WHO'] });
+      parcels.arrive('QR-WHO', shop.did);
+      parcels.pickup('QR-WHO', shop.did, releaseCodeOf('QR-WHO'));
+      const stars = { stars: 1, raterMobile: '+254700111002' };
+      // Another shop, a shop's role with no shop behind it, and the driver who carried it.
+      for (const who of [as('agent', elsewhere.did), as('agent'), as('driver', 'did:glos:who-bus')]) {
+        expect(() => controller.rate('QR-WHO', stars as never, who)).toThrow('A rating is recorded by a shop that handled this parcel');
+      }
+      expect(core.get(shop.did)?.reputationScore).not.toBe(1);
+      expect((controller.rate('QR-WHO', { ...stars, stars: 5 } as never, as('agent', shop.did)) as { agentComposite: number }).agentComposite).toBe(5);
+      // A parcel nobody made is nobody's to rate, staff included.
+      expect(() => controller.rate('QR-NOBODY-MADE', stars as never, staff)).toThrow();
+    });
+  });
+
   describe('two-person rules need named people outside a sandbox', () => {
     const before = process.env.GLOS_ENV;
     afterEach(() => {

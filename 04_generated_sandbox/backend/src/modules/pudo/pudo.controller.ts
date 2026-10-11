@@ -51,7 +51,7 @@ import { COUNTRY_CATALOGUE, catalogueEntry } from '../../foundation/countries/ca
 import { ApiQuery } from '@nestjs/swagger';
 import { GlosError } from '../../foundation/http/glos-error';
 import { Public } from '../../foundation/auth/public.decorator';
-import { Roles, Scopes } from '../../foundation/auth/scopes.decorator';
+import { Roles, Scopes, SignedIn } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { actingDid, actingTenant, auditActor } from '../../foundation/auth/acting';
 import { PresenceService } from '../../foundation/presence/presence.service';
@@ -397,6 +397,12 @@ export class SbgController {
 
   // --- agents (↔ M1 Tiers 1–2) ---
 
+  /**
+   * Put a shop on the network WITHOUT its owner signing up — network staff, and on a laptop the seeder. A shop that
+   * signs itself up goes through `auth/signup`, with a phone it has proven. This took any valid token: any signed-in
+   * driver or store could mint shops.
+   */
+  @Roles('operator')
   @Post('agents')
   register(@Body() dto: RegisterAgentDto) {
     return this.agents.register(dto);
@@ -3099,8 +3105,11 @@ export class SbgController {
    * The embedded PUDO-picker node (or a webhook, or manual entry): capture the buyer's destination-PUDO
    * choice + email so it can pre-fill a shipment in the console. This is what hooks into the vendor's checkout.
    */
+  @Scopes('vendor:manage:self')
   @Post('vendors/:id/checkout')
-  captureCheckout(@Param('id') id: string, @Body() dto: CheckoutDto) {
+  captureCheckout(@Param('id') id: string, @Body() dto: CheckoutDto, @Actor() actor: IntrospectionResult) {
+    // THAT store's own sign-in (or staff). The id in the address was all it took: any account could file orders in any store's name.
+    this.assertVendorOwner(id, actor);
     return this.vendors.captureCheckout({ vendorId: id, destAgentDid: dto.destPudoDid, buyerEmail: dto.buyerEmail, buyerMobile: dto.buyerMobile, externalOrderId: dto.externalOrderId, items: dto.items, subtotal: dto.subtotal, source: dto.source });
   }
 
@@ -3285,9 +3294,24 @@ export class SbgController {
   }
 
   /** An MDP sets its open-data per-parcel sort price. */
+  @Roles('mdp', 'operator')
   @Patch('mdps/:id/pricing')
-  setMdpPrice(@Param('id') id: string, @Body() dto: SetPriceDto) {
+  setMdpPrice(@Param('id') id: string, @Body() dto: SetPriceDto, @Actor() actor: IntrospectionResult) {
+    this.assertMdpActs(id, actor);
     return this.mdps.setPrice(id, dto.price);
+  }
+
+  /**
+   * What only the HUB does — its price, its bags, what is dropped and sorted at it — from its own sign-in, or
+   * network staff standing in for it. These took any valid token and no identity: any account could reprice a
+   * hub, mint bags into it, or empty and sort what stood in it. A hub's token carries its DID; the address
+   * carries its id; the record ties the two.
+   */
+  private assertMdpActs(mdpId: string, actor: IntrospectionResult): void {
+    const mdp = this.mdps.require(mdpId); // 404 if unknown
+    if (actor?.role !== 'operator' && (!actor?.did || actor.did !== mdp.did)) {
+      throw new GlosError('FORBIDDEN', 'Only the hub can do this, from its own sign-in');
+    }
   }
 
   /**
@@ -3705,8 +3729,15 @@ export class SbgController {
   }
 
   /** Tier-1 customer rates a delivered parcel → writes the agent composite to the shared core (graduation). */
+  @Roles('agent', 'operator')
   @Post('parcels/:id/rate')
-  rate(@Param('id') id: string, @Body() dto: RateDto) {
+  rate(@Param('id') id: string, @Body() dto: RateDto, @Actor() actor: IntrospectionResult) {
+    // Recorded at the counter of a shop that HANDLED this parcel, or by staff. Any signed-in account could rate any
+    // parcel — and a rating is what a shop's standing is made of.
+    const parcel = this.parcels.get(id); // 404 if unknown
+    if (actor?.role !== 'operator' && (!actor?.did || (actor.did !== parcel.originAgentDid && actor.did !== parcel.destAgentDid))) {
+      throw new GlosError('FORBIDDEN', 'A rating is recorded by a shop that handled this parcel');
+    }
     return this.ratings.rate({ parcelId: id, stars: dto.stars, raterMobile: dto.raterMobile });
   }
 
@@ -4045,13 +4076,15 @@ export class SbgController {
 
   // --- routing: first-mile node + leg computation ---
 
-  /** Assign a first-mile node: nearest open PUDO with free shelf capacity. */
+  /** Assign a first-mile node: nearest open PUDO with free shelf capacity. No app asks this; network staff may. */
+  @Roles('operator')
   @Post('routing/assign-node')
   assignNode(@Body() dto: AssignNodeDto) {
     return this.routing.assignFirstMileNode(dto);
   }
 
-  /** Plan the journey: commit a first-mile node (given or assigned) and compute the legs + ETA. */
+  /** Plan the journey: commit a first-mile node (given or assigned) and compute the legs + ETA. No app asks this; network staff may. */
+  @Roles('operator')
   @Post('routing/plan-journey')
   planJourney(@Body() dto: PlanJourneyDto) {
     return this.routing.planJourney(dto);
@@ -4098,7 +4131,8 @@ export class SbgController {
 
   // --- MDP hubs + tote-bag sorting (multi-hop) ---
 
-  /** Register an MDP sort hub covering one or more zones. */
+  /** Register an MDP sort hub covering one or more zones. Network staff (and the seeder): it took any valid token. */
+  @Roles('operator')
   @Post('mdps')
   registerMdp(@Body() dto: RegisterMdpDto) {
     return this.mdps.register(dto);
@@ -4110,8 +4144,10 @@ export class SbgController {
   }
 
   /** Register a fresh laminated tote (QR + human code) into the pool at this MDP. */
+  @Roles('mdp', 'operator')
   @Post('mdps/:id/totes')
-  registerTote(@Param('id') id: string) {
+  registerTote(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    this.assertMdpActs(id, actor);
     return this.mdps.registerTote(id);
   }
 
@@ -4126,39 +4162,53 @@ export class SbgController {
     return this.totes.requireByCode(code);
   }
 
-  /** Link a free bag to a single next destination so it can start taking parcels. */
+  /**
+   * Link a free bag to a single next destination so it can start taking parcels.
+   *
+   * THE BAG ROUTES are for the trades that handle bags — a shop, a hub, and for loading a driver — and network
+   * staff. The code printed on the bag is what the one holding it has; but a store, a business, a fleet's office or
+   * somebody sending a parcel never holds one, and these took any valid token.
+   */
+  @Roles('agent', 'mdp', 'operator')
   @Post('totes/:code/assign')
   assignTote(@Param('code') code: string, @Body() dto: AssignToteDto) {
     return this.mdps.assignTote(code, dto.destinationNodeId, dto.destinationLabel);
   }
 
   /** Drop a parcel into a bag (capacity-checked) — connects bag ↔ parcel. */
+  @Roles('agent', 'mdp', 'operator')
   @Post('totes/:code/fill')
   fillTote(@Param('code') code: string, @Body() dto: FillToteDto) {
     return this.mdps.fillTote(code, dto.parcelId);
   }
 
   /** Scan the bag onto a bus — one scan moves the whole tote + every parcel to On_Bus. */
+  @Roles('agent', 'mdp', 'driver', 'operator')
   @Post('totes/:code/load')
   loadBag(@Param('code') code: string, @Body() dto: LoadBagDto) {
     return this.mdps.loadBag(code, dto.driverBadgeId);
   }
 
   /** A bus drops a bag at an MDP → scan the bag code, empty it; parcels become unsorted (At_MDP). */
+  @Roles('mdp', 'operator')
   @Post('mdps/:id/drop-bag')
-  dropBag(@Param('id') id: string, @Body() dto: DropBagDto) {
+  dropBag(@Param('id') id: string, @Body() dto: DropBagDto, @Actor() actor: IntrospectionResult) {
+    this.assertMdpActs(id, actor);
     return this.mdps.dropBag(id, dto.code);
   }
 
   /** Sort a parcel at an MDP → returns its next destination + the bag code to drop it in. */
+  @Roles('mdp', 'operator')
   @Post('mdps/:id/sort')
-  sortParcel(@Param('id') id: string, @Body() dto: SortParcelDto) {
+  sortParcel(@Param('id') id: string, @Body() dto: SortParcelDto, @Actor() actor: IntrospectionResult) {
+    this.assertMdpActs(id, actor);
     return this.mdps.sortParcel(id, dto.parcelId);
   }
 
   // --- fleet managers (the operator who owns the fleet — own onboarding + requirements) ---
 
-  /** Register a fleet manager (eligibility: business reg + transport-operator licence + tax ID + depot). */
+  /** Register a fleet manager (eligibility: business reg + transport-operator licence + tax ID + depot). Network staff: it took any valid token. */
+  @Roles('operator')
   @Post('fleet/managers')
   registerManager(@Body() dto: RegisterFleetManagerDto) {
     const manager = this.managers.register(dto);
@@ -4438,9 +4488,14 @@ export class SbgController {
   // --- fleet: vehicles (own ID) ---
 
   /** Register a vehicle into the fleet (own ID; capacity computed; verified = full docs + factory ID). */
+  @Roles('fleet_manager', 'operator')
   @Post('vehicles')
-  registerVehicle(@Body() dto: RegisterVehicleDto) {
-    return this.vehicles.register(dto as never);
+  registerVehicle(@Body() dto: RegisterVehicleDto, @Actor() actor: IntrospectionResult) {
+    // A fleet's office registers into ITS OWN fleet, whatever fleet is typed; staff name the fleet (or none: an
+    // independent courier's). It took any valid token and the typed fleet: any account could add vehicles to any fleet.
+    const managerDid = actor?.role === 'operator' ? dto.managerDid : actingTenant(actor);
+    if (actor?.role !== 'operator' && !managerDid) throw new GlosError('FORBIDDEN', 'A vehicle is registered by its fleet’s office');
+    return this.vehicles.register({ ...dto, managerDid } as never);
   }
 
   /** A fleet manager sees only their own vehicles (actor.tenant); operator sees all. */
@@ -5012,7 +5067,8 @@ export class SbgController {
     return { items: this.departures.forShipper(who) };
   }
 
-  /** What this load would cost on that departure, and which axis of it the load fills — BEFORE booking. */
+  /** What this load would cost on that departure, and which axis of it the load fills — BEFORE booking. A sum: it names nobody and keeps nothing. */
+  @SignedIn()
   @Post('departures/:departureId/quote')
   quoteDeparture(@Param('departureId') departureId: string, @Body() dto: BookDepartureDto) {
     return this.departures.quote(departureId, { weightKg: dto.weightKg, volumeM3: dto.volumeM3, nature: dto.nature });
@@ -5442,12 +5498,14 @@ export class SbgController {
   }
 
   /** Publish a filling tote to the claim marketplace early (before it is full / 24 h). */
+  @Roles('agent', 'mdp', 'operator')
   @Post('totes/:code/release')
   releaseTote(@Param('code') code: string) {
     return this.dispatch.release(code);
   }
 
-  /** Sweep: publish every tote that is full or has waited ≥ 24 h. */
+  /** Sweep: publish every tote that is full or has waited ≥ 24 h. The network's own sweep, run by staff: it took any valid token. */
+  @Roles('operator')
   @Post('dispatch/publish-ready')
   publishReady() {
     return { published: this.dispatch.publishReady() };
@@ -5756,16 +5814,24 @@ export class SbgController {
     if (!ownerDid || !actor?.did || actor.did !== ownerDid) throw new GlosError('FORBIDDEN', 'Only the shipper who posted this load can answer the prices offered on it');
   }
 
-  /** Bulk freight pickup (claimed → in_transit). driverDid (the claimer) is verified against claimedBy. */
+  /**
+   * Bulk freight pickup (claimed → in_transit). The driver is verified against claimedBy.
+   *
+   * WHO THE DRIVER IS comes from the sign-in, never from the request: these four took any valid token and a driver
+   * typed into the body, so anybody who knew which driver had claimed a load could mark it picked up, delivered or
+   * failed in that driver's name. Network staff standing in name the driver.
+   */
+  @Roles('driver', 'operator')
   @Post('dispatch/freight/:id/pickup')
-  freightPickup(@Param('id') id: string, @Body() dto: FreightActionDto) {
-    return this.dispatch.pickupFreight(id, dto.driverDid, { confirmed: dto.confirmed, securementPhotoId: dto.securementPhotoId, reservations: dto.reservations });
+  freightPickup(@Param('id') id: string, @Body() dto: FreightActionDto, @Actor() actor: IntrospectionResult) {
+    return this.dispatch.pickupFreight(id, actingDid(actor, dto.driverDid), { confirmed: dto.confirmed, securementPhotoId: dto.securementPhotoId, reservations: dto.reservations });
   }
 
   /** Bulk freight delivery (in_transit → delivered; releases the driver's reserved capacity). */
+  @Roles('driver', 'operator')
   @Post('dispatch/freight/:id/deliver')
-  freightDeliver(@Param('id') id: string, @Body() dto: FreightActionDto) {
-    return this.dispatch.deliverFreight(id, dto.driverDid, { confirmed: dto.confirmed, receiverName: dto.receiverName, podPhotoId: dto.podPhotoId, remarks: dto.remarks });
+  freightDeliver(@Param('id') id: string, @Body() dto: FreightActionDto, @Actor() actor: IntrospectionResult) {
+    return this.dispatch.deliverFreight(id, actingDid(actor, dto.driverDid), { confirmed: dto.confirmed, receiverName: dto.receiverName, podPhotoId: dto.podPhotoId, remarks: dto.remarks });
   }
 
   /**
@@ -5830,9 +5896,10 @@ export class SbgController {
   }
 
   /** FP3b — the driver stood at the door and could not hand over. The load stays on the van; the sender is told. */
+  @Roles('driver', 'operator')
   @Post('dispatch/freight/:id/delivery-failed')
-  freightDeliveryFailed(@Param('id') id: string, @Body() dto: FreightDeliveryFailedDto) {
-    return this.dispatch.failDelivery(id, dto.driverDid, { outcome: dto.outcome, note: dto.note });
+  freightDeliveryFailed(@Param('id') id: string, @Body() dto: FreightDeliveryFailedDto, @Actor() actor: IntrospectionResult) {
+    return this.dispatch.failDelivery(id, actingDid(actor, dto.driverDid), { outcome: dto.outcome, note: dto.note });
   }
 
   /** FP3b — the sender's claim against a delivered load: damaged, short, or not received. Answers with the claim, never the record. */
@@ -6035,9 +6102,10 @@ export class SbgController {
     return this.archive.html(docId, Number(seq) || 0, actor);
   }
 
+  @Roles('driver', 'operator')
   @Post('dispatch/freight/:id/temperature')
-  freightTemp(@Param('id') id: string, @Body() dto: RecordTempDto) {
-    return this.dispatch.recordTemp(id, dto.celsius, dto.driverDid);
+  freightTemp(@Param('id') id: string, @Body() dto: RecordTempDto, @Actor() actor: IntrospectionResult) {
+    return this.dispatch.recordTemp(id, dto.celsius, actingDid(actor, dto.driverDid));
   }
 
   // --- F3: consolidation consignments (durable dry commodities) — the bulk analogue of totes ---
@@ -6198,15 +6266,25 @@ export class SbgController {
     return this.dispatch.driverJobsCsv(did, query);
   }
 
-  /** Driver accepts a suggestion → reserves the load + its weight against the vehicle's capacity. */
+  /**
+   * Driver accepts a suggestion → reserves the load + its weight against the vehicle's capacity.
+   *
+   * AN OFFER IS MADE TO ONE DRIVER, and is theirs to take or leave — from their own sign-in, or network staff
+   * standing in. Its id was all these two took: any account could accept a load onto somebody's van, or throw
+   * somebody's offers away.
+   */
+  @Roles('driver', 'operator')
   @Post('dispatch/offers/:id/claim')
-  claimOffer(@Param('id') id: string) {
+  claimOffer(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    this.assertDriverActs(this.dispatch.offerDriver(id), actor);
     return this.dispatch.claim(id);
   }
 
   /** Driver declines a suggestion. */
+  @Roles('driver', 'operator')
   @Post('dispatch/offers/:id/ignore')
-  ignoreOffer(@Param('id') id: string) {
+  ignoreOffer(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    this.assertDriverActs(this.dispatch.offerDriver(id), actor);
     return this.dispatch.ignore(id);
   }
 

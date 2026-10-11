@@ -19,3 +19,11 @@ export const Roles = (...roles: ActorRole[]) => SetMetadata(ROLES_KEY, roles);
 
 /** Require a minimum assurance tier. */
 export const MinTier = (tier: Tier) => SetMetadata(MIN_TIER_KEY, tier);
+
+/**
+ * ANYBODY SIGNED IN, whoever they are — said out loud. For a route that names nobody and belongs to nobody: a
+ * calculation, a list every participant reads. Not a default. A route with no policy written on it says nothing;
+ * this says "it was looked at, and it is for everybody who is signed in".
+ */
+export const SIGNED_IN_KEY = 'authSignedIn';
+export const SignedIn = () => SetMetadata(SIGNED_IN_KEY, true);

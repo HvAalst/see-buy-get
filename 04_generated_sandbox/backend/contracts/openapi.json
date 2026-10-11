@@ -11984,7 +11984,7 @@
       "post": {
         "operationId": "Sbg.planJourney",
         "summary": "",
-        "description": "Plan the journey: commit a first-mile node (given or assigned) and compute the legs + ETA.",
+        "description": "Plan the journey: commit a first-mile node (given or assigned) and compute the legs + ETA. No app asks this; network staff may.",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -12229,7 +12229,7 @@
       "post": {
         "operationId": "Sbg.assignTote",
         "summary": "",
-        "description": "Link a free bag to a single next destination so it can start taking parcels.",
+        "description": "Link a free bag to a single next destination so it can start taking parcels.\n\nTHE BAG ROUTES are for the trades that handle bags — a shop, a hub, and for loading a driver — and network\nstaff. The code printed on the bag is what the one holding it has; but a store, a business, a fleet's office or\nsomebody sending a parcel never holds one, and these took any valid token.",
         "parameters": [
           {
             "name": "code",
@@ -14343,7 +14343,7 @@
       "post": {
         "operationId": "Sbg.quoteDeparture",
         "summary": "",
-        "description": "What this load would cost on that departure, and which axis of it the load fills — BEFORE booking.",
+        "description": "What this load would cost on that departure, and which axis of it the load fills — BEFORE booking. A sum: it names nobody and keeps nothing.",
         "parameters": [
           {
             "name": "departureId",
@@ -15655,7 +15655,7 @@
       "post": {
         "operationId": "Sbg.publishReady",
         "summary": "",
-        "description": "Sweep: publish every tote that is full or has waited ≥ 24 h.",
+        "description": "Sweep: publish every tote that is full or has waited ≥ 24 h. The network's own sweep, run by staff: it took any valid token.",
         "parameters": [],
         "responses": {
           "201": {
@@ -16441,7 +16441,7 @@
       "post": {
         "operationId": "Sbg.freightPickup",
         "summary": "",
-        "description": "Bulk freight pickup (claimed → in_transit). driverDid (the claimer) is verified against claimedBy.",
+        "description": "Bulk freight pickup (claimed → in_transit). The driver is verified against claimedBy.\n\nWHO THE DRIVER IS comes from the sign-in, never from the request: these four took any valid token and a driver\ntyped into the body, so anybody who knew which driver had claimed a load could mark it picked up, delivered or\nfailed in that driver's name. Network staff standing in name the driver.",
         "parameters": [
           {
             "name": "id",
@@ -17851,7 +17851,7 @@
       "post": {
         "operationId": "Sbg.claimOffer",
         "summary": "",
-        "description": "Driver accepts a suggestion → reserves the load + its weight against the vehicle's capacity.",
+        "description": "Driver accepts a suggestion → reserves the load + its weight against the vehicle's capacity.\n\nAN OFFER IS MADE TO ONE DRIVER, and is theirs to take or leave — from their own sign-in, or network staff\nstanding in. Its id was all these two took: any account could accept a load onto somebody's van, or throw\nsomebody's offers away.",
         "parameters": [
           {
             "name": "id",

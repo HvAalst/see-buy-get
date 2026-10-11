@@ -3,7 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { AuthService } from './auth.service';
 import { IS_PUBLIC_KEY } from './public.decorator';
-import { MIN_TIER_KEY, ROLES_KEY, SCOPES_KEY } from './scopes.decorator';
+import { MIN_TIER_KEY, ROLES_KEY, SCOPES_KEY, SIGNED_IN_KEY } from './scopes.decorator';
 import { hasScope } from './actor-scopes';
 import { staffNetworkAllows } from './staff-network';
 import { SETUP_KEY_KEY, isStaffAccount, setupKeyOutsideSandbox } from './setup-key';
@@ -63,7 +63,9 @@ export class AuthGuard implements CanActivate {
     const requiredRoles = this.reflector.getAllAndOverride<ActorRole[]>(ROLES_KEY, targets);
     const requiredScopes = this.reflector.getAllAndOverride<string[]>(SCOPES_KEY, targets);
     const minTier = this.reflector.getAllAndOverride<Tier>(MIN_TIER_KEY, targets);
-    const labelled = Boolean(requiredRoles?.length || requiredScopes?.length || minTier);
+    // "Anybody signed in" is a policy too, when it is written down (@SignedIn): the route was looked at.
+    const signedIn = this.reflector.getAllAndOverride<boolean>(SIGNED_IN_KEY, targets) === true;
+    const labelled = Boolean(requiredRoles?.length || requiredScopes?.length || minTier || signedIn);
 
     if (!labelled) {
       if (STRICT) throw new ForbiddenException('Route has no authorization policy (@Public/@Scopes/@Roles required)');

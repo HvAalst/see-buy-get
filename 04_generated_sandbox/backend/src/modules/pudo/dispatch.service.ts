@@ -3448,6 +3448,11 @@ export class DispatchService {
     return this.router.etaMinutes(a, b, VEHICLE_SPEED_KMH.bus);
   }
 
+  /** WHOSE OFFER IS THIS — the one driver it was made to. What the door asks before it lets anybody take or leave it. */
+  offerDriver(offerId: string): string {
+    return this.requireOffer(offerId).driverDid;
+  }
+
   private requireOffer(offerId: string): Offer {
     const o = this.offers.get(offerId);
     if (!o) throw new GlosError('NOT_FOUND', `Offer not found: ${offerId}`);
