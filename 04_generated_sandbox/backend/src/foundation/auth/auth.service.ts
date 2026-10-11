@@ -1,7 +1,7 @@
 import { PersistentMap } from '../store/persistent-map';
 import { isSandbox } from '../runtime/sandbox';
 import { deploymentSecret } from '../runtime/secrets';
-import { BadRequestException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { DidService } from '../did/did.service';
 import { OperationalStore } from '../data-firewall/operational-store.service';
@@ -147,11 +147,16 @@ export class AuthService {
   }
 
   /**
-   * Impersonate a participant — mint an actor token for an arbitrary registered DID. Trusted-caller
-   * only (client secret). Used by the seed and ops tooling to act AS an entity they provisioned
-   * without a password. In dev (no secret configured) this is open, like every grant.
+   * A token AS a participant, for whoever holds the client secret — ON A LAPTOP ONLY. The seeder and the tests act
+   * as the shops, drivers and fleets they made, without a password each.
+   *
+   * Outside a sandbox it is refused whatever is presented (the user, 2026-10-11: "client secret should not act as
+   * participant outside sandbox"). A participant's token comes from that participant signing in and from nowhere
+   * else: one string in a server's environment must not be every shop, driver and company at once. Said before the
+   * secret is looked at, so the answer does not say whether the secret was right.
    */
   mintActorTokenFor(clientSecret: string | undefined, input: { role: ActorRole; did: string; tenant?: string; tier?: Tier }): AccessToken {
+    if (!isSandbox()) throw new ForbiddenException('Nobody is signed in as somebody else here: a participant’s token comes only from that participant signing in');
     this.assertClientCredentials(clientSecret);
     return this.mintActorToken(input);
   }

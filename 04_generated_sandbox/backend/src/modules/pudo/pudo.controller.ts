@@ -56,6 +56,7 @@ import { Actor } from '../../foundation/auth/actor.decorator';
 import { actingDid, actingTenant, auditActor } from '../../foundation/auth/acting';
 import { PresenceService } from '../../foundation/presence/presence.service';
 import { staffOf } from './staff-of';
+import { SetupKeyMay, setupKeyOutsideSandbox } from '../../foundation/auth/setup-key';
 import type { Signer } from '../../foundation/entity/same-person';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { AuthService } from '../../foundation/auth/auth.service';
@@ -1984,6 +1985,7 @@ export class SbgController {
    * second person approves. One stolen staff sign-in must not be able to become two people.
    */
   @Roles('operator')
+  @SetupKeyMay()
   @Post('operators')
   createOperator(@Body() dto: EntityAdminDto, @Actor() actor: IntrospectionResult) {
     if (staffIdOf(actor?.revocationKey)) {
@@ -1994,9 +1996,15 @@ export class SbgController {
 
   /** Every staff account that can still sign in, and the ones asked for that wait for a second member of staff. */
   @Roles('operator')
+  @SetupKeyMay()
   @Get('operators')
   listOperators(@Actor() actor: IntrospectionResult): StaffAccountList {
-    return { items: this.operatorAccounts.list(), waiting: this.operatorAccounts.waitingFor(staffIdOf(actor?.revocationKey)) };
+    return {
+      items: this.operatorAccounts.list(),
+      waiting: this.operatorAccounts.waitingFor(staffIdOf(actor?.revocationKey)),
+      // Outside a sandbox this is all the setup key reaches: said, so the console shows it and nothing else.
+      ...(setupKeyOutsideSandbox(actor) ? { setupOnly: true } : {}),
+    };
   }
 
   /** A member of staff ASKS for a new staff account. Nothing can sign in until a second member approves it. */
@@ -2011,6 +2019,7 @@ export class SbgController {
    * only one able to sign in. No password is made: the new person is emailed a link to choose their own.
    */
   @Roles('operator')
+  @SetupKeyMay()
   @Post('operators/proposals/:proposalId/approve')
   approveOperator(@Param('proposalId') proposalId: string, @Actor() actor: IntrospectionResult): Promise<StaffInvited> {
     const operatorId = staffIdOf(actor?.revocationKey);
@@ -2063,6 +2072,7 @@ export class SbgController {
    * SETUP KEY outside a sandbox: announced to everybody on staff first, and finished a day later unless one stops it.
    */
   @Roles('operator')
+  @SetupKeyMay()
   @Delete('operators/:operatorId')
   revokeOperator(@Param('operatorId') operatorId: string, @Actor() actor: IntrospectionResult): OperatorAccountView {
     return staffIdOf(actor?.revocationKey) ? this.operatorAccounts.revoke(operatorId, auditActor(actor)) : this.operatorAccounts.removeByKey(operatorId);

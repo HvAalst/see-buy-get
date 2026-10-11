@@ -384,6 +384,12 @@ export class StaffProposalView {
 export class StaffAccountList {
   items: OperatorAccountView[];
   waiting: StaffProposalView[];
+  /**
+   * Said to the SETUP KEY outside a sandbox: this list, and setting staff up from it, is all it reaches. The console
+   * shows that and nothing else, rather than a screen of refusals.
+   */
+  @ApiPropertyOptional()
+  setupOnly?: boolean;
 }
 
 /** An administrator as anybody may read them — no salt, no hash, no password, ever. */

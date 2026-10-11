@@ -706,6 +706,11 @@
   user-select: all; /* one click selects the whole thing — it is going to be copied */
 }
 
+/* The setup key's one screen: no rail beside it, so it is held to a readable width. */
+.twr-setup {
+  max-width: 1100px;
+}
+
 /* A link is one long word: it breaks anywhere rather than push the box off a phone. */
 .twr-reveal__link {
   overflow-wrap: anywhere;

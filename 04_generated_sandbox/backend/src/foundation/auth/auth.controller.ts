@@ -12,8 +12,9 @@ interface TokenDto {
   /** Required once GLOS_CLIENT_SECRET is configured. */
   clientSecret?: string;
   /**
-   * Trusted-caller extensions (client-secret gated). Ask for an operator token (role 'operator'), or
-   * impersonate a participant DID (role + did) — used by the seed and ops scripts, never the browser.
+   * Trusted-caller extensions (client-secret gated). Ask for the setup key's operator token (role 'operator') —
+   * which outside a sandbox only sets network staff up — or, ON A LAPTOP ONLY, a token as a participant
+   * (role + did): what the seeder and the tests use. Outside a sandbox the second is refused whatever is presented.
    */
   role?: ActorRole;
   did?: string;
@@ -36,7 +37,7 @@ export class AuthController {
   @Public()
   @Post('token')
   token(@Body() body: TokenDto, @Req() req: { ip?: string }): AccessToken {
-    // Trusted-caller paths (client-secret gated) — operator, or actor impersonation.
+    // Trusted-caller paths (client-secret gated): the setup key; and, in a sandbox only, a token as a participant.
     if (body?.role === 'operator') {
       if (!staffNetworkAllows(req?.ip)) throw new ForbiddenException('Staff access is open only from the networks SeeBuyGet staff work on');
       return this.authService.mintOperatorToken(body?.clientSecret);

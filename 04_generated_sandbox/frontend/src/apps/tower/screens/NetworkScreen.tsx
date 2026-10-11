@@ -20,7 +20,7 @@ import {
   statusMixRows,
 } from '../network';
 import { money } from '../queues';
-import { linkWords, opensItself, staffAddWay, staffFoldHint, waitingActions, waitingLine, type StaffWaiting } from '../staff';
+import { linkWords, opensItself, staffAddWay, staffFoldHint, staffListOf, waitingActions, waitingLine, type StaffWaiting } from '../staff';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
 /**
@@ -406,6 +406,24 @@ function FleetsPanel({ actions }: { actions: TowerActions }) {
 }
 
 /**
+ * ALL THE SETUP KEY HAS, OUTSIDE A SANDBOX: who is on staff, and setting them up. The key is nobody — no name, no
+ * account — so there it opens no other screen, decides nothing and acts for nobody; the server refuses it everything
+ * else, and this is shown instead of a console full of refusals.
+ */
+export function StaffSetupScreen({ actions }: { actions: TowerActions }) {
+  const t = useT();
+  return (
+    <>
+      <div class="cons__head">
+        <h1 class="cons__title">{t('tower.setup.title')}</h1>
+        <p class="cons__lede">{t('tower.setup.lede')}</p>
+      </div>
+      <StaffPanel actions={actions} named={false} startOpen />
+    </>
+  );
+}
+
+/**
  * Who works for the network — one sign-in each. The panel exists so that "a different person must approve this" can
  * be true: until the first account is made, everybody holds the one setup key and every name is typed.
  *
@@ -414,7 +432,7 @@ function FleetsPanel({ actions }: { actions: TowerActions }) {
  * email went. Only the setup key (`named` is false) makes an account at once, with a password shown once — its own
  * first account on a new installation.
  */
-function StaffPanel({ actions, named }: { actions: TowerActions; named: boolean }) {
+function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActions; named: boolean; /** The only thing on the screen: it arrives open. */ startOpen?: boolean }) {
   const t = useT();
   const client = actions.client();
   const [rows, setRows] = useState<StaffRow[] | null>(null);
@@ -424,7 +442,7 @@ function StaffPanel({ actions, named }: { actions: TowerActions; named: boolean 
   const [declining, setDeclining] = useState<string | null>(null);
   const [reason, setReason] = useState('');
   // Opened for the reader when an account waits that is theirs to decide: work behind a click is work nobody does.
-  const [fold, setFold] = useState(false);
+  const [fold, setFold] = useState(startOpen);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -440,10 +458,10 @@ function StaffPanel({ actions, named }: { actions: TowerActions; named: boolean 
     if (!client) return;
     const r = await client.api.staff();
     if (r.error) return setError(r.error.detail || r.error.title);
-    const data = r.data as unknown as { items?: StaffRow[]; waiting?: StaffWaiting[] };
-    setRows(data?.items ?? []);
-    setWaiting(data?.waiting ?? []);
-    if (opensItself(data?.waiting ?? [], named)) setFold(true);
+    const data = staffListOf<StaffRow>(r.data);
+    setRows(data.items);
+    setWaiting(data.waiting);
+    if (opensItself(data.waiting, named)) setFold(true);
   }, [client, named]);
 
   useEffect(() => {

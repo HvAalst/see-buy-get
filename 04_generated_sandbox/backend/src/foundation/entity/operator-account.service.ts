@@ -5,6 +5,7 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { GlosError } from '../http/glos-error';
 import { PersistentMap } from '../store/persistent-map';
 import { AuthService } from '../auth/auth.service';
+import { STAFF_KEY_PREFIX } from '../auth/setup-key';
 import { PASSWORD_NO_SELF_RESET, PasswordTries, keptLocks, spendTime } from '../auth/password-tries';
 import { passwordProblem } from '../auth/password-rules';
 import { AccessToken } from '../auth/auth.types';
@@ -692,10 +693,10 @@ function fingerprint(token: string): string {
 
 /** The sign-out key of one staff account: operator tokens have no DID to be signed out by. */
 export function operatorKey(operatorId: string): string {
-  return `operator:${operatorId}`;
+  return `${STAFF_KEY_PREFIX}${operatorId}`;
 }
 
 /** The staff account behind an operator token — none for the shared setup key, which is nobody in particular. */
 export function staffIdOf(revocationKey: string | undefined): string | undefined {
-  return revocationKey?.startsWith('operator:') ? revocationKey.slice('operator:'.length) : undefined;
+  return revocationKey?.startsWith(STAFF_KEY_PREFIX) ? revocationKey.slice(STAFF_KEY_PREFIX.length) : undefined;
 }

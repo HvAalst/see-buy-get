@@ -367,10 +367,10 @@ export const ARTICLES: GuideArticle[] = [
       "console"
     ],
     title: "The setup key",
-    summary: "The one shared operator key, for the first staff account on a new installation and for scripts.",
+    summary: "The one shared operator key, for the first staff account on a new installation. On a laptop it also runs the seeder and the tests.",
     notes: [
-      "It has full operator rights but cannot say who is holding it, so the console marks your name “name not verified”.",
-      "Outside a sandbox it cannot take a decision that needs two people.",
+      "In a sandbox it has full operator rights but cannot say who is holding it, so the console marks your name “name not verified”.",
+      "Outside a sandbox it sets network staff up and does nothing else. The console shows that one screen; the key opens no other, decides nothing and acts for nobody. Nothing signs in as a shop, a driver or a company but they themselves.",
       "Outside a sandbox it makes a staff account alone only while nobody can sign in. When one person can sign in, that person asks for the next account and the setup key approves it. With two or more, a second member of staff approves, and the setup key adds nobody.",
       "Outside a sandbox it takes no sign-in away at once. Asking with the setup key tells everybody on staff by email and waits 24 hours, and any member of staff can stop it: Overview, then Network staff, then Stop it. That is the way back for somebody alone on staff who lost their phone, and it is no quiet way in for whoever finds the key."
     ]

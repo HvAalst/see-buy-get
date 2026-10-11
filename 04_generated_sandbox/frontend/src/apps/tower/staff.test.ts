@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { linkWords, opensItself, passwordBlocker, staffAddWay, staffFoldHint, waitingActions, waitingLine, welcomeTokenFrom, type StaffWaiting } from './staff';
+import { linkWords, opensItself, passwordBlocker, staffAddWay, staffFoldHint, staffListOf, waitingActions, waitingLine, welcomeTokenFrom, type StaffWaiting } from './staff';
 
 const day = (iso: string) => iso.slice(0, 10);
 const asked: StaffWaiting = { proposalId: 'spr_1', email: 'chloe@sbg.test', name: 'Chloe Wanjiru', askedBy: 'Amina Otieno', askedAt: '2026-10-11T09:00:00Z', until: '2026-10-18T09:00:00Z', mine: false, forSetupKey: false };
@@ -49,6 +49,18 @@ describe('adding a member of staff takes two people', () => {
   it('counts the ones asked for on the folded panel only when there are some', () => {
     expect(staffFoldHint(3, 0, t)).toBe('3 people on staff');
     expect(staffFoldHint(3, 2, t)).toBe('3 people on staff · 2 asked for, waiting for a second');
+  });
+});
+
+describe('the staff list, and whether it is all the caller reaches', () => {
+  it('shows the setup key its one screen only when the server says that is all it has', () => {
+    expect(staffListOf({ items: [{ operatorId: 'opr_1' }], waiting: [asked], setupOnly: true })).toEqual({ items: [{ operatorId: 'opr_1' }], waiting: [asked], setupOnly: true });
+    // On a laptop, and from a server that predates it, nothing is said: the whole console is the key's, as before.
+    expect(staffListOf({ items: [], waiting: [] }).setupOnly).toBe(false);
+    // Only the server's plain yes counts — not a word that merely looks like one.
+    for (const not of ['true', 1, {}, null, undefined, false]) expect([not, staffListOf({ items: [], waiting: [], setupOnly: not }).setupOnly]).toEqual([not, false]);
+    // Nothing at all, or something that is not a list: an empty list, never a crash.
+    for (const nothing of [undefined, null, {}, { items: 'x', waiting: 3 }]) expect(staffListOf(nothing)).toEqual({ items: [], waiting: [], setupOnly: false });
   });
 });
 

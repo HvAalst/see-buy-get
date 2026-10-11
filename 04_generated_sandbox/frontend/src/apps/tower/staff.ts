@@ -10,6 +10,16 @@ import type { MessageKey, Translate } from '../../shared/i18n';
  * shown a button that will be refused.
  */
 
+/**
+ * THE STAFF LIST as the server answered it — and whether that list is ALL the caller reaches. Outside a sandbox the
+ * setup key sets network staff up and does nothing else; the server says so here (`setupOnly`), and the console
+ * shows that one screen instead of opening on a page of refusals. A server that predates a field is read as without it.
+ */
+export function staffListOf<Row>(data: unknown): { items: Row[]; waiting: StaffWaiting[]; setupOnly: boolean } {
+  const d = (data ?? {}) as { items?: Row[]; waiting?: StaffWaiting[]; setupOnly?: unknown };
+  return { items: Array.isArray(d.items) ? d.items : [], waiting: Array.isArray(d.waiting) ? d.waiting : [], setupOnly: d.setupOnly === true };
+}
+
 /** A staff account somebody asked for, waiting for a second person. */
 export interface StaffWaiting {
   proposalId: string;

@@ -35,7 +35,8 @@ describe('AuthService', () => {
       delete process.env.GLOS_ENV;
       expect(auth.mintActorTokenFor(undefined, { role: 'driver', did: subject.id }).access_token).toBeTruthy();
       process.env.GLOS_ENV = 'production';
-      expect(() => auth.mintActorTokenFor(undefined, { role: 'driver', did: subject.id })).toThrow(/no client secret/);
+      // A token as a participant is not given outside a sandbox at all, with or without a secret (setup-key.spec.ts).
+      expect(() => auth.mintActorTokenFor(undefined, { role: 'driver', did: subject.id })).toThrow(/Nobody is signed in as somebody else here/);
       expect(() => auth.mintOperatorToken(undefined)).toThrow(/no client secret/);
     } finally {
       if (before === undefined) delete process.env.GLOS_ENV;

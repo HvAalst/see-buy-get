@@ -94,6 +94,8 @@ export const enTower = {
   'tower.staff.title': 'Network staff',
   'tower.staff.lede': 'One sign-in per person, so a decision that needs two people really takes two. That goes for a new sign-in too: one member of staff asks for it and a second approves it. The new person is emailed a link to choose their own password; nobody on staff is ever shown one.',
   'tower.staff.ledeKey': 'You are signed in with the setup key. Outside a sandbox it makes a staff account alone only while nobody can sign in, approves a request only for somebody who is the only one able to sign in, and takes no sign-in away without a day’s notice to everybody on staff.',
+  'tower.setup.title': 'Setting up network staff',
+  'tower.setup.lede': 'You are signed in with the setup key. On this server it sets network staff up and does nothing else: it opens no other screen, decides nothing and acts for nobody. Make the first account here, then sign in with it.',
   'tower.staff.ask': 'Ask for the account',
   'tower.staff.asked': 'Asked. Nothing is made yet. When a second person approves it, {name} is emailed a link to choose a password. Nobody on staff is shown one.',
   'tower.staff.waiting.title': 'Asked for, waiting for a second member of staff',

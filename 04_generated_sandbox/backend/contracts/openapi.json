@@ -30212,6 +30212,10 @@
       "StaffAccountList": {
         "type": "object",
         "properties": {
+          "setupOnly": {
+            "type": "boolean",
+            "description": "Said to the SETUP KEY outside a sandbox: this list, and setting staff up from it, is all it reaches. The console\nshows that and nothing else, rather than a screen of refusals."
+          },
           "items": {
             "type": "array",
             "items": {

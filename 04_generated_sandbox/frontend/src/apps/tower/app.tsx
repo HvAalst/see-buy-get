@@ -18,7 +18,7 @@ import { ReportsScreen } from './screens/ReportsScreen';
 import { MoneyScreen } from './screens/MoneyScreen';
 import { PicturesScreen } from './screens/PicturesScreen';
 import { SupportScreen } from './screens/SupportScreen';
-import { NetworkScreen } from './screens/NetworkScreen';
+import { NetworkScreen, StaffSetupScreen } from './screens/NetworkScreen';
 import { RatesScreen } from './screens/RatesScreen';
 import { ImportsScreen } from './screens/ImportsScreen';
 import { AccountMovesScreen } from './screens/AccountMovesScreen';
@@ -104,6 +104,32 @@ export function App() {
 
   if (state.phase === 'signin') {
     return <SignInScreen actions={actions} state={state} error={state.signInError} busy={state.loading} welcomed={welcomed} />;
+  }
+
+  // The setup key outside a sandbox: one screen, and no way to any other — the server refuses it all the rest.
+  if (state.who?.setupOnly) {
+    return (
+      <div class="cons">
+        <header class="cons__mast">
+          <div class="cons__brand">
+            <BrandMark size={26} />
+            <span class="cons__brandname">{t('tower.appTitle')}</span>
+          </div>
+          <ConsoleMenu
+            name={state.who.name}
+            warn={t('tower.signIn.unverified')}
+            entries={[
+              { key: 'help', icon: 'info' as const, label: t('guide.link'), onGo: () => setHelpOpen(true) },
+              { key: 'out', icon: 'lock' as const, label: t('tower.signOut'), danger: true, onGo: actions.signOut },
+            ]}
+          />
+          <HelpLink app="console" open={helpOpen} onOpenChange={setHelpOpen} />
+        </header>
+        <main class="cons__main twr-setup">
+          <StaffSetupScreen actions={actions} />
+        </main>
+      </div>
+    );
   }
 
   /**

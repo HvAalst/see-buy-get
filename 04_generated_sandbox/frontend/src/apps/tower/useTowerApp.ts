@@ -20,6 +20,7 @@ import type { AgentRow, CoverageCounts, FlagRow, HubRow, ToteRow } from './netwo
 import { runSummary, type FundingAction, type FundingRow, type PayoutAction, type PayoutRow, type RunResult, type UnmatchedRow } from './settlement';
 import type { HelpOption } from './pictures';
 import { approvedSays } from './connections';
+import { staffListOf } from './staff';
 import { resolveBaseUrl } from '../../lib/sbg';
 
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
@@ -31,7 +32,7 @@ export interface TowerState {
   creds: TowerCreds | null;
   /** WHO the network says this is, once a token exists. Drives the rail: an operator sees the whole
    *  network, a company administrator sees their own company and whatever sits under it. */
-  who: { mode: 'operator' | 'company'; name: string; entityId?: string; /** The name came from an account, not from a field beside the shared key. */ named?: boolean } | null;
+  who: { mode: 'operator' | 'company'; name: string; entityId?: string; /** The name came from an account, not from a field beside the shared key. */ named?: boolean; /** The setup key, on a server where it only sets staff up: the console shows that one screen. */ setupOnly?: boolean } | null;
   /** The disputed queue, longest wait first — the server's order, kept as it arrives. */
   hazards: ConstraintView[] | null;
   /** CV1 — messages a party reported in a conversation. Null while unread. */
@@ -743,12 +744,18 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     const client = createTowerClient(creds);
     clientRef.current = client;
     if (creds.mode === 'operator') {
-      setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: creds.name } }));
-      void loadHazards(client);
-      void loadQueues(client);
-      void loadPapers(client);
-      void loadNetwork(client);
-      void loadEntities(client);
+      // The staff list is the one read the setup key is allowed everywhere, and it says when that list is ALL the key
+      // reaches (outside a sandbox). Asked first, so the console does not open on a screen of refusals.
+      void client.api.staff().then(({ data }) => {
+        const setupOnly = staffListOf(data).setupOnly;
+        setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: creds.name, setupOnly } }));
+        if (setupOnly) return;
+        void loadHazards(client);
+        void loadQueues(client);
+        void loadPapers(client);
+        void loadNetwork(client);
+        void loadEntities(client);
+      });
       return;
     }
     if (creds.mode === 'staff') {
@@ -787,16 +794,23 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       const creds: TowerCreds = { mode: 'operator', name: name.trim(), key };
       const client = createTowerClient(creds);
       setState((s) => ({ ...s, loading: true, signInError: null }));
-      // The queue read is the sign-in test: it needs a token AND the operator role, so a key the server
-      // rejects fails here rather than after the shell has already claimed the person is signed in.
-      const { error } = await client.api.disputedConstraints();
+      // The staff list is the sign-in test: it needs a token AND the operator role, so a key the server rejects fails
+      // here rather than after the shell has already claimed the person is signed in. It is also the one read the
+      // setup key is allowed everywhere, and its answer says when that is all the key reaches (outside a sandbox).
+      const { data, error } = await client.api.staff();
       if (error) {
         setState((s) => ({ ...s, loading: false, signInError: error.detail || t('tower.signIn.rejected') }));
         return;
       }
+      const setupOnly = staffListOf(data).setupOnly;
       clientRef.current = client;
       saveCreds(creds);
-      setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: creds.name }, signInError: null }));
+      setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: creds.name, setupOnly }, signInError: null }));
+      if (setupOnly) {
+        // Nothing else is this key's to read: the one screen is shown, and none of the rest is asked for.
+        setState((s) => ({ ...s, loading: false }));
+        return;
+      }
       await loadHazards(client);
       await loadQueues(client);
       await loadPapers(client);

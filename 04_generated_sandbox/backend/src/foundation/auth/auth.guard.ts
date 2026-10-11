@@ -6,6 +6,7 @@ import { IS_PUBLIC_KEY } from './public.decorator';
 import { MIN_TIER_KEY, ROLES_KEY, SCOPES_KEY } from './scopes.decorator';
 import { hasScope } from './actor-scopes';
 import { staffNetworkAllows } from './staff-network';
+import { SETUP_KEY_KEY, setupKeyOutsideSandbox } from './setup-key';
 import { ActorRole, IntrospectionResult } from './auth.types';
 import { Tier } from '../data-firewall/data-firewall.types';
 
@@ -44,6 +45,11 @@ export class AuthGuard implements CanActivate {
     request.auth = auth;
     // A staff token works only from where staff work, when a deployment says where that is (GLOS_STAFF_NETWORKS).
     if (auth.role === 'operator' && !staffNetworkAllows(request.ip)) throw new ForbiddenException('Staff access is open only from the networks SeeBuyGet staff work on');
+    // THE SETUP KEY IS NOBODY. Outside a sandbox it sets network staff up and does nothing else: refused here, before
+    // any role or scope is read, on every route that is not marked for it — the unlabelled ones included.
+    if (setupKeyOutsideSandbox(auth) && !this.reflector.getAllAndOverride<boolean>(SETUP_KEY_KEY, targets)) {
+      throw new ForbiddenException('The setup key only sets network staff up. Sign in with a staff account of your own for everything else.');
+    }
 
     // --- authorize ---
     const requiredRoles = this.reflector.getAllAndOverride<ActorRole[]>(ROLES_KEY, targets);

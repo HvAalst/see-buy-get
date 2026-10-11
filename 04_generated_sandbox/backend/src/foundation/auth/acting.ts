@@ -1,13 +1,15 @@
 import { ForbiddenException } from '@nestjs/common';
 import { IntrospectionResult } from './auth.types';
+import { assertMayStandIn } from './setup-key';
 
 /**
  * Resolve WHO a request acts as, closing the self-asserted-identity hole.
  *
  * The rule: a normal actor acts as THEMSELVES — identity comes from the verified token, and any id
- * in the request body is ignored. An OPERATOR (maximally trusted, client-secret gated) may act on
- * behalf of another participant by passing an explicit id — this is what keeps the seed, ops scripts
- * and admin tooling working without a password for every entity.
+ * in the request body is ignored. An OPERATOR may act on behalf of another
+ * participant by passing an explicit id: a member of staff standing in, and — on a laptop only — the
+ * seeder with the setup key. Outside a sandbox the setup key stands in for nobody (`setup-key.ts`): it
+ * has no name to put on what it did.
  *
  * Before S3 the body field WAS the identity for everyone, so a driver's token could pickup/void/settle
  * as any agent. Now:
@@ -16,6 +18,7 @@ import { IntrospectionResult } from './auth.types';
  */
 export function actingDid(actor: IntrospectionResult | undefined, override?: string): string {
   if (actor?.role === 'operator') {
+    assertMayStandIn(actor);
     const did = override ?? actor.did;
     if (!did) throw new ForbiddenException('Operator must specify the subject id');
     return did;
@@ -69,6 +72,9 @@ export function actingPerson(actor: IntrospectionResult | undefined): string {
  * override) so callers can list across tenants.
  */
 export function actingTenant(actor: IntrospectionResult | undefined, override?: string): string | undefined {
-  if (actor?.role === 'operator') return override; // operator: the given tenant, or all
+  if (actor?.role === 'operator') {
+    assertMayStandIn(actor);
+    return override; // operator: the given tenant, or all
+  }
   return actor?.tenant; // everyone else: pinned to their own
 }
