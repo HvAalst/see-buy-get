@@ -20,6 +20,7 @@ import {
   offShiftSummary,
   rateBand,
   removalWords,
+  removedLine,
   shiftSummary,
   usedPercent,
 } from '../logic';
@@ -148,7 +149,7 @@ function OffShift({ state, actions, onOpenFleet }: HomeScreenProps) {
 
       <FleetOfferNote state={state} onOpenFleet={onOpenFleet} />
       {removed ? (
-        <Note tone="warn" icon="truck" title={t('driver.home.betweenTitle')} detail={`${t('driver.fleet.removed', { company: removed.companyName, day: formatDate(removed.at, { day: 'numeric', month: 'short' }) })} ${removalWords(removed, t)}`} />
+        <Note tone="warn" icon="truck" title={t('driver.home.betweenTitle')} detail={`${removedLine(removed, formatDate(removed.at, { day: 'numeric', month: 'short' }), t)} ${removalWords(removed, t)}`} />
       ) : null}
       {notice ? <Note tone="warn" icon="clock" title={t('driver.home.notActivated')} detail={notice} /> : null}
       <Clearance state={state} actions={actions} />

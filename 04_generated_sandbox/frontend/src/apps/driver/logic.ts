@@ -150,10 +150,25 @@ export function driverStatusNotice(status: DriverStatus | undefined, t: Translat
   return t(hasFleet ? 'driver.logic.statusNotice' : 'driver.logic.statusNoticeOwn', { status: state });
 }
 
-/** Why a fleet took this driver off, and what it means — the fleet's own words when it chose to give them. */
-export function removalWords(removed: { reason: 'left' | 'ended' | 'other'; note?: string }, t: Translate): string {
-  const why = removed.reason === 'left' ? t('driver.fleet.removedLeft') : removed.reason === 'ended' ? t('driver.fleet.removedEnded') : removed.note ? t('driver.fleet.removedNote', { note: removed.note }) : '';
+/**
+ * Why this driver is off a fleet, and what it means — the fleet's own words when its office took them off and chose
+ * to give them; and NOTHING put in a fleet's mouth when the driver left by themselves.
+ */
+export function removalWords(removed: { reason: 'left' | 'ended' | 'other' | 'own'; note?: string }, t: Translate): string {
+  const why =
+    removed.reason === 'own' ? '' : removed.reason === 'left' ? t('driver.fleet.removedLeft') : removed.reason === 'ended' ? t('driver.fleet.removedEnded') : removed.note ? t('driver.fleet.removedNote', { note: removed.note }) : '';
   return [why, t('driver.fleet.removedNext')].filter(Boolean).join(' ');
+}
+
+/** What happened, as its own sentence: "you left" is not "they took you off", and the screen must not say the second for the first. */
+export function removedLine(removed: { reason: 'left' | 'ended' | 'other' | 'own'; companyName: string }, day: string, t: Translate): string {
+  return t(removed.reason === 'own' ? 'driver.fleet.leftOwn' : 'driver.fleet.removed', { company: removed.companyName, day });
+}
+
+/** After leaving: what the office was told, said to the driver — with the runs they came off, when there were any. */
+export function leftDetail(runs: string[], t: Translate): string {
+  if (runs.length === 0) return t('driver.fleet.leftDetail');
+  return runs.length === 1 ? t('driver.fleet.leftDetailRun', { run: runs[0] }) : t('driver.fleet.leftDetailRuns', { count: runs.length });
 }
 
 export function canStartShift(status: DriverStatus | undefined): boolean {

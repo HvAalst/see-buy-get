@@ -27,7 +27,7 @@ interface VehicleChanged { departureId: string; managerDid: string; company: str
 interface FleetChange { driverDid: string; driverName: string; fromManagerDid?: string; toManagerDid: string; toCompany: string }
 interface FleetOfferMade { offerId: string; driverDid: string; fleetDid: string; companyName: string; expiresAt: string }
 interface FleetOfferClosed { offerId: string; outcome: 'declined' | 'withdrawn'; fleetDid: string; driverDid: string; phoneEnding: string; companyName: string }
-interface DriverLeftFleet { driverDid: string; driverName: string; fleetDid: string; companyName: string; reason: 'left' | 'ended' | 'other'; note?: string }
+interface DriverLeftFleet { driverDid: string; driverName: string; fleetDid: string; companyName: string; reason: 'left' | 'ended' | 'other' | 'own'; note?: string; /** The runs they came off, when it was they who left. */ runs?: string[] }
 
 const OFFER_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 /** "8 Oct" — the day an offer lapses, as a person reads it. */
@@ -840,6 +840,27 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
    * learn it from a roster that is one shorter.
    */
   private async onDriverLeftFleet(p: DriverLeftFleet): Promise<void> {
+    if (p.reason === 'own') {
+      // THE DRIVER LEFT. Nobody took them off, and neither notice says somebody did. The office is told what it now
+      // has to do — the runs with nobody on them — because it was not asked and may not be looking.
+      const runs = p.runs ?? [];
+      const crew = runs.length === 1 ? ` They were on the ${runs[0]} run: it has no driver now.` : runs.length > 1 ? ` They were on ${runs.length} of your runs (${runs.join(', ')}): those have no driver now.` : '';
+      await this.tell(p.driverDid, {
+        kind: 'roster_changed',
+        title: `You left ${p.companyName}`,
+        body: 'Your trips, papers and ratings stay yours. To drive again, a fleet has to offer you a place — give its office the phone number you sign in with.',
+        tag: `driver:${p.driverDid}:removed`,
+        data: { fleetDid: p.fleetDid },
+      });
+      await this.tell(p.fleetDid, {
+        kind: 'roster_changed',
+        title: `${p.driverName} left your fleet`,
+        body: `${p.driverName} left ${p.companyName} by their own choice.${crew} Every trip they did for you stays in your records and on your earnings statement.`,
+        tag: `driver:${p.driverDid}:removed`,
+        data: { driverDid: p.driverDid },
+      });
+      return;
+    }
     await this.tell(p.driverDid, {
       kind: 'roster_changed',
       title: `${p.companyName} took you off their fleet`,

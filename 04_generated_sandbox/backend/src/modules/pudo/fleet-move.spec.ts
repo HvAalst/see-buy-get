@@ -98,6 +98,9 @@ describe('a driver changing fleet', () => {
   let books: BooksService;
   let entities: EntityService;
   let moves: FleetMoveService;
+  let parcels: ParcelService;
+  let agents: AgentService;
+  let gate: WalletGateService;
   let offers: FleetOfferService;
   let notes: ConsignmentNoteService;
   let notifications: NotificationService;
@@ -140,6 +143,9 @@ describe('a driver changing fleet', () => {
     persons = moduleRef.get(PersonService);
     auth = moduleRef.get(AuthService);
     moves = moduleRef.get(FleetMoveService);
+    parcels = moduleRef.get(ParcelService);
+    agents = moduleRef.get(AgentService);
+    gate = moduleRef.get(WalletGateService);
     offers = moduleRef.get(FleetOfferService);
     notifications = moduleRef.get(NotificationService);
     events = moduleRef.get(EventBus);
@@ -205,6 +211,9 @@ describe('a driver changing fleet', () => {
     seq += 1;
     return vehicles.register({ plate: `MV-${seq}`, vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, ...(managerDid ? { managerDid } : {}), ...(ownerDriverDid ? { ownerDriverDid } : {}) } as never);
   }
+
+  /** The number a helper-made driver was registered under ("Mover 7" → 7): their national ID is `ID-MV-7`. */
+  const seqOf = (displayName: string) => displayName.replace(/\D/g, '');
 
   /** The whole way in: the fleet offers by phone, the driver says yes. */
   function joins(fleetDid: string, d: { driver: FleetDriver; phone: string }, now?: number) {
@@ -593,6 +602,197 @@ describe('a driver changing fleet', () => {
       moves.remove(kilima.did, d.driver.did, { reason: 'left' });
       expect(auth.introspect(old.access_token)).toMatchObject({ active: false, reason: 'revoked' });
       expect(persons.findByDid(person.personDid)!.roles.find((r) => r.role === 'driver')!.tenant).toBeUndefined();
+    });
+  });
+
+  /* ------------------------------------------------- the driver leaves, alone -- */
+
+  /**
+   * THE USER, 2026-10-11: a driver leaves a fleet BY THEMSELVES, once their shift has ended and no load is on them;
+   * the office is told. Nobody's leave is asked — a driver who had to be let go could be kept.
+   */
+  describe('a driver leaves their fleet, by themselves', () => {
+    /** A parcel a shop scanned to this driver's badge over its counter: not in a bag, not a freight load. */
+    function handedAParcel(badgeId: string) {
+      seq += 1;
+      const hours = { open: '08:00', close: '18:00' };
+      const shop = agents.register({
+        shopName: `Counter ${seq}`, zone: 'Nairobi', location: { lat: -1.2, lng: 36.8 }, landmark: 'x', shelf: { rows: 3, cols: 3 },
+        openingHours: { mon: hours, tue: hours, wed: hours, thu: hours, fri: hours, sat: hours, sun: null },
+        fullName: `Owner ${seq}`, nationalId: `ID-LV-${seq}`, mobile: `+2547990${seq}0`, deviceImei: `IMEI-LV-${seq}`,
+        requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true },
+      } as never);
+      agents.submitKyc(shop.did, { idCopyRef: 'i.jpg', tradingLicenceRef: 'l.jpg', shopPhotoRefs: ['s.jpg'] } as never);
+      agents.decideKyc(shop.did, true);
+      gate.topUp(shop.did, 50);
+      const parcelId = `QR-LV-${seq}`;
+      parcels.accept({ agentDid: shop.did, parcelId, size: 'M', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'a.jpg' } as never);
+      const p = parcels.get(parcelId);
+      p.status = 'On_Bus';
+      p.driverBadgeId = badgeId;
+      return p;
+    }
+    const aRunTomorrow = (fleetDid: string, d: { driver: FleetDriver; truck: { vehicleId: string } }, name = 'Nairobi – Nakuru LV') => {
+      const line = corridors.publish(corridors.proposeLine({ managerDid: fleetDid, company: 'Kilima Logistics', name, originZone: `${name} A`, destZone: `${name} B`, vehicleType: 'truck' }).corridorId, 'did:glos:staff');
+      const run = departures.declare({ managerDid: fleetDid, corridorId: line.corridorId, vehicleId: d.truck.vehicleId, leavesAt: new Date(Date.now() + DAY).toISOString(), capacityKg: 6000, capacityM3: 40, basis: 'per_trip', amount: 450 });
+      departures.assignDriver(run.departureId, fleetDid, { did: d.driver.did, name: d.driver.displayName });
+      return run;
+    };
+
+    it('leaves at once: between fleets, told what that means in their own voice — and the office is told, and keeps what it did', async () => {
+      const kilima = aFleet('Kilima Logistics');
+      const d = aDriver(kilima.did);
+      const { freight } = aDeliveredHaul(d.driver.did, d.truck.vehicleId, kilima.did);
+
+      const { driver: left, companyName, runs } = moves.leave(d.driver.did);
+      expect([companyName, runs]).toEqual(['Kilima Logistics', []]);
+      expect(left.managerDid).toBeUndefined();
+      expect(left.removedFrom).toMatchObject({ fleetDid: kilima.did, companyName: 'Kilima Logistics', reason: 'own' });
+      // Nobody's words and nobody's name are on it: nobody else did this.
+      expect(left.removedFrom).not.toHaveProperty('note');
+      expect(left.removedFrom).not.toHaveProperty('by');
+      expect(drivers.isIndependent(left)).toBe(false);
+      expect(drivers.canOperate(d.driver.did)).toBe(false);
+      expect(drivers.offRoadReasons(d.driver.did)[0]).toMatch(/^you are not in a fleet — you left Kilima Logistics on .+, and a fleet has to offer you a place first$/);
+      // The fleet keeps what it did.
+      expect(dispatch.fleetJobsPage(kilima.did, (x) => x, {} as never).items.map((r) => r.freightId)).toEqual([freight.freightId]);
+
+      await settle();
+      const [told] = notifications.inboxFor(d.driver.did);
+      expect(told).toMatchObject({ kind: 'roster_changed', title: 'You left Kilima Logistics' });
+      expect(told.body).not.toMatch(/took you off|They say/);
+      const [office] = notifications.inboxFor(kilima.did);
+      expect(office.title).toBe(`${d.driver.displayName} left your fleet`);
+      expect(office.body).toBe(`${d.driver.displayName} left Kilima Logistics by their own choice. Every trip they did for you stays in your records and on your earnings statement.`);
+    });
+
+    it('not while a shift is running: they end it first, and then nothing else is asked', () => {
+      const kilima = aFleet('Kilima Logistics');
+      const d = aDriver(kilima.did);
+      fleet.couple(d.driver.did, d.truck.vehicleId);
+      expect(() => moves.leave(d.driver.did)).toThrow('Finish this first: you are on a shift — end it first');
+      expect(drivers.get(d.driver.did).managerDid).toBe(kilima.did);
+      expect(fleet.activeForDriver(d.driver.did)).toBeDefined(); // not ended for them, as an office taking them off would
+      fleet.uncouple(d.driver.did);
+      expect(moves.leave(d.driver.did).driver.managerDid).toBeUndefined();
+    });
+
+    it('not with anything in their hands — a load, a parcel a shop handed over, a run that has left — each said by name', () => {
+      const kilima = aFleet('Kilima Logistics');
+      const at = { lat: -1.2, lng: 36.8 };
+
+      const loaded = aDriver(kilima.did);
+      const freight = dispatch.registerFreight({ description: 'Cement', pickupLocation: at, pickupLabel: 'Depot', destLabel: 'Site', destLocation: at, weightKg: 200, packaging: 'palletised' });
+      fleet.couple(loaded.driver.did, loaded.truck.vehicleId);
+      dispatch.assign(freight.freightId, loaded.driver.did, { managerDid: kilima.did });
+      fleet.uncouple(loaded.driver.did);
+      expect(() => moves.leave(loaded.driver.did)).toThrow(`Finish this first: you are carrying ${freight.code} — deliver it or hand it back`);
+      expect(drivers.get(loaded.driver.did).managerDid).toBe(kilima.did);
+
+      // Parcels handed over a counter were in nobody's count of what a driver carries.
+      const handed = aDriver(kilima.did);
+      const first = handedAParcel(handed.driver.badgeId!);
+      expect(() => moves.leave(handed.driver.did)).toThrow('Finish this first: you are carrying a parcel a shop handed you — deliver it first');
+      handedAParcel(handed.driver.badgeId!);
+      expect(() => moves.leave(handed.driver.did)).toThrow('you are carrying 2 parcels shops handed you — deliver them first');
+      // They are in THIS driver's hands and nobody else's: a colleague with nothing aboard goes freely.
+      const colleague = aDriver(kilima.did);
+      expect(parcels.onBusWith(colleague.driver.badgeId)).toEqual([]);
+      expect(moves.leave(colleague.driver.did).driver.managerDid).toBeUndefined();
+      // A driver with no badge yet is carrying nothing, not everything nobody's badge is on.
+      expect(parcels.onBusWith(undefined)).toEqual([]);
+      // …and the office cannot take them off with those in the van either, which it could.
+      expect(() => moves.remove(kilima.did, handed.driver.did, { reason: 'left' })).toThrow(`${handed.driver.displayName} is carrying 2 parcels shops handed over — they have to be delivered first`);
+      // Delivered, they are no longer in the driver's hands.
+      for (const p of parcels.onBusWith(handed.driver.badgeId)) p.status = 'Ready_For_Pickup';
+      expect(parcels.onBusWith(handed.driver.badgeId)).toEqual([]);
+      expect(parcels.get(first.parcelId).status).toBe('Ready_For_Pickup');
+      expect(moves.leave(handed.driver.did).driver.managerDid).toBeUndefined();
+
+      // A run that HAS left, with goods aboard, is in their hands.
+      const away = aDriver(kilima.did);
+      const run = aRunTomorrow(kilima.did, away, 'Nairobi – Eldoret LV');
+      const kept = departures.list().find((x) => x.departureId === run.departureId)!;
+      kept.status = 'departed';
+      kept.bookings.push({ status: 'booked' } as never);
+      expect(() => moves.leave(away.driver.did)).toThrow('Finish this first: the Nairobi – Eldoret LV run has left with goods aboard — finish it first');
+      expect(departures.list().find((x) => x.departureId === run.departureId)!.driverDid).toBe(away.driver.did);
+    });
+
+    it('a run that has NOT left does not hold them: they come off it, the run stands, and the office is told which has no driver', async () => {
+      const kilima = aFleet('Kilima Logistics');
+      const d = aDriver(kilima.did);
+      const run = aRunTomorrow(kilima.did, d);
+      // A run of theirs that has already left, with nothing aboard: it holds nobody, and it is HISTORY — who drove it
+      // is not rewritten because that driver later left.
+      const gone = aRunTomorrow(kilima.did, d, 'Nairobi – Kisumu LV');
+      departures.list().find((x) => x.departureId === gone.departureId)!.status = 'departed';
+      // An office taking them off is still refused while they are on it — it has to crew its own run first.
+      expect(() => moves.remove(kilima.did, d.driver.did, { reason: 'left' })).toThrow(/put somebody else on it first/);
+
+      expect(moves.leave(d.driver.did).runs).toEqual(['Nairobi – Nakuru LV']);
+      const after = departures.list().find((x) => x.departureId === run.departureId)!;
+      expect(after.status).toBe('open');
+      expect(after).not.toHaveProperty('driverDid');
+      expect(after).not.toHaveProperty('driverName');
+      expect(departures.forDriver(d.driver.did).map((x) => x.departureId)).toEqual([gone.departureId]);
+      expect(departures.list().find((x) => x.departureId === gone.departureId)).toMatchObject({ status: 'departed', driverDid: d.driver.did, driverName: d.driver.displayName });
+
+      await settle();
+      expect(notifications.inboxFor(kilima.did)[0].body).toBe(
+        `${d.driver.displayName} left Kilima Logistics by their own choice. They were on the Nairobi – Nakuru LV run: it has no driver now. Every trip they did for you stays in your records and on your earnings statement.`,
+      );
+    });
+
+    it('is nobody else’s to do or to write: an office cannot record that a driver "left by themselves", and only a driver in a fleet can leave one', () => {
+      const kilima = aFleet('Kilima Logistics');
+      const d = aDriver(kilima.did);
+      expect(() => moves.remove(kilima.did, d.driver.did, { reason: 'own' as never })).toThrow(/Say why/);
+      expect(drivers.get(d.driver.did).managerDid).toBe(kilima.did);
+
+      const courier = aDriver();
+      expect(() => moves.leave(courier.driver.did)).toThrow('You are not in a fleet');
+      moves.leave(d.driver.did);
+      expect(() => moves.leave(d.driver.did)).toThrow('You are not in a fleet');
+    });
+
+    /**
+     * NOT WANTED, AND WRITTEN DOWN AS IT IS. The user's decision is that a driver who leaves and wants to ride for
+     * themselves signs up as a courier again. Today the sign-up refuses them: their national ID is still held by
+     * their own record. progress.html has the row ("cannot become a courier"). When the way back is built, this test
+     * is the first thing that has to change.
+     */
+    it('KNOWN GAP: cannot yet sign up as a courier — the sign-up finds their own record and calls them a duplicate', () => {
+      const kilima = aFleet('Kilima Logistics');
+      const d = aDriver(kilima.did);
+      moves.leave(d.driver.did);
+      const phone = `+2547833${++seq}00`;
+      moduleOtp().verify(phone, moduleOtp().request(phone).code);
+      const again = () =>
+        accounts().signup({
+          role: 'driver', email: `left${seq}@d.test`, password: 'mkate-na-chai-1', phone,
+          profile: { driver: { displayName: 'Rider', fullName: 'R', nationalId: `ID-MV-${seqOf(d.driver.displayName)}`, mobile: phone, licenceClasses: ['bike'] } },
+        } as never);
+      expect(again).toThrow('A driver with this national ID already exists');
+      expect(drivers.isIndependent(drivers.get(d.driver.did))).toBe(false);
+    });
+
+    it('ends their sessions, and the person link names no fleet; a fleet can then offer them a place — the one they left, or another', () => {
+      const kilima = aFleet('Kilima Logistics');
+      const pwani = aFleet('Pwani Haulage');
+      const d = aDriver(kilima.did);
+      const person = persons.findByPhone(d.phone)!;
+      const old = auth.mintActorToken({ role: 'driver', did: d.driver.did, tenant: kilima.did, revocationKey: person.personDid, personDid: person.personDid });
+      moves.leave(d.driver.did);
+      expect(auth.introspect(old.access_token)).toMatchObject({ active: false, reason: 'revoked' });
+      expect(persons.findByDid(person.personDid)!.roles.find((r) => r.role === 'driver')!.tenant).toBeUndefined();
+
+      joins(pwani.did, d);
+      expect(drivers.get(d.driver.did)).toMatchObject({ managerDid: pwani.did });
+      expect(drivers.get(d.driver.did).removedFrom).toBeUndefined();
+      moves.leave(d.driver.did);
+      joins(kilima.did, d);
+      expect(drivers.get(d.driver.did).managerDid).toBe(kilima.did);
     });
   });
 

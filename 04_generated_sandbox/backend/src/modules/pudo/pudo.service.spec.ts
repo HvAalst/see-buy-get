@@ -3745,8 +3745,27 @@ describe('PUDO Light', () => {
     expect(drivers.get(joiner.did).managerDid).toBeUndefined();
     const office = { active: true, role: 'fleet_manager', did: m.did, tenant: m.did } as never;
     const offer = controller.makeFleetOffer(m.did, { phone: ph2 }, office);
-    controller.acceptFleetOffer(joiner.did, offer.offerId, auth.introspect(joiner.token.access_token) as never);
+    const accepted = controller.acceptFleetOffer(joiner.did, offer.offerId, auth.introspect(joiner.token.access_token) as never);
     expect(drivers.get(joiner.did).managerDid).toBe(m.did); // employed by the fleet
+
+    // …AND THEY LEAVE THE WAY THEY CAME: by themselves. Not their office for them, not staff, not another driver.
+    const asJoiner = auth.introspect(accepted.token!.access_token) as never;
+    expect(() => controller.leaveFleet(joiner.did, office)).toThrow('Only the driver can leave a fleet, from their own sign-in');
+    expect(() => controller.leaveFleet(joiner.did, { active: true, role: 'operator' } as never)).toThrow('Only the driver can leave a fleet');
+    expect(() => controller.leaveFleet(joiner.did, auth.introspect(self.token.access_token) as never)).toThrow('Only the driver can leave a fleet');
+    expect(drivers.get(joiner.did).managerDid).toBe(m.did);
+
+    const left = controller.leaveFleet(joiner.did, asJoiner);
+    expect(left).toMatchObject({ did: joiner.did, companyName: 'Co', runs: [] });
+    expect(drivers.get(joiner.did)).toMatchObject({ removedFrom: { fleetDid: m.did, reason: 'own' } });
+    expect(drivers.get(joiner.did).managerDid).toBeUndefined();
+    // The session they asked from ended with every other one; the phone was handed a sign-in that names no fleet.
+    expect(auth.introspect(accepted.token!.access_token)).toMatchObject({ active: false });
+    const now = auth.introspect(left.token!.access_token);
+    expect(now).toMatchObject({ active: true, role: 'driver', did: joiner.did });
+    expect(now.tenant).toBeUndefined();
+    // Not in a fleet, there is none to leave.
+    expect(() => controller.leaveFleet(joiner.did, now as never)).toThrow('You are not in a fleet');
   });
 
   /*

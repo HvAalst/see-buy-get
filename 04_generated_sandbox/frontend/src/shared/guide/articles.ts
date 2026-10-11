@@ -156,7 +156,8 @@ export const ARTICLES: GuideArticle[] = [
       "A driver carrying one of your loads, or rostered on one of your runs, cannot be taken off until the load is delivered or handed back and somebody else is on the run.",
       "A driver you take off keeps their own trips, papers and rating. Every trip they did for you stays in your records.",
       "Only your own drivers can start a shift on your vehicles.",
-      "You choose a driver’s vehicle under Shifts; it goes to the top of their list and they are told. The driver starts the shift themselves, with their PIN. Nobody starts a shift for somebody else."
+      "You choose a driver’s vehicle under Shifts; it goes to the top of their list and they are told. The driver starts the shift themselves, with their PIN. Nobody starts a shift for somebody else.",
+      "A driver can also leave by themselves, from their own app, once their shift has ended and nothing is in their hands. You are told in the bell, with any of your runs that now have no driver. A run that has not left yet does not hold them: put somebody else on it."
     ]
   },
   {
@@ -196,7 +197,8 @@ export const ARTICLES: GuideArticle[] = [
     notes: [
       "You cannot say yes while you are on a shift, carrying a load, or rostered on a run of your current fleet. The app says what to finish first.",
       "Your licence, trips and rating come with you. The fleet you leave keeps the trips you did for it.",
-      "If a fleet takes you off, the app says who and why. You cannot start a shift until another fleet offers you a place."
+      "If a fleet takes you off, the app says who and why. You cannot start a shift until another fleet offers you a place.",
+      "You can leave a fleet by yourself: your name at the top, then Your fleet, then “Leave” and the company’s name. Nobody’s permission is needed. End your shift first, and deliver or hand back anything you are carrying; the app says what still stands in the way. Their office is told. If you are on one of their runs that has not left yet, you come off it. After you leave you cannot start a shift until a fleet offers you a place."
     ]
   },
   {

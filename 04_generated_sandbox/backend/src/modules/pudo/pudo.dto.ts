@@ -1669,6 +1669,16 @@ export class FleetMoveView {
   @ApiPropertyOptional({ type: IssuedTokenView }) token?: IssuedTokenView;
 }
 
+/** A driver left their fleet by themselves: what they are now, and a sign-in that no longer names the fleet. */
+export class FleetLeaveView {
+  @ApiProperty() did!: string;
+  /** The fleet they left. */
+  @ApiProperty() companyName!: string;
+  /** The runs of that fleet they were on and are now off. */
+  @ApiProperty({ type: [String] }) runs!: string[];
+  @ApiPropertyOptional({ type: IssuedTokenView }) token?: IssuedTokenView;
+}
+
 /** A fleet takes a driver off — always with a reason the driver is shown. */
 export class RemoveDriverDto {
   @IsIn(['left', 'ended', 'other']) reason!: 'left' | 'ended' | 'other';

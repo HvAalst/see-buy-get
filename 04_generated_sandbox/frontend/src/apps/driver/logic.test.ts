@@ -21,6 +21,8 @@ import {
   countdownLabel,
   driverStatusNotice,
   removalWords,
+  removedLine,
+  leftDetail,
   isFull,
   lastReadingBreached,
   minEarnFilter,
@@ -546,5 +548,32 @@ describe('removalWords — why a fleet took a driver off, as the driver reads it
   it('quotes the fleet’s own words for "other" — and says nothing invented when it gave none', () => {
     expect(removalWords({ reason: 'other', note: 'Never came back after leave' }, t)).toContain('“Never came back after leave”');
     expect(removalWords({ reason: 'other' }, t)).toBe('Your trips, papers and rating stay yours. You cannot start a shift until a fleet offers you a place.');
+  });
+});
+
+/**
+ * A driver left their fleet by themselves. Nothing a fleet's office might have said is put in its mouth, and the
+ * screen does not say a fleet "took them off" when nobody did.
+ */
+describe('a driver who left their fleet by themselves', () => {
+  it('is told what it means, with no fleet’s words in front of it', () => {
+    expect(removalWords({ reason: 'own' }, t)).toBe('Your trips, papers and rating stay yours. You cannot start a shift until a fleet offers you a place.');
+    // Even if a note were somehow on the record, it is not a fleet's reason and is not shown as one.
+    expect(removalWords({ reason: 'own', note: 'left over' }, t)).not.toMatch(/Their reason|They say/);
+    // The fleet's three still read as the fleet's.
+    expect(removalWords({ reason: 'ended' }, t)).toMatch(/^They say they ended your contract\./);
+  });
+
+  it('says what happened as it happened: "you left", or "they took you off"', () => {
+    expect(removedLine({ reason: 'own', companyName: 'Kilima Logistics' }, '11 Oct', t)).toBe('You left Kilima Logistics on 11 Oct.');
+    for (const reason of ['left', 'ended', 'other'] as const) {
+      expect(removedLine({ reason, companyName: 'Kilima Logistics' }, '11 Oct', t)).toBe('Kilima Logistics took you off their fleet on 11 Oct.');
+    }
+  });
+
+  it('is told what the office was told — and which runs now need somebody else', () => {
+    expect(leftDetail([], t)).toBe('Their office has been told.');
+    expect(leftDetail(['Nairobi – Nakuru'], t)).toBe('Their office has been told, and that the Nairobi – Nakuru run needs another driver.');
+    expect(leftDetail(['Nairobi – Nakuru', 'Nairobi – Eldoret'], t)).toBe('Their office has been told, and that 2 of their runs need another driver.');
   });
 });

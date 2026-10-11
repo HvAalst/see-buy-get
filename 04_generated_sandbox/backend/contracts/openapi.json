@@ -13535,6 +13535,35 @@
         }
       }
     },
+    "/v1/sbg/drivers/{did}/leave-fleet": {
+      "post": {
+        "operationId": "Sbg.leaveFleet",
+        "summary": "",
+        "description": "THE DRIVER LEAVES THEIR FLEET. Only from the driver's OWN sign-in: not their office (which has its own way to\ntake somebody off, with its own words), not staff, and not anybody standing in. Now, or refused by name.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetLeaveView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/drivers/{did}/fleet-offers/{offerId}/decline": {
       "post": {
         "operationId": "Sbg.declineFleetOffer",
@@ -35971,6 +36000,33 @@
         "required": [
           "did",
           "companyName"
+        ]
+      },
+      "FleetLeaveView": {
+        "type": "object",
+        "properties": {
+          "did": {
+            "type": "string"
+          },
+          "companyName": {
+            "type": "string",
+            "description": "The fleet they left."
+          },
+          "runs": {
+            "description": "The runs of that fleet they were on and are now off.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "token": {
+            "$ref": "#/components/schemas/IssuedTokenView"
+          }
+        },
+        "required": [
+          "did",
+          "companyName",
+          "runs"
         ]
       },
       "FleetOfferDto": {

@@ -52,6 +52,10 @@ export function createDriverApi(sbg: SbgClient) {
     declineFleetOffer: (did: string, offerId: string) =>
       sbg.request((c) => c.POST('/v1/sbg/drivers/{did}/fleet-offers/{offerId}/decline', { params: { path: { did, offerId } } })),
 
+    /** Leave the fleet — the driver's own act, from their own sign-in. Refused by name while a shift runs or
+     *  anything is in their hands. Every earlier session ends; a fresh token comes back for this phone. */
+    leaveFleet: (did: string) => sbg.request((c) => c.POST('/v1/sbg/drivers/{did}/leave-fleet', { params: { path: { did } } })),
+
     sendLicenceRenewal: (did: string, body: { copyRef: string; expiresAt: string; number?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/licence-renewal', { params: { path: { did } }, body: body as never })),
 

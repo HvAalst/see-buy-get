@@ -765,6 +765,16 @@ export class ParcelService implements OnApplicationBootstrap {
     return { perDay: parcel.holdingFeePerDay ?? now.perDay, currency: now.currency };
   }
 
+  /**
+   * The parcels a driver was handed OVER A COUNTER and has not yet delivered — not in a bag, scanned to their badge.
+   * A bag or a freight load is found where those are kept (DispatchService.activeCargo); these were found nowhere,
+   * so a driver holding five parcels counted as holding nothing.
+   */
+  onBusWith(badgeId: string | undefined): Parcel[] {
+    if (!badgeId) return [];
+    return [...this.parcels.values()].filter((p) => p.status === 'On_Bus' && p.driverBadgeId === badgeId && !p.toteId);
+  }
+
   /** DT — mint the shipment's stable GLOS identity (the digital twin's DID) at parcel creation. Anchored +
    *  resolvable; the reusable sticker parcelId is the human handle, this is the shipment's global id. */
   private mintShipmentDid(parcelId: string, direction: ParcelDirection): string {

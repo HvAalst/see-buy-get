@@ -465,7 +465,9 @@ export class DriverService {
     const papers = [...(driver.idHold ? [idHoldLine(driver.idHold.reference)] : []), ...lapsedOf(driverPapers(driver, now)).map(offRoadLine)];
     if (!betweenFleets(driver)) return papers;
     const off = driver.removedFrom!;
-    return [`you are not in a fleet — ${off.companyName} took you off on ${dayOf(off.at)}, and a fleet has to offer you a place first`, ...papers];
+    // Said as what happened: a driver who left is not told a fleet took them off.
+    const how = off.reason === 'own' ? `you left ${off.companyName} on ${dayOf(off.at)}` : `${off.companyName} took you off on ${dayOf(off.at)}`;
+    return [`you are not in a fleet — ${how}, and a fleet has to offer you a place first`, ...papers];
   }
 
   /** Whether the driver's licence clears them for a given vehicle class. */

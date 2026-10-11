@@ -329,9 +329,13 @@ export class DriverPortrait {
   addedAt: string;
 }
 
-export type FleetRemovalReason = 'left' | 'ended' | 'other';
+/**
+ * `left`, `ended` and `other` are the FLEET's words, said when its office takes a driver off. `own` is nobody's
+ * word but the driver's: they left by themselves, from their own sign-in, and no office can write it for them.
+ */
+export type FleetRemovalReason = 'left' | 'ended' | 'other' | 'own';
 
-/** A fleet took this driver off — who, when and why, kept so the driver can read it and the next fleet starts clean. */
+/** This driver is off a fleet — which, when and why, kept so the driver can read it and the next fleet starts clean. */
 export class FleetRemoval {
   fleetDid: string;
   companyName: string;

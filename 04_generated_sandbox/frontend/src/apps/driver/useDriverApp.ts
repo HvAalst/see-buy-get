@@ -28,7 +28,7 @@ import type {
   VehicleView,
 } from './types';
 import type { DepartureView } from './types';
-import { boardOriginPin, DEFAULT_WORK_RADIUS_KM, defaultWorkMode, lastReadingBreached, minEarnFilter, nodeOptions, originReady } from './logic';
+import { boardOriginPin, DEFAULT_WORK_RADIUS_KM, defaultWorkMode, lastReadingBreached, leftDetail, minEarnFilter, nodeOptions, originReady } from './logic';
 import { pinAfterRename, type GeoPoint, type PinSource } from '../../shared/geo';
 import { currentPosition, watchPosition } from '../../shared/position';
 import { t } from '../../shared/i18n';
@@ -886,6 +886,24 @@ export function useDriverApp() {
     [client, did, pushToast, refresh],
   );
 
+  /**
+   * LEAVE THE FLEET. The driver's own decision, asked of nobody. The server ends every session this driver holds
+   * (each named the fleet) and hands this phone a new one, which is seeded before anything else is asked — as when
+   * a place is accepted. A refusal (a shift still running, something still in their hands) goes back to the sheet.
+   */
+  const leaveFleet = useCallback(async (): Promise<SbgError | null> => {
+    if (!client || !did) return null;
+    setState((s) => ({ ...s, busy: 'fleet-leave' }));
+    const r = await client.api.leaveFleet(did);
+    setState((s) => ({ ...s, busy: null }));
+    if (r.error) return r.error;
+    const left = narrow<{ companyName: string; runs?: string[]; token?: { access_token: string; token_type: 'Bearer'; expires_in: number } }>(r.data);
+    if (left?.token) await client.client.seed(left.token);
+    pushToast({ tone: 'info', icon: 'truck', title: t('driver.fleet.leftToast', { company: left?.companyName ?? '' }), detail: leftDetail(left?.runs ?? [], t) });
+    await refresh();
+    return null;
+  }, [client, did, pushToast, refresh]);
+
   /** No to a fleet's offer. The fleet is told; nothing else changes. */
   const declineFleetOffer = useCallback(
     async (offerId: string): Promise<SbgError | null> => {
@@ -1714,6 +1732,7 @@ export function useDriverApp() {
       sendLicenceRenewal,
       acceptFleetOffer,
       declineFleetOffer,
+      leaveFleet,
       sendClearance,
       countries,
       loadRoad,

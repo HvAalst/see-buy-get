@@ -37,7 +37,8 @@ export interface DriverRecord {
    * A fleet took them off and nobody has taken them on: they are between fleets, and cannot start a shift until a
    * fleet offers them a place. Who, when, and the reason the fleet gave.
    */
-  removedFrom?: { fleetDid: string; companyName: string; reason: 'left' | 'ended' | 'other'; note?: string; at: string };
+  /** `own`: they left by themselves. The other three are the fleet's words, from when its office took them off. */
+  removedFrom?: { fleetDid: string; companyName: string; reason: 'left' | 'ended' | 'other' | 'own'; note?: string; at: string };
   /** FP4 — a renewed licence they sent, not yet checked. Its date is their reading and switches nothing on. */
   licenceRenewal?: { copyRef: string; expiresAt: string; number?: string; sentAt: string };
   /** Why the last card they sent was not accepted, so they can send a better one. */

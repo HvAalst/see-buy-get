@@ -887,6 +887,21 @@ export class DepartureService {
   }
 
   /**
+   * A DRIVER LEFT THEIR FLEET: they come off every run of it that has not left yet. A run is sold before anybody is
+   * rostered on it — "no driver yet" is an ordinary state — so the run stands, its bookings stand, and the office has
+   * to put somebody else on it. A run that HAS left is not touched: goods are aboard, and that is finished first.
+   */
+  takeOffRuns(driverDid: string): Departure[] {
+    const released = this.forDriver(driverDid).filter((d) => d.status !== 'departed');
+    for (const d of released) {
+      delete d.driverDid;
+      delete d.driverName;
+      this.departures.set(d.departureId, d);
+    }
+    return released;
+  }
+
+  /**
    * WHAT THIS DRIVER HAS PROMISED AND NOT YET DONE: a run still to go, or goods still aboard one that left. A
    * driver moving to another fleet is refused while any stands, because the shippers on those runs planned around
    * this driver — stop new commitments, never the finishing of old ones. A run whose time passed with nothing

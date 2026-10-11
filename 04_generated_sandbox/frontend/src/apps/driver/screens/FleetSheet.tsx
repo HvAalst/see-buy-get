@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks';
 import { Button, Card, Note, RefusalNote, Sheet } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
-import { removalWords } from '../logic';
+import { removalWords, removedLine } from '../logic';
 import type { DriverActions, DriverState, FleetOffer } from '../useDriverApp';
 
 const DAY: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
@@ -17,16 +17,22 @@ const DAY: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
  *
  * Whatever is unfinished is said before they commit, in the server's own words: a shift running, a load in hand, a
  * run of their current fleet's still to go. And what saying yes changes is said before it does.
+ *
+ * AND THE WAY OUT, which is theirs alone too. A driver in a fleet can leave it from here, with nobody's leave: once
+ * their shift has ended and nothing is in their hands. What leaving means is said before the button that does it —
+ * above all that no shift can start afterwards until a fleet offers them a place.
  */
 export function FleetSheet({ open, onClose, state, actions }: { open: boolean; onClose: () => void; state: DriverState; actions: DriverActions }) {
   const t = useT();
   const [error, setError] = useState<SbgError | null>(null);
+  const [leaving, setLeaving] = useState(false);
   const driver = state.driver;
   const removed = driver && !driver.managerDid ? driver.removedFrom : undefined;
   const courier = Boolean(driver) && !driver?.managerDid && !removed;
 
   const close = () => {
     setError(null);
+    setLeaving(false);
     onClose();
   };
   const answer = async (act: () => Promise<SbgError | null>, thenClose: boolean) => {
@@ -38,8 +44,40 @@ export function FleetSheet({ open, onClose, state, actions }: { open: boolean; o
   return (
     <Sheet open={open} onClose={close} title={t('driver.fleet.title')}>
       <p class="t-body">{driver?.fleetName ? t('driver.fleet.now', { company: driver.fleetName }) : removed ? t('driver.fleet.nowNone') : t('driver.fleet.nowOwn')}</p>
-      {removed ? <Note tone="warn" icon="truck" title={t('driver.fleet.removed', { company: removed.companyName, day: formatDate(removed.at, DAY) })} detail={removalWords(removed, t)} /> : null}
+      {removed ? <Note tone="warn" icon="truck" title={removedLine(removed, formatDate(removed.at, DAY), t)} detail={removalWords(removed, t)} /> : null}
       {error ? <RefusalNote error={error} /> : null}
+
+      {/* THE WAY OUT. Quiet until asked for; then what it means, and one button that does it. A refusal — a shift
+          still running, something still in their hands — is shown above in the server's own words. */}
+      {driver?.managerDid && driver.fleetName ? (
+        leaving ? (
+          <Card title={t('driver.fleet.leaveTitle', { company: driver.fleetName })}>
+            <Note tone="warn" icon="truck" title={t('driver.fleet.leaveMeans')} detail={t('driver.fleet.leaveDetail', { company: driver.fleetName })} />
+            <div class="stack">
+              <Button
+                chevron={false}
+                busy={state.busy === 'fleet-leave'}
+                onClick={() =>
+                  void answer(async () => {
+                    const failed = await actions.leaveFleet();
+                    if (!failed) setLeaving(false);
+                    return failed;
+                  }, false)
+                }
+              >
+                {t('driver.fleet.leaveCta', { company: driver.fleetName })}
+              </Button>
+              <Button variant="outline" chevron={false} disabled={state.busy === 'fleet-leave'} onClick={() => setLeaving(false)}>
+                {t('driver.fleet.leaveStay')}
+              </Button>
+            </div>
+          </Card>
+        ) : (
+          <Button variant="link" onClick={() => setLeaving(true)}>
+            {t('driver.fleet.leave', { company: driver.fleetName })}
+          </Button>
+        )
+      ) : null}
 
       {state.fleetOffers.map((offer) => (
         <OfferCard key={offer.offerId} offer={offer} courier={courier} busy={state.busy === 'fleet-offer'} onYes={() => void answer(() => actions.acceptFleetOffer(offer.offerId), true)} onNo={() => void answer(() => actions.declineFleetOffer(offer.offerId), false)} />
