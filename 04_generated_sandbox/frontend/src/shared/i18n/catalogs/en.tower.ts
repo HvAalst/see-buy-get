@@ -41,7 +41,7 @@ export const enTower = {
   'tower.welcome.checking': 'Checking the link…',
   'tower.welcome.deadTitle': 'This link no longer works',
   'tower.welcome.toSignIn': 'Go to sign-in',
-  'tower.welcome.done': 'Your password is set. Sign in with it now; the next step sets up the 6-digit code from an authenticator app.',
+  'tower.welcome.done': 'Your password is set. Sign in with it now.',
   'tower.signIn.unverified': 'name not verified',
   'tower.signIn.name': 'Your name',
   'tower.signIn.namePlaceholder': 'e.g. A. Mwangi',

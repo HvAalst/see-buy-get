@@ -362,6 +362,14 @@ describe('network staff accounts', () => {
       expect(kept?.revokedAt).toBe(iso(t0 + 1000));
     });
 
+    it('tells whoever is already on staff when the setup key makes an account alone', async () => {
+      const { amina, brian } = two();
+      await settled();
+      expect(news(amina.email)[0].text).toContain(`A network staff account was made for Brian Kamau (${brian.email}) with the setup key, without a second person.`);
+      // Not the one it was made for: they have their own email about it.
+      expect(news(brian.email)).toEqual([]);
+    });
+
     it('on a laptop the setup key makes as many as the seeder and the scripts need, and takes one away at once', () => {
       two();
       expect(staff.create({ email: email('third'), name: 'Third' }, 'setup key', t0).name).toBe('Third');
