@@ -199,6 +199,35 @@ describe('presence', () => {
       expect(() => presence.approve(proposal!.proposalId, 'Chege')).toThrow(/already approved/);
     });
 
+    it('tells the two apart by ACCOUNT: two colleagues with one name can second each other, and one account cannot second itself', () => {
+      const { proposal } = presence.propose({ jurisdiction: 'ZM', level: 'matched', by: 'Sam Otieno', byKey: 'operator:opr_1' });
+      const id = proposal!.proposalId;
+      // The same account, whatever name is typed beside it.
+      expect(() => presence.approve(id, 'Somebody Else', undefined, 'operator:opr_1')).toThrow(/different person must approve/);
+      expect(presence.resolve('ZM').level).toBe('observed');
+      // What a screen asks before it offers "Approve".
+      expect(presence.proposedByReader(id, { name: 'Somebody Else', key: 'operator:opr_1' })).toBe(true);
+      expect(presence.proposedByReader(id, { name: 'Sam Otieno', key: 'operator:opr_2' })).toBe(false);
+      expect(presence.proposedByReader('pp_nobody', { name: 'Sam Otieno', key: 'operator:opr_1' })).toBe(false);
+      // The account is kept beside the proposal, never on it: every member of staff reads a proposal whole.
+      expect(JSON.stringify(presence.listProposals())).not.toContain('opr_1');
+      // Another account with the very same name is another person.
+      expect(presence.approve(id, 'Sam Otieno', undefined, 'operator:opr_2').presence).toMatchObject({ level: 'matched', setBy: 'Sam Otieno', approvedBy: 'Sam Otieno' });
+    });
+
+    it('goes by the name where there is no account to go by: typed on a laptop, or proposed before accounts were kept', () => {
+      const old = presence.propose({ jurisdiction: 'ZM', level: 'matched', by: 'Amina' }).proposal!;
+      expect(() => presence.approve(old.proposalId, ' amina ', undefined, 'operator:opr_9')).toThrow(/different person must approve/);
+      expect(presence.proposedByReader(old.proposalId, { name: 'AMINA' })).toBe(true);
+      expect(presence.proposedByReader(old.proposalId, { name: '' })).toBe(false);
+      presence.decline(old.proposalId, 'Brian', 'asked again below');
+      // A name typed beside the shared key is not an account: the same name under a staff sign-in is the same person.
+      const typed = presence.propose({ jurisdiction: 'ZM', level: 'matched', by: 'Brian', byKey: 'typed:Brian' }).proposal!;
+      expect(() => presence.approve(typed.proposalId, 'brian', undefined, 'operator:opr_3')).toThrow(/different person must approve/);
+      expect(() => presence.approve(typed.proposalId, 'BRIAN', undefined, 'typed:BRIAN')).toThrow(/different person must approve/);
+      expect(presence.approve(typed.proposalId, 'Chege', undefined, 'operator:opr_3').presence.approvedBy).toBe('Chege');
+    });
+
     it('applies a lowering at once, by one named person — refusing is the safe direction', () => {
       presence.set({ jurisdiction: 'ZM', level: 'matched' });
       const { applied, proposal } = presence.propose({ jurisdiction: 'ZM', level: 'observed', note: 'Regulator letter', by: 'Amina' });

@@ -202,6 +202,8 @@ export interface PresenceProposalRow {
   decidedBy?: string;
   decidedAt?: string;
   reason?: string;
+  /** Said by the server to whoever is reading: THEY proposed this one. Absent from a server that predates it. */
+  mine?: boolean;
 }
 
 /**
@@ -232,13 +234,24 @@ export function samePerson(a: string | undefined, b: string | undefined): boolea
 }
 
 /**
+ * IS IT THE READER'S OWN — the thing a two-person rule stops them seconding.
+ *
+ * For somebody signed in with an account of their own (`named`) the SERVER says: two colleagues may share a name and
+ * are two people, and one colleague is one whatever is typed. A name typed beside the setup key is all there is to go
+ * by, so there the names are compared — the same rule the server applies.
+ */
+export function ownOf(mine: boolean | undefined, named: boolean, who: string | undefined, by: string): boolean {
+  return named && typeof mine === 'boolean' ? mine : samePerson(who, by);
+}
+
+/**
  * CA2 — may this person approve this change? Never the one who proposed it: two people switch a country on.
  * Returns the reason they may not, or null.
  */
-export function approvalBlocker(proposal: PresenceProposalRow, who: string | undefined): MessageKey | null {
+export function approvalBlocker(proposal: PresenceProposalRow, who: string | undefined, named = false): MessageKey | null {
   if (proposal.status !== 'pending') return 'tower.presence.alreadyDecided';
   if (!who?.trim()) return 'tower.presence.needName';
-  if (samePerson(who, proposal.proposedBy)) return 'tower.presence.ownProposal';
+  if (ownOf(proposal.mine, named, who, proposal.proposedBy)) return 'tower.presence.ownProposal';
   return null;
 }
 

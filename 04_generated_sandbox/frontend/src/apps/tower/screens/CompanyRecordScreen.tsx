@@ -171,6 +171,7 @@ export function CompanyRecordScreen({ state, actions }: { state: TowerState; act
           <Documents
             view={view}
             who={who}
+            named={Boolean(state.who?.named)}
             canVerify={reader === 'operator'}
             canUpload={reader === 'company' || hands.keeper === 'staff'}
             reader={reader}
@@ -652,6 +653,7 @@ function ObligationsSection({ view, busy, onSave }: { view: CompanyRecordView; b
 function Documents({
   view,
   who,
+  named,
   canVerify,
   canUpload,
   reader,
@@ -665,6 +667,8 @@ function Documents({
 }: {
   view: CompanyRecordView;
   who: string | undefined;
+  /** Signed in with an account of their own: the server says which papers are theirs, whatever anybody is called. */
+  named: boolean;
   /** Network staff verify and reject the papers of a company not switched on yet. */
   canVerify: boolean;
   /** A company's administrator always; staff only while the record is still theirs to enter. */
@@ -698,6 +702,7 @@ function Documents({
                 key={d.documentId}
                 document={d}
                 who={who}
+                named={named}
                 canVerify={canVerify}
                 reader={reader}
                 reportable={mayReport(d, view.keeper)}
@@ -807,6 +812,7 @@ function PutOnRecord({
 function DocumentRow({
   document: d,
   who,
+  named,
   canVerify,
   reader,
   reportable,
@@ -821,6 +827,7 @@ function DocumentRow({
 }: {
   document: CompanyDocument;
   who: string | undefined;
+  named: boolean;
   canVerify: boolean;
   reader: 'operator' | 'company';
   /** It counts, on a record the company keeps itself: anybody reading it may say it is not right. */
@@ -841,7 +848,7 @@ function DocumentRow({
   const [reason, setReason] = useState('');
   const [panel, setPanel] = useState<'report' | 'answer' | null>(null);
   const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-  const blocker = documentBlocker(d, who);
+  const blocker = documentBlocker(d, who, named);
   const status =
     d.status === 'verified'
       ? t('tower.company.doc.status.verified', { who: d.verifiedBy ?? '' })

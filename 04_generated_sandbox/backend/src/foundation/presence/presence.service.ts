@@ -6,6 +6,7 @@ import { incotermEntry, putsDutyOnSeller } from '../incoterms/catalogue';
 import { PersistentMap } from '../store/persistent-map';
 import { EntityService } from '../entity/entity.service';
 import { canTransact } from '../entity/entity.types';
+import { sameSigner, type Signer } from '../entity/same-person';
 import {
   LEVEL_DEFAULTS,
   PRESENCE_CAPABILITIES,
@@ -36,6 +37,8 @@ export class PresenceService implements OnApplicationBootstrap {
   private readonly presences = new PersistentMap<string, Presence>('presence');
   /** CA2 — changes that raise a country, waiting for a second person. Kept after they are decided. */
   private readonly proposals = new PersistentMap<string, PresenceProposal>('presence-proposals');
+  /** Which ACCOUNT proposed each. Beside the proposal, not on it: a proposal is read whole by every member of staff. */
+  private readonly proposerKeys = new PersistentMap<string, string>('presence-proposal-keys');
 
   constructor(private readonly entities: EntityService) {}
 
@@ -189,7 +192,7 @@ export class PresenceService implements OnApplicationBootstrap {
    * direction and an emergency must not wait for a second signature.
    */
   propose(
-    input: { jurisdiction: string; level: PresenceLevel; overrides?: Partial<Record<PresenceCapability, boolean>>; note?: string; by?: string; incoterms?: { origin?: string[]; destination?: string[] } },
+    input: { jurisdiction: string; level: PresenceLevel; overrides?: Partial<Record<PresenceCapability, boolean>>; note?: string; by?: string; /** The proposer's account, where they have one. */ byKey?: string; incoterms?: { origin?: string[]; destination?: string[] } },
     now = Date.now(),
   ): { applied?: ResolvedPresence; proposal?: PresenceProposal } {
     const by = input.by?.trim();
@@ -219,12 +222,13 @@ export class PresenceService implements OnApplicationBootstrap {
       status: 'pending',
     };
     this.proposals.set(proposal.proposalId, proposal);
+    if (input.byKey) this.proposerKeys.set(proposal.proposalId, input.byKey);
     return { proposal };
   }
 
   /** The second person says yes. Never the first: a person who proposed a change cannot approve it. */
-  approve(proposalId: string, by?: string, now = Date.now()): { proposal: PresenceProposal; presence: ResolvedPresence } {
-    const proposal = this.assertApprovable(proposalId, by, now);
+  approve(proposalId: string, by?: string, now = Date.now(), byKey?: string): { proposal: PresenceProposal; presence: ResolvedPresence } {
+    const proposal = this.assertApprovable(proposalId, by, now, byKey);
     const who = by!.trim();
     // Asked again: the world may have moved since it was proposed (a company closed, a record lapsed).
     const presence = this.set({
@@ -245,14 +249,24 @@ export class PresenceService implements OnApplicationBootstrap {
    * May this person approve this proposal right now? Throws the reason they may not. Asked on its own by the
    * caller that has to prepare something first (activating a company) before the approval is applied.
    */
-  assertApprovable(proposalId: string, by?: string, now = Date.now()): PresenceProposal {
+  assertApprovable(proposalId: string, by?: string, now = Date.now(), byKey?: string): PresenceProposal {
     const proposal = this.requirePending(proposalId, now);
     const who = by?.trim();
     if (!who) throw new GlosError('FIELD_REQUIRED', 'Say who you are — the second person is named just like the first');
-    if (samePerson(who, proposal.proposedBy)) {
+    if (sameSigner({ name: who, key: byKey }, this.proposerOf(proposal))) {
       throw new GlosError('FORBIDDEN', 'You proposed this change — a different person must approve it');
     }
     return proposal;
+  }
+
+  /** Did this reader propose it? What a screen asks before it offers them "Approve". */
+  proposedByReader(proposalId: string, reader: Signer): boolean {
+    const proposal = this.proposals.get(proposalId);
+    return Boolean(proposal) && sameSigner(reader, this.proposerOf(proposal as PresenceProposal));
+  }
+
+  private proposerOf(proposal: PresenceProposal): Signer {
+    return { name: proposal.proposedBy, key: this.proposerKeys.get(proposal.proposalId) };
   }
 
   /** Say no — anyone, including the proposer withdrawing it — and always with a reason that is kept. */
@@ -378,11 +392,6 @@ function withoutLapses(capabilities: PresenceCapabilities, lapses: CapabilityLap
 /** A change to a country waits this long for a second person, then expires on the record. */
 export const PROPOSAL_TTL_DAYS = 7;
 
-/** Two names are one person when they differ only in case and spacing. */
-function samePerson(a: string, b: string): boolean {
-  const n = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
-  return n(a) === n(b);
-}
 
 /** The countries development starts with, beside the ones a company of ours already stands in. */
 export const DEVELOPMENT_COUNTRIES = ['TZ', 'UG', 'RW', 'DE'];

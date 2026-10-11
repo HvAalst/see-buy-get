@@ -149,6 +149,8 @@ export class PresenceProposal {
   @ApiPropertyOptional() decidedAt?: string;
   /** Why it was declined. Required there, because a refusal nobody can read cannot be argued with. */
   @ApiPropertyOptional() reason?: string;
+  /** On a listing, for whoever reads it: THEY proposed this one, so they are not the one to approve it. Never stored. */
+  @ApiPropertyOptional() mine?: boolean;
 }
 
 /**

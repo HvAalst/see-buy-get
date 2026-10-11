@@ -215,6 +215,19 @@ describe('CA2 — two people switch a country on', () => {
     expect(approvalBlocker(proposal({ status: 'approved' }), 'Brian')).toBe('tower.presence.alreadyDecided');
   });
 
+  it('goes by what the server says for somebody with an account: a namesake may approve, and nobody their own under another name', () => {
+    // Two colleagues called Amina: the server says this one is NOT the reader's.
+    expect(approvalBlocker(proposal({ mine: false }), 'Amina', true)).toBeNull();
+    // The reader's own, whatever the proposal calls them.
+    expect(approvalBlocker(proposal({ mine: true }), 'Somebody Else', true)).toBe('tower.presence.ownProposal');
+    // The setup key has only a typed name: the names decide, whatever the list said of a reader it could not name.
+    expect(approvalBlocker(proposal({ mine: false }), 'Amina', false)).toBe('tower.presence.ownProposal');
+    expect(approvalBlocker(proposal({ mine: false }), 'Brian', false)).toBeNull();
+    // A server that predates it says nothing: the names decide, as before.
+    expect(approvalBlocker(proposal(), 'Amina', true)).toBe('tower.presence.ownProposal');
+    expect(approvalBlocker(proposal(), 'Brian', true)).toBeNull();
+  });
+
   it('asks for a second person only when the change gives the country something', () => {
     expect(needsSecondPerson(row({ level: 'observed', capabilities: { ...LEVEL_DEFAULTS.observed } }), 'matched')).toBe(true);
     expect(needsSecondPerson(row(), 'observed')).toBe(false); // a lowering: one person, recorded

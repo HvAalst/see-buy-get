@@ -1,5 +1,6 @@
 ﻿import { ConsignmentNoteService } from './consignment-note.service';
 import { DepartureNoteService } from './departure-note.service';
+import { pdfDataUrl } from '../../foundation/entity/company.test-util';
 import { NoteArchiveService } from './note-archive.service';
 import { NoteBundleService } from './note-bundle.service';
 import { DestinationService } from './destination.service';
@@ -5450,6 +5451,22 @@ describe('PUDO Light', () => {
       expect(() => controller.declinePresence('prop_nope', { by: 'Brian', reason: 'no' } as never, sharedKey)).toThrow(/named sign-in/);
       expect(() => controller.verifyCompanyDocument('ent_nope', 'doc_nope', { by: 'Brian' } as never, sharedKey)).toThrow(/named sign-in/);
       expect(() => controller.declinePresence('prop_nope', { reason: 'no' } as never, named)).not.toThrow(/named sign-in/);
+    });
+
+    it('tells the two apart by ACCOUNT on a company’s paper: nobody verifies their own upload under another name, and a namesake can', () => {
+      const staffer = (id: string, name: string) => ({ active: true, role: 'operator', sub: `operator:${id}`, scopes: ['*'], actorName: name, revocationKey: `operator:${id}` }) as never;
+      const [sam1, sam2] = [staffer('opr_s1', 'Sam Otieno'), staffer('opr_s2', 'Sam Otieno')];
+      const company = entities.createCompany({ kind: 'sister', jurisdiction: 'zm', name: 'SeeBuyGet Zambia' }, 'Amina');
+      const doc = controller.uploadCompanyDocument(company.entityId, { kind: 'certificate_of_incorporation', title: 'Certificate', dataUrl: pdfDataUrl('two-accounts') } as never, sam1);
+      const listed = (as: never) => (controller.companyRecord(company.entityId, as) as unknown as { documents: Array<{ documentId: string; mine?: boolean }> }).documents.find((d) => d.documentId === doc.documentId);
+      // The record says whose it is to each reader — and never which account.
+      expect(listed(sam1)?.mine).toBe(true);
+      expect(listed(sam2)?.mine).toBe(false);
+      expect(JSON.stringify(listed(sam2))).not.toContain('opr_s1');
+      // The uploader, whatever name is typed beside their sign-in.
+      expect(() => controller.verifyCompanyDocument(company.entityId, doc.documentId, { by: 'Brian Kamau' } as never, sam1)).toThrow(/different person must verify/);
+      // A colleague with the very same name is another person.
+      expect(controller.verifyCompanyDocument(company.entityId, doc.documentId, {} as never, sam2)).toMatchObject({ status: 'verified', verifiedBy: 'Sam Otieno' });
     });
 
     it('still accepts a typed name on a laptop, so a demo can play both people', () => {

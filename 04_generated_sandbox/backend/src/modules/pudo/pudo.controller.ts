@@ -55,6 +55,8 @@ import { Roles, Scopes } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { actingDid, actingTenant, auditActor } from '../../foundation/auth/acting';
 import { PresenceService } from '../../foundation/presence/presence.service';
+import { staffOf } from './staff-of';
+import type { Signer } from '../../foundation/entity/same-person';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { AuthService } from '../../foundation/auth/auth.service';
 import { AgentService } from './agent.service';
@@ -564,6 +566,17 @@ export class SbgController {
    * typed beside it. Two typed names are not two people: one person holding the key could approve their own change
    * by typing a colleague's name. On a laptop the typed name is still accepted, so a demo can play both people.
    */
+  /** Whoever is READING, as a two-person rule tells them from the one who acted. No account, no key: only their name. */
+  private reader(actor: IntrospectionResult | undefined): Signer {
+    return { name: actor?.actorName ?? '', ...(actor?.actorName && actor.revocationKey ? { key: actor.revocationKey } : {}) };
+  }
+
+  /** Who is acting, for an act a DIFFERENT person must second: their name for the record, their account beside it. */
+  private signed(actor: IntrospectionResult, typed?: string): { by: string; byKey: string } {
+    const who = staffOf(actor, typed);
+    return { by: who.name, byKey: who.key };
+  }
+
   private namedActor(actor: IntrospectionResult, typed?: string): string {
     if (!isSandbox() && !actor?.actorName) {
       throw new GlosError('FORBIDDEN', 'A decision that needs two people needs a named sign-in — the shared operator key cannot say who is at the keyboard');
@@ -730,18 +743,21 @@ export class SbgController {
   /** CA2 — changes to a country waiting for a second person, and the ones already decided. Operator-only. */
   @Roles('operator')
   @Get('presence/proposals')
-  presenceProposals() {
-    return { items: this.presence.listProposals() };
+  presenceProposals(@Actor() actor: IntrospectionResult) {
+    // `mine` is said per reader, so the console offers "Approve" by ACCOUNT: two colleagues may share a name.
+    const reader = this.reader(actor);
+    return { items: this.presence.listProposals().map((p) => ({ ...p, mine: this.presence.proposedByReader(p.proposalId, reader) })) };
   }
 
   /** CA2 — the second person approves. Never the proposer; the rate book is asked again if this switches a country on. */
   @Roles('operator')
   @Post('presence/proposals/:proposalId/approve')
   approvePresence(@Param('proposalId') proposalId: string, @Body() dto: PresenceDecisionDto, @Actor() actor: IntrospectionResult) {
-    const by = this.namedActor(actor, dto.by);
+    const who = staffOf(actor, dto.by);
+    const by = who.name;
     // Everything that could refuse is asked BEFORE anything changes: the second person, the rate book, and — for
     // Established or Partnered — whether the company is ready. Only then is a draft company switched on.
-    const proposal = this.presence.assertApprovable(proposalId, by);
+    const proposal = this.presence.assertApprovable(proposalId, by, undefined, who.key);
     this.requirePriceableSwitchOn(proposal.jurisdiction, proposal.level);
     const company = this.requireReadyCompanyFor(proposal.jurisdiction, proposal.level);
     if (company) this.entities.activate(company.entityId, by);
@@ -757,7 +773,7 @@ export class SbgController {
      * a company that does not exist.
      */
     const waiting = this.interest.waitingFor(proposal.jurisdiction);
-    const decided = this.presence.approve(proposalId, by);
+    const decided = this.presence.approve(proposalId, by, undefined, who.key);
 
     if (waiting.length && this.presence.resolve(proposal.jurisdiction).capabilities.takeIn) {
       const name = catalogueEntry(proposal.jurisdiction)?.name ?? proposal.jurisdiction;
@@ -809,7 +825,7 @@ export class SbgController {
       level: dto.level,
       overrides: dto.overrides as never,
       note: dto.note,
-      by: this.namedActor(actor, dto.by),
+      ...this.signed(actor, dto.by),
     });
   }
 
@@ -877,7 +893,8 @@ export class SbgController {
       // above it, what was said — never by whom, and never what the reporter attached.
       reports: this.paperReports?.forEntity(entityId, actor?.role === 'operator' ? 'staff' : 'company') ?? [],
       readiness: entity.kind === 'group' ? null : this.readiness.readinessOf(entityId),
-      documents: this.companyDocuments.list(entityId),
+      // `mine` is said per reader, so the console offers "Verify" by ACCOUNT: two colleagues may share a name.
+      documents: this.companyDocuments.list(entityId).map((d) => ({ ...d, mine: this.companyDocuments.uploadedByReader(d, this.reader(actor)) })),
       obligations: catalogueEntry(entity.jurisdiction)?.obligations ?? [],
       lapses: this.entities.lapsesFor(entity.jurisdiction).filter((l) => l.entityId === entityId),
       // What is running OUT, and what the company's administrators were told about it — beside what has already
@@ -965,7 +982,7 @@ export class SbgController {
       dataUrl: dto.dataUrl,
       relatesTo: dto.relatesTo,
       expiresAt: dto.expiresAt,
-      by: this.namedActor(actor, dto.by),
+      ...this.signed(actor, dto.by),
       declared: own,
     });
   }
@@ -993,7 +1010,8 @@ export class SbgController {
   @Roles('operator')
   @Post('entities/:entityId/documents/:documentId/verify')
   verifyCompanyDocument(@Param('entityId') entityId: string, @Param('documentId') documentId: string, @Body() dto: DocumentDecisionDto, @Actor() actor: IntrospectionResult) {
-    return this.companyDocuments.verify(entityId, documentId, this.namedActor(actor, dto.by));
+    const who = staffOf(actor, dto.by);
+    return this.companyDocuments.verify(entityId, documentId, who.name, undefined, who.key);
   }
 
   /** CA4 — reject a document, always with a reason. */

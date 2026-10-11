@@ -25676,6 +25676,10 @@
           "reason": {
             "type": "string",
             "description": "Why it was declined. Required there, because a refusal nobody can read cannot be argued with."
+          },
+          "mine": {
+            "type": "boolean",
+            "description": "On a listing, for whoever reads it: THEY proposed this one, so they are not the one to approve it. Never stored."
           }
         },
         "required": [
@@ -26745,6 +26749,9 @@
           },
           "strikeReason": {
             "type": "string"
+          },
+          "mine": {
+            "type": "boolean"
           }
         },
         "required": [

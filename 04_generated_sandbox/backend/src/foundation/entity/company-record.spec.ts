@@ -98,6 +98,25 @@ describe('a company, recorded properly', () => {
       expect(() => documents.reject(zm.entityId, doc.documentId, 'Brian')).toThrow(/Say why/);
     });
 
+    it('tells the uploader from the verifier by ACCOUNT where there is one, and by name where there is not', () => {
+      const zm = entities.createCompany({ kind: 'sister', jurisdiction: 'ZM', name: 'SeeBuyGet Zambia' }, 'Amina');
+      const doc = documents.upload({ entityId: zm.entityId, kind: 'certificate_of_incorporation', title: 'Certificate', dataUrl: pdfDataUrl('by-account'), by: 'Sam Otieno', byKey: 'operator:opr_1' });
+      // The same account, whatever name is typed beside it.
+      expect(() => documents.verify(zm.entityId, doc.documentId, 'Another Name', undefined, 'operator:opr_1')).toThrow(/different person must verify/);
+      expect(documents.uploadedByReader(doc, { name: 'Another Name', key: 'operator:opr_1' })).toBe(true);
+      expect(documents.uploadedByReader(doc, { name: 'Sam Otieno', key: 'operator:opr_2' })).toBe(false);
+      // The account is kept beside the paper, never on it: the company reads its papers whole.
+      expect(JSON.stringify(documents.list(zm.entityId))).not.toContain('opr_1');
+      // A colleague with the very same name is another person.
+      expect(documents.verify(zm.entityId, doc.documentId, 'Sam Otieno', undefined, 'operator:opr_2')).toMatchObject({ status: 'verified', verifiedBy: 'Sam Otieno' });
+
+      // No account on the record (a name typed on a laptop, or a paper from before accounts were kept): the name decides.
+      const old = documents.upload({ entityId: zm.entityId, kind: 'tax_registration_certificate', title: 'Tax', dataUrl: pdfDataUrl('by-name'), by: 'Amina' });
+      expect(() => documents.verify(zm.entityId, old.documentId, ' amina ', undefined, 'operator:opr_7')).toThrow(/different person must verify/);
+      expect(documents.uploadedByReader(old, { name: 'AMINA', key: 'operator:opr_7' })).toBe(true);
+      expect(documents.verify(zm.entityId, old.documentId, 'Brian', undefined, 'operator:opr_7').status).toBe('verified');
+    });
+
     it('keeps every version: a replacement supersedes, and the same file twice is refused', () => {
       const zm = entities.createCompany({ kind: 'sister', jurisdiction: 'ZM', name: 'SeeBuyGet Zambia' }, 'Amina');
       const first = documents.upload({ entityId: zm.entityId, kind: 'licence', relatesTo: 'C-1', title: 'Courier licence', dataUrl: pdfDataUrl('v1'), by: 'Amina' });

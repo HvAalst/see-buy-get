@@ -5,7 +5,7 @@ import { GlosError } from '../http/glos-error';
 import { PersistentMap } from '../store/persistent-map';
 import { decodeDocument } from '../media/decode-document';
 import { EntityService } from './entity.service';
-import { samePerson } from './same-person';
+import { sameSigner, type Signer } from './same-person';
 
 /**
  * CA4 — THE PAPERS BEHIND A COMPANY, PROVABLE (user, 2026-09-13: "documents are fingerprinted").
@@ -80,6 +80,8 @@ export class CompanyDocument {
   @ApiPropertyOptional() struckBy?: string;
   @ApiPropertyOptional() struckAt?: string;
   @ApiPropertyOptional() strikeReason?: string;
+  /** On a company's record, for whoever reads it: THEY put this one on record, so they are not the one to verify it. Never stored. */
+  @ApiPropertyOptional() mine?: boolean;
 }
 
 @Injectable()
@@ -87,11 +89,13 @@ export class CompanyDocumentService {
   private readonly documents = new PersistentMap<string, CompanyDocument>('entity-documents');
   /** The bytes, apart from the metadata, so listing a company's papers never carries a file. */
   private readonly files = new PersistentMap<string, string>('entity-document-files');
+  /** Which ACCOUNT put each on record. Beside the paper, not on it: a paper is read whole by the company and by staff. */
+  private readonly uploaderKeys = new PersistentMap<string, string>('entity-document-uploader-keys');
 
   constructor(private readonly entities: EntityService) {}
 
   upload(
-    input: { entityId: string; kind: string; title: string; dataUrl: string; relatesTo?: string; expiresAt?: string; by?: string; /** The company's own, and it keeps its own record: it counts at once. */ declared?: boolean },
+    input: { entityId: string; kind: string; title: string; dataUrl: string; relatesTo?: string; expiresAt?: string; by?: string; /** The uploader's account, where they have one. */ byKey?: string; /** The company's own, and it keeps its own record: it counts at once. */ declared?: boolean },
     now = Date.now(),
   ): CompanyDocument {
     const entity = this.entities.get(input.entityId);
@@ -135,6 +139,7 @@ export class CompanyDocumentService {
     };
     this.files.set(document.documentId, bytes.toString('base64'));
     this.documents.set(document.documentId, document);
+    if (input.byKey) this.uploaderKeys.set(document.documentId, input.byKey);
     if (previous) {
       // Kept, never replaced in place: "which certificate did we rely on in March" outlives the new one.
       Object.assign(previous, { supersededFrom: previous.status, status: 'superseded', supersededBy: document.documentId });
@@ -144,16 +149,21 @@ export class CompanyDocumentService {
   }
 
   /** A second person confirms the paper is what it says. Never the uploader; never a file that no longer matches. */
-  verify(entityId: string, documentId: string, by?: string, now = Date.now()): CompanyDocument {
+  verify(entityId: string, documentId: string, by?: string, now = Date.now(), byKey?: string): CompanyDocument {
     const document = this.require(entityId, documentId);
     if (document.status !== 'awaiting_verification') throw new GlosError('INVALID_STATE', `This document is ${document.status.replace('_', ' ')}`);
     const who = by?.trim();
     if (!who) throw new GlosError('FIELD_REQUIRED', 'Say who is verifying this');
-    if (samePerson(who, document.uploadedBy)) throw new GlosError('FORBIDDEN', 'You uploaded this document — a different person must verify it');
+    if (this.uploadedByReader(document, { name: who, key: byKey })) throw new GlosError('FORBIDDEN', 'You uploaded this document — a different person must verify it');
     if (!this.intact(document)) throw new GlosError('INVALID_STATE', 'The stored file no longer matches its fingerprint — it cannot be verified');
     Object.assign(document, { status: 'verified', verifiedBy: who, verifiedAt: new Date(now).toISOString() });
     this.documents.set(document.documentId, document);
     return document;
+  }
+
+  /** Did this reader put it on record? What a screen asks before it offers them "Verify". */
+  uploadedByReader(document: Pick<CompanyDocument, 'documentId' | 'uploadedBy'>, reader: Signer): boolean {
+    return sameSigner(reader, { name: document.uploadedBy, key: this.uploaderKeys.get(document.documentId) });
   }
 
   /** Say a paper is not good enough — including one verified earlier and found wanting — always with a reason. */

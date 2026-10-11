@@ -150,6 +150,28 @@ describe('the staff entrance', () => {
       expect((await listed(brianToken)).items.some((a) => a.email === fay.email)).toBe(false);
     });
 
+    it('two colleagues with the same name are two people: either can second the other, and neither their own', async () => {
+      const sam = async (n: number) => (await http().post('/v1/sbg/operators').set(bearer(setupKey)).send({ email: `sam${n}-${tag}@sbg.test`, name: `Sam ${tag}` }).expect(201)).body as { email: string; temporaryPassword: string };
+      const [first, second] = [await signIn(await sam(1)), await signIn(await sam(2))];
+      // A country nobody switched on: raising it is a change that needs a second person.
+      const asked = (await http().post('/v1/sbg/presence/LV').set(bearer(first)).send({ level: 'matched', note: 'Riga partners ready' }).expect(201)).body;
+      expect(asked.proposal).toMatchObject({ jurisdiction: 'LV', status: 'pending', proposedBy: `Sam ${tag}` });
+      const id = asked.proposal.proposalId as string;
+      const listedAs = async (token: string) => ((await http().get('/v1/sbg/presence/proposals').set(bearer(token)).expect(200)).body.items as Array<{ proposalId: string; mine?: boolean }>).find((p) => p.proposalId === id);
+      // Each reader is told whose it is — by account, since the name says nothing here — and never which account.
+      expect((await listedAs(first))?.mine).toBe(true);
+      expect((await listedAs(second))?.mine).toBe(false);
+      expect(JSON.stringify(await listedAs(second))).not.toMatch(/operator:|opr_/);
+
+      const approve = (token: string) => http().post(`/v1/sbg/presence/proposals/${id}/approve`).set(bearer(token)).send({});
+      expect((await approve(first).expect(403)).body.detail).toMatch(/different person must approve/);
+      expect((await http().get('/v1/sbg/presence/LV').set(bearer(second)).expect(200)).body.level).toBe('observed');
+      const done = (await approve(second).expect(201)).body;
+      expect(done.presence).toMatchObject({ level: 'matched', setBy: `Sam ${tag}`, approvedBy: `Sam ${tag}` });
+      // Put back: a lowering is applied at once, by one person.
+      await http().post('/v1/sbg/presence/LV').set(bearer(first)).send({ level: 'observed', note: 'test over' }).expect(201);
+    });
+
     it('outside a sandbox the setup key adds nobody once two people can sign in', async () => {
       const before = (await listed(setupKey)).items.length;
       expect(before).toBeGreaterThanOrEqual(2);

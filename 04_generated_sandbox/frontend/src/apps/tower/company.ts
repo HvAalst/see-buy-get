@@ -1,5 +1,5 @@
 import type { MessageKey } from '../../shared/i18n';
-import { PRESENCE_CAPABILITIES, samePerson, type CatalogueCountry, type PresenceCapability } from './presence';
+import { PRESENCE_CAPABILITIES, ownOf, type CatalogueCountry, type PresenceCapability } from './presence';
 import type { EntityRow } from './money';
 import type { PaperCase } from './paperReports';
 
@@ -93,6 +93,8 @@ export interface CompanyDocument {
   rejectedBy?: string;
   rejectionReason?: string;
   supersededBy?: string;
+  /** Said by the server to whoever is reading: THEY put this one on record. Absent from a server that predates it. */
+  mine?: boolean;
 }
 
 export interface LocalObligation {
@@ -427,10 +429,10 @@ export function readinessCounts(readiness: CompanyRecordView['readiness']): { me
 }
 
 /** CA4 — may this person verify this paper? Never the uploader: two people, as for switching a country on. */
-export function documentBlocker(document: CompanyDocument, who: string | undefined): MessageKey | null {
+export function documentBlocker(document: CompanyDocument, who: string | undefined, named = false): MessageKey | null {
   if (document.status !== 'awaiting_verification') return 'tower.company.doc.notAwaiting';
   if (!who?.trim()) return 'tower.company.doc.needName';
-  if (samePerson(who, document.uploadedBy)) return 'tower.company.doc.ownUpload';
+  if (ownOf(document.mine, named, who, document.uploadedBy)) return 'tower.company.doc.ownUpload';
   return null;
 }
 

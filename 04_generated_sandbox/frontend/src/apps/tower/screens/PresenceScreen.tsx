@@ -280,7 +280,7 @@ function ProposalView({ proposal, state, actions }: { proposal: PresenceProposal
   const t = useT();
   const [declining, setDeclining] = useState(false);
   const [reason, setReason] = useState('');
-  const blocker = approvalBlocker(proposal, state.who?.name);
+  const blocker = approvalBlocker(proposal, state.who?.name, Boolean(state.who?.named));
   const busy = state.busyId === proposal.proposalId;
 
   return (

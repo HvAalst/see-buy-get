@@ -68,6 +68,15 @@ describe('CA4 — a paper counts once somebody else has checked it', () => {
     expect(documentBlocker(doc({ status: 'verified' }), 'Brian')).toBe('tower.company.doc.notAwaiting');
   });
 
+  it('goes by what the server says for somebody with an account: a namesake may verify, and nobody their own under another name', () => {
+    expect(documentBlocker(doc({ mine: false }), 'Amina', true)).toBeNull();
+    expect(documentBlocker(doc({ mine: true }), 'Somebody Else', true)).toBe('tower.company.doc.ownUpload');
+    // The setup key has only a typed name; and a server that predates it says nothing: the names decide.
+    expect(documentBlocker(doc({ mine: false }), 'Amina', false)).toBe('tower.company.doc.ownUpload');
+    expect(documentBlocker(doc(), 'Amina', true)).toBe('tower.company.doc.ownUpload');
+    expect(documentBlocker(doc(), 'Brian', true)).toBeNull();
+  });
+
   it('shows the fingerprint grouped, the way a person compares one', () => {
     expect(shortFingerprint(doc().fingerprint)).toBe('a1b2 c3d4 e5f6 0718…');
   });
