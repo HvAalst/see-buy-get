@@ -22,7 +22,7 @@ import { HeuristicRouter, ROUTER } from './router';
 import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { ParcelService, birthplaceOf, custodianOf, custodyAt, labelDate, ownershipOf } from './parcel.service';
-import { MAX_WORK_RADIUS_KM, OTP_MAX_ATTEMPTS, TOTE_LOAD_FEE, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
+import { MAX_WORK_RADIUS_KM, OTP_MAX_ATTEMPTS, PICKUP_FEE, RELEASE_FEE, SHELVING_FEE, TOTE_LOAD_FEE, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { CargoService } from './cargo.service';
 import { SbgController } from './pudo.controller';
@@ -5551,6 +5551,58 @@ describe('PUDO Light', () => {
       expect((controller.rate('QR-WHO', { ...stars, stars: 5 } as never, as('agent', shop.did)) as { agentComposite: number }).agentComposite).toBe(5);
       // A parcel nobody made is nobody's to rate, staff included.
       expect(() => controller.rate('QR-NOBODY-MADE', stars as never, staff)).toThrow();
+    });
+  });
+
+  /**
+   * A PARCEL RELEASED ON THE SENDER'S CODE. Found 2026-10-11 by walking a new installation's first day
+   * (test/first-day-from-zero.e2e-spec.ts): the release asked only for the code. Not WHICH shop was asking — so any
+   * shop that knew a parcel's number could burn its five tries and lock it — and it paid the shop that handed the
+   * parcel over nothing for doing so: that half of its pay was paid only where an order is collected by its QR.
+   */
+  describe('a parcel released on the sender’s code', () => {
+    const onItsShelf = (id: string) => {
+      const origin = onboardAgent(`${id} Origin`, 'NorthTown', 50);
+      const dest = onboardAgent(`${id} Dest`, 'SouthTown', 50);
+      const corridor = corridors.addCorridor({ name: `${id} N-S`, originZone: 'NorthTown', destZone: 'SouthTown' });
+      const bus = corridors.addDriver({ driverDid: `did:glos:${id}-bus`, name: 'D', corridorId: corridor.corridorId });
+      parcels.accept({ agentDid: origin.did, parcelId: id, size: 'M', destZone: 'SouthTown', senderMobile: '+254700111001', receiverMobile: '+254700111002', dropoffPhotoRef: 'r.jpg' });
+      parcels.handover({ agentDid: origin.did, driverBadgeId: bus.badgeId, parcelIds: [id] });
+      return { origin, dest };
+    };
+
+    it('is released by the shop that holds it: another shop cannot try a code against it, right or wrong', () => {
+      const { origin, dest } = onItsShelf('QR-REL-1');
+      parcels.arrive('QR-REL-1', dest.did);
+      const code = releaseCodeOf('QR-REL-1');
+      const wrong = code === '0000' ? '1111' : '0000';
+      // More tries than would lock it, from the shop it came from and from a shop that never saw it.
+      for (const elsewhere of [origin.did, 'did:glos:some-other-shop']) {
+        for (let i = 0; i < OTP_MAX_ATTEMPTS + 1; i++) expect(() => parcels.pickup('QR-REL-1', elsewhere, wrong)).toThrow('This parcel is on another shop’s shelf');
+        expect(() => parcels.pickup('QR-REL-1', elsewhere, code)).toThrow('This parcel is on another shop’s shelf');
+      }
+      expect(parcels.get('QR-REL-1')).toMatchObject({ status: 'Ready_For_Pickup' });
+      expect(parcels.get('QR-REL-1').otpAttempts ?? 0).toBe(0);
+      expect(parcels.get('QR-REL-1').otpLockedAt).toBeUndefined();
+      // At its own counter a wrong code is still counted, and the right one still releases it.
+      expect(() => parcels.pickup('QR-REL-1', dest.did, wrong)).toThrow('Incorrect OTP');
+      expect(parcels.get('QR-REL-1').otpAttempts).toBe(1);
+      expect(parcels.pickup('QR-REL-1', dest.did, code).status).toBe('Delivered');
+    });
+
+    it('pays the shop for handing it over: shelving when it lands, the rest at release — together the whole destination leg', () => {
+      const { dest } = onItsShelf('QR-REL-2');
+      const before = agents.balance(dest.did) ?? 0;
+      const earned = () => Math.round(((agents.balance(dest.did) ?? 0) - before) * 100) / 100;
+      parcels.arrive('QR-REL-2', dest.did);
+      expect(earned()).toBe(SHELVING_FEE);
+      // A wrong code pays nothing.
+      const code = releaseCodeOf('QR-REL-2');
+      expect(() => parcels.pickup('QR-REL-2', dest.did, code === '0000' ? '1111' : '0000')).toThrow('Incorrect OTP');
+      expect(earned()).toBe(SHELVING_FEE);
+      parcels.pickup('QR-REL-2', dest.did, code);
+      expect(earned()).toBe(PICKUP_FEE);
+      expect(Math.round((SHELVING_FEE + RELEASE_FEE) * 100) / 100).toBe(PICKUP_FEE);
     });
   });
 

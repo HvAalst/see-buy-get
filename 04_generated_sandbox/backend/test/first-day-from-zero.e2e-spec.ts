@@ -6,6 +6,7 @@ import { MAIL_SENDER, OutgoingMail } from '../src/foundation/mail/mail.types';
 import { OutgoingSms, SMS_SENDER } from '../src/foundation/sms/sms.types';
 import { totpCode, totpStep } from '../src/foundation/auth/totp';
 import { pdfDataUrl } from '../src/foundation/entity/company.test-util';
+import { HANDOVER_FEE, RELEASE_FEE, SHELVING_FEE, WHOLESALE } from '../src/modules/pudo/pudo.config';
 
 /**
  * THE FIRST DAY OF A NEW INSTALLATION, AS IT WOULD BE LIVE — from an empty server to a parcel collected.
@@ -281,5 +282,126 @@ describe('the first day of a new installation, as it would be live', () => {
       ['Mama Sarah Shop', 'confirmed', 'statement', 'KES'],
       ['Riverside Corner', 'confirmed', 'statement', 'KES'],
     ]);
+  });
+
+  /* ------------------------------------------------------------ the carrier -- */
+
+  /** The code a mail carries, as its subject line says it. */
+  const codeMailedTo = (address: string) => mailTo(address, 'email-code')?.subject.match(/^(\d{6}) /)?.[1] ?? '';
+  /**
+   * A person makes their sign-in: their phone confirmed by a texted code, a recovery email confirmed by a mailed one,
+   * and a PIN — which then belongs to the device they did it on. What comes back is that device's key.
+   */
+  const enrol = async (phone: string, email: string, pin: string): Promise<string> => {
+    await must(http().post('/v1/sbg/auth/phone/request').send({ phone }));
+    await must(http().post('/v1/sbg/auth/phone/verify').send({ phone, code: codeIn(textTo(phone)) }));
+    await must(http().post('/v1/sbg/identity/email/request').send({ email }));
+    const enrolled = await must(http().post('/v1/sbg/identity/enroll').send({ phone, pin, email, emailCode: codeMailedTo(email) }));
+    expect(enrolled.device).toBeTruthy();
+    return enrolled.device as string;
+  };
+  let fleetDid = '';
+  let office = '';
+  let amos: { did: string; token: string; badgeId?: string };
+  let vehicleId = '';
+
+  it('6 · a fleet: registered and vetted by staff; its office signs in with the company’s code and a person’s own PIN', async () => {
+    const phone = '+254711000201';
+    const registered = await must(
+      http()
+        .post('/v1/sbg/fleet/managers')
+        .set(bearer(amina))
+        .send({ companyName: 'Kilima Logistics', contactPhone: phone, ownerFullName: 'Kilima Owner', ownerNationalId: 'KE-ID-KILIMA', depotAddress: 'Enterprise Road depot, Nairobi', requirements: { businessRegistrationNo: 'BR-KILIMA', transportOperatorLicence: 'TOL-KILIMA', taxId: 'TAX-KILIMA' } }),
+    );
+    fleetDid = registered.did;
+    const own = `/v1/sbg/fleet/managers/${encodeURIComponent(fleetDid)}`;
+    await must(http().post(`${own}/submit-kyc`).set(bearer(amina)).send({ businessRegCertRef: 'reg.pdf', operatorLicenceRef: 'tol.pdf', ownerIdRef: 'id.jpg', proofOfAddressRef: 'poa.pdf' }));
+    await must(http().post(`${own}/kyc-decision`).set(bearer(amina)).send({ approve: true }));
+    await must(http().post(`${own}/bond`).set(bearer(amina)).send({}));
+    const code = (await must(http().get(own).set(bearer(amina)), 200)).loginCode as string;
+    expect(code).toBeTruthy();
+
+    // The code names the fleet and admits nobody: the person signs in, with a PIN that lives on their own device.
+    const device = await enrol(phone, 'office@kilima.sbg-rehearsal.org', '24689');
+    await must(http().post('/v1/sbg/fleet/managers/session').send({ code, phone, pin: '24689' }), 403);
+    const session = await must(http().post('/v1/sbg/fleet/managers/session').send({ code, phone, pin: '24689', device }));
+    office = session.token.access_token as string;
+    expect((await must(http().get('/v1/sbg/fleet/dashboard').set(bearer(office)), 200)).managerDid).toBe(fleetDid);
+  });
+
+  it('7 · a vehicle, a driver who signs in for themselves and starts their own shift, and the corridor they run', async () => {
+    const vehicle = await must(http().post('/v1/sbg/vehicles').set(bearer(office)).send({ plate: 'KMFA 001B', vehicleClass: 'bike', ownerName: 'Kilima Logistics', ownerType: 'fleet_owned', pricePerKm: 0.5 }));
+    vehicleId = vehicle.vehicleId;
+    const phone = '+254711000301';
+    const driver = await must(http().post('/v1/sbg/drivers/onboard').set(bearer(office)).send({ displayName: 'Amos K.', fullName: 'Amos Kariuki', nationalId: 'KE-ID-AMOS', mobile: phone, licenceClasses: ['bike'], managerDid: fleetDid }));
+    expect(driver).toMatchObject({ status: 'ACTIVE', managerDid: fleetDid, badgeId: expect.stringMatching(/^DRV-/) });
+
+    const device = await enrol(phone, 'amos@drivers.sbg-rehearsal.org', '13570');
+    const session = await must(http().post('/v1/sbg/drivers/session').send({ phone, pin: '13570', device }));
+    amos = { did: driver.did, token: session.token.access_token, badgeId: driver.badgeId };
+    const own = `/v1/sbg/fleet/drivers/${encodeURIComponent(amos.did)}`;
+    // The office says which vehicle; it cannot start the shift. The driver does, with their PIN.
+    await must(http().post(`${own}/start-session`).set(bearer(office)).send({ vehicleId }), 403);
+    expect(await must(http().post(`${own}/start-session`).set(bearer(amos.token)).send({ vehicleId, pin: '13570' }))).toMatchObject({ status: 'active', driverDid: amos.did, vehicleId });
+
+    const corridor = await must(http().post('/v1/sbg/corridors').set(bearer(amina)).send({ name: 'Nairobi CBD → Westlands', originZone: 'Nairobi CBD', destZone: 'Westlands' }));
+    await must(http().post(`${own}/assign-corridor`).set(bearer(office)).send({ corridorId: corridor.corridorId }));
+    expect(await must(http().get(`${own}/session`).set(bearer(amos.token)), 200)).toMatchObject({ active: true, assignment: { corridorId: corridor.corridorId, vehicleId } });
+  });
+
+  /* ------------------------------------------------------- the first parcel -- */
+
+  it('8 · the first parcel: taken in at one shop, handed to the driver, arrived at the other, and collected with the code', async () => {
+    const sender = '+254722000001';
+    const receiver = '+254722000002';
+    const sent = texts.length;
+    const taken = await must(
+      http().post('/v1/sbg/parcels/accept').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, parcelId: 'QR-FIRST-0001', size: 'M', destZone: 'Westlands', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: 'dropoff.jpg' }),
+    );
+    expect(taken).toMatchObject({ parcelId: 'QR-FIRST-0001', originZone: 'Nairobi CBD', destZone: 'Westlands', collectingEntityId: kenya, takeInPromise: 'ours' });
+    // The code that will release it is given to the SENDER, at the counter, and to nobody else.
+    const code = taken.otp as string;
+    expect(code).toMatch(/^\d{4,8}$/);
+
+    const handed = await must(http().post('/v1/sbg/parcels/handover').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, driverBadgeId: amos.badgeId, parcelIds: ['QR-FIRST-0001'] }));
+    expect(handed).toMatchObject({ driverDid: amos.did, handed: ['QR-FIRST-0001'], rejected: [], shortShipped: false });
+    expect(await must(http().post('/v1/sbg/parcels/QR-FIRST-0001/arrive').set(bearer(riverside.token)).send({ destAgentDid: riverside.did }))).toMatchObject({ status: 'Ready_For_Pickup', binSlot: expect.any(String) });
+
+    // The shop holding it never learns the code: what it reads back carries none.
+    const held = await must(http().get('/v1/sbg/parcels/QR-FIRST-0001').set(bearer(riverside.token)), 200);
+    expect(JSON.stringify(held)).not.toContain(code);
+    // A wrong code leaves it on the shelf; the right one hands it over.
+    const wrong = code === '0000' ? '1111' : '0000';
+    const refused = await http().post('/v1/sbg/parcels/QR-FIRST-0001/pickup').set(bearer(riverside.token)).send({ agentDid: riverside.did, otp: wrong, deliveredPhotoRef: 'handed.jpg' });
+    expect(refused.status).toBeGreaterThanOrEqual(400);
+    expect((await must(http().get('/v1/sbg/parcels/QR-FIRST-0001').set(bearer(riverside.token)), 200)).status).toBe('Ready_For_Pickup');
+    // Not by another shop, even with the right code in hand: it is on Riverside's shelf.
+    const elsewhere = await http().post('/v1/sbg/parcels/QR-FIRST-0001/pickup').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, otp: code, deliveredPhotoRef: 'handed.jpg' });
+    expect([elsewhere.status, elsewhere.body.code]).toEqual([403, 'WRONG_PUDO']);
+    await must(http().post('/v1/sbg/parcels/QR-FIRST-0001/pickup').set(bearer(riverside.token)).send({ agentDid: riverside.did, otp: code, deliveredPhotoRef: 'handed.jpg' }));
+    expect((await must(http().get('/v1/sbg/parcels/QR-FIRST-0001').set(bearer(riverside.token)), 200)).status).toBe('Delivered');
+
+    // NOBODY WAS TEXTED about the parcel: on a live server a text carries a sign-in code and nothing else. A receiver
+    // hears that it arrived only through the app, if they hold it — and learns the code from the sender.
+    expect(texts.slice(sent)).toEqual([]);
+  });
+
+  it('9 · what the day left behind: each shop was paid for what it did, and the Kenyan company’s books balance to the shilling', async () => {
+    const cents = (n: number) => Math.round(n * 100) / 100;
+    const float = async (shop: Shop) => (await must(http().get(`/v1/sbg/agents/${encodeURIComponent(shop.did)}/can-transact`).set(bearer(shop.token)), 200)).balance as number;
+    // The shop that took it in paid for the journey out of its float and was paid for handing the batch to the driver.
+    expect(await float(mamaSarah)).toBe(cents(60 - WHOLESALE + HANDOVER_FEE));
+    // The shop that received it was paid for shelving it, and again for handing it over.
+    expect(await float(riverside)).toBe(cents(60 + SHELVING_FEE + RELEASE_FEE));
+
+    const books = await must(http().get(`/v1/sbg/entities/${kenya}/books`).set(bearer(amina)), 200);
+    const account = (code: string) => (books.accounts as Array<{ code: string; balance: number; currency: string }>).filter((a) => a.code === code);
+    expect(books.integrity).toEqual({ balanced: true, drift: 0 });
+    expect(books.accounts.every((a: { currency: string }) => a.currency === 'KES')).toBe(true);
+    // Held: the two payments in. Owed back: the two floats. Earned: the journey. Paid out: the three steps of work.
+    expect(account('cash.custody').map((a) => a.balance)).toEqual([120]);
+    expect(cents(-account('deposit.agent').reduce((sum, a) => sum + a.balance, 0))).toBe(cents((await float(mamaSarah)) + (await float(riverside))));
+    expect(account('revenue').map((a) => cents(-a.balance))).toEqual([WHOLESALE]);
+    expect(account('expense.provider_fees').map((a) => cents(a.balance))).toEqual([cents(HANDOVER_FEE + SHELVING_FEE + RELEASE_FEE)]);
   });
 });

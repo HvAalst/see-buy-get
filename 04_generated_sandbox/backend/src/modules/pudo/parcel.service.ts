@@ -1359,6 +1359,10 @@ export class ParcelService implements OnApplicationBootstrap {
     // Unclaimed releases exactly like Ready_For_Pickup. The window closing changes what is OWED, never
     // whether the person standing at the counter with the right code may have their parcel.
     if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
+    // BY THE SHOP THAT HOLDS IT, asked before the code is looked at. Any shop that knew a parcel's number could try
+    // codes against it — five wrong ones lock it, and the person it belongs to is then turned away at the right
+    // counter until staff reissue. (A collected order always asked this: see collect().)
+    if (parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'This parcel is on another shop’s shelf');
     if (parcel.otpLockedAt) throw new GlosError('OTP_LOCKED', 'Too many wrong codes — ask the control tower to reissue');
 
     if (parcel.otp !== (otp || '').trim()) {
@@ -1383,6 +1387,9 @@ export class ParcelService implements OnApplicationBootstrap {
     this.handTo(parcel, 'receiver', parcel.receiverPhoneHash ?? 'receiver', 'collected in person');
     this.endCustody(parcel);
     this.scan(parcel, 'Delivered', agentDid, 'OTP verified');
+    // THE OTHER HALF OF THE SHOP'S PAY (see RELEASE_FEE). It was paid where an order is collected by its QR and not
+    // here, so a shop that handed over a parcel sent from a counter was paid for shelving it and nothing for the rest.
+    this.gate.payLabour(agentDid, RELEASE_FEE, parcelId, 'parcel', parcel.sellerEntityId);
     void this.events.publish(GlosEvent.Pudo.ParcelDelivered, { parcelId, agentDid }, { source: 'pudo' }).catch(() => undefined);
     return parcel;
   }
