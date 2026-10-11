@@ -4091,7 +4091,17 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -12121,10 +12131,22 @@
       },
       "get": {
         "operationId": "Sbg.listMdps",
+        "summary": "",
+        "description": "Every hub: where it is and what it charges. The hub itself and network staff also read its number and its bag count.",
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -12162,7 +12184,7 @@
       "get": {
         "operationId": "Sbg.listTotes",
         "summary": "",
-        "description": "Totes currently at a location (MDP id or agent did).",
+        "description": "Totes currently at a location. A hub reads the bags standing at it; the whole pool (no location) is read by network staff.",
         "parameters": [
           {
             "name": "location",
@@ -15565,6 +15587,8 @@
     "/v1/sbg/fleet/assignments": {
       "get": {
         "operationId": "Sbg.listAssignments",
+        "summary": "",
+        "description": "Who is on which vehicle, and where they last were: a fleet office reads its own drivers' shifts, network staff read them all.",
         "parameters": [
           {
             "name": "status",

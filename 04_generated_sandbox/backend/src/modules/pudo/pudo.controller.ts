@@ -390,6 +390,7 @@ export class SbgController {
     return this.accounts.changePassword(dto.email, dto.password, dto.newPassword);
   }
 
+  @SignedIn()
   @Get('module-info')
   info(): ModuleInfo {
     return { module: 'PUDO', name: 'PUDO Light — Pick-Up/Drop-Off network', edition: 'Light v1.0 (GLOS Phase 1, emerging markets)', status: 'active' };
@@ -661,6 +662,7 @@ export class SbgController {
    * asking whether it may take goods in, and under whose promise, is asking this. What it never
    * carries is money — a level says what is permitted, never what is held.
    */
+  @SignedIn()
   @Get('presence')
   listPresence() {
     // CA3/CA7 — each country carries the companies standing (or being prepared) there, and whether each is ready.
@@ -805,6 +807,7 @@ export class SbgController {
     return this.presence.decline(proposalId, this.namedActor(actor, dto.by), dto.reason);
   }
 
+  @SignedIn()
   @Get('presence/:jurisdiction')
   presenceFor(@Param('jurisdiction') jurisdiction: string) {
     return this.presence.resolve(jurisdiction);
@@ -839,6 +842,7 @@ export class SbgController {
   /* ----------------------------------------------- CA6: the rules of crossing a border -- */
 
   /** CA6 — every recorded rule between two countries. Read by anybody signed in: a driver needs it as much as staff. */
+  @SignedIn()
   @Get('border-rules')
   borderRuleList() {
     return { items: this.borderRules.list() };
@@ -2431,8 +2435,14 @@ export class SbgController {
 
   // `currency` travels with every balance that leaves the system: a bare number is ambiguous the moment
   // a second currency exists anywhere in the network, and that is a change nobody remembers to audit for.
+  /** Every shop. Network staff read the whole record; anybody else signed in gets the card the public map shows. */
+  @SignedIn()
   @Get('agents')
-  listAgents() {
+  listAgents(@Actor() actor: IntrospectionResult): object[] {
+    // THE WHOLE RECORD IS THE NETWORK'S: a shop's float, its papers and what was said about them, the tablet it is
+    // bound to. This answered ANY sign-in with all of it — the driver's app asks here for the places it can route
+    // toward, and was handed every shop's balance with them.
+    if (actor?.role !== 'operator') return this.agents.list().map((a) => this.shopCard(a));
     return this.agents.list().map((a) => ({ ...a, balance: this.agents.balance(a.did), currency: NETWORK_CURRENCY, rating: this.ratings.agentRating(a.did), freeSlots: this.shelf.available(a.did), capacity: this.shelf.capacity(a.did) }));
   }
 
@@ -2612,6 +2622,8 @@ export class SbgController {
     return this.corridors.addDriver(dto);
   }
 
+  // Read by everybody who works with corridors, as the corridors themselves are (corridor-authority.spec.ts holds both).
+  @SignedIn()
   @Get('drivers')
   listDrivers() {
     return this.corridors.listDrivers();
@@ -2751,15 +2763,22 @@ export class SbgController {
     return actor?.role === 'operator' ? rows : rows.map(operationalParcelView);
   }
 
+  @Roles('agent', 'operator')
   @Get('parcels/:id')
   getParcel(@Param('id') id: string) {
     return this.monitor.parcelTimeline(id);
   }
 
   /** The planned route for a parcel (origin PUDO → MDP(s) → dest PUDO), once a destination is known. */
+  @Scopes('vendor:manage:self')
   @Get('parcels/:id/route')
-  parcelRoute(@Param('id') id: string) {
+  parcelRoute(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     const parcel = this.parcels.get(id);
+    // Read by the store that shipped it (its screen after minting). A parcel no store shipped has no store to ask.
+    if (actor?.role !== 'operator') {
+      if (!parcel.vendorId) throw new GlosError('FORBIDDEN', 'This parcel was not shipped by your store');
+      this.assertVendorOwner(parcel.vendorId, actor);
+    }
     if (!parcel.destAgentDid) return { planned: false, reason: 'No destination PUDO nominated yet (set at accept or arrival).' };
     return { planned: true, ...this.routing.planJourney({ originAgentDid: parcel.committedNodeDid ?? parcel.originAgentDid, destAgentDid: parcel.destAgentDid }) };
   }
@@ -2893,6 +2912,7 @@ export class SbgController {
     return { vendorId: vendor.vendorId, secret: vendor.secret, secretRotatedAt: vendor.secretRotatedAt, token: this.auth.mintActorToken({ role: 'genesis', did: vendor.did }) };
   }
 
+  @Roles('operator')
   @Get('vendors')
   listVendors() {
     return this.vendors.list();
@@ -2902,8 +2922,11 @@ export class SbgController {
    * Load a single vendor (so the merchant console can sign back into an existing store via ?vendor=).
    * Returns the public view — the signing secret is issued once at registration and never re-exposed.
    */
+  @Scopes('vendor:manage:self')
   @Get('vendors/:id')
-  getVendor(@Param('id') id: string) {
+  getVendor(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    // Its balance, the number to reach it on and where its systems are called: the store's own. Its id was all it took.
+    this.assertVendorOwner(id, actor);
     const vendor = this.vendors.get(id);
     // Whether it has an account of its own — never the address: a console signed in the old way is told to set one up.
     return { ...VendorService.publicView(vendor), hasAccount: Boolean(this.accounts.emailForDid(vendor.did)) };
@@ -3241,6 +3264,7 @@ export class SbgController {
    * vehicle per-km); without `type` → just the three network benchmarks (the public hub summary).
    * Without lat/lng → network-wide (no radius filter). In-memory haversine here; a geo-index at real scale.
    */
+  @SignedIn()
   @Get('pricing/near')
   @ApiQuery({ name: 'type', required: false, enum: ['pudo', 'mdp', 'vehicle'] })
   @ApiQuery({ name: 'lat', required: false })
@@ -3276,6 +3300,7 @@ export class SbgController {
   }
 
   /** Open pricing feed — every PUDO, MDP and vehicle's advertised rate. DEBUG/small-network only — at scale use /pricing/near. */
+  @Roles('operator')
   @Get('pricing')
   pricing() {
     return {
@@ -3484,7 +3509,12 @@ export class SbgController {
   @Public()
   @Get('network/points')
   networkPoints() {
-    return this.agents.list().map((a) => ({
+    return this.agents.list().map((a) => this.shopCard(a));
+  }
+
+  /** A shop as anybody may see it: where it is, whether it is open, what it charges. Nothing it holds, owes or was asked for. */
+  private shopCard(a: ReturnType<AgentService['list']>[number]) {
+    return {
       did: a.did,
       shopName: a.shopName,
       zone: a.zone,
@@ -3501,7 +3531,7 @@ export class SbgController {
       rating: this.ratings.agentRating(a.did),
       freeSlots: this.shelf.available(a.did),
       since: a.createdAt, // REP1 — a "serving since" trust signal for the public profile (an onboarding date, not PII)
-    }));
+    };
   }
 
   /** Vendor mint: an order ships → create the inbound parcel + phygital label + collection code + tracking key.
@@ -3743,6 +3773,7 @@ export class SbgController {
     return this.ratings.rate({ parcelId: id, stars: dto.stars, raterMobile: dto.raterMobile });
   }
 
+  @SignedIn()
   @Get('agents/:did/rating')
   agentRating(@Param('did') did: string) {
     return this.ratings.agentRating(did);
@@ -4071,6 +4102,7 @@ export class SbgController {
   }
 
   /** PUDO coverage heatmap — points + density + open/closed counts (feeds journey-leg planning). */
+  @Roles('operator')
   @Get('heatmap')
   heatmap() {
     return this.monitor.heatmap();
@@ -4140,9 +4172,15 @@ export class SbgController {
     return this.mdps.register(dto);
   }
 
+  /** Every hub: where it is and what it charges. The hub itself and network staff also read its number and its bag count. */
+  @SignedIn()
   @Get('mdps')
-  listMdps() {
-    return this.mdps.list().map((m) => ({ ...m, totes: this.totes.list({ locationId: m.mdpId }).length }));
+  listMdps(@Actor() actor: IntrospectionResult) {
+    // The number to ring, the company a hub contracts with and how many bags stand there went to any sign-in that asked.
+    return this.mdps.list().map((m) => {
+      if (actor?.role === 'operator' || (actor?.did && actor.did === m.did)) return { ...m, totes: this.totes.list({ locationId: m.mdpId }).length };
+      return { mdpId: m.mdpId, did: m.did, name: m.name, country: m.country, zones: m.zones, location: m.location, address: m.address, pricePerParcel: m.pricePerParcel };
+    });
   }
 
   /** Register a fresh laminated tote (QR + human code) into the pool at this MDP. */
@@ -4153,12 +4191,19 @@ export class SbgController {
     return this.mdps.registerTote(id);
   }
 
-  /** Totes currently at a location (MDP id or agent did). */
+  /** Totes currently at a location. A hub reads the bags standing at it; the whole pool (no location) is read by network staff. */
+  @Roles('mdp', 'operator')
   @Get('totes')
-  listTotes(@Query('location') location?: string, @Query('status') status?: string) {
+  listTotes(@Actor() actor: IntrospectionResult, @Query('location') location?: string, @Query('status') status?: string) {
+    // Any sign-in could read every bag on the network, with what is in each.
+    if (actor?.role !== 'operator') {
+      if (!location) throw new GlosError('FORBIDDEN', 'Name your own hub: the whole bag pool is read by network staff');
+      this.assertMdpActs(location, actor);
+    }
     return this.totes.list({ locationId: location, status: status as never });
   }
 
+  @Roles('agent', 'mdp', 'driver', 'operator')
   @Get('totes/:code')
   getTote(@Param('code') code: string) {
     return this.totes.requireByCode(code);
@@ -5050,6 +5095,7 @@ export class SbgController {
    * Readable by anybody signed in, like the freight board: a shop, a store or a courier all ship things,
    * and which of them you are does not change what space is for sale. A full departure is simply absent.
    */
+  @SignedIn()
   @Get('departures')
   departureOffers(@Query('from') from?: string, @Query('to') to?: string) {
     return { items: this.departures.offers({ ...(from ? { from } : {}), ...(to ? { to } : {}) }) };
@@ -5474,9 +5520,18 @@ export class SbgController {
     return this.fleet.assignCorridor(did, dto.corridorId);
   }
 
+  /** Who is on which vehicle, and where they last were: a fleet office reads its own drivers' shifts, network staff read them all. */
+  @Roles('fleet_manager', 'operator')
   @Get('fleet/assignments')
-  listAssignments(@Query('status') status?: string) {
-    return this.fleet.list({ status: status as never });
+  listAssignments(@Actor() actor: IntrospectionResult, @Query('status') status?: string) {
+    // It answered any sign-in with every shift of every fleet — a shop, a store or another fleet's office could
+    // follow any driver's position. (The same defect as the driver list: see listFleetDrivers.)
+    const all = this.fleet.list({ status: status as never });
+    if (actor?.role === 'operator') return all;
+    const fleet = actingTenant(actor);
+    if (!fleet) throw new GlosError('FORBIDDEN', 'The shift list belongs to a fleet office and the network');
+    const own = new Set(this.drivers.list({ managerDid: fleet }).map((d) => d.did));
+    return all.filter((a) => own.has(a.driverDid));
   }
 
   // --- PUDO outbound totes + the dispatch marketplace (opportunistic line-haul) ---
@@ -5532,6 +5587,7 @@ export class SbgController {
     return posted;
   }
 
+  @Roles('operator')
   @Get('dispatch/freight')
   listFreight(@Query('status') status?: string) {
     // P1 — an order under a contract is the two parties' and that fleet's, never part of a list anybody may read.
@@ -5606,6 +5662,7 @@ export class SbgController {
   }
 
   /** What is around here. Cleared constraints are gone; disputed ones are still shown, and say so. */
+  @SignedIn()
   @Get('route-constraints')
   constraintsNear(@Query() q: ConstraintsNearQueryDto): ConstraintsResponse {
     const items = this.constraints.near({ lat: Number(q.lat), lng: Number(q.lng) }, q.radiusKm);
@@ -5619,6 +5676,7 @@ export class SbgController {
    * The board pairs this with a caveat it cannot switch off; a client rendering this list on its own must
    * carry the same warning, because absence of a report is not clearance.
    */
+  @SignedIn()
   @Get('route-constraints/route')
   constraintsAlongRoute(@Query() q: ConstraintsRouteQueryDto): RouteConstraintsResponse {
     const items = this.constraints.alongRoute(

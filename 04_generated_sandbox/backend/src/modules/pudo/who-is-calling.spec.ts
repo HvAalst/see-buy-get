@@ -9,9 +9,10 @@ import { SbgController } from './pudo.controller';
  * WHO THE DOOR LETS IN.
  *
  * A route with no role written on it is open to ANY valid sign-in — a shop's, a driver's, a store's. Twenty-four of
- * those changed something and never asked who was calling. Each now has its trades written on the door; what a
- * route does about WHICH shop, hub, fleet or driver is calling is tested where the handlers are
- * (pudo.service.spec.ts, "the routes that changed something without asking who was calling").
+ * those changed something and never asked who was calling, and twenty-two more read something the same way. Each now
+ * has its readers or its trades written on the door; what a route does about WHICH shop, hub, fleet, store or driver
+ * is calling is tested where the handlers are (pudo.service.spec.ts, "the routes that changed something without
+ * asking who was calling" and "the reads that asked nobody who was calling").
  *
  * This reads the door itself, so that a role taken off one of these fails here rather than in production.
  */
@@ -92,6 +93,37 @@ describe('who the door lets in', () => {
     expect(door('POST sbg/departures/:departureId/quote')).toMatchObject({ open: false, signedIn: true, labelled: true });
   });
 
+  /** READS. Facts about the network that belong to no one party: for anybody signed in — written down, not left blank. */
+  it.each(['GET sbg/module-info', 'GET sbg/presence', 'GET sbg/presence/:jurisdiction', 'GET sbg/border-rules', 'GET sbg/drivers', 'GET sbg/pricing/near', 'GET sbg/agents/:did/rating', 'GET sbg/departures', 'GET sbg/route-constraints', 'GET sbg/route-constraints/route'])(
+    '%s is for anybody signed in, and says so',
+    (route) => {
+      expect(door(route)).toMatchObject({ open: false, signedIn: true, labelled: true });
+      expect(door(route)?.roles).toBeUndefined();
+    },
+  );
+
+  /** Every shop and every hub: anybody signed in is answered — with a card. The rest is kept for staff inside. */
+  it.each(['GET sbg/agents', 'GET sbg/mdps'])('%s answers anybody signed in (what each is handed is decided inside)', (route) => {
+    expect(door(route)).toMatchObject({ open: false, signedIn: true, labelled: true });
+  });
+
+  /** The network's own working lists. */
+  it.each(['GET sbg/vendors', 'GET sbg/pricing', 'GET sbg/heatmap', 'GET sbg/dispatch/freight'])('%s is read by network staff', (route) => {
+    expect(door(route)).toMatchObject({ open: false, roles: ['operator'] });
+  });
+
+  it('a parcel is looked up at a shop’s counter or by the support desk; a bag by the trades that handle bags; the bags at a hub by a hub', () => {
+    expect(door('GET sbg/parcels/:id')).toMatchObject({ open: false, roles: ['agent', 'operator'] });
+    expect(door('GET sbg/totes/:code')).toMatchObject({ open: false, roles: ['agent', 'mdp', 'driver', 'operator'] });
+    expect(door('GET sbg/totes')).toMatchObject({ open: false, roles: ['mdp', 'operator'] });
+  });
+
+  it('a store’s record and the journey of its parcel are for a store; the shifts for a fleet’s office or staff', () => {
+    expect(door('GET sbg/vendors/:id')).toMatchObject({ open: false, scopes: ['vendor:manage:self'] });
+    expect(door('GET sbg/parcels/:id/route')).toMatchObject({ open: false, scopes: ['vendor:manage:self'] });
+    expect(door('GET sbg/fleet/assignments')).toMatchObject({ open: false, roles: ['fleet_manager', 'operator'] });
+  });
+
   /**
    * THE COUNT THAT IS LEFT. Every route here that changes something and still has no policy written on it — it was
    * 24 fewer than this before these were closed. The number may only go DOWN: a new route with nothing written on it
@@ -107,6 +139,6 @@ describe('who the door lets in', () => {
   });
 });
 
-/** Counted 2026-10-11 after the twenty-four were closed. Lower them as more are written; never raise them. */
+/** Counted 2026-10-11 after the twenty-four, and then the twenty-two reads, were closed. Lower them as more are written; never raise them. */
 const UNWRITTEN_CHANGES = 91;
-const UNWRITTEN_READS = 67;
+const UNWRITTEN_READS = 45;

@@ -5554,6 +5554,109 @@ describe('PUDO Light', () => {
     });
   });
 
+  /**
+   * THE READS THAT ASKED NOBODY WHO WAS CALLING. Twenty-two reads took no identity: whatever they returned went to any
+   * sign-in. Most return what is nobody's in particular. Five returned somebody's own: every shop's float and papers,
+   * every hub's number, every bag on the network, any store's record by its id, and every driver's shift and position.
+   */
+  describe('the reads that asked nobody who was calling', () => {
+    const as = (role: string, did?: string, tenant?: string) => ({ active: true, role, ...(did ? { did } : {}), ...(tenant ? { tenant } : {}), scopes: role === 'operator' ? ['*'] : [] }) as never;
+    const staff = as('operator');
+    const at = { lat: -1.2, lng: 36.8 };
+    type Row = Record<string, unknown>;
+
+    it('every shop: staff read the whole record; anybody else is handed the card the public map shows', () => {
+      const shop = onboardAgent('Read Shop', 'NorthTown', 50);
+      const full = (controller.listAgents(staff) as Row[]).find((a) => a.did === shop.did)!;
+      expect(full).toMatchObject({ balance: agents.balance(shop.did), deviceImei: shop.deviceImei, vaultRef: shop.vaultRef, status: 'ACTIVE' });
+      expect(full.balance).toBeGreaterThan(0);
+
+      const onTheMap = (controller.networkPoints() as Row[]).find((p) => p.did === shop.did)!;
+      // A driver (whose app asks here for the places it can route toward), another shop, a store, a shopper — and the shop itself.
+      for (const who of [as('driver', 'did:glos:a-driver'), as('agent', 'did:glos:another-shop'), as('genesis', 'did:glos:a-store'), as('consumer'), as('agent', shop.did)]) {
+        const card = (controller.listAgents(who) as Row[]).find((a) => a.did === shop.did)!;
+        expect(card).toMatchObject({ did: shop.did, shopName: 'Read Shop', location: shop.location });
+        expect(card).toEqual(onTheMap);
+        for (const kept of ['balance', 'currency', 'deviceImei', 'vaultRef', 'kyc', 'requirements', 'equipmentDepositPaid', 'capacity', 'status', 'lastPingAt']) expect(card).not.toHaveProperty(kept);
+      }
+    });
+
+    it('every hub: where it is and what it charges for anybody; its number and its bags for the hub itself and for staff', () => {
+      const hub = mdps.register({ name: 'Read Hub', zones: ['ReadZone'], location: at, contactPhone: '+254700999001', address: 'Depot Road 1' });
+      const other = mdps.register({ name: 'Other Read Hub', zones: ['ReadElse'], location: at, contactPhone: '+254700999002' });
+      mdps.registerTote(hub.mdpId);
+      const row = (who: never) => (controller.listMdps(who) as Row[]).find((m) => m.mdpId === hub.mdpId)!;
+      for (const who of [staff, as('mdp', hub.did)]) expect(row(who)).toMatchObject({ contactPhone: '+254700999001', totes: 1, entityId: hub.entityId });
+      // Another hub, a driver, a hub's role with no hub behind it, a shopper.
+      for (const who of [as('mdp', other.did), as('driver', 'did:glos:a-driver'), as('mdp'), as('consumer')]) {
+        expect(row(who)).toEqual({ mdpId: hub.mdpId, did: hub.did, name: 'Read Hub', country: hub.country, zones: ['ReadZone'], location: at, address: 'Depot Road 1', pricePerParcel: hub.pricePerParcel });
+        for (const kept of ['contactPhone', 'totes', 'entityId']) expect(row(who)).not.toHaveProperty(kept);
+      }
+    });
+
+    it('the bags standing at a hub are read by that hub; the whole pool by staff', () => {
+      const hub = mdps.register({ name: 'Bag Hub', zones: ['BagZone'], location: at });
+      const other = mdps.register({ name: 'Other Bag Hub', zones: ['BagElse'], location: at });
+      const bag = mdps.registerTote(hub.mdpId);
+      const codes = (list: unknown) => (list as Array<{ code: string }>).map((t) => t.code);
+      expect(codes(controller.listTotes(as('mdp', hub.did), hub.mdpId))).toEqual([bag.code]);
+      // Another hub, and a hub's role with no hub behind it.
+      for (const who of [as('mdp', other.did), as('mdp')]) expect(() => controller.listTotes(who, hub.mdpId)).toThrow('Only the hub can do this, from its own sign-in');
+      // No hub named is the whole pool, and that is not a hub's to read.
+      for (const none of [undefined, '']) expect(() => controller.listTotes(as('mdp', hub.did), none)).toThrow('Name your own hub: the whole bag pool is read by network staff');
+      expect(codes(controller.listTotes(staff))).toContain(bag.code);
+      expect(codes(controller.listTotes(staff, other.mdpId))).toEqual([]);
+    });
+
+    it('a store’s record, and the journey of a parcel it shipped, are read by that store', () => {
+      const origin = onboardAgent('Read Origin', 'NorthTown', 50);
+      const dest = onboardAgent('Read Dest', 'SouthTown', 50);
+      corridors.addCorridor({ name: 'Read N-S', originZone: 'NorthTown', destZone: 'SouthTown' });
+      const store = vendors.register({ name: 'Read Store' });
+      const stranger = vendors.register({ name: 'Another Read Store' });
+      vendors.topUp(store.vendorId, 50);
+      const { parcel } = parcels.createInbound({ vendorId: store.vendorId, externalOrderId: 'ORD-READ', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'c.jpg', shippingPolicy: store.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });
+      const own = as('genesis', store.did);
+      const others = [as('genesis', stranger.did), as('genesis'), as('agent', origin.did)];
+
+      // The record carries the store's balance: its own, and staff's.
+      for (const who of [own, staff]) expect(controller.getVendor(store.vendorId, who)).toMatchObject({ vendorId: store.vendorId, balance: vendors.get(store.vendorId).balance });
+      expect(controller.getVendor(store.vendorId, own)).not.toHaveProperty('secret');
+      for (const who of others) expect(() => controller.getVendor(store.vendorId, who)).toThrow('This store is not yours to view');
+
+      for (const who of [own, staff]) expect(controller.parcelRoute(parcel.parcelId, who)).toMatchObject({ planned: true });
+      for (const who of others) expect(() => controller.parcelRoute(parcel.parcelId, who)).toThrow('This store is not yours to view');
+      // A parcel handed in at a counter was shipped by no store: there is no store whose it could be.
+      parcels.accept({ agentDid: origin.did, parcelId: 'QR-READ', size: 'M', destZone: 'SouthTown', senderMobile: '+254700111001', receiverMobile: '+254700111002', dropoffPhotoRef: 'r.jpg' });
+      for (const who of [own, as('genesis')]) expect(() => controller.parcelRoute('QR-READ', who)).toThrow('This parcel was not shipped by your store');
+      expect(controller.parcelRoute('QR-READ', staff)).toMatchObject({ planned: false });
+    });
+
+    it('who is on which vehicle, and where they last were: a fleet’s office reads its own drivers’ shifts, staff read them all', () => {
+      const [fleetA, fleetB] = [activateManager('Read Fleet A', 'RA1'), activateManager('Read Fleet B', 'RB1')];
+      const onShift = (tag: string, managerDid?: string) => {
+        const d = drivers.register({ displayName: tag, fullName: tag, nationalId: 'ID-' + tag, mobile: '+2547' + tag, licenceClasses: ['truck'], licenceNumber: 'L-' + tag, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true, ...(managerDid ? { managerDid } : {}) });
+        drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+        drivers.decideKyc(d.did, true);
+        const v = vehicles.register({ plate: 'RD-' + tag, vehicleClass: 'truck', truckSubtype: 'tipper', capacityKg: 20_000, ownerName: 'X', baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, ...(managerDid ? { managerDid } : {}) });
+        fleet.couple(d.did, v.vehicleId);
+        fleet.reportLocation(d.did, at);
+        return d;
+      };
+      const [a1, b1, solo] = [onShift('rda1', fleetA.did), onShift('rdb1', fleetB.did), onShift('rdsolo')];
+      const shifts = (who: never) => controller.listAssignments(who, 'active') as Array<{ driverDid: string; location?: unknown }>;
+      const seen = (who: never) => shifts(who).map((x) => x.driverDid).sort();
+
+      // Each office: its own drivers, with their position — and nobody else's.
+      expect(shifts(as('fleet_manager', fleetA.did, fleetA.did))).toEqual([expect.objectContaining({ driverDid: a1.did, location: at })]);
+      expect(seen(as('fleet_manager', fleetB.did, fleetB.did))).toEqual([b1.did]);
+      // Staff: every shift, the courier's who answers to no fleet included.
+      expect(seen(staff)).toEqual([a1.did, b1.did, solo.did].sort());
+      // An office's role with no fleet behind it is not "every fleet".
+      expect(() => controller.listAssignments(as('fleet_manager'), 'active')).toThrow('The shift list belongs to a fleet office and the network');
+    });
+  });
+
   describe('two-person rules need named people outside a sandbox', () => {
     const before = process.env.GLOS_ENV;
     afterEach(() => {
