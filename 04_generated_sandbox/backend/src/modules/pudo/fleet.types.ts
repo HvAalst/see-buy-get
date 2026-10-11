@@ -87,6 +87,34 @@ export class FleetManagerKyc {
   ownerIdRef: string;
   proofOfAddressRef: string;
   submittedAt: string;
+  /** The member of staff who put them on record, by name. Somebody ELSE approves them. */
+  enteredBy?: string;
+}
+
+/** Why a fleet's papers were sent back, for whoever puts them on record again. */
+export class FleetKycRejection {
+  reason: string;
+  at: string;
+  by?: string;
+}
+
+/** One fleet as the staff who set fleets up read it: where it stands, and what is next. */
+export class FleetSetupRow {
+  did: string;
+  companyName: string;
+  tradingName?: string;
+  status: FleetManagerStatus;
+  jurisdiction?: string;
+  contactPhone: string;
+  depotAddress?: string;
+  requirements: FleetManagerRequirements;
+  createdAt: string;
+  /** Its papers, once on record — and whether THIS reader put them there, in which case somebody else approves. */
+  papers?: FleetManagerKyc & { enteredByMe: boolean };
+  /** Why its papers were last sent back. Gone once they are on record again. */
+  refused?: FleetKycRejection;
+  /** The code its office signs in with, once it is active: staff pass it on. */
+  loginCode?: string;
 }
 
 export class FleetManager {
@@ -110,6 +138,7 @@ export class FleetManager {
   location: GeoPoint;
   requirements: FleetManagerRequirements;
   kyc?: FleetManagerKyc;
+  kycRejection?: FleetKycRejection;
   /** The operator's own papers and their expiry dates — recorded always, enforced only where a sister says so. */
   papers?: CarrierPapers;
   bondPaid: boolean; // refundable operating bond (activation gate)

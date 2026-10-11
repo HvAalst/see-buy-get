@@ -4,7 +4,7 @@ import { BusinessClientService } from './business-client.service';
 import { clientRefOf, type ClientRef } from './business-client.types';
 import { driverPapers, lapsedOf, offRoadLine } from './papers';
 import { PapersWatchService } from './papers-watch.service';
-import type { FleetDriver } from './fleet.types';
+import type { FleetDriver, FleetSetupRow } from './fleet.types';
 import { ConsignmentNoteService } from './consignment-note.service';
 import { DepartureNoteService } from './departure-note.service';
 import { NoteArchiveService } from './note-archive.service';
@@ -4393,6 +4393,13 @@ export class SbgController {
     return { ...m, person: view, token };
   }
 
+  /** Every fleet as the staff who set fleets up read them: where each stands in being set up, and what is next. */
+  @Roles('operator')
+  @Get('fleet/managers/setting-up')
+  fleetsSettingUp(@Actor() actor: IntrospectionResult): { items: FleetSetupRow[] } {
+    return { items: this.managers.settingUp(this.reader(actor)) };
+  }
+
   /** Managers awaiting a KYC decision (the GLOS operator review queue). */
   @Roles('operator')
   @Get('fleet/managers/kyc-queue')
@@ -4574,14 +4581,32 @@ export class SbgController {
   @Post('fleet/managers/:did/submit-kyc')
   managerSubmitKyc(@Param('did') did: string, @Body() dto: ManagerKycDto, @Actor() actor: IntrospectionResult) {
     this.assertFleetSelf(did, actor);
-    return this.managers.submitKyc(did, dto);
+    const fleet = this.managers.get(did);
+    if (fleet.status !== 'DRAFT') throw new GlosError('INVALID_STATE', `Manager is ${fleet.status}, expected DRAFT`);
+    // EACH PAPER IS A PICTURE ITS SENDER UPLOADED, as a shop's are: a name with no file behind it was taken as a paper
+    // (the seeder sent four), and whoever approved the fleet was approving pictures nobody could open.
+    const staff = actor?.role === 'operator';
+    const sender = staff ? auditActor(actor) : actingDid(actor);
+    const papers: Array<[string, 'kyc_registration' | 'kyc_licence' | 'kyc_id' | 'kyc_address']> = [
+      [dto.businessRegCertRef, 'kyc_registration'],
+      [dto.operatorLicenceRef, 'kyc_licence'],
+      [dto.ownerIdRef, 'kyc_id'],
+      [dto.proofOfAddressRef, 'kyc_address'],
+    ];
+    for (const [ref, kind] of papers) {
+      if (!this.media.adopt(ref, sender, { type: 'fleet', id: did }, kind)) throw new GlosError('PHOTO_REQUIRED', 'That picture could not be attached — take the photograph again');
+    }
+    // A member of staff putting them on record is named, and held to it: somebody else approves (see decideKyc).
+    return this.managers.submitKyc(did, dto, staff ? staffOf(actor) : undefined);
   }
 
   /** GLOS operator vetting of a fleet manager — a manager/driver token must never self-approve. */
   @Roles('operator')
   @Post('fleet/managers/:did/kyc-decision')
   managerDecideKyc(@Param('did') did: string, @Body() dto: ManagerKycDecisionDto, @Actor() actor: IntrospectionResult) {
-    return this.managers.decideKyc(did, dto.approve, auditActor(actor, dto.by));
+    const who = staffOf(actor, dto.by);
+    if (!dto.approve && !dto.reason?.trim()) throw new GlosError('REASON_REQUIRED', 'A refusal must say why: whoever puts the papers on record again reads it');
+    return this.managers.decideKyc(did, dto.approve, who.name, dto.reason, who);
   }
 
   /** Record the refundable operating bond → ACTIVE — operator only (the fleet console recorded its

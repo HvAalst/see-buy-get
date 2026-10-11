@@ -343,8 +343,9 @@ describe('the first day of a new installation, as it would be live', () => {
   let amos: { did: string; token: string; badgeId?: string };
   let vehicleId = '';
 
-  it('6 · a fleet: registered and vetted by staff; its office signs in with the company’s code and a person’s own PIN', async () => {
+  it('6 · a fleet is set up by staff: one member registers it and puts its papers on record, ANOTHER approves; then its office signs in', async () => {
     const phone = '+254711000201';
+    const settingUp = async (token: string, did: string) => ((await must(http().get('/v1/sbg/fleet/managers/setting-up').set(bearer(token)), 200)).items as Array<Record<string, any>>).find((f) => f.did === did)!;
     const registered = await must(
       http()
         .post('/v1/sbg/fleet/managers')
@@ -353,11 +354,54 @@ describe('the first day of a new installation, as it would be live', () => {
     );
     fleetDid = registered.did;
     const own = `/v1/sbg/fleet/managers/${encodeURIComponent(fleetDid)}`;
-    await must(http().post(`${own}/submit-kyc`).set(bearer(amina)).send({ businessRegCertRef: 'reg.pdf', operatorLicenceRef: 'tol.pdf', ownerIdRef: 'id.jpg', proofOfAddressRef: 'poa.pdf' }));
-    await must(http().post(`${own}/kyc-decision`).set(bearer(amina)).send({ approve: true }));
+    expect(await settingUp(amina, fleetDid)).toMatchObject({ companyName: 'Kilima Logistics', status: 'DRAFT' });
+    expect(await settingUp(amina, fleetDid)).not.toHaveProperty('papers');
+
+    // ITS PAPERS ARE PICTURES, put on record by the member of staff setting it up. A file name is not a paper…
+    const names = await http().post(`${own}/submit-kyc`).set(bearer(amina)).send({ businessRegCertRef: 'reg.pdf', operatorLicenceRef: 'tol.pdf', ownerIdRef: 'id.jpg', proofOfAddressRef: 'poa.pdf' });
+    expect([names.status, names.body.code]).toEqual([400, 'PHOTO_REQUIRED']);
+    const scan = async (token: string, kind: string) => photograph(token, kind, `${kind} of Kilima`);
+    const papers = { businessRegCertRef: await scan(amina, 'kyc_registration'), operatorLicenceRef: await scan(amina, 'kyc_licence'), ownerIdRef: await scan(amina, 'kyc_id'), proofOfAddressRef: await scan(amina, 'kyc_address') };
+    // …and neither is a picture a colleague uploaded: whoever puts them on record answers for all four.
+    const mixed = await http().post(`${own}/submit-kyc`).set(bearer(amina)).send({ ...papers, proofOfAddressRef: await scan(brian, 'kyc_address') });
+    expect([mixed.status, mixed.body.code]).toEqual([400, 'PHOTO_REQUIRED']);
+    // EACH of the four is held to it: three real pictures do not carry a fourth that is only a name.
+    for (const key of ['businessRegCertRef', 'operatorLicenceRef', 'ownerIdRef', 'proofOfAddressRef']) {
+      const one = await http().post(`${own}/submit-kyc`).set(bearer(amina)).send({ ...papers, [key]: 'scan.pdf' });
+      expect([key, one.status, one.body.code]).toEqual([key, 400, 'PHOTO_REQUIRED']);
+    }
+    expect(await settingUp(amina, fleetDid)).toMatchObject({ status: 'DRAFT' });
+    expect((await must(http().post(`${own}/submit-kyc`).set(bearer(amina)).send(papers))).status).toBe('KYC_PENDING');
+
+    // TWO PEOPLE. Amina put them on record, so Amina is not the one to approve them — and each is told which they are.
+    expect((await settingUp(amina, fleetDid)).papers).toMatchObject({ ...papers, enteredBy: AMINA.name, enteredByMe: true });
+    expect((await settingUp(brian, fleetDid)).papers).toMatchObject({ enteredBy: AMINA.name, enteredByMe: false });
+    const self = await http().post(`${own}/kyc-decision`).set(bearer(amina)).send({ approve: true });
+    expect([self.status, self.body.detail]).toEqual([403, 'You put these papers on record — a different person must approve them']);
+    // The pictures open for the colleague who has to look at them.
+    await must(http().get(`/v1/sbg/media/${papers.operatorLicenceRef}`).set(bearer(brian)), 200);
+
+    // A refusal says why, and sends it back to be put right.
+    const silent = await http().post(`${own}/kyc-decision`).set(bearer(brian)).send({ approve: false });
+    expect([silent.status, silent.body.code]).toEqual([400, 'REASON_REQUIRED']);
+    await must(http().post(`${own}/kyc-decision`).set(bearer(brian)).send({ approve: false, reason: 'The operator’s licence is last year’s' }));
+    expect(await settingUp(amina, fleetDid)).toMatchObject({ status: 'DRAFT', refused: { reason: 'The operator’s licence is last year’s', by: BRIAN.name } });
+    expect(await settingUp(amina, fleetDid)).not.toHaveProperty('papers');
+    // Put on record again — by Brian this time, so now it is Amina who approves.
+    const again = { businessRegCertRef: await scan(brian, 'kyc_registration'), operatorLicenceRef: await scan(brian, 'kyc_licence'), ownerIdRef: await scan(brian, 'kyc_id'), proofOfAddressRef: await scan(brian, 'kyc_address') };
+    await must(http().post(`${own}/submit-kyc`).set(bearer(brian)).send(again));
+    expect(await settingUp(brian, fleetDid)).not.toHaveProperty('refused');
+    await must(http().post(`${own}/kyc-decision`).set(bearer(brian)).send({ approve: true }), 403);
+    expect((await must(http().post(`${own}/kyc-decision`).set(bearer(amina)).send({ approve: true }))).status).toBe('APPROVED');
+
+    // Its bond is recorded, and only then is it active and has a code — which staff read here and pass on.
+    expect(await settingUp(amina, fleetDid)).not.toHaveProperty('loginCode');
     await must(http().post(`${own}/bond`).set(bearer(amina)).send({}));
-    const code = (await must(http().get(own).set(bearer(amina)), 200)).loginCode as string;
-    expect(code).toBeTruthy();
+    const code = (await settingUp(brian, fleetDid)).loginCode as string;
+    expect(code).toMatch(/^FM-/);
+    expect(await settingUp(brian, fleetDid)).toMatchObject({ status: 'ACTIVE' });
+    // Nobody but staff reads that list.
+    await must(http().get('/v1/sbg/fleet/managers/setting-up').set(bearer(mamaSarah.token)), 403);
 
     // The code names the fleet and admits nobody: the person signs in, with a PIN that lives on their own device.
     const device = await enrol(phone, 'office@kilima.sbg-rehearsal.org', '24689');

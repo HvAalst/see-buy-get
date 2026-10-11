@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { DocumentStrip } from './DocumentStrip';
+import { FleetsPanel } from './FleetsPanel';
 import { useT } from '../../../shared/i18n';
 import {
   CLAIM_SLOW_DAYS,
@@ -484,6 +485,8 @@ export function ApprovalsScreen({ state, actions }: { state: TowerState; actions
       </QueuePanel>
 
       <DriverApplicationsPanel state={state} actions={actions} />
+
+      <FleetsPanel state={state} actions={actions} />
 
       <StalledPanel rows={state.stalled} />
     </>

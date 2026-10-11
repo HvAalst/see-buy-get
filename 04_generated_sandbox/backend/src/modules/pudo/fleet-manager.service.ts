@@ -8,7 +8,8 @@ import { OperationalStore } from '../../foundation/data-firewall/operational-sto
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { Geocoder, GEOCODER } from './geocoder';
-import { CarrierPapers, FleetClockView, FleetManager, FleetManagerKyc, FleetManagerRequirements, FleetManagerStatus } from './fleet.types';
+import { CarrierPapers, FleetClockView, FleetManager, FleetManagerKyc, FleetManagerRequirements, FleetManagerStatus, FleetSetupRow } from './fleet.types';
+import { sameSigner, type Signer } from '../../foundation/entity/same-person';
 import { clockAt, clocksOfCountry, isTimeZone, utcDay, zoneName } from './fleet-clock';
 import { CARRIER_PAPER_KINDS, fleetPapers, lapsedOf, offRoadLine, paperLabel, paperLapsesAt, type CarrierPaperKind, type PaperStatus } from './papers';
 import { MediaService } from './media.service';
@@ -45,6 +46,11 @@ export class FleetManagerService {
   // Durable: onboarded fleet managers (KYC state, bond, the tenant boundary S3 authorizes against).
   private readonly managers = new PersistentMap<string, FleetManager>('pudo-fleet-managers'); // keyed by DID
   private readonly fingerprints = new Set<string>();
+  /**
+   * WHOSE ACCOUNT put a fleet's papers on record — kept BESIDE the fleet, never on it: the record is the fleet's own
+   * to read, and it has no business holding a member of staff's account. Asked when somebody approves.
+   */
+  private readonly enteredKeys = new PersistentMap<string, string>('pudo-fleet-kyc-entered-keys'); // fleet DID → account
 
   constructor(
     private readonly dids: DidService,
@@ -139,22 +145,51 @@ export class FleetManagerService {
   }
 
   /** Upload KYC docs (business reg cert, operator licence, owner ID, proof of address) → KYC_PENDING. */
-  submitKyc(did: string, documents: { businessRegCertRef: string; operatorLicenceRef: string; ownerIdRef: string; proofOfAddressRef: string }): FleetManager {
+  submitKyc(
+    did: string,
+    documents: { businessRegCertRef: string; operatorLicenceRef: string; ownerIdRef: string; proofOfAddressRef: string },
+    /** The member of staff putting them on record, where it is staff: asked again when somebody approves. */
+    by?: Signer,
+  ): FleetManager {
     const m = this.require(did);
     if (m.status !== 'DRAFT') throw new GlosError('INVALID_STATE', `Manager is ${m.status}, expected DRAFT`);
     if (!documents.businessRegCertRef || !documents.operatorLicenceRef || !documents.ownerIdRef || !documents.proofOfAddressRef) {
       throw new GlosError('KYC_INCOMPLETE', 'KYC requires a business registration certificate, operator licence, owner ID, and proof of address');
     }
-    m.kyc = { ...documents, submittedAt: new Date().toISOString() } as FleetManagerKyc;
+    const { businessRegCertRef, operatorLicenceRef, ownerIdRef, proofOfAddressRef } = documents;
+    m.kyc = { businessRegCertRef, operatorLicenceRef, ownerIdRef, proofOfAddressRef, submittedAt: new Date().toISOString(), ...(by?.name ? { enteredBy: by.name } : {}) };
+    if (by?.key) this.enteredKeys.set(did, by.key);
+    else this.enteredKeys.delete(did);
+    m.kycRejection = undefined;
     return this.transition(m, 'KYC_PENDING');
   }
 
-  /** Vetting decision: approve → APPROVED (post the bond next); reject → DRAFT. */
-  decideKyc(did: string, approve: boolean, by?: string): FleetManager {
+  /** Did this reader put the fleet's papers on record? Then they are not the one to approve them. */
+  papersEnteredBy(m: Pick<FleetManager, 'did' | 'kyc'>, reader: Signer): boolean {
+    if (!m.kyc?.enteredBy) return false;
+    return sameSigner(reader, { name: m.kyc.enteredBy, key: this.enteredKeys.get(m.did) });
+  }
+
+  /**
+   * Vetting decision: approve → APPROVED (post the bond next); refuse → DRAFT, with the reason kept for whoever puts
+   * the papers on record again.
+   *
+   * TWO PEOPLE. A fleet's papers are put on record by a member of staff (the fleet cannot sign in until it is
+   * active), so the one check on them is that somebody ELSE looks before the fleet is approved. Refusing is not held
+   * to that: taking one's own entry back is not approving it.
+   */
+  decideKyc(did: string, approve: boolean, by?: string, reason?: string, signer?: Signer): FleetManager {
     const m = this.require(did);
     if (m.status !== 'KYC_PENDING') throw new GlosError('INVALID_STATE', `Manager is ${m.status}, expected KYC_PENDING`);
-    if (!approve) return this.transition(m, 'DRAFT');
+    if (!approve) {
+      const why = reason?.trim();
+      if (why) m.kycRejection = { reason: why, at: new Date().toISOString(), ...(by ? { by } : {}) };
+      m.kyc = undefined;
+      this.enteredKeys.delete(did);
+      return this.transition(m, 'DRAFT');
+    }
     if (!m.kyc) throw new GlosError('KYC_INCOMPLETE', 'Cannot approve: KYC documents missing');
+    if (signer && this.papersEnteredBy(m, signer)) throw new GlosError('FORBIDDEN', 'You put these papers on record — a different person must approve them');
     const unmet = this.unmetRequirements(m);
     if (unmet.length) throw new GlosError('APPROVAL_BLOCKED', `Cannot approve: ${unmet.join('; ')}`);
     this.core.upsert({ did, vaultRef: m.vaultRef, tier: 2, status: 'active', capabilities: ['fleet-manager'], metadata: { by } });
@@ -436,6 +471,31 @@ export class FleetManagerService {
 
   list(): FleetManager[] {
     return [...this.managers.values()];
+  }
+
+  /**
+   * EVERY FLEET, AS THE STAFF WHO SET FLEETS UP READ THEM: where each stands, what is next, and whether this reader is
+   * the one who put its papers on record (and so not the one to approve them). A fleet does not sign itself up — it
+   * is set up by staff and its office then signs in with the code it is given — so this is where one comes to be.
+   */
+  settingUp(reader: Signer): FleetSetupRow[] {
+    return this.list()
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+      .map((m) => ({
+        did: m.did,
+        companyName: m.companyName,
+        ...(m.tradingName ? { tradingName: m.tradingName } : {}),
+        status: m.status,
+        ...(m.jurisdiction ? { jurisdiction: m.jurisdiction } : {}),
+        contactPhone: m.contactPhone,
+        ...(m.depotAddress ? { depotAddress: m.depotAddress } : {}),
+        requirements: m.requirements,
+        createdAt: m.createdAt,
+        ...(m.kyc ? { papers: { ...m.kyc, enteredByMe: this.papersEnteredBy(m, reader) } } : {}),
+        ...(m.kycRejection ? { refused: m.kycRejection } : {}),
+        // The code is the office's way in once the fleet is active, and staff are who pass it on.
+        ...(m.status === 'ACTIVE' && m.loginCode ? { loginCode: m.loginCode } : {}),
+      }));
   }
 
   /**

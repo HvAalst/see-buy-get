@@ -69,8 +69,14 @@ describe('who you contract with, and its papers, over the wire', () => {
     const fleetName = `Kifaru ${u}`;
     const fleet = (await http().post('/v1/sbg/fleet/managers').set(bearer(operator)).send({ companyName: fleetName, tradingName: fleetName, contactPhone: `+2547${u}1`, contactEmail: `ops@kifaru${u}.example`, ownerFullName: 'Owner', ownerNationalId: `MGR-${u}`, depotAddress: '1 Depot Rd', location: { lat: -1.3, lng: 36.8 }, requirements: { businessRegistrationNo: `BRN-${u}`, transportOperatorLicence: `TOL-${u}`, taxId: `TAX-${u}`, declaredFleetSize: 3 } }).expect(201)).body;
     // A fleet takes drivers on once it has been checked and has posted its bond.
-    await http().post(`/v1/sbg/fleet/managers/${fleet.did}/submit-kyc`).set(bearer(operator)).send({ businessRegCertRef: 'r.pdf', operatorLicenceRef: 'l.pdf', ownerIdRef: 'id.jpg', proofOfAddressRef: 'a.pdf' }).expect(201);
-    await http().post(`/v1/sbg/fleet/managers/${fleet.did}/kyc-decision`).set(bearer(operator)).send({ approve: true }).expect(201);
+    // Its papers are pictures the member of staff setting it up uploaded, and somebody else approves them.
+    const scan = async (kind: string) => (await http().post('/v1/sbg/media').set(bearer(operator)).send({ kind, dataUrl: shot(`${kind}:${fleet.did}`) }).expect(201)).body.mediaId as string;
+    await http()
+      .post(`/v1/sbg/fleet/managers/${fleet.did}/submit-kyc`)
+      .set(bearer(operator))
+      .send({ businessRegCertRef: await scan('kyc_registration'), operatorLicenceRef: await scan('kyc_licence'), ownerIdRef: await scan('kyc_id'), proofOfAddressRef: await scan('kyc_address') })
+      .expect(201);
+    await http().post(`/v1/sbg/fleet/managers/${fleet.did}/kyc-decision`).set(bearer(operator)).send({ approve: true, by: 'A second member of staff' }).expect(201);
     await http().post(`/v1/sbg/fleet/managers/${fleet.did}/bond`).set(bearer(operator)).expect(201);
     const driver = (await http().post('/v1/sbg/drivers/onboard').set(bearer(operator)).send({ displayName: 'Boda', fullName: 'Boda Rider', nationalId: `DRV-${u}`, mobile: `+2547${u}2`, licenceClasses: ['motorcycle'], managerDid: fleet.did }).expect(201)).body;
     const store = (await http().post('/v1/sbg/vendors').set(bearer(operator)).send({ name: `Duka ${u}` }).expect(201)).body;

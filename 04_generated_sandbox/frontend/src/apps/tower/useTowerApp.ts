@@ -1,3 +1,4 @@
+import { FLEET_PAPERS, fleetBody, type FleetForm, type FleetPaperKey, type FleetSetupRow } from './fleets';
 import type { MoveRow } from './accountMoves';
 import type { PaperCase } from './paperReports';
 import type { DisputeRow } from './idDisputes';
@@ -98,6 +99,10 @@ export interface TowerState {
   /** Heavy-registry drivers waiting to be vetted. A real queue — somebody is waiting on US — and it had
    *  no screen at all until now, though the route has been live the whole time. Null while unread. */
   driverApplications: DriverApplication[] | null;
+  /** Every fleet and where it stands in being set up — a fleet is set up by staff, here. Null while unread. */
+  fleets: FleetSetupRow[] | null;
+  /** What the last act on a fleet came to, said in the fleets panel itself and not at the top of the screen. */
+  fleetNote: { tone: 'ok' | 'err'; text: string } | null;
   /** A refusal the SCREEN made before the server had to — a missing reason, an award over the cover. */
   queueError: string | null;
   /** CL4 — who moves loads, with the operator-only half. Null while unread. */
@@ -286,6 +291,11 @@ export interface TowerActions {
   /** Vet a heavy-registry driver. A refusal carries the reason the driver is shown. */
   /** `criminalRecordClear` is the vetting staff member's own tick — never the applicant's. */
   decideDriver(did: string, approve: boolean, reason?: string, criminalRecordClear?: boolean): Promise<void>;
+  /** A fleet is set up by staff: register it, put its four papers on record, approve or send back, record its bond. */
+  registerFleet(form: FleetForm): Promise<boolean>;
+  putFleetPapers(did: string, pictures: Record<FleetPaperKey, string>): Promise<boolean>;
+  decideFleet(did: string, approve: boolean, reason?: string): Promise<void>;
+  recordFleetBond(did: string): Promise<void>;
   runPayouts(): Promise<void>;
   movePayout(payoutId: string, action: PayoutAction, reason?: string): Promise<void>;
   /** Move one funding request along. the provider reference is what a confirmation cannot do without. */
@@ -356,6 +366,8 @@ const INITIAL: TowerState = {
   paperReports: null,
   stalled: null,
   driverApplications: null,
+  fleets: null,
+  fleetNote: null,
   presence: null,
   interest: null,
   presenceForm: { level: '', note: '' },
@@ -630,7 +642,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
    */
   const loadQueues = useCallback(async (client: TowerClient) => {
     setState((s) => ({ ...s, loading: true }));
-    const [claims, freightClaims, disposal, approvals, stalled, driverApplications, businesses, accountMoves, idDisputes, paperReports] = await Promise.all([
+    const [claims, freightClaims, disposal, approvals, stalled, driverApplications, businesses, accountMoves, idDisputes, paperReports, fleets] = await Promise.all([
       client.api.disputes(),
       client.api.freightClaims(),
       client.api.disposalQueue(),
@@ -647,6 +659,8 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       client.api.idDisputes(),
       // The one time staff step into the record of a company that keeps its own: somebody said a paper is not right.
       client.api.paperReports(),
+      // A fleet is set up by staff, and two of its four steps are somebody waiting on us.
+      client.api.fleetsSettingUp(),
     ]);
     setState((s) => ({
       ...s,
@@ -661,6 +675,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       accountMoves: accountMoves.error ? null : (narrow<{ items: MoveRow[] }>(accountMoves.data)?.items ?? []),
       idDisputes: idDisputes.error ? null : (narrow<{ items: DisputeRow[] }>(idDisputes.data)?.items ?? []),
       paperReports: paperReports.error ? null : (narrow<{ items: PaperCase[] }>(paperReports.data)?.items ?? []),
+      fleets: fleets.error ? null : (narrow<{ items: FleetSetupRow[] }>(fleets.data)?.items ?? []),
       readAt: Date.now(),
     }));
   }, []);
@@ -1313,6 +1328,72 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           return;
         }
         setState((s) => ({ ...s, busyId: null, queueError: null, done: approve ? t('tower.drivers.approved') : t('tower.drivers.refused') }));
+        await loadQueues(client);
+      },
+      /**
+       * A FLEET IS SET UP BY STAFF — the four acts that had no screen. Each says what it came to in the fleets panel
+       * and reads the list again: the next step on a row is derived from the fleet, never remembered here.
+       */
+      registerFleet: async (form: FleetForm): Promise<boolean> => {
+        const client = clientRef.current;
+        if (!client) return false;
+        setState((s) => ({ ...s, busyId: 'fleet-new', fleetNote: null }));
+        const { error } = await client.api.registerFleet(fleetBody(form));
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, fleetNote: { tone: 'err', text: error.detail || error.title } }));
+          return false;
+        }
+        setState((s) => ({ ...s, busyId: null, fleetNote: { tone: 'ok', text: t('tower.fleets.registered', { name: form.companyName.trim() }) } }));
+        await loadQueues(client);
+        return true;
+      },
+      /** Its four papers: each picture is uploaded as this member of staff's own, and only then are they put on record. */
+      putFleetPapers: async (did: string, pictures: Record<FleetPaperKey, string>): Promise<boolean> => {
+        const client = clientRef.current;
+        if (!client) return false;
+        setState((s) => ({ ...s, busyId: did, fleetNote: null }));
+        const refs: Partial<Record<FleetPaperKey, string>> = {};
+        for (const [key, kind] of FLEET_PAPERS) {
+          const up = await client.api.uploadMedia(kind, pictures[key]);
+          const mediaId = narrow<{ mediaId: string }>(up.data)?.mediaId;
+          if (up.error || !mediaId) {
+            setState((s) => ({ ...s, busyId: null, fleetNote: { tone: 'err', text: up.error ? up.error.detail || up.error.title : t('tower.fleets.uploadFailed') } }));
+            return false;
+          }
+          refs[key] = mediaId;
+        }
+        const { error } = await client.api.submitFleetPapers(did, refs as Record<FleetPaperKey, string>);
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, fleetNote: { tone: 'err', text: error.detail || error.title } }));
+          return false;
+        }
+        setState((s) => ({ ...s, busyId: null, fleetNote: { tone: 'ok', text: t('tower.fleets.papersOnRecord') } }));
+        await loadQueues(client);
+        return true;
+      },
+      /** Approve, or send back with the reason whoever puts them on record again will read. */
+      decideFleet: async (did: string, approve: boolean, reason?: string) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: did, fleetNote: null }));
+        const { error } = await client.api.decideFleetKyc(did, { approve, by: stateRef.current.who?.name, ...(reason ? { reason } : {}) });
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, fleetNote: { tone: 'err', text: error.detail || error.title } }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, fleetNote: { tone: 'ok', text: approve ? t('tower.fleets.approved') : t('tower.fleets.sentBackDone') } }));
+        await loadQueues(client);
+      },
+      recordFleetBond: async (did: string) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: did, fleetNote: null }));
+        const { error } = await client.api.recordFleetBond(did);
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, fleetNote: { tone: 'err', text: error.detail || error.title } }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, fleetNote: { tone: 'ok', text: t('tower.fleets.bondRecorded') } }));
         await loadQueues(client);
       },
       addAdmin: async (entityId: string, email: string, name: string) => {

@@ -237,10 +237,18 @@ const run = async () => {
       }),
       'manager register',
     );
+    // Its papers are pictures the member of staff setting it up put on record: a file name is refused.
+    const [businessRegCertRef, operatorLicenceRef, ownerIdRef, proofOfAddressRef] = [
+      await uploadDoc(op, 'kyc_registration', 'licence', 21),
+      await uploadDoc(op, 'kyc_licence', 'licence', 22),
+      await uploadDoc(op, 'kyc_id', 'id', 23),
+      await uploadDoc(op, 'kyc_address', 'licence', 24),
+    ];
+    if (!businessRegCertRef || !operatorLicenceRef || !ownerIdRef || !proofOfAddressRef) die('could not upload the fleet’s papers');
     need(
       await req('POST', `/v1/sbg/fleet/managers/${mgr.did}/submit-kyc`, {
         token: op,
-        body: { businessRegCertRef: 'reg.pdf', operatorLicenceRef: 'tol.pdf', ownerIdRef: 'id.jpg', proofOfAddressRef: 'poa.pdf' },
+        body: { businessRegCertRef, operatorLicenceRef, ownerIdRef, proofOfAddressRef },
       }),
       'manager kyc',
     );

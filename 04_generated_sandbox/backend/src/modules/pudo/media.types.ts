@@ -20,6 +20,9 @@ export const MEDIA_KINDS = [
    * the kind of mislabel a date gets misread under.
    */
   'kyc_insurance',
+  /** A COMPANY's own papers, put on record when a fleet is set up: its certificate of registration, and proof of where it is. */
+  'kyc_registration',
+  'kyc_address',
   'shop', // shop premises photo
   'avatar', // a person's profile picture (S29)
   'securement', // S33 — a driver's photo of a secured dedicated-freight load at pickup
@@ -136,6 +139,8 @@ export const KIND_RETENTION: Record<MediaKind, RetentionClass> = {
   kyc_id: 'account-doc',
   kyc_licence: 'account-doc',
   kyc_insurance: 'account-doc',
+  kyc_registration: 'account-doc',
+  kyc_address: 'account-doc',
   shop: 'account-doc',
   avatar: 'account-doc', // kept while the account is active (linked to the person → never orphan-reaped)
   hazard: 'road-report',

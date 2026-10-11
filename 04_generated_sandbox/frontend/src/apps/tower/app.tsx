@@ -37,6 +37,7 @@ import { welcomeTokenFrom } from './staff';
 import { ConsoleMenu } from './ConsoleMenu';
 import { ConsolePhoneNav, ConsoleRail } from './ConsoleNav';
 import { SettingsScreen } from './screens/SettingsScreen';
+import { joiningWaiting } from './fleets';
 import { groupsFor } from './nav';
 import { waitingLine } from './queues';
 import { useWideScreen } from '../../shared/useWideScreen';
@@ -184,7 +185,7 @@ export function App() {
     hazards: state.hazards?.length ?? null,
     claims: state.claims == null && state.freightClaims == null ? null : (state.claims?.length ?? 0) + (state.freightClaims?.length ?? 0),
     disposal: state.disposal?.length ?? null,
-    approvals: state.approvals?.length ?? null,
+    approvals: joiningWaiting(state.approvals, state.driverApplications, state.fleets),
     businesses: waitingOnStaff(state.businesses),
     // Every one that is still open waits on one of us: a first look, or a second person's approval.
     accountmoves: movesWaiting(state.accountMoves),
@@ -219,7 +220,7 @@ export function App() {
                   hazards: state.hazards?.length ?? null,
                   claims: state.claims == null && state.freightClaims == null ? null : (state.claims?.length ?? 0) + (state.freightClaims?.length ?? 0),
                   disposal: state.disposal?.length ?? null,
-                  approvals: state.approvals?.length ?? null,
+                  approvals: joiningWaiting(state.approvals, state.driverApplications, state.fleets),
                 },
                 t,
               )}

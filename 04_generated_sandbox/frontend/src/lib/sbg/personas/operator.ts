@@ -842,6 +842,20 @@ export function createOperatorApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/kyc-decision', { params: { path: { did } }, body: body as never })),
 
     /**
+     * A FLEET IS SET UP BY STAFF: it does not sign itself up. Every fleet and where it stands; register one; put its
+     * four papers on record (ids of pictures this member of staff uploaded); approve or send back — by somebody
+     * OTHER than whoever put them on record; record its bond, which makes it active and gives it its code.
+     */
+    fleetsSettingUp: () => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/setting-up', {})),
+    registerFleet: (body: { companyName: string; jurisdiction: string; contactPhone: string; ownerFullName: string; ownerNationalId: string; depotAddress: string; requirements: { businessRegistrationNo: string; transportOperatorLicence: string; taxId: string } }) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/managers', { body: body as never })),
+    submitFleetPapers: (did: string, body: { businessRegCertRef: string; operatorLicenceRef: string; ownerIdRef: string; proofOfAddressRef: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/submit-kyc', { params: { path: { did } }, body })),
+    decideFleetKyc: (did: string, body: { approve: boolean; by?: string; reason?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/kyc-decision', { params: { path: { did } }, body: body as never })),
+    recordFleetBond: (did: string) => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/bond', { params: { path: { did } } })),
+
+    /**
      * Shops that started joining and STOPPED — a chase list, not a queue.
      *
      * Nothing in it is waiting on a decision by us: a draft shop is waiting on the shopkeeper to send

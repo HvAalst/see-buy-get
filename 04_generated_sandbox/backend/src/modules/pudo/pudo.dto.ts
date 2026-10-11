@@ -1552,6 +1552,8 @@ export class CarrierPapersDto {
 export class ManagerKycDecisionDto {
   @IsBoolean() approve!: boolean;
   @IsOptional() @IsString() by?: string;
+  /** Why not — required when refusing: whoever puts the papers on record again reads it. */
+  @IsOptional() @IsString() @MaxLength(300) reason?: string;
 }
 
 /** Step one: which fleet. The code NAMES a company; it no longer signs anybody in. */

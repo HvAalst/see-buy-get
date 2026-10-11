@@ -12509,6 +12509,19 @@
         }
       }
     },
+    "/v1/sbg/fleet/managers/setting-up": {
+      "get": {
+        "operationId": "Sbg.fleetsSettingUp",
+        "summary": "",
+        "description": "Every fleet as the staff who set fleets up read them: where each stands in being set up, and what is next.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/managers/kyc-queue": {
       "get": {
         "operationId": "Sbg.managerKycQueue",
@@ -33568,6 +33581,10 @@
           },
           "submittedAt": {
             "type": "string"
+          },
+          "enteredBy": {
+            "type": "string",
+            "description": "The member of staff who put them on record, by name. Somebody ELSE approves them."
           }
         },
         "required": [
@@ -33576,6 +33593,24 @@
           "ownerIdRef",
           "proofOfAddressRef",
           "submittedAt"
+        ]
+      },
+      "FleetKycRejection": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "at"
         ]
       },
       "CarrierPapers": {
@@ -33659,6 +33694,9 @@
           },
           "kyc": {
             "$ref": "#/components/schemas/FleetManagerKyc"
+          },
+          "kycRejection": {
+            "$ref": "#/components/schemas/FleetKycRejection"
           },
           "papers": {
             "description": "The operator's own papers and their expiry dates — recorded always, enforced only where a sister says so.",
@@ -35166,6 +35204,11 @@
           },
           "by": {
             "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why not — required when refusing: whoever puts the papers on record again reads it.",
+            "maxLength": 300
           }
         },
         "required": [
@@ -41458,6 +41501,8 @@
               "kyc_id",
               "kyc_licence",
               "kyc_insurance",
+              "kyc_registration",
+              "kyc_address",
               "shop",
               "avatar",
               "securement",

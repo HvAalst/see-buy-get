@@ -7,6 +7,23 @@ describe('GLOS backend (e2e)', () => {
   let app: INestApplication;
 
   /**
+   * A fleet's papers, put on record the way staff do it: four pictures the sender uploaded. (A file name with no file
+   * behind it is refused; and whoever puts them on record is not the one who approves — a test names a second person.)
+   */
+  const sendFleetPapers = async (did: string, sender: Record<string, string>): Promise<void> => {
+    const http = app.getHttpServer();
+    const scan = async (kind: string) => {
+      const dataUrl = `data:image/png;base64,${Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from(`${kind}:${did}`)]).toString('base64')}`;
+      return (await request(http).post('/v1/sbg/media').set(sender).send({ kind, dataUrl }).expect(201)).body.mediaId as string;
+    };
+    await request(http)
+      .post(`/v1/sbg/fleet/managers/${did}/submit-kyc`)
+      .set(sender)
+      .send({ businessRegCertRef: await scan('kyc_registration'), operatorLicenceRef: await scan('kyc_licence'), ownerIdRef: await scan('kyc_id'), proofOfAddressRef: await scan('kyc_address') })
+      .expect(201);
+  };
+
+  /**
    * A shop's papers, sent the way a shop sends them: three photographs it uploaded itself. (A sandbox lets a test
    * sign in as the shop; staff cannot send a shop's papers for it, and a file name with no file behind it is refused.)
    */
@@ -928,7 +945,7 @@ describe('GLOS backend (e2e)', () => {
     const tooEarly = await request(http).post('/v1/sbg/vehicles').set(auth).send({ plate: `MV-${u}`, vehicleClass: 'van', ownerName: 'A', managerDid: mDid }).expect(400);
     expect(tooEarly.body.code).toBe('INVALID_STATE');
 
-    await request(http).post(`/v1/sbg/fleet/managers/${mDid}/submit-kyc`).set(auth).send({ businessRegCertRef: 'r.pdf', operatorLicenceRef: 'l.pdf', ownerIdRef: 'id.jpg', proofOfAddressRef: 'a.pdf' }).expect(201);
+    await sendFleetPapers(mDid, auth);
     const queue = await request(http).get('/v1/sbg/fleet/managers/kyc-queue').set(auth).expect(200);
     expect(queue.body.some((m: { did: string }) => m.did === mDid)).toBe(true);
     await request(http).post(`/v1/sbg/fleet/managers/${mDid}/kyc-decision`).set(auth).send({ approve: true, by: 'ops' }).expect(201);
@@ -958,8 +975,8 @@ describe('GLOS backend (e2e)', () => {
     // Onboard + activate two fleet managers, each with one vehicle (operator actions).
     const onboardManager = async (name: string) => {
       const m = (await request(http).post('/v1/sbg/fleet/managers').set(operator).send({ companyName: name, tradingName: name, contactPhone: `+2547${u}${name.length}`, contactEmail: `ops@${name}.example`, ownerFullName: 'Owner', ownerNationalId: `MGR-${u}-${name}`, depotAddress: '1 Depot Rd', location: { lat: -1.3, lng: 36.8 }, requirements: { businessRegistrationNo: `BRN-${u}-${name}`, transportOperatorLicence: `TOL-${u}-${name}`, taxId: `TAX-${u}-${name}`, declaredFleetSize: 3 } }).expect(201)).body;
-      await request(http).post(`/v1/sbg/fleet/managers/${m.did}/submit-kyc`).set(operator).send({ businessRegCertRef: 'r.pdf', operatorLicenceRef: 'l.pdf', ownerIdRef: 'id.jpg', proofOfAddressRef: 'a.pdf' }).expect(201);
-      await request(http).post(`/v1/sbg/fleet/managers/${m.did}/kyc-decision`).set(operator).send({ approve: true }).expect(201);
+      await sendFleetPapers(m.did, operator);
+      await request(http).post(`/v1/sbg/fleet/managers/${m.did}/kyc-decision`).set(operator).send({ approve: true, by: 'A second member of staff' }).expect(201);
       await request(http).post(`/v1/sbg/fleet/managers/${m.did}/bond`).set(operator).expect(201);
       await request(http).post('/v1/sbg/vehicles').set(operator).send({ plate: `${name}-${u}`, vehicleClass: 'van', ownerName: name, managerDid: m.did }).expect(201);
       return m.did as string;

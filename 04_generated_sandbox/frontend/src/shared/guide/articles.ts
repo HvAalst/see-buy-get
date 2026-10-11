@@ -416,6 +416,26 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "console-fleet-setup",
+    apps: [
+      "console"
+    ],
+    title: "Setting up a fleet",
+    summary: "A fleet does not sign itself up. Network staff register it, put its four papers on record, a second member of staff approves them, and its bond is recorded. Then its office has a code to sign in with.",
+    steps: [
+      "Waiting on you, then Joining the network, then Fleets. Open “Register a fleet” and fill in the company, its country, its depot, its owner, its three numbers (business registration, transport operator’s licence, tax) and the phone number of its first manager. Press Register the fleet.",
+      "On the fleet’s row, choose a photograph or scan of each of the four papers: the certificate of registration, the transport operator’s licence, the owner’s ID and a proof of address. Press Put on record.",
+      "A different member of staff opens the same screen, looks at the four pictures and presses Approve its papers. Whoever put them on record sees no such button.",
+      "When the fleet’s operating bond has been received, press Record the bond. The fleet is now active.",
+      "The row now shows the fleet’s code. Give it to the fleet’s office. In the Fleet app they type it and tap “First time here, or forgot your PIN?”: a code is texted to the first manager’s phone, they add a recovery email and choose their own PIN."
+    ],
+    notes: [
+      "Papers that are not right are sent back with the reason, by either of you. The row then asks for the four pictures again, and shows who sent them back and why.",
+      "Why it takes two: one person entering a company’s papers and approving them is one person letting a carrier onto the network alone. The number beside Joining the network counts a fleet whose papers are waiting for you, and not one that is waiting for a colleague.",
+      "A fleet can be registered only in a country that is switched on. Once it is active, the fleet keeps its own papers and people in the Fleet app; staff issue a new code under Overview, then The fleets, then New code."
+    ]
+  },
+  {
     id: "console-account-moves",
     apps: [
       "console"
