@@ -645,11 +645,11 @@ describe('a driver changing fleet', () => {
       const kilima = aFleet('Kilima Logistics');
       const d = aDriver(kilima.did);
       const person = persons.findByPhone(d.phone)!;
-      persons.setPin(person.personDid, '1357');
-      for (let i = 0; i < 4; i++) expect(() => persons.loginWithPin(d.phone, '0000')).toThrow(/Wrong phone or PIN/);
+      persons.setPin(person.personDid, '13570');
+      for (let i = 0; i < 4; i++) expect(() => persons.loginWithPin(d.phone, '00000', persons.trustDevice(d.phone))).toThrow(/Wrong phone or PIN/);
       await settle();
       expect(notifications.inboxFor(d.driver.did)).toHaveLength(0); // four wrong is a typo, not news
-      expect(() => persons.loginWithPin(d.phone, '0000')).toThrow(/Too many wrong PINs/);
+      expect(() => persons.loginWithPin(d.phone, '00000', persons.trustDevice(d.phone))).toThrow(/Too many wrong PINs/);
       await settle();
       expect(notifications.inboxFor(d.driver.did)[0]).toMatchObject({ kind: 'security', title: 'Your PIN was locked' });
       expect(notifications.inboxFor(d.driver.did)[0].body).toContain('verify your phone by code');

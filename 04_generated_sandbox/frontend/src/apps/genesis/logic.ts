@@ -6,6 +6,7 @@
 
 import { distanceLabel, haversineKm, type GeoPoint } from '../../shared/geo';
 import type { IconName } from '../../shared/ui/Icon';
+import { PIN_LENGTH } from '../../shared/account/pin';
 import type { MessageKey } from '../../shared/i18n';
 import type { ConsumerParcelView, NetworkPoint, ParcelSize, ParcelStatus, PersonRole, QuoteView, TrackView, FreightTrackView } from './types';
 
@@ -382,7 +383,7 @@ export function phoneBlocker(phone: string, t: Translate): string {
   return phoneReady(phone) ? '' : t('send.logic.phoneBlocker');
 }
 export function pinBlocker(pin: string, t: Translate): string {
-  return codeReady(pin, 4) ? '' : t('send.logic.pinBlocker');
+  return codeReady(pin, PIN_LENGTH) ? '' : t('send.logic.pinBlocker');
 }
 
 export interface RoleMeta {

@@ -1,3 +1,4 @@
+import { readDeviceKey } from '../../shared/account/pin';
 import {
   createConversationsApi,
   createFleetApi,
@@ -41,27 +42,31 @@ export function managerLookup(code: string): Promise<Result<{ did: string; compa
 /**
  * Step two — WHICH PERSON, and the only step that returns a token.
  *
+ * Every call here that carries a PIN carries `device` too: the key this phone or browser was handed when a code to the
+ * number was typed on it. Without it the server does not look at the PIN (DEVICE_NOT_KNOWN), and the sign-in screen
+ * sends the code (NewDeviceSheet).
+ *
  * The server mints it, against a PIN checked by the identity spine that already counts wrong attempts
  * and locks out. The app no longer mints its own: a client that can mint its own access is a client
  * whose sign-in screen is decoration.
  */
 export function managerSession(code: string, phone: string, pin: string): Promise<Result<ManagerView & { token: MintedToken }>> {
-  return publicRequest(fleetConfig(), '/v1/sbg/fleet/managers/session', { body: { code, phone, pin } });
+  return publicRequest(fleetConfig(), '/v1/sbg/fleet/managers/session', { body: { code, phone, pin, device: readDeviceKey(phone) } });
 }
 
 /** Forgot the fleet code: phone + PIN name the fleets this person manages. Mints nothing. */
 export function managerChoices(phone: string, pin: string): Promise<Result<{ fleets: Array<{ did: string; companyName: string; status: string }> }>> {
-  return publicRequest(fleetConfig(), '/v1/sbg/fleet/managers/mine', { body: { phone, pin } });
+  return publicRequest(fleetConfig(), '/v1/sbg/fleet/managers/mine', { body: { phone, pin, device: readDeviceKey(phone) } });
 }
 
 /** Sign in to a fleet CHOSEN after phone + PIN — the PIN and the manager role are checked again. */
 export function managerSessionByFleet(did: string, phone: string, pin: string): Promise<Result<ManagerView & { token: MintedToken }>> {
-  return publicRequest(fleetConfig(), '/v1/sbg/fleet/managers/session', { body: { did, phone, pin } });
+  return publicRequest(fleetConfig(), '/v1/sbg/fleet/managers/session', { body: { did, phone, pin, device: readDeviceKey(phone) } });
 }
 
 /** Change your own PIN, proven with the current one. Other sessions end. */
 export function changeManagerPin(phone: string, pin: string, newPin: string): Promise<Result<{ token: MintedToken }>> {
-  return publicRequest(fleetConfig(), '/v1/sbg/identity/pin/change', { body: { phone, pin, newPin } });
+  return publicRequest(fleetConfig(), '/v1/sbg/identity/pin/change', { body: { phone, pin, newPin, device: readDeviceKey(phone) } });
 }
 
 export interface FleetClient {

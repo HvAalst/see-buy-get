@@ -6,6 +6,8 @@ import { useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import { EmailStep } from '../../../shared/account/EmailStep';
 import { TroubleSheet } from '../../../shared/account/TroubleSheet';
+import { NewDeviceSheet } from '../../../shared/account/NewDeviceSheet';
+import { PIN_LENGTH, isNewDevice } from '../../../shared/account/pin';
 import { recoveryApi } from '../../../shared/account/recovery';
 import { driverConfig } from '../api';
 
@@ -42,6 +44,9 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
   const [email, setEmail] = useState('');
   const [emailCode, setEmailCode] = useState('');
   const [trouble, setTrouble] = useState(false);
+  // A PIN typed on a phone no code was ever typed on: not an error, a step — the code, once.
+  const [closedFor, setClosedFor] = useState<unknown>(null);
+  const confirming = step === 'pin' && isNewDevice(error) && closedFor !== error;
 
   const busyWhile = async (work: () => Promise<unknown>) => {
     setBusy(true);
@@ -105,7 +110,7 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
   );
 
   const ready =
-    step === 'pin' ? phone.trim() !== '' && pin.length === 4 : step === 'phone' ? phone.trim() !== '' : step === 'code' ? code.length === 6 && pin.length === 4 : email.trim() !== '' && emailCode.length === 6;
+    step === 'pin' ? phone.trim() !== '' && pin.length === PIN_LENGTH : step === 'phone' ? phone.trim() !== '' : step === 'code' ? code.length === 6 && pin.length === PIN_LENGTH : email.trim() !== '' && emailCode.length === 6;
 
   return (
     <>
@@ -121,7 +126,7 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
         /* The sign-in ended under them. One phone at a time means that is how a driver LEARNS somebody else signed
            in as them — so it says so, and says what undoes it, rather than a bare "sign in again". */
         <Note tone="warn" icon="lock" title={t('driver.signin.signedOutTitle')} detail={t('driver.signin.signedOutNote')} />
-      ) : error ? (
+      ) : error && !confirming ? (
         <ErrorNote error={error} />
       ) : null}
 
@@ -130,7 +135,7 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
         {step === 'pin' ? (
           <div class="field">
             <span class="field__label">{t('driver.signin.pinLabel')}</span>
-            <CodeBoxes id="drv-pin" label={t('driver.signin.pinLabel')} length={4} value={pin} onInput={setPin} disabled={busy} mask />
+            <CodeBoxes id="drv-pin" label={t('driver.signin.pinLabel')} length={PIN_LENGTH} value={pin} onInput={setPin} disabled={busy} mask />
           </div>
         ) : null}
         {step === 'code' ? (
@@ -142,7 +147,7 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
             {testCode ? <p class="hint">{t('driver.signin.testCode', { code: testCode })}</p> : null}
             <div class="field">
               <span class="field__label">{t('driver.signin.newPinLabel')}</span>
-              <CodeBoxes id="drv-new-pin" label={t('driver.signin.newPinLabel')} length={4} value={pin} onInput={setPin} disabled={busy} />
+              <CodeBoxes id="drv-new-pin" label={t('driver.signin.newPinLabel')} length={PIN_LENGTH} value={pin} onInput={setPin} disabled={busy} />
             </div>
           </>
         ) : null}
@@ -183,6 +188,16 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
     </form>
     {/* Outside the form: Enter in one of its fields must not submit the sign-in behind it. */}
     <TroubleSheet open={trouble} onClose={() => setTrouble(false)} api={recovery} />
+    <NewDeviceSheet
+      open={confirming}
+      onClose={() => setClosedFor(error)}
+      api={recovery}
+      phone={phone}
+      onConfirmed={() => {
+        setClosedFor(error);
+        void busyWhile(() => onSignIn(phone, pin));
+      }}
+    />
     </>
   );
 }

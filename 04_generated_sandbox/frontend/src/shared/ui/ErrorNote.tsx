@@ -45,7 +45,8 @@ const SAY: Record<string, string> = {
   // right" to somebody who had typed a password. The server's detail says which, where a screen shows it.
   'error.wrong_sign_in': 'That is not right. Check what you typed and try again.',
   // Consumer phone + PIN sign-in (S20/S21).
-  'error.pin_digits': 'Your PIN must be 4 digits.',
+  'error.pin_digits': 'Your PIN must be 5 digits.',
+  'error.device_new': 'This phone or browser has not signed in to your account before. We send a code to your number to confirm it; after that your PIN works here.',
   'error.pin_locked': 'Too many wrong PINs. Tap "Forgot your PIN?" to sign in with a code.',
   'error.pin_wrong': 'That is not your PIN. Five wrong tries lock it.',
   'error.password_wrong': 'That is not the password. Try again.',
@@ -55,7 +56,7 @@ const SAY: Record<string, string> = {
   'error.password_short': 'That password is too short. Use at least 8 characters.',
   'error.password_guessable': 'That password is too easy to guess. Avoid a common word with a number on the end, your own name or email address, only digits, and runs like 12345678.',
   'error.secret_wrong': 'That is not the current secret. Try again.',
-  'error.pin_guessable': 'That PIN is too easy to guess. Avoid one digit four times, a run like 1234, and pairs like 1212.',
+  'error.pin_guessable': 'That PIN is too easy to guess. Avoid mostly one digit, a run like 12345 or 13579, and a pattern like 12312.',
   'error.role_not_held': 'You cannot open that here.',
   'error.phone_invalid': 'That phone number is not right. Check it.',
   'error.verify_phone': 'Verify your phone first — we will send you a code.',

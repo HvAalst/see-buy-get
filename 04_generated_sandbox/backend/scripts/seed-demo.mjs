@@ -251,7 +251,7 @@ const run = async () => {
   ).access_token;
   // The manager as a PERSON, with a PIN. The company code names the fleet; the PIN is what actually
   // signs somebody in, so a seeded fleet with no person behind it is a console nobody can open.
-  const MGR_PIN = '2468';
+  const MGR_PIN = '24689';
   {
     const r1 = await req('POST', '/v1/sbg/auth/phone/request', { body: { phone: mgr.contactPhone } });
     const otp = r1.data?.code ?? r1.data?.otp ?? r1.data?.verificationCode;
@@ -308,19 +308,20 @@ const run = async () => {
    * so the fleet's token cannot stand in for the person who took it. The phone is the one in the DID's
    * controller (`pudo-driver:<mobile>`): on a re-seed the driver already exists and nobody printed it.
    */
-  const DRIVER_PIN = '1357';
+  const DRIVER_PIN = '13570';
   const signInDriver = async (driver, label) => {
     const phone = (need(await req('GET', `/v1/did/${encodeURIComponent(driver.did)}`), `${label} did`).controller ?? '').replace(/^pudo-driver:/, '');
-    let session = await req('POST', '/v1/sbg/drivers/session', { body: { phone, pin: DRIVER_PIN } });
-    if (!session.ok) {
-      const r1 = await req('POST', '/v1/sbg/auth/phone/request', { body: { phone } });
-      await req('POST', '/v1/sbg/auth/phone/verify', { body: { phone, code: r1.data?.code } });
-      const email = `${label}.driver@sbg.test`;
-      const e1 = await req('POST', '/v1/sbg/identity/email/request', { body: { email } });
-      await req('POST', '/v1/sbg/identity/enroll', { body: { phone, pin: DRIVER_PIN, email, emailCode: e1.data?.code } });
-      session = await req('POST', '/v1/sbg/drivers/session', { body: { phone, pin: DRIVER_PIN } });
-    }
-    return { phone, token: session.data?.token?.access_token };
+    // A PIN IS LOOKED AT ONLY ON A DEVICE A CODE TO THE PHONE CONFIRMED, and this script is a device like any other:
+    // it asks for the code (echoed in a sandbox), types it, and is handed the key the PIN is then asked with. That also
+    // sets the demo PIN afresh each run — which is what moves a sandbox seeded with the old four-digit PINs to five.
+    const r1 = await req('POST', '/v1/sbg/auth/phone/request', { body: { phone } });
+    if (!r1.ok) die(`a code to ${label}'s phone was refused (${r1.status} ${JSON.stringify(r1.data)}) — a number is sent one code a minute: wait a minute between two seeds`);
+    need(await req('POST', '/v1/sbg/auth/phone/verify', { body: { phone, code: r1.data?.code } }), `${label} phone code`);
+    const email = `${label}.driver@sbg.test`;
+    const e1 = await req('POST', '/v1/sbg/identity/email/request', { body: { email } });
+    const enrolled = need(await req('POST', '/v1/sbg/identity/enroll', { body: { phone, pin: DRIVER_PIN, email, emailCode: e1.data?.code } }), `${label} PIN`);
+    const session = need(await req('POST', '/v1/sbg/drivers/session', { body: { phone, pin: DRIVER_PIN, device: enrolled.device } }), `${label} sign-in`);
+    return { phone, token: session.token?.access_token };
   };
   const amosIn = await signInDriver(amos, 'amos');
   const amosToken = amosIn.token;

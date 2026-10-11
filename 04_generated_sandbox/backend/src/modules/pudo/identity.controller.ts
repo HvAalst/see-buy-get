@@ -10,6 +10,7 @@ import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { GlosError } from '../../foundation/http/glos-error';
 import { hashPhone, isPlausiblePhone } from '../../foundation/identity/phone';
 import { PersonService } from './person.service';
+import { ConfirmDeviceDto } from './pudo.dto';
 import { OtpService } from './otp.service';
 import { ParcelService } from './parcel.service';
 import { DispatchService } from './dispatch.service';
@@ -77,7 +78,7 @@ export class IdentityController {
         this.emailCodes.verify(dto.email, dto.emailCode);
       }
     }
-    const { person, isNew, token } = this.persons.enroll(dto.phone, verified, dto.pin);
+    const { person, isNew, token, device } = this.persons.enroll(dto.phone, verified, dto.pin);
     if (needsEmail) {
       this.persons.setEmail(person.personDid, dto.email as string);
       this.emailCodes.consume(dto.email as string);
@@ -85,7 +86,8 @@ export class IdentityController {
     this.otp.consume(dto.phone);
     // S24: a first-time join through an invite link credits the inviter (best-effort — never blocks sign-up).
     if (isNew && dto.inviteToken) this.invites.accept(dto.inviteToken, person.personDid);
-    return { ...this.persons.view(person), isNew, token };
+    // `device`: the key this device keeps. The code was typed here, so the PIN works here from now on.
+    return { ...this.persons.view(person), isNew, token, device };
   }
 
   /**
@@ -140,16 +142,36 @@ export class IdentityController {
   @Post('recover')
   recover(@Body() dto: RecoverAccountDto) {
     const person = this.recovery.recoverByEmail(dto);
-    return { recovered: true, undoUntil: person.phoneChange?.undoUntil };
+    // The code to the new number was typed on this device: it is the one device the new PIN works on.
+    return { recovered: true, undoUntil: person.phoneChange?.undoUntil, device: this.persons.trustDevice(dto.newPhone) };
   }
 
-  /** Reopen the app: phone + 4-digit PIN, no OTP (locks after repeated wrong PINs — then OTP again). */
+  /**
+   * THIS DEVICE, CONFIRMED BY THE CODE — for somebody who has an account and a PIN and is on a device their PIN has
+   * never been used on. `auth/phone/request` sent the code and `auth/phone/verify` checked it; this hands the device
+   * its key and spends the confirmation. Nothing about the account changes: the PIN is the one they had.
+   */
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(20, 15 * 60)
+  @Post('device')
+  confirmDevice(@Body() dto: ConfirmDeviceDto) {
+    if (!this.otp.isVerified(dto.phone)) throw new GlosError('PHONE_NOT_VERIFIED', 'Verify your phone number first');
+    const device = this.persons.trustDevice(dto.phone);
+    this.otp.consume(dto.phone);
+    return { device };
+  }
+
+  /**
+   * Reopen the app: phone + PIN, no code — ON A DEVICE THE CODE WAS ONCE TYPED ON (`device`). Anywhere else the
+   * answer is DEVICE_NOT_KNOWN and the PIN is not looked at. Locks after repeated wrong PINs — then the code again.
+   */
   @Public()
   @UseGuards(RateLimitGuard)
   @RateLimit(60, 15 * 60) // each PIN locks after five; this stops one caller spreading guesses across many phones
   @Post('login')
   login(@Body() dto: PinLoginDto) {
-    const { person, token } = this.persons.loginWithPin(dto.phone, dto.pin);
+    const { person, token } = this.persons.loginWithPin(dto.phone, dto.pin, dto.device);
     return { ...this.persons.view(person), token };
   }
 
@@ -172,7 +194,7 @@ export class IdentityController {
   @RateLimit(20, 15 * 60)
   @Post('pin/change')
   changePin(@Body() dto: ChangePinDto) {
-    const { person, token } = this.persons.changePin(dto.phone, dto.pin, dto.newPin);
+    const { person, token } = this.persons.changePin(dto.phone, dto.pin, dto.newPin, dto.device);
     return { ...this.persons.view(person), token };
   }
 

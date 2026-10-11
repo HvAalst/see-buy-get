@@ -94,7 +94,7 @@ describe('the receipt for a business’s delivered load', () => {
       seq += 1;
       const phone = `+2519120${String(seq).padStart(5, '0')}`;
       const person = persons.ensurePerson(phone);
-      persons.setPin(person.personDid, '4826');
+      persons.setPin(person.personDid, '48261');
       if (email) persons.setEmail(person.personDid, email);
       return { personDid: person.personDid, phone, email: email ?? '' };
     };

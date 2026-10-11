@@ -30,7 +30,7 @@ describe('a customer’s business, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `biz-${tag}-${seq}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '4826', email, emailCode: mailed.body.code }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201);
     return { phone, token: enrolled.body.token.access_token, email, personDid: enrolled.body.personId };
   }
 
@@ -304,7 +304,7 @@ describe('a customer’s business, over the wire', () => {
     // the old mailbox stops at that moment, and the load says why. What they made to pass on is untouched.
     const moved = `biz-${tag}-moved@example.com`;
     const proof = await http().post('/v1/sbg/identity/email/request').send({ email: moved });
-    await http().post('/v1/sbg/account/email').set(bearer(booker.token)).send({ pin: '4826', email: moved, code: proof.body.code }).expect(201);
+    await http().post('/v1/sbg/account/email').set(bearer(booker.token)).send({ pin: '48261', email: moved, code: proof.body.code }).expect(201);
     expect(await look()).toEqual({ state: 'cancelled', expiresAt: expect.any(String) });
     expect((await http().post('/v1/sbg/document-links/fetch').send({ token: key }).expect(400)).body.detail).toBe('This link was cancelled');
     expect((await http().post('/v1/sbg/document-links/look').send({ token: passedKey }).expect(200)).body.state).toBe('ready');

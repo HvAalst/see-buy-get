@@ -65,7 +65,7 @@ describe('PersonService — the identity spine (S20)', () => {
 
   it('enroll requires an OTP-verified phone, then mints a consumer token', () => {
     expect(() => persons.enroll(PHONE, false)).toThrow(/Verify your phone/);
-    const { person, isNew, token } = persons.enroll(PHONE, true, '4826');
+    const { person, isNew, token } = persons.enroll(PHONE, true, '48261');
     expect(isNew).toBe(true);
     const claims = auth.introspect(token.access_token);
     expect(claims.active).toBe(true);
@@ -74,37 +74,103 @@ describe('PersonService — the identity spine (S20)', () => {
     expect(claims.scopes).toEqual(expect.arrayContaining(['shipment:create', 'parcel:read:own', 'identity:self']));
   });
 
-  it('sets a 4-digit PIN (rejecting bad shapes) and reopens with phone + PIN', () => {
-    persons.enroll(PHONE, true);
+  it('sets a 5-digit PIN (rejecting bad shapes) and reopens with phone + PIN on the device the code was typed on', () => {
+    const { device } = persons.enroll(PHONE, true);
     const did = persons.findByPhone(PHONE)!.personDid;
-    expect(() => persons.setPin(did, '12')).toThrow(/4 digits/);
-    expect(() => persons.setPin(did, 'abcd')).toThrow(/4 digits/);
-    persons.setPin(did, '2468');
-    expect(persons.loginWithPin(PHONE, '2468').person.personDid).toBe(did);
+    expect(() => persons.setPin(did, '12')).toThrow(/5 digits/);
+    expect(() => persons.setPin(did, 'abcde')).toThrow(/5 digits/);
+    // Four was the length of a PIN — and is the length of a mobile-money PIN and a bank card's. Not of this one.
+    expect(() => persons.setPin(did, '2468')).toThrow(/5 digits/);
+    expect(() => persons.setPin(did, '246890')).toThrow(/5 digits/);
+    persons.setPin(did, '24689');
+    expect(persons.loginWithPin(PHONE, '24689', device).person.personDid).toBe(did);
   });
 
   it('locks the PIN after repeated wrong tries — then only OTP re-entry works', () => {
-    persons.enroll(PHONE, true, '3579');
-    for (let i = 0; i < 4; i++) expect(() => persons.loginWithPin(PHONE, '9999')).toThrow(/Wrong phone or PIN/);
+    persons.enroll(PHONE, true, '35792');
+    for (let i = 0; i < 4; i++) expect(() => persons.loginWithPin(PHONE, '99999', persons.trustDevice(PHONE))).toThrow(/Wrong phone or PIN/);
     // The fifth wrong one locks it, and says so — the owner learns at once what will get them back in.
-    expect(() => persons.loginWithPin(PHONE, '9999')).toThrow(/Too many wrong PINs/);
+    expect(() => persons.loginWithPin(PHONE, '99999', persons.trustDevice(PHONE))).toThrow(/Too many wrong PINs/);
     // Locked now: even the CORRECT PIN is refused until the phone is verified by code again.
-    expect(() => persons.loginWithPin(PHONE, '3579')).toThrow(/Too many wrong PINs/);
+    expect(() => persons.loginWithPin(PHONE, '35792', persons.trustDevice(PHONE))).toThrow(/Too many wrong PINs/);
     // But re-enrolling by OTP resets the lockout and the credential.
-    const re = persons.enroll(PHONE, true, '3579');
+    const re = persons.enroll(PHONE, true, '35792');
     expect(re.isNew).toBe(false);
-    expect(persons.loginWithPin(PHONE, '3579').person.personDid).toBe(re.person.personDid);
+    expect(persons.loginWithPin(PHONE, '35792', persons.trustDevice(PHONE)).person.personDid).toBe(re.person.personDid);
   });
 
-  it('does not reveal whether a phone is registered on a failed PIN login', () => {
-    expect(() => persons.loginWithPin('+254700999999', '0000')).toThrow(/Wrong phone or PIN/); // unknown phone
-    persons.enroll(PHONE, true, '2468');
-    expect(() => persons.loginWithPin(PHONE, '0000')).toThrow(/Wrong phone or PIN/); // known phone, wrong pin — same message
+  /** What a sign-in was refused with — or that it was not. */
+  const refused = (fn: () => unknown): string => {
+    try {
+      fn();
+    } catch (e) {
+      return (e as { code?: string }).code ?? 'threw something else';
+    }
+    return 'let in';
+  };
+
+  describe('a PIN works only on a device a code to the phone confirmed', () => {
+    it('is not looked at anywhere else — right or wrong, and whoever has an account', () => {
+      const mine = persons.enroll(PHONE, true, '24689');
+      const theirs = persons.enroll('+254700888888', true, '48261');
+      // No key, an empty one, a made-up one, and a real one that is somebody else's: the same answer, the right PIN included.
+      for (const key of [undefined, '', 'dvc_made-up', theirs.device]) {
+        expect([key, refused(() => persons.loginWithPin(PHONE, '24689', key))]).toEqual([key, 'DEVICE_NOT_KNOWN']);
+        expect([key, refused(() => persons.loginWithPin(PHONE, '00000', key))]).toEqual([key, 'DEVICE_NOT_KNOWN']);
+      }
+      // A number nobody has is answered the same way: this door does not say who has an account.
+      expect(refused(() => persons.loginWithPin('+254700999999', '00000', mine.device))).toBe('DEVICE_NOT_KNOWN');
+      expect(refused(() => persons.loginWithPin('+254700999999', '00000'))).toBe('DEVICE_NOT_KNOWN');
+      // NOTHING WAS COUNTED: nine tries from nowhere have not brought the PIN one step nearer its lock.
+      expect(persons.findByPhone(PHONE)!.pinAttempts ?? 0).toBe(0);
+      expect(persons.loginWithPin(PHONE, '24689', mine.device).person.personDid).toBe(mine.person.personDid);
+    });
+
+    it('on that device a wrong PIN is a wrong PIN, counted as it always was', () => {
+      const { device } = persons.enroll(PHONE, true, '24689');
+      expect(refused(() => persons.loginWithPin(PHONE, '00000', device))).toBe('AUTH_FAILED');
+      expect(persons.findByPhone(PHONE)!.pinAttempts).toBe(1);
+      expect(refused(() => persons.loginWithPin(PHONE, '24689', device))).toBe('let in');
+    });
+
+    it('a second device is confirmed by a code and changes nothing about the account; both then work', () => {
+      const { device: phone, person } = persons.enroll(PHONE, true, '24689');
+      const tablet = persons.trustDevice(PHONE);
+      expect(tablet).toMatch(/^dvc_[0-9a-f]{64}$/);
+      expect(tablet).not.toBe(phone);
+      expect(persons.deviceCount(person.personDid)).toBe(2);
+      for (const key of [phone, tablet]) expect(refused(() => persons.loginWithPin(PHONE, '24689', key))).toBe('let in');
+      // A number with no account has no device to confirm: said to somebody who has just proved the number is theirs.
+      expect(refused(() => persons.trustDevice('+254700999999'))).toBe('NOT_FOUND');
+    });
+
+    it('a PIN replaced by a code leaves it working on the device that did it, and on no other', () => {
+      const { device: old, person } = persons.enroll(PHONE, true, '24689');
+      const tablet = persons.trustDevice(PHONE);
+      // Forgotten, or locked by wrong tries: the code again, and a new PIN.
+      const again = persons.enroll(PHONE, true, '73914');
+      expect(persons.deviceCount(person.personDid)).toBe(1);
+      for (const key of [old, tablet]) expect(refused(() => persons.loginWithPin(PHONE, '73914', key))).toBe('DEVICE_NOT_KNOWN');
+      expect(refused(() => persons.loginWithPin(PHONE, '73914', again.device))).toBe('let in');
+      // The code alone, with no new PIN, confirms a device and forgets none.
+      const third = persons.enroll(PHONE, true);
+      expect(persons.deviceCount(person.personDid)).toBe(2);
+      expect(refused(() => persons.loginWithPin(PHONE, '73914', third.device))).toBe('let in');
+    });
+
+    it('keeps ten devices to a person: the eleventh puts the oldest out', () => {
+      const { device: first, person } = persons.enroll(PHONE, true, '24689');
+      let last = first;
+      for (let i = 0; i < 10; i++) last = persons.trustDevice(PHONE);
+      expect(persons.deviceCount(person.personDid)).toBe(10);
+      expect(refused(() => persons.loginWithPin(PHONE, '24689', first))).toBe('DEVICE_NOT_KNOWN');
+      expect(refused(() => persons.loginWithPin(PHONE, '24689', last))).toBe('let in');
+    });
   });
 
   it('switches to a held role, minting that role\'s actor token; refuses a role not held', () => {
     const agentDid = dids.generate('pudo:agent-entity').id;
-    persons.enroll(PHONE, true, '2468');
+    persons.enroll(PHONE, true, '24689');
     persons.attachRole(PHONE, 'agent', agentDid);
     const person = persons.findByPhone(PHONE)!;
 
@@ -133,7 +199,7 @@ describe('PersonService — the identity spine (S20)', () => {
     const avatarFor = (ownerDid: string) => media.upload({ ownerDid, kind: 'avatar', dataUrl: PNG }).mediaId;
 
     it('stores a display NAME in the vault (never the core) and reveals it only in the self-view', () => {
-      const { person } = persons.enroll(PHONE, true, '2468');
+      const { person } = persons.enroll(PHONE, true, '24689');
       persons.setProfile(person.personDid, { displayName: '  Hans  ' });
       const p = persons.findByDid(person.personDid)!;
       expect(p.vaultRef).toBeTruthy(); // the name went to the vault, not onto the person/core
@@ -142,13 +208,13 @@ describe('PersonService — the identity spine (S20)', () => {
     });
 
     it('rejects an empty or over-long display name', () => {
-      const { person } = persons.enroll(PHONE, true, '2468');
+      const { person } = persons.enroll(PHONE, true, '24689');
       expect(() => persons.setProfile(person.personDid, { displayName: '   ' })).toThrow(/cannot be empty/);
       expect(() => persons.setProfile(person.personDid, { displayName: 'x'.repeat(81) })).toThrow(/too long/);
     });
 
     it('updates the name IN PLACE (stable vault handle) rather than orphaning a record', () => {
-      const { person } = persons.enroll(PHONE, true, '2468');
+      const { person } = persons.enroll(PHONE, true, '24689');
       persons.setProfile(person.personDid, { displayName: 'First' });
       const ref1 = persons.findByDid(person.personDid)!.vaultRef;
       persons.setProfile(person.personDid, { displayName: 'Second' });
@@ -158,7 +224,7 @@ describe('PersonService — the identity spine (S20)', () => {
     });
 
     it('links an OWNED avatar to the person and purges the previous one on replace', () => {
-      const { person } = persons.enroll(PHONE, true, '2468');
+      const { person } = persons.enroll(PHONE, true, '24689');
       const first = avatarFor(person.personDid);
       persons.setProfile(person.personDid, { avatarMediaId: first });
       expect(persons.view(persons.findByDid(person.personDid)!).avatarMediaId).toBe(first);
@@ -171,14 +237,14 @@ describe('PersonService — the identity spine (S20)', () => {
     });
 
     it('refuses an avatar the person does not own (no cross-owner pinning)', () => {
-      const { person } = persons.enroll(PHONE, true, '2468');
+      const { person } = persons.enroll(PHONE, true, '24689');
       const notMine = avatarFor(dids.generate('person:stranger').id);
       expect(() => persons.setProfile(person.personDid, { avatarMediaId: notMine })).toThrow(/not yours/);
       expect(persons.findByDid(person.personDid)!.avatarMediaId).toBeUndefined();
     });
 
     it('refuses a media the person owns but did NOT upload as an avatar (no evidence-photo laundering)', () => {
-      const { person } = persons.enroll(PHONE, true, '2468');
+      const { person } = persons.enroll(PHONE, true, '24689');
       // A PoD/dispute photo the receiver owns lives in a LOCKED evidence bin. Pinning it as an avatar would
       // re-kind it out of that bin and let a later replace hard-delete it — the setProfile guard forbids it.
       const podId = media.upload({ ownerDid: person.personDid, kind: 'pod', dataUrl: PNG }).mediaId;
@@ -189,7 +255,7 @@ describe('PersonService — the identity spine (S20)', () => {
     });
 
     it('degrades gracefully when the vault entry is gone (in-memory vault lost on restart, vaultRef persisted)', () => {
-      const { person } = persons.enroll(PHONE, true, '2468');
+      const { person } = persons.enroll(PHONE, true, '24689');
       persons.setProfile(person.personDid, { displayName: 'Hans' });
       const p = persons.findByDid(person.personDid)!;
       p.vaultRef = 'vault_gone'; // simulate a restart: the Person persisted, the in-memory vault did not

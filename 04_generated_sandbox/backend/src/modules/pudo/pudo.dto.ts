@@ -1561,12 +1561,16 @@ export class ManagerSessionDto {
   @IsOptional() @IsString() did?: string;
   @IsString() phone!: string;
   @IsString() pin!: string;
+  /** The key this device was handed when a code to the phone was typed on it. Without it the PIN is not looked at. */
+  @IsOptional() @IsString() @MaxLength(120) device?: string;
 }
 
 /** Forgot the fleet code: phone + PIN name the fleets this person manages. */
 export class ManagerChoicesDto {
   @IsString() phone!: string;
   @IsString() pin!: string;
+  /** The key this device was handed when a code to the phone was typed on it. Without it the PIN is not looked at. */
+  @IsOptional() @IsString() @MaxLength(120) device?: string;
 }
 
 /** A driver signs in: the phone they were registered with, and their PIN. `did` only picks one if the phone drives for several. */
@@ -1574,6 +1578,8 @@ export class DriverSessionDto {
   @IsString() phone!: string;
   @IsString() pin!: string;
   @IsOptional() @IsString() did?: string;
+  /** The key this device was handed when a code to the phone was typed on it. Without it the PIN is not looked at. */
+  @IsOptional() @IsString() @MaxLength(120) device?: string;
 }
 
 /** A fleet offers a place to a driver already registered — by the phone number they sign in with. */
@@ -1839,6 +1845,8 @@ export class ChangePinDto {
   @IsString() phone!: string;
   @IsString() pin!: string;
   @IsString() newPin!: string;
+  /** The key this device was handed when a code to the phone was typed on it. Without it the PIN is not looked at. */
+  @IsOptional() @IsString() @MaxLength(120) device?: string;
 }
 
 /** Rotate a store's signing secret, proven with the current one. */
@@ -1893,6 +1901,13 @@ export class CreateInviteDto {
 export class PinLoginDto {
   @IsString() phone!: string;
   @IsString() pin!: string;
+  /** The key this device was handed when a code to the phone was typed on it. Without it the PIN is not looked at. */
+  @IsOptional() @IsString() @MaxLength(120) device?: string;
+}
+
+/** Confirm THIS device for a number that already has an account: the code to the phone has just been typed on it. */
+export class ConfirmDeviceDto {
+  @IsString() @MaxLength(40) phone!: string;
 }
 
 /** Set or change the signed-in person's 4-digit PIN. */

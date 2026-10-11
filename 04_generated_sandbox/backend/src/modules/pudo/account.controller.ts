@@ -123,7 +123,9 @@ export class AccountController {
   @Post('phone/change')
   changeNumber(@Body() dto: ChangeNumberDto, @Actor() actor: IntrospectionResult) {
     const person = this.recovery.changeNumber(actingPerson(actor), dto.pin, dto.newPhone);
-    return { changed: true, undoUntil: person.phoneChange?.undoUntil, signedOutEverywhere: true };
+    // No device goes with a number that moves — except the one this was done on: the code to the NEW number was
+    // typed here, a moment ago. It is handed its key for the new number, so the person signs back in with their PIN.
+    return { changed: true, undoUntil: person.phoneChange?.undoUntil, signedOutEverywhere: true, device: this.persons.trustDevice(dto.newPhone) };
   }
 
   /**

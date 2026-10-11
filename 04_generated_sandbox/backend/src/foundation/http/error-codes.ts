@@ -106,7 +106,7 @@ export const ERROR_CODES = {
   // --- 400 Bad Request: OTP + PIN --------------------------------------------------------------
   OTP_INVALID: { status: 400, title: 'Wrong or expired code' },
   OTP_LOCKED: { status: 400, title: 'Too many wrong codes' },
-  PIN_INVALID: { status: 400, title: 'PIN must be 4 digits' },
+  PIN_INVALID: { status: 400, title: 'PIN must be 5 digits' },
   // The recovery email was given but nobody has proved they read it: a code goes to the address first.
   EMAIL_NOT_VERIFIED: { status: 400, title: 'Confirm your email address first' },
   // One digit four times, a straight run, pairs: the PINs somebody who knows you tries first. Refused when chosen.
@@ -151,6 +151,9 @@ export const ERROR_CODES = {
   // A wrong PIN from somebody ALREADY signed in (changing it, starting a shift). Deliberately not a 401: the
   // session is fine, and every app reads a 401 as 'your sign-in ended' and signs the person out.
   PIN_WRONG: { status: 403, title: 'That is not your PIN' },
+  // A phone + PIN sign-in from a device no code to that phone was ever typed on. The PIN was not looked at. A 403
+  // of its own (never a 401, never "wrong PIN"): the app's answer is to send the code and confirm the device.
+  DEVICE_NOT_KNOWN: { status: 403, title: 'This device has not signed in to this account before' },
   // The same, for a store asked for its password (or, with no account yet, its current secret) before its signing
   // secret is replaced: it is signed in, and a mistyped password must not be read as "your sign-in ended".
   PASSWORD_WRONG: { status: 403, title: 'That is not the password' },

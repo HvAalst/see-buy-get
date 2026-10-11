@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { t } from '../../shared/i18n'; // plain t(): toasts/outbound text are built at action time in the sender's active locale
 import { isSignInRequired, narrow, type SbgError } from '../../lib/sbg';
 import { asksForEmail } from '../../shared/account/recovery';
+import { PIN_LENGTH } from '../../shared/account/pin';
 import type { MediaKind } from '../../lib/sbg/personas/media';
 import type { MerchantTag } from '../../lib/sbg/personas/consumer';
 import { downscaleImage, type MediaView } from '../../shared/media';
@@ -582,7 +583,7 @@ export function useSendApp() {
   const submitEnroll = useCallback(async () => {
     const phone = cleanPhone(stateRef.current.authPhone);
     const pin = stateRef.current.authPin;
-    if (!codeReady(pin, 4)) return;
+    if (!codeReady(pin, PIN_LENGTH)) return;
     const epoch = ++authEpoch.current;
     setState((s) => ({ ...s, authBusy: true, authError: null }));
     // On the email step the address and its code ride along; before it, the server is asked whether it needs one.
@@ -606,7 +607,7 @@ export function useSendApp() {
   const submitLogin = useCallback(async () => {
     const phone = cleanPhone(stateRef.current.authPhone);
     const pin = stateRef.current.authPin;
-    if (!phoneReady(phone) || !codeReady(pin, 4)) return;
+    if (!phoneReady(phone) || !codeReady(pin, PIN_LENGTH)) return;
     const epoch = ++authEpoch.current;
     setState((s) => ({ ...s, authBusy: true, authError: null }));
     const r = await pinLogin(phone, pin);
@@ -926,7 +927,7 @@ export function useSendApp() {
   const changePin = useCallback(
     async (currentPin: string, pin: string): Promise<boolean> => {
       const phone = readPhone();
-      if (!client || !phone || !codeReady(pin, 4) || !codeReady(currentPin, 4)) return false;
+      if (!client || !phone || !codeReady(pin, PIN_LENGTH) || !codeReady(currentPin, PIN_LENGTH)) return false;
       setState((s) => ({ ...s, accountBusy: true, accountError: null, accountNote: null }));
       const r = await changePinWithCurrent(phone, currentPin, pin);
       if (r.error || !r.data) {

@@ -7,6 +7,8 @@ import type { SendActions, SendState } from '../useSendApp';
 import { useState } from 'preact/hooks';
 import { EmailStep } from '../../../shared/account/EmailStep';
 import { TroubleSheet } from '../../../shared/account/TroubleSheet';
+import { NewDeviceSheet } from '../../../shared/account/NewDeviceSheet';
+import { PIN_LENGTH, isNewDevice } from '../../../shared/account/pin';
 import { recoveryApi } from '../../../shared/account/recovery';
 import { sendConfig } from '../api';
 
@@ -85,14 +87,17 @@ function LoginView({ state, actions, busy }: { state: SendState; actions: SendAc
   // PIN-only ONLY when the number was remembered from a prior session — never just because a digit was
   // typed (that would collapse the field mid-entry for a first-time signer).
   const known = state.phoneKnown;
-  const ready = phoneReady(state.authPhone) && codeReady(state.authPin, 4);
+  const ready = phoneReady(state.authPhone) && codeReady(state.authPin, PIN_LENGTH);
   const [trouble, setTrouble] = useState(false);
+  // A PIN typed on a phone or browser no code was ever typed on: not an error, a step — the code, once.
+  const [closedFor, setClosedFor] = useState<unknown>(null);
+  const confirming = isNewDevice(state.authError) && closedFor !== state.authError;
   return (
     <>
       <h1 class="scr__title">{t('send.auth.loginTitle')}</h1>
       <p class="scr__lede">{known ? t('send.auth.ledeKnown') : t('send.auth.ledeNew')}</p>
 
-      {state.authError ? <ErrorNote error={state.authError} /> : null}
+      {state.authError && !confirming ? <ErrorNote error={state.authError} /> : null}
 
       <Card>
         {known ? (
@@ -106,7 +111,7 @@ function LoginView({ state, actions, busy }: { state: SendState; actions: SendAc
         )}
         <div class="field">
           <span class="field__label">{t('send.auth.pin')}</span>
-          <CodeBoxes id="auth-pin" label={t('send.auth.pin')} length={4} value={state.authPin} onInput={actions.setAuthPin} disabled={busy} mask />
+          <CodeBoxes id="auth-pin" label={t('send.auth.pin')} length={PIN_LENGTH} value={state.authPin} onInput={actions.setAuthPin} disabled={busy} mask />
         </div>
       </Card>
 
@@ -123,6 +128,16 @@ function LoginView({ state, actions, busy }: { state: SendState; actions: SendAc
         <Button variant="link" onClick={() => setTrouble(true)}>{t('account.trouble.link')}</Button>
       </div>
       <TroubleSheet open={trouble} onClose={() => setTrouble(false)} api={recovery} />
+      <NewDeviceSheet
+        open={confirming}
+        onClose={() => setClosedFor(state.authError)}
+        api={recovery}
+        phone={state.authPhone}
+        onConfirmed={() => {
+          setClosedFor(state.authError);
+          void actions.submitLogin();
+        }}
+      />
     </>
   );
 }
@@ -186,11 +201,11 @@ function EnrollView({ state, actions, busy }: { state: SendState; actions: SendA
         <Card>
           <div class="field">
             <span class="field__label">{t('send.newPin')}</span>
-            <CodeBoxes id="auth-newpin" label={t('send.newPin')} length={4} value={state.authPin} onInput={actions.setAuthPin} disabled={busy} />
+            <CodeBoxes id="auth-newpin" label={t('send.newPin')} length={PIN_LENGTH} value={state.authPin} onInput={actions.setAuthPin} disabled={busy} />
           </div>
         </Card>
         <div class="scr__cta">
-          <Button chevron={false} onClick={() => void actions.submitEnroll()} disabled={!codeReady(state.authPin, 4)} busy={busy}>
+          <Button chevron={false} onClick={() => void actions.submitEnroll()} disabled={!codeReady(state.authPin, PIN_LENGTH)} busy={busy}>
             {t('send.auth.createAccount')}
           </Button>
         </div>

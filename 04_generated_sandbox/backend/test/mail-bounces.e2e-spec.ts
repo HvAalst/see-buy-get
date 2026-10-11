@@ -56,7 +56,7 @@ describe('a bounce notice from the mail provider, over the wire', () => {
     const asked = await http().post('/v1/sbg/auth/phone/request').send({ phone });
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const person = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '4826', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
+    const person = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
     const me = async () => (await http().get('/v1/sbg/account/me').set(bearer(person)).expect(200)).body;
     expect((await me()).emailBounced).toBeUndefined();
 
@@ -96,7 +96,7 @@ describe('a bounce notice from the mail provider, over the wire', () => {
     // address has to wait a minute, which a test of the wire should not.) The old address stays stopped.
     const better = `works-${tag}@example.com`;
     const proof = await http().post('/v1/sbg/identity/email/request').send({ email: better });
-    await http().post('/v1/sbg/account/email').set(bearer(person)).send({ pin: '4826', email: better, code: proof.body.code }).expect(201);
+    await http().post('/v1/sbg/account/email').set(bearer(person)).send({ pin: '48261', email: better, code: proof.body.code }).expect(201);
     expect((await me()).emailBounced).toBeUndefined();
     expect((await http().get('/v1/sbg/connections').set(bearer(staff)).expect(200)).body.mail.bounces.stopped).toBe(2);
   });

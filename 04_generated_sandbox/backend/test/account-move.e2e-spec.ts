@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { OtpService } from '../src/modules/pudo/otp.service';
 
 /**
  * TWO MEMBERS OF STAFF MOVE AN ACCOUNT, OVER THE WIRE — as the guards and the route roles see it.
@@ -34,14 +35,25 @@ describe('two members of staff move an account, over the wire', () => {
   });
 
   /** A person through the ordinary phone door: a code to the phone, a PIN, a confirmed recovery email. */
-  async function aPerson(): Promise<{ phone: string; token: string }> {
+  /**
+   * THIS DEVICE, CONFIRMED BY A CODE TO THE PHONE — what an app does the first time a number's PIN is used on it.
+   * (A second code to one number inside a minute is refused, as it should be; that minute is not what is proved here.)
+   */
+  async function confirmDevice(phone: string): Promise<string> {
+    (app.get(OtpService) as unknown as { rates: Map<string, unknown> }).rates.clear();
+    const asked = await http().post('/v1/sbg/auth/phone/request').send({ phone }).expect(201);
+    await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
+    return (await http().post('/v1/sbg/identity/device').send({ phone }).expect(201)).body.device as string;
+  }
+
+  async function aPerson(): Promise<{ phone: string; token: string; device: string }> {
     const phone = aNumber();
     const asked = await http().post('/v1/sbg/auth/phone/request').send({ phone });
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `mv-${tag}-${(seq += 1)}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '4826', email, emailCode: mailed.body.code }).expect(201);
-    return { phone, token: enrolled.body.token.access_token };
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201);
+    return { phone, token: enrolled.body.token.access_token, device: enrolled.body.device };
   }
   /** A number somebody holds: confirmed by its code, as the app does before asking. */
   async function aVerifiedNumber(): Promise<string> {
@@ -110,8 +122,13 @@ describe('two members of staff move an account, over the wire', () => {
 
     // The account is on the new number: the old sign-in is over, the new number and the PIN open it.
     await http().get('/v1/sbg/account/me').set(bearer(holder.token)).expect(401);
-    await http().post('/v1/sbg/identity/login').send({ phone: holder.phone, pin: '4826' }).expect(401);
-    const back = await http().post('/v1/sbg/identity/login').send({ phone: newPhone, pin: '4826' }).expect(201);
+    // No device went with the number: the one that signed in on the old number opens neither. The PIN works again on
+    // a device a code to the NEW number confirmed — which only whoever holds that number can do.
+    for (const phone of [holder.phone, newPhone]) {
+      const refused = await http().post('/v1/sbg/identity/login').send({ phone, pin: '48261', device: holder.device }).expect(403);
+      expect(refused.body.code).toBe('DEVICE_NOT_KNOWN');
+    }
+    const back = await http().post('/v1/sbg/identity/login').send({ phone: newPhone, pin: '48261', device: await confirmDevice(newPhone) }).expect(201);
     expect((await http().get('/v1/sbg/account/me').set(bearer(back.body.token.access_token)).expect(200)).body.moveAsked).toBeUndefined();
     expect(await status(asked.body.reference)).toMatchObject({ state: 'moved', decidedAt: expect.any(String) });
     // Over is over.
@@ -147,12 +164,12 @@ describe('two members of staff move an account, over the wire', () => {
     const secondId = await idOf(second.body.reference, amina);
     await http().post(`/v1/sbg/account-moves/${secondId}/check`).set(bearer(amina)).send({ what: 'Saw an ID card.' }).expect(200);
     await new Promise((r) => setTimeout(r, 5));
-    await http().post('/v1/sbg/identity/login').send({ phone: other.phone, pin: '4826' }).expect(201);
+    await http().post('/v1/sbg/identity/login').send({ phone: other.phone, pin: '48261', device: other.device }).expect(201);
     expect((await http().get(`/v1/sbg/account-moves/${secondId}`).set(bearer(brian)).expect(200)).body.account.pinUsedSince).toEqual(expect.any(String));
     const refusal = await http().post(`/v1/sbg/account-moves/${secondId}/approve`).set(bearer(brian)).send({}).expect(409);
     expect(refusal.body.detail).toMatch(/PIN was used after the request was made/);
     expect((await http().post('/v1/sbg/identity/move-requests/status').send({ reference: second.body.reference }).expect(200)).body.state).toBe('stopped');
-    await http().post('/v1/sbg/identity/login').send({ phone: other.phone, pin: '4826' }).expect(201);
+    await http().post('/v1/sbg/identity/login').send({ phone: other.phone, pin: '48261', device: other.device }).expect(201);
   });
 
   it('counts two people by their sign-ins — and, on a sandbox’s shared key, by the names typed', async () => {

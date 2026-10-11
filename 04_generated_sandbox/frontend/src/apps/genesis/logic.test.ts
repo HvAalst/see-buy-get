@@ -311,7 +311,10 @@ describe('Send app — identity + my-parcels logic (S21)', () => {
     expect(codeReady('123', 4)).toBe(false);
     expect(codeReady('123456', 6)).toBe(true);
     expect(codeReady('12a4', 4)).toBe(false);
-    expect(pinBlocker('1234', t)).toBe('');
+    // A PIN is five digits: four — the old length, and a mobile-money PIN's — is not one.
+    expect(pinBlocker('48261', t)).toBe('');
+    expect(pinBlocker('4826', t)).toMatch(/5-digit PIN/);
+    expect(pinBlocker('482619', t)).toMatch(/PIN/);
     expect(pinBlocker('12', t)).toMatch(/PIN/);
   });
 

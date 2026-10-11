@@ -2,6 +2,7 @@ import { DarkSpellNote } from './DarkSpellNote';
 import { useState } from 'preact/hooks';
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, Explainer, ExplainerBlock, GlanceNumber, Icon, Note, PhotoField, Pill, PushPrompt, QrBlock, ReadAloud, RefusalNote, ScanField, Sheet } from '../../../shared/ui';
 import type { SbgError } from '../../../lib/sbg';
+import { PIN_LENGTH } from '../../../shared/account/pin';
 import { formatDate, useT } from '../../../shared/i18n';
 import { paperDay } from '../../../shared/papers';
 import { qrPayload } from '../../../shared/qr';
@@ -365,11 +366,11 @@ function OffShift({ state, actions, onOpenFleet }: HomeScreenProps) {
         {refused?.code === 'PIN_LOCKED' ? <p class="hint">{t('driver.home.pinLocked')}</p> : null}
         <div class="field">
           <span class="field__label">{t('driver.home.pinLabel')}</span>
-          <CodeBoxes id="shift-pin" label={t('driver.home.pinLabel')} length={4} value={pin} onInput={setPin} disabled={state.busy === 'start'} mask />
+          <CodeBoxes id="shift-pin" label={t('driver.home.pinLabel')} length={PIN_LENGTH} value={pin} onInput={setPin} disabled={state.busy === 'start'} mask />
         </div>
         <Button
           chevron={false}
-          disabled={pin.length !== 4}
+          disabled={pin.length !== PIN_LENGTH}
           busy={state.busy === 'start'}
           onClick={async () => {
             const failed = await actions.startShift(pin, vehicleId ?? undefined, leg && { fromLabel: leg.fromLabel, from: leg.from, toLabel: leg.toLabel, to: leg.to });

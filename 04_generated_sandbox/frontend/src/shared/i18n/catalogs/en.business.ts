@@ -9,7 +9,7 @@ export const enBusiness = {
 
   /* ---- the door ---- */
   'business.signIn.loginTitle': 'Sign in',
-  'business.signIn.loginLede': 'With your phone number and your 4-digit PIN — the same PIN you use in any SeeBuyGet app.',
+  'business.signIn.loginLede': 'With your phone number and your 5-digit PIN — the same PIN you use in any SeeBuyGet app.',
   'business.signIn.loginCta': 'Sign in',
   'business.signIn.phoneTitle': 'Your phone number',
   'business.signIn.phoneLede': 'New here, on a new device, or forgot your PIN? We send a code to your phone to prove it is yours.',
@@ -18,7 +18,7 @@ export const enBusiness = {
   'business.signIn.codeLede': 'We sent a 6-digit code to {phone}.',
   'business.signIn.codeCta': 'Check the code',
   'business.signIn.pinTitle': 'Choose your PIN',
-  'business.signIn.pinLede': 'Four digits you will remember and nobody else would guess. You sign in with it from now on.',
+  'business.signIn.pinLede': 'Five digits you will remember and nobody else would guess. You sign in with it from now on.',
   'business.signIn.pinCta': 'Save my PIN',
   'business.signIn.emailTitle': 'An email for getting back in',
   'business.signIn.emailLede': 'If you ever lose your phone number, this is how you get back into your account. We send a code to prove you read it.',

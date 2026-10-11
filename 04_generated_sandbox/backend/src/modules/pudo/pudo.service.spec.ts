@@ -3045,14 +3045,14 @@ describe('PUDO Light', () => {
     // The manager's own person, with a PIN they set. The role link is what the registration and
     // company-lookup routes both do (tryAttachRole) — done by hand here because this exercises the
     // services rather than the controller.
-    persons.enroll('+254800780', true, '2468');
+    persons.enroll('+254800780', true, '24689');
     persons.tryAttachRole(m.contactPhone, 'fleet_manager', m.did, m.did);
-    const mine = persons.loginWithPin('+254800780', '2468').person;
+    const mine = persons.loginWithPin('+254800780', '24689', persons.trustDevice('+254800780')).person;
     expect(mine.roles.some((r) => r.role === 'fleet_manager' && r.entityDid === m.did && r.status === 'active')).toBe(true);
 
     // A real account, a real PIN — and nothing to do with this fleet.
-    const stranger = persons.enroll('+254800781', true, '3579').person;
-    expect(persons.loginWithPin('+254800781', '3579').person.personDid).toBe(stranger.personDid);
+    const stranger = persons.enroll('+254800781', true, '35792').person;
+    expect(persons.loginWithPin('+254800781', '35792', persons.trustDevice('+254800781')).person.personDid).toBe(stranger.personDid);
     // THE CHECK: holding the company code and a working account is not enough.
     expect(stranger.roles.some((r) => r.role === 'fleet_manager' && r.entityDid === m.did && r.status === 'active')).toBe(false);
 
@@ -3821,7 +3821,7 @@ describe('PUDO Light', () => {
 
     // The SAME human later enrolls the SAME phone as a consumer (to send a parcel). No second account:
     // the existing person gains a consumer role.
-    const { person, isNew, token } = persons.enroll(phone, true, '2468');
+    const { person, isNew, token } = persons.enroll(phone, true, '24689');
     expect(isNew).toBe(false); // the driver already existed as a person
     expect(person.personDid).toBe(linked!.personDid); // one identity
     expect(person.roles.map((r) => r.role).sort()).toEqual(['consumer', 'driver']);
@@ -3840,10 +3840,10 @@ describe('PUDO Light', () => {
     expect(asDriver.scopes).toContain('offer:claim');
 
     // Reopen with the 4-digit PIN (no OTP). Wrong PINs lock after 5 tries; the right PIN still works before that.
-    expect(persons.loginWithPin(phone, '2468').person.personDid).toBe(person.personDid);
-    for (let i = 0; i < 4; i++) expect(() => persons.loginWithPin(phone, '0000')).toThrow(/Wrong phone or PIN/);
-    expect(() => persons.loginWithPin(phone, '0000')).toThrow(/Too many wrong PINs/); // the fifth locks it, and says so
-    expect(() => persons.loginWithPin(phone, '2468')).toThrow(/Too many wrong PINs/); // locked out → OTP required
+    expect(persons.loginWithPin(phone, '24689', persons.trustDevice(phone)).person.personDid).toBe(person.personDid);
+    for (let i = 0; i < 4; i++) expect(() => persons.loginWithPin(phone, '00000', persons.trustDevice(phone))).toThrow(/Wrong phone or PIN/);
+    expect(() => persons.loginWithPin(phone, '00000', persons.trustDevice(phone))).toThrow(/Too many wrong PINs/); // the fifth locks it, and says so
+    expect(() => persons.loginWithPin(phone, '24689', persons.trustDevice(phone))).toThrow(/Too many wrong PINs/); // locked out → OTP required
   });
 
   it('S28 — invite per contact: one token per contact, deduped credit, capped, no oracle, no inflation', () => {
@@ -3896,7 +3896,7 @@ describe('PUDO Light', () => {
     const t = invites.create(inviter).token;
 
     // A brand-new person enrolling through the link is credited — mimicking the controller's `isNew && accept`.
-    const first = persons.enroll('+254700951001', true, '2468');
+    const first = persons.enroll('+254700951001', true, '24689');
     expect(first.isNew).toBe(true);
     if (first.isNew) invites.accept(t, first.person.personDid);
     expect(invites.byToken(t)!.joiners).toHaveLength(1);
@@ -5081,15 +5081,15 @@ describe('PUDO Light', () => {
 
     it('changes a PIN only with the current one, and a wrong current PIN counts toward the lockout', () => {
       const phone = '+254700333444';
-      const enrolled = persons.enroll(phone, true, '2468');
-      expect(() => identity.changePin({ phone, pin: '9999', newPin: '4826' })).toThrow(/Wrong phone or PIN/);
-      expect(() => identity.changePin({ phone, pin: '2468', newPin: '2468' })).toThrow(/different from the current one/);
-      const r = identity.changePin({ phone, pin: '2468', newPin: '4826' });
+      const enrolled = persons.enroll(phone, true, '24689');
+      expect(() => identity.changePin({ phone, pin: '99999', newPin: '48261', device: persons.trustDevice(phone) })).toThrow(/Wrong phone or PIN/);
+      expect(() => identity.changePin({ phone, pin: '24689', newPin: '24689', device: persons.trustDevice(phone) })).toThrow(/different from the current one/);
+      const r = identity.changePin({ phone, pin: '24689', newPin: '48261', device: persons.trustDevice(phone) });
       expect(r.token.access_token).toBeTruthy();
       expect(auth.introspect(enrolled.token.access_token)).toMatchObject({ active: false, reason: 'revoked' }); // the old session really ends
       expect(auth.introspect(r.token.access_token).active).toBe(true);
-      expect(() => persons.loginWithPin(phone, '2468')).toThrow(/Wrong phone or PIN/);
-      expect(persons.loginWithPin(phone, '4826').token.access_token).toBeTruthy();
+      expect(() => persons.loginWithPin(phone, '24689', persons.trustDevice(phone))).toThrow(/Wrong phone or PIN/);
+      expect(persons.loginWithPin(phone, '48261', persons.trustDevice(phone)).token.access_token).toBeTruthy();
     });
 
     it('rotates a store’s signing secret only with the current one, and only for the store itself', () => {
@@ -5116,7 +5116,7 @@ describe('PUDO Light', () => {
       managers.decideKyc(m.did, true);
       const active = managers.recordBond(m.did);
       const code = active.loginCode!;
-      persons.enroll(phone, true, '2468');
+      persons.enroll(phone, true, '24689');
       controller.managerLookup({ code } as never); // links the registered phone to the fleet, as a first sign-in does
 
       // The hole: any signed-in account could read a fleet's code, tax id and licences by its DID.
@@ -5127,10 +5127,10 @@ describe('PUDO Light', () => {
       expect(controller.getManager(m.did, self)).toHaveProperty('loginCode', code);
 
       // Forgot the code: phone + PIN names the fleets this person manages, and a chosen one signs in.
-      expect(() => controller.managerChoices({ phone, pin: '0000' })).toThrow(/Wrong phone or PIN/);
-      expect(controller.managerChoices({ phone, pin: '2468' }).fleets).toEqual([{ did: m.did, companyName: 'Rotate Haulage', status: 'ACTIVE' }]);
-      expect(controller.managerSession({ did: m.did, phone, pin: '2468' } as never).token).toBeDefined();
-      expect(() => controller.managerSession({ phone, pin: '2468' } as never)).toThrow(/fleet code, or choose the fleet/);
+      expect(() => controller.managerChoices({ phone, pin: '00000', device: persons.trustDevice(phone) })).toThrow(/Wrong phone or PIN/);
+      expect(controller.managerChoices({ phone, pin: '24689', device: persons.trustDevice(phone) }).fleets).toEqual([{ did: m.did, companyName: 'Rotate Haulage', status: 'ACTIVE' }]);
+      expect(controller.managerSession({ did: m.did, phone, pin: '24689', device: persons.trustDevice(phone) } as never).token).toBeDefined();
+      expect(() => controller.managerSession({ phone, pin: '24689', device: persons.trustDevice(phone) } as never)).toThrow(/fleet code, or choose the fleet/);
 
       // Rotating: the old code stops naming the fleet; only the fleet itself (or an operator) may do it.
       expect(() => controller.rotateManagerCode(m.did, shop)).toThrow(/not yours/);
@@ -5147,26 +5147,26 @@ describe('PUDO Light', () => {
       const phone = '+254700990021';
       const d = controller.registerDriver({ displayName: 'Pin Rider', fullName: 'Pin Rider', nationalId: 'NID-PINRIDER', mobile: phone, licenceClasses: ['bike'] } as never, { active: true, role: 'operator' } as never);
       // Registered, but no PIN chosen yet: nothing opens.
-      expect(() => controller.driverSignIn({ phone, pin: '1357' })).toThrow(/Wrong phone or PIN/);
+      expect(() => controller.driverSignIn({ phone, pin: '13570', device: persons.trustDevice(phone) })).toThrow(/Wrong phone or PIN/);
 
       otp.verify(phone, otp.request(phone).code);
-      persons.enroll(phone, true, '1357');
-      expect(() => controller.driverSignIn({ phone, pin: '0000' })).toThrow(/Wrong phone or PIN/);
+      persons.enroll(phone, true, '13570');
+      expect(() => controller.driverSignIn({ phone, pin: '00000', device: persons.trustDevice(phone) })).toThrow(/Wrong phone or PIN/);
 
-      const s = controller.driverSignIn({ phone, pin: '1357' });
+      const s = controller.driverSignIn({ phone, pin: '13570', device: persons.trustDevice(phone) });
       expect(s.did).toBe(d.did);
       expect(auth.introspect(s.token.access_token)).toMatchObject({ active: true, role: 'driver', did: d.did });
 
       // The PIN is the credential: changing it ends the session it opened.
-      persons.changePin(phone, '1357', '4826');
+      persons.changePin(phone, '13570', '48261', persons.trustDevice(phone));
       expect(auth.introspect(s.token.access_token)).toMatchObject({ active: false, reason: 'revoked' });
     });
 
     it('refuses a person who holds no driver role, even with the right PIN', () => {
       const phone = '+254700990022';
       otp.verify(phone, otp.request(phone).code);
-      persons.enroll(phone, true, '4826');
-      expect(() => controller.driverSignIn({ phone, pin: '4826' })).toThrow(/not registered to a driver/);
+      persons.enroll(phone, true, '48261');
+      expect(() => controller.driverSignIn({ phone, pin: '48261', device: persons.trustDevice(phone) })).toThrow(/not registered to a driver/);
     });
   });
 
@@ -5190,13 +5190,13 @@ describe('PUDO Light', () => {
       return { did: m.did, office: { active: true, role: 'fleet_manager', did: m.did, tenant: m.did, personDid: `did:glos:mgr-${n}` } as never };
     }
     /** A rider the office registered, who chose a PIN through the phone door and signed in. */
-    function aRider(fleetDid: string, office: never, pin = '1357') {
+    function aRider(fleetDid: string, office: never, pin = '13570') {
       n += 1;
       const phone = `+25471177${String(n).padStart(4, '0')}`;
       const d = controller.registerDriver({ displayName: `Rider ${n}`, fullName: `R ${n}`, nationalId: `NID-CL-${n}`, mobile: phone, licenceClasses: ['bike'] } as never, office);
       otp.verify(phone, otp.request(phone).code);
       persons.enroll(phone, true, pin);
-      const signedIn = controller.driverSignIn({ phone, pin });
+      const signedIn = controller.driverSignIn({ phone, pin, device: persons.trustDevice(phone) });
       const bike = vehicles.register({ plate: `CL-${n}`, vehicleClass: 'bike', ownerName: 'Fleet', managerDid: fleetDid } as never);
       return { did: d.did, phone, pin, token: signedIn.token.access_token, actor: auth.introspect(signedIn.token.access_token) as never, bike };
     }
@@ -5204,17 +5204,17 @@ describe('PUDO Light', () => {
     it('a PIN locked by five wrong guesses is still locked an hour later — only a code sent to the phone opens it', () => {
       const kilima = aFleetOffice('Colleague Haulage');
       const x = aRider(kilima.did, kilima.office);
-      for (let i = 0; i < 4; i++) expect(() => controller.driverSignIn({ phone: x.phone, pin: '0000' })).toThrow(/Wrong phone or PIN/);
-      expect(() => controller.driverSignIn({ phone: x.phone, pin: '0000' })).toThrow(/Too many wrong PINs/);
+      for (let i = 0; i < 4; i++) expect(() => controller.driverSignIn({ phone: x.phone, pin: '00000', device: persons.trustDevice(x.phone) })).toThrow(/Wrong phone or PIN/);
+      expect(() => controller.driverSignIn({ phone: x.phone, pin: '00000', device: persons.trustDevice(x.phone) })).toThrow(/Too many wrong PINs/);
       const anHourLater = Date.now() + 60 * 60 * 1000;
       const clock = jest.spyOn(Date, 'now').mockReturnValue(anHourLater);
       try {
         // It used to open itself after fifteen minutes: twenty guesses an hour, every hour, for whoever knew the number.
-        expect(() => controller.driverSignIn({ phone: x.phone, pin: x.pin })).toThrow(/Too many wrong PINs/);
+        expect(() => controller.driverSignIn({ phone: x.phone, pin: x.pin, device: persons.trustDevice(x.phone) })).toThrow(/Too many wrong PINs/);
         // The owner, with their phone in hand, verifies by code and chooses a PIN: in again.
         otp.verify(x.phone, otp.request(x.phone).code);
-        persons.enroll(x.phone, true, '4826');
-        expect(controller.driverSignIn({ phone: x.phone, pin: '4826' }).did).toBe(x.did);
+        persons.enroll(x.phone, true, '48261');
+        expect(controller.driverSignIn({ phone: x.phone, pin: '48261', device: persons.trustDevice(x.phone) }).did).toBe(x.did);
       } finally {
         clock.mockRestore();
       }
@@ -5223,17 +5223,21 @@ describe('PUDO Light', () => {
     it('refuses the PINs a colleague tries first, when a PIN is chosen', () => {
       const phone = '+254711779901';
       otp.verify(phone, otp.request(phone).code);
-      for (const easy of ['1234', '0000', '7777', '9876', '7890', '1212', '1122', '2580']) {
-        expect(() => persons.enroll(phone, true, easy)).toThrow(/harder to guess/);
+      // Mostly one digit; a run up, down and round the dial; every second number; the same three again; the keypad's middle column.
+      for (const easy of ['00000', '77777', '12121', '11222', '55005', '12345', '98765', '78901', '13579', '24680', '97531', '12312', '45645', '02580', '25800', '08520', '70852']) {
+        expect([easy, (() => { try { persons.enroll(phone, true, easy); return 'taken'; } catch (e) { return (e as { code?: string }).code; } })()]).toEqual([easy, 'PIN_GUESSABLE']);
       }
-      expect(persons.enroll(phone, true, '1357').person.pinHash).toBeTruthy();
+      // A PIN of the old length is not a PIN: it is the length of the one people already have for their money.
+      expect(() => persons.enroll(phone, true, '2468')).toThrow(/exactly 5 digits/);
+      // …and the ones that only look near to those are taken.
+      for (const fine of ['13570', '24689', '48261', '90417']) expect(persons.enroll(phone, true, fine).person.pinHash).toBeTruthy();
     });
 
     it('one phone at a time: signing in as a driver ends that driver’s other session', () => {
       const kilima = aFleetOffice('One Phone Haulage');
       const x = aRider(kilima.did, kilima.office);
       expect(auth.introspect(x.token).active).toBe(true);
-      const elsewhere = controller.driverSignIn({ phone: x.phone, pin: x.pin });
+      const elsewhere = controller.driverSignIn({ phone: x.phone, pin: x.pin, device: persons.trustDevice(x.phone) });
       expect(auth.introspect(x.token)).toMatchObject({ active: false, reason: 'revoked' });
       expect(auth.introspect(elsewhere.token.access_token).active).toBe(true);
       // The role switcher is the same door: acting as the driver from another app ends the earlier one too.
@@ -5246,16 +5250,16 @@ describe('PUDO Light', () => {
       const kilima = aFleetOffice('Shared Cab Haulage');
       const x = aRider(kilima.did, kilima.office);
       expect(() => controller.startSession(x.did, { vehicleId: x.bike.vehicleId } as never, x.actor)).toThrow(/Enter your PIN/);
-      for (let i = 0; i < 4; i++) expect(() => controller.startSession(x.did, { vehicleId: x.bike.vehicleId, pin: '0000' } as never, x.actor)).toThrow(/That is not your PIN/);
-      expect(() => controller.startSession(x.did, { vehicleId: x.bike.vehicleId, pin: '0000' } as never, x.actor)).toThrow(/Too many wrong PINs/);
+      for (let i = 0; i < 4; i++) expect(() => controller.startSession(x.did, { vehicleId: x.bike.vehicleId, pin: '00000' } as never, x.actor)).toThrow(/That is not your PIN/);
+      expect(() => controller.startSession(x.did, { vehicleId: x.bike.vehicleId, pin: '00000' } as never, x.actor)).toThrow(/Too many wrong PINs/);
       // The real owner's PIN no longer works either — the phone, verified by code, is what opens it again.
       expect(() => controller.startSession(x.did, { vehicleId: x.bike.vehicleId, pin: x.pin } as never, x.actor)).toThrow(/Too many wrong PINs/);
       expect(fleet.activeForDriver(x.did)).toBeUndefined();
 
-      const y = aRider(kilima.did, kilima.office, '2468');
-      expect((controller.startSession(y.did, { vehicleId: y.bike.vehicleId, pin: '2468' } as never, y.actor) as { status: string }).status).toBe('active');
+      const y = aRider(kilima.did, kilima.office, '24689');
+      expect((controller.startSession(y.did, { vehicleId: y.bike.vehicleId, pin: '24689' } as never, y.actor) as { status: string }).status).toBe('active');
       // Staff standing in name no PIN — they are not the driver, and are audited as staff.
-      const z = aRider(kilima.did, kilima.office, '3579');
+      const z = aRider(kilima.did, kilima.office, '35792');
       expect((controller.startSession(z.did, { vehicleId: z.bike.vehicleId } as never, { active: true, role: 'operator' } as never) as { status: string }).status).toBe('active');
     });
 
@@ -5263,7 +5267,7 @@ describe('PUDO Light', () => {
       const kilima = aFleetOffice('Same Fleet Haulage');
       const pwani = aFleetOffice('Other Fleet Haulage');
       const x = aRider(kilima.did, kilima.office);
-      const colleague = aRider(kilima.did, kilima.office, '2468');
+      const colleague = aRider(kilima.did, kilima.office, '24689');
       expect(() => controller.startSession(x.did, { vehicleId: x.bike.vehicleId, pin: colleague.pin } as never, colleague.actor)).toThrow(/Only the driver/);
 
       const o = controller.makeFleetOffer(pwani.did, { phone: x.phone }, pwani.office);
@@ -5293,7 +5297,7 @@ describe('PUDO Light', () => {
       const kilima = aFleetOffice('Which Vehicle Haulage');
       const pwani = aFleetOffice('Next Door Haulage');
       const x = aRider(kilima.did, kilima.office);
-      const colleague = aRider(kilima.did, kilima.office, '2468');
+      const colleague = aRider(kilima.did, kilima.office, '24689');
       const second = vehicles.register({ plate: 'CL-SECOND', vehicleClass: 'bike', ownerName: 'Fleet', managerDid: kilima.did } as never);
 
       // There is no door through which the office puts a driver on shift any more.
@@ -5339,11 +5343,11 @@ describe('PUDO Light', () => {
     it('refuses a PIN with no email, and an email nobody proved they read — and spends nothing on a refusal', () => {
       const phone = '+254711660001';
       verifyPhone(phone);
-      expect(() => identity.enroll({ phone, pin: '4826' })).toThrow(/Give an email address/);
-      expect(() => identity.enroll({ phone, pin: '4826', email: 'not-an-address' })).toThrow(/valid email address/);
-      expect(() => identity.enroll({ phone, pin: '4826', email: 'amina@example.com' })).toThrow(/Type the code we sent/);
+      expect(() => identity.enroll({ phone, pin: '48261' })).toThrow(/Give an email address/);
+      expect(() => identity.enroll({ phone, pin: '48261', email: 'not-an-address' })).toThrow(/valid email address/);
+      expect(() => identity.enroll({ phone, pin: '48261', email: 'amina@example.com' })).toThrow(/Type the code we sent/);
       codeFor('amina@example.com');
-      expect(() => identity.enroll({ phone, pin: '4826', email: 'amina@example.com', emailCode: '000000' })).toThrow(/Wrong or expired code/);
+      expect(() => identity.enroll({ phone, pin: '48261', email: 'amina@example.com', emailCode: '000000' })).toThrow(/Wrong or expired code/);
       // Nothing was created and the phone is still verified: the person simply tries again.
       expect(persons.findByPhone(phone)).toBeUndefined();
       expect(otp.isVerified(phone)).toBe(true);
@@ -5353,7 +5357,7 @@ describe('PUDO Light', () => {
       const phone = '+254711660002';
       verifyPhone(phone);
       const code = codeFor('Juma@Example.com');
-      const joined = identity.enroll({ phone, pin: '4826', email: 'Juma@Example.com', emailCode: code }) as { email?: string; hasPin: boolean };
+      const joined = identity.enroll({ phone, pin: '48261', email: 'Juma@Example.com', emailCode: code }) as { email?: string; hasPin: boolean };
       expect(joined).toMatchObject({ hasPin: true, email: 'j…@example.com' });
       expect(persons.findByEmail('juma@example.com')?.personDid).toBe(persons.findByPhone(phone)!.personDid);
 
@@ -5362,7 +5366,7 @@ describe('PUDO Light', () => {
       const clock = jest.spyOn(Date, 'now').mockReturnValue(later);
       try {
         verifyPhone(phone);
-        expect((identity.enroll({ phone, pin: '7391' }) as { hasPin: boolean }).hasPin).toBe(true);
+        expect((identity.enroll({ phone, pin: '73914' }) as { hasPin: boolean }).hasPin).toBe(true);
       } finally {
         clock.mockRestore();
       }
@@ -5371,10 +5375,10 @@ describe('PUDO Light', () => {
     it('refuses an address another account already holds, before anything is created', () => {
       const first = '+254711660003';
       verifyPhone(first);
-      identity.enroll({ phone: first, pin: '4826', email: 'shared@example.com', emailCode: codeFor('shared@example.com') });
+      identity.enroll({ phone: first, pin: '48261', email: 'shared@example.com', emailCode: codeFor('shared@example.com') });
       const second = '+254711660004';
       verifyPhone(second);
-      expect(() => identity.enroll({ phone: second, pin: '4826', email: 'shared@example.com', emailCode: '123456' })).toThrow(/already used by another account/);
+      expect(() => identity.enroll({ phone: second, pin: '48261', email: 'shared@example.com', emailCode: '123456' })).toThrow(/already used by another account/);
       expect(persons.findByPhone(second)).toBeUndefined();
     });
 
@@ -5383,7 +5387,7 @@ describe('PUDO Light', () => {
       verifyPhone(phone);
       const guest = identity.enroll({ phone }) as { hasPin: boolean; token: { access_token: string } };
       expect(guest.hasPin).toBe(false);
-      expect(() => identity.setPin({ pin: '4826' }, auth.introspect(guest.token.access_token) as never)).toThrow(/Add your email address first/);
+      expect(() => identity.setPin({ pin: '48261' }, auth.introspect(guest.token.access_token) as never)).toThrow(/Add your email address first/);
     });
   });
 
@@ -6827,11 +6831,11 @@ describe('PUDO Light', () => {
     // Naming a known vehicle starts the day exactly as scanning its dashboard would.
     // …by the driver themselves, signed in as a person, with their PIN (a shift is where who-is-driving is written down).
     const person = persons.attachRole('+254711000777', 'driver', d.did);
-    persons.setPin(person.personDid, '1357');
+    persons.setPin(person.personDid, '13570');
     const me = { active: true, role: 'driver', did: d.did, personDid: person.personDid } as never;
-    const asg: any = controller.startSession(d.did, { vehicleId: mine, pin: '1357' } as never, me);
+    const asg: any = controller.startSession(d.did, { vehicleId: mine, pin: '13570' } as never, me);
     expect(asg.vehicleId).toBe(mine);
-    expect(() => controller.startSession(d.did, { pin: '1357' } as never, me)).toThrow(/Scan the vehicle QR/);
+    expect(() => controller.startSession(d.did, { pin: '13570' } as never, me)).toThrow(/Scan the vehicle QR/);
 
     // Someone else on shift with it is SHOWN and marked, not hidden — "where is my bus?" deserves an answer.
     const other = drivers.register({ displayName: 'Other', fullName: 'O O', nationalId: 'ID-other-pick', mobile: '+2547other', licenceClasses: ['truck'], licenceNumber: 'L-o', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
@@ -6840,7 +6844,7 @@ describe('PUDO Light', () => {
     fleet.uncouple(d.did); // our driver hands it back at the end of the day…
     fleet.couple(other.did, mine); // …and it goes out with someone else
     expect(fleet.recentVehicles(other.did)[0]).toMatchObject({ vehicleId: mine, busy: true });
-    expect(() => controller.startSession(d.did, { vehicleId: mine, pin: '1357' } as never, me)).toThrow(/already coupled/i);
+    expect(() => controller.startSession(d.did, { vehicleId: mine, pin: '13570' } as never, me)).toThrow(/already coupled/i);
   });
 
   it('refuses a leg that is off shift, or half-named', () => {

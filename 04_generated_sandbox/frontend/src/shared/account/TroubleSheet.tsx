@@ -7,6 +7,7 @@ import { IdDisputeCase } from './IdDisputeCase';
 import { IdDisputeOpen } from './IdDisputeOpen';
 import { looksLikeIdReference } from './idDispute';
 import { looksLikeReference, moveStatusSays, supportLines, type MoveAsked, type MoveStatus } from './move';
+import { PIN_LENGTH } from './pin';
 import { asksForNationalId, type RecoveryApi } from './recovery';
 
 type Mode = 'choose' | 'gone' | 'undo' | 'staff' | 'id' | 'status' | 'done-gone' | 'done-undo';
@@ -145,7 +146,7 @@ function Gone({ api, onDone }: { api: RecoveryApi; onDone: () => void }) {
     onDone();
   };
 
-  const ready = email.trim() && code.length === 6 && phone.trim() && (phoneVerified || phoneCode.length === 6) && pin.length === 4 && (!wantsId || nationalId.trim());
+  const ready = email.trim() && code.length === 6 && phone.trim() && (phoneVerified || phoneCode.length === 6) && pin.length === PIN_LENGTH && (!wantsId || nationalId.trim());
 
   return (
     <>
@@ -191,7 +192,7 @@ function Gone({ api, onDone }: { api: RecoveryApi; onDone: () => void }) {
       ) : null}
       <div class="field">
         <span class="field__label">{t('account.trouble.newPin')}</span>
-        <CodeBoxes id="gone-pin" label={t('account.trouble.newPin')} length={4} value={pin} onInput={setPin} disabled={busy} />
+        <CodeBoxes id="gone-pin" label={t('account.trouble.newPin')} length={PIN_LENGTH} value={pin} onInput={setPin} disabled={busy} />
       </div>
       {error ? <RefusalNote error={error} /> : null}
       <Button chevron={false} disabled={!ready} busy={busy} onClick={() => void submit()}>
@@ -388,7 +389,7 @@ function Undo({ api, onDone }: { api: RecoveryApi; onDone: () => void }) {
     setError(r.error ?? null);
     if (!r.error) onDone();
   };
-  const ready = by === 'number' ? phone.trim() && pin.length === 4 : email.trim() && code.length === 6;
+  const ready = by === 'number' ? phone.trim() && pin.length === PIN_LENGTH : email.trim() && code.length === 6;
 
   return (
     <>
@@ -411,7 +412,7 @@ function Undo({ api, onDone }: { api: RecoveryApi; onDone: () => void }) {
           </div>
           <div class="field">
             <span class="field__label">{t('account.trouble.oldPin')}</span>
-            <CodeBoxes id="undo-pin" label={t('account.trouble.oldPin')} length={4} value={pin} onInput={setPin} disabled={busy} mask />
+            <CodeBoxes id="undo-pin" label={t('account.trouble.oldPin')} length={PIN_LENGTH} value={pin} onInput={setPin} disabled={busy} mask />
           </div>
         </>
       ) : (

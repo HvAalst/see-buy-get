@@ -149,7 +149,7 @@ describe('a parcel is kept by the account, not by the number', () => {
   };
 
   let seq = 0;
-  const PIN = '4826';
+  const PIN = '48261';
   /** Past the day in which a move can be undone. The old number is still the account's. */
   const DAY_AND_A_BIT = NUMBER_UNDO_MS + 1000;
   /** Past the week the old number is kept: it has been let go. */
@@ -492,7 +492,7 @@ describe('a parcel is kept by the account, not by the number', () => {
       const p = aPerson();
       const incoming = aParcel({ to: p.phone });
       const { code } = recovery.sendAccountCode(p.email, 'recover');
-      recovery.recoverByEmail({ email: p.email, code, newPhone: aVerifiedNumber(), pin: '7391' });
+      recovery.recoverByEmail({ email: p.email, code, newPhone: aVerifiedNumber(), pin: '73914' });
       const view = parcels.consumerParcel(incoming.parcelId, me(p.personDid));
       expect([view.collectToken, view.codeHeldUntil]).toEqual([undefined, me(p.personDid).phoneChange!.undoUntil]);
     });
@@ -839,7 +839,7 @@ describe('a parcel is kept by the account, not by the number', () => {
       expect(() => recovery.changeNumber(p.personDid, PIN, fresh)).toThrow(/the keeper could not keep/);
       // Asked while the account was still on the number it is leaving, and nothing moved.
       expect(heard).toEqual([`${p.personDid}:true`]);
-      expect(persons.loginWithPin(p.phone, PIN).person.personDid).toBe(p.personDid);
+      expect(persons.loginWithPin(p.phone, PIN, persons.trustDevice(p.phone)).person.personDid).toBe(p.personDid);
       expect(me(p.personDid).phoneChange).toBeUndefined();
     });
 

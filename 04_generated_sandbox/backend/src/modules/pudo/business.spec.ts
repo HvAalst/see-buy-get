@@ -58,7 +58,7 @@ describe('a customer’s business', () => {
     seq += 1;
     const phone = `+2519110${String(seq).padStart(5, '0')}`;
     const person = persons.ensurePerson(phone);
-    persons.setPin(person.personDid, '4826');
+    persons.setPin(person.personDid, '48261');
     const email = `owner${seq}-${Date.now()}@example.com`;
     persons.setEmail(person.personDid, email);
     return { personDid: person.personDid, phone, email };

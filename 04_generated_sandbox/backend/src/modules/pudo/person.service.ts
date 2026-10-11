@@ -12,30 +12,43 @@ import { hashEmail, hashPhone, isPlausiblePhone, normalizePhone } from '../../fo
 import { isPlausibleEmail, normalizeEmail } from './email-code.service';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
 import { MediaService } from './media.service';
+import { DeviceBook, KnownDevice } from './person-devices';
 import { OldNumber, Person, PersonRole, PersonView, PhoneChange, ROLE_TO_ACTOR, RoleLink, toView } from './person.types';
 
 /** Wrong-PIN attempts before the PIN locks. From then on only a code sent to the phone opens it again. */
 export const MAX_PIN_ATTEMPTS = 5;
-/** A 4-digit numeric PIN — the BondBridge credential shape, chosen for a phone-first consumer. */
-const PIN_RE = /^\d{4}$/;
+/**
+ * HOW MANY DIGITS A PIN HAS. Five (the user, 2026-10-11: "a five digit pin is safer and commonly used for banking
+ * apps rather than 4"). It was four. Now that a PIN is only looked at on a device a code confirmed, its job is to
+ * stop whoever is holding that device, and five gives them a tenth of the chance in their five tries. And four is
+ * what a mobile-money PIN and a bank card's are: a PIN of another length cannot simply be the same one.
+ * Every app reads the same number from `shared/account/pin.ts`.
+ */
+export const PIN_LENGTH = 5;
+const PIN_RE = new RegExp(`^\\d{${PIN_LENGTH}}$`);
 const PIN_LOCKED_SENTENCE = 'Too many wrong PINs. Verify your phone by code to sign in.';
 
 /**
  * THE PINS SOMEBODY WHO KNOWS YOU TRIES FIRST.
  *
- * Five wrong guesses lock a PIN, so a PIN has to survive five — and a colleague who knows your number knows
- * to start with one digit four times, a straight run up or down (1234, 9876, 7890), two pairs (1212, 1122) or
- * the keypad's middle column (2580). Refused at the moment a PIN is chosen; a PIN already set keeps working.
+ * Five wrong guesses lock a PIN, so a PIN has to survive five — and somebody who knows you knows to start with
+ * mostly one digit (11111, 12121, 11222), a straight run up or down (12345, 98765, 78901), every second number
+ * (13579, 24680), the same three over again (12312) or the keypad's middle column (02580). Refused at the moment
+ * a PIN is chosen. Written for any length, so that the number of digits is one line and not a rewrite.
  */
+const KEYPAD_COLUMN = ['2580', '0852'];
 export function isGuessablePin(pin: string): boolean {
   if (!PIN_RE.test(pin)) return false;
   const d = pin.split('').map(Number);
-  if (d.every((x) => x === d[0])) return true;
+  // Fewer than three different digits.
+  if (new Set(d).size < 3) return true;
+  // A run: each digit the same step on from the one before, round the dial.
   const runs = (step: number) => d.every((x, i) => i === 0 || x === (d[i - 1] + step + 10) % 10);
-  if (runs(1) || runs(-1)) return true;
-  if (d[0] === d[2] && d[1] === d[3]) return true;
-  if (d[0] === d[1] && d[2] === d[3]) return true;
-  return pin === '2580' || pin === '0852';
+  if (runs(1) || runs(-1) || runs(2) || runs(-2)) return true;
+  // The same three digits over again.
+  if (d.every((x, i) => i < 3 || x === d[i - 3])) return true;
+  // The keypad's middle column, read down or up, with a digit before or after it.
+  return KEYPAD_COLUMN.some((column) => pin.startsWith(column) || pin.endsWith(column));
 }
 
 /** How long a number change can be undone. */
@@ -76,6 +89,8 @@ export class PersonService {
   // Durable: a person IS an account (the PIN is a real credential; the roles are real access). Losing
   // these on a restart would sign every consumer out permanently and orphan their role links.
   private readonly persons = new PersistentMap<string, Person>('sbg-persons'); // keyed by phoneHash
+  /** The devices each person's PIN works on: the ones a code to their phone was typed on. Durable. */
+  private readonly devices = new DeviceBook(new PersistentMap<string, KnownDevice>('person-devices'));
   // Derived index personDid → phoneHash, so an authenticated request (token.did = personDid) resolves
   // in O(1). Rebuilt from the durable map at construction and kept in step on every save().
   private readonly byDid = new Map<string, string>();
@@ -291,12 +306,38 @@ export class PersonService {
    * this never trusts an unverified number. Optionally sets the PIN in the same step (the phone-first
    * happy path). Returns a consumer actor token.
    */
-  enroll(phone: string, otpVerified: boolean, pin?: string): { person: Person; isNew: boolean; token: AccessToken } {
+  enroll(phone: string, otpVerified: boolean, pin?: string): { person: Person; isNew: boolean; token: AccessToken; device: string } {
     if (!otpVerified) throw new GlosError('PHONE_NOT_VERIFIED', 'Verify your phone number first');
-    const isNew = !this.findByPhone(phone);
+    const before = this.findByPhone(phone);
+    const isNew = !before;
+    const hadPin = Boolean(before?.pinHash);
     const person = this.attachRole(phone, 'consumer', ''); // entityDid resolved to personDid inside
-    if (pin !== undefined) this.setPin(person.personDid, pin);
-    return { person: this.requireByDid(person.personDid), isNew, token: this.mintConsumerToken(person) };
+    if (pin !== undefined) {
+      this.setPin(person.personDid, pin);
+      // A PIN replaced by a code — forgotten, or locked by wrong tries — is a PIN somebody may have been guessing
+      // at, or a phone that changed hands. Every device it worked on has to be confirmed again; this one is, below.
+      if (hadPin) this.devices.forgetAll(person.personDid);
+    }
+    // THE CODE WAS TYPED ON THIS DEVICE: it is the moment the device becomes one this person's PIN works on.
+    const device = this.devices.add(person.personDid);
+    return { person: this.requireByDid(person.personDid), isNew, token: this.mintConsumerToken(person), device };
+  }
+
+  /**
+   * THIS DEVICE, CONFIRMED — for somebody who has an account and a PIN and is on a device that has neither been
+   * seen before. The caller has checked the code to the phone; what comes back is the key the PIN will be asked
+   * with. It changes nothing about the person: the PIN is the one they had.
+   */
+  trustDevice(phone: string): string {
+    const person = this.findByPhone(phone);
+    // Said to somebody who has just typed a code sent to this very number: it tells them about their own phone.
+    if (!person) throw new GlosError('NOT_FOUND', 'No account signs in with this number yet');
+    return this.devices.add(person.personDid);
+  }
+
+  /** How many devices this person's PIN works on — for their own account screen. */
+  deviceCount(personDid: string): number {
+    return this.devices.count(personDid);
   }
 
   /**
@@ -306,9 +347,9 @@ export class PersonService {
    * refused here and nowhere else, and no door can choose one by going round.
    */
   setPin(personDid: string, pin: string): void {
-    if (!PIN_RE.test(pin || '')) throw new GlosError('PIN_INVALID', 'PIN must be exactly 4 digits');
+    if (!PIN_RE.test(pin || '')) throw new GlosError('PIN_INVALID', `PIN must be exactly ${PIN_LENGTH} digits`, { length: PIN_LENGTH });
     if (isGuessablePin(pin)) {
-      throw new GlosError('PIN_GUESSABLE', 'Choose a PIN that is harder to guess: not one digit four times, not a run like 1234 or 9876, and not pairs like 1212 or 1122', { reason: 'guessable' });
+      throw new GlosError('PIN_GUESSABLE', 'Choose a PIN that is harder to guess: not mostly one digit, not a run like 12345 or 13579, and not a pattern like 12312', { reason: 'guessable' });
     }
     const person = this.requireByDid(personDid);
     person.pinSalt = randomBytes(16).toString('hex');
@@ -325,8 +366,17 @@ export class PersonService {
    * real strength: after MAX_PIN_ATTEMPTS wrong tries it locks, and only a code sent to the phone opens it again.
    * Returns a consumer actor token.
    */
-  loginWithPin(phone: string, pin: string): { person: Person; token: AccessToken } {
+  loginWithPin(phone: string, pin: string, device?: string): { person: Person; token: AccessToken } {
     const person = this.findByPhone(phone);
+    /*
+     * THE PIN IS LOOKED AT ONLY ON A DEVICE THIS PERSON CONFIRMED BY A CODE. Asked FIRST, and answered the same
+     * way for a number nobody has, a number with no PIN, somebody else's device key and no key at all: without a
+     * device of this person's there is no PIN to guess at, from anywhere, and nothing here says who has an account.
+     * A 403 of its own, because every app's answer to it is one thing: send the code.
+     */
+    if (!this.devices.knows(person?.personDid, device)) {
+      throw new GlosError('DEVICE_NOT_KNOWN', 'This phone or browser has not signed in to this account before. Confirm the number by the code we send to it, then use your PIN here');
+    }
     // Do not reveal whether the phone is registered — same error either way.
     if (!person || !person.pinHash || !person.pinSalt) throw new GlosError('AUTH_FAILED', 'Wrong phone or PIN');
     this.checkPin(person, pin, 'AUTH_FAILED', 'Wrong phone or PIN');
@@ -404,8 +454,8 @@ export class PersonService {
     return { person: updated, token: this.mintConsumerToken(updated) };
   }
 
-  changePin(phone: string, currentPin: string, newPin: string): { person: Person; token: AccessToken } {
-    const { person } = this.loginWithPin(phone, currentPin);
+  changePin(phone: string, currentPin: string, newPin: string, device?: string): { person: Person; token: AccessToken } {
+    const { person } = this.loginWithPin(phone, currentPin, device);
     if (currentPin === newPin) throw new GlosError('PIN_INVALID', 'Choose a PIN different from the current one');
     this.setPin(person.personDid, newPin);
     this.auth.revokeAll(person.personDid);
@@ -565,6 +615,8 @@ export class PersonService {
       held: [],
     };
     this.persons.delete(fromHash);
+    // No device goes with a number that moves: the next PIN sign-in is confirmed by a code to the number it is now.
+    this.devices.forgetAll(person.personDid);
     person.phoneHash = toHash;
     this.mergeVault(person, { phone: normalizePhone(newPhone) }, 'number-change');
     this.save(person);
@@ -605,6 +657,8 @@ export class PersonService {
     const change = person.phoneChange;
     if (!change || Date.parse(change.undoUntil) <= now) throw new GlosError('INVALID_STATE', 'There is no number change to undo — the 24 hours have passed');
     this.persons.delete(person.phoneHash);
+    // Whoever had the account in between confirmed devices of their own: none of them survives the undo.
+    this.devices.forgetAll(person.personDid);
     person.phoneHash = change.fromHash;
     person.pinHash = change.pinHash;
     person.pinSalt = change.pinSalt;

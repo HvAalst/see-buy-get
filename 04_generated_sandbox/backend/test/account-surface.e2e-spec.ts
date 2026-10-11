@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { OtpService } from '../src/modules/pudo/otp.service';
 
 /**
  * THE ACCOUNT IS THE PERSON, AND EVERY APP CAN REACH IT.
@@ -19,9 +20,11 @@ describe('the account, reached from a role app', () => {
   let http: () => ReturnType<typeof request>;
 
   const PHONE = `+2547${Math.floor(Math.random() * 9_000_000) + 1_000_000}`;
-  const PIN = '2468';
+  const PIN = '24689';
   let driverToken = '';
   let driverDid = '';
+  /** The key this "device" was handed when the code to the phone was typed on it. */
+  let device = '';
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -52,10 +55,11 @@ describe('the account, reached from a role app', () => {
     // A PIN is chosen with a confirmed recovery email behind it: a code to the address, echoed here because this is a sandbox.
     const EMAIL = `njeri${PHONE.slice(-6)}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email: EMAIL });
-    await http().post('/v1/sbg/identity/enroll').send({ phone: PHONE, pin: '4826' }).expect(400); // no email, no PIN
-    await http().post('/v1/sbg/identity/enroll').send({ phone: PHONE, pin: PIN, email: EMAIL, emailCode: mailed.body.code }).expect(201);
+    await http().post('/v1/sbg/identity/enroll').send({ phone: PHONE, pin: '48261' }).expect(400); // no email, no PIN
+    // The code was typed here: this is the device the PIN works on.
+    device = (await http().post('/v1/sbg/identity/enroll').send({ phone: PHONE, pin: PIN, email: EMAIL, emailCode: mailed.body.code }).expect(201)).body.device;
 
-    const session = await http().post('/v1/sbg/drivers/session').send({ phone: PHONE, pin: PIN });
+    const session = await http().post('/v1/sbg/drivers/session').send({ phone: PHONE, pin: PIN, device });
     driverToken = session.body.token.access_token;
   });
 
@@ -115,21 +119,21 @@ describe('the account, reached from a role app', () => {
       // administration; setting somebody's PIN or reading their address is impersonation.
       await http().get('/v1/sbg/account/me').set('authorization', `Bearer ${machine}`).expect(403);
       await http().patch('/v1/sbg/account/profile').set('authorization', `Bearer ${machine}`).send({ displayName: 'Whoever' }).expect(403);
-      await http().post('/v1/sbg/account/pin/change').set('authorization', `Bearer ${machine}`).send({ currentPin: '0000', newPin: '1111' }).expect(403);
+      await http().post('/v1/sbg/account/pin/change').set('authorization', `Bearer ${machine}`).send({ currentPin: '00000', newPin: '11111' }).expect(403);
     });
 
     it('refuses a wrong current PIN, and never takes a phone number to say whose PIN to change', async () => {
       await http()
         .post('/v1/sbg/account/pin/change')
         .set('authorization', `Bearer ${driverToken}`)
-        .send({ currentPin: '9999', newPin: '1357' })
+        .send({ currentPin: '99999', newPin: '13570' })
         // 403, not 401: the session is fine. Every app reads a 401 as 'your sign-in ended' and signs the person out —
         // which is what a mistyped current PIN used to do to them.
         .expect(403)
         .expect((res) => expect(res.body.code).toBe('PIN_WRONG'));
       await http().get('/v1/sbg/account/me').set('authorization', `Bearer ${driverToken}`).expect(200);
       // The old PIN still opens the door: a failed change changed nothing.
-      const again = await http().post('/v1/sbg/drivers/session').send({ phone: PHONE, pin: PIN }).expect(201);
+      const again = await http().post('/v1/sbg/drivers/session').send({ phone: PHONE, pin: PIN, device }).expect(201);
       // One phone at a time: that sign-in ended the earlier one, so the rest of this file carries the new token.
       await http().get('/v1/sbg/account/me').set('authorization', `Bearer ${driverToken}`).expect(401);
       driverToken = again.body.token.access_token;
@@ -156,7 +160,7 @@ describe('the account, reached from a role app', () => {
     await http()
       .post('/v1/sbg/account/pin/change')
       .set('authorization', `Bearer ${driverToken}`)
-      .send({ currentPin: PIN, newPin: '1357' })
+      .send({ currentPin: PIN, newPin: '13570' })
       .expect(201)
       .expect((res) => {
         expect(res.body.changed).toBe(true);
@@ -167,16 +171,18 @@ describe('the account, reached from a role app', () => {
     // That is why the response hands back nothing to swap in, and why the app signs the person back in.
     await http().get('/v1/sbg/account/me').set('authorization', `Bearer ${driverToken}`).expect(401);
     // The new PIN works; the old one does not.
-    await http().post('/v1/sbg/drivers/session').send({ phone: PHONE, pin: PIN }).expect(401);
-    await http().post('/v1/sbg/drivers/session').send({ phone: PHONE, pin: '1357' }).expect(201);
+    // …on the same device: changing a PIN with the current one confirms nothing again.
+    await http().post('/v1/sbg/drivers/session').send({ phone: PHONE, pin: PIN, device }).expect(401);
+    await http().post('/v1/sbg/drivers/session').send({ phone: PHONE, pin: '13570', device }).expect(201);
   });
 
   describe('moving the account to a new number, from Settings', () => {
     const NEW_PHONE = `+2541${Math.floor(Math.random() * 9_000_000) + 1_000_000}`;
     let token = '';
+    let newDevice = '';
 
     beforeAll(async () => {
-      token = (await http().post('/v1/sbg/drivers/session').send({ phone: PHONE, pin: '1357' })).body.token.access_token;
+      token = (await http().post('/v1/sbg/drivers/session').send({ phone: PHONE, pin: '13570', device })).body.token.access_token;
     });
 
     it('shows the person their recovery email masked, never whole', async () => {
@@ -189,10 +195,10 @@ describe('the account, reached from a role app', () => {
       await http()
         .post('/v1/sbg/account/email')
         .set('authorization', `Bearer ${token}`)
-        .send({ pin: '9999', email: 'thief@example.com', code: '000000' })
+        .send({ pin: '99999', email: 'thief@example.com', code: '000000' })
         .expect(403)
         .expect((res) => expect(res.body.code).toBe('PIN_WRONG'));
-      await http().post('/v1/sbg/account/phone/change').set('authorization', `Bearer ${token}`).send({ pin: '9999', newPhone: NEW_PHONE }).expect(403);
+      await http().post('/v1/sbg/account/phone/change').set('authorization', `Bearer ${token}`).send({ pin: '99999', newPhone: NEW_PHONE }).expect(403);
       await http().get('/v1/sbg/account/me').set('authorization', `Bearer ${token}`).expect(200);
     });
 
@@ -200,7 +206,7 @@ describe('the account, reached from a role app', () => {
       await http()
         .post('/v1/sbg/account/phone/change')
         .set('authorization', `Bearer ${token}`)
-        .send({ pin: '1357', newPhone: NEW_PHONE })
+        .send({ pin: '13570', newPhone: NEW_PHONE })
         .expect(400)
         .expect((res) => expect(res.body.code).toBe('PHONE_NOT_VERIFIED'));
     });
@@ -208,25 +214,40 @@ describe('the account, reached from a role app', () => {
     it('moves it with the PIN and a code to the new number, signs everybody out, and the old number opens nothing', async () => {
       const asked = await http().post('/v1/sbg/auth/phone/request').send({ phone: NEW_PHONE });
       await http().post('/v1/sbg/auth/phone/verify').send({ phone: NEW_PHONE, code: asked.body.code }).expect(201);
-      const moved = await http().post('/v1/sbg/account/phone/change').set('authorization', `Bearer ${token}`).send({ pin: '1357', newPhone: NEW_PHONE }).expect(201);
+      const moved = await http().post('/v1/sbg/account/phone/change').set('authorization', `Bearer ${token}`).send({ pin: '13570', newPhone: NEW_PHONE }).expect(201);
       expect(moved.body.signedOutEverywhere).toBe(true);
       expect(Date.parse(moved.body.undoUntil)).toBeGreaterThan(Date.now());
+      // The code to the new number was typed on this device: it is handed its key for the new number.
+      newDevice = moved.body.device;
+      expect(newDevice).toMatch(/^dvc_[0-9a-f]{64}$/);
 
       await http().get('/v1/sbg/account/me').set('authorization', `Bearer ${token}`).expect(401);
-      await http().post('/v1/sbg/drivers/session').send({ phone: PHONE, pin: '1357' }).expect(401);
-      // The same driver, the same PIN, the new number.
-      const again = await http().post('/v1/sbg/drivers/session').send({ phone: NEW_PHONE, pin: '1357' }).expect(201);
+      // NO DEVICE WENT WITH THE NUMBER: the key from before opens neither the old number nor the new one.
+      for (const phone of [PHONE, NEW_PHONE]) {
+        const refused = await http().post('/v1/sbg/drivers/session').send({ phone, pin: '13570', device }).expect(403);
+        expect(refused.body.code).toBe('DEVICE_NOT_KNOWN');
+      }
+      // The same driver, the same PIN, the new number — on the device the change was made on.
+      const again = await http().post('/v1/sbg/drivers/session').send({ phone: NEW_PHONE, pin: '13570', device: newDevice }).expect(201);
       expect(again.body.did).toBe(driverDid);
       token = again.body.token.access_token;
     });
 
     it('puts it back with the old number and the PIN as it was — and locks the PIN, so whoever moved it is out', async () => {
-      await http().post('/v1/sbg/identity/phone/undo').send({ phone: PHONE, pin: '0000' }).expect(401);
-      await http().post('/v1/sbg/identity/phone/undo').send({ phone: PHONE, pin: '1357' }).expect(201);
+      await http().post('/v1/sbg/identity/phone/undo').send({ phone: PHONE, pin: '00000' }).expect(401);
+      await http().post('/v1/sbg/identity/phone/undo').send({ phone: PHONE, pin: '13570' }).expect(201);
 
       await http().get('/v1/sbg/account/me').set('authorization', `Bearer ${token}`).expect(401);
-      await http().post('/v1/sbg/drivers/session').send({ phone: NEW_PHONE, pin: '1357' }).expect(401);
-      const locked = await http().post('/v1/sbg/drivers/session').send({ phone: PHONE, pin: '1357' });
+      // Whoever moved it confirmed a device of their own on the number they moved it to: it went with the undo.
+      const movers = await http().post('/v1/sbg/drivers/session').send({ phone: NEW_PHONE, pin: '13570', device: newDevice }).expect(403);
+      expect(movers.body.code).toBe('DEVICE_NOT_KNOWN');
+      expect((await http().post('/v1/sbg/drivers/session').send({ phone: PHONE, pin: '13570', device: newDevice })).body.code).toBe('DEVICE_NOT_KNOWN');
+      // The owner, on a device a code to their own number confirms, finds the PIN locked — and that code is what opens it.
+      (app.get(OtpService) as unknown as { rates: Map<string, unknown> }).rates.clear();
+      const asked = await http().post('/v1/sbg/auth/phone/request').send({ phone: PHONE }).expect(201);
+      await http().post('/v1/sbg/auth/phone/verify').send({ phone: PHONE, code: asked.body.code }).expect(201);
+      const owners = (await http().post('/v1/sbg/identity/device').send({ phone: PHONE }).expect(201)).body.device;
+      const locked = await http().post('/v1/sbg/drivers/session').send({ phone: PHONE, pin: '13570', device: owners });
       expect(locked.body.code).toBe('PIN_LOCKED');
     });
   });

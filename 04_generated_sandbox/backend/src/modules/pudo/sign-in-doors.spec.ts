@@ -83,6 +83,7 @@ describe('every door anybody can knock on', () => {
     'sbg/fleet/managers/mine': 20,
     'sbg/drivers/session': 60,
     'sbg/identity/login': 60,
+    'sbg/identity/device': 20, // the code was typed: this device is handed its key
     'sbg/identity/pin/change': 20,
     'sbg/identity/recover': 10,
     'sbg/identity/account-code': 10,

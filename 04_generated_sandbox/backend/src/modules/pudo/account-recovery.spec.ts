@@ -124,7 +124,7 @@ describe('account recovery', () => {
   };
 
   let seq = 0;
-  const PIN = '4826';
+  const PIN = '48261';
   /** A fleet, so a driver's office can be told. */
   function aFleet() {
     seq += 1;
@@ -180,7 +180,7 @@ describe('account recovery', () => {
       recovery.changeNumber(d.personDid, PIN, aVerifiedNumber(), t0);
       // Their own Settings say it from the first minute: still theirs until when, and not to be blocked yet.
       expect(persons.view(persons.requireByDid(d.personDid), t0 + 1000).oldNumber).toEqual({ since: iso(t0), until: iso(t0 + OLD_NUMBER_KEPT_MS), canBlock: false });
-      expect(codeOf(() => recovery.blockOldNumber(d.personDid, '0000', t0 + 1000))).toBe('PIN_WRONG');
+      expect(codeOf(() => recovery.blockOldNumber(d.personDid, '00000', t0 + 1000))).toBe('PIN_WRONG');
       expect(() => recovery.blockOldNumber(d.personDid, PIN, t0 + 1000)).toThrow(/can still be undone/);
       // Refused, and nothing given up: the old number is still where the account can go back to.
       expect(persons.keptFor(hashPhone(d.phone), t0 + 2000)!.personDid).toBe(d.personDid);
@@ -188,7 +188,7 @@ describe('account recovery', () => {
       // The day over — whether or not the sweep has been round.
       const later = t0 + NUMBER_UNDO_MS + 1000;
       expect(persons.view(persons.requireByDid(d.personDid), later).oldNumber).toEqual({ since: iso(t0), until: iso(t0 + OLD_NUMBER_KEPT_MS), canBlock: true });
-      expect(codeOf(() => recovery.blockOldNumber(d.personDid, '0000', later))).toBe('PIN_WRONG');
+      expect(codeOf(() => recovery.blockOldNumber(d.personDid, '00000', later))).toBe('PIN_WRONG');
       expect(persons.keptFor(hashPhone(d.phone), later)!.personDid).toBe(d.personDid);
       const after = recovery.blockOldNumber(d.personDid, PIN, later);
       expect(persons.view(after, later).oldNumber).toBeUndefined();
@@ -312,14 +312,17 @@ describe('account recovery', () => {
     it('needs the PIN again and a code on the new number — then the new number signs in and the old one does not', () => {
       const d = aDriver();
       const fresh = aVerifiedNumber();
-      expect(() => recovery.changeNumber(d.personDid, '0000', fresh)).toThrow(/That is not your PIN/);
+      expect(() => recovery.changeNumber(d.personDid, '00000', fresh)).toThrow(/That is not your PIN/);
       expect(() => recovery.changeNumber(d.personDid, PIN, '+254733999999')).toThrow(/Verify the new number first/);
 
       const session = auth.mintActorToken({ role: 'driver', did: d.did, revocationKey: d.personDid, personDid: d.personDid });
+      const theirPhone = persons.trustDevice(d.phone); // the device they have been signing in on
       const moved = recovery.changeNumber(d.personDid, PIN, fresh);
       expect(moved.personDid).toBe(d.personDid); // the same person, every role and all their history with them
-      expect(persons.loginWithPin(fresh, PIN).person.personDid).toBe(d.personDid);
-      expect(() => persons.loginWithPin(d.phone, PIN)).toThrow(/Wrong phone or PIN/);
+      // No device went with the number: the PIN works on a device a code to the NEW number confirmed, and nowhere else.
+      expect(() => persons.loginWithPin(d.phone, PIN, theirPhone)).toThrow(/has not signed in to this account before/);
+      expect(() => persons.loginWithPin(fresh, PIN, theirPhone)).toThrow(/has not signed in to this account before/);
+      expect(persons.loginWithPin(fresh, PIN, persons.trustDevice(fresh)).person.personDid).toBe(d.personDid);
       expect(auth.introspect(session.access_token)).toMatchObject({ active: false, reason: 'revoked' });
     });
 
@@ -364,7 +367,7 @@ describe('account recovery', () => {
       const other = aDriver();
       otp.verify(other.phone, otp.request(other.phone).code);
       expect(() => recovery.changeNumber(d.personDid, PIN, other.phone)).toThrow(/already/);
-      expect(persons.loginWithPin(d.phone, PIN).person.personDid).toBe(d.personDid);
+      expect(persons.loginWithPin(d.phone, PIN, persons.trustDevice(d.phone)).person.personDid).toBe(d.personDid);
     });
 
     it('refuses a number a driver is REGISTERED on even when no account holds it yet — asked before anything moves', () => {
@@ -374,7 +377,7 @@ describe('account recovery', () => {
       drivers.register({ displayName: 'Waiting', fullName: 'W W', nationalId: 'ID-RC-WAITING', mobile: taken, licenceClasses: ['bike'] });
       expect(() => recovery.changeNumber(d.personDid, PIN, taken)).toThrow(/already/);
       // Nothing moved: not the person, not the driver record.
-      expect(persons.loginWithPin(d.phone, PIN).person.personDid).toBe(d.personDid);
+      expect(persons.loginWithPin(d.phone, PIN, persons.trustDevice(d.phone)).person.personDid).toBe(d.personDid);
       expect(persons.requireByDid(d.personDid).phoneChange).toBeUndefined();
     });
 
@@ -415,14 +418,19 @@ describe('account recovery', () => {
       const d = aDriver();
       const theirs = aVerifiedNumber();
       recovery.changeNumber(d.personDid, PIN, theirs);
-      persons.setPin(d.personDid, '7391'); // the colleague who knew the PIN makes it their own
+      const moversDevice = persons.trustDevice(theirs); // …confirms a device of their own on the number they moved it to…
+      persons.setPin(d.personDid, '73914'); // the colleague who knew the PIN makes it their own
+      expect(persons.loginWithPin(theirs, '73914', moversDevice).person.personDid).toBe(d.personDid); // …and is in
 
-      expect(() => recovery.undoWithOldNumber(d.phone, '7391')).toThrow(/Wrong phone or PIN/);
+      expect(() => recovery.undoWithOldNumber(d.phone, '73914')).toThrow(/Wrong phone or PIN/);
       const back = recovery.undoWithOldNumber(d.phone, PIN);
       expect(back.personDid).toBe(d.personDid);
       // Back on the old number, and LOCKED: whoever moved it knew the PIN. A code to the owner's number opens it.
-      expect(() => persons.loginWithPin(d.phone, PIN)).toThrow(/Too many wrong PINs/);
-      expect(() => persons.loginWithPin(theirs, '7391')).toThrow(/Wrong phone or PIN/);
+      expect(() => persons.loginWithPin(d.phone, PIN, persons.trustDevice(d.phone))).toThrow(/Too many wrong PINs/);
+      // The number it was moved to has no account any more — and the device the mover confirmed there went with the undo.
+      expect(persons.findByPhone(theirs)).toBeUndefined();
+      expect(() => persons.loginWithPin(theirs, '73914', moversDevice)).toThrow(/has not signed in to this account before/);
+      expect(() => persons.loginWithPin(d.phone, '73914', moversDevice)).toThrow(/has not signed in to this account before/);
       // …and the number it was moved to is let go.
       expect(persons.ensurePerson(theirs).personDid).not.toBe(d.personDid);
       expect(drivers.register({ displayName: 'T', fullName: 'T T', nationalId: 'ID-RC-THEIRS', mobile: theirs, licenceClasses: ['bike'] }).did).toBeTruthy();
@@ -432,7 +440,7 @@ describe('account recovery', () => {
       const d = aDriver();
       recovery.changeNumber(d.personDid, PIN, aVerifiedNumber());
       expect(() => recovery.undoWithOldNumber('+254733000001', PIN)).toThrow(/Wrong phone or PIN/);
-      for (let i = 0; i < MAX_RECOVERY_MISSES; i++) expect(() => recovery.undoWithOldNumber(d.phone, '0000')).toThrow(/Wrong phone or PIN/);
+      for (let i = 0; i < MAX_RECOVERY_MISSES; i++) expect(() => recovery.undoWithOldNumber(d.phone, '00000')).toThrow(/Wrong phone or PIN/);
       expect(() => recovery.undoWithOldNumber(d.phone, PIN)).toThrow(/Undo it with the code we send to your email/);
     });
 
@@ -480,7 +488,7 @@ describe('account recovery', () => {
       const d = aDriver();
       const fresh = aVerifiedNumber();
       const { code } = recovery.sendAccountCode(d.email, 'recover');
-      const ask = { email: d.email, code, newPhone: fresh, pin: '7391' };
+      const ask = { email: d.email, code, newPhone: fresh, pin: '73914' };
       expect(() => recovery.recoverByEmail(ask)).toThrow(/Type the national ID number you registered with/);
       expect(() => recovery.recoverByEmail({ ...ask, nationalId: 'ID-NOT-THEIRS' })).toThrow(/not the one on this account/);
       // Refused as itself, not as a 401: every app words a 401 as "that PIN is not right", which would send them to the wrong box.
@@ -494,7 +502,7 @@ describe('account recovery', () => {
       expect(refused.params?.field).toBe('nationalId');
       const back = recovery.recoverByEmail({ ...ask, nationalId: d.nationalId.toLowerCase() });
       expect(back.personDid).toBe(d.personDid);
-      expect(persons.loginWithPin(fresh, '7391').person.personDid).toBe(d.personDid);
+      expect(persons.loginWithPin(fresh, '73914', persons.trustDevice(fresh)).person.personDid).toBe(d.personDid);
       // It is a number change like any other: the owner of the old number can still undo it.
       expect(recovery.undoWithOldNumber(d.phone, PIN).personDid).toBe(d.personDid);
     });
@@ -503,16 +511,16 @@ describe('account recovery', () => {
       const d = aDriver();
       const fresh = aVerifiedNumber();
       const { code } = recovery.sendAccountCode(d.email, 'recover');
-      for (let i = 0; i < MAX_RECOVERY_MISSES; i++) expect(() => recovery.recoverByEmail({ email: d.email, code, nationalId: `WRONG-${i}`, newPhone: fresh, pin: '7391' })).toThrow(/not the one on this account/);
-      expect(() => recovery.recoverByEmail({ email: d.email, code, nationalId: d.nationalId, newPhone: fresh, pin: '7391' })).toThrow(/Too many wrong tries/);
+      for (let i = 0; i < MAX_RECOVERY_MISSES; i++) expect(() => recovery.recoverByEmail({ email: d.email, code, nationalId: `WRONG-${i}`, newPhone: fresh, pin: '73914' })).toThrow(/not the one on this account/);
+      expect(() => recovery.recoverByEmail({ email: d.email, code, nationalId: d.nationalId, newPhone: fresh, pin: '73914' })).toThrow(/Too many wrong tries/);
     });
 
     it('will not land the account on a number nobody proved they hold', () => {
       const d = aDriver();
       const { code } = recovery.sendAccountCode(d.email, 'recover');
-      expect(() => recovery.recoverByEmail({ email: d.email, code, nationalId: d.nationalId, newPhone: '+254733777001', pin: '7391' })).toThrow(/Verify the new number first/);
+      expect(() => recovery.recoverByEmail({ email: d.email, code, nationalId: d.nationalId, newPhone: '+254733777001', pin: '73914' })).toThrow(/Verify the new number first/);
       // Refused whole: the old number and the old PIN still stand.
-      expect(persons.loginWithPin(d.phone, PIN).person.personDid).toBe(d.personDid);
+      expect(persons.loginWithPin(d.phone, PIN, persons.trustDevice(d.phone)).person.personDid).toBe(d.personDid);
     });
 
     it('somebody who only sends and collects gave us no ID, so the inbox stands alone', () => {
@@ -521,15 +529,15 @@ describe('account recovery', () => {
       persons.setEmail(person.personDid, 'sender@example.com');
       const fresh = aVerifiedNumber();
       const { code } = recovery.sendAccountCode('Sender@Example.com ', 'recover');
-      expect(recovery.recoverByEmail({ email: 'sender@example.com', code, newPhone: fresh, pin: '7391' }).personDid).toBe(person.personDid);
+      expect(recovery.recoverByEmail({ email: 'sender@example.com', code, newPhone: fresh, pin: '73914' }).personDid).toBe(person.personDid);
     });
 
     it('says nothing about whether an address has an account, and a wrong code opens nothing', () => {
       const d = aDriver();
       expect(recovery.sendAccountCode('nobody@example.com', 'recover')).toEqual({});
       expect(outbox.recent('nobody@example.com')).toHaveLength(0);
-      expect(() => recovery.recoverByEmail({ email: d.email, code: '000000', nationalId: d.nationalId, newPhone: aVerifiedNumber(), pin: '7391' })).toThrow(/Wrong or expired code/);
-      expect(persons.loginWithPin(d.phone, PIN).person.personDid).toBe(d.personDid);
+      expect(() => recovery.recoverByEmail({ email: d.email, code: '000000', nationalId: d.nationalId, newPhone: aVerifiedNumber(), pin: '73914' })).toThrow(/Wrong or expired code/);
+      expect(persons.loginWithPin(d.phone, PIN, persons.trustDevice(d.phone)).person.personDid).toBe(d.personDid);
     });
   });
 
@@ -546,7 +554,7 @@ describe('account recovery', () => {
     it('is replaced with the PIN and a code to the NEW address — and the old address is told', async () => {
       const d = aDriver();
       const { code } = recovery.sendConfirmCode('new@example.com');
-      expect(() => recovery.changeEmail(d.personDid, '0000', 'new@example.com', code)).toThrow(/That is not your PIN/);
+      expect(() => recovery.changeEmail(d.personDid, '00000', 'new@example.com', code)).toThrow(/That is not your PIN/);
       expect(() => recovery.changeEmail(d.personDid, PIN, 'new@example.com', '000000')).toThrow(/Wrong or expired code/);
       recovery.changeEmail(d.personDid, PIN, 'new@example.com', code);
       await settle();
@@ -563,8 +571,8 @@ describe('account recovery', () => {
 
     it('is told when five wrong PINs lock the account', async () => {
       const d = aDriver();
-      for (let i = 0; i < 4; i++) expect(() => persons.loginWithPin(d.phone, '0000')).toThrow(/Wrong phone or PIN/);
-      expect(() => persons.loginWithPin(d.phone, '0000')).toThrow(/Too many wrong PINs/);
+      for (let i = 0; i < 4; i++) expect(() => persons.loginWithPin(d.phone, '00000', persons.trustDevice(d.phone))).toThrow(/Wrong phone or PIN/);
+      expect(() => persons.loginWithPin(d.phone, '00000', persons.trustDevice(d.phone))).toThrow(/Too many wrong PINs/);
       await settle();
       expect(mailTo(d.email)[0].subject).toMatch(/your PIN was locked/);
     });

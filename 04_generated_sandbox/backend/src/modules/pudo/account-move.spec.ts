@@ -130,7 +130,7 @@ describe('two members of staff move an account', () => {
     for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
   };
   let seq = 0;
-  const PIN = '4826';
+  const PIN = '48261';
   const AMINA = { name: 'Amina Otieno', key: 'staff:amina' };
   const BRIAN = { name: 'Brian Kamau', key: 'staff:brian' };
   const DAY = 86_400_000;
@@ -342,7 +342,8 @@ describe('two members of staff move an account', () => {
       const checked = moves.check(asked.moveId, AMINA, ' Saw their national ID card at the Nairobi office; the number on it matches. ');
       expect(checked).toMatchObject({ state: 'checked', checkedBy: 'Amina Otieno', checkedWhat: 'Saw their national ID card at the Nairobi office; the number on it matches.', checkedByYou: true });
       // Checking moves nothing.
-      expect(persons.loginWithPin(d.phone, PIN).person.personDid).toBe(d.personDid);
+      const theirPhone = persons.trustDevice(d.phone); // the device the holder has been signing in on
+      expect(persons.loginWithPin(d.phone, PIN, theirPhone).person.personDid).toBe(d.personDid);
       // (…and that sign-in is itself after the asking, so the request is made again for the rest of this test.)
       moves.refuse(asked.moveId, AMINA, 'Asked again for the test');
       const fresh = askFor(d, {}, Date.now() + 1000);
@@ -353,8 +354,11 @@ describe('two members of staff move an account', () => {
       expect(moved.checkedByYou).toBeUndefined();
       expect(persons.findByPhone(fresh.newPhone)?.personDid).toBe(d.personDid);
       expect(persons.findByPhone(d.phone)).toBeUndefined();
-      expect(persons.loginWithPin(fresh.newPhone, PIN).person.personDid).toBe(d.personDid);
-      expect(failure(() => persons.loginWithPin(d.phone, PIN))).toMatch(/^AUTH_FAILED/);
+      // NO DEVICE WENT WITH THE NUMBER. The device that signed in on the old number opens nothing — not the old
+      // number, which nobody has, and not the new one: the PIN works again on a device a code to the NEW number confirmed.
+      expect(failure(() => persons.loginWithPin(d.phone, PIN, theirPhone))).toMatch(/^DEVICE_NOT_KNOWN/);
+      expect(failure(() => persons.loginWithPin(fresh.newPhone, PIN, theirPhone))).toMatch(/^DEVICE_NOT_KNOWN/);
+      expect(persons.loginWithPin(fresh.newPhone, PIN, persons.trustDevice(fresh.newPhone)).person.personDid).toBe(d.personDid);
       expect(auth.introspect(session.access_token)).toMatchObject({ active: false, reason: 'revoked' });
       expect(drivers.get(d.did).did).toBe(d.did);
       expect(moves.status(fresh.reference)).toEqual({ state: 'moved', askedAt: expect.any(String), decidedAt: expect.any(String) });
@@ -375,7 +379,7 @@ describe('two members of staff move an account', () => {
       moves.check(asked.moveId, AMINA, 'Saw the ID card', t0 + 1000);
       moves.approve(asked.moveId, BRIAN, t0 + 2000);
       // Whoever was given the account chooses a PIN of their own…
-      persons.setPin(d.personDid, '7391');
+      persons.setPin(d.personDid, '73914');
       // …and the person it was taken from still has the number and the PIN it had.
       recovery.undoWithOldNumber(d.phone, PIN, t0 + 3000);
       expect(persons.findByPhone(d.phone)?.personDid).toBe(d.personDid);
@@ -510,10 +514,10 @@ describe('two members of staff move an account', () => {
       moves.check(asked.moveId, AMINA, 'Saw the ID card', asked.at + 1000);
       expect(moves.one(asked.moveId).account!.pinUsedSince).toBeUndefined();
       // A wrong PIN is not the holder: it is anybody.
-      expect(failure(() => persons.loginWithPin(d.phone, '0000'))).toMatch(/^AUTH_FAILED/);
+      expect(failure(() => persons.loginWithPin(d.phone, '00000', persons.trustDevice(d.phone)))).toMatch(/^AUTH_FAILED/);
       expect(moves.one(asked.moveId).account!.pinUsedSince).toBeUndefined();
 
-      persons.loginWithPin(d.phone, PIN);
+      persons.loginWithPin(d.phone, PIN, persons.trustDevice(d.phone));
       // Staff see it before they press anything…
       expect(moves.one(asked.moveId).account!.pinUsedSince).toEqual(expect.any(String));
       // …and pressing it ends the request instead of moving the account.
@@ -533,14 +537,14 @@ describe('two members of staff move an account', () => {
       const reset = aDriver();
       const b = askFor(reset);
       moves.check(b.moveId, AMINA, 'Saw the ID card', b.at + 1000);
-      persons.setPin(reset.personDid, '7391');
+      persons.setPin(reset.personDid, '73914');
       expect(failure(() => moves.approve(b.moveId, BRIAN))).toMatch(/^CONFLICT/);
       expect(moves.one(b.moveId).state).toBe('stopped');
     });
 
     it('is not stopped by a PIN that was used BEFORE it was asked: that is an ordinary yesterday', () => {
       const d = aDriver();
-      persons.loginWithPin(d.phone, PIN);
+      persons.loginWithPin(d.phone, PIN, persons.trustDevice(d.phone));
       const t0 = Date.now() + 5000;
       const asked = askFor(d, {}, t0);
       moves.check(asked.moveId, AMINA, 'Saw the ID card', t0 + 1000);

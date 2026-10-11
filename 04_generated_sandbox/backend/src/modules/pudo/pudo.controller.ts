@@ -4098,7 +4098,7 @@ export class SbgController {
   @Post('fleet/managers/session')
   managerSession(@Body() dto: ManagerSessionDto) {
     const m = dto.code ? this.managers.login(dto.code) : this.managers.requireSignInByDid(dto.did);
-    const { person } = this.persons.loginWithPin(dto.phone, dto.pin);
+    const { person } = this.persons.loginWithPin(dto.phone, dto.pin, dto.device);
     const holds = person.roles.some((r) => r.role === 'fleet_manager' && r.entityDid === m.did && r.status === 'active');
     // Not FORBIDDEN: telling somebody "right PIN, wrong company" confirms both the account and the code.
     if (!holds) throw new GlosError('AUTH_FAILED', 'That account cannot manage this fleet');
@@ -4133,7 +4133,7 @@ export class SbgController {
   @RateLimit(20, 15 * 60)
   @Post('fleet/managers/mine')
   managerChoices(@Body() dto: ManagerChoicesDto) {
-    const { person } = this.persons.loginWithPin(dto.phone, dto.pin);
+    const { person } = this.persons.loginWithPin(dto.phone, dto.pin, dto.device);
     const fleets = person.roles
       .filter((r) => r.role === 'fleet_manager' && r.status === 'active')
       .flatMap((r) => {
@@ -4464,7 +4464,7 @@ export class SbgController {
   @RateLimit(60, 15 * 60) // a depot's morning from one address fits; spraying PINs across many phones does not
   @Post('drivers/session')
   driverSignIn(@Body() dto: DriverSessionDto) {
-    const { person } = this.persons.loginWithPin(dto.phone, dto.pin);
+    const { person } = this.persons.loginWithPin(dto.phone, dto.pin, dto.device);
     const held = person.roles
       .filter((r) => r.role === 'driver' && r.status === 'active' && (!dto.did || r.entityDid === dto.did))
       .flatMap((link) => {

@@ -4,6 +4,8 @@ import { BrandMark, CodeBoxes } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { EmailStep } from '../../../shared/account/EmailStep';
 import { TroubleSheet } from '../../../shared/account/TroubleSheet';
+import { NewDeviceSheet } from '../../../shared/account/NewDeviceSheet';
+import { PIN_LENGTH, isNewDevice } from '../../../shared/account/pin';
 import { recoveryApi } from '../../../shared/account/recovery';
 import { businessConfig } from '../api';
 import { digitsReady, phoneReady } from '../logic';
@@ -47,27 +49,30 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
   const t = useT();
   const [trouble, setTrouble] = useState(false);
   const { step, busy } = state;
-  const error = state.error ? state.error.detail || state.error.title : null;
+  // A PIN typed on a phone or browser no code was ever typed on: not an error, a step — the code, once.
+  const [closedFor, setClosedFor] = useState<unknown>(null);
+  const confirming = step === 'login' && isNewDevice(state.error) && closedFor !== state.error;
+  const error = state.error && !confirming ? state.error.detail || state.error.title : null;
 
   const submit = (e: Event) => {
     e.preventDefault();
     if (busy) return;
-    if (step === 'login' && phoneReady(state.phone) && digitsReady(state.pin, 4)) void actions.submitLogin();
+    if (step === 'login' && phoneReady(state.phone) && digitsReady(state.pin, PIN_LENGTH)) void actions.submitLogin();
     else if (step === 'phone' && phoneReady(state.phone)) void actions.requestCode();
     else if (step === 'code' && digitsReady(state.code, 6)) void actions.submitCode();
-    else if (step === 'pin' && digitsReady(state.pin, 4)) void actions.submitPin();
+    else if (step === 'pin' && digitsReady(state.pin, PIN_LENGTH)) void actions.submitPin();
     else if (step === 'email' && state.email.trim() && digitsReady(state.emailCode, 6)) void actions.submitPin();
   };
 
   const ready =
     step === 'login'
-      ? phoneReady(state.phone) && digitsReady(state.pin, 4)
+      ? phoneReady(state.phone) && digitsReady(state.pin, PIN_LENGTH)
       : step === 'phone'
         ? phoneReady(state.phone)
         : step === 'code'
           ? digitsReady(state.code, 6)
           : step === 'pin'
-            ? digitsReady(state.pin, 4)
+            ? digitsReady(state.pin, PIN_LENGTH)
             : Boolean(state.email.trim()) && digitsReady(state.emailCode, 6);
 
   return (
@@ -109,7 +114,7 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
           {step === 'login' || step === 'pin' ? (
             <div class="cfield">
               <span class="cfield__label">{t(step === 'pin' ? 'business.signIn.newPin' : 'business.signIn.pin')}</span>
-              <CodeBoxes id="biz-pin" label={t('business.signIn.pin')} length={4} value={state.pin} onInput={(v) => actions.set({ pin: v })} disabled={busy} mask={step === 'login'} />
+              <CodeBoxes id="biz-pin" label={t('business.signIn.pin')} length={PIN_LENGTH} value={state.pin} onInput={(v) => actions.set({ pin: v })} disabled={busy} mask={step === 'login'} />
             </div>
           ) : null}
 
@@ -176,6 +181,16 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
         <p class="chint biz-signin__same">{t('business.signIn.samePin')}</p>
       </div>
       <TroubleSheet open={trouble} onClose={() => setTrouble(false)} api={recovery} />
+      <NewDeviceSheet
+        open={confirming}
+        onClose={() => setClosedFor(state.error)}
+        api={recovery}
+        phone={state.phone}
+        onConfirmed={() => {
+          setClosedFor(state.error);
+          void actions.submitLogin();
+        }}
+      />
     </div>
   );
 }

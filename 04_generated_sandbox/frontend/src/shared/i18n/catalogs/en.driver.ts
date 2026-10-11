@@ -110,7 +110,7 @@ export const enDriver = {
 
   // Sign-in screen (driver identity capture).
   'driver.signin.title': 'Who is driving?',
-  'driver.signin.lede': 'Sign in with the phone number you are registered with, and your 4-digit PIN.',
+  'driver.signin.lede': 'Sign in with the phone number you are registered with, and your 5-digit PIN.',
   'driver.signin.phoneLabel': 'Phone number',
   'driver.signin.phoneNote': 'The number you signed up with — or, if a fleet took you on, the one they registered for you.',
   'driver.signin.pinLabel': 'PIN',
@@ -119,7 +119,7 @@ export const enDriver = {
   'driver.signin.continue': 'Sign in',
   'driver.signin.firstTime': 'First time here, or forgot your PIN?',
   'driver.signin.codeTitle': 'Choose your PIN',
-  'driver.signin.codeLede': 'We send a code to your phone. Type it here, then choose a 4-digit PIN.',
+  'driver.signin.codeLede': 'We send a code to your phone. Type it here, then choose a 5-digit PIN.',
   'driver.signin.sendCode': 'Send me a code',
   'driver.signin.codeLabel': 'Code from the message',
   'driver.signin.testCode': 'Test code: {code}',
@@ -130,7 +130,7 @@ export const enDriver = {
   'driver.signin.why1': 'Nobody can drive as you with your badge alone',
   'driver.signin.why2': 'A new PIN signs out every other phone',
   'driver.signin.why3': 'Five wrong PINs lock it; a code opens it again',
-  'driver.signin.aloud': 'Type the phone number you are registered with, then your four digit PIN. First time here? Tap first time, and we send you a code.',
+  'driver.signin.aloud': 'Type the phone number you are registered with, then your five digit PIN. First time here? Tap first time, and we send you a code.',
 
   // Route screen (choose start + destination, then get offers).
   'driver.route.title': 'Where are you going?',

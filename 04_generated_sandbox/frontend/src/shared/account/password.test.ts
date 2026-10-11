@@ -11,12 +11,16 @@ describe('changing a password or a PIN', () => {
     expect(passwordChangeBlocker({ current: 'old-pass', next: 'long-enough', again: 'long-enough' })).toBeNull();
   });
 
-  it('asks for four digits, the current PIN, and a different one', () => {
-    expect(pinChangeBlocker({ current: '12', next: '5678' })).toBe('account.pin.needCurrent');
-    expect(pinChangeBlocker({ current: '1234', next: '56a8' })).toBe('account.pin.fourDigits');
-    expect(pinChangeBlocker({ current: '1234', next: '5678', again: '5679' })).toBe('account.pin.mismatch');
-    expect(pinChangeBlocker({ current: '1234', next: '1234' })).toBe('account.pin.same');
-    expect(pinChangeBlocker({ current: '1234', next: '5678', again: '5678' })).toBeNull();
+  it('asks for five digits, the current PIN, and a different one', () => {
+    expect(pinChangeBlocker({ current: '12', next: '56781' })).toBe('account.pin.needCurrent');
+    expect(pinChangeBlocker({ current: '48261', next: '56a81' })).toBe('account.pin.digits');
+    // Four was the length of a PIN, and is the length of the one people have for their money: it is not this one's.
+    expect(pinChangeBlocker({ current: '4826', next: '56781' })).toBe('account.pin.needCurrent');
+    expect(pinChangeBlocker({ current: '48261', next: '5678' })).toBe('account.pin.digits');
+    expect(pinChangeBlocker({ current: '48261', next: '567812' })).toBe('account.pin.digits');
+    expect(pinChangeBlocker({ current: '48261', next: '56781', again: '56791' })).toBe('account.pin.mismatch');
+    expect(pinChangeBlocker({ current: '48261', next: '48261' })).toBe('account.pin.same');
+    expect(pinChangeBlocker({ current: '48261', next: '56781', again: '56781' })).toBeNull();
   });
 });
 

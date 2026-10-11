@@ -1,4 +1,5 @@
 import { publicRequest, type Result, type SbgConfig, type SbgError } from '../../lib/sbg';
+import { saveDeviceKey } from './pin';
 import { idDisputeApi, type DisputeOpened, type IdDisputeApi, type IdRegister } from './idDispute';
 import type { MoveAsked, MoveStatus } from './move';
 
@@ -13,12 +14,17 @@ export interface RecoveryApi {
   /** A code to a phone number (echoed back only in a sandbox). */
   phoneCode: (phone: string) => Promise<Result<{ sent: boolean; code?: string }>>;
   verifyPhone: (phone: string, code: string) => Promise<Result<{ verified: boolean }>>;
+  /**
+   * THIS DEVICE, CONFIRMED — after the code to the phone has been checked. The key the server hands back is kept on
+   * the device (`saveDeviceKey`): from then on the PIN works here.
+   */
+  confirmDevice: (phone: string) => Promise<Result<{ device: string }>>;
   /** A code to an email address, to CONFIRM it as a recovery address. */
   emailCode: (email: string) => Promise<Result<{ sent: boolean; code?: string }>>;
   /** A code to the address ON an account — to get back in, or to undo a number change. Answers the same for any address. */
   accountCode: (email: string, why: 'recover' | 'undo') => Promise<Result<{ sent: boolean; code?: string }>>;
   undo: (body: { phone?: string; pin?: string; email?: string; code?: string }) => Promise<Result<{ undone: boolean }>>;
-  recover: (body: { email: string; code: string; nationalId?: string; newPhone: string; pin: string }) => Promise<Result<{ recovered: boolean; undoUntil?: string }>>;
+  recover: (body: { email: string; code: string; nationalId?: string; newPhone: string; pin: string }) => Promise<Result<{ recovered: boolean; undoUntil?: string; device?: string }>>;
   /** No number, no PIN, no inbox: ask two members of staff to move the account. The new number is already confirmed by a code. */
   askStaff: (body: { oldPhone: string; newPhone: string; nationalId?: string; note?: string }) => Promise<Result<MoveAsked>>;
   /** What became of it, by the reference that was handed back. */
@@ -34,10 +40,20 @@ export function recoveryApi(config: SbgConfig): RecoveryApi {
   return {
     phoneCode: (phone) => post('/v1/sbg/auth/phone/request', { phone }),
     verifyPhone: (phone, code) => post('/v1/sbg/auth/phone/verify', { phone, code }),
+    confirmDevice: async (phone) => {
+      const r = await post<{ device: string }>('/v1/sbg/identity/device', { phone });
+      saveDeviceKey(phone, r.data?.device);
+      return r;
+    },
     emailCode: (email) => post('/v1/sbg/identity/email/request', { email }),
     accountCode: (email, why) => post('/v1/sbg/identity/account-code', { email, why }),
     undo: (body) => post('/v1/sbg/identity/phone/undo', body),
-    recover: (body) => post('/v1/sbg/identity/recover', body),
+    // The code to the NEW number was typed on this device: the server hands it its key, and the new PIN works here.
+    recover: async (body) => {
+      const r = await post<{ recovered: boolean; undoUntil?: string; device?: string }>('/v1/sbg/identity/recover', body);
+      saveDeviceKey(body.newPhone, r.data?.device);
+      return r;
+    },
     askStaff: (body) => post('/v1/sbg/identity/move-requests', body),
     moveStatus: (reference) => post('/v1/sbg/identity/move-requests/status', { reference }),
     openIdDispute: (body) => post('/v1/sbg/identity/id-disputes', body),

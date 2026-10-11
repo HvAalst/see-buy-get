@@ -1,3 +1,4 @@
+import { pinReady } from './pin';
 import type { MessageKey } from '../i18n';
 
 /**
@@ -12,10 +13,10 @@ export function passwordChangeBlocker(form: { current: string; next: string; aga
   return null;
 }
 
-/** What stops a PIN change: four digits, typed twice, and not the one it replaces. */
+/** What stops a PIN change: the right number of digits, typed twice, and not the one it replaces. */
 export function pinChangeBlocker(form: { current: string; next: string; again?: string }): MessageKey | null {
-  if (!/^\d{4}$/.test(form.current)) return 'account.pin.needCurrent';
-  if (!/^\d{4}$/.test(form.next)) return 'account.pin.fourDigits';
+  if (!pinReady(form.current)) return 'account.pin.needCurrent';
+  if (!pinReady(form.next)) return 'account.pin.digits';
   if (form.again !== undefined && form.next !== form.again) return 'account.pin.mismatch';
   if (form.next === form.current) return 'account.pin.same';
   return null;

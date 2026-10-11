@@ -1,3 +1,4 @@
+import { saveDeviceKey } from './pin';
 import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 import { narrow, type Result, type SbgClient, type SbgError } from '../../lib/sbg';
 import type { ContractView } from './contract';
@@ -265,7 +266,16 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
   const sendEmailCode = useCallback((email: string) => post<Sent>('/v1/sbg/identity/email/request', { email }), [post]);
   const sendPhoneCode = useCallback((phone: string) => post<Sent>('/v1/sbg/auth/phone/request', { phone }), [post]);
   const confirmPhoneCode = useCallback((phone: string, code: string) => post<unknown>('/v1/sbg/auth/phone/verify', { phone, code }), [post]);
-  const changeNumber = useCallback((pin: string, newPhone: string) => post<unknown>('/v1/sbg/account/phone/change', { pin, newPhone }), [post]);
+  const changeNumber = useCallback(
+    async (pin: string, newPhone: string) => {
+      const r = await post<{ device?: string }>('/v1/sbg/account/phone/change', { pin, newPhone });
+      // No device goes with a number that moves — except this one: the code to the new number was typed here, so the
+      // server hands it its key and the person signs back in on the new number with their PIN.
+      saveDeviceKey(newPhone, r.data?.device);
+      return r;
+    },
+    [post],
+  );
 
   const blockOldNumber = useCallback(
     async (pin: string) => {

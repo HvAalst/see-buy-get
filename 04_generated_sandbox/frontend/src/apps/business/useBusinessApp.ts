@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import type { SbgError } from '../../lib/sbg';
+import { isNewDevice } from '../../shared/account/pin';
 import {
   clearBusinessSession,
   clearSessions,
@@ -185,7 +186,8 @@ export function useBusinessApp(): { state: BusinessState; actions: BusinessActio
       const s = stateRef.current;
       patch({ busy: true, error: null });
       const r = await pinLogin(s.phone.trim(), s.pin);
-      if (r.error || !r.data) return patch({ busy: false, error: r.error, pin: '' });
+      // A device that is new is not a wrong PIN: the PIN stays typed, for when the code has confirmed the device.
+      if (r.error || !r.data) return patch({ busy: false, error: r.error, ...(isNewDevice(r.error) ? {} : { pin: '' }) });
       await signedIn(r.data);
     },
 

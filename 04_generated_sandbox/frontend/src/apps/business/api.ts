@@ -1,3 +1,4 @@
+import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
 import { createAgentApi, createNotificationsApi, createOperatorApi, createSeededClient, makeConfig, publicRequest, type AgentApi, type NotificationsApi, type OperatorApi, type Result, type SbgConfig, type SeededAppClient } from '../../lib/sbg';
 import type { QuoteView } from '../../shared/quote';
 
@@ -39,12 +40,16 @@ export interface PersonAuth {
 }
 
 /** A verified phone, a new PIN, and — the first time — a confirmed recovery email behind it. */
-export function enroll(phone: string, pin: string, recovery?: { email: string; code: string }): Promise<Result<PersonAuth>> {
-  return publicRequest<PersonAuth>(businessConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}) } });
+export async function enroll(phone: string, pin: string, recovery?: { email: string; code: string }): Promise<Result<PersonAuth>> {
+  const r = await publicRequest<PersonAuth & { device?: string }>(businessConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}) } });
+  // The code was typed on this device: it is handed the key the PIN is asked with from now on.
+  saveDeviceKey(phone, r.data?.device);
+  return r;
 }
 
 export function pinLogin(phone: string, pin: string): Promise<Result<PersonAuth>> {
-  return publicRequest<PersonAuth>(businessConfig(), '/v1/sbg/identity/login', { body: { phone, pin } });
+  // `device`: the key this phone or browser was handed when the code was typed on it. Without it the PIN is not looked at.
+  return publicRequest<PersonAuth>(businessConfig(), '/v1/sbg/identity/login', { body: { phone, pin, device: readDeviceKey(phone) } });
 }
 
 /* ---------------------------------------------------------------- the person -- */

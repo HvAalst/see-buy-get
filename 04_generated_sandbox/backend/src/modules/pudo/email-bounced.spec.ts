@@ -42,7 +42,7 @@ describe('a recovery email that came back', () => {
   const aPerson = (email?: string) => {
     seq += 1;
     const person = persons.ensurePerson(`+2519130${String(seq).padStart(5, '0')}`);
-    persons.setPin(person.personDid, '4826');
+    persons.setPin(person.personDid, '48261');
     if (email) persons.setEmail(person.personDid, email);
     return person.personDid;
   };

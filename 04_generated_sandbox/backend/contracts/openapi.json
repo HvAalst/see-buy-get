@@ -17862,11 +17862,34 @@
         }
       }
     },
+    "/v1/sbg/identity/device": {
+      "post": {
+        "operationId": "Identity.confirmDevice",
+        "summary": "",
+        "description": "THIS DEVICE, CONFIRMED BY THE CODE — for somebody who has an account and a PIN and is on a device their PIN has\nnever been used on. `auth/phone/request` sent the code and `auth/phone/verify` checked it; this hands the device\nits key and spends the confirmation. Nothing about the account changes: the PIN is the one they had.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmDeviceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/identity/login": {
       "post": {
         "operationId": "Identity.login",
         "summary": "",
-        "description": "Reopen the app: phone + 4-digit PIN, no OTP (locks after repeated wrong PINs — then OTP again).",
+        "description": "Reopen the app: phone + PIN, no code — ON A DEVICE THE CODE WAS ONCE TYPED ON (`device`). Anywhere else the\nanswer is DEVICE_NOT_KNOWN and the PIN is not looked at. Locks after repeated wrong PINs — then the code again.",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -33231,6 +33254,11 @@
           },
           "pin": {
             "type": "string"
+          },
+          "device": {
+            "type": "string",
+            "description": "The key this device was handed when a code to the phone was typed on it. Without it the PIN is not looked at.",
+            "maxLength": 120
           }
         },
         "required": [
@@ -33246,6 +33274,11 @@
           },
           "pin": {
             "type": "string"
+          },
+          "device": {
+            "type": "string",
+            "description": "The key this device was handed when a code to the phone was typed on it. Without it the PIN is not looked at.",
+            "maxLength": 120
           }
         },
         "required": [
@@ -35181,6 +35214,11 @@
           },
           "did": {
             "type": "string"
+          },
+          "device": {
+            "type": "string",
+            "description": "The key this device was handed when a code to the phone was typed on it. Without it the PIN is not looked at.",
+            "maxLength": 120
           }
         },
         "required": [
@@ -39174,6 +39212,18 @@
           "pin"
         ]
       },
+      "ConfirmDeviceDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "phone"
+        ]
+      },
       "PinLoginDto": {
         "type": "object",
         "properties": {
@@ -39182,6 +39232,11 @@
           },
           "pin": {
             "type": "string"
+          },
+          "device": {
+            "type": "string",
+            "description": "The key this device was handed when a code to the phone was typed on it. Without it the PIN is not looked at.",
+            "maxLength": 120
           }
         },
         "required": [
@@ -39211,6 +39266,11 @@
           },
           "newPin": {
             "type": "string"
+          },
+          "device": {
+            "type": "string",
+            "description": "The key this device was handed when a code to the phone was typed on it. Without it the PIN is not looked at.",
+            "maxLength": 120
           }
         },
         "required": [

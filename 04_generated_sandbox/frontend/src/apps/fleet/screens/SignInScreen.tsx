@@ -1,11 +1,13 @@
 import { HelpLink } from '../../../shared/guide/HelpLink';
-import { useState } from 'preact/hooks';
+import { useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { Button, Card, Checklist, ErrorNote, ReadAloud } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import type { FleetActions } from '../useFleetApp';
 import { TroubleSheet } from '../../../shared/account/TroubleSheet';
+import { NewDeviceSheet } from '../../../shared/account/NewDeviceSheet';
+import { PIN_LENGTH, isNewDevice } from '../../../shared/account/pin';
 import { recoveryApi } from '../../../shared/account/recovery';
 import { fleetConfig } from '../api';
 
@@ -42,15 +44,25 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
   const [pin, setPin] = useState('');
   const [trouble, setTrouble] = useState(false);
   const [fleets, setFleets] = useState<Array<{ did: string; companyName: string; status: string }> | null>(null);
+  // A PIN typed on a phone or browser no code was ever typed on: not an error, a step — the code, once. What was
+  // being done when the server said so is done again afterwards, with the PIN that is still typed.
+  const [closedFor, setClosedFor] = useState<unknown>(null);
+  const again = useRef<() => void>(() => undefined);
+  const confirming = isNewDevice(error) && closedFor !== error;
+  const findFleets = () => void actions.findMyFleets(phone, pin).then((found) => setFleets(found));
+  const attempt = (what: () => void) => {
+    again.current = what;
+    what();
+  };
 
   const submit = (e: JSX.TargetedEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (mode === 'phone') {
-      void actions.findMyFleets(phone, pin).then((found) => setFleets(found));
+      attempt(findFleets);
       return;
     }
     if (!company) void actions.findCompany(code);
-    else void actions.signIn(phone, pin);
+    else attempt(() => void actions.signIn(phone, pin));
   };
 
   const phoneFields = (
@@ -80,6 +92,7 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
           type="password"
           inputMode="numeric"
           value={pin}
+          maxLength={PIN_LENGTH}
           onInput={(e) => setPin(e.currentTarget.value)}
           autocomplete="current-password"
           enterkeyhint="go"
@@ -93,7 +106,7 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
       <form class="scr" onSubmit={submit}>
         <h1 class="scr__title">{t('fleet.signin.forgotTitle')}</h1>
         <p class="scr__lede">{t('fleet.signin.forgotLede')}</p>
-        {error ? <ErrorNote error={error} /> : null}
+        {error && !confirming ? <ErrorNote error={error} /> : null}
 
         {fleets === null ? (
           <Card>
@@ -108,7 +121,7 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
           <Card title={t('fleet.signin.chooseFleet')}>
             <div class="rows">
               {fleets.map((f) => (
-                <button key={f.did} type="button" class="row" disabled={busy} onClick={() => void actions.signInToFleet(f.did, phone, pin)}>
+                <button key={f.did} type="button" class="row" disabled={busy} onClick={() => attempt(() => void actions.signInToFleet(f.did, phone, pin))}>
                   <span class="row__body">
                     <span class="row__t">{f.companyName}</span>
                     <span class="row__s">{f.status}</span>
@@ -145,7 +158,7 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
       <h1 class="scr__title">{t('fleet.signin.title')}</h1>
       <p class="scr__lede">{t('fleet.signin.lede')}</p>
 
-      {error ? <ErrorNote error={error} /> : null}
+      {error && !confirming ? <ErrorNote error={error} /> : null}
 
       {!company ? (
         <Card>
@@ -213,6 +226,16 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
     </form>
     {/* Outside the form: Enter in one of its fields must not submit the sign-in behind it. */}
     <TroubleSheet open={trouble} onClose={() => setTrouble(false)} api={recovery} />
+    <NewDeviceSheet
+      open={confirming}
+      onClose={() => setClosedFor(error)}
+      api={recovery}
+      phone={phone}
+      onConfirmed={() => {
+        setClosedFor(error);
+        again.current();
+      }}
+    />
     </>
   );
 }

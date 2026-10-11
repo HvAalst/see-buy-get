@@ -11,6 +11,7 @@ import { EmailStep } from './EmailStep';
 import { IdDisputeCase } from './IdDisputeCase';
 import { settingsIdSays } from './idDispute';
 import { pinChangeBlocker } from './password';
+import { PIN_LENGTH } from './pin';
 import { oldNumberSays, recoveryEmailSays } from './recovery';
 import type { AccountApi } from './useAccount';
 
@@ -232,11 +233,11 @@ function PinForm({ api, own, onDone }: { api: AccountApi; own?: SettingsSheetPro
       <p class="t-body">{t(own ? 'account.settings.pinStays' : 'account.menu.pinBody')}</p>
       <div class="field">
         <span class="field__label">{t('account.menu.currentPin')}</span>
-        <CodeBoxes id="acct-pin-current" label={t('account.menu.currentPin')} length={4} value={current} onInput={setCurrent} disabled={busy} mask />
+        <CodeBoxes id="acct-pin-current" label={t('account.menu.currentPin')} length={PIN_LENGTH} value={current} onInput={setCurrent} disabled={busy} mask />
       </div>
       <div class="field">
         <span class="field__label">{t('account.menu.newPin')}</span>
-        <CodeBoxes id="acct-pin-new" label={t('account.menu.newPin')} length={4} value={next} onInput={setNext} disabled={busy} />
+        <CodeBoxes id="acct-pin-new" label={t('account.menu.newPin')} length={PIN_LENGTH} value={next} onInput={setNext} disabled={busy} />
       </div>
       {error ? <ErrorNote error={error} /> : null}
       <Button
@@ -277,10 +278,10 @@ function EmailForm({ api, onDone }: { api: AccountApi; onDone: () => void }) {
       <EmailStep id="acct" email={email} code={code} onEmail={setEmail} onCode={setCode} send={api.sendEmailCode} disabled={busy} label={api.account?.email ? t('account.settings.emailNew') : undefined} />
       <div class="field">
         <span class="field__label">{t('account.settings.pinToConfirm')}</span>
-        <CodeBoxes id="acct-email-pin" label={t('account.settings.pinToConfirm')} length={4} value={pin} onInput={(v) => { setPin(v); setError(null); }} disabled={busy} mask />
+        <CodeBoxes id="acct-email-pin" label={t('account.settings.pinToConfirm')} length={PIN_LENGTH} value={pin} onInput={(v) => { setPin(v); setError(null); }} disabled={busy} mask />
       </div>
       <Refused error={error} />
-      <Button chevron={false} busy={busy} disabled={!email.trim() || code.length !== 6 || pin.length !== 4} onClick={() => void save()}>
+      <Button chevron={false} busy={busy} disabled={!email.trim() || code.length !== 6 || pin.length !== PIN_LENGTH} onClick={() => void save()}>
         {t('account.settings.emailSave')}
       </Button>
     </>
@@ -315,10 +316,10 @@ function OldNumberForm({ api, onDone }: { api: AccountApi; onDone: () => void })
       <p class="t-body">{t('account.settings.oldNumber.blockBody')}</p>
       <div class="field">
         <span class="field__label">{t('account.settings.pinToConfirm')}</span>
-        <CodeBoxes id="acct-old-pin" label={t('account.settings.pinToConfirm')} length={4} value={pin} onInput={(v) => { setPin(v); setError(null); }} disabled={busy} mask />
+        <CodeBoxes id="acct-old-pin" label={t('account.settings.pinToConfirm')} length={PIN_LENGTH} value={pin} onInput={(v) => { setPin(v); setError(null); }} disabled={busy} mask />
       </div>
       <Refused error={error} />
-      <Button chevron={false} busy={busy} disabled={pin.length !== 4} onClick={() => void block()}>
+      <Button chevron={false} busy={busy} disabled={pin.length !== PIN_LENGTH} onClick={() => void block()}>
         {t('account.settings.oldNumber.blockSave')}
       </Button>
     </>
@@ -401,10 +402,10 @@ function PhoneForm({ api, onDone }: { api: AccountApi; onDone: () => void }) {
       ) : null}
       <div class="field">
         <span class="field__label">{t('account.settings.pinToConfirm')}</span>
-        <CodeBoxes id="acct-phone-pin" label={t('account.settings.pinToConfirm')} length={4} value={pin} onInput={(v) => { setPin(v); setError(null); }} disabled={busy} mask />
+        <CodeBoxes id="acct-phone-pin" label={t('account.settings.pinToConfirm')} length={PIN_LENGTH} value={pin} onInput={(v) => { setPin(v); setError(null); }} disabled={busy} mask />
       </div>
       <Refused error={error} />
-      <Button chevron={false} busy={busy} disabled={!sent || (!verified && code.length !== 6) || pin.length !== 4} onClick={() => void move()}>
+      <Button chevron={false} busy={busy} disabled={!sent || (!verified && code.length !== 6) || pin.length !== PIN_LENGTH} onClick={() => void move()}>
         {t('account.settings.phoneSave')}
       </Button>
     </>

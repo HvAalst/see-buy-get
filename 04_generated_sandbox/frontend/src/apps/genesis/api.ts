@@ -1,3 +1,4 @@
+import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
 import {
   createConsumerApi,
   createConversationsApi,
@@ -72,9 +73,12 @@ export function verifyOtp(phone: string, code: string): Promise<Result<{ verifie
 }
 
 /** Create (or refresh) the consumer for an OTP-verified phone; optionally set the PIN + credit an invite. */
-export function enroll(phone: string, pin?: string, inviteToken?: string, recovery?: { email: string; code: string }): Promise<Result<AuthResult>> {
+export async function enroll(phone: string, pin?: string, inviteToken?: string, recovery?: { email: string; code: string }): Promise<Result<AuthResult>> {
   // A first PIN needs a confirmed recovery email behind it; somebody replacing a forgotten PIN already has one.
-  return publicRequest<AuthResult>(sendConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, inviteToken, ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}) } });
+  const r = await publicRequest<AuthResult & { device?: string }>(sendConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, inviteToken, ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}) } });
+  // The code was typed on this device: the server hands it the key the PIN is asked with from now on.
+  saveDeviceKey(phone, r.data?.device);
+  return r;
 }
 
 /** Validate an invite token at the landing (S24) — public, tells us only whether the link is real. */
@@ -82,14 +86,16 @@ export function previewInvite(token: string): Promise<Result<{ valid: boolean }>
   return publicRequest<{ valid: boolean }>(sendConfig(), `/v1/sbg/identity/invite/${encodeURIComponent(token)}`);
 }
 
-/** Reopen with phone + 4-digit PIN (no OTP). */
 /** Change your PIN, proven with the CURRENT one — a phone left unlocked is not proof of who holds it. */
 export function changePinWithCurrent(phone: string, pin: string, newPin: string): Promise<Result<AuthResult>> {
-  return publicRequest<AuthResult>(sendConfig(), '/v1/sbg/identity/pin/change', { body: { phone, pin, newPin } });
+  return publicRequest<AuthResult>(sendConfig(), '/v1/sbg/identity/pin/change', { body: { phone, pin, newPin, device: readDeviceKey(phone) } });
 }
 
+/** Reopen with phone + PIN, no code — on a device the code was once typed on. */
 export function pinLogin(phone: string, pin: string): Promise<Result<AuthResult>> {
-  return publicRequest<AuthResult>(sendConfig(), '/v1/sbg/identity/login', { body: { phone, pin } });
+  // `device`: the key this phone or browser was handed when the code was typed on it. Without it the server does not
+  // look at the PIN, and answers DEVICE_NOT_KNOWN — the sign-in screen then sends the code (NewDeviceSheet).
+  return publicRequest<AuthResult>(sendConfig(), '/v1/sbg/identity/login', { body: { phone, pin, device: readDeviceKey(phone) } });
 }
 
 /** sessionStorage namespace for the consumer's bearer — one key per personDid, purged on every

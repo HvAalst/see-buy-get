@@ -13,7 +13,7 @@ const GENERIC = 'Something went wrong. Try again.';
  * pins the fix so the six can never silently fall back again.
  */
 describe('errorSentence — identity codes resolve to specific guidance (not the generic fallback)', () => {
-  const codes: SbgErrorCode[] = ['AUTH_FAILED', 'PIN_INVALID', 'PIN_LOCKED', 'PIN_WRONG', 'PASSWORD_WRONG', 'SECRET_WRONG', 'PASSWORD_LOCKED', 'PASSWORD_TOO_SHORT', 'PASSWORD_GUESSABLE', 'PIN_GUESSABLE', 'ROLE_NOT_HELD', 'PHONE_INVALID', 'PHONE_NOT_VERIFIED'];
+  const codes: SbgErrorCode[] = ['AUTH_FAILED', 'DEVICE_NOT_KNOWN', 'PIN_INVALID', 'PIN_LOCKED', 'PIN_WRONG', 'PASSWORD_WRONG', 'SECRET_WRONG', 'PASSWORD_LOCKED', 'PASSWORD_TOO_SHORT', 'PASSWORD_GUESSABLE', 'PIN_GUESSABLE', 'ROLE_NOT_HELD', 'PHONE_INVALID', 'PHONE_NOT_VERIFIED'];
   for (const code of codes) {
     it(`${code} has its own sentence`, () => {
       expect(errorSentence(mk(code))).not.toBe(GENERIC);
@@ -43,6 +43,15 @@ describe('errorSentence — identity codes resolve to specific guidance (not the
     expect(errorSentence(mk('PASSWORD_TOO_SHORT'))).toContain('8 characters');
     const guessable = errorSentence(mk('PASSWORD_GUESSABLE')).toLowerCase();
     for (const word of ['common word', 'name', 'digits', '12345678']) expect(guessable).toContain(word);
+  });
+
+  it('a PIN is five digits, and a device that is new is told what happens next — not that the PIN was wrong', () => {
+    expect(errorSentence(mk('PIN_INVALID'))).toContain('5 digits');
+    expect(errorSentence(mk('PIN_GUESSABLE'))).toContain('12345');
+    const fresh = errorSentence(mk('DEVICE_NOT_KNOWN')).toLowerCase();
+    expect(fresh).toContain('code');
+    expect(fresh).not.toContain('wrong');
+    expect(fresh).not.toContain('not right');
   });
 
   it('PIN_LOCKED steers the user to the code recovery, not a dead "try again"', () => {

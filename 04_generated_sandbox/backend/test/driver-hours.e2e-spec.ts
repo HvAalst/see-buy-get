@@ -18,7 +18,7 @@ describe('a driver’s hours, over the wire', () => {
   let http: () => ReturnType<typeof request>;
   const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
   const digits = () => String(Math.floor(Math.random() * 9_000_000) + 1_000_000);
-  const PIN = '4826';
+  const PIN = '48261';
   const H = 3_600_000;
   let operator = '';
 
@@ -45,8 +45,8 @@ describe('a driver’s hours, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `hrs${digits()}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
-    await http().post('/v1/sbg/identity/enroll').send({ phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
-    const session = await http().post('/v1/sbg/drivers/session').send({ phone, pin: PIN }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
+    const session = await http().post('/v1/sbg/drivers/session').send({ phone, pin: PIN, device: enrolled.body.device }).expect(201);
     const bike = app.get(VehicleService).register({ plate: `HRS-${digits()}`, vehicleClass: 'bike', capacityKg: 30, ownerName: 'Njeri Rider', ownerDriverDid: did } as never);
     return { did, token: session.body.token.access_token as string, vehicleId: bike.vehicleId };
   }

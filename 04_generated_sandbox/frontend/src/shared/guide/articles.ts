@@ -91,11 +91,13 @@ export const ARTICLES: GuideArticle[] = [
     summary: "Two steps: the company code says which fleet, and your own phone and PIN say who you are.",
     steps: [
       "Type the company code (it looks like FM-1A2B3C). The app shows the company name, so you know it is the right one.",
-      "Type your phone number and your 4-digit PIN.",
+      "Type your phone number and your 5-digit PIN.",
+      "A phone or browser you have not signed in on before asks for a code first: we send it to your number, you type it once, and from then on your PIN works there. Your PIN is not changed by it.",
       "Forgot the code? Tap “Forgot the code? Sign in with your phone”, type your phone and PIN, and pick your fleet from the list."
     ],
     notes: [
-      "Five wrong PINs lock the PIN until you verify your phone by code and choose a new one. Anybody who manages the fleet can see the code in the app."
+      "Five wrong PINs lock the PIN until you verify your phone by code and choose a new one. Anybody who manages the fleet can see the code in the app.",
+      "Your PIN opens your account only on a phone or browser that has shown it holds your number. Nobody can try your PIN from anywhere else."
     ]
   },
   {
@@ -143,16 +145,18 @@ export const ARTICLES: GuideArticle[] = [
       "driver"
     ],
     title: "Signing in as a driver",
-    summary: "Use the phone number your fleet registered you with, and your 4-digit PIN. Your driver ID alone does not sign you in.",
+    summary: "Use the phone number your fleet registered you with, and your 5-digit PIN. Your driver ID alone does not sign you in.",
     steps: [
       "Type your phone number and PIN, and tap Sign in.",
+      "A phone or browser you have not signed in on before asks for a code first: we send it to your number, you type it once, and from then on your PIN works there. Your PIN is not changed by it.",
       "First time, or forgot your PIN? Tap “First time here, or forgot your PIN?”. We send a code to your phone; type it, then choose a PIN. The first time, you also add a recovery email.",
       "The app says “This phone is not registered to a driver”? Your PIN is fine: ask your fleet manager which number they registered."
     ],
     notes: [
       "Five wrong PINs lock the PIN. Only a code sent to your phone opens it again, and you are told when it happens.",
       "Signing in on another phone signs this one out. If you are signed out and it was not you, choose a new PIN.",
-      "Starting a shift asks for your PIN again, so nobody can start one on a phone you left signed in."
+      "Starting a shift asks for your PIN again, so nobody can start one on a phone you left signed in.",
+      "Your PIN opens your account only on a phone or browser that has shown it holds your number. Nobody can try your PIN from anywhere else."
     ]
   },
   {
@@ -181,7 +185,7 @@ export const ARTICLES: GuideArticle[] = [
       "send"
     ],
     title: "Changing your PIN",
-    summary: "Your PIN is 4 digits. Change it with the current one — or, if you have forgotten it, with a code sent to your phone.",
+    summary: "Your PIN is 5 digits. Change it with the current one — or, if you have forgotten it, with a code sent to your phone.",
     steps: [
       "Driver and Fleet app: tap your picture, then Settings, then Change your PIN.",
       "Send app: Account, then Settings, then Change your PIN.",
@@ -189,7 +193,9 @@ export const ARTICLES: GuideArticle[] = [
     ],
     notes: [
       "Changing your PIN signs out every other phone that PIN had opened, in every app.",
-      "A PIN that is easy to guess is refused: one digit four times, a run like 1234, or pairs like 1212."
+      "A PIN that is easy to guess is refused: mostly one digit, a run like 12345 or 13579, or a pattern like 12312.",
+      "A PIN is five digits, not four, so that it is not the same PIN as the one for your mobile money or your bank card. Do not use that one with a digit added.",
+      "A PIN replaced with a code — forgotten, or locked — works on the phone or browser you did it on. Every other one asks for a code again."
     ]
   },
   {
@@ -233,7 +239,7 @@ export const ARTICLES: GuideArticle[] = [
       "Somebody changed your number and it was not you: within 24 hours tap “Trouble signing in?”, then “Undo a number change”. Use the old number with the PIN as it was, or a code to your email."
     ],
     notes: [
-      "Lost only the handset? Nothing is lost. Sign in from any phone with the same number and PIN.",
+      "Lost only the handset? Nothing is lost. Put your number in the new phone and sign in with the same number and PIN: the new phone asks for a code to your number once, and then your PIN works on it.",
       "A first PIN cannot be chosen without a recovery email. We write to it when your PIN is locked and when your phone number changes.",
       "Drivers and shops are also asked for the national ID number they registered with when they get back in by email.",
       "After a number change the old number is kept for you for 24 hours. After that it is free for a new person.",
@@ -251,7 +257,8 @@ export const ARTICLES: GuideArticle[] = [
       "Somebody who signs up with a number another account used to have sees none of that account’s parcels, orders or invitations: only what is sent to the number from then on.",
       "In those seven days, give your new number to the people and the stores that send to you. When they have it, open Settings and choose “Block my old number”, with your PIN: from then a parcel sent to it is no longer yours. We remind you once a day. If you do nothing, the old number is let go after seven days. It cannot be blocked in the first 24 hours, while the change can still be undone.",
       "If your account was moved without your PIN, by a code to your email or by SeeBuyGet staff, the collection codes of your parcels are changed and are hidden for 24 hours after the move. The parcel screen says from when the code shows. The free collection time of a waiting parcel does not run out in those hours.",
-      "For 24 hours after any number change you cannot give a parcel up or name somebody else to collect it: those two cannot be taken back. When a number change is undone, the collection codes of your parcels are changed, so whoever had the account in between holds codes that open nothing."
+      "For 24 hours after any number change you cannot give a parcel up or name somebody else to collect it: those two cannot be taken back. When a number change is undone, the collection codes of your parcels are changed, so whoever had the account in between holds codes that open nothing.",
+      "After your number changes, your PIN works on the phone or browser you changed it on. Every other one asks for a code to the new number first."
     ]
   },
   {
@@ -315,8 +322,9 @@ export const ARTICLES: GuideArticle[] = [
     title: "Signing in to send or collect",
     summary: "You do not need to sign in to get a price or track a parcel. To send, sign in with your phone and a PIN you choose.",
     steps: [
-      "New here: type your phone number, type the code we send you, then choose a 4-digit PIN.",
+      "New here: type your phone number, type the code we send you, then choose a 5-digit PIN.",
       "Coming back: tap “I already have an account” and type your phone and PIN.",
+      "A phone or browser you have not signed in on before asks for a code first: we send it to your number, you type it once, and from then on your PIN works there. Your PIN is not changed by it.",
       "Forgot your PIN? Sign in with a code again, and choose a new PIN."
     ]
   },
@@ -484,7 +492,8 @@ export const ARTICLES: GuideArticle[] = [
     summary: "Everyone in a business signs in as themselves, with their own phone number and PIN — the same PIN as in any SeeBuyGet app.",
     steps: [
       "Open the Business app from the front page: Sign in, then A business.",
-      "Type your phone number and PIN. New here, or forgot your PIN? We send a code to your phone first.",
+      "Type your phone number and your 5-digit PIN. New here, or forgot your PIN? We send a code to your phone first.",
+      "A phone or browser you have not signed in on before asks for a code first: we send it to your number, you type it once, and from then on your PIN works there. Your PIN is not changed by it.",
       "The first time, set up your business: its registered name, country, registration number and what it does. You become its owner.",
       "In more than one business? Pick one. Switch business, in the menu under your name, takes you back to the list."
     ]

@@ -22,7 +22,7 @@ describe('a parcel is kept by the account, over the wire', () => {
   let operator: Record<string, string>;
   const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
   const digits = () => String(Math.floor(Math.random() * 9_000_000) + 1_000_000);
-  const PIN = '4826';
+  const PIN = '48261';
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -106,9 +106,10 @@ describe('a parcel is kept by the account, over the wire', () => {
 
     // They move the account to a new number, with their PIN and a code to the new one.
     await confirm(NEW);
-    await http().post('/v1/sbg/account/phone/change').set(bearer(token)).send({ pin: PIN, newPhone: NEW }).expect(201);
+    const changed = (await http().post('/v1/sbg/account/phone/change').set(bearer(token)).send({ pin: PIN, newPhone: NEW }).expect(201)).body;
     await http().get('/v1/sbg/identity/parcels').set(bearer(token)).expect(401); // signed out everywhere
-    token = (await http().post('/v1/sbg/identity/login').send({ phone: NEW, pin: PIN }).expect(201)).body.token.access_token;
+    // The device the change was made on typed the code to the new number: it is handed its key, and signs back in with the PIN.
+    token = (await http().post('/v1/sbg/identity/login').send({ phone: NEW, pin: PIN, device: changed.device }).expect(201)).body.token.access_token;
 
     // The parcel is still theirs, and so is the code a shop will ask for. The order too.
     expect((await myParcels(token)).received.map((p) => p.parcelId)).toEqual([parcelId]);
@@ -124,7 +125,7 @@ describe('a parcel is kept by the account, over the wire', () => {
     // THE DAY IN WHICH THE MOVE CAN BE UNDONE. The old number is still theirs, and not theirs to block yet; and the two
     // things that could not be put right by an undo — naming somebody else to collect, giving the parcel up — wait.
     expect(await me()).toMatchObject({ oldNumber: { canBlock: false } });
-    expect((await block('0000').expect(403)).body.code).toBe('PIN_WRONG');
+    expect((await block('00000').expect(403)).body.code).toBe('PIN_WRONG');
     expect((await block(PIN)).body).toMatchObject({ code: 'INVALID_STATE', message: expect.stringContaining('can still be undone') });
     stored.status = 'Ready_For_Pickup';
     for (const refused of [await mine('nominate-collector').send({ name: 'A neighbour' }), await mine('collection-response').send({ choice: 'relinquish' })]) {
@@ -199,7 +200,10 @@ describe('a parcel is kept by the account, over the wire', () => {
 
     // Two members of staff move it (their checking is another suite's to prove; the move is the one they end in).
     const moved = app.get(AccountRecoveryService).moveByStaff(await idOf(token), NEW);
-    token = (await http().post('/v1/sbg/identity/login').send({ phone: NEW, pin: PIN }).expect(201)).body.token.access_token;
+    // Staff moved it, so no device typed a code to the new number: the person confirms theirs, then the PIN works.
+    await confirm(NEW);
+    const device = (await http().post('/v1/sbg/identity/device').send({ phone: NEW }).expect(201)).body.device as string;
+    token = (await http().post('/v1/sbg/identity/login').send({ phone: NEW, pin: PIN, device }).expect(201)).body.token.access_token;
 
     const seen = (await http().get(`/v1/sbg/identity/parcels/${parcelId}`).set(bearer(token)).expect(200)).body as { parcelId: string; collectToken?: unknown; codeHeldUntil?: string };
     expect(seen.parcelId).toBe(parcelId);

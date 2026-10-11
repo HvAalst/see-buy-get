@@ -1,3 +1,4 @@
+import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
 import {
   createConversationsApi,
   createDriverApi,
@@ -97,7 +98,8 @@ export interface DriverSignIn {
 
 /** Phone + PIN → the driver this phone was registered to, and a token for them. */
 export function driverSession(phone: string, pin: string): Promise<Result<DriverSignIn>> {
-  return publicRequest<DriverSignIn>(driverConfig(), '/v1/sbg/drivers/session', { body: { phone, pin } });
+  // `device`: the key this phone was handed when the code was typed on it. Without it the PIN is not looked at.
+  return publicRequest<DriverSignIn>(driverConfig(), '/v1/sbg/drivers/session', { body: { phone, pin, device: readDeviceKey(phone) } });
 }
 
 /** First time, or a forgotten PIN: a one-time code to the phone (echoed back only in a sandbox). */
@@ -110,9 +112,12 @@ export function verifyPhoneCode(phone: string, code: string): Promise<Result<{ v
 }
 
 /** Choose (or replace) the PIN for a phone that has just been verified by code. */
-export function choosePin(phone: string, pin: string, recovery?: { email: string; code: string }): Promise<Result<unknown>> {
+export async function choosePin(phone: string, pin: string, recovery?: { email: string; code: string }): Promise<Result<unknown>> {
   // A first PIN needs a confirmed recovery email behind it; somebody replacing a forgotten PIN already has one.
-  return publicRequest(driverConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}) } });
+  const r = await publicRequest<{ device?: string }>(driverConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}) } });
+  // The code was typed on this phone: it is handed the key the PIN is asked with from now on.
+  saveDeviceKey(phone, r.data?.device);
+  return r;
 }
 
 /**
