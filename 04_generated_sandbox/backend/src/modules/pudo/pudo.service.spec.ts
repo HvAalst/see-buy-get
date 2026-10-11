@@ -5537,9 +5537,12 @@ describe('PUDO Light', () => {
       const bus = corridors.addDriver({ driverDid: 'did:glos:who-bus', name: 'D', corridorId: corridor.corridorId });
       parcels.accept({ agentDid: shop.did, parcelId: 'QR-WHO', size: 'M', destZone: 'SouthTown', senderMobile: '+254700111001', receiverMobile: '+254700111002', dropoffPhotoRef: 'r.jpg' });
       parcels.handover({ agentDid: shop.did, driverBadgeId: bus.badgeId, parcelIds: ['QR-WHO'] });
+      const stars = { stars: 1, raterMobile: '+254700111002' };
+      // Still on its way, it has no second shop yet: a sign-in with no shop behind it is not "the shop it has not reached".
+      expect(parcels.get('QR-WHO').destAgentDid).toBeUndefined();
+      expect(() => controller.rate('QR-WHO', stars as never, as('agent'))).toThrow('A rating is recorded by a shop that handled this parcel');
       parcels.arrive('QR-WHO', shop.did);
       parcels.pickup('QR-WHO', shop.did, releaseCodeOf('QR-WHO'));
-      const stars = { stars: 1, raterMobile: '+254700111002' };
       // Another shop, a shop's role with no shop behind it, and the driver who carried it.
       for (const who of [as('agent', elsewhere.did), as('agent'), as('driver', 'did:glos:who-bus')]) {
         expect(() => controller.rate('QR-WHO', stars as never, who)).toThrow('A rating is recorded by a shop that handled this parcel');

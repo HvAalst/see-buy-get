@@ -3735,7 +3735,9 @@ export class SbgController {
     // Recorded at the counter of a shop that HANDLED this parcel, or by staff. Any signed-in account could rate any
     // parcel — and a rating is what a shop's standing is made of.
     const parcel = this.parcels.get(id); // 404 if unknown
-    if (actor?.role !== 'operator' && (!actor?.did || (actor.did !== parcel.originAgentDid && actor.did !== parcel.destAgentDid))) {
+    // The shops it passed through: where it was taken in, where it was collected. (A parcel born on a store's dock has no first.)
+    const handledBy = [parcel.originAgentDid, parcel.destAgentDid].filter((did): did is string => Boolean(did));
+    if (actor?.role !== 'operator' && !handledBy.includes(actor?.did ?? '')) {
       throw new GlosError('FORBIDDEN', 'A rating is recorded by a shop that handled this parcel');
     }
     return this.ratings.rate({ parcelId: id, stars: dto.stars, raterMobile: dto.raterMobile });
