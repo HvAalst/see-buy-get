@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { AuthImage, Button, Card, ErrorNote, GlanceNumber, Icon, Note, Pill, PlaceMap, PushPrompt, ReadAloud, Sheet, TopUpCostNote, type IconName } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { fromPlaceWords, toPlaceWords } from '../../../shared/placewords';
-import { canAccept, gateNotice, homeSummary, money, statusNotice } from '../logic';
+import { canAccept, gateNotice, homeSummary, money, papersReady, papersStep } from '../logic';
+import { PhotoField } from './PhotoField';
 import type { AgentActions, AgentState, Screen } from '../useAgentApp';
 import type { GeoPoint } from '../../../shared/geo';
 import type { Weekday, WeeklyHours } from '../types';
@@ -50,7 +51,9 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
   const [sheet, setSheet] = useState<SheetKind | 'password' | null>(null);
   const agent = state.agent;
   const gate = gateNotice(agent, state.gate, t);
-  const onboarding = statusNotice(agent?.status, t);
+  // Papers first, money after: a shop that is not approved yet is not told to top up to take a parcel in.
+  const step = papersStep(agent);
+  const awaitingApproval = step?.kind === 'send' || step?.kind === 'with_staff';
   const open = agent?.openState !== 'closed';
 
   // Refresh the shelf occupancy each time the cockpit is shown (Home re-mounts on navigation), so a bag just
@@ -158,7 +161,7 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
         storageKey="glos-agent-push-asked"
       />
 
-      {onboarding ? <Note tone="warn" icon="clock" title={t('agent.home.notActive')} detail={onboarding} /> : null}
+      <Papers state={state} actions={actions} />
       {gate ? <Note tone={gate.tone} icon={gate.tone === 'danger' ? 'lock' : 'wallet'} title={gate.title} detail={gate.detail} /> : null}
 
       {/* Quick actions — the counter jobs. */}
@@ -172,7 +175,7 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
               </span>
               <span class="row__body">
                 <span class="row__t">{t(j.titleKey)}</span>
-                <span class="row__s">{disabled ? t('agent.home.topUpFirst') : t(j.subKey)}</span>
+                <span class="row__s">{disabled ? t(awaitingApproval ? 'agent.home.approvalFirst' : 'agent.home.topUpFirst') : t(j.subKey)}</span>
               </span>
               <span class="row__end">
                 {j.screen === 'handover' && state.shopParcels.length ? <span class="row__count">{state.shopParcels.length}</span> : null}
@@ -526,5 +529,68 @@ function HoursSheet({ open, onClose, state, actions }: { open: boolean; onClose:
       </div>
       <Button variant="link" onClick={onClose}>{t('agent.done')}</Button>
     </Sheet>
+  );
+}
+
+/**
+ * A SHOP THAT IS NOT YET APPROVED: what is wanted of it, and the way to send it.
+ *
+ * This is where a new shop used to read "Your shop is draft" and nothing else. Staff can only approve a shop that
+ * has sent a copy of an ID, its trading licence and a photograph of the shop — and no screen sent them, so every
+ * shop that signed up waited for an approval that could not come. (The courier's app had the same hole and the same
+ * card: see Clearance there.)
+ *
+ * Papers with staff show that they are, and no button: sending them twice is not an action.
+ */
+function Papers({ state, actions }: HomeScreenProps) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [idCopy, setIdCopy] = useState('');
+  const [licence, setLicence] = useState('');
+  const [shopFront, setShopFront] = useState('');
+  const step = papersStep(state.agent);
+  if (!step) return null;
+
+  if (step.kind === 'with_staff') return <Note tone="info" icon="check" title={t('agent.papers.pendingTitle')} detail={t('agent.papers.pendingBody')} />;
+  if (step.kind === 'pay_in') return <Note tone="info" icon="wallet" title={t('agent.papers.approvedTitle')} detail={t('agent.papers.approvedBody')} />;
+
+  return (
+    <>
+      {step.refusedWhy ? (
+        <Note tone="danger" icon="warning" title={t('agent.papers.refusedTitle')} detail={t('agent.papers.refusedBody', { reason: step.refusedWhy })} />
+      ) : (
+        <Note tone="warn" icon="badge" title={t('agent.papers.needTitle')} detail={t('agent.papers.needBody')} />
+      )}
+      <Button variant="outline" onClick={() => setOpen(true)}>
+        {t(step.refusedWhy ? 'agent.papers.sendAgain' : 'agent.papers.send')}
+      </Button>
+
+      {open ? (
+        <Sheet open onClose={() => setOpen(false)} title={t('agent.papers.send')}>
+          <p class="t-body">{t('agent.papers.sheetBody')}</p>
+          <PhotoField id="papers-id" value={idCopy} label={t('agent.papers.idPhoto')} upload={(file) => actions.uploadPhoto('kyc_id', file)} onCapture={setIdCopy} />
+          <PhotoField id="papers-licence" value={licence} label={t('agent.papers.licencePhoto')} upload={(file) => actions.uploadPhoto('kyc_licence', file)} onCapture={setLicence} />
+          <PhotoField id="papers-shop" value={shopFront} label={t('agent.papers.shopPhoto')} upload={(file) => actions.uploadPhoto('shop', file)} onCapture={setShopFront} />
+          <Button
+            chevron={false}
+            disabled={!papersReady({ idCopy, licence, shopFront })}
+            busy={state.busy === 'papers'}
+            onClick={async () => {
+              const sent = await actions.sendPapers({ idCopyRef: idCopy, tradingLicenceRef: licence, shopPhotoRefs: [shopFront] });
+              if (!sent) return;
+              setOpen(false);
+              setIdCopy('');
+              setLicence('');
+              setShopFront('');
+            }}
+          >
+            {t('agent.papers.submit')}
+          </Button>
+          <Button variant="link" onClick={() => setOpen(false)}>
+            {t('agent.papers.notNow')}
+          </Button>
+        </Sheet>
+      ) : null}
+    </>
   );
 }

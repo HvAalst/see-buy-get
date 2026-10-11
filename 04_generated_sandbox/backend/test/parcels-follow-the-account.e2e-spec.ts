@@ -53,7 +53,13 @@ describe('a parcel is kept by the account, over the wire', () => {
       })
       .expect(201);
     const did = reg.body.did as string;
-    await http().post(`/v1/sbg/agents/${did}/submit-kyc`).set(operator).send({ idCopyRef: 'id.jpg', tradingLicenceRef: 'lic.pdf', shopPhotoRefs: ['shop.jpg'] }).expect(201);
+    // Its papers are photographs the shop itself uploaded: staff cannot send them for it, and a file name is refused.
+    const shop = { Authorization: `Bearer ${(await http().post('/v1/auth/token').send({ role: 'agent', did }).expect(201)).body.access_token}` };
+    const photograph = async (kind: string) => {
+      const dataUrl = `data:image/png;base64,${Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from(`${kind}:${did}`)]).toString('base64')}`;
+      return (await http().post('/v1/sbg/media').set(shop).send({ kind, dataUrl }).expect(201)).body.mediaId as string;
+    };
+    await http().post(`/v1/sbg/agents/${did}/submit-kyc`).set(shop).send({ idCopyRef: await photograph('kyc_id'), tradingLicenceRef: await photograph('kyc_licence'), shopPhotoRefs: [await photograph('shop')] }).expect(201);
     await http().post(`/v1/sbg/agents/${did}/kyc-decision`).set(operator).send({ approve: true }).expect(201);
     const asked = await http().post(`/v1/sbg/agents/${did}/top-up`).set(operator).send({ amount: 50 }).expect(201);
     await http().post(`/v1/rails/funding/${asked.body.fundingId}/simulate`).set(operator).send({ providerRef: `MPX${u}`, amount: 50 }).expect(201);

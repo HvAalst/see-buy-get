@@ -72,6 +72,8 @@ export interface AgentView {
   openState: OpenState;
   pricePerParcel: number;
   status: AgentStatus;
+  /** Why staff did not accept the papers last sent — shown to the shop, which sends them again. Gone once they are sent. */
+  kycRejection?: { reason: string; at: string };
   openingHours?: WeeklyHours;
   shopfrontMediaId?: string; // the shop-front photo (owner-gated media)
   /** Floor room for outbound bags. Absent until the shop says — the plan's `staging.capacity` is the answer. */

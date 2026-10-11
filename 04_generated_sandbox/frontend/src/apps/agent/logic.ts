@@ -75,10 +75,14 @@ export interface GateNotice {
  * sentence for both cases; the S4 error contract gives us the machine code, so a locked
  * account and a thin wallet get their own words (and their own icons upstream).
  */
-export function gateNotice(agent: Pick<AgentView, 'status'> | null, gate: GateView | null, t: Translate): GateNotice | null {
+export function gateNotice(agent: Pick<AgentView, 'status' | 'kycRejection'> | null, gate: GateView | null, t: Translate): GateNotice | null {
   if (!agent || !gate || gate.ok) return null;
   // Held over its national ID: said as what it is. Topping up would not open the counter, so it must not be asked for.
   if (gate.code === 'ID_HELD') return { tone: 'danger', title: t('agent.logic.gateIdHeldTitle'), detail: t('agent.logic.gateIdHeldDetail') };
+  // NOT YET THROUGH THE DOOR IS NOT "LOCKED". A new shop was shown "Account locked — top up your wallet to start
+  // accepting parcels AGAIN" under the request for its papers: money asked for before anybody had agreed to anything,
+  // in words for a shop that had been open. What it is waiting on is said once, by papersStep.
+  if (papersStep(agent)) return null;
   if (agent.status === 'LOCKED' || gate.code === 'AGENT_LOCKED') {
     return {
       tone: 'danger',
@@ -101,10 +105,30 @@ export function canAccept(gate: GateView | null): boolean {
   return Boolean(gate?.ok);
 }
 
-/** The shop must be through onboarding before the counter flows make sense. */
-export function statusNotice(status: AgentStatus | undefined, t: Translate): string | null {
-  if (!status || status === 'ACTIVE' || status === 'LOCKED') return null;
-  return t('agent.logic.statusNotice', { status: status.replace(/_/g, ' ').toLowerCase() });
+/**
+ * WHERE A SHOP STANDS BEFORE IT CAN TAKE A PARCEL, AND WHOSE MOVE IT IS.
+ *
+ * A new shop was shown "Your shop is draft. SeeBuyGet must activate it" — the name of a state, and a sentence that
+ * put the next step on us. It was the shop's: three photographs nobody had asked it for, on a screen that had no way
+ * to send them. So each step here says who acts: `send` (the shop, with the reason when its papers came back),
+ * `with_staff` (us — and nothing for the shop to do), `pay_in` (the shop again). Null once it is through.
+ */
+export type PapersStep = { kind: 'send'; refusedWhy?: string } | { kind: 'with_staff' } | { kind: 'pay_in' };
+export function papersStep(agent: { status: AgentStatus; kycRejection?: { reason: string } } | null | undefined): PapersStep | null {
+  if (!agent) return null;
+  if (agent.status === 'DRAFT') {
+    // Quoted inside a sentence on the screen, so without the full stop its writer may have ended it on.
+    const why = agent.kycRejection?.reason?.trim().replace(/[.\s]+$/, '');
+    return why ? { kind: 'send', refusedWhy: why } : { kind: 'send' };
+  }
+  if (agent.status === 'KYC_PENDING') return { kind: 'with_staff' };
+  if (agent.status === 'APPROVED_UNFUNDED') return { kind: 'pay_in' };
+  return null;
+}
+
+/** Nothing is sent until all three are there: a shop told "something is missing" has to guess which. */
+export function papersReady(papers: { idCopy: string; licence: string; shopFront: string }): boolean {
+  return Boolean(papers.idCopy && papers.licence && papers.shopFront);
 }
 
 /* ------------------------------------------------------------------ money -- */

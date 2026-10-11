@@ -4110,7 +4110,7 @@
       "post": {
         "operationId": "Sbg.submitKyc",
         "summary": "",
-        "description": "Upload KYC documents (ID copy, trading licence, shop photos) → KYC_PENDING.",
+        "description": "A shop sends its papers — a copy of an ID, its trading licence, a photograph of the shop — and they go to staff.",
         "parameters": [
           {
             "name": "did",

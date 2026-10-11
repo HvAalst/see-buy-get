@@ -65,6 +65,25 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "shop-papers",
+    apps: [
+      "agent"
+    ],
+    title: "Getting your shop approved: send your papers",
+    summary: "A new shop cannot take parcels until SeeBuyGet has seen three things: your ID, your trading licence and a photo of your shop. You send them from the Shop app, and it tells you where you stand.",
+    steps: [
+      "Sign in to the Shop app. While your shop is not approved, the home screen says Send your papers to be approved.",
+      "Press Send my papers. Photograph your ID, your trading licence and the front of your shop, one after the other. Take each in good light, with every corner in the picture.",
+      "When all three say Photo saved, press Send to SeeBuyGet. The screen then says Your papers are with SeeBuyGet. There is nothing more for you to do while they are read.",
+      "If something is wrong with them, the screen says Your papers were not accepted and shows what SeeBuyGet wrote. Put that right and press Send them again.",
+      "When your shop is approved the screen says so. Pay in to your float, and you can take your first parcel."
+    ],
+    notes: [
+      "Only SeeBuyGet staff see these photographs.",
+      "A photograph must be one you take or pick in the app at that moment. Papers cannot be sent for you by anybody else."
+    ]
+  },
+  {
     id: "change-password",
     apps: [
       "agent",

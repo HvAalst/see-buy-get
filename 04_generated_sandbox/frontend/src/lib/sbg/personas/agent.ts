@@ -42,6 +42,10 @@ export function createAgentApi(sbg: SbgClient) {
     /** The shop's own record (status, open state, price, zone, balance, rating). */
     me: (did: string) => sbg.request((c) => c.GET('/v1/sbg/agents/{did}', { params: { path: { did } } })),
 
+    /** Send the shop's papers to be approved: each is the id of a picture this shop uploaded. */
+    submitKyc: (did: string, body: { idCopyRef: string; tradingLicenceRef: string; shopPhotoRefs: string[] }) =>
+      sbg.request((c) => c.POST('/v1/sbg/agents/{did}/submit-kyc', { params: { path: { did } }, body })),
+
     /** The 'no money, no scan' gate — { ok, code, balance, shortfall } as readable state. */
     canTransact: (did: string) => sbg.request((c) => c.GET('/v1/sbg/agents/{did}/can-transact', { params: { path: { did } } })),
 

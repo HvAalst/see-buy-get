@@ -196,6 +196,10 @@ describe('the first day of a new installation, as it would be live', () => {
 
   /* ------------------------------------------------------------------ shops -- */
 
+  /** A photograph, as a phone's camera hands it over: a real picture file, different for each label. */
+  const shot = (label: string) => `data:image/png;base64,${Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from(label)]).toString('base64')}`;
+  /** Somebody takes a picture in their app: it is uploaded as theirs, and what comes back is its id. */
+  const photograph = async (token: string, kind: string, label: string) => (await must(http().post('/v1/sbg/media').set(bearer(token)).send({ kind, dataUrl: shot(label) }))).mediaId as string;
   /** The code a text carries: its first six digits, as the person reads them off their phone. */
   const codeIn = (sms: OutgoingSms | undefined) => sms?.body.match(/^(\d{6}) /)?.[1] ?? '';
   const HOURS = Object.fromEntries(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map((d) => [d, { open: '07:30', close: '20:30' }]));
@@ -243,6 +247,8 @@ describe('the first day of a new installation, as it would be live', () => {
   };
   let mamaSarah: Shop;
   let riverside: Shop;
+  /** The first shop's ID photograph: the second shop tries to send it as its own. */
+  let papersOfTheFirst = '';
 
   it('4 · two shops join by a code texted to the shopkeeper’s phone, send their papers, and are approved by staff', async () => {
     mamaSarah = await joinAsShop('Mama Sarah Shop', 'Nairobi CBD', '+254711000101', { lat: -1.2864, lng: 36.8172 });
@@ -252,7 +258,39 @@ describe('the first day of a new installation, as it would be live', () => {
     for (const shop of [mamaSarah, riverside]) {
       const own = `/v1/sbg/agents/${encodeURIComponent(shop.did)}`;
       expect((await must(http().get(own).set(bearer(shop.token)), 200)).status).toBe('DRAFT');
-      await must(http().post(`${own}/submit-kyc`).set(bearer(shop.token)).send({ idCopyRef: 'id.jpg', tradingLicenceRef: 'licence.jpg', shopPhotoRefs: ['shop-front.jpg'] }));
+      // Nothing for staff to look at yet: a shop that has sent no papers is not in their queue.
+      expect((await must(http().get('/v1/sbg/agents/kyc-queue').set(bearer(amina)), 200)).map((a: { did: string }) => a.did)).not.toContain(shop.did);
+      // ITS PAPERS ARE PHOTOGRAPHS IT TOOK. A file name with nothing behind it is not a paper…
+      const refusedName = await http().post(`${own}/submit-kyc`).set(bearer(shop.token)).send({ idCopyRef: 'id.jpg', tradingLicenceRef: 'licence.jpg', shopPhotoRefs: ['shop-front.jpg'] });
+      expect([refusedName.status, refusedName.body.code]).toEqual([400, 'PHOTO_REQUIRED']);
+      const [idCopyRef, tradingLicenceRef, shopFront] = [await photograph(shop.token, 'kyc_id', `id of ${shop.did}`), await photograph(shop.token, 'kyc_licence', `licence of ${shop.did}`), await photograph(shop.token, 'shop', `front of ${shop.did}`)];
+      // …nor is a photograph somebody else took.
+      if (shop === riverside) {
+        const borrowed = await http().post(`${own}/submit-kyc`).set(bearer(shop.token)).send({ idCopyRef: papersOfTheFirst, tradingLicenceRef, shopPhotoRefs: [shopFront] });
+        expect([borrowed.status, borrowed.body.code]).toEqual([400, 'PHOTO_REQUIRED']);
+      } else {
+        papersOfTheFirst = idCopyRef;
+      }
+      // EACH of the three, not the first only: a good ID does not carry a licence or a shop front that is only a name.
+      for (const papers of [
+        { idCopyRef, tradingLicenceRef: 'licence.jpg', shopPhotoRefs: [shopFront] },
+        { idCopyRef, tradingLicenceRef, shopPhotoRefs: ['shop-front.jpg'] },
+        { idCopyRef, tradingLicenceRef, shopPhotoRefs: [shopFront, 'another-angle.jpg'] },
+      ]) {
+        const refused = await http().post(`${own}/submit-kyc`).set(bearer(shop.token)).send(papers);
+        expect([refused.status, refused.body.code]).toEqual([400, 'PHOTO_REQUIRED']);
+      }
+      expect((await must(http().get(own).set(bearer(shop.token)), 200)).status).toBe('DRAFT');
+      expect((await must(http().post(`${own}/submit-kyc`).set(bearer(shop.token)).send({ idCopyRef, tradingLicenceRef, shopPhotoRefs: [shopFront] }))).status).toBe('KYC_PENDING');
+      // Staff find it in their queue, with pictures they can open.
+      const queued = (await must(http().get('/v1/sbg/agents/kyc-queue').set(bearer(amina)), 200)).find((a: { did: string }) => a.did === shop.did);
+      expect(queued.kyc).toMatchObject({ idCopyRef, tradingLicenceRef, shopPhotoRefs: [shopFront] });
+      await must(http().get(`/v1/sbg/media/${idCopyRef}`).set(bearer(amina)), 200);
+      // Sent once: a second sending is refused, not queued twice — and it is told THAT, whatever it sends this time.
+      for (const again of [{ idCopyRef, tradingLicenceRef, shopPhotoRefs: [shopFront] }, { idCopyRef: 'id.jpg', tradingLicenceRef: 'licence.jpg', shopPhotoRefs: ['shop-front.jpg'] }]) {
+        const second = await http().post(`${own}/submit-kyc`).set(bearer(shop.token)).send(again);
+        expect([second.status, second.body.code]).toEqual([400, 'INVALID_STATE']);
+      }
       // A shop cannot approve itself.
       await must(http().post(`${own}/kyc-decision`).set(bearer(shop.token)).send({ approve: true }), 403);
       await must(http().post(`${own}/kyc-decision`).set(bearer(amina)).send({ approve: true }));

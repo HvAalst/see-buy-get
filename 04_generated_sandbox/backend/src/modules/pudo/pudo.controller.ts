@@ -409,11 +409,20 @@ export class SbgController {
     return this.agents.register(dto);
   }
 
-  /** Upload KYC documents (ID copy, trading licence, shop photos) → KYC_PENDING. */
+  /** A shop sends its papers — a copy of an ID, its trading licence, a photograph of the shop — and they go to staff. */
   @Roles('agent', 'operator')
   @Post('agents/:did/submit-kyc')
   submitKyc(@Param('did') did: string, @Body() dto: SubmitKycDto, @Actor() actor: IntrospectionResult) {
     this.assertAgentActs(did, actor);
+    const shop = this.agents.get(did);
+    if (shop.status !== 'DRAFT') throw new GlosError('INVALID_STATE', `Agent is ${shop.status}, expected DRAFT`);
+    // EACH PAPER IS A PICTURE THIS SHOP UPLOADED. A name with no file behind it was taken as a paper — the seeder sent
+    // three — and staff were then asked to approve a shop on pictures nobody could open. Somebody else's picture is not
+    // this shop's paper either. It also makes the sending the shop's own act: staff cannot supply what they then check.
+    const papers: Array<[string, 'kyc_id' | 'kyc_licence' | 'shop']> = [[dto.idCopyRef, 'kyc_id'], [dto.tradingLicenceRef, 'kyc_licence'], ...dto.shopPhotoRefs.map((ref): [string, 'shop'] => [ref, 'shop'])];
+    for (const [ref, kind] of papers) {
+      if (!this.media.adopt(ref, did, { type: 'agent', id: did }, kind)) throw new GlosError('PHOTO_REQUIRED', 'That picture could not be attached — take the photograph again');
+    }
     return this.agents.submitKyc(did, dto);
   }
 

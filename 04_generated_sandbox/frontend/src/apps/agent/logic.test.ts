@@ -34,7 +34,8 @@ import {
   roundMoney,
   selectablePoints,
   sizeMeta,
-  statusNotice,
+  papersReady,
+  papersStep,
   toggleExcludedBody,
   voidCountdownLabel,
   voidRemainingMs,
@@ -92,13 +93,51 @@ describe('gateNotice', () => {
   });
 });
 
-describe('statusNotice', () => {
-  it('active and locked shops get no onboarding notice', () => {
-    expect(statusNotice('ACTIVE', t)).toBeNull();
-    expect(statusNotice('LOCKED', t)).toBeNull(); // locked is the gate's story, not onboarding's
+describe('papersStep — where a shop stands before it can take a parcel, and whose move it is', () => {
+  it('a shop that has sent nothing is the one to act: it sends its papers', () => {
+    expect(papersStep({ status: 'DRAFT' })).toEqual({ kind: 'send' });
   });
-  it('a draft shop is told the office must activate it', () => {
-    expect(statusNotice('KYC_PENDING', t)).toContain('kyc pending');
+  it('a shop whose papers came back is shown why, and sends them again', () => {
+    expect(papersStep({ status: 'DRAFT', kycRejection: { reason: 'The licence is out of date' } })).toEqual({ kind: 'send', refusedWhy: 'The licence is out of date' });
+    // It is quoted inside a sentence: the full stop its writer ended on is not carried into the quotation.
+    expect(papersStep({ status: 'DRAFT', kycRejection: { reason: 'The licence is out of date. ' } })).toEqual({ kind: 'send', refusedWhy: 'The licence is out of date' });
+    // A reason of nothing but spaces is not a reason to show.
+    expect(papersStep({ status: 'DRAFT', kycRejection: { reason: '   ' } })).toEqual({ kind: 'send' });
+  });
+  it('papers with staff are staff’s move: nothing for the shop to send, least of all twice', () => {
+    expect(papersStep({ status: 'KYC_PENDING' })).toEqual({ kind: 'with_staff' });
+    // The reason for an earlier refusal is not carried into a second look.
+    expect(papersStep({ status: 'KYC_PENDING', kycRejection: { reason: 'old' } })).toEqual({ kind: 'with_staff' });
+  });
+  it('an approved shop is told it is approved, and that the next step is its own again: paying in', () => {
+    expect(papersStep({ status: 'APPROVED_UNFUNDED' })).toEqual({ kind: 'pay_in' });
+  });
+  it('a shop that is through, locked for money, or not read yet gets nothing here', () => {
+    expect(papersStep({ status: 'ACTIVE' })).toBeNull();
+    expect(papersStep({ status: 'LOCKED' })).toBeNull(); // locked is the gate's story
+    expect(papersStep(null)).toBeNull();
+    expect(papersStep(undefined)).toBeNull();
+  });
+});
+
+describe('gateNotice — a shop that is not approved yet is not “locked”', () => {
+  const lockedGate = { ok: false, code: 'AGENT_LOCKED', balance: 0, shortfall: 0 } as never;
+  it('says nothing about money while the papers are still the next step, or being read, or just approved', () => {
+    for (const status of ['DRAFT', 'KYC_PENDING', 'APPROVED_UNFUNDED'] as const) expect(gateNotice({ status }, lockedGate, t)).toBeNull();
+  });
+  it('still tells a shop that WAS open, and ran out, that it is locked', () => {
+    expect(gateNotice({ status: 'LOCKED' }, lockedGate, t)).toMatchObject({ tone: 'danger' });
+    expect(gateNotice({ status: 'ACTIVE' }, lockedGate, t)).toMatchObject({ tone: 'danger' });
+  });
+  it('and a shop held over its ID is told that, whatever else is true of it', () => {
+    expect(gateNotice({ status: 'DRAFT' }, { ok: false, code: 'ID_HELD' } as never, t)).toMatchObject({ tone: 'danger' });
+  });
+});
+
+describe('papersReady — nothing is sent until all three are there', () => {
+  it('needs the ID, the licence and the shop’s photograph', () => {
+    expect(papersReady({ idCopy: 'med_1', licence: 'med_2', shopFront: 'med_3' })).toBe(true);
+    for (const missing of ['idCopy', 'licence', 'shopFront'] as const) expect(papersReady({ idCopy: 'med_1', licence: 'med_2', shopFront: 'med_3', [missing]: '' })).toBe(false);
   });
 });
 

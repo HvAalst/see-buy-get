@@ -1234,6 +1234,26 @@ export function useAgentApp() {
     [client, did, run, fail, pushToast, refresh],
   );
 
+  /**
+   * The shop sends its papers. Each is the id of a picture it has just taken (see PhotoField): the server takes
+   * nothing else. True when they went — the sheet closes on that and on nothing else.
+   */
+  const sendPapers = useCallback(
+    async (papers: { idCopyRef: string; tradingLicenceRef: string; shopPhotoRefs: string[] }): Promise<boolean> => {
+      if (!client || !did) return false;
+      let sent = false;
+      await run('papers', async () => {
+        const r = await client.api.submitKyc(did, papers);
+        if (r.error) return fail(r.error);
+        sent = true;
+        await refresh();
+        pushToast({ tone: 'ok', icon: 'check', title: t('agent.toast.papersSent') });
+      });
+      return sent;
+    },
+    [client, did, run, fail, pushToast, refresh],
+  );
+
   /** Capture + upload a shop-front photo → point the shop at it → refresh. */
   const saveShopfront = useCallback(
     async (file: File) => {
@@ -2094,6 +2114,7 @@ export function useAgentApp() {
       loadMedia,
       setLocationPin,
       saveHours,
+      sendPapers,
       saveShopfront,
       submitAccept,
       /** CV1 — the conversations API for this shop (null until signed in). */

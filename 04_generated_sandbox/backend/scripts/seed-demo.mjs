@@ -183,10 +183,13 @@ const run = async () => {
     const rec = need(await req('GET', `/v1/sbg/agents/${encodeURIComponent(did)}`, { token: tok }), 'agent read');
     if (rec.status === 'DRAFT' || rec.status === 'KYC_PENDING') {
       if (rec.status === 'DRAFT') {
+        // Its papers are pictures the shop itself uploaded: a file name with nothing behind it is refused.
+        const [idCopyRef, tradingLicenceRef, shopFront] = [await uploadDoc(tok, 'kyc_id', 'id', 1), await uploadDoc(tok, 'kyc_licence', 'licence', 2), await uploadDoc(tok, 'shop', 'shop', 3)];
+        if (!idCopyRef || !tradingLicenceRef || !shopFront) die(`could not upload the papers of ${label}`);
         need(
           await req('POST', `/v1/sbg/agents/${encodeURIComponent(did)}/submit-kyc`, {
             token: tok,
-            body: { idCopyRef: 'id.jpg', tradingLicenceRef: 'licence.jpg', shopPhotoRefs: ['shop-front.jpg'] },
+            body: { idCopyRef, tradingLicenceRef, shopPhotoRefs: [shopFront] },
           }),
           `kyc ${label}`,
         );
