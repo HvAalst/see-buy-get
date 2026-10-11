@@ -457,6 +457,26 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "console-stores",
+    apps: [
+      "console"
+    ],
+    title: "Finding a store, and what opening one shows",
+    summary: "Operator console, Stores: every store that ships through the network, found by the name it gives on the phone. Opening one shows what its call is usually about — whether it has float, whether a payment arrived, whether its systems are answering. Staff read there and change nothing.",
+    steps: [
+      "Operator console, Stores, in the first group beside At a glance. Type any of: the store’s name, its store number, its street, its country, or the company of ours it pays. Every word typed has to be found, in any order.",
+      "A row gives the country, the company that settles the store and its float. A tag is shown only where something differs from the ordinary: “Float empty”; “No float held here”, where no company of ours runs a till in that country; or “Signs in by its secret”, where it has not set up an email and password yet.",
+      "Open a store. The top says what is likely wrong, a sentence each, with where it is put right: labels waiting on float, a payment started and not arrived, messages to its systems given up on, returns it has not answered. “Nothing stands out” means none of those.",
+      "Its money: the float, any payment it has started that has not arrived, with the reference to confirm it by under Money in, and its last five entries.",
+      "Its shipments: how many in all, how many on the way and how many not paid for, and its newest five by parcel number. To see where one is, look it up by that number under Find a parcel.",
+      "Its systems: the address they are told at, how many messages arrived, are still owed or were given up on, and why the last ones failed, in our words. A store with no address set has no software of its own to tell, which is ordinary and not a fault. Under that, the keys it has made: in use, never used, or revoked."
+    ],
+    notes: [
+      "Staff are shown no buyer, no collection code, no signing secret and no key. The number on file for a store is shown by its last three digits only.",
+      "Nothing is changed from this screen. A store changes its own address, keys and settings in the Store app; a payment is confirmed under Money in."
+    ]
+  },
+  {
     id: "console-amounts",
     apps: [
       "console"

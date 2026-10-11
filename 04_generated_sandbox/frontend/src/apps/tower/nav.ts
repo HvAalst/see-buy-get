@@ -34,7 +34,9 @@ export interface NavGroup {
 export const NAV_GROUPS: NavGroup[] = [
   // Y4's yard register sits here rather than under setup: a yard's own list is read every morning, and an
   // operator reading it is asking the market question — which yards exist and what do they say they hold.
-  { key: 'overview', labelKey: 'tower.group.overview', icon: 'home', screens: ['network', 'market', 'movers', 'depots'] },
+  // STORES sit beside the shops, hubs and fleets they are a counterpart of — and on a screen of their own,
+  // because a store is the one participant somebody has to FIND: it rings, and it gives its name.
+  { key: 'overview', labelKey: 'tower.group.overview', icon: 'home', screens: ['network', 'stores', 'market', 'movers', 'depots'] },
   {
     key: 'waiting',
     labelKey: 'tower.group.waiting',
@@ -56,6 +58,7 @@ export const NAV_GROUPS: NavGroup[] = [
  */
 export const SCREEN_META: Record<Screen, { labelKey: MessageKey; icon: IconName }> = {
   network: { labelKey: 'tower.nav.network', icon: 'home' },
+  stores: { labelKey: 'tower.nav.stores', icon: 'bag' },
   hazards: { labelKey: 'tower.nav.hazards', icon: 'route' },
   claims: { labelKey: 'tower.nav.claims', icon: 'warning' },
   disposal: { labelKey: 'tower.nav.disposal', icon: 'box' },

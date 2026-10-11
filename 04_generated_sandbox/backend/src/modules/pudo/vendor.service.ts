@@ -218,8 +218,20 @@ export class VendorService {
   }
 
   /** The read-path twin: the sister, or nothing where the store stands in a country we only match. */
-  entityIdOrNone(vendor: Vendor): string | undefined {
+  entityIdOrNone(vendor: Pick<Vendor, 'entityId' | 'country'>): string | undefined {
     return vendor.entityId ?? this.entities.forJurisdiction(vendor.country)?.entityId;
+  }
+
+  /**
+   * WHO SETTLES THIS STORE, by name, and in what money — for somebody reading about the store rather than
+   * posting to its books. Nothing where the store stands in a country we only match: it has no till with
+   * us, and a currency beside "no float held" would read as a balance of nothing.
+   */
+  settledBy(vendor: Pick<Vendor, 'entityId' | 'country'>): { name: string; currency: string } | null {
+    const entityId = this.entityIdOrNone(vendor);
+    if (!entityId) return null;
+    const entity = this.entities.get(entityId);
+    return { name: entity.name, currency: entity.currency ?? currencyForJurisdiction(entity.jurisdiction) };
   }
 
   /** Does a sister of ours settle this store at all? Where none does, its freight settles off-platform. */

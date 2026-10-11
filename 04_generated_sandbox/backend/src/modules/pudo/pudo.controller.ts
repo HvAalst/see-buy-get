@@ -67,6 +67,7 @@ import { operationalParcelView, ParcelService } from './parcel.service';
 import { MonitorService } from './monitor.service';
 import { RatingService, belowFloor } from './rating.service';
 import { VendorService } from './vendor.service';
+import { storeDeskOf, storeRowOf, type StoreDesk, type StoreRecord, type StoreRow, type StoreStanding } from './store-desk';
 import { ShelfService } from './shelf.service';
 import { RoutingService, publicQuote } from './routing.service';
 import { MdpService } from './mdp.service';
@@ -2989,10 +2990,56 @@ export class SbgController {
     return { vendorId: vendor.vendorId, secret: vendor.secret, secretRotatedAt: vendor.secretRotatedAt, token: this.auth.mintActorToken({ role: 'genesis', did: vendor.did }) };
   }
 
+  /**
+   * EVERY STORE, for network staff: the list a support desk finds one in.
+   *
+   * This answered with every store's whole record, less its signing secret — the owner's phone number
+   * among it — and no screen read it. It answers now with a row made for the purpose (store-desk.ts):
+   * who the store is, which company of ours settles it, what its float is and in what money, and how it
+   * signs in. Nothing personal, and nothing a list has no use for.
+   */
   @Roles('operator')
   @Get('vendors')
-  listVendors() {
-    return this.vendors.list();
+  listVendors(): StoreRow[] {
+    return this.vendors.list().map((v) => storeRowOf(v, this.storeStanding(v)));
+  }
+
+  /**
+   * ONE STORE, OPENED BY NETWORK STAFF — what somebody answering its call needs to see, and no more.
+   *
+   * Staff's sign-in already opens each of the store's OWN routes (assertVendorOwner admits it), and those
+   * carry what the store needs and a support desk does not: buyers' numbers and collection codes on the
+   * shipment register, signatures and whole bodies on the callback list. The console does not call them.
+   * It calls this, which is assembled field by field from what may be shown (storeDeskOf), and which
+   * only network staff are answered by — the store has its own app for its own record.
+   */
+  @Roles('operator')
+  @Get('vendors/:id/desk')
+  storeDesk(@Param('id') id: string): StoreDesk {
+    const vendor = VendorService.publicView(this.vendors.get(id)); // 404 if unknown
+    return storeDeskOf({
+      vendor,
+      standing: this.storeStanding(vendor),
+      // A store pays under its vendorId, not its DID — the key its top-up is opened against.
+      funding: this.funding.list({ payerDid: id }),
+      ledger: this.vendors.settlementsFor(id),
+      parcels: this.parcels.list({ vendorId: id }),
+      stats: this.parcels.vendorOrderStats(id),
+      callbacks: this.vendors.outboxFor(id),
+      keys: this.apiKeys.list(id),
+      returnsWaiting: this.returns.pendingFor(id).length,
+      scorecard: this.merchants.scorecard(id),
+    });
+  }
+
+  /** Which company of ours settles a store and in what money, its float today, and whether it has an account. */
+  private storeStanding(vendor: StoreRecord): StoreStanding {
+    const company = this.vendors.settledBy(vendor);
+    return {
+      ...(company ? { companyName: company.name, currency: company.currency } : {}),
+      balance: this.vendors.balanceOrNone(vendor.vendorId),
+      hasAccount: Boolean(this.accounts.emailForDid(vendor.did)),
+    };
   }
 
   /**

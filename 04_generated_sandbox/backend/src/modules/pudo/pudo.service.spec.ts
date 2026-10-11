@@ -5721,6 +5721,62 @@ describe('PUDO Light', () => {
       expect(controller.parcelRoute('QR-READ', staff)).toMatchObject({ planned: false });
     });
 
+    it('every store: staff find one in a list made for the purpose and open it — its secret, its owner’s number and its buyers stay out of both', () => {
+      const origin = onboardAgent('Desk Origin', 'NorthTown', 50);
+      const dest = onboardAgent('Desk Dest', 'SouthTown', 50);
+      corridors.addCorridor({ name: 'Desk N-S', originZone: 'NorthTown', destZone: 'SouthTown' });
+      const OWNER = '+254711222333';
+      const BUYER = '+254722000111';
+      const store = vendors.register({ name: 'Desk Store', callbackUrl: 'https://desk.example/hook', ownerPhone: OWNER, address: 'Biashara St 12' });
+      const other = vendors.register({ name: 'Another Desk Store' });
+      vendors.topUp(store.vendorId, 50);
+      const { parcel } = parcels.createInbound({ vendorId: store.vendorId, externalOrderId: 'ORD-DESK', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: BUYER, size: 'M', contentPhotoRef: 'c.jpg', shippingPolicy: store.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });
+      const key = controller.issueApiKey(store.vendorId, { kind: 'secret', mode: 'live', label: 'Shop backend' } as never, staff) as { secret: string; hint: string; keyId: string };
+      const settles = vendors.settledBy(store)!;
+
+      // THE LIST: one row a store, made of what a list is for.
+      const rows = controller.listVendors();
+      const row = rows.find((r) => r.vendorId === store.vendorId)!;
+      expect(row).toEqual({
+        vendorId: store.vendorId,
+        name: 'Desk Store',
+        country: store.country,
+        companyName: settles.name,
+        balance: vendors.balanceOrNone(store.vendorId),
+        currency: settles.currency,
+        hasAccount: false,
+        hasCallback: true,
+        hasDock: false,
+        address: 'Biashara St 12',
+        createdAt: store.createdAt,
+      });
+      expect(row.balance).toBeGreaterThan(0);
+      expect(rows.find((r) => r.vendorId === other.vendorId)).toMatchObject({ name: 'Another Desk Store', hasCallback: false, balance: 0 });
+      const listed = JSON.stringify(rows);
+      for (const hidden of [store.secret, other.secret, OWNER, store.did]) expect(listed).not.toContain(hidden);
+
+      // THE STORE, OPENED: what somebody answering its call reads.
+      const desk = controller.storeDesk(store.vendorId);
+      expect(desk).toMatchObject({ ...row, signIn: { hasAccount: false }, contact: { phoneEnding: '333' }, dock: null, returnsWaiting: 0 });
+      expect(desk.shipments).toMatchObject({ total: 1, recent: [{ parcelId: parcel.parcelId, externalOrderId: 'ORD-DESK', destZone: 'SouthTown' }] });
+      expect(desk.money.recent.map((m) => `${m.sign}${m.type}`)).toEqual(expect.arrayContaining(['+TOP_UP', '-BILLING']));
+      expect(desk.money.recent.every((m) => m.currency === settles.currency)).toBe(true);
+      expect(desk.keys).toEqual([expect.objectContaining({ keyId: key.keyId, kind: 'secret', mode: 'live', label: 'Shop backend', hint: key.hint })]);
+      expect(desk.callbacks.url).toBe('https://desk.example/hook');
+      expect(desk.callbacks.pending + desk.callbacks.failed + desk.callbacks.delivered).toBe(vendors.outboxFor(store.vendorId).length);
+      // What the store's own routes carry for the store, and this must not: the signing secret, the key
+      // that was issued, the owner's and the buyer's numbers, and whatever would release the parcel.
+      const minted = parcels.get(parcel.parcelId);
+      const opened = JSON.stringify(desk);
+      for (const hidden of [store.secret, key.secret, OWNER, BUYER, store.did, minted.otp, minted.collectionCode, minted.trackingKey, ...vendors.outboxFor(store.vendorId).map((c) => c.signature)]) {
+        if (hidden) expect(opened).not.toContain(hidden);
+      }
+      expect([minted.otp, minted.trackingKey].filter(Boolean).length).toBeGreaterThan(0); // the search above had something to look for
+
+      // A store nobody registered is not an empty one.
+      expect(() => controller.storeDesk('ven_nobody')).toThrow(/not found/i);
+    });
+
     it('who is on which vehicle, and where they last were: a fleet’s office reads its own drivers’ shifts, staff read them all', () => {
       const [fleetA, fleetB] = [activateManager('Read Fleet A', 'RA1'), activateManager('Read Fleet B', 'RB1')];
       const onShift = (tag: string, managerDid?: string) => {

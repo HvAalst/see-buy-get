@@ -1088,6 +1088,50 @@ describe('GLOS backend (e2e)', () => {
     expect(told.filter((n) => n.kind === 'papers_checked').map((n) => n.title).sort()).toEqual(['Your licence is recorded', 'Your licence photo was not accepted']);
   });
 
+  it('staff find a store in the list and open it; the store itself, another store and nobody signed out are each refused the staff view', async () => {
+    const http = app.getHttpServer();
+    const u = Math.floor(Math.random() * 1e6);
+    const as = async (body: Record<string, unknown>) => ({ Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ ...body, type: 'client_credentials' }).expect(201)).body.access_token}` });
+    const operator = await as({ role: 'operator' });
+    const OWNER = `+25471${u}99`;
+    const email = `desk.${u}@store.example`;
+    // Registered the way a store registers itself: with its own account, its owner's number, and where its systems are told.
+    const made = (await request(http).post('/v1/sbg/vendors').send({ name: `Desk Store ${u}`, ownerPhone: OWNER, callbackUrl: 'https://desk.example/hook', address: 'Biashara St 12', email, password: 'vitenge-vya-pwani-8' }).expect(201)).body;
+    const store = { Authorization: `Bearer ${made.token.access_token}` };
+    // Another store, signed in as itself: no more staff than the first.
+    const rival = (await request(http).post('/v1/sbg/vendors').send({ name: `Rival Store ${u}`, email: `rival.${u}@store.example`, password: 'vitenge-vya-bara-9' }).expect(201)).body;
+    const shop = { Authorization: `Bearer ${rival.token.access_token}` };
+
+    // THE LIST: staff's, and nobody else's.
+    const list = (await request(http).get('/v1/sbg/vendors').set(operator).expect(200)).body as Array<Record<string, unknown>>;
+    const row = list.find((r) => r.vendorId === made.vendorId)!;
+    expect(row).toMatchObject({ name: `Desk Store ${u}`, hasAccount: true, hasCallback: true, hasDock: false, address: 'Biashara St 12' });
+    expect(Object.keys(row).sort()).toEqual(['address', 'balance', 'companyName', 'country', 'createdAt', 'currency', 'hasAccount', 'hasCallback', 'hasDock', 'name', 'vendorId']);
+    for (const hidden of [made.secret, OWNER, email, made.did]) expect(JSON.stringify(list)).not.toContain(hidden);
+    await request(http).get('/v1/sbg/vendors').set(store).expect(403);
+    await request(http).get('/v1/sbg/vendors').set(shop).expect(403);
+    await request(http).get('/v1/sbg/vendors').expect(401);
+
+    // The store starts a payment, the way its app does: the commonest thing a call is about.
+    const asked = (await request(http).post(`/v1/sbg/vendors/${made.vendorId}/top-up`).set(store).send({ amount: 500 }).expect(201)).body;
+
+    // THE STORE, OPENED.
+    const deskAt = `/v1/sbg/vendors/${made.vendorId}/desk`;
+    const desk = (await request(http).get(deskAt).set(operator).expect(200)).body;
+    // The payment it started and that has not arrived, by the reference staff confirm it by.
+    expect(desk.money.open).toEqual([{ reference: asked.reference, amount: 500, currency: row.currency, openedAt: expect.any(String) }]);
+    expect(String(asked.reference).length).toBeGreaterThan(3);
+    expect(desk).toMatchObject({ vendorId: made.vendorId, signIn: { hasAccount: true }, contact: { phoneEnding: OWNER.slice(-3) }, shipments: { total: 0, unpaid: 0, active: 0, recent: [] }, keys: [], dock: null, returnsWaiting: 0 });
+    expect(desk.callbacks).toMatchObject({ url: 'https://desk.example/hook', carriesCode: true, pending: 0, failed: 0, delivered: 0 });
+    for (const hidden of [made.secret, OWNER, email, made.did]) expect(JSON.stringify(desk)).not.toContain(hidden);
+    // The store reads its own record by its own door, and is not answered at staff's.
+    await request(http).get(`/v1/sbg/vendors/${made.vendorId}`).set(store).expect(200);
+    await request(http).get(deskAt).set(store).expect(403);
+    await request(http).get(deskAt).set(shop).expect(403);
+    await request(http).get(deskAt).expect(401);
+    await request(http).get('/v1/sbg/vendors/ven_nobody/desk').set(operator).expect(404);
+  });
+
   it('S4 problem+json: every error carries a machine code, a traceId, and a preserved status', async () => {
     const http = app.getHttpServer();
     const auth = { Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201)).body.access_token}` };

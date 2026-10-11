@@ -1072,6 +1072,14 @@
   margin-left: auto;
 }
 
+/* Several tags that are ONE thing in a panel head. The head spreads its children to its edges, and two
+   tags spread that way read as a label for each end of the row rather than as two facts about its title. */
+.twr-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 /* The two-step reminder above the work area: a sentence and the one thing to do about it. */
 .twr-nudge {
   display: flex;

@@ -9533,6 +9533,8 @@
       },
       "get": {
         "operationId": "Sbg.listVendors",
+        "summary": "",
+        "description": "EVERY STORE, for network staff: the list a support desk finds one in.\n\nThis answered with every store's whole record, less its signing secret — the owner's phone number\namong it — and no screen read it. It answers now with a row made for the purpose (store-desk.ts):\nwho the store is, which company of ours settles it, what its float is and in what money, and how it\nsigns in. Nothing personal, and nothing a list has no use for.",
         "parameters": [],
         "responses": {
           "200": {
@@ -9657,6 +9659,35 @@
         "responses": {
           "201": {
             "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/desk": {
+      "get": {
+        "operationId": "Sbg.storeDesk",
+        "summary": "",
+        "description": "ONE STORE, OPENED BY NETWORK STAFF — what somebody answering its call needs to see, and no more.\n\nStaff's sign-in already opens each of the store's OWN routes (assertVendorOwner admits it), and those\ncarry what the store needs and a support desk does not: buyers' numbers and collection codes on the\nshipment register, signatures and whole bodies on the callback list. The console does not call them.\nIt calls this, which is assembled field by field from what may be shown (storeDeskOf), and which\nonly network staff are answered by — the store has its own app for its own record.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }

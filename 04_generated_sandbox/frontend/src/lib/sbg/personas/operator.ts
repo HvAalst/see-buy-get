@@ -203,6 +203,16 @@ export function createOperatorApi(sbg: SbgClient) {
     /** Every shop on the network, with its float, its shelf and when it last checked in. */
     agents: () => sbg.request((c) => c.GET('/v1/sbg/agents', {})),
 
+    /** Every store, as a row made for staff: who it is, which company settles it, its float, how it signs in. */
+    stores: () => sbg.request((c) => c.GET('/v1/sbg/vendors', {})),
+
+    /**
+     * One store, opened by staff: what somebody answering its call needs. Assembled for the purpose on the
+     * server — no signing secret, no buyer, no whole phone number — and NOT the store's own routes, which
+     * staff's sign-in also opens and which carry all three.
+     */
+    storeDesk: (vendorId: string) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/desk', { params: { path: { id: vendorId } } })),
+
     /** The sort hubs. */
     hubs: () => sbg.request((c) => c.GET('/v1/sbg/mdps', {})),
 
