@@ -68,10 +68,23 @@ describe('a PIN works only on a device a code to the phone confirmed, over the w
     // Four was the length of a PIN. It is the length of a mobile-money PIN and a bank card's — not of this one.
     for (const pin of ['2468', '246890', 'abcde', '']) expect([pin, await said(choose(pin))]).toEqual([pin, '400 PIN_INVALID']);
     for (const pin of ['12345', '00000', '13579', '12312', '02580']) expect([pin, await said(choose(pin))]).toEqual([pin, '400 PIN_GUESSABLE']);
+    // Said BEFORE an email is asked for: a PIN that will not do is not found out a step later, on a screen with no
+    // PIN field on it. A PIN that will do, and no email yet, is asked for the email.
+    const withoutEmail = (pin: string) => http().post('/v1/sbg/identity/enroll').send({ phone, pin });
+    expect(await said(withoutEmail('12345'))).toBe('400 PIN_GUESSABLE');
+    expect(await said(withoutEmail('2468'))).toBe('400 PIN_INVALID');
+    expect(await said(withoutEmail(PIN))).toBe('400 FIELD_REQUIRED');
+    // …but not before the phone: somebody who has not typed the code is told that, whatever PIN they sent.
+    expect(await said(http().post('/v1/sbg/identity/enroll').send({ phone: `+2547${digits()}0`, pin: '12345' }))).toBe('400 PHONE_NOT_VERIFIED');
     // None of those spent the code: the person chooses again and is in.
     const chosen = await choose(PIN).expect(201);
     expect(chosen.body.device).toMatch(/^dvc_[0-9a-f]{64}$/);
     expect(chosen.body.hasPin).toBe(true);
+    // The other way a PIN is chosen — changing it, signed in — refuses the same ones, and leaves the PIN as it was.
+    const change = (newPin: string) => http().post('/v1/sbg/account/pin/change').set(bearer(chosen.body.token.access_token)).send({ currentPin: PIN, newPin });
+    for (const pin of ['13579', '2468']) expect([pin, (await change(pin)).status]).toEqual([pin, 400]);
+    expect((await change('13579')).body.code).toBe('PIN_GUESSABLE');
+    await login({ phone, pin: PIN, device: chosen.body.device }).expect(201);
   });
 
   it('the PIN is not looked at without the device’s key: not the right one, not a wrong one, and nothing is counted', async () => {

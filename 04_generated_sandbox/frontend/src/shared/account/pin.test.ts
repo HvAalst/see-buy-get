@@ -85,6 +85,29 @@ describe('the doors that hand a device its key keep it', () => {
     expect(readDeviceKey('+254712345678')).toBe('dvc_confirmed');
   });
 
+  it('choosing a PIN: the one door that chooses one, saying which device it is on — and the key that comes back is kept', async () => {
+    saveDeviceKey('+254712345678', 'dvc_before');
+    serve(() => jsonResponse({ hasPin: true, device: 'dvc_after' }, 201));
+    const r = await api().choosePin('+254712345678', '48261');
+    expect(r.error).toBeFalsy();
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toContain('/v1/sbg/identity/enroll');
+    expect(calls[0].body).toEqual({ phone: '+254712345678', pin: '48261', device: 'dvc_before' });
+    expect(readDeviceKey('0712 345 678')).toBe('dvc_after');
+  });
+
+  it('choosing a PIN: the email and its code go only on the second try, and a refusal keeps nothing', async () => {
+    serve(() => jsonResponse({ code: 'FIELD_REQUIRED', status: 400, title: 'x', detail: 'x', params: { field: 'email', why: 'pin-reset' } }, 400));
+    const first = await api().choosePin('+254712345678', '48261');
+    expect(first.error?.code).toBe('FIELD_REQUIRED');
+    expect(calls[0].body).toEqual({ phone: '+254712345678', pin: '48261' });
+    expect(readDeviceKey('+254712345678')).toBeUndefined();
+    serve(() => jsonResponse({ hasPin: true, device: 'dvc_new' }, 201));
+    await api().choosePin('+254712345678', '48261', { email: 'njeri@example.com', code: '482615' });
+    expect(calls[0].body).toEqual({ phone: '+254712345678', pin: '48261', email: 'njeri@example.com', emailCode: '482615' });
+    expect(readDeviceKey('+254712345678')).toBe('dvc_new');
+  });
+
   it('a refusal keeps nothing', async () => {
     serve(() => jsonResponse({ code: 'PHONE_NOT_VERIFIED', status: 400, title: 'Verify', detail: 'Verify your phone number first' }, 400));
     const r = await api().confirmDevice('0712345678');

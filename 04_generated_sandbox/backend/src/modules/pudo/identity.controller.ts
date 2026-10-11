@@ -61,6 +61,10 @@ export class IdentityController {
   @Post('enroll')
   enroll(@Body() dto: EnrollDto) {
     const verified = this.otp.isVerified(dto.phone);
+    // A PIN NOBODY MAY CHOOSE IS SAID FIRST, before an email is asked for. It was said last: somebody was sent on to
+    // the email step, typed an address and its code, and was only then told that 12345 will not do — on a screen
+    // with no PIN field on it, and no way back to one but to start again with a minute's wait for a new code.
+    if (verified && dto.pin !== undefined) this.persons.assertPin(dto.pin);
     /*
      * A PIN IS CHOSEN WITH A RECOVERY EMAIL BEHIND IT — the user, 2026-10-01: "we need an email for account
      * recovery and safety." The PIN is what makes this an account somebody can be locked out of, or have taken

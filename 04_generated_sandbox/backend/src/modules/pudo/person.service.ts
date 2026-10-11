@@ -400,16 +400,24 @@ export class PersonService {
   }
 
   /**
-   * Set or change the person's 4-digit PIN (scrypt-hashed) and clear any lockout.
+   * IS THIS A PIN SOMEBODY MAY CHOOSE — the right number of digits, and not one that is easy to guess. It changes
+   * nothing and knows nobody, so a door can ask it before anything else (`identity/enroll` does, ahead of the email).
+   */
+  assertPin(pin: string): void {
+    if (!PIN_RE.test(pin || '')) throw new GlosError('PIN_INVALID', `PIN must be exactly ${PIN_LENGTH} digits`, { length: PIN_LENGTH });
+    if (isGuessablePin(pin)) {
+      throw new GlosError('PIN_GUESSABLE', 'Choose a PIN that is harder to guess: not mostly one digit, not a run like 12345 or 13579, and not a pattern like 12312', { reason: 'guessable' });
+    }
+  }
+
+  /**
+   * Set or change the person's 5-digit PIN (scrypt-hashed) and clear any lockout.
    *
    * The ONE place a PIN is chosen — enrolling, a forgotten PIN after a code, a change — so the guessable ones are
    * refused here and nowhere else, and no door can choose one by going round.
    */
   setPin(personDid: string, pin: string): void {
-    if (!PIN_RE.test(pin || '')) throw new GlosError('PIN_INVALID', `PIN must be exactly ${PIN_LENGTH} digits`, { length: PIN_LENGTH });
-    if (isGuessablePin(pin)) {
-      throw new GlosError('PIN_GUESSABLE', 'Choose a PIN that is harder to guess: not mostly one digit, not a run like 12345 or 13579, and not a pattern like 12312', { reason: 'guessable' });
-    }
+    this.assertPin(pin);
     const person = this.requireByDid(personDid);
     person.pinSalt = randomBytes(16).toString('hex');
     person.pinHash = this.hashPin(pin, person.pinSalt);

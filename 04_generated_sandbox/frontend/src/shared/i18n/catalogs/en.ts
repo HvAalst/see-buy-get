@@ -737,6 +737,20 @@ export const en = {
   'account.pin.needCurrent': 'Type your current 5-digit PIN.',
   'account.pin.digits': 'A PIN is 5 digits.',
   // A PIN typed on a phone or browser no code to that number was ever typed on (NewDeviceSheet).
+  // "First time here, or forgot your PIN?" — one sheet, for an app whose sign-in screen has no such step of its own.
+  'account.choosePin.link': 'First time here, or forgot your PIN?',
+  'account.choosePin.title': 'Choose a PIN',
+  'account.choosePin.lede': 'We send a code to your phone. You type it, then choose a PIN. The first time, you also add a recovery email.',
+  'account.choosePin.phone': 'Your phone number',
+  'account.choosePin.sendCode': 'Send me a code',
+  'account.choosePin.codeLede': 'We sent a 6-digit code to {phone}.',
+  'account.choosePin.checkCode': 'Check the code',
+  'account.choosePin.pinLede': 'Pick 5 digits you will remember. Not the PIN of your mobile money or your bank card.',
+  'account.choosePin.pin': 'Your new 5-digit PIN',
+  'account.choosePin.save': 'Save my PIN',
+  'account.choosePin.doneTitle': 'Your PIN is set',
+  'account.choosePin.done': 'It works on this phone or browser from now on. Sign in with your number and this PIN.',
+  'account.choosePin.signIn': 'Sign in',
   'account.device.title': 'Confirm this phone or browser',
   'account.device.lede': 'Your PIN does not work on this phone or browser yet. We sent a 6-digit code to {phone}. Type it once, and your PIN works here from now on.',
   // Until a code has gone: while it is being sent, and when it could not be (the note above the boxes says so).

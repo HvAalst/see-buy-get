@@ -7,6 +7,7 @@ import type { SbgError } from '../../../lib/sbg';
 import type { FleetActions } from '../useFleetApp';
 import { TroubleSheet } from '../../../shared/account/TroubleSheet';
 import { NewDeviceSheet } from '../../../shared/account/NewDeviceSheet';
+import { ChoosePinSheet } from '../../../shared/account/ChoosePinSheet';
 import { PIN_LENGTH, isNewDevice } from '../../../shared/account/pin';
 import { recoveryApi } from '../../../shared/account/recovery';
 import { fleetConfig } from '../api';
@@ -35,6 +36,10 @@ export interface SignInScreenProps {
  *
  * And because the code only NAMES the fleet, forgetting it must not lock anybody out: "Forgot the code?" asks
  * for the phone and PIN first and lists the fleets that person manages.
+ *
+ * A PIN can be CHOSEN here too — "First time here, or forgot your PIN?" (`ChoosePinSheet`). It could not: somebody
+ * added to a fleet's office by their number had to go and choose a PIN in another app before this one would let
+ * them in, and the screen did not say so.
  */
 export function SignInScreen({ actions, error, busy, company }: SignInScreenProps) {
   const t = useT();
@@ -43,6 +48,7 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
   const [phone, setPhone] = useState('');
   const [pin, setPin] = useState('');
   const [trouble, setTrouble] = useState(false);
+  const [choosing, setChoosing] = useState(false);
   const [fleets, setFleets] = useState<Array<{ did: string; companyName: string; status: string }> | null>(null);
   // A PIN typed on a phone or browser no code was ever typed on: not an error, a step — the code, once. What was
   // being done when the server said so is done again afterwards, with the PIN that is still typed.
@@ -54,6 +60,38 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
     again.current = what;
     what();
   };
+  /** A PIN was chosen in the sheet: it is typed in for them, and what they came to do is done with it. */
+  const chosen = (p: string, n: string) => {
+    setChoosing(false);
+    setPhone(p);
+    setPin(n);
+    if (mode === 'phone') attempt(() => void actions.findMyFleets(p, n).then((found) => setFleets(found)));
+    else if (company) attempt(() => void actions.signIn(p, n));
+  };
+  const choosePin = (
+    <Button variant="link" onClick={() => setChoosing(true)}>
+      {t('account.choosePin.link')}
+    </Button>
+  );
+  // Outside either form: Enter in one of their fields must not submit the sign-in behind it. And in BOTH ways in:
+  // the sheet that confirms a new phone or browser was missing from "Forgot the code?", where a PIN typed on a new
+  // device was answered with nothing at all.
+  const sheets = (
+    <>
+      <TroubleSheet open={trouble} onClose={() => setTrouble(false)} api={recovery} />
+      <NewDeviceSheet
+        open={confirming}
+        onClose={() => setClosedFor(error)}
+        api={recovery}
+        phone={phone}
+        onConfirmed={() => {
+          setClosedFor(error);
+          again.current();
+        }}
+      />
+      <ChoosePinSheet open={choosing} onClose={() => setChoosing(false)} api={recovery} phone={phone} onChosen={chosen} />
+    </>
+  );
 
   const submit = (e: JSX.TargetedEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -103,6 +141,7 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
 
   if (mode === 'phone') {
     return (
+      <>
       <form class="scr" onSubmit={submit}>
         <h1 class="scr__title">{t('fleet.signin.forgotTitle')}</h1>
         <p class="scr__lede">{t('fleet.signin.forgotLede')}</p>
@@ -139,6 +178,7 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
             </Button>
           </div>
         ) : null}
+        {fleets === null ? choosePin : null}
         <Button
           variant="link"
           onClick={() => {
@@ -149,6 +189,8 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
           {t('fleet.signin.backToCode')}
         </Button>
       </form>
+      {sheets}
+      </>
     );
   }
 
@@ -195,6 +237,7 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
           {company ? t('fleet.signin.submit') : t('fleet.signin.next')}
         </Button>
       </div>
+      {company ? choosePin : null}
       {company ? (
         <Button variant="link" onClick={() => actions.clearCompany()}>
           {t('fleet.signin.otherCompany')}
@@ -224,18 +267,7 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
         <ReadAloud text={() => t('fleet.signin.aloud')} label={t('fleet.readAloud')} />
       </div>
     </form>
-    {/* Outside the form: Enter in one of its fields must not submit the sign-in behind it. */}
-    <TroubleSheet open={trouble} onClose={() => setTrouble(false)} api={recovery} />
-    <NewDeviceSheet
-      open={confirming}
-      onClose={() => setClosedFor(error)}
-      api={recovery}
-      phone={phone}
-      onConfirmed={() => {
-        setClosedFor(error);
-        again.current();
-      }}
-    />
+    {sheets}
     </>
   );
 }

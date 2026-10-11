@@ -1,5 +1,5 @@
 import { publicRequest, type Result, type SbgConfig, type SbgError } from '../../lib/sbg';
-import { saveDeviceKey } from './pin';
+import { readDeviceKey, saveDeviceKey } from './pin';
 import { idDisputeApi, type DisputeOpened, type IdDisputeApi, type IdRegister } from './idDispute';
 import type { MoveAsked, MoveStatus } from './move';
 
@@ -19,6 +19,12 @@ export interface RecoveryApi {
    * the device (`saveDeviceKey`): from then on the PIN works here.
    */
   confirmDevice: (phone: string) => Promise<Result<{ device: string }>>;
+  /**
+   * CHOOSE A PIN — a first one, or a new one in place of a forgotten one — once the code to the phone is checked.
+   * The server may ask for an email first (`asksForEmail`): the address and its code then ride along on a second
+   * try. It says which device it is on, and keeps the key it is handed: the new PIN works here.
+   */
+  choosePin: (phone: string, pin: string, recovery?: { email: string; code: string }) => Promise<Result<{ hasPin?: boolean; device?: string }>>;
   /** A code to an email address, to CONFIRM it as a recovery address. */
   emailCode: (email: string) => Promise<Result<{ sent: boolean; code?: string }>>;
   /** A code to the address ON an account — to get back in, or to undo a number change. Answers the same for any address. */
@@ -42,6 +48,11 @@ export function recoveryApi(config: SbgConfig): RecoveryApi {
     verifyPhone: (phone, code) => post('/v1/sbg/auth/phone/verify', { phone, code }),
     confirmDevice: async (phone) => {
       const r = await post<{ device: string }>('/v1/sbg/identity/device', { phone });
+      saveDeviceKey(phone, r.data?.device);
+      return r;
+    },
+    choosePin: async (phone, pin, recovery) => {
+      const r = await post<{ hasPin?: boolean; device?: string }>('/v1/sbg/identity/enroll', { phone, pin, device: readDeviceKey(phone), ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}) });
       saveDeviceKey(phone, r.data?.device);
       return r;
     },

@@ -93,6 +93,7 @@ export const ARTICLES: GuideArticle[] = [
       "Type the company code (it looks like FM-1A2B3C). The app shows the company name, so you know it is the right one.",
       "Type your phone number and your 5-digit PIN.",
       "A phone or browser you have not signed in on before, or have not used for 90 days, asks for a code first: we send it to your number, you type it once, and from then on your PIN works there. Your PIN is not changed by it.",
+      "First time, or forgot your PIN? Tap “First time here, or forgot your PIN?”. We send a code to your phone; type it, then choose a PIN. The first time, you also add a recovery email.",
       "Forgot the code? Tap “Forgot the code? Sign in with your phone”, type your phone and PIN, and pick your fleet from the list."
     ],
     notes: [
