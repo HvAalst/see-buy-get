@@ -25,7 +25,8 @@ export function pinReady(pin: string): boolean {
  * with it AND the PIN a person is in; with it alone, nobody is. It stays when somebody signs out — signing out ends
  * the session, not the fact that this phone once showed it holds the number.
  */
-const keyFor = (phone: string): string => `sbg-device:${phone.replace(/\D/g, '').slice(-9)}`;
+const SLOT = 'sbg-device:';
+const keyFor = (phone: string): string => `${SLOT}${phone.replace(/\D/g, '').slice(-9)}`;
 
 export function readDeviceKey(phone: string): string | undefined {
   try {
@@ -41,6 +42,36 @@ export function saveDeviceKey(phone: string, key: string | undefined): void {
     globalThis.localStorage?.setItem(keyFor(phone), key);
   } catch {
     /* storage unavailable — the next PIN sign-in here asks for the code again */
+  }
+}
+
+/**
+ * EVERY KEY THIS BROWSER HOLDS — one per number that ever signed in on it — and where each is kept. Settings sends
+ * them all: an account does not know its own number, so nothing here can say which key is "mine"; the server picks
+ * out the one that belongs to who is signed in. A key alone opens nothing, anybody's: it needs its PIN.
+ */
+export function allDeviceKeys(): Array<{ slot: string; key: string }> {
+  const found: Array<{ slot: string; key: string }> = [];
+  try {
+    const store = globalThis.localStorage;
+    for (let i = 0; store && i < store.length && found.length < 20; i++) {
+      const slot = store.key(i);
+      const key = slot?.startsWith(SLOT) ? store.getItem(slot) : null;
+      if (slot && key) found.push({ slot, key });
+    }
+  } catch {
+    /* storage unavailable — there is nothing to send, and the server marks none of them "this one" */
+  }
+  return found;
+}
+
+/** Drop ONE of them — the one the server has just forgotten. Never anything that is not a device key. */
+export function dropDeviceKey(slot: string | undefined): void {
+  if (!slot?.startsWith(SLOT)) return;
+  try {
+    globalThis.localStorage?.removeItem(slot);
+  } catch {
+    /* storage unavailable — the server has forgotten it, which is what counts */
   }
 }
 

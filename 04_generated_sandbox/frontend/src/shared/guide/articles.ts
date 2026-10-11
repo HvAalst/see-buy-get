@@ -92,7 +92,7 @@ export const ARTICLES: GuideArticle[] = [
     steps: [
       "Type the company code (it looks like FM-1A2B3C). The app shows the company name, so you know it is the right one.",
       "Type your phone number and your 5-digit PIN.",
-      "A phone or browser you have not signed in on before asks for a code first: we send it to your number, you type it once, and from then on your PIN works there. Your PIN is not changed by it.",
+      "A phone or browser you have not signed in on before, or have not used for 90 days, asks for a code first: we send it to your number, you type it once, and from then on your PIN works there. Your PIN is not changed by it.",
       "Forgot the code? Tap “Forgot the code? Sign in with your phone”, type your phone and PIN, and pick your fleet from the list."
     ],
     notes: [
@@ -148,7 +148,7 @@ export const ARTICLES: GuideArticle[] = [
     summary: "Use the phone number your fleet registered you with, and your 5-digit PIN. Your driver ID alone does not sign you in.",
     steps: [
       "Type your phone number and PIN, and tap Sign in.",
-      "A phone or browser you have not signed in on before asks for a code first: we send it to your number, you type it once, and from then on your PIN works there. Your PIN is not changed by it.",
+      "A phone or browser you have not signed in on before, or have not used for 90 days, asks for a code first: we send it to your number, you type it once, and from then on your PIN works there. Your PIN is not changed by it.",
       "First time, or forgot your PIN? Tap “First time here, or forgot your PIN?”. We send a code to your phone; type it, then choose a PIN. The first time, you also add a recovery email.",
       "The app says “This phone is not registered to a driver”? Your PIN is fine: ask your fleet manager which number they registered."
     ],
@@ -199,7 +199,8 @@ export const ARTICLES: GuideArticle[] = [
       "A PIN is five digits, not four, so that it is not the same PIN as the one for your mobile money or your bank card. Do not use that one with a digit added.",
       "A PIN replaced with a code — forgotten, or locked — works on the phone or browser you did it on. Every other one asks for a code again.",
       "Replacing a forgotten PIN on a phone or browser you have not signed in on before asks for two codes: the one to your number, and one to the recovery email on your account. Type that email address and we send it a code. On a phone you have signed in on before, the code to your number is enough.",
-      "We write to your recovery email, and tell you in the app, whenever your PIN is replaced or starts working on a new phone or browser. If it was not you, replace your PIN straight away: that shuts out every other phone and browser."
+      "We write to your recovery email, and tell you in the app, whenever your PIN is replaced or starts working on a new phone or browser. If it was not you, replace your PIN straight away: that shuts out every other phone and browser.",
+      "Settings, then Phones and browsers, shows every phone and browser your PIN works on, with when each was confirmed and last used. “Forget all the others” asks for your PIN and signs you out everywhere; each of the others then needs a code to your number before your PIN works there again. On a phone or a computer that is not yours, use “Sign out, and forget this one”."
     ]
   },
   {
@@ -264,7 +265,8 @@ export const ARTICLES: GuideArticle[] = [
       "For 24 hours after any number change you cannot give a parcel up or name somebody else to collect it: those two cannot be taken back. When a number change is undone, the collection codes of your parcels are changed, so whoever had the account in between holds codes that open nothing.",
       "After your number changes, your PIN works on the phone or browser you changed it on. Every other one asks for a code to the new number first.",
       "We write to your recovery email, and tell you in the app, whenever your PIN is replaced or starts working on a new phone or browser. If it was not you, replace your PIN straight away: that shuts out every other phone and browser.",
-      "If the app says it could not send the code, nothing is wrong with your number and nothing was counted against you. Wait a little and ask for the code again."
+      "If the app says it could not send the code, nothing is wrong with your number and nothing was counted against you. Wait a little and ask for the code again.",
+      "Settings, then Phones and browsers, shows every phone and browser your PIN works on, with when each was confirmed and last used. “Forget all the others” asks for your PIN and signs you out everywhere; each of the others then needs a code to your number before your PIN works there again. On a phone or a computer that is not yours, use “Sign out, and forget this one”."
     ]
   },
   {
@@ -330,7 +332,7 @@ export const ARTICLES: GuideArticle[] = [
     steps: [
       "New here: type your phone number, type the code we send you, then choose a 5-digit PIN.",
       "Coming back: tap “I already have an account” and type your phone and PIN.",
-      "A phone or browser you have not signed in on before asks for a code first: we send it to your number, you type it once, and from then on your PIN works there. Your PIN is not changed by it.",
+      "A phone or browser you have not signed in on before, or have not used for 90 days, asks for a code first: we send it to your number, you type it once, and from then on your PIN works there. Your PIN is not changed by it.",
       "Forgot your PIN? Sign in with a code again, and choose a new PIN. On a phone or browser that is new to your account we also ask for your recovery email, and send it a code.",
       "If the app says it could not send the code, nothing is wrong with your number and nothing was counted against you. Wait a little and ask for the code again."
     ]
@@ -503,7 +505,7 @@ export const ARTICLES: GuideArticle[] = [
     steps: [
       "Open the Business app from the front page: Sign in, then A business.",
       "Type your phone number and your 5-digit PIN. New here, or forgot your PIN? We send a code to your phone first.",
-      "A phone or browser you have not signed in on before asks for a code first: we send it to your number, you type it once, and from then on your PIN works there. Your PIN is not changed by it.",
+      "A phone or browser you have not signed in on before, or have not used for 90 days, asks for a code first: we send it to your number, you type it once, and from then on your PIN works there. Your PIN is not changed by it.",
       "The first time, set up your business: its registered name, country, registration number and what it does. You become its owner.",
       "In more than one business? Pick one. Switch business, in the menu under your name, takes you back to the list."
     ]

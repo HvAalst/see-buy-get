@@ -254,4 +254,56 @@ describe('a PIN works only on a device a code to the phone confirmed, over the w
     const inbox = (await http().get('/v1/sbg/notifications/inbox').set(bearer(mine.token.access_token)).expect(200)).body;
     expect(JSON.stringify(inbox)).toContain('A new phone or browser can use your PIN');
   });
+
+  it('Settings shows the phones and browsers a PIN works on; the others are forgotten with the PIN, this one without', async () => {
+    const phone = `+2547${digits()}7`;
+    const first = await signUp(phone);
+    const otherPhone = `+2547${digits()}8`;
+    const other = await signUp(otherPhone);
+    await typeTheCode(phone);
+    const second = (await http().post('/v1/sbg/identity/device').send({ phone }).expect(201)).body.device as string;
+    const signIn = async (device: string) => (await login({ phone, pin: PIN, device }).expect(201)).body.token.access_token as string;
+    const devices = (token: string, body: Record<string, unknown>) => http().post('/v1/sbg/account/pin-devices').set(bearer(token)).send(body);
+    const forgetOthers = (token: string, body: Record<string, unknown>) => http().post('/v1/sbg/account/pin-devices/forget-others').set(bearer(token)).send(body);
+    const forgetThis = (token: string, body: Record<string, unknown>) => http().post('/v1/sbg/account/pin-devices/forget-this').set(bearer(token)).send(body);
+
+    // Asked from the second device, whose browser also holds a key for another number that signed in on it.
+    const onSecond = await signIn(second);
+    const seen = (await devices(onSecond, { devices: [other.device, 'dvc_made-up', second] }).expect(201)).body;
+    expect(seen).toMatchObject({ count: 2, here: true, unusedDays: 90 });
+    // The one last used first — this one, a moment ago — and each as dates only.
+    expect(seen.devices.map((d: { here: boolean }) => d.here)).toEqual([true, false]);
+    expect(Object.keys(seen.devices[0]).sort()).toEqual(['addedAt', 'here', 'usedAt']);
+    expect(JSON.stringify(seen)).not.toMatch(/dvc_|[0-9a-f]{40}/);
+    // With no key, or only somebody else's, none of them is "this one" — and somebody else's are not counted in.
+    expect((await devices(onSecond, {}).expect(201)).body).toMatchObject({ count: 2, here: false });
+    expect((await devices(onSecond, { devices: [other.device] }).expect(201)).body).toMatchObject({ count: 2, here: false });
+    // Nobody signed in is told nothing, and staff are not a person whose devices these are.
+    await http().post('/v1/sbg/account/pin-devices').send({ devices: [second] }).expect(401);
+    expect((await devices(operator, { devices: [second] })).status).toBeGreaterThanOrEqual(400);
+    // A body that is not a list of keys is refused before anything is looked at.
+    await devices(onSecond, { devices: 'dvc_one' }).expect(400);
+    await devices(onSecond, { devices: Array.from({ length: 21 }, () => second) }).expect(400);
+
+    // FORGET THE OTHERS. A wrong PIN is a wrong PIN — a 403, so the session stands — and forgets nothing.
+    expect(await said(forgetOthers(onSecond, { pin: '73914', devices: [second] }))).toBe('403 PIN_WRONG');
+    await forgetOthers(onSecond, { devices: [second] }).expect(400);
+    expect((await devices(onSecond, { devices: [second] }).expect(201)).body.count).toBe(2);
+    expect((await forgetOthers(onSecond, { pin: PIN, devices: [other.device, second] }).expect(201)).body).toEqual({ forgotten: 1, kept: true, signedOutEverywhere: true });
+    // Every session is over, this one too; the forgotten phone needs a code; this one signs back in with its PIN.
+    await devices(onSecond, { devices: [second] }).expect(401);
+    await http().get('/v1/sbg/account/me').set(bearer(first.token.access_token)).expect(401);
+    expect(await said(login({ phone, pin: PIN, device: first.device }))).toBe('403 DEVICE_NOT_KNOWN');
+    const again = await signIn(second);
+    expect((await devices(again, { devices: [second] }).expect(201)).body).toMatchObject({ count: 1, here: true });
+    // Nobody else's device went with it.
+    await login({ phone: otherPhone, pin: PIN, device: other.device }).expect(201);
+
+    // FORGET THIS ONE: no PIN, and it says which of the browser's keys it was, so the browser drops its copy.
+    expect((await forgetThis(again, { devices: [other.device, second] }).expect(201)).body).toEqual({ forgotten: true, which: 1 });
+    expect(await said(login({ phone, pin: PIN, device: second }))).toBe('403 DEVICE_NOT_KNOWN');
+    // The session it was asked from is not ended by the server (the app drops it): asked again, there is nothing to forget.
+    expect((await forgetThis(again, { devices: [other.device, second] }).expect(201)).body).toEqual({ forgotten: false, which: -1 });
+    expect((await devices(again, { devices: [second] }).expect(201)).body).toMatchObject({ count: 0, here: false });
+  });
 });

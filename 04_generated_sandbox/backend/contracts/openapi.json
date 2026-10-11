@@ -18400,6 +18400,75 @@
         }
       }
     },
+    "/v1/sbg/account/pin-devices": {
+      "post": {
+        "operationId": "Account.pinDevices",
+        "summary": "",
+        "description": "THE PHONES AND BROWSERS MY PIN WORKS ON — how many, when each was confirmed by a code and last used, and which\none this is. A POST although it only reads: the browser's device keys come in the body, never in an address,\nwhich is written to logs. Keyed to the token, like everything here.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinDevicesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/pin-devices/forget-others": {
+      "post": {
+        "operationId": "Account.forgetOtherDevices",
+        "summary": "",
+        "description": "FORGET EVERY OTHER PHONE AND BROWSER — the PIN again. Each of them needs the code to the number before the PIN\nworks there again, and every session is ended, this one included: the app signs the person back in here.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgetOtherDevicesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/pin-devices/forget-this": {
+      "post": {
+        "operationId": "Account.forgetThisDevice",
+        "summary": "",
+        "description": "FORGET THIS ONE, AND SIGN OUT — for a computer that is not theirs. From then on the PIN does not work on it\nuntil a code to the number is typed there again.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinDevicesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/account/email": {
       "post": {
         "operationId": "Account.setEmail",
@@ -39492,6 +39561,36 @@
         "required": [
           "currentPin",
           "newPin"
+        ]
+      },
+      "PinDevicesDto": {
+        "type": "object",
+        "properties": {
+          "devices": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 100
+            }
+          }
+        }
+      },
+      "ForgetOtherDevicesDto": {
+        "type": "object",
+        "properties": {
+          "devices": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          "pin": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pin"
         ]
       },
       "AccountEmailDto": {

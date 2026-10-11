@@ -1,4 +1,5 @@
 import { saveDeviceKey } from './pin';
+import { pinDevicesApi, type PinDevicesApi } from './devices';
 import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 import { narrow, type Result, type SbgClient, type SbgError } from '../../lib/sbg';
 import type { ContractView } from './contract';
@@ -98,6 +99,8 @@ export interface AccountApi {
   idDispute: IdDisputeApi;
   /** "The number on my record is not mine — this one is." Ends a dispute at once, or a hold it left. */
   ownId: (nationalId: string) => Promise<Result<{ saved: boolean }>>;
+  /** The phones and browsers this person's PIN works on: read them, forget the others, forget this one. */
+  devices: PinDevicesApi;
 }
 
 const NO_CLIENT = { data: null, error: null } as unknown as Result<never>;
@@ -124,6 +127,7 @@ const IDLE: AccountApi = {
   stopMove: async () => NO_CLIENT,
   idDispute: idDisputeApi(async () => NO_CLIENT),
   ownId: async () => NO_CLIENT,
+  devices: pinDevicesApi(async () => NO_CLIENT),
 };
 
 export function useAccount(client: SbgClient | null, enabled = true): AccountApi {
@@ -296,7 +300,8 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
 
   const idDispute = useMemo(() => idDisputeApi(post), [post]);
   const ownId = useCallback((nationalId: string) => post<{ saved: boolean }>('/v1/sbg/account/id-disputes/own-id', { nationalId }), [post]);
+  const devices = useMemo(() => pinDevicesApi(post), [post]);
 
   if (!client) return IDLE;
-  return { account, contract, reportContractPaper, loading, error, busy, reload, save, changePin, saveAvatar, loadMedia, sendEmailCode, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, idDispute, ownId };
+  return { account, contract, reportContractPaper, loading, error, busy, reload, save, changePin, saveAvatar, loadMedia, sendEmailCode, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, idDispute, ownId, devices };
 }

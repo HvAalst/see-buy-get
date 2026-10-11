@@ -1,6 +1,6 @@
 import { DESTINATION_KINDS } from './destination.types';
 import { PaperCaseView } from '../../foundation/entity/company-paper-reports.service';
-import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { INCOTERM_CODES } from '../../foundation/incoterms/catalogue';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE } from '../../foundation/interest/interest.service';
 import { CLAIM_KINDS, DELAY_PLACES, GIVE_BACK_REASONS, RATE_BASES, RUN_CANCEL_REASONS, SETTLE_METHODS, SETTLE_WHEN, type DelayPlace, type GiveBackReason, type RunCancelReason } from './departure.types';
@@ -1994,6 +1994,20 @@ export class AccountEmailDto {
 export class AccountPinDto {
   @IsString() currentPin!: string;
   @IsString() newPin!: string;
+}
+
+/**
+ * The device keys the asking browser holds — one per number that ever signed in on it. An account does not know its
+ * own number (only a hash of it is kept), so the browser cannot say which key is "mine": it sends what it has, and
+ * the one that belongs to the signed-in person is the one that counts. The others are compared and dropped.
+ */
+export class PinDevicesDto {
+  @IsOptional() @IsArray() @ArrayMaxSize(20) @IsString({ each: true }) @MaxLength(100, { each: true }) devices?: string[];
+}
+
+/** Forget every other phone and browser: the PIN again, and this browser's keys so that its own is kept. */
+export class ForgetOtherDevicesDto extends PinDevicesDto {
+  @IsString() pin!: string;
 }
 
 /** The receiver's delivered-state proof photo (S23). */

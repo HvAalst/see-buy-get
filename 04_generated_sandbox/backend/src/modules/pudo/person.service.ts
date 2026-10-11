@@ -12,7 +12,7 @@ import { hashEmail, hashPhone, isPlausiblePhone, normalizePhone } from '../../fo
 import { isPlausibleEmail, normalizeEmail } from './email-code.service';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
 import { MediaService } from './media.service';
-import { DeviceBook, KnownDevice } from './person-devices';
+import { DEVICE_UNUSED_DAYS, DeviceBook, DeviceSeen, KnownDevice } from './person-devices';
 import { OldNumber, Person, PersonRole, PersonView, PhoneChange, ROLE_TO_ACTOR, RoleLink, toView } from './person.types';
 
 /** Wrong-PIN attempts before the PIN locks. From then on only a code sent to the phone opens it again. */
@@ -324,6 +324,7 @@ export class PersonService {
     // THE CODE WAS TYPED ON THIS DEVICE: it is the moment the device becomes one this person's PIN works on. A
     // device that already was keeps the key it has — a new key for every code would fill a person's ten with one phone.
     const device = known && !replaced ? (deviceKey as string) : this.devices.add(person.personDid);
+    if (known && !replaced) this.devices.used(person.personDid, device);
     // THE HOLDER IS TOLD, on the channel whoever has the phone cannot read: a PIN replaced, or their PIN now working
     // somewhere it never had. Not at a first sign-up, and not for somebody who has no PIN to protect.
     if (replaced) this.tellSignIn(GlosEvent.Pudo.PersonPinReplaced, person, { newDevice: !known });
@@ -359,6 +360,43 @@ export class PersonService {
   /** How many devices this person's PIN works on — for their own account screen. */
   deviceCount(personDid: string): number {
     return this.devices.count(personDid);
+  }
+
+  /**
+   * THE PHONES AND BROWSERS THIS PERSON'S PIN WORKS ON, for their own Settings: how many, when each was confirmed
+   * and last used, and which one is asking. Dates and nothing else — no key and no name of a device is kept to show.
+   * `keys` is what the asking browser holds (one per number that ever signed in on it); the one that is this
+   * person's marks "this one".
+   */
+  devicesOf(personDid: string, keys?: string[], now: number = Date.now()): { count: number; here: boolean; unusedDays: number; devices: DeviceSeen[] } {
+    const mine = keys?.[this.devices.whichOf(personDid, keys, now)];
+    const devices = this.devices.list(personDid, mine, now);
+    return { count: devices.length, here: devices.some((d) => d.here), unusedDays: DEVICE_UNUSED_DAYS, devices };
+  }
+
+  /**
+   * FORGET EVERY OTHER PHONE AND BROWSER. The PIN again — an open session is not proof of who is holding the phone —
+   * through the same check and the same lock as the door. Every session ends, the asker's too (a token carries the
+   * person as its revocation key), so a phone that was forgotten is also signed out; the one this was done on keeps
+   * its key and signs back in with the PIN. With no key of this person's among `keys`, nothing is kept.
+   */
+  forgetOtherDevices(personDid: string, pin: string, keys?: string[]): { forgotten: number; kept: boolean } {
+    this.confirmPin(personDid, pin);
+    const mine = keys?.[this.devices.whichOf(personDid, keys)];
+    const forgotten = this.devices.forgetAll(personDid, mine);
+    this.auth.revokeAll(personDid);
+    return { forgotten, kept: Boolean(mine) };
+  }
+
+  /**
+   * FORGET THIS ONE — for whoever signed in on a computer that is not theirs. No PIN: it takes something away from
+   * whoever holds this device and gives nothing. `which` is the place of the forgotten key in `keys`, so the browser
+   * can drop its copy. The person's other phones stay signed in: this is signing out of ONE place, and the app that
+   * asked drops its own session as any sign-out does.
+   */
+  forgetThisDevice(personDid: string, keys?: string[]): { forgotten: boolean; which: number } {
+    const which = this.devices.whichOf(personDid, keys);
+    return { forgotten: this.devices.forget(personDid, keys?.[which]), which };
   }
 
   /**
@@ -401,6 +439,8 @@ export class PersonService {
     // Do not reveal whether the phone is registered — same error either way.
     if (!person || !person.pinHash || !person.pinSalt) throw new GlosError('AUTH_FAILED', 'Wrong phone or PIN');
     this.checkPin(person, pin, 'AUTH_FAILED', 'Wrong phone or PIN');
+    // The right PIN, on this device, today: what its owner is shown, and what its ninety days are counted from.
+    this.devices.used(person.personDid, device);
     return { person, token: this.mintConsumerToken(person) };
   }
 

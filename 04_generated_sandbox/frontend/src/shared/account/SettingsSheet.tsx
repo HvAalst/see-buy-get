@@ -7,6 +7,7 @@ import type { SbgError } from '../../lib/sbg';
 import { ContractCompany } from './ContractCompany';
 import { hasContract } from './contract';
 import { CredentialAge } from './CredentialAge';
+import { canForgetOthers, deviceLine, devicesLede, type PinDevices } from './devices';
 import { EmailStep } from './EmailStep';
 import { IdDisputeCase } from './IdDisputeCase';
 import { settingsIdSays } from './idDispute';
@@ -15,7 +16,7 @@ import { PIN_LENGTH } from './pin';
 import { oldNumberSays, recoveryEmailSays } from './recovery';
 import type { AccountApi } from './useAccount';
 
-type View = 'list' | 'pin' | 'email' | 'phone' | 'phone-done' | 'old-number' | 'id' | 'contract';
+type View = 'list' | 'pin' | 'email' | 'phone' | 'phone-done' | 'old-number' | 'id' | 'contract' | 'devices';
 
 export interface SettingsSheetProps {
   open: boolean;
@@ -81,7 +82,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
   const me = api.account;
   // Once the number has moved the token is dead: every way out of the sheet is the sign-in screen.
   const close = view === 'phone-done' ? () => { onClose(); onSignOut(); } : onClose;
-  const title = view === 'contract' ? t('account.contract.title') : view === 'old-number' ? t('account.settings.oldNumber.title') : view === 'id' ? t('account.settings.id.viewTitle') : view === 'pin' ? t('account.menu.pin') : view === 'email' ? t('account.settings.email') : view === 'phone' || view === 'phone-done' ? t('account.settings.phone') : t('account.settings.title');
+  const title = view === 'devices' ? t('account.devices.title') : view === 'contract' ? t('account.contract.title') : view === 'old-number' ? t('account.settings.oldNumber.title') : view === 'id' ? t('account.settings.id.viewTitle') : view === 'pin' ? t('account.menu.pin') : view === 'email' ? t('account.settings.email') : view === 'phone' || view === 'phone-done' ? t('account.settings.phone') : t('account.settings.title');
   const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   const old = oldNumberSays(me, t as never, when);
 
@@ -136,6 +137,8 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
             {onChangePassword ? <Row icon="lock" label={t('account.menu.password')} sub={t('account.menu.passwordSub')} onClick={() => { onClose(); onChangePassword(); }} /> : null}
             {me?.hasPin ? <Row icon="mail" label={t('account.settings.email')} sub={recoveryEmailSays(me, t as never).sub} onClick={() => setView('email')} /> : null}
             {me?.hasPin ? <Row icon="phone" label={t('account.settings.phone')} sub={t('account.settings.phoneSub')} onClick={() => setView('phone')} /> : null}
+            {/* WHERE THE PIN WORKS: every phone and browser a code to the number was typed on. Seen, and forgotten, here. */}
+            {me?.hasPin ? <Row icon="lock" label={t('account.devices.title')} sub={t('account.devices.sub')} onClick={() => setView('devices')} /> : null}
             {/* WHO THEY CONTRACT WITH, and the papers it trades on. Omitted where no company of ours contracts with them. */}
             {hasContract(api.contract) ? <Row icon="badge" label={t('account.contract.title')} sub={api.contract?.company?.name} onClick={() => setView('contract')} /> : null}
           </div>
@@ -172,6 +175,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
       {view === 'email' ? <EmailForm api={api} onDone={() => { setSaved(true); setView('list'); }} /> : null}
       {view === 'phone' ? <PhoneForm api={api} onDone={() => setView('phone-done')} /> : null}
       {view === 'contract' ? <ContractCompany api={api} /> : null}
+      {view === 'devices' ? <DevicesForm api={api} onSignedOut={() => { onClose(); onSignOut(); }} /> : null}
       {view === 'old-number' ? <OldNumberForm api={api} onDone={() => { setBlocked(true); setView('list'); }} /> : null}
       {view === 'id' && idRef ? <IdDisputeCase api={api.idDispute} reference={idRef} ownId={api.ownId} onChanged={() => void api.reload()} /> : null}
       {view === 'phone-done' ? (
@@ -250,6 +254,113 @@ function PinForm({ api, own, onDone }: { api: AccountApi; own?: SettingsSheetPro
       >
         {t('account.menu.savePin')}
       </Button>
+    </>
+  );
+}
+
+/**
+ * THE PHONES AND BROWSERS THE PIN WORKS ON. Read when it is opened — it is a live fact, and another phone may have
+ * been confirmed a minute ago. Two things can be done, each said in full before it is done, because both end with
+ * the person signed out: forget all the others (the PIN again — a phone left unlocked is not its owner), or sign out
+ * of this one and forget it (no PIN: it only takes something away from whoever is holding it).
+ */
+function DevicesForm({ api, onSignedOut }: { api: AccountApi; onSignedOut: () => void }) {
+  const t = useT();
+  const [seen, setSeen] = useState<PinDevices | null>(null);
+  const [step, setStep] = useState<'list' | 'others' | 'this'>('list');
+  const [pin, setPin] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<SbgError | null>(null);
+  const [unread, setUnread] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      const r = await api.devices.read();
+      if (r.error || !r.data) return setUnread(true);
+      setSeen(r.data);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' });
+  const done = async (doing: Promise<{ error?: SbgError | null }>) => {
+    setBusy(true);
+    setError(null);
+    const r = await doing;
+    setBusy(false);
+    if (r.error) return setError(r.error);
+    onSignedOut();
+  };
+
+  if (!seen) return unread ? <Note tone="warn" icon="warning" title={t('account.devices.unread')} /> : <p class="t-body">{t('common.loading')}</p>;
+
+  if (step === 'others') {
+    return (
+      <>
+        <p class="t-body">{t('account.devices.forgetOthersBody')}</p>
+        <div class="field">
+          <span class="field__label">{t('account.settings.pinToConfirm')}</span>
+          <CodeBoxes id="acct-devices-pin" label={t('account.settings.pinToConfirm')} length={PIN_LENGTH} value={pin} onInput={(v) => { setPin(v); setError(null); }} disabled={busy} mask />
+        </div>
+        <Refused error={error} />
+        <Button chevron={false} busy={busy} disabled={pin.length !== PIN_LENGTH} onClick={() => void done(api.devices.forgetOthers(pin))}>
+          {t('account.devices.forgetOthersSave')}
+        </Button>
+        <Button variant="link" full={false} onClick={() => { setStep('list'); setPin(''); setError(null); }}>
+          {t('common.cancel')}
+        </Button>
+      </>
+    );
+  }
+
+  if (step === 'this') {
+    return (
+      <>
+        <p class="t-body">{t('account.devices.forgetThisBody')}</p>
+        <Refused error={error} />
+        <Button chevron={false} busy={busy} onClick={() => void done(api.devices.forgetThis())}>
+          {t('account.devices.forgetThisSave')}
+        </Button>
+        <Button variant="link" full={false} onClick={() => { setStep('list'); setError(null); }}>
+          {t('common.cancel')}
+        </Button>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <p class="t-body">{devicesLede(seen, t as never)}</p>
+      {seen.devices.length ? (
+        <div class="rows" role="list">
+          {seen.devices.map((d, i) => {
+            const line = deviceLine(d, t as never, day);
+            return (
+              <div class="row row--static" role="listitem" key={i}>
+                <span class="row__ic">
+                  <Icon name={d.here ? 'check' : 'phone'} size={22} />
+                </span>
+                <span class="row__body">
+                  <span class="row__t">{line.title}</span>
+                  <span class="row__s">{line.sub}</span>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+      {/* Signed in here by something other than a PIN on a confirmed device: said, so the list is not misread. */}
+      {seen.count > 0 && !seen.here ? <Note tone="info" icon="info" title={t('account.devices.notHere')} /> : null}
+      {canForgetOthers(seen) ? (
+        <Button variant="outline" chevron={false} onClick={() => setStep('others')}>
+          {t('account.devices.forgetOthers')}
+        </Button>
+      ) : null}
+      {seen.here ? (
+        <Button variant="outline" chevron={false} onClick={() => setStep('this')}>
+          {t('account.devices.forgetThis')}
+        </Button>
+      ) : null}
     </>
   );
 }

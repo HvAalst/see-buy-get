@@ -4,7 +4,7 @@ import { actingPerson } from '../../foundation/auth/acting';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { PersonService } from './person.service';
 import { HandleService } from '../../foundation/handle/handle.service';
-import { AccountProfileDto, AccountPinDto, AccountEmailDto, BlockOldNumberDto, ChangeNumberDto } from './pudo.dto';
+import { AccountProfileDto, AccountPinDto, AccountEmailDto, BlockOldNumberDto, ChangeNumberDto, ForgetOtherDevicesDto, PinDevicesDto } from './pudo.dto';
 import { AccountMoveService } from './account-move.service';
 import { IdDisputeService } from './id-dispute.service';
 import { AccountRecoveryService } from './account-recovery.service';
@@ -100,6 +100,34 @@ export class AccountController {
   changePin(@Body() dto: AccountPinDto, @Actor() actor: IntrospectionResult) {
     const { person } = this.persons.changePinForPerson(actingPerson(actor), dto.currentPin, dto.newPin);
     return { changed: true, pinChangedAt: person.pinChangedAt, signedOutEverywhere: true };
+  }
+
+  /**
+   * THE PHONES AND BROWSERS MY PIN WORKS ON — how many, when each was confirmed by a code and last used, and which
+   * one this is. A POST although it only reads: the browser's device keys come in the body, never in an address,
+   * which is written to logs. Keyed to the token, like everything here.
+   */
+  @Post('pin-devices')
+  pinDevices(@Body() dto: PinDevicesDto, @Actor() actor: IntrospectionResult) {
+    return this.persons.devicesOf(actingPerson(actor), dto.devices);
+  }
+
+  /**
+   * FORGET EVERY OTHER PHONE AND BROWSER — the PIN again. Each of them needs the code to the number before the PIN
+   * works there again, and every session is ended, this one included: the app signs the person back in here.
+   */
+  @Post('pin-devices/forget-others')
+  forgetOtherDevices(@Body() dto: ForgetOtherDevicesDto, @Actor() actor: IntrospectionResult) {
+    return { ...this.persons.forgetOtherDevices(actingPerson(actor), dto.pin, dto.devices), signedOutEverywhere: true };
+  }
+
+  /**
+   * FORGET THIS ONE, AND SIGN OUT — for a computer that is not theirs. From then on the PIN does not work on it
+   * until a code to the number is typed there again.
+   */
+  @Post('pin-devices/forget-this')
+  forgetThisDevice(@Body() dto: PinDevicesDto, @Actor() actor: IntrospectionResult) {
+    return this.persons.forgetThisDevice(actingPerson(actor), dto.devices);
   }
 
   /**
