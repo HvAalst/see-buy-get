@@ -722,6 +722,40 @@ export const enFleet = {
   'fleet.toast.papersSavedDetail': 'The dates are watched from now on.',
   'fleet.toast.licenceSaved': 'Licence recorded',
   'fleet.toast.licenceSavedDetail': 'The new date counts from now.',
+  /*
+   * A DRIVER'S RENEWED CARD, sent to this office from the driver app. The same words network staff read
+   * for a courier who has no fleet: their reading is "they read", yours is "as you read it", and a
+   * refusal is a sentence the driver is shown exactly.
+   */
+  'fleet.card.sentRow': 'Sent their renewed licence {date}. Read it.',
+  'fleet.card.readBtn': 'Read the card',
+  'fleet.card.waitingOne': 'A renewed licence to read',
+  'fleet.card.waitingMany': '{count} renewed licences to read',
+  'fleet.card.waitingDetail': 'Each was sent from the driver app. Until you read the card and record its date, nothing changes for that driver.',
+  'fleet.card.title': 'The card they sent',
+  'fleet.card.body': 'Read the expiry date off the photograph and type it yourself. Their reading is shown so you can compare; it is never copied into the record for you.',
+  'fleet.card.read': 'Sent {date}. They read the expiry as {expires}.',
+  'fleet.card.number': 'They give the number as {number}.',
+  'fleet.card.alt': 'The renewed licence {name} sent',
+  'fleet.card.open': 'Open the photo at full size',
+  'fleet.card.gone': 'This photo cannot be shown',
+  'fleet.card.goneDetail': 'Say so under “Not accepted”, and they can send it again. Or record the date from the card itself if they are with you.',
+  'fleet.card.readDate': 'Expiry date, as you read it on the card',
+  'fleet.card.differs': 'That is not the date they read ({expires})',
+  'fleet.card.differsDetail': 'Look at the card again before recording it.',
+  'fleet.card.datePast': 'That date has already passed. A renewed licence runs into the future.',
+  'fleet.card.record': 'Record the licence',
+  'fleet.card.refuse': 'Not accepted',
+  'fleet.card.refuseWhy': 'Why not — they are shown exactly this',
+  'fleet.card.refuseSend': 'Refuse the card',
+  'fleet.card.refusedToast': 'Card refused',
+  'fleet.card.refusedToastDetail': '{name} is told why, and can send another.',
+  'fleet.card.fromCard': 'This date was read from the card they sent, recorded {date}.',
+  'fleet.card.fromWord': 'This date was recorded {date} with no photograph: from the card as somebody saw it.',
+  'fleet.card.recordedCard': 'The card this date was read from',
+  'fleet.card.lastRefused': 'Their last card was not accepted on {date}: “{reason}” They have been told, and can send another.',
+  'fleet.card.howItArrives': 'A driver whose licence is running out is asked for a photo of the new card in the driver app. It arrives here to be read. You can also record the date from the card itself, as before.',
+  'fleet.papers.cardSentRow': 'Sent their new card. Read it under Drivers.',
 
   // Dashboard screen.
   'fleet.dash.tileVehicles': 'Vehicles active',

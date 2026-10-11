@@ -178,9 +178,9 @@ describe('the papers watch', () => {
     const jane = () => inbox.filter((n) => n.did === 'd-jane');
     const office = () => inbox.filter((n) => n.did === 'did:fleet:k');
     expect(jane()[0]).toMatchObject({ kind: 'papers_due', title: 'Your licence runs out in 4 days' });
-    // Her office records it, so the message tells her where the date goes — and it is short, because the
+    // Her office records it, so the message tells her where the card goes — and it is short, because the
     // place it is read is a lock screen.
-    expect(jane()[0].body).toContain('Give the new date to the fleet office');
+    expect(jane()[0].body).toContain('Send your fleet office a photo of the new card');
     expect(jane()[0].body.length).toBeLessThan(120);
     expect(office()[0]).toMatchObject({ kind: 'papers_due', title: 'A paper running out in your fleet' });
     expect(await watch.sweep(now + DAY)).toEqual({ shiftsEnded: 0, notified: 0, mails: 0 });
@@ -203,6 +203,39 @@ describe('the papers watch', () => {
     // …and a courier who rides without a fleet is sent to the app, not to an office they do not have.
     expect(one.inbox[0].body).toContain('Send a photo of the new card from the app');
     expect(one.inbox[0].body.length).toBeLessThan(120);
+  });
+
+  it('stops telling a driver to send the card once they have: quiet while it only runs out, and when it lapses the shift still ends and says why', async () => {
+    const card = { copyRef: 'med_card', expiresAt: day(700), sentAt: new Date(now).toISOString() };
+    const drivers = [
+      { did: 'd-sent', displayName: 'Sent S.', status: 'ACTIVE', managerDid: 'did:fleet:k', licence: { number: 'L1', classes: ['van'], expiresAt: day(3) }, licenceRenewal: card },
+      { did: 'd-solo-sent', displayName: 'Solo S.', status: 'ACTIVE', licence: { number: 'L2', classes: ['motorcycle'], expiresAt: day(3) }, licenceRenewal: card },
+    ];
+    const { watch, inbox, ended } = harness({ vehicles: [{ vehicleId: 'v9', plate: 'KLM 009X', status: 'ACTIVE', managerDid: 'did:fleet:k', documents: {} }], drivers, onShift: { v9: 'd-sent' } });
+    await watch.sweep(now);
+    // Neither driver is told anything: each has done their part. The office still is — the row is its to act on,
+    // and the dashboard row says the card is there to read.
+    expect(inbox.filter((n) => n.did === 'd-sent' || n.did === 'd-solo-sent')).toEqual([]);
+    expect(inbox.filter((n) => n.did === 'did:fleet:k')).toHaveLength(1);
+    expect(watch.reportFor('did:fleet:k', now).due).toEqual([expect.objectContaining({ id: 'd-sent', cardSent: true })]);
+
+    // Lapsed, the card still unread: the shift ends all the same, and the sentence does not ask for the card again.
+    await watch.sweep(now + 5 * DAY);
+    expect(ended).toEqual(['d-sent']);
+    const told = inbox.filter((n) => n.did === 'd-sent');
+    expect(told.map((n) => n.kind)).toEqual(['papers_lapsed', 'papers_lapsed']);
+    for (const n of told) {
+      expect(n.body).toContain('The card you sent has not been read yet');
+      expect(n.body).not.toContain('Send ');
+    }
+    expect(inbox.find((n) => n.did === 'd-solo-sent')?.body).toContain('The card you sent has not been read yet');
+    expect(watch.reportFor('did:fleet:k', now + 5 * DAY).lapsed).toEqual([expect.objectContaining({ id: 'd-sent', cardSent: true })]);
+  });
+
+  it('a row with no card sent says nothing about one', async () => {
+    const drivers = [{ did: 'd-jane', displayName: 'Jane W.', status: 'ACTIVE', managerDid: 'did:fleet:k', licence: { number: 'L', classes: ['van'], expiresAt: day(3) } }];
+    const { watch } = harness({ vehicles: [], drivers });
+    expect(watch.reportFor('did:fleet:k', now).due[0]).not.toHaveProperty('cardSent');
   });
 
   it('reports to the network what only an operator can put right, worst first, and when it last looked', async () => {

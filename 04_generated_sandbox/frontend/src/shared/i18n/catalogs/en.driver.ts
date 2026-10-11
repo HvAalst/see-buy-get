@@ -231,9 +231,9 @@ export const enDriver = {
   'driver.home.allBusy': 'All of your vehicles are out with someone else. Scan the one you are taking instead.',
   // FP4 — papers that switch things off, said before the walk to the yard rather than at the coupling.
   'driver.home.offRoadTitle': 'You cannot start a shift',
-  'driver.home.offRoadDetail': 'Renew it and show the fleet office; they record the new date, and shifts start again from then.',
+  'driver.home.offRoadDetail': 'Renew it, then send a photo of the new card here, or show the card at the fleet office. They record the new date, and shifts start again from then.',
   'driver.home.licenceDueTitle': 'Your licence runs out in {days} days',
-  'driver.home.licenceDueDetail': 'Renew it in time and give the fleet office the new date, or shifts stop on that day.',
+  'driver.home.licenceDueDetail': 'Renew it in time, then send a photo of the new card here or show the card at the fleet office, or shifts stop on that day.',
   // …and for a courier who rides on their own, who has no fleet office to go to. The same two moments, with
   // the one thing they can actually do: send the new card from here.
   'driver.home.offRoadDetailOwn': 'Renew it, then send a photo of the new card here. The network checks it and records the date; shifts start again from then.',
@@ -245,6 +245,10 @@ export const enDriver = {
   'driver.licence.number': 'Licence number, if it changed',
   'driver.licence.submit': 'Send it',
   'driver.licence.sent': 'Sent. The network will check it.',
+  // A fleet driver's card goes to their own office: the same three sentences, naming who reads it.
+  'driver.licence.sheetBodyFleet': 'A clear photo of the new card, with the expiry date readable. Your fleet office reads the same photo and records the date. Until they do, nothing changes.',
+  'driver.licence.sentFleet': 'Sent. Your fleet office will check it.',
+  'driver.licence.pendingDetailFleet': 'Waiting for your fleet office to check it. You read the expiry as {expires}.',
   'driver.licence.refused': 'Not sent',
   'driver.licence.pendingTitle': 'Renewed licence sent {date}',
   'driver.licence.pendingDetail': 'Waiting for the network to check it. You read the expiry as {expires}.',

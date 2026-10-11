@@ -21,7 +21,7 @@ import { useFleetApp, type FleetActions, type FleetState, type Screen } from './
 import type { ArchiveApiState } from '../../shared/archive/useArchive';
 import '../../shared/screens.css';
 import './fleet.css';
-import { fleetWorkLine } from './logic';
+import { cardsToRead, fleetWorkLine } from './logic';
 
 export function App() {
   const t = useT();
@@ -57,11 +57,13 @@ export function App() {
   // A badge of open runs, which is the one number on this tab that changes on its own — a shipper booking
   // space is somebody else acting on the fleet's behalf, and the office should see it without looking.
   const openRuns = state.departures.filter((d) => d.status === 'open').length;
+  // And the cards drivers have sent: each is a driver off the road, or about to be, until the office reads it.
+  const cards = cardsToRead(state.drivers);
 
   const tabs: NavItem<Screen>[] = [
     { key: 'dash', label: t('fleet.nav.dash'), icon: 'grid' },
     { key: 'vehicles', label: t('fleet.nav.vehicles'), icon: 'truck' },
-    { key: 'drivers', label: t('fleet.nav.drivers'), icon: 'person' },
+    { key: 'drivers', label: t('fleet.nav.drivers'), icon: 'person', badge: cards || undefined },
     { key: 'sessions', label: t('fleet.nav.sessions'), icon: 'route', badge: onShift || undefined },
     { key: 'lines', label: t('fleet.nav.lines'), icon: 'repeat' },
     // F3 — its own tab, not a section under Lines. Drawing a line is setup, once per road; putting a

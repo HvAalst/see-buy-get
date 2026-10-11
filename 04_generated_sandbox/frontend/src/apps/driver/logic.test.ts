@@ -16,6 +16,8 @@ import {
   boardSummary,
   canLoadBag,
   canStartShift,
+  cardReader,
+  cardWords,
   capacitySubLine,
   claimControl,
   countdownLabel,
@@ -575,5 +577,38 @@ describe('a driver who left their fleet by themselves', () => {
     expect(leftDetail([], t)).toBe('Their office has been told.');
     expect(leftDetail(['Nairobi – Nakuru'], t)).toBe('Their office has been told, and that the Nairobi – Nakuru run needs another driver.');
     expect(leftDetail(['Nairobi – Nakuru', 'Nairobi – Eldoret'], t)).toBe('Their office has been told, and that 2 of their runs need another driver.');
+  });
+});
+
+describe('who reads a renewed licence a driver sends', () => {
+  it('a fleet’s driver sends it to their own office; a courier with no fleet to the network; a driver between fleets to nobody', () => {
+    expect(cardReader({ managerDid: 'did:glos:kilima' })).toBe('office');
+    expect(cardReader({})).toBe('network');
+    // Taken off, or left: no office is theirs, and the network never contracted them as a courier.
+    expect(cardReader({ removedFrom: { companyName: 'Kilima Logistics', at: '2026-10-11', reason: 'own' } })).toBeNull();
+    // …and a fleet that has taken them on since is their office, whatever the old marker says.
+    expect(cardReader({ managerDid: 'did:glos:other', removedFrom: { companyName: 'Kilima Logistics' } })).toBe('office');
+    expect(cardReader(null)).toBeNull();
+    expect(cardReader(undefined)).toBeNull();
+  });
+
+  it('names the reader in every sentence, and never the other one', () => {
+    const say = (reader: 'office' | 'network') => Object.values(cardWords(reader)).map((key) => t(key, { expires: '31 Mar 2031' }));
+    const office = say('office');
+    const network = say('network');
+    expect(office).toHaveLength(5);
+    for (const line of office) {
+      expect(line).toMatch(/fleet office/);
+      expect(line).not.toMatch(/network/i);
+    }
+    // The dead end this replaced: a courier sent to an office they do not have. None of theirs names one.
+    for (const line of network) expect(line).not.toMatch(/fleet office/);
+    expect(network.filter((line) => /network/i.test(line))).toHaveLength(4);
+    // A fleet driver is told BOTH ways the office can come to see the card: sent from here, or shown there.
+    expect(t(cardWords('office').offRoad)).toBe('Renew it, then send a photo of the new card here, or show the card at the fleet office. They record the new date, and shifts start again from then.');
+    expect(t(cardWords('office').due)).toMatch(/send a photo of the new card here or show the card at the fleet office/);
+    expect(t(cardWords('office').sent)).toBe('Sent. Your fleet office will check it.');
+    expect(t(cardWords('office').pending, { expires: '31 Mar 2031' })).toBe('Waiting for your fleet office to check it. You read the expiry as 31 Mar 2031.');
+    expect(t(cardWords('network').sent)).toBe('Sent. The network will check it.');
   });
 });

@@ -235,6 +235,37 @@ export function papersAloud(report: PapersReport | null | undefined, t: Translat
   return (report.lapsed.length ? t('fleet.papers.aloudLapsed', { count: report.lapsed.length }) : '') + (report.due.length ? t('fleet.papers.aloudDue', { count: report.due.length }) : '');
 }
 
+/* -------------------------------------------- a driver's renewed card -- */
+
+/** How many drivers have sent a renewed licence this office has not read yet: the number on the Drivers tab. */
+export function cardsToRead(drivers: Array<Pick<DriverRow, 'licenceRenewal'>>): number {
+  return drivers.filter((d) => Boolean(d.licenceRenewal)).length;
+}
+
+/**
+ * The pool with a waiting card first. That driver is off the road, or about to be, until somebody here
+ * opens the card, and a pool of forty would otherwise put them wherever they were registered. Everybody
+ * else keeps the order the server gave.
+ */
+export function cardsFirst<T extends Pick<DriverRow, 'licenceRenewal'>>(drivers: T[]): T[] {
+  return [...drivers].sort((a, b) => Number(Boolean(b.licenceRenewal)) - Number(Boolean(a.licenceRenewal)));
+}
+
+/**
+ * The office typed a date that is not the one the driver read. Two readings of one photograph that disagree
+ * are worth a second look before it is saved, and neither is assumed to be the right one. Not said about a
+ * date that cannot be saved anyway (`blocked`): one message at a time.
+ */
+export function readingDiffers(card: { expiresAt: string } | undefined, typed: string, blocked = false): boolean {
+  return Boolean(card && typed && !blocked && typed !== card.expiresAt);
+}
+
+/** Where the date on record came from: a card somebody sent, somebody's word, or from before that was kept. */
+export function licenceSource(licence: DriverRow['licence']): 'card' | 'word' | null {
+  if (!licence?.recordedAt) return null;
+  return licence.copyRef ? 'card' : 'word';
+}
+
 export function shortDid(s: string | undefined | null): string {
   const v = s ?? '';
   return v.length > 16 ? `${v.slice(0, 8)}…${v.slice(-4)}` : v || '—';

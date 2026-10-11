@@ -1007,6 +1007,87 @@ describe('GLOS backend (e2e)', () => {
     expect(all.body.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('a fleet driver’s renewed licence: the driver sends the photograph, their OWN office opens it and records the date — no other office, no colleague, nobody signed out', async () => {
+    const http = app.getHttpServer();
+    const u = Math.floor(Math.random() * 1e6);
+    const as = async (body: Record<string, unknown>) => ({ Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ ...body, type: 'client_credentials' }).expect(201)).body.access_token}` });
+    const operator = await as({ role: 'operator' });
+    const onboardManager = async (name: string) => {
+      const m = (await request(http).post('/v1/sbg/fleet/managers').set(operator).send({ companyName: name, tradingName: name, contactPhone: `+2547${u}${name.length}`, contactEmail: `ops@${name}.example`, ownerFullName: 'Owner', ownerNationalId: `MGR-${u}-${name}`, depotAddress: '1 Depot Rd', location: { lat: -1.3, lng: 36.8 }, requirements: { businessRegistrationNo: `BRN-${u}-${name}`, transportOperatorLicence: `TOL-${u}-${name}`, taxId: `TAX-${u}-${name}`, declaredFleetSize: 3 } }).expect(201)).body;
+      await sendFleetPapers(m.did, operator);
+      await request(http).post(`/v1/sbg/fleet/managers/${m.did}/kyc-decision`).set(operator).send({ approve: true, by: 'A second member of staff' }).expect(201);
+      await request(http).post(`/v1/sbg/fleet/managers/${m.did}/bond`).set(operator).expect(201);
+      return m.did as string;
+    };
+    const mA = await onboardManager('CardCo');
+    const mB = await onboardManager('RivalCard');
+    const office = await as({ role: 'fleet_manager', did: mA, tenant: mA });
+    const rival = await as({ role: 'fleet_manager', did: mB, tenant: mB });
+    // A phone number is compared by its digits, so the two differ in a digit and not in a name.
+    const onboardDriver = async (tag: string) =>
+      (await request(http).post('/v1/sbg/drivers/onboard').set(operator).send({ displayName: tag, fullName: `${tag} Rider`, nationalId: `CARD-${u}-${tag}`, mobile: `+25471${u}${tag.length}`, licenceClasses: ['motorcycle'], managerDid: mA }).expect(201)).body as { did: string };
+    const amos = await onboardDriver('Amos');
+    const colleague = await onboardDriver('Baraka');
+    // Exactly what a fleet driver's sign-in carries: the fleet rides in the token as its tenant.
+    const asAmos = await as({ role: 'driver', did: amos.did, tenant: mA });
+    const asColleague = await as({ role: 'driver', did: colleague.did, tenant: mA });
+
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const photo = async () => (await request(http).post('/v1/sbg/media').set(asAmos).send({ kind: 'kyc_licence', dataUrl: PNG }).expect(201)).body.mediaId as string;
+    const card = await photo();
+    const send = `/v1/sbg/fleet/drivers/${amos.did}/licence-renewal`;
+    const cardAt = (id: string) => `/v1/sbg/fleet/drivers/${amos.did}/licence-card/${id}`;
+
+    // A photograph the driver has taken and not sent is not the office's to open.
+    await request(http).get(cardAt(card)).set(office).expect(404);
+    // Sent by the driver. Their office cannot send one for them, and neither can a colleague.
+    await request(http).post(send).set(office).send({ copyRef: card, expiresAt: '2031-03-31' }).expect(403);
+    await request(http).post(send).set(asColleague).send({ copyRef: card, expiresAt: '2031-03-31' }).expect(403);
+    const sent = await request(http).post(send).set(asAmos).send({ copyRef: card, expiresAt: '2031-03-31' }).expect(201);
+    expect(sent.body.licenceRenewal).toMatchObject({ copyRef: card, expiresAt: '2031-03-31' });
+
+    // The office is told, in its own inbox, and its driver list carries the card.
+    const bell = (await request(http).get('/v1/sbg/notifications/inbox').set(office).expect(200)).body.items as Array<{ kind: string; title: string }>;
+    expect(bell.filter((n) => n.kind === 'papers_sent').map((n) => n.title)).toEqual(['Amos sent their renewed licence']);
+    const list = (await request(http).get('/v1/sbg/fleet/drivers').set(office).expect(200)).body as Array<{ did: string; licenceRenewal?: { copyRef: string } }>;
+    expect(list.find((d) => d.did === amos.did)?.licenceRenewal?.copyRef).toBe(card);
+
+    // THE PHOTOGRAPH: the bytes, as an image, never cached — for that office, by this door and no other.
+    const opened = await request(http).get(cardAt(card)).set(office).expect(200);
+    expect(opened.headers['content-type']).toMatch(/^image\/png/);
+    expect(opened.headers['cache-control']).toBe('private, no-store');
+    expect(opened.headers['x-content-type-options']).toBe('nosniff');
+    expect(Buffer.isBuffer(opened.body) && opened.body.length > 0).toBe(true);
+    await request(http).get(`/v1/sbg/media/${card}`).set(office).expect(403); // the general door stays shut to it
+    for (const who of [rival, asColleague, asAmos, operator]) await request(http).get(cardAt(card)).set(who).expect(403);
+    await request(http).get(cardAt(card)).expect(401);
+    // The driver's other photographs are not reachable by naming them here.
+    const other = await photo();
+    await request(http).get(cardAt(other)).set(office).expect(404);
+
+    // REFUSED by that office and nobody else's; the driver reads the office's own sentence.
+    const refuse = `/v1/sbg/fleet/drivers/${amos.did}/licence-renewal/refuse`;
+    await request(http).post(refuse).set(rival).send({ reason: 'No.' }).expect(403);
+    await request(http).post(refuse).set(asColleague).send({ reason: 'No.' }).expect(403);
+    await request(http).post(refuse).set(asAmos).send({ reason: 'No.' }).expect(403);
+    await request(http).post(refuse).set(office).send({ reason: 'The date is under your thumb.' }).expect(201);
+    const me = (await request(http).get(`/v1/sbg/fleet/drivers/${amos.did}`).set(asAmos).expect(200)).body;
+    expect(me.licenceRenewal).toBeUndefined();
+    expect(me.licenceRenewalRefusal).toMatchObject({ reason: 'The date is under your thumb.' });
+    await request(http).get(cardAt(card)).set(office).expect(404); // deleted with the refusal
+
+    // SENT AGAIN, RECORDED by the office from the card: the date is the office's reading, and the driver is told.
+    const second = await photo();
+    await request(http).post(send).set(asAmos).send({ copyRef: second, expiresAt: '2031-03-31' }).expect(201);
+    await request(http).post(`/v1/sbg/fleet/drivers/${amos.did}/licence`).set(rival).send({ expiresAt: '2031-03-30' }).expect(403);
+    const recorded = await request(http).post(`/v1/sbg/fleet/drivers/${amos.did}/licence`).set(office).send({ expiresAt: '2031-03-30' }).expect(201);
+    expect(recorded.body.licence).toMatchObject({ expiresAt: '2031-03-30', copyRef: second });
+    expect(recorded.body.licenceRenewal).toBeUndefined();
+    await request(http).get(cardAt(second)).set(office).expect(200); // the card the date was read from, still theirs to open
+    const told = (await request(http).get('/v1/sbg/notifications/inbox').set(asAmos).expect(200)).body.items as Array<{ kind: string; title: string }>;
+    expect(told.filter((n) => n.kind === 'papers_checked').map((n) => n.title).sort()).toEqual(['Your licence is recorded', 'Your licence photo was not accepted']);
+  });
+
   it('S4 problem+json: every error carries a machine code, a traceId, and a preserved status', async () => {
     const http = app.getHttpServer();
     const auth = { Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201)).body.access_token}` };

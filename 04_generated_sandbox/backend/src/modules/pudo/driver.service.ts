@@ -365,18 +365,20 @@ export class DriverService {
   }
 
   /**
-   * A COURIER WITHOUT A FLEET SENDS THEIR RENEWED LICENCE: the photograph, and the date they read off it.
+   * A DRIVER SENDS THEIR RENEWED LICENCE: the photograph, and the date they read off it.
    *
-   * Until this existed their app told them to "show the fleet office" — which they do not have — and the
-   * console asked staff to record a renewal they had no way to see. The date sent here switches nothing
-   * on; it waits beside the photograph until somebody here reads the same card and types it
-   * (renewLicence). A fleet driver is turned away with the reason: their office records their licence,
-   * and a second route to the same date would be two people who each think the other checked it.
+   * WHO READS IT is whoever records their licence, and there is only ever one: the office of the fleet
+   * they drive for, or — for a courier without a fleet — network staff. A fleet driver used to be turned
+   * away here ("show them the renewed card"), so their office typed a date off a card it may never have
+   * seen. The card goes to that same office now. It is still one route to the date, not two: the driver
+   * supplies the photograph, and the office that always recorded the date is the one that reads it.
+   *
+   * The date sent here switches nothing on; it waits beside the photograph until somebody reads the same
+   * card and types it (renewLicence).
    */
   sendLicenceRenewal(did: string, input: { copyRef: string; expiresAt: string; number?: string }, now: number = Date.now()): FleetDriver {
     const driver = this.require(did);
-    if (driver.managerDid) throw new GlosError('FORBIDDEN', 'Your fleet office records your licence — show them the renewed card');
-    if (driver.status === 'SUSPENDED') throw new GlosError('INVALID_STATE', 'A suspended courier cannot send papers');
+    if (driver.status === 'SUSPENDED') throw new GlosError('INVALID_STATE', 'A suspended driver cannot send papers');
     if (!input.expiresAt || paperLapsesAt(input.expiresAt) <= now) throw new GlosError('LICENCE_EXPIRED', 'That date has already passed — a renewed licence runs into the future');
     if (!this.media) throw new GlosError('INVALID_STATE', 'Photographs cannot be kept in this deployment, so a licence cannot be sent');
     // Only the courier's OWN fresh photograph: adopt() refuses another actor's media and anything already
@@ -391,7 +393,24 @@ export class DriverService {
     driver.licenceRenewal = { copyRef: input.copyRef, expiresAt: input.expiresAt, ...(number ? { number } : {}), sentAt: new Date(now).toISOString() };
     driver.licenceRenewalRefusal = undefined;
     this.drivers.set(did, driver);
+    // Staff read a queue that counts what is waiting. A fleet's office has no such queue, so it is told.
+    void this.events
+      .publish(GlosEvent.Pudo.DriverLicenceSent, { did, displayName: driver.displayName, expiresAt: input.expiresAt, ...(driver.managerDid ? { managerDid: driver.managerDid } : {}) }, { source: 'pudo' })
+      .catch(() => undefined);
     return driver;
+  }
+
+  /**
+   * WHICH PHOTOGRAPHS OF A DRIVER'S LICENCE THEIR FLEET'S OFFICE MAY OPEN: the card waiting to be read,
+   * and the card the date on record was read from. Nothing else of the driver's — the caller names an id
+   * and is answered only when it is one of those two, so this never becomes a way to walk a driver's
+   * other photographs. An id that is neither answers NOT FOUND rather than "not yours".
+   */
+  licenceCardOf(did: string, mediaId: string): string {
+    const driver = this.require(did);
+    const readable = [driver.licenceRenewal?.copyRef, driver.licence.copyRef].filter(Boolean);
+    if (!mediaId || !readable.includes(mediaId)) throw new GlosError('NOT_FOUND', 'No such photograph');
+    return mediaId;
   }
 
   /**
@@ -417,7 +436,7 @@ export class DriverService {
   /**
    * The card they sent is not accepted — unreadable, not a driving licence, a date that is not on it.
    *
-   * A REFUSAL CARRIES A REASON, as every refusal here does: the courier is shown it, and one they cannot
+   * A REFUSAL CARRIES A REASON, as every refusal here does: the driver is shown it, and one they cannot
    * act on leaves them where silence did. The photograph is deleted now rather than kept on a clock:
    * nothing was recorded from it, so it is a picture of somebody's licence that proves nothing.
    */
@@ -426,7 +445,7 @@ export class DriverService {
     const pending = driver.licenceRenewal;
     if (!pending) throw new GlosError('INVALID_STATE', 'Nothing has been sent to refuse');
     const why = reason?.trim();
-    if (!why) throw new GlosError('REASON_REQUIRED', 'A refusal must say why: the courier is shown it');
+    if (!why) throw new GlosError('REASON_REQUIRED', 'A refusal must say why: the driver is shown it');
     this.media?.purgeByOwner(pending.copyRef, did);
     driver.licenceRenewal = undefined;
     driver.licenceRenewalRefusal = { reason: why, at: new Date(now).toISOString(), ...(by ? { by } : {}) };

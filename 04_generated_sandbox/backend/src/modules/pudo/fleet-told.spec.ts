@@ -12,7 +12,7 @@ import { MediaService } from './media.service';
 import { requiredUnloadKeys } from './heavy-cargo';
 import type { AgentService } from './agent.service';
 import type { DispatchService } from './dispatch.service';
-import type { DriverService } from './driver.service';
+import { DriverService } from './driver.service';
 import type { FleetService } from './fleet.service';
 import type { Geocoder } from './geocoder';
 import type { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
@@ -317,5 +317,105 @@ describe('a fleet hears the answer to a document it sent', () => {
     managers.recordPapers(did, { licenceExpiresAt: inAYear }, 'ops1@sbg.test');
     await settle();
     expect(notifications.inboxFor(did)).toHaveLength(0);
+  });
+});
+
+/**
+ * A DRIVER'S RENEWED LICENCE, SENT TO THEIR OWN OFFICE. The office has no queue with a count on it the way
+ * network staff do, so the bell is the only thing that brings it to the card — and the driver stays off
+ * the road until somebody there opens it. The real DriverService publishes; the real dispatcher listens.
+ */
+describe('a fleet’s office hears that one of its drivers sent a renewed licence', () => {
+  const OFFICE = 'did:glos:fleet-card-office';
+  const settle = async () => {
+    for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
+  };
+  const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+  const setUp = () => {
+    const events = new EventBus();
+    const notifications = new NotificationService(new OutboxPushSender());
+    const none = {} as never;
+    new NotificationDispatcher(
+      events,
+      notifications,
+      { list: () => [] } as unknown as ParcelService,
+      none as PersonService,
+      { find: () => undefined, unfinished: () => [] } as unknown as AgentService,
+      { list: () => [], overHours: () => false } as unknown as FleetService,
+      none as ToteService,
+      none as MdpService,
+      none as DispatchService,
+      { sweep: () => [] } as unknown as UnclaimedService,
+      none as VendorService,
+    ).onModuleInit();
+
+    const dids = new DidService({ anchor: () => 'anchor' } as unknown as LedgerService, events);
+    const entities = new EntityService(dids);
+    entities.seed();
+    const media = new MediaService();
+    const drivers = new DriverService(
+      dids,
+      { store: () => ({ vaultRef: 'vault_x' }) } as unknown as IdentityVault,
+      { upsert: () => undefined } as unknown as OperationalStore,
+      events,
+      { requireActive: () => undefined } as unknown as FleetManagerService,
+      entities,
+      { can: () => true } as unknown as PresenceService,
+      media,
+    );
+    let n = 0;
+    const driver = (managerDid?: string) => {
+      n += 1;
+      return drivers.register({ displayName: `Card ${n}.`, fullName: `Card Driver ${n}`, nationalId: `ID-CARD-TOLD-${n}-${Date.now()}`, mobile: `+25470055${n}${Date.now() % 100000}`, licenceClasses: ['motorcycle'], criminalRecordClear: true, ...(managerDid ? { managerDid } : {}) } as never);
+    };
+    const card = (ownerDid: string) => media.upload({ ownerDid, kind: 'kyc_licence', dataUrl: PNG }).mediaId;
+    return { notifications, drivers, driver, card };
+  };
+
+  it('is told who sent it, what date they read, and where to go', async () => {
+    const { notifications, drivers, driver, card } = setUp();
+    const d = driver(OFFICE);
+    drivers.sendLicenceRenewal(d.did, { copyRef: card(d.did), expiresAt: '2031-03-31' });
+    await settle();
+
+    const told = notifications.inboxFor(OFFICE);
+    expect(told).toHaveLength(1);
+    expect(told[0]).toMatchObject({ kind: 'papers_sent', title: 'Card 1. sent their renewed licence' });
+    expect(told[0].body).toMatch(/^They read the new expiry as .*2031\. Read the card under Drivers\.$/);
+    // Short enough to be read whole in the bell, where a third line is an ellipsis.
+    expect(told[0].body.length).toBeLessThan(80);
+    // The driver is not told that they sent it: they were there.
+    expect(notifications.inboxFor(d.did)).toHaveLength(0);
+
+    // A different photograph is said again — the date they read may have changed with it.
+    drivers.sendLicenceRenewal(d.did, { copyRef: card(d.did), expiresAt: '2032-04-30' });
+    await settle();
+    const again = notifications.inboxFor(OFFICE).filter((x) => x.kind === 'papers_sent');
+    expect(again).toHaveLength(2);
+    expect(again.some((x) => /2032/.test(x.body))).toBe(true);
+  });
+
+  it('tells no office about a courier who has none — network staff read a queue that counts it', async () => {
+    const { notifications, drivers, driver, card } = setUp();
+    const d = driver();
+    drivers.sendLicenceRenewal(d.did, { copyRef: card(d.did), expiresAt: '2031-03-31' });
+    await settle();
+    expect(notifications.inboxFor(OFFICE)).toHaveLength(0);
+    expect(notifications.inboxFor(d.did)).toHaveLength(0);
+  });
+
+  it('then tells the DRIVER what the office decided, in the office’s own words', async () => {
+    const { notifications, drivers, driver, card } = setUp();
+    const d = driver(OFFICE);
+    drivers.sendLicenceRenewal(d.did, { copyRef: card(d.did), expiresAt: '2031-03-31' });
+    drivers.refuseLicenceRenewal(d.did, 'The date is under your thumb.', OFFICE);
+    await settle();
+    expect(notifications.inboxFor(d.did)[0]).toMatchObject({ kind: 'papers_checked', title: 'Your licence photo was not accepted', body: 'The date is under your thumb. Send a new photo from the app.' });
+
+    drivers.sendLicenceRenewal(d.did, { copyRef: card(d.did), expiresAt: '2031-03-31' });
+    drivers.renewLicence(d.did, { expiresAt: '2031-03-31' }, Date.now(), OFFICE);
+    await settle();
+    expect(notifications.inboxFor(d.did).map((x) => x.title)).toContain('Your licence is recorded');
   });
 });

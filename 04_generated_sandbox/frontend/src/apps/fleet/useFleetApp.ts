@@ -878,18 +878,59 @@ export function useFleetApp() {
     [client, managerDid, run, pushToast, refresh],
   );
 
-  /** FP4 — record a driver's renewed licence. The new date is the whole of the renewal. */
+  /**
+   * FP4 — record a driver's renewed licence. The new date is the whole of the renewal.
+   *
+   * Answers the refusal rather than posting it to the screen's error slot: this is saved from a sheet, and
+   * an error drawn behind the sheet is an error nobody sees while the button looks like it did nothing.
+   */
   const renewLicence = useCallback(
-    async (did: string, body: { number?: string; expiresAt: string }) => {
-      if (!client || !body.expiresAt) return;
+    async (did: string, body: { number?: string; expiresAt: string }): Promise<SbgError | null> => {
+      if (!client || !body.expiresAt) return null;
+      let refused: SbgError | null = null;
       await run('licence:' + did, async () => {
         const r = await client.api.renewLicence(did, body);
-        if (r.error) return fail(r.error);
+        if (r.error) {
+          refused = r.error;
+          return;
+        }
         pushToast({ tone: 'ok', icon: 'check', title: t('fleet.toast.licenceSaved'), detail: t('fleet.toast.licenceSavedDetail') });
         await refresh();
       });
+      return refused;
     },
-    [client, run, fail, pushToast, refresh],
+    [client, run, pushToast, refresh],
+  );
+
+  /**
+   * The renewed card a driver sent is NOT ACCEPTED. The reason is this office's own sentence and the driver
+   * is shown exactly it, so it is asked for here and refused empty by the server.
+   */
+  const refuseLicence = useCallback(
+    async (did: string, name: string, reason: string): Promise<SbgError | null> => {
+      if (!client || !reason.trim()) return null;
+      let refused: SbgError | null = null;
+      await run('licence:' + did, async () => {
+        const r = await client.api.refuseLicenceRenewal(did, reason.trim());
+        if (r.error) {
+          refused = r.error;
+          return;
+        }
+        pushToast({ tone: 'info', icon: 'check', title: t('fleet.card.refusedToast'), detail: t('fleet.card.refusedToastDetail', { name }) });
+        await refresh();
+      });
+      return refused;
+    },
+    [client, run, pushToast, refresh],
+  );
+
+  /**
+   * The bytes of a card one of this fleet's drivers sent, for <AuthImage>. Its own door: the driver owns the
+   * photograph, and the general media door answers only its owner and network staff.
+   */
+  const loadDriverCard = useCallback(
+    (did: string, mediaId: string) => (client ? client.api.driverCard(did, mediaId) : Promise.resolve({ data: null, error: {} as unknown })),
+    [client],
   );
 
   /** Put a load on a driver. The server applies every gate a claim would, and tells the driver. */
@@ -1255,6 +1296,8 @@ export function useFleetApp() {
       swapRunVehicle,
       rosterInstead,
       renewLicence,
+      refuseLicence,
+      loadDriverCard,
       couple,
       uncouple,
       assignCorridor,

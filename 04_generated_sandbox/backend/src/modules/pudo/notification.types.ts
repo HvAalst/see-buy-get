@@ -52,8 +52,10 @@ export const NOTIFICATION_KINDS = [
   'shift_hours',
   'papers_due',
   'papers_lapsed',
-  /** A renewed licence the courier sent was recorded, or refused with a reason they can act on. */
+  /** A renewed licence the driver sent was recorded, or refused with a reason they can act on. */
   'papers_checked',
+  /** One of a fleet's drivers sent their renewed licence: the office is the one who has to read it. */
+  'papers_sent',
   'bus_inbound',
   'intake_expected',
   'bag_ready_to_close',

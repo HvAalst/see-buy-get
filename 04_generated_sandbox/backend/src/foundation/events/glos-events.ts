@@ -71,6 +71,11 @@ export const GlosEvent = {
      */
     DriverLicenceChecked: 'pudo.driver_licence_checked',
     /**
+     * A driver sent a renewed licence to be read. Carries the fleet they drive for, when there is one: its
+     * office is who reads the card, and an office is not watching a queue the way network staff are.
+     */
+    DriverLicenceSent: 'pudo.driver_licence_sent',
+    /**
      * The same, for a fleet OPERATOR's own licence or cover: a document the fleet sent was recorded or turned
      * down. Published only when the fleet was waiting on the answer — a date staff typed on their own is not
      * news to anybody.

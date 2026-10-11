@@ -184,6 +184,8 @@ function PapersCard({ report }: { report: PapersReport }) {
                 <span class={paperLineClass(r.state)}>{paperLine(r, t)}</span>
                 {/* Still driving on it: for a lapsed paper that is the shift the next check ends. */}
                 {r.onShift ? <span class="row__s">{t(r.state === 'lapsed' ? 'fleet.papers.onShiftEnds' : 'fleet.papers.onShift')}</span> : null}
+                {/* The driver has done their part: this row now waits on the office, and says where. */}
+                {r.cardSent ? <span class="row__s row__s--warn">{t('fleet.papers.cardSentRow')}</span> : null}
               </span>
               <span class="row__end">
                 <Pill tone={r.state === 'lapsed' ? 'danger' : 'warn'} dot>

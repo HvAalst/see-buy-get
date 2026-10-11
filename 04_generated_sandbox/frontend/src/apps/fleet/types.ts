@@ -36,6 +36,8 @@ export interface PaperRow {
   expiresAt?: string;
   daysLeft?: number;
   onShift: boolean;
+  /** A driver who has sent the renewed card: the row waits on this office to read it, under Drivers. */
+  cardSent?: boolean;
 }
 
 export interface PapersReport {
@@ -80,7 +82,15 @@ export interface DriverRow {
   badgeId?: string;
   registry: 'light' | 'heavy';
   status: DriverStatus;
-  licence?: { classes?: string[]; number?: string; expiresAt?: string };
+  /** `copyRef` is the card the date was read from, when there was one; `recordedAt` is when it was typed. */
+  licence?: { classes?: string[]; number?: string; expiresAt?: string; copyRef?: string; recordedAt?: string };
+  /**
+   * THE RENEWED CARD THIS DRIVER SENT, waiting on this office: the photograph, and the date and number they
+   * read off it. Their reading is shown beside the photograph and never typed into the record for them.
+   */
+  licenceRenewal?: { copyRef: string; expiresAt: string; number?: string; sentAt: string };
+  /** Why their last card was not accepted. They are shown it until they send another. */
+  licenceRenewalRefusal?: { reason: string; at: string };
   managerDid?: string;
   /**
    * What this driver's VEHICLE RATE is costing them in work, today.

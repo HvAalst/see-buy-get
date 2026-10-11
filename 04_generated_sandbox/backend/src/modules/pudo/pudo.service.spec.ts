@@ -1,4 +1,5 @@
-﻿import { ConsignmentNoteService } from './consignment-note.service';
+﻿import { StreamableFile } from '@nestjs/common';
+import { ConsignmentNoteService } from './consignment-note.service';
 import { DepartureNoteService } from './departure-note.service';
 import { pdfDataUrl } from '../../foundation/entity/company.test-util';
 import { NoteArchiveService } from './note-archive.service';
@@ -6522,24 +6523,117 @@ describe('PUDO Light', () => {
       expect.objectContaining({ did: c.did, accepted: true, expiresAt: '2030-05-30' }),
     ]);
 
-    // A fleet driver's card goes to their fleet office: a second route to the same date would be two
-    // people each thinking the other had checked it.
+    // A fleet driver's card is NOT on this list. It goes to their own fleet's office (the test after the
+    // next), and staff's queue stays what it says it is: the people who have no office.
     const mgr = activateManager('Card Fleet', 'CF1');
     const fd = mkManagedDriver(mgr.did, 'CF1D');
     const fleetCard = media.upload({ ownerDid: fd.did, kind: 'kyc_licence', dataUrl: PNG });
-    expect(() => drivers.sendLicenceRenewal(fd.did, { copyRef: fleetCard.mediaId, expiresAt: '2030-05-31' })).toThrow(/fleet office/);
+    drivers.sendLicenceRenewal(fd.did, { copyRef: fleetCard.mediaId, expiresAt: '2030-05-31' });
+    expect(drivers.get(fd.did).licenceRenewal).toMatchObject({ copyRef: fleetCard.mediaId });
+    expect(report.networkReport().couriers.some((r) => r.did === fd.did)).toBe(false);
   });
 
-  it('FP4: only the courier sends their own card, and only staff refuse one', () => {
+  it('FP4: a fleet driver sends the renewed card to their OWN office — it opens the photograph, records the date from it or refuses it with a reason; no other office, no colleague', () => {
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const mgr = activateManager('Card Office', 'CO1');
+    const other = activateManager('Other Office', 'CO2');
+    const amos = mkManagedDriver(mgr.did, 'CO1A');
+    const colleague = mkManagedDriver(mgr.did, 'CO1B');
+    const office = { active: true, role: 'fleet_manager', did: mgr.did, tenant: mgr.did } as never;
+    const otherOffice = { active: true, role: 'fleet_manager', did: other.did, tenant: other.did } as never;
+    // Exactly what a fleet driver's sign-in mints: the fleet rides in the token as its tenant.
+    const asAmos = { active: true, role: 'driver', did: amos.did, tenant: mgr.did } as never;
+    const asColleague = { active: true, role: 'driver', did: colleague.did, tenant: mgr.did } as never;
+    const staff = { active: true, role: 'operator', sub: 'operator:opr_x', actorName: 'Amina Otieno' } as never;
+    const sentTo: unknown[] = [];
+    events.subscribe(GlosEvent.Pudo.DriverLicenceSent, (e) => {
+      sentTo.push(e.payload);
+    });
+    const checked: unknown[] = [];
+    events.subscribe(GlosEvent.Pudo.DriverLicenceChecked, (e) => {
+      checked.push(e.payload);
+    });
+
+    // SENT, by the driver's own sign-in and nobody else's — the office that will read it least of all.
+    const card = media.upload({ ownerDid: amos.did, kind: 'kyc_licence', dataUrl: PNG });
+    const dto = { copyRef: card.mediaId, expiresAt: '2031-03-31', number: 'L-NEW-1' } as never;
+    expect(() => controller.sendLicenceRenewal(amos.did, dto, office)).toThrow(/Only the driver/);
+    expect(() => controller.sendLicenceRenewal(amos.did, dto, asColleague)).toThrow(/Only the driver/);
+    const sent = controller.sendLicenceRenewal(amos.did, dto, asAmos);
+    expect(sent.licenceRenewal).toMatchObject({ copyRef: card.mediaId, expiresAt: '2031-03-31', number: 'L-NEW-1' });
+    // It switches nothing on, and it names the office as its reader.
+    expect(drivers.get(amos.did).licence.copyRef).toBeUndefined();
+    expect(sentTo).toEqual([expect.objectContaining({ did: amos.did, managerDid: mgr.did, expiresAt: '2031-03-31' })]);
+    // The office's own list carries it, which is what its Drivers tab counts.
+    const listed = controller.listFleetDrivers(office) as Array<{ did: string; licenceRenewal?: { copyRef: string } }>;
+    expect(listed.find((d) => d.did === amos.did)?.licenceRenewal?.copyRef).toBe(card.mediaId);
+    expect((controller.listFleetDrivers(otherOffice) as Array<{ did: string }>).some((d) => d.did === amos.did)).toBe(false);
+
+    // THE PHOTOGRAPH is opened by the office of the fleet they drive for. Not another fleet's office; not
+    // a colleague, whose sign-in names the same fleet; not the driver or staff by this door (each has
+    // their own); and not any other photograph of the driver's, or a colleague's card under their name.
+    expect(controller.driverLicenceCard(amos.did, card.mediaId, office)).toBeInstanceOf(StreamableFile);
+    for (const who of [otherOffice, asColleague, asAmos, staff, undefined as never]) {
+      expect(() => controller.driverLicenceCard(amos.did, card.mediaId, who)).toThrow(/not in your fleet/);
+    }
+    const portrait = media.upload({ ownerDid: amos.did, kind: 'avatar', dataUrl: PNG });
+    expect(() => controller.driverLicenceCard(amos.did, portrait.mediaId, office)).toThrow(/No such photograph/);
+    const theirs = media.upload({ ownerDid: colleague.did, kind: 'kyc_licence', dataUrl: PNG });
+    drivers.sendLicenceRenewal(colleague.did, { copyRef: theirs.mediaId, expiresAt: '2031-01-31' });
+    expect(() => controller.driverLicenceCard(amos.did, theirs.mediaId, office)).toThrow(/No such photograph/);
+    expect(controller.driverLicenceCard(colleague.did, theirs.mediaId, office)).toBeInstanceOf(StreamableFile);
+
+    // REFUSED by that office, in a sentence the driver reads. The photograph goes at once.
+    expect(() => controller.refuseLicenceRenewal(amos.did, { reason: 'No.' } as never, otherOffice)).toThrow(/not in your fleet/);
+    expect(() => controller.refuseLicenceRenewal(amos.did, { reason: 'No.' } as never, asColleague)).toThrow(/not in your fleet/);
+    expect(() => controller.refuseLicenceRenewal(amos.did, { reason: 'No.' } as never, asAmos)).toThrow(/never by the driver who sent it/);
+    expect(() => controller.refuseLicenceRenewal(amos.did, { reason: '  ' } as never, office)).toThrow(/say why/);
+    expect(drivers.get(amos.did).licenceRenewal).toBeDefined(); // none of those took it away
+    const refused = controller.refuseLicenceRenewal(amos.did, { reason: 'The corner with the date is cut off.' } as never, office);
+    expect(refused.licenceRenewal).toBeUndefined();
+    expect(media.get(card.mediaId)).toBeUndefined();
+    expect(() => controller.driverLicenceCard(amos.did, card.mediaId, office)).toThrow(/No such photograph/);
+    expect(controller.getFleetDriver(amos.did, asAmos).licenceRenewalRefusal).toMatchObject({ reason: 'The corner with the date is cut off.' });
+
+    // SENT AGAIN AND RECORDED by the office: the date the OFFICE typed, the photograph it read it from
+    // kept as the licence's own copy — and still the office's to open, a month on.
+    const second = media.upload({ ownerDid: amos.did, kind: 'kyc_licence', dataUrl: PNG });
+    controller.sendLicenceRenewal(amos.did, { copyRef: second.mediaId, expiresAt: '2031-03-31' } as never, asAmos);
+    expect(() => controller.renewDriverLicence(amos.did, { expiresAt: '2031-03-30' } as never, otherOffice)).toThrow(/not in your fleet/);
+    const recorded = controller.renewDriverLicence(amos.did, { expiresAt: '2031-03-30' } as never, office);
+    expect(recorded.licence).toMatchObject({ expiresAt: '2031-03-30', copyRef: second.mediaId, recordedBy: mgr.did });
+    expect(recorded.licenceRenewal).toBeUndefined();
+    expect(recorded.licenceRenewalRefusal).toBeUndefined();
+    expect(controller.driverLicenceCard(amos.did, second.mediaId, office)).toBeInstanceOf(StreamableFile);
+    // The driver was waiting on an answer both times, and heard both.
+    expect(checked).toEqual([
+      expect.objectContaining({ did: amos.did, accepted: false, reason: 'The corner with the date is cut off.' }),
+      expect.objectContaining({ did: amos.did, accepted: true, expiresAt: '2031-03-30' }),
+    ]);
+
+    // WHOSE OFFICE is asked today, not when the card was sent: a driver who has moved is the new
+    // fleet's to read, and the one they left opens nothing of theirs.
+    drivers.get(amos.did).managerDid = other.did;
+    expect(() => controller.driverLicenceCard(amos.did, second.mediaId, office)).toThrow(/not in your fleet/);
+    expect(controller.driverLicenceCard(amos.did, second.mediaId, otherOffice)).toBeInstanceOf(StreamableFile);
+  });
+
+  it('FP4: only the driver sends their own card; staff refuse a courier’s, and no fleet’s office does', () => {
     const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
     const c = drivers.register({ displayName: 'Own O.', fullName: 'Own Courier', nationalId: 'ID-OWN-1', mobile: '+254700111333', licenceClasses: ['motorcycle'], criminalRecordClear: true });
     const card = media.upload({ ownerDid: c.did, kind: 'kyc_licence', dataUrl: PNG });
     const dto = { copyRef: card.mediaId, expiresAt: '2030-05-31' } as never;
     // Staff cannot send one "on their behalf": the checker would be supplying the thing checked.
-    expect(() => controller.sendLicenceRenewal(c.did, dto, { active: true, role: 'operator', sub: 'operator:opr_x', actorName: 'Amina Otieno' } as never)).toThrow(/Only the courier/);
-    expect(() => controller.sendLicenceRenewal(c.did, dto, { active: true, role: 'driver', did: 'did:glos:another-driver' } as never)).toThrow(/Only the courier/);
+    expect(() => controller.sendLicenceRenewal(c.did, dto, { active: true, role: 'operator', sub: 'operator:opr_x', actorName: 'Amina Otieno' } as never)).toThrow(/Only the driver/);
+    expect(() => controller.sendLicenceRenewal(c.did, dto, { active: true, role: 'driver', did: 'did:glos:another-driver' } as never)).toThrow(/Only the driver/);
     const sent = controller.sendLicenceRenewal(c.did, dto, { active: true, role: 'driver', did: c.did } as never);
     expect(sent.licenceRenewal).toMatchObject({ copyRef: card.mediaId, expiresAt: '2030-05-31' });
+    // A courier has no office: a fleet's office is nobody to them, and neither refuses nor opens their card.
+    const mgr = activateManager('Nobody’s Office', 'NO1');
+    const anOffice = { active: true, role: 'fleet_manager', did: mgr.did, tenant: mgr.did } as never;
+    expect(() => controller.refuseLicenceRenewal(c.did, { reason: 'No.' } as never, anOffice)).toThrow(/not in your fleet/);
+    expect(() => controller.driverLicenceCard(c.did, card.mediaId, anOffice)).toThrow(/not in your fleet/);
+    expect(() => controller.renewDriverLicence(c.did, { expiresAt: '2030-05-31' } as never, anOffice)).toThrow(/not in your fleet/);
     // A named staff sign-in's own name is what the refusal records — not whatever the body says.
     const refused = controller.refuseLicenceRenewal(c.did, { reason: 'Not a driving licence.', by: 'Somebody Else' } as never, { active: true, role: 'operator', sub: 'operator:opr_x', actorName: 'Amina Otieno' } as never);
     expect(refused.licenceRenewalRefusal).toMatchObject({ reason: 'Not a driving licence.', by: 'Amina Otieno' });

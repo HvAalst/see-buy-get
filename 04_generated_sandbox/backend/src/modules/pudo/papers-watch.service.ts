@@ -23,6 +23,8 @@ export interface PaperRow {
   daysLeft?: number;
   /** Whether the thing is on a shift right now — a lapsed paper here means a shift the sweep will end. */
   onShift: boolean;
+  /** A driver who has sent the renewed card: the row is waiting on the office to read it, not on the driver. */
+  cardSent?: boolean;
 }
 
 export interface PapersReport {
@@ -207,11 +209,11 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
   /** What is due and what is off, for one fleet, as of now. */
   reportFor(managerDid: string, now: number = Date.now()): PapersReport {
     const report: PapersReport = { lapsed: [], due: [], inDate: 0, unrecorded: 0 };
-    const take = (subject: PaperRow['subject'], id: string, label: string, papers: PaperStatus[], onShift: boolean) => {
+    const take = (subject: PaperRow['subject'], id: string, label: string, papers: PaperStatus[], onShift: boolean, cardSent = false) => {
       for (const p of papers) {
         if (p.state === 'ok') report.inDate++;
         else if (p.state === 'none') report.unrecorded++;
-        else (p.state === 'lapsed' ? report.lapsed : report.due).push({ subject, id, label, kind: p.kind, state: p.state, expiresAt: p.expiresAt, daysLeft: p.daysLeft, onShift });
+        else (p.state === 'lapsed' ? report.lapsed : report.due).push({ subject, id, label, kind: p.kind, state: p.state, expiresAt: p.expiresAt, daysLeft: p.daysLeft, onShift, ...(cardSent ? { cardSent } : {}) });
       }
     };
     for (const v of this.vehicles.list({ managerDid })) {
@@ -220,7 +222,7 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
     }
     for (const d of this.drivers.list({ managerDid })) {
       if (d.status !== 'ACTIVE') continue;
-      take('driver', d.did, d.displayName, driverPapers(d, now), Boolean(this.fleet.activeForDriver(d.did)));
+      take('driver', d.did, d.displayName, driverPapers(d, now), Boolean(this.fleet.activeForDriver(d.did)), Boolean(d.licenceRenewal));
     }
     const soonest = (a: PaperRow, b: PaperRow) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0);
     report.lapsed.sort(soonest);
@@ -373,11 +375,19 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
        * other side. They send a photograph from the app instead, and the network's staff read it.
        */
       const own = !d.managerDid;
+      /*
+       * ONCE THE CARD IS SENT they have done their part, and "send a photo" would be telling them to repeat
+       * themselves while it waits on somebody else — the rule the fleet's own papers keep below. A licence
+       * still only running out says nothing more. One that has LAPSED still ends the shift and still says
+       * why, because that is a fact about today and not an instruction.
+       */
+      const sent = Boolean(d.licenceRenewal);
       // SHORT, BECAUSE A NOTIFICATION IS READ ON A LOCK SCREEN. The long version of this ran to five lines
       // in the app's own inbox — one notification per phone screen, the next one cut in half.
-      const next = own ? 'Send a photo of the new card from the app' : 'Give the new date to the fleet office';
+      const next = sent ? 'The card you sent has not been read yet' : own ? 'Send a photo of the new card from the app' : 'Send your fleet office a photo of the new card';
       for (const p of driverPapers(d, now)) {
         if (p.state !== 'due' && p.state !== 'lapsed') continue;
+        if (sent && p.state === 'due') continue;
         if (p.state === 'lapsed' && this.fleet.activeForDriver(d.did)) {
           this.endShift(d.did, `Your shift was ended: ${offRoadLine(p)}. ${next} — no shift can start until it is recorded.`);
           out.shiftsEnded++;

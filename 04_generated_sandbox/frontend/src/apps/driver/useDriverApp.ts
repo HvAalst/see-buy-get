@@ -28,7 +28,7 @@ import type {
   VehicleView,
 } from './types';
 import type { DepartureView } from './types';
-import { boardOriginPin, DEFAULT_WORK_RADIUS_KM, defaultWorkMode, lastReadingBreached, leftDetail, minEarnFilter, nodeOptions, originReady } from './logic';
+import { boardOriginPin, cardReader, cardWords, DEFAULT_WORK_RADIUS_KM, defaultWorkMode, lastReadingBreached, leftDetail, minEarnFilter, nodeOptions, originReady } from './logic';
 import { pinAfterRename, type GeoPoint, type PinSource } from '../../shared/geo';
 import { currentPosition, watchPosition } from '../../shared/position';
 import { t } from '../../shared/i18n';
@@ -842,11 +842,12 @@ export function useDriverApp() {
   );
 
   /**
-   * FP4 — a courier without a fleet sends their renewed licence: the photo, and the date they read off it.
+   * FP4 — a driver sends their renewed licence: the photo, and the date they read off it. To their fleet's
+   * office, or — a courier without a fleet — to the network's staff.
    *
-   * Until this existed the app told them to "show the fleet office", which they do not have. Nothing
-   * switches on here: the date waits beside the photo until network staff read the same card. Refreshes
-   * the driver's own record so the home screen says "sent" the moment it is, not on the next poll.
+   * Nothing switches on here: the date waits beside the photo until whoever records their licence reads
+   * the same card. Refreshes the driver's own record so the home screen says "sent" the moment it is,
+   * not on the next poll.
    */
   const sendLicenceRenewal = useCallback(
     async (body: { copyRef: string; expiresAt: string; number?: string }): Promise<boolean> => {
@@ -858,7 +859,9 @@ export function useDriverApp() {
         pushToast({ tone: 'danger', icon: 'warning', title: t('driver.licence.refused'), detail: r.error.detail || r.error.title });
         return false;
       }
-      pushToast({ tone: 'ok', icon: 'check', title: t('driver.licence.sent') });
+      // Who it went to is read off the answer, not assumed: their fleet's office, or the network's staff.
+      const reader = cardReader(narrow<DriverRecord>(r.data)) ?? 'network';
+      pushToast({ tone: 'ok', icon: 'check', title: t(cardWords(reader).sent) });
       await refresh();
       return true;
     },

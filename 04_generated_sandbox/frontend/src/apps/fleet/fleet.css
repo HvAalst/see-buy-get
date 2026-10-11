@@ -152,6 +152,33 @@
   object-fit: cover;
 }
 
+/* A DRIVER'S RENEWED CARD, at the sheet's full width. A thumbnail is for recognising a thing, and this is
+   eight small digits somebody is about to put a driver back on the road on. Pressing it opens the
+   photograph at its own size. */
+.cardphoto {
+  display: block;
+  width: 100%;
+  /* A phone gives it the whole sheet. At a desk that would stretch a phone's photograph across the screen
+     and push the date field under the fold, so it stops at a size a card is read at. */
+  max-width: 520px;
+  margin: 8px 0 12px;
+  padding: 0;
+  border: 1px solid var(--bd);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+  overflow: hidden;
+  cursor: zoom-in;
+}
+
+.cardphoto .cardphoto__img {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 120px;
+  border-radius: 0;
+  object-fit: contain;
+}
+
 .photos__thumb--sm {
   width: 48px;
   height: 48px;

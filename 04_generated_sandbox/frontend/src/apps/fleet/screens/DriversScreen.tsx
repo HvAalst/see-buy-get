@@ -1,11 +1,12 @@
-import { Button, Card, ErrorNote, Note, PhotoField, Pill, ReadAloud, RefusalNote, Sheet } from '../../../shared/ui';
+import { AuthImage, Button, Card, ErrorNote, Note, PhotoField, Pill, ReadAloud, RefusalNote, Sheet } from '../../../shared/ui';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import type { DuplicateField } from '../../../shared/duplicate';
-import { driverAction, driverMissing, isHeavySelection, paperLine, paperLineClass, papersToShow, shortDid, statusTone, toggleClass } from '../logic';
+import { cardsFirst, cardsToRead, driverAction, driverMissing, isHeavySelection, licenceSource, paperDay, paperLine, paperLineClass, papersToShow, readingDiffers, shortDid, statusTone, toggleClass } from '../logic';
+import { renewalBlocker } from '../../../shared/papers';
 import { VEHICLE_CLASSES, type DriverRow } from '../types';
 import type { FleetActions, FleetOfferRow, FleetState, RemovalReason } from '../useFleetApp';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
 import type { ChatThread } from '../../../shared/conversation/logic';
 
@@ -33,8 +34,11 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
   const heavy = isHeavySelection(f.classes);
   // CV3 — the thread a driver shared, open read-only.
   const [thread, setThread] = useState<ChatThread | null>(null);
-  // FP4 — whose renewed licence is being recorded.
-  const [licenceFor, setLicenceFor] = useState<DriverRow | null>(null);
+  // FP4 — whose renewed licence is being recorded. Held by id and read off the list each time: a driver who
+  // sends a clearer photograph while the sheet is open must not leave it showing the one that was deleted.
+  const [licenceDid, setLicenceDid] = useState<string | null>(null);
+  const licenceFor = state.drivers.find((d) => d.did === licenceDid) ?? null;
+  const waiting = cardsToRead(state.drivers);
   // Who is being taken off the fleet.
   const [removing, setRemoving] = useState<DriverRow | null>(null);
   // The place being offered: the number typed, and what the server said about it.
@@ -50,6 +54,37 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
   return (
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
+
+      {/* A CARD SOMEBODY SENT IS SOMEBODY WAITING ON THIS OFFICE — so it is the first thing on the screen the
+          tab's number leads to, not a line in a pool three cards down. Each is a driver off the road, or
+          about to be, until it is read. Nothing is here when nothing waits. */}
+      {waiting ? (
+        <Card title={waiting === 1 ? t('fleet.card.waitingOne') : t('fleet.card.waitingMany', { count: waiting })}>
+          <p class="card__note">{t('fleet.card.waitingDetail')}</p>
+          <div class="rows" role="list">
+            {state.drivers
+              .filter((d) => d.licenceRenewal)
+              .map((d) => (
+                <div key={d.did} class="row row--static" role="listitem">
+                  <span class="row__body">
+                    <span class="row__t">{d.displayName}</span>
+                    {papersToShow(d.papers).map((p) => (
+                      <span key={p.kind} class={paperLineClass(p.state)}>
+                        {paperLine(p, t)}
+                      </span>
+                    ))}
+                    <span class="row__s">{t('fleet.card.read', { date: formatDate(d.licenceRenewal!.sentAt), expires: paperDay(d.licenceRenewal!.expiresAt) })}</span>
+                  </span>
+                  <span class="row__end">
+                    <Button variant="link" full={false} onClick={() => setLicenceDid(d.did)}>
+                      {t('fleet.card.readBtn')}
+                    </Button>
+                  </span>
+                </div>
+              ))}
+          </div>
+        </Card>
+      ) : null}
 
       {/* CV3 — only what a driver CHOSE to share, and only while they drive for this fleet. Read, never write. */}
       <Card title={t('fleet.chat.title')}>
@@ -210,7 +245,7 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
           <p class="hint">{t('fleet.drivers.empty')}</p>
         ) : (
           <div class="rows" role="list">
-            {state.drivers.map((d) => {
+            {cardsFirst(state.drivers).map((d) => {
               const action = driverAction(d);
               return (
                 <div key={d.did} class="row row--static" role="listitem">
@@ -228,6 +263,7 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
                         {paperLine(p, t)}
                       </span>
                     ))}
+                    {d.licenceRenewal ? <span class="row__s row__s--warn">{t('fleet.card.sentRow', { date: formatDate(d.licenceRenewal.sentAt) })}</span> : null}
                     {d.rateReach?.rateLooksHigh ? (
                       <span class="row__s">
                         {d.rateReach.ratePerKm
@@ -240,8 +276,8 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
                     <Pill tone={d.offRoad?.length ? 'danger' : statusTone(d.status)} dot>
                       {d.offRoad?.length ? t('fleet.papers.offRoad') : d.status === 'KYC_PENDING' ? t('fleet.drivers.beingChecked') : d.status.replace(/_/g, ' ').toLowerCase()}
                     </Pill>
-                    <Button variant="link" full={false} onClick={() => setLicenceFor(d)}>
-                      {t('fleet.drivers.licenceBtn')}
+                    <Button variant="link" full={false} onClick={() => setLicenceDid(d.did)}>
+                      {t(d.licenceRenewal ? 'fleet.card.readBtn' : 'fleet.drivers.licenceBtn')}
                     </Button>
                     <Button variant="link" full={false} onClick={() => setRemoving(d)}>
                       {t('fleet.remove.btn')}
@@ -309,7 +345,7 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
         </Button>
       </Sheet>
 
-      <LicenceSheet driver={licenceFor} onClose={() => setLicenceFor(null)} state={state} actions={actions} />
+      <LicenceSheet driver={licenceFor} onClose={() => setLicenceDid(null)} state={state} actions={actions} />
       <RemoveSheet driver={removing} onClose={() => setRemoving(null)} state={state} actions={actions} />
 
       <div class="scr__foot">
@@ -407,52 +443,173 @@ function RemoveSheet({ driver, onClose, state, actions }: { driver: DriverRow | 
  * FP4 — the renewed licence, recorded by the fleet office. The new date is the whole of the renewal: the day it
  * is saved the driver can start a shift again, and nothing else has to be cleared. The driver's own word is
  * deliberately not enough — the office records what it has seen.
+ *
+ * WHAT IT HAS SEEN is, more and more, a photograph: a driver whose licence is running out sends the new card
+ * from their own app, and it arrives here. Then the sheet shows the card at a size its date can be read at,
+ * with the date and number the driver read off it BESIDE the fields and never in them — their reading is
+ * their word, and the date is there to replace their word. A date typed here that differs from theirs is
+ * pointed out before it is saved. A card that cannot be read is refused, in a sentence the driver is shown.
+ *
+ * With no card sent the office records the date from the card in somebody's hand, as it always could, and
+ * is told where the date on record came from.
  */
 function LicenceSheet({ driver, onClose, state, actions }: { driver: DriverRow | null; onClose: () => void; state: FleetState; actions: FleetActions }) {
   const t = useT();
   const [number, setNumber] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState('');
+  const [refusing, setRefusing] = useState(false);
+  const [reason, setReason] = useState('');
+  const [refused, setRefused] = useState<SbgError | null>(null);
+  const card = driver?.licenceRenewal;
   const current = driver?.licence?.number && driver.licence.number !== 'n/a' ? driver.licence.number : '';
-  const close = () => {
+  // The number starts from what the driver read off the NEW card, when they gave one: it is checked against
+  // the photograph like the date is, but a number is long and a typo in it locks nobody out of work.
+  const shownNumber = number ?? card?.number ?? current;
+  const blocker = renewalBlocker(expiresAt);
+  const differs = readingDiffers(card, expiresAt, blocker !== null);
+  const busy = driver ? state.busy === 'licence:' + driver.did : false;
+  const source = licenceSource(driver?.licence);
+  const lastRefusal = driver?.licenceRenewalRefusal;
+  const reset = () => {
     setNumber(null);
     setExpiresAt('');
+    setRefusing(false);
+    setReason('');
+    setRefused(null);
+  };
+  // Another driver, or a different photograph from the same one: what was typed against the last card is
+  // not a reading of this one.
+  useEffect(reset, [driver?.did, card?.copyRef]);
+  const close = () => {
+    reset();
     onClose();
   };
   return (
     <Sheet open={Boolean(driver)} onClose={close} title={driver ? t('fleet.drivers.licenceSheetTitle', { name: driver.displayName }) : ''}>
-      <p class="t-body">{t('fleet.drivers.licenceBody')}</p>
+      {driver && card ? (
+        <>
+          <p class="t-body">{t('fleet.card.body')}</p>
+          <p class="hint">
+            {t('fleet.card.read', { date: formatDate(card.sentAt), expires: paperDay(card.expiresAt) })}
+            {card.number ? ` ${t('fleet.card.number', { number: card.number })}` : ''}
+          </p>
+          <DriverCard did={driver.did} mediaId={card.copyRef} name={driver.displayName} actions={actions} />
+        </>
+      ) : (
+        <>
+          <p class="t-body">{t('fleet.drivers.licenceBody')}</p>
+          {source && driver?.licence?.recordedAt ? (
+            <p class="hint">{t(source === 'card' ? 'fleet.card.fromCard' : 'fleet.card.fromWord', { date: formatDate(driver.licence.recordedAt) })}</p>
+          ) : null}
+          {driver && source === 'card' && driver.licence?.copyRef ? (
+            <DriverCard did={driver.did} mediaId={driver.licence.copyRef} name={driver.displayName} actions={actions} recorded />
+          ) : null}
+          {lastRefusal ? <Note tone="info" icon="info" title={t('fleet.card.lastRefused', { date: formatDate(lastRefusal.at), reason: lastRefusal.reason })} /> : null}
+          <p class="hint">{t('fleet.card.howItArrives')}</p>
+        </>
+      )}
       {driver?.offRoad?.length ? <Note tone="danger" icon="clock" title={t('fleet.papers.offRoad')} detail={driver.offRoad.join(' · ')} /> : null}
-      <div class="grid2">
-        <div class="field">
-          <label class="field__label" for="l-num">
-            {t('fleet.drivers.licenceNumber')}
-          </label>
-          <input id="l-num" class="input input--mono" value={number ?? current} onInput={(e) => setNumber(e.currentTarget.value)} spellcheck={false} />
-        </div>
-        <div class="field">
-          <label class="field__label" for="l-exp">
-            {t('fleet.drivers.licenceNewExpires')}
-          </label>
-          <input id="l-exp" class="input" type="date" value={expiresAt} onInput={(e) => setExpiresAt(e.currentTarget.value)} />
-        </div>
-      </div>
-      <Button
-        chevron={false}
-        disabled={!expiresAt}
-        busy={driver ? state.busy === 'licence:' + driver.did : false}
-        onClick={() => {
-          if (!driver || !expiresAt) return;
-          const n = (number ?? current).trim();
-          const body = { expiresAt, ...(n && n !== current ? { number: n } : {}) };
-          close();
-          void actions.renewLicence(driver.did, body);
+      {refused ? <RefusalNote error={refused} /> : null}
+      {driver && card && refusing ? (
+        <>
+          <div class="field">
+            <label class="field__label" for="l-why">
+              {t('fleet.card.refuseWhy')}
+            </label>
+            <textarea id="l-why" class="input" rows={3} maxLength={500} value={reason} onInput={(e) => setReason(e.currentTarget.value)} />
+          </div>
+          <Button
+            chevron={false}
+            danger
+            disabled={!reason.trim()}
+            busy={busy}
+            onClick={async () => {
+              const failed = await actions.refuseLicence(driver.did, driver.displayName, reason);
+              setRefused(failed);
+              if (!failed) close();
+            }}
+          >
+            {t('fleet.card.refuseSend')}
+          </Button>
+          <Button variant="link" onClick={() => setRefusing(false)}>
+            {t('common.cancel')}
+          </Button>
+        </>
+      ) : (
+        <>
+          <div class="grid2">
+            <div class="field">
+              <label class="field__label" for="l-num">
+                {t('fleet.drivers.licenceNumber')}
+              </label>
+              <input id="l-num" class="input input--mono" value={shownNumber} onInput={(e) => setNumber(e.currentTarget.value)} spellcheck={false} />
+            </div>
+            <div class="field">
+              <label class="field__label" for="l-exp">
+                {t(card ? 'fleet.card.readDate' : 'fleet.drivers.licenceNewExpires')}
+              </label>
+              <input id="l-exp" class="input" type="date" value={expiresAt} onInput={(e) => setExpiresAt(e.currentTarget.value)} />
+            </div>
+          </div>
+          {differs && card ? <Note tone="warn" icon="warning" title={t('fleet.card.differs', { expires: paperDay(card.expiresAt) })} detail={t('fleet.card.differsDetail')} /> : null}
+          {expiresAt && blocker === 'tower.papers.datePast' ? <p class="hint">{t('fleet.card.datePast')}</p> : null}
+          <Button
+            chevron={false}
+            disabled={blocker !== null}
+            busy={busy}
+            onClick={async () => {
+              if (!driver || blocker !== null) return;
+              const n = shownNumber.trim();
+              const failed = await actions.renewLicence(driver.did, { expiresAt, ...(n && n !== current ? { number: n } : {}) });
+              setRefused(failed);
+              if (!failed) close();
+            }}
+          >
+            {t(card ? 'fleet.card.record' : 'fleet.drivers.saveLicence')}
+          </Button>
+          {card ? (
+            <Button variant="link" danger onClick={() => setRefusing(true)}>
+              {t('fleet.card.refuse')}
+            </Button>
+          ) : null}
+          <Button variant="link" onClick={close}>
+            {t('common.cancel')}
+          </Button>
+        </>
+      )}
+    </Sheet>
+  );
+}
+
+/**
+ * A CARD TO BE READ, at the width of the sheet. Pressing it opens the photograph at its own size in another
+ * tab — never downloaded: it is somebody's licence, and the server holds the only copy.
+ *
+ * When the bytes cannot be had, this says so in words and says what to do. A grey tile under "the card they
+ * sent" would be a claim about evidence that only the thing that fetched it knows to be false.
+ */
+function DriverCard({ did, mediaId, name, actions, recorded }: { did: string; mediaId: string; name: string; actions: FleetActions; recorded?: boolean }) {
+  const t = useT();
+  const [gone, setGone] = useState(false);
+  useEffect(() => setGone(false), [mediaId]);
+  const load = (id: string) => actions.loadDriverCard(did, id) as Promise<{ data: Blob | null; error: unknown }>;
+  // The card a date was ALREADY read from is history: if it cannot be shown, nothing is waiting on it.
+  if (gone) return recorded ? null : <Note tone="warn" icon="warning" title={t('fleet.card.gone')} detail={t('fleet.card.goneDetail')} />;
+  return (
+    <>
+      {recorded ? <p class="hint">{t('fleet.card.recordedCard')}</p> : null}
+      <button
+        type="button"
+        class="cardphoto"
+        title={t('fleet.card.open')}
+        aria-label={t('fleet.card.open')}
+        onClick={async () => {
+          const r = await load(mediaId);
+          if (!r.error && r.data) window.open(URL.createObjectURL(r.data), '_blank', 'noopener');
         }}
       >
-        {t('fleet.drivers.saveLicence')}
-      </Button>
-      <Button variant="link" onClick={close}>
-        {t('common.cancel')}
-      </Button>
-    </Sheet>
+        <AuthImage mediaId={mediaId} load={load} alt={t('fleet.card.alt', { name })} class="cardphoto__img" onFailed={() => setGone(true)} />
+      </button>
+    </>
   );
 }

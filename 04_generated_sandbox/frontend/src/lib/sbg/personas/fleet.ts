@@ -70,6 +70,20 @@ export function createFleetApi(sbg: SbgClient) {
     renewLicence: (did: string, body: { number?: string; expiresAt: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/licence', { params: { path: { did } }, body: body as never })),
 
+    /** The renewed card a driver sent is not accepted — with the reason, which the driver is shown exactly. */
+    refuseLicenceRenewal: (did: string, reason: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/licence-renewal/refuse', { params: { path: { did } }, body: { reason } as never })),
+
+    /**
+     * The photograph of a licence one of this fleet's drivers sent, as a Blob — the card waiting to be read,
+     * or the one the date on record was read from. Its own door, because the driver owns those bytes and
+     * the general media door answers only their owner and network staff.
+     */
+    driverCard: (did: string, mediaId: string, variant?: 'full' | 'thumb') =>
+      sbg.request((c) =>
+        c.GET('/v1/sbg/fleet/drivers/{did}/licence-card/{mediaId}' as never, { params: { path: { did, mediaId }, query: variant ? { variant } : {} }, parseAs: 'blob' } as never),
+      ),
+
     /** This fleet's drivers. */
     drivers: () => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers', {})),
 

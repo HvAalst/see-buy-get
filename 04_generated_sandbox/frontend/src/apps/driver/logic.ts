@@ -175,6 +175,31 @@ export function canStartShift(status: DriverStatus | undefined): boolean {
   return status === 'ACTIVE';
 }
 
+/**
+ * WHO READS A RENEWED LICENCE THIS DRIVER SENDS — and so whose name every sentence about it carries.
+ *
+ * The office of the fleet they drive for; or, for a courier who rides on their own, network staff. A fleet
+ * driver used to be told to "show the fleet office", and the office typed a date off a card it might never
+ * have seen. The card goes to that same office now, from the same button a courier has always had.
+ *
+ * Nobody, for a driver BETWEEN fleets: a fleet took them off or they left, and no office is theirs. They
+ * cannot start a shift whatever their licence says, so the app offers no card to send.
+ */
+export type CardReader = 'office' | 'network';
+
+export function cardReader(driver: { managerDid?: string; removedFrom?: unknown } | null | undefined): CardReader | null {
+  if (!driver) return null;
+  if (driver.managerDid) return 'office';
+  return driver.removedFrom ? null : 'network';
+}
+
+/** Every sentence that names who reads the card, chosen in one place so no two of them can disagree. */
+export function cardWords(reader: CardReader) {
+  return reader === 'office'
+    ? ({ offRoad: 'driver.home.offRoadDetail', due: 'driver.home.licenceDueDetail', sheetBody: 'driver.licence.sheetBodyFleet', sent: 'driver.licence.sentFleet', pending: 'driver.licence.pendingDetailFleet' } as const)
+    : ({ offRoad: 'driver.home.offRoadDetailOwn', due: 'driver.home.licenceDueDetailOwn', sheetBody: 'driver.licence.sheetBody', sent: 'driver.licence.sent', pending: 'driver.licence.pendingDetail' } as const);
+}
+
 /* -------------------------------------------------------------- speaking -- */
 
 /**

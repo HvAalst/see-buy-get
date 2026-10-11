@@ -144,6 +144,11 @@ describe('who the door lets in', () => {
     expect(door('GET sbg/fleet/assignments')).toMatchObject({ open: false, roles: ['fleet_manager', 'operator'] });
   });
 
+  it('a card a driver sent is opened by a fleet’s office (staff open it by the media door they already have); it is refused by an office or by staff', () => {
+    expect(door('GET sbg/fleet/drivers/:did/licence-card/:mediaId')).toMatchObject({ open: false, roles: ['fleet_manager'] });
+    expect(door('POST sbg/fleet/drivers/:did/licence-renewal/refuse')).toMatchObject({ open: false, roles: ['fleet_manager', 'operator'] });
+  });
+
   /**
    * THE ROUTES THAT ASK WHOSE IT IS, INSIDE. Each already refuses everybody but the owner (and staff standing in). The
    * trade written here is the one that check admits: a mistake in the check is then a shop reaching another shop's
@@ -421,7 +426,7 @@ describe('who the door lets in', () => {
       ],
     ],
     [
-      'a courier sending their own licence: the courier, never staff for them',
+      'a driver sending their own licence: the driver, never staff or their fleet’s office for them',
       { roles: ['driver'] },
       [
         'POST sbg/fleet/drivers/:did/licence-renewal',

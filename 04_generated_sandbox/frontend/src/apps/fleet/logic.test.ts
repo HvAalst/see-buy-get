@@ -19,6 +19,10 @@ import { ageWords, signalState, shiftHours, overShiftLimit,
   paperLine,
   paperLineClass,
   papersAloud,
+  cardsFirst,
+  cardsToRead,
+  licenceSource,
+  readingDiffers,
   papersToShow,
   paperTone,
   vehiclePins,
@@ -483,5 +487,51 @@ describe('declaring a run against a real vehicle', () => {
   it('says nothing about capacity when no vehicle has been chosen to measure against', () => {
     // The vehicle blocker fires first, so the ceiling is never consulted against a guess.
     expect(runBlocker(form({ vehicleId: '', capacityKg: '40000' }), soon)).toBe('fleet.runs.needVehicle');
+  });
+});
+
+describe('a renewed licence one of the fleet’s drivers sent', () => {
+  const card = { copyRef: 'med_card', expiresAt: '2031-03-31', sentAt: '2026-10-11T08:00:00.000Z' };
+  const pool = [
+    { did: 'a', displayName: 'Amos', licenceRenewal: undefined },
+    { did: 'b', displayName: 'Baraka', licenceRenewal: card },
+    { did: 'c', displayName: 'Chege', licenceRenewal: undefined },
+    { did: 'd', displayName: 'Dalmas', licenceRenewal: card },
+  ];
+
+  it('counts the cards waiting on the office, and none when nobody has sent one', () => {
+    expect(cardsToRead(pool)).toBe(2);
+    expect(cardsToRead([pool[0], pool[2]])).toBe(0);
+    expect(cardsToRead([])).toBe(0);
+  });
+
+  it('puts a waiting card first and leaves everybody else in the order they came', () => {
+    expect(cardsFirst(pool).map((d) => d.did)).toEqual(['b', 'd', 'a', 'c']);
+    expect(pool.map((d) => d.did)).toEqual(['a', 'b', 'c', 'd']); // the list it was given is not reordered
+    expect(cardsFirst([pool[0], pool[2]]).map((d) => d.did)).toEqual(['a', 'c']);
+  });
+
+  it('points out a date that is not the one the driver read — and says nothing while there is no date, no card, or a date that cannot be saved', () => {
+    expect(readingDiffers(card, '2031-03-30')).toBe(true);
+    expect(readingDiffers(card, '2031-03-31')).toBe(false);
+    expect(readingDiffers(card, '')).toBe(false);
+    expect(readingDiffers(undefined, '2031-03-30')).toBe(false);
+    expect(readingDiffers(card, '2020-01-01', true)).toBe(false);
+  });
+
+  it('says where the date on record came from: a card, somebody’s word, or before that was kept', () => {
+    expect(licenceSource({ expiresAt: '2031-03-30', copyRef: 'med_card', recordedAt: '2026-10-11T09:00:00.000Z' })).toBe('card');
+    expect(licenceSource({ expiresAt: '2031-03-30', recordedAt: '2026-10-11T09:00:00.000Z' })).toBe('word');
+    expect(licenceSource({ expiresAt: '2031-03-30' })).toBeNull();
+    expect(licenceSource({ expiresAt: '2031-03-30', copyRef: 'med_vetting' })).toBeNull(); // a copy with no recording is not a reading
+    expect(licenceSource(undefined)).toBeNull();
+  });
+
+  it('asks the office for ITS reading, and tells the driver’s apart from it', () => {
+    expect(t('fleet.card.readDate')).toBe('Expiry date, as you read it on the card');
+    expect(t('fleet.card.read', { date: '11 Oct 2026', expires: '31 Mar 2031' })).toBe('Sent 11 Oct 2026. They read the expiry as 31 Mar 2031.');
+    expect(t('fleet.card.differs', { expires: '31 Mar 2031' })).toBe('That is not the date they read (31 Mar 2031)');
+    expect(t('fleet.card.waitingMany', { count: 2 })).toBe('2 renewed licences to read');
+    expect(t('fleet.card.waitingOne')).toBe('A renewed licence to read');
   });
 });

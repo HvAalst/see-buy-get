@@ -11,6 +11,9 @@ import { isRidden, namedVehicleClass, stickerPlace, vehicleWord } from '../vehic
 import {
   canStartShift,
   capacitySubLine,
+  cardReader,
+  cardWords,
+  type CardReader,
   driverStatusNotice,
   afterShiftLine,
   hoursWords,
@@ -100,16 +103,18 @@ function OffShift({ state, actions, onOpenFleet }: HomeScreenProps) {
   // ones the coupling would refuse with). A licence running out is said here too, once, where it can be acted on.
   const offRoad = state.driver?.offRoad ?? [];
   const licenceDue = (state.driver?.papers ?? []).find((p) => p.kind === 'licence' && p.state === 'due');
-  // Who records their licence decides what the note can tell them to do: a fleet's office, or — for a
-  // courier who rides on their own — the network, from a photo sent here.
+  // Who records their licence decides what the note can tell them to do, and who a card sent from here goes
+  // to: their fleet's office, or — for a courier who rides on their own — the network.
   // BETWEEN FLEETS: a fleet took them off and none has taken them on. Not their own boss — nobody contracted them
-  // as one — so the courier's notes below do not apply, and no shift can start until a fleet offers them a place.
+  // as one — and no office is theirs, so there is nobody to send a card to, and no shift can start until a
+  // fleet offers them a place.
   const removed = state.driver && !state.driver.managerDid ? state.driver.removedFrom : undefined;
-  const own = Boolean(state.driver) && !state.driver?.managerDid && !removed;
+  const reader = cardReader(state.driver);
+  const words = cardWords(reader ?? 'office');
   // Once the new card is sent, the notes keep their FACTS (how long is left, why no shift can start) and
   // drop the instruction to send it — the note below says it has been, and telling somebody to do what
   // they have just done reads as "it did not go through".
-  const cardSent = own && Boolean(state.driver?.licenceRenewal);
+  const cardSent = reader !== null && Boolean(state.driver?.licenceRenewal);
   const ready = canStartShift(state.driver?.status) && offRoad.length === 0 && !removed;
   // THE PIN, asked at the start of a shift: that is where who-is-driving is written down, and an app left signed
   // in — in a cab, on a depot charger — is not proof of who is holding the phone.
@@ -154,17 +159,17 @@ function OffShift({ state, actions, onOpenFleet }: HomeScreenProps) {
       {notice ? <Note tone="warn" icon="clock" title={t('driver.home.notActivated')} detail={notice} /> : null}
       <Clearance state={state} actions={actions} />
       {offRoad.length ? (
-        <Note tone="danger" icon="clock" title={t('driver.home.offRoadTitle')} detail={offRoad.join('. ') + '.' + (cardSent ? '' : ' ' + t(own ? 'driver.home.offRoadDetailOwn' : 'driver.home.offRoadDetail'))} />
+        <Note tone="danger" icon="clock" title={t('driver.home.offRoadTitle')} detail={offRoad.join('. ') + '.' + (cardSent ? '' : ' ' + t(words.offRoad))} />
       ) : null}
       {!offRoad.length && licenceDue ? (
         <Note
           tone="warn"
           icon="clock"
           title={t('driver.home.licenceDueTitle', { days: licenceDue.daysLeft ?? 0 })}
-          detail={cardSent ? undefined : t(own ? 'driver.home.licenceDueDetailOwn' : 'driver.home.licenceDueDetail')}
+          detail={cardSent ? undefined : t(words.due)}
         />
       ) : null}
-      {own ? <LicenceRenewal state={state} actions={actions} needed={offRoad.length > 0 || Boolean(licenceDue)} /> : null}
+      {reader ? <LicenceRenewal state={state} actions={actions} reader={reader} needed={offRoad.length > 0 || Boolean(licenceDue)} /> : null}
       {/* A refused start names the paper (FP4) — that sentence was written for the driver, so it is shown. */}
       {/* FP8 — and a refused start after a working day names the rest owed (HOURS_EXCEEDED), the same way. */}
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} showDetail={state.error.code === 'CANNOT_COUPLE' || state.error.code === 'HOURS_EXCEEDED'} /> : null}
@@ -411,17 +416,6 @@ function OffShift({ state, actions, onOpenFleet }: HomeScreenProps) {
 }
 
 /**
- * FP4 — THE RENEWED CARD, sent from here by a courier who rides on their own.
- *
- * They were told to "show the fleet office", which they do not have, and the network's staff were asked
- * to record a renewal nobody could show them. So the card travels as a photograph, with the date the
- * courier read off it, and waits until somebody at the network reads the same photograph and records it.
- *
- * Shown only when there is something to do or something to know: a licence running out or lapsed, a card
- * waiting to be checked, or a card that was not accepted and why. A courier whose licence is fine sees
- * nothing here at all.
- */
-/**
  * GETTING CLEARED, FOR SOMEBODY WHO HAS NOBODY TO DO IT FOR THEM.
  *
  * Anything heavier than a motorcycle puts a courier in the heavy registry, which starts at DRAFT and
@@ -480,8 +474,23 @@ function Clearance({ state, actions }: HomeScreenProps) {
   );
 }
 
-function LicenceRenewal({ state, actions, needed }: HomeScreenProps & { needed: boolean }) {
+/**
+ * FP4 — THE RENEWED CARD, sent from here: by a courier who rides on their own to the network's staff, and
+ * by a fleet's driver to their own fleet's office. The same card, the same button, the same three states;
+ * only the name of who reads it changes (cardWords).
+ *
+ * A courier was once told to "show the fleet office", which they do not have. A fleet driver was told the
+ * same, and had one — which then typed a date off a card it may never have seen. So the card travels as a
+ * photograph, with the date its owner read off it, and waits until whoever records their licence reads the
+ * same photograph.
+ *
+ * Shown only when there is something to do or something to know: a licence running out or lapsed, a card
+ * waiting to be checked, or a card that was not accepted and why. A driver whose licence is fine sees
+ * nothing here at all.
+ */
+function LicenceRenewal({ state, actions, needed, reader }: HomeScreenProps & { needed: boolean; reader: CardReader }) {
   const t = useT();
+  const words = cardWords(reader);
   const [open, setOpen] = useState(false);
   const [photo, setPhoto] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
@@ -495,9 +504,9 @@ function LicenceRenewal({ state, actions, needed }: HomeScreenProps & { needed: 
   return (
     <>
       {pending ? (
-        <Note tone="info" icon="check" title={t('driver.licence.pendingTitle', { date: formatDate(pending.sentAt) })} detail={t('driver.licence.pendingDetail', { expires: paperDay(pending.expiresAt) })} />
+        <Note tone="info" icon="check" title={t('driver.licence.pendingTitle', { date: formatDate(pending.sentAt) })} detail={t(words.pending, { expires: paperDay(pending.expiresAt) })} />
       ) : refusal ? (
-        // The reason is the staff member's own sentence, written for this courier — shown as it was written.
+        // The reason is the own sentence of whoever read the card, written for this driver — shown as it was written.
         <Note tone="warn" icon="warning" title={t('driver.licence.refusedTitle')} detail={refusal.reason} />
       ) : null}
       <Button variant={pending ? 'link' : 'outline'} full={!pending} onClick={() => setOpen(true)}>
@@ -506,7 +515,7 @@ function LicenceRenewal({ state, actions, needed }: HomeScreenProps & { needed: 
 
       {open ? (
         <Sheet open onClose={() => setOpen(false)} title={t('driver.licence.send')}>
-          <p class="t-body">{t('driver.licence.sheetBody')}</p>
+          <p class="t-body">{t(words.sheetBody)}</p>
           <PhotoField id="licence-photo" value={photo} label={t('driver.licence.photo')} upload={(file) => actions.uploadPhoto('kyc_licence', file)} onCapture={setPhoto} />
           <label class="field">
             <span class="field__label">{t('driver.licence.expires')}</span>

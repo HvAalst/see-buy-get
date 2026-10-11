@@ -5091,23 +5091,61 @@ export class SbgController {
   }
 
   /**
-   * FP4 — a courier without a fleet sends the renewed card from their app. The courier themselves and
-   * nobody else: staff sending one "on their behalf" would be the checker supplying the thing checked.
+   * FP4 — a driver sends the renewed card from their app: to their fleet's office, or — a courier without a
+   * fleet — to network staff. The driver themselves and nobody else: staff or an office sending one "on
+   * their behalf" would be the checker supplying the thing checked.
    */
   @Roles('driver')
   @Post('fleet/drivers/:did/licence-renewal')
   sendLicenceRenewal(@Param('did') did: string, @Body() dto: SendLicenceRenewalDto, @Actor() actor: IntrospectionResult) {
-    if (!actor?.did || actor.did !== did) throw new GlosError('FORBIDDEN', 'Only the courier can send their own licence');
+    if (!actor?.did || actor.did !== did) throw new GlosError('FORBIDDEN', 'Only the driver can send their own licence');
     const sent = this.drivers.sendLicenceRenewal(did, { copyRef: dto.copyRef, expiresAt: dto.expiresAt, number: dto.number });
     return { ...sent, papers: driverPapers(sent), offRoad: lapsedOf(driverPapers(sent)).map(offRoadLine) };
   }
 
-  /** FP4 — the card they sent is not accepted, with the reason they are shown. Network staff only. */
-  @Roles('operator')
+  /**
+   * FP4 — the card they sent is not accepted, with the reason they are shown. Whoever records that driver's
+   * licence refuses it: the office of the fleet they drive for, or network staff — the same two, by the
+   * same test, as the route that records the date.
+   */
+  @Roles('fleet_manager', 'operator')
   @Post('fleet/drivers/:did/licence-renewal/refuse')
   refuseLicenceRenewal(@Param('did') did: string, @Body() dto: RefuseLicenceRenewalDto, @Actor() actor: IntrospectionResult) {
+    const driver = this.drivers.get(did);
+    if (actor?.role !== 'operator' && !this.isFleetOffice(actor, driver.managerDid)) {
+      throw new GlosError('FORBIDDEN', actor?.did === did ? 'A card is read by your fleet office or the network, never by the driver who sent it' : 'This driver is not in your fleet');
+    }
     const refused = this.drivers.refuseLicenceRenewal(did, dto.reason, auditActor(actor, dto.by));
     return { ...refused, papers: driverPapers(refused), offRoad: lapsedOf(driverPapers(refused)).map(offRoadLine) };
+  }
+
+  /**
+   * THE CARD ONE OF ITS DRIVERS SENT, opened by the fleet's office — and this route exists because of who
+   * took the photograph.
+   *
+   * The driver owns those bytes, and the media module serves them to their owner and to network staff.
+   * That is exactly useless to the office that has to read the date off them. So the read is widened, and
+   * no wider than the act: the office of the fleet this driver is in today, and only the card waiting to
+   * be read or the one the date on record was read from (DriverService.licenceCardOf). A colleague whose
+   * token names the same fleet is a driver, not the office, and reads nothing here.
+   *
+   * Never cached and never sniffed: it is somebody's licence.
+   */
+  @Roles('fleet_manager')
+  @Get('fleet/drivers/:did/licence-card/:mediaId')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('X-Content-Type-Options', 'nosniff')
+  driverLicenceCard(
+    @Param('did') did: string,
+    @Param('mediaId') mediaId: string,
+    @Actor() actor: IntrospectionResult,
+    @Query('variant') variant?: string,
+  ): StreamableFile {
+    const driver = this.drivers.get(did);
+    if (!this.isFleetOffice(actor, driver.managerDid)) throw new GlosError('FORBIDDEN', 'This driver is not in your fleet');
+    const id = this.drivers.licenceCardOf(did, mediaId);
+    const { bytes, contentType } = this.media.blob(id, variant === 'thumb' ? 'thumb' : 'full');
+    return new StreamableFile(bytes, { type: contentType });
   }
 
   /**

@@ -13979,7 +13979,7 @@
       "post": {
         "operationId": "Sbg.sendLicenceRenewal",
         "summary": "",
-        "description": "FP4 — a courier without a fleet sends the renewed card from their app. The courier themselves and\nnobody else: staff sending one \"on their behalf\" would be the checker supplying the thing checked.",
+        "description": "FP4 — a driver sends the renewed card from their app: to their fleet's office, or — a courier without a\nfleet — to network staff. The driver themselves and nobody else: staff or an office sending one \"on\ntheir behalf\" would be the checker supplying the thing checked.",
         "parameters": [
           {
             "name": "did",
@@ -14011,7 +14011,7 @@
       "post": {
         "operationId": "Sbg.refuseLicenceRenewal",
         "summary": "",
-        "description": "FP4 — the card they sent is not accepted, with the reason they are shown. Network staff only.",
+        "description": "FP4 — the card they sent is not accepted, with the reason they are shown. Whoever records that driver's\nlicence refuses it: the office of the fleet they drive for, or network staff — the same two, by the\nsame test, as the route that records the date.",
         "parameters": [
           {
             "name": "did",
@@ -14034,6 +14034,44 @@
         },
         "responses": {
           "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/licence-card/{mediaId}": {
+      "get": {
+        "operationId": "Sbg.driverLicenceCard",
+        "summary": "",
+        "description": "THE CARD ONE OF ITS DRIVERS SENT, opened by the fleet's office — and this route exists because of who\ntook the photograph.\n\nThe driver owns those bytes, and the media module serves them to their owner and to network staff.\nThat is exactly useless to the office that has to read the date off them. So the read is widened, and\nno wider than the act: the office of the fleet this driver is in today, and only the card waiting to\nbe read or the one the date on record was read from (DriverService.licenceCardOf). A colleague whose\ntoken names the same fleet is a driver, not the office, and reads nothing here.\n\nNever cached and never sniffed: it is somebody's licence.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mediaId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "variant",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
             "description": ""
           }
         }

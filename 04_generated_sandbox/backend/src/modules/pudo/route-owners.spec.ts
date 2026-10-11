@@ -45,7 +45,7 @@ const PLAIN_READS = ['this.drivers.get(', 'this.agents.get(', 'this.managers.get
  */
 const EXEMPT: Record<string, string> = {
   'POST fleet/drivers/:did/licence-renewal':
-    'the courier ONLY — staff are refused on purpose (the checker must not supply the thing checked), so it checks inline rather than with a helper that lets staff through',
+    'the driver ONLY — staff and their fleet’s office are refused on purpose (the checker must not supply the thing checked), so it checks inline rather than with a helper that lets either through',
   'GET fleet/managers/:did':
     'scoped by ManagerService.viewFor: a stranger is given the public fields only, the owner and staff the whole record',
   'GET agents/:did/rating':

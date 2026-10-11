@@ -117,6 +117,7 @@ const GIVE_BACK_WORDS: Record<string, string> = {
 interface RunClaimOpened { departureId: string; bookingId: string; managerDid: string; shipperDid: string; company: string; lineName: string; load: string; kind: string; description: string; amount?: number; currency: string }
 interface RunClaimAnswered { departureId: string; bookingId: string; shipperDid: string; managerDid: string; company: string; load: string; answer: 'accepted' | 'refused'; note?: string }
 interface FleetPaperChecked { did: string; kind: 'operator_licence' | 'carrier_insurance'; accepted: boolean; expiresAt?: string; reason?: string }
+interface LicenceSent { did: string; displayName: string; expiresAt: string; managerDid?: string }
 import { UnclaimedService } from './unclaimed.service';
 import { VendorService } from './vendor.service';
 import { MARKET_SUPPLY_STALE_MIN, NUDGE_COOLDOWN_MIN, NUDGE_MIN_MOVE_KM, UNCOLLECTED_REMINDER_H, UNCOLLECTED_SWEEP_MS } from './pudo.config';
@@ -382,6 +383,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ did: string; reason: string }>(GlosEvent.Pudo.DriverKycRejected, (e) => this.onDriverRefused(e.payload));
     // FP4 (courier) — the renewed licence they sent was checked. They sent it and are waiting: either answer.
     this.events.subscribe<{ did: string; accepted: boolean; expiresAt?: string; reason?: string }>(GlosEvent.Pudo.DriverLicenceChecked, (e) => this.onLicenceChecked(e.payload));
+    this.events.subscribe<LicenceSent>(GlosEvent.Pudo.DriverLicenceSent, (e) => this.onLicenceSent(e.payload));
 
     // Retention: the parties hear about it a month before the document goes, not afterwards.
     this.events.subscribe<{ docId: string; number: string; parties: string[]; goesAt: string }>(GlosEvent.Pudo.NoteExpiringSoon, (e) =>
@@ -436,6 +438,27 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     } catch (err) {
       this.logger.warn(`licence check notice failed for ${payload.did}: ${(err as Error).message}`);
     }
+  }
+
+  /**
+   * A driver sent their renewed licence, and their fleet's office is who reads it. The office is told,
+   * because nothing else would bring it to the Drivers tab: the driver is off the road, or about to be,
+   * until somebody there opens the card. A courier without a fleet tells nobody here — network staff read
+   * a queue that counts what is waiting.
+   *
+   * Said again when they send a different photograph: the office may have asked for a clearer one, and
+   * the date they read may have changed with it. On a phone the newer notice takes the older one's place.
+   */
+  private async onLicenceSent(p: LicenceSent): Promise<void> {
+    if (!p.managerDid) return;
+    await this.tell(p.managerDid, {
+      kind: 'papers_sent',
+      title: `${p.displayName} sent their renewed licence`,
+      // Two lines in the bell, and the second is where to go: the long version lost its ending to an ellipsis.
+      body: `They read the new expiry as ${paperDay(p.expiresAt)}. Read the card under Drivers.`,
+      tag: `papers:${p.did}:card`,
+      data: { did: p.did },
+    });
   }
 
   private async onFreightDeliveryFailed(payload: { freightId: string; code: string; posterDid?: string; outcome: string; note?: string; destLabel?: string; attempts: number }): Promise<void> {
