@@ -283,6 +283,8 @@ export class SbgController {
    * handing it to whoever asked would let anyone verify anyone's phone — it has to reach the phone itself.
    */
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(120, 15 * 60)
   @Post('auth/phone/request')
   phoneRequest(@Body() dto: PhoneRequestDto) {
     const issued = this.otp.request(dto.phone);
@@ -302,6 +304,8 @@ export class SbgController {
 
   /** Create a participant account + its domain entity (PUDO agent / driver / MDP) → an actor token. */
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(120, 15 * 60)
   @Post('auth/signup')
   signup(@Body() dto: SignupDto) {
     return this.accounts.signup(dto);

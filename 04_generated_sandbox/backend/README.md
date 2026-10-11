@@ -54,7 +54,15 @@ Every door that takes a password counts its tries twice: **per account** (five w
 lock it, the right password included; each lock in a row is longer — `src/foundation/auth/password-tries.ts`)
 and **per caller** (`@RateLimit` with `@UseGuards(RateLimitGuard)`). A new route that needs no sign-in and
 changes something must carry a limit or a reason: `src/modules/pudo/sign-in-doors.spec.ts` fails until it does.
-Both counts are kept in this server's memory.
+A lock is kept in the durable store (`data/password-locks-*.json`), so a restart does not lift it; the wrong
+tries before a lock and the per-caller counts are kept in memory.
+
+## Other websites, and the docs page
+On a laptop any website may call the API from a browser (each app is a dev server on its own port) and
+`/v1/docs` serves the contract. With `GLOS_ENV=production`: only our own sites are answered — the origins of
+`SBG_PUBLIC_URL` and `SBG_CONSOLE_URL`, plus `GLOS_CORS_ORIGINS` (comma-separated) — except the shipping API
+(`/v1/sbg/shipping/*`), which a store's own page calls and which answers every site; and the docs page is not
+served (`src/foundation/http/cors.ts`, `src/main.ts`).
 
 ## Develop
 ```bash

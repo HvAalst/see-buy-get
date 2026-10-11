@@ -4,7 +4,7 @@ import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { GlosError } from '../http/glos-error';
 import { PersistentMap } from '../store/persistent-map';
 import { AuthService } from '../auth/auth.service';
-import { PASSWORD_NO_SELF_RESET, PasswordTries, spendTime } from '../auth/password-tries';
+import { PASSWORD_NO_SELF_RESET, PasswordTries, keptLocks, spendTime } from '../auth/password-tries';
 import { passwordProblem } from '../auth/password-rules';
 import { AccessToken } from '../auth/auth.types';
 import { newTotpSecret, otpauthUri, verifyTotp } from '../auth/totp';
@@ -62,7 +62,7 @@ export class OperatorAccountService {
   /** Keyed by the lower-cased email: one login per person. */
   private readonly accounts = new PersistentMap<string, OperatorAccount>('operator-accounts');
   /** Wrong passwords, counted against the address that was typed — the code from an authenticator has its own count. */
-  private readonly tries = new PasswordTries(PASSWORD_NO_SELF_RESET);
+  private readonly tries = new PasswordTries(PASSWORD_NO_SELF_RESET, keptLocks('staff'));
 
   /**
    * A wrong password: counted, and answered — the fifth in a quarter of an hour locks the sign-in and tells its

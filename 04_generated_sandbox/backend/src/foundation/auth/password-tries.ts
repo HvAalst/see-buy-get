@@ -1,5 +1,6 @@
 import { scryptSync } from 'crypto';
 import { GlosError } from '../http/glos-error';
+import { PersistentMap } from '../store/persistent-map';
 
 /**
  * WRONG PASSWORDS, COUNTED AGAINST THE ACCOUNT — whoever types them, from wherever.
@@ -16,8 +17,12 @@ import { GlosError } from '../http/glos-error';
  * working through a list gets five tries a day. The way back that does not wait is the one only the holder has —
  * a reset by a code sent to the address (`forget`).
  *
- * Kept in memory, like the one-time codes: honest for one server. Behind two, a guesser gets two counts; the fix is
- * a shared counter, not a cleverer local one. A restart forgets the locks, which costs a guesser's five tries.
+ * WHAT IS KEPT, AND WHERE. A LOCK is kept in the durable store (`keptLocks`): a restart must not hand a guesser a
+ * clean slate, and a day-long lock that a deploy ends is not a day-long lock. It is written when a lock starts and
+ * when one is lifted — rare events — and it lives behind the same store everything durable does, so the day that
+ * store is shared between servers, so are the locks. The wrong tries BEFORE a lock are kept in memory only: writing
+ * a file for every wrong password anybody types would turn guessing into a way to wear the disk out, and losing
+ * them at a restart costs at most four tries.
  */
 
 /** Wrong tries before the sign-in locks. The same number as a PIN. */
@@ -31,12 +36,18 @@ export const PASSWORD_LADDER_MEMORY_MS = 24 * 60 * 60 * 1000;
 /** A crude cap, so a flood of made-up addresses cannot pin memory. */
 const MAX_KEYS = 50_000;
 
-interface Tries {
-  /** When each recent wrong try was made. */
-  wrong: number[];
-  lockedUntil?: number;
-  /** Locks in a row: which rung of the ladder the next one stands on. */
+/** A lock as it is kept: until when, and which one in a row it was. */
+export interface KeptLock {
+  until: number;
   locks: number;
+}
+
+/**
+ * The durable store one door's locks are kept in: `data/password-locks-<door>.json`. Under test, and with persistence
+ * off, it keeps them in memory. (`file` is for the test that proves the round trip through a real file.)
+ */
+export function keptLocks(door: string, file?: string): Map<string, KeptLock> {
+  return new PersistentMap<string, KeptLock>(`password-locks-${door}`, file ? { file } : {});
 }
 
 /** How long, in the words a person is told: "15 minutes", "1 hour", "6 hours". */
@@ -55,14 +66,23 @@ export interface TriesWords {
   /** How to get in without waiting, if there is a way: ", or reset the password". */
   wayBack: string;
 }
-const PASSWORD_WORDS: TriesWords = { wrong: 'Wrong email or password', what: 'passwords', wayBack: ', or reset the password' };
+export const PASSWORD_WORDS: TriesWords = { wrong: 'Wrong email or password', what: 'passwords', wayBack: ', or reset the password' };
 /** A password whose holder cannot reset it themselves (network staff, a company's administrators): they wait, or a colleague makes them a new sign-in. */
 export const PASSWORD_NO_SELF_RESET: TriesWords = { ...PASSWORD_WORDS, wayBack: '' };
 
 export class PasswordTries {
-  private readonly state = new Map<string, Tries>();
+  /** When each recent wrong try at an address was made. Memory only. */
+  private readonly wrongTries = new Map<string, number[]>();
 
-  constructor(private readonly words: TriesWords = PASSWORD_WORDS) {}
+  /**
+   * @param words what this door says
+   * @param locks where its locks are kept. A service passes `keptLocks('…')`; left out, they live and die with this
+   *              object, which is what a unit test wants.
+   */
+  constructor(
+    private readonly words: TriesWords = PASSWORD_WORDS,
+    private readonly locks: Map<string, KeptLock> = new Map(),
+  ) {}
 
   private static key(typed: string | undefined): string {
     return (typed ?? '').trim().toLowerCase().slice(0, 254);
@@ -75,7 +95,7 @@ export class PasswordTries {
 
   /** Until when this address is locked — undefined when it is not. */
   lockedUntil(typed: string | undefined, now: number = Date.now()): number | undefined {
-    const until = this.state.get(PasswordTries.key(typed))?.lockedUntil;
+    const until = this.locks.get(PasswordTries.key(typed))?.until;
     return until !== undefined && until > now ? until : undefined;
   }
 
@@ -91,20 +111,20 @@ export class PasswordTries {
    */
   wrong(typed: string | undefined, now: number = Date.now()): { error: GlosError; locked?: { until: number } } {
     const key = PasswordTries.key(typed);
-    const entry = this.state.get(key) ?? { wrong: [], locks: 0 };
-    // A lock that ended long ago is forgotten: the next one starts from the first rung again.
-    if (entry.lockedUntil !== undefined && now - entry.lockedUntil > PASSWORD_LADDER_MEMORY_MS) entry.locks = 0;
-    entry.wrong = entry.wrong.filter((at) => now - at < PASSWORD_TRY_WINDOW_MS);
-    entry.wrong.push(now);
-    if (entry.wrong.length < MAX_PASSWORD_TRIES) {
-      this.keep(key, entry, now);
+    const recent = (this.wrongTries.get(key) ?? []).filter((at) => now - at < PASSWORD_TRY_WINDOW_MS);
+    recent.push(now);
+    if (recent.length < MAX_PASSWORD_TRIES) {
+      this.wrongTries.set(key, recent);
+      if (this.wrongTries.size > MAX_KEYS) this.sweepTries(now);
       return { error: new GlosError('AUTH_FAILED', this.words.wrong) };
     }
-    const until = now + PASSWORD_LOCK_LADDER_MS[Math.min(entry.locks, PASSWORD_LOCK_LADDER_MS.length - 1)];
-    entry.locks += 1;
-    entry.lockedUntil = until;
-    entry.wrong = [];
-    this.keep(key, entry, now);
+    // Which rung: the one after the last lock, unless that lock ended long enough ago to be forgotten.
+    const last = this.locks.get(key);
+    const rung = last && now - last.until <= PASSWORD_LADDER_MEMORY_MS ? last.locks : 0;
+    const until = now + PASSWORD_LOCK_LADDER_MS[Math.min(rung, PASSWORD_LOCK_LADDER_MS.length - 1)];
+    this.wrongTries.delete(key);
+    this.sweepLocks(now);
+    this.locks.set(key, { until, locks: rung + 1 });
     return { error: this.locked(until, now), locked: { until } };
   }
 
@@ -113,16 +133,20 @@ export class PasswordTries {
    * locked sign-in at once. The wrong tries are forgotten; so is the lock, and the ladder.
    */
   forget(typed: string | undefined): void {
-    this.state.delete(PasswordTries.key(typed));
+    const key = PasswordTries.key(typed);
+    this.wrongTries.delete(key);
+    // Asked first: nearly every sign-in has no lock to lift, and lifting one is a write to the durable store.
+    if (this.locks.has(key)) this.locks.delete(key);
   }
 
-  private keep(key: string, entry: Tries, now: number): void {
-    this.state.set(key, entry);
-    if (this.state.size <= MAX_KEYS) return;
-    for (const [k, e] of this.state) {
-      const live = e.wrong.some((at) => now - at < PASSWORD_TRY_WINDOW_MS) || (e.lockedUntil !== undefined && now - e.lockedUntil <= PASSWORD_LADDER_MEMORY_MS);
-      if (!live) this.state.delete(k);
-    }
+  private sweepTries(now: number): void {
+    for (const [k, tries] of this.wrongTries) if (!tries.some((at) => now - at < PASSWORD_TRY_WINDOW_MS)) this.wrongTries.delete(k);
+  }
+
+  /** Locks that ended long enough ago to matter to nobody are taken out — when a new one is being written anyway. */
+  private sweepLocks(now: number): void {
+    const stale = [...this.locks].filter(([, lock]) => now - lock.until > PASSWORD_LADDER_MEMORY_MS).map(([k]) => k);
+    for (const k of stale) this.locks.delete(k);
   }
 }
 

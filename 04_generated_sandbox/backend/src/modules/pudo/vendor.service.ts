@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
-import { PasswordTries } from '../../foundation/auth/password-tries';
+import { PasswordTries, keptLocks } from '../../foundation/auth/password-tries';
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { DidService } from '../../foundation/did/did.service';
@@ -263,7 +263,7 @@ export class VendorService {
    * store's own system must be given it). Shown to the store exactly once, like the first.
    */
   /** Wrong secrets, counted against the store ID that was typed — whether or not there is such a store. */
-  private readonly tries = new PasswordTries({ wrong: 'Wrong store ID or secret', what: 'secrets', wayBack: '' });
+  private readonly tries = new PasswordTries({ wrong: 'Wrong store ID or secret', what: 'secrets', wayBack: '' }, keptLocks('stores'));
 
   rotateSecret(vendorId: string, current: string): Vendor {
     return this.replaceSecret(this.login(vendorId, current).vendorId);

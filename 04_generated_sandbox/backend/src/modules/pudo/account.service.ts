@@ -5,7 +5,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { AuthService } from '../../foundation/auth/auth.service';
-import { PasswordTries, spendTime } from '../../foundation/auth/password-tries';
+import { PASSWORD_WORDS, PasswordTries, keptLocks, spendTime } from '../../foundation/auth/password-tries';
 import { assertPassword, newResetCode, readResetCode } from '../../foundation/auth/password-rules';
 import { AccessToken } from '../../foundation/auth/auth.types';
 import { DidService } from '../../foundation/did/did.service';
@@ -61,7 +61,7 @@ export class AccountService implements OnApplicationBootstrap {
   // participant out permanently. Keyed by lower-cased email.
   private readonly accounts = new PersistentMap<string, Account>('pudo-accounts');
   /** Wrong passwords, counted against the address that was typed. One count for every door these accounts have. */
-  private readonly tries = new PasswordTries();
+  private readonly tries = new PasswordTries(PASSWORD_WORDS, keptLocks('accounts'));
 
   constructor(
     private readonly agents: AgentService,

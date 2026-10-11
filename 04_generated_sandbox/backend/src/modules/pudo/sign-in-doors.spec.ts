@@ -111,6 +111,12 @@ describe('every door anybody can knock on', () => {
     }
   });
 
+  it('the doors that MAKE an account, or send a code to a phone, are counted as well — widely, because a market’s worth of people can stand behind one address', () => {
+    for (const path of ['sbg/auth/phone/request', 'sbg/auth/signup', 'sbg/identity/enroll']) {
+      expect([path, door(path)?.open, door(path)?.limit, door(path)?.guarded]).toEqual([path, true, { limit: 120, windowSec: QUARTER_HOUR }, true]);
+    }
+  });
+
   it('no limit is written down without the guard that reads it, on any route', () => {
     expect(DOORS.filter((d) => d.limit && !d.guarded).map((d) => d.path)).toEqual([]);
   });
@@ -120,9 +126,6 @@ describe('every door anybody can knock on', () => {
    * fails this until it is given a limit or a line here.
    */
   const NOT_COUNTED: Record<string, string> = {
-    'sbg/auth/phone/request': 'asks for a code to a phone: ten a day per phone (OtpService). Not per caller — one mobile network’s address is thousands of people asking for their own code',
-    'sbg/auth/signup': 'needs a phone that was just confirmed by its code, and uses that confirmation up',
-    'sbg/identity/enroll': 'needs a phone that was just confirmed by its code, and uses that confirmation up',
     'sbg/size/classify': 'a sum over the open size thresholds: it reads nothing about anybody and keeps nothing',
     'sbg/consignment-notes/verify': 'answers about a SHA-256 fingerprint and nothing else: whoever asks already holds the document, and a fingerprint cannot be guessed',
     'sbg/dispatch/offers/decline': 'takes the single-use token that rode in one driver’s notification: it can only say "not now" to that one offer, and dies with it',

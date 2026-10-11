@@ -3,6 +3,11 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { OutboxMailSender } from '../src/foundation/mail/outbox-mail.sender';
+import { PersistentMap } from '../src/foundation/store/persistent-map';
+import { AccountService } from '../src/modules/pudo/account.service';
+import { VendorService } from '../src/modules/pudo/vendor.service';
+import { OperatorAccountService } from '../src/foundation/entity/operator-account.service';
+import { EntityAdminService } from '../src/foundation/entity/entity-admin.service';
 
 /**
  * EVERY PASSWORD DOOR COUNTS ITS TRIES — through the booted application (the user, 2026-10-11: "the shop and hub need
@@ -221,6 +226,17 @@ describe('every password door counts its tries, over the wire', () => {
     expect(lockedMails(adminEmail)).toHaveLength(1);
     // An administrator nobody made is locked the same way.
     expect(await guess((pw) => http().post('/v1/sbg/entities/admins/login').send({ email: `ghost.${u}@sbg-ke.example`, password: pw }), 5)).toEqual(FOUR_WRONG_THEN_LOCKED);
+  });
+
+  it('every door keeps its locks in the durable store, each in its own: a restart does not lift a lock', () => {
+    // What a lock survives is proved through a real file in password-tries.spec.ts. This is that each door here was
+    // GIVEN the durable store — the one thing a unit test of the count cannot see.
+    const kept = (service: unknown) => (service as { tries: { locks: unknown } }).tries.locks;
+    const doors = { accounts: app.get(AccountService), staff: app.get(OperatorAccountService), admins: app.get(EntityAdminService), stores: app.get(VendorService) };
+    for (const [door, service] of Object.entries(doors)) {
+      expect([door, kept(service) instanceof PersistentMap]).toEqual([door, true]);
+      expect((kept(service) as unknown as { name: string }).name).toBe(`password-locks-${door}`);
+    }
   });
 
   it('does the same work to refuse an address nobody holds as to refuse a wrong password: how long an answer takes says nothing about who has an account', async () => {

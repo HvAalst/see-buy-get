@@ -4,7 +4,7 @@ import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { GlosError } from '../http/glos-error';
 import { PersistentMap } from '../store/persistent-map';
 import { AuthService } from '../auth/auth.service';
-import { PASSWORD_NO_SELF_RESET, PasswordTries, spendTime } from '../auth/password-tries';
+import { PASSWORD_NO_SELF_RESET, PasswordTries, keptLocks, spendTime } from '../auth/password-tries';
 import { passwordProblem } from '../auth/password-rules';
 import { AccessToken } from '../auth/auth.types';
 import { EntityService } from './entity.service';
@@ -111,7 +111,7 @@ export class EntityAdminService {
   }
 
   /** Wrong passwords, counted against the address that was typed. */
-  private readonly tries = new PasswordTries(PASSWORD_NO_SELF_RESET);
+  private readonly tries = new PasswordTries(PASSWORD_NO_SELF_RESET, keptLocks('admins'));
 
   /**
    * A wrong password: counted, and answered — the fifth in a quarter of an hour locks the sign-in and tells its

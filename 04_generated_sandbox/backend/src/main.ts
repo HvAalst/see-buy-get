@@ -1,17 +1,14 @@
 import { NestFactory } from '@nestjs/core';
 import { Logger, ValidationPipe } from '@nestjs/common';
-import { SwaggerModule } from '@nestjs/swagger';
 import { json } from 'express';
 import { AppModule } from './app.module';
 import { isSandbox } from './foundation/runtime/sandbox';
+import { applyEdge } from './edge';
 import { readProviderEventsRaw } from './foundation/mail/provider-events.raw';
-import { buildOpenApiDocument } from './spec/openapi';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Allow the local frontend (e.g. http://localhost:4173) to call the API during dev.
-  app.enableCors();
   /*
    * WHO IS CALLING, behind a proxy. Deployed behind Cloudflare or nginx every request arrives from the proxy, so the
    * rate limits and the staff network fence (GLOS_STAFF_NETWORKS) would see one address for the whole world.
@@ -44,8 +41,8 @@ async function bootstrap() {
   // All SeeBuyGet APIs are versioned under /v1 (APIG-010, APIG-015).
   app.setGlobalPrefix('v1');
 
-  // Live contract docs at /v1/docs (the same document `npm run spec` emits to contracts/openapi.json).
-  SwaggerModule.setup('v1/docs', app, buildOpenApiDocument(app));
+  // Which websites are answered, and the docs page at /v1/docs (on a laptop only): see edge.ts.
+  applyEdge(app);
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);

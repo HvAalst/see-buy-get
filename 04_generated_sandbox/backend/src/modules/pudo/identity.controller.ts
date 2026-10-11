@@ -55,6 +55,8 @@ export class IdentityController {
    * proof; enroll consumes it (one verification → one enrolment), so a stale verification can't be reused.
    */
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(120, 15 * 60)
   @Post('enroll')
   enroll(@Body() dto: EnrollDto) {
     const verified = this.otp.isVerified(dto.phone);

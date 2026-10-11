@@ -1,5 +1,8 @@
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { GlosError } from '../http/glos-error';
-import { MAX_PASSWORD_TRIES, PASSWORD_LADDER_MEMORY_MS, PASSWORD_LOCK_LADDER_MS, PASSWORD_TRY_WINDOW_MS, PasswordTries, lockWords } from './password-tries';
+import { KeptLock, MAX_PASSWORD_TRIES, PASSWORD_LADDER_MEMORY_MS, PASSWORD_LOCK_LADDER_MS, PASSWORD_TRY_WINDOW_MS, PASSWORD_WORDS, PasswordTries, keptLocks, lockWords } from './password-tries';
 import { newResetCode, passwordProblem, readResetCode } from './password-rules';
 
 const MIN = 60_000;
@@ -101,6 +104,72 @@ describe('wrong passwords, counted against the account', () => {
     guess(u, 'c@d.example', 4, T0);
     u.forget('c@d.example');
     expect(guess(u, 'c@d.example', 4, T0 + 5000)).toEqual(['AUTH_FAILED', 'AUTH_FAILED', 'AUTH_FAILED', 'AUTH_FAILED']);
+  });
+});
+
+describe('a lock is kept — a restart does not hand a guesser a clean slate', () => {
+  it('still refuses after the server has started again, for as long as the lock had left; and the next lock in a row is the longer one', () => {
+    const kept = new Map<string, KeptLock>(); // what the durable store holds: it outlives the object counting the tries
+    const before = new PasswordTries(PASSWORD_WORDS, kept);
+    guess(before, 'mama@shop.example', 4, T0);
+    const first = before.wrong('mama@shop.example', T0 + 4000).locked!;
+    expect([...kept]).toEqual([['mama@shop.example', { until: first.until, locks: 1 }]]);
+
+    const after = new PasswordTries(PASSWORD_WORDS, kept); // the same server, started again
+    expect(codeOf(() => after.check('mama@shop.example', T0 + 5 * MIN))).toBe('PASSWORD_LOCKED');
+    expect(codeOf(() => after.check('mama@shop.example', first.until))).toBe('let through');
+    // The ladder was kept with it: the lock after a restart is an hour, not another quarter of one.
+    guess(after, 'mama@shop.example', 4, first.until + MIN);
+    const second = after.wrong('mama@shop.example', first.until + MIN + 4000).locked!;
+    expect(second.until - (first.until + MIN + 4000)).toBe(PASSWORD_LOCK_LADDER_MS[1]);
+    expect(kept.get('mama@shop.example')).toEqual({ until: second.until, locks: 2 });
+  });
+
+  it('goes through a real file: locked, the process gone, a new one reading the same file — still locked', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'glos-locks-'));
+    const file = join(dir, 'password-locks-test.json');
+    const worker = process.env.JEST_WORKER_ID;
+    delete process.env.JEST_WORKER_ID; // the durable store keeps nothing on disk under Jest unless it is told it is not under Jest
+    try {
+      const before = new PasswordTries(PASSWORD_WORDS, keptLocks('test', file));
+      const from = Date.now();
+      guess(before, 'mama@shop.example', 4, from);
+      const { locked } = before.wrong('mama@shop.example', from + 4000);
+      expect(existsSync(file)).toBe(true);
+      expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual([['mama@shop.example', { until: locked!.until, locks: 1 }]]);
+
+      const after = new PasswordTries(PASSWORD_WORDS, keptLocks('test', file));
+      expect(codeOf(() => after.check('mama@shop.example', from + 5 * MIN))).toBe('PASSWORD_LOCKED');
+      // Lifted by the holder's way back: gone from the file too, so the next start does not bring it back.
+      after.forget('mama@shop.example');
+      expect(new PasswordTries(PASSWORD_WORDS, keptLocks('test', file)).lockedUntil('mama@shop.example', from + 5 * MIN)).toBeUndefined();
+    } finally {
+      if (worker !== undefined) process.env.JEST_WORKER_ID = worker;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps nothing for a wrong try that locked nothing: wrong passwords do not become writes to the store', () => {
+    const kept = new Map<string, KeptLock>();
+    const t = new PasswordTries(PASSWORD_WORDS, kept);
+    guess(t, 'a@b.example', 4, T0);
+    for (let i = 0; i < 50; i++) t.wrong(`nobody.${i}@nowhere.example`, T0 + i);
+    expect(kept.size).toBe(0);
+    // …so the four tries before a restart are the most a restart gives back.
+    const restarted = new PasswordTries(PASSWORD_WORDS, kept);
+    expect(guess(restarted, 'a@b.example', 4, T0 + 5000)).toEqual(['AUTH_FAILED', 'AUTH_FAILED', 'AUTH_FAILED', 'AUTH_FAILED']);
+  });
+
+  it('is taken out of the store when it is lifted, and when it ended long enough ago to matter to nobody', () => {
+    const kept = new Map<string, KeptLock>();
+    const t = new PasswordTries(PASSWORD_WORDS, kept);
+    guess(t, 'a@b.example', 5, T0);
+    guess(t, 'c@d.example', 5, T0);
+    t.forget('a@b.example'); // a reset by a code to the address
+    expect([...kept.keys()]).toEqual(['c@d.example']);
+    // Two days on, somebody else is locked: the old lock goes out with that write.
+    guess(t, 'e@f.example', 5, T0 + 2 * PASSWORD_LADDER_MEMORY_MS);
+    expect([...kept.keys()]).toEqual(['e@f.example']);
   });
 });
 
