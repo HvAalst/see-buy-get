@@ -1,5 +1,5 @@
 import { credentialAge } from '../../../shared/account/password';
-import { resetTwoStep, type StaffRow } from '../api';
+import { resetTwoStep, sendStaffLink, stopStaffRemoval, type StaffInvited, type StaffRow } from '../api';
 import { useState, useCallback, useEffect } from 'preact/hooks';
 import { Icon, PlaceMap } from '../../../shared/ui';
 import { ConsoleFold } from '../ConsoleFold';
@@ -20,7 +20,7 @@ import {
   statusMixRows,
 } from '../network';
 import { money } from '../queues';
-import { opensItself, staffAddWay, staffFoldHint, waitingActions, waitingLine, type StaffWaiting } from '../staff';
+import { linkWords, opensItself, staffAddWay, staffFoldHint, waitingActions, waitingLine, type StaffWaiting } from '../staff';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
 /**
@@ -409,8 +409,10 @@ function FleetsPanel({ actions }: { actions: TowerActions }) {
  * Who works for the network — one sign-in each. The panel exists so that "a different person must approve this" can
  * be true: until the first account is made, everybody holds the one setup key and every name is typed.
  *
- * A NEW SIGN-IN TAKES TWO OF THEM. Somebody with an account of their own ASKS here; a second member of staff approves
- * it here and is the one shown the first password. Only the setup key makes an account at once (`named` is false).
+ * A NEW SIGN-IN TAKES TWO PEOPLE. Somebody with an account of their own ASKS here; a second person approves it here.
+ * Nobody is shown a password: the new person is emailed a link to choose their own, and this panel says whether that
+ * email went. Only the setup key (`named` is false) makes an account at once, with a password shown once — its own
+ * first account on a new installation.
  */
 function StaffPanel({ actions, named }: { actions: TowerActions; named: boolean }) {
   const t = useT();
@@ -431,6 +433,8 @@ function StaffPanel({ actions, named }: { actions: TowerActions; named: boolean 
   const [confirm, setConfirm] = useState<string | null>(null);
   // Shown until it is closed BY HAND: this is the only time this password exists anywhere.
   const [made, setMade] = useState<{ name: string; email: string; temporaryPassword: string } | null>(null);
+  // Approved, or sent a new link: whether the email went. Never a password — there is none.
+  const [invited, setInvited] = useState<StaffInvited | null>(null);
 
   const load = useCallback(async () => {
     if (!client) return;
@@ -446,7 +450,7 @@ function StaffPanel({ actions, named }: { actions: TowerActions; named: boolean 
     void load();
   }, [load]);
 
-  const way = staffAddWay(named, rows?.length ?? 0);
+  const way = staffAddWay(named);
 
   /** With an account of your own you ASK, and a second member of staff approves. The setup key makes it at once. */
   const add = async () => {
@@ -472,7 +476,7 @@ function StaffPanel({ actions, named }: { actions: TowerActions; named: boolean 
     await load();
   };
 
-  /** The second member of staff: yes — and the first password is theirs to hand over — or no, with the reason. */
+  /** The second person: yes — and the new colleague is emailed a link to choose their password — or no, with the reason. */
   const decide = async (p: StaffWaiting, yes: boolean, why?: string) => {
     if (!client) return;
     setBusy(p.proposalId);
@@ -483,7 +487,30 @@ function StaffPanel({ actions, named }: { actions: TowerActions; named: boolean 
     setDeclining(null);
     setReason('');
     if (r.error) setError(r.error.detail || r.error.title);
-    else if (yes) setMade(r.data as unknown as { name: string; email: string; temporaryPassword: string });
+    else if (yes) setInvited(r.data as unknown as StaffInvited);
+    await load();
+  };
+
+  /** The email did not arrive, or its two days passed: a new link, to the same address. The one before it stops working. */
+  const sendLink = async (a: StaffRow) => {
+    if (!client) return;
+    setBusy(`link:${a.operatorId}`);
+    setError(null);
+    const r = await sendStaffLink(client, a.operatorId);
+    setBusy(null);
+    if (r.error) setError(r.error.detail || r.error.title);
+    else setInvited(r.data ?? null);
+    await load();
+  };
+
+  /** The setup key asked to take a colleague's sign-in away, and everybody was told: any one of us stops it. */
+  const stopRemoval = async (a: StaffRow) => {
+    if (!client) return;
+    setBusy(`stop:${a.operatorId}`);
+    setError(null);
+    const r = await stopStaffRemoval(client, a.operatorId);
+    setBusy(null);
+    if (r.error) setError(r.error.detail || r.error.title);
     await load();
   };
   const day = (iso: string) => new Date(iso).toLocaleDateString();
@@ -496,8 +523,7 @@ function StaffPanel({ actions, named }: { actions: TowerActions; named: boolean 
       open={fold}
       onOpenChange={setFold}
     >
-      {/* Nobody to approve it, no form: a request that can only be refused is not offered. */}
-      {rows === null || way === 'alone' ? null : (
+      {rows === null ? null : (
         <div class="twr-panelend">
           <button type="button" class="cbtn cbtn--ghost cbtn--sm" aria-expanded={open} onClick={() => setOpen(!open)}>
             {open ? t('common.close') : t('tower.staff.add')}
@@ -505,7 +531,6 @@ function StaffPanel({ actions, named }: { actions: TowerActions; named: boolean 
         </div>
       )}
       <p class="cons__lede">{t(way === 'key' ? 'tower.staff.ledeKey' : 'tower.staff.lede')}</p>
-      {rows !== null && way === 'alone' ? <p class="chint">{t('tower.staff.ledeAlone')}</p> : null}
       {error ? <p class="cerr">{error}</p> : null}
       {asked ? (
         <p class="twr-done">
@@ -524,6 +549,26 @@ function StaffPanel({ actions, named }: { actions: TowerActions; named: boolean 
           </p>
           <button type="button" class="cbtn cbtn--primary" onClick={() => setMade(null)}>
             {t('tower.staff.revealDone')}
+          </button>
+        </div>
+      ) : null}
+
+      {/* Approved, or sent a new link. What is said is whether the email WENT — and, where none leaves (a laptop), the
+          link itself, so the sandbox can be walked through. There is no password to show. */}
+      {invited ? (
+        <div class="twr-reveal">
+          <p class="twr-clear__t">{t('tower.staff.invited.title', { name: invited.name })}</p>
+          <p class="twr-clear__b">{t(invited.sent ? 'tower.staff.invited.sent' : 'tower.staff.invited.notSent', { email: invited.email })}</p>
+          {invited.link ? (
+            <>
+              <p class="twr-clear__b">{t('tower.staff.invited.sandbox')}</p>
+              <p class="twr-reveal__creds">
+                <span class="ctbl__mono twr-reveal__link">{invited.link}</span>
+              </p>
+            </>
+          ) : null}
+          <button type="button" class="cbtn cbtn--primary" onClick={() => setInvited(null)}>
+            {t('common.close')}
           </button>
         </div>
       ) : null}
@@ -640,14 +685,39 @@ function StaffPanel({ actions, named }: { actions: TowerActions; named: boolean 
           <tbody>
             {rows.map((a) => (
               <tr key={a.operatorId}>
-                <td class="ctbl__strong">{a.name}</td>
+                <td>
+                  <div class="ctbl__strong">{a.name}</div>
+                  {/* The setup key asked to take this sign-in away. Said to everybody; stopped by any member of staff. */}
+                  {a.removalFrom ? (
+                    <div class="chint">
+                      {t('tower.staff.removalAsked', { when: new Date(a.removalFrom).toLocaleString() })}
+                      {named ? (
+                        <button type="button" class="cbtn cbtn--ghost cbtn--sm" style="margin:6px 0 0;display:block" disabled={busy === `stop:${a.operatorId}`} onClick={() => void stopRemoval(a)}>
+                          {t('tower.staff.removalStop')}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </td>
                 <td class="ctbl__mono">
                   <span class="ctbl__lbl">{t('tower.staff.col.email')}</span>
                   {a.email}
                 </td>
                 <td class="ctbl__sub">
                   <span class="ctbl__lbl">{t('tower.staff.col.lastSeen')}</span>
-                  {a.lastSeenAt ? new Date(a.lastSeenAt).toLocaleString() : t('tower.staff.never')}
+                  {a.passwordLinkUntil ? (
+                    <>
+                      <span class="ctag ctag--warn">{t('tower.staff.noPassword')}</span>
+                      <span class="chint">{linkWords(a.passwordLinkUntil, Date.now(), t, (iso) => new Date(iso).toLocaleString())}</span>
+                      <button type="button" class="cbtn cbtn--ghost cbtn--sm" style="margin-top:6px" disabled={busy === `link:${a.operatorId}`} onClick={() => void sendLink(a)}>
+                        {t('tower.staff.sendLink')}
+                      </button>
+                    </>
+                  ) : a.lastSeenAt ? (
+                    new Date(a.lastSeenAt).toLocaleString()
+                  ) : (
+                    t('tower.staff.never')
+                  )}
                 </td>
                 <td class="ctbl__sub">
                   <span class="ctbl__lbl">{t('tower.staff.col.password')}</span>

@@ -278,8 +278,13 @@ export interface OperatorAccount {
   email: string;
   /** What every decision they make is recorded against. Set at creation, carried in the token. */
   name: string;
+  /** Both EMPTY until the person has chosen a password by the link emailed to them: nothing signs in with an empty one. */
   salt: string;
   hash: string;
+  /** The link to choose a password: the fingerprint of its token (never the token), and until when it works. */
+  welcome?: { hash: string; sentAt: string; until: string };
+  /** The setup key asked to take this sign-in away. Everybody on staff was told; a day later it can finish. */
+  removal?: { askedAt: string };
   createdAt: string;
   /** Who asked for it — a member of staff's name — or the setup key, which made it alone. */
   createdBy: string;
@@ -320,6 +325,21 @@ export class OperatorAccountView {
   /** A reset of their two-step sign-in, asked for by this member of staff and waiting for a second. */
   @ApiPropertyOptional()
   twoStepResetAskedBy?: string;
+  /** They have not chosen a password yet: until when the link emailed to them works (it may be past). */
+  @ApiPropertyOptional()
+  passwordLinkUntil?: string;
+  /** The setup key asked to take this sign-in away: from when it can finish, unless a member of staff stops it. */
+  @ApiPropertyOptional()
+  removalFrom?: string;
+}
+
+/** A staff account just approved, or sent its link again: whether the email went. Never a password — there is none. */
+export class StaffInvited extends OperatorAccountView {
+  /** Whether the email with the link was handed over. When not, it is tried again; a new link can also be sent. */
+  sent: boolean;
+  /** IN A SANDBOX ONLY, where no email leaves: the link that was written, so the laptop can be walked through. */
+  @ApiPropertyOptional()
+  link?: string;
 }
 
 /**
@@ -356,6 +376,8 @@ export class StaffProposalView {
   until: string;
   /** Asked for by whoever is reading this: they can take it back, and cannot approve it. */
   mine: boolean;
+  /** The one who asked is the only one able to sign in, so there is no second member of staff: the setup key approves. */
+  forSetupKey: boolean;
 }
 
 /** Who can sign in as network staff, and who has been asked for. */

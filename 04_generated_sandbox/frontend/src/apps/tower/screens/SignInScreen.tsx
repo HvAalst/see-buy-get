@@ -18,7 +18,20 @@ import { CodeField, TwoStepSetupPanel } from './TwoStepSetup';
  * The shared SETUP KEY is not a way in for people. It exists to make the first staff account on a new installation,
  * and for scripts — so it is a quiet link under the form, not a tab beside the two real doors.
  */
-export function SignInScreen({ actions, state, error, busy }: { actions: TowerActions; state: Pick<TowerState, 'staffStep' | 'signInNote'>; error: string | null; busy: boolean }) {
+export function SignInScreen({
+  actions,
+  state,
+  error,
+  busy,
+  welcomed,
+}: {
+  actions: TowerActions;
+  state: Pick<TowerState, 'staffStep' | 'signInNote'>;
+  error: string | null;
+  busy: boolean;
+  /** Somebody new just chose their password by the link they were emailed: their address, to sign in with. */
+  welcomed?: string | null;
+}) {
   const t = useT();
   const [mode, setMode] = useState<'staff' | 'company' | 'operator'>('staff');
 
@@ -43,9 +56,10 @@ export function SignInScreen({ actions, state, error, busy }: { actions: TowerAc
         )}
 
         {state.signInNote ? <p class="cnote">{state.signInNote}</p> : null}
+        {welcomed && mode === 'staff' && !state.staffStep ? <p class="cnote">{t('tower.welcome.done')}</p> : null}
 
         {mode === 'staff' ? (
-          <StaffForm actions={actions} step={state.staffStep} error={error} busy={busy} />
+          <StaffForm actions={actions} step={state.staffStep} error={error} busy={busy} startWith={welcomed ?? ''} />
         ) : mode === 'company' ? (
           <CompanyForm actions={actions} error={error} busy={busy} />
         ) : (
@@ -73,9 +87,9 @@ export function SignInScreen({ actions, state, error, busy }: { actions: TowerAc
  * Network staff: email and password, then the code — or, the first time, the authenticator set-up. The email and
  * password stay in the form while the code is asked for, so the second submit sends all three together.
  */
-function StaffForm({ actions, step, error, busy }: { actions: TowerActions; step: TowerState['staffStep']; error: string | null; busy: boolean }) {
+function StaffForm({ actions, step, error, busy, startWith }: { actions: TowerActions; step: TowerState['staffStep']; error: string | null; busy: boolean; startWith: string }) {
   const t = useT();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(startWith);
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [local, setLocal] = useState<string | null>(null);

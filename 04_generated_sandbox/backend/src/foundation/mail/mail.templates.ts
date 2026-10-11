@@ -78,6 +78,8 @@ export interface MailParams {
   welcome: { name: string; email: string; role: 'shop' | 'hub' | 'driver' | 'store' };
   'company-admin-added': { name: string; email: string; company: string; addedBy: string };
   'staff-account-added': { name: string; email: string; addedBy: string };
+  /** A new member of staff chooses their own password by this link. Nobody on staff is ever shown one. */
+  'staff-account-welcome': { name: string; email: string; addedBy: string; link: string; hours: number };
   'staff-two-step': { name: string; what: string; next: string; when: string };
   /** Who is on staff changed, or somebody asked for it to: said to members of staff. */
   'staff-account-news': { what: string; next: string; when: string };
@@ -497,7 +499,7 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
 
   'staff-account-added': {
     title: 'Network staff account added',
-    sentWhen: 'A second member of staff approves a staff account that was asked for, or the setup key makes one (to the new address).',
+    sentWhen: 'The setup key makes a staff account alone: the first on a new installation (to the new address).',
     wired: true,
     sendLater: 48,
     sample: { name: 'Chloe Wanjiru', email: 'chloe@seebuyget.example', addedBy: 'Amina Otieno' },
@@ -513,6 +515,28 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
         { kind: 'warning', title: 'Not expecting this?', text: `Tell ${p.addedBy}. Nothing happens until somebody signs in.` },
       ],
       reason: 'You are getting this email because a SeeBuyGet staff account was created for this address.',
+    }),
+  },
+
+  'staff-account-welcome': {
+    title: 'Network staff account: choose your password',
+    sentWhen: 'A second person approves a staff account that was asked for, or somebody on staff sends the link again (to the new address, and to nobody else).',
+    wired: true,
+    // The link in it works for two days: handed over a day late, it still has a day left.
+    sendLater: 24,
+    sample: { name: 'Chloe Wanjiru', email: 'chloe@seebuyget.example', addedBy: 'Amina Otieno and Brian Kamau', link: 'https://console.seebuyget.example/#welcome=3q2-7wAAAAAAAAAAAAAAAAAAAAAAAAAA', hours: 48 },
+    build: (p) => ({
+      subject: 'Choose your password for the SeeBuyGet operator console',
+      preheader: `${p.addedBy} made a network staff account for you.`,
+      blocks: [
+        { kind: 'heading', text: 'You have a staff sign-in' },
+        { kind: 'paragraph', text: `${p.addedBy} made a network staff account for you, ${p.name}. Every decision you take in the operator console is recorded against this name — including the ones that need a second person.` },
+        { kind: 'facts', rows: [['Sign in with', p.email], ['On the sign-in screen', 'Choose “Network staff”']] },
+        { kind: 'paragraph', text: `Nobody was shown a password for you, and nobody can give you one. Choose your own with the button below. The link works once, for ${p.hours} hours; after that, ask a colleague on staff to send you a new one.` },
+        { kind: 'button', label: 'Choose your password', href: p.link },
+        { kind: 'warning', title: 'Not expecting this?', text: `Do not use the link, and do not pass it on: whoever opens it becomes this member of staff. Tell ${p.addedBy}.` },
+      ],
+      reason: 'You are getting this email because a SeeBuyGet staff account was made for this address.',
     }),
   },
 

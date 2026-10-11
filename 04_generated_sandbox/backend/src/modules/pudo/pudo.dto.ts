@@ -1348,6 +1348,16 @@ export class StaffProposalDeclineDto {
   @IsOptional() @IsString() @MaxLength(300) @ApiPropertyOptional() reason?: string;
 }
 
+/** The token off the link a new member of staff was emailed: whose is it? */
+export class StaffWelcomeCheckDto {
+  @IsString() @MaxLength(200) token!: string;
+}
+
+/** A new member of staff chooses their own password, proven by the token off the link they were emailed. */
+export class StaffWelcomeDto extends StaffWelcomeCheckDto {
+  @IsString() @MaxLength(200) password!: string;
+}
+
 /** The six digits an authenticator app shows. */
 export class TwoStepCodeDto {
   @IsString() @MaxLength(12) code!: string;

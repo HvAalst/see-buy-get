@@ -7047,7 +7047,7 @@
       "post": {
         "operationId": "Sbg.approveOperator",
         "summary": "",
-        "description": "The second member of staff approves — never the one who asked — and is shown the first password, once.",
+        "description": "The second person approves — never the one who asked. A member of staff; or the setup key, for somebody who is the\nonly one able to sign in. No password is made: the new person is emailed a link to choose their own.",
         "parameters": [
           {
             "name": "proposalId",
@@ -7064,7 +7064,111 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/StaffInvited"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/operators/{operatorId}/welcome-link": {
+      "post": {
+        "operationId": "Sbg.resendStaffWelcome",
+        "summary": "",
+        "description": "Send somebody who has not chosen a password yet a NEW link, to their own address. The old one stops working.",
+        "parameters": [
+          {
+            "name": "operatorId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffInvited"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/operators/welcome/check": {
+      "post": {
+        "operationId": "Sbg.staffWelcomeCheck",
+        "summary": "",
+        "description": "Whose link is this? Asked by the console before it shows \"choose your password\". One answer for every bad link.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffWelcomeCheckDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/operators/welcome": {
+      "post": {
+        "operationId": "Sbg.staffWelcome",
+        "summary": "",
+        "description": "A new member of staff chooses their own password, proven by the link they were emailed. It works once.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffWelcomeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/operators/{operatorId}/removal/stop": {
+      "post": {
+        "operationId": "Sbg.stopStaffRemoval",
+        "summary": "",
+        "description": "The setup key asked to take a sign-in away, and everybody was told: any member of staff stops it.",
+        "parameters": [
+          {
+            "name": "operatorId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperatorAccountView"
                 }
               }
             }
@@ -7108,7 +7212,7 @@
       "delete": {
         "operationId": "Sbg.revokeOperator",
         "summary": "",
-        "description": "Take a staff login away; its open sessions end at once. The record is kept.",
+        "description": "Take a staff login away. By a member of staff: at once, and its open sessions end; the record is kept. By the\nSETUP KEY outside a sandbox: announced to everybody on staff first, and finished a day later unless one stops it.",
         "parameters": [
           {
             "name": "operatorId",
@@ -30030,6 +30134,14 @@
             "type": "string",
             "description": "A reset of their two-step sign-in, asked for by this member of staff and waiting for a second."
           },
+          "passwordLinkUntil": {
+            "type": "string",
+            "description": "They have not chosen a password yet: until when the link emailed to them works (it may be past)."
+          },
+          "removalFrom": {
+            "type": "string",
+            "description": "The setup key asked to take this sign-in away: from when it can finish, unless a member of staff stops it."
+          },
           "operatorId": {
             "type": "string"
           },
@@ -30080,6 +30192,10 @@
           "mine": {
             "type": "boolean",
             "description": "Asked for by whoever is reading this: they can take it back, and cannot approve it."
+          },
+          "forSetupKey": {
+            "type": "boolean",
+            "description": "The one who asked is the only one able to sign in, so there is no second member of staff: the setup key approves."
           }
         },
         "required": [
@@ -30089,7 +30205,8 @@
           "askedBy",
           "askedAt",
           "until",
-          "mine"
+          "mine",
+          "forSetupKey"
         ]
       },
       "StaffAccountList": {
@@ -30111,6 +30228,93 @@
         "required": [
           "items",
           "waiting"
+        ]
+      },
+      "StaffInvited": {
+        "type": "object",
+        "properties": {
+          "lastSeenAt": {
+            "type": "string"
+          },
+          "passwordChangedAt": {
+            "type": "string"
+          },
+          "revokedAt": {
+            "type": "string"
+          },
+          "twoStepResetAskedBy": {
+            "type": "string",
+            "description": "A reset of their two-step sign-in, asked for by this member of staff and waiting for a second."
+          },
+          "passwordLinkUntil": {
+            "type": "string",
+            "description": "They have not chosen a password yet: until when the link emailed to them works (it may be past)."
+          },
+          "removalFrom": {
+            "type": "string",
+            "description": "The setup key asked to take this sign-in away: from when it can finish, unless a member of staff stops it."
+          },
+          "link": {
+            "type": "string",
+            "description": "IN A SANDBOX ONLY, where no email leaves: the link that was written, so the laptop can be walked through."
+          },
+          "sent": {
+            "type": "boolean",
+            "description": "Whether the email with the link was handed over. When not, it is tried again; a new link can also be sent."
+          },
+          "operatorId": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "twoStep": {
+            "type": "boolean",
+            "description": "Whether this account signs in with a code from an authenticator app as well as its password."
+          }
+        },
+        "required": [
+          "sent",
+          "operatorId",
+          "email",
+          "name",
+          "createdAt",
+          "twoStep"
+        ]
+      },
+      "StaffWelcomeCheckDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "StaffWelcomeDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "token",
+          "password"
         ]
       },
       "StaffProposalDeclineDto": {

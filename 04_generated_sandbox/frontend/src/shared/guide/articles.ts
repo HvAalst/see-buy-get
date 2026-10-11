@@ -348,15 +348,17 @@ export const ARTICLES: GuideArticle[] = [
     steps: [
       "Open the console at the address staff were given — it is not linked from the public site. Choose Network staff and type your email and password.",
       "Then the 6-digit code from your authenticator app. The first time, the console shows a QR code to scan with the app; the first code turns two-step sign-in on.",
-      "Change the password you were given straight away: your name at the top, then Settings.",
-      "Add a colleague: Overview, then Network staff, then Add a person, and ask for the account. Nothing is made yet. A second member of staff approves it in the same place; they are shown the first password, once, and hand it over in person.",
+      "New here? You were emailed a link: open it and choose your password. Nobody on staff was shown one for you. Then sign in as above. (Only the very first account on a new installation is given a password; change that one straight away: your name at the top, then Settings.)",
+      "Add a colleague: Overview, then Network staff, then Add a person, and ask for the account. Nothing is made yet. A second member of staff approves it in the same place. Your colleague is then emailed a link to choose their own password; nobody on staff is shown one.",
       "Somebody leaving: Take away. Their open sessions end at once; their decisions keep their name. An account they asked for that nobody approved yet is dropped with it."
     ],
     notes: [
       "Lost your phone? Two other members of staff reset your two-step sign-in: Overview, then Network staff, then Reset two-step. One asks, a second approves; you are signed out and set it up again at your next sign-in.",
       "The console may only open from the networks SeeBuyGet staff work on.",
       "Five wrong passwords lock your sign-in for 15 minutes, and for longer each time it happens again: an hour, six hours, then a day. While it is locked nobody gets in, not even with the right password. You get an email saying so. A new password you choose cannot be one that is easy to guess: a common word with a number on the end, your own name or email address, only digits, or a run like 12345678.",
-      "Why a new sign-in takes two of you: if one sign-in could make another alone, whoever held it could become a second person and approve their own decisions. Approve an account only if you know the person and the address is theirs. Everybody else on staff gets an email when one is asked for. If the colleague named in it did not ask, decline it and take their sign-in away. A request waits 7 days; you can take back your own, and decline somebody else’s with a reason they are told."
+      "Why a new sign-in takes two of you: if one sign-in could make another alone, whoever held it could become a second person and approve their own decisions. Approve an account only if you know the person and the address is theirs. Everybody else on staff gets an email when one is asked for. If the colleague named in it did not ask, decline it and take their sign-in away. A request waits 7 days; you can take back your own, and decline somebody else’s with a reason they are told.",
+      "The link to choose a password works once, for 48 hours, and only the newest one works. If it did not arrive or has lapsed, anybody on staff sends a new one: Overview, then Network staff, then Send a new link. It always goes to the colleague’s own address.",
+      "If you are the only one who can sign in, there is no colleague to approve what you ask for: the setup key approves it. Whoever holds the key signs in with it and finds your request under Network staff."
     ]
   },
   {
@@ -365,11 +367,12 @@ export const ARTICLES: GuideArticle[] = [
       "console"
     ],
     title: "The setup key",
-    summary: "The one shared operator key, for creating the first two staff accounts and for scripts.",
+    summary: "The one shared operator key, for the first staff account on a new installation and for scripts.",
     notes: [
       "It has full operator rights but cannot say who is holding it, so the console marks your name “name not verified”.",
       "Outside a sandbox it cannot take a decision that needs two people.",
-      "Outside a sandbox it makes a staff account only while fewer than two people can sign in: the first two, and the second again if one of two has left. After that, two members of staff add each new one. Everybody already on staff gets an email whenever it makes one."
+      "Outside a sandbox it makes a staff account alone only while nobody can sign in. When one person can sign in, that person asks for the next account and the setup key approves it. With two or more, a second member of staff approves, and the setup key adds nobody.",
+      "Outside a sandbox it takes no sign-in away at once. Asking with the setup key tells everybody on staff by email and waits 24 hours, and any member of staff can stop it: Overview, then Network staff, then Stop it. That is the way back for somebody alone on staff who lost their phone, and it is no quiet way in for whoever finds the key."
     ]
   },
   {

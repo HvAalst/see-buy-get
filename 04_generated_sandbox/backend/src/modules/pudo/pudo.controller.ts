@@ -130,13 +130,13 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyDeclarationDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, SuggestVehicleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, FleetMoveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto } from './pudo.dto';
+  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, SuggestVehicleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, FleetMoveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto } from './pudo.dto';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, MAX_CLAIM_AWARD, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
-import { EntityAdminView, OperatorAccountView, StaffAccountList, StaffProposalView, EntityChanges, EntityPricing } from '../../foundation/entity/entity.types';
+import { EntityAdminView, OperatorAccountView, StaffAccountList, StaffInvited, StaffProposalView, EntityChanges, EntityPricing } from '../../foundation/entity/entity.types';
 import { EntityAdminService } from '../../foundation/entity/entity-admin.service';
 import { CompanyPapersWatch } from '../../foundation/entity/company-papers-watch.service';
 import { CompanyDeclarationService, COMPANY_PAPER_KINDS, PAPER_BOUND_SECTIONS, recordKeeper } from '../../foundation/entity/company-declarations.service';
@@ -1979,9 +1979,9 @@ export class SbgController {
   /* ------------------------------------------------------ who works for the network -- */
 
   /**
-   * Make a staff account with the SETUP KEY, without a second person — the first two, and outside a sandbox no more
-   * than that. A member of staff with an account of their own never makes another alone, anywhere: they ask
-   * (`operators/proposals`) and a second approves. One stolen staff sign-in must not be able to become two people.
+   * Make a staff account with the SETUP KEY, alone — outside a sandbox only while nobody can sign in. A member of
+   * staff with an account of their own never makes another alone, anywhere: they ask (`operators/proposals`) and a
+   * second person approves. One stolen staff sign-in must not be able to become two people.
    */
   @Roles('operator')
   @Post('operators')
@@ -2006,11 +2006,49 @@ export class SbgController {
     return this.operatorAccounts.propose({ email: dto.email, name: dto.name }, this.staffSelf(actor));
   }
 
-  /** The second member of staff approves — never the one who asked — and is shown the first password, once. */
+  /**
+   * The second person approves — never the one who asked. A member of staff; or the setup key, for somebody who is the
+   * only one able to sign in. No password is made: the new person is emailed a link to choose their own.
+   */
   @Roles('operator')
   @Post('operators/proposals/:proposalId/approve')
-  approveOperator(@Param('proposalId') proposalId: string, @Actor() actor: IntrospectionResult) {
-    return this.operatorAccounts.approve(proposalId, this.staffSelf(actor));
+  approveOperator(@Param('proposalId') proposalId: string, @Actor() actor: IntrospectionResult): Promise<StaffInvited> {
+    const operatorId = staffIdOf(actor?.revocationKey);
+    return this.operatorAccounts.approve(proposalId, operatorId ? { operatorId } : { setupKey: true });
+  }
+
+  /** Send somebody who has not chosen a password yet a NEW link, to their own address. The old one stops working. */
+  @Roles('operator')
+  @Post('operators/:operatorId/welcome-link')
+  resendStaffWelcome(@Param('operatorId') operatorId: string): Promise<StaffInvited> {
+    return this.operatorAccounts.sendWelcome(operatorId);
+  }
+
+  /** Whose link is this? Asked by the console before it shows "choose your password". One answer for every bad link. */
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(20, 15 * 60)
+  @Post('operators/welcome/check')
+  staffWelcomeCheck(@Body() dto: StaffWelcomeCheckDto, @Req() req: { ip?: string }) {
+    this.assertStaffNetwork(req.ip);
+    return this.operatorAccounts.welcomeFor(dto.token);
+  }
+
+  /** A new member of staff chooses their own password, proven by the link they were emailed. It works once. */
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(20, 15 * 60)
+  @Post('operators/welcome')
+  staffWelcome(@Body() dto: StaffWelcomeDto, @Req() req: { ip?: string }) {
+    this.assertStaffNetwork(req.ip);
+    return this.operatorAccounts.choosePassword(dto.token, dto.password);
+  }
+
+  /** The setup key asked to take a sign-in away, and everybody was told: any member of staff stops it. */
+  @Roles('operator')
+  @Post('operators/:operatorId/removal/stop')
+  stopStaffRemoval(@Param('operatorId') operatorId: string, @Actor() actor: IntrospectionResult): OperatorAccountView {
+    return this.operatorAccounts.stopRemoval(operatorId, this.staffSelf(actor));
   }
 
   /** Decline an account somebody asked for, with the reason — or take back your own. */
@@ -2020,11 +2058,14 @@ export class SbgController {
     return this.operatorAccounts.decline(proposalId, this.staffSelf(actor), dto.reason);
   }
 
-  /** Take a staff login away; its open sessions end at once. The record is kept. */
+  /**
+   * Take a staff login away. By a member of staff: at once, and its open sessions end; the record is kept. By the
+   * SETUP KEY outside a sandbox: announced to everybody on staff first, and finished a day later unless one stops it.
+   */
   @Roles('operator')
   @Delete('operators/:operatorId')
   revokeOperator(@Param('operatorId') operatorId: string, @Actor() actor: IntrospectionResult): OperatorAccountView {
-    return this.operatorAccounts.revoke(operatorId, auditActor(actor));
+    return staffIdOf(actor?.revocationKey) ? this.operatorAccounts.revoke(operatorId, auditActor(actor)) : this.operatorAccounts.removeByKey(operatorId);
   }
 
   /**

@@ -32,6 +32,8 @@ import { MarketScreen } from './screens/MarketScreen';
 import { DepotsScreen } from './screens/DepotsScreen';
 import { MoversScreen } from './screens/MoversScreen';
 import { SignInScreen } from './screens/SignInScreen';
+import { WelcomeScreen } from './screens/WelcomeScreen';
+import { welcomeTokenFrom } from './staff';
 import { ConsoleMenu } from './ConsoleMenu';
 import { ConsolePhoneNav, ConsoleRail } from './ConsoleNav';
 import { SettingsScreen } from './screens/SettingsScreen';
@@ -60,6 +62,14 @@ export function App() {
   // than left to CSS, because a stylesheet can move a menu but cannot swap it for a different one.
   const wide = useWideScreen();
   const [helpOpen, setHelpOpen] = useState(false);
+  // Opened by the link a new member of staff was emailed: they choose their password before anything else is shown.
+  const [welcome, setWelcome] = useState<string | null>(() => welcomeTokenFrom(typeof location === 'undefined' ? '' : location.hash));
+  const [welcomed, setWelcomed] = useState<string | null>(null);
+  // The token leaves the address bar with the screen: it is not left there to be bookmarked or read off a shared screen.
+  const leaveWelcome = () => {
+    history.replaceState(null, '', location.pathname + location.search);
+    setWelcome(null);
+  };
 
   if (state.phase === 'boot') return <div class="twr-boot" aria-busy="true" />;
 
@@ -77,8 +87,23 @@ export function App() {
     );
   }
 
+  if (welcome) {
+    return (
+      <WelcomeScreen
+        token={welcome}
+        onLeave={leaveWelcome}
+        onDone={(email) => {
+          leaveWelcome();
+          setWelcomed(email);
+          // Somebody else's session open in this browser is not the new person's way in: they sign in as themselves.
+          if (state.phase !== 'signin') actions.signOut();
+        }}
+      />
+    );
+  }
+
   if (state.phase === 'signin') {
-    return <SignInScreen actions={actions} state={state} error={state.signInError} busy={state.loading} />;
+    return <SignInScreen actions={actions} state={state} error={state.signInError} busy={state.loading} welcomed={welcomed} />;
   }
 
   /**

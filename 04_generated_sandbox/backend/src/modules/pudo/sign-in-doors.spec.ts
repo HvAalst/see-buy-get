@@ -74,6 +74,8 @@ describe('every door anybody can knock on', () => {
     'sbg/auth/phone/verify': 60,
     'sbg/operators/login': 20,
     'sbg/operators/password': 20,
+    'sbg/operators/welcome': 20, // the link a new member of staff was emailed: they choose their password
+    'sbg/operators/welcome/check': 20, // …and whose link it is, asked before the password is typed
     'sbg/entities/admins/login': 20,
     'sbg/entities/admins/password': 20,
     'sbg/vendors/session': 20,

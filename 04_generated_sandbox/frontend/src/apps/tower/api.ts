@@ -103,6 +103,17 @@ export interface StaffRow {
   twoStep?: boolean;
   /** A reset of their two-step sign-in, asked for by this member of staff, waiting for a second. */
   twoStepResetAskedBy?: string;
+  /** They have not chosen a password yet: until when the link in their email works (it may be past). */
+  passwordLinkUntil?: string;
+  /** The setup key asked to take this sign-in away: from when it can finish, unless a member of staff stops it. */
+  removalFrom?: string;
+}
+
+/** What a second person's approval, or a link sent again, answers: whether the email went. Never a password — there is none. */
+export interface StaffInvited extends StaffRow {
+  sent: boolean;
+  /** In a sandbox only, where no email leaves: the link that was written. */
+  link?: string;
 }
 
 /** What a company login answers with — the person, and the company they administer. */
@@ -236,4 +247,24 @@ export function clearCreds(): void {
   } catch {
     /* nothing was stored in the first place */
   }
+}
+
+/** Whose link is this? Asked before "choose your password" is shown. @Public: the link is all the caller has. */
+export function staffWelcomeCheck(token: string): Promise<Result<{ email: string; name: string }>> {
+  return publicRequest<{ email: string; name: string }>(towerConfig(), '/v1/sbg/operators/welcome/check', { body: { token } });
+}
+
+/** A new member of staff chooses their own password, proven by the link they were emailed. It works once. */
+export function staffWelcome(token: string, password: string): Promise<Result<{ ok: true; email: string }>> {
+  return publicRequest<{ ok: true; email: string }>(towerConfig(), '/v1/sbg/operators/welcome', { body: { token, password } });
+}
+
+/** Send somebody who has not chosen a password yet a NEW link, to their own address. The old one stops working. */
+export function sendStaffLink(client: TowerClient, operatorId: string): Promise<Result<StaffInvited>> {
+  return client.client.sbg.request((raw) => raw.POST(`/v1/sbg/operators/${encodeURIComponent(operatorId)}/welcome-link` as never, {} as never) as never) as Promise<Result<StaffInvited>>;
+}
+
+/** The setup key asked to take a colleague's sign-in away: stop it. */
+export function stopStaffRemoval(client: TowerClient, operatorId: string): Promise<Result<StaffRow>> {
+  return client.client.sbg.request((raw) => raw.POST(`/v1/sbg/operators/${encodeURIComponent(operatorId)}/removal/stop` as never, {} as never) as never) as Promise<Result<StaffRow>>;
 }

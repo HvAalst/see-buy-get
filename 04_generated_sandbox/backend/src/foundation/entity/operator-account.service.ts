@@ -1,6 +1,7 @@
 import { MailService } from '../mail/mail.service';
+import { appUrl, formatWhen } from '../mail/mail.templates';
 import { Injectable, Optional } from '@nestjs/common';
-import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { GlosError } from '../http/glos-error';
 import { PersistentMap } from '../store/persistent-map';
 import { AuthService } from '../auth/auth.service';
@@ -10,7 +11,7 @@ import { AccessToken } from '../auth/auth.types';
 import { newTotpSecret, otpauthUri, verifyTotp } from '../auth/totp';
 import { FieldEncryption } from '../data-firewall/field-encryption.service';
 import { isSandbox } from '../runtime/sandbox';
-import { OperatorAccount, OperatorAccountView, StaffProposal, StaffProposalView } from './entity.types';
+import { OperatorAccount, OperatorAccountView, StaffInvited, StaffProposal, StaffProposalView } from './entity.types';
 
 /** Wrong authenticator codes in a row before that account's code is refused for a while. */
 export const MAX_CODE_MISSES = 5;
@@ -22,6 +23,18 @@ const RESET_WAIT_MS = 24 * 60 * 60 * 1000;
 /** A staff account one member of staff asked for waits this many days for a second. */
 export const STAFF_PROPOSAL_DAYS = 7;
 const PROPOSAL_WAIT_MS = STAFF_PROPOSAL_DAYS * 24 * 60 * 60 * 1000;
+/** The link a new member of staff is emailed to choose their password works this many hours, once. */
+export const STAFF_WELCOME_HOURS = 48;
+const WELCOME_MS = STAFF_WELCOME_HOURS * 60 * 60 * 1000;
+/** The setup key takes a sign-in away this many hours after everybody on staff was told — unless one of them stops it. */
+export const KEY_REMOVAL_WAIT_HOURS = 24;
+const REMOVAL_WAIT_MS = KEY_REMOVAL_WAIT_HOURS * 60 * 60 * 1000;
+/** Asked for and neither stopped nor finished, it is forgotten after a week: it has to be asked — and announced — again. */
+const REMOVAL_KEPT_MS = 7 * 24 * 60 * 60 * 1000;
+/** What the record says did it, where no member of staff did. */
+export const SETUP_KEY = 'the setup key';
+/** Who is acting on a request for a staff account: a member of staff with their own account, or the setup key. */
+export type StaffOrKey = { operatorId: string } | { setupKey: true };
 
 /** What an authenticator app needs: the secret to type, and the same thing as a URI for a QR code. */
 export interface TwoStepSetup {
@@ -65,9 +78,17 @@ export function twoStepRequired(): boolean {
  * session — could make themselves a second person and approve their own decisions: a country switched on,
  * somebody's account moved to another phone number. Every two-person rule in the console rested on a door one
  * person could open. Now one member of staff ASKS for an account and a different one APPROVES it. The first
- * password is made at the approval and shown to the one who approved: they vouched for the person and the address,
- * and they hand it over. The setup key makes an account only while fewer than two people can sign in — the first
- * two, and the second again when one of two has left.
+ * password was at first made at the approval and shown to the one who approved.
+ *
+ * NO FIRST PASSWORD, AND A SETUP KEY THAT CANNOT BECOME TWO PEOPLE (the user, the same day: "all of your 'not done'
+ * should be wired in"). A password shown to the colleague who approved is a password that colleague holds: they could
+ * sign in as the new person before handing it over. So there is none. The approval emails the new person a link, to
+ * their own address and to nobody else, to choose a password themselves — once, for 48 hours.
+ * And the setup key was still a way round every rule: it could take sign-ins away until one was left, and then add.
+ * Outside a sandbox it now makes an account alone only while NOBODY can sign in; when exactly one person can, that
+ * person asks and the setup key is the second; with two or more it adds nobody. And it takes no sign-in away without
+ * everybody on staff being told and a day passing, in which any one of them can stop it — the way back when a sign-in
+ * is truly lost, and no quiet way in for whoever finds the key.
  */
 @Injectable()
 export class OperatorAccountService {
@@ -98,41 +119,41 @@ export class OperatorAccountService {
   ) {}
 
   /**
-   * Make a staff account WITHOUT a second person — the setup key's way, and only for the first two. The password is
-   * generated here and returned exactly once, as `temporaryPassword`.
+   * Make a staff account ALONE, with the setup key. The password is generated here and returned exactly once, as
+   * `temporaryPassword`: whoever holds the setup key is setting the installation up, and this is their own way in.
    *
-   * Outside a sandbox it is refused once two people can sign in: from there a member of staff asks (`propose`) and
-   * a second approves. A sandbox is a laptop, where the seeder, the scripts and the tests make as many as they need
-   * and the key is anybody's anyway. Whichever it is, everybody already on staff is told.
+   * Outside a sandbox that is allowed only while NOBODY can sign in — the first account, and the first again if every
+   * sign-in is ever gone. With one member of staff, that member asks and the setup key approves (`approve`); with two
+   * or more the setup key adds nobody. A sandbox is a laptop, where the seeder, the scripts and the tests make as
+   * many as they need and the key is anybody's anyway. Whichever it is, everybody already on staff is told.
    */
   create(input: { email: string; name: string }, createdBy: string, now: number = Date.now()): OperatorAccountView & { temporaryPassword: string } {
     const asked = this.checked(input, now);
-    const staff = this.active();
-    if (!isSandbox() && staff.length >= 2) {
-      throw new GlosError('FORBIDDEN', 'Two members of staff add a new one: one asks for the account in the console, a second approves it. The setup key makes an account only while fewer than two people can sign in.');
+    if (!isSandbox() && this.signers().length >= 1) {
+      throw new GlosError('FORBIDDEN', 'The setup key makes a staff account alone only while nobody can sign in. With one member of staff, that member asks for the account and the setup key approves it; with two or more, a second member of staff approves it.');
     }
-    const made = this.make(asked, createdBy, now);
+    const staff = this.active();
+    const password = randomBytes(9).toString('base64url');
+    const account = this.make(asked, createdBy, now, undefined, password);
+    void this.mail?.send('staff-account-added', { address: account.email, name: account.name }, { name: account.name, email: account.email, addedBy: createdBy });
     this.tell(
       staff,
-      `A network staff account was made for ${asked.name} (${asked.email}) with the setup key, without a second member of staff.`,
-      'The setup key can do that only while fewer than two people can sign in. If nobody you know did this, the key is in the wrong hands: tell whoever runs the server at once.',
+      `A network staff account was made for ${asked.name} (${asked.email}) with the setup key, without a second person.`,
+      'The setup key can do that only while nobody can sign in. If nobody you know did this, the key is in the wrong hands: tell whoever runs the server at once.',
       now,
     );
-    return made;
+    return { ...viewOf(account, now), temporaryPassword: password };
   }
 
   /**
-   * ASK for a staff account. Nothing is made: no password exists and nobody can sign in with it until a second,
-   * different member of staff approves. Every other member of staff is told at once — it is work for one of them,
-   * and it is the alarm when nobody they know asked.
+   * ASK for a staff account. Nothing is made: nobody can sign in with it until a second, different person approves.
+   * Every other member of staff is told at once — it is work for one of them, and it is the alarm when nobody they
+   * know asked. Somebody who is the only one able to sign in may ask too: the setup key is their second.
    */
   propose(input: { email: string; name: string }, by: { operatorId: string }, now: number = Date.now()): StaffProposalView {
     const asker = this.byId(by.operatorId);
     const asked = this.checked(input, now);
-    const others = this.active().filter((a) => a.operatorId !== asker.operatorId);
-    if (!others.length) {
-      throw new GlosError('INVALID_STATE', 'Nobody else on staff can sign in, so nobody could approve this. The second staff account is made with the setup key.');
-    }
+    this.assertLinkCanTravel();
     const proposal: StaffProposal = {
       proposalId: `spr_${randomBytes(8).toString('hex')}`,
       ...asked,
@@ -143,32 +164,36 @@ export class OperatorAccountService {
     };
     this.proposals.set(proposal.proposalId, proposal);
     this.tell(
-      others,
+      this.signers().filter((a) => a.operatorId !== asker.operatorId),
       `${asker.name} asked for a network staff account for ${asked.name} (${asked.email}).`,
       `Nothing was made, and nobody can sign in with it until a second member of staff approves it: Overview, then Network staff. Approve it only if you know this person and this is their address. If ${asker.name} did not ask for it, decline it and take their sign-in away: it may be in somebody else's hands.`,
       now,
     );
-    return proposalView(proposal, asker.operatorId);
+    return this.proposalView(proposal, asker.operatorId);
   }
 
   /**
-   * The SECOND member of staff says yes — never the one who asked. The account is made now, and its first password
-   * is returned once to the one approving: they vouched for this person and this address, and they hand it over.
+   * The SECOND person says yes — never the one who asked. A member of staff; or the setup key, and then only for
+   * somebody who is the only one able to sign in.
+   *
+   * NO PASSWORD IS MADE. The account cannot sign in until its holder has chosen one, by a link emailed to the
+   * account's own address and to nobody else. Neither of the two who made the account ever holds a way into it.
    */
-  approve(proposalId: string, by: { operatorId: string }, now: number = Date.now()): OperatorAccountView & { temporaryPassword: string } {
+  async approve(proposalId: string, by: StaffOrKey, now: number = Date.now()): Promise<StaffInvited> {
     const proposal = this.pending(proposalId, now);
-    const approver = this.byId(by.operatorId);
-    if (proposal.askedById === approver.operatorId) throw new GlosError('CONFLICT', 'A second member of staff has to approve — not the one who asked');
-    const made = this.make({ email: proposal.email, name: proposal.name }, proposal.askedBy, now, approver.name);
-    Object.assign(proposal, { state: 'approved', decidedBy: approver.name, decidedAt: new Date(now).toISOString(), operatorId: made.operatorId });
+    const approvedBy = 'operatorId' in by ? this.secondFor(proposal, by.operatorId) : this.keyFor(proposal);
+    this.assertLinkCanTravel();
+    const account = this.make({ email: proposal.email, name: proposal.name }, proposal.askedBy, now, approvedBy);
+    Object.assign(proposal, { state: 'approved', decidedBy: approvedBy, decidedAt: new Date(now).toISOString(), operatorId: account.operatorId });
     this.proposals.set(proposal.proposalId, proposal);
+    const welcome = await this.welcome(account, now);
     this.tell(
       this.active().filter((a) => a.operatorId === proposal.askedById),
-      `${approver.name} approved the network staff account you asked for, for ${proposal.name} (${proposal.email}).`,
-      `${approver.name} was shown its first password, once, and hands it to ${proposal.name} in person. It is not in this email and was not shown to you.`,
+      `${approvedBy === SETUP_KEY ? 'The setup key' : approvedBy} approved the network staff account you asked for, for ${proposal.name} (${proposal.email}).`,
+      `${proposal.name} is emailed a link, at that address, to choose a password: nobody on staff is shown one. It works for ${STAFF_WELCOME_HOURS} hours. If it does not arrive, anybody on staff can send a new one: Overview, then Network staff.`,
       now,
     );
-    return made;
+    return { ...viewOf(account, now), ...welcome };
   }
 
   /**
@@ -193,9 +218,46 @@ export class OperatorAccountService {
     return { ok: true };
   }
 
-  /** The accounts asked for that still wait for a second member of staff, oldest first. `mine` marks the reader's own. */
+  /** The accounts asked for that still wait for a second person, oldest first. `mine` marks the reader's own. */
   waitingFor(readerId: string | undefined, now: number = Date.now()): StaffProposalView[] {
-    return this.waiting(now).map((p) => proposalView(p, readerId));
+    return this.waiting(now).map((p) => this.proposalView(p, readerId));
+  }
+
+  /* ----------------------------------------------- choosing your own first password -- */
+
+  /**
+   * WHOSE LINK IS THIS — what the console shows before a password is typed. A link that was used, has lapsed, was
+   * replaced by a newer one or was made up all get one answer, which says nothing about any account.
+   */
+  welcomeFor(token: string, now: number = Date.now()): { email: string; name: string } {
+    const account = this.invited(token, now);
+    return { email: account.email, name: account.name };
+  }
+
+  /**
+   * The new member of staff chooses their own password, proven by the link they were emailed. The link is spent by
+   * it — and only by it: a password that will not do is refused and the link still works.
+   */
+  choosePassword(token: string, password: string, now: number = Date.now()): { ok: true; email: string } {
+    const account = this.invited(token, now);
+    this.assertPassword(password, account);
+    account.salt = randomBytes(16).toString('hex');
+    account.hash = this.hash(password, account.salt);
+    account.passwordChangedAt = new Date(now).toISOString();
+    delete account.welcome;
+    this.accounts.set(account.email, account);
+    return { ok: true, email: account.email };
+  }
+
+  /**
+   * Send the link again — a new one, and the old one stops working. For an account whose holder has not chosen a
+   * password yet: the email did not arrive, or the two days passed. It goes to the account's own address, whoever asks.
+   */
+  async sendWelcome(operatorId: string, now: number = Date.now()): Promise<StaffInvited> {
+    const account = this.byId(operatorId);
+    if (account.hash) throw new GlosError('INVALID_STATE', `${account.name} has already chosen a password`);
+    this.assertLinkCanTravel();
+    return { ...viewOf(account, now), ...(await this.welcome(account, now)) };
   }
 
   /**
@@ -287,8 +349,7 @@ export class OperatorAccountService {
     const account = held && !held.revokedAt ? held : undefined;
     if (!account || !this.verify(current, account)) throw this.wrongPassword(key, account, current, Date.now());
     this.tries.forget(key);
-    if ((next ?? '').length < 10) throw new GlosError('VALIDATION_FAILED', 'A password for a console with operator rights needs at least 10 characters');
-    if (passwordProblem(next, [account.email, account.name], 10) === 'guessable') throw new GlosError('PASSWORD_GUESSABLE', 'That password is too easy to guess. Avoid a common word with a number on the end, your own name or email address, only digits, and runs like 12345678 or qwerty.');
+    this.assertPassword(next, account);
     if (current === next) throw new GlosError('VALIDATION_FAILED', 'Choose a password different from the current one');
     account.salt = randomBytes(16).toString('hex');
     account.hash = this.hash(next, account.salt);
@@ -330,11 +391,141 @@ export class OperatorAccountService {
     return viewOf(account);
   }
 
+  /**
+   * THE SETUP KEY TAKES A SIGN-IN AWAY — announced, and a day later.
+   *
+   * A member of staff takes a colleague's sign-in away at once: a sign-in in the wrong hands must not wait. The setup
+   * key is nobody in particular, and whoever holds it could otherwise empty the staff list and start again as two
+   * people. So outside a sandbox its first asking only ANNOUNCES it: everybody on staff is told, the one concerned
+   * included, and any one of them can stop it. A day later, not stopped, the key can finish. That is the way back when
+   * a sign-in is truly lost — somebody alone on staff who lost their phone — and it is no quiet way in.
+   */
+  removeByKey(operatorId: string, now: number = Date.now()): OperatorAccountView {
+    if (isSandbox()) return this.revoke(operatorId, SETUP_KEY, now);
+    const account = this.byId(operatorId);
+    const asked = account.removal && now - Date.parse(account.removal.askedAt) < REMOVAL_KEPT_MS ? account.removal : undefined;
+    if (!asked) {
+      account.removal = { askedAt: new Date(now).toISOString() };
+      this.accounts.set(account.email, account);
+      this.tell(
+        this.active(),
+        `The setup key asked to take away the staff sign-in of ${account.name} (${account.email}).`,
+        `Nothing happens for ${KEY_REMOVAL_WAIT_HOURS} hours. If nobody on staff asked for this, stop it — Overview, then Network staff, then “Stop it” beside that name — and tell whoever runs the server that the setup key is in the wrong hands. If nobody stops it, whoever holds the setup key can finish it after that.`,
+        now,
+      );
+      return viewOf(account, now);
+    }
+    const from = Date.parse(asked.askedAt) + REMOVAL_WAIT_MS;
+    if (now < from) {
+      throw new GlosError('INVALID_STATE', `Everybody on staff has been told. The setup key can finish this from ${formatWhen(new Date(from).toISOString())}, unless a member of staff stops it first`);
+    }
+    delete account.removal;
+    return this.revoke(operatorId, SETUP_KEY, now);
+  }
+
+  /** Any member of staff — the one concerned included — stops what the setup key asked for. Everybody else is told. */
+  stopRemoval(operatorId: string, by: { operatorId: string }, now: number = Date.now()): OperatorAccountView {
+    const who = this.byId(by.operatorId);
+    const account = this.byId(operatorId);
+    if (!account.removal) throw new GlosError('INVALID_STATE', `Nobody asked to take the sign-in of ${account.name} away`);
+    delete account.removal;
+    this.accounts.set(account.email, account);
+    this.tell(
+      this.active().filter((a) => a.operatorId !== who.operatorId),
+      `${who.name} stopped the setup key taking away the staff sign-in of ${account.name}.`,
+      'If the setup key is in the wrong hands, whoever runs the server replaces it (GLOS_CLIENT_SECRET). Until then it can ask again, and everybody is told again.',
+      now,
+    );
+    return viewOf(account, now);
+  }
+
   /* ------------------------------------------------------------------ internals -- */
 
-  /** Everybody who can sign in. */
+  /** Every account that has not been taken away — whether or not its holder has chosen a password yet. */
   private active(): OperatorAccount[] {
     return [...this.accounts.values()].filter((a) => !a.revokedAt);
+  }
+
+  /** Everybody who CAN SIGN IN: not taken away, and with a password. Who counts as "on staff" for every rule of two. */
+  private signers(): OperatorAccount[] {
+    return this.active().filter((a) => Boolean(a.hash));
+  }
+
+  /** Is this member of staff the only one able to sign in — so that there is no colleague to be their second? */
+  private aloneOnStaff(operatorId: string): boolean {
+    const signers = this.signers();
+    return signers.length === 1 && signers[0].operatorId === operatorId;
+  }
+
+  /** The second person, when it is a member of staff: anybody on staff but the one who asked. Their name, for the record. */
+  private secondFor(proposal: StaffProposal, operatorId: string): string {
+    const approver = this.byId(operatorId);
+    if (proposal.askedById === approver.operatorId) throw new GlosError('CONFLICT', 'A second member of staff has to approve — not the one who asked');
+    return approver.name;
+  }
+
+  /** The second person, when it is the SETUP KEY: only for somebody who is the only one able to sign in. */
+  private keyFor(proposal: StaffProposal): string {
+    if (!this.aloneOnStaff(proposal.askedById)) {
+      throw new GlosError('FORBIDDEN', 'A second member of staff approves this. The setup key approves only for somebody who is the only one able to sign in.');
+    }
+    return SETUP_KEY;
+  }
+
+  /**
+   * Outside a sandbox the link to choose a password goes by email and in no other way. With no email leaving the
+   * server, that is said before anything is asked for or made — not found out by a new colleague waiting for it.
+   */
+  private assertLinkCanTravel(): void {
+    if (isSandbox() || this.mail?.connection().sends) return;
+    throw new GlosError('INVALID_STATE', 'No email leaves this server yet, and a new member of staff is sent the link to choose their password by email and in no other way. Set email up first: Connections shows what is missing.');
+  }
+
+  /** A password for a console with operator rights: long, and not one that is easy to guess. */
+  private assertPassword(next: string, account: OperatorAccount): void {
+    if ((next ?? '').length < 10) throw new GlosError('VALIDATION_FAILED', 'A password for a console with operator rights needs at least 10 characters');
+    if (passwordProblem(next, [account.email, account.name], 10) === 'guessable') throw new GlosError('PASSWORD_GUESSABLE', 'That password is too easy to guess. Avoid a common word with a number on the end, your own name or email address, only digits, and runs like 12345678 or qwerty.');
+  }
+
+  /**
+   * A FRESH LINK to choose a password — from now the only one that works — emailed to the account's own address and to
+   * nobody else. Only its fingerprint is kept. In a sandbox, where no email leaves, the link is handed back as well.
+   */
+  private async welcome(account: OperatorAccount, now: number): Promise<{ sent: boolean; link?: string; passwordLinkUntil: string }> {
+    const token = randomBytes(24).toString('base64url');
+    const until = new Date(now + WELCOME_MS).toISOString();
+    account.welcome = { hash: fingerprint(token), sentAt: new Date(now).toISOString(), until };
+    this.accounts.set(account.email, account);
+    const link = `${appUrl('console')}#welcome=${token}`;
+    const addedBy = account.approvedBy ? `${account.createdBy} and ${account.approvedBy}` : account.createdBy;
+    const sent = (await this.mail?.send('staff-account-welcome', { address: account.email, name: account.name }, { name: account.name, email: account.email, addedBy, link, hours: STAFF_WELCOME_HOURS }, now)) ?? false;
+    return { sent, passwordLinkUntil: until, ...(isSandbox() ? { link } : {}) };
+  }
+
+  /**
+   * The account a link belongs to: not taken away, this very link, and inside its two days. (A link is forgotten the
+   * moment a password is chosen by it, so an account that has one has no link to be found by.)
+   */
+  private invited(token: string, now: number): OperatorAccount {
+    const print = fingerprint((token || '').trim());
+    const account = this.active().find((a) => a.welcome?.hash === print);
+    if (!account || Date.parse(account.welcome!.until) <= now) {
+      throw new GlosError('WINDOW_EXPIRED', 'This link has been used, or it has lapsed. Ask a colleague on staff to send you a new one.');
+    }
+    return account;
+  }
+
+  private proposalView(p: StaffProposal, readerId: string | undefined): StaffProposalView {
+    return {
+      proposalId: p.proposalId,
+      email: p.email,
+      name: p.name,
+      askedBy: p.askedBy,
+      askedAt: p.askedAt,
+      until: new Date(Date.parse(p.askedAt) + PROPOSAL_WAIT_MS).toISOString(),
+      mine: p.askedById === readerId,
+      forSetupKey: this.aloneOnStaff(p.askedById),
+    };
   }
 
   /** What was typed, tidied — and refused when that address has an account, or one already asked for and waiting. */
@@ -343,29 +534,39 @@ export class OperatorAccountService {
     if (!email.includes('@')) throw new GlosError('VALIDATION_FAILED', 'Network staff need a real email address to sign in with');
     const name = input.name?.trim();
     if (!name) throw new GlosError('VALIDATION_FAILED', 'Say who this is — every decision they make is recorded against this name');
-    if (this.accounts.has(email)) throw new GlosError('CONFLICT', `${email} already has a staff account`);
+    // A sign-in that was taken away leaves its address free: the person may come back, and somebody locked out gets a new one.
+    const held = this.accounts.get(email);
+    if (held && !held.revokedAt) throw new GlosError('CONFLICT', `${email} already has a staff account`);
     const waiting = this.waiting(now).find((p) => p.email === email);
-    if (waiting) throw new GlosError('CONFLICT', `${waiting.askedBy} already asked for a staff account for ${email}. A second member of staff approves or declines that one first`);
+    if (waiting) throw new GlosError('CONFLICT', `${waiting.askedBy} already asked for a staff account for ${email}. A second person approves or declines that one first`);
     return { email, name };
   }
 
-  /** THE ACT: an account that can sign in, and its first password, which exists nowhere but in what this returns. */
-  private make(asked: { email: string; name: string }, createdBy: string, now: number, approvedBy?: string): OperatorAccountView & { temporaryPassword: string } {
-    const password = randomBytes(9).toString('base64url');
-    const salt = randomBytes(16).toString('hex');
+  /**
+   * THE ACT: a staff account. With `password` it can sign in at once (the setup key's own first account); without, it
+   * cannot until its holder has chosen one by the link emailed to them.
+   */
+  private make(asked: { email: string; name: string }, createdBy: string, now: number, approvedBy?: string, password?: string): OperatorAccount {
+    // The record of a sign-in that was taken away is KEPT — its decisions still need its name — beside the address it
+    // gives up, never under it.
+    const old = this.accounts.get(asked.email);
+    if (old) {
+      this.accounts.delete(asked.email);
+      this.accounts.set(`${old.email}#${old.operatorId}`, old);
+    }
+    const salt = password ? randomBytes(16).toString('hex') : '';
     const account: OperatorAccount = {
       operatorId: `opr_${randomBytes(8).toString('hex')}`,
       email: asked.email,
       name: asked.name,
       salt,
-      hash: this.hash(password, salt),
+      hash: password ? this.hash(password, salt) : '',
       createdAt: new Date(now).toISOString(),
       createdBy,
       ...(approvedBy ? { approvedBy } : {}),
     };
     this.accounts.set(account.email, account);
-    void this.mail?.send('staff-account-added', { address: account.email, name: account.name }, { name: account.name, email: account.email, addedBy: approvedBy ? `${createdBy} and ${approvedBy}` : createdBy });
-    return { ...viewOf(account, now), temporaryPassword: password };
+    return account;
   }
 
   /** Asked for, not yet decided, and not waiting longer than a week. Oldest first. */
@@ -455,6 +656,8 @@ export class OperatorAccountService {
   }
 
   private verify(password: string, account: OperatorAccount): boolean {
+    // No password chosen yet: nothing signs in, whatever is typed.
+    if (!account.hash) return false;
     const candidate = Buffer.from(this.hash(password || '', account.salt), 'hex');
     const stored = Buffer.from(account.hash, 'hex');
     return candidate.length === stored.length && timingSafeEqual(candidate, stored);
@@ -477,19 +680,14 @@ function viewOf(a: OperatorAccount, now: number = Date.now()): OperatorAccountVi
     ...(a.passwordChangedAt ? { passwordChangedAt: a.passwordChangedAt } : {}),
     ...(a.revokedAt ? { revokedAt: a.revokedAt } : {}),
     ...(a.totpReset && now - Date.parse(a.totpReset.at) < RESET_WAIT_MS ? { twoStepResetAskedBy: a.totpReset.by } : {}),
+    ...(!a.hash && a.welcome ? { passwordLinkUntil: a.welcome.until } : {}),
+    ...(a.removal && now - Date.parse(a.removal.askedAt) < REMOVAL_KEPT_MS ? { removalFrom: new Date(Date.parse(a.removal.askedAt) + REMOVAL_WAIT_MS).toISOString() } : {}),
   };
 }
 
-function proposalView(p: StaffProposal, readerId: string | undefined): StaffProposalView {
-  return {
-    proposalId: p.proposalId,
-    email: p.email,
-    name: p.name,
-    askedBy: p.askedBy,
-    askedAt: p.askedAt,
-    until: new Date(Date.parse(p.askedAt) + PROPOSAL_WAIT_MS).toISOString(),
-    mine: p.askedById === readerId,
-  };
+/** What is kept of a link's token: enough to know it again, never enough to use it. */
+function fingerprint(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
 }
 
 /** The sign-out key of one staff account: operator tokens have no DID to be signed out by. */

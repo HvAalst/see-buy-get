@@ -52,6 +52,10 @@ function own(about: Array<string | undefined>): Set<string> {
   for (const raw of about) {
     const text = (raw ?? '').toLowerCase();
     if (!text) continue;
+    // The address itself, whole: "amina@example.com" typed as its own password is the first thing a guesser types,
+    // and for a while it was let through — only the part before the @ was looked at.
+    const all = text.replace(/[^a-z0-9]/g, '');
+    if (all.length >= 4) out.add(all);
     const whole = text.split('@')[0];
     const joined = whole.replace(/[^a-z0-9]/g, '');
     if (joined.length >= 4) out.add(joined);

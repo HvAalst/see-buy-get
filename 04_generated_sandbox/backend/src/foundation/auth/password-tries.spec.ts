@@ -202,6 +202,11 @@ describe('what may be chosen as a password', () => {
     guessable('Amina.Otieno1', ['amina.otieno@example.com']);
     guessable('dukabora123', ['orders@example.com', 'Duka Bora']);
     guessable('Bora@2026', ['Duka Bora']);
+    // The address itself, whole — with or without something on the end.
+    guessable('amina@example.com', ['amina@example.com']);
+    guessable('Amina@Example.com1', ['amina@example.com']);
+    guessable('amina.otieno@example.com!', ['amina.otieno@example.com']);
+    ok('amina@example.com', ['wanjiru@example.com']);
     // The same password is nobody else's problem, and a short scrap of a name is not a name.
     ok('amina2026', ['wanjiru@example.com']);
     ok('ali-and-the-goats', ['ali@example.com']);

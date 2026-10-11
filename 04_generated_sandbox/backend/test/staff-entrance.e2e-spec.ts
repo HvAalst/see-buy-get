@@ -112,19 +112,59 @@ describe('the staff entrance', () => {
       await approve(setupKey).expect(403);
       expect((await listed(brianToken)).items.some((a) => a.email === eve.email)).toBe(false);
 
+      // Approved: NO password is made. The one who approved is answered with whether the email went — and, on a
+      // laptop where none leaves, the link that was written.
       const made = (await approve(brianToken).expect(201)).body;
-      expect(made).toMatchObject({ email: eve.email, name: eve.name });
-      expect(made.temporaryPassword).toHaveLength(12);
-      const eveToken = await signIn({ email: eve.email, temporaryPassword: made.temporaryPassword });
+      expect(made).toMatchObject({ email: eve.email, name: eve.name, sent: true });
+      expect(made).not.toHaveProperty('temporaryPassword');
+      expect(JSON.stringify(made)).not.toMatch(/"password"|hash|salt/i);
+      const token = (made.link as string).split('#welcome=')[1];
+      expect(token).toMatch(/^[\w-]{32}$/);
+      const welcome = (body: object, path = '') => http().post(`/v1/sbg/operators/welcome${path}`).send(body);
+      // Nothing signs in until its holder has chosen a password — and the link's token is not one.
+      await http().post('/v1/sbg/operators/login').send({ email: eve.email, password: token }).expect(401);
+      expect((await welcome({ token }, '/check').expect(201)).body).toEqual({ email: eve.email, name: eve.name });
+      expect((await welcome({ token: 'A'.repeat(32) }, '/check').expect(400)).body.code).toBe('WINDOW_EXPIRED');
+      expect((await welcome({ token, password: 'too-short' }).expect(400)).body.code).toBe('VALIDATION_FAILED');
+      expect((await welcome({ token, password: eve.email }).expect(400)).body.code).toBe('PASSWORD_GUESSABLE');
+      expect((await welcome({ token, password: 'eve-chose-this-one' }).expect(201)).body).toEqual({ ok: true, email: eve.email });
+      const eveToken = await signIn({ email: eve.email, temporaryPassword: 'eve-chose-this-one' });
       expect((await http().get('/v1/sbg/operators/me').set(bearer(eveToken)).expect(200)).body.name).toBe(eve.name);
+      // Once: whoever finds the email afterwards opens nothing with it.
+      expect((await welcome({ token, password: 'somebody-else-chose-this' }).expect(400)).body.code).toBe('WINDOW_EXPIRED');
+      expect((await welcome({ token }, '/check').expect(400)).body.code).toBe('WINDOW_EXPIRED');
+      await http().post('/v1/sbg/operators/login').send({ email: eve.email, password: 'somebody-else-chose-this' }).expect(401);
+
       const after = await listed(brianToken);
       expect(after.items.some((a) => a.email === eve.email)).toBe(true);
       expect(after.waiting.some((p) => p.proposalId === asked.proposalId)).toBe(false);
-      // Decided once: a second yes makes no second account and shows no second password.
+      // Decided once: a second yes makes no second account and writes no second link.
       const twice = await approve(brianToken).expect(400);
       expect(twice.body.code).toBe('INVALID_STATE');
-      expect(twice.body).not.toHaveProperty('temporaryPassword');
+      expect(twice.body).not.toHaveProperty('link');
       expect((await listed(brianToken)).items.filter((a) => a.email === eve.email)).toHaveLength(1);
+    });
+
+    it('a new link is sent on asking, to the same address, and the one before it stops working', async () => {
+      const amina = await make('amina4');
+      const brian = await make('brian4');
+      const [aminaToken, brianToken] = [await signIn(amina), await signIn(brian)];
+      const hal = { email: `hal-${tag}@sbg.test`, name: `Hal ${tag}` };
+      const id = (await http().post('/v1/sbg/operators/proposals').set(bearer(aminaToken)).send(hal).expect(201)).body.proposalId;
+      const made = (await http().post(`/v1/sbg/operators/proposals/${id}/approve`).set(bearer(brianToken)).expect(201)).body;
+      const row = async () => ((await listed(aminaToken)).items as Array<{ email: string; passwordLinkUntil?: string }>).find((a) => a.email === hal.email);
+      expect((await row())?.passwordLinkUntil).toBe(made.passwordLinkUntil);
+
+      const again = (await http().post(`/v1/sbg/operators/${made.operatorId}/welcome-link`).set(bearer(aminaToken)).expect(201)).body;
+      expect(again).toMatchObject({ email: hal.email, sent: true });
+      const [first, second] = [made.link, again.link].map((l: string) => l.split('#welcome=')[1]);
+      expect(second).not.toBe(first);
+      expect((await http().post('/v1/sbg/operators/welcome').send({ token: first, password: 'hal-chose-this-one' }).expect(400)).body.code).toBe('WINDOW_EXPIRED');
+      await http().post('/v1/sbg/operators/welcome').send({ token: second, password: 'hal-chose-this-one' }).expect(201);
+      expect(await row()).not.toHaveProperty('passwordLinkUntil');
+      // Nothing to send to somebody who has chosen; and it is a door for staff only.
+      expect((await http().post(`/v1/sbg/operators/${made.operatorId}/welcome-link`).set(bearer(aminaToken)).expect(400)).body.code).toBe('INVALID_STATE');
+      await http().post(`/v1/sbg/operators/${made.operatorId}/welcome-link`).expect(401);
     });
 
     it('is declined with a reason, or taken back by the one who asked', async () => {
@@ -172,23 +212,51 @@ describe('the staff entrance', () => {
       await http().post('/v1/sbg/presence/LV').set(bearer(first)).send({ level: 'observed', note: 'test over' }).expect(201);
     });
 
-    it('outside a sandbox the setup key adds nobody once two people can sign in', async () => {
+    it('outside a sandbox the setup key adds nobody while anybody can sign in, and takes no sign-in away without a day’s notice a member of staff can stop', async () => {
+      const victim = await make('victim');
+      const leaver = (await make('leaver')).operatorId;
+      const witness = await signIn(await make('witness'));
       const before = (await listed(setupKey)).items.length;
       expect(before).toBeGreaterThanOrEqual(2);
       const gus = { email: `gus-${tag}@sbg.test`, name: `Gus ${tag}` };
       const env = process.env.GLOS_ENV;
       process.env.GLOS_ENV = 'production';
+      const remove = () => http().delete(`/v1/sbg/operators/${victim.operatorId}`).set(bearer(setupKey));
+      const row = async () => ((await listed(witness)).items as Array<{ operatorId?: string; email: string; removalFrom?: string }>).find((a) => a.email === victim.email);
       try {
         const refused = await http().post('/v1/sbg/operators').set(bearer(setupKey)).send(gus).expect(403);
-        expect(refused.body.detail ?? refused.body.message).toMatch(/Two members of staff add a new one/);
+        expect(refused.body.detail ?? refused.body.message).toMatch(/only while nobody can sign in/);
         expect(refused.body).not.toHaveProperty('temporaryPassword');
+
+        // Asked by the setup key: announced, and nothing is taken away.
+        const asked = (await remove().expect(200)).body;
+        expect(Date.parse(asked.removalFrom) - Date.now()).toBeGreaterThan(23.9 * 60 * 60 * 1000);
+        expect(asked).not.toHaveProperty('revokedAt');
+        expect((await row())?.removalFrom).toBe(asked.removalFrom);
+        // Asked again before the day is out: refused, and still nothing is taken away.
+        expect((await remove().expect(400)).body.code).toBe('INVALID_STATE');
+        expect(await row()).toBeDefined();
+        // Stopped by a member of staff — never by the setup key itself.
+        await http().post(`/v1/sbg/operators/${victim.operatorId}/removal/stop`).set(bearer(setupKey)).expect(403);
+        expect((await http().post(`/v1/sbg/operators/${victim.operatorId}/removal/stop`).set(bearer(witness)).expect(201)).body).not.toHaveProperty('removalFrom');
+        expect(await row()).not.toHaveProperty('removalFrom');
+        // A MEMBER OF STAFF still takes a colleague's sign-in away at once, here as anywhere: that is not the key's rule.
+        expect((await http().delete(`/v1/sbg/operators/${leaver}`).set(bearer(witness)).expect(200)).body.revokedAt).toBeDefined();
+        // And with no email leaving this server, a new account is not asked for at all: its link could not travel.
+        const noMail = await http().post('/v1/sbg/operators/proposals').set(bearer(witness)).send(gus).expect(400);
+        expect(noMail.body.detail ?? noMail.body.message).toMatch(/No email leaves this server yet/);
       } finally {
         if (env === undefined) delete process.env.GLOS_ENV;
         else process.env.GLOS_ENV = env;
       }
+      // One fewer than before: the colleague a member of staff took away. Nobody the setup key touched, and nobody added.
       const after = await listed(setupKey);
-      expect(after.items.length).toBe(before);
+      expect(after.items.length).toBe(before - 1);
+      expect(after.items.some((a) => a.email === victim.email)).toBe(true);
       expect(after.items.some((a) => a.email === gus.email)).toBe(false);
+      expect(after.waiting.some((p) => p.email === gus.email)).toBe(false);
+      // A member of staff still takes a colleague's sign-in away at once.
+      expect((await http().delete(`/v1/sbg/operators/${victim.operatorId}`).set(bearer(witness)).expect(200)).body.revokedAt).toBeDefined();
     });
   });
 
@@ -199,6 +267,9 @@ describe('the staff entrance', () => {
     try {
       await http().post('/v1/sbg/operators/login').send({ email: dana.email, password: dana.temporaryPassword }).expect(403);
       await http().post('/v1/auth/token').send({ role: 'operator' }).expect(403);
+      // The link a new member of staff is emailed opens nothing from anywhere else either.
+      await http().post('/v1/sbg/operators/welcome/check').send({ token: 'A'.repeat(32) }).expect(403);
+      await http().post('/v1/sbg/operators/welcome').send({ token: 'A'.repeat(32), password: 'a-long-chosen-password' }).expect(403);
       await http().get('/v1/sbg/operators').set('authorization', `Bearer ${token}`).expect(403);
       process.env.GLOS_STAFF_NETWORKS = '127.0.0.1, ::1';
       await http().get('/v1/sbg/operators').set('authorization', `Bearer ${token}`).expect(200);
