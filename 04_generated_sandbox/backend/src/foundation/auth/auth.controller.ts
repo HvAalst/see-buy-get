@@ -1,6 +1,6 @@
 import { Body, Controller, ForbiddenException, Post, Req } from '@nestjs/common';
 import { staffNetworkAllows } from './staff-network';
-import { AuthService, PUBLIC_MAX_TTL_SECONDS } from './auth.service';
+import { AuthService } from './auth.service';
 import { Public } from './public.decorator';
 import { AccessToken, ActorRole, GrantType, IntrospectionResult } from './auth.types';
 import { Tier } from '../data-firewall/data-firewall.types';
@@ -31,8 +31,9 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   /**
-   * Issue an access token (public — this is how machine callers obtain credentials).
-   * The caller-supplied TTL is capped hard here: on this grant the lifetime is attacker-controlled.
+   * Issue a token to whoever holds the client secret. OUTSIDE A SANDBOX that is one token only: the setup key's,
+   * which sets network staff up and does nothing else. On a laptop it is also a plain machine token, and a token as
+   * any participant — what the seeder and the tests run on.
    */
   @Public()
   @Post('token')
@@ -45,13 +46,9 @@ export class AuthController {
     if (body?.role && body?.did) {
       return this.authService.mintActorTokenFor(body.clientSecret, { role: body.role, did: body.did, tenant: body.tenant, tier: body.tier });
     }
-    // Plain machine token (browser bootstrap / server-to-server), capped hard.
-    this.authService.assertClientCredentials(body?.clientSecret);
-    return this.authService.issueToken({
-      sub: body?.sub,
-      type: body?.type,
-      ttlSeconds: Math.min(body?.ttlSeconds ?? PUBLIC_MAX_TTL_SECONDS, PUBLIC_MAX_TTL_SECONDS),
-    });
+    // A plain machine token — nobody in particular. On a laptop only: outside a sandbox the secret gets the setup key
+    // and no other token.
+    return this.authService.mintMachineToken(body?.clientSecret, { sub: body?.sub, type: body?.type, ttlSeconds: body?.ttlSeconds });
   }
 
   /** Introspect a token (public — RFC 7662 style). */

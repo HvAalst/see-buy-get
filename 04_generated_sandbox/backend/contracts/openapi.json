@@ -427,7 +427,7 @@
       "post": {
         "operationId": "Auth.token",
         "summary": "",
-        "description": "Issue an access token (public — this is how machine callers obtain credentials).\nThe caller-supplied TTL is capped hard here: on this grant the lifetime is attacker-controlled.",
+        "description": "Issue a token to whoever holds the client secret. OUTSIDE A SANDBOX that is one token only: the setup key's,\nwhich sets network staff up and does nothing else. On a laptop it is also a plain machine token, and a token as\nany participant — what the seeder and the tests run on.",
         "parameters": [],
         "responses": {
           "201": {

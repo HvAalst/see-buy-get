@@ -147,6 +147,21 @@ export class AuthService {
   }
 
   /**
+   * A PLAIN MACHINE TOKEN — no role, no identity, nobody — for whoever holds the client secret. ON A LAPTOP ONLY.
+   *
+   * It is "a valid token", and that is all a great many routes ask for: the ones no role was ever written on. So
+   * outside a sandbox the client secret is not exchanged for one. What it gets there is the setup key's token and
+   * no other — and that one sets network staff up and does nothing else (`setup-key.ts`). Said before the secret is
+   * looked at, so the answer does not say whether the secret was right.
+   */
+  mintMachineToken(clientSecret: string | undefined, input: { sub: string; type: IssueTokenInput['type']; ttlSeconds?: number }): AccessToken {
+    if (!isSandbox()) throw new ForbiddenException('Outside a sandbox the client secret gets the setup key’s token and no other');
+    this.assertClientCredentials(clientSecret);
+    // The caller-supplied lifetime is capped hard: on this grant it is whatever the caller asked for.
+    return this.issueToken({ sub: input.sub, type: input.type, ttlSeconds: Math.min(input.ttlSeconds ?? PUBLIC_MAX_TTL_SECONDS, PUBLIC_MAX_TTL_SECONDS) });
+  }
+
+  /**
    * A token AS a participant, for whoever holds the client secret — ON A LAPTOP ONLY. The seeder and the tests act
    * as the shops, drivers and fleets they made, without a password each.
    *

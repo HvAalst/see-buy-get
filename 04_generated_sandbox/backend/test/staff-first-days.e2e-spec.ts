@@ -146,7 +146,15 @@ describe('a new installation’s first days', () => {
           expect(said(refused)).toMatch(/Nobody is signed in as somebody else here/);
           expect(refused.body).not.toHaveProperty('access_token');
         }
+        // Nor a plain machine token: nobody at all, but "a valid token" — which is all a great many routes ask for.
+        for (const body of [{ sub: 'a-script', type: 'client_credentials' }, { sub: 'a-script', type: 'client_credentials', clientSecret: 'whatever-is-presented' }]) {
+          const refused = await http().post('/v1/auth/token').send(body).expect(403);
+          expect(said(refused)).toMatch(/the client secret gets the setup key’s token and no other/);
+          expect(refused.body).not.toHaveProperty('access_token');
+        }
       });
+      // On a laptop a script still gets one.
+      expect((await http().post('/v1/auth/token').send({ sub: 'a-script', type: 'client_credentials' }).expect(201)).body.access_token).toBeTruthy();
     });
 
     it('exactly four routes are marked for the setup key, and all four set network staff up', () => {

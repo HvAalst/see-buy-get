@@ -152,6 +152,11 @@ describe('the setup key, outside a sandbox', () => {
       // On a laptop: the right secret gets it, the wrong one does not.
       expect(auth.introspect(auth.mintActorTokenFor(SECRET, { role: 'agent', did: shop.id }).access_token)).toMatchObject({ active: true, role: 'agent', did: shop.id });
       expect(() => auth.mintActorTokenFor('not-the-secret', { role: 'agent', did: shop.id })).toThrow('Invalid client credentials');
+      // …and a plain machine token, whose lifetime is capped whatever is asked for.
+      const plain = auth.mintMachineToken(SECRET, { sub: 'a-script', type: 'client_credentials', ttlSeconds: 10 * 365 * 24 * 60 * 60 });
+      expect(auth.introspect(plain.access_token)).toMatchObject({ active: true, sub: 'a-script' });
+      expect(plain.expires_in).toBeLessThanOrEqual(60 * 60);
+      expect(() => auth.mintMachineToken('not-the-secret', { sub: 'a-script', type: 'client_credentials' })).toThrow('Invalid client credentials');
 
       production();
       const REFUSED = 'Nobody is signed in as somebody else here: a participant’s token comes only from that participant signing in';
@@ -159,6 +164,9 @@ describe('the setup key, outside a sandbox', () => {
       // The same answer for a wrong secret and for none: it does not say whether the secret was right.
       expect(() => auth.mintActorTokenFor('not-the-secret', { role: 'agent', did: shop.id })).toThrow(REFUSED);
       expect(() => auth.mintActorTokenFor(undefined, { role: 'agent', did: shop.id })).toThrow(REFUSED);
+      // Nor a plain machine token — nobody at all, but "a valid token", which is all many routes ask for.
+      const PLAIN = 'Outside a sandbox the client secret gets the setup key’s token and no other';
+      for (const presented of [SECRET, 'not-the-secret', undefined]) expect(() => auth.mintMachineToken(presented, { sub: 'a-script', type: 'client_credentials' })).toThrow(PLAIN);
       // The setup key itself is still handed out for the secret — and is nobody: no name, no account behind it.
       const setupKey = auth.introspect(auth.mintOperatorToken(SECRET).access_token);
       expect(setupKey).toMatchObject({ active: true, role: 'operator' });
