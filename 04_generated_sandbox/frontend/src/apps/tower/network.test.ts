@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   AGENT_OFFLINE_H,
-  LOW_BALANCE,
   agentState,
   checkedIn,
   bagsInTransit,
@@ -60,9 +59,14 @@ describe('what a shop’s row says', () => {
     expect(agentState(agent({ lastPingAt: undefined }), NOW).key).toBe('offline');
   });
 
-  it('warns on a float too thin to take the next parcel', () => {
-    expect(agentState(agent({ balance: LOW_BALANCE - 0.01 }), NOW).key).toBe('low');
-    expect(agentState(agent({ balance: LOW_BALANCE }), NOW).key).toBe('active');
+  it('warns on a float too thin to take the next parcel — at the price of a parcel at that shop’s own company', () => {
+    expect(agentState(agent({ balance: 159.99, parcelPrice: 160 }), NOW).key).toBe('low');
+    expect(agentState(agent({ balance: 160, parcelPrice: 160 }), NOW).key).toBe('active');
+    // The same float is thin in one country and not in another: there is no one figure to measure every shop by.
+    expect(agentState(agent({ balance: 4, parcelPrice: 1.6 }), NOW).key).toBe('active');
+    expect(agentState(agent({ balance: 4, parcelPrice: 5000 }), NOW).key).toBe('low');
+    // Not told the price, the console does not guess one.
+    expect(agentState(agent({ balance: 0.01 }), NOW).key).toBe('active');
   });
 
   it('never calls a shop LOW on a float it does not have', () => {

@@ -61,6 +61,8 @@ function harness(opts: HarnessOpts) {
     // No account is named for any parcel here: each side is found by the number it was addressed to.
     receiverOf: (p: { receiverPhoneHash?: string }) => ({ hash: p.receiverPhoneHash }),
     senderOf: (p: { senderPhoneHash?: string }) => ({ hash: p.senderPhoneHash }),
+    // What a day of holding costs is the parcel service's to say: the rate fixed on the parcel, in its shop's money.
+    holdingTermsOf: (p: { holdingFeePerDay?: number }) => ({ perDay: p.holdingFeePerDay ?? 0.1, currency: 'KES' }),
     // …and nobody's account was moved without its PIN: every code is shown to whoever it belongs to.
     codeHeldUntil: () => undefined,
   } as unknown as ParcelService;
@@ -104,6 +106,8 @@ function harness(opts: HarnessOpts) {
       return mdp ? { loc: mdp.location, label: id } : null;
     },
     offerNear: () => (opts.offerNear ? opts.offerNear() : null),
+    // What scanning a bag aboard pays this driver, and in what money — their own company's.
+    driverPayTerms: () => ({ bagLoadPay: 0.5, currency: 'KES' }),
     activeOffersFor: () => (opts.activeOffers ? opts.activeOffers() : []),
     mintDeclineToken: () => 'decline-token',
   } as unknown as DispatchService;
@@ -584,6 +588,8 @@ describe('notification deep links resolve to a page that exists', () => {
     // push-collapsing hint for the service worker and not a fact about the notification.
     const notice = notifications.inboxFor('did:person:rx').find((n) => n.data?.parcelId === 'PUD-1');
     expect(notice).toBeDefined();
+    // What holding costs is said as money: an amount AND what it is an amount of.
+    expect(notice!.body).toContain('Holding now costs KES 0.10 a day');
     // A path segment is the bug. Home, or home with a selection — nothing else is served.
     expect(notice!.link).toBe('/?parcel=PUD-1');
     expect(notice!.link === '/' || notice!.link!.startsWith('/?')).toBe(true);

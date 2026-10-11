@@ -44,7 +44,7 @@ import { MediaService } from './media.service';
 import { MarketPulseStore } from './market-pulse.store';
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, toteCapacityOf, VEHICLE_SPEC } from './fleet.config';
 import { Router, ROUTER } from './router';
-import { DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MARKET_MIN_DEMAND, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, taxOn, TOTE_LOAD_FEE, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH, MAX_CLAIM_AWARD } from './pudo.config';
+import { DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MARKET_MIN_DEMAND, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, taxOn, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH, MAX_CLAIM_AWARD } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
@@ -766,7 +766,7 @@ export class DispatchService {
     ctx: { detour: number; minutesAway: number; price?: PriceBreakdown; ratePerKm: number; time?: { collectMin: number; deliverMin?: number }; now: number },
   ): Offer {
     const { detour, minutesAway, price, now } = ctx;
-    const earn = this.expectedEarn(load, price, ctx.ratePerKm);
+    const earn = this.expectedEarn(driverDid, load, price, ctx.ratePerKm);
     const existing = [...this.offers.values()].find((o) => o.driverDid === driverDid && o.ref === load.ref && o.status === 'pending' && new Date(o.expiresAt).getTime() > now);
     if (existing) return existing;
     const offer: Offer = {
@@ -922,7 +922,7 @@ export class DispatchService {
         // through, which was defensible only while a bag paid a flat handling fee; since a bag started
         // earning for the road as well it has had a real number, and a driver who said "not below 200"
         // meant it about bags too. This is the same function the lock screen prints and the claim locks.
-        const earn = this.expectedEarn(load, price, profile.ratePerKm);
+        const earn = this.expectedEarn(driverDid, load, price, profile.ratePerKm);
         // An earn we cannot state cannot be promised to clear a floor, and the lock screen would fall back
         // to the bare handling fee — which is under any real floor anyway. Silence is the honest answer.
         if (earn == null || earn < floor) {
@@ -3389,10 +3389,16 @@ export class DispatchService {
    * and contents, so it has to be carried on the offer or the driver is consenting to a number nobody
    * showed them.
    */
-  private expectedEarn(load: Claimable, price: PriceBreakdown | undefined, ratePerKm: number): number | undefined {
+  private expectedEarn(driverDid: string, load: Claimable, price: PriceBreakdown | undefined, ratePerKm: number): number | undefined {
     if (load.kind === 'freight') return price?.total;
     const haul = this.haulFor(load.ref, ratePerKm);
-    return haul ? Math.round((TOTE_LOAD_FEE + haul.road) * 100) / 100 : undefined;
+    // The handling fee is THIS driver's company's (the scan that pays it asks the same function).
+    return haul ? Math.round((this.drivers.payTermsOf(driverDid).bagLoadPay + haul.road) * 100) / 100 : undefined;
+  }
+
+  /** What loading a bag pays this driver and in what money — for a surface that has to say a figure with no offer to read it off. */
+  driverPayTerms(driverDid: string): { bagLoadPay: number; currency: string } {
+    return this.drivers.payTermsOf(driverDid);
   }
 
   /**

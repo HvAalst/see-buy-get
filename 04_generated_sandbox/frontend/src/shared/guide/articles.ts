@@ -455,6 +455,25 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "console-amounts",
+    apps: [
+      "console"
+    ],
+    title: "What a parcel costs and what each step pays",
+    summary: "Each country’s company keeps its own list of amounts, in its own money: what a parcel costs a shop’s float, and what a shop, a hub or a driver is paid for each step. Network staff and that company’s own administrators set it.",
+    steps: [
+      "Setup, then Rates & tax. Choose the company. Below the table of rates: “What a parcel costs and what each step pays”.",
+      "Type a figure in the box of the amount you want to set, in that company’s currency. An empty box stands at the figure shown greyed in it, which is what every company starts from. Type 0 for a step the company pays nothing for.",
+      "Read the line under the boxes before you save: what one parcel taken in at a counter brings in, and what sorting, shelving and handing it over pay out. It turns red when the second is more than the first, which nearly always means a figure is in the wrong box.",
+      "Press Save. The change is listed under “What changed, and who changed it”, with your name and what the figure was before."
+    ],
+    notes: [
+      "A change counts for every step done from then on. It does not re-price what has happened: a parcel that is cancelled is refunded what its shop was charged, and a parcel already past its free collection time keeps the daily holding rate it started at.",
+      "The price of a parcel is also the float a shop needs to take the next one in, and a shop’s credit line is twenty parcels at that price. Change the price and both follow; there is no second figure to keep in step.",
+      "Whose list counts is the company of whoever does the step. A parcel shelved in another country is paid for at that country’s figure, in that country’s money."
+    ]
+  },
+  {
     id: "console-account-moves",
     apps: [
       "console"

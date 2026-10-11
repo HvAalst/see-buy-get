@@ -819,6 +819,13 @@ export class Parcel {
    */
   taxPct?: number;
   taxLabel?: string;
+  /**
+   * What the shop was CHARGED for this parcel at its counter (before tax), and what it was PAID for taking it in — by
+   * its own company's list on that day. Kept because both are taken back if the parcel is cancelled, and a list that
+   * changed in between must not make what comes back differ from what went.
+   */
+  intakeCharge?: number;
+  intakeLabour?: number;
   shipmentTax?: number;
   /**
    * The COST-OF-RISK slice of the platform fee on this shipment — money set aside against claims rather
@@ -935,6 +942,11 @@ export class Parcel {
   unclaimedAt?: string;
   /** Holding already settled, so a part-paid parcel is not billed twice at the counter. */
   holdingSettled?: number;
+  /**
+   * What a day of holding costs, fixed when the free time ended (the list of the company whose shop holds it, that
+   * day). The days already owed are not re-priced by a later change to that list. Cleared with `unclaimedAt`.
+   */
+  holdingFeePerDay?: number;
   /** Extensions taken. The first is free (FREE_EXTENSIONS); counted so the second can be priced. */
   extensionsUsed?: number;
   /** What the receiver said when told the window had closed. Absent means silence — which is the

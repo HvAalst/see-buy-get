@@ -9,7 +9,8 @@ import { OperationalStore } from '../../foundation/data-firewall/operational-sto
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { WalletService } from '../m1/wallet/wallet.service';
-import { DEFAULT_BAG_BAYS, DEFAULT_PUDO_PRICE_PER_PARCEL, LOCK_THRESHOLD, MAX_BAG_BAYS, MIN_ANDROID_VERSION, MIN_OPEN_HOURS, MIN_SLOTS, NETWORK_JURISDICTION, TRADE_CREDIT_LIMIT } from './pudo.config';
+import { DEFAULT_BAG_BAYS, DEFAULT_PUDO_PRICE_PER_PARCEL, MAX_BAG_BAYS, MIN_ANDROID_VERSION, MIN_OPEN_HOURS, MIN_SLOTS, NETWORK_JURISDICTION } from './pudo.config';
+import { creditLimitOf, lockThresholdOf, type Amounts } from './amounts';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
 import { BooksService } from '../../foundation/books/books.service';
@@ -123,6 +124,15 @@ export class AgentService {
    */
   entityIdOrNone(agent: Agent): string | undefined {
     return agent.entityId ?? this.entities.forJurisdiction(this.countryOf(agent))?.entityId;
+  }
+
+  /**
+   * What this shop is charged for a parcel and paid for each step, in its company's own money (amounts.ts). A shop
+   * that stands where no company of ours does is answered with what every company starts from: it holds no float
+   * and is paid by whoever sold the shipment, so nothing here is ever measured against those figures.
+   */
+  amountsOf(did: string): Amounts & { currency?: string } {
+    return this.entities.amountsFor(this.entityIdOrNone(this.require(did)));
   }
 
   entityIdOf(agent: Agent): string {
@@ -366,11 +376,15 @@ export class AgentService {
       }
       return agent;
     }
-    const balance = float + TRADE_CREDIT_LIMIT;
-    if ((agent.status === 'APPROVED_UNFUNDED' || agent.status === 'LOCKED') && balance >= LOCK_THRESHOLD) {
+    // Both follow the price of a parcel at THIS shop's company: the credit line is a number of parcels, and the float
+    // that opens the counter is the price of one.
+    const list = this.amountsOf(did);
+    const balance = float + creditLimitOf(list);
+    const threshold = lockThresholdOf(list);
+    if ((agent.status === 'APPROVED_UNFUNDED' || agent.status === 'LOCKED') && balance >= threshold) {
       this.transition(agent, 'ACTIVE');
       void this.events.publish(GlosEvent.Pudo.AgentActivated, { did, agentId: agent.agentId }, { source: 'pudo' }).catch(() => undefined);
-    } else if (agent.status === 'ACTIVE' && balance < LOCK_THRESHOLD) {
+    } else if (agent.status === 'ACTIVE' && balance < threshold) {
       this.transition(agent, 'LOCKED');
       void this.events.publish(GlosEvent.Pudo.AgentLocked, { did, agentId: agent.agentId, balance }, { source: 'pudo' }).catch(() => undefined);
     }

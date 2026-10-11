@@ -1025,4 +1025,69 @@ describe('GLOS backend (e2e)', () => {
     expect(badBody.body.code).toBe('VALIDATION_FAILED');
     expect(Array.isArray(badBody.body.params.violations)).toBe(true);
   });
+
+  /**
+   * WHAT A PARCEL COSTS AND WHAT EACH STEP PAYS is a list each company keeps, set where its rates are set
+   * (modules/pudo/amounts.ts). The services are held by their own specs; this is the door and what comes out of it:
+   * who may set a figure, what is refused, and that a shop's counter and the console's shop list then read it.
+   *
+   * PUT BACK AT THE END, whatever happens in between: one application is shared by every test in this file.
+   */
+  it('a company’s list of amounts: set by staff, refused to a shop, read back with its terms and felt at a counter', async () => {
+    const http = app.getHttpServer();
+    const staff = { Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201)).body.access_token}` };
+    const KE = '/v1/sbg/entities/sbg-ke';
+    type Row = { key: string; amount: number; own: boolean; startsAt: number };
+    const rowOf = async (key: string) => ((await request(http).get(`${KE}/pricing`).set(staff).expect(200)).body.amounts as Row[]).find((r) => r.key === key)!;
+
+    const u = Math.random().toString(16).slice(2, 10);
+    const hours = { open: '08:00', close: '18:00' };
+    const reg = await request(http).post('/v1/sbg/agents').set(staff).send({ shopName: 'Amounts Shop', zone: 'NorthTown', location: { lat: -1.2, lng: 36.8 }, landmark: 'x', shelf: { rows: 3, cols: 3 }, openingHours: { mon: hours, tue: hours, wed: hours, thu: hours, fri: hours, sat: hours, sun: null }, fullName: 'Amounts owner', nationalId: `ID-${u}`, mobile: `+254${u}`, deviceImei: `IMEI-${u}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true } }).expect(201);
+    const did = reg.body.did as string;
+    await sendShopPapers(did);
+    await request(http).post(`/v1/sbg/agents/${did}/kyc-decision`).set(staff).send({ approve: true }).expect(201);
+    await fund(`/v1/sbg/agents/${did}/top-up`, 20, staff);
+    const shop = { Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ role: 'agent', did }).expect(201)).body.access_token}` };
+    const gate = async () => (await request(http).get(`/v1/sbg/agents/${did}/can-transact`).set(shop).expect(200)).body;
+
+    // Before anybody sets anything: today's figures, in the company's money.
+    expect(await rowOf('wholesale')).toEqual({ key: 'wholesale', amount: 1.6, own: false, startsAt: 1.6 });
+    expect(await gate()).toMatchObject({ canTransact: true, threshold: 1.6, currency: 'KES', credit: { limit: 32 } });
+
+    // Nobody signed in, and a shop, do not set a company's prices.
+    await request(http).post(`${KE}/amounts`).send({ wholesale: 160 }).expect(401);
+    await request(http).post(`${KE}/amounts`).set(shop).send({ wholesale: 160 }).expect(403);
+    // What cannot be meant is refused, and says why.
+    const free = await request(http).post(`${KE}/amounts`).set(staff).send({ wholesale: 0 });
+    expect([free.status, free.body.code, free.body.detail]).toEqual([400, 'INVALID_INPUT', expect.stringContaining('A parcel has to cost something')]);
+    await request(http).post(`${KE}/amounts`).set(staff).send({ labourFee: -1 }).expect(400);
+    await request(http).post(`${KE}/amounts`).set(staff).send({ labourFee: 'forty' }).expect(400);
+    expect(await rowOf('wholesale')).toMatchObject({ amount: 1.6, own: false });
+
+    try {
+      await request(http).post(`${KE}/amounts`).set(staff).send({ wholesale: 160, handoverFee: 0 }).expect(201);
+      expect(await rowOf('wholesale')).toEqual({ key: 'wholesale', amount: 160, own: true, startsAt: 1.6 });
+      expect(await rowOf('handoverFee')).toEqual({ key: 'handoverFee', amount: 0, own: true, startsAt: 0.5 });
+      expect(await rowOf('labourFee')).toMatchObject({ amount: 0.4, own: false });
+
+      // The shop's counter: the float it needs is the price of one parcel; its credit line, twenty of them.
+      expect(await gate()).toMatchObject({ canTransact: true, threshold: 160, currency: 'KES', credit: { limit: 3200, used: 0 } });
+      // The console's list of shops is told the price beside each float, so "too thin" is measured against it.
+      const rows = (await request(http).get('/v1/sbg/agents').set(staff).expect(200)).body as Array<{ did: string; parcelPrice?: number; currency?: string }>;
+      expect(rows.find((r) => r.did === did)).toMatchObject({ parcelPrice: 160, currency: 'KES' });
+      // …and nobody who is not staff: the shop's own card of another shop carries no such thing.
+      const cards = (await request(http).get('/v1/sbg/agents').set(shop).expect(200)).body as Array<Record<string, unknown>>;
+      expect(cards.every((c) => !('parcelPrice' in c) && !('balance' in c))).toBe(true);
+
+      // Written down, with what it was before.
+      const changes = (await request(http).get(`${KE}/changes`).set(staff).expect(200)).body.items as Array<{ what: string; from: string; to: string; by: string }>;
+      expect(changes[0]).toMatchObject({ what: 'amounts', from: 'parcel price 1.6, hand-over pay 0.5 (KES)', to: 'parcel price 160, hand-over pay 0 (KES)' });
+      expect(changes[0].by).toBeTruthy();
+    } finally {
+      await request(http).post(`${KE}/amounts`).set(staff).send({ wholesale: null, handoverFee: null }).expect(201);
+    }
+    expect(await rowOf('wholesale')).toEqual({ key: 'wholesale', amount: 1.6, own: false, startsAt: 1.6 });
+    expect(await rowOf('handoverFee')).toMatchObject({ amount: 0.5, own: false });
+    expect(await gate()).toMatchObject({ threshold: 1.6, credit: { limit: 32 } });
+  });
 });

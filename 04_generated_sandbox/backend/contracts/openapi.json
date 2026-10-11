@@ -7595,6 +7595,45 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/amounts": {
+      "post": {
+        "operationId": "Sbg.setEntityAmounts",
+        "summary": "",
+        "description": "Set what a parcel costs and what each step pays at this company, in its own money.\n\nThese were constants in the code. Each company now keeps its own figure where it has set one and stands at what\nevery company starts from where it has not, so nothing moves until somebody decides it should.\n\nIt reprices nothing that has happened: a parcel keeps what its shop was charged and paid at the counter, and a\nparcel already past its free time keeps the daily rate it started at. A step done after the change is paid at\nthe new figure.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAmountsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Entity"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/tax": {
       "post": {
         "operationId": "Sbg.setEntityTax",
@@ -26613,6 +26652,10 @@
               }
             ]
           },
+          "amounts": {
+            "type": "object",
+            "description": "What a parcel costs and what each step pays, where this company has set its own figure. A key that is absent\nstands at what every company starts from. Read it through `EntityService.amountsFor()`, never off the record."
+          },
           "taxByLane": {
             "type": "object",
             "description": "Per-lane tax overrides, keyed by the caller's vocabulary exactly as `ratesByLane` is.\n\nHere for a reason narrower than it looks: tax rates vary by what is SUPPLIED, and lane is the only\nsupply-type axis this system has. A jurisdiction that zero-rates one kind of transport and standard-\nrates another can express that; everyone else sets one rate and never touches this."
@@ -29778,6 +29821,42 @@
           "reason"
         ]
       },
+      "CompanyAmount": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "wholesale",
+              "labourFee",
+              "handoverFee",
+              "shelvingFee",
+              "releaseFee",
+              "toteLoadFee",
+              "mdpSortFee",
+              "holdingFeePerDay"
+            ]
+          },
+          "amount": {
+            "type": "number",
+            "description": "The figure in force, in the company's own currency."
+          },
+          "own": {
+            "type": "boolean",
+            "description": "Whether this company set it. False: it is the figure every company starts from."
+          },
+          "startsAt": {
+            "type": "number",
+            "description": "What every company starts from."
+          }
+        },
+        "required": [
+          "key",
+          "amount",
+          "own",
+          "startsAt"
+        ]
+      },
       "ResolvedRates": {
         "type": "object",
         "properties": {
@@ -29928,6 +30007,7 @@
               "cover",
               "fee",
               "topUpFee",
+              "amounts",
               "carrierPapers",
               "created",
               "record",
@@ -30034,6 +30114,13 @@
               }
             ]
           },
+          "amounts": {
+            "description": "What a parcel costs and what each step pays here, every line of it, in this company's currency. Company-wide\nlike the top-up fee: a wage for shelving a parcel does not vary by lane of work.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompanyAmount"
+            }
+          },
           "lanes": {
             "description": "The sister's default first, then one row per lane.",
             "type": "array",
@@ -30076,6 +30163,7 @@
         },
         "required": [
           "kind",
+          "amounts",
           "lanes",
           "recentChanges",
           "entityId",
@@ -30489,6 +30577,59 @@
           "amount": {
             "type": "number",
             "description": "The flat charge below that threshold. The service refuses one worth a fifth of the threshold or more."
+          }
+        }
+      },
+      "EntityAmountsDto": {
+        "type": "object",
+        "properties": {
+          "wholesale": {
+            "type": "number",
+            "nullable": true,
+            "description": "What a parcel taken in at the counter costs the shop's float. Also the float a shop needs to take one in.",
+            "minimum": 0
+          },
+          "labourFee": {
+            "type": "number",
+            "nullable": true,
+            "description": "Paid to a shop for taking in a parcel that was paid for already.",
+            "minimum": 0
+          },
+          "handoverFee": {
+            "type": "number",
+            "nullable": true,
+            "description": "Paid to a shop for handing a batch to the driver.",
+            "minimum": 0
+          },
+          "shelvingFee": {
+            "type": "number",
+            "nullable": true,
+            "description": "Paid to the receiving shop when the parcel lands on its shelf…",
+            "minimum": 0
+          },
+          "releaseFee": {
+            "type": "number",
+            "nullable": true,
+            "description": "…and when it hands it over.",
+            "minimum": 0
+          },
+          "toteLoadFee": {
+            "type": "number",
+            "nullable": true,
+            "description": "Paid to a driver for scanning a bag aboard.",
+            "minimum": 0
+          },
+          "mdpSortFee": {
+            "type": "number",
+            "nullable": true,
+            "description": "Paid to a hub for each parcel it sorts.",
+            "minimum": 0
+          },
+          "holdingFeePerDay": {
+            "type": "number",
+            "nullable": true,
+            "description": "What a day of holding a parcel costs once its free time has ended.",
+            "minimum": 0
           }
         }
       },
@@ -31456,6 +31597,13 @@
           "taxLabel": {
             "type": "string"
           },
+          "intakeCharge": {
+            "type": "number",
+            "description": "What the shop was CHARGED for this parcel at its counter (before tax), and what it was PAID for taking it in — by\nits own company's list on that day. Kept because both are taken back if the parcel is cancelled, and a list that\nchanged in between must not make what comes back differ from what went."
+          },
+          "intakeLabour": {
+            "type": "number"
+          },
           "shipmentTax": {
             "type": "number"
           },
@@ -31571,6 +31719,10 @@
           "holdingSettled": {
             "type": "number",
             "description": "Holding already settled, so a part-paid parcel is not billed twice at the counter."
+          },
+          "holdingFeePerDay": {
+            "type": "number",
+            "description": "What a day of holding costs, fixed when the free time ended (the list of the company whose shop holds it, that\nday). The days already owed are not re-priced by a later change to that list. Cleared with `unclaimedAt`."
           },
           "extensionsUsed": {
             "type": "number",

@@ -1294,6 +1294,32 @@ export class EntityTaxDto {
 }
 
 /**
+ * Set figures on a company's list of amounts: what a parcel costs and what each step pays, in its own currency
+ * (modules/pudo/amounts.ts).
+ *
+ * The same three meanings as its neighbour above: a key left out is left alone, a number sets it, `null` puts it
+ * back to what every company starts from. No lane: a wage for shelving a parcel is not a lane of work.
+ */
+export class EntityAmountsDto {
+  /** What a parcel taken in at the counter costs the shop's float. Also the float a shop needs to take one in. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @Min(0) wholesale?: number | null;
+  /** Paid to a shop for taking in a parcel that was paid for already. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @Min(0) labourFee?: number | null;
+  /** Paid to a shop for handing a batch to the driver. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @Min(0) handoverFee?: number | null;
+  /** Paid to the receiving shop when the parcel lands on its shelf… */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @Min(0) shelvingFee?: number | null;
+  /** …and when it hands it over. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @Min(0) releaseFee?: number | null;
+  /** Paid to a driver for scanning a bag aboard. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @Min(0) toteLoadFee?: number | null;
+  /** Paid to a hub for each parcel it sorts. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @Min(0) mdpSortFee?: number | null;
+  /** What a day of holding a parcel costs once its free time has ended. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @Min(0) holdingFeePerDay?: number | null;
+}
+
+/**
  * Set what a sister charges a shop or a store to put money in — flat below a threshold, free above it.
  *
  * NOT the three-way optionality of its neighbours, and the difference is the point. A fee is one decision

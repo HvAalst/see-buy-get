@@ -119,7 +119,7 @@ interface RunClaimAnswered { departureId: string; bookingId: string; shipperDid:
 interface FleetPaperChecked { did: string; kind: 'operator_licence' | 'carrier_insurance'; accepted: boolean; expiresAt?: string; reason?: string }
 import { UnclaimedService } from './unclaimed.service';
 import { VendorService } from './vendor.service';
-import { HOLDING_FEE_PER_DAY, MARKET_SUPPLY_STALE_MIN, NETWORK_CURRENCY, NUDGE_COOLDOWN_MIN, NUDGE_MIN_MOVE_KM, TOTE_LOAD_FEE, UNCOLLECTED_REMINDER_H, UNCOLLECTED_SWEEP_MS } from './pudo.config';
+import { MARKET_SUPPLY_STALE_MIN, NUDGE_COOLDOWN_MIN, NUDGE_MIN_MOVE_KM, UNCOLLECTED_REMINDER_H, UNCOLLECTED_SWEEP_MS } from './pudo.config';
 
 /** How often to look for somebody who started joining and stopped. */
 const SIGNUP_SWEEP_MS = 60 * 60 * 1000;
@@ -1152,11 +1152,13 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       const parcel = this.parcels.get(parcelId);
       const where = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'your pickup point';
       const person = accountFor(this.parcels.receiverOf(parcel), this.persons);
+      // The rate fixed when the free time ended, in the money of the company whose shop holds it.
+      const holding = this.parcels.holdingTermsOf(parcel);
       if (person) {
         await this.notifications.notify(person.personDid, {
           kind: 'parcel_ready',
           title: 'Time to collect your parcel',
-          body: `It is still at ${where} and still yours. Holding now costs ${HOLDING_FEE_PER_DAY} a day — tell us what you want to do.`,
+          body: `It is still at ${where} and still yours. Holding now costs ${holding.currency} ${holding.perDay.toFixed(2)} a day — tell us what you want to do.`,
           // A QUERY, not a path. Each app is a single index.html, so '/parcel/PUD-1' resolves against
           // the SW scope to /send/parcel/PUD-1 — which does not exist, and the one notification that
           // asks somebody to make a decision would open a 404. Same shape as the driver's offer link.
@@ -1308,7 +1310,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       // which was true while that was all a bag paid — and became an understatement the moment a bag
       // started earning for the road as well. A lock screen is where somebody agrees to a job; the number
       // on it has to be the number they get.
-      const earn = `${NETWORK_CURRENCY} ${(offer.earn ?? offer.price?.total ?? TOTE_LOAD_FEE).toFixed(2)}`;
+      // In the money of the company that settles this driver; and where the offer carries no figure at all, the
+      // one thing certain: what scanning a bag aboard pays there.
+      const terms = this.dispatch.driverPayTerms(driverDid);
+      const earn = `${terms.currency} ${(offer.earn ?? offer.price?.total ?? terms.bagLoadPay).toFixed(2)}`;
       const what = offer.kind === 'tote' ? 'Bag' : 'Load';
       // What it costs, in the unit a driver spends. Kilometres are an abstraction at the wheel — and a
       // driver carrying passengers cannot justify eight kilometres to a bus, while "six minutes" is a

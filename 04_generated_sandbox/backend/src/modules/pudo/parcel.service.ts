@@ -13,7 +13,8 @@ import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
 import { FleetService } from './fleet.service';
-import { DEFAULT_TAX_LABEL, HANDOVER_FEE, MAX_CLAIM_AWARD, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, OTP_MAX_ATTEMPTS, RELEASE_FEE, SHELVING_FEE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, UNCOLLECTED_H, VOID_WINDOW_MS, WHOLESALE, classifySize, coverFor, holdingFeeFor, taxOn, withPlatformFee } from './pudo.config';
+import type { Amounts } from './amounts';
+import { DEFAULT_TAX_LABEL, MAX_CLAIM_AWARD, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, OTP_MAX_ATTEMPTS, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, UNCOLLECTED_H, VOID_WINDOW_MS, WHOLESALE, classifySize, coverFor, holdingFeeFor, taxOn, withPlatformFee } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import type { ResolvedTax } from '../../foundation/entity/entity.types';
 import { Birthplace, ConsumerParcelView, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, isCollectable } from './pudo.types';
@@ -492,8 +493,8 @@ export function operationalParcelView(p: Parcel) {
      * charge somebody and the screen that told them the number must not be able to disagree. Absent when
      * nothing is owed, so a list filtered on it cannot quietly include every parcel in the network.
      */
-    ...(p.unclaimedAt && holdingFeeFor({ unclaimedAt: p.unclaimedAt, shipmentCost: p.shipmentCost, settled: p.holdingSettled }) > 0
-      ? { holdingOwed: holdingFeeFor({ unclaimedAt: p.unclaimedAt, shipmentCost: p.shipmentCost, settled: p.holdingSettled }) }
+    ...(p.unclaimedAt && holdingFeeFor({ unclaimedAt: p.unclaimedAt, shipmentCost: p.shipmentCost, settled: p.holdingSettled, perDay: p.holdingFeePerDay }) > 0
+      ? { holdingOwed: holdingFeeFor({ unclaimedAt: p.unclaimedAt, shipmentCost: p.shipmentCost, settled: p.holdingSettled, perDay: p.holdingFeePerDay }) }
       : {}),
   };
 }
@@ -737,6 +738,33 @@ export class ParcelService implements OnApplicationBootstrap {
     }
   }
 
+  /**
+   * What the company that contracts this shop charges and pays, in its own money (amounts.ts). Where no company of
+   * ours contracts it, the work is bought by whoever SOLD the shipment, so it is that company's list — and what every
+   * company starts from when there is neither.
+   */
+  private amountsAt(agentDid: string, sellerEntityId?: string): Amounts & { currency?: string } {
+    let own: string | undefined;
+    try {
+      own = this.agents.entityIdOrNone(this.agents.get(agentDid));
+    } catch {
+      own = undefined;
+    }
+    return this.entities.amountsFor(own ?? sellerEntityId);
+  }
+
+  /** What a day of holding costs at the shop that holds this parcel TODAY, and in what money. */
+  holdingRateNow(parcel: Parcel): { perDay: number; currency: string } {
+    const list = parcel.destAgentDid ? this.amountsAt(parcel.destAgentDid, parcel.sellerEntityId) : this.entities.amountsFor(parcel.sellerEntityId ?? parcel.collectingEntityId);
+    return { perDay: list.holdingFeePerDay, currency: list.currency ?? NETWORK_CURRENCY };
+  }
+
+  /** What a day of holding THIS parcel costs: the rate fixed when its free time ended, else today's. */
+  holdingTermsOf(parcel: Parcel): { perDay: number; currency: string } {
+    const now = this.holdingRateNow(parcel);
+    return { perDay: parcel.holdingFeePerDay ?? now.perDay, currency: now.currency };
+  }
+
   /** DT — mint the shipment's stable GLOS identity (the digital twin's DID) at parcel creation. Anchored +
    *  resolvable; the reusable sticker parcelId is the human handle, this is the shipment's global id. */
   private mintShipmentDid(parcelId: string, direction: ParcelDirection): string {
@@ -914,8 +942,8 @@ export class ParcelService implements OnApplicationBootstrap {
             // It was sent to a number this account has moved off, and reached it because the number is still its own.
             // The sender does not know: the receiver is the one who can tell them.
             ...(Boolean(p.receiverPhoneHash) && p.receiverPhoneHash !== who.phoneHash && !TERMINAL_STATUSES.has(p.status) ? { sentToOldNumber: true } : {}),
-            ...(p.unclaimedAt && holdingFeeFor({ unclaimedAt: p.unclaimedAt, shipmentCost: p.shipmentCost, settled: p.holdingSettled }) > 0
-              ? { holdingOwed: holdingFeeFor({ unclaimedAt: p.unclaimedAt, shipmentCost: p.shipmentCost, settled: p.holdingSettled }) }
+            ...(p.unclaimedAt && holdingFeeFor({ unclaimedAt: p.unclaimedAt, shipmentCost: p.shipmentCost, settled: p.holdingSettled, perDay: p.holdingFeePerDay }) > 0
+              ? { holdingOwed: holdingFeeFor({ unclaimedAt: p.unclaimedAt, shipmentCost: p.shipmentCost, settled: p.holdingSettled, perDay: p.holdingFeePerDay }) }
               : {}),
           }
         : {}),
@@ -1167,7 +1195,10 @@ export class ParcelService implements OnApplicationBootstrap {
     if (promise === 'ours') {
       if (mode === 'cash') {
         const rule = this.wholesaleTax(input.agentDid);
-        const bill = taxOn(WHOLESALE, rule.ratePct);
+        // What a parcel costs at this shop's company today — kept on the parcel, like the tax rate beside it.
+        const price = this.amountsAt(input.agentDid).wholesale;
+        parcel.intakeCharge = price;
+        const bill = taxOn(price, rule.ratePct);
         // Stamped, so the void refund reverses the rate this parcel was CHARGED at rather than whatever
         // the sister's rate happens to be at the moment somebody voids it. `shipmentTax` deliberately
         // stays unset: this parcel has no `shipmentCost`, and a tax stamped on a cost that does not exist
@@ -1176,7 +1207,9 @@ export class ParcelService implements OnApplicationBootstrap {
         parcel.taxLabel = rule.label;
         this.gate.chargeShipping(input.agentDid, bill.gross, parcel.parcelId, bill.tax);
       } else {
-        this.gate.payLabour(input.agentDid, LABOUR_FEE, parcel.parcelId, 'parcel', parcel.sellerEntityId);
+        const pay = this.amountsAt(input.agentDid, parcel.sellerEntityId).labourFee;
+        parcel.intakeLabour = pay;
+        this.gate.payLabour(input.agentDid, pay, parcel.parcelId, 'parcel', parcel.sellerEntityId);
       }
     }
 
@@ -1317,7 +1350,7 @@ export class ParcelService implements OnApplicationBootstrap {
     }
 
     // Pay the agent the handover fee once for the batch.
-    if (handed.length) this.gate.payLabour(input.agentDid, HANDOVER_FEE, manifestId, 'manifest');
+    if (handed.length) this.gate.payLabour(input.agentDid, this.amountsAt(input.agentDid).handoverFee, manifestId, 'manifest');
 
     // REP2 — surface the DID of the fleet driver who took the batch, so the shop can rate them for this leg
     // (a legacy corridor-whitelist driver has no registry DID and isn't rateable → undefined).
@@ -1346,7 +1379,7 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.readyAt = new Date().toISOString(); // when the wait began — see Parcel.readyAt
     // The shelving half, paid HERE rather than at release. Receiving, scanning and committing a shelf
     // slot is finished work at this moment, and it stays finished whether or not anybody ever comes.
-    this.gate.payLabour(destAgentDid, SHELVING_FEE, parcelId, 'parcel', parcel.sellerEntityId);
+    this.gate.payLabour(destAgentDid, this.amountsAt(destAgentDid, parcel.sellerEntityId).shelvingFee, parcelId, 'parcel', parcel.sellerEntityId);
     this.scan(parcel, 'Ready_For_Pickup', destAgentDid, `arrived · shelf ${parcel.binSlot}`);
     void this.events.publish(GlosEvent.Pudo.ParcelReadyForPickup, { parcelId, destAgentDid, binSlot: parcel.binSlot }, { source: 'pudo' }).catch(() => undefined);
     // No secret in this response: the customer brings the code, the shop checks it.
@@ -1389,7 +1422,7 @@ export class ParcelService implements OnApplicationBootstrap {
     this.scan(parcel, 'Delivered', agentDid, 'OTP verified');
     // THE OTHER HALF OF THE SHOP'S PAY (see RELEASE_FEE). It was paid where an order is collected by its QR and not
     // here, so a shop that handed over a parcel sent from a counter was paid for shelving it and nothing for the rest.
-    this.gate.payLabour(agentDid, RELEASE_FEE, parcelId, 'parcel', parcel.sellerEntityId);
+    this.gate.payLabour(agentDid, this.amountsAt(agentDid, parcel.sellerEntityId).releaseFee, parcelId, 'parcel', parcel.sellerEntityId);
     void this.events.publish(GlosEvent.Pudo.ParcelDelivered, { parcelId, agentDid }, { source: 'pudo' }).catch(() => undefined);
     return parcel;
   }
@@ -1426,12 +1459,16 @@ export class ParcelService implements OnApplicationBootstrap {
       // The locked price the shop remitted, and the tax inside it — reversed together, because a voided
       // sale un-owes its tax as surely as it un-earns its revenue.
       this.gate.refund(agentDid, parcel.shipmentCost ?? 0, parcel.parcelId, parcel.shipmentTax, parcel.shipmentProvision);
-      this.gate.clawbackLabour(agentDid, LABOUR_FEE, parcel.parcelId); // reverse the +LABOUR_FEE paid at intake
+      // What was PAID at intake, not what the list says today. A parcel from before that was kept reads the figure
+      // every company started from, which is what it was paid.
+      this.gate.clawbackLabour(agentDid, parcel.intakeLabour ?? LABOUR_FEE, parcel.parcelId);
     } else {
       // At the rate stamped on the parcel at intake, never today's — a sister that changed its rate inside
       // the void window must not make a refund differ from the charge it reverses. A parcel from before
       // the stamp existed reads zero, which is exactly what it was charged.
-      const bill = taxOn(WHOLESALE, parcel.taxPct ?? 0);
+      // …and of the PRICE charged then, for the same reason: a parcel cancelled after the price changed gets back
+      // what it paid.
+      const bill = taxOn(parcel.intakeCharge ?? WHOLESALE, parcel.taxPct ?? 0);
       this.gate.refund(agentDid, bill.gross, parcel.parcelId, bill.tax);
     }
   }
@@ -1843,7 +1880,9 @@ export class ParcelService implements OnApplicationBootstrap {
     // isn't attached elsewhere may bind here (S29/S33a media-laundering guard).
     this.media.adopt(dropoffPhotoRef, agentDid, { type: 'parcel', id: parcelId }, 'dropoff');
     if (due > 0) this.gate.chargeShipping(agentDid, due, parcelId, parcel.shipmentTax, parcel.shipmentProvision); // remit the collected cash, tax and all (a 0-priced route charges nothing)
-    this.gate.payLabour(agentDid, LABOUR_FEE, parcelId, 'parcel', parcel.sellerEntityId);
+    const pay = this.amountsAt(agentDid, parcel.sellerEntityId).labourFee;
+    parcel.intakeLabour = pay;
+    this.gate.payLabour(agentDid, pay, parcelId, 'parcel', parcel.sellerEntityId);
     void this.events.publish(GlosEvent.Pudo.ParcelAccepted, { parcelId, agentDid, destZone: parcel.destZone, mode: 'cash' }, { source: 'pudo' }).catch(() => undefined);
     return parcel;
   }
@@ -1860,7 +1899,9 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.acceptedAt = new Date().toISOString();
     this.handTo(parcel, 'shop', agentDid, 'handed in at the counter');
     this.scan(parcel, 'At_PUDO', agentDid, 'inbound intake');
-    this.gate.payLabour(agentDid, LABOUR_FEE, parcelId, 'parcel', parcel.sellerEntityId);
+    const pay = this.amountsAt(agentDid, parcel.sellerEntityId).labourFee;
+    parcel.intakeLabour = pay;
+    this.gate.payLabour(agentDid, pay, parcelId, 'parcel', parcel.sellerEntityId);
     void this.events.publish(GlosEvent.Pudo.ParcelAccepted, { parcelId, agentDid, destZone: parcel.destZone, mode: 'prepaid' }, { source: 'pudo' }).catch(() => undefined);
     return parcel;
   }
@@ -1890,6 +1931,8 @@ export class ParcelService implements OnApplicationBootstrap {
     if (parcel.status !== 'Ready_For_Pickup') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
     parcel.status = 'Unclaimed';
     parcel.unclaimedAt = new Date(at).toISOString();
+    // The daily rate is fixed at the moment it starts to run: what is owed for these days does not move afterwards.
+    parcel.holdingFeePerDay = this.holdingRateNow(parcel).perDay;
     this.scan(parcel, 'Unclaimed', parcel.destAgentDid ?? 'network', 'collection window closed · still on the shelf');
     return parcel;
   }
@@ -1911,6 +1954,8 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.status = 'Ready_For_Pickup';
     parcel.readyAt = new Date(at).toISOString();
     parcel.unclaimedAt = chargeable ? new Date(at).toISOString() : undefined;
+    // More time bought today is bought at today's rate; time given free owes nothing at any rate.
+    parcel.holdingFeePerDay = chargeable ? this.holdingRateNow(parcel).perDay : undefined;
     parcel.extensionsUsed = (parcel.extensionsUsed ?? 0) + 1;
     parcel.uncollectedRemindedAt = undefined; // a new window earns a new reminder
     this.scan(parcel, 'Ready_For_Pickup', 'receiver', note);
@@ -1957,7 +2002,7 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.otpLockedAt = undefined;
     this.handTo(parcel, 'shop', agentDid, 'shelved at the collection point');
     parcel.readyAt = new Date().toISOString(); // when the wait began — see Parcel.readyAt
-    this.gate.payLabour(agentDid, SHELVING_FEE, parcelId, 'parcel', parcel.sellerEntityId); // see arrive()
+    this.gate.payLabour(agentDid, this.amountsAt(agentDid, parcel.sellerEntityId).shelvingFee, parcelId, 'parcel', parcel.sellerEntityId); // see arrive()
     this.scan(parcel, 'Ready_For_Pickup', agentDid, `shelved · bin ${parcel.binSlot}`);
     void this.events.publish(GlosEvent.Pudo.ParcelReadyForPickup, { parcelId, destAgentDid: agentDid, collectionCode: parcel.collectionCode, binSlot: parcel.binSlot, vendorId: parcel.vendorId, externalOrderId: parcel.externalOrderId }, { source: 'pudo' }).catch(() => undefined);
     return { parcelId, binSlot: parcel.binSlot, status: parcel.status };
@@ -1977,7 +2022,7 @@ export class ParcelService implements OnApplicationBootstrap {
     // What is owed comes back with the LOOKUP, not with the release. A shopkeeper who discovers a charge
     // only after the customer has the box in their hands has to ask for money back, which is the one
     // conversation across a counter that nobody wins.
-    const holdingOwed = holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, shipmentCost: parcel.shipmentCost, settled: parcel.holdingSettled });
+    const holdingOwed = holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, shipmentCost: parcel.shipmentCost, settled: parcel.holdingSettled, perDay: parcel.holdingFeePerDay });
     return { parcel, binSlot: parcel.binSlot, ...(holdingOwed > 0 ? { holdingOwed } : {}) };
   }
 
@@ -2011,7 +2056,7 @@ export class ParcelService implements OnApplicationBootstrap {
     // Settled BEFORE the status flips, while the clock still has an end to measure to. The receiver
     // pays the shop in cash at the counter and the shop keeps it, so nothing is posted — this records
     // that the debt is gone, which is what stops the network paying the shop for it a second time.
-    const holdingPaid = holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, shipmentCost: parcel.shipmentCost, settled: parcel.holdingSettled });
+    const holdingPaid = holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, shipmentCost: parcel.shipmentCost, settled: parcel.holdingSettled, perDay: parcel.holdingFeePerDay });
     if (holdingPaid > 0) parcel.holdingSettled = (parcel.holdingSettled ?? 0) + holdingPaid;
 
     parcel.status = 'Delivered';
@@ -2028,7 +2073,7 @@ export class ParcelService implements OnApplicationBootstrap {
     );
     this.endCustody(parcel);
     this.scan(parcel, 'Delivered', agentDid, byProxy ? 'collected · by a named proxy' : 'collected · OK');
-    this.gate.payLabour(agentDid, RELEASE_FEE, parcelId, 'parcel', parcel.sellerEntityId);
+    this.gate.payLabour(agentDid, this.amountsAt(agentDid, parcel.sellerEntityId).releaseFee, parcelId, 'parcel', parcel.sellerEntityId);
     this.rebateFlexible(parcel); // a flexible parcel taken by a cheaper carrier → refund the over-hold
     void this.events.publish(GlosEvent.Pudo.ParcelDelivered, { parcelId, agentDid, vendorId: parcel.vendorId, externalOrderId: parcel.externalOrderId }, { source: 'pudo' }).catch(() => undefined);
     return parcel;

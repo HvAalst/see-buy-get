@@ -24,6 +24,8 @@ export interface AgentRow {
   status?: string;
   /** Null where the network holds no money in that country — which is NOT a zero float. */
   balance?: number | null;
+  /** What one parcel costs this shop's float, at its own company's price. */
+  parcelPrice?: number;
   capacity?: number;
   freeSlots?: number;
   lastPingAt?: string;
@@ -37,9 +39,6 @@ export type AgentTone = 'ok' | 'warn' | 'bad' | 'info';
 
 /** An hour without a ping is the line: a shop's app checks in far more often than that when it is on. */
 export const AGENT_OFFLINE_H = 1;
-
-/** Under this, a shop cannot take the next parcel — its float will not cover the fee. */
-export const LOW_BALANCE = 5;
 
 /**
  * What this shop's row should SAY, in the order that matters.
@@ -58,7 +57,11 @@ export function agentState(row: AgentRow, now: number): { key: string; tone: Age
   // A shop in a country where we hold no money is not LOW on float, it is outside the float entirely —
   // and warning about a till that does not exist sends somebody to fix nothing.
   if (row.balance === null || row.balance === undefined) return { key: 'nofloat', tone: 'info', labelKey: 'tower.network.agent.noFloat' };
-  if (row.balance < LOW_BALANCE) return { key: 'low', tone: 'warn', labelKey: 'tower.network.agent.lowBalance' };
+  // Thin against the price of ONE PARCEL at this shop's own company, which the server says beside the float. It was
+  // measured against a 5 written here — right for no country, and a hundred times out the day real prices are set.
+  // A shop on its credit line can still scan; this is the earlier signal, that its own money has run out.
+  // An empty float is thin at any price, told or not.
+  if (row.balance <= 0 || (row.parcelPrice != null && row.balance < row.parcelPrice)) return { key: 'low', tone: 'warn', labelKey: 'tower.network.agent.lowBalance' };
   return { key: 'active', tone: 'ok', labelKey: 'tower.network.agent.active' };
 }
 

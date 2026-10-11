@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AMOUNT_HINT,
+  AMOUNT_LABEL,
+  AMOUNT_ORDER,
   amountOf,
+  amountsFormError,
+  amountsFormOf,
+  amountsInForce,
+  amountsPayload,
+  counterParcelMath,
+  type CompanyAmount,
   coverFormError,
   coverFormOf,
   coverPayload,
@@ -196,5 +205,76 @@ describe('the lanes', () => {
     expect(laneLabel('pudo', t)).toBe('tower.lane.pudo');
     // A lane the server grows that this build has never heard of shows its key rather than nothing.
     expect(laneLabel('barge', t)).toBe('barge');
+  });
+});
+
+/**
+ * A COMPANY'S LIST OF AMOUNTS — what a parcel costs and what each step pays.
+ *
+ * The inheritance seam again, in money this time: an EMPTY box is "what every company starts from", a typed 0 is a
+ * decision, and saving one figure must not turn the seven beside it into decisions nobody took.
+ */
+describe('a company’s list of amounts', () => {
+  const STARTS: Record<string, number> = { wholesale: 1.6, labourFee: 0.4, handoverFee: 0.5, shelvingFee: 0.15, releaseFee: 0.15, toteLoadFee: 0.5, mdpSortFee: 0.2, holdingFeePerDay: 0.1 };
+  const list = (own: Record<string, number> = {}): { amounts: CompanyAmount[] } => ({
+    amounts: Object.keys(STARTS).map((key) => ({ key: key as CompanyAmount['key'], amount: own[key] ?? STARTS[key], own: key in own, startsAt: STARTS[key] })),
+  });
+  const typed = (pricing: { amounts: CompanyAmount[] }, over: Record<string, string>) => ({ ...amountsFormOf(pricing), ...over });
+
+  it('has a box, a label and a line of explanation for every amount the server keeps — and no other', () => {
+    expect([...AMOUNT_ORDER].sort()).toEqual(Object.keys(STARTS).sort());
+    expect(Object.keys(AMOUNT_LABEL).sort()).toEqual(Object.keys(STARTS).sort());
+    expect(Object.keys(AMOUNT_HINT).sort()).toEqual(Object.keys(STARTS).sort());
+    // Read in the order a parcel travels: what comes in first, what waiting costs last.
+    expect(AMOUNT_ORDER[0]).toBe('wholesale');
+    expect(AMOUNT_ORDER[AMOUNT_ORDER.length - 1]).toBe('holdingFeePerDay');
+  });
+
+  it('opens with this company’s OWN figures, and an empty box wherever it has set none', () => {
+    expect(amountsFormOf(list())).toEqual({ wholesale: '', labourFee: '', handoverFee: '', toteLoadFee: '', mdpSortFee: '', shelvingFee: '', releaseFee: '', holdingFeePerDay: '' });
+    expect(amountsFormOf(list({ wholesale: 160, handoverFee: 0 }))).toMatchObject({ wholesale: '160', handoverFee: '0', labourFee: '' });
+  });
+
+  it('sends only what was changed', () => {
+    const stored = list({ wholesale: 160 });
+    expect(amountsPayload(amountsFormOf(stored), stored)).toEqual({});
+    expect(amountsPayload(typed(stored, { labourFee: '40' }), stored)).toEqual({ labourFee: 40 });
+    // Typed as it stands: not a change.
+    expect(amountsPayload(typed(stored, { wholesale: '160.00' }), stored)).toEqual({});
+    expect(amountsPayload(typed(stored, { wholesale: '175' }), stored)).toEqual({ wholesale: 175 });
+  });
+
+  it('an emptied box puts the figure back; a typed 0 is a decision; the starting figure typed is one too', () => {
+    const stored = list({ wholesale: 160, handoverFee: 55 });
+    expect(amountsPayload(typed(stored, { handoverFee: '' }), stored)).toEqual({ handoverFee: null });
+    expect(amountsPayload(typed(stored, { handoverFee: '0' }), stored)).toEqual({ handoverFee: 0 });
+    // A box that was empty and stays empty says nothing — it does not send the greyed figure.
+    expect(amountsPayload(typed(stored, { labourFee: '  ' }), stored)).toEqual({});
+    // "0.4" typed where nothing was set makes it this company's own 0.4: it no longer follows the starting figure.
+    expect(amountsPayload(typed(stored, { labourFee: '0.4' }), stored)).toEqual({ labourFee: 0.4 });
+  });
+
+  it('says the server’s refusals before the button is pressed', () => {
+    const stored = list();
+    expect(amountsFormError(amountsFormOf(stored), stored, t)).toBeNull();
+    expect(amountsFormError(typed(stored, { labourFee: 'forty' }), stored, t)).toBe('tower.rates.notANumber(field=tower.amounts.k.labourFee)');
+    expect(amountsFormError(typed(stored, { releaseFee: '-1' }), stored, t)).toBe('tower.amounts.negative(field=tower.amounts.k.releaseFee)');
+    expect(amountsFormError(typed(stored, { wholesale: '0' }), stored, t)).toBe('tower.amounts.priceNeeded');
+    // Nothing unreadable is sent beside what can be read.
+    expect(amountsPayload(typed(stored, { labourFee: 'forty', releaseFee: '12' }), stored)).toEqual({ releaseFee: 12 });
+    // A step paid nothing is allowed; only the price of a parcel must be something.
+    expect(amountsFormError(typed(stored, { handoverFee: '0' }), stored, t)).toBeNull();
+  });
+
+  it('works out the list as it WOULD stand, and says what one counter parcel brings in against what it pays out', () => {
+    const stored = list({ wholesale: 160 });
+    const draft = typed(stored, { shelvingFee: '15', releaseFee: '12' });
+    expect(amountsInForce(draft, stored)).toMatchObject({ wholesale: 160, shelvingFee: 15, releaseFee: 12, mdpSortFee: 0.2, labourFee: 0.4 });
+    expect(counterParcelMath(amountsInForce(draft, stored))).toEqual({ price: 160, perParcel: 27.2, over: false });
+    // The figure typed in the wrong box: every parcel would pay out more than it brings in — said loudly, not refused.
+    const slip = typed(list(), { shelvingFee: '160' });
+    expect(counterParcelMath(amountsInForce(slip, list()))).toMatchObject({ price: 1.6, over: true });
+    // An emptied box is read at the starting figure, not at what the company had.
+    expect(amountsInForce(typed(stored, { wholesale: '' }), stored).wholesale).toBe(1.6);
   });
 });

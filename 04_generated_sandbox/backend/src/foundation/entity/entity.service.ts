@@ -7,8 +7,10 @@ import { PersistentMap } from '../store/persistent-map';
 import { DidService } from '../did/did.service';
 import { currencyForJurisdiction } from '../money/currency';
 import { DEFAULT_TAX_LABEL, MAX_PLATFORM_FEE_PCT, MAX_PREMIUM_PCT, MAX_TAX_PCT, MIN_PLATFORM_FEE_PCT, MIN_TAX_PCT, PLATFORM_FEE_PCT } from '../../modules/pudo/pudo.config';
+import { AMOUNT_KEYS, DEFAULT_AMOUNTS, amountsLine, isAmountKey, resolveAmounts, type AmountKey, type Amounts } from '../../modules/pudo/amounts';
 import {
   BusinessProfile,
+  CompanyAmount,
   Entity,
   EntityChange,
   EntityPricing,
@@ -327,6 +329,66 @@ export class EntityService implements OnApplicationBootstrap {
     // `charge` and `freeAbove` are the TERMS and stand whatever this particular amount is, so a screen can
     // say "we charge 20 below 2,000" before anybody has typed a figure. `fee` answers for this amount only.
     return { fee, charge: freeAbove > 0 ? Math.round(charge * 100) / 100 : 0, freeAbove, currency: entity.currency };
+  }
+
+  /**
+   * WHAT A PARCEL COSTS AND WHAT EACH STEP PAYS, for this company — its own figure where it set one, and what every
+   * company starts from where it did not. In its own currency.
+   *
+   * `entityId` may be nothing: a shop that stands where no company of ours does has no list of its own, and the
+   * caller is answered with the starting figures rather than refused — every path that MOVES money has already been
+   * refused by name before it gets here (AgentService.entityIdOf).
+   */
+  amountsFor(entityId?: string): Amounts & { currency?: string } {
+    const entity = entityId ? this.entities.get(entityId) : undefined;
+    return { ...resolveAmounts(entity?.amounts), currency: entity?.currency };
+  }
+
+  /**
+   * Set figures on a company's list. A key left out is left alone; `null` puts it back to what every company starts
+   * from. Company-wide, and recorded with whoever did it, as every other term a company sets is.
+   *
+   * Held to very little, on purpose: these are amounts of MONEY in currencies whose scales differ a thousandfold, so
+   * no ceiling means anything. What is refused is what cannot be meant — a figure that is not a number, a negative
+   * one, a name this list does not have — and a parcel that costs nothing, because the price of a parcel is also the
+   * float a shop must hold to take one in and the measure of its credit line: at zero both stop guarding anything.
+   */
+  setAmounts(entityId: string, patch: Partial<Record<string, number | null>>, by?: string): Entity {
+    const entity = this.requireTransacting(entityId);
+    const before = resolveAmounts(entity.amounts);
+    const own: Partial<Record<AmountKey, number>> = { ...(entity.amounts ?? {}) };
+
+    for (const [key, value] of Object.entries(patch ?? {})) {
+      if (value === undefined) continue;
+      if (!isAmountKey(key)) throw new GlosError('INVALID_INPUT', `"${key}" is not an amount on a company’s list (${AMOUNT_KEYS.join(', ')})`);
+      if (value === null) {
+        delete own[key];
+        continue;
+      }
+      const n = Number(value);
+      if (typeof value !== 'number' || !Number.isFinite(n) || n < 0) throw new GlosError('INVALID_INPUT', `${key} has to be an amount of money: a number, and not less than nothing`);
+      own[key] = Math.round(n * 100) / 100;
+    }
+    const after = resolveAmounts(own);
+    if (!(after.wholesale > 0)) {
+      throw new GlosError('INVALID_INPUT', 'A parcel has to cost something: its price is also the float a shop needs to take one in, and the measure of its credit');
+    }
+
+    const changed = AMOUNT_KEYS.filter((k) => before[k] !== after[k]);
+    // Candidate first, stored only once every bound has held — the same discipline as setRates.
+    entity.amounts = Object.keys(own).length ? own : undefined;
+    this.entities.set(entity.entityId, entity);
+    // A save that changed no figure is not a decision, and is not written down as one.
+    if (changed.length) {
+      this.record(entity.entityId, { at: new Date().toISOString(), by: by ?? 'unknown', what: 'amounts', from: amountsLine(before, changed, entity.currency), to: amountsLine(after, changed, entity.currency) });
+    }
+    return entity;
+  }
+
+  /** The list as the screen that sets it reads it: every line, whether it is this company's own, and where it started. */
+  static amountRows(from: Pick<Entity, 'amounts'>): CompanyAmount[] {
+    const resolved = resolveAmounts(from.amounts);
+    return AMOUNT_KEYS.map((key) => ({ key, amount: resolved[key], own: typeof from.amounts?.[key] === 'number', startsAt: DEFAULT_AMOUNTS[key] }));
   }
 
   /** The resolution itself, over a plain shape — so a CANDIDATE can be checked before anything is stored. */
@@ -889,6 +951,7 @@ export class EntityService implements OnApplicationBootstrap {
       // The rule AS DECIDED, not resolved against an amount — this is the screen that sets it, and what
       // it has to show is whether anybody has decided anything. `undefined` is the answer "no fee here".
       topUpFee: entity.topUpFee,
+      amounts: EntityService.amountRows(entity),
       carrierPapers: EntityService.resolveCarrierPapers(entity),
       // The default first: every lane row below is read against it, and a table whose fallback row is
       // buried in the middle makes "inherited from where?" a question you have to hunt for.

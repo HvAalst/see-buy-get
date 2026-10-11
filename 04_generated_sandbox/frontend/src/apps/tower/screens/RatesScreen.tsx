@@ -3,6 +3,14 @@ import { Icon } from '../../../shared/ui';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { EntityPicker } from './EntityPicker';
 import {
+  AMOUNT_HINT,
+  AMOUNT_LABEL,
+  AMOUNT_ORDER,
+  amountsFormError,
+  amountsFormOf,
+  amountsInForce,
+  amountsPayload,
+  counterParcelMath,
   coverFormError,
   coverFormOf,
   coverPayload,
@@ -26,6 +34,7 @@ import {
   type RateForm,
   type TaxForm,
   type TopUpFeeForm,
+  type AmountsForm,
 } from '../money';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
@@ -128,6 +137,7 @@ export function RatesScreen({ state, actions }: { state: TowerState; actions: To
             </table>
           </section>
 
+          <Amounts pricing={pricing} state={state} actions={actions} />
           <TopUpFee pricing={pricing} state={state} actions={actions} />
           <CarrierPapers pricing={pricing} state={state} actions={actions} />
           <RecentChanges pricing={pricing} />
@@ -179,6 +189,86 @@ function LaneRow({ row, pricing, state, actions }: { row: LanePricing; pricing: 
         </tr>
       ) : null}
     </>
+  );
+}
+
+/**
+ * WHAT A PARCEL COSTS AND WHAT EACH STEP PAYS — this company's own list, in its own money.
+ *
+ * These were numbers in the code: 1.60 to a shop's float for a parcel, 0.40 for a take-in, and so on, at a dollar's
+ * scale and stamped as shillings. They are on every screen of every app and decide what a real top-up buys, and only
+ * a developer could change one.
+ *
+ * ITS OWN PANEL, like the top-up fee and for the same reason: none of it varies by lane of work.
+ *
+ * AN EMPTY BOX IS NOT ZERO. It stands at what every company starts from, and the box shows that figure greyed, so
+ * "not set" is a number somebody can read. Zero is a decision — a step this company pays nothing for — and is typed.
+ */
+function Amounts({ pricing, state, actions }: { pricing: EntityPricing; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const [form, setForm] = useState<AmountsForm>(() => amountsFormOf(pricing));
+  const [tried, setTried] = useState(false);
+
+  // A save re-reads the pricing, so the boxes follow what was actually stored rather than what was typed.
+  useEffect(() => {
+    setForm(amountsFormOf(pricing));
+    setTried(false);
+  }, [pricing]);
+
+  const err = tried ? amountsFormError(form, pricing, t) : null;
+  const busy = state.busyId === 'amounts';
+  const currency = pricing.currency ?? '';
+  const money = (n: number) => `${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`.trim();
+  const own = pricing.amounts.filter((r) => r.own).length;
+  const body = amountsPayload(form, pricing);
+  const changed = Object.keys(body).length > 0;
+  const math = counterParcelMath(amountsInForce(form, pricing));
+
+  const save = () => {
+    setTried(true);
+    if (amountsFormError(form, pricing, t) || !changed) return;
+    void actions.saveAmounts(body);
+  };
+
+  return (
+    <section class="cons__panel" style="margin-top:18px">
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t('tower.amounts.title')}</span>
+        <span class="ctbl__sub">{own ? t('tower.amounts.ownCount', { n: own, of: pricing.amounts.length }) : t('tower.amounts.noneOwn')}</span>
+      </div>
+
+      <div class="twr-knobs">
+        <p class="chint">{t('tower.amounts.hint', { currency: currency || t('tower.amounts.itsMoney') })}</p>
+        <div class="twr-knobs__row">
+          {AMOUNT_ORDER.map((key) => {
+            const row = pricing.amounts.find((r) => r.key === key);
+            return (
+              <section class="twr-knob" key={key}>
+                <Text
+                  label={currency ? t('tower.topupfee.inCurrency', { label: t(AMOUNT_LABEL[key]), currency }) : t(AMOUNT_LABEL[key])}
+                  value={form[key]}
+                  placeholder={row ? String(row.startsAt) : ''}
+                  hint={t(AMOUNT_HINT[key])}
+                  onInput={(v) => setForm({ ...form, [key]: v })}
+                />
+              </section>
+            );
+          })}
+        </div>
+        {/* Said before the button is pressed, in this company's own money: what one parcel brings in, and what its
+            steps pay out. Loud only when the second is more than the first. */}
+        <p class={math.over ? 'cerr' : 'chint'}>
+          {t(math.over ? 'tower.amounts.mathOver' : 'tower.amounts.math', { price: money(math.price), out: money(math.perParcel) })}
+        </p>
+        {err ? <p class="cerr">{err}</p> : null}
+        <div class="twr-panelend">
+          <button type="button" class="cbtn cbtn--primary" disabled={!pricing.editable || busy || !changed} onClick={save}>
+            {t('tower.rates.save')}
+          </button>
+          {!changed ? <span class="ctbl__sub">{t('tower.amounts.nothingChanged')}</span> : null}
+        </div>
+      </div>
+    </section>
   );
 }
 

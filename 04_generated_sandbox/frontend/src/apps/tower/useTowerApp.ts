@@ -316,6 +316,8 @@ export interface TowerActions {
   saveCover(body: { lane?: string; freeLimit: number | null; premiumPct: number | null }, lane?: string): Promise<void>;
   /** Sister-wide, so no lane: a top-up is not a lane of work. An empty body removes the fee. */
   saveTopUpFee(body: { amount?: number; freeAbove?: number }): Promise<void>;
+  /** What a parcel costs and what each step pays at this company. Only the figures changed; null puts one back. */
+  saveAmounts(body: Record<string, number | null>): Promise<void>;
   /** Which carrier papers this sister refuses to trade without. The whole list; empty enforces nothing. */
   saveCarrierPapers(enforce: Array<'operator_licence' | 'carrier_insurance'>): Promise<void>;
   /** Record the dates on one fleet operator's own papers — staff only. */
@@ -1715,6 +1717,8 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           (client, entityId) => client.api.setTopUpFee(entityId, body),
           body.amount === undefined ? t('tower.topupfee.removed') : t('tower.topupfee.saved'),
         ),
+      // The company's own list of amounts: not a lane, its own busy id, its own words.
+      saveAmounts: (body) => saveKnob('amounts', (client, entityId) => client.api.setAmounts(entityId, body), t('tower.amounts.saved')),
       // Not a lane either, so its own busy id and its own words — same reasoning as the top-up fee.
       saveCarrierPapers: (enforce) =>
         saveKnob(

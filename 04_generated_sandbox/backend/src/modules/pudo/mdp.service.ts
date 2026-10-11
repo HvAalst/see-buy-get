@@ -14,7 +14,7 @@ import { FleetService } from './fleet.service';
 import { WalletGateService } from './wallet-gate.service';
 import { CargoService } from './cargo.service';
 import { CargoNature, VehicleCapability } from './cargo.types';
-import { DEFAULT_MDP_PRICE_PER_PARCEL, MDP_SORT_FEE, TOTE_LOAD_FEE } from './pudo.config';
+import { DEFAULT_MDP_PRICE_PER_PARCEL } from './pudo.config';
 import { countryOfSite, requireCountryCode } from './country';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
@@ -388,7 +388,7 @@ export class MdpService {
       // Graduation: the tote path must raise HANDOVER on the M4 timeline like the direct handover does.
       void this.events.publish(GlosEvent.Pudo.ParcelHandedToBus, { parcelId, driverBadgeId, toteCode: tote.code }, { source: 'pudo' }).catch(() => undefined);
     }
-    if (fleet) this.gate.driverPayout(fleet.driverDid, TOTE_LOAD_FEE); // transport fee for the carrying driver
+    if (fleet) this.gate.payBagLoad(fleet.driverDid); // for scanning it aboard, at the driver's own company's figure
     void this.events.publish(GlosEvent.Pudo.BagLoaded, { toteId: tote.toteId, code: tote.code, driverBadgeId, destinationNodeId: tote.destinationNodeId, parcels: tote.parcels.length }, { source: 'pudo' }).catch(() => undefined);
     return { tote, moved: [...tote.parcels] };
   }
@@ -475,7 +475,10 @@ export class MdpService {
     this.totes.add(tote.code, parcelId, parcel.size);
     parcel.toteId = tote.toteId; // bag ↔ parcel; stays At_MDP until the bag is loaded onward
     // MDP sort labour, recharged at cost when this hub's sister is not the one that sold the shipment.
-    this.gate.sortLabour(mdpId, MDP_SORT_FEE, parcelId, this.entityIdOrNone(this.require(mdpId)), parcel.sellerEntityId);
+    // At this hub's own company's figure; where no company of ours stands behind it, at the seller's, who buys the work.
+    const hubEntity = this.entityIdOrNone(this.require(mdpId));
+    const sortPay = this.entities.amountsFor(hubEntity ?? parcel.sellerEntityId).mdpSortFee;
+    if (sortPay > 0) this.gate.sortLabour(mdpId, sortPay, parcelId, hubEntity, parcel.sellerEntityId);
 
     void this.events.publish(GlosEvent.Pudo.ParcelSorted, { parcelId, mdpId, nextDestinationId: next.id, nextDestinationType: next.type, toteCode: tote.code }, { source: 'pudo' }).catch(() => undefined);
     return { parcelId, nextDestination: next, toteCode: tote.code, toteId: tote.toteId, fillPct: this.totes.fillPct(tote) };

@@ -507,6 +507,74 @@ describe('the collection window closing', () => {
   });
 
   // ---------------------------------------------------------------------------------------------
+  /**
+   * The daily rate was a constant. It is the company's own figure now (amounts.ts), and it is FIXED on the parcel at
+   * the moment it starts to run: days already owed are not re-priced when the list changes afterwards.
+   */
+  describe('what a day of holding costs is the company’s to say, and is fixed when the free time ends', () => {
+    const KE = () => entities.requireForJurisdiction('KE').entityId;
+    const at = (parcelId: string) => new Date(parcels.get(parcelId).unclaimedAt!).getTime();
+
+    // Figures kept under what the journey cost: the meter stops there whatever the rate (see "stops at the ceiling").
+    it('runs at the figure of the company whose shop holds the parcel', () => {
+      entities.setAmounts(KE(), { holdingFeePerDay: 0.3 }, 'Amina Otieno');
+      const { parcel } = stranded();
+      expect(parcels.get(parcel.parcelId).holdingFeePerDay).toBe(0.3);
+      expect(unclaimed.owed(parcel.parcelId, at(parcel.parcelId) + 1)).toBe(0.3);
+      expect(unclaimed.owed(parcel.parcelId, at(parcel.parcelId) + 2 * DAY)).toBe(0.6);
+      expect(parcels.holdingTermsOf(parcels.get(parcel.parcelId))).toEqual({ perDay: 0.3, currency: 'KES' });
+      // …and still never more than the journey cost, at any rate.
+      expect(unclaimed.owed(parcel.parcelId, at(parcel.parcelId) + 10 * DAY)).toBe(parcels.get(parcel.parcelId).shipmentCost);
+    });
+
+    it('does not re-price the days already owed when the figure changes — only parcels whose time ends afterwards', () => {
+      entities.setAmounts(KE(), { holdingFeePerDay: 0.3 }, 'Amina Otieno');
+      const first = stranded().parcel;
+      entities.setAmounts(KE(), { holdingFeePerDay: 0.5 }, 'Amina Otieno');
+      const later = stranded().parcel;
+      expect(unclaimed.owed(first.parcelId, at(first.parcelId) + 2 * DAY)).toBe(0.6);
+      expect(parcels.holdingTermsOf(parcels.get(first.parcelId)).perDay).toBe(0.3);
+      expect(unclaimed.owed(later.parcelId, at(later.parcelId) + 2 * DAY)).toBe(1);
+      expect(parcels.holdingTermsOf(parcels.get(later.parcelId)).perDay).toBe(0.5);
+      // What the counter is told to collect is read off the same rate (a day into the wait; not "now", which is
+      // the same millisecond the free time ended in and owes nothing yet).
+      const aDayIn = { ...parcels.get(later.parcelId), unclaimedAt: daysAgo(0) };
+      expect(operationalParcelView(aDayIn).holdingOwed).toBe(0.5);
+    });
+
+    it('a shop no company of ours contracts: the list of whoever SOLD the shipment, who buys the work — else the starting figures', () => {
+      entities.setAmounts(KE(), { holdingFeePerDay: 0.3 }, 'Amina Otieno');
+      const { parcel } = onShelf();
+      const elsewhere = { ...parcels.get(parcel.parcelId), destAgentDid: 'did:glos:a-shop-nobody-of-ours-contracts' };
+      expect(parcels.holdingRateNow({ ...elsewhere, sellerEntityId: KE() })).toEqual({ perDay: 0.3, currency: 'KES' });
+      // Nobody's company at either end: what every company starts from, in the network's own money.
+      expect(parcels.holdingRateNow({ ...elsewhere, sellerEntityId: undefined, collectingEntityId: undefined })).toEqual({ perDay: HOLDING_FEE_PER_DAY, currency: 'KES' });
+    });
+
+    it('a parcel from before the rate was kept runs at what every company started from', () => {
+      const { parcel } = stranded();
+      parcels.get(parcel.parcelId).holdingFeePerDay = undefined;
+      entities.setAmounts(KE(), { holdingFeePerDay: 0.5 }, 'Amina Otieno');
+      expect(unclaimed.owed(parcel.parcelId, at(parcel.parcelId) + 2 * DAY)).toBeCloseTo(2 * HOLDING_FEE_PER_DAY, 2);
+    });
+
+    it('more time given free owes nothing at any rate; more time BOUGHT runs at the rate of the day it is bought, and says so', () => {
+      entities.setAmounts(KE(), { holdingFeePerDay: 0.3 }, 'Amina Otieno');
+      const { parcel } = stranded();
+      unclaimed.extend(parcel.parcelId); // the first is free
+      expect(parcels.get(parcel.parcelId).unclaimedAt).toBeUndefined();
+      expect(parcels.get(parcel.parcelId).holdingFeePerDay).toBeUndefined();
+
+      parcels.get(parcel.parcelId).status = 'Unclaimed'; // it lapses again
+      entities.setAmounts(KE(), { holdingFeePerDay: 0.4 }, 'Amina Otieno');
+      unclaimed.extend(parcel.parcelId); // the second is bought, today
+      const p = parcels.get(parcel.parcelId);
+      expect(p.holdingFeePerDay).toBe(0.4);
+      // Said as money on the parcel's own trail: an amount, and what it is an amount of.
+      expect(p.scans.map((s) => s.note).filter(Boolean).join(' | ')).toContain('KES 0.40 per day');
+    });
+  });
+
   describe('silence', () => {
     it('reaches an ending with no answer from anybody', () => {
       // The common case, and the one the whole design has to survive. Nothing here waits on a person:

@@ -16,7 +16,7 @@ import { DriverKyc, DriverRegistry, FleetDriver, FleetRemoval } from './fleet.ty
 import { FleetManagerService } from './fleet-manager.service';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
-import { NETWORK_JURISDICTION } from './pudo.config';
+import { NETWORK_CURRENCY, NETWORK_JURISDICTION } from './pudo.config';
 
 interface RegisterDriverInput {
   displayName: string; // shop-floor label (non-PII)
@@ -135,6 +135,15 @@ export class DriverService {
       ? this.managers.entityIdOrNone(this.managers.get(driver.managerDid))
       : driver.entityId ?? this.entities.forJurisdiction(driver.jurisdiction ?? NETWORK_JURISDICTION)?.entityId;
     return { ...(entityId ? { entityId } : {}), payeeDid: driver.managerDid ?? driver.did };
+  }
+
+  /**
+   * What loading a bag pays this driver, and in what money: the list of the company that settles them (their fleet's,
+   * or their own country's for a courier). One answer for the offer that promises it and the scan that pays it.
+   */
+  payTermsOf(did: string): { bagLoadPay: number; currency: string } {
+    const list = this.entities.amountsFor(this.payeeOrNone(did).entityId);
+    return { bagLoadPay: list.toteLoadFee, currency: list.currency ?? NETWORK_CURRENCY };
   }
 
   payeeOf(did: string): { entityId: string; payeeDid: string } {

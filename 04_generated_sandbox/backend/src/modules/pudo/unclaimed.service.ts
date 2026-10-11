@@ -6,7 +6,7 @@ import { AgentService } from './agent.service';
 import { ShelfService } from './shelf.service';
 import { ReturnService } from './return.service';
 import { WalletGateService } from './wallet-gate.service';
-import { EXTENSION_H, FREE_EXTENSIONS, HOLDING_FEE_PER_DAY, UNCOLLECTED_H, holdingFeeFor } from './pudo.config';
+import { EXTENSION_H, FREE_EXTENSIONS, UNCOLLECTED_H, holdingFeeFor } from './pudo.config';
 import { Parcel, ReceiverIntent, isCollectable } from './pudo.types';
 
 /** One line an operator can act on, for a parcel whose owner has given up their claim. */
@@ -87,7 +87,7 @@ export class UnclaimedService {
    */
   owed(parcelId: string, now: number = Date.now()): number {
     const parcel = this.parcels.get(parcelId);
-    return holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, now, shipmentCost: parcel.shipmentCost, settled: parcel.holdingSettled });
+    return holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, now, shipmentCost: parcel.shipmentCost, settled: parcel.holdingSettled, perDay: parcel.holdingFeePerDay });
   }
 
   /**
@@ -147,7 +147,8 @@ export class UnclaimedService {
       parcelId,
       now,
       !free,
-      free ? `held ${days} more days at the receiver's request` : `held ${days} more days · ${HOLDING_FEE_PER_DAY} per day`,
+      // The days bought now run at today's rate, in the money of the company whose shop holds the parcel.
+      free ? `held ${days} more days at the receiver's request` : `held ${days} more days · ${this.parcels.holdingRateNow(parcel).currency} ${this.parcels.holdingRateNow(parcel).perDay.toFixed(2)} per day`,
     );
   }
 
@@ -227,7 +228,7 @@ export class UnclaimedService {
         relinquishedAt: p.relinquishedAt!,
         heldDays: Math.max(0, Math.floor((now - new Date(p.unclaimedAt ?? p.relinquishedAt!).getTime()) / 86_400_000)),
         declaredValue: p.declaredValue,
-        owedToShop: holdingFeeFor({ unclaimedAt: p.unclaimedAt, now, shipmentCost: p.shipmentCost, settled: p.holdingSettled }),
+        owedToShop: holdingFeeFor({ unclaimedAt: p.unclaimedAt, now, shipmentCost: p.shipmentCost, settled: p.holdingSettled, perDay: p.holdingFeePerDay }),
       }))
       .sort((a, b) => a.relinquishedAt.localeCompare(b.relinquishedAt));
   }
@@ -263,7 +264,7 @@ export class UnclaimedService {
    * between that being true and it merely being said.
    */
   settleToShop(parcel: Parcel, now: number = Date.now()): number {
-    const owed = holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, now, shipmentCost: parcel.shipmentCost, settled: parcel.holdingSettled });
+    const owed = holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, now, shipmentCost: parcel.shipmentCost, settled: parcel.holdingSettled, perDay: parcel.holdingFeePerDay });
     if (owed <= 0 || !parcel.destAgentDid) return 0;
     this.gate.payLabour(parcel.destAgentDid, owed, parcel.parcelId, 'parcel', parcel.sellerEntityId);
     parcel.holdingSettled = (parcel.holdingSettled ?? 0) + owed;

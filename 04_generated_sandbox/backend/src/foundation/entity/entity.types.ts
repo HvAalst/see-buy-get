@@ -1,5 +1,6 @@
 import type { CompanyRecord } from './company-record.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { AMOUNT_KEYS, type AmountKey } from '../../modules/pudo/amount-keys';
 
 /**
  * The legal entities the network is operated by — the structure the money model hangs on.
@@ -418,8 +419,8 @@ export class EntityChange {
   at: string;
   /** The name the token carried, or the DID when a machine did it. Never a string from a request body. */
   by: string;
-  @ApiProperty({ enum: ['rates', 'tax', 'cover', 'fee', 'topUpFee', 'carrierPapers', 'created', 'record', 'activated', 'verification'] })
-  what: 'rates' | 'tax' | 'cover' | 'fee' | 'topUpFee' | 'carrierPapers' | 'created' | 'record' | 'activated' | 'verification';
+  @ApiProperty({ enum: ['rates', 'tax', 'cover', 'fee', 'topUpFee', 'amounts', 'carrierPapers', 'created', 'record', 'activated', 'verification'] })
+  what: 'rates' | 'tax' | 'cover' | 'fee' | 'topUpFee' | 'amounts' | 'carrierPapers' | 'created' | 'record' | 'activated' | 'verification';
   /** The lane it applies to; absent means the company's default for everything. */
   @ApiPropertyOptional()
   lane?: string;
@@ -480,6 +481,21 @@ export class LanePricing {
  * what the server refuses, or refuse what the server would have taken — and the operator gets to find out
  * which after they press save.
  */
+/**
+ * One line of a company's list of amounts (modules/pudo/amounts.ts), as the screen that sets it reads it: the figure
+ * in force, whether THIS company set it, and what every company starts from — so "not set" can be said as a number.
+ */
+export class CompanyAmount {
+  @ApiProperty({ enum: AMOUNT_KEYS })
+  key: AmountKey;
+  /** The figure in force, in the company's own currency. */
+  amount: number;
+  /** Whether this company set it. False: it is the figure every company starts from. */
+  own: boolean;
+  /** What every company starts from. */
+  startsAt: number;
+}
+
 export class PricingBounds {
   minRatePct: number;
   /** The ceiling on ONE layer, and on the three of them added together — they are the same number. */
@@ -523,6 +539,12 @@ export class EntityPricing {
    */
   @ApiPropertyOptional({ type: TopUpFeeRule })
   topUpFee?: TopUpFeeRule;
+  /**
+   * What a parcel costs and what each step pays here, every line of it, in this company's currency. Company-wide
+   * like the top-up fee: a wage for shelving a parcel does not vary by lane of work.
+   */
+  @ApiProperty({ type: [CompanyAmount] })
+  amounts: CompanyAmount[];
   /**
    * Which of a carrier's own papers this sister refuses to trade without. Sister-wide, like the top-up
    * fee: a transport licence is not a lane of work. Always present, and EMPTY for nearly everybody —
@@ -599,6 +621,11 @@ export class Entity {
    * `EntityService.topUpFeeFor()`, never off the record, so a sister created before the knob still answers.
    */
   topUpFee?: TopUpFeeRule;
+  /**
+   * What a parcel costs and what each step pays, where this company has set its own figure. A key that is absent
+   * stands at what every company starts from. Read it through `EntityService.amountsFor()`, never off the record.
+   */
+  amounts?: Partial<Record<AmountKey, number>>;
   /**
    * Per-lane tax overrides, keyed by the caller's vocabulary exactly as `ratesByLane` is.
    *

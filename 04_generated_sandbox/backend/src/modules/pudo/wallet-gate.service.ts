@@ -7,7 +7,8 @@ import { GlosEvent } from '../../foundation/events/glos-events';
 import { WalletService } from '../m1/wallet/wallet.service';
 import { DriverService } from './driver.service';
 import { AgentService } from './agent.service';
-import { LOCK_THRESHOLD, NETWORK_CURRENCY, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS } from './pudo.config';
+import { NETWORK_CURRENCY, TRADE_CREDIT_PARCELS } from './pudo.config';
+import { creditLimitOf, lockThresholdOf } from './amounts';
 import { BooksService } from '../../foundation/books/books.service';
 import { ACCOUNT_CODES, type AccountCode } from '../../foundation/books/books.types';
 import { EntityService } from '../../foundation/entity/entity.service';
@@ -173,7 +174,11 @@ export class WalletGateService {
    * new field; `ok` is kept as an alias so the shipped agent app keeps working. `code` lets a
    * low-literacy UI pick the right icon (top-up vs unlock) and `shortfall` names the exact gap.
    */
-  canTransact(did: string): { ok: boolean; canTransact: boolean; moneyOk: boolean; code: string | null; balance: number; threshold: number; shortfall: number; credit: { limit: number; used: number; available: number } } {
+  canTransact(did: string): { ok: boolean; canTransact: boolean; moneyOk: boolean; code: string | null; balance: number; threshold: number; shortfall: number; currency: string; credit: { limit: number; used: number; available: number } } {
+    // The price of one parcel at this shop's company, and the credit line measured in parcels at that price.
+    const list = this.agents.amountsOf(did);
+    const threshold = lockThresholdOf(list);
+    const creditLimit = creditLimitOf(list);
     // Null where we hold no money in that country; the paths below are money paths, so it is refused
     // upstream by entityIdOf before this is ever reached.
     const float = this.agents.balance(did);
@@ -181,18 +186,18 @@ export class WalletGateService {
     // What the shop can actually spend: its own float PLUS the trade-credit line. A customer paying cash
     // at the counter is not turned away for an empty float — the shop keeps scanning, on credit, up to a
     // bounded number of parcels. With the limit at zero this is exactly the old 'no money, no scan' rule.
-    const spendable = Math.round((balance + TRADE_CREDIT_LIMIT) * 100) / 100;
+    const spendable = Math.round((balance + creditLimit) * 100) / 100;
     // A shop we hold NO float for has nothing to fund: 'no money, no scan' guards money of ours, and none can
     // move at that counter (the take-in door refuses cash there by country). Found in the browser — the shop
     // was told to "top up your wallet first" with no wallet it could ever top up.
-    const funded = float === null || spendable >= LOCK_THRESHOLD;
+    const funded = float === null || spendable >= threshold;
     // Held over its national ID: said first, because topping up would not open the counter.
     const held = Boolean(this.agents.idHoldOf(did));
     // The money side alone: what a parcel booked BEFORE the hold is judged by when it is handed in.
     const moneyOk = this.agents.canScan(did) && funded;
     const ok = !held && moneyOk;
     const code = ok ? null : held ? 'ID_HELD' : !funded ? 'WALLET_INSUFFICIENT' : 'AGENT_LOCKED';
-    const shortfall = funded ? 0 : Math.round((LOCK_THRESHOLD - spendable) * 100) / 100;
+    const shortfall = funded ? 0 : Math.round((threshold - spendable) * 100) / 100;
     const used = this.agents.creditOwed(did);
     return {
       ok,
@@ -200,9 +205,11 @@ export class WalletGateService {
       moneyOk,
       code,
       balance,
-      threshold: LOCK_THRESHOLD,
+      threshold,
       shortfall,
-      credit: { limit: TRADE_CREDIT_LIMIT, used, available: Math.round((TRADE_CREDIT_LIMIT - used) * 100) / 100 },
+      // Every figure here is in the money of the company that contracts this shop.
+      currency: list.currency ?? NETWORK_CURRENCY,
+      credit: { limit: creditLimit, used, available: Math.round((creditLimit - used) * 100) / 100 },
     };
   }
 
@@ -300,7 +307,7 @@ export class WalletGateService {
     const balance = this.agents.balance(did) ?? 0;
     // `amount` is the GROSS. The credit line is measured against it too: what a shop owes us is the whole
     // charge, and a tax we have already booked as payable is exactly as real a debt as the rest.
-    if (balance - amount < -TRADE_CREDIT_LIMIT - 1e-9) {
+    if (balance - amount < -creditLimitOf(this.agents.amountsOf(did)) - 1e-9) {
       throw new GlosError('WALLET_INSUFFICIENT', `Trade credit is used up (${TRADE_CREDIT_PARCELS} parcels) — top up to keep scanning`);
     }
     // Tax first, off the top — held for an authority, never ours, never revenue.
@@ -330,6 +337,8 @@ export class WalletGateService {
    *  `sellerEntityId` is the sister that SOLD the shipment. When it is another company, this shop's own
    *  sister has just paid for work on somebody else's sale, and recovers it at cost (see recoverAtCost). */
   payLabour(did: string, amount: number, reference: string, refType: PudoLedgerEntry['refType'], sellerEntityId?: string): PudoLedgerEntry | null {
+    // A company may pay nothing for a step (its list says so): then nothing is booked and no row is written.
+    if (!(amount > 0)) return null;
     const agent = this.agents.get(did);
     if (!this.agents.entityIdOrNone(agent)) {
       /**
@@ -494,12 +503,17 @@ export class WalletGateService {
    * The REGISTER row stays keyed to the driver even when the money goes to their fleet — see
    * `DriverService.payeeOf` for why those are deliberately two different keys.
    */
+  /** Scanning a bag aboard is paid at the figure of the company that settles this driver — the one their offer showed. */
+  payBagLoad(driverDid: string): PudoLedgerEntry | null {
+    return this.driverPayout(driverDid, this.drivers.payTermsOf(driverDid).bagLoadPay);
+  }
+
   driverPayout(driverId: string, amount: number): PudoLedgerEntry | null {
     const { entityId, payeeDid } = this.drivers.payeeOrNone(driverId);
     // A fleet standing where no sister does is not paid by us: the job settles between the two parties, off the
     // platform, and nothing is accrued. Returning null rather than refusing, because this runs at DELIVERY — a
     // custody event must not fail because a money question has no answer (the P2 lesson, again).
-    if (!entityId) return null;
+    if (!entityId || !(amount > 0)) return null;
     const entryId = this.books.post({
       entityId,
       kind: 'driver-payout',

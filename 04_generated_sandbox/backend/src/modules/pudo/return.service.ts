@@ -121,7 +121,7 @@ export class ReturnService {
       toAgentDid,
       declaredValue,
       returnCost: quote.locked.gross,
-      holdingCost: holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, now, shipmentCost: parcel.shipmentCost, settled: parcel.holdingSettled }),
+      holdingCost: holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, now, shipmentCost: parcel.shipmentCost, settled: parcel.holdingSettled, perDay: parcel.holdingFeePerDay }),
       currency: quote.currency,
       status: 'offered',
       offeredAt: new Date(now).toISOString(),
@@ -275,7 +275,7 @@ export class ReturnService {
   /** What the shop holding this parcel is owed for the slot, right now. Zero once it is settled. */
   private holdingOn(parcelId: string, now: number): number {
     const parcel = this.parcels.get(parcelId);
-    return holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, now, shipmentCost: parcel.shipmentCost, settled: parcel.holdingSettled });
+    return holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, now, shipmentCost: parcel.shipmentCost, settled: parcel.holdingSettled, perDay: parcel.holdingFeePerDay });
   }
 
   private requireOpen(offerId: string, vendorId: string, now: number): ReturnOffer {

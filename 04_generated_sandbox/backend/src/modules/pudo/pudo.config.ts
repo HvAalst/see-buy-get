@@ -516,7 +516,7 @@ export const FREE_EXTENSIONS = 1;
  * would see a different number from the counter about to charge somebody. Counted in STARTED days, which
  * is how storage is charged everywhere and how a person expects to be billed for one.
  */
-export function holdingFeeFor(input: { unclaimedAt?: string; now?: number; shipmentCost?: number; settled?: number }): number {
+export function holdingFeeFor(input: { unclaimedAt?: string; now?: number; shipmentCost?: number; settled?: number; /** The daily rate fixed on the parcel; absent, what every company starts from. */ perDay?: number }): number {
   if (!input.unclaimedAt) return 0;
   const since = new Date(input.unclaimedAt).getTime();
   if (!Number.isFinite(since)) return 0;
@@ -525,7 +525,7 @@ export function holdingFeeFor(input: { unclaimedAt?: string; now?: number; shipm
   const days = Math.min(Math.ceil(elapsed / 86_400_000), HOLDING_FEE_MAX_DAYS);
   // Never more than the journey itself cost. A parcel with no recorded cost is capped by the days alone.
   const ceiling = input.shipmentCost && input.shipmentCost > 0 ? input.shipmentCost : Number.POSITIVE_INFINITY;
-  const accrued = Math.min(round2(days * HOLDING_FEE_PER_DAY), ceiling);
+  const accrued = Math.min(round2(days * (input.perDay ?? HOLDING_FEE_PER_DAY)), ceiling);
   return Math.max(0, round2(accrued - (input.settled ?? 0)));
 }
 /**

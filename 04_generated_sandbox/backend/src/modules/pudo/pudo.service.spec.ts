@@ -23,6 +23,7 @@ import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { ParcelService, birthplaceOf, custodianOf, custodyAt, labelDate, ownershipOf } from './parcel.service';
 import { MAX_WORK_RADIUS_KM, OTP_MAX_ATTEMPTS, PICKUP_FEE, RELEASE_FEE, SHELVING_FEE, TOTE_LOAD_FEE, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
+import { AMOUNT_KEYS, DEFAULT_AMOUNTS } from './amounts';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { CargoService } from './cargo.service';
 import { SbgController } from './pudo.controller';
@@ -2758,6 +2759,22 @@ describe('PUDO Light', () => {
       // What was promised is what arrives: the offer's figure equals the sum of the two ledger lines.
       const paid = gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did).reduce((s, e) => s + e.amount, 0);
       expect(Math.round(paid * 100) / 100).toBe(offer.earn);
+    });
+
+    it('pays for loading a bag what the driver’s own company says — on the offer, and at the scan', () => {
+      // It was a constant, in the code. The offer and the scan each read it, so a figure changed in one place
+      // would have promised a driver one amount and paid another.
+      entities.setAmounts(entities.requireForJurisdiction('KE').entityId, { toteLoadFee: 35 }, 'Amina Otieno');
+      const dest = onboardAgent('Haul Dest G', 'SouthTown', 50); agents.setLocation(dest.did, { lat: -1.35, lng: 36.95 });
+      const { origin, d, bag } = bagRun('G', { destinationNodeId: dest.did, parcels: 1 });
+      expect(drivers.payTermsOf(d.did)).toEqual({ bagLoadPay: 35, currency: 'KES' });
+      const [offer] = dispatch.suggest(d.did, { from: origin.location, to: dest.location }).filter((o) => o.ref === bag.code);
+      dispatch.claim(offer.offerId);
+      const road = totes.requireByCode(bag.code).haul!.road;
+      expect(offer.earn).toBe(Math.round((35 + road) * 100) / 100);
+
+      mdps.loadBag(bag.code, drivers.get(d.did).badgeId!);
+      expect(gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did).map((e) => e.amount)).toEqual([35]);
     });
 
     it('shows what the pay is MADE of — how many parcels, and how full the bag is', () => {
@@ -7592,5 +7609,206 @@ describe('PUDO Light', () => {
     expect(d.systemFloat).toBeGreaterThan(0);
     expect(d.statusMix.At_PUDO).toBeGreaterThanOrEqual(1);
     expect(monitor.finance().systemFloat).toBe(d.systemFloat);
+  });
+
+  /**
+   * WHAT A PARCEL COSTS AND WHAT EACH STEP PAYS — a list per country's company, in its own money (amounts.ts).
+   *
+   * These were constants: 1.60 to a shop's float, 0.40 for a take-in, and so on, at a dollar's scale, stamped as
+   * shillings, changeable by a developer. What is held here: a company starts from those figures and nothing moves
+   * until one is set; a figure set is used by every step done from then on; and what has already happened is not
+   * re-priced — a parcel is refunded what it was charged.
+   */
+  describe('a company’s own list of amounts', () => {
+    const KE = () => entities.requireForJurisdiction('KE').entityId;
+    const set = (patch: Record<string, number | null>) => entities.setAmounts(KE(), patch, 'Amina Otieno');
+    const row = (key: string) => entities.pricingFor(KE(), []).amounts.find((r) => r.key === key)!;
+    const cash = (a: { did: string }, id: string) => parcels.accept({ agentDid: a.did, parcelId: id, size: 'M', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'v.jpg' });
+    const refused = (patch: Record<string, unknown>): string => {
+      try {
+        entities.setAmounts(KE(), patch as never, 'Amina Otieno');
+      } catch (e) {
+        return (e as Error).message;
+      }
+      return 'taken';
+    };
+    /** What this shop has been paid, newest last. */
+    const paidTo = (did: string) => gate.entries({ did, type: 'LABOR_PAYOUT' }).map((e) => e.amount).reverse();
+
+    it('starts every company from today’s figures — and nothing changes until somebody sets one', () => {
+      expect(DEFAULT_AMOUNTS).toEqual({ wholesale: 1.6, labourFee: 0.4, handoverFee: 0.5, shelvingFee: 0.15, releaseFee: 0.15, toteLoadFee: 0.5, mdpSortFee: 0.2, holdingFeePerDay: 0.1 });
+      expect(entities.amountsFor(KE())).toEqual({ ...DEFAULT_AMOUNTS, currency: 'KES' });
+      // Nobody's company: the starting figures, in no money in particular.
+      expect(entities.amountsFor(undefined)).toEqual({ ...DEFAULT_AMOUNTS, currency: undefined });
+      const rows = entities.pricingFor(KE(), []).amounts;
+      expect(rows.map((r) => r.key)).toEqual([...AMOUNT_KEYS]);
+      expect(rows.every((r) => !r.own && r.amount === r.startsAt)).toBe(true);
+    });
+
+    it('a figure set is that company’s own; one left out is left alone; null puts one back', () => {
+      set({ wholesale: 160, labourFee: 40 });
+      expect(entities.amountsFor(KE())).toMatchObject({ wholesale: 160, labourFee: 40, handoverFee: 0.5, currency: 'KES' });
+      expect(row('wholesale')).toEqual({ key: 'wholesale', amount: 160, own: true, startsAt: 1.6 });
+      expect(row('handoverFee')).toEqual({ key: 'handoverFee', amount: 0.5, own: false, startsAt: 0.5 });
+
+      set({ labourFee: null });
+      expect(entities.amountsFor(KE())).toMatchObject({ wholesale: 160, labourFee: 0.4 });
+      expect(row('labourFee').own).toBe(false);
+      // Money has two places.
+      set({ shelvingFee: 12.347 });
+      expect(row('shelvingFee').amount).toBe(12.35);
+      // A step a company pays nothing for is a figure like any other.
+      set({ handoverFee: 0 });
+      expect(row('handoverFee')).toEqual({ key: 'handoverFee', amount: 0, own: true, startsAt: 0.5 });
+    });
+
+    it('refuses what cannot be meant, and a refusal changes nothing beside it', () => {
+      expect(refused({ retail: 2 })).toContain('"retail" is not an amount on a company’s list');
+      expect(refused({ labourFee: -1 })).toContain('not less than nothing');
+      expect(refused({ labourFee: Number.NaN })).toContain('has to be an amount of money');
+      expect(refused({ labourFee: '40' })).toContain('has to be an amount of money');
+      // The price of a parcel is also the float a shop needs and the measure of its credit: at nothing, neither guards.
+      expect(refused({ wholesale: 0 })).toContain('A parcel has to cost something');
+      expect(refused({ labourFee: 40, wholesale: 0 })).toContain('A parcel has to cost something');
+      expect(entities.amountsFor(KE())).toEqual({ ...DEFAULT_AMOUNTS, currency: 'KES' });
+      // The group sells nothing and pays nobody: it has no list to set.
+      expect(() => entities.setAmounts('sbg', { wholesale: 2 }, 'Amina Otieno')).toThrow();
+    });
+
+    it('is written down with who did it, naming only what changed — and a save that changes nothing is not a decision', () => {
+      set({ wholesale: 160, labourFee: 40 });
+      expect(entities.changes(KE(), 1)[0]).toMatchObject({ by: 'Amina Otieno', what: 'amounts', from: 'parcel price 1.6, take-in pay 0.4 (KES)', to: 'parcel price 160, take-in pay 40 (KES)' });
+      const written = entities.changes(KE(), 50).length;
+      set({ wholesale: 160 });
+      set({});
+      expect(entities.changes(KE(), 50)).toHaveLength(written);
+    });
+
+    it('is set by network staff and by that company’s own administrators — not by another company’s', () => {
+      const staff = { role: 'operator', active: true, actorName: 'Amina Otieno' } as never;
+      const ours = { role: 'entity_admin', active: true, tenant: KE(), actorName: 'Njeri W.' } as never;
+      const theirs = { role: 'entity_admin', active: true, tenant: 'sbg-et', actorName: 'Abebe B.' } as never;
+
+      controller.setEntityAmounts(KE(), { wholesale: 150 } as never, ours);
+      expect(entities.amountsFor(KE()).wholesale).toBe(150);
+      expect(entities.changes(KE(), 1)[0]).toMatchObject({ what: 'amounts', by: 'Njeri W.' });
+
+      // Told there is no such company, as for any other of its terms: not even that it exists.
+      expect(() => controller.setEntityAmounts(KE(), { wholesale: 1 } as never, theirs)).toThrow('No such company');
+      expect(entities.amountsFor(KE()).wholesale).toBe(150);
+
+      controller.setEntityAmounts(KE(), { wholesale: null } as never, staff);
+      expect(entities.amountsFor(KE()).wholesale).toBe(WHOLESALE);
+      expect(entities.changes(KE(), 1)[0].by).toBe('Amina Otieno');
+    });
+
+    it('a parcel at the counter costs what the shop’s company says — and is refunded what it COST, not today’s price', () => {
+      set({ wholesale: 160 });
+      const a = onboardAgent('Price Shop', 'NorthTown', 1000);
+      const before = agents.balance(a.did)!;
+      cash(a, 'QR-AM-1');
+      expect(agents.balance(a.did)!).toBeCloseTo(before - 160, 2);
+      expect(parcels.get('QR-AM-1').intakeCharge).toBe(160);
+
+      // The price moves while that parcel can still be cancelled.
+      set({ wholesale: 200 });
+      cash(a, 'QR-AM-2');
+      expect(agents.balance(a.did)!).toBeCloseTo(before - 360, 2);
+      parcels.void('QR-AM-1', a.did, 'torn.jpg');
+      expect(agents.balance(a.did)!).toBeCloseTo(before - 200, 2); // 160 came back; the 200 parcel stands
+      expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
+    });
+
+    it('the float that opens the counter is the price of one parcel, and the credit line is twenty of them', () => {
+      const early = onboardAgent('Early Shop', 'NorthTown', 10);
+      expect(gate.canTransact(early.did)).toMatchObject({ canTransact: true, threshold: 1.6, currency: 'KES', credit: { limit: 32, used: 0, available: 32 } });
+
+      set({ wholesale: 160 });
+      expect(gate.canTransact(early.did)).toMatchObject({ canTransact: true, threshold: 160, currency: 'KES', credit: { limit: 3200, used: 0, available: 3200 } });
+
+      // Two parcels of its own money, then the whole line: the shutter comes down where the next parcel cannot be paid.
+      const a = onboardAgent('Line Shop', 'NorthTown', 320);
+      for (let i = 0; i < 2 + TRADE_CREDIT_PARCELS; i += 1) cash(a, `QR-LN-${i}`);
+      expect(gate.canTransact(a.did)).toMatchObject({ canTransact: false, code: 'WALLET_INSUFFICIENT', threshold: 160, shortfall: 160, credit: { limit: 3200, used: 3200, available: 0 } });
+      expect(agents.get(a.did).status).toBe('LOCKED');
+      expect(() => cash(a, 'QR-LN-X')).toThrow('Insufficient funds');
+    });
+
+    it('a change of price is felt at every counter of that company at once — not at each shop’s next payment', () => {
+      const staff = { role: 'operator', active: true, actorName: 'Amina Otieno' } as never;
+      controller.setEntityAmounts(KE(), { wholesale: 160 } as never, staff);
+      // One parcel of its own money and nineteen on credit: one parcel short of the end of its line — open, only just.
+      const a = onboardAgent('Edge Shop', 'NorthTown', 160);
+      for (let i = 0; i < TRADE_CREDIT_PARCELS; i += 1) cash(a, `QR-ED-${i}`);
+      expect(agents.get(a.did).status).toBe('ACTIVE');
+      // A shop approved and never funded: a price does not open it.
+      agentSeq += 1;
+      const waiting = agents.register({ shopName: 'Waiting Shop', zone: 'NorthTown', location: { lat: -1.2, lng: 36.8 }, landmark: 'x', openingHours: uniformHours(), shelf: defaultShelf, fullName: 'Waiting owner', nationalId: `ID-WAIT-${agentSeq}`, mobile: `+2547009${agentSeq}`, deviceImei: `IMEI-WAIT-${agentSeq}`, requirements: eligibleReqs() });
+      agents.submitKyc(waiting.did, kycDocs);
+      agents.decideKyc(waiting.did, true);
+      expect(agents.get(waiting.did).status).toBe('APPROVED_UNFUNDED');
+
+      // The price falls: nineteen parcels at 160 are more than twenty at 100, so the line is used up — shut, now.
+      controller.setEntityAmounts(KE(), { wholesale: 100 } as never, staff);
+      expect(agents.get(a.did).status).toBe('LOCKED');
+      expect(gate.canTransact(a.did)).toMatchObject({ canTransact: false, threshold: 100, credit: { limit: 2000 } });
+      // …and back: open again, with nobody paying anything in between.
+      controller.setEntityAmounts(KE(), { wholesale: 160 } as never, staff);
+      expect(agents.get(a.did).status).toBe('ACTIVE');
+      expect(gate.canTransact(a.did).canTransact).toBe(true);
+      expect(agents.get(waiting.did).status).toBe('APPROVED_UNFUNDED');
+    });
+
+    it('each step is paid what the company of the shop that does it says, on the day it is done', () => {
+      set({ labourFee: 40, shelvingFee: 15, releaseFee: 12 });
+      const { origin, dest, res } = mintInbound('AMT');
+      const id = res.parcel.parcelId;
+
+      parcels.intakeInbound(id, origin.did);
+      expect(paidTo(origin.did)).toEqual([40]);
+      expect(parcels.get(id).intakeLabour).toBe(40);
+
+      parcels.get(id).status = 'On_Bus';
+      parcels.arrive(id, dest.did);
+      expect(paidTo(dest.did)).toEqual([15]);
+
+      // The figure moves between the shelf and the hand-over: the hand-over is paid at the figure of its own day.
+      set({ releaseFee: 20 });
+      parcels.collectConfirm(id, dest.did, parcels.get(id).collectionCode!);
+      expect(paidTo(dest.did)).toEqual([15, 20]);
+      expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
+    });
+
+    it('handing a batch to the driver pays that shop’s company’s figure — and a step paid nothing writes no row', () => {
+      set({ handoverFee: 55 });
+      const { badge } = mkFleetDriver('AMH');
+      const a = onboardAgent('Batch Shop', 'NorthTown', 50);
+      handOff(a, badge, 'QR-AMH-1');
+      expect(paidTo(a.did)).toEqual([55]);
+
+      set({ handoverFee: 0 });
+      handOff(a, badge, 'QR-AMH-2');
+      expect(paidTo(a.did)).toEqual([55]);
+      expect(parcels.get('QR-AMH-2').status).toBe('On_Bus'); // the parcel moved all the same
+    });
+
+    it('a hub is paid for each parcel it sorts at its own company’s figure', () => {
+      set({ mdpSortFee: 25 });
+      const origin = onboardAgent('Sort Origin', 'NorthTown', 50);
+      const dest = onboardAgent('Sort Dest', 'SouthTown', 50);
+      const hub = mdps.register({ name: 'Sort Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } });
+      const vendor = vendors.register({ name: 'SortStore' });
+      vendors.topUp(vendor.vendorId, 50);
+      const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700222', size: 'M', contentPhotoRef: 'content.jpg', shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });
+      parcels.intakeInbound(parcel.parcelId, origin.did);
+      const bag = totes.register(origin.did);
+      totes.assign(bag.code, hub.mdpId, hub.name);
+      mdps.fillTote(bag.code, parcel.parcelId);
+      mdps.loadBag(bag.code, 'BUS-AM');
+      mdps.dropBag(hub.mdpId, bag.code);
+      mdps.sortParcel(hub.mdpId, parcel.parcelId);
+      const sorted = gate.entries({ type: 'LABOR_PAYOUT' }).filter((e) => e.refType === 'mdp');
+      expect(sorted.map((e) => e.amount)).toEqual([25]);
+    });
   });
 });

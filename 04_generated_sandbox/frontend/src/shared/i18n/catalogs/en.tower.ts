@@ -1234,6 +1234,33 @@ export const enTower = {
   /* WHAT IT COSTS TO PUT MONEY IN — the one knob on this screen that is not a lane and not a percentage.
      The hint has to carry the reasoning, because an operator setting this is deciding for every shop in
      the country and the shape of the fee is the argument for it. */
+  'tower.amounts.title': 'What a parcel costs and what each step pays',
+  'tower.amounts.noneOwn': 'All at the figures every company starts from',
+  'tower.amounts.ownCount': '{n} of {of} set by this company',
+  'tower.amounts.itsMoney': 'this company’s own money',
+  'tower.amounts.hint': 'In {currency}. An empty box stands at the figure shown greyed in it, which is what every company starts from; type 0 for a step this company pays nothing for. A change counts for every step done from then on. It does not re-price what has happened: a parcel is refunded what it was charged, and a parcel already past its free time keeps the daily rate it started at.',
+  'tower.amounts.k.wholesale': 'A parcel taken in at the counter',
+  'tower.amounts.h.wholesale': 'Charged to the shop’s float. It is also the float a shop needs to take the next one in, and its credit line is counted in parcels at this price.',
+  'tower.amounts.k.labourFee': 'Taking in a parcel that is already paid for',
+  'tower.amounts.h.labourFee': 'Paid to the shop.',
+  'tower.amounts.k.handoverFee': 'Handing a batch to the driver',
+  'tower.amounts.h.handoverFee': 'Paid to the shop, once for each batch.',
+  'tower.amounts.k.toteLoadFee': 'Loading a bag',
+  'tower.amounts.h.toteLoadFee': 'Paid to the driver who scans it aboard, on top of what the road pays.',
+  'tower.amounts.k.mdpSortFee': 'Sorting a parcel at a hub',
+  'tower.amounts.h.mdpSortFee': 'Paid to the hub, for each parcel.',
+  'tower.amounts.k.shelvingFee': 'Shelving a parcel that has arrived',
+  'tower.amounts.h.shelvingFee': 'Paid to the receiving shop when the parcel lands on its shelf.',
+  'tower.amounts.k.releaseFee': 'Handing a parcel to its receiver',
+  'tower.amounts.h.releaseFee': 'Paid to the receiving shop when it is collected.',
+  'tower.amounts.k.holdingFeePerDay': 'Holding a parcel, for each day',
+  'tower.amounts.h.holdingFeePerDay': 'Owed once the free collection time has ended, and never more than the journey cost.',
+  'tower.amounts.math': 'A parcel taken in at the counter brings in {price}. Sorting, shelving and handing it over pay out up to {out} of that.',
+  'tower.amounts.mathOver': 'A parcel taken in at the counter brings in {price}, and sorting, shelving and handing it over pay out up to {out}: more than it brings in. Check which box each figure is in.',
+  'tower.amounts.negative': '{field} cannot be less than nothing.',
+  'tower.amounts.priceNeeded': 'A parcel has to cost something: its price is also the float a shop needs to take one in.',
+  'tower.amounts.nothingChanged': 'Nothing changed yet.',
+  'tower.amounts.saved': 'Saved. Every step done from now on uses these figures.',
   'tower.topupfee.title': 'What it costs to put money in',
   'tower.topupfee.hint':
     'A flat charge on a top-up below the threshold, and nothing at or above it. Flat because what it recovers is a cost per PAYMENT, not per shilling — a percentage would charge twice as much for a top-up that costs us the same to carry. Free above the threshold so it is never friction for a shop that has run dry mid-morning. The shop is credited the full amount and charged separately, and both lines show on its register.',
@@ -1605,6 +1632,7 @@ export const enTowerCompanies = {
   // The rest of the EntityChange union. Without these the audit table renders its own key as the reason a
   // price moved, which is the one column on it that has to be readable by somebody asking what happened.
   'tower.changes.what.topUpFee': 'Top-up fee',
+  'tower.changes.what.amounts': 'Parcel price and step pay',
   'tower.changes.what.created': 'Company created',
   'tower.changes.what.record': 'Company record',
   'tower.changes.what.activated': 'Switched on',

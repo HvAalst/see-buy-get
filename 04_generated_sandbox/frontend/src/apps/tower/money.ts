@@ -193,6 +193,109 @@ export function topUpFeeFormError(form: TopUpFeeForm, t: Translate): string | nu
   return null;
 }
 
+/* ------------------------------------------------------------- a company's list of amounts -- */
+
+export type CompanyAmount = components['schemas']['CompanyAmount'];
+export type AmountKey = CompanyAmount['key'];
+/** What is typed: text, one box per amount. An EMPTY box is "what every company starts from", not zero. */
+export type AmountsForm = Record<AmountKey, string>;
+
+/**
+ * The order the list is READ in: what comes in first, then what goes out in the order a parcel travels — taken in,
+ * handed to a driver, loaded, sorted, shelved, handed over — and last what waiting costs. The server's own order is
+ * the order the figures were written in the code, which is nobody's way of thinking about a parcel.
+ */
+export const AMOUNT_ORDER: AmountKey[] = ['wholesale', 'labourFee', 'handoverFee', 'toteLoadFee', 'mdpSortFee', 'shelvingFee', 'releaseFee', 'holdingFeePerDay'];
+
+const amountRow = (pricing: Pick<EntityPricing, 'amounts'>, key: AmountKey): CompanyAmount | undefined => pricing.amounts.find((r) => r.key === key);
+
+/** The form as it opens: this company's own figures, and an empty box wherever it has not set one. */
+export function amountsFormOf(pricing: Pick<EntityPricing, 'amounts'>): AmountsForm {
+  const form = {} as AmountsForm;
+  for (const key of AMOUNT_ORDER) {
+    const row = amountRow(pricing, key);
+    form[key] = row?.own ? String(row.amount) : '';
+  }
+  return form;
+}
+
+/**
+ * What goes on the wire: ONLY what was changed. A box emptied sends `null` (back to the starting figure); a box
+ * left as it was sends nothing, so saving one figure cannot quietly turn seven inherited ones into decisions.
+ */
+export function amountsPayload(form: AmountsForm, pricing: Pick<EntityPricing, 'amounts'>): Partial<Record<AmountKey, number | null>> {
+  const out: Partial<Record<AmountKey, number | null>> = {};
+  for (const key of AMOUNT_ORDER) {
+    const row = amountRow(pricing, key);
+    const typed = form[key].trim();
+    if (!typed) {
+      if (row?.own) out[key] = null;
+      continue;
+    }
+    const n = amountOf(typed);
+    if (n === null) continue; // amountsFormError has said so; nothing half-read is sent
+    if (!row?.own || row.amount !== Math.round(n * 100) / 100) out[key] = n;
+  }
+  return out;
+}
+
+/** The server's own refusals, said before anybody presses save. */
+export function amountsFormError(form: AmountsForm, pricing: Pick<EntityPricing, 'amounts'>, t: Translate): string | null {
+  for (const key of AMOUNT_ORDER) {
+    const typed = form[key].trim();
+    if (!typed) continue;
+    const n = amountOf(typed);
+    if (n === null) return t('tower.rates.notANumber', { field: t(AMOUNT_LABEL[key]) });
+    if (n < 0) return t('tower.amounts.negative', { field: t(AMOUNT_LABEL[key]) });
+  }
+  if (!(amountsInForce(form, pricing).wholesale > 0)) return t('tower.amounts.priceNeeded');
+  return null;
+}
+
+/** The list as it WOULD stand if this form were saved: what is typed, else the figure every company starts from. */
+export function amountsInForce(form: AmountsForm, pricing: Pick<EntityPricing, 'amounts'>): Record<AmountKey, number> {
+  const out = {} as Record<AmountKey, number>;
+  for (const key of AMOUNT_ORDER) {
+    const typed = amountOf(form[key].trim());
+    out[key] = form[key].trim() && typed !== null ? Math.round(typed * 100) / 100 : (amountRow(pricing, key)?.startsAt ?? 0);
+  }
+  return out;
+}
+
+/**
+ * WHAT ONE COUNTER PARCEL BRINGS IN AGAINST WHAT ITS STEPS PAY OUT — said on the screen before the button is pressed.
+ *
+ * Not a rule the server holds: a company may decide to carry a parcel at a loss, and currencies differ too much for
+ * any ceiling to mean something. But a list on which every parcel pays out more than it brings in is nearly always a
+ * figure typed in the wrong box, and the one place that can be seen is here.
+ */
+export function counterParcelMath(amounts: Record<AmountKey, number>): { price: number; perParcel: number; over: boolean } {
+  const perParcel = Math.round((amounts.mdpSortFee + amounts.shelvingFee + amounts.releaseFee) * 100) / 100;
+  return { price: amounts.wholesale, perParcel, over: perParcel > amounts.wholesale };
+}
+
+export const AMOUNT_LABEL: Record<AmountKey, MessageKey> = {
+  wholesale: 'tower.amounts.k.wholesale',
+  labourFee: 'tower.amounts.k.labourFee',
+  handoverFee: 'tower.amounts.k.handoverFee',
+  toteLoadFee: 'tower.amounts.k.toteLoadFee',
+  mdpSortFee: 'tower.amounts.k.mdpSortFee',
+  shelvingFee: 'tower.amounts.k.shelvingFee',
+  releaseFee: 'tower.amounts.k.releaseFee',
+  holdingFeePerDay: 'tower.amounts.k.holdingFeePerDay',
+};
+
+export const AMOUNT_HINT: Record<AmountKey, MessageKey> = {
+  wholesale: 'tower.amounts.h.wholesale',
+  labourFee: 'tower.amounts.h.labourFee',
+  handoverFee: 'tower.amounts.h.handoverFee',
+  toteLoadFee: 'tower.amounts.h.toteLoadFee',
+  mdpSortFee: 'tower.amounts.h.mdpSortFee',
+  shelvingFee: 'tower.amounts.h.shelvingFee',
+  releaseFee: 'tower.amounts.h.releaseFee',
+  holdingFeePerDay: 'tower.amounts.h.holdingFeePerDay',
+};
+
 export function coverFormOf(row: LanePricing): CoverForm {
   const level: RuleOrigin = row.lane ? 'lane' : 'sister';
   const owned = row.insuranceOrigin === level;

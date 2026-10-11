@@ -67,6 +67,11 @@ export function createOperatorApi(sbg: SbgClient) {
     setTopUpFee: (entityId: string, body: { amount?: number; freeAbove?: number }) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/top-up-fee', { params: { path: { entityId } }, body: body as never })),
 
+    /** Set figures on a company's list of amounts — what a parcel costs and what each step pays, in its own money.
+     *  A key left out is left alone; `null` puts one back to what every company starts from. */
+    setAmounts: (entityId: string, body: Record<string, number | null>) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/amounts', { params: { path: { entityId } }, body: body as never })),
+
     /** Set what a sister covers for free, and what it charges to cover more. */
     setInsurance: (entityId: string, body: { lane?: string; premiumPct?: number | null; freeLimit?: number | null }) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/insurance', { params: { path: { entityId } }, body: body as never })),
