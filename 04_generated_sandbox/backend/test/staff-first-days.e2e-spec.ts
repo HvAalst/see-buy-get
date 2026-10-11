@@ -6,6 +6,7 @@ import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { RequestMethod } from '@nestjs/common';
 import { AppModule } from '../src/app.module';
 import { SETUP_KEY_KEY } from '../src/foundation/auth/setup-key';
+import { STAFF_OUTSIDE_SANDBOX_KEY } from '../src/foundation/auth/engine-surface';
 import { DidService } from '../src/foundation/did/did.service';
 
 /**
@@ -155,6 +156,81 @@ describe('a new installation’s first days', () => {
       });
       // On a laptop a script still gets one.
       expect((await http().post('/v1/auth/token').send({ sub: 'a-script', type: 'client_credentials' }).expect(201)).body.access_token).toBeTruthy();
+    });
+
+    /**
+     * THE ENGINE UNDERNEATH. Found while checking what else the secret could reach: its own routes ask for "a valid
+     * token" and no more, and the identity and wallet ones for nothing at all. None of the apps calls them.
+     */
+    it('the engine’s own routes are for network staff only: not for the public, a participant, or the setup key', async () => {
+      const amina = person('amina-engine');
+      const made = (await http().post('/v1/sbg/operators').set(bearer(setupKey)).send(amina).expect(201)).body;
+      const staffToken = await signIn(amina.email, made.temporaryPassword);
+      const shopDid = app.get(DidService).generate(`pudo-agent:+2547008${tag}`).id;
+      const shopToken = (await http().post('/v1/auth/token').send({ role: 'agent', did: shopDid }).expect(201)).body.access_token as string;
+
+      // ON A LAPTOP, as it always was: the wallet asks for no sign-in, and any valid token opens the rest.
+      expect((await http().post('/v1/identity/liveness/challenge').expect(201)).body).toBeDefined();
+      await http().get('/v1/shipments/module-info').set(bearer(shopToken)).expect(200);
+      await http().get('/v1/settlement/module-info').set(bearer(shopToken)).expect(200);
+
+      await asProduction(async () => {
+        const STAFF_ONLY = /Outside a sandbox this part of the server is for network staff only\./;
+        // Nobody signed in: every one of these answered before, the credit and the cash-out among them.
+        for (const [method, path] of [
+          ['post', '/v1/identity/register'],
+          ['post', '/v1/identity/liveness/challenge'],
+          ['get', '/v1/identity/accounts/acc_anybody'],
+          ['post', '/v1/identity/accounts/acc_anybody/roles'],
+          ['get', '/v1/identity/accounts/acc_anybody/wallet'],
+          ['post', '/v1/identity/accounts/acc_anybody/wallet/credit'],
+          ['post', '/v1/identity/accounts/acc_anybody/wallet/cash-out'],
+          ['post', '/v1/identity/accounts/acc_anybody/wallet/withdrawals/req_1/approve'],
+        ] as Array<['get' | 'post', string]>) {
+          expect([path, (await http()[method](path).send({ amount: 1000, currency: 'KES' })).status]).toEqual([path, 401]);
+        }
+        // A shop, signed in as itself: any valid token used to do, and a shop's is one.
+        for (const [method, path] of [
+          ['get', '/v1/shipments/module-info'],
+          ['post', '/v1/shipments'],
+          ['post', '/v1/settlement/escrows'],
+          ['post', '/v1/settlement/disputes/dsp_1/resolve'],
+          ['post', '/v1/reputation/ratings'],
+          ['post', '/v1/tracking/events'],
+          ['post', '/v1/control-tower/actions/act_1/approve'],
+          ['post', '/v1/matching/matches/m_1/force-assign'],
+          ['get', '/v1/gateway/module-info'],
+          ['get', '/v1/identity'],
+          ['post', '/v1/identity/accounts/acc_anybody/wallet/credit'],
+        ] as Array<['get' | 'post', string]>) {
+          const refused = await http()[method](path).set(bearer(shopToken)).send({});
+          expect([path, refused.status, STAFF_ONLY.test(said(refused))]).toEqual([path, 403, true]);
+        }
+        // The setup key: refused, for its own reason.
+        expect((await http().get('/v1/shipments/module-info').set(bearer(setupKey)).expect(403)).body).toBeDefined();
+        // A member of staff reads it.
+        await http().get('/v1/shipments/module-info').set(bearer(staffToken)).expect(200);
+        await http().get('/v1/settlement/module-info').set(bearer(staffToken)).expect(200);
+        // And what is the PRODUCT's own stays as open as it was: a shop signed in is still a shop.
+        await http().get('/v1/sbg/border-rules').set(bearer(shopToken)).expect(200);
+      });
+    });
+
+    it('nine controllers are the engine’s, every one of them is marked, and nothing else is', () => {
+      const marked: string[] = [];
+      const others: string[] = [];
+      for (const module of app.get(ModulesContainer).values()) {
+        for (const controller of module.controllers.values()) {
+          const type = controller.metatype as object;
+          const base = String(Reflect.getMetadata(PATH_METADATA, type) ?? '');
+          (Reflect.getMetadata(STAFF_OUTSIDE_SANDBOX_KEY, type) === true ? marked : others).push(base);
+        }
+      }
+      expect([...new Set(marked)].sort()).toEqual(['control-tower', 'gateway', 'identity', 'identity/accounts/:accountId/wallet', 'matching', 'reputation', 'settlement', 'shipments', 'tracking']);
+      // Everything else is the product's (under sbg) or the server's own front: a new controller that is neither has to
+      // be put on one of these two lists by somebody who looked at it.
+      const front = ['auth', 'did', 'health', 'mail', 'rails/funding'];
+      expect([...new Set(others)].filter((b) => !b.startsWith('sbg') && !front.includes(b))).toEqual([]);
     });
 
     it('exactly four routes are marked for the setup key, and all four set network staff up', () => {

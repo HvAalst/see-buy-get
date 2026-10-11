@@ -1,3 +1,4 @@
+import { StaffOnlyOutsideSandbox } from '../../foundation/auth/engine-surface';
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { TrackingService } from './tracking.service';
 import { TrackingContextService } from './tracking-context.service';
@@ -22,6 +23,7 @@ interface ModuleInfo {
 /**
  * M4 — Visibility & Tracking Tower. DID-authenticated (global guard; no @Public).
  */
+@StaffOnlyOutsideSandbox()
 @Controller('tracking')
 export class M4Controller {
   constructor(

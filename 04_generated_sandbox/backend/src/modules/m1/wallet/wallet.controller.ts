@@ -1,3 +1,4 @@
+import { StaffOnlyOutsideSandbox } from '../../../foundation/auth/engine-surface';
 import { BadRequestException, Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { Public } from '../../../foundation/auth/public.decorator';
 import { IdentityService } from '../identity.service';
@@ -8,10 +9,13 @@ import { ApproveDto, BankLinkVerifyDto, CashOutDto, CreditDto, SettlementTrigger
 
 /**
  * Wallet endpoints for a participant (UDIW-040/043/044/052).
- * NOTE: marked @Public for the prototype so the wallet UX is demoable. In production these
- * require per-owner authorization (a DID-bound token whose subject owns the account).
+ * NOTE: marked @Public for the prototype so the wallet UX is demoable — ON A SANDBOX ONLY. Outside one, the whole
+ * controller is for network staff (`@StaffOnlyOutsideSandbox`): a credit and a cash-out that ask for no sign-in are
+ * not a door. Opening any of it to its owner needs per-owner authorization first (a DID-bound token whose subject
+ * owns the account).
  */
 @Public()
+@StaffOnlyOutsideSandbox()
 @Controller('identity/accounts/:accountId/wallet')
 export class WalletController {
   constructor(

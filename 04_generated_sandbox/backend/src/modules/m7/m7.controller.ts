@@ -1,3 +1,4 @@
+import { StaffOnlyOutsideSandbox } from '../../foundation/auth/engine-surface';
 import { BadRequestException, Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { DigitalTwinService } from './digital-twin.service';
 import { EtaService } from './eta.service';
@@ -17,6 +18,7 @@ interface ModuleInfo {
 }
 
 /** M7 AI Control Tower endpoints. DID-authenticated (global guard; no @Public). */
+@StaffOnlyOutsideSandbox()
 @Controller('control-tower')
 export class M7Controller {
   constructor(

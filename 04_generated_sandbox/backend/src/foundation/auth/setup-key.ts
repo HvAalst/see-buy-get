@@ -39,6 +39,11 @@ export function isSetupKey(auth: Pick<IntrospectionResult, 'role' | 'scopes' | '
   return operator && !auth?.revocationKey?.startsWith(STAFF_KEY_PREFIX);
 }
 
+/** Is this a member of network staff signed in to their own account — a person, with a name on what they do? */
+export function isStaffAccount(auth: Pick<IntrospectionResult, 'role' | 'revocationKey'> | undefined): boolean {
+  return auth?.role === 'operator' && Boolean(auth.revocationKey?.startsWith(STAFF_KEY_PREFIX));
+}
+
 /** Is the setup key being used where it is nobody: outside a sandbox? */
 export function setupKeyOutsideSandbox(auth: Pick<IntrospectionResult, 'role' | 'scopes' | 'revocationKey'> | undefined): boolean {
   return !isSandbox() && isSetupKey(auth);

@@ -1,3 +1,4 @@
+import { StaffOnlyOutsideSandbox } from '../../foundation/auth/engine-surface';
 import { Body, Controller, Get, NotFoundException, Param, Post } from '@nestjs/common';
 import { EscrowService, CreateEscrowInput } from './escrow.service';
 import { InvoiceService } from './invoice.service';
@@ -14,6 +15,7 @@ interface ModuleInfo {
 }
 
 /** SSE settlement endpoints. DID-authenticated (global guard; no @Public). */
+@StaffOnlyOutsideSandbox()
 @Controller('settlement')
 export class SseController {
   constructor(

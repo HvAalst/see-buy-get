@@ -1,3 +1,4 @@
+import { StaffOnlyOutsideSandbox } from '../../foundation/auth/engine-surface';
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { Public } from '../../foundation/auth/public.decorator';
 import { IdentityService } from './identity.service';
@@ -12,6 +13,7 @@ interface ModuleInfo {
   status: 'scaffold' | 'active';
 }
 
+@StaffOnlyOutsideSandbox()
 @Controller('identity')
 export class M1Controller {
   constructor(private readonly identity: IdentityService) {}

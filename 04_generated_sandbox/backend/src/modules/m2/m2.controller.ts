@@ -1,3 +1,4 @@
+import { StaffOnlyOutsideSandbox } from '../../foundation/auth/engine-surface';
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ShipmentService, CreateShipmentInput, EnrichShipmentInput } from './shipment.service';
 import { LegDecompositionService } from './leg-decomposition.service';
@@ -20,6 +21,7 @@ import {
 import { Shipment } from './shipment.types';
 
 /** M2 shipment endpoints. DID-authenticated. The digital twin is born here. */
+@StaffOnlyOutsideSandbox()
 @Controller('shipments')
 export class M2Controller {
   constructor(

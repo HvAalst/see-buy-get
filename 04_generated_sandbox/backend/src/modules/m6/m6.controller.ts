@@ -1,3 +1,4 @@
+import { StaffOnlyOutsideSandbox } from '../../foundation/auth/engine-surface';
 import { Controller, Get } from '@nestjs/common';
 
 interface ModuleInfo {
@@ -7,6 +8,7 @@ interface ModuleInfo {
   status: 'scaffold';
 }
 
+@StaffOnlyOutsideSandbox()
 @Controller('gateway')
 export class M6Controller {
   @Get('module-info')

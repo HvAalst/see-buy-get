@@ -1,3 +1,4 @@
+import { StaffOnlyOutsideSandbox } from '../../foundation/auth/engine-surface';
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { RatingService, SubmitRatingInput } from './rating.service';
 import { ReputationStore } from './reputation-store.service';
@@ -12,6 +13,7 @@ interface ModuleInfo {
 }
 
 /** M5 reputation endpoints. DID-authenticated (global guard; no @Public). */
+@StaffOnlyOutsideSandbox()
 @Controller('reputation')
 export class M5Controller {
   constructor(

@@ -6,7 +6,9 @@ import { IS_PUBLIC_KEY } from './public.decorator';
 import { MIN_TIER_KEY, ROLES_KEY, SCOPES_KEY } from './scopes.decorator';
 import { hasScope } from './actor-scopes';
 import { staffNetworkAllows } from './staff-network';
-import { SETUP_KEY_KEY, setupKeyOutsideSandbox } from './setup-key';
+import { SETUP_KEY_KEY, isStaffAccount, setupKeyOutsideSandbox } from './setup-key';
+import { STAFF_OUTSIDE_SANDBOX_KEY } from './engine-surface';
+import { isSandbox } from '../runtime/sandbox';
 import { ActorRole, IntrospectionResult } from './auth.types';
 import { Tier } from '../data-firewall/data-firewall.types';
 
@@ -33,7 +35,11 @@ export class AuthGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const targets = [context.getHandler(), context.getClass()];
 
-    if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, targets)) return true;
+    // THE ENGINE UNDERNEATH (engine-surface.ts): outside a sandbox its own routes are for network staff only — one
+    // marked @Public included, so that mark is read before "public" is.
+    const engine = !isSandbox() && this.reflector.getAllAndOverride<boolean>(STAFF_OUTSIDE_SANDBOX_KEY, targets) === true;
+
+    if (!engine && this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, targets)) return true;
 
     // --- authenticate ---
     const request = context.switchToHttp().getRequest<Request & { auth?: IntrospectionResult }>();
@@ -50,6 +56,8 @@ export class AuthGuard implements CanActivate {
     if (setupKeyOutsideSandbox(auth) && !this.reflector.getAllAndOverride<boolean>(SETUP_KEY_KEY, targets)) {
       throw new ForbiddenException('The setup key only sets network staff up. Sign in with a staff account of your own for everything else.');
     }
+
+    if (engine && !isStaffAccount(auth)) throw new ForbiddenException('Outside a sandbox this part of the server is for network staff only.');
 
     // --- authorize ---
     const requiredRoles = this.reflector.getAllAndOverride<ActorRole[]>(ROLES_KEY, targets);

@@ -1,3 +1,4 @@
+import { StaffOnlyOutsideSandbox } from '../../foundation/auth/engine-surface';
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { MatchingService } from './matching.service';
 import { AvailabilityService } from './availability.service';
@@ -15,6 +16,7 @@ interface ModuleInfo {
 }
 
 /** M3 matching endpoints. DID-authenticated (global guard; no @Public). */
+@StaffOnlyOutsideSandbox()
 @Controller('matching')
 export class M3Controller {
   constructor(
