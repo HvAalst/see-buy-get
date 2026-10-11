@@ -75,7 +75,7 @@ export function verifyOtp(phone: string, code: string): Promise<Result<{ verifie
 /** Create (or refresh) the consumer for an OTP-verified phone; optionally set the PIN + credit an invite. */
 export async function enroll(phone: string, pin?: string, inviteToken?: string, recovery?: { email: string; code: string }): Promise<Result<AuthResult>> {
   // A first PIN needs a confirmed recovery email behind it; somebody replacing a forgotten PIN already has one.
-  const r = await publicRequest<AuthResult & { device?: string }>(sendConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, inviteToken, ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}) } });
+  const r = await publicRequest<AuthResult & { device?: string }>(sendConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, inviteToken, device: readDeviceKey(phone), ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}) } });
   // The code was typed on this device: the server hands it the key the PIN is asked with from now on.
   saveDeviceKey(phone, r.data?.device);
   return r;

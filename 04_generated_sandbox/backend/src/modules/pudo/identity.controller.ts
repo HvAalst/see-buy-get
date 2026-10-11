@@ -78,11 +78,36 @@ export class IdentityController {
         this.emailCodes.verify(dto.email, dto.emailCode);
       }
     }
-    const { person, isNew, token, device } = this.persons.enroll(dto.phone, verified, dto.pin);
+    /*
+     * A PIN REPLACED ON A DEVICE IT NEVER WORKED ON NEEDS THE EMAIL CODE TOO — the user, 2026-10-11: "a pin reset on a
+     * new device should ask for the email code."
+     *
+     * Now that a PIN cannot be tried from anywhere, the easiest way into an account was this door: a code to the
+     * phone, and a new PIN. A code to a phone is read by whoever has the SIM today, or the handset for a minute. So
+     * on a phone or browser the PIN already worked on, the code to the number is enough, as it was; on any other,
+     * the person also types the recovery email on the account and the code we send to it. The address has to be
+     * THE ACCOUNT'S: a code to an inbox proves the inbox, not whose it is. Checked before anything changes and
+     * before the phone's confirmation is spent, so a refusal costs the person nothing.
+     */
+    const resetElsewhere = verified && dto.pin !== undefined && Boolean(known?.pinHash) && Boolean(known?.emailVerifiedAt) && !this.persons.knowsDevice(known?.personDid, dto.device);
+    if (resetElsewhere) {
+      if (!dto.email?.trim()) {
+        throw new GlosError('FIELD_REQUIRED', 'This phone or browser is new to your account. To replace your PIN here, also type the recovery email on your account: we send it a code', { field: 'email', why: 'pin-reset' });
+      }
+      if (!this.emailCodes.isVerified(dto.email)) {
+        if (!dto.emailCode?.trim()) throw new GlosError('EMAIL_NOT_VERIFIED', 'Type the code we sent to that email address', { field: 'emailCode', why: 'pin-reset' });
+        this.emailCodes.verify(dto.email, dto.emailCode);
+      }
+      if (this.persons.findByEmail(dto.email)?.personDid !== known?.personDid) {
+        throw new GlosError('FORBIDDEN', 'That is not the recovery email on this account. Use the address you gave when you chose your PIN — or “Trouble signing in?”', { field: 'email', why: 'pin-reset' });
+      }
+    }
+    const { person, isNew, token, device } = this.persons.enroll(dto.phone, verified, dto.pin, dto.device);
     if (needsEmail) {
       this.persons.setEmail(person.personDid, dto.email as string);
       this.emailCodes.consume(dto.email as string);
     }
+    if (resetElsewhere) this.emailCodes.consume(dto.email as string);
     this.otp.consume(dto.phone);
     // S24: a first-time join through an invite link credits the inviter (best-effort — never blocks sign-up).
     if (isNew && dto.inviteToken) this.invites.accept(dto.inviteToken, person.personDid);

@@ -1882,6 +1882,11 @@ export class EnrollDto {
   @IsString() phone!: string;
   @IsOptional() @IsString() pin?: string;
   /**
+   * The key this device already holds for this number, if it has one. A PIN replaced on a device the PIN already
+   * worked on needs the code to the phone; on any other it needs the code to the recovery email as well.
+   */
+  @IsOptional() @IsString() @MaxLength(120) device?: string;
+  /**
    * The recovery email — needed the first time a PIN is chosen, with the code sent to it. It is how somebody gets
    * back in when their number is gone, and where we warn them. Not asked again once one is confirmed.
    */

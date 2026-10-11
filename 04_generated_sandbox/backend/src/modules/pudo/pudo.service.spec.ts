@@ -5357,16 +5357,61 @@ describe('PUDO Light', () => {
       const phone = '+254711660002';
       verifyPhone(phone);
       const code = codeFor('Juma@Example.com');
-      const joined = identity.enroll({ phone, pin: '48261', email: 'Juma@Example.com', emailCode: code }) as { email?: string; hasPin: boolean };
+      const joined = identity.enroll({ phone, pin: '48261', email: 'Juma@Example.com', emailCode: code }) as { email?: string; hasPin: boolean; device: string };
       expect(joined).toMatchObject({ hasPin: true, email: 'j…@example.com' });
       expect(persons.findByEmail('juma@example.com')?.personDid).toBe(persons.findByPhone(phone)!.personDid);
 
-      // Forgot the PIN: a code to the phone and a new PIN. The email is already on record.
-      const later = Date.now() + 2 * 60 * 1000;
-      const clock = jest.spyOn(Date, 'now').mockReturnValue(later);
+      // Forgot the PIN, ON THE PHONE THE PIN WORKED ON: a code to the number and a new PIN. The email is not asked again.
+      const start = Date.now();
+      const clock = jest.spyOn(Date, 'now').mockReturnValue(start + 2 * 60 * 1000);
       try {
         verifyPhone(phone);
-        expect((identity.enroll({ phone, pin: '73914' }) as { hasPin: boolean }).hasPin).toBe(true);
+        const again = identity.enroll({ phone, pin: '73914', device: joined.device }) as { hasPin: boolean; device: string };
+        expect(again.hasPin).toBe(true);
+        expect(persons.loginWithPin(phone, '73914', again.device).person.personDid).toBe(persons.findByPhone(phone)!.personDid);
+      } finally {
+        clock.mockRestore();
+      }
+    });
+
+    it('a PIN replaced on a phone or browser it never worked on needs the code to the recovery email as well — the account’s own', () => {
+      const phone = '+254711660022';
+      verifyPhone(phone);
+      const joined = identity.enroll({ phone, pin: '48261', email: 'wanjiru@example.com', emailCode: codeFor('wanjiru@example.com') }) as { device: string };
+      const who = persons.findByPhone(phone)!.personDid;
+      const refusal = (fn: () => unknown) => {
+        try {
+          fn();
+        } catch (e) {
+          const err = e as { code?: string; params?: { field?: string; why?: string } };
+          return `${err.code} ${err.params?.field ?? ''} ${err.params?.why ?? ''}`.trim();
+        }
+        return 'replaced';
+      };
+      const start = Date.now();
+      const clock = jest.spyOn(Date, 'now');
+      try {
+        // Somebody has the code to the number — the SIM today, or the handset for a minute — and no device of this account's.
+        clock.mockReturnValue(start + 2 * 60 * 1000);
+        verifyPhone(phone);
+        for (const device of [undefined, 'dvc_made-up']) {
+          expect([device, refusal(() => identity.enroll({ phone, pin: '73914', device }))]).toEqual([device, 'FIELD_REQUIRED email pin-reset']);
+        }
+        // An inbox of their OWN, confirmed by its code, is an inbox — not this account's.
+        const theirs = codeFor('somebody.else@example.com');
+        expect(refusal(() => identity.enroll({ phone, pin: '73914', email: 'somebody.else@example.com', emailCode: theirs }))).toBe('FORBIDDEN email pin-reset');
+        // The account's address, without its code, and with a wrong one.
+        expect(refusal(() => identity.enroll({ phone, pin: '73914', email: 'wanjiru@example.com' }))).toBe('EMAIL_NOT_VERIFIED emailCode pin-reset');
+        clock.mockReturnValue(start + 4 * 60 * 1000);
+        const right = codeFor('wanjiru@example.com');
+        expect(refusal(() => identity.enroll({ phone, pin: '73914', email: 'wanjiru@example.com', emailCode: right === '000000' ? '111111' : '000000' }))).not.toBe('replaced');
+        // NOTHING WAS CHANGED OR SPENT by any of it: the PIN is the old one, on the old device, and the phone's code still stands.
+        expect(persons.loginWithPin(phone, '48261', joined.device).person.personDid).toBe(who);
+        // Both codes: the PIN is replaced, on this new device and on no other.
+        const replaced = identity.enroll({ phone, pin: '73914', email: 'Wanjiru@Example.com', emailCode: right }) as { device: string; hasPin: boolean };
+        expect(replaced.hasPin).toBe(true);
+        expect(persons.loginWithPin(phone, '73914', replaced.device).person.personDid).toBe(who);
+        expect(() => persons.loginWithPin(phone, '73914', joined.device)).toThrow(/has not signed in to this account before/);
       } finally {
         clock.mockRestore();
       }

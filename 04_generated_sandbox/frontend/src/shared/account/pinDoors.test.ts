@@ -100,6 +100,19 @@ describe('the code was typed here: the key the server hands back is kept', () =>
     expect(last().body.device).toBe('dvc_handed-here');
   });
 
+  /**
+   * A PIN REPLACED ON A DEVICE IT ALREADY WORKED ON needs the code to the number; on any other it needs a code to the
+   * recovery email as well. The server tells the two apart by the key — so an app that did not send it would ask
+   * everybody for their email, on their own phone.
+   */
+  it.each(enrolments)('%s — says which device it is on, so that a PIN replaced on one’s own phone is not asked for the email', async (_name, enrol) => {
+    saveDeviceKey(PHONE, 'dvc_this-phone');
+    serve({ token: { access_token: 't' }, device: 'dvc_after' });
+    await enrol();
+    expect(last().path).toBe('/v1/sbg/identity/enroll');
+    expect(last().body).toMatchObject({ phone: PHONE, pin: PIN, device: 'dvc_this-phone' });
+  });
+
   it.each(enrolments)('%s — a newer key replaces the one before it (a PIN replaced by a code forgot the old one)', async (_name, enrol) => {
     saveDeviceKey(PHONE, 'dvc_from-before');
     serve({ token: { access_token: 't' }, device: 'dvc_after-the-code' });

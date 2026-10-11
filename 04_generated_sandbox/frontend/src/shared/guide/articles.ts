@@ -156,7 +156,8 @@ export const ARTICLES: GuideArticle[] = [
       "Five wrong PINs lock the PIN. Only a code sent to your phone opens it again, and you are told when it happens.",
       "Signing in on another phone signs this one out. If you are signed out and it was not you, choose a new PIN.",
       "Starting a shift asks for your PIN again, so nobody can start one on a phone you left signed in.",
-      "Your PIN opens your account only on a phone or browser that has shown it holds your number. Nobody can try your PIN from anywhere else."
+      "Your PIN opens your account only on a phone or browser that has shown it holds your number. Nobody can try your PIN from anywhere else.",
+      "Replacing a forgotten PIN on a phone or browser you have not signed in on before asks for two codes: the one to your number, and one to the recovery email on your account. Type that email address and we send it a code. On a phone you have signed in on before, the code to your number is enough."
     ]
   },
   {
@@ -195,7 +196,9 @@ export const ARTICLES: GuideArticle[] = [
       "Changing your PIN signs out every other phone that PIN had opened, in every app.",
       "A PIN that is easy to guess is refused: mostly one digit, a run like 12345 or 13579, or a pattern like 12312.",
       "A PIN is five digits, not four, so that it is not the same PIN as the one for your mobile money or your bank card. Do not use that one with a digit added.",
-      "A PIN replaced with a code — forgotten, or locked — works on the phone or browser you did it on. Every other one asks for a code again."
+      "A PIN replaced with a code — forgotten, or locked — works on the phone or browser you did it on. Every other one asks for a code again.",
+      "Replacing a forgotten PIN on a phone or browser you have not signed in on before asks for two codes: the one to your number, and one to the recovery email on your account. Type that email address and we send it a code. On a phone you have signed in on before, the code to your number is enough.",
+      "We write to your recovery email, and tell you in the app, whenever your PIN is replaced or starts working on a new phone or browser. If it was not you, replace your PIN straight away: that shuts out every other phone and browser."
     ]
   },
   {
@@ -258,7 +261,8 @@ export const ARTICLES: GuideArticle[] = [
       "In those seven days, give your new number to the people and the stores that send to you. When they have it, open Settings and choose “Block my old number”, with your PIN: from then a parcel sent to it is no longer yours. We remind you once a day. If you do nothing, the old number is let go after seven days. It cannot be blocked in the first 24 hours, while the change can still be undone.",
       "If your account was moved without your PIN, by a code to your email or by SeeBuyGet staff, the collection codes of your parcels are changed and are hidden for 24 hours after the move. The parcel screen says from when the code shows. The free collection time of a waiting parcel does not run out in those hours.",
       "For 24 hours after any number change you cannot give a parcel up or name somebody else to collect it: those two cannot be taken back. When a number change is undone, the collection codes of your parcels are changed, so whoever had the account in between holds codes that open nothing.",
-      "After your number changes, your PIN works on the phone or browser you changed it on. Every other one asks for a code to the new number first."
+      "After your number changes, your PIN works on the phone or browser you changed it on. Every other one asks for a code to the new number first.",
+      "We write to your recovery email, and tell you in the app, whenever your PIN is replaced or starts working on a new phone or browser. If it was not you, replace your PIN straight away: that shuts out every other phone and browser."
     ]
   },
   {
@@ -325,7 +329,7 @@ export const ARTICLES: GuideArticle[] = [
       "New here: type your phone number, type the code we send you, then choose a 5-digit PIN.",
       "Coming back: tap “I already have an account” and type your phone and PIN.",
       "A phone or browser you have not signed in on before asks for a code first: we send it to your number, you type it once, and from then on your PIN works there. Your PIN is not changed by it.",
-      "Forgot your PIN? Sign in with a code again, and choose a new PIN."
+      "Forgot your PIN? Sign in with a code again, and choose a new PIN. On a phone or browser that is new to your account we also ask for your recovery email, and send it a code."
     ]
   },
   {

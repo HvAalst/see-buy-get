@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { OtpService } from '../src/modules/pudo/otp.service';
+import { OutboxMailSender } from '../src/foundation/mail/outbox-mail.sender';
 import { EmailCodeService } from '../src/modules/pudo/email-code.service';
 
 /**
@@ -49,7 +50,8 @@ describe('a PIN works only on a device a code to the phone confirmed, over the w
     await typeTheCode(phone);
     const email = `pd${digits()}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
-    return (await http().post('/v1/sbg/identity/enroll').send({ phone, pin, email, emailCode: mailed.body.code }).expect(201)).body as { token: { access_token: string }; device: string; personId: string };
+    const made = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin, email, emailCode: mailed.body.code }).expect(201)).body as { token: { access_token: string }; device: string; personId: string };
+    return { ...made, email };
   };
   const login = (body: Record<string, unknown>) => http().post('/v1/sbg/identity/login').send(body);
   const said = async (r: request.Test) => {
@@ -183,13 +185,73 @@ describe('a PIN works only on a device a code to the phone confirmed, over the w
     await typeTheCode(phone);
     const tablet = (await http().post('/v1/sbg/identity/device').send({ phone }).expect(201)).body.device as string;
 
-    // Forgotten: the code again, and a new PIN, on some device.
+    // Forgotten, ON A DEVICE THE PIN WORKED ON: the code to the number again, and a new PIN.
     await typeTheCode(phone);
-    const again = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '73914' }).expect(201)).body;
+    const again = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '73914', device: tablet }).expect(201)).body;
     expect(again.personId).toBe(before.personId);
+    // It works on the device that did it — a new key, because every key from before went with the old PIN.
     for (const device of [before.device, tablet]) expect(await said(login({ phone, pin: '73914', device }))).toBe('403 DEVICE_NOT_KNOWN');
     await login({ phone, pin: '73914', device: again.device }).expect(201);
     // The old PIN is gone with it, wherever it is tried.
     expect(await said(login({ phone, pin: PIN, device: again.device }))).toBe('401 AUTH_FAILED');
+    // The holder is told, in their inbox: if it was not them, it is the only way they find out.
+    const told = app.get(OutboxMailSender).recent(before.email).filter((m) => m.subject.includes('PIN was replaced'));
+    expect(told).toHaveLength(1);
+    expect(told[0].text).toContain('on a phone or browser you had signed in on before');
+    expect(told[0].text).toContain('forgot your PIN');
+  });
+
+  it('a PIN replaced on a phone or browser it NEVER worked on needs the code to the recovery email as well', async () => {
+    const phone = `+2547${digits()}0`;
+    const before = await signUp(phone);
+    const replace = (body: Record<string, unknown>) => http().post('/v1/sbg/identity/enroll').send({ phone, pin: '73914', ...body });
+    const refused = async (r: request.Test) => {
+      const answer = await r;
+      return `${answer.status} ${answer.body.code} ${answer.body.params?.field ?? ''} ${answer.body.params?.why ?? ''}`.trim();
+    };
+    const emailCode = async (email: string) => {
+      (app.get(EmailCodeService) as unknown as { rates: Map<string, unknown> }).rates.clear();
+      return (await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201)).body.code as string;
+    };
+
+    // Somebody with the code to the number, and no device of this account's: the SIM today, or the handset for a minute.
+    await typeTheCode(phone);
+    expect(await refused(replace({}))).toBe('400 FIELD_REQUIRED email pin-reset');
+    expect(await refused(replace({ device: 'dvc_made-up' }))).toBe('400 FIELD_REQUIRED email pin-reset');
+    // An inbox of their own, confirmed by its code, is an inbox — not this account's.
+    const theirs = `somebody.${digits()}@example.com`;
+    expect(await refused(replace({ email: theirs, emailCode: await emailCode(theirs) }))).toBe('403 FORBIDDEN email pin-reset');
+    // The account's address without its code.
+    expect(await refused(replace({ email: before.email }))).toBe('400 EMAIL_NOT_VERIFIED emailCode pin-reset');
+    // NOTHING WAS CHANGED OR SPENT: the old PIN on the old device, and nobody was written to about a PIN.
+    await login({ phone, pin: PIN, device: before.device }).expect(201);
+    expect(app.get(OutboxMailSender).recent(before.email).filter((m) => m.subject.includes('PIN was replaced'))).toHaveLength(0);
+
+    // Both codes: replaced, here and nowhere else — and the holder is told which kind of device it was.
+    const replaced = (await replace({ email: before.email.toUpperCase(), emailCode: await emailCode(before.email) }).expect(201)).body;
+    expect(replaced.personId).toBe(before.personId);
+    await login({ phone, pin: '73914', device: replaced.device }).expect(201);
+    expect(await said(login({ phone, pin: '73914', device: before.device }))).toBe('403 DEVICE_NOT_KNOWN');
+    const told = app.get(OutboxMailSender).recent(before.email).filter((m) => m.subject.includes('PIN was replaced'));
+    expect(told).toHaveLength(1);
+    expect(told[0].text).toContain('had not signed in to it before');
+  });
+
+  it('the holder is told when their PIN starts working on a new phone or browser', async () => {
+    const phone = `+2547${digits()}9`;
+    const mine = await signUp(phone);
+    const news = () => app.get(OutboxMailSender).recent(mine.email).filter((m) => m.subject.includes('new phone or browser'));
+    // Signing up is not news to the person signing up: not in their inbox, and not in the app.
+    const inApp = async () => JSON.stringify((await http().get('/v1/sbg/notifications/inbox').set(bearer(mine.token.access_token)).expect(200)).body);
+    expect(news()).toHaveLength(0);
+    expect(await inApp()).not.toContain('A new phone or browser can use your PIN');
+    expect(await inApp()).not.toContain('Your PIN was replaced');
+    await typeTheCode(phone);
+    await http().post('/v1/sbg/identity/device').send({ phone }).expect(201);
+    expect(news()).toHaveLength(1);
+    expect(news()[0].text).toContain('Your PIN now works there too');
+    // The same in the app, where the person is.
+    const inbox = (await http().get('/v1/sbg/notifications/inbox').set(bearer(mine.token.access_token)).expect(200)).body;
+    expect(JSON.stringify(inbox)).toContain('A new phone or browser can use your PIN');
   });
 });

@@ -156,6 +156,11 @@ describe('PersonService — the identity spine (S20)', () => {
       const third = persons.enroll(PHONE, true);
       expect(persons.deviceCount(person.personDid)).toBe(2);
       expect(refused(() => persons.loginWithPin(PHONE, '73914', third.device))).toBe('let in');
+      // A device that is ALREADY known keeps the key it has: a new key for every code typed on one phone would fill a
+      // person's ten with that phone, and put their other devices out.
+      for (let i = 0; i < 12; i++) expect(persons.enroll(PHONE, true, undefined, third.device).device).toBe(third.device);
+      expect(persons.deviceCount(person.personDid)).toBe(2);
+      expect(refused(() => persons.loginWithPin(PHONE, '73914', again.device))).toBe('let in');
     });
 
     it('keeps ten devices to a person: the eleventh puts the oldest out', () => {

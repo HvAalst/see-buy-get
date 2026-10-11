@@ -360,6 +360,13 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ driverDid: string; plate: string; vehicleClass: string }>(GlosEvent.Pudo.DriverVehicleSuggested, (e) => this.onVehicleSuggested(e.payload));
     // Five wrong PINs for one number: whoever typed them may know it. The owner is the only one who can act.
     this.events.subscribe<{ personDid: string; driverDids: string[] }>(GlosEvent.Pudo.PersonPinLocked, (e) => this.onPinLocked(e.payload));
+    // A PIN replaced by a code, or working on a device it never had: said in the app as well as to the inbox.
+    this.events.subscribe<{ personDid: string; driverDids: string[]; newDevice?: boolean }>(GlosEvent.Pudo.PersonPinReplaced, (e) =>
+      this.onSignInChanged(e.payload, 'pin-replaced', 'Your PIN was replaced', 'Your PIN was replaced with a code sent to your phone number. It now works only on the phone or browser it was replaced on. If it was not you, replace it again straight away: “forgot your PIN” on the sign-in screen.'),
+    );
+    this.events.subscribe<{ personDid: string; driverDids: string[] }>(GlosEvent.Pudo.PersonDeviceConfirmed, (e) =>
+      this.onSignInChanged(e.payload, 'device-confirmed', 'A new phone or browser can use your PIN', 'A code sent to your number was typed on a phone or browser that had not signed in to your account before. Your PIN now works there too. If it was not you, replace your PIN straight away: “forgot your PIN” on the sign-in screen.'),
+    );
     // The fleet's own licence or cover: a document it sent was recorded, or turned down with a reason.
     this.events.subscribe<FleetPaperChecked>(GlosEvent.Pudo.FleetPaperChecked, (e) => this.onFleetPaperChecked(e.payload));
     // FP3b (sender) — the driver is at the door and cannot hand over: the sender is the one who can fix it.
@@ -865,6 +872,12 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
    * one who can do anything about it, so they hear it in every inbox they read: their own and each driver record they
    * sign in as. Never a fleet's: a fleet's inbox is shared by its managers, and one person's PIN is nobody else's.
    */
+  private async onSignInChanged(p: { personDid: string; driverDids: string[] }, what: string, title: string, body: string): Promise<void> {
+    for (const to of [p.personDid, ...p.driverDids]) {
+      await this.tell(to, { kind: 'security', title, body, tag: `${what}:${p.personDid}`, data: {} });
+    }
+  }
+
   private async onPinLocked(p: { personDid: string; driverDids: string[] }): Promise<void> {
     for (const to of [p.personDid, ...p.driverDids]) {
       await this.tell(to, {

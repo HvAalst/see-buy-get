@@ -306,21 +306,40 @@ export class PersonService {
    * this never trusts an unverified number. Optionally sets the PIN in the same step (the phone-first
    * happy path). Returns a consumer actor token.
    */
-  enroll(phone: string, otpVerified: boolean, pin?: string): { person: Person; isNew: boolean; token: AccessToken; device: string } {
+  enroll(phone: string, otpVerified: boolean, pin?: string, deviceKey?: string): { person: Person; isNew: boolean; token: AccessToken; device: string } {
     if (!otpVerified) throw new GlosError('PHONE_NOT_VERIFIED', 'Verify your phone number first');
     const before = this.findByPhone(phone);
     const isNew = !before;
     const hadPin = Boolean(before?.pinHash);
+    // Is this a device the PIN already worked on? Asked BEFORE anything is forgotten below.
+    const known = this.devices.knows(before?.personDid, deviceKey);
     const person = this.attachRole(phone, 'consumer', ''); // entityDid resolved to personDid inside
+    const replaced = pin !== undefined && hadPin;
     if (pin !== undefined) {
       this.setPin(person.personDid, pin);
       // A PIN replaced by a code — forgotten, or locked by wrong tries — is a PIN somebody may have been guessing
       // at, or a phone that changed hands. Every device it worked on has to be confirmed again; this one is, below.
       if (hadPin) this.devices.forgetAll(person.personDid);
     }
-    // THE CODE WAS TYPED ON THIS DEVICE: it is the moment the device becomes one this person's PIN works on.
-    const device = this.devices.add(person.personDid);
+    // THE CODE WAS TYPED ON THIS DEVICE: it is the moment the device becomes one this person's PIN works on. A
+    // device that already was keeps the key it has — a new key for every code would fill a person's ten with one phone.
+    const device = known && !replaced ? (deviceKey as string) : this.devices.add(person.personDid);
+    // THE HOLDER IS TOLD, on the channel whoever has the phone cannot read: a PIN replaced, or their PIN now working
+    // somewhere it never had. Not at a first sign-up, and not for somebody who has no PIN to protect.
+    if (replaced) this.tellSignIn(GlosEvent.Pudo.PersonPinReplaced, person, { newDevice: !known });
+    else if (hadPin && !known) this.tellSignIn(GlosEvent.Pudo.PersonDeviceConfirmed, person, {});
     return { person: this.requireByDid(person.personDid), isNew, token: this.mintConsumerToken(person), device };
+  }
+
+  /** Is this the key of a device this person's PIN already works on? */
+  knowsDevice(personDid: string | undefined, deviceKey: string | undefined): boolean {
+    return this.devices.knows(personDid, deviceKey);
+  }
+
+  /** Who is told about their sign-in: the person, and every driver record they sign in as (a driver reads the Driver app). */
+  private tellSignIn(event: string, person: Person, more: Record<string, unknown>): void {
+    const driverDids = person.roles.filter((r) => r.role === 'driver' && r.status === 'active').map((r) => r.entityDid);
+    void this.events?.publish(event, { personDid: person.personDid, driverDids, ...more }, { source: 'pudo' }).catch(() => undefined);
   }
 
   /**
@@ -332,7 +351,9 @@ export class PersonService {
     const person = this.findByPhone(phone);
     // Said to somebody who has just typed a code sent to this very number: it tells them about their own phone.
     if (!person) throw new GlosError('NOT_FOUND', 'No account signs in with this number yet');
-    return this.devices.add(person.personDid);
+    const device = this.devices.add(person.personDid);
+    if (person.pinHash) this.tellSignIn(GlosEvent.Pudo.PersonDeviceConfirmed, person, {});
+    return device;
   }
 
   /** How many devices this person's PIN works on — for their own account screen. */

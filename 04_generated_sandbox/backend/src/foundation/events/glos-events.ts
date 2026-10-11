@@ -138,6 +138,10 @@ export const GlosEvent = {
     DriverVehicleSuggested: 'pudo.driver_vehicle_suggested',
     /** Five wrong PINs for one phone: the PIN is locked until the phone is verified by code, and its owner is told. */
     PersonPinLocked: 'pudo.person_pin_locked',
+    /** A PIN was REPLACED by a code — forgotten, or locked. Its holder is told, because a code to a phone is something somebody else may have read. */
+    PersonPinReplaced: 'pudo.person_pin_replaced',
+    /** A phone or browser this person's PIN had never worked on was confirmed by a code. Their PIN works there now, and they are told. */
+    PersonDeviceConfirmed: 'pudo.person_device_confirmed',
     DepartureDelivered: 'pudo.departure_delivered', // one booking reached its destination and was handed over
     DepartureCancelled: 'pudo.departure_cancelled', // the run is not happening, and everybody aboard has to be told
     DepartureClaimOpened: 'pudo.departure_claim_opened', // the shipper says something went wrong; the carrier is told, and nobody adjudicates

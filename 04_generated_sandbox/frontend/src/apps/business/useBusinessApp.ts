@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import type { SbgError } from '../../lib/sbg';
 import { isNewDevice } from '../../shared/account/pin';
+import { isPinReset } from '../../shared/account/recovery';
 import {
   clearBusinessSession,
   clearSessions,
@@ -43,6 +44,8 @@ export interface BusinessState {
   devCode: string;
   email: string;
   emailCode: string;
+  /** The email step is "confirm it is you" (a PIN replaced on a new device), not "an email for getting back in" (a first PIN). */
+  emailReset: boolean;
   busy: boolean;
   error: SbgError | null;
   memberships: Membership[] | null;
@@ -62,6 +65,7 @@ const INITIAL: BusinessState = {
   devCode: '',
   email: '',
   emailCode: '',
+  emailReset: false,
   busy: false,
   error: null,
   memberships: null,
@@ -218,7 +222,8 @@ export function useBusinessApp(): { state: BusinessState; actions: BusinessActio
       const r = await enroll(s.phone.trim(), s.pin, withEmail);
       if (r.error || !r.data) {
         const field = (r.error?.params as { field?: string } | undefined)?.field;
-        if (s.step === 'pin' && field === 'email') return patch({ busy: false, step: 'email', error: null });
+        // A first PIN wants a recovery address; a PIN replaced on a device it never worked on wants the one on the account.
+        if (s.step === 'pin' && field === 'email') return patch({ busy: false, step: 'email', error: null, emailReset: isPinReset(r.error) });
         return patch({ busy: false, error: r.error });
       }
       await signedIn(r.data);

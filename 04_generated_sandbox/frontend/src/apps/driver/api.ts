@@ -114,7 +114,7 @@ export function verifyPhoneCode(phone: string, code: string): Promise<Result<{ v
 /** Choose (or replace) the PIN for a phone that has just been verified by code. */
 export async function choosePin(phone: string, pin: string, recovery?: { email: string; code: string }): Promise<Result<unknown>> {
   // A first PIN needs a confirmed recovery email behind it; somebody replacing a forgotten PIN already has one.
-  const r = await publicRequest<{ device?: string }>(driverConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}) } });
+  const r = await publicRequest<{ device?: string }>(driverConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, device: readDeviceKey(phone), ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}) } });
   // The code was typed on this phone: it is handed the key the PIN is asked with from now on.
   saveDeviceKey(phone, r.data?.device);
   return r;

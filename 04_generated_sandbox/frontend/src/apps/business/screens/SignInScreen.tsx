@@ -84,8 +84,8 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
         </div>
 
         <form onSubmit={submit}>
-          <h1 class="cons__title">{t(TITLE[step])}</h1>
-          <p class="cons__lede">{step === 'code' ? t('business.signIn.codeLede', { phone: state.phone }) : t(LEDE[step])}</p>
+          <h1 class="cons__title">{t(step === 'email' && state.emailReset ? 'account.safety.resetTitle' : TITLE[step])}</h1>
+          <p class="cons__lede">{step === 'code' ? t('business.signIn.codeLede', { phone: state.phone }) : t(step === 'email' && state.emailReset ? 'account.safety.resetLede' : LEDE[step])}</p>
 
           {step === 'login' || step === 'phone' ? (
             state.phoneKnown && step === 'login' ? (

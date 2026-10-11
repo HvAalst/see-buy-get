@@ -39111,6 +39111,11 @@
           "pin": {
             "type": "string"
           },
+          "device": {
+            "type": "string",
+            "description": "The key this device already holds for this number, if it has one. A PIN replaced on a device the PIN already\nworked on needs the code to the phone; on any other it needs the code to the recovery email as well.",
+            "maxLength": 120
+          },
           "email": {
             "type": "string",
             "description": "The recovery email — needed the first time a PIN is chosen, with the code sent to it. It is how somebody gets\nback in when their number is gone, and where we warn them. Not asked again once one is confirmed.",

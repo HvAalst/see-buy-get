@@ -88,6 +88,28 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
       const person = this.persons.findByDid(e.payload.personDid);
       if (person) this.tellByMail(person, { headline: 'Your PIN was locked', what: 'Somebody typed a wrong PIN five times for your phone number, so nobody can sign in with it now.', next: 'To sign in again, verify your phone by code and choose a new PIN. If it was not you, somebody knows your number: choose a PIN they cannot guess.' });
     });
+    // A PIN replaced by a code, or the PIN now working on a phone or browser it never had: the same channel, for
+    // the same reason. If it was the holder, one email they expected; if it was not, the only way they find out.
+    this.events.subscribe<{ personDid: string; newDevice?: boolean }>(GlosEvent.Pudo.PersonPinReplaced, (e) => {
+      const person = this.persons.findByDid(e.payload.personDid);
+      if (!person) return;
+      this.tellByMail(person, {
+        headline: 'Your PIN was replaced',
+        what: e.payload.newDevice
+          ? 'The PIN on your SeeBuyGet account was replaced on a phone or browser that had not signed in to it before, with a code sent to your phone number and a code sent to this email address. Your PIN now works only there.'
+          : 'The PIN on your SeeBuyGet account was replaced, with a code sent to your phone number, on a phone or browser you had signed in on before. Your PIN now works only there.',
+        next: 'If it was you, there is nothing to do. If it was not: replace your PIN again straight away (“forgot your PIN” on the sign-in screen) — that shuts out every other phone and browser — and ask your mobile network whether your number was moved to another SIM.',
+      });
+    });
+    this.events.subscribe<{ personDid: string }>(GlosEvent.Pudo.PersonDeviceConfirmed, (e) => {
+      const person = this.persons.findByDid(e.payload.personDid);
+      if (!person) return;
+      this.tellByMail(person, {
+        headline: 'A new phone or browser can use your PIN',
+        what: 'A code sent to your phone number was typed on a phone or browser that had not signed in to your SeeBuyGet account before. Your PIN now works there too.',
+        next: 'If it was you, there is nothing to do. If it was not: replace your PIN straight away (“forgot your PIN” on the sign-in screen). That shuts out every other phone and browser. Nobody is in without your PIN — but somebody can read the messages sent to your number.',
+      });
+    });
     this.timer = setInterval(() => {
       this.settle();
       this.remindOldNumbers();

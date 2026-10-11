@@ -70,6 +70,15 @@ const fieldOf = (error: SbgError | null | undefined): string | undefined => {
  * The server is asking for the recovery email — not refusing the PIN. A new person choosing a PIN is told so as the
  * next thing to fill in, never as an error; somebody who already gave an address is never asked.
  */
+/**
+ * WHY the server is asking for the email. For somebody choosing their FIRST PIN it wants a recovery address to put
+ * behind it; for somebody replacing a PIN on a phone or browser it never worked on, it wants proof that they hold
+ * the address ALREADY on the account. The same two fields, a different question — and the screen has to say which.
+ */
+export function isPinReset(error: SbgError | null | undefined): boolean {
+  return (error?.params as { why?: unknown } | undefined)?.why === 'pin-reset';
+}
+
 export function asksForEmail(error: SbgError | null | undefined): boolean {
   if (!error) return false;
   const field = fieldOf(error);

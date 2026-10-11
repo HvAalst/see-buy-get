@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SbgError } from '../../lib/sbg';
-import { asksForEmail, asksForNationalId, looksLikeEmail, oldNumberSays, recoveryEmailSays } from './recovery';
+import { asksForEmail, asksForNationalId, isPinReset, looksLikeEmail, oldNumberSays, recoveryEmailSays } from './recovery';
 
 const refusal = (code: string, field?: string): SbgError => ({ code, status: 400, title: '', detail: '', retryable: false, ...(field ? { params: { field } } : {}) });
 
@@ -8,6 +8,18 @@ describe('what the server is asking for at a sign-in screen', () => {
   it('reads a missing recovery email as the next thing to fill in', () => {
     expect(asksForEmail(refusal('FIELD_REQUIRED', 'email'))).toBe(true);
     expect(asksForEmail(refusal('EMAIL_NOT_VERIFIED', 'emailCode'))).toBe(true);
+  });
+
+  it('tells the two reasons an email is asked for apart: a first PIN wants an address, a PIN replaced on a new device wants the account’s own', () => {
+    const first = refusal('FIELD_REQUIRED', 'email');
+    const reset: SbgError = { ...refusal('FIELD_REQUIRED', 'email'), params: { field: 'email', why: 'pin-reset' } };
+    // Both are the same step on the screen…
+    expect([asksForEmail(first), asksForEmail(reset)]).toEqual([true, true]);
+    // …asked for a different reason, which the screen has to say.
+    expect([isPinReset(first), isPinReset(reset)]).toEqual([false, true]);
+    expect(isPinReset({ ...refusal('EMAIL_NOT_VERIFIED', 'emailCode'), params: { field: 'emailCode', why: 'pin-reset' } })).toBe(true);
+    expect(isPinReset(null)).toBe(false);
+    expect(isPinReset(refusal('PIN_GUESSABLE'))).toBe(false);
   });
 
   it('does not mistake another missing field, or a refused PIN, for it', () => {

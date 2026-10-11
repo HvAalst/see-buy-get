@@ -1,7 +1,7 @@
 import { HelpLink } from '../../../shared/guide/HelpLink';
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
-import { Button, Card, Checklist, CodeBoxes, ErrorNote, Note, ReadAloud } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeBoxes, ErrorNote, Note, ReadAloud, RefusalNote } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import { EmailStep } from '../../../shared/account/EmailStep';
@@ -17,7 +17,7 @@ export interface SignInScreenProps {
   /** Send a code to the phone. Resolves to the code in a sandbox, `''` once sent, null on failure. */
   onSendCode: (phone: string) => Promise<string | null>;
   /** Verify the code, set the new PIN, sign in. `'email'`: this is a first PIN, and it needs a recovery email. */
-  onSetPin: (phone: string, code: string, pin: string, recovery?: { email: string; code: string }) => Promise<'ok' | 'email' | 'failed'>;
+  onSetPin: (phone: string, code: string, pin: string, recovery?: { email: string; code: string }) => Promise<'ok' | 'email' | 'email-reset' | 'failed'>;
   error: SbgError | null;
 }
 
@@ -44,6 +44,8 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
   const [email, setEmail] = useState('');
   const [emailCode, setEmailCode] = useState('');
   const [trouble, setTrouble] = useState(false);
+  /** The email step is "confirm it is you" (a PIN replaced on a new phone), not "add a recovery email" (a first PIN). */
+  const [reset, setReset] = useState(false);
   // A PIN typed on a phone no code was ever typed on: not an error, a step — the code, once.
   const [closedFor, setClosedFor] = useState<unknown>(null);
   const confirming = step === 'pin' && isNewDevice(error) && closedFor !== error;
@@ -74,7 +76,12 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
     } else if (step === 'code') {
       // A first PIN: the server answers that it wants a recovery email, and that is the next thing to fill in.
       void busyWhile(async () => {
-        if ((await onSetPin(phone, code, pin)) === 'email') setStep('email');
+        const next = await onSetPin(phone, code, pin);
+        if (next === 'email' || next === 'email-reset') {
+          // …or this phone is new to the account and the PIN is being replaced: the same step, asked for another reason.
+          setReset(next === 'email-reset');
+          setStep('email');
+        }
       });
     } else {
       void busyWhile(() => onSetPin(phone, code, pin, { email: email.trim(), code: emailCode }));
@@ -115,8 +122,8 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
   return (
     <>
     <form class="scr" onSubmit={submit}>
-      <h1 class="scr__title">{step === 'pin' ? t('driver.signin.title') : step === 'email' ? t('account.safety.signupTitle') : t('driver.signin.codeTitle')}</h1>
-      <p class="scr__lede">{step === 'pin' ? t('driver.signin.lede') : step === 'email' ? t('account.safety.signupLede') : t('driver.signin.codeLede')}</p>
+      <h1 class="scr__title">{step === 'pin' ? t('driver.signin.title') : step === 'email' ? t(reset ? 'account.safety.resetTitle' : 'account.safety.signupTitle') : t('driver.signin.codeTitle')}</h1>
+      <p class="scr__lede">{step === 'pin' ? t('driver.signin.lede') : step === 'email' ? t(reset ? 'account.safety.resetLede' : 'account.safety.signupLede') : t('driver.signin.codeLede')}</p>
 
       {/* The PIN was right but this phone drives for nobody: the generic "you cannot open that" would send a driver
           looking for a problem with their PIN, when the fix is the number their fleet registered. */}
@@ -127,7 +134,8 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
            in as them — so it says so, and says what undoes it, rather than a bare "sign in again". */
         <Note tone="warn" icon="lock" title={t('driver.signin.signedOutTitle')} detail={t('driver.signin.signedOutNote')} />
       ) : error && !confirming ? (
-        <ErrorNote error={error} />
+        /* On the email step the server's own sentence is the message: "that is not the recovery email on this account". */
+        step === 'email' ? <RefusalNote error={error} /> : <ErrorNote error={error} />
       ) : null}
 
       <Card>
@@ -156,7 +164,7 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
 
       <div class="scr__cta">
         <Button type="submit" disabled={!ready} busy={busy}>
-          {step === 'pin' ? t('driver.signin.continue') : step === 'phone' ? t('driver.signin.sendCode') : step === 'email' ? t('account.safety.signupCta') : t('driver.signin.savePin')}
+          {step === 'pin' ? t('driver.signin.continue') : step === 'phone' ? t('driver.signin.sendCode') : step === 'email' ? t(reset ? 'account.safety.resetCta' : 'account.safety.signupCta') : t('driver.signin.savePin')}
         </Button>
       </div>
 

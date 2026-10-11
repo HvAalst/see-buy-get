@@ -1,6 +1,6 @@
 import { drain, outboxItems } from '../../shared/outbox';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { asksForEmail } from '../../shared/account/recovery';
+import { asksForEmail, isPinReset } from '../../shared/account/recovery';
 import type { SbgError } from '../../lib/sbg';
 import type { IconName } from '../../shared/ui/Icon';
 import { choosePin, createDriverClient, driverConfig, driverSession, isMintSourced, isSignInRequired, narrow, purgeDriverTokens, requestPhoneCode, verifyPhoneCode } from './api';
@@ -636,7 +636,7 @@ export function useDriverApp() {
    * checked and the proof it bought lasts half an hour, so the second call must not check it again.
    */
   const verifiedPhone = useRef('');
-  const setPinAndSignIn = useCallback(async (phone: string, code: string, pin: string, recovery?: { email: string; code: string }): Promise<'ok' | 'email' | 'failed'> => {
+  const setPinAndSignIn = useCallback(async (phone: string, code: string, pin: string, recovery?: { email: string; code: string }): Promise<'ok' | 'email' | 'email-reset' | 'failed'> => {
     const number = phone.trim();
     if (verifiedPhone.current !== number) {
       const verified = await verifyPhoneCode(number, code.trim());
@@ -650,7 +650,8 @@ export function useDriverApp() {
     if (chosen.error) {
       if (!recovery && asksForEmail(chosen.error)) {
         setState((s) => ({ ...s, error: null }));
-        return 'email';
+        // A first PIN wants a recovery address; a PIN replaced on a phone it never worked on wants the one on the account.
+        return isPinReset(chosen.error) ? 'email-reset' : 'email';
       }
       // A proof that ran out is asked for again, from the start.
       if (chosen.error.code === 'PHONE_NOT_VERIFIED') verifiedPhone.current = '';

@@ -41,7 +41,7 @@ export interface PersonAuth {
 
 /** A verified phone, a new PIN, and — the first time — a confirmed recovery email behind it. */
 export async function enroll(phone: string, pin: string, recovery?: { email: string; code: string }): Promise<Result<PersonAuth>> {
-  const r = await publicRequest<PersonAuth & { device?: string }>(businessConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}) } });
+  const r = await publicRequest<PersonAuth & { device?: string }>(businessConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, device: readDeviceKey(phone), ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}) } });
   // The code was typed on this device: it is handed the key the PIN is asked with from now on.
   saveDeviceKey(phone, r.data?.device);
   return r;

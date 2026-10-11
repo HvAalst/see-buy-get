@@ -1016,6 +1016,10 @@ export const en = {
   'account.safety.signupTitle': 'Add a recovery email',
   'account.safety.signupLede': 'One more step. If you ever lose this phone number, the email is how you get your account back — and we write to it when something changes on your account.',
   'account.safety.signupCta': 'Save and sign in',
+  // Replacing a PIN on a phone or browser it never worked on: the code to the number, and a code to the email ON the account.
+  'account.safety.resetTitle': 'Confirm it is you',
+  'account.safety.resetLede': 'This phone or browser is new to your account. To replace your PIN here, type the recovery email on your account. We send it a code.',
+  'account.safety.resetCta': 'Replace my PIN and sign in',
   'account.trouble.link': 'Trouble signing in?',
   'account.trouble.title': 'Trouble signing in?',
   'account.trouble.lede': 'Forgot your PIN but still have your number? Go back and choose the forgot-PIN link — a code to your phone is all you need. These are for when that cannot work.',

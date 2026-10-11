@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { t } from '../../shared/i18n'; // plain t(): toasts/outbound text are built at action time in the sender's active locale
 import { isSignInRequired, narrow, type SbgError } from '../../lib/sbg';
-import { asksForEmail } from '../../shared/account/recovery';
+import { asksForEmail, isPinReset } from '../../shared/account/recovery';
 import { PIN_LENGTH } from '../../shared/account/pin';
 import type { MediaKind } from '../../lib/sbg/personas/media';
 import type { MerchantTag } from '../../lib/sbg/personas/consumer';
@@ -86,6 +86,8 @@ export interface SendState {
   /** True only when the phone was REMEMBERED from a prior session (device storage) → login is PIN-only.
    *  A first-time typist keeps the editable field; typing a digit must never flip the input to read-only. */
   phoneKnown: boolean;
+  /** The email step is "confirm it is you" (a PIN replaced on a new device), not "add a recovery email" (a first PIN). */
+  authReset: boolean;
   authCode: string; // the 6-digit OTP
   authPin: string; // the 4-digit PIN
   authBusy: boolean;
@@ -175,6 +177,7 @@ const INITIAL: SendState = {
   authStep: 'phone',
   authPhone: '',
   phoneKnown: false,
+  authReset: false,
   authCode: '',
   authPin: '',
   authBusy: false,
@@ -595,7 +598,8 @@ export function useSendApp() {
       // A FIRST PIN needs a recovery email. That is the next thing to fill in, not an error: the phone stays
       // verified and the PIN stays typed. Somebody replacing a forgotten PIN already has one and never sees this.
       if (!onEmailStep && asksForEmail(r.error)) {
-        setState((s) => ({ ...s, authBusy: false, authStep: 'email', authError: null }));
+        // …or a PIN replaced on a device it never worked on: the same step, asked for a different reason.
+        setState((s) => ({ ...s, authBusy: false, authStep: 'email', authError: null, authReset: isPinReset(r.error) }));
         return;
       }
       setState((s) => ({ ...s, authBusy: false, authError: r.error }));

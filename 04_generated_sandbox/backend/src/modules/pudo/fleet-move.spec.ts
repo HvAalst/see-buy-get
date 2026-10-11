@@ -646,10 +646,18 @@ describe('a driver changing fleet', () => {
       const d = aDriver(kilima.did);
       const person = persons.findByPhone(d.phone)!;
       persons.setPin(person.personDid, '13570');
-      for (let i = 0; i < 4; i++) expect(() => persons.loginWithPin(d.phone, '00000', persons.trustDevice(d.phone))).toThrow(/Wrong phone or PIN/);
+      // The phone the PIN is typed on was confirmed by a code — and THAT is news: their PIN works somewhere it never had.
+      const theirPhone = persons.trustDevice(d.phone);
       await settle();
-      expect(notifications.inboxFor(d.driver.did)).toHaveLength(0); // four wrong is a typo, not news
-      expect(() => persons.loginWithPin(d.phone, '00000', persons.trustDevice(d.phone))).toThrow(/Too many wrong PINs/);
+      expect(notifications.inboxFor(d.driver.did)).toHaveLength(1);
+      expect(notifications.inboxFor(d.driver.did)[0]).toMatchObject({ kind: 'security', title: 'A new phone or browser can use your PIN' });
+      expect(notifications.inboxFor(d.driver.did)[0].body).toContain('forgot your PIN');
+      expect(notifications.inboxFor(person.personDid)[0]).toMatchObject({ kind: 'security', title: 'A new phone or browser can use your PIN' });
+      expect(notifications.inboxFor(kilima.did)).toHaveLength(0);
+      for (let i = 0; i < 4; i++) expect(() => persons.loginWithPin(d.phone, '00000', theirPhone)).toThrow(/Wrong phone or PIN/);
+      await settle();
+      expect(notifications.inboxFor(d.driver.did)).toHaveLength(1); // four wrong is a typo, not news
+      expect(() => persons.loginWithPin(d.phone, '00000', theirPhone)).toThrow(/Too many wrong PINs/);
       await settle();
       expect(notifications.inboxFor(d.driver.did)[0]).toMatchObject({ kind: 'security', title: 'Your PIN was locked' });
       expect(notifications.inboxFor(d.driver.did)[0].body).toContain('verify your phone by code');

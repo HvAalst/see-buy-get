@@ -1,5 +1,5 @@
 import { HelpLink } from '../../../shared/guide/HelpLink';
-import { Button, Card, Checklist, CodeBoxes, ErrorNote, Note, ReadAloud } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeBoxes, ErrorNote, Note, ReadAloud, RefusalNote } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { canPickContact } from '../../../shared/device';
 import { codeReady, phoneReady } from '../logic';
@@ -174,15 +174,16 @@ function EnrollView({ state, actions, busy }: { state: SendState; actions: SendA
   if (state.authStep === 'email') {
     return (
       <>
-        <h1 class="scr__title">{t('account.safety.signupTitle')}</h1>
-        <p class="scr__lede">{t('account.safety.signupLede')}</p>
-        {state.authError ? <ErrorNote error={state.authError} /> : null}
+        <h1 class="scr__title">{t(state.authReset ? 'account.safety.resetTitle' : 'account.safety.signupTitle')}</h1>
+        <p class="scr__lede">{t(state.authReset ? 'account.safety.resetLede' : 'account.safety.signupLede')}</p>
+        {/* The server's own sentence: "that is not the recovery email on this account" is the message, not a detail of one. */}
+        {state.authError ? <RefusalNote error={state.authError} /> : null}
         <Card>
           <EmailStep id="auth" email={state.authEmail} code={state.authEmailCode} onEmail={actions.setAuthEmail} onCode={actions.setAuthEmailCode} send={recovery.emailCode} disabled={busy} />
         </Card>
         <div class="scr__cta">
           <Button chevron={false} onClick={() => void actions.submitEnroll()} disabled={!state.authEmail.trim() || !codeReady(state.authEmailCode, 6)} busy={busy}>
-            {t('account.safety.signupCta')}
+            {t(state.authReset ? 'account.safety.resetCta' : 'account.safety.signupCta')}
           </Button>
         </div>
         <div class="scr__foot">
