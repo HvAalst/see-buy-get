@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
-import { isSandbox } from '../runtime/sandbox';
+import { deploymentSecret } from '../runtime/secrets';
 
 /**
  * FieldEncryption — AES-256-GCM encryption for PII at rest in the Identity Vault (T-003).
@@ -10,7 +10,7 @@ import { isSandbox } from '../runtime/sandbox';
 @Injectable()
 export class FieldEncryption {
   private readonly key = createHash('sha256')
-    .update(process.env.GLOS_VAULT_KEY || 'glos-dev-vault-key-change-me')
+    .update(deploymentSecret('GLOS_VAULT_KEY', 'glos-dev-vault-key-change-me'))
     .digest(); // 32 bytes
 
   /**
@@ -21,12 +21,10 @@ export class FieldEncryption {
    * The vault now keeps its ciphertext on disk, and ciphertext under a key anyone can read in the source
    * is the Golden Record in plain text with extra steps. Refused at boot rather than warned about: a
    * warning in a deploy log is read after the file has been copied.
+   *
+   * The refusal is where the key is read, above (`deploymentSecret`): it used to ask only whether the variable
+   * was set, and the example environment file sets it — to the printed key.
    */
-  constructor() {
-    if (!isSandbox() && !process.env.GLOS_VAULT_KEY) {
-      throw new Error('GLOS_VAULT_KEY is not set: outside a sandbox the identity vault will not encrypt personal data under the key printed in the source');
-    }
-  }
 
   encrypt(plaintext: string): string {
     const iv = randomBytes(12);

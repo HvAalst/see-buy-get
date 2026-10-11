@@ -14,7 +14,10 @@
 import { documentDataUrl, roadDataUrl } from './seed-image.mjs';
 
 const API = process.env.SBG_API ?? 'http://localhost:3000';
-const PASSWORD = 'seebuyget';
+// The demo password. It was 'seebuyget' — the first thing anybody guessing would try, and refused now wherever a
+// password is chosen. Accounts an earlier run made with it are moved to this one (`ensureAccount`).
+const PASSWORD = 'seebuyget-demo';
+const OLD_PASSWORD = 'seebuyget';
 const stamp = Date.now().toString(36).slice(-5).toUpperCase();
 
 const out = [];
@@ -95,6 +98,12 @@ async function verifiedPhone() {
 async function ensureAccount(email, role, profile) {
   const login = await req('POST', '/v1/sbg/auth/login', { body: { email, password: PASSWORD } });
   if (login.ok) return login.data;
+  // An account an earlier run made with the old demo password: it changes it, as its holder would.
+  const moved = await req('POST', '/v1/sbg/auth/password', { body: { email, password: OLD_PASSWORD, newPassword: PASSWORD } });
+  if (moved.ok) {
+    say(`  (${email} moved to the new demo password)`);
+    return need(await req('POST', '/v1/sbg/auth/login', { body: { email, password: PASSWORD } }), `login ${email}`);
+  }
   const phone = await verifiedPhone();
   const r = await req('POST', '/v1/sbg/auth/signup', { body: { role, email, password: PASSWORD, phone, profile } });
   return need(r, `signup ${email}`);
@@ -542,6 +551,8 @@ const run = async () => {
 
   /* ------------------------------------------------------------- vendor --- */
   const VENDOR_SECRET = 'whsec_demo_nairobi_threads';
+  // A store signs in with its own email and password; its secret is for its systems.
+  const STORE_EMAIL = 'store@sbg.test';
   let shop = need(await req('GET', '/v1/sbg/vendors', { token: op }), 'vendors').find((v) => v.name === 'Nairobi Threads');
   if (!shop) {
     shop = need(
@@ -552,12 +563,23 @@ const run = async () => {
           address: 'Biashara St 12',
           location: { lat: -1.284, lng: 36.824 },
           secret: VENDOR_SECRET,
+          email: STORE_EMAIL,
+          password: PASSWORD,
         },
       }),
       'vendor register',
     );
   }
-  const vLogin = need(await req('POST', '/v1/sbg/vendors/login', { body: { vendorId: shop.vendorId, secret: VENDOR_SECRET } }), 'vendor login');
+  const storeSession = () => req('POST', '/v1/sbg/vendors/session', { body: { email: STORE_EMAIL, password: PASSWORD } });
+  let storeIn = await storeSession();
+  if (!storeIn.ok) {
+    // A demo store from before stores had accounts: in by its secret one last time, and it sets its account up.
+    const old = need(await req('POST', '/v1/sbg/vendors/login', { body: { vendorId: shop.vendorId, secret: VENDOR_SECRET } }), 'vendor login (by secret)');
+    need(await req('POST', `/v1/sbg/vendors/${shop.vendorId}/account`, { token: old.token.access_token, body: { email: STORE_EMAIL, password: PASSWORD } }), 'store account');
+    say(`  (the demo store now signs in as ${STORE_EMAIL})`);
+    storeIn = await storeSession();
+  }
+  const vLogin = need(storeIn, 'store sign-in');
   const tokV = vLogin.token.access_token;
 
   // Enough float for the WHOLE run, not enough to look plausible. This run mints about fifty shipments —
@@ -937,10 +959,10 @@ const run = async () => {
 
   /* -------------------------------------------------------------- sheet --- */
   out.push('', '='.repeat(64), '  SEEBUYGET DEMO — SIGN-IN SHEET', '='.repeat(64));
-  out.push('  Agent app   /agent/   agent1@sbg.test / seebuyget   (Mama Sarah Shop)');
-  out.push('                        agent2@sbg.test / seebuyget   (Riverside Corner)');
-  out.push('                        agent3@sbg.test / seebuyget   (Downtown Kiosk)');
-  out.push('  Hub app     /mdp/     hub@sbg.test    / seebuyget   (Central Sort)');
+  out.push(`  Agent app   /agent/   agent1@sbg.test / ${PASSWORD}   (Mama Sarah Shop)`);
+  out.push(`                        agent2@sbg.test / ${PASSWORD}   (Riverside Corner)`);
+  out.push(`                        agent3@sbg.test / ${PASSWORD}   (Downtown Kiosk)`);
+  out.push(`  Hub app     /mdp/     hub@sbg.test    / ${PASSWORD}   (Central Sort)`);
   out.push(`  Fleet app   /fleet/   company ${fleetCode} · then ${mgr.contactPhone} PIN ${MGR_PIN}`);
   // BOTH drivers, because one account proves nothing about what a second may see — the road photographs
   // are read back by the next driver down that road, and checking that needs two sign-ins.
@@ -953,8 +975,8 @@ const run = async () => {
     out.push(`              :5181/    ${a.email.padEnd(18)} / ${a.password}   (${a.kind === 'group' ? 'the group: sees every sister' : 'this company only'})`);
   }
   if (!companyAdmins.length) out.push('              :5181/    company logins already exist — their passwords were printed on the first seed');
-  out.push(`  Vendor app  /vendor/  store ID ${shop.vendorId}`);
-  out.push(`                        secret   ${VENDOR_SECRET}`);
+  out.push(`  Vendor app  /vendor/  ${STORE_EMAIL}  / ${PASSWORD}   (Nairobi Threads, ${shop.vendorId})`);
+  out.push(`                        its signing secret, for its systems only: ${VENDOR_SECRET}`);
   out.push('-'.repeat(64));
   out.push(`  Handover demo   ${p1.parcelId}, ${p2.parcelId} wait for badge ${amos.badgeId}`);
   out.push(`  Release demo    ${p3.parcelId} is On_Bus at Riverside (mark arrived)`);

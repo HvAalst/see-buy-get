@@ -1,4 +1,5 @@
 import { createHmac } from 'crypto';
+import { deploymentSecret } from '../runtime/secrets';
 import { PersistentMap } from '../store/persistent-map';
 import { isPlausiblePhone, normalizePhone } from './phone';
 
@@ -40,7 +41,7 @@ export type IdentityFields = ReadonlyArray<readonly [PrintField, string | undefi
  * The server secret the prints are keyed with. A dev default keeps the sandbox working; production injects a
  * real one. Changing it re-keys every print — a deliberate, operator-gated migration — so it is read once here.
  */
-const IDENTITY_PEPPER = process.env.GLOS_IDENTITY_PEPPER || 'glos-dev-identity-pepper-change-me';
+const IDENTITY_PEPPER = deploymentSecret('GLOS_IDENTITY_PEPPER', 'glos-dev-identity-pepper-change-me');
 
 /**
  * The same detail typed two ways is the same detail. A phone goes through the one normaliser the OTP service,

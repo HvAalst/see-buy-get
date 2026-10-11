@@ -483,12 +483,12 @@ describe('a driver changing fleet', () => {
       const otp = moduleOtp();
       const phone = '+254781999002';
       otp.verify(phone, otp.request(phone).code);
-      const opened = accounts().signup({ role: 'driver', email: 'rider@sbg.test', password: 'secret12', phone, profile: { driver: { displayName: 'Rider', fullName: 'R R', nationalId: '88001122', mobile: phone, licenceClasses: ['motorcycle'] } } });
+      const opened = accounts().signup({ role: 'driver', email: 'rider@sbg.test', password: 'mkate-na-chai-1', phone, profile: { driver: { displayName: 'Rider', fullName: 'R R', nationalId: '88001122', mobile: phone, licenceClasses: ['motorcycle'] } } });
       expect(auth.introspect(opened.token.access_token).tenant).toBeUndefined();
       const o = offers.offer(pwani.did, phone);
       offers.accept(o.offerId, opened.did);
       expect(auth.introspect(opened.token.access_token).active).toBe(false);
-      const again = accounts().login('rider@sbg.test', 'secret12');
+      const again = accounts().login('rider@sbg.test', 'mkate-na-chai-1');
       expect(auth.introspect(again.token.access_token)).toMatchObject({ active: true, tenant: pwani.did });
     });
   });
@@ -502,12 +502,12 @@ describe('a driver changing fleet', () => {
       const phone = '+254781999003';
       otp.verify(phone, otp.request(phone).code);
       expect(() =>
-        accounts().signup({ role: 'driver', email: 'coded@sbg.test', password: 'secret12', phone, profile: { fleetCode: kilima.loginCode, driver: { displayName: 'Coded', fullName: 'C C', nationalId: '88001133', mobile: phone, licenceClasses: ['motorcycle'] } } }),
+        accounts().signup({ role: 'driver', email: 'coded@sbg.test', password: 'mkate-na-chai-1', phone, profile: { fleetCode: kilima.loginCode, driver: { displayName: 'Coded', fullName: 'C C', nationalId: '88001133', mobile: phone, licenceClasses: ['motorcycle'] } } }),
       ).toThrow(/A fleet adds its own drivers/);
 
       const phone2 = '+254781999004';
       otp.verify(phone2, otp.request(phone2).code);
-      const sneaky = accounts().signup({ role: 'driver', email: 'sneaky@sbg.test', password: 'secret12', phone: phone2, profile: { driver: { displayName: 'Sneaky', fullName: 'S S', nationalId: '88001144', mobile: phone2, licenceClasses: ['motorcycle'], managerDid: kilima.did }, vehicle: { plate: 'KMSNK 1', vehicleClass: 'motorcycle', managerDid: kilima.did } } });
+      const sneaky = accounts().signup({ role: 'driver', email: 'sneaky@sbg.test', password: 'mkate-na-chai-1', phone: phone2, profile: { driver: { displayName: 'Sneaky', fullName: 'S S', nationalId: '88001144', mobile: phone2, licenceClasses: ['motorcycle'], managerDid: kilima.did }, vehicle: { plate: 'KMSNK 1', vehicleClass: 'motorcycle', managerDid: kilima.did } } });
       expect(drivers.get(sneaky.did).managerDid).toBeUndefined();
       expect(vehicles.list({ managerDid: kilima.did })).toHaveLength(0);
     });

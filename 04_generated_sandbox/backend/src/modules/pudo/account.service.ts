@@ -5,6 +5,8 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { AuthService } from '../../foundation/auth/auth.service';
+import { PasswordTries, spendTime } from '../../foundation/auth/password-tries';
+import { assertPassword, newResetCode, readResetCode } from '../../foundation/auth/password-rules';
 import { AccessToken } from '../../foundation/auth/auth.types';
 import { DidService } from '../../foundation/did/did.service';
 import { hashPhone, isPlausiblePhone } from '../../foundation/identity/phone';
@@ -58,6 +60,8 @@ export class AccountService implements OnApplicationBootstrap {
   // Durable: these are real login credentials (scrypt salt + hash). A restart wiping them logs every
   // participant out permanently. Keyed by lower-cased email.
   private readonly accounts = new PersistentMap<string, Account>('pudo-accounts');
+  /** Wrong passwords, counted against the address that was typed. One count for every door these accounts have. */
+  private readonly tries = new PasswordTries();
 
   constructor(
     private readonly agents: AgentService,
@@ -113,7 +117,7 @@ export class AccountService implements OnApplicationBootstrap {
   signup(input: { role: AccountRole; email: string; password: string; phone: string; profile: Record<string, unknown> }): { accountId: string; role: AccountRole; did: string; email: string; entityStatus?: string; token: AccessToken } {
     const email = (input.email || '').trim().toLowerCase();
     if (!email.includes('@')) throw new GlosError('EMAIL_INVALID', 'A valid email is required');
-    if ((input.password || '').length < 6) throw new GlosError('PASSWORD_TOO_SHORT', 'Password must be at least 6 characters');
+    assertPassword(input.password, [email, welcomeName(input.role, input.profile)]);
     if (!input.phone?.trim()) throw new GlosError('PHONE_REQUIRED', 'A phone number is required');
     if (!this.otp.isVerified(input.phone)) throw new GlosError('PHONE_NOT_VERIFIED', 'Verify your phone number first');
     /*
@@ -185,9 +189,30 @@ export class AccountService implements OnApplicationBootstrap {
 
   /** Verify credentials → an actor-scoped token (S2). Replaces the old ?<role>=<did> URL "session". */
   login(email: string, password: string): { accountId: string; role: AccountRole; did: string; email: string; token: AccessToken } {
-    const account = this.accounts.get((email || '').trim().toLowerCase());
-    if (!account || !this.verify(password, account)) throw new GlosError('AUTH_FAILED', 'Wrong email or password');
+    const key = (email || '').trim().toLowerCase();
+    // A locked sign-in answers nobody — asked before the password is looked at, so the right one learns nothing either.
+    this.tries.check(key);
+    const account = this.accounts.get(key);
+    if (!account || !this.verify(password, account)) throw this.wrongPassword(key, account, password);
+    this.tries.forget(key);
     return { accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account) };
+  }
+
+  /**
+   * A WRONG PASSWORD: counted against the address that was typed, and answered. The fifth in a quarter of an hour
+   * locks the sign-in — and the holder is told, because five wrong passwords at an account are either its holder,
+   * who then knows why they cannot get in, or somebody else, which they would want to know.
+   *
+   * An address nobody holds is counted, locked and timed exactly like one somebody does: this door tells nobody
+   * who has an account, by what it says or by how long it takes to say it.
+   */
+  private wrongPassword(key: string, account: Account | undefined, password: string): GlosError {
+    if (!account) spendTime(password);
+    const { error, locked } = this.tries.wrong(key);
+    if (locked && account) {
+      void this.mail?.send('password-locked', { address: account.email }, { email: account.email, app: ACCOUNT_APP[account.role], when: new Date().toISOString(), until: new Date(locked.until).toISOString(), recovery: 'self-reset' });
+    }
+    return error;
   }
 
   /**
@@ -214,10 +239,10 @@ export class AccountService implements OnApplicationBootstrap {
    * WHAT STOPS A STORE'S ACCOUNT BEING MADE — asked BEFORE the store itself is registered, so that an email somebody
    * already holds does not leave a store behind it with no way in.
    */
-  checkNewAccount(email: string | undefined, password: string | undefined): string {
+  checkNewAccount(email: string | undefined, password: string | undefined, name?: string): string {
     const address = (email || '').trim().toLowerCase();
     if (!address.includes('@')) throw new GlosError('EMAIL_INVALID', 'A valid email is required');
-    if ((password || '').length < 8) throw new GlosError('PASSWORD_TOO_SHORT', 'A password needs at least 8 characters');
+    assertPassword(password, [address, name]);
     if (this.accounts.has(address)) throw new GlosError('DUPLICATE', 'An account with this email already exists', { field: 'email', register: 'account' });
     return address;
   }
@@ -235,7 +260,7 @@ export class AccountService implements OnApplicationBootstrap {
    * carries it, and the same person is one person across the apps.
    */
   setUpStore(input: { did: string; name: string; email: string; password: string; phone?: string }): { accountId: string; role: AccountRole; did: string; email: string; token: AccessToken } {
-    const email = this.checkNewAccount(input.email, input.password);
+    const email = this.checkNewAccount(input.email, input.password, input.name);
     if (this.emailForDid(input.did)) throw new GlosError('CONFLICT', 'This store already has an account: sign in with its email and password');
     const salt = randomBytes(16).toString('hex');
     const account: Account = {
@@ -258,8 +283,14 @@ export class AccountService implements OnApplicationBootstrap {
    * shop's or a courier's: this door tells nobody which accounts exist, or what kind they are.
    */
   storeLogin(email: string, password: string): { accountId: string; role: AccountRole; did: string; email: string; token: AccessToken } {
-    const account = this.accounts.get((email || '').trim().toLowerCase());
-    if (!account || account.role !== 'vendor' || !this.verify(password, account)) throw new GlosError('AUTH_FAILED', 'Wrong email or password');
+    const key = (email || '').trim().toLowerCase();
+    this.tries.check(key);
+    const account = this.accounts.get(key);
+    // The password is checked BEFORE the kind of account is looked at: a shop's address must take as long to refuse
+    // as a wrong password does. It is the same count as the shops' own door — one address, one set of tries.
+    const right = account ? this.verify(password, account) : false;
+    if (!account || !right || account.role !== 'vendor') throw this.wrongPassword(key, account, password);
+    this.tries.forget(key);
     return { accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account) };
   }
 
@@ -268,7 +299,19 @@ export class AccountService implements OnApplicationBootstrap {
    * console left open is not proof that the person at it holds the account.
    */
   passwordOpens(did: string, password: string | undefined): boolean {
-    for (const account of this.accounts.values()) if (account.did === did) return this.verify(password ?? '', account);
+    for (const account of this.accounts.values()) {
+      if (account.did !== did) continue;
+      // The same count as the sign-in: a console left open must not be a quieter place to guess the password from.
+      this.tries.check(account.email);
+      if (this.verify(password ?? '', account)) {
+        this.tries.forget(account.email);
+        return true;
+      }
+      const { error, locked } = this.tries.wrong(account.email);
+      if (!locked) return false;
+      void this.mail?.send('password-locked', { address: account.email }, { email: account.email, app: ACCOUNT_APP[account.role], when: new Date().toISOString(), until: new Date(locked.until).toISOString(), recovery: 'self-reset' });
+      throw error;
+    }
     return false;
   }
 
@@ -276,7 +319,7 @@ export class AccountService implements OnApplicationBootstrap {
   forgot(email: string): { sent: boolean; resetToken?: string } {
     const account = this.accounts.get((email || '').trim().toLowerCase());
     if (!account) return { sent: false }; // do not reveal which emails exist
-    account.resetToken = `RST-${randomBytes(4).toString('hex').toUpperCase()}`;
+    account.resetToken = newResetCode();
     account.resetExpires = Date.now() + RESET_TTL_MS;
     this.accounts.set(account.email, account); // persist the reset token
     void this.mail?.send('password-reset', { address: account.email }, { email: account.email, code: account.resetToken!, minutes: RESET_TTL_MS / 60_000, app: ACCOUNT_APP[account.role] });
@@ -289,9 +332,13 @@ export class AccountService implements OnApplicationBootstrap {
    * device that made the change is handed a fresh sign-in.
    */
   changePassword(email: string, current: string, next: string): { accountId: string; role: AccountRole; did: string; email: string; token: AccessToken } {
-    const account = this.accounts.get((email || '').trim().toLowerCase());
-    if (!account || !this.verify(current, account)) throw new GlosError('AUTH_FAILED', 'Wrong email or password');
-    if ((next || '').length < 8) throw new GlosError('PASSWORD_TOO_SHORT', 'A new password needs at least 8 characters');
+    const key = (email || '').trim().toLowerCase();
+    // This route proves itself with the current password, so it is a place to guess it: the same count as the sign-in.
+    this.tries.check(key);
+    const account = this.accounts.get(key);
+    if (!account || !this.verify(current, account)) throw this.wrongPassword(key, account, current);
+    this.tries.forget(key);
+    assertPassword(next, [account.email]);
     if (this.verify(next, account)) throw new GlosError('VALIDATION_FAILED', 'Choose a password different from the current one');
     account.salt = randomBytes(16).toString('hex');
     account.hash = this.hash(next, account.salt);
@@ -305,12 +352,12 @@ export class AccountService implements OnApplicationBootstrap {
   }
 
   reset(token: string, password: string): { ok: boolean } {
-    if ((password || '').length < 6) throw new GlosError('PASSWORD_TOO_SHORT', 'Password must be at least 6 characters');
-    const account = [...this.accounts.values()].find((a) => a.resetToken && a.resetToken === (token || '').trim().toUpperCase());
+    const code = readResetCode(token);
+    const account = code ? [...this.accounts.values()].find((a) => a.resetToken && a.resetToken === code) : undefined;
     if (!account || !account.resetExpires || account.resetExpires < Date.now()) throw new GlosError('WINDOW_EXPIRED', 'Invalid or expired reset token');
-    // A store's password is eight or more wherever it is chosen: made, changed, or reset. (The code is not used up
-    // by a refusal: the store types a longer one and carries on.)
-    if (account.role === 'vendor' && password.length < 8) throw new GlosError('PASSWORD_TOO_SHORT', 'A password needs at least 8 characters');
+    // The same rules as wherever a password is chosen. (The code is not used up by a refusal: the person types
+    // another password and carries on.)
+    assertPassword(password, [account.email]);
     account.salt = randomBytes(16).toString('hex');
     account.hash = this.hash(password, account.salt);
     account.resetToken = undefined;
@@ -319,6 +366,9 @@ export class AccountService implements OnApplicationBootstrap {
     this.accounts.set(account.email, account); // persist the new password hash
     // Whoever had the old password — which is presumably why it was reset — is signed out everywhere.
     this.auth.revokeAll(account.did);
+    // THE HOLDER'S OWN WAY BACK: a code that reached the address opens a locked sign-in at once, and the count of
+    // wrong tries starts again. Nobody who is only guessing can do this.
+    this.tries.forget(account.email);
     // The reset code reached them and was typed in: email to this address works, whatever came back before.
     this.mail?.addressWorks(account.email);
     this.tellPasswordChanged(account);

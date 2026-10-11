@@ -199,7 +199,7 @@ function ForgotSheet({ open, onClose, actions, email: initial }: { open: boolean
               autocomplete="new-password"
             />
           </div>
-          <Button chevron={false} busy={busy} disabled={!token.trim() || password.length < 6} onClick={() => void apply()}>
+          <Button chevron={false} busy={busy} disabled={!token.trim() || password.length < 8} onClick={() => void apply()}>
             {t('agent.signin.setPassword')}
           </Button>
         </>

@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { deploymentSecret } from '../runtime/secrets';
 
 /**
  * Phone normalization + hashing — the identity spine's join key (S20).
@@ -18,11 +19,11 @@ import { createHash } from 'crypto';
 const DEFAULT_DIAL_CODE = process.env.GLOS_DEFAULT_DIAL_CODE || '+254';
 
 /**
- * Server-side pepper for the phone hash. A dev default keeps the sandbox working; production injects a
- * real secret. Rotating it re-keys every phoneHash (a deliberate, operator-gated migration), so it is
+ * Server-side pepper for the phone hash. A dev default keeps the sandbox working; outside one the server does not
+ * start without a real secret (`deploymentSecret`): phone numbers are few enough to try them all against a known pepper. Rotating it re-keys every phoneHash (a deliberate, operator-gated migration), so it is
  * kept out of the data and read once here.
  */
-const PHONE_PEPPER = process.env.GLOS_PHONE_PEPPER || 'glos-dev-phone-pepper-change-me';
+const PHONE_PEPPER = deploymentSecret('GLOS_PHONE_PEPPER', 'glos-dev-phone-pepper-change-me');
 
 /**
  * Normalize a phone to E.164. Without this, the verified set, rate limits and the identity join key are

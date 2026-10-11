@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { createHash, createHmac } from 'crypto';
+import { deploymentSecret } from '../../../foundation/runtime/secrets';
 import { EventBus } from '../../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../../foundation/events/glos-events';
 import { ShipmentService } from '../shipment.service';
@@ -43,7 +44,7 @@ export interface SmartLabel {
 @Injectable()
 export class LabelService {
   private readonly labels = new Map<string, SmartLabel>();
-  private readonly signingKey = process.env.GLOS_LABEL_KEY || 'glos-dev-label-key';
+  private readonly signingKey = deploymentSecret('GLOS_LABEL_KEY', 'glos-dev-label-key');
 
   constructor(
     private readonly shipments: ShipmentService,

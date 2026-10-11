@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { createHmac } from 'crypto';
+import { deploymentSecret } from '../../../foundation/runtime/secrets';
 import { LedgerService } from '../../../foundation/ledger/ledger.service';
 import { NetworkInfo } from '../../../foundation/ledger/ledger.types';
 import { ShipmentService } from '../shipment.service';
@@ -30,7 +31,7 @@ export interface DisclosureProof {
  */
 @Injectable()
 export class AnchoringService {
-  private readonly key = process.env.GLOS_DISCLOSURE_KEY || 'glos-dev-disclosure-key';
+  private readonly key = deploymentSecret('GLOS_DISCLOSURE_KEY', 'glos-dev-disclosure-key');
 
   constructor(
     private readonly shipments: ShipmentService,

@@ -29,6 +29,33 @@ Every endpoint requires a `Bearer` token unless marked `@Public()`. Obtain one f
 (bound to a DID that must resolve in the registry). The global `AuthGuard` introspects the token
 on every request.
 
+## Before it leaves a laptop: the secrets
+On a laptop nothing needs setting: every secret has a value printed in the source. Printed means known, so
+with `GLOS_ENV=production` the server **does not start** unless each of these comes from the deployment, is not
+a printed value (the ones in `../.env.example` are printed values), is 32 characters or more, and is not shared
+with another. The refusal names the ones it needs (`src/foundation/runtime/secrets.ts`).
+
+| Variable | What it protects |
+|---|---|
+| `GLOS_AUTH_SECRET` | signs every sign-in token: whoever has it signs in as anybody, staff included |
+| `GLOS_VAULT_KEY` | seals the identity vault (national ID numbers) |
+| `GLOS_PHONE_PEPPER` | keys the hash each phone number is stored as |
+| `GLOS_IDENTITY_PEPPER` | keys the prints that find a second registration of one national ID |
+| `GLOS_FUNDING_SECRET` | signs payment confirmations on the stand-in rail |
+| `GLOS_LABEL_KEY` | signs parcel labels |
+| `GLOS_DISCLOSURE_KEY` | keys single-field waybill proofs |
+
+Make each with `openssl rand -hex 32`. The peppers and the vault key must then never change: changing one
+re-keys what is already stored. Also set `GLOS_TRUST_PROXY` when the server is behind a proxy or a load
+balancer: the per-caller sign-in limits count by address, and behind a proxy there is one address.
+
+## Sign-in limits
+Every door that takes a password counts its tries twice: **per account** (five wrong in a quarter of an hour
+lock it, the right password included; each lock in a row is longer — `src/foundation/auth/password-tries.ts`)
+and **per caller** (`@RateLimit` with `@UseGuards(RateLimitGuard)`). A new route that needs no sign-in and
+changes something must carry a limit or a reason: `src/modules/pudo/sign-in-doors.spec.ts` fails until it does.
+Both counts are kept in this server's memory.
+
 ## Develop
 ```bash
 cd 04_generated_sandbox/backend

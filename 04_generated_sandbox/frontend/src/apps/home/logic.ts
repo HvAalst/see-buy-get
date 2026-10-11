@@ -274,9 +274,9 @@ export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Tran
       return null;
     case 'login':
       if (!f.email.includes('@')) return t('home.block.email');
-      // A store's account asks for eight: the server's floor for it, and the same as when any password is changed.
-      if (role.kind === 'vendor') return f.password.length < 8 ? t('home.block.passwordStore') : null;
-      if (f.password.length < 6) return t('home.block.password');
+      // Eight, for everybody: the server's floor wherever a password is chosen. What it will not take for being easy
+      // to guess is its own to say — the list of what people try first does not live in a web page.
+      if (f.password.length < 8) return t('home.block.password');
       return null;
     default:
       return null;

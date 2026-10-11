@@ -3678,34 +3678,37 @@ describe('PUDO Light', () => {
     const phone = '+254700555';
     const agentProfile = { shopName: 'Signup Shop', zone: 'NorthTown', location: { lat: -1.2, lng: 36.8 }, landmark: 'x', openingHours: uniformHours(), shelf: defaultShelf, fullName: 'Owner', nationalId: 'ID-SU1', mobile: phone, deviceImei: 'IMEI-SU1', requirements: eligibleReqs() };
     // unverified phone is rejected
-    expect(() => accounts.signup({ role: 'pudo', email: 'shop@store.test', password: 'secret1', phone, profile: { agent: agentProfile, kyc: kycDocs } })).toThrow(/Verify your phone/);
+    expect(() => accounts.signup({ role: 'pudo', email: 'shop@store.test', password: 'mkate-na-chai-1', phone, profile: { agent: agentProfile, kyc: kycDocs } })).toThrow(/Verify your phone/);
 
     const { code } = otp.request(phone);
     expect(() => otp.verify(phone, '0000')).toThrow(/Wrong or expired/);
     expect(otp.verify(phone, code).verified).toBe(true);
 
-    const res = accounts.signup({ role: 'pudo', email: 'shop@store.test', password: 'secret1', phone, profile: { agent: agentProfile, kyc: kycDocs } });
+    const res = accounts.signup({ role: 'pudo', email: 'shop@store.test', password: 'mkate-na-chai-1', phone, profile: { agent: agentProfile, kyc: kycDocs } });
     expect(res.role).toBe('pudo');
     expect(res.did).toMatch(/^did:glos:/);
     expect(agents.get(res.did).status).toBe('KYC_PENDING'); // wizard submitted KYC → awaiting vetting
 
     // login
-    expect(accounts.login('SHOP@store.test', 'secret1').did).toBe(res.did); // case-insensitive email
+    expect(accounts.login('SHOP@store.test', 'mkate-na-chai-1').did).toBe(res.did); // case-insensitive email
     expect(() => accounts.login('shop@store.test', 'wrong')).toThrow(/Wrong email or password/);
     const p2 = '+254700556'; otp.verify(p2, otp.request(p2).code);
-    expect(() => accounts.signup({ role: 'pudo', email: 'shop@store.test', password: 'secret1', phone: p2, profile: { agent: agentProfile } })).toThrow(/already exists/);
+    expect(() => accounts.signup({ role: 'pudo', email: 'shop@store.test', password: 'mkate-na-chai-1', phone: p2, profile: { agent: agentProfile } })).toThrow(/already exists/);
 
     // forgot → reset → login with the new password
     const { resetToken } = accounts.forgot('shop@store.test');
-    expect(resetToken).toMatch(/^RST-/);
-    accounts.reset(resetToken!, 'secret2');
-    expect(() => accounts.login('shop@store.test', 'secret1')).toThrow();
-    expect(accounts.login('shop@store.test', 'secret2').did).toBe(res.did);
+    expect(resetToken).toMatch(/^RST-[0-9A-HJKMNP-TV-Z]{12}$/); // sixty random bits, not thirty-two
+    // The same rules as wherever a password is chosen — and a refusal does not use the code up.
+    expect(() => accounts.reset(resetToken!, 'secret2')).toThrow(/at least 8 characters/);
+    expect(() => accounts.reset(resetToken!, 'Welcome2026!')).toThrow(/too easy to guess/);
+    accounts.reset(resetToken!.toLowerCase(), 'sukari-na-maziwa-2');
+    expect(() => accounts.login('shop@store.test', 'mkate-na-chai-1')).toThrow();
+    expect(accounts.login('shop@store.test', 'sukari-na-maziwa-2').did).toBe(res.did);
   });
 
   it('signs up a self-employed driver (own vehicle); a fleet takes one on by offering a place, never by its code', () => {
     const ph1 = '+254700601'; otp.verify(ph1, otp.request(ph1).code);
-    const self = accounts.signup({ role: 'driver', email: 'boda@d.test', password: 'secret1', phone: ph1, profile: { driver: { displayName: 'Boda', fullName: 'B', nationalId: 'ID-D1', mobile: ph1, licenceClasses: ['bike', 'motorcycle'] }, vehicle: { plate: 'BD-1', vehicleClass: 'motorcycle', ownerName: 'B' } } });
+    const self = accounts.signup({ role: 'driver', email: 'boda@d.test', password: 'mkate-na-chai-1', phone: ph1, profile: { driver: { displayName: 'Boda', fullName: 'B', nationalId: 'ID-D1', mobile: ph1, licenceClasses: ['bike', 'motorcycle'] }, vehicle: { plate: 'BD-1', vehicleClass: 'motorcycle', ownerName: 'B' } } });
     expect(self.role).toBe('driver');
     expect(drivers.get(self.did).status).toBe('ACTIVE'); // light registry
     expect(vehicles.list().find((v) => v.plate === 'BD-1')).toMatchObject({ ownerDriverDid: self.did }); // own vehicle registered — theirs, and nobody else's to start on
@@ -3718,9 +3721,9 @@ describe('PUDO Light', () => {
     const ph2 = '+254700602'; otp.verify(ph2, otp.request(ph2).code);
     const joinerProfile = { driver: { displayName: 'Joiner', fullName: 'J', nationalId: 'ID-D2', mobile: ph2, licenceClasses: ['bike'] } };
     // The code names the company at its own sign-in. It used to make whoever typed it that fleet's driver.
-    expect(() => accounts.signup({ role: 'driver', email: 'joiner@d.test', password: 'secret1', phone: ph2, profile: { fleetCode: active.loginCode, ...joinerProfile } })).toThrow(/A fleet adds its own drivers/);
+    expect(() => accounts.signup({ role: 'driver', email: 'joiner@d.test', password: 'mkate-na-chai-1', phone: ph2, profile: { fleetCode: active.loginCode, ...joinerProfile } })).toThrow(/A fleet adds its own drivers/);
     // They sign up on their own, the fleet office offers a place by the number they sign in with, and THEY say yes.
-    const joiner = accounts.signup({ role: 'driver', email: 'joiner@d.test', password: 'secret1', phone: ph2, profile: joinerProfile });
+    const joiner = accounts.signup({ role: 'driver', email: 'joiner@d.test', password: 'mkate-na-chai-1', phone: ph2, profile: joinerProfile });
     expect(drivers.get(joiner.did).managerDid).toBeUndefined();
     const office = { active: true, role: 'fleet_manager', did: m.did, tenant: m.did } as never;
     const offer = controller.makeFleetOffer(m.did, { phone: ph2 }, office);
@@ -3745,7 +3748,7 @@ describe('PUDO Light', () => {
     const joined = accounts.signup({
       role: 'driver',
       email: 'owner@d.test',
-      password: 'secret1',
+      password: 'mkate-na-chai-1',
       phone,
       profile: {
         driver: {
@@ -3785,7 +3788,7 @@ describe('PUDO Light', () => {
     otp.verify(phone, otp.request(phone).code);
     expect(() =>
       accounts.signup({
-        role: 'driver', email: 'mismatch@d.test', password: 'secret1', phone,
+        role: 'driver', email: 'mismatch@d.test', password: 'mkate-na-chai-1', phone,
         profile: {
           driver: { displayName: 'Mix', fullName: 'M X', nationalId: 'ID-MIX1', mobile: phone, licenceClasses: ['bike'] },
           vehicle: { plate: 'KDD 002', vehicleClass: 'van' },
@@ -3801,7 +3804,7 @@ describe('PUDO Light', () => {
     otp.verify(phone, otp.request(phone).code);
     expect(() =>
       accounts.signup({
-        role: 'driver', email: 'nofields@d.test', password: 'secret1', phone,
+        role: 'driver', email: 'nofields@d.test', password: 'mkate-na-chai-1', phone,
         profile: { driver: { displayName: 'No ID', mobile: phone, licenceClasses: ['bike'] } },
       }),
     ).toThrow(/full name/);
@@ -3810,7 +3813,7 @@ describe('PUDO Light', () => {
   it('S20 — one person, many roles: a driver who signs up can enroll as a consumer and send, under one account', () => {
     // A driver signs up through the existing PUDO account flow — which now links them to a person by phone.
     const phone = '+254700711'; otp.verify(phone, otp.request(phone).code);
-    const driver = accounts.signup({ role: 'driver', email: 'multi@d.test', password: 'secret1', phone, profile: { driver: { displayName: 'Multi', fullName: 'M', nationalId: 'ID-M1', mobile: phone, licenceClasses: ['motorcycle'] }, vehicle: { plate: 'MU-1', vehicleClass: 'motorcycle' } } });
+    const driver = accounts.signup({ role: 'driver', email: 'multi@d.test', password: 'mkate-na-chai-1', phone, profile: { driver: { displayName: 'Multi', fullName: 'M', nationalId: 'ID-M1', mobile: phone, licenceClasses: ['motorcycle'] }, vehicle: { plate: 'MU-1', vehicleClass: 'motorcycle' } } });
 
     const linked = persons.findByPhone(phone);
     expect(linked).toBeDefined();
@@ -4171,7 +4174,7 @@ describe('PUDO Light', () => {
       (otp as unknown as { rates: Map<string, unknown> }).rates.clear(); // the same number asks for a code twice in this test
       otp.verify(phone, otp.request(phone).code);
       const profile = { shopName: `Claim Shop ${n}`, zone: 'NorthTown', location: { lat: -1.2 - n / 100, lng: 36.8 }, landmark: 'x', openingHours: uniformHours(), shelf: defaultShelf, fullName: 'Owner', nationalId: `ID-CLM-${n}`, mobile: phone, deviceImei: `IMEI-CLM-${n}`, requirements: eligibleReqs() };
-      return accounts.signup({ role: 'pudo', email: `claim${n}@store.test`, password: 'secret1', phone, profile: { agent: profile, kyc: kycDocs } });
+      return accounts.signup({ role: 'pudo', email: `claim${n}@store.test`, password: 'mkate-na-chai-1', phone, profile: { agent: profile, kyc: kycDocs } });
     };
     /** Past the question of WHO, a claim on a load nobody has delivered is refused for that — which is a different answer. */
     const asked = (did: string, freightId: string) => {

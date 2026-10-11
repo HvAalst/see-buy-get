@@ -371,8 +371,7 @@ export const enHome = {
   'home.block.country': 'Pick the country you are joining in.',
   'home.block.zone': 'Pick the area you serve.',
   'home.block.email': 'Type an email you can open.',
-  'home.block.password': 'Use at least 6 characters.',
-  'home.block.passwordStore': 'Use at least 8 characters.',
+  'home.block.password': 'Use at least 8 characters.',
 
   // Join wizard — step: phone.
   'home.join.phone.lede': 'Your phone number is your key to the network. We send a code to check it works.',
@@ -478,8 +477,7 @@ export const enHome = {
   'home.join.login.lede': 'This is what opens your app from now on.',
   'home.join.login.email': 'Email',
   'home.join.login.password': 'Password',
-  'home.join.login.passwordPh': 'At least 6 characters',
-  'home.join.login.passwordPhStore': 'At least 8 characters',
+  'home.join.login.passwordPh': 'At least 8 characters, and not one that is easy to guess',
 
   // Join wizard — step: done.
   'home.join.done.title': 'You are in',

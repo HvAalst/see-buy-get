@@ -51,6 +51,9 @@ describe('a store has an account of its own, over the wire', () => {
     expect((await http().post('/v1/sbg/vendors').send({ name: `Duka ${u}`, email, password: 'seven-7' })).body.code).toBe('PASSWORD_TOO_SHORT');
     expect((await http().post('/v1/sbg/vendors').send({ name: `Duka ${u}`, email })).body.code).toBe('PASSWORD_TOO_SHORT');
     expect((await http().post('/v1/sbg/vendors').send({ name: `Duka ${u}`, password })).body.code).toBe('EMAIL_INVALID');
+    // A password that is easy to guess, and a signing secret of its own choosing that is short, are refused the same way.
+    expect((await http().post('/v1/sbg/vendors').send({ name: `Duka Bora ${u}`, email, password: 'DukaBora2026' })).body.code).toBe('PASSWORD_GUESSABLE');
+    expect((await http().post('/v1/sbg/vendors').send({ name: `Duka ${u}`, email, password, secret: '1234' })).body).toMatchObject({ code: 'VALIDATION_FAILED', params: { field: 'secret' } });
     expect(await stores()).toBe(before);
 
     const made = (await http().post('/v1/sbg/vendors').send({ name: `Duka Bora ${u}`, email: `  ${email.toUpperCase()} `, password }).expect(201)).body;
@@ -212,16 +215,17 @@ describe('a store has an account of its own, over the wire', () => {
   });
 
   // LAST IN THIS FILE ON PURPOSE: it uses up the door's tries for this caller, and every test above signs in.
-  it('the tries at a store’s password are counted: after twenty in a quarter of an hour the door stops answering, right password or wrong', async () => {
+  it('one caller is counted too: twenty tries in a quarter of an hour at the stores’ door, however many stores they are spread over — and then it answers that caller nothing', async () => {
     const u = digits();
     const email = `guess.${u}@target.example`;
     const password = 'samaki-wa-kupaka-9';
     const made = (await http().post('/v1/sbg/vendors').send({ name: `Target ${u}`, email, password }).expect(201)).body;
     const token = made.token.access_token as string;
 
-    /* ---- the sign-in door ---- */
+    /* ---- the sign-in door: one wrong try each at twenty-one stores, never enough to lock any one of them ---- */
+    // (Five at ONE store lock that store, whoever makes them: that count is proved in sign-in-limits.e2e-spec.ts.)
     const answers: number[] = [];
-    for (let i = 0; i < 21; i++) answers.push((await session(email, `guess-number-${i}`)).status);
+    for (let i = 0; i < 21; i++) answers.push((await session(`spray.${u}.${i}@target.example`, 'Welcome2026!')).status);
     // Wrong guesses are refused as wrong (401) until the count runs out, and then as too many (429) — never let in.
     expect(answers.every((s) => s === 401 || s === 429)).toBe(true);
     expect(answers[0]).toBe(401);
@@ -234,10 +238,18 @@ describe('a store has an account of its own, over the wire', () => {
 
     /* ---- the same password, asked for from inside: a console left open is not a place to guess it from ---- */
     const rotate = (body: Record<string, unknown>) => http().post(`/v1/sbg/vendors/${made.vendorId}/secret/rotate`).set(bearer(token)).send(body);
-    const inside: number[] = [];
-    for (let i = 0; i < 21; i++) inside.push((await rotate({ password: `guess-number-${i}` })).status);
-    expect(inside.every((s) => s === 403 || s === 429)).toBe(true);
-    expect(inside[inside.length - 1]).toBe(429);
+    const inside: string[] = [];
+    for (let i = 0; i < 21; i++) {
+      const r = await rotate({ password: `guess-number-${i}` });
+      inside.push(`${r.status} ${r.body.code}`);
+    }
+    // Four are wrong; the fifth locks the ACCOUNT; and when this caller's twenty at this route are used up (the tests
+    // above made some of them) it stops answering this caller at all. Nothing else is ever said, and nobody is let in.
+    expect(inside.slice(0, 5)).toEqual(['403 PASSWORD_WRONG', '403 PASSWORD_WRONG', '403 PASSWORD_WRONG', '403 PASSWORD_WRONG', '403 PASSWORD_LOCKED']);
+    const firstLimited = inside.indexOf('429 RATE_LIMITED');
+    expect(firstLimited).toBeGreaterThan(5);
+    expect(inside.slice(5, firstLimited).every((s) => s === '403 PASSWORD_LOCKED')).toBe(true);
+    expect(inside.slice(firstLimited).every((s) => s === '429 RATE_LIMITED')).toBe(true);
     expect((await rotate({ password })).status).toBe(429);
     // Nothing was replaced, and the store is still signed in.
     const still = (await http().get(`/v1/sbg/vendors/${made.vendorId}`).set(bearer(token)).expect(200)).body;

@@ -108,7 +108,8 @@ describe('stepBlocker', () => {
     expect(stepBlocker(shop, 'where', { ...filled(), country: '' }, t)).toContain('country');
     expect(stepBlocker(shop, 'where', { ...filled(), location: null }, t)).toContain('map');
     expect(stepBlocker(shop, 'where', filled(), t)).toBeNull();
-    expect(stepBlocker(shop, 'login', { ...filled(), password: '123' }, t)).toContain('6 characters');
+    // Eight, for a shop as for everybody: seven is one short.
+    expect(stepBlocker(shop, 'login', { ...filled(), password: '1234567' }, t)).toContain('8 characters');
     expect(stepBlocker(shop, 'login', filled(), t)).toBeNull();
   });
 
@@ -249,7 +250,7 @@ describe('stepBlocker', () => {
   it('a store’s account is an email and a password of at least eight characters', () => {
     const store = { ...EMPTY_JOIN, displayName: 'Nairobi Threads', country: 'KE', email: 'orders@threads.example' };
     expect(stepBlocker(role('vendor'), 'login', { ...store, email: 'orders' }, t)).toContain('email');
-    // Seven is enough for nobody; a shop's six is not enough for a store, whose server floor is eight.
+    // Seven is enough for nobody: the server's floor is eight wherever a password is chosen.
     expect(stepBlocker(role('vendor'), 'login', { ...store, password: '1234567' }, t)).toContain('8 characters');
     expect(stepBlocker(role('vendor'), 'login', { ...store, password: '12345678' }, t)).toBeNull();
   });

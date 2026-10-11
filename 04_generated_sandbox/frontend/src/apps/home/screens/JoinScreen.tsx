@@ -665,7 +665,7 @@ function LoginStep({ state, actions }: JoinScreenProps) {
             value={f.password}
             onInput={(e) => actions.setForm({ password: e.currentTarget.value })}
             autocomplete="new-password"
-            placeholder={t(role.kind === 'vendor' ? 'home.join.login.passwordPhStore' : 'home.join.login.passwordPh')}
+            placeholder={t('home.join.login.passwordPh')}
           />
         </div>
       </Card>

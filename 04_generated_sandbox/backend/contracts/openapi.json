@@ -3955,7 +3955,7 @@
       "post": {
         "operationId": "Sbg.authLogin",
         "summary": "",
-        "description": "Sign in with email + password → an actor-scoped token the app carries.",
+        "description": "Sign in with email + password → an actor-scoped token the app carries. The Shop and Hub apps' door (and a\ncourier's who signs in by email).\n\nTWO COUNTS. Per ACCOUNT: five wrong passwords lock it (`AccountService`), whoever typed them and from wherever —\nthat is the one a guesser cannot spread out. Per CALLER, here: sixty in a quarter of an hour, which a street of\nshops behind one mobile network's address fits and one machine working through a list of accounts does not.",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -4220,7 +4220,7 @@
       "post": {
         "operationId": "Sbg.registerInterest",
         "summary": "",
-        "description": "ASK TO BE TOLD WHEN THE NETWORK REACHES YOUR COUNTRY.\n\nPublic, and unverified on purpose: this is evidence for a decision, not an account. A bad address\ncosts one person their answer and nothing else, and making somebody prove a phone before they may\nsay \"I would carry freight here\" is friction on the cheapest, most useful thing they can give us.\n\nA country that is ALREADY open is refused by name rather than thanked for waiting — there is nothing\nto wait for, and the right answer is the sign-up.",
+        "description": "ASK TO BE TOLD WHEN THE NETWORK REACHES YOUR COUNTRY.\n\nPublic, and unverified on purpose: this is evidence for a decision, not an account. A bad address\ncosts one person their answer and nothing else, and making somebody prove a phone before they may\nsay \"I would carry freight here\" is friction on the cheapest, most useful thing they can give us.\n\nA country that is ALREADY open is refused by name rather than thanked for waiting — there is nothing\nto wait for, and the right answer is the sign-up.\n\nCOUNTED PER CALLER, because each one sends an email to an address nobody has confirmed: without a count this\nis a way to make us write to anybody, as often as somebody likes.",
         "parameters": [
           {
             "name": "code",

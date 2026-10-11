@@ -1,5 +1,6 @@
 import { PersistentMap } from '../store/persistent-map';
 import { isSandbox } from '../runtime/sandbox';
+import { deploymentSecret } from '../runtime/secrets';
 import { BadRequestException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { DidService } from '../did/did.service';
@@ -32,7 +33,9 @@ export const SHIFT_TTL_SECONDS = 10 * 60 * 60; // 10h
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
-  private readonly secret = process.env.GLOS_AUTH_SECRET || 'glos-dev-secret-change-me';
+  // WHAT EVERY TOKEN IS SIGNED WITH. The value printed here is for a laptop; anywhere else the server does not start
+  // on it (`deploymentSecret`) — whoever knows this secret mints themselves a staff token.
+  private readonly secret = deploymentSecret('GLOS_AUTH_SECRET', 'glos-dev-secret-change-me');
   /**
    * Shared secret for the public client_credentials grant. When unset the grant stays open so the
    * existing sandbox pages keep working; a loud boot warning marks that as a deployment blocker.

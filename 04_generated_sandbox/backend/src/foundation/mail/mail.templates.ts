@@ -73,6 +73,8 @@ export function formatDate(iso: string): string {
 export interface MailParams {
   'password-reset': { email: string; code: string; minutes: number; app: MailApp };
   'password-changed': { email: string; when: string; app: MailApp; recovery: 'self-reset' | 'ask-admin' };
+  /** Five wrong passwords at one account locked its sign-in. Sent to the holder by the try that locked it. */
+  'password-locked': { email: string; app: MailApp; when: string; until: string; recovery: 'self-reset' | 'ask-admin' };
   welcome: { name: string; email: string; role: 'shop' | 'hub' | 'driver' | 'store' };
   'company-admin-added': { name: string; email: string; company: string; addedBy: string };
   'staff-account-added': { name: string; email: string; addedBy: string };
@@ -366,7 +368,7 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     // A code for somebody waiting at a screen: they ask again.
     sendLater: false,
     asked: true,
-    sample: { email: 'amina@example.com', code: 'RST-4F9A2C1B', minutes: 30, app: 'agent' },
+    sample: { email: 'amina@example.com', code: 'RST-4F9A2C1B7K3M', minutes: 30, app: 'agent' },
     build: (p) => ({
       subject: 'Your SeeBuyGet password reset code',
       preheader: `Your code is ${p.code}. It works once, for ${p.minutes} minutes.`,
@@ -412,6 +414,40 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
         ...(p.recovery === 'self-reset' ? [{ kind: 'button' as const, label: `Open the ${APP_NAMES[p.app]}`, href: appUrl(p.app) }] : []),
       ],
       reason: 'You are getting this email because the password on your SeeBuyGet account changed. We always tell you — this email cannot be turned off.',
+    }),
+  },
+
+  /*
+   * FIVE WRONG PASSWORDS AT ONE ACCOUNT. Either it was the holder, who now knows why they cannot get in and what
+   * opens it; or it was somebody else, and the holder would want to know. It says what did NOT happen first.
+   */
+  'password-locked': {
+    title: 'Sign-in locked after wrong passwords',
+    sentWhen: 'The wrong password is typed five times in a quarter of an hour for one account — a shop, a hub, a store, a driver, a company administrator or network staff.',
+    wired: true,
+    // An alarm: worth having late.
+    sendLater: 48,
+    sample: { email: 'amina@example.com', app: 'agent', when: '2026-10-11T08:42:00Z', until: '2026-10-11T08:57:00Z', recovery: 'self-reset' },
+    also: [{ key: 'ask-admin', label: 'To staff or a company administrator, who cannot reset it themselves', sample: { email: 'amina@sbg.example', app: 'console', when: '2026-10-11T08:42:00Z', until: '2026-10-11T08:57:00Z', recovery: 'ask-admin' } }],
+    build: (p) => ({
+      subject: 'SeeBuyGet: your sign-in is locked after wrong passwords',
+      preheader: `Nothing was opened. The sign-in for ${p.email} is locked until ${formatWhen(p.until)}.`,
+      blocks: [
+        { kind: 'heading', text: 'Your sign-in is locked for now' },
+        { kind: 'paragraph', text: `Somebody typed the wrong password for ${p.email} five times in the ${APP_NAMES[p.app]}. Nothing was opened: your password was not guessed.` },
+        { kind: 'facts', rows: [['Account', p.email], ['When', formatWhen(p.when)], ['Locked until', formatWhen(p.until)]] },
+        {
+          kind: 'warning',
+          title: 'What to do',
+          text:
+            p.recovery === 'self-reset'
+              ? 'If it was you: wait until then, or tap “I forgot my password” in the app. The code comes to this email address and opens your account at once. If it was not you: you need do nothing. Until the lock ends, nobody can sign in — not even with the right password.'
+              : 'If it was you: wait until then. If it was not you: you need do nothing — until the lock ends, nobody can sign in, not even with the right password. Tell a colleague who administers sign-ins if it keeps happening.',
+        },
+        { kind: 'paragraph', text: 'Each lock in a row lasts longer: a quarter of an hour, an hour, six hours, then a day.' },
+        ...(p.recovery === 'self-reset' ? [{ kind: 'button' as const, label: `Open the ${APP_NAMES[p.app]}`, href: appUrl(p.app) }] : []),
+      ],
+      reason: 'You are getting this email because wrong passwords were typed for your SeeBuyGet account. We always tell you — this email cannot be turned off.',
     }),
   },
 

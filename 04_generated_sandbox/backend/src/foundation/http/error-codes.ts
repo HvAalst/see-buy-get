@@ -33,6 +33,7 @@ export const ERROR_CODES = {
   // F3 — a departure that cannot take this load. Weight or space; the message says which.
   NO_ROOM: { status: 409, title: 'There is not enough room on that departure' },
   PASSWORD_TOO_SHORT: { status: 400, title: 'Password is too short' },
+  PASSWORD_GUESSABLE: { status: 400, title: 'That password is too easy to guess' },
   PHONE_REQUIRED: { status: 400, title: 'A phone number is required' },
   PHONE_INVALID: { status: 400, title: 'Phone number is not valid' },
   PHONE_NOT_VERIFIED: { status: 400, title: 'Verify your phone number first' },
@@ -154,6 +155,9 @@ export const ERROR_CODES = {
   // secret is replaced: it is signed in, and a mistyped password must not be read as "your sign-in ended".
   PASSWORD_WRONG: { status: 403, title: 'That is not the password' },
   SECRET_WRONG: { status: 403, title: 'That is not the current secret' },
+  // Five wrong passwords at one account: the sign-in answers nobody for a while. A 403, because it is asked from
+  // inside an app too (changing a password, replacing a store's secret) and a 401 there would sign the person out.
+  PASSWORD_LOCKED: { status: 403, title: 'Too many wrong passwords' },
   ROLE_NOT_HELD: { status: 403, title: 'You do not hold that role' },
 
   // --- 403 Forbidden: media ---------------------------------------------------------------------

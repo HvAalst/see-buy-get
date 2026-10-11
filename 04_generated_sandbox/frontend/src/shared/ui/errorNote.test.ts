@@ -13,7 +13,7 @@ const GENERIC = 'Something went wrong. Try again.';
  * pins the fix so the six can never silently fall back again.
  */
 describe('errorSentence — identity codes resolve to specific guidance (not the generic fallback)', () => {
-  const codes: SbgErrorCode[] = ['AUTH_FAILED', 'PIN_INVALID', 'PIN_LOCKED', 'PIN_WRONG', 'PASSWORD_WRONG', 'SECRET_WRONG', 'PIN_GUESSABLE', 'ROLE_NOT_HELD', 'PHONE_INVALID', 'PHONE_NOT_VERIFIED'];
+  const codes: SbgErrorCode[] = ['AUTH_FAILED', 'PIN_INVALID', 'PIN_LOCKED', 'PIN_WRONG', 'PASSWORD_WRONG', 'SECRET_WRONG', 'PASSWORD_LOCKED', 'PASSWORD_TOO_SHORT', 'PASSWORD_GUESSABLE', 'PIN_GUESSABLE', 'ROLE_NOT_HELD', 'PHONE_INVALID', 'PHONE_NOT_VERIFIED'];
   for (const code of codes) {
     it(`${code} has its own sentence`, () => {
       expect(errorSentence(mk(code))).not.toBe(GENERIC);
@@ -26,6 +26,23 @@ describe('errorSentence — identity codes resolve to specific guidance (not the
     // …while the two refusals that ARE about one thing say which.
     expect(errorSentence(mk('PASSWORD_WRONG')).toLowerCase()).toContain('password');
     expect(errorSentence(mk('SECRET_WRONG')).toLowerCase()).toContain('secret');
+  });
+
+  it('a locked password sign-in says how long is left: the server’s sentence is the message, and a bare one still says what to do', () => {
+    const locked = { ...mk('PASSWORD_LOCKED'), status: 403, detail: 'Too many wrong passwords. This sign-in is locked: try again in 15 minutes, or reset the password.' };
+    expect(errorSentence(locked)).toContain('try again in 15 minutes');
+    const bare = errorSentence({ ...mk('PASSWORD_LOCKED'), detail: '' });
+    expect(bare).not.toBe(GENERIC);
+    expect(bare.toLowerCase()).toContain('locked');
+    expect(bare.toLowerCase()).toContain('reset');
+    // Nobody else's detail becomes a headline: a refused sign-in keeps the shared sentence.
+    expect(errorSentence({ ...mk('AUTH_FAILED'), status: 401, detail: 'Wrong email or password' })).not.toContain('Wrong email');
+  });
+
+  it('a password that may not be chosen says why: too short, or what makes it easy to guess', () => {
+    expect(errorSentence(mk('PASSWORD_TOO_SHORT'))).toContain('8 characters');
+    const guessable = errorSentence(mk('PASSWORD_GUESSABLE')).toLowerCase();
+    for (const word of ['common word', 'name', 'digits', '12345678']) expect(guessable).toContain(word);
   });
 
   it('PIN_LOCKED steers the user to the code recovery, not a dead "try again"', () => {

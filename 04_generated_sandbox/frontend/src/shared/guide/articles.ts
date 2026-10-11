@@ -60,6 +60,7 @@ export const ARTICLES: GuideArticle[] = [
     steps: [
       "Type your email and password, and tap Sign in.",
       "Forgot it? Tap “I forgot my password”. A reset code is sent to your email; type it with a new password.",
+      "Five wrong passwords lock your sign-in for 15 minutes, and for longer each time it happens again: an hour, six hours, then a day. While it is locked nobody gets in, not even with the right password. You get an email saying so. “I forgot my password” opens it at once: the code comes to your email, so only you can use it.",
       "A sign-in lasts a working day. After that the app asks for your password again."
     ]
   },
@@ -74,10 +75,11 @@ export const ARTICLES: GuideArticle[] = [
     steps: [
       "Shop app: Home, then Shop settings, then Password.",
       "Hub app: Home, then Change password at the bottom.",
-      "Type your current password, then the new one twice. It needs at least 8 characters."
+      "Type your current password, then the new one twice. It needs at least 8 characters, and cannot be one that is easy to guess: a common word with a number on the end, your own name or email address, only digits, or a run like 12345678."
     ],
     notes: [
-      "Every other phone or computer still signed in with the old password is signed out at once. The one you used stays signed in."
+      "Every other phone or computer still signed in with the old password is signed out at once. The one you used stays signed in.",
+      "A wrong current password here counts like a wrong one at sign-in: five lock the account for a while."
     ]
   },
   {
@@ -262,7 +264,9 @@ export const ARTICLES: GuideArticle[] = [
     steps: [
       "Type the email and the password. Nothing that opens your store is kept on the device: when the sign-in ends, you type them again.",
       "Forgot the password? Choose “I forgot my password”. A code goes to your store’s email address and works for 30 minutes; type it with a new password.",
+      "Five wrong passwords lock your sign-in for 15 minutes, and for longer each time it happens again: an hour, six hours, then a day. While it is locked nobody gets in, not even with the right password. You get an email saying so. “I forgot my password” opens it at once.",
       "To change the password: Settings, then Change password. Every device signed in to your store is signed out, except the one you changed it on.",
+      "A password is 8 characters or more, and cannot be one that is easy to guess: a common word with a number on the end, your own name or email address, only digits, or a run like 12345678.",
       "A store created before stores had an email and password: choose “My store has no email and password yet”, and sign in with the store ID and signing secret one last time. The app then asks you to set them up, on every screen until you have.",
       "Once your store has an email and password, the signing secret no longer signs anybody in. It is only for your shop system."
     ]
@@ -331,7 +335,8 @@ export const ARTICLES: GuideArticle[] = [
     ],
     notes: [
       "Lost your phone? Two other members of staff reset your two-step sign-in: Overview, then Network staff, then Reset two-step. One asks, a second approves; you are signed out and set it up again at your next sign-in.",
-      "The console may only open from the networks SeeBuyGet staff work on."
+      "The console may only open from the networks SeeBuyGet staff work on.",
+      "Five wrong passwords lock your sign-in for 15 minutes, and for longer each time it happens again: an hour, six hours, then a day. While it is locked nobody gets in, not even with the right password. You get an email saying so. A new password you choose cannot be one that is easy to guess: a common word with a number on the end, your own name or email address, only digits, or a run like 12345678."
     ]
   },
   {
@@ -363,7 +368,8 @@ export const ARTICLES: GuideArticle[] = [
       "A licence or an insurance policy on a company’s record has an expiry date, and the day after it what the paper permits is switched off in that country: a courier licence, charging customers; a goods-in-transit policy, paying claims. The company’s own administrators are emailed 60, 30, 14, 7 and 1 days ahead, and on the day it has lapsed; from a week out the administrators of the company above it are emailed too. A company with no administrator login cannot be told: the Companies screen says so on that row.",
       "As a company’s administrator you see your own papers that are running out at the top of your Company record, with a number beside it in the menu once one has lapsed or is in its last two weeks. To renew one: get the new paper from whoever issues it, then under Licences or Insurance press “Change, with its paper”, enter the new date and attach the paper. It counts from that moment; nobody at SeeBuyGet enters anything.",
       "Once a company is switched on, it keeps its own record: its administrators change it, and SeeBuyGet staff no longer do. A licence, an insurance policy, a bank account and who may sign each change one at a time, together with the paper behind it; the company’s other administrators, and those of the company above it, are emailed each such change. What a licence or policy permits cannot be changed by the company, and one that permits something cannot be taken off the record: it is renewed, or it runs out on its date. Until a company is switched on, staff enter its record and a second person verifies each paper, as before.",
-      "Anybody who can read a switched-on company’s record can say one of its papers is not right: under Papers press “Report this paper”, say what is wrong and attach what shows it, such as a screenshot of the issuer’s register. Nothing changes by reporting. The paper keeps counting; the company is told what was said, never who said it, and has seven days to answer under the same paper with “Answer”. Then SeeBuyGet staff decide under Reported papers: one of them may dismiss the report with the reason; striking the paper takes two, one proposing and another approving. A strike puts back what the paper changed: a struck renewal, and the previous date counts again."
+      "Anybody who can read a switched-on company’s record can say one of its papers is not right: under Papers press “Report this paper”, say what is wrong and attach what shows it, such as a screenshot of the issuer’s register. Nothing changes by reporting. The paper keeps counting; the company is told what was said, never who said it, and has seven days to answer under the same paper with “Answer”. Then SeeBuyGet staff decide under Reported papers: one of them may dismiss the report with the reason; striking the paper takes two, one proposing and another approving. A strike puts back what the paper changed: a struck renewal, and the previous date counts again.",
+      "Five wrong passwords lock your sign-in for 15 minutes, and for longer each time it happens again: an hour, six hours, then a day. While it is locked nobody gets in, not even with the right password. You get an email saying so. A new password you choose cannot be one that is easy to guess: a common word with a number on the end, your own name or email address, only digits, or a run like 12345678."
     ]
   },
   {

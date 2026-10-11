@@ -4,6 +4,8 @@ import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { GlosError } from '../http/glos-error';
 import { PersistentMap } from '../store/persistent-map';
 import { AuthService } from '../auth/auth.service';
+import { PASSWORD_NO_SELF_RESET, PasswordTries, spendTime } from '../auth/password-tries';
+import { passwordProblem } from '../auth/password-rules';
 import { AccessToken } from '../auth/auth.types';
 import { EntityService } from './entity.service';
 import { EntityAdmin, EntityAdminView } from './entity.types';
@@ -90,9 +92,14 @@ export class EntityAdminService {
    * proof that the person at it is the account holder.
    */
   changePassword(email: string, current: string, next: string): { ok: true } {
-    const admin = this.admins.get((email || '').trim().toLowerCase());
-    if (!admin || admin.revokedAt || !this.verify(current, admin)) throw new GlosError('AUTH_FAILED', 'Wrong email or password');
+    const key = (email || '').trim().toLowerCase();
+    this.tries.check(key);
+    const held = this.admins.get(key);
+    const admin = held && !held.revokedAt ? held : undefined;
+    if (!admin || !this.verify(current, admin)) throw this.wrongPassword(key, admin, current);
+    this.tries.forget(key);
     if ((next ?? '').length < 10) throw new GlosError('VALIDATION_FAILED', 'A password for a console that sets prices needs at least 10 characters');
+    if (passwordProblem(next, [admin.email, admin.name], 10) === 'guessable') throw new GlosError('PASSWORD_GUESSABLE', 'That password is too easy to guess. Avoid a common word with a number on the end, your own name or email address, only digits, and runs like 12345678 or qwerty.');
     admin.salt = randomBytes(16).toString('hex');
     admin.hash = this.hash(next, admin.salt);
     admin.passwordChangedAt = new Date().toISOString();
@@ -103,14 +110,32 @@ export class EntityAdminService {
     return { ok: true };
   }
 
+  /** Wrong passwords, counted against the address that was typed. */
+  private readonly tries = new PasswordTries(PASSWORD_NO_SELF_RESET);
+
+  /**
+   * A wrong password: counted, and answered — the fifth in a quarter of an hour locks the sign-in and tells its
+   * holder. An address nobody holds, and one that was taken away, are counted and timed like any other.
+   */
+  private wrongPassword(key: string, admin: EntityAdmin | undefined, password: string): GlosError {
+    if (!admin) spendTime(password);
+    const { error, locked } = this.tries.wrong(key);
+    if (locked && admin) {
+      void this.mail?.send('password-locked', { address: admin.email, name: admin.name }, { email: admin.email, app: 'console', when: new Date().toISOString(), until: new Date(locked.until).toISOString(), recovery: 'ask-admin' });
+    }
+    return error;
+  }
+
   /** Sign in → a token carrying the ENTITY this person administers. */
   login(email: string, password: string): EntityAdminView & { token: AccessToken } {
-    const admin = this.admins.get((email || '').trim().toLowerCase());
+    const key = (email || '').trim().toLowerCase();
+    this.tries.check(key);
+    const held = this.admins.get(key);
+    const admin = held && !held.revokedAt ? held : undefined;
     // One answer for "no such person" and "wrong password", and it names neither: a login that
     // distinguishes them tells a stranger which of our companies has an administrator called this.
-    if (!admin || admin.revokedAt || !this.verify(password, admin)) {
-      throw new GlosError('AUTH_FAILED', 'Wrong email or password');
-    }
+    if (!admin || !this.verify(password, admin)) throw this.wrongPassword(key, admin, password);
+    this.tries.forget(key);
     const entity = this.entities.get(admin.entityId);
     admin.lastSeenAt = new Date().toISOString();
     this.admins.set(admin.email, admin);

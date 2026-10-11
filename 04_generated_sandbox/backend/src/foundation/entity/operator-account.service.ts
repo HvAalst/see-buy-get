@@ -4,6 +4,8 @@ import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { GlosError } from '../http/glos-error';
 import { PersistentMap } from '../store/persistent-map';
 import { AuthService } from '../auth/auth.service';
+import { PASSWORD_NO_SELF_RESET, PasswordTries, spendTime } from '../auth/password-tries';
+import { passwordProblem } from '../auth/password-rules';
 import { AccessToken } from '../auth/auth.types';
 import { newTotpSecret, otpauthUri, verifyTotp } from '../auth/totp';
 import { FieldEncryption } from '../data-firewall/field-encryption.service';
@@ -59,6 +61,21 @@ export function twoStepRequired(): boolean {
 export class OperatorAccountService {
   /** Keyed by the lower-cased email: one login per person. */
   private readonly accounts = new PersistentMap<string, OperatorAccount>('operator-accounts');
+  /** Wrong passwords, counted against the address that was typed — the code from an authenticator has its own count. */
+  private readonly tries = new PasswordTries(PASSWORD_NO_SELF_RESET);
+
+  /**
+   * A wrong password: counted, and answered — the fifth in a quarter of an hour locks the sign-in and tells its
+   * holder. An address nobody holds, and one that was taken away, are counted and timed like any other.
+   */
+  private wrongPassword(key: string, account: OperatorAccount | undefined, password: string, now: number): GlosError {
+    if (!account) spendTime(password);
+    const { error, locked } = this.tries.wrong(key, now);
+    if (locked && account) {
+      void this.mail?.send('password-locked', { address: account.email, name: account.name }, { email: account.email, app: 'console', when: new Date(now).toISOString(), until: new Date(locked.until).toISOString(), recovery: 'ask-admin' });
+    }
+    return error;
+  }
 
   constructor(
     private readonly auth: AuthService,
@@ -95,9 +112,13 @@ export class OperatorAccountService {
    * signs in by sending the password again with the first code that app shows. That first code is what turns it on.
    */
   login(email: string, password: string, code?: string, now: number = Date.now()): StaffLoginResult {
-    const account = this.accounts.get((email || '').trim().toLowerCase());
+    const key = (email || '').trim().toLowerCase();
+    this.tries.check(key, now);
+    const held = this.accounts.get(key);
+    const account = held && !held.revokedAt ? held : undefined;
     // One answer for "no such person" and "wrong password", naming neither.
-    if (!account || account.revokedAt || !this.verify(password, account)) throw new GlosError('AUTH_FAILED', 'Wrong email or password');
+    if (!account || !this.verify(password, account)) throw this.wrongPassword(key, account, password, now);
+    this.tries.forget(key);
 
     if (account.totpSecret) {
       this.checkCode(account, account.totpSecret, code, now);
@@ -167,9 +188,14 @@ export class OperatorAccountService {
 
   /** Change your own password, proven with the current one. Your other sessions end; nobody else's do. */
   changePassword(email: string, current: string, next: string): { ok: true } {
-    const account = this.accounts.get((email || '').trim().toLowerCase());
-    if (!account || account.revokedAt || !this.verify(current, account)) throw new GlosError('AUTH_FAILED', 'Wrong email or password');
+    const key = (email || '').trim().toLowerCase();
+    this.tries.check(key);
+    const held = this.accounts.get(key);
+    const account = held && !held.revokedAt ? held : undefined;
+    if (!account || !this.verify(current, account)) throw this.wrongPassword(key, account, current, Date.now());
+    this.tries.forget(key);
     if ((next ?? '').length < 10) throw new GlosError('VALIDATION_FAILED', 'A password for a console with operator rights needs at least 10 characters');
+    if (passwordProblem(next, [account.email, account.name], 10) === 'guessable') throw new GlosError('PASSWORD_GUESSABLE', 'That password is too easy to guess. Avoid a common word with a number on the end, your own name or email address, only digits, and runs like 12345678 or qwerty.');
     if (current === next) throw new GlosError('VALIDATION_FAILED', 'Choose a password different from the current one');
     account.salt = randomBytes(16).toString('hex');
     account.hash = this.hash(next, account.salt);

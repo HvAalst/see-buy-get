@@ -49,6 +49,11 @@ const SAY: Record<string, string> = {
   'error.pin_locked': 'Too many wrong PINs. Tap "Forgot your PIN?" to sign in with a code.',
   'error.pin_wrong': 'That is not your PIN. Five wrong tries lock it.',
   'error.password_wrong': 'That is not the password. Try again.',
+  // Five wrong passwords at one account. The server's own sentence says how long is left, and is what is shown
+  // (`SERVER_SAYS`); this is the line for when it sent none.
+  'error.password_locked': 'Too many wrong passwords. This sign-in is locked for now: wait, or reset the password.',
+  'error.password_short': 'That password is too short. Use at least 8 characters.',
+  'error.password_guessable': 'That password is too easy to guess. Avoid a common word with a number on the end, your own name or email address, only digits, and runs like 12345678.',
   'error.secret_wrong': 'That is not the current secret. Try again.',
   'error.pin_guessable': 'That PIN is too easy to guess. Avoid one digit four times, a run like 1234, and pairs like 1212.',
   'error.role_not_held': 'You cannot open that here.',
@@ -88,7 +93,14 @@ const OVERRIDE: Record<string, string> = {
   INTERNAL: 'The system had a problem. Try again shortly.',
 };
 
+/**
+ * Refusals whose one useful fact only the server has — how long a lock has left to run. Its sentence was written
+ * for the person reading it and IS the message; the shared line could only say "for now".
+ */
+const SERVER_SAYS = new Set<string>(['PASSWORD_LOCKED']);
+
 export function errorSentence(error: SbgError): string {
+  if (SERVER_SAYS.has(error.code) && error.detail?.trim()) return error.detail.trim();
   return OVERRIDE[error.code] ?? SAY[presentationFor(error.code).say] ?? SAY['error.generic'];
 }
 
@@ -110,7 +122,8 @@ export function ErrorNote({ error, onRetry, retryLabel = 'Try again', showDetail
       <Icon name={p.icon} size={22} class="note__ic" />
       <div class="note__body">
         <p class="note__t">{errorSentence(error)}</p>
-        {showDetail && error.detail ? <p class="note__d">{error.detail}</p> : null}
+        {/* Never the same sentence twice: where the server's words are the headline, they are not also the detail. */}
+        {showDetail && error.detail && error.detail.trim() !== errorSentence(error) ? <p class="note__d">{error.detail}</p> : null}
         {onRetry && error.retryable ? (
           <div class="note__retry">
             <Button variant="link" full={false} onClick={onRetry}>

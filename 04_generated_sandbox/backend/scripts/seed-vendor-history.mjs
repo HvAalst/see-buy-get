@@ -16,7 +16,9 @@
 const API = process.env.SBG_API ?? 'http://localhost:3000';
 const VENDOR_SECRET = process.env.VENDOR_SECRET ?? 'whsec_demo_nairobi_threads';
 const HISTORY_N = Number(process.env.HISTORY_N ?? 44);
-const PASSWORD = 'seebuyget';
+// What the demo accounts sign in with. ('seebuyget' was it: refused now, as the first thing anybody would try.)
+const PASSWORD = 'seebuyget-demo';
+const STORE_EMAIL = 'store@sbg.test';
 const stamp = Date.now().toString(36).slice(-5).toUpperCase();
 
 const say = (s) => console.log(s);
@@ -96,7 +98,9 @@ const run = async () => {
   let tokV = null;
   const known = (await req('GET', '/v1/sbg/vendors', { token: op })).data?.find((v) => v.name === 'Nairobi Threads');
   if (known) {
-    const li = await req('POST', '/v1/sbg/vendors/login', { body: { vendorId: known.vendorId, secret: VENDOR_SECRET } });
+    // The demo store signs in with its account; one that has none yet (an older sandbox) still opens by its secret.
+    let li = await req('POST', '/v1/sbg/vendors/session', { body: { email: STORE_EMAIL, password: PASSWORD } });
+    if (!li.ok || li.data.vendorId !== known.vendorId) li = await req('POST', '/v1/sbg/vendors/login', { body: { vendorId: known.vendorId, secret: VENDOR_SECRET } });
     if (li.ok) {
       vendorId = known.vendorId;
       vendorName = known.name;

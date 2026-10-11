@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { GlosError } from '../http/glos-error';
 import { isSandbox } from '../runtime/sandbox';
+import { deploymentSecret } from '../runtime/secrets';
 import { CallbackMeta, FundingInstruction, FundingRail, RailOpening, RailPayment } from './funding.types';
 
 /** How long a signed callback stays acceptable. Long enough for a provider's own retry, short enough that
@@ -33,13 +34,7 @@ export class SandboxFundingRail implements FundingRail {
    * The signing secret. Printed in this file for the sandbox, and REFUSED outside one — the same rule as
    * the vault key, for a sharper reason: this secret is the authority to create money on our books.
    */
-  private readonly secret = process.env.GLOS_FUNDING_SECRET || 'glos-dev-funding-secret-change-me';
-
-  constructor() {
-    if (!isSandbox() && !process.env.GLOS_FUNDING_SECRET) {
-      throw new Error('GLOS_FUNDING_SECRET is not set: outside a sandbox the funding callback would accept payments signed with the secret printed in the source');
-    }
-  }
+  private readonly secret = deploymentSecret('GLOS_FUNDING_SECRET', 'glos-dev-funding-secret-change-me');
 
   async open(instruction: FundingInstruction): Promise<RailOpening> {
     const reference = this.reference();

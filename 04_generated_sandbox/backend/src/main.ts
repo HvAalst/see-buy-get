@@ -3,6 +3,7 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { SwaggerModule } from '@nestjs/swagger';
 import { json } from 'express';
 import { AppModule } from './app.module';
+import { isSandbox } from './foundation/runtime/sandbox';
 import { readProviderEventsRaw } from './foundation/mail/provider-events.raw';
 import { buildOpenApiDocument } from './spec/openapi';
 
@@ -17,6 +18,11 @@ async function bootstrap() {
    * GLOS_TRUST_PROXY says how many hops to trust ("1"), or which ("loopback, 10.0.0.0/8"); unset trusts none.
    */
   const trustProxy = process.env.GLOS_TRUST_PROXY?.trim();
+  if (!trustProxy && !isSandbox()) {
+    // Said at boot, because the other way to find out is everybody being shut out at once: the limits on how often
+    // one caller may try a sign-in count by address, and behind a proxy there is one address.
+    Logger.warn('GLOS_TRUST_PROXY is not set. If this server is behind a proxy or a load balancer, every caller looks like one address: the per-caller limits on sign-in will count everybody together, and the staff network fence will see only the proxy.', 'Bootstrap');
+  }
   if (trustProxy) {
     (app.getHttpAdapter().getInstance() as { set: (k: string, v: unknown) => void }).set('trust proxy', /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy === 'true' ? true : trustProxy);
   }

@@ -170,7 +170,12 @@ describe('FieldEncryption outside a sandbox', () => {
     process.env.GLOS_ENV = 'production';
     delete process.env.GLOS_VAULT_KEY;
     expect(() => new FieldEncryption()).toThrow(/GLOS_VAULT_KEY/);
+    // SET is not the question: the example environment file sets it, to the printed key. Nor is a key somebody typed.
+    process.env.GLOS_VAULT_KEY = 'glos-dev-vault-key-change-me';
+    expect(() => new FieldEncryption()).toThrow(/GLOS_VAULT_KEY is a value printed in the source/);
     process.env.GLOS_VAULT_KEY = 'a-real-key-from-the-deployment';
+    expect(() => new FieldEncryption()).toThrow(/GLOS_VAULT_KEY is shorter than 32 characters/);
+    process.env.GLOS_VAULT_KEY = '9f2c4e1a7b3d5f608192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8';
     expect(() => new FieldEncryption()).not.toThrow();
     delete process.env.GLOS_ENV;
     delete process.env.GLOS_VAULT_KEY;

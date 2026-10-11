@@ -291,6 +291,8 @@ export class SbgController {
 
   /** Confirm the code → marks the phone verified for sign-up. */
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(60, 15 * 60)
   @Post('auth/phone/verify')
   phoneVerify(@Body() dto: PhoneVerifyDto) {
     return this.otp.verify(dto.phone, dto.code);
@@ -305,8 +307,17 @@ export class SbgController {
     return this.accounts.signup(dto);
   }
 
-  /** Sign in with email + password → an actor-scoped token the app carries. */
+  /**
+   * Sign in with email + password → an actor-scoped token the app carries. The Shop and Hub apps' door (and a
+   * courier's who signs in by email).
+   *
+   * TWO COUNTS. Per ACCOUNT: five wrong passwords lock it (`AccountService`), whoever typed them and from wherever —
+   * that is the one a guesser cannot spread out. Per CALLER, here: sixty in a quarter of an hour, which a street of
+   * shops behind one mobile network's address fits and one machine working through a list of accounts does not.
+   */
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(60, 15 * 60)
   @Post('auth/login')
   authLogin(@Body() dto: LoginDto) {
     return this.accounts.login(dto.email, dto.password);
@@ -318,6 +329,8 @@ export class SbgController {
    * also the same for an email nobody holds, so this route cannot be used to find out which accounts exist.
    */
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(20, 15 * 60)
   @Post('auth/forgot')
   authForgot(@Body() dto: ForgotDto) {
     const issued = this.accounts.forgot(dto.email);
@@ -325,6 +338,8 @@ export class SbgController {
   }
 
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(20, 15 * 60)
   @Post('auth/reset')
   authReset(@Body() dto: ResetDto) {
     return this.accounts.reset(dto.token, dto.password);
@@ -335,6 +350,8 @@ export class SbgController {
    * password, never with a session. Every other session is signed out; the answer carries a fresh sign-in.
    */
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(20, 15 * 60)
   @Post('auth/password')
   changeAccountPassword(@Body() dto: ChangePasswordDto) {
     return this.accounts.changePassword(dto.email, dto.password, dto.newPassword);
@@ -433,8 +450,13 @@ export class SbgController {
    *
    * A country that is ALREADY open is refused by name rather than thanked for waiting — there is nothing
    * to wait for, and the right answer is the sign-up.
+   *
+   * COUNTED PER CALLER, because each one sends an email to an address nobody has confirmed: without a count this
+   * is a way to make us write to anybody, as often as somebody likes.
    */
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(20, 15 * 60)
   @Post('countries/:code/interest')
   registerInterest(@Param('code') code: string, @Body() dto: InterestDto) {
     const open = this.presence.resolve(code.trim().toUpperCase()).capabilities.takeIn;
@@ -2003,6 +2025,8 @@ export class SbgController {
    * request body later: a self-asserted name is a name anybody can type.
    */
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(20, 15 * 60)
   @Post('entities/admins/login')
   entityAdminLogin(@Body() dto: EntityAdminLoginDto) {
     return this.entityAdmins.login(dto.email, dto.password);
@@ -2016,6 +2040,8 @@ export class SbgController {
    * the person at it is the account holder, and the old password is.
    */
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(20, 15 * 60)
   @Post('entities/admins/password')
   changeEntityAdminPassword(@Body() dto: EntityAdminPasswordDto) {
     return this.entityAdmins.changePassword(dto.email, dto.password, dto.newPassword);
@@ -2634,12 +2660,17 @@ export class SbgController {
    *  @Public (S15): this IS a signup — the same pre-auth reasoning as auth/signup. The
    *  secret is in the response exactly once; vendors/login is how it is used ever after. */
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(20, 15 * 60)
   @Post('vendors')
   registerVendor(@Body() dto: RegisterVendorDto) {
     const { email, password, ...store } = dto;
+    // A store may bring its own signing secret (its shop system may already have one). It is a machine's credential,
+    // and for a store with no account yet it still opens the console: so it is long, or it is ours — never "1234".
+    if (dto.secret !== undefined && dto.secret.length < 24) throw new GlosError('VALIDATION_FAILED', 'A signing secret you choose yourself needs at least 24 characters. Leave it out and one is made for you', { field: 'secret' });
     const withAccount = email !== undefined || password !== undefined;
     // The account is checked BEFORE the store is made: an email somebody already holds must not leave a store behind it.
-    if (withAccount) this.accounts.checkNewAccount(email, password);
+    if (withAccount) this.accounts.checkNewAccount(email, password, dto.name);
     const vendor = this.vendors.register(store);
     // S20: if the operator gave a phone, link this store to their person identity — same human, one account.
     if (dto.ownerPhone) this.persons.tryAttachRole(dto.ownerPhone, 'vendor', vendor.did);
@@ -2688,6 +2719,8 @@ export class SbgController {
    * same reason auth/login is: a caller cannot hold an actor token before signing in.
    */
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(20, 15 * 60)
   @Post('vendors/login')
   vendorLogin(@Body() dto: VendorLoginDto) {
     const vendor = this.vendors.login(dto.vendorId, dto.secret);

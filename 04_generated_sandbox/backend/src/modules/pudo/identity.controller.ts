@@ -143,6 +143,8 @@ export class IdentityController {
 
   /** Reopen the app: phone + 4-digit PIN, no OTP (locks after repeated wrong PINs — then OTP again). */
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(60, 15 * 60) // each PIN locks after five; this stops one caller spreading guesses across many phones
   @Post('login')
   login(@Body() dto: PinLoginDto) {
     const { person, token } = this.persons.loginWithPin(dto.phone, dto.pin);
@@ -164,6 +166,8 @@ export class IdentityController {
    * holds it). A wrong current PIN counts toward the lockout. Other sessions end; this one gets a fresh sign-in.
    */
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(20, 15 * 60)
   @Post('pin/change')
   changePin(@Body() dto: ChangePinDto) {
     const { person, token } = this.persons.changePin(dto.phone, dto.pin, dto.newPin);

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
+import { PasswordTries } from '../../foundation/auth/password-tries';
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { DidService } from '../../foundation/did/did.service';
@@ -261,6 +262,9 @@ export class VendorService {
    * once, every session holding it is signed out, and every callback from now on is signed with the new one (so the
    * store's own system must be given it). Shown to the store exactly once, like the first.
    */
+  /** Wrong secrets, counted against the store ID that was typed — whether or not there is such a store. */
+  private readonly tries = new PasswordTries({ wrong: 'Wrong store ID or secret', what: 'secrets', wayBack: '' });
+
   rotateSecret(vendorId: string, current: string): Vendor {
     return this.replaceSecret(this.login(vendorId, current).vendorId);
   }
@@ -285,11 +289,15 @@ export class VendorService {
    * Constant-time compare, same as the account service's password check.
    */
   login(vendorId: string, secret: string): Vendor {
+    // THE SAME COUNT AS A PASSWORD: five wrong secrets at one store ID lock this door, the right one included. A
+    // secret we issue is ninety-six random bits and nobody guesses it; one a store chose for itself may be anything.
+    this.tries.check(vendorId);
     const vendor = this.vendors.get(vendorId);
-    if (!vendor) throw new GlosError('AUTH_FAILED', 'Wrong store ID or secret');
+    if (!vendor) throw this.tries.wrong(vendorId).error;
     const a = Buffer.from(String(secret ?? ''));
     const b = Buffer.from(vendor.secret);
-    if (a.length !== b.length || !timingSafeEqual(a, b)) throw new GlosError('AUTH_FAILED', 'Wrong store ID or secret');
+    if (a.length !== b.length || !timingSafeEqual(a, b)) throw this.tries.wrong(vendorId).error;
+    this.tries.forget(vendorId);
     // Backfill for records created before vendors carried DIDs (pre-S15 in-memory worlds).
     if (!vendor.did) {
       vendor.did = this.dids.generate(`vendor:${vendor.name}`, { role: 'vendor' }).id;
