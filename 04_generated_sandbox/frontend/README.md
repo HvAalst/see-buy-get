@@ -206,9 +206,11 @@ started with, never off a variable that happens to be set.
   the archive in the other apps (`shared/archive/useNoteLinks.ts`); `GET dispatch/posted` says where a load's
   note is (`noteId`) once a copy is kept. See the business's variant of the email at
   `/v1/mail/preview/freight-delivered?as=business`.
-- **Push** is still kept by `OutboxPushSender`: no push leaves the server. The keys (`GLOS_VAPID_PUBLIC`,
-  `GLOS_VAPID_PRIVATE`) are judged from the pair: the server's own, the pair written in the source, or two that
-  do not belong together.
+- **Push** is kept by `OutboxPushSender` in a sandbox and SENT outside one (`WebPushSender`,
+  `backend/src/modules/pudo/web-push.ts`): standard Web Push, signed with the server's own key and sealed to the
+  one device, with no account at any browser maker. The key is one value, `GLOS_VAPID_PRIVATE` — a deployment
+  secret the server does not start without; the public half is worked out from it. A push is posted only to a
+  browser maker's push service; a device the service no longer knows is forgotten.
 
 "Kept, not sent" is the normal state of a sandbox; with `GLOS_ENV=production` the same state is said as a fault,
 because there it is people who are never told.

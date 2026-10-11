@@ -2054,7 +2054,7 @@ export const enTowerQueues = {
   'tower.conn.push.mismatched':
     'The two keys this server signs with do not belong together: one was set and the other left as it was, or they were copied from two different pairs. A phone enrols against one and the server signs with the other, so every push is refused. Set both, from the same pair.',
   'tower.conn.push.builtIn':
-    'This server signs with the pair of keys written in its own source code, and anybody who can read the code can sign with them too. Set a pair of its own before this server is relied on.',
+    'This server signs with the key written in its own source code, and anybody who can read the code can sign with it too. Give it a key of its own (GLOS_VAPID_PRIVATE) before this server is relied on.',
   'tower.conn.push.unsent': 'No push has been handed to a phone since this server started ({since}).',
   'tower.conn.push.sent': 'The last push, at {when}, was handed to the phone’s push service.',
   'tower.conn.push.failed': 'The last push, at {when}, could not be handed over. The notification is in the person’s bell all the same.',

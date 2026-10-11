@@ -44,9 +44,13 @@ with another. The refusal names the ones it needs (`src/foundation/runtime/secre
 | `GLOS_FUNDING_SECRET` | signs payment confirmations on the stand-in rail |
 | `GLOS_LABEL_KEY` | signs parcel labels |
 | `GLOS_DISCLOSURE_KEY` | keys single-field waybill proofs |
+| `GLOS_VAPID_PRIVATE` | signs every push sent to a phone; the public half browsers subscribe against is worked out from it |
 
 Make each with `openssl rand -hex 32`. The peppers and the vault key must then never change: changing one
-re-keys what is already stored. Also set `GLOS_TRUST_PROXY` when the server is behind a proxy or a load
+re-keys what is already stored. Changing the push key afterwards is survivable but loud: every device already
+enrolled stops receiving pushes until its owner turns notifications off and on again. Set `GLOS_VAPID_SUBJECT`
+beside it to a `mailto:` or `https:` address that is read: it is who a push service writes to about this sender, and
+left unset a made-up address is sent in its place. Also set `GLOS_TRUST_PROXY` when the server is behind a proxy or a load
 balancer: the per-caller sign-in limits count by address, and behind a proxy there is one address.
 
 ## Sign-in limits

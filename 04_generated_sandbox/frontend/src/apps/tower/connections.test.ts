@@ -288,7 +288,7 @@ describe('what this server is connected to', () => {
       expect(mismatched.line).toMatch(/every push is refused\. Set both, from the same pair\.$/);
       const builtIn = pushSays(push({ keys: 'built_in', last: lastOk }), true, since, t);
       expect([builtIn.tone, builtIn.tag]).toEqual(['danger', 'Keys anybody can read']);
-      expect(builtIn.line).toMatch(/anybody who can read the code can sign with them too/);
+      expect(builtIn.line).toMatch(/anybody who can read the code can sign with it too/);
     });
 
     it('says nothing has been sent yet, then what the last push met — and that the bell has it either way', () => {

@@ -20,6 +20,7 @@ export const DEPLOYMENT_SECRETS = {
   GLOS_FUNDING_SECRET: 'signs payment confirmations on the stand-in rail: whoever has it can create money on our books',
   GLOS_LABEL_KEY: 'signs parcel labels',
   GLOS_DISCLOSURE_KEY: 'keys the proofs that disclose one field of a waybill without the rest',
+  GLOS_VAPID_PRIVATE: 'signs every push this server sends: whoever has it, and the address of a device, can light that device up in this network’s name',
 } as const;
 
 export type DeploymentSecret = keyof typeof DEPLOYMENT_SECRETS;

@@ -129,8 +129,10 @@ describe('no secret falls back on a value printed in the source', () => {
     }
   };
   walk(SRC);
-  // `process.env.SOMETHING_SECRET || '…'` (or ??), for names that are a secret, a key, a pepper, a token or a password.
-  const FALLBACK = /process\.env\.([A-Z0-9_]*(?:SECRET|KEY|PEPPER|TOKEN|PASSWORD)[A-Z0-9_]*)\s*(?:\|\||\?\?)\s*['"`]/g;
+  // `process.env.SOMETHING_SECRET || '…'` (or ??), for names that are a secret, a key, a pepper, a token or a password —
+  // or the PRIVATE half of a pair; and whether what it falls back on is written there in quotes or kept in a CONSTANT.
+  // The eighth secret (the key every push is signed with) had both of those and walked past this test for that reason.
+  const FALLBACK = /process\.env\.([A-Z0-9_]*(?:SECRET|KEY|PEPPER|TOKEN|PASSWORD|PRIVATE)[A-Z0-9_]*)\s*(?:\|\||\?\?)\s*(?:['"`]|[A-Z][A-Z0-9_]{2,}\b)/g;
   const found = (text: string) => [...text.matchAll(FALLBACK)].map((m) => m[1]);
 
   it('read the source, and knows the shape when it sees it', () => {
@@ -140,6 +142,10 @@ describe('no secret falls back on a value printed in the source', () => {
     // What it was written to catch, as it stood in auth.service.ts:
     expect(found("private readonly secret = process.env.GLOS_AUTH_SECRET || 'glos-dev-secret-change-me';")).toEqual(['GLOS_AUTH_SECRET']);
     expect(found('const k = process.env.GLOS_LABEL_KEY ?? "x";')).toEqual(['GLOS_LABEL_KEY']);
+    // …and as the eighth stood in notification.service.ts, which the first form of this test did not see:
+    expect(found('const VAPID_PRIVATE = process.env.GLOS_VAPID_PRIVATE || BUILT_IN_PRIVATE;')).toEqual(['GLOS_VAPID_PRIVATE']);
+    // Its public half is not a secret, and a secret read with nothing to fall back on is the rule being kept.
+    expect(found('const pub = process.env.GLOS_VAPID_PUBLIC || BUILT_IN_PUBLIC; const t = process.env.ZEPTOMAIL_TOKEN;')).toEqual([]);
     // …and what is not a secret is not its business.
     expect(found("const port = process.env.PORT ?? '3000'; const dial = process.env.GLOS_DEFAULT_DIAL_CODE || '+254';")).toEqual([]);
   });

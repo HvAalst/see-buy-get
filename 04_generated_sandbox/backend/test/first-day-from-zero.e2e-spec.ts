@@ -7,6 +7,9 @@ import { OutgoingSms, SMS_SENDER } from '../src/foundation/sms/sms.types';
 import { totpCode, totpStep } from '../src/foundation/auth/totp';
 import { pdfDataUrl } from '../src/foundation/entity/company.test-util';
 import { HANDOVER_FEE, RELEASE_FEE, SHELVING_FEE, WHOLESALE } from '../src/modules/pudo/pudo.config';
+import { WebPushSender } from '../src/modules/pudo/web-push';
+import { publicKeyOf } from '../src/modules/pudo/vapid';
+import { aDevice, openAsBrowser } from '../src/modules/pudo/push.test-util';
 
 /**
  * THE FIRST DAY OF A NEW INSTALLATION, AS IT WOULD BE LIVE — from an empty server to a parcel collected.
@@ -23,10 +26,14 @@ describe('the first day of a new installation, as it would be live', () => {
   const before = { ...process.env };
   const texts: OutgoingSms[] = [];
   const mails: OutgoingMail[] = [];
+  /** What a browser maker's push service would have been sent: the address, the headers, and a body only the phone can open. */
+  const pushes: Array<{ url: string; headers: Record<string, string>; body: Buffer }> = [];
   let app: INestApplication;
   let http: () => ReturnType<typeof request>;
   const secret = () => randomBytes(32).toString('hex');
   const CLIENT_SECRET = secret();
+  /** The key every push is signed with: the eighth secret a live server will not start without. */
+  const PUSH_KEY = secret();
   const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
 
   /** The answer, or a failure that says which call it was and what the server said: this file is read when it breaks. */
@@ -52,6 +59,7 @@ describe('the first day of a new installation, as it would be live', () => {
       GLOS_FUNDING_SECRET: secret(),
       GLOS_LABEL_KEY: secret(),
       GLOS_DISCLOSURE_KEY: secret(),
+      GLOS_VAPID_PRIVATE: PUSH_KEY,
       SBG_CONSOLE_URL: 'https://console.rehearsal.example.org',
     });
     // Loaded only now: whatever the server reads from its environment as it starts, it reads as a live one.
@@ -61,6 +69,15 @@ describe('the first day of a new installation, as it would be live', () => {
       .useValue({ send: async (sms: OutgoingSms) => void texts.push(sms) })
       .overrideProvider(MAIL_SENDER)
       .useValue({ send: async (mail: OutgoingMail) => void mails.push(mail) })
+      // The REAL sender — it signs and seals as it will on the day — with only the last metre replaced: where it
+      // would post to a push service, the request is kept here instead.
+      .overrideProvider(WebPushSender)
+      .useValue(
+        new WebPushSender(undefined, async (url, init) => {
+          pushes.push({ url, headers: init.headers, body: init.body });
+          return { status: 201, text: async () => '' };
+        }),
+      )
       .compile();
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
@@ -301,6 +318,17 @@ describe('the first day of a new installation, as it would be live', () => {
   });
 
   it('5 · a shop pays in: it asks, pays outside the system, and a member of staff confirms the line they see on the statement', async () => {
+    // MAMA SARAH TURNS NOTIFICATIONS ON, first. Her browser asks this server for its key — the public half of the
+    // secret it was started with — subscribes at its own maker's push service, and hands this server the address.
+    const served = (await must(http().get('/v1/sbg/notifications/vapid-public-key'), 200)).key as string;
+    expect(served).toBe(publicKeyOf(Buffer.from(PUSH_KEY, 'hex')));
+    const phone = aDevice();
+    const AT = 'https://fcm.googleapis.com/fcm/send/rehearsal-mama-sarah';
+    // An address inside somebody's network is not a push service, and this server will not be made to post to it.
+    await must(http().post('/v1/sbg/notifications/subscribe').set(bearer(mamaSarah.token)).send({ endpoint: 'http://169.254.169.254/latest/meta-data/', keys: phone.keys }), 400);
+    await must(http().post('/v1/sbg/notifications/subscribe').set(bearer(mamaSarah.token)).send({ endpoint: AT, keys: phone.keys }));
+    expect(pushes).toEqual([]);
+
     for (const shop of [mamaSarah, riverside]) {
       const own = `/v1/sbg/agents/${encodeURIComponent(shop.did)}`;
       const asked = await must(http().post(`${own}/top-up`).set(bearer(shop.token)).send({ amount: 60 }));
@@ -314,6 +342,18 @@ describe('the first day of a new installation, as it would be live', () => {
       await must(http().post(`/v1/rails/funding/${asked.fundingId}/confirm`).set(bearer(amina)).send({ providerRef: `STMT-${asked.reference}`, amount: 60 }));
       expect(await must(http().get(`${own}/can-transact`).set(bearer(shop.token)), 200)).toMatchObject({ canTransact: true, balance: 60 });
     }
+    // HER PHONE IS TOLD THE MONEY CAME IN, with the app closed: one request, to her browser's push service, signed
+    // by this server and sealed to that phone. Riverside enrolled no device and reads it in the app's bell.
+    for (let i = 0; i < 100 && pushes.length < 1; i += 1) await new Promise((r) => setTimeout(r, 20));
+    expect(pushes.map((p) => p.url)).toEqual([AT]);
+    const told = JSON.parse(openAsBrowser(pushes[0].body, phone).text);
+    expect(told).toMatchObject({ kind: 'money_in', title: 'Your payment came through', body: 'KES 60.00 is in your wallet. You can scan again.' });
+    expect(pushes[0].headers).toMatchObject({ 'Content-Encoding': 'aes128gcm', TTL: '86400', Urgency: 'normal' });
+    expect(pushes[0].headers.Authorization).toMatch(new RegExp(`^vapid t=[A-Za-z0-9_.-]+, k=${served}$`));
+    // What the push service itself could read of it: neither the words nor the amount.
+    expect(pushes[0].body.toString('latin1')).not.toContain('payment');
+    expect(pushes[0].body.toString('latin1')).not.toContain('60.00');
+
     // On the Kenyan company's books, as what it was: a statement line, and who read it.
     const paidIn = (await must(http().get(`/v1/rails/funding?entityId=${kenya}`).set(bearer(amina)), 200)).items as Array<{ status: string; provider: string; currency: string; payerName: string }>;
     expect(paidIn.map((p) => [p.payerName, p.status, p.provider, p.currency]).sort()).toEqual([

@@ -1,5 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { createECDH, createHash, randomBytes } from 'crypto';
+import { BUILT_IN_PUBLIC, vapidIdentity } from './vapid';
+import { PushGone, isDeviceKeys, pushServiceOf } from './web-push';
+import { isSandbox } from '../../foundation/runtime/sandbox';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PushConnection, PushKeys, PushLast } from './connections.types';
@@ -13,22 +16,7 @@ import {
   WebPushSubscription,
 } from './notification.types';
 
-/**
- * VAPID keypair (RFC 8292). The PUBLIC key is the `applicationServerKey` the browser needs to build a
- * subscription — it is not a secret and is served openly at GET /notifications/vapid-public-key. The
- * PRIVATE key signs the push JWT and MUST stay server-side (never returned by any route).
- *
- * Injected from the environment the same inline way every other GLOS secret is (GLOS_AUTH_SECRET,
- * GLOS_PHONE_PEPPER, …), with a REAL dev-default P-256 keypair baked in so the sandbox works out of the
- * box: the default public key is a valid base64url uncompressed EC point, so `pushManager.subscribe`
- * accepts it and a browser genuinely subscribes. In production, set GLOS_VAPID_PUBLIC/PRIVATE to a
- * freshly generated pair (rotating the default) and GLOS_VAPID_SUBJECT to a real mailto:/https: contact.
- */
-const BUILT_IN_PUBLIC = 'BGdKs8o8SwKFtZWmRYPEy5j8tccJ2bbBzExTX0xJW2qzb6ft9Rot26iGI9p4u5_5e0jXTskaRLJrNW7p3oIP37U';
-const BUILT_IN_PRIVATE = 'oREOkpH8LKZI0b2iVJ8hPeuhCqJTMLBppOQsoml4Cc8';
-const VAPID_PUBLIC = process.env.GLOS_VAPID_PUBLIC || BUILT_IN_PUBLIC;
-const VAPID_PRIVATE = process.env.GLOS_VAPID_PRIVATE || BUILT_IN_PRIVATE;
-const VAPID_SUBJECT = process.env.GLOS_VAPID_SUBJECT || 'mailto:ops@seebuyget.example';
+// The key this server is known to a push service by — where it comes from, and why it is one value: vapid.ts.
 
 /**
  * WHOSE KEYS A PAIR IS, worked out from the pair itself rather than from which variables are set.
@@ -77,22 +65,31 @@ export class NotificationService {
   private failed = 0;
   private last?: PushLast;
 
+  /** Read as this service is made, like every secret: outside a sandbox a server that cannot sign a push does not start. */
+  private readonly identity = vapidIdentity();
+
   constructor(@Inject(PUSH_SENDER) private readonly sender: PushSender) {}
 
   /** The `applicationServerKey` a browser needs to subscribe. Public by design — not a secret. */
   vapidPublicKey(): string {
-    return VAPID_PUBLIC;
+    return this.identity.publicKey;
   }
 
-  /** The signing identity a production `WebPushSender` needs. Server-side only — never routed. */
+  /** The signing identity, as text. Server-side only — never routed. */
   vapidCredentials(): { publicKey: string; privateKey: string; subject: string } {
-    return { publicKey: VAPID_PUBLIC, privateKey: VAPID_PRIVATE, subject: VAPID_SUBJECT };
+    return { publicKey: this.identity.publicKey, privateKey: this.identity.privateKey.toString('base64url'), subject: this.identity.subject };
   }
 
   /** Enrol (or refresh) a device for an owner. Idempotent per endpoint — a re-subscribe updates in place. */
   subscribe(ownerDid: string, role: string, sub: WebPushSubscription): PushSubscriptionRecord {
     if (!sub?.endpoint || !sub.keys?.p256dh || !sub.keys?.auth) {
       throw new GlosError('INVALID_INPUT', 'A push subscription needs an endpoint and both keys (p256dh, auth).');
+    }
+    // WHERE THIS SERVER WILL POST is decided here, when the address is given, and the person is told. A sandbox
+    // keeps every push in its outbox and posts to nobody, so there it takes whatever a test or a tool hands it.
+    if (!isSandbox()) {
+      if (!pushServiceOf(sub.endpoint)) throw new GlosError('INVALID_INPUT', 'That address is not a push service this server sends to. Notifications still reach you in the app.');
+      if (!isDeviceKeys(sub.keys)) throw new GlosError('INVALID_INPUT', 'Those are not a push subscription’s keys. Turn notifications off and on again in this browser.');
     }
     const existing = this.subs.get(this.key(ownerDid, sub.endpoint));
     const record: PushSubscriptionRecord = {
@@ -131,6 +128,10 @@ export class NotificationService {
           () => this.pushed(true),
           (err) => {
             this.pushed(false);
+            // GONE IS AN ANSWER, not a fault: the browser unsubscribed, or the phone was wiped. The address is
+            // forgotten, so this person's next notification is not posted to nowhere again — and counted, so a
+            // screen that says how many devices can be reached does not go on counting one that cannot.
+            if (err instanceof PushGone) this.subs.delete(this.key(ownerDid, sub.endpoint));
             this.logger.warn(`push to ${ownerDid} (${sub.endpoint.slice(0, 40)}…) failed: ${(err as Error).message}`);
           },
         ),
@@ -154,7 +155,7 @@ export class NotificationService {
     const devices = [...this.subs.values()];
     return {
       sends: !(this.sender instanceof OutboxPushSender),
-      keys: vapidKeysOf(VAPID_PUBLIC, VAPID_PRIVATE),
+      keys: vapidKeysOf(this.identity.publicKey, this.identity.privateKey.toString('base64url')),
       devices: devices.length,
       people: new Set(devices.map((s) => s.ownerDid)).size,
       handed: this.handed,
