@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Chip, ErrorNote, GlanceNumber, Icon, Pager, Pill, ReadAloud, SearchInput, Sheet } from '../../../shared/ui';
 import { useDebounced } from '../../../shared/useDebounced';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
-import { money } from '../logic';
+import { money, settlementLines } from '../logic';
 import { JOBS_LIMIT, type DriverActions, type DriverState, type JobsQuery } from '../useDriverApp';
 import type { DriverJobRow } from '../types';
 
@@ -86,15 +86,13 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
       {/* What has actually LEFT, which is a different question from what the network has booked. Kept as
           its own line rather than folded into the one above, because merging them is exactly how "we owe
           you this" came to be displayed as "you have been paid". */}
-      {sum?.settlement ? (
-        <p class="card__note">
-          {!sum.settlement.paidToMe
-            ? t('driver.earn.settledFleet')
-            : sum.settlement.settled > 0 || sum.settlement.inFlight > 0
-              ? t('driver.earn.settledLine', { settled: money(sum.settlement.settled), inFlight: money(sum.settlement.inFlight) })
-              : t('driver.earn.settledNone')}
-        </p>
-      ) : null}
+      {sum?.settlement
+        ? settlementLines(sum.settlement, money, t).map((line) => (
+            <p key={line} class="card__note">
+              {line}
+            </p>
+          ))
+        : null}
 
       <Card title={t('driver.earn.jobsTitle')} aside={<span class="row__count">{state.jobsTotal}</span>}>
         <div class="reg__controls">

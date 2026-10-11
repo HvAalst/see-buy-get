@@ -16,6 +16,7 @@ import {
   boardSummary,
   canLoadBag,
   canStartShift,
+  settlementLines,
   cardReader,
   cardWords,
   capacitySubLine,
@@ -610,5 +611,40 @@ describe('who reads a renewed licence a driver sends', () => {
     expect(t(cardWords('office').sent)).toBe('Sent. Your fleet office will check it.');
     expect(t(cardWords('office').pending, { expires: '31 Mar 2031' })).toBe('Waiting for your fleet office to check it. You read the expiry as 31 Mar 2031.');
     expect(t(cardWords('network').sent)).toBe('Sent. The network will check it.');
+  });
+});
+
+describe('who was paid, said to the driver', () => {
+  const cash = (n: number) => `KES ${n.toFixed(2)}`;
+  const none = { settled: 0, inFlight: 0 };
+
+  it('a courier reads what has reached them, or that nothing has yet', () => {
+    expect(settlementLines({ paidToMe: true, standing: 'own', ...none }, cash, t)).toEqual(['Nothing has been paid out to you yet.']);
+    expect(settlementLines({ paidToMe: true, standing: 'own', settled: 60, inFlight: 15 }, cash, t)).toEqual(['KES 60.00 has actually reached you. KES 15.00 is on its way.']);
+    // A first payment on its way is not "nothing yet": it is the thing they opened the screen to see.
+    expect(settlementLines({ paidToMe: true, standing: 'own', settled: 0, inFlight: 15 }, cash, t)).toEqual(['KES 0.00 has actually reached you. KES 15.00 is on its way.']);
+  });
+
+  it('a fleet’s driver reads that the money goes to their fleet — and no figure of the fleet’s', () => {
+    expect(settlementLines({ paidToMe: false, standing: 'fleet', ...none }, cash, t)).toEqual(['Your earnings are paid to your fleet, not to you directly.']);
+  });
+
+  it('a driver who is in no fleet is not told that something is still to come', () => {
+    const lines = settlementLines({ paidToMe: false, standing: 'none', ...none }, cash, t);
+    expect(lines).toEqual(['You are in no fleet now. What you earned while you drove for a fleet was paid to that fleet, not to you, and the network owes you nothing for it.']);
+    expect(lines.join(' ')).not.toMatch(/yet|paid to your fleet/);
+  });
+
+  it('money that reached them for work on their own is still said, beside who is paid now', () => {
+    expect(settlementLines({ paidToMe: false, standing: 'fleet', settled: 60, inFlight: 0 }, cash, t)).toEqual([
+      'Your earnings are paid to your fleet, not to you directly.',
+      'For work you did on your own, KES 60.00 has reached you and KES 0.00 is on its way.',
+    ]);
+    expect(settlementLines({ paidToMe: false, standing: 'none', settled: 0, inFlight: 20 }, cash, t)[1]).toBe('For work you did on your own, KES 0.00 has reached you and KES 20.00 is on its way.');
+  });
+
+  it('reads an answer from before “standing” existed the way it always was read', () => {
+    expect(settlementLines({ paidToMe: false, ...none }, cash, t)).toEqual(['Your earnings are paid to your fleet, not to you directly.']);
+    expect(settlementLines({ paidToMe: true, ...none }, cash, t)).toEqual(['Nothing has been paid out to you yet.']);
   });
 });

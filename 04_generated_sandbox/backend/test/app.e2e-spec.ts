@@ -1086,6 +1086,11 @@ describe('GLOS backend (e2e)', () => {
     await request(http).get(cardAt(second)).set(office).expect(200); // the card the date was read from, still theirs to open
     const told = (await request(http).get('/v1/sbg/notifications/inbox').set(asAmos).expect(200)).body.items as Array<{ kind: string; title: string }>;
     expect(told.filter((n) => n.kind === 'papers_checked').map((n) => n.title).sort()).toEqual(['Your licence is recorded', 'Your licence photo was not accepted']);
+
+    // WHO IS PAID, as a fleet's driver reads it on their earnings screen: their fleet — and no figure of the fleet's.
+    const summary = (await request(http).get(`/v1/sbg/fleet/drivers/${amos.did}/jobs/summary`).set(asAmos).expect(200)).body;
+    expect(summary.settlement).toMatchObject({ payeeDid: mA, paidToMe: false, standing: 'fleet', settled: 0, inFlight: 0 });
+    await request(http).get(`/v1/sbg/fleet/drivers/${amos.did}/jobs/summary`).set(asColleague).expect(403);
   });
 
   it('staff find a store in the list and open it; the store itself, another store and nobody signed out are each refused the staff view', async () => {

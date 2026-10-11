@@ -230,7 +230,47 @@ describe('what the network owes its drivers', () => {
       // driver's earnings are real and theirs to read; the payment is their employer's to receive.
       const { manager, driver } = employed();
       gate.driverPayout(driver.did, 30);
-      expect(drivers.settlementFor(driver.did, payouts)).toMatchObject({ payeeDid: manager.did, paidToMe: false });
+      expect(drivers.settlementFor(driver.did, payouts)).toMatchObject({ payeeDid: manager.did, paidToMe: false, standing: 'fleet' });
+    });
+
+    it('never hands a fleet’s driver the FLEET’s money: the figures are only what reached that driver', () => {
+      // The answer carried everything the network had ever paid the fleet, for all its drivers, to each one
+      // of them. The app showed a sentence in its place, so nobody saw it — and it was sent all the same.
+      const { manager, driver } = employed();
+      gate.driverPayout(driver.did, 30);
+      const [p] = payouts.runFor(ke()).raised;
+      payouts.settle(payouts.submit(p.payoutId).payoutId);
+      expect(payouts.forPayee(manager.did)).toMatchObject({ settled: 30 }); // the fleet WAS paid; that is its own to read
+      expect(drivers.settlementFor(driver.did, payouts)).toMatchObject({ payeeDid: manager.did, paidToMe: false, standing: 'fleet', settled: 0, inFlight: 0 });
+    });
+
+    it('does not tell a driver who is in no fleet that their earnings are paid to them: nobody is paying, and what they earned went to the fleet', () => {
+      // "No fleet" was read as "their own boss". A driver a fleet took off, or who left, is nobody's courier.
+      const { manager, driver } = employed();
+      gate.driverPayout(driver.did, 30);
+      const [p] = payouts.runFor(ke()).raised;
+      payouts.settle(payouts.submit(p.payoutId).payoutId);
+      drivers.leaveFleet(driver.did, { fleetDid: manager.did, companyName: 'Their Fleet', reason: 'own', at: new Date().toISOString() });
+
+      const told = drivers.settlementFor(driver.did, payouts);
+      expect(told).toMatchObject({ paidToMe: false, standing: 'none', settled: 0, inFlight: 0 });
+      expect(told).not.toHaveProperty('payeeDid'); // for work done now there is nobody to pay
+      // The fleet's money stayed the fleet's: leaving did not move its past onto the driver.
+      expect(payouts.forPayee(manager.did)).toMatchObject({ settled: 30 });
+    });
+
+    it('keeps what reached a courier theirs to read after they join a fleet — beside who is paid now', () => {
+      const d = courier();
+      gate.driverPayout(d.did, 60);
+      const [p] = payouts.runFor(ke()).raised;
+      payouts.settle(payouts.submit(p.payoutId).payoutId);
+      const { manager } = employed();
+      drivers.get(d.did).managerDid = manager.did;
+      expect(drivers.settlementFor(d.did, payouts)).toMatchObject({ payeeDid: manager.did, paidToMe: false, standing: 'fleet', settled: 60, inFlight: 0 });
+    });
+
+    it('says a courier is their own payee', () => {
+      expect(drivers.settlementFor(courier().did, payouts)).toMatchObject({ paidToMe: true, standing: 'own' });
     });
   });
 

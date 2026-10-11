@@ -80,9 +80,13 @@ export interface DriverJobsSummary {
    * A separate question from the numbers above, kept separate on the screen too: merging them is how "we
    * owe you this" came to be displayed as "you have been paid". `paidToMe` is false for a fleet driver,
    * whose earnings are real and theirs to read but whose payment is their employer's to receive.
-   * Absent on an older backend.
+   *
+   * `standing` is where they stand TODAY: on their `own`, in a `fleet`, or in `none` — taken off a fleet or
+   * left, and nobody's courier. The figures are only ever what reached this driver themselves, never a
+   * fleet's. `payeeDid` is absent for somebody in no fleet: nobody is being paid for work done now.
+   * Absent altogether on an older backend, as `standing` is on one a little newer.
    */
-  settlement?: { payeeDid: string; paidToMe: boolean; settled: number; inFlight: number; currency?: string };
+  settlement?: { payeeDid?: string; paidToMe: boolean; standing?: 'own' | 'fleet' | 'none'; settled: number; inFlight: number; currency?: string };
 }
 
 export interface VehicleView {

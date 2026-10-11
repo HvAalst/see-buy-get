@@ -171,6 +171,26 @@ export function leftDetail(runs: string[], t: Translate): string {
   return runs.length === 1 ? t('driver.fleet.leftDetailRun', { run: runs[0] }) : t('driver.fleet.leftDetailRuns', { count: runs.length });
 }
 
+/**
+ * WHO WAS PAID, in the driver's own words — one line, or two.
+ *
+ * Three people read this screen and each was owed a different sentence. A courier: what has reached them,
+ * and what is on its way. A fleet's driver: that the money goes to their fleet. And a driver who is in NO
+ * fleet — taken off one, or left — who used to be told "nothing has been paid out to you yet", as though
+ * something were coming: what they earned was paid to the fleet they drove for, and nothing is owed to them.
+ *
+ * A second line appears only when money has reached this driver THEMSELVES while they are not on their own
+ * now — somebody who rode alone before they joined a fleet. It is theirs, and it says what it was for.
+ */
+export function settlementLines(s: { paidToMe: boolean; standing?: 'own' | 'fleet' | 'none'; settled: number; inFlight: number }, cash: (n: number) => string, t: Translate): string[] {
+  // An answer from before `standing` existed says only whether it is paid to them.
+  const standing = s.standing ?? (s.paidToMe ? 'own' : 'fleet');
+  const reached = s.settled > 0 || s.inFlight > 0;
+  const amounts = { settled: cash(s.settled), inFlight: cash(s.inFlight) };
+  if (standing === 'own') return [reached ? t('driver.earn.settledLine', amounts) : t('driver.earn.settledNone')];
+  return [t(standing === 'fleet' ? 'driver.earn.settledFleet' : 'driver.earn.settledNoFleet'), ...(reached ? [t('driver.earn.settledOwnWork', amounts)] : [])];
+}
+
 export function canStartShift(status: DriverStatus | undefined): boolean {
   return status === 'ACTIVE';
 }

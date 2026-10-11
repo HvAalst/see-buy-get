@@ -163,10 +163,23 @@ export class DriverService {
    * So the two facts are reported apart. `settled` is money a rail confirmed leaving; `inFlight` is a
    * payment on its way. And `payeeDid` names who it goes to, which for a fleet driver is not them — that
    * is the scope boundary made visible rather than left for somebody to discover on payday.
+   *
+   * WHERE THEY STAND TODAY, AND WHOSE MONEY THE FIGURES ARE. Two things this got wrong:
+   *
+   *  - "No fleet" was read as "their own boss". A driver a fleet took off, or who left, is in no fleet
+   *    and is nobody's courier either — and was told their earnings are paid to them, beside a figure of
+   *    nothing. What they earned was paid to the fleet they drove for. `standing: 'none'` says so, and
+   *    names no payee, because for work done now there is none.
+   *  - For a fleet's driver the figures were the FLEET's: everything the network ever paid that fleet,
+   *    for all its drivers, handed to each one of them. The app showed a sentence instead of the number,
+   *    so nobody saw it; the answer carried it all the same. The figures are now only ever what reached
+   *    THIS driver directly — usually nothing for a fleet's driver, and what they were paid as a courier
+   *    for one who rode alone before or since.
    */
   settlementFor(did: string, payouts: { forPayee(payeeDid: string): { settled: number; inFlight: number; currency?: string } }): {
-    payeeDid: string;
+    payeeDid?: string;
     paidToMe: boolean;
+    standing: 'own' | 'fleet' | 'none';
     settled: number;
     inFlight: number;
     currency?: string;
@@ -174,8 +187,9 @@ export class DriverService {
     const driver = this.require(did);
     // WHO is paid is a fact about the contract, not about money — so it is read without asking which sister
     // pays, which would refuse for a driver whose fleet stands where no sister does (a read must answer).
-    const payeeDid = driver.managerDid ?? driver.did;
-    return { payeeDid, paidToMe: payeeDid === driver.did, ...payouts.forPayee(payeeDid) };
+    const standing = driver.managerDid ? 'fleet' : betweenFleets(driver) ? 'none' : 'own';
+    const payeeDid = standing === 'fleet' ? driver.managerDid : standing === 'own' ? driver.did : undefined;
+    return { ...(payeeDid ? { payeeDid } : {}), paidToMe: standing === 'own', standing, ...payouts.forPayee(driver.did) };
   }
 
   /**

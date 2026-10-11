@@ -492,6 +492,10 @@ export const enDriver = {
   // A fleet driver's work is theirs to read; the payment is their employer's to receive. Said here rather
   // than left to be discovered on payday.
   'driver.earn.settledFleet': 'Your earnings are paid to your fleet, not to you directly.',
+  // In no fleet: taken off one, or left. Not "nothing has been paid out to you YET" — nothing is coming.
+  'driver.earn.settledNoFleet': 'You are in no fleet now. What you earned while you drove for a fleet was paid to that fleet, not to you, and the network owes you nothing for it.',
+  // Money that reached this driver themselves, said beside either sentence above: work they did riding alone.
+  'driver.earn.settledOwnWork': 'For work you did on your own, {settled} has reached you and {inFlight} is on its way.',
   'driver.earn.subEmpty': 'What you have earned on your freight hauls — for whatever you filter to below.',
   'driver.earn.liveLoading': 'Loading jobs…',
   'driver.earn.liveError': 'Could not load jobs.',

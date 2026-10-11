@@ -198,7 +198,8 @@ export const ARTICLES: GuideArticle[] = [
       "You cannot say yes while you are on a shift, carrying a load, or rostered on a run of your current fleet. The app says what to finish first.",
       "Your licence, trips and rating come with you. The fleet you leave keeps the trips you did for it.",
       "If a fleet takes you off, the app says who and why. You cannot start a shift until another fleet offers you a place.",
-      "You can leave a fleet by yourself: your name at the top, then Your fleet, then “Leave” and the company’s name. Nobody’s permission is needed. End your shift first, and deliver or hand back anything you are carrying; the app says what still stands in the way. Their office is told. If you are on one of their runs that has not left yet, you come off it. After you leave you cannot start a shift until a fleet offers you a place."
+      "You can leave a fleet by yourself: your name at the top, then Your fleet, then “Leave” and the company’s name. Nobody’s permission is needed. End your shift first, and deliver or hand back anything you are carrying; the app says what still stands in the way. Their office is told. If you are on one of their runs that has not left yet, you come off it. After you leave you cannot start a shift until a fleet offers you a place.",
+      "Your earnings screen says who was paid. In a fleet, the money goes to your fleet. In no fleet, it says that what you earned while you drove for one was paid to that fleet, and that nothing is owed to you for it. Money that reached you for work you did on your own is shown beside either."
     ]
   },
   {
