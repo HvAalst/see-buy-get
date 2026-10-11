@@ -3,7 +3,7 @@ import { actingPerson } from '../../foundation/auth/acting';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Public } from '../../foundation/auth/public.decorator';
-import { Roles } from '../../foundation/auth/scopes.decorator';
+import { Roles, SignedIn } from '../../foundation/auth/scopes.decorator';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { AccountMoveService } from './account-move.service';
 import { ApproveMoveDto, AskMoveDto, CheckMoveDto, MoveAsked, MoveList, MoveRow, MoveStatus, MoveStatusDto, MoveStopped, RefuseMoveDto } from './account-move.types';
@@ -41,6 +41,7 @@ export class AccountMoveController {
   }
 
   /** "That was not me." Ends every request waiting against the account of whoever is signed in. */
+  @SignedIn()
   @Post('account/move-requests/stop')
   @HttpCode(200)
   stop(@Actor() actor: IntrospectionResult): MoveStopped {

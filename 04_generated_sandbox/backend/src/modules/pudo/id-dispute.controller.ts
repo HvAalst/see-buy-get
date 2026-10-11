@@ -3,7 +3,7 @@ import { actingPerson } from '../../foundation/auth/acting';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Public } from '../../foundation/auth/public.decorator';
-import { Roles } from '../../foundation/auth/scopes.decorator';
+import { Roles, SignedIn } from '../../foundation/auth/scopes.decorator';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { IdDisputeService } from './id-dispute.service';
 import {
@@ -97,6 +97,7 @@ export class IdDisputeController {
   }
 
   /** "The number on my record is not mine — this one is." Ends a dispute over their ID at once, or a hold it left. */
+  @SignedIn()
   @Post('account/id-disputes/own-id')
   @HttpCode(200)
   ownId(@Body() dto: OwnIdDto, @Actor() actor: IntrospectionResult): OwnIdSaved {

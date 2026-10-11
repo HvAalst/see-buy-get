@@ -2,6 +2,7 @@ import { Body, Controller, Get, Patch, Post } from '@nestjs/common';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { actingPerson } from '../../foundation/auth/acting';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
+import { SignedIn } from '../../foundation/auth/scopes.decorator';
 import { PersonService } from './person.service';
 import { HandleService } from '../../foundation/handle/handle.service';
 import { AccountProfileDto, AccountPinDto, AccountEmailDto, BlockOldNumberDto, ChangeNumberDto, ForgetOtherDevicesDto, PinDevicesDto } from './pudo.dto';
@@ -52,6 +53,7 @@ export class AccountController {
    * Note what it does NOT do: invent a handle. `handleOf` looks up the acting DID and answers nothing for
    * a fleet driver, who has no public page by design — the menu simply omits the row.
    */
+  @SignedIn()
   @Get('me')
   me(@Actor() actor: IntrospectionResult) {
     const person = this.persons.requireByDid(actingPerson(actor));
@@ -74,6 +76,7 @@ export class AccountController {
   }
 
   /** Set the person's own name, photo or address. Each field independent; an empty address clears it. */
+  @SignedIn()
   @Patch('profile')
   setProfile(@Body() dto: AccountProfileDto, @Actor() actor: IntrospectionResult) {
     const person = this.persons.setProfile(actingPerson(actor), dto);
@@ -96,6 +99,7 @@ export class AccountController {
    * person back in rather than carrying on; the response deliberately hands back no token, since the
    * consumer one the spine mints is not the role token the caller came in with.
    */
+  @SignedIn()
   @Post('pin/change')
   changePin(@Body() dto: AccountPinDto, @Actor() actor: IntrospectionResult) {
     const { person } = this.persons.changePinForPerson(actingPerson(actor), dto.currentPin, dto.newPin);
@@ -107,6 +111,7 @@ export class AccountController {
    * one this is. A POST although it only reads: the browser's device keys come in the body, never in an address,
    * which is written to logs. Keyed to the token, like everything here.
    */
+  @SignedIn()
   @Post('pin-devices')
   pinDevices(@Body() dto: PinDevicesDto, @Actor() actor: IntrospectionResult) {
     return this.persons.devicesOf(actingPerson(actor), dto.devices);
@@ -116,6 +121,7 @@ export class AccountController {
    * FORGET EVERY OTHER PHONE AND BROWSER — the PIN again. Each of them needs the code to the number before the PIN
    * works there again, and every session is ended, this one included: the app signs the person back in here.
    */
+  @SignedIn()
   @Post('pin-devices/forget-others')
   forgetOtherDevices(@Body() dto: ForgetOtherDevicesDto, @Actor() actor: IntrospectionResult) {
     return { ...this.persons.forgetOtherDevices(actingPerson(actor), dto.pin, dto.devices), signedOutEverywhere: true };
@@ -125,6 +131,7 @@ export class AccountController {
    * FORGET THIS ONE, AND SIGN OUT — for a computer that is not theirs. From then on the PIN does not work on it
    * until a code to the number is typed there again.
    */
+  @SignedIn()
   @Post('pin-devices/forget-this')
   forgetThisDevice(@Body() dto: PinDevicesDto, @Actor() actor: IntrospectionResult) {
     return this.persons.forgetThisDevice(actingPerson(actor), dto.devices);
@@ -135,6 +142,7 @@ export class AccountController {
    * the code sent to the NEW address. The address it replaces is told, because whoever swaps the email is one
    * step from owning the account.
    */
+  @SignedIn()
   @Post('email')
   setEmail(@Body() dto: AccountEmailDto, @Actor() actor: IntrospectionResult) {
     return this.persons.view(this.recovery.changeEmail(actingPerson(actor), dto.pin, dto.email, dto.code));
@@ -148,6 +156,7 @@ export class AccountController {
    * Every session ends, this one included; they sign in again with the new number and the same PIN. It can be
    * undone for 24 hours, and the old number is held for them until then.
    */
+  @SignedIn()
   @Post('phone/change')
   changeNumber(@Body() dto: ChangeNumberDto, @Actor() actor: IntrospectionResult) {
     const person = this.recovery.changeNumber(actingPerson(actor), dto.pin, dto.newPhone);
@@ -164,6 +173,7 @@ export class AccountController {
    * end. The PIN again; keyed to the token, never to a number in the body. Refused while the move can still be undone:
    * the old number is where the account would go back to. Answers with the account as it now stands.
    */
+  @SignedIn()
   @Post('phone/old/block')
   blockOldNumber(@Body() dto: BlockOldNumberDto, @Actor() actor: IntrospectionResult) {
     return this.persons.view(this.recovery.blockOldNumber(actingPerson(actor), dto.pin));

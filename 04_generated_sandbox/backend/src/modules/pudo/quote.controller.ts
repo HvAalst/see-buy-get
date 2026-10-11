@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { auditActor } from '../../foundation/auth/acting';
+import { SignedIn } from '../../foundation/auth/scopes.decorator';
 import { GlosError } from '../../foundation/http/glos-error';
 import { NETWORK_CURRENCY } from './pudo.config';
 import { DispatchService } from './dispatch.service';
@@ -34,29 +35,34 @@ export class QuoteController {
     private readonly entities: EntityService,
   ) {}
 
+  @SignedIn()
   @Get('quotes/:quoteId')
   read(@Param('quoteId') quoteId: string, @Actor() actor: IntrospectionResult): Quote {
     return this.ownQuote(quoteId, actor);
   }
 
   /** Paid, or back to open — confirmed by a party, with their reference. */
+  @SignedIn()
   @Post('quotes/:quoteId/status')
   setStatus(@Param('quoteId') quoteId: string, @Body() dto: QuoteStatusDto, @Actor() actor: IntrospectionResult): Quote {
     return this.quotes.setStatus(quoteId, dto.status, actorOf(actor), dto.reference);
   }
 
   /** The payer agrees to the figure. */
+  @SignedIn()
   @Post('quotes/:quoteId/agree')
   agree(@Param('quoteId') quoteId: string, @Actor() actor: IntrospectionResult): Quote {
     return this.quotes.agree(quoteId, actorOf(actor));
   }
 
   /** Attach the proforma invoice — either party, kept as handed over. */
+  @SignedIn()
   @Post('quotes/:quoteId/proforma')
   attachProforma(@Param('quoteId') quoteId: string, @Body() dto: QuoteProformaDto, @Actor() actor: IntrospectionResult): Quote {
     return this.quotes.attachProforma(quoteId, actorOf(actor), { dataUrl: dto.dataUrl, fileName: dto.fileName });
   }
 
+  @SignedIn()
   @Get('quotes/:quoteId/proforma')
   @Header('Cache-Control', 'private, no-store')
   @Header('X-Content-Type-Options', 'nosniff')
@@ -76,6 +82,7 @@ export class QuoteController {
    * agreed on the board; the poster may state what the carrier actually invoiced. Kept as agreed: by posting and
    * claiming, both sides already said yes to it.
    */
+  @SignedIn()
   @Get('dispatch/freight/:id/quote')
   freightQuote(@Param('id') id: string, @Actor() actor: IntrospectionResult): { quote: Quote | null } {
     const f = this.dispatch.requireFreightPublic(id);
@@ -83,6 +90,7 @@ export class QuoteController {
     return { quote: this.quotes.forSubject('freight', f.freightId) ?? null };
   }
 
+  @SignedIn()
   @Post('dispatch/freight/:id/quote')
   recordFreightQuote(@Param('id') id: string, @Body() dto: RecordCarrierQuoteDto, @Actor() actor: IntrospectionResult): Quote {
     const f = this.dispatch.requireFreightPublic(id);
@@ -106,6 +114,7 @@ export class QuoteController {
     );
   }
 
+  @SignedIn()
   @Get('departures/:departureId/bookings/:bookingId/quote')
   bookingQuote(@Param('departureId') departureId: string, @Param('bookingId') bookingId: string, @Actor() actor: IntrospectionResult): { quote: Quote | null } {
     const { booking } = this.bookingFor(departureId, bookingId, actor);
@@ -113,6 +122,7 @@ export class QuoteController {
   }
 
   /** The run's price is the carrier's published rate, agreed by booking; the shipper may state what was invoiced. */
+  @SignedIn()
   @Post('departures/:departureId/bookings/:bookingId/quote')
   recordBookingQuote(@Param('departureId') departureId: string, @Param('bookingId') bookingId: string, @Body() dto: RecordCarrierQuoteDto, @Actor() actor: IntrospectionResult): Quote {
     const { departure, booking } = this.bookingFor(departureId, bookingId, actor);

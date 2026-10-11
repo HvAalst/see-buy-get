@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Header, Param, Post, Query, StreamableFi
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { actingDid, auditActor } from '../../foundation/auth/acting';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
+import { SignedIn } from '../../foundation/auth/scopes.decorator';
 import { GlosError } from '../../foundation/http/glos-error';
 import { MediaService } from './media.service';
 import { UploadMediaDto } from './pudo.dto';
@@ -32,18 +33,21 @@ export class MediaController {
   }
 
   /** Upload one downscaled image (+ optional thumbnail). The owner is the authenticated caller. */
+  @SignedIn()
   @Post()
   upload(@Body() dto: UploadMediaDto, @Actor() actor: IntrospectionResult) {
     return this.media.upload({ ownerDid: this.owner(actor), kind: dto.kind, dataUrl: dto.dataUrl, thumbDataUrl: dto.thumbDataUrl });
   }
 
   /** The caller's own media — the source for the media library (S27). PII-free projection. */
+  @SignedIn()
   @Get()
   mine(@Actor() actor: IntrospectionResult) {
     return this.media.listForOwner(this.owner(actor));
   }
 
   /** Stream one image's bytes (or its thumbnail via ?variant=thumb). Owner-or-operator only. */
+  @SignedIn()
   @Get(':id')
   @Header('Cache-Control', 'private, no-store')
   @Header('X-Content-Type-Options', 'nosniff')
@@ -59,6 +63,7 @@ export class MediaController {
   }
 
   /** Remove one of your own asset images early (vehicle/trailer only — evidence bins stay locked). */
+  @SignedIn()
   @Delete(':id')
   remove(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     this.media.removeByOwner(id, this.owner(actor));

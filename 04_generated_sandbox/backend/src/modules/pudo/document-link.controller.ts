@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Public } from '../../foundation/auth/public.decorator';
+import { SignedIn } from '../../foundation/auth/scopes.decorator';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { BusinessMemberGuard } from './business-member.guard';
 import { DocumentLinkService } from './document-link.service';
@@ -51,6 +52,7 @@ export class DocumentLinkController {
   }
 
   /** The links made for the caller on one of their documents. */
+  @SignedIn()
   @Get('consignment-notes/:docId/links')
   list(@Param('docId') docId: string, @Actor() actor: IntrospectionResult): DocumentLinkList {
     return { items: this.links.listFor(docId, actor) };
@@ -59,12 +61,14 @@ export class DocumentLinkController {
   /** Make a link to pass on. The address in the answer is shown this once: the key is not kept. */
   @UseGuards(RateLimitGuard)
   @RateLimit(20, 15 * 60)
+  @SignedIn()
   @Post('consignment-notes/:docId/links')
   make(@Param('docId') docId: string, @Actor() actor: IntrospectionResult): MadeDocumentLink {
     return this.links.make(docId, actor);
   }
 
   /** Cancel one: it opens nothing from now on. */
+  @SignedIn()
   @Post('consignment-notes/:docId/links/:linkId/cancel')
   @HttpCode(200)
   cancel(@Param('docId') docId: string, @Param('linkId') linkId: string, @Actor() actor: IntrospectionResult): DocumentLinkRow {
