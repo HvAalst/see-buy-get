@@ -81,7 +81,7 @@ export const enTower = {
   'tower.password.onlyCompany': 'The setup key has no password to change here.',
   'tower.staff.title': 'Network staff',
   'tower.staff.lede': 'One sign-in per person, so a decision that needs two people really takes two. That goes for a new sign-in too: one member of staff asks for it, and a second approves it and hands over the first password.',
-  'tower.staff.ledeKey': 'You are signed in with the setup key. It makes the first two staff accounts. After that, one member of staff asks for a new account and a second approves it.',
+  'tower.staff.ledeKey': 'You are signed in with the setup key. Outside a sandbox it makes only the first two staff accounts. After that, one member of staff asks for a new account and a second approves it.',
   'tower.staff.ledeAlone': 'You are the only member of staff who can sign in, so nobody could approve a new account. The second account is made with the setup key.',
   'tower.staff.ask': 'Ask for the account',
   'tower.staff.asked': 'Asked. Nothing is made yet: {name} can sign in once a second member of staff approves it. They are shown the first password and hand it over.',
