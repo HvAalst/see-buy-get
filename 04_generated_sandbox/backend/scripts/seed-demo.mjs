@@ -724,21 +724,27 @@ const run = async () => {
    *
    * Idempotent like the rest: a driver already on shift is left where they are, because re-coupling
    * would end a session this run had nothing to do with.
+   *
+   * THE DRIVER STARTS IT, from their own sign-in and with their PIN; the office only says where they run. This
+   * asked the office to do both (`couple`) long after that route was gone, and said only "could not" when it failed.
    */
   const live = need(await req('GET', '/v1/sbg/fleet/assignments?status=active', { token: fm }), 'active assignments');
-  const onShift = async (driver, vehicle, corridorId) => {
-    if (live.some((x) => x.driverDid === driver.did)) return;
-    const r = await req('POST', `/v1/sbg/fleet/drivers/${encodeURIComponent(driver.did)}/couple`, {
-      token: fm,
-      body: { vehicleId: vehicle.vehicleId, ...(corridorId ? { corridorId } : {}) },
-    });
-    if (!r.ok) say(`  (could not put ${driver.displayName} on ${vehicle.plate}: ${r.status})`);
+  const startShift = async (driver, driverToken, vehicle, corridorId) => {
+    const path = (tail) => `/v1/sbg/fleet/drivers/${encodeURIComponent(driver.did)}/${tail}`;
+    const started = await req('POST', path('start-session'), { token: driverToken, body: { vehicleId: vehicle.vehicleId, pin: DRIVER_PIN } });
+    if (!started.ok) return started;
+    return corridorId ? req('POST', path('assign-corridor'), { token: fm, body: { corridorId } }) : started;
   };
-  await onShift(amos, bike, corridorZAB?.corridorId);
+  const onShift = async (driver, driverToken, vehicle, corridorId) => {
+    if (live.some((x) => x.driverDid === driver.did)) return;
+    const r = await startShift(driver, driverToken, vehicle, corridorId);
+    if (!r.ok) say(`  (could not put ${driver.displayName} on ${vehicle.plate}: ${r.status} ${JSON.stringify(r.data).slice(0, 160)})`);
+  };
+  await onShift(amos, amosToken, bike, corridorZAB?.corridorId);
   // Grace is the KYC_PENDING half of the pair on purpose — she is what a manager chasing paperwork looks
   // like — so she is put on the van only once her papers actually clear.
   const graceNow = need(await req('GET', '/v1/sbg/fleet/drivers', { token: fm }), 'drivers again').find((d) => d.displayName === 'Grace M.');
-  if (graceNow?.status === 'ACTIVE') await onShift(graceNow, van);
+  if (graceNow?.status === 'ACTIVE') await onShift(graceNow, graceIn.token, van);
 
   // A BAG THAT IS STILL ON THE BIKE. The tote leg above loads one onto Amos and drops it at the hub in
   // the same breath, which is right for the hub demo and leaves the fleet manager watching an empty
@@ -875,10 +881,8 @@ const run = async () => {
           );
         const carrierIn = await signInDriver(carrier, 'peter');
         const spare = await ensureVehicle('KLM 003B', 'bike', 0.5);
-        await req('POST', `/v1/sbg/fleet/drivers/${encodeURIComponent(carrier.did)}/couple`, {
-          token: fm,
-          body: { vehicleId: spare.vehicleId, corridorId: corridorZAB.corridorId },
-        });
+        const shift = await startShift(carrier, carrierIn.token, spare, corridorZAB.corridorId);
+        if (!shift.ok) say(`  (could not start ${carrier.displayName}'s shift: ${shift.status} ${JSON.stringify(shift.data).slice(0, 160)})`);
 
         const assigned = await req('POST', `/v1/sbg/fleet/managers/${encodeURIComponent(mgr.did)}/dispatch`, {
           token: fm,
