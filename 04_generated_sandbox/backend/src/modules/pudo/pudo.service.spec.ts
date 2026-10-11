@@ -5657,6 +5657,138 @@ describe('PUDO Light', () => {
     });
   });
 
+  /**
+   * THE LAST ROUTES WITH NOTHING WRITTEN ON THE DOOR. Fifty-seven, each read on its own. Five answered more than the
+   * caller's: the fleet dashboard (no fleet behind the sign-in read as "every fleet"), a fleet's whole record and its
+   * vehicles' (a driver's token names the fleet too), the freight board (judged against whichever driver the request
+   * named), and the parcel list (whichever shop the request named, or all of them).
+   */
+  describe('the last routes with nothing written on the door', () => {
+    const as = (role: string, did?: string, tenant?: string) => ({ active: true, role, ...(did ? { did } : {}), ...(tenant ? { tenant } : {}), scopes: role === 'operator' ? ['*'] : [] }) as never;
+    const staff = as('operator');
+    const at = { lat: -1.2, lng: 36.8 };
+    type Row = Record<string, unknown>;
+    const onShift = (tag: string, managerDid?: string) => {
+      const d = drivers.register({ displayName: tag, fullName: tag, nationalId: 'ID-' + tag, mobile: '+2547' + tag, licenceClasses: ['truck'], licenceNumber: 'L-' + tag, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true, ...(managerDid ? { managerDid } : {}) });
+      drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+      drivers.decideKyc(d.did, true);
+      const v = vehicles.register({ plate: 'LD-' + tag, vehicleClass: 'truck', truckSubtype: 'tipper', capacityKg: 20_000, ownerName: 'X', baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, ...(managerDid ? { managerDid } : {}) });
+      fleet.couple(d.did, v.vehicleId);
+      fleet.reportLocation(d.did, at);
+      return d;
+    };
+
+    it('the fleet dashboard: an office reads its own fleet, and a sign-in with no fleet behind it is not “every fleet”', () => {
+      const [fleetA, fleetB] = [activateManager('Dash Fleet A', 'DA1'), activateManager('Dash Fleet B', 'DB1')];
+      const [a1, b1] = [onShift('dsa1', fleetA.did), onShift('dsb1', fleetB.did)];
+      const view = (who: never, manager?: string) => controller.fleetDashboard(who, manager) as { managerDid: string | null; sessions: { list: Array<{ driverDid: string }> } };
+      const onDuty = (who: never, manager?: string) => view(who, manager).sessions.list.map((x) => x.driverDid).sort();
+      const officeA = as('fleet_manager', fleetA.did, fleetA.did);
+
+      expect(onDuty(officeA)).toEqual([a1.did]);
+      // An office naming another fleet in the request is still its own office.
+      expect(view(officeA, fleetB.did).managerDid).toBe(fleetA.did);
+      expect(onDuty(officeA, fleetB.did)).toEqual([a1.did]);
+      // A shop, a courier on their own, an office's role with no fleet behind it — and a driver OF that fleet.
+      for (const who of [as('agent', 'did:glos:a-shop'), as('driver', 'did:glos:solo'), as('fleet_manager'), as('driver', a1.did, fleetA.did)]) {
+        expect(() => view(who)).toThrow('The dashboard belongs to a fleet office and the network');
+        expect(() => view(who, fleetA.did)).toThrow('The dashboard belongs to a fleet office and the network');
+      }
+      // Staff: one fleet by name, or every fleet.
+      expect(onDuty(staff, fleetB.did)).toEqual([b1.did]);
+      expect(onDuty(staff)).toEqual([a1.did, b1.did].sort());
+      expect(view(staff).managerDid).toBeNull();
+    });
+
+    it('a fleet’s whole record, and its vehicles’, are its office’s: a driver of that fleet gets the outside view', () => {
+      const fleetA = activateManager('Rec Fleet A', 'RC1');
+      const van = vehicles.register({ plate: 'REC-1', vehicleClass: 'van', ownerName: 'Rec Owner', managerDid: fleetA.did });
+      const office = as('fleet_manager', fleetA.did, fleetA.did);
+      const itsDriver = as('driver', 'did:glos:rec-driver', fleetA.did);
+      const otherOffice = as('fleet_manager', 'did:glos:other-fleet', 'did:glos:other-fleet');
+      const outsiders = [itsDriver, as('agent', 'did:glos:a-shop'), otherOffice, as('fleet_manager')];
+
+      const INSIDE = ['loginCode', 'vaultRef', 'contactPhone', 'requirements', 'depotAddress', 'kyc'];
+      const one = (who: never) => controller.getManager(fleetA.did, who) as Row;
+      const listed = (who: never) => (controller.listManagers(who) as Row[]).find((m) => m.did === fleetA.did)!;
+      for (const read of [one, listed]) {
+        for (const who of [office, staff]) expect(read(who)).toMatchObject({ did: fleetA.did, contactPhone: fleetA.contactPhone, requirements: fleetA.requirements });
+        for (const who of outsiders) {
+          expect(read(who)).toMatchObject({ did: fleetA.did, companyName: 'Rec Fleet A' });
+          for (const key of INSIDE) expect(read(who)).not.toHaveProperty(key);
+        }
+      }
+
+      const VEHICLE_INSIDE = ['managerDid', 'documents', 'qr', 'ownerName', 'ownerType', 'vehiclePhotoRefs'];
+      const single = (who: never) => controller.getVehicle(van.vehicleId, who) as Row;
+      const inList = (who: never) => (controller.listVehicles(who) as Row[]).find((x) => x.vehicleId === van.vehicleId)!;
+      for (const read of [single, inList]) {
+        for (const who of [office, staff]) expect(read(who)).toMatchObject({ managerDid: fleetA.did, ownerName: 'Rec Owner' });
+        // Another fleet's office reads it by its id like any outsider; in its LIST it is not there at all (see below).
+        for (const who of outsiders.filter((x) => read === single || x !== otherOffice)) {
+          expect(read(who)).toMatchObject({ vehicleId: van.vehicleId, plate: 'REC-1' });
+          for (const key of VEHICLE_INSIDE) expect(read(who)).not.toHaveProperty(key);
+        }
+      }
+      // An office's list is its own vehicles; a driver's is the open list, where this one is one of many.
+      expect((controller.listVehicles(office) as Row[]).every((x) => x.managerDid === fleetA.did)).toBe(true);
+      expect(controller.listVehicles(otherOffice)).toEqual([]);
+    });
+
+    it('the freight board is judged against the caller’s own vehicle, whoever the request names', () => {
+      const d = coupleTipper('brd1', { min: 0.8, max: 1.5 });
+      dispatch.registerFreight({ description: 'Cement 5t', pickupLocation: at, pickupLabel: 'Depot', destLabel: 'Site', weightKg: 5000, packaging: 'loose' });
+      const q = (driverDid?: string) => ({ lat: at.lat, lng: at.lng, ...(driverDid ? { driverDid } : {}) }) as never;
+      const shop = as('agent', 'did:glos:a-shop');
+      const theirs = controller.freightBoard(q(), asDriver(d.did));
+      expect(theirs.items).toHaveLength(1);
+
+      // A shop names that driver: it is answered as a shop, exactly as if it had named nobody.
+      const named = controller.freightBoard(q(d.did), shop);
+      expect(named).toEqual(controller.freightBoard(q(), shop));
+      expect(named).not.toEqual(theirs);
+      // Another driver names them: answered for their own vehicle.
+      const other = coupleTipper('brd2', { min: 1, max: 1 }, 99);
+      expect(controller.freightBoard(q(d.did), asDriver(other.did))).toEqual(controller.freightBoard(q(), asDriver(other.did)));
+      expect(controller.freightBoard(q(d.did), asDriver(other.did))).not.toEqual(theirs);
+      // Staff name a driver, and read the board as that driver sees it.
+      expect(controller.freightBoard(q(d.did), staff)).toEqual(theirs);
+    });
+
+    it('the parcel list: a shop’s is its own whatever shop the request names, and a hub’s is what stands at it', () => {
+      const shop = onboardAgent('List Shop', 'NorthTown', 50);
+      const other = onboardAgent('List Other', 'NorthTown', 50);
+      const taken = { size: 'M' as const, destZone: 'SouthTown', senderMobile: '+254700111001', receiverMobile: '+254700111002', dropoffPhotoRef: 'r.jpg' };
+      corridors.addCorridor({ name: 'List N-S', originZone: 'NorthTown', destZone: 'SouthTown' });
+      parcels.accept({ ...taken, agentDid: shop.did, parcelId: 'QR-L1' });
+      parcels.accept({ ...taken, agentDid: other.did, parcelId: 'QR-L2' });
+      const rows = (who: never, agent?: string, status = '') => controller.listParcels(status, agent, who) as Row[];
+      const ids = (who: never, agent?: string, status = '') => rows(who, agent, status).map((p) => p.parcelId as string).sort();
+      const own = as('agent', shop.did);
+
+      // Its own — naming the other shop, or none, changes nothing.
+      for (const agent of [shop.did, other.did, '', undefined]) expect(ids(own, agent)).toEqual(['QR-L1']);
+      expect(ids(own, other.did, 'At_PUDO')).toEqual(['QR-L1']);
+      // …and what a shop reads carries no phone and no code.
+      for (const kept of ['senderMobile', 'receiverMobile', 'otp', 'collectionCode']) expect(rows(own)[0]).not.toHaveProperty(kept);
+      // Staff name a shop, or none.
+      expect(ids(staff, other.did)).toEqual(['QR-L2']);
+      expect(ids(staff)).toEqual(['QR-L1', 'QR-L2']);
+
+      // A hub: what stands at it, and nothing of another hub's.
+      const hub = mdps.register({ name: 'List Hub', zones: ['ListZone'], location: at });
+      const elsewhere = mdps.register({ name: 'List Hub 2', zones: ['ListElse'], location: at });
+      parcels.get('QR-L1').atMdpId = hub.mdpId;
+      expect(ids(as('mdp', hub.did))).toEqual(['QR-L1']);
+      expect(ids(as('mdp', elsewhere.did))).toEqual([]);
+
+      // Anybody else, and a trade with nobody behind it.
+      for (const who of [as('driver', 'did:glos:a-driver'), as('genesis', 'did:glos:a-store'), as('consumer'), as('agent'), as('mdp'), as('mdp', 'did:glos:not-a-hub')]) {
+        expect(() => rows(who)).toThrow('The parcel list is a shop’s or a hub’s own');
+      }
+    });
+  });
+
   describe('two-person rules need named people outside a sandbox', () => {
     const before = process.env.GLOS_ENV;
     afterEach(() => {

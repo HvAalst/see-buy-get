@@ -327,24 +327,164 @@ describe('who the door lets in', () => {
   });
 
   /**
+   * THE LAST ONES: no shared check to read once, so each was read on its own. Five of them answered more than the
+   * caller's (pudo.service.spec.ts, "the last routes with nothing written on the door").
+   */
+  const LAST: Array<[string, Partial<Door>, string[]]> = [
+    [
+      'a shop acting at its own counter: the shop, or staff standing in',
+      { roles: ['agent', 'operator'] },
+      [
+        'POST sbg/agents/:did/bag-bays',
+        'GET sbg/agents/:did/bag-plan',
+        'POST sbg/agents/:did/totes/:code/fill',
+        'POST sbg/agents/:did/totes/:code/seal',
+        'POST sbg/parcels/accept',
+        'POST sbg/parcels/book-freight',
+        'POST sbg/parcels/handover',
+        'POST sbg/parcels/:id/arrive',
+        'POST sbg/parcels/:id/pickup',
+        'POST sbg/parcels/:id/void',
+        'POST sbg/parcels/:id/intake',
+        'POST sbg/parcels/:id/shelve',
+        'POST sbg/parcels/collect',
+        'POST sbg/parcels/:id/collect-confirm',
+        'POST sbg/parcels/:id/dispute',
+        'POST sbg/drivers/:did/rate',
+        'POST sbg/consignments',
+      ],
+    ],
+    [
+      'an open list with an outside view, or the caller’s own whatever their trade: anybody signed in',
+      { signedIn: true, labelled: true },
+      [
+        'GET sbg/corridors',
+        'GET sbg/fleet/managers',
+        'GET sbg/fleet/managers/:did',
+        'GET sbg/vehicles',
+        'GET sbg/vehicles/:id',
+        'GET sbg/departures/mine',
+        'POST sbg/departures/:departureId/book',
+        'POST sbg/departures/:departureId/bookings/:bookingId/cancel',
+        'POST sbg/departures/:departureId/bookings/:bookingId/delivered',
+        'POST sbg/departures/:departureId/bookings/:bookingId/secured',
+        'POST sbg/departures/:departureId/bookings/:bookingId/claim',
+        'POST sbg/departures/:departureId/bookings/:bookingId/arrived',
+        'POST sbg/departures/:departureId/bookings/:bookingId/free-to-go',
+        'POST sbg/dispatch/freight',
+        'GET sbg/dispatch/board',
+        'GET sbg/dispatch/posted',
+        'GET sbg/consignment-notes',
+        'GET sbg/consignment-notes/export',
+        'GET sbg/consignment-notes/bundle.zip',
+        'GET sbg/consignment-notes/destination',
+        'POST sbg/consignment-notes/destination',
+        'DELETE sbg/consignment-notes/destination',
+        'GET sbg/consignment-notes/destination/secret',
+        'POST sbg/consignment-notes/destination/test',
+        'GET sbg/consignment-notes/deliveries',
+        // What is on the road: reported, confirmed and refuted by anybody signed in (route-constraint.spec.ts holds that).
+        'POST sbg/route-constraints',
+        'POST sbg/route-constraints/:id/confirm',
+        'POST sbg/route-constraints/:id/refute',
+      ],
+    ],
+    [
+      'a store setting up its own account: the store',
+      { scopes: ['vendor:manage:self'] },
+      [
+        'POST sbg/vendors/:id/account',
+      ],
+    ],
+    [
+      'a vehicle’s rate: its fleet’s office, the driver on shift with it, or staff',
+      { roles: ['fleet_manager', 'driver', 'operator'] },
+      [
+        'PATCH sbg/vehicles/:id/pricing',
+      ],
+    ],
+    [
+      'a fleet office’s working tools: the office, or staff',
+      { roles: ['fleet_manager', 'operator'] },
+      [
+        'GET sbg/fleet/drivers',
+        'POST sbg/fleet/drivers/:did/licence',
+        'POST sbg/fleet/drivers/:did/vehicle-for-today',
+        'GET sbg/fleet/dashboard',
+      ],
+    ],
+    [
+      'a fleet sending its own papers: its office, never staff for it',
+      { roles: ['fleet_manager'] },
+      [
+        'POST sbg/fleet/managers/:did/papers/send',
+      ],
+    ],
+    [
+      'a courier sending their own licence: the courier, never staff for them',
+      { roles: ['driver'] },
+      [
+        'POST sbg/fleet/drivers/:did/licence-renewal',
+      ],
+    ],
+    [
+      'from the cab — a load handed back, a price named for one: a driver, or staff standing in',
+      { roles: ['driver', 'operator'] },
+      [
+        'POST sbg/dispatch/freight/:id/hand-back',
+        'POST sbg/dispatch/freight/:id/proposals',
+        'POST sbg/dispatch/proposals/:id/withdraw',
+      ],
+    ],
+    [
+      'the parcel list: a shop, a hub, or staff',
+      { roles: ['agent', 'mdp', 'operator'] },
+      [
+        'GET sbg/parcels',
+      ],
+    ],
+  ];
+  it.each(LAST.flatMap(([whose, label, routes]) => routes.map((route) => [route, whose, label] as const)))('%s — %s', (route, _whose, label) => {
+    expect(door(route)).toMatchObject({ open: false, ...label });
+  });
+
+  it('…and that is the last 57, none listed twice', () => {
+    const listed = LAST.flatMap(([, , routes]) => routes);
+    expect(listed).toHaveLength(57);
+    expect(new Set(listed).size).toBe(listed.length);
+  });
+
+  /**
    * THE COUNT THAT IS LEFT, over every controller above. Every route that changes something and still has no policy
    * written on it — held exactly, not as a ceiling: a count of "no more than" passes on the day this stops reading
    * the doors and finds none. So writing a label on one more means lowering the number below, in the same change. The number may only go DOWN: a new route with nothing written on it
    * fails this, and so does taking a label off.
    */
-  it('exactly as many routes change something with nothing written on the door as when this was last counted', () => {
+  it('the reading can tell a door with nothing written on it from one that has', () => {
+    // Every route is public, or has something written: so the two kinds below are all of them, and both exist.
+    const written = all.filter((d) => d.labelled);
+    const open = all.filter((d) => d.open);
+    expect(written.length).toBeGreaterThan(400);
+    expect(open.length).toBeGreaterThan(40);
+    expect(open.some((d) => !d.labelled)).toBe(true); // a public route with no role: "labelled" is not always true
+    expect(written.length + open.filter((d) => !d.labelled).length).toBe(all.length);
+  });
+
+  it('no route that changes something has nothing written on its door', () => {
     const unwritten = all.filter((d) => !d.open && !d.labelled && !d.route.startsWith('GET ')).map((d) => d.route);
+    expect(unwritten).toEqual([]);
     expect(unwritten.length).toBe(UNWRITTEN_CHANGES);
   });
-  it('…nor read something', () => {
+  it('…and no route that reads something', () => {
     const unwritten = all.filter((d) => !d.open && !d.labelled && d.route.startsWith('GET ')).map((d) => d.route);
+    expect(unwritten).toEqual([]);
     expect(unwritten.length).toBe(UNWRITTEN_READS);
   });
 });
 
 /**
- * Counted 2026-10-11, over all eight controllers: after the twenty-four, the twenty-two reads, and the 123 that ask
- * whose it is. Lower them as more are written; never raise them.
+ * Counted 2026-10-11, over all eight controllers: after the twenty-four, the twenty-two reads, the 123 that ask
+ * whose it is, and the last 57. None is left, and none may be added: a new route says who it is for.
  */
-const UNWRITTEN_CHANGES = 39;
-const UNWRITTEN_READS = 18;
+const UNWRITTEN_CHANGES = 0;
+const UNWRITTEN_READS = 0;

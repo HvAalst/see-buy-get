@@ -2391,6 +2391,7 @@ export class SbgController {
   }
 
   /** Declare the floor room for outbound BAGS — the shelf's counterpart for the other pile in the room. */
+  @Roles('agent', 'operator')
   @Post('agents/:did/bag-bays')
   setBagBays(@Param('did') did: string, @Body() dto: BagBaysDto, @Actor() actor: IntrospectionResult) {
     return this.agents.setBagBays(actingDid(actor, did), dto.bays);
@@ -2416,18 +2417,21 @@ export class SbgController {
    * What this shop should be bagging: its waiting parcels grouped by NEXT HOP, plus the bags it already
    * has open. Several bags at once is the normal case — direct-to-Addis alongside one for the local hub.
    */
+  @Roles('agent', 'operator')
   @Get('agents/:did/bag-plan')
   bagPlan(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
     return this.bagPlans.forShop(actingDid(actor, did));
   }
 
   /** Drop a waiting parcel into the shop's bag — refuses one that is going somewhere else. */
+  @Roles('agent', 'operator')
   @Post('agents/:did/totes/:code/fill')
   fillShopBag(@Param('did') did: string, @Param('code') code: string, @Body() dto: FillToteDto, @Actor() actor: IntrospectionResult) {
     return this.mdps.fillShopBag(code, actingDid(actor, did), dto.parcelId);
   }
 
   /** Seal the bag — where the completeness gate lives for a bagged hand-over (see sealShopBag). */
+  @Roles('agent', 'operator')
   @Post('agents/:did/totes/:code/seal')
   sealShopBag(@Param('did') did: string, @Param('code') code: string, @Body() dto: SealBagDto, @Actor() actor: IntrospectionResult) {
     return this.mdps.sealShopBag(code, actingDid(actor, did), dto);
@@ -2587,6 +2591,7 @@ export class SbgController {
   }
 
   /** Readable by everyone who has to work with them: the fleet app offers them, the agent app checks them. */
+  @SignedIn()
   @Get('corridors')
   listCorridors(@Actor() actor: IntrospectionResult) {
     // A fleet's PROPOSED line is its plan, not yet geography: its own fleet and the operator see it.
@@ -2650,6 +2655,7 @@ export class SbgController {
 
   // --- agent app: 3 screens ---
 
+  @Roles('agent', 'operator')
   @Post('parcels/accept')
   accept(@Body() dto: AcceptParcelDto, @Actor() actor: IntrospectionResult) {
     return this.parcels.accept({ ...dto, agentDid: actingDid(actor, dto.agentDid) });
@@ -2662,6 +2668,7 @@ export class SbgController {
    *  so the load stays 'unpaid' and the agent's parcel-sized wallet is never billed a truck haul (the driver is
    *  still paid on delivery by the platform, as for any bulletin freight). Immediate or planned (F1). Returns a
    *  tracking code the agent prints for a phone-less customer. */
+  @Roles('agent', 'operator')
   @Post('parcels/book-freight')
   bookFreight(@Body() dto: BookFreightDto, @Actor() actor: IntrospectionResult) {
     const agentDid = actingDid(actor, dto.agentDid);
@@ -2733,21 +2740,25 @@ export class SbgController {
     };
   }
 
+  @Roles('agent', 'operator')
   @Post('parcels/handover')
   handover(@Body() dto: HandoverDto, @Actor() actor: IntrospectionResult) {
     return this.parcels.handover({ ...dto, agentDid: actingDid(actor, dto.agentDid) });
   }
 
+  @Roles('agent', 'operator')
   @Post('parcels/:id/arrive')
   arrive(@Param('id') id: string, @Body() dto: ArriveDto, @Actor() actor: IntrospectionResult) {
     return this.parcels.arrive(id, actingDid(actor, dto.destAgentDid));
   }
 
+  @Roles('agent', 'operator')
   @Post('parcels/:id/pickup')
   pickup(@Param('id') id: string, @Body() dto: PickupDto, @Actor() actor: IntrospectionResult) {
     return this.parcels.pickup(id, actingDid(actor, dto.agentDid), dto.otp, dto.deliveredPhotoRef);
   }
 
+  @Roles('agent', 'operator')
   @Post('parcels/:id/void')
   voidParcel(@Param('id') id: string, @Body() dto: VoidDto, @Actor() actor: IntrospectionResult) {
     return this.parcels.void(id, actingDid(actor, dto.agentDid), dto.voidedPhotoRef);
@@ -2763,16 +2774,25 @@ export class SbgController {
    * to ask for in one breath. The alternative, omitting the filter, returns every parcel the shop has ever
    * handled: unbounded, and growing, on the cheapest phone in the network.
    */
+  @Roles('agent', 'mdp', 'operator')
   @Get('parcels')
   listParcels(@Query('status') status?: string, @Query('agent') agent?: string, @Actor() actor?: IntrospectionResult) {
+    // WHOSE LIST. A shop's is its own parcels, whatever shop the request names; a hub's is what stands at it; staff
+    // name any shop, or none. The shop used to come from the request alone, so any sign-in read any shop's parcels —
+    // and, naming none, every parcel on the network.
+    const staff = actor?.role === 'operator';
+    const shop = staff ? agent : actor?.role === 'agent' ? actor.did : undefined;
+    const hub = actor?.role === 'mdp' && actor.did ? this.mdps.list().find((m) => m.did === actor.did)?.mdpId : undefined;
+    if (!staff && !shop && !hub) throw new GlosError('FORBIDDEN', 'The parcel list is a shop’s or a hub’s own');
     const wanted = (status ?? '')
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
-    const rows = wanted.length
-      ? wanted.flatMap((s) => this.parcels.list({ status: s as never, agentDid: agent }))
-      : this.parcels.list({ agentDid: agent });
-    return actor?.role === 'operator' ? rows : rows.map(operationalParcelView);
+    const all = wanted.length
+      ? wanted.flatMap((s) => this.parcels.list({ status: s as never, agentDid: shop }))
+      : this.parcels.list({ agentDid: shop });
+    const rows = hub ? all.filter((p) => p.atMdpId === hub) : all;
+    return staff ? rows : rows.map(operationalParcelView);
   }
 
   @Roles('agent', 'operator')
@@ -2870,6 +2890,7 @@ export class SbgController {
    * staff today is that a staff token carries no store; the role is named as well, so that it stays refused if one
    * ever does.
    */
+  @Scopes('vendor:manage:self')
   @Post('vendors/:id/account')
   setUpVendorAccount(@Param('id') id: string, @Body() dto: StoreAccountDto, @Actor() actor: IntrospectionResult) {
     const vendor = this.vendors.get(id);
@@ -3358,6 +3379,7 @@ export class SbgController {
    * A vehicle's open-data per-km rate, set by the fleet that owns it, the driver on a shift with it right
    * now, or an operator. It took any valid token before — a public rate is still not a public knob.
    */
+  @Roles('fleet_manager', 'driver', 'operator')
   @Patch('vehicles/:id/pricing')
   setVehiclePrice(@Param('id') id: string, @Body() dto: SetPriceDto, @Actor() actor: IntrospectionResult) {
     const v = this.vehicles.get(id); // 404 if unknown
@@ -3653,6 +3675,7 @@ export class SbgController {
   /** Origin PUDO scans a parcel in: a vendor's inbound (prepaid — labour fee) or a person's pre-minted
    *  peer send (PG2 — cash collected against the locked price, drop-off photo required). ONE scan surface;
    *  the parcel's own record decides which intake it is. */
+  @Roles('agent', 'operator')
   @Post('parcels/:id/intake')
   intake(@Param('id') id: string, @Body() dto: IntakeDto, @Actor() actor: IntrospectionResult) {
     const did = actingDid(actor, dto.agentDid);
@@ -3692,18 +3715,21 @@ export class SbgController {
   }
 
   /** Destination PUDO shelves an arrived parcel → Ready_For_Pickup + buyer notified. */
+  @Roles('agent', 'operator')
   @Post('parcels/:id/shelve')
   shelve(@Param('id') id: string, @Body() dto: ShelveDto, @Actor() actor: IntrospectionResult) {
     return this.parcels.shelve(id, actingDid(actor, dto.agentDid), dto.binId);
   }
 
   /** Buyer presents the collection QR → resolve the parcel + shelf slot (opens the handover screen). */
+  @Roles('agent', 'operator')
   @Post('parcels/collect')
   collect(@Body() dto: CollectDto, @Actor() actor: IntrospectionResult) {
     return this.parcels.collect(dto.collectionCode, actingDid(actor, dto.agentDid));
   }
 
   /** Buyer confirms the parcel is correct → Delivered, order closed. */
+  @Roles('agent', 'operator')
   @Post('parcels/:id/collect-confirm')
   collectConfirm(@Param('id') id: string, @Body() dto: CollectDto, @Actor() actor: IntrospectionResult) {
     return this.parcels.collectConfirm(id, actingDid(actor, dto.agentDid), dto.collectionCode);
@@ -3768,6 +3794,7 @@ export class SbgController {
   }
 
   /** Buyer reports a discrepancy at collection → Disputed, with mandatory photo proof. */
+  @Roles('agent', 'operator')
   @Post('parcels/:id/dispute')
   dispute(@Param('id') id: string, @Body() dto: DisputeDto, @Actor() actor: IntrospectionResult) {
     return this.parcels.dispute(id, actingDid(actor, dto.agentDid), dto.reason, dto.photoProofRef);
@@ -3800,6 +3827,7 @@ export class SbgController {
    * on a REAL interaction: the agent must have handed to / received from this driver (a badge is not secret, so
    * "knowing it" is not enough). One rating per agent↔driver pair, last-wins.
    */
+  @Roles('agent', 'operator')
   @Post('drivers/:did/rate')
   rateDriver(@Param('did') did: string, @Body() dto: RateDriverDto, @Actor() actor: IntrospectionResult) {
     const agentDid = actingDid(actor, dto.agentDid);
@@ -4287,9 +4315,19 @@ export class SbgController {
    * as anybody. An operator sees everything; a fleet sees itself; everyone else gets the name and status
    * and nothing that could be used against the company.
    */
+  @SignedIn()
   @Get('fleet/managers')
   listManagers(@Actor() actor: IntrospectionResult) {
-    return this.managers.listScoped(actingTenant(actor), actor?.role === 'operator');
+    return this.managers.listScoped(this.officeOf(actor), actor?.role === 'operator');
+  }
+
+  /**
+   * The fleet whose OFFICE is calling (staff: the one they name, or none). Never a driver's fleet: a fleet driver's
+   * token names the fleet as its tenant too, and read as "the fleet itself" it was handed the fleet's whole record —
+   * its papers, its depot, the number to ring — and every vehicle's documents and dashboard sticker.
+   */
+  private officeOf(actor: IntrospectionResult | undefined, named?: string): string | undefined {
+    return actor?.role === 'operator' || actor?.role === 'fleet_manager' ? actingTenant(actor, named) : undefined;
   }
 
   /**
@@ -4354,9 +4392,10 @@ export class SbgController {
   }
 
   /** One fleet — whole for the fleet itself and network staff, the outside view for anybody else. */
+  @SignedIn()
   @Get('fleet/managers/:did')
   getManager(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
-    return this.managers.viewFor(this.managers.get(did), actingTenant(actor), actor?.role === 'operator');
+    return this.managers.viewFor(this.managers.get(did), this.officeOf(actor), actor?.role === 'operator');
   }
 
   /**
@@ -4564,11 +4603,12 @@ export class SbgController {
   }
 
   /** A fleet manager sees only their own vehicles (actor.tenant); operator sees all. */
+  @SignedIn()
   @Get('vehicles')
   listVehicles(@Actor() actor: IntrospectionResult, @Query('status') status?: string, @Query('class') vehicleClass?: string) {
     // Open-data marketplace list, but scoped: a fleet manager sees their own vehicles in full; a
     // non-owner sees only the public fields — never another tenant's owner id, docs, QR or photo mediaIds.
-    return this.vehicles.listFor({ status: status as never, vehicleClass: vehicleClass as never, managerDid: actingTenant(actor) }, actingTenant(actor), actor?.role === 'operator');
+    return this.vehicles.listFor({ status: status as never, vehicleClass: vehicleClass as never, managerDid: this.officeOf(actor) }, this.officeOf(actor), actor?.role === 'operator');
   }
 
   /**
@@ -4585,11 +4625,12 @@ export class SbgController {
     return Object.entries(TRUCK_SUBTYPE_CATALOG).map(([id, s]) => ({ id, ...s }));
   }
 
+  @SignedIn()
   @Get('vehicles/:id')
   getVehicle(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     // Scope the detail to the viewer: owner/operator see the full record; others get the public
     // marketplace fields only — never the owner id, docs, dashboard QR or the S26 photo mediaIds.
-    return this.vehicles.viewFor(id, actingTenant(actor), actor?.role === 'operator');
+    return this.vehicles.viewFor(id, this.officeOf(actor), actor?.role === 'operator');
   }
 
   /**
@@ -4825,6 +4866,7 @@ export class SbgController {
    * Their earnings FLOOR is not here and should not be: that is the driver's own decision about their own
    * time, and putting it in front of the person who schedules them turns a setting into a negotiation.
    */
+  @Roles('fleet_manager', 'operator')
   @Get('fleet/drivers')
   listFleetDrivers(@Actor() actor: IntrospectionResult) {
     /*
@@ -4887,6 +4929,7 @@ export class SbgController {
    * staff sending one "on its behalf" would be the checker supplying the thing checked — the same line the
    * courier's renewed licence draws. The image must be one this session uploaded (see sendPaper).
    */
+  @Roles('fleet_manager')
   @Post('fleet/managers/:did/papers/send')
   sendCarrierPaper(@Param('did') did: string, @Body() dto: SendCarrierPaperDto, @Actor() actor: IntrospectionResult) {
     this.managers.get(did);
@@ -4954,6 +4997,7 @@ export class SbgController {
    * The fleet the driver belongs to, or an operator — never the driver, whose own word on their own licence is
    * exactly what the date is there to replace.
    */
+  @Roles('fleet_manager', 'operator')
   @Post('fleet/drivers/:did/licence')
   renewDriverLicence(@Param('did') did: string, @Body() dto: RenewLicenceDto, @Actor() actor: IntrospectionResult) {
     const driver = this.drivers.get(did);
@@ -4968,6 +5012,7 @@ export class SbgController {
    * FP4 — a courier without a fleet sends the renewed card from their app. The courier themselves and
    * nobody else: staff sending one "on their behalf" would be the checker supplying the thing checked.
    */
+  @Roles('driver')
   @Post('fleet/drivers/:did/licence-renewal')
   sendLicenceRenewal(@Param('did') did: string, @Body() dto: SendLicenceRenewalDto, @Actor() actor: IntrospectionResult) {
     if (!actor?.did || actor.did !== did) throw new GlosError('FORBIDDEN', 'Only the courier can send their own licence');
@@ -5001,6 +5046,7 @@ export class SbgController {
    * FP8 — the driver hands a claimed load back before pickup. Only the driver it is on (or staff); the service
    * unwinds the price and the charge and puts the load back on the market, and the sender is told why.
    */
+  @Roles('driver', 'operator')
   @Post('dispatch/freight/:id/hand-back')
   handBackFreight(@Param('id') id: string, @Body() dto: HandBackDto, @Actor() actor: IntrospectionResult) {
     const f = this.dispatch.requireFreightPublic(id);
@@ -5147,6 +5193,7 @@ export class SbgController {
    * the public offer list, and the driver's roster. A shop took space, saw a toast, and the booking left
    * their world. This is the door back to it, and the only one that answers "was my truck called off".
    */
+  @SignedIn()
   @Get('departures/mine')
   myDepartureBookings(@Actor() actor: IntrospectionResult) {
     const who = actingDid(actor);
@@ -5162,6 +5209,7 @@ export class SbgController {
   }
 
   /** Take space on it. The actor is the shipper — their own DID, never one they name. */
+  @SignedIn()
   @Post('departures/:departureId/book')
   bookDeparture(@Param('departureId') departureId: string, @Body() dto: BookDepartureDto, @Actor() actor: IntrospectionResult) {
     const shipperDid = actingDid(actor);
@@ -5173,6 +5221,7 @@ export class SbgController {
   }
 
   /** Give the space back — the shipper who took it, or the fleet that sold it. */
+  @SignedIn()
   @Post('departures/:departureId/bookings/:bookingId/cancel')
   cancelDepartureBooking(
     @Param('departureId') departureId: string,
@@ -5215,6 +5264,7 @@ export class SbgController {
    * The driver standing at the door, or the office on their behalf. Never the shipper: this is the
    * carrier saying what they did, and a delivery the receiving side can mark itself records nothing.
    */
+  @SignedIn()
   @Post('departures/:departureId/bookings/:bookingId/delivered')
   deliverDepartureBooking(
     @Param('departureId') departureId: string,
@@ -5233,6 +5283,7 @@ export class SbgController {
    * A load that arrives broken is argued about at the far end of the journey, and the photograph that
    * settles it was taken hours earlier. Recorded at the loading gate, where the driver already is.
    */
+  @SignedIn()
   @Post('departures/:departureId/bookings/:bookingId/secured')
   secureDepartureBooking(
     @Param('departureId') departureId: string,
@@ -5278,6 +5329,7 @@ export class SbgController {
    * is the record: a dated claim against a consignment note, beside the photographs, with the carrier’s
    * answer next to it — which is what a forwarder or an insurer can actually act on.
    */
+  @SignedIn()
   @Post('departures/:departureId/bookings/:bookingId/claim')
   openDepartureClaim(
     @Param('departureId') departureId: string,
@@ -5325,6 +5377,7 @@ export class SbgController {
    * a driver tapping when it happens is making a record, and that difference is what lets a shipper accept
    * the number afterwards.
    */
+  @SignedIn()
   @Post('departures/:departureId/bookings/:bookingId/arrived')
   departureArrived(
     @Param('departureId') departureId: string,
@@ -5337,6 +5390,7 @@ export class SbgController {
     return this.departures.arrive(departureId, bookingId, dto.where, who).record;
   }
 
+  @SignedIn()
   @Post('departures/:departureId/bookings/:bookingId/free-to-go')
   departureFreeToGo(
     @Param('departureId') departureId: string,
@@ -5400,6 +5454,7 @@ export class SbgController {
    * are at the wheel — from their own sign-in, with their PIN (start-session). The office's own decision is the
    * vehicle, and that is all this does: it heads the driver's list, and they are told.
    */
+  @Roles('fleet_manager', 'operator')
   @Post('fleet/drivers/:did/vehicle-for-today')
   suggestVehicle(@Param('did') did: string, @Body() dto: SuggestVehicleDto, @Actor() actor: IntrospectionResult) {
     const driver = this.drivers.get(did); // 404 if unknown
@@ -5631,6 +5686,7 @@ export class SbgController {
   }
 
   /** Register a bulk freight job (trucks only) into the same marketplace as totes. */
+  @SignedIn()
   @Post('dispatch/freight')
   registerFreight(@Body() dto: RegisterFreightDto, @Actor() actor: IntrospectionResult) {
     // FB0b — the DTO carries dimensions as {l,w,h} (the shape every other measured route uses); the service
@@ -5664,10 +5720,12 @@ export class SbgController {
    * answer is the entire market, with no 15 km clamp anywhere near it (that number governs interruptions,
    * and browsing is not an interruption).
    */
+  @SignedIn()
   @Get('dispatch/board')
   freightBoard(@Query() q: FreightBoardQueryDto, @Actor() actor: IntrospectionResult): FreightBoardResponse {
     // Judged against the caller's own vehicle unless an operator names someone else's.
-    const driverDid = actor?.role === 'operator' ? q.driverDid : (q.driverDid ?? actor?.did);
+    // …and only an operator: a driver named in the request had the board answered for THEIR vehicle, reasons and all.
+    const driverDid = actor?.role === 'operator' ? q.driverDid : actor?.did;
     const items = this.dispatch.board({ driverDid, from: { lat: Number(q.lat), lng: Number(q.lng) }, radiusKm: q.radiusKm });
     return { items, total: items.length };
   }
@@ -5687,12 +5745,14 @@ export class SbgController {
    * one anybody can poison anonymously. Reports of the same obstacle from different laybys fold into one
    * constraint and count as corroboration; the service handles that, so the client may report freely.
    */
+  @SignedIn()
   @Post('route-constraints')
   reportConstraint(@Body() dto: ReportConstraintDto, @Actor() actor: IntrospectionResult): ConstraintView {
     return this.constraints.report({ kind: dto.kind, at: dto.at, value: dto.value, note: dto.note, photoRef: dto.photoRef, by: actingDid(actor) });
   }
 
   /** A later passer-by agrees it is there. One vote each, and never the original reporter's own. */
+  @SignedIn()
   @Post('route-constraints/:id/confirm')
   confirmConstraint(@Param('id') id: string, @Body() dto: ConfirmConstraintDto, @Actor() actor: IntrospectionResult): ConstraintView {
     return this.constraints.confirm(id, actingDid(actor), dto?.note, dto?.photoRef);
@@ -5706,6 +5766,7 @@ export class SbgController {
    * it in front of an operator. Letting the crowd remove a hazard would mean one mistaken tap — or one
    * driver who wanted a shorter route — could take a low bridge off everybody's map.
    */
+  @SignedIn()
   @Post('route-constraints/:id/refute')
   refuteConstraint(@Param('id') id: string, @Body() dto: RefuteConstraintDto, @Actor() actor: IntrospectionResult): ConstraintView {
     return this.constraints.refute(id, actingDid(actor), dto.note, dto.photoRef);
@@ -5875,6 +5936,7 @@ export class SbgController {
    * Scoped at the source, never by filtering the public list: an operator may name another party, everyone
    * else is pinned to their own token.
    */
+  @SignedIn()
   @Get('dispatch/posted')
   postedFreight(@Query('did') did: string | undefined, @Actor() actor: IntrospectionResult): PostedFreightResponse {
     const who = actingDid(actor, did);
@@ -5887,6 +5949,7 @@ export class SbgController {
   }
 
   /** A driver names their price for a load posted 'negotiate'. Reserves nothing — the poster's accept claims it. */
+  @Roles('driver', 'operator')
   @Post('dispatch/freight/:id/proposals')
   proposeForFreight(@Param('id') id: string, @Body() dto: ProposeFreightDto, @Actor() actor: IntrospectionResult) {
     return this.dispatch.propose({ freightId: id, driverDid: actingDid(actor, dto.driverDid), from: dto.from, price: dto.price, note: dto.note });
@@ -5917,6 +5980,7 @@ export class SbgController {
   }
 
   /** A driver pulls back their own price. */
+  @Roles('driver', 'operator')
   @Post('dispatch/proposals/:id/withdraw')
   withdrawFreightProposal(@Param('id') id: string, @Body() dto: WithdrawProposalDto, @Actor() actor: IntrospectionResult) {
     return this.dispatch.withdrawProposal(id, actingDid(actor, dto.driverDid));
@@ -6110,12 +6174,14 @@ export class SbgController {
    * can search is a drawer nobody can produce. No `:did` in the path: a document's readers were frozen
    * WITH it, so the archive answers for whoever is asking rather than for a relationship looked up today.
    */
+  @SignedIn()
   @Get('consignment-notes')
   noteArchive(@Query() query: NoteArchiveQueryDto, @Actor() actor: IntrospectionResult) {
     return this.archive.register(actor, query);
   }
 
   /** The whole match as a spreadsheet — every page, current filters, never just the page in front of them. */
+  @SignedIn()
   @Get('consignment-notes/export')
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @Header('Content-Disposition', 'attachment; filename="consignment-notes.csv"')
@@ -6140,6 +6206,7 @@ export class SbgController {
   }
 
   /** The same, for everything matching a filter — the shape an audit asks for: "everything you moved in 2026". */
+  @SignedIn()
   @Get('consignment-notes/bundle.zip')
   noteBundles(@Query() query: NoteArchiveQueryDto, @Actor() actor: IntrospectionResult, @Res({ passthrough: true }) res: Response): StreamableFile {
     const file = this.bundles.many(actor, query);
@@ -6157,16 +6224,19 @@ export class SbgController {
    * is the requirement and a connector per provider is a treadmill. The documents are deleted at twelve
    * months, so a copy that arrives somewhere by itself is what makes that defensible.
    */
+  @SignedIn()
   @Get('consignment-notes/destination')
   destination(@Actor() actor: IntrospectionResult) {
     return this.destinations.view(actor) ?? { connected: false };
   }
 
+  @SignedIn()
   @Post('consignment-notes/destination')
   connectDestination(@Body() dto: ConnectDestinationDto, @Actor() actor: IntrospectionResult) {
     return this.destinations.connect(actor, dto);
   }
 
+  @SignedIn()
   @Delete('consignment-notes/destination')
   disconnectDestination(@Actor() actor: IntrospectionResult) {
     this.destinations.disconnect(actor);
@@ -6174,6 +6244,7 @@ export class SbgController {
   }
 
   /** The webhook signing secret, for setting the far end up. Shown to the owner, nobody else. */
+  @SignedIn()
   @Get('consignment-notes/destination/secret')
   destinationSecret(@Actor() actor: IntrospectionResult) {
     return this.destinations.webhookSecret(actor);
@@ -6186,12 +6257,14 @@ export class SbgController {
    * exists with a prefix that is denied. Only a real PUT finds those, and finding them now rather than
    * a year later — when the document has gone — is the entire point of the button.
    */
+  @SignedIn()
   @Post('consignment-notes/destination/test')
   testDestination(@Actor() actor: IntrospectionResult) {
     return this.destinations.test(actor);
   }
 
   /** What has been delivered and what is still owed — so a destination that stopped working is visible. */
+  @SignedIn()
   @Get('consignment-notes/deliveries')
   deliveries(@Actor() actor: IntrospectionResult) {
     return { items: this.destinations.deliveriesFor(actor) };
@@ -6247,6 +6320,7 @@ export class SbgController {
    *  truckload, and when it is full or aged it posts itself as one bulk freight (off-platform, like an F2
    *  counter freight). Owner-scoped: the acting agent (operator may override) is the aggregating PUDO, and its
    *  site is the freight's pickup. A perishable commodity is refused here — it books freight directly. */
+  @Roles('agent', 'operator')
   @Post('consignments')
   openConsignment(@Body() dto: OpenConsignmentDto, @Actor() actor: IntrospectionResult) {
     const ownerDid = actingDid(actor, dto.ownerDid);
@@ -6339,9 +6413,13 @@ export class SbgController {
   /** Fleet-manager dashboard: vehicle/driver/session counts, working hours, live positions + cargo.
    * A fleet manager sees ONLY their own fleet (actor.tenant); the ?manager= scope and the omit-for-all
    * view are operator-only. Before S3 anyone could pass ?manager= to read a competitor's fleet. */
+  @Roles('fleet_manager', 'operator')
   @Get('fleet/dashboard')
   fleetDashboard(@Actor() actor: IntrospectionResult, @Query('manager') managerQuery?: string) {
-    const managerDid = actingTenant(actor, managerQuery);
+    const managerDid = this.officeOf(actor, managerQuery);
+    // "No fleet" is the network's whole picture — every shift, every position, every load on the road — and it was
+    // handed to any sign-in that had no fleet: a shop, a store, a courier on their own. A fleet's own drivers got theirs.
+    if (actor?.role !== 'operator' && !managerDid) throw new GlosError('FORBIDDEN', 'The dashboard belongs to a fleet office and the network');
     const overview = this.fleet.overview(managerDid);
     const driverDids = managerDid ? new Set(this.drivers.list().filter((d) => d.managerDid === managerDid).map((d) => d.did)) : undefined;
     const cargo = this.dispatch.activeCargo(driverDids);
