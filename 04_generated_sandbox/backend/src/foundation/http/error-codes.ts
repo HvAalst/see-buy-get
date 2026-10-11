@@ -37,7 +37,7 @@ export const ERROR_CODES = {
   PHONE_REQUIRED: { status: 400, title: 'A phone number is required' },
   PHONE_INVALID: { status: 400, title: 'Phone number is not valid' },
   PHONE_NOT_VERIFIED: { status: 400, title: 'Verify your phone number first' },
-  // A number in a country this deployment does not text codes to (GLOS_SMS_COUNTRIES). The number may be perfectly
+  // A number in a country that is not switched on, so no code is texted to it. The number may be perfectly
   // good — which is why it is not PHONE_INVALID, whose sentence tells the person to check what they typed.
   PHONE_NOT_SERVED: { status: 400, title: 'We cannot send a code to a number in that country' },
   PHOTO_REQUIRED: { status: 400, title: 'A photo is required' },

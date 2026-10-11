@@ -86,11 +86,11 @@ export interface SmsConnection {
   problem?: SmsProblem;
   /** Texts go to a stand-in on the server's own machine: a sandbox being driven. No phone receives one. */
   standIn: boolean;
-  /** Dial codes a code may be texted to. Empty: any country. */
+  /** The countries a code is texted to — the ones that are switched on — as "KE +254". Empty: none. */
   countries: string[];
   written: number;
   failed: number;
-  /** Not texted since the server started: the number is outside those countries. */
+  /** Not texted since the server started: the number's country is not switched on. */
   fenced: number;
   last?: { at: string; ok: boolean; failed?: SmsFailure; code?: string };
 }
@@ -338,9 +338,20 @@ export function smsRefusedWhy(code: string | undefined): 'credential' | 'country
   return 'unknown';
 }
 
-/** The countries a code is texted to, as the screen says them: the dial codes that were set, or that none was. */
+/** The countries a code is texted to, as the screen says them: the ones that are switched on, or that none is. */
 export function smsCountryWords(c: SmsConnection, t: Translate): string {
-  return c.countries.length ? c.countries.join(', ') : t('tower.conn.fact.smsCountriesAny');
+  return c.countries.length ? c.countries.join(', ') : t('tower.conn.fact.smsCountriesNone');
+}
+
+/**
+ * What staff are told when a change to a country is approved. Where it switched the country ON — it may take goods
+ * in, which it could not — its numbers are texted codes from that moment, and the provider's own list of countries
+ * has to be changed by hand: said here, at the one moment somebody is thinking about that country.
+ */
+export function approvedSays(proposal: { jurisdiction?: string; gains?: string[] } | undefined, t: Translate): string {
+  const country = proposal?.jurisdiction ?? '';
+  const approved = t('tower.presence.approved', { country });
+  return proposal?.gains?.includes('takeIn') ? `${approved} ${t('tower.presence.approvedSms', { country })}` : approved;
 }
 
 /**

@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { OtpService } from '../src/modules/pudo/otp.service';
 import { OutboxSmsSender } from '../src/foundation/sms/outbox-sms.sender';
 import { SmsService } from '../src/foundation/sms/sms.service';
+import { PresenceService } from '../src/foundation/presence/presence.service';
 import { OutgoingSms, SMS_SENDER, SmsSendError } from '../src/foundation/sms/sms.types';
 
 /**
@@ -146,23 +147,31 @@ describe('a code is texted to the phone, over the wire', () => {
       expect(arrived).toHaveLength(0);
     });
 
-    it('a number outside the countries the deployment texts is turned away before a code is made or counted', async () => {
-      process.env.GLOS_SMS_COUNTRIES = '+254, +255';
+    it('a number in a country that is not switched on is turned away before a code is made or counted — and switching the country on is what lets it through', async () => {
+      const presence = app.get(PresenceService);
       const abroad = `+3712${digits()}`;
+      expect([presence.resolve('LV').level, presence.resolve('KE').level === 'observed']).toEqual(['observed', false]);
       const before = made(app);
+      const fencedBefore = app.get(SmsService).connection().fenced;
       const answer = await ask(app, abroad).expect(400);
       expect([answer.body.code, answer.body.params]).toEqual(['PHONE_NOT_SERVED', { field: 'phone' }]);
       expect(arrived).toHaveLength(0);
       expect(made(app)).toEqual(before);
-      expect(app.get(SmsService).connection()).toMatchObject({ countries: ['+254', '+255'], fenced: 1 });
-      // Inside the fence, as ever — in either country, and typed the national way.
-      await ask(app, `+2557${digits()}6`).expect(201);
+      expect(app.get(SmsService).connection().fenced).toBe(fencedBefore + 1);
+      // A country that IS on, typed the national way.
       await ask(app, `07${digits()}7`).expect(201);
-      expect(arrived.map((m) => m.to.slice(0, 4))).toEqual(['+255', '+254']);
-      // With no fence, anywhere: and nothing of the refusal was held against the number.
-      delete process.env.GLOS_SMS_COUNTRIES;
-      await ask(app, abroad).expect(201);
-      expect(arrived[2].to).toBe(abroad);
+      expect(arrived.map((m) => m.to.slice(0, 4))).toEqual(['+254']);
+      // Latvia is switched on, as two members of staff switch a country on. Nothing else is set; nothing is restarted.
+      presence.set({ jurisdiction: 'LV', level: 'matched', by: 'a member of staff', approvedBy: 'another' });
+      try {
+        expect(app.get(SmsService).connection().countries).toContain('LV +371');
+        await ask(app, abroad).expect(201);
+        expect(arrived[1].to).toBe(abroad);
+      } finally {
+        presence.set({ jurisdiction: 'LV', level: 'observed', by: 'a member of staff' });
+      }
+      // …and lowered again, its numbers stop.
+      expect((await ask(app, `+3712${digits()}`).expect(400)).body.code).toBe('PHONE_NOT_SERVED');
     });
   });
 
@@ -187,8 +196,8 @@ describe('a code is texted to the phone, over the wire', () => {
       await type(app, phone, asked.body.code).expect(201, { verified: true });
     });
 
-    it('a sandbox texts any country: a fence is about what is paid for, and nothing is', async () => {
-      process.env.GLOS_SMS_COUNTRIES = '+254';
+    it('a sandbox hands the code back for a number in any country: nothing is texted, so nothing is turned away', async () => {
+      expect(app.get(PresenceService).resolve('LV').level).toBe('observed');
       await ask(app, `+3712${digits()}`).expect(201);
     });
 

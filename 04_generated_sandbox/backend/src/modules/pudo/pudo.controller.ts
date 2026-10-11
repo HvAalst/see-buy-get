@@ -291,8 +291,9 @@ export class SbgController {
    * text, the person is told it could not be sent — not left at a screen waiting for a text that is not coming —
    * and the try is given back (`OtpService.notSent`): they may ask again at once.
    *
-   * A number outside the countries this deployment texts (`GLOS_SMS_COUNTRIES`) is turned away before a code is
-   * made or counted: a text is paid for, and codes asked for to numbers abroad is how that is abused.
+   * A number in a country that is not switched on is turned away before a code is made or counted: a text is paid
+   * for, and codes asked for to numbers abroad is how that is abused. Switching a country on is what lets its
+   * numbers be texted (`SmsService.mayGoTo`) — there is no list beside it.
    */
   @Public()
   @UseGuards(RateLimitGuard)

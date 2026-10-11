@@ -1973,7 +1973,7 @@ export const enTowerQueues = {
   'tower.conn.sms.code': 'Twilio’s number for it: {code}.',
   'tower.conn.sms.someFailed': 'Since this server started, {failed} of {n} could not be handed over.',
   'tower.conn.sms.where':
-    'A code is texted through Twilio when the server is started, off a sandbox, with TWILIO_ACCOUNT_SID, a credential (TWILIO_API_KEY_SID with TWILIO_API_KEY_SECRET, or TWILIO_AUTH_TOKEN) and what texts are sent from (TWILIO_MESSAGING_SERVICE_SID, or TWILIO_FROM). None of them is shown, here or anywhere. GLOS_SMS_COUNTRIES — “+254, +255” — limits the countries a code is texted to; switch on the same ones, and no others, in Twilio’s SMS Geo Permissions. A text is sent once: when it cannot be handed over, the person is told, and asks again. No text has yet gone through the real provider: the first one should be watched here.',
+    'A code is texted through Twilio when the server is started, off a sandbox, with TWILIO_ACCOUNT_SID, a credential (TWILIO_API_KEY_SID with TWILIO_API_KEY_SECRET, or TWILIO_AUTH_TOKEN) and what texts are sent from (TWILIO_MESSAGING_SERVICE_SID, or TWILIO_FROM). None of them is shown, here or anywhere. A code is texted only to a number in a country that is switched on (Where we operate): there is no list beside it. Twilio keeps a list of its own, changed by hand in its console and not by us: switch on the same countries, and no others, under its SMS Geo Permissions. A text is sent once: when it cannot be handed over, the person is told, and asks again. No text has yet gone through the real provider: the first one should be watched here.',
   'tower.conn.sms.whereKept': 'On a sandbox no phone is needed: the code is shown on the screen that asked for it.',
   'tower.conn.fact.smsAccount': 'Twilio account',
   'tower.conn.fact.smsCredential': 'Signs with',
@@ -1983,8 +1983,8 @@ export const enTowerQueues = {
   'tower.conn.fact.smsSender.service': 'A Messaging Service',
   'tower.conn.fact.smsSender.from': 'A number or sender name',
   'tower.conn.fact.smsCountries': 'Countries a code is texted to',
-  'tower.conn.fact.smsCountriesAny': 'Any — none is set',
-  'tower.conn.fact.smsFenced': 'Not texted: a number outside those countries',
+  'tower.conn.fact.smsCountriesNone': 'None — no country is switched on',
+  'tower.conn.fact.smsFenced': 'Not texted: the number’s country is not switched on',
   'tower.conn.fact.leaves': 'Leaves this server',
   'tower.conn.fact.leavesYes': 'Yes',
   'tower.conn.fact.leavesNo': 'No — kept here',
@@ -2095,6 +2095,9 @@ export const enTowerQueues = {
   'tower.presence.needName': 'Sign in with your name to approve.',
   'tower.presence.alreadyDecided': 'Already decided.',
   'tower.presence.approved': '{country} approved — every screen that asks now gets the new answer.',
+  // Said when the approval switched the country ON: its numbers are texted codes from now, and Twilio's own list is not ours to change.
+  'tower.presence.approvedSms':
+    'Codes are now texted to numbers in {country}. Switch {country} on in the Twilio console too, under SMS Geo Permissions: Twilio does not let anybody do that for you, and until it is done it refuses those texts.',
   'tower.presence.declined': 'Declined, and kept with the reason.',
   'tower.presence.decidedTitle': 'Recently decided',
   'tower.presence.status.approved': 'approved by {who}',

@@ -1,5 +1,6 @@
 import { MailService } from './foundation/mail/mail.service';
 import { SmsService } from './foundation/sms/sms.service';
+import { PresenceService } from './foundation/presence/presence.service';
 import { FleetMoveService } from './modules/pudo/fleet-move.service';
 import { FleetOfferService } from './modules/pudo/fleet-offer.service';
 import { AccountRecoveryService } from './modules/pudo/account-recovery.service';
@@ -29,6 +30,8 @@ describe('the application boots', () => {
     expect(moduleRef.get(MailService)).toBeDefined();
     // And the text that carries a code: optional on the controller, and without it no code leaves the server.
     expect(moduleRef.get(SmsService)).toBeDefined();
+    // …and it asks the register of countries which numbers may be texted: without it, any number in the world is.
+    expect((moduleRef.get(SmsService) as unknown as { presence?: unknown }).presence).toBeInstanceOf(PresenceService);
     // The same for moving a driver between fleets: optional on the controller, so the real graph must hold it.
     expect(moduleRef.get(FleetMoveService, { strict: false })).toBeDefined();
     expect(moduleRef.get(FleetOfferService, { strict: false })).toBeDefined();

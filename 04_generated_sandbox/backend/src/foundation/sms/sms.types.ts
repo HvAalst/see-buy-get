@@ -10,7 +10,8 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
  *   - a credential: `TWILIO_API_KEY_SID` + `TWILIO_API_KEY_SECRET` (what Twilio recommends: a key can be revoked
  *     without touching the account), or `TWILIO_AUTH_TOKEN`;
  *   - who a text is from: `TWILIO_MESSAGING_SERVICE_SID`, or `TWILIO_FROM` (a number, or a sender name);
- *   - optionally `GLOS_SMS_COUNTRIES` ("+254, +255") — the countries a code may be texted to at all.
+ *
+ * Which countries a code is texted to is NOT set here: it is the countries that are switched on (`SmsService`).
  *
  * With all three set, off a sandbox, `sms.module.ts` wires the provider's sender. Otherwise `OutboxSmsSender` keeps
  * what would have been texted. A SANDBOX NEVER TEXTS THROUGH THE PROVIDER, whatever is set: its people are made up
@@ -93,12 +94,12 @@ export class SmsConnection {
   @ApiPropertyOptional({ enum: SMS_PROBLEMS }) problem?: SmsProblem;
   /** The texts go to a stand-in on this machine, not to the provider: a sandbox being driven. */
   standIn: boolean;
-  /** The countries a code may be texted to, as dial codes. Empty: any country. */
+  /** The countries a code is texted to — the ones that are switched on — each as its code and dial code ("KE +254"). Empty: none. */
   countries: string[];
   /** Texts written since this server started · of those, not handed over. */
   written: number;
   failed: number;
-  /** Codes NOT texted since this server started because the number is outside those countries. */
+  /** Codes NOT texted since this server started because the number's country is not switched on. */
   fenced: number;
   @ApiPropertyOptional({ type: SmsLast }) last?: SmsLast;
 }

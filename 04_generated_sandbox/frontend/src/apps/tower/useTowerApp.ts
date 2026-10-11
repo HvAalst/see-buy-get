@@ -19,6 +19,7 @@ import type { ExpiringItem } from './company';
 import type { AgentRow, CoverageCounts, FlagRow, HubRow, ToteRow } from './network';
 import { runSummary, type FundingAction, type FundingRow, type PayoutAction, type PayoutRow, type RunResult, type UnmatchedRow } from './settlement';
 import type { HelpOption } from './pictures';
+import { approvedSays } from './connections';
 import { resolveBaseUrl } from '../../lib/sbg';
 
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
@@ -1146,7 +1147,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
           return;
         }
-        setState((s) => ({ ...s, busyId: null, done: t('tower.presence.approved', { country: proposal?.jurisdiction ?? '' }) }));
+        setState((s) => ({ ...s, busyId: null, done: approvedSays(proposal, t) }));
         await loadPresence(client);
       },
       declineProposal: async (proposalId: string, reason: string) => {

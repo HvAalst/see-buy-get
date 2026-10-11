@@ -67,14 +67,18 @@ Twilio's Messages API, and a text is the only way it reaches anybody (`src/found
 | `TWILIO_ACCOUNT_SID` | the account; part of the address a text is posted to |
 | `TWILIO_API_KEY_SID` + `TWILIO_API_KEY_SECRET` | what signs each request — a key can be revoked without touching the account. Or `TWILIO_AUTH_TOKEN`, the account's own |
 | `TWILIO_MESSAGING_SERVICE_SID` | who a text is from. Or `TWILIO_FROM`: one number, or a sender name |
-| `GLOS_SMS_COUNTRIES` | optional: the dial codes a code may be texted to, `+254, +255` |
 
 - **Half a set-up sends nothing.** Without all three of account, credential and sender no text leaves, the door
   answers `SMS_NOT_SENT` (it never says "sent" when nothing was), and the start-up log and the console's
   Connections screen say which part is missing.
-- **Fence the countries, in both places.** "Send me a code" texts any number in the world at our cost, and codes
-  asked for to numbers that earn their owner money per text is an old fraud. Set `GLOS_SMS_COUNTRIES`, and switch on
-  the same countries — and no others — under SMS Geo Permissions in the Twilio console.
+- **A code is texted only to a country that is switched on.** There is no setting for it: the countries are the ones
+  staff switched on in the console (Where we operate), read when a code is asked for. "Send me a code" would
+  otherwise text any number in the world at our cost, and codes asked for to numbers that earn their owner money
+  per text is an old fraud.
+- **Twilio keeps its own list, and it is changed by hand.** Under SMS Geo Permissions in the Twilio console, switch
+  on the same countries and no others. Twilio's documentation says these permissions "can not be changed
+  programmatically via the API for security reasons", so switching a country on here cannot do it for you; a
+  country on here and off there is refused by Twilio (21408), and the Connections screen says so.
 - **A text is sent once.** No answer in time may still mean it went, so there is no second try: the person is told
   it could not be sent, the try is not counted against their number, and they ask again.
 - **Handed to Twilio is not delivered.** A `201` means Twilio took it. Whether it reached the phone is not heard

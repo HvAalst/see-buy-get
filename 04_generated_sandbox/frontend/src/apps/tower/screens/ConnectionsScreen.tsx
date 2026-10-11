@@ -251,7 +251,7 @@ export function ConnectionsScreen({ actions }: { state: TowerState; actions: Tow
                 <dt class="cons__factk">{t('tower.conn.fact.written')}</dt>
                 <dd class="cons__factv">{countWords(view.sms.written, view.sms.failed, t)}</dd>
               </div>
-              {view.sms.countries.length || view.sms.fenced > 0 ? (
+              {view.sms.sends || view.sms.fenced > 0 ? (
                 <div class="cons__fact">
                   <dt class="cons__factk">{t('tower.conn.fact.smsFenced')}</dt>
                   <dd class="cons__factv">{view.sms.fenced}</dd>

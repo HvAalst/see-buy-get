@@ -1,4 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { COUNTRY_CATALOGUE, catalogueEntry } from '../countries/catalogue';
+import { PresenceService } from '../presence/presence.service';
 import { isSandbox } from '../runtime/sandbox';
 import { OutboxSmsSender } from './outbox-sms.sender';
 import { SMS_SENDER, SmsConnection, SmsLast, SmsSendError, SmsSender } from './sms.types';
@@ -6,24 +8,18 @@ import { twilioConfig } from './twilio';
 
 type Env = Record<string, string | undefined>;
 
-/**
- * THE COUNTRIES A CODE MAY BE TEXTED TO, where the deployment fenced them: `GLOS_SMS_COUNTRIES="+254, +255"`.
- *
- * A door that texts any number in the world is paid for by us. Asking for codes to numbers that earn their owner
- * money per text received is an old fraud, and "send me a code" is exactly the button it presses. The first fence is
- * the provider's own (Twilio's SMS Geo Permissions); this is ours, looked at before a code is made or counted.
- * Unset: any country, and the start-up log says so.
- */
-export function smsCountries(env: Env = process.env): string[] {
-  return (env.GLOS_SMS_COUNTRIES ?? '')
-    .split(',')
-    .map((s) => s.trim().replace(/[^\d+]/g, ''))
-    .filter((s) => /^\+\d{1,4}$/.test(s));
-}
+/** Every dial code there is, the longest first: `+1242` is asked before `+1`. */
+const DIAL_CODES = [...new Set(COUNTRY_CATALOGUE.map((c) => c.dialCode))].sort((a, b) => b.length - a.length);
 
-/** `phone` is E.164. With no fence, anywhere. */
-export function smsMayGoTo(phone: string, countries: string[] = smsCountries()): boolean {
-  return countries.length === 0 || countries.some((dial) => phone.startsWith(dial));
+/**
+ * IS THIS NUMBER IN ONE OF THESE COUNTRIES — judged by the LONGEST dial code in the catalogue it starts with, so a
+ * number in the Bahamas (+1242) is not let through because the United States (+1) is on. Countries that share one
+ * dial code and nothing longer (the US and Canada, Russia and Kazakhstan) cannot be told apart by it: one of them
+ * being on lets the other's numbers through. `phone` is E.164; `on` is dial codes.
+ */
+export function smsMayGoTo(phone: string, on: string[], all: string[] = DIAL_CODES): boolean {
+  const dial = all.find((d) => phone.startsWith(d));
+  return Boolean(dial) && on.includes(dial as string);
 }
 
 /**
@@ -48,6 +44,20 @@ export function codeText(code: string, minutes: number, env: Env = process.env):
  * `sendCode` resolves only when the provider took the text. The door that asked (`auth/phone/request`) tells the
  * person it could not be sent rather than leave them waiting for a text that is not coming. A count is kept for the
  * console's Connections screen, and a failure is logged by its kind — never the number, never the code.
+ *
+ * WHICH COUNTRIES A CODE IS TEXTED TO IS NOT A SETTING OF ITS OWN (the user, 2026-10-11: "switching on a country
+ * would also mean to switch on the sms geo permission"). It is the countries that are switched on — every one whose
+ * standing is above "observed" — read from the same register every other screen asks, at the moment a code is
+ * asked for. Switching a country on is what lets its numbers be texted; lowering it to observed stops them. There
+ * is no list to keep beside it and forget.
+ *
+ * It matters because a door that texts any number in the world is paid for by us: codes asked for to numbers that
+ * earn their owner money per text received is an old fraud, and "send me a code" is the button it presses.
+ *
+ * THE PROVIDER KEEPS A LIST OF ITS OWN, and that one cannot follow ours: Twilio's SMS Geo Permissions are changed
+ * in its console and "can not be changed programmatically via the API for security reasons" (its documentation,
+ * read 2026-10-11). So a country switched on here and not there is refused by Twilio with 21408, which the
+ * Connections screen says in those words; and the console says so at the moment a country is switched on.
  */
 @Injectable()
 export class SmsService {
@@ -58,18 +68,18 @@ export class SmsService {
   private fenced = 0;
   private last?: SmsLast;
 
-  constructor(@Inject(SMS_SENDER) private readonly sender: SmsSender) {
-    if (isSandbox()) return;
+  constructor(
+    @Inject(SMS_SENDER) private readonly sender: SmsSender,
+    // Optional so that what builds this by hand keeps compiling: with no register of countries to ask, nothing is fenced.
+    @Optional() private readonly presence?: PresenceService,
+  ) {
+    if (isSandbox() || this.sends()) return;
     // Said at start-up, not found out by the first person who cannot sign up.
-    if (!this.sends()) {
-      const why = twilioConfig().problem;
-      this.logger.warn(
-        `No text leaves this server${why ? ` (Twilio: ${why})` : ''}, and off a sandbox a code has no other way to a phone: nobody can sign up, confirm a new phone or replace a PIN. ` +
-          'Set TWILIO_ACCOUNT_SID, a credential (TWILIO_API_KEY_SID + TWILIO_API_KEY_SECRET, or TWILIO_AUTH_TOKEN) and a sender (TWILIO_MESSAGING_SERVICE_SID or TWILIO_FROM).',
-      );
-    } else if (!smsCountries().length) {
-      this.logger.warn('GLOS_SMS_COUNTRIES is not set: a code is texted to a number in ANY country. Fence it here ("+254, +255") and in Twilio’s SMS Geo Permissions.');
-    }
+    const why = twilioConfig().problem;
+    this.logger.warn(
+      `No text leaves this server${why ? ` (Twilio: ${why})` : ''}, and off a sandbox a code has no other way to a phone: nobody can sign up, confirm a new phone or replace a PIN. ` +
+        'Set TWILIO_ACCOUNT_SID, a credential (TWILIO_API_KEY_SID + TWILIO_API_KEY_SECRET, or TWILIO_AUTH_TOKEN) and a sender (TWILIO_MESSAGING_SERVICE_SID or TWILIO_FROM).',
+    );
   }
 
   /** The outbox keeps; anything in its place sends. Read off the sender, never off a setting. */
@@ -77,9 +87,20 @@ export class SmsService {
     return !(this.sender instanceof OutboxSmsSender);
   }
 
-  /** May a code be texted to this number at all? Counted when not, for the console. `phone` is E.164. */
+  /** The countries that are switched on, as the catalogue has them. Read each time: a country may have changed a minute ago. */
+  private switchedOn(): Array<{ code: string; dialCode: string }> {
+    return (this.presence?.list() ?? [])
+      .filter((p) => p.level !== 'observed')
+      .map((p) => catalogueEntry(p.jurisdiction))
+      .filter((c): c is NonNullable<typeof c> => Boolean(c))
+      .map((c) => ({ code: c.code, dialCode: c.dialCode }));
+  }
+
+  /** May a code be texted to this number: is its country switched on? Counted when not, for the console. `phone` is E.164. */
   mayGoTo(phone: string): boolean {
-    if (smsMayGoTo(phone)) return true;
+    if (!this.presence) return true;
+    const on = this.switchedOn().map((c) => c.dialCode);
+    if (smsMayGoTo(phone, on)) return true;
     this.fenced += 1;
     return false;
   }
@@ -110,7 +131,9 @@ export class SmsService {
       ...(given.sender ? { sender: given.sender } : {}),
       ...(given.problem ? { problem: given.problem } : {}),
       standIn: given.standIn,
-      countries: smsCountries(),
+      countries: this.switchedOn()
+        .map((c) => `${c.code} ${c.dialCode}`)
+        .sort(),
       written: this.written,
       failed: this.failed,
       fenced: this.fenced,

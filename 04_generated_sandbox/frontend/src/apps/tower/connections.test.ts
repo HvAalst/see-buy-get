@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { adviserSays, bounceListenWords, checkSays, countWords, mailBounceWords, mailAddressWords, mailAgainWords, mailSays, momentWords, plausible, pushSays, refusedWhy, routerSays, smsCountryWords, smsRefusedWhy, smsSays, waitingWords, type AdviserConnection, type MailConnection, type PushConnection, type RouterConnection, type SmsConnection } from './connections';
+import { adviserSays, bounceListenWords, checkSays, countWords, mailBounceWords, mailAddressWords, mailAgainWords, mailSays, momentWords, plausible, approvedSays, pushSays, refusedWhy, routerSays, smsCountryWords, smsRefusedWhy, smsSays, waitingWords, type AdviserConnection, type MailConnection, type PushConnection, type RouterConnection, type SmsConnection } from './connections';
 
 const since = '2026-10-06T06:00:00Z';
 const at = '2026-10-06T08:15:00Z';
@@ -378,9 +378,19 @@ describe('what this server is connected to', () => {
 
     it('reads a refusal’s number only where Twilio states what it means, and says the countries that were set — or that none was', () => {
       expect(['20003', '21408', '21606', '21608', '21612', '30008', undefined].map(smsRefusedWhy)).toEqual(['credential', 'country', 'sender', 'trial', 'unknown', 'unknown', 'unknown']);
-      expect(smsCountryWords(sms({ countries: ['+254', '+255'] }), t)).toBe('+254, +255');
-      expect(smsCountryWords(sms({ countries: [] }), t)).toBe('Any — none is set');
+      expect(smsCountryWords(sms({ countries: ['KE +254', 'TZ +255'] }), t)).toBe('KE +254, TZ +255');
+      expect(smsCountryWords(sms({ countries: [] }), t)).toBe('None — no country is switched on');
     });
+  });
+
+  it('says, when a country is switched on, that its numbers are texted from now — and that Twilio’s own list is changed by hand', () => {
+    const on = approvedSays({ jurisdiction: 'TZ', gains: ['takeIn', 'fieldEvidence'] }, t);
+    expect(on).toBe('TZ approved — every screen that asks now gets the new answer. Codes are now texted to numbers in TZ. Switch TZ on in the Twilio console too, under SMS Geo Permissions: Twilio does not let anybody do that for you, and until it is done it refuses those texts.');
+    // A change that did not switch the country on — it was on already, or only a trade term changed — says no such thing.
+    for (const not of [{ jurisdiction: 'KE', gains: ['claims', 'payouts'] }, { jurisdiction: 'KE', gains: [] }, { jurisdiction: 'KE' }]) {
+      expect(approvedSays(not, t)).toBe('KE approved — every screen that asks now gets the new answer.');
+    }
+    expect(approvedSays(undefined, t)).toBe(' approved — every screen that asks now gets the new answer.');
   });
 
   it('says a count plainly, and how many of them failed only when some did', () => {

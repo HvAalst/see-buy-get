@@ -4,7 +4,7 @@ import { createServer, IncomingMessage, Server, ServerResponse } from 'http';
 import { AddressInfo } from 'net';
 import { OutboxSmsSender } from './outbox-sms.sender';
 import { SmsModule, chooseSmsSender } from './sms.module';
-import { SmsService, codeText, smsCountries, smsMayGoTo } from './sms.service';
+import { SmsService, codeText, smsMayGoTo } from './sms.service';
 import { SMS_SENDER, SmsSendError } from './sms.types';
 import { TWILIO_API, readTwilioAnswer, toTwilioForm, twilioConfig } from './twilio';
 import { TwilioSmsSender } from './twilio.sender';
@@ -234,23 +234,15 @@ describe('the text that carries a code', () => {
   });
 
   describe('the countries a code may be texted to', () => {
-    it('is any country until the deployment says which', () => {
-      expect(smsCountries({})).toEqual([]);
-      expect(smsMayGoTo(PHONE, [])).toBe(true);
-      expect(smsMayGoTo('+37120000000', [])).toBe(true);
-    });
-
-    it('reads dial codes however they were typed, and drops what is not one', () => {
-      expect(smsCountries({ GLOS_SMS_COUNTRIES: ' +254, +255 ,+31' })).toEqual(['+254', '+255', '+31']);
-      expect(smsCountries({ GLOS_SMS_COUNTRIES: '254, +, +12345, kenya, ,' })).toEqual([]);
-      expect(smsCountries({ GLOS_SMS_COUNTRIES: '+254 (KE), 255' })).toEqual(['+254']);
-      expect(smsCountries({ GLOS_SMS_COUNTRIES: '"+254", (+255)' })).toEqual(['+254', '+255']);
-    });
-
-    it('lets a number through by how it starts, and nothing else', () => {
-      const fence = ['+254', '+255'];
-      expect([smsMayGoTo('+254712345678', fence), smsMayGoTo('+255712345678', fence)]).toEqual([true, true]);
-      expect([smsMayGoTo('+37120000000', fence), smsMayGoTo('+25', fence), smsMayGoTo('254712345678', fence), smsMayGoTo('', fence)]).toEqual([false, false, false, false]);
+    it('are judged by the LONGEST dial code a number starts with: the Bahamas is not the United States', () => {
+      expect([smsMayGoTo('+254712345678', ['+254', '+255']), smsMayGoTo('+255712345678', ['+254', '+255'])]).toEqual([true, true]);
+      expect([smsMayGoTo('+37120000000', ['+254']), smsMayGoTo('+25', ['+254']), smsMayGoTo('254712345678', ['+254']), smsMayGoTo('', ['+254'])]).toEqual([false, false, false, false]);
+      // +1 is on. +1242 is a country of its own in the catalogue, and is not.
+      expect([smsMayGoTo('+12025550123', ['+1']), smsMayGoTo('+12425550123', ['+1']), smsMayGoTo('+12425550123', ['+1242'])]).toEqual([true, false, true]);
+      // With none switched on, nobody is texted: there is no "any country".
+      expect(smsMayGoTo(PHONE, [])).toBe(false);
+      // A number that starts with no dial code there is, is in no country.
+      expect(smsMayGoTo('+999123456789', ['+254'], ['+254', '+1'])).toBe(false);
     });
   });
 
@@ -376,14 +368,31 @@ describe('the text that carries a code', () => {
       expect(s.connection()).toMatchObject({ sends: false, written: 1, failed: 0, last: { ok: true } });
     });
 
-    it('counts a number outside the countries the deployment set, and says which countries those are', () => {
-      const s = new SmsService(new OutboxSmsSender());
-      process.env.GLOS_SMS_COUNTRIES = '+254, +255';
-      expect([s.mayGoTo(PHONE), s.mayGoTo('+37120000000'), s.mayGoTo('+79000000000')]).toEqual([true, false, false]);
-      expect(s.connection()).toMatchObject({ countries: ['+254', '+255'], fenced: 2, written: 0 });
-      delete process.env.GLOS_SMS_COUNTRIES;
-      expect(s.mayGoTo('+37120000000')).toBe(true);
-      expect(s.connection().fenced).toBe(2);
+    /** The register every other screen asks how a country stands — here with the standings a test gives it. */
+    const register = (levels: Record<string, string>) => ({ list: () => Object.entries(levels).map(([jurisdiction, level]) => ({ jurisdiction, level })) }) as never;
+
+    it('texts the countries that are switched on, and no other: switching one on is what lets its numbers through', () => {
+      const levels: Record<string, string> = { KE: 'established', TZ: 'matched', DE: 'observed' };
+      const s = new SmsService(new OutboxSmsSender(), register(levels));
+      expect([s.mayGoTo(PHONE), s.mayGoTo('+255712345678'), s.mayGoTo('+4915112345678'), s.mayGoTo('+37120000000')]).toEqual([true, true, false, false]);
+      expect(s.connection()).toMatchObject({ countries: ['KE +254', 'TZ +255'], fenced: 2, written: 0 });
+      // Germany is switched on. Asked again, the same number goes: nothing was restarted and nothing else was set.
+      levels.DE = 'partnered';
+      expect(s.mayGoTo('+4915112345678')).toBe(true);
+      expect(s.connection().countries).toEqual(['DE +49', 'KE +254', 'TZ +255']);
+      // …and a country lowered to observed stops being texted.
+      levels.TZ = 'observed';
+      expect(s.mayGoTo('+255712345678')).toBe(false);
+      expect(s.connection()).toMatchObject({ countries: ['DE +49', 'KE +254'], fenced: 3 });
+    });
+
+    it('texts nobody when no country is switched on — and fences nothing only where there is no register to ask', () => {
+      const none = new SmsService(new OutboxSmsSender(), register({ KE: 'observed' }));
+      expect(none.mayGoTo(PHONE)).toBe(false);
+      expect(none.connection()).toMatchObject({ countries: [], fenced: 1 });
+      // Built by hand, with no register of countries (the application never is: app.boot.spec holds it to that).
+      const bare = new SmsService(new OutboxSmsSender());
+      expect([bare.mayGoTo('+37120000000'), bare.connection().fenced]).toEqual([true, 0]);
     });
 
     it('says why an account that is set is not used', () => {
@@ -398,7 +407,7 @@ describe('the text that carries a code', () => {
       expect(s.connection()).toMatchObject({ sends: false, sender: 'from', problem: 'sandbox' });
     });
 
-    it('says at start-up, off a sandbox, that nobody can be sent a code — and, when texts do leave, that no country is fenced', () => {
+    it('says at start-up, off a sandbox, that nobody can be sent a code — and nothing when texts do leave', () => {
       const warned: string[] = [];
       const spy = jest.spyOn(Logger.prototype, 'warn').mockImplementation((m: unknown) => void warned.push(String(m)));
       try {
@@ -416,14 +425,8 @@ describe('the text that carries a code', () => {
         expect(warned[0]).toMatch(/No text leaves this server \(Twilio: no_credential\)/);
         expect(warned[0]).toMatch(/nobody can sign up/);
 
-        const sending = { send: async () => undefined };
-        delete process.env.GLOS_SMS_COUNTRIES;
-        new SmsService(sending);
-        expect(warned).toHaveLength(2);
-        expect(warned[1]).toMatch(/GLOS_SMS_COUNTRIES is not set/);
-        process.env.GLOS_SMS_COUNTRIES = '+254';
-        new SmsService(sending);
-        expect(warned).toHaveLength(2);
+        new SmsService({ send: async () => undefined });
+        expect(warned).toHaveLength(1);
         // Nothing it says at start-up is a credential.
         expect(warned.join(' ')).not.toContain(ACCOUNT);
       } finally {
