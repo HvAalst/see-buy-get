@@ -281,8 +281,10 @@ export interface OperatorAccount {
   salt: string;
   hash: string;
   createdAt: string;
-  /** Who created it — another staff member's name, or the setup key. */
+  /** Who asked for it — a member of staff's name — or the setup key, which made it alone. */
   createdBy: string;
+  /** The second member of staff, who approved it. Absent on an account the setup key made. */
+  approvedBy?: string;
   lastSeenAt?: string;
   passwordChangedAt?: string;
   /** Revoked logins are KEPT: a decision still needs the name of whoever made it. */
@@ -318,6 +320,48 @@ export class OperatorAccountView {
   /** A reset of their two-step sign-in, asked for by this member of staff and waiting for a second. */
   @ApiPropertyOptional()
   twoStepResetAskedBy?: string;
+}
+
+/**
+ * A STAFF ACCOUNT ONE MEMBER OF STAFF ASKED FOR. It is not an account: no password exists and nobody can sign in
+ * with it until a second, different member of staff approves. Kept after it is decided — who asked for an account
+ * that was refused is worth knowing later.
+ */
+export interface StaffProposal {
+  proposalId: string;
+  /** The login asked for, lower-cased. */
+  email: string;
+  name: string;
+  askedBy: string;
+  /** Which ACCOUNT asked. Two people are told apart by this, never by their names. */
+  askedById: string;
+  askedAt: string;
+  state: 'asked' | 'approved' | 'declined';
+  decidedBy?: string;
+  decidedAt?: string;
+  /** Why it was declined. */
+  reason?: string;
+  /** The account it became. */
+  operatorId?: string;
+}
+
+/** A staff account that was asked for and waits for a second member of staff, as the console reads it. */
+export class StaffProposalView {
+  proposalId: string;
+  email: string;
+  name: string;
+  askedBy: string;
+  askedAt: string;
+  /** When it stops waiting. Asked for again after that, it waits again. */
+  until: string;
+  /** Asked for by whoever is reading this: they can take it back, and cannot approve it. */
+  mine: boolean;
+}
+
+/** Who can sign in as network staff, and who has been asked for. */
+export class StaffAccountList {
+  items: OperatorAccountView[];
+  waiting: StaffProposalView[];
 }
 
 /** An administrator as anybody may read them — no salt, no hash, no password, ever. */

@@ -1343,6 +1343,11 @@ export class StaffLoginDto extends EntityAdminLoginDto {
   @IsOptional() @IsString() @MaxLength(12) @ApiPropertyOptional() code?: string;
 }
 
+/** Declining a staff account somebody asked for. Somebody else's needs the reason; the one who asked is told it. */
+export class StaffProposalDeclineDto {
+  @IsOptional() @IsString() @MaxLength(300) @ApiPropertyOptional() reason?: string;
+}
+
 /** The six digits an authenticator app shows. */
 export class TwoStepCodeDto {
   @IsString() @MaxLength(12) code!: string;

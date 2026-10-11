@@ -20,6 +20,7 @@ import {
   statusMixRows,
 } from '../network';
 import { money } from '../queues';
+import { opensItself, staffAddWay, staffFoldHint, waitingActions, waitingLine, type StaffWaiting } from '../staff';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
 /**
@@ -235,7 +236,7 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
       </ConsoleFold>
 
       {state.who?.mode === 'operator' ? <FleetsPanel actions={actions} /> : null}
-      {state.who?.mode === 'operator' ? <StaffPanel actions={actions} /> : null}
+      {state.who?.mode === 'operator' ? <StaffPanel actions={actions} named={Boolean(state.who.named)} /> : null}
 
       <ConsoleFold
         title={t('tower.network.hubsTitle')}
@@ -407,11 +408,21 @@ function FleetsPanel({ actions }: { actions: TowerActions }) {
 /**
  * Who works for the network — one sign-in each. The panel exists so that "a different person must approve this" can
  * be true: until the first account is made, everybody holds the one setup key and every name is typed.
+ *
+ * A NEW SIGN-IN TAKES TWO OF THEM. Somebody with an account of their own ASKS here; a second member of staff approves
+ * it here and is the one shown the first password. Only the setup key makes an account at once (`named` is false).
  */
-function StaffPanel({ actions }: { actions: TowerActions }) {
+function StaffPanel({ actions, named }: { actions: TowerActions; named: boolean }) {
   const t = useT();
   const client = actions.client();
   const [rows, setRows] = useState<StaffRow[] | null>(null);
+  const [waiting, setWaiting] = useState<StaffWaiting[]>([]);
+  // Asked for, not made: said until the next thing is done here.
+  const [asked, setAsked] = useState<string | null>(null);
+  const [declining, setDeclining] = useState<string | null>(null);
+  const [reason, setReason] = useState('');
+  // Opened for the reader when an account waits that is theirs to decide: work behind a click is work nobody does.
+  const [fold, setFold] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -424,40 +435,84 @@ function StaffPanel({ actions }: { actions: TowerActions }) {
   const load = useCallback(async () => {
     if (!client) return;
     const r = await client.api.staff();
-    if (r.error) setError(r.error.detail || r.error.title);
-    else setRows((r.data as unknown as { items?: StaffRow[] })?.items ?? []);
-  }, [client]);
+    if (r.error) return setError(r.error.detail || r.error.title);
+    const data = r.data as unknown as { items?: StaffRow[]; waiting?: StaffWaiting[] };
+    setRows(data?.items ?? []);
+    setWaiting(data?.waiting ?? []);
+    if (opensItself(data?.waiting ?? [], named)) setFold(true);
+  }, [client, named]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const create = async () => {
+  const way = staffAddWay(named, rows?.length ?? 0);
+
+  /** With an account of your own you ASK, and a second member of staff approves. The setup key makes it at once. */
+  const add = async () => {
     if (!client) return;
     setBusy('create');
     setError(null);
-    const r = await client.api.createStaff({ email: email.trim(), name: name.trim() });
-    setBusy(null);
-    if (r.error) return setError(r.error.detail || r.error.title);
-    setMade(r.data as unknown as { name: string; email: string; temporaryPassword: string });
+    setAsked(null);
+    const body = { email: email.trim(), name: name.trim() };
+    if (way === 'ask') {
+      const r = await client.api.askStaff(body);
+      setBusy(null);
+      if (r.error) return setError(r.error.detail || r.error.title);
+      setAsked(body.name);
+    } else {
+      const r = await client.api.createStaff(body);
+      setBusy(null);
+      if (r.error) return setError(r.error.detail || r.error.title);
+      setMade(r.data as unknown as { name: string; email: string; temporaryPassword: string });
+    }
     setName('');
     setEmail('');
     setOpen(false);
     await load();
   };
 
+  /** The second member of staff: yes — and the first password is theirs to hand over — or no, with the reason. */
+  const decide = async (p: StaffWaiting, yes: boolean, why?: string) => {
+    if (!client) return;
+    setBusy(p.proposalId);
+    setError(null);
+    setAsked(null);
+    const r = yes ? await client.api.approveStaff(p.proposalId) : await client.api.declineStaff(p.proposalId, why);
+    setBusy(null);
+    setDeclining(null);
+    setReason('');
+    if (r.error) setError(r.error.detail || r.error.title);
+    else if (yes) setMade(r.data as unknown as { name: string; email: string; temporaryPassword: string });
+    await load();
+  };
+  const day = (iso: string) => new Date(iso).toLocaleDateString();
+
   return (
     <ConsoleFold
       title={t('tower.staff.title')}
-      hint={rows === null ? t('tower.queues.loading') : t('tower.network.fold.staff', { n: rows.length })}
+      hint={rows === null ? t('tower.queues.loading') : staffFoldHint(rows.length, waiting.length, t)}
+      aside={waiting.length ? <span class="ctag ctag--warn">{t('tower.staff.waiting.tag', { n: waiting.length })}</span> : undefined}
+      open={fold}
+      onOpenChange={setFold}
     >
-      <div class="twr-panelend">
-        <button type="button" class="cbtn cbtn--ghost cbtn--sm" aria-expanded={open} onClick={() => setOpen(!open)}>
-        {open ? t('common.close') : t('tower.staff.add')}
-        </button>
-      </div>
-      <p class="cons__lede">{t('tower.staff.lede')}</p>
+      {/* Nobody to approve it, no form: a request that can only be refused is not offered. */}
+      {rows === null || way === 'alone' ? null : (
+        <div class="twr-panelend">
+          <button type="button" class="cbtn cbtn--ghost cbtn--sm" aria-expanded={open} onClick={() => setOpen(!open)}>
+            {open ? t('common.close') : t('tower.staff.add')}
+          </button>
+        </div>
+      )}
+      <p class="cons__lede">{t(way === 'key' ? 'tower.staff.ledeKey' : 'tower.staff.lede')}</p>
+      {rows !== null && way === 'alone' ? <p class="chint">{t('tower.staff.ledeAlone')}</p> : null}
       {error ? <p class="cerr">{error}</p> : null}
+      {asked ? (
+        <p class="twr-done">
+          <Icon name="check" size={16} />
+          {t('tower.staff.asked', { name: asked })}
+        </p>
+      ) : null}
 
       {made ? (
         <div class="twr-reveal">
@@ -486,12 +541,84 @@ function StaffPanel({ actions }: { actions: TowerActions }) {
                 <span class="cfield__label">{t('tower.staff.email')}</span>
                 <input class="cinput" type="email" value={email} onInput={(e) => setEmail((e.target as HTMLInputElement).value)} />
               </label>
-              <button type="button" class="cbtn cbtn--primary" disabled={busy === 'create' || !email.trim() || !name.trim()} onClick={() => void create()}>
-                {t('tower.staff.create')}
+              <button type="button" class="cbtn cbtn--primary" disabled={busy === 'create' || !email.trim() || !name.trim()} onClick={() => void add()}>
+                {t(way === 'ask' ? 'tower.staff.ask' : 'tower.staff.create')}
               </button>
             </div>
           </div>
         </div>
+      ) : null}
+
+      {/* Asked for, and not yet anybody: nothing here can sign in. The one who asked may only take it back — the
+          server refuses them an approval, so the button is not drawn for them. */}
+      {waiting.length ? (
+        <>
+          <div class="cons__panelhead">
+            <span class="cons__panelt">{t('tower.staff.waiting.title')}</span>
+            <span class="ctag ctag--warn">{waiting.length}</span>
+          </div>
+          <table class="ctbl ctbl--stack">
+            <tbody>
+              {waiting.map((p) => {
+                const may = waitingActions(p, named);
+                return (
+                  <tr key={p.proposalId}>
+                    <td>
+                      <div class="ctbl__strong">{p.name}</div>
+                      <div class="ctbl__mono">{p.email}</div>
+                    </td>
+                    <td class="ctbl__sub">{waitingLine(p, named, t, day)}</td>
+                    <td>
+                      {declining === p.proposalId ? (
+                        <span class="twr-panelend">
+                          <input
+                            class="cinput"
+                            value={reason}
+                            placeholder={t('tower.staff.declineReason', { who: p.askedBy })}
+                            aria-label={t('tower.staff.declineReason', { who: p.askedBy })}
+                            onInput={(e) => setReason((e.target as HTMLInputElement).value)}
+                          />
+                          <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy === p.proposalId || !reason.trim()} onClick={() => void decide(p, false, reason.trim())}>
+                            {t('tower.staff.decline')}
+                          </button>
+                          <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setDeclining(null)}>
+                            {t('tower.presence.cancel')}
+                          </button>
+                        </span>
+                      ) : (
+                        <span class="twr-panelend">
+                          {may.includes('approve') ? (
+                            <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy === p.proposalId} onClick={() => void decide(p, true)}>
+                              {t('tower.staff.approve')}
+                            </button>
+                          ) : null}
+                          {may.includes('decline') ? (
+                            <button
+                              type="button"
+                              class="cbtn cbtn--ghost cbtn--sm"
+                              disabled={busy === p.proposalId}
+                              onClick={() => {
+                                setReason('');
+                                setDeclining(p.proposalId);
+                              }}
+                            >
+                              {t('tower.staff.decline')}
+                            </button>
+                          ) : null}
+                          {may.includes('takeBack') ? (
+                            <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy === p.proposalId} onClick={() => void decide(p, false)}>
+                              {t('tower.staff.takeBack')}
+                            </button>
+                          ) : null}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </>
       ) : null}
 
       {rows === null ? (

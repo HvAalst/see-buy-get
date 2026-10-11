@@ -878,7 +878,13 @@ export function createOperatorApi(sbg: SbgClient) {
       sbg.request((c) => c.DELETE('/v1/sbg/entities/{entityId}/admins/{adminId}', { params: { path: { entityId, adminId } } })),
     /** Network staff, one account each. */
     staff: () => sbg.request((c) => c.GET('/v1/sbg/operators')),
+    /** The setup key's way: made at once. Refused to anybody with an account of their own — they ask. */
     createStaff: (body: { email: string; name: string }) => sbg.request((c) => c.POST('/v1/sbg/operators', { body })),
+    /** A member of staff asks for an account; a second approves it (and is shown the first password) or declines it. */
+    askStaff: (body: { email: string; name: string }) => sbg.request((c) => c.POST('/v1/sbg/operators/proposals', { body })),
+    approveStaff: (proposalId: string) => sbg.request((c) => c.POST('/v1/sbg/operators/proposals/{proposalId}/approve', { params: { path: { proposalId } } })),
+    declineStaff: (proposalId: string, reason?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/operators/proposals/{proposalId}/decline', { params: { path: { proposalId } }, body: reason ? { reason } : {} })),
     revokeStaff: (operatorId: string) => sbg.request((c) => c.DELETE('/v1/sbg/operators/{operatorId}', { params: { path: { operatorId } } })),
 
     /**

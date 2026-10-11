@@ -79,6 +79,8 @@ export interface MailParams {
   'company-admin-added': { name: string; email: string; company: string; addedBy: string };
   'staff-account-added': { name: string; email: string; addedBy: string };
   'staff-two-step': { name: string; what: string; next: string; when: string };
+  /** Who is on staff changed, or somebody asked for it to: said to members of staff. */
+  'staff-account-news': { what: string; next: string; when: string };
   'access-removed': { email: string; what: string; removedBy: string; when: string };
   'fleet-code-issued': { company: string; when: string; byStaff: boolean };
   'fleet-code-due': { company: string; days: number };
@@ -495,7 +497,7 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
 
   'staff-account-added': {
     title: 'Network staff account added',
-    sentWhen: 'A member of staff (or the setup key) creates a staff account.',
+    sentWhen: 'A second member of staff approves a staff account that was asked for, or the setup key makes one (to the new address).',
     wired: true,
     sendLater: 48,
     sample: { name: 'Chloe Wanjiru', email: 'chloe@seebuyget.example', addedBy: 'Amina Otieno' },
@@ -532,6 +534,31 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
         { kind: 'button', label: 'Open the operator console', href: appUrl('console') },
       ],
       reason: 'You are getting this email because it is the sign-in of a SeeBuyGet staff account. We always tell you — this email cannot be turned off.',
+    }),
+  },
+
+  'staff-account-news': {
+    title: 'Staff account asked for, approved or declined',
+    sentWhen: 'A member of staff asks for a new staff account (to every other member of staff); a second approves or declines it (to the one who asked); or the setup key makes one alone (to everybody already on staff).',
+    wired: true,
+    // An alarm.
+    sendLater: 48,
+    sample: {
+      what: 'Amina Otieno asked for a network staff account for Chloe Wanjiru (chloe@seebuyget.example).',
+      next: 'Nothing was made, and nobody can sign in with it until a second member of staff approves it: Overview, then Network staff. Approve it only if you know this person and this is their address. If Amina Otieno did not ask for it, decline it and take their sign-in away: it may be in somebody else’s hands.',
+      when: '2026-10-11T09:12:00Z',
+    },
+    build: (p) => ({
+      subject: 'SeeBuyGet: a network staff account',
+      preheader: p.what,
+      blocks: [
+        { kind: 'heading', text: 'A network staff account' },
+        { kind: 'paragraph', text: p.what },
+        { kind: 'facts', rows: [['When', formatWhen(p.when)]] },
+        { kind: 'warning', title: 'What happens now', text: p.next },
+        { kind: 'button', label: 'Open the operator console', href: appUrl('console') },
+      ],
+      reason: 'You are getting this email because you have a SeeBuyGet staff account, and who is on staff decides who can approve what. We always tell you — this email cannot be turned off.',
     }),
   },
 

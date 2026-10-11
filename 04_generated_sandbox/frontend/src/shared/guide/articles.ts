@@ -349,12 +349,14 @@ export const ARTICLES: GuideArticle[] = [
       "Open the console at the address staff were given — it is not linked from the public site. Choose Network staff and type your email and password.",
       "Then the 6-digit code from your authenticator app. The first time, the console shows a QR code to scan with the app; the first code turns two-step sign-in on.",
       "Change the password you were given straight away: your name at the top, then Settings.",
-      "Add a colleague: Overview, then Network staff, then Add a person. Their password is shown once — hand it over in person. Somebody leaving: Take away. Their open sessions end at once; their decisions keep their name."
+      "Add a colleague: Overview, then Network staff, then Add a person, and ask for the account. Nothing is made yet. A second member of staff approves it in the same place; they are shown the first password, once, and hand it over in person.",
+      "Somebody leaving: Take away. Their open sessions end at once; their decisions keep their name. An account they asked for that nobody approved yet is dropped with it."
     ],
     notes: [
       "Lost your phone? Two other members of staff reset your two-step sign-in: Overview, then Network staff, then Reset two-step. One asks, a second approves; you are signed out and set it up again at your next sign-in.",
       "The console may only open from the networks SeeBuyGet staff work on.",
-      "Five wrong passwords lock your sign-in for 15 minutes, and for longer each time it happens again: an hour, six hours, then a day. While it is locked nobody gets in, not even with the right password. You get an email saying so. A new password you choose cannot be one that is easy to guess: a common word with a number on the end, your own name or email address, only digits, or a run like 12345678."
+      "Five wrong passwords lock your sign-in for 15 minutes, and for longer each time it happens again: an hour, six hours, then a day. While it is locked nobody gets in, not even with the right password. You get an email saying so. A new password you choose cannot be one that is easy to guess: a common word with a number on the end, your own name or email address, only digits, or a run like 12345678.",
+      "Why a new sign-in takes two of you: if one sign-in could make another alone, whoever held it could become a second person and approve their own decisions. Approve an account only if you know the person and the address is theirs. Everybody else on staff gets an email when one is asked for. If the colleague named in it did not ask, decline it and take their sign-in away. A request waits 7 days; you can take back your own, and decline somebody else’s with a reason they are told."
     ]
   },
   {
@@ -363,10 +365,11 @@ export const ARTICLES: GuideArticle[] = [
       "console"
     ],
     title: "The setup key",
-    summary: "The one shared operator key, for creating the first staff accounts and for scripts.",
+    summary: "The one shared operator key, for creating the first two staff accounts and for scripts.",
     notes: [
       "It has full operator rights but cannot say who is holding it, so the console marks your name “name not verified”.",
-      "Outside a sandbox it cannot take a decision that needs two people."
+      "Outside a sandbox it cannot take a decision that needs two people.",
+      "Outside a sandbox it makes a staff account only while fewer than two people can sign in: the first two, and the second again if one of two has left. After that, two members of staff add each new one. Everybody already on staff gets an email whenever it makes one."
     ]
   },
   {

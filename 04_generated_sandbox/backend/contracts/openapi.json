@@ -6997,10 +6997,108 @@
       "get": {
         "operationId": "Sbg.listOperators",
         "summary": "",
-        "description": "Every staff account that can still sign in.",
+        "description": "Every staff account that can still sign in, and the ones asked for that wait for a second member of staff.",
         "parameters": [],
         "responses": {
           "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffAccountList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/operators/proposals": {
+      "post": {
+        "operationId": "Sbg.proposeOperator",
+        "summary": "",
+        "description": "A member of staff ASKS for a new staff account. Nothing can sign in until a second member approves it.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAdminDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffProposalView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/operators/proposals/{proposalId}/approve": {
+      "post": {
+        "operationId": "Sbg.approveOperator",
+        "summary": "",
+        "description": "The second member of staff approves — never the one who asked — and is shown the first password, once.",
+        "parameters": [
+          {
+            "name": "proposalId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/operators/proposals/{proposalId}/decline": {
+      "post": {
+        "operationId": "Sbg.declineOperator",
+        "summary": "",
+        "description": "Decline an account somebody asked for, with the reason — or take back your own.",
+        "parameters": [
+          {
+            "name": "proposalId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffProposalDeclineDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
             "description": ""
           }
         }
@@ -29949,6 +30047,73 @@
           "createdAt",
           "twoStep"
         ]
+      },
+      "StaffProposalView": {
+        "type": "object",
+        "properties": {
+          "proposalId": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "askedBy": {
+            "type": "string"
+          },
+          "askedAt": {
+            "type": "string"
+          },
+          "until": {
+            "type": "string",
+            "description": "When it stops waiting. Asked for again after that, it waits again."
+          },
+          "mine": {
+            "type": "boolean",
+            "description": "Asked for by whoever is reading this: they can take it back, and cannot approve it."
+          }
+        },
+        "required": [
+          "proposalId",
+          "email",
+          "name",
+          "askedBy",
+          "askedAt",
+          "until",
+          "mine"
+        ]
+      },
+      "StaffAccountList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OperatorAccountView"
+            }
+          },
+          "waiting": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StaffProposalView"
+            }
+          }
+        },
+        "required": [
+          "items",
+          "waiting"
+        ]
+      },
+      "StaffProposalDeclineDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 300
+          }
+        }
       },
       "StaffLoginDto": {
         "type": "object",
