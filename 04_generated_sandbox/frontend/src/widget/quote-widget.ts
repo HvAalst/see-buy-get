@@ -4,6 +4,7 @@ import {
   headers,
   configProblem,
   errorLine,
+  invitationFor,
   parseAreas,
   priceLine,
   quoteRequest,
@@ -37,6 +38,10 @@ import {
 
 declare const __SBG_API_BASE__: string;
 const BAKED_API = typeof __SBG_API_BASE__ === 'string' ? __SBG_API_BASE__ : 'http://localhost:3000/v1';
+// The consumer site this build was made for (SBG_PUBLIC_URL), where a buyer signs up. Empty on a laptop build: the
+// invitation then shows only where the embed names a `site`.
+declare const __SBG_SITE_BASE__: string;
+const BAKED_SITE = typeof __SBG_SITE_BASE__ === 'string' ? __SBG_SITE_BASE__ : '';
 
 const CSS = `
 :host { display: inline-block; font: inherit; color: var(--sbg-fg, inherit); }
@@ -49,7 +54,7 @@ button { font: inherit; cursor: pointer; }
   color: var(--sbg-accent, #4c46e0); font-weight: 600;
 }
 .cta:hover { background: color-mix(in srgb, var(--sbg-accent, #4c46e0) 8%, transparent); }
-.cta:focus-visible, select:focus-visible, .where:focus-visible, .go:focus-visible, .link:focus-visible { outline: 2px solid var(--sbg-accent, #4c46e0); outline-offset: 2px; }
+.cta:focus-visible, select:focus-visible, .where:focus-visible, .go:focus-visible, .link:focus-visible, .follow a:focus-visible { outline: 2px solid var(--sbg-accent, #4c46e0); outline-offset: 2px; }
 .panel {
   margin-top: 10px; padding: 16px; min-width: 260px; max-width: 340px;
   border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
@@ -92,6 +97,17 @@ select, .where {
 .flag { margin-top: 10px; font-size: 12px; opacity: .75; }
 .err { margin-top: 12px; font-size: 13px; color: #a33a3a; }
 .link { background: none; border: 0; padding: 0; color: var(--sbg-accent, #4c46e0); text-decoration: underline; font-size: 13px; }
+/* The invitation under a price. Outlined, not filled: the filled button on this panel is the price, and this is what
+   comes after it — asked for once the buyer has their answer, never before. */
+.follow { margin-top: 14px; padding-top: 12px; border-top: 1px solid color-mix(in srgb, currentColor 14%, transparent); }
+.follow b { display: block; font-size: 14px; font-weight: 600; }
+.follow p { margin: 4px 0 10px; font-size: 13px; opacity: .75; }
+.follow a {
+  display: block; text-align: center; padding: 9px 14px; border-radius: var(--sbg-radius, 8px);
+  border: 1px solid var(--sbg-accent, #4c46e0); color: var(--sbg-accent, #4c46e0);
+  font-weight: 600; font-size: 14px; text-decoration: none;
+}
+.follow a:hover { background: color-mix(in srgb, var(--sbg-accent, #4c46e0) 8%, transparent); }
 `;
 
 const ATTRS = ['api', 'key', 'from-point', 'from-country', 'from-area', 'weight-kg', 'length-cm', 'width-cm', 'height-cm', 'size', 'label', 'locale', 'site', 'store'];
@@ -282,7 +298,31 @@ class SbgShippingQuote extends HTMLElement {
     if (this.error) out.append(this.message(this.error, true));
     else if (this.quote) out.append(...this.answer(this.quote));
     p.append(out);
+
+    // ONCE THE FEE IS ON SCREEN, and not before: the invitation to follow the parcel. Outside the live region on
+    // purpose — a screen reader should hear the price it asked for, not the price and then a pitch.
+    const follow = invitationFor({ quote: this.quote, error: this.error }, this.attrs(), BAKED_SITE);
+    if (follow) p.append(this.follow(follow));
     return p;
+  }
+
+  /** "Want to follow your parcel?" — what signing up gets them, and the link that does it. */
+  private follow(href: string): HTMLDivElement {
+    const box = document.createElement('div');
+    box.className = 'follow';
+    const title = document.createElement('b');
+    title.textContent = this.s.followTitle;
+    const body = document.createElement('p');
+    body.textContent = this.s.followBody;
+    const link = document.createElement('a');
+    link.href = href;
+    // A NEW TAB, always. The buyer is in the middle of somebody's checkout, and a link that takes them out of it
+    // costs the shop the sale it put this button there to make.
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = this.s.follow;
+    box.append(title, body, link);
+    return box;
   }
 
   private answer(q: QuoteResponse): Node[] {

@@ -86,7 +86,9 @@ A full build then writes `robots.txt`, `sitemap.xml` and `llms.txt` into `dist/`
 (`scripts/seo-files.mjs`). Two settings at BUILD time:
 
 - `SBG_PUBLIC_URL` — the site's own address (e.g. `https://seebuyget.com`). Without it there is no sitemap, no
-  canonical address and no link-preview image.
+  canonical address and no link-preview image — and the store widget (`dist/embed/sbg-quote.js`) has nowhere to
+  send a buyer who wants to follow their parcel, so it shows that invitation only on an embed that sets `site`.
+  The build says so.
 - `VITE_SBG_API` — where the build fetches the town pages from. A build that cannot reach it still makes the front
   page, with no town pages (it says so).
 

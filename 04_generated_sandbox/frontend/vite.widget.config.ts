@@ -26,9 +26,14 @@ declare const process: { env: Record<string, string | undefined> };
 // with the `api` attribute, but the paste-and-go path must not require them to know a URL.
 const API_BASE = `${(process.env.VITE_SBG_API ?? 'http://localhost:3000').replace(/\/+$/, '')}/v1`;
 
+// Where the apps are served from — the same SBG_PUBLIC_URL the sitemap is written for. The widget's invitation to
+// follow a parcel leads to the Send app there. Unset (a laptop build), it bakes nothing and the invitation shows only
+// on an embed that names its own `site`.
+const SITE_BASE = (process.env.SBG_PUBLIC_URL ?? '').trim().replace(/\/+$/, '');
+
 export default defineConfig({
   root: ROOT,
-  define: { __SBG_API_BASE__: JSON.stringify(API_BASE) },
+  define: { __SBG_API_BASE__: JSON.stringify(API_BASE), __SBG_SITE_BASE__: JSON.stringify(SITE_BASE) },
   build: {
     outDir: resolve(ROOT, 'dist/embed'),
     emptyOutDir: true,

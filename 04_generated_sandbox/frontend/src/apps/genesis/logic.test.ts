@@ -4,6 +4,7 @@ import {
   LADDER,
   cleanPhone,
   coverLine,
+  followLanding,
   codeReady,
   dimsBlocker,
   isOffLadder,
@@ -443,5 +444,33 @@ describe('FP6 — a load on the tracking page', () => {
     expect(freightWithdrawnLine({ at: 'x', by: 'carrier' }, t)).toBe('The carrier called this off on x.');
     expect(freightWithdrawnLine({ at: 'x', by: 'sender' }, t)).toBe('The sender withdrew this load on x.');
     expect(freightWithdrawnLine({ at: 'x', by: 'network' }, t)).toBe('The network withdrew this load on x.');
+  });
+});
+
+/**
+ * /send/?follow=1 — a buyer who followed the invitation under a price in a store's checkout widget.
+ *
+ * They land on My parcels; what stands in front of it is whatever this device needs, and the one sentence about the
+ * shop's number is shown only to somebody who still has to say who they are.
+ */
+describe('followLanding — arriving from a store’s checkout', () => {
+  const nobody = { session: false, knownPhone: false };
+  it('is nothing without the link, whatever else the address carries', () => {
+    expect(followLanding('', nobody)).toBeNull();
+    expect(followLanding('?track=T-1234', nobody)).toBeNull();
+    expect(followLanding('?invite=abc&parcel=PUD-1', nobody)).toBeNull();
+  });
+  it('somebody new is taken to signing up, and told which number', () => {
+    expect(followLanding('?follow=1', nobody)).toEqual({ following: true, authMode: 'enroll' });
+    // The link is its own word: no value, or beside other things, it still means the same.
+    expect(followLanding('?follow', nobody)).toEqual({ following: true, authMode: 'enroll' });
+    expect(followLanding('?utm_source=shop&follow=1', nobody)).toEqual({ following: true, authMode: 'enroll' });
+  });
+  it('a device that remembers a number is asked for its PIN, not to sign up again', () => {
+    expect(followLanding('?follow=1', { session: false, knownPhone: true })).toEqual({ following: true, authMode: 'login' });
+  });
+  it('somebody already signed in goes straight to their parcels: no sign-in is touched, nothing is explained', () => {
+    expect(followLanding('?follow=1', { session: true, knownPhone: true })).toEqual({ following: false });
+    expect(followLanding('?follow=1', { session: true, knownPhone: false })).toEqual({ following: false });
   });
 });

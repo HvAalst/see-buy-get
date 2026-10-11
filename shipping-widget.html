@@ -106,6 +106,7 @@
           from-country="KE"
           from-area="Nairobi"
           length-cm="30" width-cm="20" height-cm="10" weight-kg="0.6"
+          site="http://localhost:5180"
         ></sbg-shipping-quote>
       </div>
     </div>
@@ -143,6 +144,8 @@
       <tr><td>locale</td><td class="desc">BCP-47 tag for the money and date formats. Defaults to the visitor's.</td></tr>
       <tr><td>key</td><td class="desc">Your <b>publishable</b> key (<code>pk_…</code>), so the rate limit is yours rather than shared with everyone behind your visitors' IP. Optional. A secret <code>sk_</code> key here makes the widget refuse to render and tell your console to revoke it — by the time you read that, it is already in somebody's browser.</td></tr>
       <tr><td>api</td><td class="desc">Override the API root for one embed — staging, mostly.</td></tr>
+      <tr><td>site</td><td class="desc">Where the SeeBuyGet site for shoppers lives. The script you load already knows the one it was built for; set this only to point one embed somewhere else (on this page: the sandbox's front door). It is where the invitation below leads, and the link to your delivery record.</td></tr>
+      <tr><td>store</td><td class="desc">Your store id. With it, the panel carries a quiet link to your delivery record as we measured it.</td></tr>
     </tbody>
   </table>
   </div>
@@ -164,6 +167,24 @@
 </section>
 
 <section>
+  <h2>After the price: “Want to follow your parcel?”</h2>
+  <p>Nobody is texted about a parcel. So once your buyer has their price, the widget tells them how they
+  <em>will</em> hear about theirs: an invitation to sign up, under the price, that opens in a new tab and
+  leaves your checkout where it is.</p>
+  <ul class="plain">
+    <li><b>It appears only once a price is on screen</b> — never before, and not beside an error.</li>
+    <li><b>It is true because of one thing you already send us:</b> the buyer's mobile number on the
+      shipment. A parcel sent to a number shows in the account on that number, whether the buyer signed up
+      before you shipped or after. The invitation says so in its one line: sign up with the number you
+      give this shop.</li>
+    <li><b>It tells us nothing about your buyer.</b> The link carries no number, no basket and no price;
+      whoever follows it arrives as anybody would.</li>
+    <li><b>Its words are yours to change</b> like every other line: <code>followTitle</code>,
+      <code>followBody</code> and <code>follow</code> in <code>window.SBG_QUOTE_STRINGS</code>.</li>
+  </ul>
+</section>
+
+<section>
   <h2>How it behaves in somebody else's page</h2>
   <ul class="plain">
     <li><b>It cannot break your CSS and you cannot break it.</b> The widget renders in a shadow root, so
@@ -171,7 +192,7 @@
     <li><b>It inherits your typography.</b> A widget that shouts in its own house style looks bolted on, so
       it takes the page's font and colour. Three custom properties are the whole styling contract:
       <code>--sbg-accent</code>, <code>--sbg-radius</code>, <code>--sbg-fg</code>.</li>
-    <li><b>It brings no framework.</b> Plain DOM, about 4 kB over the wire — a merchant should not pay for
+    <li><b>It brings no framework.</b> Plain DOM, under 6 kB over the wire — a merchant should not pay for
       a UI runtime to render one price.</li>
     <li><b>Configuration mistakes go to the console, never to the shopper.</b> A misconfigured widget
       renders as though it were not on the page.</li>

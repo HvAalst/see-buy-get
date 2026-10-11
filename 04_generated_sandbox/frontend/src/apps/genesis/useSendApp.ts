@@ -34,7 +34,7 @@ import {
 } from './api';
 import { pickPhoneFromContacts, readSmsOtp } from '../../shared/device';
 import { classifyParcel } from './api';
-import { cleanPhone, codeReady, normalizeKey, parseDims, phoneReady, EMPTY_DIMS, type DimsForm } from './logic';
+import { cleanPhone, codeReady, followLanding, normalizeKey, parseDims, phoneReady, EMPTY_DIMS, type DimsForm } from './logic';
 import type { AnyTrackView, AuthResult, ClassifyView, ConsumerParcelView, InviteSummary, InviteView, MintResult, MyParcels, NetworkPoint, PersonRole, PersonView, QuoteView, SwitchResult } from './types';
 
 export type Screen = 'send' | 'track' | 'parcels' | 'account';
@@ -135,6 +135,8 @@ export interface SendState {
   inviteNote: string | null; // "Invite sent" / "Link copied" feedback
   inviteToken: string | null; // captured from a ?invite= landing
   invited: boolean; // the landing token validated → show the welcome
+  /** Arrived from a store's checkout widget (?follow=1) and not signed in: the sign-in says whose number to use. */
+  following: boolean;
   /** S28 — the on-device token→contact map (names/numbers NEVER sent to the server). */
   inviteMap: InviteEntry[];
   inviteSending: string | null; // the contact key (tel|name) currently being sent, for a per-row spinner
@@ -212,6 +214,7 @@ const INITIAL: SendState = {
   inviteNote: null,
   inviteToken: null,
   invited: false,
+  following: false,
   inviteMap: [],
   inviteSending: null,
   media: [],
@@ -250,6 +253,21 @@ export function useSendApp() {
       if (r.data?.valid) setState((s) => ({ ...s, screen: 'account', authMode: 'enroll', invited: true }));
       else if (r.data && !r.data.valid) setState((s) => ({ ...s, inviteToken: null }));
     });
+  }, []);
+
+  // Arriving from a store's checkout widget: ?follow=1 → My parcels, behind whatever sign-in this device needs. Read
+  // once and stripped, like every other link here: a refresh must not throw somebody back onto the sign-up they left.
+  useEffect(() => {
+    const landing = followLanding(globalThis.location?.search ?? '', { session: Boolean(readDid()), knownPhone: Boolean(readPhone()) });
+    if (!landing) return;
+    try {
+      const url = new URL(location.href);
+      url.searchParams.delete('follow');
+      history.replaceState(null, '', url.toString());
+    } catch {
+      /* a browser that refuses the rewrite still lands on the right screen */
+    }
+    setState((s) => ({ ...s, screen: 'parcels', following: landing.following, ...(landing.authMode ? { authMode: landing.authMode } : {}) }));
   }, []);
 
   /**
@@ -375,7 +393,7 @@ export function useSendApp() {
     mintEpoch.current++;
     // Keep the public wizard scaffolding AND a not-yet-redeemed invite token (resetting the wizard must not
     // consume it — only signOut deliberately drops it).
-    setState((s) => ({ ...INITIAL, screen: 'send', points: s.points, pointsState: s.pointsState, recent: s.recent, identity: s.identity, authPhone: s.authPhone, inviteToken: s.inviteToken, invited: s.invited }));
+    setState((s) => ({ ...INITIAL, screen: 'send', points: s.points, pointsState: s.pointsState, recent: s.recent, identity: s.identity, authPhone: s.authPhone, inviteToken: s.inviteToken, invited: s.invited, following: s.following }));
   }, []);
 
   /* ------------------------------------------------------------------ track */
@@ -530,6 +548,7 @@ export function useSendApp() {
       inviteSending: null,
       inviteToken: null, // the invite (if any) was credited on the server at enrol; done with it now
       invited: false,
+      following: false, // they are in: the list itself says what shows up there
     }));
     setDid(data.personId); // triggers restore() → loadParcels()
   }, []);
@@ -694,6 +713,7 @@ export function useSendApp() {
         authError: error,
         inviteToken: null, // a stale invite must not survive sign-out and credit the next person to enrol
         invited: false,
+        following: false,
         invites: null,
         invitesState: 'idle',
         inviteMap: [], // the next person re-hydrates their own map from device storage

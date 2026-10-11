@@ -1,5 +1,4 @@
-import {
-  siteBase, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   siteBase,
   apiBase,
@@ -7,7 +6,9 @@ import {
   configProblem,
   EN,
   errorLine,
+  followLink,
   headers,
+  invitationFor,
   money,
   parseAreas,
   priceLine,
@@ -246,5 +247,76 @@ describe('siteBase', () => {
     // than no chip. The widget requires BOTH before it renders one.
     expect(siteBase({})).toBe('');
     expect(siteBase({ site: '   ' })).toBe('');
+  });
+});
+
+/**
+ * THE INVITATION TO FOLLOW A PARCEL — shown once the buyer has their price, and only when it leads somewhere.
+ *
+ * A receiver is not texted. So the one place a buyer can be told how they will hear about their parcel is here, on the
+ * shop's page; and what the link must never be is a link to nowhere, or a link that says anything about them.
+ */
+describe('followLink — where a buyer signs up to follow their parcel', () => {
+  it('leads to the Send app on the site this build was made for', () => {
+    expect(followLink(attrs(), 'https://seebuyget.example')).toBe('https://seebuyget.example/send/?follow=1');
+    expect(followLink(attrs(), 'https://seebuyget.example/')).toBe('https://seebuyget.example/send/?follow=1');
+  });
+
+  it('lets one embed name its own site, which wins over the baked one', () => {
+    expect(followLink(attrs({ site: 'https://staging.seebuyget.example/' }), 'https://seebuyget.example')).toBe('https://staging.seebuyget.example/send/?follow=1');
+    expect(followLink(attrs({ site: 'http://localhost:5180' }), '')).toBe('http://localhost:5180/send/?follow=1');
+  });
+
+  it('is nothing at all without a site: a button to nowhere on a checkout is worse than no button', () => {
+    expect(followLink(attrs(), '')).toBeNull();
+    expect(followLink(attrs({ site: '   ' }), '  ')).toBeNull();
+    // …and a thing that is not a web address is not a site: no javascript:, no bare host, no path.
+    expect(followLink(attrs({ site: 'javascript:alert(1)' }), '')).toBeNull();
+    expect(followLink(attrs({ site: 'seebuyget.example' }), '')).toBeNull();
+    expect(followLink(attrs({ site: '/send' }), '')).toBeNull();
+    expect(followLink(attrs({ site: 'https://' }), '')).toBeNull();
+  });
+
+  it('carries nothing about the buyer, the shop, the parcel or the price', () => {
+    const link = followLink(attrs({ site: 'https://seebuyget.example', store: 'ven_123', key: 'pk_live_abc', fromPoint: 'pt_9', weightKg: '2' }), '')!;
+    expect(link).toBe('https://seebuyget.example/send/?follow=1');
+    expect([...new URL(link).searchParams.keys()]).toEqual(['follow']);
+  });
+});
+
+describe('the invitation’s words', () => {
+  it('says what signing up gets them, and which number to use', () => {
+    expect(EN.followTitle).toBe('Want to follow your parcel?');
+    expect(EN.followBody).toContain('the phone number you give this shop');
+    expect(EN.follow).toBe('Sign up to follow it');
+    // Nothing in it promises a text: nobody is texted about a parcel.
+    for (const line of [EN.followTitle, EN.followBody, EN.follow]) expect(line).not.toMatch(/text|sms|message/i);
+  });
+
+  it('is in the Swahili pack, and is the merchant’s to reword like every other line', () => {
+    for (const key of ['followTitle', 'followBody', 'follow'] as const) expect(packFor('sw')[key]).toBeTruthy();
+    expect(strings({ follow: 'Track my order' }, 'sw').follow).toBe('Track my order');
+    // An empty override does not blank it: the invitation is part of the widget, not a line a typo can remove.
+    expect(strings({ follow: '  ' }).follow).toBe(EN.follow);
+  });
+});
+
+describe('invitationFor — once the shipping fee has been calculated, and not before', () => {
+  const SITE = 'https://seebuyget.example';
+  const LINK = 'https://seebuyget.example/send/?follow=1';
+  it('is not shown before a price: not on the closed button, not on the open panel, not while one is being worked out', () => {
+    expect(invitationFor({ quote: null, error: null }, attrs(), SITE)).toBeNull();
+    expect(invitationFor({ quote: undefined, error: null }, attrs(), SITE)).toBeNull();
+  });
+  it('is shown with the price', () => {
+    expect(invitationFor({ quote: quote(), error: null }, attrs(), SITE)).toBe(LINK);
+  });
+  it('is not shown beside a refusal: a pitch to somebody whose question was not answered', () => {
+    expect(invitationFor({ quote: null, error: 'We could not find that place.' }, attrs(), SITE)).toBeNull();
+    expect(invitationFor({ quote: quote(), error: 'We could not reach the shipping service.' }, attrs(), SITE)).toBeNull();
+  });
+  it('is not shown, price or no price, when there is nowhere to lead', () => {
+    expect(invitationFor({ quote: quote(), error: null }, attrs(), '')).toBeNull();
+    expect(invitationFor({ quote: quote(), error: null }, attrs({ site: 'http://localhost:5180' }), '')).toBe('http://localhost:5180/send/?follow=1');
   });
 });

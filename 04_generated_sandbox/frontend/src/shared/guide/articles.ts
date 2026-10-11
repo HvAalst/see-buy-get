@@ -358,6 +358,25 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "follow-shop-order",
+    apps: [
+      "send",
+      "vendor"
+    ],
+    title: "Following something you bought from a shop",
+    summary: "We do not text you about a parcel. Sign up with the phone number you gave the shop, and the parcel shows in your account.",
+    steps: [
+      "On the shop’s page, once you have the delivery price, tap “Sign up to follow it”. It opens the Send app in a new tab; your checkout stays where it is.",
+      "Type your phone number — the same one you give the shop — then the code we send you, and choose a 5-digit PIN. The first time, you also add a recovery email.",
+      "Open My parcels. When the shop has sent your parcel it is there: where it is now, when it is ready, and the code to show at the counter."
+    ],
+    notes: [
+      "It does not matter which comes first. Sign up before the shop sends it and it appears when they do; sign up afterwards and it is already waiting.",
+      "Nothing there? Check which number the shop has for you. A parcel sent to another number is in the account on that number, not in yours.",
+      "For a store: the invitation is part of the shipping widget and appears under the price by itself. It works because your shipment carries the buyer’s mobile number."
+    ]
+  },
+  {
     id: "console-staff",
     apps: [
       "console"

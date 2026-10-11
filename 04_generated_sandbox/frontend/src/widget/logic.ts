@@ -93,6 +93,34 @@ export function siteBase(attrs: WidgetAttrs): string {
 }
 
 /**
+ * WHERE A BUYER SIGNS UP TO FOLLOW THEIR PARCEL — the Send app on the consumer site, or nowhere.
+ *
+ * A receiver is not texted: a text carries a sign-in code and nothing about a parcel. So the one moment a buyer can be
+ * told how they WILL hear about theirs is here, on the shop's own page, when they have just been shown what delivery
+ * costs. A parcel a store sends to a phone number belongs to whoever holds an account on that number, whether they
+ * signed up before it was sent or after — which is what makes the invitation true.
+ *
+ * The site is the merchant's `site` attribute, else the address this build was made for. With neither there is no
+ * link, and so no invitation: a button to nowhere on somebody's checkout is worse than no button.
+ *
+ * It carries NOTHING about the buyer, the basket or the price. Whoever follows it arrives as anybody would.
+ */
+export function followLink(attrs: WidgetAttrs, bakedSite: string): string | null {
+  const site = siteBase(attrs) || (bakedSite ?? '').trim().replace(/\/+$/, '');
+  return /^https?:\/\/[^/]/i.test(site) ? `${site}/send/?follow=1` : null;
+}
+
+/**
+ * WHEN the invitation is shown: once a price is on screen, and not before.
+ *
+ * Asked for with nothing calculated it is a sign-up form in the way of a price; beside an error it is a pitch to
+ * somebody whose question was not answered. So it needs a quote, no error — and somewhere to lead.
+ */
+export function invitationFor(panel: { quote: unknown; error: string | null }, attrs: WidgetAttrs, bakedSite: string): string | null {
+  return panel.quote && !panel.error ? followLink(attrs, bakedSite) : null;
+}
+
+/**
  * What the merchant still has to put on the tag, as a sentence a developer reads in their console.
  *
  * Configuration errors are shown to the DEVELOPER, never to the buyer: a shopper who sees "from-area is
@@ -177,6 +205,10 @@ export interface Strings {
   offline: string;
   retry: string;
   close: string;
+  /** The invitation under a price: its heading, what signing up gets them, and the words on the link. */
+  followTitle: string;
+  followBody: string;
+  follow: string;
 }
 
 export const EN: Strings = {
@@ -200,6 +232,10 @@ export const EN: Strings = {
   offline: 'We could not reach the shipping service. Check your connection.',
   retry: 'Try again',
   close: 'Close',
+  // Said as what THEY get, and with the one thing they have to do right: the same number they give the shop.
+  followTitle: 'Want to follow your parcel?',
+  followBody: 'Sign up with the phone number you give this shop. Once it is sent, your parcel shows in your account: where it is, and when to collect it.',
+  follow: 'Sign up to follow it',
 };
 
 /**
@@ -237,6 +273,9 @@ export const PACKS: Record<string, Partial<Strings>> = {
     offline: 'Hatukuweza kufikia huduma ya usafirishaji. Angalia mtandao wako.',
     retry: 'Jaribu tena',
     close: 'Funga',
+    followTitle: 'Unataka kufuatilia kifurushi chako?',
+    followBody: 'Jisajili kwa nambari ya simu utakayompa muuzaji huyu. Kikishatumwa, kifurushi chako kitaonekana kwenye akaunti yako: kilipo, na lini ukichukue.',
+    follow: 'Jisajili ili ukifuatilie',
   },
 };
 

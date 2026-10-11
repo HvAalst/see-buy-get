@@ -84,6 +84,11 @@ if (!wanted.length) {
     process.exit(r.status ?? 1);
   }
   console.log('built 1 embed: sbg-quote.js');
+  // Said at build time, because nothing says it afterwards: with no site address in it, the widget's invitation to
+  // follow a parcel has nowhere to lead and simply does not appear — which on a checkout looks exactly like finished.
+  if (!(process.env.SBG_PUBLIC_URL ?? '').trim()) {
+    console.log('embed: no site address in this build, so the widget invites a buyer to follow their parcel only where the embed sets `site` — set SBG_PUBLIC_URL to the site\'s address');
+  }
 
   // The public site's robots.txt and sitemap.xml, from the pages the build actually prerendered.
   const seo = spawnSync(process.execPath, [resolve(ROOT, 'scripts/seo-files.mjs')], { cwd: ROOT, env: process.env, stdio: 'inherit' });

@@ -480,3 +480,20 @@ export function coverLine(q: QuoteView, t: Translate): string | null {
   if (free > 0) return t('send.logic.coverFree', { amount: money(free) });
   return t('send.logic.coverNone');
 }
+
+/**
+ * `/send/?follow=1` — where a store's checkout widget sends a buyer who wants to follow their parcel.
+ *
+ * The buyer has just been shown what delivery costs, on a shop's page, and nothing has been sent yet. What they need
+ * is an account on the number they are about to give that shop: a parcel a store sends to a number shows in the
+ * account on it, whether the account came first or the parcel did.
+ *
+ * So the link lands on My parcels, and what stands in front of it depends on the device: a session → the list itself;
+ * a number this device remembers → its PIN; nobody → signing up. `following` is what puts the one sentence about the
+ * shop's number above the form. Null when the address carries no such link.
+ */
+export function followLanding(search: string, device: { session: boolean; knownPhone: boolean }): { following: boolean; authMode?: 'enroll' | 'login' } | null {
+  if (!new URLSearchParams(search).has('follow')) return null;
+  if (device.session) return { following: false };
+  return { following: true, authMode: device.knownPhone ? 'login' : 'enroll' };
+}

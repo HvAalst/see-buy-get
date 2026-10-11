@@ -33,6 +33,8 @@ export function AuthScreen({ state, actions }: AuthScreenProps) {
   return (
     <div class="scr">
       {state.invited ? <Note tone="ok" icon="person" title={t('send.auth.invitedTitle')} detail={t('send.auth.invitedDetail')} /> : null}
+      {/* From a shop's checkout: the ONE thing to get right is which number — the one the shop is given. */}
+      {state.following ? <Note tone="ok" icon="box" title={t('send.auth.followTitle')} detail={t('send.auth.followDetail')} /> : null}
 
       {state.authMode === 'login' ? (
         <LoginView state={state} actions={actions} busy={busy} />

@@ -1098,6 +1098,8 @@ export const en = {
   // Auth screen (login + enroll).
   'send.auth.invitedTitle': 'You\'ve been invited to SeeBuyGet',
   'send.auth.invitedDetail': 'Join to send, track and collect parcels.',
+  'send.auth.followTitle': 'Follow your parcel',
+  'send.auth.followDetail': 'Use the phone number you give the shop. When the shop sends your parcel it shows here: where it is, and your code to collect it.',
   'send.auth.aloudLogin': 'Enter your phone number and your five digit PIN to see your parcels.',
   'send.auth.aloudPhone': 'Enter your phone number and we will send you a code.',
   'send.auth.aloudCode': 'Type the code we sent to your phone.',

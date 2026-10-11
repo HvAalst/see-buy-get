@@ -222,4 +222,48 @@ describe('a parcel is kept by the account, over the wire', () => {
     expect(now).not.toBe(code);
     expect(everything).not.toContain(`"${now}"`);
   });
+
+  /**
+   * WHAT THE STORE'S WIDGET PROMISES A BUYER — "sign up with the phone number you give this shop; once it is sent, your
+   * parcel shows in your account".
+   *
+   * Nobody is texted about a parcel, so this is how a buyer comes to hear of theirs, and the invitation is made BEFORE
+   * the order exists: the buyer is still at the checkout. Both orders of events have to hold — the account first and
+   * then the parcel, and the parcel first and then the account — for a store's order as for a parcel from a counter.
+   */
+  it('a store’s order shows in the buyer’s account: signed up at the checkout before anything was sent, or only afterwards', async () => {
+    const origin = await aShop('Store-side PFA', 'FollowNorth');
+    const dest = await aShop('Buyer-side PFA', 'FollowSouth');
+    // A store's order is routed when it is made, so the road between the two shops has to exist first.
+    await http().post('/v1/sbg/corridors').set(operator).send({ name: 'FollowNorth → FollowSouth', originZone: 'FollowNorth', destZone: 'FollowSouth' }).expect(201);
+    const store =(await http().post('/v1/sbg/vendors').set(operator).send({ name: `Follow Store ${digits()}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body.vendorId as string;
+    const asked = await http().post(`/v1/sbg/vendors/${store}/top-up`).set(operator).send({ amount: 50 }).expect(201);
+    await http().post(`/v1/rails/funding/${asked.body.fundingId}/simulate`).set(operator).send({ providerRef: `MPX${digits()}`, amount: 50 }).expect(201);
+    const orderFor = async (buyerMobile: string) =>
+      (await http().post('/v1/sbg/inbound/orders').set(operator).send({ vendorId: store, originPudoDid: origin, destPudoDid: dest, buyerMobile, size: 'M', contentPhotoRef: 'content.jpg' }).expect(201)).body.parcel.parcelId as string;
+
+    // THE ACCOUNT FIRST: the buyer follows the invitation while they are still at the checkout. Nothing is theirs yet.
+    const EARLY = `+2547${digits()}4`;
+    const early = await signUp(EARLY);
+    expect(await myParcels(early)).toMatchObject({ sent: [], received: [] });
+    const first = await orderFor(EARLY);
+    expect((await myParcels(early)).received.map((p) => p.parcelId)).toEqual([first]);
+    const opened = (await http().get(`/v1/sbg/identity/parcels/${first}`).set(bearer(early)).expect(200)).body;
+    expect(opened).toMatchObject({ parcelId: first, relation: 'received' });
+
+    // THE PARCEL FIRST: a buyer who signs up only after the store sent it finds it waiting.
+    const LATE = `+2547${digits()}5`;
+    const second = await orderFor(LATE);
+    expect((await myParcels(early)).received.map((p) => p.parcelId)).toEqual([first]);
+    const late = await signUp(LATE);
+    expect((await myParcels(late)).received.map((p) => p.parcelId)).toEqual([second]);
+
+    // Each sees their own and cannot open the other's: the number given to the shop is the whole of the link.
+    await http().get(`/v1/sbg/identity/parcels/${second}`).set(bearer(early)).expect(404);
+    await http().get(`/v1/sbg/identity/parcels/${first}`).set(bearer(late)).expect(404);
+    // And a buyer who gave the shop ANOTHER number than the one they signed up with sees nothing — which is why the
+    // invitation says which number, in its one line.
+    await orderFor(`+2547${digits()}6`);
+    expect((await myParcels(early)).received.map((p) => p.parcelId)).toEqual([first]);
+  });
 });
