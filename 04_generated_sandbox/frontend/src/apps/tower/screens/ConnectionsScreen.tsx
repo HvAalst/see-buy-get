@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
-import { adviserSays, bounceListenWords, checkSays, countWords, mailAddressWords, mailSays, momentWords, pushSays, routerSays, waitingWords, type Connections, type RouterCheck } from '../connections';
+import { adviserSays, bounceListenWords, checkSays, countWords, mailAddressWords, mailSays, momentWords, pushSays, routerSays, smsCountryWords, smsSays, waitingWords, type Connections, type RouterCheck } from '../connections';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
 /**
  * WHAT THIS SERVER IS CONNECTED TO — the routing server and the adviser behind a fleet's planning panel, and the
- * email and push behind everybody.
+ * email, the push and the text that carries a code behind everybody.
  *
  * Both are set where the server runs, and until this the only place that said so was a README. A fleet's office is
  * told what it needs where it works (its plan says which distances it was made on); whether the service behind that
@@ -48,6 +48,7 @@ export function ConnectionsScreen({ actions }: { state: TowerState; actions: Tow
   const adviser = view ? adviserSays(view.adviser, view.since, t) : null;
   const mail = view ? mailSays(view.mail, view.sandbox, view.since, t) : null;
   const push = view ? pushSays(view.push, view.sandbox, view.since, t) : null;
+  const sms = view ? smsSays(view.sms, view.sandbox, view.since, t) : null;
   const checked = check ? checkSays(check, t) : null;
 
   return (
@@ -217,6 +218,50 @@ export function ConnectionsScreen({ actions }: { state: TowerState; actions: Tow
               </div>
             </dl>
             <p class="chint">{t('tower.conn.push.where')}</p>
+          </section>
+
+          <section class="cons__panel">
+            <div class="cons__panelhead">
+              <span class="cons__panelt">{t('tower.conn.sms.title')}</span>
+              <span class={`ctag ctag--${sms!.tone}`}>{sms!.tag}</span>
+            </div>
+            <p class="cons__lede">{sms!.line}</p>
+            <dl class="cons__facts">
+              <div class="cons__fact">
+                <dt class="cons__factk">{t('tower.conn.fact.leaves')}</dt>
+                <dd class="cons__factv">{t(view.sms.sends ? 'tower.conn.fact.leavesYes' : 'tower.conn.fact.leavesNo')}</dd>
+              </div>
+              <div class="cons__fact">
+                <dt class="cons__factk">{t('tower.conn.fact.smsAccount')}</dt>
+                <dd class="cons__factv">{t(view.sms.accountSet ? 'tower.conn.fact.keySet' : 'tower.conn.fact.keyNone')}</dd>
+              </div>
+              <div class="cons__fact">
+                <dt class="cons__factk">{t('tower.conn.fact.smsCredential')}</dt>
+                <dd class="cons__factv">{t(view.sms.credential ? `tower.conn.fact.smsCredential.${view.sms.credential}` : 'tower.conn.fact.keyNone')}</dd>
+              </div>
+              <div class="cons__fact">
+                <dt class="cons__factk">{t('tower.conn.fact.smsSender')}</dt>
+                <dd class="cons__factv">{t(view.sms.sender ? `tower.conn.fact.smsSender.${view.sms.sender}` : 'tower.conn.fact.keyNone')}</dd>
+              </div>
+              <div class="cons__fact">
+                <dt class="cons__factk">{t('tower.conn.fact.smsCountries')}</dt>
+                <dd class="cons__factv">{smsCountryWords(view.sms, t)}</dd>
+              </div>
+              <div class="cons__fact">
+                <dt class="cons__factk">{t('tower.conn.fact.written')}</dt>
+                <dd class="cons__factv">{countWords(view.sms.written, view.sms.failed, t)}</dd>
+              </div>
+              {view.sms.countries.length || view.sms.fenced > 0 ? (
+                <div class="cons__fact">
+                  <dt class="cons__factk">{t('tower.conn.fact.smsFenced')}</dt>
+                  <dd class="cons__factv">{view.sms.fenced}</dd>
+                </div>
+              ) : null}
+            </dl>
+            <p class="chint">
+              {t('tower.conn.sms.where')}
+              {view.sandbox && !view.sms.sends ? ` ${t('tower.conn.sms.whereKept')}` : ''}
+            </p>
           </section>
 
           <p class="chint">{t('tower.conn.since', { since: momentWords(view.since) })}</p>

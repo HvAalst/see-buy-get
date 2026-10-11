@@ -157,7 +157,8 @@ export const ARTICLES: GuideArticle[] = [
       "Signing in on another phone signs this one out. If you are signed out and it was not you, choose a new PIN.",
       "Starting a shift asks for your PIN again, so nobody can start one on a phone you left signed in.",
       "Your PIN opens your account only on a phone or browser that has shown it holds your number. Nobody can try your PIN from anywhere else.",
-      "Replacing a forgotten PIN on a phone or browser you have not signed in on before asks for two codes: the one to your number, and one to the recovery email on your account. Type that email address and we send it a code. On a phone you have signed in on before, the code to your number is enough."
+      "Replacing a forgotten PIN on a phone or browser you have not signed in on before asks for two codes: the one to your number, and one to the recovery email on your account. Type that email address and we send it a code. On a phone you have signed in on before, the code to your number is enough.",
+      "If the app says it could not send the code, nothing is wrong with your number and nothing was counted against you. Wait a little and ask for the code again."
     ]
   },
   {
@@ -262,7 +263,8 @@ export const ARTICLES: GuideArticle[] = [
       "If your account was moved without your PIN, by a code to your email or by SeeBuyGet staff, the collection codes of your parcels are changed and are hidden for 24 hours after the move. The parcel screen says from when the code shows. The free collection time of a waiting parcel does not run out in those hours.",
       "For 24 hours after any number change you cannot give a parcel up or name somebody else to collect it: those two cannot be taken back. When a number change is undone, the collection codes of your parcels are changed, so whoever had the account in between holds codes that open nothing.",
       "After your number changes, your PIN works on the phone or browser you changed it on. Every other one asks for a code to the new number first.",
-      "We write to your recovery email, and tell you in the app, whenever your PIN is replaced or starts working on a new phone or browser. If it was not you, replace your PIN straight away: that shuts out every other phone and browser."
+      "We write to your recovery email, and tell you in the app, whenever your PIN is replaced or starts working on a new phone or browser. If it was not you, replace your PIN straight away: that shuts out every other phone and browser.",
+      "If the app says it could not send the code, nothing is wrong with your number and nothing was counted against you. Wait a little and ask for the code again."
     ]
   },
   {
@@ -329,7 +331,8 @@ export const ARTICLES: GuideArticle[] = [
       "New here: type your phone number, type the code we send you, then choose a 5-digit PIN.",
       "Coming back: tap “I already have an account” and type your phone and PIN.",
       "A phone or browser you have not signed in on before asks for a code first: we send it to your number, you type it once, and from then on your PIN works there. Your PIN is not changed by it.",
-      "Forgot your PIN? Sign in with a code again, and choose a new PIN. On a phone or browser that is new to your account we also ask for your recovery email, and send it a code."
+      "Forgot your PIN? Sign in with a code again, and choose a new PIN. On a phone or browser that is new to your account we also ask for your recovery email, and send it a code.",
+      "If the app says it could not send the code, nothing is wrong with your number and nothing was counted against you. Wait a little and ask for the code again."
     ]
   },
   {
@@ -446,19 +449,20 @@ export const ARTICLES: GuideArticle[] = [
     apps: [
       "console"
     ],
-    title: "Connections: routing, the adviser, email and push",
-    summary: "The Connections screen says whether the services this server leans on are set up and answering: the routing server and the adviser behind the fleets’ planning, and email and push for everybody.",
+    title: "Connections: routing, the adviser, email, push and texts",
+    summary: "The Connections screen says whether the services this server leans on are set up and answering: the routing server and the adviser behind the fleets’ planning, and email, push and the text that carries a code for everybody.",
     steps: [
       "Open Connections, under Setup. Only SeeBuyGet staff see it.",
       "Read the word beside each service: Not set up, Set up and not asked yet, Answering, or Not answering. The line under it says what the last plan, or the last office to ask, met.",
       "For the routing server, tap Check it now. It asks for the road distance between a fleet’s depot and a place a little way off it, and says what came back.",
-      "For Email and for Push to a phone, read whether anything leaves this server at all. Kept, not sent means each one is written and kept on the server, and reaches nobody."
+      "For Email and for Push to a phone, read whether anything leaves this server at all. Kept, not sent means each one is written and kept on the server, and reaches nobody.",
+      "For Text messages, read the same. On a sandbox, Kept, not sent is as it should be: a code is shown on the screen that asked for it. Anywhere else the word is No code can be sent, in red: a text is the only way a code reaches a phone, so nobody can sign up, confirm a new phone or replace a PIN until Twilio is set up."
     ],
     notes: [
       "A routing server that is not set up, or not answering, stops nothing. Each day’s plan is made on estimated distances instead, and says so to the office that made it.",
       "If a check answers with a distance that cannot be right for two places that close together, the routing server may hold another country’s map.",
       "The adviser is not checked from here, because every question to it is paid for. What the last office’s question met says whether it is answering.",
-      "All four are set where the server runs, not on this screen. The routing server’s address is shown without anything secret in it. The adviser’s key, the mail provider’s token and the private push key are never shown. Nobody’s email address is shown either: the last email is named by what it was, not by who it was for.",
+      "All five are set where the server runs, not on this screen. The routing server’s address is shown without anything secret in it. The adviser’s key, the mail provider’s token, the private push key and everything of Twilio’s are never shown. Nobody’s email address is shown either: the last email is named by what it was, not by who it was for.",
       "What each service last met, and the counts of emails and pushes, are kept only since the server started. After a restart, check the routing server again.",
       "Kept, not sent is how a sandbox is meant to run. On a server that real people rely on it is said in red: reset codes, invitations and notices are written and reach nobody, and no phone is woken.",
       "Email is sent only when the server was started with both the provider’s token and its sending address, each copied from the provider account’s API page. A token on its own sends nothing, and the screen says what is missing or wrong with the address.",
@@ -472,7 +476,9 @@ export const ARTICLES: GuideArticle[] = [
       "Given up on counts the emails that will not be sent: the provider turned that one email down, it may already have gone, or it waited too long to be worth sending. The person it was for was not told. Under the line about the last email, the screen says whether that email is kept or will not be sent again.",
       "Bounce notices says whether this server hears of email that comes back. It listens only when ZEPTOMAIL_WEBHOOK_KEY is set to the authentication key of a webhook you add at the provider, for hard and soft bounces, pointed at /v1/mail/provider/events on this server’s public address. A notice is taken only when it is signed with that key.",
       "An address email came back from for good is not written to again, and its owner is told in Settings in their own app. It is written to again once they confirm it with a code, and a code is always sent. After a soft bounce, such as a full mailbox, the address is left alone for a day. The screen counts the addresses not being written to. It never shows an address.",
-      "If signed bounce notices are being refused, the screen says how many and why, until one is taken again. Refused because the signature does not match means the key set here is not the one on the provider’s webhook. Requests with no signature are only counted: the address is public, and anything can find it. If the provider’s own notices are counted there, its webhook has no authentication key. No notice has yet come from the real provider, so watch the first one here."
+      "If signed bounce notices are being refused, the screen says how many and why, until one is taken again. Refused because the signature does not match means the key set here is not the one on the provider’s webhook. Requests with no signature are only counted: the address is public, and anything can find it. If the provider’s own notices are counted there, its webhook has no authentication key. No notice has yet come from the real provider, so watch the first one here.",
+      "A text that carries a code is sent once. When Twilio does not take it, the person is told it could not be sent and asks again; that try is not counted against their number. The screen says whose the failure was: Refused by the provider is the account’s to put right, One number turned down is a number that cannot receive a text. Handed to Twilio is not delivered: whether a text reached the phone is not heard of here.",
+      "Countries a code is texted to shows the dial codes set on the server. With none set, a code is texted to a number in any country, and every text is paid for. Set the countries you serve on the server, and switch on the same ones, and no others, under SMS Geo Permissions in Twilio."
     ]
   },
   {

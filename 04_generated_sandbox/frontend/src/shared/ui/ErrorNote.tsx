@@ -59,6 +59,9 @@ const SAY: Record<string, string> = {
   'error.pin_guessable': 'That PIN is too easy to guess. Avoid mostly one digit, a run like 12345 or 13579, and a pattern like 12312.',
   'error.role_not_held': 'You cannot open that here.',
   'error.phone_invalid': 'That phone number is not right. Check it.',
+  // The server's own words for these two, so that a screen which also shows the detail does not say it twice.
+  'error.phone_not_served': 'We cannot send a code to a number in that country yet.',
+  'error.sms_not_sent': 'We could not send the code just now. Try again in a little while.',
   'error.verify_phone': 'Verify your phone first — we will send you a code.',
   'error.verify_email': 'Confirm your email first — type the code we sent to it.',
   'error.bag_full': 'That bag is full.',

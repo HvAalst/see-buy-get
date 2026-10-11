@@ -221,7 +221,8 @@ function EnrollView({ state, actions, busy }: { state: SendState; actions: SendA
     <>
       <h1 class="scr__title">{t('send.auth.title')}</h1>
       <p class="scr__lede">{t('send.auth.lede')}</p>
-      {state.authError ? <ErrorNote error={state.authError} /> : null}
+      {/* With the server's own words: "use a mobile number" and "wait 40s" are the part somebody can act on. */}
+      {state.authError ? <ErrorNote error={state.authError} showDetail /> : null}
       <Card>
         <PhoneField id="enroll-phone" state={state} actions={actions} hint="send" />
       </Card>

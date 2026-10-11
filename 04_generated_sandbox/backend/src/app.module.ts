@@ -8,6 +8,7 @@ import { DidModule } from './foundation/did/did.module';
 import { EntityModule } from './foundation/entity/entity.module';
 import { HandleModule } from './foundation/handle/handle.module';
 import { MailModule } from './foundation/mail/mail.module';
+import { SmsModule } from './foundation/sms/sms.module';
 import { PresenceModule } from './foundation/presence/presence.module';
 import { InterestModule } from './foundation/interest/interest.module';
 import { BooksModule } from './foundation/books/books.module';
@@ -43,6 +44,7 @@ import { SseModule } from './modules/sse/sse.module';
     LedgerModule,
     DidModule,
     MailModule,
+    SmsModule,
     EntityModule,
     HandleModule,
     PresenceModule,

@@ -1,4 +1,5 @@
 import { MailService } from './foundation/mail/mail.service';
+import { SmsService } from './foundation/sms/sms.service';
 import { FleetMoveService } from './modules/pudo/fleet-move.service';
 import { FleetOfferService } from './modules/pudo/fleet-offer.service';
 import { AccountRecoveryService } from './modules/pudo/account-recovery.service';
@@ -26,6 +27,8 @@ describe('the application boots', () => {
     expect(moduleRef).toBeDefined();
     // Mail is injected @Optional (so hand-listed specs keep working) — which is exactly why the real graph must have it.
     expect(moduleRef.get(MailService)).toBeDefined();
+    // And the text that carries a code: optional on the controller, and without it no code leaves the server.
+    expect(moduleRef.get(SmsService)).toBeDefined();
     // The same for moving a driver between fleets: optional on the controller, so the real graph must hold it.
     expect(moduleRef.get(FleetMoveService, { strict: false })).toBeDefined();
     expect(moduleRef.get(FleetOfferService, { strict: false })).toBeDefined();

@@ -1814,7 +1814,7 @@ export const enTowerQueues = {
   'tower.nav.connections': 'Connections',
   'tower.conn.title': 'Connections',
   'tower.conn.lede':
-    'What this server is connected to: a routing server and the adviser for the fleets\u2019 planning, and email and push for everybody. All are set where the server runs. This says whether each is set up, whether it is answering, and whether what is written here leaves at all.',
+    'What this server is connected to: a routing server and the adviser for the fleets\u2019 planning, and email, push and the text that carries a code for everybody. All are set where the server runs. This says whether each is set up, whether it is answering, and whether what is written here leaves at all.',
   'tower.conn.unread': 'This could not be read. Try again in a moment.',
   'tower.conn.tag.off': 'Not set up',
   'tower.conn.tag.invalid': 'Set, and not an address',
@@ -1938,6 +1938,53 @@ export const enTowerQueues = {
   'tower.conn.push.someFailed': 'Since this server started, {failed} of {n} could not be handed over.',
   'tower.conn.push.where':
     'The keys are set on the server as GLOS_VAPID_PUBLIC and GLOS_VAPID_PRIVATE; the private one is never shown, here or anywhere. Changing them ends every enrolment: each phone has to turn notifications on again.',
+  'tower.conn.tag.noCodes': 'No code can be sent',
+  'tower.conn.tag.smsLimit': 'Asked to slow down',
+  'tower.conn.tag.smsRejected': 'One number turned down',
+  'tower.conn.sms.title': 'Text messages',
+  'tower.conn.sms.kept':
+    'No text leaves this server. A code is handed back to the app that asked for it and shown on its screen; the text that would have carried it is kept here — {n} since it started. That is how a sandbox is meant to run.',
+  'tower.conn.sms.keptLive':
+    'No text leaves this server, and this is not a sandbox: a code has no other way to a phone. Nobody can sign up, confirm a new phone or browser, or replace a PIN — each is told the code could not be sent. Twilio’s account, a credential and what texts are sent from have to be set before this server is relied on.',
+  'tower.conn.sms.problem.no_account': 'Something of Twilio’s is set and the account is not. Set TWILIO_ACCOUNT_SID, and restart the server.',
+  'tower.conn.sms.problem.no_credential':
+    'Twilio’s account is set and there is nothing to sign with. Set TWILIO_API_KEY_SID with TWILIO_API_KEY_SECRET, or TWILIO_AUTH_TOKEN, and restart the server.',
+  'tower.conn.sms.problem.no_sender': 'Twilio’s account is set and nothing says who a text is from. Set TWILIO_MESSAGING_SERVICE_SID, or TWILIO_FROM, and restart the server.',
+  'tower.conn.sms.problem.not_twilio':
+    'TWILIO_URL is set. It is only for a stand-in on the same machine as a sandbox; anywhere else the credential would go to an address that is not Twilio’s, so nothing is sent. Remove it, and restart the server.',
+  'tower.conn.sms.problem.sandbox': 'Twilio’s account is set, and this is a sandbox, which does not text: its people are made up, and a made-up number may be somebody’s.',
+  'tower.conn.sms.standIn': 'Texts go to a stand-in on this machine, not to Twilio: no phone receives one.',
+  'tower.conn.sms.unsent': 'No code has been texted since this server started ({since}).',
+  'tower.conn.sms.sent': 'The last code, at {when}, was handed to Twilio. Whether it reached the phone is Twilio’s to say: this server does not hear of it.',
+  'tower.conn.sms.sentStandIn': 'The last code, at {when}, was taken by it.',
+  'tower.conn.sms.failed.unreachable':
+    'The last code, at {when}, could not be texted: Twilio could not be reached, or did not answer in time. The person was told it could not be sent, and can ask again at once.',
+  'tower.conn.sms.failed.failed':
+    'The last code, at {when}, could not be texted: what came back was a fault, or was not Twilio’s answer at all. The person was told it could not be sent, and can ask again at once.',
+  'tower.conn.sms.failed.limit': 'The last code, at {when}, was not taken: Twilio asked this server to slow down. The person was told it could not be sent, and can ask again at once.',
+  'tower.conn.sms.failed.rejected':
+    'The last code, at {when}, could not be texted to the number it was for: Twilio cannot text that number. The person was told to check it. That is one number: others may be going.',
+  'tower.conn.sms.failed.refused': 'The last code, at {when}, was refused by Twilio, and the person was told it could not be sent.',
+  'tower.conn.sms.refusedWhy.credential': 'It did not accept the credential, or the credential may not send. Nobody is texted until that is put right.',
+  'tower.conn.sms.refusedWhy.country': 'The country that number is in is not switched on in the Twilio account’s SMS Geo Permissions. Numbers in other countries may be going.',
+  'tower.conn.sms.refusedWhy.sender': 'What texts are sent from is not something this Twilio account can send messages with. Nobody is texted until that is put right.',
+  'tower.conn.sms.refusedWhy.trial': 'The Twilio account texts only numbers that were verified with it, until it is upgraded.',
+  'tower.conn.sms.refusedWhy.unknown': 'It will not text for this account as it is set up. Check the credential, and what texts are sent from.',
+  'tower.conn.sms.code': 'Twilio’s number for it: {code}.',
+  'tower.conn.sms.someFailed': 'Since this server started, {failed} of {n} could not be handed over.',
+  'tower.conn.sms.where':
+    'A code is texted through Twilio when the server is started, off a sandbox, with TWILIO_ACCOUNT_SID, a credential (TWILIO_API_KEY_SID with TWILIO_API_KEY_SECRET, or TWILIO_AUTH_TOKEN) and what texts are sent from (TWILIO_MESSAGING_SERVICE_SID, or TWILIO_FROM). None of them is shown, here or anywhere. GLOS_SMS_COUNTRIES — “+254, +255” — limits the countries a code is texted to; switch on the same ones, and no others, in Twilio’s SMS Geo Permissions. A text is sent once: when it cannot be handed over, the person is told, and asks again. No text has yet gone through the real provider: the first one should be watched here.',
+  'tower.conn.sms.whereKept': 'On a sandbox no phone is needed: the code is shown on the screen that asked for it.',
+  'tower.conn.fact.smsAccount': 'Twilio account',
+  'tower.conn.fact.smsCredential': 'Signs with',
+  'tower.conn.fact.smsCredential.api_key': 'An API key',
+  'tower.conn.fact.smsCredential.auth_token': 'The account’s auth token',
+  'tower.conn.fact.smsSender': 'Sent from',
+  'tower.conn.fact.smsSender.service': 'A Messaging Service',
+  'tower.conn.fact.smsSender.from': 'A number or sender name',
+  'tower.conn.fact.smsCountries': 'Countries a code is texted to',
+  'tower.conn.fact.smsCountriesAny': 'Any — none is set',
+  'tower.conn.fact.smsFenced': 'Not texted: a number outside those countries',
   'tower.conn.fact.leaves': 'Leaves this server',
   'tower.conn.fact.leavesYes': 'Yes',
   'tower.conn.fact.leavesNo': 'No — kept here',

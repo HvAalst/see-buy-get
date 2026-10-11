@@ -33,6 +33,8 @@ export function NewDeviceSheet({ open, onClose, api, phone, onConfirmed }: NewDe
   const [error, setError] = useState<SbgError | null>(null);
   /** In a sandbox no message leaves, so the server echoes the code and it is shown — as every other code is. */
   const [echoed, setEchoed] = useState<string | null>(null);
+  /** A code has gone to the number. Until one has, the sheet does not say "we sent": the text may not have left. */
+  const [sent, setSent] = useState(false);
   const askedFor = useRef('');
 
   const send = async () => {
@@ -41,6 +43,7 @@ export function NewDeviceSheet({ open, onClose, api, phone, onConfirmed }: NewDe
     const r = await api.phoneCode(phone.trim());
     setBusy(false);
     if (r.error) return setError(r.error);
+    setSent(true);
     setEchoed(r.data?.code ?? null);
   };
 
@@ -54,6 +57,7 @@ export function NewDeviceSheet({ open, onClose, api, phone, onConfirmed }: NewDe
     askedFor.current = phone;
     setCode('');
     setEchoed(null);
+    setSent(false);
     void send();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, phone]);
@@ -74,11 +78,11 @@ export function NewDeviceSheet({ open, onClose, api, phone, onConfirmed }: NewDe
 
   return (
     <Sheet open={open} onClose={onClose} title={t('account.device.title')}>
-      <p class="t-body">{t('account.device.lede', { phone })}</p>
+      <p class="t-body">{t(sent ? 'account.device.lede' : 'account.device.ledeUnsent', { phone })}</p>
       {error ? <ErrorNote error={error} showDetail /> : null}
       <div class="field">
-        <span class="field__label">{t('account.device.code')}</span>
-        <CodeBoxes id="device-code" label={t('account.device.code')} length={6} value={code} onInput={setCode} disabled={busy} />
+        <span class="field__label">{t(sent ? 'account.device.code' : 'account.device.codeUnsent')}</span>
+        <CodeBoxes id="device-code" label={t(sent ? 'account.device.code' : 'account.device.codeUnsent')} length={6} value={code} onInput={setCode} disabled={busy} />
         {echoed ? <p class="hint">{t('account.device.sandbox', { code: echoed })}</p> : null}
       </div>
       <Button chevron={false} busy={busy} disabled={code.length !== 6} onClick={() => void confirm()}>

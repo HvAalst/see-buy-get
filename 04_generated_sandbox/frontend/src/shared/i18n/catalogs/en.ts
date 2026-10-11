@@ -739,7 +739,10 @@ export const en = {
   // A PIN typed on a phone or browser no code to that number was ever typed on (NewDeviceSheet).
   'account.device.title': 'Confirm this phone or browser',
   'account.device.lede': 'Your PIN has not been used here before. We sent a 6-digit code to {phone}. Type it once, and your PIN works here from now on.',
+  // Until a code has gone: while it is being sent, and when it could not be (the note above the boxes says so).
+  'account.device.ledeUnsent': 'Your PIN has not been used here before. A 6-digit code to {phone} confirms this phone or browser. Type it once, and your PIN works here from now on.',
   'account.device.code': 'The code we sent',
+  'account.device.codeUnsent': 'The 6-digit code',
   'account.device.sandbox': 'Sandbox: no message is sent here, so this is your code: {code}',
   'account.device.confirm': 'Confirm, and sign in',
   'account.device.again': 'Send a new code',

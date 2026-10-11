@@ -37,6 +37,9 @@ export const ERROR_CODES = {
   PHONE_REQUIRED: { status: 400, title: 'A phone number is required' },
   PHONE_INVALID: { status: 400, title: 'Phone number is not valid' },
   PHONE_NOT_VERIFIED: { status: 400, title: 'Verify your phone number first' },
+  // A number in a country this deployment does not text codes to (GLOS_SMS_COUNTRIES). The number may be perfectly
+  // good — which is why it is not PHONE_INVALID, whose sentence tells the person to check what they typed.
+  PHONE_NOT_SERVED: { status: 400, title: 'We cannot send a code to a number in that country' },
   PHOTO_REQUIRED: { status: 400, title: 'A photo is required' },
   ADDRESS_REQUIRED: { status: 400, title: 'A location or address is required' },
   FIELD_REQUIRED: { status: 400, title: 'A required field is missing' },
@@ -185,6 +188,9 @@ export const ERROR_CODES = {
   // --- 429 / 5xx: transport --------------------------------------------------------------------
   RATE_LIMITED: { status: 429, title: 'Too many requests', retryable: true },
   INTERNAL: { status: 500, title: 'Something went wrong', retryable: true },
+  // The code could not be texted: the provider was not there, refused us, or is not set up. Nothing the person did,
+  // and nothing was counted against their number — asking again is the answer, so it is retryable.
+  SMS_NOT_SENT: { status: 503, title: 'The code could not be sent', retryable: true },
 } as const;
 /* eslint-enable @typescript-eslint/no-unused-vars */
 

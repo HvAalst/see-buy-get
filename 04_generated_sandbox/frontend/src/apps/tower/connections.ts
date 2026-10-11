@@ -14,6 +14,9 @@ import type { Translate } from '../../shared/i18n';
  * Mail and push stand behind everybody. They do not fall back: each is handed to a sender, and the sender this server
  * starts with keeps what it is handed. Their states are: kept, not sent · set, and wrong · nothing sent yet · sending
  * · not getting through.
+ *
+ * So does the text that carries a code — and off a sandbox it is the only way a code reaches a phone, so "kept" there
+ * is not people who are told late: it is nobody signing up at all.
  */
 
 export interface RouterAsk {
@@ -73,11 +76,30 @@ export interface PushConnection {
   failed: number;
   last?: { at: string; ok: boolean };
 }
+export type SmsFailure = 'unreachable' | 'refused' | 'limit' | 'rejected' | 'failed';
+export type SmsProblem = 'no_account' | 'no_credential' | 'no_sender' | 'not_twilio' | 'sandbox';
+export interface SmsConnection {
+  sends: boolean;
+  accountSet: boolean;
+  credential?: 'api_key' | 'auth_token';
+  sender?: 'service' | 'from';
+  problem?: SmsProblem;
+  /** Texts go to a stand-in on the server's own machine: a sandbox being driven. No phone receives one. */
+  standIn: boolean;
+  /** Dial codes a code may be texted to. Empty: any country. */
+  countries: string[];
+  written: number;
+  failed: number;
+  /** Not texted since the server started: the number is outside those countries. */
+  fenced: number;
+  last?: { at: string; ok: boolean; failed?: SmsFailure; code?: string };
+}
 export interface Connections {
   router: RouterConnection;
   adviser: AdviserConnection;
   mail: MailConnection;
   push: PushConnection;
+  sms: SmsConnection;
   sandbox: boolean;
   since: string;
 }
@@ -262,6 +284,63 @@ export function pushSays(c: PushConnection, sandbox: boolean, since: string, t: 
   const earlier = c.failed > 0 ? ` ${t('tower.conn.push.someFailed', { failed: c.failed, n: c.handed })}` : '';
   if (c.last.ok) return { tone: 'ok', tag: t('tower.conn.tag.sending'), line: t('tower.conn.push.sent', { when }) + earlier };
   return { tone: 'warn', tag: t('tower.conn.tag.notSending'), line: t('tower.conn.push.failed', { when }) + earlier };
+}
+
+/**
+ * The text that carries a code. Kept or sent is said first, as the others' is — but what "kept" MEANS differs. On a
+ * sandbox the code is handed back to the app that asked, and nothing is missing. Anywhere else the text is the only
+ * way a code reaches a phone: nobody signs up, confirms a new phone or replaces a PIN, and each is told so.
+ *
+ * Where texts do leave, a failure is said by WHOSE IT IS. A refusal is the account's, and red. A number Twilio cannot
+ * text is that number's — the person was told to check it — and is not a fault of the connection at all.
+ */
+export function smsSays(c: SmsConnection, sandbox: boolean, since: string, t: Translate): ConnectionSays {
+  if (!c.sends) {
+    const why = c.problem ? t(`tower.conn.sms.problem.${c.problem}`) : '';
+    if (!sandbox) return { tone: 'danger', tag: t('tower.conn.tag.noCodes'), line: [t('tower.conn.sms.keptLive'), why].filter(Boolean).join(' ') };
+    // On a sandbox, kept is how it should be — with a whole account set too, which a sandbox does not use. Half an
+    // account is somebody's unfinished set-up, and is said as that.
+    return { tone: c.problem && c.problem !== 'sandbox' ? 'warn' : 'info', tag: t('tower.conn.tag.kept'), line: [t('tower.conn.sms.kept', { n: c.written }), why].filter(Boolean).join(' ') };
+  }
+  // A stand-in is said before anything the last text met: "handed to Twilio" would not be true of any of them.
+  const standIn = c.standIn ? `${t('tower.conn.sms.standIn')} ` : '';
+  if (!c.last) return { tone: 'info', tag: t('tower.conn.tag.unsent'), line: standIn + t('tower.conn.sms.unsent', { since: momentWords(since) }) };
+  const when = momentWords(c.last.at);
+  const earlier = c.failed > 0 ? ` ${t('tower.conn.sms.someFailed', { failed: c.failed, n: c.written })}` : '';
+  if (c.last.ok) return { tone: c.standIn ? 'info' : 'ok', tag: t('tower.conn.tag.sending'), line: standIn + t(c.standIn ? 'tower.conn.sms.sentStandIn' : 'tower.conn.sms.sent', { when }) + earlier };
+  const kind: SmsFailure = c.last.failed ?? 'failed';
+  const line = [
+    t(`tower.conn.sms.failed.${kind}`, { when }),
+    ...(kind === 'refused' ? [t(`tower.conn.sms.refusedWhy.${smsRefusedWhy(c.last.code)}`)] : []),
+    ...(c.last.code ? [t('tower.conn.sms.code', { code: c.last.code })] : []),
+  ].join(' ');
+  return { tone: SMS_FAILED[kind].tone, tag: t(SMS_FAILED[kind].tag), line: standIn + line + earlier };
+}
+
+const SMS_FAILED = {
+  refused: { tone: 'danger', tag: 'tower.conn.tag.mailRefused' },
+  limit: { tone: 'warn', tag: 'tower.conn.tag.smsLimit' },
+  // One number that cannot be texted is not the connection failing: the person mistyped, or gave a landline.
+  rejected: { tone: 'info', tag: 'tower.conn.tag.smsRejected' },
+  unreachable: { tone: 'warn', tag: 'tower.conn.tag.notSending' },
+  failed: { tone: 'warn', tag: 'tower.conn.tag.notSending' },
+} as const;
+
+/**
+ * What a refusal is about, from Twilio's own number for it — only the numbers whose meaning its error dictionary
+ * states. One of them is about a single country and leaves every other number going; the wording says which.
+ */
+export function smsRefusedWhy(code: string | undefined): 'credential' | 'country' | 'sender' | 'trial' | 'unknown' {
+  if (code === '20003') return 'credential';
+  if (code === '21408') return 'country';
+  if (code === '21606') return 'sender';
+  if (code === '21608') return 'trial';
+  return 'unknown';
+}
+
+/** The countries a code is texted to, as the screen says them: the dial codes that were set, or that none was. */
+export function smsCountryWords(c: SmsConnection, t: Translate): string {
+  return c.countries.length ? c.countries.join(', ') : t('tower.conn.fact.smsCountriesAny');
 }
 
 /**

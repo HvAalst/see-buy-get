@@ -5491,17 +5491,20 @@ describe('PUDO Light', () => {
       else process.env.GLOS_ENV = before;
     });
 
-    it('echoes the phone code and the reset token on a laptop, and neither in production', () => {
+    it('echoes the phone code and the reset token on a laptop, and neither in production', async () => {
       const phone = '+254700990013';
       otp.verify(phone, otp.request(phone).code);
       accounts.signup({ role: 'mdp', email: 'forgot-prod@sbg.test', password: 'first-pass', phone, profile: { mdp: { name: 'Forgot Hub', zones: ['FZ'], country: 'KE', location: { lat: -1.2, lng: 36.8 } } } });
 
       delete process.env.GLOS_ENV;
-      expect(controller.phoneRequest({ phone: '+254700990011' } as never)).toHaveProperty('code');
+      expect(await controller.phoneRequest({ phone: '+254700990011' } as never)).toHaveProperty('code');
       expect(controller.authForgot({ email: 'forgot-prod@sbg.test' } as never)).toHaveProperty('resetToken');
 
       process.env.GLOS_ENV = 'production';
-      expect(controller.phoneRequest({ phone: '+254700990012' } as never)).toEqual({ sent: true });
+      // The code is in no answer — and with nothing wired in to text it (as here), "sent" is not said either: that
+      // was the answer once, and the code reached nobody. With a sender, it is { sent: true } and the code is in the
+      // text alone: test/phone-code-sms.e2e-spec.ts asks that over the wire.
+      await expect(controller.phoneRequest({ phone: '+254700990012' } as never)).rejects.toMatchObject({ code: 'SMS_NOT_SENT' });
       expect(controller.authForgot({ email: 'forgot-prod@sbg.test' } as never)).toEqual({ sent: true });
       // …and an email nobody holds gets the very same answer, so the route cannot be used to find accounts.
       expect(controller.authForgot({ email: 'nobody-here@sbg.test' } as never)).toEqual({ sent: true });

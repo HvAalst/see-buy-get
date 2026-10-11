@@ -13,7 +13,7 @@ const GENERIC = 'Something went wrong. Try again.';
  * pins the fix so the six can never silently fall back again.
  */
 describe('errorSentence — identity codes resolve to specific guidance (not the generic fallback)', () => {
-  const codes: SbgErrorCode[] = ['AUTH_FAILED', 'DEVICE_NOT_KNOWN', 'PIN_INVALID', 'PIN_LOCKED', 'PIN_WRONG', 'PASSWORD_WRONG', 'SECRET_WRONG', 'PASSWORD_LOCKED', 'PASSWORD_TOO_SHORT', 'PASSWORD_GUESSABLE', 'PIN_GUESSABLE', 'ROLE_NOT_HELD', 'PHONE_INVALID', 'PHONE_NOT_VERIFIED'];
+  const codes: SbgErrorCode[] = ['AUTH_FAILED', 'DEVICE_NOT_KNOWN', 'PIN_INVALID', 'PIN_LOCKED', 'PIN_WRONG', 'PASSWORD_WRONG', 'SECRET_WRONG', 'PASSWORD_LOCKED', 'PASSWORD_TOO_SHORT', 'PASSWORD_GUESSABLE', 'PIN_GUESSABLE', 'ROLE_NOT_HELD', 'PHONE_INVALID', 'PHONE_NOT_SERVED', 'SMS_NOT_SENT', 'PHONE_NOT_VERIFIED'];
   for (const code of codes) {
     it(`${code} has its own sentence`, () => {
       expect(errorSentence(mk(code))).not.toBe(GENERIC);
@@ -26,6 +26,15 @@ describe('errorSentence — identity codes resolve to specific guidance (not the
     // …while the two refusals that ARE about one thing say which.
     expect(errorSentence(mk('PASSWORD_WRONG')).toLowerCase()).toContain('password');
     expect(errorSentence(mk('SECRET_WRONG')).toLowerCase()).toContain('secret');
+  });
+
+  it('a code that could not be texted is said once: the app’s sentence is the server’s, and it is not about what the person typed', () => {
+    // The sentences the server sends with each (pudo.controller.ts). Equal, so a screen that shows the detail too shows one line.
+    const notSent = { ...mk('SMS_NOT_SENT'), status: 503, retryable: true, detail: 'We could not send the code just now. Try again in a little while.' };
+    expect(errorSentence(notSent)).toBe(notSent.detail);
+    const abroad = { ...mk('PHONE_NOT_SERVED'), status: 400, detail: 'We cannot send a code to a number in that country yet.' };
+    expect(errorSentence(abroad)).toBe(abroad.detail);
+    for (const said of [errorSentence(notSent), errorSentence(abroad)]) expect(said.toLowerCase()).not.toMatch(/check|not right|wrong/);
   });
 
   it('a locked password sign-in says how long is left: the server’s sentence is the message, and a bare one still says what to do', () => {

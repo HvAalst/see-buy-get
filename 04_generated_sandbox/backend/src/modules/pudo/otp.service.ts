@@ -6,7 +6,9 @@ import { normalizePhone } from '../../foundation/identity/phone';
 /** 429 — a retryable rate-limit rejection (RATE_LIMITED carries status 429 + retryable in the registry). */
 const tooManyRequests = (message: string) => new GlosError('RATE_LIMITED', message);
 
-const OTP_TTL_MS = 10 * 60 * 1000;
+/** How long a code works, in minutes. The text that carries it says so. */
+export const OTP_TTL_MINUTES = 10;
+const OTP_TTL_MS = OTP_TTL_MINUTES * 60 * 1000;
 /** A verified phone does not stay verified forever — sign-up must follow verification promptly. */
 const VERIFIED_TTL_MS = 30 * 60 * 1000;
 /** Wrong-code attempts before the code is burned. */
@@ -32,13 +34,15 @@ interface RateEntry {
   lastRequestAt: number;
   windowStart: number;
   count: number;
+  /** How it stood before the newest request — `null` when that request was the number's first. See `notSent`. */
+  before?: { lastRequestAt: number; windowStart: number; count: number } | null;
 }
 
 /**
  * OtpService — phone-number verification for participant onboarding. A field operator's phone is
  * mandatory: the control tower uses it to reach them on escalation, and it anchors GPS tracking. We
- * issue a short numeric code (returned in the sandbox — would be SMS'd in production), then mark the
- * number verified once the code is confirmed. Account sign-up will not provision an entity for an
+ * issue a short numeric code (returned in the sandbox — texted by the door that asked, `auth/phone/request`,
+ * anywhere else), then mark the number verified once the code is confirmed. Account sign-up will not provision an entity for an
  * unverified phone.
  *
  * Hardened in S0: 6-digit codes, attempt lockout, resend cooldown, a daily cap, E.164 normalization
@@ -62,15 +66,37 @@ export class OtpService {
     return normalizePhone(phone);
   }
 
-  /** Issue a 6-digit code for a phone (returned here; SMS'd in production). */
-  request(phone: string): { sent: boolean; code: string } {
+  /** The number a code would go to, as E.164 — or the refusal a number that cannot be one gets. Nothing is counted. */
+  phoneFor(phone: string): string {
     const p = this.norm(phone);
     if (p.replace(/\D/g, '').length < 9) throw new GlosError('PHONE_INVALID', 'Enter a valid phone number');
+    return p;
+  }
+
+  /** Issue a 6-digit code for a phone (returned here; the door that asked texts it). */
+  request(phone: string): { sent: boolean; code: string } {
+    const p = this.phoneFor(phone);
     this.assertWithinRate(p);
 
     const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
     this.codes.set(p, { code, expires: Date.now() + OTP_TTL_MS, attempts: 0 });
     return { sent: true, code };
+  }
+
+  /**
+   * THE CODE JUST ISSUED COULD NOT BE TEXTED. The try is given back: the person may ask again at once, and it does
+   * not count against the number's day — a provider's bad minute is not theirs to wait out, and ten of them must
+   * not lock a number until tomorrow.
+   *
+   * The code itself STAYS GOOD. "Could not be sent" includes "got no answer in time", and a text that only seemed
+   * to fail may still arrive: it should then work. Asking again replaces it, as asking again always does.
+   */
+  notSent(phone: string): void {
+    const p = this.norm(phone);
+    const rate = this.rates.get(p);
+    if (!rate || rate.before === undefined) return;
+    if (rate.before === null) this.rates.delete(p);
+    else this.rates.set(p, { ...rate.before });
   }
 
   /** Confirm the code → marks the phone verified. Burns the code after MAX_ATTEMPTS wrong tries. */
@@ -135,9 +161,11 @@ export class OtpService {
     const now = Date.now();
     const rate = this.rates.get(p);
     if (!rate) {
-      this.rates.set(p, { lastRequestAt: now, windowStart: now, count: 1 });
+      this.rates.set(p, { lastRequestAt: now, windowStart: now, count: 1, before: null });
       return;
     }
+    // Taken before anything moves, a new day's reset included: what is given back is exactly how it stood.
+    const before = { lastRequestAt: rate.lastRequestAt, windowStart: rate.windowStart, count: rate.count };
     if (now - rate.windowStart > DAY_MS) {
       rate.windowStart = now;
       rate.count = 0;
@@ -151,6 +179,7 @@ export class OtpService {
     }
     rate.lastRequestAt = now;
     rate.count += 1;
+    rate.before = before;
   }
 
   private static safeEqual(a: string, b: string): boolean {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { adviserSays, bounceListenWords, checkSays, countWords, mailBounceWords, mailAddressWords, mailAgainWords, mailSays, momentWords, plausible, pushSays, refusedWhy, routerSays, waitingWords, type AdviserConnection, type MailConnection, type PushConnection, type RouterConnection } from './connections';
+import { adviserSays, bounceListenWords, checkSays, countWords, mailBounceWords, mailAddressWords, mailAgainWords, mailSays, momentWords, plausible, pushSays, refusedWhy, routerSays, smsCountryWords, smsRefusedWhy, smsSays, waitingWords, type AdviserConnection, type MailConnection, type PushConnection, type RouterConnection, type SmsConnection } from './connections';
 
 const since = '2026-10-06T06:00:00Z';
 const at = '2026-10-06T08:15:00Z';
@@ -9,6 +9,9 @@ const adviser = (over: Partial<AdviserConnection> = {}): AdviserConnection => ({
 // As a server that really sends, with nothing wrong: each test says what is different about its own.
 const mail = (over: Partial<MailConnection> = {}): MailConnection => ({ sends: true, tokenSet: true, from: 'noreply@kilima.example', fromIsPlaceholder: false, written: 0, failed: 0, reserved: 0, bounced: 0, bounces: { listening: true, stopped: 0, received: 0, refused: 0, unsigned: 0 }, waiting: 0, sentLater: 0, gaveUp: 0, ...over });
 const push = (over: Partial<PushConnection> = {}): PushConnection => ({ sends: true, keys: 'own', devices: 0, people: 0, handed: 0, failed: 0, ...over });
+// As a server that really texts, through Twilio, with nothing wrong.
+const sms = (over: Partial<SmsConnection> = {}): SmsConnection => ({ sends: true, accountSet: true, credential: 'api_key', sender: 'service', standIn: false, countries: ['+254'], written: 0, failed: 0, fenced: 0, ...over });
+const noSms: Partial<SmsConnection> = { sends: false, accountSet: false, credential: undefined, sender: undefined, countries: [] };
 
 describe('what this server is connected to', () => {
   describe('the routing server', () => {
@@ -297,6 +300,86 @@ describe('what this server is connected to', () => {
       const bad = pushSays(push({ handed: 5, failed: 2, last: { at, ok: false } }), false, since, t);
       expect([bad.tone, bad.tag]).toEqual(['warn', 'Not getting through']);
       expect(bad.line).toBe(`The last push, at ${momentWords(at)}, could not be handed over. The notification is in the person’s bell all the same. Since this server started, 2 of 5 could not be handed over.`);
+    });
+  });
+
+  describe('the text that carries a code', () => {
+    it('on a sandbox, kept is how it is meant to run: the code is shown on the screen that asked', () => {
+      const s = smsSays(sms({ ...noSms, written: 4 }), true, since, t);
+      expect([s.tone, s.tag]).toEqual(['info', 'Kept, not sent']);
+      expect(s.line).toBe('No text leaves this server. A code is handed back to the app that asked for it and shown on its screen; the text that would have carried it is kept here — 4 since it started. That is how a sandbox is meant to run.');
+    });
+
+    it('off a sandbox, kept is nobody getting in — said in red, and not as "kept"', () => {
+      const s = smsSays(sms(noSms), false, since, t);
+      expect([s.tone, s.tag]).toEqual(['danger', 'No code can be sent']);
+      expect(s.line).toMatch(/^No text leaves this server, and this is not a sandbox: a code has no other way to a phone\. Nobody can sign up, confirm a new phone or browser, or replace a PIN/);
+      // With part of an account set, which part is missing is said after it.
+      const half = smsSays(sms({ ...noSms, accountSet: true, problem: 'no_credential' }), false, since, t);
+      expect(half.tone).toBe('danger');
+      expect(half.line).toMatch(/before this server is relied on\. Twilio’s account is set and there is nothing to sign with\. Set TWILIO_API_KEY_SID with TWILIO_API_KEY_SECRET, or TWILIO_AUTH_TOKEN, and restart the server\.$/);
+    });
+
+    it('says which part of a half-made set-up is missing — and that a sandbox with a whole account still does not text', () => {
+      const line = (problem: SmsConnection['problem']) => smsSays(sms({ ...noSms, accountSet: true, problem }), true, since, t);
+      expect(line('no_account').line).toMatch(/Set TWILIO_ACCOUNT_SID, and restart the server\.$/);
+      expect(line('no_sender').line).toMatch(/nothing says who a text is from\. Set TWILIO_MESSAGING_SERVICE_SID, or TWILIO_FROM/);
+      expect(line('not_twilio').line).toMatch(/TWILIO_URL is set\. It is only for a stand-in on the same machine as a sandbox.*Remove it, and restart the server\.$/);
+      for (const problem of ['no_account', 'no_credential', 'no_sender', 'not_twilio'] as const) expect([problem, line(problem).tone]).toEqual([problem, 'warn']);
+      // A whole account on a sandbox is nobody's mistake.
+      const whole = line('sandbox');
+      expect([whole.tone, whole.tag]).toEqual(['info', 'Kept, not sent']);
+      expect(whole.line).toMatch(/That is how a sandbox is meant to run\. Twilio’s account is set, and this is a sandbox, which does not text: its people are made up, and a made-up number may be somebody’s\.$/);
+    });
+
+    it('says nothing has been texted yet, then that the last was handed over — and that handed over is not delivered', () => {
+      const none = smsSays(sms(), false, since, t);
+      expect([none.tone, none.tag, none.line]).toEqual(['info', 'Set up, nothing sent yet', `No code has been texted since this server started (${momentWords(since)}).`]);
+      const good = smsSays(sms({ written: 9, failed: 2, last: { at, ok: true } }), false, since, t);
+      expect([good.tone, good.tag]).toEqual(['ok', 'Sending']);
+      expect(good.line).toBe(`The last code, at ${momentWords(at)}, was handed to Twilio. Whether it reached the phone is Twilio’s to say: this server does not hear of it. Since this server started, 2 of 9 could not be handed over.`);
+    });
+
+    it('says a failure by whose it is: the account’s in red, one number’s as that number’s, a bad minute as a bad minute', () => {
+      const met = (failed: NonNullable<SmsConnection['last']>['failed'], code?: string) => smsSays(sms({ written: 3, failed: 1, last: { at, ok: false, failed, code } }), false, since, t);
+      const refused = met('refused', '20003');
+      expect([refused.tone, refused.tag]).toEqual(['danger', 'Refused by the provider']);
+      expect(refused.line).toBe(`The last code, at ${momentWords(at)}, was refused by Twilio, and the person was told it could not be sent. It did not accept the credential, or the credential may not send. Nobody is texted until that is put right. Twilio’s number for it: 20003. Since this server started, 1 of 3 could not be handed over.`);
+      // A country that is not switched on stops that country, not everybody — and is said so.
+      expect(met('refused', '21408').line).toMatch(/not switched on in the Twilio account’s SMS Geo Permissions\. Numbers in other countries may be going\. Twilio’s number for it: 21408\./);
+      expect(met('refused', '21606').line).toMatch(/What texts are sent from is not something this Twilio account can send messages with/);
+      expect(met('refused', '21608').line).toMatch(/texts only numbers that were verified with it, until it is upgraded/);
+      // A refusal with no number, or one whose meaning is not stated: not blamed on any one thing.
+      expect(met('refused').line).toMatch(/It will not text for this account as it is set up\. Check the credential, and what texts are sent from\. Since/);
+      expect(met('refused').line).not.toMatch(/number for it/);
+      expect(met('refused', '21612').line).toMatch(/It will not text for this account as it is set up\..* Twilio’s number for it: 21612\./);
+
+      const number = met('rejected', '21614');
+      expect([number.tone, number.tag]).toEqual(['info', 'One number turned down']);
+      expect(number.line).toMatch(/Twilio cannot text that number\. The person was told to check it\. That is one number: others may be going\. Twilio’s number for it: 21614\./);
+
+      expect([met('limit', '20429').tone, met('limit', '20429').tag]).toEqual(['warn', 'Asked to slow down']);
+      expect([met('unreachable').tone, met('unreachable').tag]).toEqual(['warn', 'Not getting through']);
+      expect(met('unreachable').line).toMatch(/Twilio could not be reached, or did not answer in time\. The person was told it could not be sent, and can ask again at once\./);
+      expect(met('failed').line).toMatch(/was a fault, or was not Twilio’s answer at all/);
+      // A failure nobody named is said as a fault.
+      expect(met(undefined).line).toBe(met('failed').line);
+    });
+
+    it('says a stand-in is a stand-in before anything a text met: none of them was handed to Twilio', () => {
+      const none = smsSays(sms({ standIn: true }), true, since, t);
+      expect(none.line).toMatch(/^Texts go to a stand-in on this machine, not to Twilio: no phone receives one\. No code has been texted/);
+      const good = smsSays(sms({ standIn: true, written: 1, last: { at, ok: true } }), true, since, t);
+      expect([good.tone, good.tag]).toEqual(['info', 'Sending']);
+      expect(good.line).toBe(`Texts go to a stand-in on this machine, not to Twilio: no phone receives one. The last code, at ${momentWords(at)}, was taken by it.`);
+      expect(good.line).not.toMatch(/handed to Twilio/);
+      expect(smsSays(sms({ standIn: true, written: 1, failed: 1, last: { at, ok: false, failed: 'refused' } }), true, since, t).line).toMatch(/^Texts go to a stand-in on this machine/);
+    });
+
+    it('reads a refusal’s number only where Twilio states what it means, and says the countries that were set — or that none was', () => {
+      expect(['20003', '21408', '21606', '21608', '21612', '30008', undefined].map(smsRefusedWhy)).toEqual(['credential', 'country', 'sender', 'trial', 'unknown', 'unknown', 'unknown']);
+      expect(smsCountryWords(sms({ countries: ['+254', '+255'] }), t)).toBe('+254, +255');
+      expect(smsCountryWords(sms({ countries: [] }), t)).toBe('Any — none is set');
     });
   });
 

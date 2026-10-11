@@ -44204,6 +44204,109 @@
           "failed"
         ]
       },
+      "SmsLast": {
+        "type": "object",
+        "properties": {
+          "failed": {
+            "type": "string",
+            "enum": [
+              "unreachable",
+              "refused",
+              "limit",
+              "rejected",
+              "failed"
+            ]
+          },
+          "code": {
+            "type": "string",
+            "description": "The provider's own number for the failure, for looking up. A number only: its words may name a phone."
+          },
+          "at": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "at",
+          "ok"
+        ]
+      },
+      "SmsConnection": {
+        "type": "object",
+        "properties": {
+          "credential": {
+            "type": "string",
+            "description": "Which credential would be used. Absent: none is set.",
+            "enum": [
+              "api_key",
+              "auth_token"
+            ]
+          },
+          "sender": {
+            "type": "string",
+            "description": "Who a text would be from: a Messaging Service, or a number or sender name. Absent: none is set.",
+            "enum": [
+              "service",
+              "from"
+            ]
+          },
+          "problem": {
+            "type": "string",
+            "description": "Something of the provider's is set and it is not used, and this is why.",
+            "enum": [
+              "no_account",
+              "no_credential",
+              "no_sender",
+              "not_twilio",
+              "sandbox"
+            ]
+          },
+          "last": {
+            "$ref": "#/components/schemas/SmsLast"
+          },
+          "sends": {
+            "type": "boolean",
+            "description": "A text leaves this server for the provider. `false`: it is kept here instead, and no phone receives one."
+          },
+          "accountSet": {
+            "type": "boolean",
+            "description": "The provider's account is named."
+          },
+          "standIn": {
+            "type": "boolean",
+            "description": "The texts go to a stand-in on this machine, not to the provider: a sandbox being driven."
+          },
+          "countries": {
+            "description": "The countries a code may be texted to, as dial codes. Empty: any country.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "written": {
+            "type": "number",
+            "description": "Texts written since this server started · of those, not handed over."
+          },
+          "failed": {
+            "type": "number"
+          },
+          "fenced": {
+            "type": "number",
+            "description": "Codes NOT texted since this server started because the number is outside those countries."
+          }
+        },
+        "required": [
+          "sends",
+          "accountSet",
+          "standIn",
+          "countries",
+          "written",
+          "failed",
+          "fenced"
+        ]
+      },
       "ConnectionsView": {
         "type": "object",
         "properties": {
@@ -44219,9 +44322,12 @@
           "push": {
             "$ref": "#/components/schemas/PushConnection"
           },
+          "sms": {
+            "$ref": "#/components/schemas/SmsConnection"
+          },
           "sandbox": {
             "type": "boolean",
-            "description": "This is a sandbox, where mail and push are MEANT to be kept and not sent. Off a sandbox the same state is\npeople who are never told."
+            "description": "This is a sandbox, where mail, push and texts are MEANT to be kept and not sent. Off a sandbox the same state is\npeople who are never told."
           },
           "since": {
             "type": "string",
@@ -44233,6 +44339,7 @@
           "adviser",
           "mail",
           "push",
+          "sms",
           "sandbox",
           "since"
         ]

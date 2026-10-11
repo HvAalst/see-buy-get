@@ -11,7 +11,7 @@
  */
 export type SbgErrorCode =
   | 'BAD_REQUEST' | 'VALIDATION_FAILED' | 'INVALID_INPUT' | 'AMOUNT_INVALID' | 'EMAIL_INVALID' | 'EMAIL_NOT_VERIFIED'
-  | 'PASSWORD_TOO_SHORT' | 'PASSWORD_GUESSABLE' | 'PHONE_REQUIRED' | 'PHONE_INVALID' | 'PHONE_NOT_VERIFIED' | 'PHOTO_REQUIRED'
+  | 'PASSWORD_TOO_SHORT' | 'PASSWORD_GUESSABLE' | 'PHONE_REQUIRED' | 'PHONE_INVALID' | 'PHONE_NOT_SERVED' | 'PHONE_NOT_VERIFIED' | 'PHOTO_REQUIRED'
   | 'ADDRESS_REQUIRED' | 'FIELD_REQUIRED' | 'INVALID_RATING' | 'ZONES_REQUIRED' | 'LICENCE_REQUIRED'
   | 'LICENCE_EXPIRED' | 'INVALID_VEHICLE_CLASS' | 'INVALID_TRUCK_SUBTYPE' | 'UNKNOWN_ROLE' | 'DISPUTE_INCOMPLETE'
   | 'REQUIREMENTS_NOT_MET' | 'KYC_INCOMPLETE' | 'APPROVAL_BLOCKED' | 'INVALID_STATE' | 'WINDOW_EXPIRED'
@@ -20,7 +20,7 @@ export type SbgErrorCode =
   | 'BAG_MISADDRESSED' | 'ALREADY_IN_BAG' | 'STAGING_FULL' | 'SHELF_FULL' | 'NO_CAPACITY_AVAILABLE' | 'OTP_INVALID' | 'OTP_LOCKED' | 'PIN_INVALID' | 'UNAUTHORIZED'
   | 'AUTH_FAILED' | 'AUTH_CODE_INVALID' | 'AUTH_NOT_ACTIVE' | 'PAYMENT_REQUIRED' | 'WALLET_INSUFFICIENT'
   | 'FORBIDDEN' | 'WRONG_PUDO' | 'AGENT_LOCKED' | 'PIN_LOCKED' | 'PIN_WRONG' | 'DEVICE_NOT_KNOWN' | 'PASSWORD_WRONG' | 'SECRET_WRONG' | 'PASSWORD_LOCKED' | 'PIN_GUESSABLE' | 'ROLE_NOT_HELD' | 'MEDIA_LOCKED' | 'CARGO_REQUIRES_DEDICATED' | 'CARGO_INCOMPATIBLE' | 'VEHICLE_MISSING_CAPABILITY' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE' | 'INCOMPLETE_MANIFEST' | 'INVITE_LIMIT'
-  | 'MEDIA_EXPIRED' | 'MEDIA_TOO_LARGE' | 'UNSUPPORTED_MEDIA' | 'RATE_LIMITED' | 'PRICE_CHANGED'
+  | 'MEDIA_EXPIRED' | 'MEDIA_TOO_LARGE' | 'UNSUPPORTED_MEDIA' | 'RATE_LIMITED' | 'PRICE_CHANGED' | 'SMS_NOT_SENT'
   | 'INTERNAL'
   | 'NETWORK' | 'TIMEOUT' | 'OFFLINE' | 'CLIENT_OUTDATED'; // client-synthesised (no HTTP response)
 
@@ -101,6 +101,10 @@ const PRESENTATION: Partial<Record<SbgErrorCode, ErrorPresentation>> = {
   DEVICE_NOT_KNOWN: { icon: 'lock', tone: 'info', say: 'error.device_new' },
   ROLE_NOT_HELD: { icon: 'block', tone: 'warn', say: 'error.role_not_held' },
   PHONE_INVALID: { icon: 'keypad', tone: 'warn', say: 'error.phone_invalid' },
+  // A good number, in a country this deployment does not text codes to. Not "check what you typed".
+  PHONE_NOT_SERVED: { icon: 'keypad', tone: 'warn', say: 'error.phone_not_served' },
+  // The code could not be texted — the provider's bad minute, or ours. Nothing was counted: asking again is the answer.
+  SMS_NOT_SENT: { icon: 'clock', tone: 'warn', say: 'error.sms_not_sent' },
   PHONE_NOT_VERIFIED: { icon: 'keypad', tone: 'warn', say: 'error.verify_phone' },
   // Choosing a PIN needs a recovery email, proven by the code sent to it.
   EMAIL_NOT_VERIFIED: { icon: 'keypad', tone: 'warn', say: 'error.verify_email' },

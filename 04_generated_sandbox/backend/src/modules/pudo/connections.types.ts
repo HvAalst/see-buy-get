@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { MailConnection } from '../../foundation/mail/mail.types';
+import { SmsConnection } from '../../foundation/sms/sms.types';
 import { ADVISER_FAILURES, AdviserFailure } from './plan-adviser.types';
 
 /*
@@ -16,6 +17,9 @@ import { ADVISER_FAILURES, AdviserFailure } from './plan-adviser.types';
  * address. So the first question for those is not "is it answering" but "does anything leave", and it is read off the
  * sender that is wired in, never off a variable that happens to be set. For mail that does leave, the second is what
  * the last one met — and, where it failed, whose that is to put right.
+ *
+ * And one thing nobody gets in without: the text that carries a code to a phone. Off a sandbox it is the only way a
+ * code reaches anybody, so "kept, not sent" there is nobody signing up, confirming a new phone or replacing a PIN.
  *
  * Nothing here is a secret and nothing here can become one: an address is shown as its host only, because an address
  * can carry a key, and a credential is shown as set or not set.
@@ -91,8 +95,9 @@ export class ConnectionsView {
   @ApiProperty({ type: AdviserConnection }) adviser: AdviserConnection;
   @ApiProperty({ type: MailConnection }) mail: MailConnection;
   @ApiProperty({ type: PushConnection }) push: PushConnection;
+  @ApiProperty({ type: SmsConnection }) sms: SmsConnection;
   /**
-   * This is a sandbox, where mail and push are MEANT to be kept and not sent. Off a sandbox the same state is
+   * This is a sandbox, where mail, push and texts are MEANT to be kept and not sent. Off a sandbox the same state is
    * people who are never told.
    */
   sandbox: boolean;

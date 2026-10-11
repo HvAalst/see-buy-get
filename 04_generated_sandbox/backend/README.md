@@ -57,6 +57,32 @@ changes something must carry a limit or a reason: `src/modules/pudo/sign-in-door
 A lock is kept in the durable store (`data/password-locks-*.json`), so a restart does not lift it; the wrong
 tries before a lock and the per-caller counts are kept in memory.
 
+## The code to a phone: Twilio
+A phone is proved by a six-digit code. On a laptop the code is handed back to the app that asked and shown on its
+screen; no text is sent, whatever is set. With `GLOS_ENV=production` the code is in no answer: it is texted, through
+Twilio's Messages API, and a text is the only way it reaches anybody (`src/foundation/sms/`).
+
+| Variable | What it is |
+|---|---|
+| `TWILIO_ACCOUNT_SID` | the account; part of the address a text is posted to |
+| `TWILIO_API_KEY_SID` + `TWILIO_API_KEY_SECRET` | what signs each request — a key can be revoked without touching the account. Or `TWILIO_AUTH_TOKEN`, the account's own |
+| `TWILIO_MESSAGING_SERVICE_SID` | who a text is from. Or `TWILIO_FROM`: one number, or a sender name |
+| `GLOS_SMS_COUNTRIES` | optional: the dial codes a code may be texted to, `+254, +255` |
+
+- **Half a set-up sends nothing.** Without all three of account, credential and sender no text leaves, the door
+  answers `SMS_NOT_SENT` (it never says "sent" when nothing was), and the start-up log and the console's
+  Connections screen say which part is missing.
+- **Fence the countries, in both places.** "Send me a code" texts any number in the world at our cost, and codes
+  asked for to numbers that earn their owner money per text is an old fraud. Set `GLOS_SMS_COUNTRIES`, and switch on
+  the same countries — and no others — under SMS Geo Permissions in the Twilio console.
+- **A text is sent once.** No answer in time may still mean it went, so there is no second try: the person is told
+  it could not be sent, the try is not counted against their number, and they ask again.
+- **Handed to Twilio is not delivered.** A `201` means Twilio took it. Whether it reached the phone is not heard
+  of here (no status callback is listened for).
+- **Never yet sent through the real provider.** It is tested against a server standing where Twilio stands
+  (`src/foundation/sms/sms.spec.ts`). `TWILIO_URL` exists only for that — a stand-in on the same machine as a
+  sandbox — and anything else in it stops all sending. Watch the first real text on the Connections screen.
+
 ## Other websites, and the docs page
 On a laptop any website may call the API from a browser (each app is a dev server on its own port) and
 `/v1/docs` serves the contract. With `GLOS_ENV=production`: only our own sites are answered — the origins of

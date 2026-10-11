@@ -17,6 +17,8 @@ import { SiteService, SITE_BASIS, type Site } from './site.service';
 import { TransitAuthorityService, TRANSIT_BASIS } from './transit-authority.service';
 import { FieldObservationService, OBSERVATION_BASIS } from './field-observation.service';
 import { MailService } from '../../foundation/mail/mail.service';
+import { SmsService } from '../../foundation/sms/sms.service';
+import { SmsSendError } from '../../foundation/sms/sms.types';
 import { appUrl } from '../../foundation/mail/mail.templates';
 import { InterestService } from '../../foundation/interest/interest.service';
 import { DepartureService } from './departure.service';
@@ -83,7 +85,7 @@ import { CONTACT_BASIS, ContactCardService } from './contact-card.service';
 import { ContactCardView, DepotListResponse, DepotRegisterView } from './depot.types';
 import { FleetManagerService } from './fleet-manager.service';
 import { AccountService } from './account.service';
-import { OtpService } from './otp.service';
+import { OTP_TTL_MINUTES, OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
 import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto,
@@ -271,23 +273,46 @@ export class SbgController {
     @Optional() private readonly companyPapers?: CompanyPapersWatch,
     @Optional() private readonly declarations?: CompanyDeclarationService,
     @Optional() private readonly paperReports?: CompanyPaperReportService,
+    @Optional() private readonly sms?: SmsService,
   ) {}
 
   // --- phone verification (mandatory at onboarding — control-tower contact + GPS) ---
+  // (CODE_NOT_SENT, below the class: one sentence for a code that could not be texted, whichever way it could not.)
   // These six are @Public(): they are the PRE-auth flow. A caller cannot hold an actor token before
   // they have signed up or logged in, and once GLOS_CLIENT_SECRET gates /auth/token (S0) the browser
   // can no longer mint a machine token to reach them either. They must be reachable unauthenticated.
 
   /**
    * Issue a verification code for a phone. The code comes back in the answer ONLY in a sandbox: anywhere else,
-   * handing it to whoever asked would let anyone verify anyone's phone — it has to reach the phone itself.
+   * handing it to whoever asked would let anyone verify anyone's phone — it has to reach the phone itself, and it
+   * goes there as a text (`SmsService`).
+   *
+   * "SENT" IS SAID ONLY WHEN IT WAS. Off a sandbox with no provider wired in, or when the provider did not take the
+   * text, the person is told it could not be sent — not left at a screen waiting for a text that is not coming —
+   * and the try is given back (`OtpService.notSent`): they may ask again at once.
+   *
+   * A number outside the countries this deployment texts (`GLOS_SMS_COUNTRIES`) is turned away before a code is
+   * made or counted: a text is paid for, and codes asked for to numbers abroad is how that is abused.
    */
   @Public()
   @UseGuards(RateLimitGuard)
   @RateLimit(120, 15 * 60)
   @Post('auth/phone/request')
-  phoneRequest(@Body() dto: PhoneRequestDto) {
+  async phoneRequest(@Body() dto: PhoneRequestDto) {
+    const to = this.otp.phoneFor(dto.phone);
+    const texts = this.sms?.sends() ?? false;
+    if (!texts && !isSandbox()) throw new GlosError('SMS_NOT_SENT', CODE_NOT_SENT);
+    if (texts && !this.sms?.mayGoTo(to)) throw new GlosError('PHONE_NOT_SERVED', 'We cannot send a code to a number in that country yet.', { field: 'phone' });
     const issued = this.otp.request(dto.phone);
+    try {
+      // In a sandbox with nothing wired in this is the outbox, which keeps it: the same steps run either way.
+      await this.sms?.sendCode(to, issued.code, OTP_TTL_MINUTES);
+    } catch (err) {
+      this.otp.notSent(dto.phone);
+      // The one failure that is the person's: the provider cannot text that number. Everything else is ours.
+      if (err instanceof SmsSendError && err.kind === 'rejected') throw new GlosError('PHONE_INVALID', 'We cannot send a text to that number. Check it, or use a mobile number.', { field: 'phone' });
+      throw new GlosError('SMS_NOT_SENT', CODE_NOT_SENT);
+    }
     return isSandbox() ? issued : { sent: issued.sent };
   }
 
@@ -6100,3 +6125,10 @@ export class SbgController {
     return this.dispatch.declineByToken(dto.token);
   }
 }
+
+/**
+ * What somebody is told when their code could not be texted. One sentence whether the provider was not there,
+ * refused us, or is not set up at all: none of that is theirs to tell apart, and none of it is theirs to put right.
+ * The apps say the same words for `SMS_NOT_SENT`, so it is never shown twice.
+ */
+export const CODE_NOT_SENT = 'We could not send the code just now. Try again in a little while.';
