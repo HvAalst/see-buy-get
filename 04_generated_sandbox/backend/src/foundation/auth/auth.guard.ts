@@ -12,13 +12,8 @@ import { isSandbox } from '../runtime/sandbox';
 import { ActorRole, IntrospectionResult } from './auth.types';
 import { Tier } from '../data-firewall/data-firewall.types';
 
-/**
- * Strict mode (S3). When on, any route carrying neither @Public() nor @Scopes()/@Roles() is denied —
- * a default-deny that mechanically forces every route to declare its authorization. ON in CI (catches
- * unlabelled routes in review), OFF in prod by default so the incremental caller migration is not a
- * hard-fail while the frontend still sends anonymous tokens (see the S3 rollout decision).
- */
-const STRICT = process.env.GLOS_AUTHZ_STRICT === '1';
+/** What a route with nothing written on it is told. Said to staff as well: nobody looked at it, so it is nobody's. */
+export const NOBODY_SAID = 'This route does not say who it is for, so it is open to nobody';
 
 /**
  * The ONE global guard (T-006, extended in S3). It authenticates, then authorizes — in a single
@@ -68,8 +63,13 @@ export class AuthGuard implements CanActivate {
     const labelled = Boolean(requiredRoles?.length || requiredScopes?.length || minTier || signedIn);
 
     if (!labelled) {
-      if (STRICT) throw new ForbiddenException('Route has no authorization policy (@Public/@Scopes/@Roles required)');
-      return true; // prod default: a valid token is enough for an unlabelled route (pre-migration)
+      // THE DOOR, TURNED ROUND. A route with nothing written on it used to be let in with any valid sign-in and
+      // trusted to decide inside; a setting could refuse it instead and was never switched on. Every route of the
+      // product now says who it is for (modules/pudo/who-is-calling.spec.ts reads all of them), so one that says
+      // nothing is one nobody looked at, and it is refused — to staff too. The engine underneath is the one exception,
+      // and its own mark makes it: staff-only outside a sandbox (above), and on a laptop the demo it always was.
+      if (this.reflector.getAllAndOverride<boolean>(STAFF_OUTSIDE_SANDBOX_KEY, targets) === true) return true;
+      throw new ForbiddenException(`${NOBODY_SAID}. It needs @Public, @Roles, @Scopes or @SignedIn.`);
     }
 
     // Operator satisfies everything — the `*` scope is granted only to operator tokens.

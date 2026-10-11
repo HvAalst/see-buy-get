@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { Controller, ExecutionContext, Get, Post } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
-import { AuthGuard } from './auth.guard';
+import { AuthGuard, NOBODY_SAID } from './auth.guard';
 import { AuthService } from './auth.service';
 import { actingDid, actingTenant } from './acting';
 import { IntrospectionResult } from './auth.types';
@@ -126,13 +126,23 @@ describe('the setup key, outside a sandbox', () => {
 
     it('changes nothing for a member of staff, for anybody else, or on a laptop', () => {
       production();
-      for (const route of ['staffSetUp', 'decide', 'runs', 'unlabelled', 'open'] as const) expect([route, guardAs(staff)(route)]).toEqual([route, true]);
+      for (const route of ['staffSetUp', 'decide', 'runs', 'open'] as const) expect([route, guardAs(staff)(route)]).toEqual([route, true]);
       expect(guardAs(driver)('runs')).toBe(true);
       expect(() => guardAs(driver)('decide')).toThrow('Requires role: operator');
       expect(() => guardAs(driver)('staffSetUp')).toThrow('Requires role: operator');
 
       delete process.env.GLOS_ENV;
-      for (const route of ['staffSetUp', 'decide', 'runs', 'unlabelled', 'open'] as const) expect([route, guardAs(key)(route)]).toEqual([route, true]);
+      for (const route of ['staffSetUp', 'decide', 'runs', 'open'] as const) expect([route, guardAs(key)(route)]).toEqual([route, true]);
+    });
+
+    it('…and the route with nothing written on it is nobody’s: that is the route’s own failing, said in its own words', () => {
+      production();
+      // The key is told about the KEY first (above); a member of staff and a driver are told about the route.
+      expect(() => guardAs(staff)('unlabelled')).toThrow(NOBODY_SAID);
+      expect(() => guardAs(driver)('unlabelled')).toThrow(NOBODY_SAID);
+      delete process.env.GLOS_ENV;
+      // On a laptop the key is an ordinary operator sign-in, and is told the same.
+      expect(() => guardAs(key)('unlabelled')).toThrow(NOBODY_SAID);
     });
   });
 

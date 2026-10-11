@@ -7,6 +7,8 @@ import { RequestMethod } from '@nestjs/common';
 import { AppModule } from '../src/app.module';
 import { SETUP_KEY_KEY } from '../src/foundation/auth/setup-key';
 import { STAFF_OUTSIDE_SANDBOX_KEY } from '../src/foundation/auth/engine-surface';
+import { IS_PUBLIC_KEY } from '../src/foundation/auth/public.decorator';
+import { MIN_TIER_KEY, ROLES_KEY, SCOPES_KEY, SIGNED_IN_KEY } from '../src/foundation/auth/scopes.decorator';
 import { DidService } from '../src/foundation/did/did.service';
 
 /**
@@ -254,6 +256,42 @@ describe('a new installation’s first days', () => {
       // It read the real application: hundreds of routes, not a list that could have been empty.
       expect(routes).toBeGreaterThan(600);
       expect(marked.sort()).toEqual(['DELETE sbg/operators/:operatorId', 'GET sbg/operators', 'POST sbg/operators', 'POST sbg/operators/proposals/:proposalId/approve']);
+    });
+
+    /**
+     * THE DOOR, READ OFF WHAT IS RUNNING. The guard refuses a route that says nothing about who it is for. The unit
+     * test of the doors (who-is-calling.spec.ts) reads the eight controllers it knows by name; this reads whatever the
+     * application registered, so a ninth controller is seen here on the day it is added — by name, at build time,
+     * and not as a refusal somebody meets in an app.
+     */
+    it('every route of the running application says who it is for — the engine’s excepted, by its mark', () => {
+      const VERB: Record<number, string> = { [RequestMethod.GET]: 'GET', [RequestMethod.POST]: 'POST', [RequestMethod.DELETE]: 'DELETE', [RequestMethod.PUT]: 'PUT', [RequestMethod.PATCH]: 'PATCH' };
+      const says = (target: object): boolean =>
+        Reflect.getMetadata(IS_PUBLIC_KEY, target) === true ||
+        Reflect.getMetadata(SIGNED_IN_KEY, target) === true ||
+        Boolean((Reflect.getMetadata(ROLES_KEY, target) as unknown[] | undefined)?.length || (Reflect.getMetadata(SCOPES_KEY, target) as unknown[] | undefined)?.length || Reflect.getMetadata(MIN_TIER_KEY, target));
+      const unsaid: string[] = [];
+      let routes = 0;
+      let engines = 0;
+      for (const module of app.get(ModulesContainer).values()) {
+        for (const controller of module.controllers.values()) {
+          const type = controller.metatype as { prototype: Record<string, unknown> };
+          const base = String(Reflect.getMetadata(PATH_METADATA, type) ?? '');
+          const ofEngine = Reflect.getMetadata(STAFF_OUTSIDE_SANDBOX_KEY, type) === true;
+          for (const name of Object.getOwnPropertyNames(type.prototype)) {
+            const handler = type.prototype[name];
+            if (typeof handler !== 'function' || Reflect.getMetadata(METHOD_METADATA, handler) === undefined) continue;
+            routes += 1;
+            if (says(type) || says(handler)) continue;
+            if (ofEngine) engines += 1;
+            else unsaid.push(`${VERB[Reflect.getMetadata(METHOD_METADATA, handler) as number]} ${base}/${String(Reflect.getMetadata(PATH_METADATA, handler))}`);
+          }
+        }
+      }
+      // It read the real application, and it can find an unwritten route: the engine has more than a hundred.
+      expect(routes).toBeGreaterThan(600);
+      expect(engines).toBeGreaterThan(100);
+      expect(unsaid).toEqual([]);
     });
   });
 });

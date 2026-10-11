@@ -1,11 +1,11 @@
 import 'reflect-metadata';
 import { Controller, ExecutionContext, Get, Post } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { AuthGuard } from './auth.guard';
+import { AuthGuard, NOBODY_SAID } from './auth.guard';
 import { AuthService } from './auth.service';
 import { IntrospectionResult } from './auth.types';
 import { Public } from './public.decorator';
-import { Roles } from './scopes.decorator';
+import { Roles, SignedIn } from './scopes.decorator';
 import { StaffOnlyOutsideSandbox } from './engine-surface';
 import { isStaffAccount } from './setup-key';
 
@@ -44,8 +44,14 @@ describe('the engine’s own routes, outside a sandbox', () => {
     @Post('track')
     track() {}
 
+    // Nothing written on it: nobody said who it is for.
     @Get('rules')
     rules() {}
+
+    // "Anybody signed in", said out loud.
+    @SignedIn()
+    @Get('rates')
+    rates() {}
   }
 
   const staff = { active: true, role: 'operator', scopes: ['*'], actorName: 'Amina Otieno', revocationKey: 'operator:opr_amina' } as unknown as IntrospectionResult;
@@ -91,10 +97,35 @@ describe('the engine’s own routes, outside a sandbox', () => {
     }
   });
 
-  it('touches nothing that is not marked: the product’s own open routes stay open, anywhere', () => {
+  it('touches nothing that is not marked: what the product marks open stays open, anywhere', () => {
     process.env.GLOS_ENV = 'production';
     expect(at(Product, undefined)('track')).toBe(true);
-    expect(at(Product, driver)('rules')).toBe(true);
-    expect(at(Product, staff)('rules')).toBe(true);
+    expect(at(Product, driver)('rates')).toBe(true);
+    expect(at(Product, staff)('rates')).toBe(true);
+  });
+
+  /**
+   * THE DOOR, TURNED ROUND. A route with nothing written on it used to be let in with any valid sign-in. The engine's
+   * still is, on a laptop — that is what its mark is for. Anything else that says nothing is for nobody, wherever it runs.
+   */
+  it.each([['on a laptop', undefined], ['anywhere else', 'production']])('a route that says nothing about who it is for is for nobody — %s', (_where, env) => {
+    if (env) process.env.GLOS_ENV = env;
+    else delete process.env.GLOS_ENV;
+    // A driver, a token that is nobody at all, and a member of staff alike.
+    for (const who of [driver, nobody, staff]) expect(() => at(Product, who)('rules')).toThrow(NOBODY_SAID);
+    // It still asks who is there first: nobody signed in is told to sign in, not what the route failed to say.
+    expect(() => at(Product, undefined)('rules')).toThrow('Missing Bearer token');
+    // What a route SAYS is honoured: open to all, or to anybody signed in.
+    expect(at(Product, undefined)('track')).toBe(true);
+    for (const who of [driver, nobody, staff]) expect(at(Product, who)('rates')).toBe(true);
+    expect(() => at(Product, undefined)('rates')).toThrow('Missing Bearer token');
+  });
+
+  it('…and the engine’s unwritten routes are the one exception, by its mark: open to a sign-in on a laptop, staff’s anywhere else', () => {
+    delete process.env.GLOS_ENV;
+    for (const who of [driver, nobody, staff]) expect(at(Engine, who)('shipments')).toBe(true);
+    process.env.GLOS_ENV = 'production';
+    expect(at(Engine, staff)('shipments')).toBe(true);
+    for (const who of [driver, nobody]) expect(() => at(Engine, who)('shipments')).toThrow(STAFF_ONLY);
   });
 });
