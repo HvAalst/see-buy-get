@@ -27,7 +27,8 @@ export interface ClaimRow {
   coverLimit?: number;
   declaredValue?: number;
   awardCap: number;
-  capBasis: 'declared' | 'free-limit' | 'sanity-bound';
+  /** `none`: the company that carried it has stated no cover, so it pays nothing itself and nothing can be awarded. */
+  capBasis: 'declared' | 'free-limit' | 'none';
   evidence?: string[];
 }
 
@@ -70,7 +71,7 @@ export function carrierBearsLine(row: FreightClaimRow, t: Translate): string | n
 }
 
 /** What a decision is checked against — the part of a row claimBlocker reads, shared by parcels and freight. */
-export type ClaimCap = { awardCap: number; capBasis: ClaimRow['capBasis'] | 'none'; currency?: string };
+export type ClaimCap = { awardCap: number; capBasis: ClaimRow['capBasis'] | FreightClaimRow['capBasis']; currency?: string; parcelId?: string };
 
 /** FP3b — what a freight claim is covered for: the carriage the network billed, or the plain fact that it billed nothing. */
 export function freightCoverLine(row: FreightClaimRow, t: Translate): string {
@@ -100,7 +101,7 @@ export function coverLine(row: ClaimRow, t: Translate): string {
   // A price nobody recorded is NOT zero. A walk-up parcel paid for in cash carries no shipmentCost, and
   // "sold for 0.00" tells an adjudicator this shipment was free — which is a fact, and the wrong one.
   const shipping = row.shipmentCost == null ? t('tower.claims.priceNotRecorded') : t('tower.claims.shippingSoldFor', { amount: amount(row.shipmentCost, row.currency) });
-  if (row.capBasis === 'sanity-bound') return `${shipping} · ${t('tower.claims.noCover')}`;
+  if (row.capBasis === 'none') return `${shipping} · ${t('tower.claims.noCover')}`;
   const basis = row.capBasis === 'declared' ? t('tower.claims.becauseDeclared') : t('tower.claims.becauseFreeLimit');
   return `${shipping} · ${t('tower.claims.coveredTo', { amount: amount(row.awardCap, row.currency), basis })}`;
 }
@@ -116,6 +117,9 @@ export function coverLine(row: ClaimRow, t: Translate): string {
 export function claimBlocker(decision: ClaimDecision, award: string, note: string, row: ClaimCap, t: Translate): string | null {
   if (!note.trim()) return t('tower.claims.needReason');
   if (decision === 'rejected') return null; // nothing is paid, so there is no figure to check
+  // A PARCEL whose company has stated no cover: it pays nothing from its own books, so there is nothing to award and
+  // nothing to uphold — the damage claim report is the answer. Only a claim left open from before can reach here.
+  if (row.capBasis === 'none' && row.parcelId) return t('tower.claims.noAwardWithoutCover');
   // FP3b — a load nobody was billed for: upholding it records that the sender was right and that the money is
   // between the parties. Any figure typed here would be a promise from books that do not exist.
   if (row.capBasis === 'none') return award.trim() && Number(award.trim()) > 0 ? t('tower.claims.freightNoAward') : null;
@@ -316,4 +320,30 @@ export function missingWords(missing: string[], t: Translate): string {
 export function stuckLabel(days: number, t: Translate): string {
   if (days === 0) return t('tower.stalled.today');
   return days === 1 ? t('tower.stalled.daysOne', { count: days }) : t('tower.stalled.daysMany', { count: days });
+}
+
+/* ------------------------------------------------------------- damage claim reports -- */
+
+/** One damage claim report, as the list reports it: made the moment a problem was reported, and decided by nobody. */
+export interface DamageReportRow {
+  parcelId: string;
+  number: string;
+  madeAt: string;
+  origin: 'buyer' | 'counter';
+  reason: string;
+  from: string;
+  to: string;
+  store?: string;
+  heldBy?: string;
+  links: number;
+  opened: number;
+}
+
+/** A report's row in words: who reported it, where the parcel was, and whether whoever it is for has handed it on. */
+export function reportRowWords(row: DamageReportRow, t: Translate): { by: string; hands: string; handedOn: string } {
+  return {
+    by: t(row.origin === 'counter' ? 'tower.reports.byShop' : 'tower.reports.byReceiver'),
+    hands: row.heldBy ? t('tower.reports.heldBy', { name: row.heldBy }) : t('tower.reports.handedOver'),
+    handedOn: row.links === 0 && row.opened === 0 ? t('tower.reports.noLink') : t('tower.reports.links', { links: row.links, opened: row.opened }),
+  };
 }

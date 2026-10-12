@@ -136,7 +136,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
-import { classifySize, MAX_CLAIM_AWARD, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
+import { classifySize, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { EntityAdminView, OperatorAccountView, StaffAccountList, StaffInvited, StaffProposalView, EntityChanges, EntityPricing } from '../../foundation/entity/entity.types';
 import { EntityAdminService } from '../../foundation/entity/entity-admin.service';
@@ -184,14 +184,15 @@ export function awardCapOf(p: { coverLimit?: number; declaredValue?: number }): 
   coverLimit?: number;
   declaredValue?: number;
   awardCap: number;
-  capBasis: 'declared' | 'free-limit' | 'sanity-bound';
+  capBasis: 'declared' | 'free-limit' | 'none';
 } {
   const stated = p.coverLimit != null && p.coverLimit > 0;
   return {
     ...(p.coverLimit != null ? { coverLimit: p.coverLimit } : {}),
     ...(p.declaredValue != null ? { declaredValue: p.declaredValue } : {}),
-    awardCap: stated ? p.coverLimit! : MAX_CLAIM_AWARD,
-    capBasis: stated ? (p.declaredValue ? 'declared' : 'free-limit') : 'sanity-bound',
+    // No cover stated is no award at all: the company pays nothing from its own books, and the report is the answer.
+    awardCap: stated ? p.coverLimit! : 0,
+    capBasis: stated ? (p.declaredValue ? 'declared' : 'free-limit') : 'none',
   };
 }
 
@@ -2324,6 +2325,13 @@ export class SbgController {
   @Post('entities/:entityId/insurance')
   setEntityInsurance(@Param('entityId') entityId: string, @Body() dto: EntityInsuranceDto, @Actor() actor: IntrospectionResult) {
     this.requireReach(actor, entityId);
+    // PAYING FROM A COMPANY'S OWN BOOKS IS NOT OPEN YET. Stating cover is what switches it on, and two things it
+    // needs are not built: an award would be one member of staff's decision, and nothing pays — or even lists — an
+    // award owed to a sender who paid at a counter. Until both exist every reported problem ends in the damage claim
+    // report (the user, 2026-10-12: "I wonder whether that is our jurisdiction"). Taking cover AWAY is always allowed.
+    if ((dto.freeLimit ?? 0) > 0 || (dto.premiumPct ?? 0) > 0) {
+      throw new GlosError('INVALID_STATE', 'A company cannot state cover yet. Stating it means the company pays claims from its own books, and that is not open: an award would be one member of staff’s decision, and nothing pays a sender who paid at a counter. Until then every reported problem ends in a damage claim report, which the claimant takes to their own insurer.');
+    }
     return this.entities.setInsurance(entityId, dto, auditActor(actor));
   }
 

@@ -37,10 +37,15 @@ describe('P3 — what the counter says before it takes goods in', () => {
     expect(takeInTermsNotice(terms(), t).detail).not.toMatch(/pay out/);
   });
 
-  it('never invents a figure where the sister stated none', () => {
+  it('never invents a figure where the sister stated none — and says, as a warning, that it pays no claim itself', () => {
+    // It used to say "a claim is decided case by case": a decision nobody of ours will make (the user, 2026-10-12).
     const n = takeInTermsNotice(terms({ coverLimit: 0, coverBasis: 'no-stated-limit' }), t);
     expect(n.detail).not.toMatch(/\d/);
-    expect(n.detail).toMatch(/case by case/);
+    expect(n.tone).toBe('warn');
+    expect(n.title).toMatch(/not insured by it/);
+    expect(n.detail).toMatch(/pays no claim itself/);
+    expect(n.detail).toMatch(/damage claim report/);
+    expect(n.detail).not.toMatch(/case by case/);
   });
 
   it('says the carrier answers, and that our cover is zero, where the promise is theirs', () => {

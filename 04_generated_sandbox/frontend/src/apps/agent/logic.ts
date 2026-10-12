@@ -37,16 +37,27 @@ export function takeInTermsNotice(terms: TakeInTerms, t: Translate): TermsNotice
     return { tone: 'warn', icon: 'warning', title: t('agent.accept.termsTheirsTitle'), detail: t('agent.accept.termsTheirsDetail', { country }) };
   }
   const sister = terms.answeredBy ?? t('agent.accept.termsOursUs');
-  const money = { sister, amount: terms.coverLimit.toFixed(2), currency: terms.currency };
-  const detail =
-    terms.coverBasis === 'declared'
-      ? t('agent.accept.termsOursDeclared', money)
-      : terms.coverBasis === 'free-limit'
-        ? t('agent.accept.termsOursLimit', money)
-        : t('agent.accept.termsOursNoLimit', { sister });
   // P4 — said in the same breath: the work is owed, but it cannot be paid out in this country yet.
-  const owed = terms.paidOut ? '' : ` ${t('agent.accept.termsOwedNotPaid', { country })}`;
-  return { tone: 'info', icon: 'wallet', title: t('agent.accept.termsOursTitle', { sister }), detail: detail + owed };
+  const unpaid = terms.paidOut ? '' : ` ${t('agent.accept.termsOwedNotPaid', { country })}`;
+  // NOTHING COVERS IT. The company carries the parcel and keeps the record; it pays no claim from its own books
+  // (the user, 2026-10-12). That is a risk the CUSTOMER takes, so it is said as a warning and has to be said to them
+  // — before the goods are accepted, not on the day something breaks. It used to read "Covered by …, a claim is
+  // decided case by case", which promised a decision nobody will make.
+  if (terms.coverBasis === 'no-stated-limit') {
+    return { tone: 'warn', icon: 'warning', title: t('agent.accept.termsNoCoverTitle', { sister }), detail: t('agent.accept.termsOursNoLimit', { sister }) + unpaid };
+  }
+  const money = { sister, amount: terms.coverLimit.toFixed(2), currency: terms.currency };
+  const detail = terms.coverBasis === 'declared' ? t('agent.accept.termsOursDeclared', money) : t('agent.accept.termsOursLimit', money);
+  return { tone: 'info', icon: 'wallet', title: t('agent.accept.termsOursTitle', { sister }), detail: detail + unpaid };
+}
+
+/**
+ * Whether the customer has to be TOLD the terms before the goods are accepted, and the shopkeeper has to say they
+ * were: where the carrier answers and not us, and where a company of ours carries the parcel and covers nothing.
+ */
+export function termsNeedTelling(terms: TakeInTerms | null): boolean {
+  if (!terms) return false;
+  return terms.promise === 'theirs' || (terms.promise === 'ours' && terms.coverBasis === 'no-stated-limit');
 }
 
 /**
@@ -59,6 +70,8 @@ export function termsBlock(terms: TakeInTerms | null, loadState: 'idle' | 'loadi
   if (!terms || loadState !== 'ready') return t('agent.accept.termsChecking');
   if (terms.promise === 'none') return t('agent.accept.termsNoneTitle');
   if (terms.promise === 'theirs' && !told) return t('agent.accept.termsTickFirst');
+  // Nothing of ours covers it: the customer is told before the goods change hands, as for the carrier's promise.
+  if (termsNeedTelling(terms) && !told) return t('agent.accept.termsTickFirst');
   return null;
 }
 

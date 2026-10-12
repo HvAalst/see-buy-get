@@ -1,5 +1,4 @@
 import { awardCapOf } from './pudo.controller';
-import { MAX_CLAIM_AWARD } from './pudo.config';
 
 /**
  * WHAT AN ADJUDICATOR IS TOLD A CLAIM IS COVERED FOR, against what the network will actually allow.
@@ -30,18 +29,16 @@ describe('the ceiling an award is checked against', () => {
     expect(awardCapOf({ coverLimit: 5000 })).toEqual({ coverLimit: 5000, awardCap: 5000, capBasis: 'free-limit' });
   });
 
-  it('falls back to the SANITY BOUND, and names it as one rather than as cover', () => {
-    // A sister that has never priced cover carries none, and an award there is a goodwill decision. The
-    // bound that stops a typo is not a promise, and a screen must not present it as one.
+  it('names NO cover as none, with nothing to award: the report is the answer there', () => {
+    // A company that has stated no cover pays nothing from its own books (the user, 2026-10-12). It used to be
+    // shown the bound that stops a typing mistake — a million — as if that were what could be awarded.
     const cap = awardCapOf({});
-    expect(cap).toEqual({ awardCap: MAX_CLAIM_AWARD, capBasis: 'sanity-bound' });
+    expect(cap).toEqual({ awardCap: 0, capBasis: 'none' });
     expect(cap.coverLimit).toBeUndefined();
   });
 
-  it('treats a zero cover limit as no cover stated, exactly as the refusal does', () => {
-    // Zero means "no policy stated", not "a policy of nothing" — the same reading item 8 settled on, and
-    // it has to be the same on both sides or the screen and the server disagree at zero.
-    expect(awardCapOf({ coverLimit: 0 }).capBasis).toBe('sanity-bound');
-    expect(awardCapOf({ coverLimit: 0 }).awardCap).toBe(MAX_CLAIM_AWARD);
+  it('treats a zero cover limit as no cover, exactly as the refusal does', () => {
+    // The same reading on both sides, or the screen and the server disagree at zero.
+    expect(awardCapOf({ coverLimit: 0 })).toEqual({ coverLimit: 0, awardCap: 0, capBasis: 'none' });
   });
 });

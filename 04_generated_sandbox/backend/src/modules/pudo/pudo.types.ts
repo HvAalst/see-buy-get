@@ -226,7 +226,13 @@ export interface CollectProxy {
  * weasling: we agree and here is the money, we agree in part and here is why, or we do not agree.
  * "Under review forever" is not an outcome, and it was the only one available before this existed.
  */
-export type DisputeDecision = 'upheld' | 'partly_upheld' | 'rejected';
+export type DisputeDecision = 'upheld' | 'partly_upheld' | 'rejected' | 'report_only';
+/*
+ * `report_only` is not a fourth thing staff may answer. It is what a reported problem ends in where the company that
+ * carried the parcel has stated no cover and so pays nothing from its own books: nobody of ours has anything to
+ * decide, and the case closes itself with the damage claim report (damage-report.types.ts). The user, 2026-10-12:
+ * "I wonder whether that is our jurisdiction."
+ */
 
 /** Where the goods were when the problem was reported — and so where the parcel returns to when the
  *  case closes. A counter dispute is raised while the goods are still on the shop's shelf; a buyer
@@ -682,6 +688,12 @@ export interface ConsumerParcelView {
    * reported broken goods could find no trace that anybody had answered.
    */
   disputeOutcome?: DisputeOutcomeView;
+  /**
+   * The damage claim report made when a problem was reported — receiver-only, because it holds what the receiver
+   * wrote and photographed. Present for every reported problem, however it ended. Read it at
+   * `GET parcels/:id/damage-report`.
+   */
+  damageReport?: { number: string };
   /**
    * The in-app collection token (S22) — present ONLY on the single-parcel detail, only for the RECEIVER,
    * and only while the parcel is Ready_For_Pickup. The QR is what the PUDO scans; the code is the typed

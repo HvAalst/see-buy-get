@@ -250,6 +250,8 @@ export interface ConsumerParcelView {
    * reason, and when something was awarded, how much and to whom. Absent while it is open, or there was none.
    */
   disputeOutcome?: DisputeOutcome;
+  /** The damage claim report made when a problem was reported. The receiver's only: it holds what they wrote and photographed. */
+  damageReport?: { number: string };
   /** The closed-window facts — RECEIVER ONLY. A sender owns the shipment, not the goods, so whether the
    *  person at the other end has come and what that is costing them is not the sender's business. */
   unclaimedAt?: string;
@@ -301,7 +303,8 @@ export interface InviteSummary {
 export interface DisputeOutcome {
   /** Where it was raised: from the receiver's own app, or by the shop at its counter. */
   origin: 'buyer' | 'counter';
-  decision: 'upheld' | 'partly_upheld' | 'rejected';
+  /** `report_only`: nobody of ours decided anything — the problem was recorded and a damage claim report was made. */
+  decision: 'upheld' | 'partly_upheld' | 'rejected' | 'report_only';
   note: string;
   decidedAt: string;
   award?: number;

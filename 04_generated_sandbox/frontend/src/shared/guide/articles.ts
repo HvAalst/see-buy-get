@@ -801,7 +801,8 @@ export const ARTICLES: GuideArticle[] = [
       "A bag goes onto the shelf whole or not at all. If there is no room for every parcel in it, the bag is refused and nothing is shelved: hand over parcels that are waiting, or add a row, then scan the bag again. One parcel that finds no slot stays with the driver in the same way.",
       "A slot that holds a parcel cannot be taken away. Hand the parcel over first, or keep the shelf large enough for that slot. The app says which slot and which parcel.",
       "A shelf has at least 6 slots and at most 10 colour columns, because every column is a colour of its own.",
-      "A slot is free again the moment its parcel is collected. A parcel with a problem reported keeps its slot until the report is decided."
+      "A slot is free again the moment its parcel is collected. A parcel with a problem reported at your counter keeps its slot, and can still be handed over.",
+      "Before you take a parcel in, the app says what covers it. “Carried by …, and not insured by it” means the company pays no claim itself: tell the customer, and tick the box that says you did. If something goes wrong they get a damage claim report to take to their own insurer."
     ]
   },
   {
@@ -828,19 +829,20 @@ export const ARTICLES: GuideArticle[] = [
       "agent",
       "console"
     ],
-    title: "A problem with a parcel: reporting it, and how it ends",
-    summary: "Broken, opened or wrong goods are reported with a photograph: by the receiver from the Send app, or by the shop at its counter. A member of staff decides it and writes the reason, and the receiver, the sender and the shop are each told.",
+    title: "A problem with a parcel: reporting it, and the damage claim report",
+    summary: "Broken, opened or wrong goods are reported with a photograph: by the receiver from the Send app, or by the shop at its counter. SeeBuyGet does not judge a claim or pay one. It makes a damage claim report on the spot — the record of who held the parcel and when, with the photographs — for the claimant to hand to an insurer.",
     steps: [
-      "Send app, after collecting: My parcels, open the parcel, “Got your parcel?”, then “Report a problem”. Say what is wrong and add a photograph. The parcel then reads “Problem reported”.",
-      "Shop app, at the counter, before handing over: Hand over a parcel, then “Report a problem instead”. Say what is wrong and take a photograph. The parcel stays in its slot and cannot be handed over until the report is decided.",
-      "Operator console, Damage claims: each open report with its reason and its photograph. A member of staff upholds it, upholds it in part, or does not uphold it, and writes the reason. The decision is recorded under the name of the member of staff who is signed in.",
-      "The receiver and the sender each get a notice, and each reads the outcome and the reason on the parcel in the Send app. A shop that reported it gets a notice naming the slot the parcel is in, and hands it over as any parcel."
+      "Send app, after collecting: My parcels, open the parcel, “Got your parcel?”, then “Report a problem”. Say what is wrong and add a photograph. The parcel stays “Delivered”, and a “Damage claim report” appears on it.",
+      "Shop app, at the counter, before handing over: Hand over a parcel, then “Report a problem instead”. Say what is wrong and take a photograph. The report is made at once, the parcel stays in its slot, and it can still be handed over: the customer decides whether to take it.",
+      "On the parcel in the Send app, the receiver has three things under “Damage claim report”: “Read the report”; “Download the report and its photographs”, which is the copy to keep; and “Make a link to pass on”, for an insurer, the sender or the store. A link opens the report with nobody signed in, works for 30 days, and can be stopped there at any time.",
+      "The receiver and the sender each get a notice. A shop that reported it gets a notice naming the slot the parcel is in. Operator console, Damage claims, lists every report made, and staff can download one; they decide nothing there."
     ],
     notes: [
-      "An award goes to whoever paid the network for the shipment: the store, for something bought in a store; the sender, for a parcel handed in at a counter. It is not paid to the receiver. The app says so on the parcel, to both of them.",
-      "An award to a sender is recorded as owed to them, in the money of the company that carried the parcel, and is paid outside the app.",
-      "The sender is shown that a problem was reported and how it ended, never what the receiver wrote or photographed. Neither of them is shown which member of staff decided.",
-      "Nobody is texted about a report or its outcome. Somebody without the Send app reads it on the parcel the day they sign in with the number the parcel was addressed to."
+      "The report says what the record held when the problem was reported: the parcel as it was made, every hand it passed through and when, each recorded step with its fingerprint, the photographs, and the terms it travelled under. It names shops and carriers as companies, never a person, and it carries a fingerprint of its own so two copies can be compared.",
+      "The report is the receiver’s, because it holds what they wrote and photographed. The sender is told that a problem was reported and that the receiver holds the report; the receiver passes it on with a link. A store reads the report on its own order.",
+      "One parcel has one report. A second problem on the same parcel is not recorded: pass the first report on, and tell whoever you pass it to what you have found since.",
+      "Nobody is texted about a report or its outcome. Somebody without the Send app reads it on the parcel the day they sign in with the number the parcel was addressed to.",
+      "A company that carries parcels pays a claim from its own books only where it has stated cover, and no company can state cover yet. Where one has, a claim waits under Damage claims for staff to decide, with a written reason, up to the cover stated."
     ]
   },
   {

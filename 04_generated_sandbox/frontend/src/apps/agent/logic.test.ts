@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import {
+  takeInTermsNotice,
+  termsBlock,
+  termsNeedTelling,
   putAwayAloud,
   putAwayList,
   BODY_HINTS,
@@ -563,5 +566,43 @@ describe('where each parcel out of a bag goes', () => {
   it('reads out every slot and every parcel in it', () => {
     const aloud = putAwayAloud(putAwayList([{ parcelId: 'L-1', slot: 'Red-1' }, { parcelId: 'L-2', slot: 'Red-1' }, { parcelId: 'P-9', slot: 'Orange-1' }]), t);
     expect(aloud).toBe('Put each parcel in its slot. Red 1: L-1, L-2. Orange 1: P-9.');
+  });
+});
+
+describe('what the counter says before it takes a parcel that nothing covers', () => {
+  const terms = (over: Record<string, unknown> = {}) => ({ promise: 'ours', jurisdiction: 'KE', level: 'established', answeredBy: 'SeeBuyGet Kenya Ltd', coverLimit: 0, coverBasis: 'no-stated-limit', currency: 'KES', cashAccepted: true, paidOut: true, ...over }) as never;
+
+  it('says, as a warning, that the company carries it and does not insure it — and what the customer gets instead', () => {
+    expect(takeInTermsNotice(terms(), t)).toEqual({
+      tone: 'warn',
+      icon: 'warning',
+      title: 'Carried by SeeBuyGet Kenya Ltd, and not insured by it',
+      detail: 'SeeBuyGet Kenya Ltd carries it and records every hand it passes through. It pays no claim itself. If something goes wrong, the customer gets a damage claim report to take to their own insurer.',
+    });
+    // It no longer promises a decision nobody will make.
+    expect(JSON.stringify(takeInTermsNotice(terms(), t))).not.toMatch(/Covered by|case by case/);
+  });
+
+  it('still says "covered" where the company has stated cover, with the figure', () => {
+    expect(takeInTermsNotice(terms({ coverLimit: 300, coverBasis: 'free-limit' }), t)).toMatchObject({ tone: 'info', title: 'Covered by SeeBuyGet Kenya Ltd', detail: 'If it is lost or damaged in our care, SeeBuyGet Kenya Ltd pays up to 300.00 KES.' });
+    expect(takeInTermsNotice(terms({ coverLimit: 6000, coverBasis: 'declared' }), t).detail).toBe('The sender declared its value: SeeBuyGet Kenya Ltd covers it up to 6000.00 KES.');
+  });
+
+  it('keeps saying the work is owed but cannot be paid out here, in the same breath', () => {
+    expect(takeInTermsNotice(terms({ paidOut: false }), t).detail).toMatch(/pays no claim itself\..* /);
+    expect(takeInTermsNotice(terms({ paidOut: false }), t).detail.length).toBeGreaterThan(takeInTermsNotice(terms(), t).detail.length);
+  });
+
+  it('makes the shopkeeper say they told the customer, before the goods change hands', () => {
+    expect(termsNeedTelling(terms())).toBe(true);
+    expect(termsNeedTelling(terms({ promise: 'theirs', coverBasis: 'none' }))).toBe(true);
+    expect(termsNeedTelling(terms({ coverLimit: 300, coverBasis: 'free-limit' }))).toBe(false);
+    expect(termsNeedTelling(terms({ coverLimit: 6000, coverBasis: 'declared' }))).toBe(false);
+    expect(termsNeedTelling(null)).toBe(false);
+    // Not ticked: the take-in may not be confirmed. Ticked: it may.
+    expect(termsBlock(terms(), 'ready', false, t)).toBe(t('agent.accept.termsTickFirst'));
+    expect(termsBlock(terms(), 'ready', true, t)).toBeNull();
+    // A parcel the company has stated cover for needs no tick at all.
+    expect(termsBlock(terms({ coverLimit: 300, coverBasis: 'free-limit' }), 'ready', false, t)).toBeNull();
   });
 });

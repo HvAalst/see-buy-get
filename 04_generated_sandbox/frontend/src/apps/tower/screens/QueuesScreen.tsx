@@ -19,7 +19,10 @@ import {
   stuckDays,
   carrierBearsLine,
   stuckLabel,
+  reportRowWords,
   type ApprovalRow,
+  type DamageReportRow,
+  type ClaimCap,
   type ClaimDecision,
   type ClaimRow,
   type DisposalRow,
@@ -121,7 +124,79 @@ export function ClaimsScreen({ state, actions }: { state: TowerState; actions: T
           </>
         ) : null}
       </QueuePanel>
+
+      <DamageReports rows={state.damageReports} actions={actions} />
     </>
+  );
+}
+
+/**
+ * THE DAMAGE CLAIM REPORTS MADE — every problem reported, newest first.
+ *
+ * The user, 2026-10-12: "I wonder whether that is our jurisdiction." Where the company that carried a parcel has
+ * stated no cover — which is every company, until one states it — a reported problem is not a claim waiting on
+ * staff: a report is made on the spot and handed to whoever it is for. So this is not a queue and nothing in it is
+ * decided here. It is what staff read when somebody rings about a report, and where they can take the file.
+ */
+function DamageReports({ rows, actions }: { rows: DamageReportRow[] | null; actions: TowerActions }) {
+  const t = useT();
+  return (
+    <section class="cons__panel">
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t('tower.reports.title')}</span>
+        {rows ? <span class="ctbl__sub">{t('tower.reports.count', { n: rows.length })}</span> : null}
+      </div>
+      <p class="cons__lede">{t('tower.reports.lede')}</p>
+      {rows === null ? (
+        <p class="cons__empty">{t('tower.queues.loading')}</p>
+      ) : rows.length === 0 ? (
+        <div class="cons__empty">
+          <p class="cons__emptyt">{t('tower.reports.emptyTitle')}</p>
+          <p>{t('tower.reports.emptyBody')}</p>
+        </div>
+      ) : (
+        <table class="ctbl ctbl--stack">
+          <thead>
+            <tr>
+              <th>{t('tower.reports.col.report')}</th>
+              <th>{t('tower.reports.col.problem')}</th>
+              <th>{t('tower.reports.col.where')}</th>
+              <th>{t('tower.reports.col.handedOn')}</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const says = reportRowWords(row, t);
+              return (
+                <tr key={row.parcelId}>
+                  <td>
+                    <div class="ctbl__strong">{row.number}</div>
+                    <div class="ctbl__sub">{[row.store, new Date(row.madeAt).toLocaleString()].filter(Boolean).join(' · ')}</div>
+                  </td>
+                  <td>
+                    <span class="ctbl__lbl">{t('tower.reports.col.problem')}</span>
+                    <div>{row.reason}</div>
+                    <div class="ctbl__sub">{says.by}</div>
+                  </td>
+                  <td>
+                    <span class="ctbl__lbl">{t('tower.reports.col.where')}</span>
+                    <div>{says.hands}</div>
+                    <div class="ctbl__sub">{`${row.from} → ${row.to}`}</div>
+                  </td>
+                  <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.reports.col.handedOn')}</span>{says.handedOn}</td>
+                  <td>
+                    <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void actions.downloadDamageReport(row.parcelId)}>
+                      {t('tower.reports.download')}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </section>
   );
 }
 
@@ -252,7 +327,7 @@ function ClaimForm({
   onDecide,
 }: {
   id: string;
-  cap: { awardCap: number; capBasis: ClaimRow['capBasis'] | 'none'; currency?: string };
+  cap: ClaimCap;
   body: string;
   busy: boolean;
   state: TowerState;

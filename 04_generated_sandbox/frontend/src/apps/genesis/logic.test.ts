@@ -515,3 +515,38 @@ describe('how a reported problem ended, said to whoever is reading', () => {
     expect(disputeOutcomeWords(outcome, 'sent', cash, t).lines[1]).toBe('KES 10.00 was paid to the store that shipped it.');
   });
 });
+
+describe('a reported problem that nobody of ours decides: the report, said to whoever is reading', () => {
+  const cash = (amount: number, currency?: string) => `${currency ?? ''} ${amount.toFixed(2)}`.trim();
+  const made = (origin: 'buyer' | 'counter') => ({ origin, decision: 'report_only' as const, note: 'No company of the network decides a claim on this parcel or pays one.' });
+
+  it('tells the receiver their problem is on record and that the report is theirs, below', () => {
+    expect(disputeOutcomeWords(made('buyer'), 'received', cash, t)).toEqual({
+      tone: 'info',
+      title: 'Your problem is recorded, and a damage claim report was made',
+      lines: ['SeeBuyGet does not judge a claim or pay one. The report is below: it is yours to keep, and to hand to an insurer or to whoever answers for the goods.'],
+    });
+  });
+
+  it('tells the sender that the receiver reported it, and who holds the report', () => {
+    expect(disputeOutcomeWords(made('buyer'), 'sent', cash, t)).toEqual({
+      tone: 'info',
+      title: 'The receiver reported a problem, and a damage claim report was made',
+      lines: ['SeeBuyGet does not judge a claim or pay one. The report was made for the receiver: ask them to pass it on if you need it for a claim.'],
+    });
+  });
+
+  it('says it was the shop that reported it, to both, when it was — and the report is still the receiver’s', () => {
+    expect(disputeOutcomeWords(made('counter'), 'received', cash, t)).toMatchObject({ tone: 'info', title: 'The shop reported a problem, and a damage claim report was made' });
+    expect(disputeOutcomeWords(made('counter'), 'received', cash, t).lines[0]).toMatch(/The report is below/);
+    expect(disputeOutcomeWords(made('counter'), 'sent', cash, t).lines[0]).toMatch(/made for the receiver/);
+  });
+
+  it('says nothing was upheld, refused or owed: nobody judged anything, and the record’s own note is not shown as a reason', () => {
+    for (const relation of ['sent', 'received'] as const) {
+      const said = disputeOutcomeWords({ ...made('buyer'), award: 40, currency: 'KES', paidTo: 'sender' }, relation, cash, t);
+      expect(`${said.title} ${said.lines.join(' ')}`).not.toMatch(/upheld|owed|paid to|40|No company of the network/);
+      expect(said.lines).toHaveLength(1);
+    }
+  });
+});

@@ -12,7 +12,8 @@ import { t } from '../../shared/i18n'; // plain t(): these strings are built at 
 import { changeCompanyPassword, changeStaffPassword, clearCreds, companyLogin, createTowerClient, myStaffAccount, readCreds, saveCreds, staffLogin, type TowerClient, type TowerCreds, type TwoStepSetup } from './api';
 import type { ConstraintView } from './logic';
 import type { EntityPricing, EntityRow } from './money';
-import type { ApprovalRow, ClaimDecision, ClaimRow, DisposalRow, DriverApplication, FreightClaimRow, StalledRow } from './queues';
+import type { ApprovalRow, ClaimDecision, ClaimRow, DamageReportRow, DisposalRow, DriverApplication, FreightClaimRow, StalledRow } from './queues';
+import { triggerDownloadBlob } from '../../shared/download';
 import { EMPTY_CORRIDOR_FORM, corridorName, type CorridorForm, type CorridorRow, type CouplingRow } from './corridors';
 import type { DisputeReportRow, ReportRow } from './reports';
 import { EMPTY_COUNTRY_FORM, newCountryCode, overridesOf, type CatalogueCountry, type InterestCountry, type NewCountryForm, type PresenceLevel, type PresenceProposalRow, type PresenceRow } from './presence';
@@ -83,6 +84,8 @@ export interface TowerState {
   claims: ClaimRow[] | null;
   /** FP3b — claims against delivered freight, read with the parcel ones and counted with them. */
   freightClaims: FreightClaimRow[] | null;
+  /** The damage claim reports made, newest first. `null` while unread or when the read failed. */
+  damageReports: DamageReportRow[] | null;
   disposal: DisposalRow[] | null;
   approvals: ApprovalRow[] | null;
   /** B1 — customers' businesses, those waiting on a check first. Null while unread, like every queue. */
@@ -280,6 +283,8 @@ export interface TowerActions {
   /** CV4 — the bytes of a voice message a party put in a shared report, or null. */
   disputeVoice(reportId: string, voiceId: string): Promise<Blob | null>;
   refresh(): Promise<void>;
+  /** Take the file of one damage claim report. */
+  downloadDamageReport(parcelId: string): Promise<void>;
   open(rowId: string | null): void;
   clear(constraintId: string, reason: string, hazard: string): Promise<void>;
   resolveClaim(parcelId: string, decision: ClaimDecision, award: number | undefined, note: string): Promise<void>;
@@ -360,6 +365,7 @@ const INITIAL: TowerState = {
   expiring: null,
   claims: null,
   freightClaims: null,
+  damageReports: null,
   disposal: null,
   approvals: null,
   businesses: null,
@@ -644,7 +650,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
    */
   const loadQueues = useCallback(async (client: TowerClient) => {
     setState((s) => ({ ...s, loading: true }));
-    const [claims, freightClaims, disposal, approvals, stalled, driverApplications, businesses, accountMoves, idDisputes, paperReports, fleets] = await Promise.all([
+    const [claims, freightClaims, disposal, approvals, stalled, driverApplications, businesses, accountMoves, idDisputes, paperReports, fleets, damageReports] = await Promise.all([
       client.api.disputes(),
       client.api.freightClaims(),
       client.api.disposalQueue(),
@@ -663,12 +669,15 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       client.api.paperReports(),
       // A fleet is set up by staff, and two of its four steps are somebody waiting on us.
       client.api.fleetsSettingUp(),
+      // Not a queue — nobody waits on us for these — but read beside the claims, because it is where a reported problem now goes.
+      client.api.damageReports(),
     ]);
     setState((s) => ({
       ...s,
       loading: false,
       claims: claims.error ? null : (narrow<{ disputes: ClaimRow[] }>(claims.data)?.disputes ?? []),
       freightClaims: freightClaims.error ? null : (narrow<{ claims: FreightClaimRow[] }>(freightClaims.data)?.claims ?? []),
+      damageReports: damageReports.error ? null : (narrow<{ items: DamageReportRow[] }>(damageReports.data)?.items ?? []),
       disposal: disposal.error ? null : (narrow<{ rows: DisposalRow[] }>(disposal.data)?.rows ?? []),
       approvals: approvals.error ? null : (narrow<ApprovalRow[]>(approvals.data) ?? []),
       stalled: stalled.error ? null : (narrow<{ items: StalledRow[] }>(stalled.data)?.items ?? []),
@@ -952,6 +961,15 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     setState((s) => ({ ...s, busyId: null, lookup: narrow<ParcelView>(data), queueError: null }));
   }, []);
 
+  /** The file of one damage claim report: the report to read or print, the same facts for a machine, and its photographs. */
+  const downloadDamageReport = useCallback(async (parcelId: string) => {
+    const client = clientRef.current;
+    if (!client) return;
+    const r = await client.api.damageReportFile(parcelId);
+    if (r.error || !r.data) return setState((s) => ({ ...s, error: r.error ?? null }));
+    triggerDownloadBlob(`damage-claim-report-${parcelId.replace(/[^A-Za-z0-9._-]+/g, '-')}.zip`, r.data);
+  }, []);
+
   const refresh = useCallback(async () => {
     const client = clientRef.current;
     if (!client) return;
@@ -1064,6 +1082,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         if (screen === 'movers' && client) void loadMovers(client);
       },
       refresh,
+      downloadDamageReport,
       open,
       clear,
       chooseEntity: async (entityId: string) => {

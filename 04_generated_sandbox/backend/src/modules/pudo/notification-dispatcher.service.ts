@@ -118,7 +118,7 @@ interface RunClaimOpened { departureId: string; bookingId: string; managerDid: s
 interface RunClaimAnswered { departureId: string; bookingId: string; shipperDid: string; managerDid: string; company: string; load: string; answer: 'accepted' | 'refused'; note?: string }
 interface FleetPaperChecked { did: string; kind: 'operator_licence' | 'carrier_insurance'; accepted: boolean; expiresAt?: string; reason?: string }
 interface LicenceSent { did: string; displayName: string; expiresAt: string; managerDid?: string }
-interface DisputeDecided { parcelId: string; decision: 'upheld' | 'partly_upheld' | 'rejected'; award: number; currency?: string; note: string; origin: 'counter' | 'buyer'; raisedBy: string }
+interface DisputeDecided { parcelId: string; decision: 'upheld' | 'partly_upheld' | 'rejected' | 'report_only'; award: number; currency?: string; note: string; origin: 'counter' | 'buyer'; raisedBy: string }
 import { UnclaimedService } from './unclaimed.service';
 import { VendorService } from './vendor.service';
 import { MARKET_SUPPLY_STALE_MIN, NUDGE_COOLDOWN_MIN, NUDGE_MIN_MOVE_KM, UNCOLLECTED_REMINDER_H, UNCOLLECTED_SWEEP_MS } from './pudo.config';
@@ -461,6 +461,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     } catch {
       return;
     }
+    if (p.decision === 'report_only') return this.onDamageReportMade(p, parcel);
     const outcome = p.decision === 'upheld' ? 'upheld' : p.decision === 'partly_upheld' ? 'upheld in part' : 'not upheld';
     const tag = `dispute:${p.parcelId}:decided`;
     const receiver = accountFor(this.parcels.receiverOf(parcel), this.persons);
@@ -476,6 +477,36 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     if (p.origin === 'counter' && p.raisedBy.startsWith('did:')) {
       const slot = parcel.binSlot ? ` It is on your shelf at ${parcel.binSlot}, to be handed over as any parcel.` : '';
       await this.tell(p.raisedBy, { kind: 'claim_decided', title: `The dispute on parcel ${p.parcelId} was decided`, body: `It was ${outcome}. ${p.note}${slot}`, tag, data: { parcelId: p.parcelId } });
+    }
+  }
+
+  /**
+   * A PROBLEM WAS REPORTED, AND NOBODY OF OURS DECIDES IT: a damage claim report was made instead.
+   *
+   * The receiver is told where it is — on the parcel in their app, theirs to read and to pass to an insurer. Where
+   * the SHOP reported it at its counter they may not have been there, so they are told that too, and that the parcel
+   * can still be collected. The sender is told a problem was reported and who holds the report: what the receiver
+   * wrote and photographed is the receiver's to show them. And the shop is told its parcel can be handed over.
+   */
+  private async onDamageReportMade(p: DisputeDecided, parcel: ReturnType<ParcelService['get']>): Promise<void> {
+    const tag = `dispute:${p.parcelId}:report`;
+    const data = { parcelId: p.parcelId };
+    const receiver = accountFor(this.parcels.receiverOf(parcel), this.persons);
+    const sender = accountFor(this.parcels.senderOf(parcel), this.persons);
+    if (receiver) {
+      await this.tell(
+        receiver.personDid,
+        p.origin === 'buyer'
+          ? { kind: 'claim_decided', title: `A damage claim report was made for parcel ${p.parcelId}`, body: 'It holds the record of who held your parcel, and the photographs. Open the parcel to read it, or to pass it to an insurer.', tag, data }
+          : { kind: 'claim_decided', title: `The shop reported a problem with parcel ${p.parcelId}`, body: 'A damage claim report was made, and it is on the parcel in your app. The parcel can still be collected.', tag, data },
+      );
+    }
+    if (sender && sender.personDid !== receiver?.personDid) {
+      await this.tell(sender.personDid, { kind: 'claim_decided', title: `A problem was reported on parcel ${p.parcelId}`, body: 'A damage claim report was made for the receiver. Ask them to pass it on if you need it for a claim.', tag, data });
+    }
+    if (p.origin === 'counter' && p.raisedBy.startsWith('did:')) {
+      const slot = parcel.binSlot ? ` It is on your shelf at ${parcel.binSlot}, and can be handed over as any parcel.` : '';
+      await this.tell(p.raisedBy, { kind: 'claim_decided', title: `The damage claim report for parcel ${p.parcelId} is made`, body: `The receiver has it in their app.${slot}`, tag, data });
     }
   }
 

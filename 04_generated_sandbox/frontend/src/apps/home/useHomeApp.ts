@@ -30,9 +30,10 @@ import {
 } from './api';
 import { currentPath, townSlugFromPath } from './prerendered';
 import { readLinkKey } from '../../shared/archive/documentLink';
+import { readReportKey } from '../../shared/damage/damageReport';
 import { EMPTY_JOIN, nextStep, readDeepLink, normalizePhone, onlyJoinable, prevStep, roleById, signupBody, stepBlocker, type JoinForm, type JoinStep, type RoleSpec } from './logic';
 
-export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents' | 'verify' | 'document' | 'town';
+export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents' | 'verify' | 'document' | 'report' | 'town';
 
 /** FB3b — how far the visitor cares to look. `null` IS a choice: the whole market. */
 export type MarketReach = number | null;
@@ -44,6 +45,8 @@ export interface HomeState {
   verifyInitial?: string;
   /** The key of a link to a document, carried in on #doc= and taken out of the address the moment it is read. */
   docKey?: string;
+  /** The key of a link to a damage claim report, carried in on #report= and taken out of the address the same way. */
+  reportKey?: string;
   role: RoleSpec | null;
   step: JoinStep;
   form: JoinForm;
@@ -316,6 +319,21 @@ export function useHomeApp() {
       /* a browser that refuses the rewrite still shows the document */
     }
     setState((s) => ({ ...s, screen: 'document', docKey: key }));
+  }, []);
+
+  /**
+   * #report=<key> — a damage claim report, for whoever the claimant handed the link to, with nobody signed in. Read
+   * once and taken out of the address, exactly as a note's key is, and for the same reason.
+   */
+  useEffect(() => {
+    const key = readReportKey(globalThis.location?.hash);
+    if (key === undefined) return;
+    try {
+      history.replaceState(null, '', `${location.pathname}${location.search}`);
+    } catch {
+      /* a browser that refuses the rewrite still shows the report */
+    }
+    setState((s) => ({ ...s, screen: 'report', reportKey: key }));
   }, []);
 
   /*

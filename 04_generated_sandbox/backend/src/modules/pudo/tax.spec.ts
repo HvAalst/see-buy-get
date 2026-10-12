@@ -505,10 +505,19 @@ describe('tax', () => {
       expect(ok.dispute?.award).toBe(6000);
     });
 
-    it('a ZERO limit means NO POLICY STATED, not a policy of nothing', async () => {
-      // Every sister starts at zero, because a free limit invented in this codebase would be a promise
-      // nobody costed. Reading that as a hard cap would have made damage resolution inert on the day
-      // cover shipped — an operator who has DECIDED to pay could not.
+    it('declaring a value buys nothing, and costs nothing, from a company that has stated no cover', () => {
+      // It used to buy cover up to the declared value, for free — so every store order was "covered" to its own
+      // subtotal by a company that had never said it covers anything.
+      expect(coverFor({ declaredValue: 6000, premiumPct: 0, freeLimit: 0 })).toEqual({ declaredValue: 6000, premium: 0, limit: 0 });
+      expect(coverFor({ premiumPct: 0, freeLimit: 0 })).toEqual({ declaredValue: 0, premium: 0, limit: 0 });
+      // STATING is what switches it on: a free limit, or a premium for more.
+      expect(coverFor({ declaredValue: 6000, premiumPct: 0, freeLimit: 5000 })).toEqual({ declaredValue: 6000, premium: 0, limit: 6000 });
+      expect(coverFor({ declaredValue: 6000, premiumPct: 0.02, freeLimit: 0 })).toEqual({ declaredValue: 6000, premium: 120, limit: 6000 });
+    });
+
+    it('a ZERO limit means the company PAYS NOTHING ITSELF: a reported problem ends in a report, and no award can be made', async () => {
+      // Every sister starts at zero, because a free limit invented in this codebase would be a promise nobody
+      // costed. Zero used to be read as "not decided yet", and let one member of staff award up to a million.
       const { from, to, store } = route();
       const { parcel } = parcels.createInbound({
         vendorId: store.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: '+254700774',
@@ -517,8 +526,10 @@ describe('tax', () => {
       });
       expect(parcel.coverLimit).toBe(0);
       toShelf(parcel.parcelId, from, to);
-      parcels.dispute(parcel.parcelId, to.did, 'crushed', 'proof.jpg');
-      expect(parcels.resolveDispute(parcel.parcelId, { decision: 'upheld', award: 40, note: 'goodwill' }).dispute?.award).toBe(40);
+      const reported = parcels.dispute(parcel.parcelId, to.did, 'crushed', 'proof.jpg');
+      expect(reported.status).toBe('Ready_For_Pickup');
+      expect(reported.dispute).toMatchObject({ state: 'resolved', decision: 'report_only', award: 0 });
+      expect(() => parcels.resolveDispute(parcel.parcelId, { decision: 'upheld', award: 40, note: 'goodwill' })).toThrow(/expected Disputed/);
     });
 
     it('stamps the policy, so changing it cannot rewrite what was promised', () => {

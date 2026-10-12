@@ -502,14 +502,15 @@ export function followLanding(search: string, device: { session: boolean; knownP
 
 /** Whose report it was, by how it went: the receiver's own, the receiver's as the sender reads it, or the shop's. */
 const OUTCOME_TITLES = {
-  mine: { upheld: 'send.outcome.upheldMine', partly_upheld: 'send.outcome.partlyMine', rejected: 'send.outcome.rejectedMine' },
-  theirs: { upheld: 'send.outcome.upheldTheirs', partly_upheld: 'send.outcome.partlyTheirs', rejected: 'send.outcome.rejectedTheirs' },
-  shop: { upheld: 'send.outcome.upheldShop', partly_upheld: 'send.outcome.partlyShop', rejected: 'send.outcome.rejectedShop' },
+  mine: { upheld: 'send.outcome.upheldMine', partly_upheld: 'send.outcome.partlyMine', rejected: 'send.outcome.rejectedMine', report_only: 'send.outcome.reportMine' },
+  theirs: { upheld: 'send.outcome.upheldTheirs', partly_upheld: 'send.outcome.partlyTheirs', rejected: 'send.outcome.rejectedTheirs', report_only: 'send.outcome.reportTheirs' },
+  shop: { upheld: 'send.outcome.upheldShop', partly_upheld: 'send.outcome.partlyShop', rejected: 'send.outcome.rejectedShop', report_only: 'send.outcome.reportShop' },
 } as const;
 
 /**
  * HOW A REPORTED PROBLEM ENDED, in words — for whoever is reading: the receiver who reported it, or the
- * sender who paid for the shipment.
+ * sender who paid for the shipment. Almost always it ended in a damage claim report and no decision at all;
+ * the three decisions are for a parcel whose company has stated cover and so pays from its own books.
  *
  * It used to end in silence. The decision and its reason were written down and the parcel went back to
  * "delivered"; the person who had reported broken goods opened the app and found nothing had been said.
@@ -526,14 +527,20 @@ const OUTCOME_TITLES = {
  * coming to them.
  */
 export function disputeOutcomeWords(
-  outcome: { origin?: 'buyer' | 'counter'; decision: 'upheld' | 'partly_upheld' | 'rejected'; note: string; award?: number; currency?: string; paidTo?: 'store' | 'sender' },
+  outcome: { origin?: 'buyer' | 'counter'; decision: 'upheld' | 'partly_upheld' | 'rejected' | 'report_only'; note: string; award?: number; currency?: string; paidTo?: 'store' | 'sender' },
   relation: 'sent' | 'received',
   cash: (amount: number, currency?: string) => string,
   t: Translate,
-): { tone: 'ok' | 'warn'; title: string; lines: string[] } {
+): { tone: 'ok' | 'warn' | 'info'; title: string; lines: string[] } {
   const mine = relation === 'received';
   const whose = outcome.origin === 'counter' ? 'shop' : mine ? 'mine' : 'theirs';
   const title = t(OUTCOME_TITLES[whose][outcome.decision]);
+  // NOBODY OF OURS DECIDED ANYTHING (the user, 2026-10-12: "I wonder whether that is our jurisdiction"). So there is
+  // no reasoning to show and nothing to call good or bad news: what is said is that the problem is on record, and
+  // where the report is — on this parcel for the receiver, with the receiver for the sender.
+  if (outcome.decision === 'report_only') {
+    return { tone: 'info', title, lines: [t(mine ? 'send.outcome.reportOnParcel' : 'send.outcome.reportHeldByReceiver')] };
+  }
   const lines = [outcome.note.trim()].filter(Boolean);
   if (outcome.award && outcome.award > 0) {
     const amount = cash(outcome.award, outcome.currency);

@@ -1,6 +1,7 @@
 import type { ChatThread } from '../../../shared/conversation/logic';
 import { ConversationSheet } from '../../../shared/conversation/Conversations';
-import { narrow } from '../../../lib/sbg';
+import { narrow, type SbgClient } from '../../../lib/sbg';
+import { DamageReportCard } from '../../../shared/damage/DamageReportCard';
 import { useEffect, useState } from 'preact/hooks';
 import { errorSentence, Button, Card, Checklist, CodeCard, ErrorNote, Icon, Note, Pill, PushPrompt, ReadAloud, Sheet } from '../../../shared/ui';
 import { formatMoney, useT } from '../../../shared/i18n';
@@ -16,6 +17,8 @@ const codeShowsAt = (iso: string) => new Date(iso).toLocaleString(undefined, { w
 export interface MyParcelsScreenProps {
   state: SendState;
   actions: SendActions;
+  /** The signed-in client: a damage claim report is read, taken and handed on from the parcel it is about. */
+  client?: SbgClient | null;
 }
 
 const PILL_TONE = { ok: 'ok', info: 'info', danger: 'danger' } as const;
@@ -26,14 +29,14 @@ const PILL_TONE = { ok: 'ok', info: 'info', danger: 'danger' } as const;
  * Tapping a parcel opens its authenticated twin: the same status ladder the public track shows, but
  * reached by identity, not by pasting a code.
  */
-export function MyParcelsScreen({ state, actions }: MyParcelsScreenProps) {
+export function MyParcelsScreen({ state, actions, client = null }: MyParcelsScreenProps) {
   const t = useT();
   useEffect(() => {
     if (state.parcelsState === 'idle') void actions.loadParcels();
   }, [state.parcelsState, actions]);
 
   const open = openParcelView(state);
-  if (open) return <ParcelDetail parcel={open} state={state} actions={actions} />;
+  if (open) return <ParcelDetail parcel={open} state={state} actions={actions} client={client} />;
 
   const received = sortForPerson(state.parcels?.received ?? []);
   const sent = sortForPerson(state.parcels?.sent ?? []);
@@ -150,7 +153,7 @@ function FreightGroup({ items }: { items: FreightShipmentView[] }) {
   );
 }
 
-function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; state: SendState; actions: SendActions }) {
+function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParcelView; state: SendState; actions: SendActions; client: SbgClient | null }) {
   const t = useT();
   const pres = statusPresentation(parcel.status, t);
   const at = ladderIndex(parcel.status);
@@ -183,10 +186,11 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
     const opened = narrow<ChatThread>(r.data);
     if (opened) setThread(opened);
   };
-  // Close the sheet once the dispute has landed (the twin flips to Disputed).
+  // Close the sheet once the report has landed: the parcel is in dispute, or — where nobody of ours decides
+  // anything — it is delivered as it was, with a damage claim report on it.
   useEffect(() => {
-    if (parcel.status === 'Disputed') setDisputeOpen(false);
-  }, [parcel.status]);
+    if (parcel.status === 'Disputed' || parcel.damageReport) setDisputeOpen(false);
+  }, [parcel.status, parcel.damageReport]);
 
   return (
     <div class="scr">
@@ -365,16 +369,21 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
           })()
         : null}
 
+      {/* THE DAMAGE CLAIM REPORT — the receiver's: to read, to keep, and to hand to whoever they choose. */}
+      {parcel.damageReport ? <DamageReportCard client={client} parcelId={parcel.parcelId} number={parcel.damageReport.number} /> : null}
+
       {/* S23: once it is delivered, the receiver keeps their own proof of what arrived, and can report a
-          problem — a reason + a photo — which routes to the seller (or the sender) and the control tower. */}
+          problem — a reason + a photo. One report to a parcel: once it is made, the button is gone. */}
       {canAct ? (
         <Card label={t('send.parcels.gotParcel')}>
           <PhotoField id="pod-photo" value={parcel.podPhotoRef ?? ''} label={t('send.parcels.addPodPhoto')} upload={(file) => actions.uploadPhoto('pod', file)} onCapture={(ref) => void actions.submitPod(ref)} disabled={state.podBusy} />
-          <div style="margin-top:10px">
-            <Button variant="outline" chevron={false} onClick={() => { setReason(''); setPhoto(''); setDisputeOpen(true); }}>
-              {t('send.parcels.reportProblem')}
-            </Button>
-          </div>
+          {parcel.damageReport ? null : (
+            <div style="margin-top:10px">
+              <Button variant="outline" chevron={false} onClick={() => { setReason(''); setPhoto(''); setDisputeOpen(true); }}>
+                {t('send.parcels.reportProblem')}
+              </Button>
+            </div>
+          )}
         </Card>
       ) : null}
 

@@ -14,7 +14,7 @@ import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
 import { FleetService } from './fleet.service';
 import type { Amounts } from './amounts';
-import { DEFAULT_TAX_LABEL, MAX_CLAIM_AWARD, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, OTP_MAX_ATTEMPTS, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, UNCOLLECTED_H, VOID_WINDOW_MS, WHOLESALE, classifySize, coverFor, holdingFeeFor, taxOn, withPlatformFee } from './pudo.config';
+import { DEFAULT_TAX_LABEL, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, OTP_MAX_ATTEMPTS, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, UNCOLLECTED_H, VOID_WINDOW_MS, WHOLESALE, classifySize, coverFor, holdingFeeFor, taxOn, withPlatformFee } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import type { ResolvedTax } from '../../foundation/entity/entity.types';
 import { Birthplace, ConsumerParcelView, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, isCollectable } from './pudo.types';
@@ -162,6 +162,21 @@ export function filterVendorParcels(rows: Parcel[], q: VendorOrdersQuery): Parce
 export function parcelCurrency(p: Parcel): string {
   return p.currency ?? NETWORK_CURRENCY;
 }
+
+/**
+ * Whether the company that carried this parcel PAYS A CLAIM FROM ITS OWN BOOKS — which it does only where it has
+ * stated cover, stamped on the parcel when it was made. Where it has not, nobody of ours has anything to decide on
+ * a reported problem: it ends in the damage claim report and nothing else.
+ */
+export function paysItself(p: Pick<Parcel, 'coverLimit'>): boolean {
+  return p.coverLimit != null && p.coverLimit > 0;
+}
+
+/** What is written on a case that closed itself with the report. Never shown as somebody's reasoning: nobody reasoned. */
+/** One parcel has one report. Said to whoever reports a second time on a parcel whose first report is already made. */
+export const ALREADY_REPORTED = 'A problem was already reported on this parcel, and its damage claim report was made then. One parcel has one report: pass that one on, and tell whoever you pass it to what you have found since.';
+
+export const REPORT_ONLY_NOTE = 'No company of the network decides a claim on this parcel or pays one. A damage claim report was made from the record.';
 
 /**
  * How a parcel's dispute ended, for the people on it — or nothing while it is open or there never was one.
@@ -893,6 +908,10 @@ export class ParcelService implements OnApplicationBootstrap {
     const who = readerOf(reader);
     const p = this.receiverParcel(id, who);
     if (p.status !== 'Delivered') throw new GlosError('INVALID_STATE', 'You can report a problem once the parcel is delivered');
+    // ONE REPORT TO A PARCEL. A case that closed itself with a report leaves the parcel "delivered" again, so a second
+    // report would open a second case over the first — and the report already handed to an insurer would describe a
+    // problem that is no longer on the record.
+    if (p.dispute) throw new GlosError('INVALID_STATE', ALREADY_REPORTED);
     if (!reason?.trim() || !photoRef) throw new GlosError('DISPUTE_INCOMPLETE', 'A reason and a photo are required to report a problem');
     // The problem photo must be its OWN media, not the delivered-state PoD reused — else one image serves
     // two roles and its retention gets confused (S26). Force a distinct capture.
@@ -914,6 +933,8 @@ export class ParcelService implements OnApplicationBootstrap {
     // is never copied into the timeline, which both parties (including the sender) can read.
     this.scan(p, 'Disputed', byDid, 'buyer dispute');
     void this.events.publish(GlosEvent.Pudo.ParcelDisputed, { parcelId: id, reason, photoProofRef: photoRef, vendorId: p.vendorId, externalOrderId: p.externalOrderId, origin: 'buyer' }, { source: 'pudo' }).catch(() => undefined);
+    this.makeReport(p);
+    if (!paysItself(p)) this.closeWithReport(p);
     return this.toConsumerView(p, who, true);
   }
 
@@ -958,6 +979,8 @@ export class ParcelService implements OnApplicationBootstrap {
       disputePhotoRef: relation === 'received' ? p.buyerDisputePhotoRef : undefined,
       disputeReason: relation === 'received' && p.status === 'Disputed' ? (p.buyerDisputeReason ?? p.disputeReason) : undefined,
       ...(disputeOutcomeOf(p) ? { disputeOutcome: disputeOutcomeOf(p) } : {}),
+      // The report holds the receiver's own words and photograph, so it is the receiver's to open — and to pass on.
+      ...(p.dispute && relation === 'received' ? { damageReport: { number: `DCR-${p.parcelId}` } } : {}),
       // The closed-window facts, receiver-only — see ConsumerParcelView. The owed figure is DERIVED here
       // rather than left to the app, so the number somebody reads on their phone and the number the
       // counter asks for cannot come from two different pieces of arithmetic.
@@ -2255,6 +2278,7 @@ export class ParcelService implements OnApplicationBootstrap {
     const parcel = this.require(parcelId);
     if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
     if (parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Dispute is raised at the destination PUDO');
+    if (parcel.dispute) throw new GlosError('INVALID_STATE', ALREADY_REPORTED); // one report to a parcel — see buyerDispute()
     if (!reason?.trim() || !photoProofRef) throw new GlosError('DISPUTE_INCOMPLETE', 'A reason and a photo proof are required to dispute');
     // The CASE opens before the status flips, and it remembers where the parcel was: these goods are
     // still on this shop's shelf, so a rejected claim has to leave them collectable rather than
@@ -2268,7 +2292,53 @@ export class ParcelService implements OnApplicationBootstrap {
     this.media.holdParcelForDispute(parcel.parcelId);
     this.scan(parcel, 'Disputed', agentDid, `dispute · ${reason}`);
     void this.events.publish(GlosEvent.Pudo.ParcelDisputed, { parcelId, agentDid, reason, photoProofRef, vendorId: parcel.vendorId, externalOrderId: parcel.externalOrderId }, { source: 'pudo' }).catch(() => undefined);
+    this.makeReport(parcel);
+    if (!paysItself(parcel)) this.closeWithReport(parcel);
     return parcel;
+  }
+
+  private problemReported?: (parcelId: string) => void;
+
+  /**
+   * Who makes the damage claim report, the instant a problem is reported. Registered here rather than injected: the
+   * report reads this service. Called INSIDE the act of reporting, before anything else can happen to the parcel —
+   * a report made a moment later, from the bus, could hold a hand-over that came after the problem it reports.
+   */
+  registerProblemReported(make: (parcelId: string) => void): void {
+    this.problemReported = make;
+  }
+
+  /** The report is evidence, not a condition: reporting a problem never fails because the report could not be built. It is then built on first reading. */
+  private makeReport(parcel: Parcel): void {
+    try {
+      this.problemReported?.(parcel.parcelId);
+    } catch {
+      /* built on first reading */
+    }
+  }
+
+  /**
+   * NOTHING OF OURS TO DECIDE, so the case closes itself — with the report.
+   *
+   * The user, 2026-10-12: "I wonder whether that is our jurisdiction. We are better off with a disclaimer that we
+   * facilitate the efficiency of the logistics chain and that we hand over a report…". Where the company that carried
+   * the parcel has stated no cover it pays nothing from its own books, and then a member of staff reading the report
+   * has nothing to grant or refuse: what the claimant needs is the record, and the record is made the moment the
+   * problem is reported (DamageReportService). So the parcel goes straight back to what it factually is — delivered,
+   * or on the shelf and collectable — instead of standing "in dispute" until somebody with no decision to make
+   * presses a button. At a counter that matters: the customer is standing there.
+   *
+   * The case stays on the parcel, closed, saying how it ended. `decidedBy` names nobody, because nobody decided.
+   */
+  private closeWithReport(parcel: Parcel): void {
+    const open = parcel.dispute;
+    if (!open || open.state !== 'open') return;
+    parcel.dispute = { ...open, state: 'resolved', decision: 'report_only', award: 0, note: REPORT_ONLY_NOTE, decidedBy: 'the record', decidedAt: new Date().toISOString() };
+    parcel.status = open.fromStatus;
+    this.scan(parcel, open.fromStatus, 'network', 'damage claim report made');
+    void this.events
+      .publish(GlosEvent.Pudo.ParcelDisputeDecided, { parcelId: parcel.parcelId, decision: 'report_only', award: 0, note: REPORT_ONLY_NOTE, origin: open.origin, raisedBy: open.raisedBy }, { source: 'pudo' })
+      .catch(() => undefined);
   }
 
   /** Every dispute still waiting on a decision — the operator's queue, oldest first, because the case
@@ -2317,24 +2387,18 @@ export class ParcelService implements OnApplicationBootstrap {
     if (award > 0 && parcel.takeInPromise === 'theirs') {
       throw new GlosError('INVALID_STATE', 'These goods were taken in under the carrier’s promise, so the carrier answers for this claim, not us. Reject it with a reason that points the claimant to the carrier.');
     }
-    // THE COVER IS THE CAP — a policy rather than a guardrail: the free limit this sister carries, raised
-    // by whatever the shipper declared and paid a premium for.
-    //
-    // A limit of ZERO is read as "no policy has been stated", not as "a policy of nothing", and falls back
-    // to the sanity bound. The distinction matters: every sister starts at zero because inventing a free
-    // limit here would be inventing a promise nobody costed, and treating that as a hard cap would have
-    // made damage resolution inert on the day cover shipped — an operator who has DECIDED to pay could
-    // not. A sister that genuinely wants to cover nothing expresses it by rejecting claims, which it can
-    // already do with a reason the claimant is shown.
-    const stated = parcel.coverLimit != null && parcel.coverLimit > 0;
-    const cap = stated ? parcel.coverLimit! : MAX_CLAIM_AWARD;
+    // AN AWARD NEEDS A COMPANY THAT PAYS. Where the company that carried this parcel has stated no cover, it pays
+    // nothing from its own books (the user, 2026-10-12) — a reported problem on such a parcel closes itself with the
+    // damage claim report and never reaches this far. One that is still open from before can be closed here with a
+    // reason, and with no money. This used to read "no cover stated" as "not decided yet" and let one member of
+    // staff award anything up to a ceiling of a million.
+    if (award > 0 && !paysItself(parcel)) {
+      throw new GlosError('INVALID_STATE', 'The company that carried this parcel has stated no cover, so it pays nothing from its own books and there is nothing to award. The damage claim report is the answer: close this with a reason and no award.');
+    }
+    // THE COVER IS THE CAP: the limit this company states, raised by whatever the shipper declared and paid for.
+    const cap = parcel.coverLimit ?? 0;
     if (award > cap) {
-      throw new GlosError(
-        'INVALID_INPUT',
-        stated
-          ? `This shipment is covered to ${cap.toFixed(2)}${parcel.declaredValue ? ' (declared)' : ' — the free limit, nothing was declared'}. Award up to that, or settle the excess off-platform.`
-          : `An award over ${MAX_CLAIM_AWARD} needs to be settled off-platform — this is a sanity bound, not a policy`,
-      );
+      throw new GlosError('INVALID_INPUT', `This shipment is covered to ${cap.toFixed(2)}${parcel.declaredValue ? ' (declared)' : ' — the free limit, nothing was declared'}. Award up to that, or settle the excess off-platform.`);
     }
 
     let funding: { fromProvision: number; fromExpense: number } | undefined;

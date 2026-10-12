@@ -1,5 +1,6 @@
 import { makeConfig, publicDownload, publicRequest, type Result, type SbgConfig } from '../../lib/sbg';
 import type { DocumentLinkView, LinkAnswer } from '../../shared/archive/documentLink';
+import type { ReportLinkAnswer, ReportLinkView } from '../../shared/damage/damageReport';
 import type { ProofAnswer } from '../../lib/sbg/personas/archive';
 
 const APP_VERSION = '1.0.0';
@@ -51,6 +52,23 @@ export async function lookAtDocumentLink(token: string): Promise<LinkAnswer> {
 /** The file. Null when it could not be had — the page then asks what the link is now, which says why. */
 export async function takeDocumentLink(token: string): Promise<Blob | null> {
   const r = await publicDownload(homeConfig(), '/v1/sbg/document-links/fetch', { body: { token } });
+  return r.error || !r.data ? null : r.data;
+}
+
+/**
+ * A LINK TO A DAMAGE CLAIM REPORT, opened by whoever the claimant handed it to — an insurer, the sender — with nobody
+ * signed in. Public for the reason a note's link is; the key goes in the BODY of both calls for the same reason.
+ */
+export async function lookAtReportLink(token: string): Promise<ReportLinkAnswer> {
+  const r = await publicRequest<ReportLinkView>(homeConfig(), '/v1/sbg/damage-report-links/look', { body: { token } });
+  if (r.data && !r.error) return { view: r.data };
+  if (r.status === 404 || r.status === 400) return { failed: 'not_ours' };
+  return { failed: r.status === 429 ? 'busy' : 'unreachable' };
+}
+
+/** The file. Null when it could not be had — the page then asks what the link is now, which says why. */
+export async function takeReportLink(token: string): Promise<Blob | null> {
+  const r = await publicDownload(homeConfig(), '/v1/sbg/damage-report-links/fetch', { body: { token } });
   return r.error || !r.data ? null : r.data;
 }
 

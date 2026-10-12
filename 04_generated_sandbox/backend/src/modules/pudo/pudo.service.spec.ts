@@ -22,7 +22,11 @@ import { GazetteerGeocoder, GEOCODER } from './geocoder';
 import { HeuristicRouter, ROUTER } from './router';
 import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
-import { ParcelService, birthplaceOf, custodianOf, custodyAt, labelDate, ownershipOf } from './parcel.service';
+import { DamageReportService, fingerprintOf, termsSentence } from './damage-report.service';
+import { DAMAGE_REPORT_STATEMENT } from './damage-report.types';
+import { canonicalJson } from './note-archive.types';
+import { LINK_DAYS, LINK_MAX_LIVE, LINK_MAX_OPENS } from './document-link.service';
+import { paysItself, REPORT_ONLY_NOTE, ParcelService, birthplaceOf, custodianOf, custodyAt, labelDate, ownershipOf } from './parcel.service';
 import { MAX_WORK_RADIUS_KM, OTP_MAX_ATTEMPTS, PICKUP_FEE, RELEASE_FEE, SHELVING_FEE, TOTE_LOAD_FEE, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
 import { AMOUNT_KEYS, DEFAULT_AMOUNTS } from './amounts';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
@@ -69,7 +73,7 @@ import { PersonService } from './person.service';
 import { InviteService } from './invite.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { SCOPES_KEY } from '../../foundation/auth/scopes.decorator';
-import { createHmac } from 'crypto';
+import { createHash, createHmac } from 'crypto';
 import { DigitalTwinService } from '../m7/digital-twin.service';
 import { TrackingService } from '../m4/tracking.service';
 import { TrackingContextService } from '../m4/tracking-context.service';
@@ -2328,10 +2332,13 @@ describe('PUDO Light', () => {
     expect(() => parcels.buyerDispute(parcel.parcelId, hashPhone('+254700999999'), 'x', 'r', 'p.jpg')).toThrow(/No such parcel/);
     expect(() => parcels.buyerDispute(parcel.parcelId, rx, me, '', 'p.jpg')).toThrow(/reason and a photo/);
 
-    // File the dispute → Disputed, buyer reason retained.
+    // File it. No company here has stated cover, so nobody of ours has anything to decide: the problem is recorded,
+    // a damage claim report is made, and the parcel is at once what it factually is again — delivered.
     const disputed = parcels.buyerDispute(parcel.parcelId, rx, me, 'Wrong item inside', 'proof.jpg');
-    expect(disputed.status).toBe('Disputed');
-    expect(disputed.disputeReason).toBe('Wrong item inside');
+    expect(disputed.status).toBe('Delivered');
+    expect(disputed.disputeOutcome).toMatchObject({ origin: 'buyer', decision: 'report_only' });
+    expect(disputed.damageReport).toEqual({ number: `DCR-${parcel.parcelId}` });
+    expect(parcels.get(parcel.parcelId).dispute).toMatchObject({ state: 'resolved', decision: 'report_only', award: 0, fromStatus: 'Delivered', reason: 'Wrong item inside', decidedBy: 'the record' });
     // Both photos survive: the PoD (what arrived) AND the dispute evidence (the problem) — distinct homes.
     expect(disputed.podPhotoRef).toBe('my-photo.jpg');
     expect(disputed.disputePhotoRef).toBe('proof.jpg');
@@ -2339,13 +2346,11 @@ describe('PUDO Light', () => {
 
     // O3 routing: the VENDOR got an HMAC 'disputed' callback...
     expect(vendors.outboxFor(vendor.vendorId).map((c) => c.event)).toContain('disputed');
-    // ...AND the control tower shows a Buyer_Dispute flag naming the origin.
-    const flag = monitor.flags().find((f) => f.type === 'Buyer_Dispute' && f.subject === parcel.parcelId);
-    expect(flag).toBeDefined();
-    expect(flag!.detail).toContain('vendor order');
+    // ...and NO flag waits in the control tower: there is nothing there for staff to decide.
+    expect(monitor.flags().find((f) => f.type === 'Buyer_Dispute' && f.subject === parcel.parcelId)).toBeUndefined();
 
-    // A delivered parcel is required — you cannot dispute one still in flight (or twice).
-    expect(() => parcels.buyerDispute(parcel.parcelId, rx, me, 'again', 'p.jpg')).toThrow(/once the parcel is delivered/);
+    // One report to a parcel: the second is refused, in words that say where the first is.
+    expect(() => parcels.buyerDispute(parcel.parcelId, rx, me, 'again', 'p.jpg')).toThrow(/already reported on this parcel/);
   });
 
   it('S23 — a peer-send dispute never leaks the buyer reason or photos to the sender counterparty', () => {
@@ -2367,17 +2372,19 @@ describe('PUDO Light', () => {
     const sndHash = hashPhone(sender);
     parcels.buyerDispute('PEER-1', rxHash, 'did:glos:person:x', 'call me at 14 Acacia Rd 0712345678', 'damage.jpg');
 
-    // The RECEIVER (who wrote it) sees their reason + evidence.
+    // The RECEIVER (who wrote it) keeps their evidence, and holds the damage claim report that states what they wrote.
     const mine = parcels.consumerParcel('PEER-1', rxHash);
     expect(mine.relation).toBe('received');
-    expect(mine.disputeReason).toContain('Acacia');
     expect(mine.disputePhotoRef).toBe('damage.jpg');
+    expect(mine.damageReport).toEqual({ number: 'DCR-PEER-1' });
 
-    // The SENDER sees the status flip to Disputed — but NOT the buyer's free-text reason, photos, or a
-    // timeline note carrying the reason (it was addressed to the control tower, not the counterparty).
+    // The SENDER sees that a problem was reported and how it ended — but NOT the receiver's free-text reason, their
+    // photos, a timeline note carrying the reason, or the report that holds all three.
     const theirs = parcels.consumerParcel('PEER-1', sndHash);
     expect(theirs.relation).toBe('sent');
-    expect(theirs.status).toBe('Disputed');
+    expect(theirs.status).toBe('Delivered');
+    expect(theirs.disputeOutcome).toMatchObject({ origin: 'buyer', decision: 'report_only' });
+    expect(theirs.damageReport).toBeUndefined();
     expect(theirs.disputeReason).toBeUndefined();
     expect(theirs.disputePhotoRef).toBeUndefined();
     expect(theirs.podPhotoRef).toBeUndefined();
@@ -2400,7 +2407,12 @@ describe('PUDO Light', () => {
 
     expect(() => parcels.dispute(parcel.parcelId, dest.did, 'damaged', '')).toThrow(); // photo proof mandatory
     const disputed = parcels.dispute(parcel.parcelId, dest.did, 'box crushed', 'proof.jpg');
-    expect(disputed.status).toBe('Disputed');
+    // No cover stated: the report is made and the parcel is collectable again at once — the customer is standing there.
+    expect(disputed.status).toBe('Ready_For_Pickup');
+    expect(disputed.dispute).toMatchObject({ state: 'resolved', decision: 'report_only', origin: 'counter', reason: 'box crushed', fromStatus: 'Ready_For_Pickup' });
+    expect(disputed.scans[disputed.scans.length - 1]).toMatchObject({ status: 'Ready_For_Pickup', note: 'damage claim report made' });
+    // One report to a parcel, however often the button is pressed.
+    expect(() => parcels.dispute(parcel.parcelId, dest.did, 'and again', 'proof2.jpg')).toThrow(/already reported on this parcel/);
     await flush();
     expect(vendors.outboxFor(vendor.vendorId).some((c) => c.event === 'disputed')).toBe(true);
   });
@@ -2408,6 +2420,13 @@ describe('PUDO Light', () => {
   describe('a dispute gets an ending', () => {
     /** Let the delivery events settle before the receiver can act on the parcel. */
     const settle = () => new Promise((r) => setImmediate(r));
+
+    // AN AWARD NEEDS A COMPANY THAT PAYS. Everything in here is about a company that has STATED COVER and so pays a
+    // claim from its own books — which no company does until it says so (the user, 2026-10-12). What a reported
+    // problem ends in where none is stated is the describe after this one.
+    const companies = () => ['KE', 'ET'].map((j) => entities.requireForJurisdiction(j).entityId);
+    beforeEach(() => companies().forEach((id) => entities.setInsurance(id, { freeLimit: 5000 }, 'Amina Otieno')));
+    afterEach(() => companies().forEach((id) => entities.setInsurance(id, { freeLimit: null }, 'Amina Otieno')));
 
     /** A delivered vendor order with a receiver who reports a problem — the buyer-dispute path. */
     async function disputedOrder(float = 200) {
@@ -2864,6 +2883,384 @@ describe('PUDO Light', () => {
     expect(() => dispatch.claim(offer.offerId)).toThrow(/capability|coldChain/i);
     expect(totes.requireByCode(bag.code).status).toBe('available'); // never reserved to an incapable driver
     expect(totes.requireByCode(bag.code).claimedBy).toBeUndefined();
+  });
+
+  /**
+   * WHERE NO COMPANY PAYS — which is everywhere, until a company states cover. The user, 2026-10-12, asked whether
+   * an award should take two members of staff: "I wonder whether that is our jurisdiction." So a reported problem ends
+   * in a damage claim report and nothing of ours decides it.
+   */
+  describe('a problem reported where no company has stated cover: a report, and nothing to decide', () => {
+    const settle = () => new Promise((r) => setImmediate(r));
+    const counterParcel = (tag: string) => {
+      const origin = onboardAgent(`NoCover Origin ${tag}`, 'NorthTown', 50);
+      const dest = onboardAgent(`NoCover Dest ${tag}`, 'SouthTown', 50);
+      const corridor = corridors.addCorridor({ name: `NC ${tag}`, originZone: 'NorthTown', destZone: 'SouthTown' });
+      const driver = corridors.addDriver({ driverDid: `did:glos:nc${tag}`, name: 'D', corridorId: corridor.corridorId });
+      const parcelId = `QR-NOCOVER-${tag}`;
+      const taken = parcels.accept({ agentDid: origin.did, parcelId, size: 'M', destZone: 'SouthTown', senderMobile: '+254700951101', receiverMobile: '+254700951102', dropoffPhotoRef: 'r.jpg' });
+      parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: [parcelId] });
+      parcels.arrive(parcelId, dest.did);
+      return { parcelId, dest, code: taken.otp! };
+    };
+
+    it('a parcel is made with no cover, and declaring a value buys none', () => {
+      const { parcelId } = counterParcel('A');
+      expect(parcels.get(parcelId).coverLimit).toBe(0);
+      expect(paysItself(parcels.get(parcelId))).toBe(false);
+      expect(paysItself({ coverLimit: 5000 })).toBe(true);
+      expect(paysItself({})).toBe(false);
+    });
+
+    it('at a counter: the case closes itself, the parcel is collectable again, and everybody it concerns is told on the wire', async () => {
+      const { parcelId, dest, code } = counterParcel('B');
+      const said: Array<Record<string, unknown>> = [];
+      events.subscribe<Record<string, unknown>>(GlosEvent.Pudo.ParcelDisputeDecided, (e) => {
+        said.push(e.payload);
+      });
+      const slot = parcels.get(parcelId).binSlot;
+      const reported = parcels.dispute(parcelId, dest.did, 'The lid is cracked', 'counter.jpg');
+      await settle();
+
+      expect(reported.status).toBe('Ready_For_Pickup');
+      expect(reported.binSlot).toBe(slot);
+      expect(reported.dispute).toMatchObject({ state: 'resolved', decision: 'report_only', award: 0, origin: 'counter', decidedBy: 'the record' });
+      expect(reported.dispute).not.toHaveProperty('paidTo');
+      expect(reported.dispute).not.toHaveProperty('funding');
+      expect(parcels.openDisputes().map((p) => p.parcelId)).not.toContain(parcelId);
+      expect(said).toEqual([{ parcelId, decision: 'report_only', award: 0, note: REPORT_ONLY_NOTE, origin: 'counter', raisedBy: dest.did }]);
+      // Both people read how it ended; only the receiver is handed the report.
+      expect(parcels.consumerParcel(parcelId, hashPhone('+254700951102'))).toMatchObject({ disputeOutcome: { origin: 'counter', decision: 'report_only' }, damageReport: { number: `DCR-${parcelId}` } });
+      const theirs = parcels.consumerParcel(parcelId, hashPhone('+254700951101'));
+      expect(theirs.disputeOutcome).toMatchObject({ decision: 'report_only' });
+      expect(theirs.disputeOutcome).not.toHaveProperty('award');
+      expect(theirs).not.toHaveProperty('damageReport');
+      // And it is collected as any parcel.
+      expect(parcels.pickup(parcelId, dest.did, code, 'handed.jpg').status).toBe('Delivered');
+    });
+
+    it('no money moves: nothing is awarded, nothing is owed, and the books are as they were', async () => {
+      const ke = entities.requireForJurisdiction('KE').entityId;
+      const claims = () => books.balance(ke, ACCOUNT_CODES.EXPENSE_CLAIMS) || 0;
+      const before = claims();
+      const { parcelId, dest } = counterParcel('C');
+      parcels.dispute(parcelId, dest.did, 'Wet through', 'counter.jpg');
+      await settle();
+      expect(claims()).toBe(before);
+      // Nobody can award on it afterwards either: there is no open case to decide.
+      expect(() => parcels.resolveDispute(parcelId, { decision: 'upheld', award: 40, note: 'goodwill' })).toThrow(/expected Disputed/);
+    });
+
+    it('a case still open from before can be closed with a reason, and never with money', () => {
+      const { parcelId, dest } = counterParcel('D');
+      parcels.dispute(parcelId, dest.did, 'Torn', 'counter.jpg');
+      // As a record written before the default was turned round would stand: in dispute, undecided, no cover.
+      const old = parcels.get(parcelId);
+      old.status = 'Disputed';
+      old.dispute = { state: 'open', origin: 'counter', fromStatus: 'Ready_For_Pickup', reason: 'Torn', raisedBy: dest.did, raisedAt: old.dispute!.raisedAt };
+
+      expect(() => parcels.resolveDispute(parcelId, { decision: 'upheld', award: 40, note: 'goodwill' })).toThrow('The company that carried this parcel has stated no cover, so it pays nothing from its own books and there is nothing to award. The damage claim report is the answer: close this with a reason and no award.');
+      expect(() => parcels.resolveDispute(parcelId, { decision: 'partly_upheld', award: 0.01, note: 'a little' })).toThrow(/stated no cover/);
+      expect(parcels.get(parcelId).status).toBe('Disputed');
+      const closed = parcels.resolveDispute(parcelId, { decision: 'rejected', note: 'The damage claim report holds the record.', by: 'Amina Otieno' });
+      expect(closed).toMatchObject({ status: 'Ready_For_Pickup', dispute: { state: 'resolved', decision: 'rejected', award: 0 } });
+    });
+
+    it('a company that states cover is the one that decides: its case stays open for staff, and is capped by what it stated', async () => {
+      const ke = entities.requireForJurisdiction('KE').entityId;
+      entities.setInsurance(ke, { freeLimit: 300 }, 'Amina Otieno');
+      try {
+        const { parcelId, dest } = counterParcel('E');
+        expect(parcels.get(parcelId).coverLimit).toBe(300);
+        const reported = parcels.dispute(parcelId, dest.did, 'Crushed', 'counter.jpg');
+        expect(reported).toMatchObject({ status: 'Disputed', dispute: { state: 'open' } });
+        expect(parcels.openDisputes().map((p) => p.parcelId)).toContain(parcelId);
+        expect(() => parcels.resolveDispute(parcelId, { decision: 'upheld', award: 301, note: 'ours' })).toThrow(/covered to 300.00/);
+        expect(parcels.resolveDispute(parcelId, { decision: 'upheld', award: 300, note: 'ours' }).dispute).toMatchObject({ decision: 'upheld', award: 300 });
+      } finally {
+        entities.setInsurance(ke, { freeLimit: null }, 'Amina Otieno');
+      }
+    });
+
+    it('stating cover is refused at the door for now, and taking it away is not', () => {
+      const ke = entities.requireForJurisdiction('KE').entityId;
+      const staff = { active: true, role: 'operator', sub: 'operator:opr_a', actorName: 'Amina Otieno', scopes: ['*'] } as never;
+      expect(() => controller.setEntityInsurance(ke, { freeLimit: 5000 } as never, staff)).toThrow(/A company cannot state cover yet/);
+      expect(() => controller.setEntityInsurance(ke, { premiumPct: 0.02 } as never, staff)).toThrow(/A company cannot state cover yet/);
+      expect(entities.insuranceFor(ke)).toMatchObject({ freeLimit: 0, premiumPct: 0 });
+      expect(() => controller.setEntityInsurance(ke, { freeLimit: null, premiumPct: null } as never, staff)).not.toThrow();
+      expect(() => controller.setEntityInsurance(ke, { freeLimit: 0 } as never, staff)).not.toThrow();
+    });
+  });
+
+  /**
+   * THE DAMAGE CLAIM REPORT — what every reported problem ends in. The record, frozen as it stood when the problem
+   * was reported, with a fingerprint; for whoever it is for, and for whoever THEY hand it to.
+   */
+  describe('the damage claim report', () => {
+    const settle = () => new Promise((r) => setImmediate(r));
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const SENDER = '+254700961101';
+    const RECEIVER = '+254700961102';
+    const staff = { active: true, role: 'operator', sub: 'operator:opr_a', actorName: 'Amina Otieno', scopes: ['*'] } as never;
+    const asPerson = (phone: string) => {
+      const person = persons.ensurePerson(phone);
+      return { active: true, role: 'consumer', did: person.personDid, sub: person.personDid, scopes: [] } as never;
+    };
+    const asShop = (did: string) => ({ active: true, role: 'agent', did, sub: did, scopes: [] }) as never;
+
+    const reportsOf = () => {
+      const reports = new DamageReportService(parcels, agents, media, vendors, persons, drivers, managers, mdps);
+      reports.onModuleInit();
+      return reports;
+    };
+    /** A counter parcel on the destination shelf, with a problem reported at that counter. */
+    const reportedAtCounter = (tag: string) => {
+      const origin = onboardAgent(`Report Origin ${tag}`, 'NorthTown', 50);
+      const dest = onboardAgent(`Report Dest ${tag}`, 'SouthTown', 50);
+      const corridor = corridors.addCorridor({ name: `R ${tag}`, originZone: 'NorthTown', destZone: 'SouthTown' });
+      const driver = corridors.addDriver({ driverDid: `did:glos:rep${tag}`, name: 'D', corridorId: corridor.corridorId });
+      const parcelId = `QR-REPORT-${tag}`;
+      const taken = parcels.accept({ agentDid: origin.did, parcelId, size: 'M', fragile: true, destZone: 'SouthTown', senderMobile: SENDER, receiverMobile: RECEIVER, dropoffPhotoRef: 'drop.jpg' });
+      parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: [parcelId] });
+      parcels.arrive(parcelId, dest.did);
+      const proof = media.upload({ ownerDid: dest.did, kind: 'dispute', dataUrl: PNG }).mediaId;
+      parcels.dispute(parcelId, dest.did, 'The lid is cracked right across', proof);
+      return { parcelId, origin, dest, proof, code: taken.otp! };
+    };
+
+    it('says what the record held when the problem was reported: the parcel, the terms, every hand, every step, every photograph', async () => {
+      const reports = reportsOf();
+      const made = jest.spyOn(reports, 'ensure');
+      const { parcelId, origin, dest, proof } = reportedAtCounter('A');
+      // Made IN the act of reporting — by the time reporting returns, and before anybody has asked to read it.
+      expect(made).toHaveBeenCalledWith(parcelId);
+      expect(made.mock.results[0].value).toMatchObject({ parcelId, sha256: expect.stringMatching(/^[0-9a-f]{64}$/) });
+      const report = reports.read(parcelId, staff);
+
+      expect(report.parcelId).toBe(parcelId);
+      expect(report.madeAt).toBe(parcels.get(parcelId).dispute!.raisedAt);
+      const b = report.body;
+      expect(b.number).toBe(`DCR-${parcelId}`);
+      expect(b.statement).toBe(DAMAGE_REPORT_STATEMENT);
+      expect(b.statement).toMatch(/does not judge a claim/);
+      expect(b.parcel).toMatchObject({ parcelId, through: 'counter', from: `${origin.shopName}, NorthTown`, to: `${dest.shopName}, SouthTown`, size: 'M', fragile: true, currency: 'KES' });
+      expect(b.parcel.shipmentId).toBe(parcels.get(parcelId).did);
+      // THE TERMS it travelled under: a company of ours carried it, and has stated no cover.
+      expect(b.terms).toMatchObject({ promise: 'ours', coverLimit: 0, currency: 'KES' });
+      expect(termsSentence(b.terms)).toMatch(/has stated no cover: it pays nothing from its own books/);
+      expect(termsSentence({ ...b.terms, coverLimit: 300 })).toMatch(/pays up to 300.00 KES from its own books/);
+      expect(termsSentence({ promise: 'theirs', coverLimit: 0, currency: 'KES' })).toMatch(/carrier’s own promise/);
+      // THE PROBLEM, in the words of whoever reported it, and in whose hands the parcel was.
+      expect(b.problem).toEqual({ origin: 'counter', reportedAt: report.madeAt, reason: 'The lid is cracked right across', parcelWas: 'on the shelf of the collection shop, not yet handed over', heldBy: { kind: 'shop', name: dest.shopName }, shop: dest.shopName });
+      // EVERY HAND: the first shop, the carrier, and the shop it was standing in — still, when it was reported.
+      expect(b.custody.map((leg) => [leg.holder.kind, leg.holder.name, Boolean(leg.to)])).toEqual([
+        ['shop', origin.shopName, true],
+        ['driver', 'The carrier', true],
+        ['shop', dest.shopName, false],
+      ]);
+      // EVERY STEP, each with the fingerprint it was anchored under, ending with the report itself.
+      expect(b.events.map((e) => e.status)).toEqual(parcels.get(parcelId).scans.slice(0, b.events.length).map((s) => s.status));
+      expect(b.events[b.events.length - 1].status).toBe('Disputed');
+      expect(b.events.every((e) => typeof e.fingerprint === 'string' && e.fingerprint.length > 0)).toBe(true);
+      // EVERY PHOTOGRAPH: one held as a picture, one that was only ever a reference.
+      expect(b.photographs).toEqual([
+        { what: 'drop_off', reference: 'drop.jpg' },
+        { what: 'problem', reference: proof, mediaId: proof, takenAt: expect.any(String), sha256: expect.any(String) },
+      ]);
+      // No phone number, no account, no member of staff: nothing in it names a person.
+      const all = JSON.stringify(report);
+      expect(all).not.toMatch(/\+2547|did:glos:person|Amina/);
+    });
+
+    it('is made once and never says anything else: what happens to the parcel afterwards is not in it', async () => {
+      const reports = reportsOf();
+      const { parcelId, dest, code } = reportedAtCounter('B');
+      await settle();
+      const first = reports.read(parcelId, staff);
+      // The fingerprint, worked out again from nothing but what the report says: SHA-256 over it with its keys sorted.
+      expect(first.sha256).toBe(createHash('sha256').update(canonicalJson(first.body)).digest('hex'));
+      expect(first.sha256).toBe(fingerprintOf(first.body));
+      expect(first.sha256).toMatch(/^[0-9a-f]{64}$/);
+
+      // The parcel is collected a moment later, and the shop is renamed.
+      await new Promise((r) => setTimeout(r, 5));
+      parcels.pickup(parcelId, dest.did, code, 'handed.jpg');
+      agents.get(dest.did).shopName = 'A New Name Altogether';
+      const later = reports.read(parcelId, staff);
+      expect(later).toEqual(first);
+      expect(later.body.custody[later.body.custody.length - 1]).not.toHaveProperty('to');
+      expect(JSON.stringify(later)).not.toContain('A New Name Altogether');
+      expect(later.body.events.some((e) => e.status === 'Delivered')).toBe(false);
+
+      // A problem reported before reports existed has its report made on first reading — and it says the same: only
+      // what the record dates no later than the report.
+      const lazy = new DamageReportService(parcels, agents, media, vendors, persons, drivers, managers, mdps);
+      agents.get(dest.did).shopName = first.body.problem.shop!;
+      const built = lazy.read(parcelId, staff);
+      expect(built.body.custody).toEqual(first.body.custody);
+      expect(built.body.events).toEqual(first.body.events);
+      expect(built.sha256).toBe(first.sha256);
+    });
+
+    it('names who the network contracts with: a fleet’s company and never its driver; somebody who rides for themselves by the name they ride under', async () => {
+      const reports = reportsOf();
+      const fleetCo = managers.register({ companyName: 'Report Haulage', contactPhone: '+254800961', ownerFullName: 'R H', ownerNationalId: 'MGR-REP', location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: 'BRN-REP', transportOperatorLicence: 'TOL-REP', taxId: 'TAX-REP' } });
+      managers.submitKyc(fleetCo.did, { businessRegCertRef: 'r.jpg', operatorLicenceRef: 'l.jpg', ownerIdRef: 'i.jpg', proofOfAddressRef: 'a.jpg' });
+      managers.decideKyc(fleetCo.did, true);
+      managers.recordBond(fleetCo.did);
+      const employed = drivers.register({ displayName: 'Wanjiru D.', fullName: 'Wanjiru Driver', nationalId: 'DRV-REP-F', mobile: '+254733961001', licenceClasses: ['bike'], managerDid: fleetCo.did });
+      const own = drivers.register({ displayName: 'Baraka R.', fullName: 'Baraka Rider', nationalId: 'DRV-REP-O', mobile: '+254733961002', licenceClasses: ['bike'] });
+
+      const { parcelId } = reportedAtCounter('C');
+      await settle();
+      // The report is built from the chain of hands: here, as it would stand had those two each carried a leg.
+      const p = parcels.get(parcelId);
+      const at = p.custody![1];
+      p.custody!.splice(1, 1, { ...at, holderId: employed.did }, { holderKind: 'driver', holderId: own.did, from: at.to!, to: at.to! }, { holderKind: 'hub', holderId: 'mdp_nowhere', from: at.to!, to: at.to! });
+      const fresh = new DamageReportService(parcels, agents, media, vendors, persons, drivers, managers, mdps);
+      const hands = fresh.read(parcelId, staff).body.custody.map((leg) => `${leg.holder.kind}: ${leg.holder.name}`);
+      expect(hands.slice(1, 4)).toEqual(['driver: Report Haulage', 'driver: Baraka R.', 'hub: A sorting hub']);
+      expect(JSON.stringify(fresh.read(parcelId, staff))).not.toMatch(/Wanjiru/);
+      expect(reports.read(parcelId, staff).body.custody[1].holder.name).toBe('The carrier'); // the one already made is as it was made
+    });
+
+    it('is read by whoever it is for — the receiver, the shop that reported it, staff — and by nobody else', async () => {
+      const reports = reportsOf();
+      const { parcelId, origin, dest } = reportedAtCounter('D');
+      await settle();
+      expect(reports.read(parcelId, asPerson(RECEIVER)).body.number).toBe(`DCR-${parcelId}`);
+      expect(reports.read(parcelId, asShop(dest.did)).body.number).toBe(`DCR-${parcelId}`);
+      expect(reports.read(parcelId, staff).body.number).toBe(`DCR-${parcelId}`);
+      // The SENDER is on the parcel, so they are told why — and are not handed what the receiver's side wrote.
+      expect(() => reports.read(parcelId, asPerson(SENDER))).toThrow('The damage claim report was made for the receiver, who holds what was written and photographed. Ask them to pass it on to you.');
+      // Anybody else is told nothing, not even that there is one: another person, the first shop, nobody signed in.
+      expect(() => reports.read(parcelId, asPerson('+254700961199'))).toThrow(/No damage claim report on such a parcel/);
+      expect(() => reports.read(parcelId, asShop(origin.did))).toThrow(/No damage claim report on such a parcel/);
+      expect(() => reports.read(parcelId, undefined)).toThrow(/No damage claim report on such a parcel/);
+      expect(() => reports.file(parcelId, asPerson(SENDER))).toThrow(/made for the receiver/);
+      // A parcel nobody reported a problem on has no report, for anybody.
+      const quiet = onboardAgent('Report Quiet', 'NorthTown', 50);
+      parcels.accept({ agentDid: quiet.did, parcelId: 'QR-REPORT-QUIET', size: 'M', destZone: 'SouthTown', senderMobile: SENDER, receiverMobile: RECEIVER, dropoffPhotoRef: 'drop.jpg' });
+      expect(() => reports.read('QR-REPORT-QUIET', staff)).toThrow(/No damage claim report/);
+      expect(() => reports.read('QR-REPORT-QUIET', asPerson(RECEIVER))).toThrow(/No damage claim report/);
+      expect(reports.ensure('QR-NO-SUCH-PARCEL')).toBeUndefined();
+    });
+
+    it('a store reads the report on its own order, and another store does not', async () => {
+      const reports = reportsOf();
+      const origin = onboardAgent('Report Store Origin', 'NorthTown');
+      const dest = onboardAgent('Report Store Dest', 'SouthTown');
+      const corridor = corridors.addCorridor({ name: 'RS', originZone: 'NorthTown', destZone: 'SouthTown' });
+      const driver = corridors.addDriver({ driverDid: 'did:glos:reps', name: 'D', corridorId: corridor.corridorId });
+      const store = vendors.register({ name: 'Report Store' });
+      const other = vendors.register({ name: 'Another Store' });
+      vendors.topUp(store.vendorId, 200);
+      const { parcel } = parcels.createInbound({ vendorId: store.vendorId, externalOrderId: 'ORD-REP-1', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: RECEIVER, size: 'M', contentPhotoRef: 'content.jpg', subtotal: 4200, items: [{ name: 'Kettle', qty: 2 }, { name: 'Lid', qty: 1 }], shippingPolicy: store.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });
+      parcels.intakeInbound(parcel.parcelId, origin.did);
+      parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: [parcel.parcelId] });
+      parcels.shelve(parcel.parcelId, dest.did);
+      parcels.collectConfirm(parcel.parcelId, dest.did, parcel.collectionCode!);
+      await settle();
+      const person = persons.ensurePerson(RECEIVER);
+      parcels.buyerDispute(parcel.parcelId, person, person.personDid, 'One kettle is dented', 'problem.jpg');
+      await settle();
+
+      const mine = reports.read(parcel.parcelId, { active: true, role: 'vendor', did: store.did, sub: store.did, scopes: [] } as never);
+      expect(mine.body.parcel).toMatchObject({ through: 'store', store: 'Report Store', orderNumber: 'ORD-REP-1', contents: ['2 × Kettle', 'Lid'], declaredValue: 4200 });
+      // The value was stated; nothing covers it, because the company has stated no cover.
+      expect(mine.body.terms.coverLimit).toBe(0);
+      expect(mine.body.problem).toMatchObject({ origin: 'buyer', reason: 'One kettle is dented', parcelWas: 'handed over to the receiver' });
+      // It had been handed over: it was in nobody's hands that the network answers for.
+      expect(mine.body.problem).not.toHaveProperty('heldBy');
+      expect(mine.body.custody[0].holder).toEqual({ kind: 'sender', name: 'Report Store' });
+      expect(mine.body.photographs.map((x) => x.what)).toEqual(['contents', 'problem']);
+      expect(() => reports.read(parcel.parcelId, { active: true, role: 'vendor', did: other.did, sub: other.did, scopes: [] } as never)).toThrow(/No damage claim report/);
+      // ON A STORE'S ORDER TWO PARTIES MAY HAND IT ON — the receiver and the store — and each one's link is its own:
+      // the other does not see it and cannot stop it.
+      const asStore = { active: true, role: 'vendor', did: store.did, sub: store.did, scopes: [] } as never;
+      const asBuyer = asPerson(RECEIVER);
+      const theirs = reports.makeLink(parcel.parcelId, asBuyer);
+      const ours = reports.makeLink(parcel.parcelId, asStore);
+      expect(reports.linksFor(parcel.parcelId, asStore).map((l) => l.linkId)).toEqual([ours.link.linkId]);
+      expect(reports.linksFor(parcel.parcelId, asBuyer).map((l) => l.linkId)).toEqual([theirs.link.linkId]);
+      expect(() => reports.cancelLink(parcel.parcelId, theirs.link.linkId, asStore)).toThrow(/No such link on this report/);
+      expect(reports.look(theirs.url.split('#report=')[1]).state).toBe('ready');
+      expect(reports.cancelLink(parcel.parcelId, ours.link.linkId, asStore).state).toBe('cancelled');
+      expect(reports.cancelLink(parcel.parcelId, theirs.link.linkId, staff).state).toBe('cancelled');
+
+      // Staff's list has it, newest first, with what a reader needs to find it by.
+      expect(reports.list()[0]).toMatchObject({ parcelId: parcel.parcelId, number: `DCR-${parcel.parcelId}`, origin: 'buyer', reason: 'One kettle is dented', store: 'Report Store', links: 0, opened: 0 });
+      expect(reports.list()[0]).not.toHaveProperty('heldBy'); // it had been handed over
+    });
+
+    it('is handed on by a link its holder makes: unguessable, counted, limited, and theirs to cancel', async () => {
+      const reports = reportsOf();
+      const { parcelId, dest, proof } = reportedAtCounter('E');
+      await settle();
+      const receiver = asPerson(RECEIVER);
+      const now = Date.parse('2026-10-12T10:00:00Z');
+
+      // Not staff, and not the shop: a link is a way in that whoever the report is for made, can see, and can cancel.
+      expect(() => reports.makeLink(parcelId, staff, now)).toThrow(/Staff read the report itself/);
+      expect(() => reports.makeLink(parcelId, asShop(dest.did), now)).toThrow(/made by whoever the report is for/);
+      expect(() => reports.makeLink(parcelId, asPerson(SENDER), now)).toThrow(/made for the receiver/);
+
+      const made = reports.makeLink(parcelId, receiver, now);
+      const token = made.url.split('#report=')[1];
+      expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(made.url.startsWith('http')).toBe(true);
+      expect(made.link).toMatchObject({ state: 'ready', opened: 0, expiresAt: new Date(now + LINK_DAYS * 86_400_000).toISOString() });
+      // The key is nowhere but in that address.
+      expect(JSON.stringify([reports.linksFor(parcelId, receiver, now), reports.list(now)])).not.toContain(token);
+
+      const report = reports.read(parcelId, receiver);
+      expect(reports.look(token, now)).toEqual({ state: 'ready', expiresAt: made.link.expiresAt, number: `DCR-${parcelId}`, parcelId, from: report.body.parcel.from, to: report.body.parcel.to, reportedAt: report.madeAt, sha256: report.sha256, opensLeft: LINK_MAX_OPENS });
+      // Looking is not opening.
+      expect(reports.linksFor(parcelId, receiver, now)[0].opened).toBe(0);
+
+      // THE FILE: the page, the same facts for a machine, the photograph, and how to check the fingerprint.
+      const file = reports.fetch(token, now);
+      expect(file.filename).toBe(`damage-claim-report-${parcelId}.zip`);
+      expect(file.bytes.subarray(0, 2).toString()).toBe('PK');
+      const inside = file.bytes.toString('latin1');
+      for (const name of ['damage-claim-report.html', 'report.json', 'README.txt', `photographs/problem-${proof}.png`]) expect(inside).toContain(name);
+      expect(inside).toContain(report.sha256);
+      expect(inside).toContain('The lid is cracked right across');
+      expect(inside).toContain('Recorded by reference only: drop.jpg');
+      // The bytes the fingerprint is taken over are in the file, exactly: anybody can work it out again from them.
+      expect(file.bytes.includes(Buffer.from(canonicalJson(report.body), 'utf8'))).toBe(true);
+      expect(reports.linksFor(parcelId, receiver, now)[0]).toMatchObject({ opened: 1, lastOpenedAt: new Date(now).toISOString() });
+      expect(reports.list(now).find((r) => r.parcelId === parcelId)).toMatchObject({ links: 1, opened: 1 });
+      // Signed in, the same file without a link.
+      expect(reports.file(parcelId, receiver).bytes.length).toBe(file.bytes.length);
+
+      // A key that is not ours, or nothing like one.
+      expect(() => reports.look('A'.repeat(43), now)).toThrow(/not a link we made/);
+      expect(() => reports.fetch('short', now)).toThrow(/not a link we made/);
+
+      // IT STOPS: by the count, by its date, and by its holder's hand.
+      for (let i = 1; i < LINK_MAX_OPENS; i += 1) reports.fetch(token, now);
+      expect(reports.look(token, now)).toEqual({ state: 'used_up', expiresAt: made.link.expiresAt });
+      expect(() => reports.fetch(token, now)).toThrow(/opened as often as one link can be/);
+      const second = reports.makeLink(parcelId, receiver, now);
+      const key2 = second.url.split('#report=')[1];
+      expect(reports.look(key2, now + LINK_DAYS * 86_400_000).state).toBe('expired');
+      expect(() => reports.fetch(key2, now + LINK_DAYS * 86_400_000)).toThrow(/its time is up/);
+      // Somebody else's link is answered as one that does not exist.
+      expect(() => reports.cancelLink(parcelId, second.link.linkId, asPerson(SENDER), now)).toThrow(/made for the receiver/);
+      expect(() => reports.cancelLink(parcelId, 'drl_nothing', receiver, now)).toThrow(/No such link on this report/);
+      expect(reports.cancelLink(parcelId, second.link.linkId, receiver, now).state).toBe('cancelled');
+      expect(reports.cancelLink(parcelId, second.link.linkId, receiver, now + 5000).cancelledAt).toBe(new Date(now).toISOString());
+      expect(() => reports.fetch(key2, now)).toThrow(/This link was cancelled/);
+
+      // A HANDFUL AT ONCE, never a pile nobody remembers: the used-up and the cancelled ones do not count.
+      for (let i = 0; i < LINK_MAX_LIVE; i += 1) reports.makeLink(parcelId, receiver, now);
+      expect(() => reports.makeLink(parcelId, receiver, now)).toThrow(`This report already has ${LINK_MAX_LIVE} links that work. Cancel one to make another.`);
+      // Staff see them all, and may cancel one; they are the only others who can.
+      expect(reports.linksFor(parcelId, staff, now)).toHaveLength(LINK_MAX_LIVE + 2);
+      expect(reports.linksFor(parcelId, asShop(dest.did), now)).toEqual([]);
+    });
   });
 
   /**

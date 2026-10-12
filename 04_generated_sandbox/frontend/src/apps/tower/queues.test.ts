@@ -5,6 +5,7 @@ import {
   DISPOSAL_LONG_DAYS,
   amount,
   claimBlocker,
+  reportRowWords,
   coverLine,
   daysWaiting,
   documentsOf,
@@ -66,8 +67,8 @@ describe('what a claim is covered for', () => {
   });
 
   it('says plainly when there is no cover at all', () => {
-    // The bound that stops a typo is not a promise, and an award there is a goodwill decision.
-    expect(coverLine(claim({ capBasis: 'sanity-bound', awardCap: 1_000_000 }), t)).toContain('tower.claims.noCover');
+    // The company has stated none: it pays nothing itself. It used to be shown as "a goodwill decision".
+    expect(coverLine(claim({ capBasis: 'none', awardCap: 0 }), t)).toContain('tower.claims.noCover');
   });
 
   it('says a price was never RECORDED rather than calling it zero', () => {
@@ -87,7 +88,7 @@ describe('what a claim is covered for', () => {
     it('always states the shipping price as NOT a cap', () => {
     // It is the first money figure an adjudicator's eye lands on, and it is about the carriage, not the
     // goods. Every branch of this line carries the label.
-    for (const basis of ['declared', 'free-limit', 'sanity-bound'] as const) {
+    for (const basis of ['declared', 'free-limit', 'none'] as const) {
       expect(coverLine(claim({ capBasis: basis }), t)).toContain('tower.claims.shippingSoldFor');
     }
   });
@@ -115,11 +116,35 @@ describe('what stops a decision being submitted', () => {
     expect(claimBlocker('upheld', '5000.01', 'agreed', claim(), t)).toContain('tower.claims.overCover');
   });
 
-  it('says a sanity bound is a sanity bound, not cover', () => {
-    const uncovered = claim({ capBasis: 'sanity-bound', awardCap: 1_000_000 });
-    expect(claimBlocker('upheld', '2000000', 'agreed', uncovered, t)).toContain('tower.claims.overBound');
-    // …and an ordinary goodwill award under it is perfectly fine.
-    expect(claimBlocker('partly_upheld', '250', 'part worn', uncovered, t)).toBeNull();
+  it('lets nothing be awarded on a parcel whose company has stated no cover — not a little, and not "upheld" with nothing', () => {
+    // It used to allow anything up to a million there, as "a goodwill decision" by one member of staff.
+    const uncovered = claim({ capBasis: 'none', awardCap: 0 });
+    expect(claimBlocker('upheld', '250', 'agreed', uncovered, t)).toBe('tower.claims.noAwardWithoutCover');
+    expect(claimBlocker('partly_upheld', '0.01', 'part worn', uncovered, t)).toBe('tower.claims.noAwardWithoutCover');
+    expect(claimBlocker('upheld', '', 'agreed', uncovered, t)).toBe('tower.claims.noAwardWithoutCover');
+    // Closing it with a reason is what is left, and needs the reason.
+    expect(claimBlocker('rejected', '', 'the damage claim report holds the record', uncovered, t)).toBeNull();
+    expect(claimBlocker('rejected', '', ' ', uncovered, t)).toBe('tower.claims.needReason');
+  });
+
+  it('says a freight claim’s sanity bound is a sanity bound, not cover', () => {
+    const bound = { awardCap: 1_000_000, capBasis: 'sanity-bound' as const, currency: 'KES' };
+    expect(claimBlocker('upheld', '2000000', 'agreed', bound, t)).toContain('tower.claims.overBound');
+    expect(claimBlocker('partly_upheld', '250', 'part worn', bound, t)).toBeNull();
+  });
+});
+
+describe('a damage claim report in the list staff read', () => {
+  const row = { parcelId: 'QR-1', number: 'DCR-QR-1', madeAt: '2026-10-12T09:30:00.000Z', origin: 'counter' as const, reason: 'The lid is cracked', from: 'Mama Sarah Shop, Nairobi CBD', to: 'Riverside Corner, Westlands', heldBy: 'Riverside Corner', links: 0, opened: 0 };
+
+  it('says who reported it and in whose hands the parcel was', () => {
+    expect(reportRowWords(row, t)).toEqual({ by: 'tower.reports.byShop', hands: 'tower.reports.heldBy(name=Riverside Corner)', handedOn: 'tower.reports.noLink' });
+    expect(reportRowWords({ ...row, origin: 'buyer', heldBy: undefined }, t)).toMatchObject({ by: 'tower.reports.byReceiver', hands: 'tower.reports.handedOver' });
+  });
+
+  it('says whether whoever it is for has handed it on — a link stopped after use still counts as handed on', () => {
+    expect(reportRowWords({ ...row, links: 1 }, t).handedOn).toBe('tower.reports.links(links=1,opened=0)');
+    expect(reportRowWords({ ...row, links: 0, opened: 3 }, t).handedOn).toBe('tower.reports.links(links=0,opened=3)');
   });
 });
 

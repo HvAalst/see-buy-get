@@ -229,6 +229,9 @@ export function createOperatorApi(sbg: SbgClient) {
 
     /** Open damage claims, oldest first — the case somebody has waited longest for needs answering most. */
     disputes: () => sbg.request((c) => c.GET('/v1/sbg/disputes', {})),
+    /** Every problem reported, newest first: the damage claim reports made. Staff read them and decide nothing. */
+    damageReports: () => sbg.request((c) => c.GET('/v1/sbg/damage-reports', {})),
+    damageReportFile: (parcelId: string) => sbg.request<Blob>((c) => c.GET('/v1/sbg/parcels/{id}/damage-report/file' as never, { params: { path: { id: parcelId } }, parseAs: 'blob' } as never)),
 
     /**
      * Decide one: upheld, partly upheld or rejected — and every one of them carries a note, because the

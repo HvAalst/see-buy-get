@@ -23357,6 +23357,223 @@
         }
       }
     },
+    "/v1/sbg/damage-reports": {
+      "get": {
+        "operationId": "DamageReport.list",
+        "summary": "",
+        "description": "Every problem reported, newest first. Staff read; nothing here is decided by them.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DamageReportList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/parcels/{id}/damage-report": {
+      "get": {
+        "operationId": "DamageReport.read",
+        "summary": "",
+        "description": "The report on one parcel, for whoever it is for.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DamageReportView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/parcels/{id}/damage-report/file": {
+      "get": {
+        "operationId": "DamageReport.file",
+        "summary": "",
+        "description": "The file: the report to read or print, the same facts for a machine, and the photographs.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/parcels/{id}/damage-report/links": {
+      "get": {
+        "operationId": "DamageReport.links",
+        "summary": "",
+        "description": "The links the caller made on this report.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DamageReportLinkList"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "DamageReport.makeLink",
+        "summary": "",
+        "description": "Make a link to pass on. The address in the answer is shown this once: the key is not kept.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MadeDamageReportLink"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/parcels/{id}/damage-report/links/{linkId}/cancel": {
+      "post": {
+        "operationId": "DamageReport.cancelLink",
+        "summary": "",
+        "description": "Cancel one: it opens nothing from now on.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "linkId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DamageReportLinkRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/damage-report-links/look": {
+      "post": {
+        "operationId": "DamageReport.look",
+        "summary": "",
+        "description": "What this link is, before the file is taken — or which way it stopped.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DamageReportTokenDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DamageReportLinkView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/damage-report-links/fetch": {
+      "post": {
+        "operationId": "DamageReport.fetch",
+        "summary": "",
+        "description": "The file, for whoever holds a link that still opens.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DamageReportTokenDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/settlement/module-info": {
       "get": {
         "operationId": "Sse.info",
@@ -45438,6 +45655,484 @@
         "required": [
           "link",
           "url"
+        ]
+      },
+      "DamageReportRow": {
+        "type": "object",
+        "properties": {
+          "origin": {
+            "type": "string",
+            "enum": [
+              "counter",
+              "buyer"
+            ]
+          },
+          "store": {
+            "type": "string"
+          },
+          "heldBy": {
+            "type": "string"
+          },
+          "parcelId": {
+            "type": "string"
+          },
+          "number": {
+            "type": "string"
+          },
+          "madeAt": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "links": {
+            "type": "number",
+            "description": "How many links to it are working, and how often the file was taken with one."
+          },
+          "opened": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "origin",
+          "parcelId",
+          "number",
+          "madeAt",
+          "reason",
+          "from",
+          "to",
+          "links",
+          "opened"
+        ]
+      },
+      "DamageReportList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DamageReportRow"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "DamageReportParcel": {
+        "type": "object",
+        "properties": {
+          "shipmentId": {
+            "type": "string",
+            "description": "The shipment's own identity in the network: the same from the moment it was made."
+          },
+          "store": {
+            "type": "string"
+          },
+          "orderNumber": {
+            "type": "string"
+          },
+          "contents": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "declaredValue": {
+            "type": "number",
+            "description": "What the goods were said to be worth when the parcel was made. Recorded, whether or not anything covers it."
+          },
+          "parcelId": {
+            "type": "string"
+          },
+          "through": {
+            "type": "string",
+            "description": "store — a store's order · counter — handed in at a shop · app — sent from somebody's phone."
+          },
+          "madeAt": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "size": {
+            "type": "string"
+          },
+          "fragile": {
+            "type": "boolean"
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "parcelId",
+          "through",
+          "madeAt",
+          "from",
+          "to",
+          "size",
+          "fragile",
+          "currency"
+        ]
+      },
+      "DamageReportTerms": {
+        "type": "object",
+        "properties": {
+          "company": {
+            "type": "string"
+          },
+          "promise": {
+            "type": "string",
+            "description": "ours — a company of the network answers · theirs — the carrier's promise · none — nobody's."
+          },
+          "coverLimit": {
+            "type": "number",
+            "description": "What that company pays from its own books at most. Zero where it has stated no cover: it pays nothing itself."
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "promise",
+          "coverLimit",
+          "currency"
+        ]
+      },
+      "DamageReportHolder": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "sender",
+              "shop",
+              "driver",
+              "hub",
+              "receiver"
+            ]
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "name"
+        ]
+      },
+      "DamageReportProblem": {
+        "type": "object",
+        "properties": {
+          "origin": {
+            "type": "string",
+            "enum": [
+              "counter",
+              "buyer"
+            ]
+          },
+          "heldBy": {
+            "description": "In whose hands it was at that moment, where it was in anybody's.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DamageReportHolder"
+              }
+            ]
+          },
+          "shop": {
+            "type": "string",
+            "description": "The shop that reported it, when it was reported at a counter."
+          },
+          "reportedAt": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "description": "In the words of whoever reported it."
+          },
+          "parcelWas": {
+            "type": "string",
+            "description": "Where the parcel was when it was reported: still on a shelf, or already handed over."
+          }
+        },
+        "required": [
+          "origin",
+          "reportedAt",
+          "reason",
+          "parcelWas"
+        ]
+      },
+      "DamageReportLeg": {
+        "type": "object",
+        "properties": {
+          "holder": {
+            "$ref": "#/components/schemas/DamageReportHolder"
+          },
+          "to": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "holder",
+          "from"
+        ]
+      },
+      "DamageReportEvent": {
+        "type": "object",
+        "properties": {
+          "fingerprint": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "status",
+          "note"
+        ]
+      },
+      "DamageReportPhoto": {
+        "type": "object",
+        "properties": {
+          "mediaId": {
+            "type": "string"
+          },
+          "takenAt": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "what": {
+            "type": "string",
+            "description": "drop_off · contents · handed_over · received · problem"
+          },
+          "reference": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "what",
+          "reference"
+        ]
+      },
+      "DamageReportBody": {
+        "type": "object",
+        "properties": {
+          "parcel": {
+            "$ref": "#/components/schemas/DamageReportParcel"
+          },
+          "terms": {
+            "$ref": "#/components/schemas/DamageReportTerms"
+          },
+          "problem": {
+            "$ref": "#/components/schemas/DamageReportProblem"
+          },
+          "custody": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DamageReportLeg"
+            }
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DamageReportEvent"
+            }
+          },
+          "photographs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DamageReportPhoto"
+            }
+          },
+          "number": {
+            "type": "string"
+          },
+          "statement": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "parcel",
+          "terms",
+          "problem",
+          "custody",
+          "events",
+          "photographs",
+          "number",
+          "statement"
+        ]
+      },
+      "DamageReportView": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/DamageReportBody"
+          },
+          "parcelId": {
+            "type": "string"
+          },
+          "madeAt": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string",
+            "description": "SHA-256 over the body, keys sorted. Two copies with the same fingerprint say the same thing."
+          }
+        },
+        "required": [
+          "body",
+          "parcelId",
+          "madeAt",
+          "sha256"
+        ]
+      },
+      "DamageReportLinkRow": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "expired",
+              "cancelled",
+              "used_up"
+            ]
+          },
+          "lastOpenedAt": {
+            "type": "string"
+          },
+          "cancelledAt": {
+            "type": "string"
+          },
+          "linkId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "opened": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "state",
+          "linkId",
+          "createdAt",
+          "expiresAt",
+          "opened"
+        ]
+      },
+      "DamageReportLinkList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DamageReportLinkRow"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "MadeDamageReportLink": {
+        "type": "object",
+        "properties": {
+          "link": {
+            "$ref": "#/components/schemas/DamageReportLinkRow"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "link",
+          "url"
+        ]
+      },
+      "DamageReportTokenDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 100
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "DamageReportLinkView": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "expired",
+              "cancelled",
+              "used_up"
+            ]
+          },
+          "number": {
+            "type": "string"
+          },
+          "parcelId": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "reportedAt": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "opensLeft": {
+            "type": "number"
+          },
+          "expiresAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "expiresAt"
         ]
       },
       "MilestoneTermDto": {

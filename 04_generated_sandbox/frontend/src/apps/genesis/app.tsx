@@ -1,6 +1,7 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { BottomNav, ConnectivityNote, Icon, NotificationBell, TopBar, type NavItem } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
+import type { SbgClient } from '../../lib/sbg';
 import { useAccount, type AccountApi } from '../../shared/account/useAccount';
 import { SendScreen } from './screens/SendScreen';
 import { TrackScreen } from './screens/TrackScreen';
@@ -61,7 +62,7 @@ export function App() {
 
       <main class="app__scroll">
         <ConnectivityNote />
-        <Router state={state} actions={actions} account={account} />
+        <Router state={state} actions={actions} account={account} sbg={sbg} />
       </main>
 
       <BottomNav<Screen> items={tabs} active={state.screen} onSelect={(key) => actions.go(key)} labels={false} />
@@ -70,12 +71,12 @@ export function App() {
 }
 
 /** The authenticated tabs gate on sign-in; a stored session restores silently (a brief boot spinner). */
-function Router({ state, actions, account }: { state: SendState; actions: SendActions; account: AccountApi }) {
+function Router({ state, actions, account, sbg }: { state: SendState; actions: SendActions; account: AccountApi; sbg: SbgClient | null }) {
   if (state.screen === 'track') return <TrackScreen state={state} actions={actions} />;
   if (state.screen === 'parcels' || state.screen === 'account') {
     if (state.restoring) return <Boot />;
     if (!state.identity) return <AuthScreen state={state} actions={actions} />;
-    return state.screen === 'parcels' ? <MyParcelsScreen state={state} actions={actions} /> : <AccountScreen state={state} actions={actions} account={account} />;
+    return state.screen === 'parcels' ? <MyParcelsScreen state={state} actions={actions} client={sbg} /> : <AccountScreen state={state} actions={actions} account={account} />;
   }
   return <SendScreen state={state} actions={actions} />;
 }

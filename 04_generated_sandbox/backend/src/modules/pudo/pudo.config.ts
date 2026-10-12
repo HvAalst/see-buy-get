@@ -175,6 +175,11 @@ export function coverFor(input: { declaredValue?: number; premiumPct: number; fr
   const num = (n: unknown) => (Number.isFinite(Number(n)) ? Math.max(0, Number(n)) : 0);
   const declaredValue = round2(num(input.declaredValue));
   const freeLimit = round2(num(input.freeLimit));
+  // NO COVER STATED IS NO COVER. A company that has named neither a free limit nor a premium pays nothing from its
+  // own books (the user, 2026-10-12): so declaring a value buys nothing and costs nothing, and the limit is zero.
+  // It used to be the declared value, for free — which made every store order "covered" to its own subtotal by a
+  // company that had never said it covers anything. The value is still recorded: the damage claim report states it.
+  if (freeLimit <= 0 && num(input.premiumPct) <= 0) return { declaredValue, premium: 0, limit: 0 };
   // Charged only on the part that is NOT already covered. Charging the whole declared value would bill
   // somebody for cover they already had, which is the kind of small dishonesty nobody forgives twice.
   const chargeable = Math.max(0, round2(declaredValue - freeLimit));

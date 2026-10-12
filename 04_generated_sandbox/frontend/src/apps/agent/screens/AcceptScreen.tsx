@@ -3,7 +3,7 @@ const INCOTERM_OPTIONS = ['EXW', 'FCA', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP', 'FAS'
 import { Button, Card, Chip, CodeCard, ErrorNote, Explainer, GlanceNumber, Icon, Note, OptionPicker, Pill, PlaceMap, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { agentConfig } from '../api';
 import { useT, type Translate } from '../../../shared/i18n';
-import { BODY_HINTS, EXCLUDABLE_BODIES, NATURES, PACKAGING_HELP, acceptMissing, bookFreightMissing, chooseBodyHint, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, takeInTermsNotice, termsBlock, toggleExcludedBody, type BodyHint, type PackagingChoice } from '../logic';
+import { BODY_HINTS, EXCLUDABLE_BODIES, NATURES, PACKAGING_HELP, acceptMissing, bookFreightMissing, chooseBodyHint, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, takeInTermsNotice, termsBlock, termsNeedTelling, toggleExcludedBody, type BodyHint, type PackagingChoice } from '../logic';
 import type { NetworkPoint, TakeInTerms } from '../types';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
@@ -278,10 +278,10 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
         </Button>
       ) : null}
       {terms ? <TermsNote terms={terms} /> : null}
-      {terms?.promise === 'theirs' ? (
+      {termsNeedTelling(terms) ? (
         <label class="checkline" style="margin-top:12px">
           <input type="checkbox" checked={state.termsTold} onChange={(e) => actions.setTermsTold(e.currentTarget.checked)} />
-          <span>{t('agent.accept.termsTheirsTick')}</span>
+          <span>{t(terms?.promise === 'theirs' ? 'agent.accept.termsTheirsTick' : 'agent.accept.termsNoCoverTick')}</span>
         </label>
       ) : null}
 

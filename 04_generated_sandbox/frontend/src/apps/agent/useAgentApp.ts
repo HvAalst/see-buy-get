@@ -2018,7 +2018,10 @@ export function useAgentApp() {
       if (r.error) return fail(r.error);
       buzz();
       setState((s) => ({ ...s, collect: { ...EMPTY_COLLECT }, screen: 'home' }));
-      pushToast({ tone: 'info', icon: 'warning', title: t('agent.toast.disputeFiled'), detail: t('agent.toast.disputeFiledDetail') });
+      // What the server did with it: where nobody of ours decides anything the report is made on the spot and the
+      // parcel can still be handed over — the customer is standing there, and the shop has to know which it is.
+      const recorded = narrow<{ dispute?: { decision?: string } }>(r.data)?.dispute?.decision === 'report_only';
+      pushToast({ tone: 'info', icon: 'warning', title: t(recorded ? 'agent.toast.problemRecorded' : 'agent.toast.disputeFiled'), detail: t(recorded ? 'agent.toast.problemRecordedDetail' : 'agent.toast.disputeFiledDetail') });
     });
   }, [client, did, run, fail, pushToast]);
 

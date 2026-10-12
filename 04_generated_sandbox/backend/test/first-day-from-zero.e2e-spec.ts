@@ -553,7 +553,7 @@ describe('the first day of a new installation, as it would be live', () => {
   };
   const inboxOf = async (token: string) => ((await must(http().get('/v1/sbg/notifications/inbox').set(bearer(token)), 200)).items as Array<{ kind: string; title: string; body: string }>);
 
-  it('10 · the chaos shelf: every parcel has a slot of its own, the shop reads where each one stands, and a slot comes back when its parcel goes', async () => {
+  it('10 · the chaos shelf: every parcel has a slot of its own, the shop reads where each one stands, a slot comes back when its parcel goes — and a problem reported at the counter is recorded without stopping the hand-over', async () => {
     const empty = await shelfOf(riverside);
     expect(empty).toMatchObject({ capacity: 20, available: 20 });
     expect(standing(empty.grid)).toEqual({});
@@ -588,29 +588,49 @@ describe('the first day of a new installation, as it would be live', () => {
     expect(third.slot).toBe(first.slot);
     expect(standing((await shelfOf(riverside)).grid)).toEqual({ [first.slot]: 'QR-SHELF-0003', [second.slot]: 'QR-SHELF-0002' });
 
-    // A PROBLEM REPORTED AT THE COUNTER leaves the goods where they stand: the parcel is in question, its slot is not free.
+    // A PROBLEM REPORTED AT THE COUNTER — the customer is standing there. Nobody of ours decides anything: the Kenyan
+    // company has stated no cover, so it pays nothing itself. The problem is recorded, a damage claim report is made on
+    // the spot, and the parcel stays where it stands, collectable as it was.
     const proof = (await must(http().post('/v1/sbg/media').set(bearer(riverside.token)).send({ kind: 'dispute', dataUrl: PNG }))).mediaId as string;
-    await must(http().post('/v1/sbg/parcels/QR-SHELF-0002/dispute').set(bearer(riverside.token)).send({ reason: 'The box is torn open at one corner', photoProofRef: proof }));
+    const reported = await must(http().post('/v1/sbg/parcels/QR-SHELF-0002/dispute').set(bearer(riverside.token)).send({ reason: 'The box is torn open at one corner', photoProofRef: proof }));
+    expect(reported.status).toBe('Ready_For_Pickup');
+    expect(reported.dispute).toMatchObject({ state: 'resolved', decision: 'report_only', origin: 'counter', award: 0 });
     expect(standing((await shelfOf(riverside)).grid)[second.slot]).toBe('QR-SHELF-0002');
-    // It cannot be handed over while it is in question, even with the right code.
-    const handedAnyway = await http().post('/v1/sbg/parcels/QR-SHELF-0002/pickup').set(bearer(riverside.token)).send({ agentDid: riverside.did, otp: second.code, deliveredPhotoRef: 'handed.jpg' });
-    expect(handedAnyway.status).toBeGreaterThanOrEqual(400);
+    // Pressed again, it is one report to a parcel.
+    const again = await http().post('/v1/sbg/parcels/QR-SHELF-0002/dispute').set(bearer(riverside.token)).send({ reason: 'And dented', photoProofRef: proof });
+    expect([again.status >= 400, again.body.detail]).toEqual([true, expect.stringMatching(/already reported on this parcel/)]);
 
-    // STAFF DECIDE IT, by name; the shop holding it is told, with the slot; and it is collected like any parcel.
-    const queue = (await must(http().get('/v1/sbg/disputes').set(bearer(amina)), 200)).disputes as Array<{ parcelId: string; origin: string; reason: string; evidence: string[] }>;
-    expect(queue.find((d) => d.parcelId === 'QR-SHELF-0002')).toMatchObject({ origin: 'counter', reason: 'The box is torn open at one corner', evidence: expect.arrayContaining([proof]) });
+    // NOTHING WAITS FOR STAFF. Their queue of things to decide is empty; what they have is the list of reports made.
+    expect((await must(http().get('/v1/sbg/disputes').set(bearer(amina)), 200)).disputes).toEqual([]);
     await must(http().get('/v1/sbg/disputes').set(bearer(riverside.token)), 403);
-    const decided = await must(http().post('/v1/sbg/disputes/QR-SHELF-0002/resolve').set(bearer(amina)).send({ decision: 'rejected', note: 'The tear is in the outer wrap only. The contents are sealed and whole.', by: 'Somebody Else' }));
-    expect(decided.dispute).toMatchObject({ state: 'resolved', decision: 'rejected', decidedBy: AMINA.name });
-    expect(decided.status).toBe('Ready_For_Pickup');
+    const made = (await must(http().get('/v1/sbg/damage-reports').set(bearer(amina)), 200)).items as Array<Record<string, unknown>>;
+    expect(made).toEqual([expect.objectContaining({ parcelId: 'QR-SHELF-0002', number: 'DCR-QR-SHELF-0002', origin: 'counter', reason: 'The box is torn open at one corner', heldBy: 'Riverside Corner' })]);
+    await must(http().get('/v1/sbg/damage-reports').set(bearer(riverside.token)), 403);
+
+    // THE SHOP THAT REPORTED IT reads the report it caused; the shop the parcel came from does not; nobody signed out does.
+    const report = await must(http().get('/v1/sbg/parcels/QR-SHELF-0002/damage-report').set(bearer(riverside.token)), 200);
+    expect(report.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(report.body.statement).toMatch(/does not judge a claim for damage or loss/);
+    expect(report.body.terms).toMatchObject({ promise: 'ours', coverLimit: 0, currency: 'KES' });
+    expect(report.body.problem).toMatchObject({ origin: 'counter', reason: 'The box is torn open at one corner', shop: 'Riverside Corner', heldBy: { kind: 'shop', name: 'Riverside Corner' } });
+    expect((report.body.custody as Array<{ holder: { kind: string; name: string } }>).map((leg) => leg.holder.name)).toEqual(['Mama Sarah Shop', expect.any(String), 'Riverside Corner']);
+    // Whoever carried it is named as who the network contracts with, and no person's number is in it.
+    expect(JSON.stringify(report)).not.toMatch(/\+2547|did:glos:person/);
+    await must(http().get('/v1/sbg/parcels/QR-SHELF-0002/damage-report').set(bearer(mamaSarah.token)), 404);
+    await must(http().get('/v1/sbg/parcels/QR-SHELF-0002/damage-report'), 401);
+    // A shop reads; it does not hand the report to anybody. That is for whoever the report is for.
+    await must(http().post('/v1/sbg/parcels/QR-SHELF-0002/damage-report/links').set(bearer(riverside.token)), 403);
+
+    // THE SHOP IS TOLD, with the slot; and the parcel is handed over like any other.
     const told = (await inboxOf(riverside.token)).find((n) => n.kind === 'claim_decided');
-    expect(told).toMatchObject({ title: 'The dispute on parcel QR-SHELF-0002 was decided' });
-    expect(told!.body).toBe(`It was not upheld. The tear is in the outer wrap only. The contents are sealed and whole. It is on your shelf at ${second.slot}, to be handed over as any parcel.`);
+    expect(told).toMatchObject({ title: 'The damage claim report for parcel QR-SHELF-0002 is made', body: `The receiver has it in their app. It is on your shelf at ${second.slot}, and can be handed over as any parcel.` });
     await must(http().post('/v1/sbg/parcels/QR-SHELF-0002/pickup').set(bearer(riverside.token)).send({ agentDid: riverside.did, otp: second.code, deliveredPhotoRef: 'handed.jpg' }));
     expect(standing((await shelfOf(riverside)).grid)).toEqual({ [first.slot]: 'QR-SHELF-0003' });
+    // What happened afterwards is not in the report: it is as it was made.
+    expect((await must(http().get('/v1/sbg/parcels/QR-SHELF-0002/damage-report').set(bearer(riverside.token)), 200)).sha256).toBe(report.sha256);
   });
 
-  it('11 · a dispute, to its end: the receiver reports broken goods from their own app, a member of staff decides it by name, and both people on the parcel are told how it ended', async () => {
+  it('11 · a problem reported by the receiver, to its end: a damage claim report is made at once, nobody of ours decides anything, and the receiver hands it to whoever they choose', async () => {
     const SENDER = '+254722000021';
     const RECEIVER = '+254722000022';
     const sent = texts.length;
@@ -622,65 +642,95 @@ describe('the first day of a new installation, as it would be live', () => {
 
     const { code } = await toRiverside('QR-BROKEN-0001', SENDER, RECEIVER);
     const mine = `/v1/sbg/identity/parcels/QR-BROKEN-0001`;
+    const itsReport = '/v1/sbg/parcels/QR-BROKEN-0001/damage-report';
     // It is theirs to follow the moment it exists: the number given at the counter is the whole of the link.
     expect(await must(http().get(mine).set(bearer(receiver)), 200)).toMatchObject({ relation: 'received', status: 'Ready_For_Pickup' });
     expect(await must(http().get(mine).set(bearer(sender)), 200)).toMatchObject({ relation: 'sent' });
-    // A problem cannot be reported on a parcel nobody has opened yet.
+    // A problem cannot be reported on a parcel nobody has opened yet — and there is no report on a parcel with no problem.
     const photo = (await must(http().post('/v1/sbg/media').set(bearer(receiver)).send({ kind: 'dispute', dataUrl: PNG }))).mediaId as string;
     const early = await http().post(`${mine}/dispute`).set(bearer(receiver)).send({ reason: 'Broken', photoRef: photo });
     expect(early.status).toBeGreaterThanOrEqual(400);
+    await must(http().get(itsReport).set(bearer(receiver)), 404);
+    await must(http().get(itsReport).set(bearer(amina)), 404);
 
     await must(http().post('/v1/sbg/parcels/QR-BROKEN-0001/pickup').set(bearer(riverside.token)).send({ agentDid: riverside.did, otp: code, deliveredPhotoRef: 'handed.jpg' }));
     // REPORTED, from the receiver's own app, with a photograph. Not by the sender, whose parcel it also is.
     await must(http().post(`${mine}/dispute`).set(bearer(sender)).send({ reason: 'Broken', photoRef: photo }), 404);
     const reported = await must(http().post(`${mine}/dispute`).set(bearer(receiver)).send({ reason: 'The screen is cracked from corner to corner', photoRef: photo }));
-    expect(reported).toMatchObject({ status: 'Disputed', disputeReason: 'The screen is cracked from corner to corner' });
-    expect(reported).not.toHaveProperty('disputeOutcome');
-    // The sender sees that it is in question, and none of what the receiver wrote or photographed.
-    const theirs = await must(http().get(mine).set(bearer(sender)), 200);
-    expect(theirs.status).toBe('Disputed');
-    expect(JSON.stringify(theirs)).not.toContain('cracked');
-    expect(JSON.stringify(theirs)).not.toContain(photo);
+    // NOBODY OF OURS DECIDES IT. The parcel is what it factually is — delivered — and the answer is the report.
+    expect(reported).toMatchObject({ status: 'Delivered', disputeOutcome: { origin: 'buyer', decision: 'report_only' }, damageReport: { number: 'DCR-QR-BROKEN-0001' } });
+    expect(reported.disputeOutcome).not.toHaveProperty('award');
+    // One report to a parcel.
+    const twice = await http().post(`${mine}/dispute`).set(bearer(receiver)).send({ reason: 'And the back is scratched', photoRef: photo });
+    expect([twice.status >= 400, twice.body.detail]).toEqual([true, expect.stringMatching(/already reported on this parcel/)]);
 
-    // STAFF'S QUEUE has it, with the photograph; a shop does not read that queue.
-    const queue = (await must(http().get('/v1/sbg/disputes').set(bearer(brian)), 200)).disputes as Array<{ parcelId: string; origin: string; reason: string; evidence: string[] }>;
-    expect(queue.map((d) => d.parcelId)).toEqual(['QR-BROKEN-0001']);
-    expect(queue[0]).toMatchObject({ origin: 'buyer', reason: 'The screen is cracked from corner to corner', evidence: expect.arrayContaining([photo]) });
-    // The evidence opens for staff, as an image.
-    const opened = await http().get(`/v1/sbg/media/${photo}`).set(bearer(brian));
-    expect([opened.status, String(opened.headers['content-type']).startsWith('image/png')]).toEqual([200, true]);
+    // STAFF HAVE NOTHING TO DECIDE, and cannot decide it anyway: no award, by anybody, under any name.
+    expect((await must(http().get('/v1/sbg/disputes').set(bearer(brian)), 200)).disputes).toEqual([]);
+    const awarded = await http().post('/v1/sbg/disputes/QR-BROKEN-0001/resolve').set(bearer(brian)).send({ decision: 'upheld', award: 40, note: 'It broke in our hands.' });
+    expect(awarded.status).toBeGreaterThanOrEqual(400);
+    // NOR CAN A COMPANY BE MADE TO PAY by stating cover for it: that door is not open yet, and says why.
+    const cover = await http().post(`/v1/sbg/entities/${kenya}/insurance`).set(bearer(amina)).send({ freeLimit: 5000 });
+    expect([cover.status >= 400, cover.body.detail]).toEqual([true, expect.stringMatching(/A company cannot state cover yet/)]);
+    // What staff do have: the list of reports made, both of today's, newest first.
+    const made = (await must(http().get('/v1/sbg/damage-reports').set(bearer(brian)), 200)).items as Array<{ parcelId: string; origin: string }>;
+    expect(made.map((r) => [r.parcelId, r.origin])).toEqual([['QR-BROKEN-0001', 'buyer'], ['QR-SHELF-0002', 'counter']]);
 
-    // DECIDED, with a reason, by the member of staff who is signed in — whatever name the request carries.
-    const noReason = await http().post('/v1/sbg/disputes/QR-BROKEN-0001/resolve').set(bearer(brian)).send({ decision: 'upheld', award: 40, note: ' ' });
-    expect(noReason.status).toBeGreaterThanOrEqual(400);
-    const decided = await must(http().post('/v1/sbg/disputes/QR-BROKEN-0001/resolve').set(bearer(brian)).send({ decision: 'upheld', award: 40, note: 'It left the first shop whole and reached the second cracked: it broke in our hands.', by: 'Somebody Else' }));
-    expect(decided.dispute).toMatchObject({ state: 'resolved', decision: 'upheld', award: 40, decidedBy: BRIAN.name, paidTo: { kind: 'off_platform' } });
-    expect(decided.status).toBe('Delivered');
-    expect((await must(http().get('/v1/sbg/disputes').set(bearer(amina)), 200)).disputes).toEqual([]);
-    // Once is all: a decision is not made twice.
-    const again = await http().post('/v1/sbg/disputes/QR-BROKEN-0001/resolve').set(bearer(amina)).send({ decision: 'rejected', note: 'On reflection, no.' });
-    expect(again.status).toBeGreaterThanOrEqual(400);
-
-    // BOTH PEOPLE ARE TOLD, each in their own inbox, and each reads it on the parcel itself.
-    const toReceiver = (await inboxOf(receiver)).find((n) => n.kind === 'claim_decided');
-    expect(toReceiver).toEqual(expect.objectContaining({ title: 'Your report on parcel QR-BROKEN-0001 was upheld', body: 'It left the first shop whole and reached the second cracked: it broke in our hands.' }));
-    const toSender = (await inboxOf(sender)).find((n) => n.kind === 'claim_decided');
-    expect(toSender).toEqual(expect.objectContaining({ title: 'The report on parcel QR-BROKEN-0001 was upheld', body: 'It left the first shop whole and reached the second cracked: it broke in our hands. 40.00 KES is owed to you for it.' }));
-    const outcome = { origin: 'buyer', decision: 'upheld', note: 'It left the first shop whole and reached the second cracked: it broke in our hands.', decidedAt: expect.any(String), award: 40, currency: 'KES', paidTo: 'sender' };
-    expect((await must(http().get(mine).set(bearer(receiver)), 200)).disputeOutcome).toEqual(outcome);
+    // THE REPORT IS THE RECEIVER'S: what they wrote, their photograph, and the record of every hand before theirs.
+    const report = await must(http().get(itsReport).set(bearer(receiver)), 200);
+    expect(report.body.number).toBe('DCR-QR-BROKEN-0001');
+    expect(report.body.problem).toMatchObject({ origin: 'buyer', reason: 'The screen is cracked from corner to corner', parcelWas: 'handed over to the receiver' });
+    expect((report.body.photographs as Array<{ what: string; mediaId?: string }>).find((x) => x.what === 'problem')).toMatchObject({ mediaId: photo });
+    expect((report.body.custody as Array<{ holder: { name: string } }>).slice(0, 3).map((leg) => leg.holder.name)).toEqual(['Mama Sarah Shop', expect.any(String), 'Riverside Corner']);
+    expect(JSON.stringify(report)).not.toMatch(/\+2547|did:glos:person|Brian|Amina/);
+    // The SENDER is told why they are not handed it; a shop that never held the report's parcel is told nothing.
+    const refused = await http().get(itsReport).set(bearer(sender));
+    expect([refused.status, refused.body.detail]).toEqual([403, expect.stringMatching(/made for the receiver/)]);
+    await must(http().get(itsReport).set(bearer(mamaSarah.token)), 404);
+    // …and on their own view of the parcel: how it ended, none of what the receiver wrote or photographed, no report.
     const senderNow = await must(http().get(mine).set(bearer(sender)), 200);
-    expect(senderNow.disputeOutcome).toEqual(outcome);
-    expect(JSON.stringify(senderNow)).not.toContain('cracked from corner');
-    // Who decided is the network's to know: neither of them is shown a member of staff's name.
-    expect(JSON.stringify([toReceiver, toSender, senderNow.disputeOutcome])).not.toContain(BRIAN.name);
+    expect(senderNow).toMatchObject({ status: 'Delivered', disputeOutcome: { decision: 'report_only' } });
+    expect(senderNow).not.toHaveProperty('damageReport');
+    expect(JSON.stringify(senderNow)).not.toContain('cracked');
+    expect(JSON.stringify(senderNow)).not.toContain(photo);
+
+    // BOTH ARE TOLD, each in their own inbox — and neither is told anything was upheld, refused or owed.
+    const toReceiver = (await inboxOf(receiver)).find((n) => n.kind === 'claim_decided');
+    expect(toReceiver).toEqual(expect.objectContaining({ title: 'A damage claim report was made for parcel QR-BROKEN-0001', body: 'It holds the record of who held your parcel, and the photographs. Open the parcel to read it, or to pass it to an insurer.' }));
+    const toSender = (await inboxOf(sender)).find((n) => n.kind === 'claim_decided');
+    expect(toSender).toEqual(expect.objectContaining({ title: 'A problem was reported on parcel QR-BROKEN-0001', body: 'A damage claim report was made for the receiver. Ask them to pass it on if you need it for a claim.' }));
+
+    // HANDED ON BY A LINK THE RECEIVER MAKES — to an insurer, to the sender, to whoever they choose. Not staff, not the sender.
+    await must(http().post(`${itsReport}/links`).set(bearer(brian)), 403);
+    await must(http().post(`${itsReport}/links`).set(bearer(sender)), 403);
+    const link = await must(http().post(`${itsReport}/links`).set(bearer(receiver)));
+    const key = String(link.url).split('#report=')[1];
+    expect(key).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    // Whoever holds it opens it with nobody signed in: first what it is, then the file.
+    expect(await must(http().post('/v1/sbg/damage-report-links/look').send({ token: key }), 200)).toMatchObject({ state: 'ready', number: 'DCR-QR-BROKEN-0001', sha256: report.sha256 });
+    const file = await http().post('/v1/sbg/damage-report-links/fetch').send({ token: key }).buffer(true).parse((res, done) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (c: Buffer) => chunks.push(c));
+      res.on('end', () => done(null, Buffer.concat(chunks)));
+    });
+    expect([file.status, String(file.headers['content-type']), String(file.headers['content-disposition'])]).toEqual([200, 'application/zip', 'attachment; filename="damage-claim-report-QR-BROKEN-0001.zip"']);
+    const inside = (file.body as Buffer).toString('latin1');
+    for (const name of ['damage-claim-report.html', 'report.json', 'README.txt', `photographs/problem-${photo}.png`]) expect(inside).toContain(name);
+    expect(inside).toContain(report.sha256);
+    // The receiver sees that it was opened, and can stop it; after that it opens nothing.
+    expect((await must(http().get(`${itsReport}/links`).set(bearer(receiver)), 200)).items).toEqual([expect.objectContaining({ linkId: link.link.linkId, state: 'ready', opened: 1 })]);
+    await must(http().post(`${itsReport}/links/${link.link.linkId}/cancel`).set(bearer(receiver)), 200);
+    expect(await must(http().post('/v1/sbg/damage-report-links/look').send({ token: key }), 200)).toEqual({ state: 'cancelled', expiresAt: expect.any(String) });
+    expect((await http().post('/v1/sbg/damage-report-links/fetch').send({ token: key })).status).toBeGreaterThanOrEqual(400);
+    await must(http().post('/v1/sbg/damage-report-links/look').send({ token: 'A'.repeat(43) }), 404);
 
     // NOBODY WAS TEXTED about any of it: a text carries a sign-in code and nothing else.
     expect(texts.slice(sent)).toEqual(codes);
 
-    // THE MONEY: what was awarded is a cost to the Kenyan company and a debt it now owes — and its books still balance.
+    // NO MONEY MOVED: nothing was awarded and nothing is owed — and the Kenyan company's books still balance.
     const books = await must(http().get(`/v1/sbg/entities/${kenya}/books`).set(bearer(amina)), 200);
     expect(books.integrity).toEqual({ balanced: true, drift: 0 });
-    const account = (code: string) => (books.accounts as Array<{ code: string; balance: number }>).filter((a) => a.code === code).reduce((sum, a) => sum + a.balance, 0);
-    expect(Math.round(account('expense.claims') * 100) / 100).toBe(40);
+    const account = (code: string) => (books.accounts as Array<{ code: string; balance: number }>).filter((x) => x.code === code).reduce((sum, x) => sum + x.balance, 0);
+    expect(account('expense.claims')).toBe(0);
+    expect(account('payable.claim')).toBe(0);
   });
 });

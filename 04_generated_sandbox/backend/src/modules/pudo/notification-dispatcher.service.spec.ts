@@ -619,6 +619,28 @@ describe('NotificationDispatcher — a dispute is decided, and the people it con
     expect(told.map((n) => n.title)).toEqual(['Your report on parcel P1 was upheld']);
   });
 
+  it('where nobody of ours decides it: the receiver is told where the report is, the sender who holds it, the shop that its parcel can go', async () => {
+    const made = (over: Record<string, unknown>) => decided({ decision: 'report_only', award: 0, currency: undefined, note: 'No company of the network decides a claim on this parcel or pays one.', ...over });
+    // Reported by the receiver, from their own app.
+    const mine = harness({ parcel: walkUp, personByHash: people });
+    await mine.events.publish(GlosEvent.Pudo.ParcelDisputeDecided, made({}));
+    expect(mine.notifications.inboxFor('did:person:rx')).toEqual([expect.objectContaining({ kind: 'claim_decided', title: 'A damage claim report was made for parcel P1', body: 'It holds the record of who held your parcel, and the photographs. Open the parcel to read it, or to pass it to an insurer.', data: { parcelId: 'P1' } })]);
+    expect(mine.notifications.inboxFor('did:person:tx')).toEqual([expect.objectContaining({ title: 'A problem was reported on parcel P1', body: 'A damage claim report was made for the receiver. Ask them to pass it on if you need it for a claim.' })]);
+    // Nothing in either says "upheld" or "not upheld": nobody judged anything.
+    const words = [...mine.notifications.inboxFor('did:person:rx'), ...mine.notifications.inboxFor('did:person:tx')].map((n) => `${n.title} ${n.body}`).join(' ');
+    expect(words).not.toMatch(/upheld|decided|owed/);
+
+    // Reported by the shop, at its counter: the receiver may not have been there, and the parcel can still be collected.
+    const counter = harness({ parcel: walkUp, personByHash: people });
+    await counter.events.publish(GlosEvent.Pudo.ParcelDisputeDecided, made({ origin: 'counter', raisedBy: 'did:agent:9' }));
+    expect(counter.notifications.inboxFor('did:person:rx')).toEqual([expect.objectContaining({ title: 'The shop reported a problem with parcel P1', body: 'A damage claim report was made, and it is on the parcel in your app. The parcel can still be collected.' })]);
+    expect(counter.notifications.inboxFor('did:agent:9')).toEqual([expect.objectContaining({ kind: 'claim_decided', title: 'The damage claim report for parcel P1 is made', body: 'The receiver has it in their app. It is on your shelf at Amber-2, and can be handed over as any parcel.' })]);
+    // A report somebody filed from their app is not answered to a shop, and one person on both ends is told once.
+    const self = harness({ parcel: { receiverPhoneHash: 'hash-rx', senderPhoneHash: 'hash-rx' }, personByHash: people });
+    await self.events.publish(GlosEvent.Pudo.ParcelDisputeDecided, made({}));
+    expect(self.notifications.inboxFor('did:person:rx').map((n) => n.title)).toEqual(['A damage claim report was made for parcel P1']);
+  });
+
   it('is silent, without throwing into the bus, when nobody on the parcel has an account or the parcel is gone', async () => {
     const none = harness({ parcel: walkUp, personByHash: {} });
     await expect(none.events.publish(GlosEvent.Pudo.ParcelDisputeDecided, decided({}))).resolves.not.toThrow();
