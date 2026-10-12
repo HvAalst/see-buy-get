@@ -11309,7 +11309,7 @@
       "post": {
         "operationId": "Sbg.settleParcel",
         "summary": "",
-        "description": "Retry the prepaid gate on an unpaid shipment after a top-up → issue the label + ParcelPaid.\n Owner-scoped (PG0): settling BILLS the minting store's balance, so only that store (or an\n operator) may trigger it — a storeless walk-up parcel has no settle path at all.",
+        "description": "Retry the prepaid gate on an unpaid shipment after a top-up → issue the label + ParcelPaid.\n Owner-scoped (PG0): settling BILLS the minting store's balance, so only that store may trigger it — not\n staff standing in (assertVendorSelf) — and a storeless walk-up parcel has no settle path at all.",
         "parameters": [
           {
             "name": "id",

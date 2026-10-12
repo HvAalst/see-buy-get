@@ -804,8 +804,68 @@ describe('PUDO Light', () => {
     expect(() => controller.createInbound(dto, undefined as never)).toThrow(/not yours/);
     const own: any = controller.createInbound(dto, { role: 'genesis', did: mine.did } as never);
     expect(own.parcel).toBeDefined();
-    const op: any = controller.createInbound(dto, { role: 'operator' } as never);
-    expect(op.parcel).toBeDefined();
+    // Not staff either: an order minted in a store's name bills that store, and staff bill nobody's float for them.
+    const before = { parcels: parcels.list({ vendorId: mine.vendorId }).length, float: vendors.balanceOrNone(mine.vendorId) };
+    expect(() => controller.createInbound(dto, { role: 'operator' } as never)).toThrow('A store makes its own changes, signed in as that store. Staff read a store under Stores and change nothing in its name');
+    expect({ parcels: parcels.list({ vendorId: mine.vendorId }).length, float: vendors.balanceOrNone(mine.vendorId) }).toEqual(before);
+  });
+
+  /**
+   * THE USER, 2026-10-12: "better that staff does not have that door to make changes."
+   *
+   * A staff sign-in passed the gate on every one of a store's own routes, the ones that change it as much as the
+   * ones that read it — and what it changed there carried no name. Each route that changes a store is tried here
+   * as staff, with what the store itself would send, and the store is read afterwards to see nothing moved.
+   */
+  it('staff change nothing in a store’s name: every route that changes a store refuses a staff sign-in, by name, and the store is as it was', () => {
+    const origin = onboardAgent('Door O', 'NorthTown', 50);
+    const dest = onboardAgent('Door D', 'SouthTown', 50);
+    corridors.addCorridor({ name: 'Door N-S', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const store = vendors.register({ name: 'Door Store', callbackUrl: 'https://door.example/hook', secret: 'whsec_door' });
+    const asStore = { active: true, role: 'genesis', did: store.did, scopes: [] } as never;
+    const staff = { active: true, role: 'operator', sub: 'operator:opr_door', actorName: 'Amina Otieno', scopes: ['*'] } as never;
+    vendors.topUp(store.vendorId, 100);
+    // What the store has, made by the store: a key, an order not yet paid for would need no float — so one paid order.
+    const key = controller.issueApiKey(store.vendorId, { kind: 'secret', mode: 'live' } as never, asStore) as { keyId: string };
+    const order = { vendorId: store.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'c.jpg' } as never;
+    const { parcel } = controller.createInbound(order, asStore) as { parcel: { parcelId: string } };
+    const asItIs = () => ({
+      record: JSON.stringify(vendors.get(store.vendorId)),
+      keys: JSON.stringify(controller.listApiKeys(store.vendorId, asStore)),
+      parcels: parcels.list({ vendorId: store.vendorId }).length,
+      checkouts: vendors.checkoutsFor(store.vendorId, true).length,
+    });
+    const before = asItIs();
+
+    const REFUSED = 'A store makes its own changes, signed in as that store. Staff read a store under Stores and change nothing in its name';
+    const tries: Array<[string, () => unknown]> = [
+      ['its address and what it charges', () => controller.updateVendor(store.vendorId, { callbackUrl: 'https://staff.example/hook' } as never, staff)],
+      ['its signing secret', () => controller.rotateVendorSecret(store.vendorId, { secret: 'whsec_door' } as never, staff)],
+      ['a new key', () => controller.issueApiKey(store.vendorId, { kind: 'secret', mode: 'live' } as never, staff)],
+      ['revoking a key', () => controller.revokeApiKey(store.vendorId, key.keyId, staff)],
+      ['a dock', () => controller.setCollectionPoint(store.vendorId, { label: 'Gate 1', zone: 'NorthTown', location: { lat: -1.2, lng: 36.8 }, bays: 2 } as never, staff)],
+      ['closing its dock', () => controller.clearCollectionPoint(store.vendorId, staff)],
+      ['a bag at its dock', () => controller.openDockBag(store.vendorId, { destZone: 'SouthTown' } as never, staff)],
+      ['filling a bag', () => controller.fillDockBag(store.vendorId, 'BAG-X', { parcelIds: [parcel.parcelId] } as never, staff)],
+      ['sealing a bag', () => controller.sealDockBag(store.vendorId, 'BAG-X', {} as never, staff)],
+      ['a checkout', () => controller.captureCheckout(store.vendorId, { destPudoDid: dest.did, buyerMobile: '+254700111222' } as never, staff)],
+      ['a payment in its name', () => controller.topUpVendor(store.vendorId, { amount: 500 } as never, staff)],
+      ['an order billed to its float', () => controller.createInbound(order, staff)],
+      ['settling a shipment against its float', () => controller.settleParcel(parcel.parcelId, staff)],
+      ['yes to a return', () => controller.acceptReturn(store.vendorId, 'off_x', staff)],
+      ['no to a return', () => controller.declineReturn(store.vendorId, 'off_x', { reason: 'no' } as never, staff)],
+    ];
+    for (const [what, attempt] of tries) expect({ what, said: (() => { try { attempt(); return 'DONE'; } catch (e) { return (e as Error).message; } })() }).toEqual({ what, said: REFUSED });
+    expect(tries).toHaveLength(15);
+    expect(asItIs()).toEqual(before);
+
+    // What staff keep is READING, and the same store's own sign-in still changes it.
+    expect(controller.getVendor(store.vendorId, staff)).toMatchObject({ vendorId: store.vendorId, callbackUrl: 'https://door.example/hook' });
+    expect(controller.storeDesk(store.vendorId)).toMatchObject({ vendorId: store.vendorId });
+    expect(controller.updateVendor(store.vendorId, { callbackUrl: 'https://door.example/hook2' } as never, asStore)).toMatchObject({ callbackUrl: 'https://door.example/hook2' });
+    // A stranger is told it is not theirs; an unknown store is not found, whoever asks.
+    expect(() => controller.updateVendor(store.vendorId, {} as never, { active: true, role: 'genesis', did: 'did:glos:another-store' } as never)).toThrow('This store is not yours to change');
+    expect(() => controller.updateVendor('ven_nobody', {} as never, staff)).toThrow(/not found/i);
   });
 
   it('a parcel knows where it was BORN and who has HELD it — the two facts a status trail cannot give', () => {
@@ -5577,7 +5637,7 @@ describe('PUDO Light', () => {
     it('a store’s checkout is filed by that store, and a parcel’s rating by a shop that handled it', () => {
       const store = vendors.register({ name: 'Who Store', contactEmail: 'who-store@sbg.test' } as never);
       const stranger = as('genesis', 'did:glos:another-store');
-      expect(() => controller.captureCheckout(store.vendorId, { destPudoDid: 'did:glos:a-shop', buyerMobile: '+254700111222' } as never, stranger)).toThrow('This store is not yours to view');
+      expect(() => controller.captureCheckout(store.vendorId, { destPudoDid: 'did:glos:a-shop', buyerMobile: '+254700111222' } as never, stranger)).toThrow('This store is not yours to change');
       expect(() => controller.captureCheckout('ven_nobody', {} as never, staff)).toThrow();
 
       // A rating: recorded at the counter of a shop the parcel passed through — not by any shop that knows its number.
@@ -5744,7 +5804,8 @@ describe('PUDO Light', () => {
       const other = vendors.register({ name: 'Another Desk Store' });
       vendors.topUp(store.vendorId, 50);
       const { parcel } = parcels.createInbound({ vendorId: store.vendorId, externalOrderId: 'ORD-DESK', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: BUYER, size: 'M', contentPhotoRef: 'c.jpg', shippingPolicy: store.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });
-      const key = controller.issueApiKey(store.vendorId, { kind: 'secret', mode: 'live', label: 'Shop backend' } as never, staff) as { secret: string; hint: string; keyId: string };
+      // Made by the store itself: staff make nothing in a store's name.
+      const key = controller.issueApiKey(store.vendorId, { kind: 'secret', mode: 'live', label: 'Shop backend' } as never, as('genesis', store.did)) as { secret: string; hint: string; keyId: string };
       const settles = vendors.settledBy(store)!;
 
       // THE LIST: one row a store, made of what a list is for.

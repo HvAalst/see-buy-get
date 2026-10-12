@@ -475,7 +475,7 @@ export const ARTICLES: GuideArticle[] = [
     ],
     notes: [
       "Staff are shown no buyer, no collection code, no signing secret and no key. The number on file for a store is shown by its last three digits only.",
-      "Nothing is changed from this screen. A store changes its own address, keys and settings in the Store app; a payment is confirmed under Money in."
+      "Nothing is changed from this screen, and a staff sign-in cannot change a store anywhere else either: its address, its keys, its dock, its orders and the payments it starts are the store’s own to make, signed in as itself in the Store app. What staff do about a store they do under their own names: a payment is confirmed under Money in."
     ]
   },
   {

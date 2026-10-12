@@ -112,8 +112,14 @@ describe('a store has an account of its own, over the wire', () => {
     expect(rotated.secret).toMatch(/^whsec_/);
     expect(rotated.secret).not.toBe(made.secret);
     expect(rotated.secretRotatedAt).toBeTruthy();
-    // Network staff still cannot do it for the store: they do not hold its password.
-    expect((await rotate({ password: 'seebuyget-staff' }, operator)).body.code).toBe('PASSWORD_WRONG');
+    // Network staff cannot do it for the store, and are refused before any password is looked at: a guess from a
+    // staff sign-in used to be weighed like the store's own, and counted against the store's five tries.
+    const byStaff = await rotate({ password: 'seebuyget-staff' }, operator);
+    expect(byStaff.status).toBe(403);
+    expect(byStaff.body.code).toBe('FORBIDDEN');
+    expect(byStaff.body.detail).toMatch(/A store makes its own changes/);
+    // Six of them, where five wrong ones lock a store: none is counted, so the store is not locked out by somebody else's guessing.
+    for (let i = 0; i < 6; i++) expect((await rotate({ password: `a-guess-${i}` }, operator)).body.code).toBe('FORBIDDEN');
     // Replacing the secret ended every sign-in the store had, and handed this device a new one.
     await http().get(`/v1/sbg/vendors/${made.vendorId}/orders/stats`).set(bearer(token)).expect(401);
     await http().get(`/v1/sbg/vendors/${made.vendorId}/orders/stats`).set(bearer(rotated.token.access_token)).expect(200);

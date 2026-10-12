@@ -64,16 +64,22 @@ describe('GLOS backend (e2e)', () => {
    * does both halves over HTTP, and the second half goes through the signed callback door — which makes
    * the end-to-end suite the only place that proves the whole inbound rail, signature included.
    */
-  async function fund(path: string, amount: number, auth: Record<string, string>): Promise<{ asked: request.Response; paid: request.Response }> {
+  async function fund(path: string, amount: number, auth: Record<string, string>, staff: Record<string, string> = auth): Promise<{ asked: request.Response; paid: request.Response }> {
     const http = app.getHttpServer();
     const asked = await request(http).post(path).set(auth).send({ amount }).expect(201);
     const fundingId = asked.body.fundingId as string;
     expect(asked.body.status).toBe('awaiting');
     const providerRef = `MPX${Math.random().toString(16).slice(2, 10).toUpperCase()}`;
     // The sandbox rail signs it exactly as a provider would and it is verified on the way back in.
-    const paid = await request(http).post(`/v1/rails/funding/${fundingId}/simulate`).set(auth).send({ providerRef, amount }).expect(201);
+    const paid = await request(http).post(`/v1/rails/funding/${fundingId}/simulate`).set(staff).send({ providerRef, amount }).expect(201);
     expect(paid.body.status).toBe('confirmed');
     return { asked, paid };
+  }
+
+  /** A store signed in as itself, the old way (its number and the secret it was handed once): what changes a store. */
+  async function asStore(vendor: { vendorId: string; secret: string }): Promise<Record<string, string>> {
+    const signedIn = await request(app.getHttpServer()).post('/v1/sbg/vendors/login').send({ vendorId: vendor.vendorId, secret: vendor.secret }).expect(201);
+    return { Authorization: `Bearer ${signedIn.body.token.access_token}` };
   }
 
   it('/v1/health (GET) is public and returns ok', () => {
@@ -722,9 +728,13 @@ describe('GLOS backend (e2e)', () => {
     // But a later fetch must NOT re-expose the signing secret (a guessed vendorId would leak the key).
     const reFetched = await request(http).get(`/v1/sbg/vendors/${vendor.body.vendorId}`).set(auth).expect(200);
     expect(reFetched.body.secret).toBeUndefined();
-    const { asked: topped } = await fund(`/v1/sbg/vendors/${vendor.body.vendorId}/top-up`, 50, auth); // prepay the daughter co
+    // The store pays in and mints its own order, signed in as itself: staff do neither in a store's name.
+    const acme = await asStore(vendor.body);
+    await request(http).post(`/v1/sbg/vendors/${vendor.body.vendorId}/top-up`).set(auth).send({ amount: 50 }).expect(403);
+    const { asked: topped } = await fund(`/v1/sbg/vendors/${vendor.body.vendorId}/top-up`, 50, acme, auth); // prepay the daughter co
     expect(topped.body.secret).toBeUndefined();
-    const order = await request(http).post('/v1/sbg/inbound/orders').set(auth).send({ vendorId: vendor.body.vendorId, externalOrderId: 'ORD-77', originPudoDid: origin, destPudoDid: dest, buyerMobile: '+254700999', size: 'M', contentPhotoRef: 'content.jpg', items: [{ name: 'Books', qty: 3 }] }).expect(201);
+    await request(http).post('/v1/sbg/inbound/orders').set(auth).send({ vendorId: vendor.body.vendorId, originPudoDid: origin, destPudoDid: dest, buyerMobile: '+254700999', size: 'M', contentPhotoRef: 'content.jpg' }).expect(403);
+    const order = await request(http).post('/v1/sbg/inbound/orders').set(acme).send({ vendorId: vendor.body.vendorId, externalOrderId: 'ORD-77', originPudoDid: origin, destPudoDid: dest, buyerMobile: '+254700999', size: 'M', contentPhotoRef: 'content.jpg', items: [{ name: 'Books', qty: 3 }] }).expect(201);
     const parcelId = order.body.parcel.parcelId as string;
     const collectionCode = order.body.parcel.collectionCode as string;
     expect(order.body.label.svg).toContain('<svg');
@@ -763,7 +773,8 @@ describe('GLOS backend (e2e)', () => {
     const origin = await onboard('MDP Origin', 'NorthTown');
     const dest = await onboard('MDP Dest', 'EastTown');
     const vendor = await request(http).post('/v1/sbg/vendors').set(auth).send({ name: 'HubShop' }).expect(201);
-    await fund(`/v1/sbg/vendors/${vendor.body.vendorId}/top-up`, 50, auth); // prepay the daughter co
+    const hubShop = await asStore(vendor.body);
+    await fund(`/v1/sbg/vendors/${vendor.body.vendorId}/top-up`, 50, hubShop, auth); // prepay the daughter co
 
     // An MDP hub that last-mile-serves the destination zone.
     const hub = await request(http).post('/v1/sbg/mdps').set(auth).send({ name: 'East Sort Hub', zones: ['EastTown'], location: { lat: -1.25, lng: 36.95 } }).expect(201);
@@ -772,7 +783,7 @@ describe('GLOS backend (e2e)', () => {
     // Two inbound parcels, intaken at the origin.
     const ids: string[] = [];
     for (let i = 0; i < 2; i += 1) {
-      const order = await request(http).post('/v1/sbg/inbound/orders').set(auth).send({ vendorId: vendor.body.vendorId, originPudoDid: origin, destPudoDid: dest, buyerMobile: `+25470${i}`, size: 'M', contentPhotoRef: 'content.jpg' }).expect(201);
+      const order = await request(http).post('/v1/sbg/inbound/orders').set(hubShop).send({ vendorId: vendor.body.vendorId, originPudoDid: origin, destPudoDid: dest, buyerMobile: `+25470${i}`, size: 'M', contentPhotoRef: 'content.jpg' }).expect(201);
       const pid = order.body.parcel.parcelId as string;
       await request(http).post(`/v1/sbg/parcels/${pid}/intake`).set(auth).send({ agentDid: origin }).expect(201);
       ids.push(pid);

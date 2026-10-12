@@ -236,11 +236,14 @@ describe('a parcel is kept by the account, over the wire', () => {
     const dest = await aShop('Buyer-side PFA', 'FollowSouth');
     // A store's order is routed when it is made, so the road between the two shops has to exist first.
     await http().post('/v1/sbg/corridors').set(operator).send({ name: 'FollowNorth → FollowSouth', originZone: 'FollowNorth', destZone: 'FollowSouth' }).expect(201);
-    const store =(await http().post('/v1/sbg/vendors').set(operator).send({ name: `Follow Store ${digits()}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body.vendorId as string;
-    const asked = await http().post(`/v1/sbg/vendors/${store}/top-up`).set(operator).send({ amount: 50 }).expect(201);
+    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ name: `Follow Store ${digits()}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
+    const store = made.vendorId as string;
+    // The store pays in and sends its orders signed in as itself: staff do neither in a store's name.
+    const asStore = { authorization: `Bearer ${(await http().post('/v1/sbg/vendors/login').send({ vendorId: store, secret: made.secret }).expect(201)).body.token.access_token}` };
+    const asked = await http().post(`/v1/sbg/vendors/${store}/top-up`).set(asStore).send({ amount: 50 }).expect(201);
     await http().post(`/v1/rails/funding/${asked.body.fundingId}/simulate`).set(operator).send({ providerRef: `MPX${digits()}`, amount: 50 }).expect(201);
     const orderFor = async (buyerMobile: string) =>
-      (await http().post('/v1/sbg/inbound/orders').set(operator).send({ vendorId: store, originPudoDid: origin, destPudoDid: dest, buyerMobile, size: 'M', contentPhotoRef: 'content.jpg' }).expect(201)).body.parcel.parcelId as string;
+      (await http().post('/v1/sbg/inbound/orders').set(asStore).send({ vendorId: store, originPudoDid: origin, destPudoDid: dest, buyerMobile, size: 'M', contentPhotoRef: 'content.jpg' }).expect(201)).body.parcel.parcelId as string;
 
     // THE ACCOUNT FIRST: the buyer follows the invitation while they are still at the checkout. Nothing is theirs yet.
     const EARLY = `+2547${digits()}4`;

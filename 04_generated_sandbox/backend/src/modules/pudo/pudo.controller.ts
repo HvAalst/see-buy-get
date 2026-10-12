@@ -2971,7 +2971,7 @@ export class SbgController {
   @Scopes('vendor:manage:self')
   @Post('vendors/:id/secret/rotate')
   rotateVendorSecret(@Param('id') id: string, @Body() dto: RotateSecretDto, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorSelf(id, actor);
     const store = this.vendors.get(id);
     let vendor: ReturnType<VendorService['get']>;
     // A WRONG PROOF HERE IS A 403 OF ITS OWN, never a 401: the store is signed in, and every app reads a 401 as
@@ -3062,12 +3062,12 @@ export class SbgController {
   @Scopes('vendor:manage:self')
   @Patch('vendors/:id')
   updateVendor(@Param('id') id: string, @Body() dto: UpdateVendorDto, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorSelf(id, actor);
     return VendorService.publicView(this.vendors.updateProfile(id, dto));
   }
 
   /**
-   * OWNER GATE for a vendor's own data AND writes (PG0). 404 on an unknown store; 403 unless the caller IS
+   * OWNER GATE for READING a vendor's own data (PG0; the writes have assertVendorSelf below). 404 on an unknown store; 403 unless the caller IS
    * that store — a vendor's token carries did = vendor.did (mintActorToken at vendors/login), so we compare
    * the acting DID to the record; an operator (client-secret gated) may act on any store. Without this, an
    * unlabelled route is admitted for ANY valid token: on reads the path id alone would expose one store's
@@ -3080,6 +3080,25 @@ export class SbgController {
     if (actor?.role !== 'operator' && (!actor?.did || actor.did !== vendor.did)) {
       throw new GlosError('FORBIDDEN', 'This store is not yours to view');
     }
+  }
+
+  /**
+   * THE STORE ITSELF, AND NOBODY STANDING IN — the gate on everything that CHANGES a store.
+   *
+   * The user, 2026-10-12: "better that staff does not have that door to make changes." assertVendorOwner lets
+   * network staff through, and it stood on the writes as well as the reads: a staff sign-in could move a store's
+   * callback address, change what it charges for shipping, revoke its keys, open a payment in its name or mint
+   * an order against its float — and none of it carried a name, so the store's own record could not say that
+   * it was staff, or who. A store's settings, its keys, its dock and its orders are changed by the store,
+   * signed in as itself. What staff do about a store they do by their own doors, under their own names:
+   * a payment is confirmed under Money in, a parcel is cancelled or its release code reissued from the desk.
+   *
+   * Said to staff in a sentence of its own, so a refusal reads as the rule it is rather than as a wrong id.
+   */
+  private assertVendorSelf(id: string, actor: IntrospectionResult): void {
+    const vendor = this.vendors.get(id); // 404 if unknown
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A store makes its own changes, signed in as that store. Staff read a store under Stores and change nothing in its name');
+    if (!actor?.did || actor.did !== vendor.did) throw new GlosError('FORBIDDEN', 'This store is not yours to change');
   }
 
   /** OWNER GATE for a shop's own data (R4). 404 on an unknown shop; 403 unless the caller IS that shop — a
@@ -3124,7 +3143,7 @@ export class SbgController {
   @Scopes('vendor:manage:self')
   @Post('vendors/:id/collection-point')
   setCollectionPoint(@Param('id') id: string, @Body() dto: CollectionPointDto, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorSelf(id, actor);
     return VendorService.publicView(this.vendors.setCollectionPoint(id, dto));
   }
 
@@ -3139,7 +3158,7 @@ export class SbgController {
   @Scopes('vendor:manage:self')
   @Post('vendors/:id/api-keys')
   issueApiKey(@Param('id') id: string, @Body() dto: IssueApiKeyDto, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorSelf(id, actor);
     this.vendors.get(id); // 404 on an unknown store before anything is minted
     const { key, secret } = this.apiKeys.issue(id, dto.kind, dto.mode ?? 'test', dto.label);
     // `secret` is the only place the full value appears. The stored record is a hash for a secret key.
@@ -3158,7 +3177,7 @@ export class SbgController {
   @Scopes('vendor:manage:self')
   @Delete('vendors/:id/api-keys/:keyId')
   revokeApiKey(@Param('id') id: string, @Param('keyId') keyId: string, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorSelf(id, actor);
     return this.apiKeys.revoke(id, keyId);
   }
 
@@ -3166,7 +3185,7 @@ export class SbgController {
   @Scopes('vendor:manage:self')
   @Delete('vendors/:id/collection-point')
   clearCollectionPoint(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorSelf(id, actor);
     return VendorService.publicView(this.vendors.clearCollectionPoint(id));
   }
 
@@ -3181,14 +3200,14 @@ export class SbgController {
   @Scopes('vendor:manage:self')
   @Post('vendors/:id/dock/bags')
   openDockBag(@Param('id') id: string, @Body() dto: OpenDockBagDto, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorSelf(id, actor);
     return this.dock.openBag(id, dto.destZone);
   }
 
   @Scopes('vendor:manage:self')
   @Post('vendors/:id/dock/bags/:code/fill')
   fillDockBag(@Param('id') id: string, @Param('code') code: string, @Body() dto: FillToteDto, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorSelf(id, actor);
     return this.dock.fillBag(code, id, dto.parcelId);
   }
 
@@ -3196,7 +3215,7 @@ export class SbgController {
   @Scopes('vendor:manage:self')
   @Post('vendors/:id/dock/bags/:code/seal')
   sealDockBag(@Param('id') id: string, @Param('code') code: string, @Body() dto: SealBagDto, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorSelf(id, actor);
     return this.dock.sealBag(code, id, dto ?? {});
   }
 
@@ -3256,7 +3275,7 @@ export class SbgController {
   @Post('vendors/:id/checkout')
   captureCheckout(@Param('id') id: string, @Body() dto: CheckoutDto, @Actor() actor: IntrospectionResult) {
     // THAT store's own sign-in (or staff). The id in the address was all it took: any account could file orders in any store's name.
-    this.assertVendorOwner(id, actor);
+    this.assertVendorSelf(id, actor);
     return this.vendors.captureCheckout({ vendorId: id, destAgentDid: dto.destPudoDid, buyerEmail: dto.buyerEmail, buyerMobile: dto.buyerMobile, externalOrderId: dto.externalOrderId, items: dto.items, subtotal: dto.subtotal, source: dto.source });
   }
 
@@ -3290,7 +3309,7 @@ export class SbgController {
   @Scopes('shipment:create')
   @Post('vendors/:id/returns/:offerId/accept')
   acceptReturn(@Param('id') id: string, @Param('offerId') offerId: string, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorSelf(id, actor);
     return this.returns.accept(offerId, id);
   }
 
@@ -3298,7 +3317,7 @@ export class SbgController {
   @Scopes('shipment:create')
   @Post('vendors/:id/returns/:offerId/decline')
   declineReturn(@Param('id') id: string, @Param('offerId') offerId: string, @Body() dto: DeclineReturnDto, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorSelf(id, actor);
     return this.returns.decline(offerId, id, dto.reason);
   }
 
@@ -3489,7 +3508,7 @@ export class SbgController {
   @Scopes('vendor:manage:self')
   @Post('vendors/:id/top-up')
   topUpVendor(@Param('id') id: string, @Body() dto: TopUpDto, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorSelf(id, actor);
     return this.funding.open({ payerKind: 'vendor', payerDid: id, amount: dto.amount, payerPhone: dto.phone });
   }
 
@@ -3544,16 +3563,14 @@ export class SbgController {
   }
 
   /** Retry the prepaid gate on an unpaid shipment after a top-up → issue the label + ParcelPaid.
-   *  Owner-scoped (PG0): settling BILLS the minting store's balance, so only that store (or an
-   *  operator) may trigger it — a storeless walk-up parcel has no settle path at all. */
+   *  Owner-scoped (PG0): settling BILLS the minting store's balance, so only that store may trigger it — not
+   *  staff standing in (assertVendorSelf) — and a storeless walk-up parcel has no settle path at all. */
   @Scopes('shipment:create')
   @Post('parcels/:id/settle')
   settleParcel(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
-    if (actor?.role !== 'operator') {
-      const vendorId = this.parcels.get(id).vendorId;
-      if (!vendorId) throw new GlosError('FORBIDDEN', 'Only the minting store may settle a shipment');
-      this.assertVendorOwner(vendorId, actor);
-    }
+    const vendorId = this.parcels.get(id).vendorId;
+    if (!vendorId) throw new GlosError('FORBIDDEN', 'Only the minting store may settle a shipment');
+    this.assertVendorSelf(vendorId, actor);
     return this.parcels.settleUnpaid(id);
   }
 
@@ -3666,7 +3683,7 @@ export class SbgController {
   @Scopes('shipment:create')
   @Post('inbound/orders')
   createInbound(@Body() dto: InboundOrderDto, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(dto.vendorId, actor);
+    this.assertVendorSelf(dto.vendorId, actor);
     const vendor = this.vendors.get(dto.vendorId);
     const handoff = dto.checkoutId ? this.vendors.checkout(dto.checkoutId) : undefined;
     // A checkout handoff is itself store-owned: binding another store's handoff would pull its buyer
