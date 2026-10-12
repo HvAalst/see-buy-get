@@ -18,6 +18,7 @@ import type {
   DeclaredLegView,
   GeocodeResult,
   RecentVehicleView,
+  RideAloneTerms,
   ExpectedLoadView,
   OfferView,
   RatesView,
@@ -102,6 +103,8 @@ export interface DriverState {
   vehicles: RecentVehicleView[];
   /** Fleets that have offered this driver a place. Only they can answer one, and only from this sign-in. */
   fleetOffers: FleetOffer[];
+  /** What riding for themselves would take — read only for a driver who is in no fleet; null for everybody else. */
+  rideAlone: RideAloneTerms | null;
   /** R5 — the driver jobs + earnings register (a filtered/paged page + the current view's totals). */
   jobs: DriverJobRow[];
   jobsTotal: number;
@@ -209,6 +212,7 @@ const INITIAL: DriverState = {
   departures: [],
   vehicles: [],
   fleetOffers: [],
+  rideAlone: null,
   jobs: [],
   jobsTotal: 0,
   jobsState: 'idle',
@@ -438,6 +442,15 @@ export function useDriverApp() {
       if (superseded()) return;
       const fleetOffers = offR.error ? [] : narrow<FleetOffer[]>(offR.data) ?? [];
 
+      // In no fleet: the other way back onto the road, and whether this app can offer it. Soft-fail to "not said"
+      // — the sheet then shows only how a fleet takes somebody on, which is still true.
+      let rideAlone: RideAloneTerms | null = null;
+      if (driver && !driver.managerDid && driver.removedFrom) {
+        const aloneR = await client.api.rideAloneTerms(did);
+        if (superseded()) return;
+        rideAlone = aloneR.error ? null : narrow<RideAloneTerms>(aloneR.data) ?? null;
+      }
+
       setState((s) => ({
         ...s,
         phase: 'ready',
@@ -446,6 +459,7 @@ export function useDriverApp() {
         vehicle,
         departures,
         fleetOffers,
+        rideAlone,
         remaining,
         remainingTotes,
         claims,
@@ -906,6 +920,25 @@ export function useDriverApp() {
     await refresh();
     return null;
   }, [client, did, pushToast, refresh]);
+
+  /**
+   * RIDE FOR THEMSELVES. Resolves to the refusal, so the sheet can show the server's sentence where the driver is
+   * looking; null means they are a courier now. No new sign-in: the one they hold already names no fleet.
+   */
+  const rideAlone = useCallback(
+    async (body: { country: string; vehicleClass: string; plate: string }): Promise<SbgError | null> => {
+      if (!client || !did) return null;
+      setState((s) => ({ ...s, busy: 'ride-alone' }));
+      const r = await client.api.rideAlone(did, body);
+      setState((s) => ({ ...s, busy: null }));
+      if (r.error) return r.error;
+      const done = narrow<{ companyName?: string }>(r.data);
+      pushToast({ tone: 'ok', icon: 'check', title: t('driver.alone.doneToast'), detail: done?.companyName ? t('driver.alone.doneDetailCompany', { company: done.companyName }) : t('driver.alone.doneDetail') });
+      await refresh();
+      return null;
+    },
+    [client, did, pushToast, refresh],
+  );
 
   /** No to a fleet's offer. The fleet is told; nothing else changes. */
   const declineFleetOffer = useCallback(
@@ -1736,6 +1769,7 @@ export function useDriverApp() {
       acceptFleetOffer,
       declineFleetOffer,
       leaveFleet,
+      rideAlone,
       sendClearance,
       countries,
       loadRoad,

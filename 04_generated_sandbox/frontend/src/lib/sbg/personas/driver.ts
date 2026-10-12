@@ -53,6 +53,16 @@ export function createDriverApi(sbg: SbgClient) {
     leaveFleet: (did: string) => sbg.request((c) => c.POST('/v1/sbg/drivers/{did}/leave-fleet', { params: { path: { did } } })),
 
     /**
+     * What riding for themselves would take, read before anything is asked: whether the app offers it (and the
+     * sentence that says why not), what they are cleared to ride, and where a courier can register with which company.
+     */
+    rideAloneTerms: (did: string) => sbg.request((c) => c.GET('/v1/sbg/drivers/{did}/ride-alone', { params: { path: { did } } })),
+
+    /** A driver who is in no fleet becomes a courier, at once: where they live, and the vehicle of their own. */
+    rideAlone: (did: string, body: { country: string; vehicleClass: string; plate: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/drivers/{did}/ride-alone', { params: { path: { did } }, body })),
+
+    /**
      * FP4 — a driver sends the renewed licence: the photo (an uploaded `kyc_licence` media id) and the date
      * they read off it. It goes to their fleet's office, or — a courier without a fleet — to network staff,
      * and switches nothing on until whoever that is has read the card.

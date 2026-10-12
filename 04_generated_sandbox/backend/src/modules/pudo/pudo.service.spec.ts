@@ -943,6 +943,19 @@ describe('PUDO Light', () => {
     expect((controller.networkPoints() as any[]).some((p) => p.did === store.did)).toBe(false);
   });
 
+  it('where a courier can register: every country the network takes parcels in, with the company that would contract them — none named where it only matches, and not a country it only watches', () => {
+    presence.set({ jurisdiction: 'DE', level: 'matched' });
+    presence.set({ jurisdiction: 'ZM', level: 'observed' }); // recorded, but the network does not operate there
+    const where = drivers.courierCountries();
+    const kenya = entities.forJurisdiction('KE')!;
+    expect(where).toEqual(expect.arrayContaining([{ jurisdiction: 'KE', companyName: kenya.name }, { jurisdiction: 'DE' }]));
+    // Matched only: a courier may stand there, and no company of ours stands behind them. The row says so by having none.
+    expect(where.find((c) => c.jurisdiction === 'DE')).not.toHaveProperty('companyName');
+    // Watched only: nothing can be taken in there, so nobody can become a courier there.
+    expect(where.some((c) => c.jurisdiction === 'ZM')).toBe(false);
+    expect(where.every((c) => presence.can(c.jurisdiction, 'takeIn'))).toBe(true);
+  });
+
   it('publishes EVERY country, and where the network stands in each', () => {
     /*
      * This used to publish only the countries goods may be taken in, so a picker built from it simply

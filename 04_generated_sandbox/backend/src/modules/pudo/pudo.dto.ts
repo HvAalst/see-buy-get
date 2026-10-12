@@ -1679,6 +1679,14 @@ export class FleetLeaveView {
   @ApiPropertyOptional({ type: IssuedTokenView }) token?: IssuedTokenView;
 }
 
+/** A driver who is in no fleet rides for themselves: where they live, and the vehicle of their own. */
+export class RideAloneDto {
+  /** ISO country code of where they legally reside: it decides the company of ours that contracts them. */
+  @IsString() @Matches(/^[A-Za-z]{2}$/) country!: string;
+  @IsString() @MaxLength(32) vehicleClass!: string;
+  @IsString() @MaxLength(32) plate!: string;
+}
+
 /** A fleet takes a driver off — always with a reason the driver is shown. */
 export class RemoveDriverDto {
   @IsIn(['left', 'ended', 'other']) reason!: 'left' | 'ended' | 'other';

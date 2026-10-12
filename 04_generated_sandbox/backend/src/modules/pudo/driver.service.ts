@@ -544,6 +544,42 @@ export class DriverService {
   }
 
 
+  /**
+   * WHERE A COURIER CAN REGISTER TODAY, and the company of ours that would contract them there — for somebody
+   * about to become one. A country we only match in has no company behind it: a courier stands there without
+   * one, and is paid by whoever they carry for.
+   */
+  courierCountries(): Array<{ jurisdiction: string; companyName?: string }> {
+    return this.presence
+      .list()
+      .filter((p) => this.presence.can(p.jurisdiction, 'takeIn'))
+      .map((p) => {
+        const company = this.entities.forJurisdiction(p.jurisdiction);
+        return { jurisdiction: p.jurisdiction, ...(company ? { companyName: company.name } : {}) };
+      });
+  }
+
+  /**
+   * RIDES FOR THEMSELVES — the driver record's half. FleetMoveService has already checked they may.
+   *
+   * The reverse of leaveFleet: somebody who is in no fleet becomes somebody the network contracts directly. That
+   * takes the two things a fleet's driver never carried — where they legally reside, and so which company of
+   * ours contracts them. The marker of the fleet they left goes: it described a state, and they are out of it.
+   * Everything keyed to THEM stays as it is: papers, trips, rating, badge, sign-in.
+   */
+  rideAlone(did: string, jurisdiction: string): FleetDriver {
+    const driver = this.require(did);
+    const code = jurisdiction.toUpperCase();
+    if (!this.presence.can(code, 'takeIn')) throw new GlosError('FORBIDDEN', `The network does not operate in ${code} yet, so a courier cannot register there`);
+    const company = this.entities.forJurisdiction(code);
+    driver.jurisdiction = code;
+    if (company) driver.entityId = company.entityId;
+    else delete driver.entityId;
+    delete driver.removedFrom;
+    this.drivers.set(did, driver);
+    return driver;
+  }
+
   /* --- the registered number moves with the person (AccountRecoveryService) --- */
 
   /** Refuse, before anything moves, a number another registration in this register already holds. */

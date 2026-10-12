@@ -144,6 +144,11 @@ describe('who the door lets in', () => {
     expect(door('GET sbg/fleet/assignments')).toMatchObject({ open: false, roles: ['fleet_manager', 'operator'] });
   });
 
+  it('riding for yourself is asked about, and chosen, by the driver alone', () => {
+    expect(door('GET sbg/drivers/:did/ride-alone')).toMatchObject({ open: false, roles: ['driver'] });
+    expect(door('POST sbg/drivers/:did/ride-alone')).toMatchObject({ open: false, roles: ['driver'] });
+  });
+
   it('a card a driver sent is opened by a fleet’s office (staff open it by the media door they already have); it is refused by an office or by staff', () => {
     expect(door('GET sbg/fleet/drivers/:did/licence-card/:mediaId')).toMatchObject({ open: false, roles: ['fleet_manager'] });
     expect(door('POST sbg/fleet/drivers/:did/licence-renewal/refuse')).toMatchObject({ open: false, roles: ['fleet_manager', 'operator'] });

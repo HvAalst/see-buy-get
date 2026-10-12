@@ -13595,6 +13595,65 @@
         }
       }
     },
+    "/v1/sbg/drivers/{did}/ride-alone": {
+      "get": {
+        "operationId": "Sbg.rideAloneTerms",
+        "summary": "",
+        "description": "WHAT RIDING FOR THEMSELVES WOULD TAKE — read by the driver before anything is asked of them: whether it can be\ndone from the app (and the sentence that says why not), what they are cleared to ride, and where a courier can\nregister with which company of ours.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "Sbg.rideAlone",
+        "summary": "",
+        "description": "A DRIVER WHO IS IN NO FLEET BECOMES A COURIER — from their own sign-in and nobody else's: not a fleet's office\n(they are in none), not staff standing in. Whom somebody contracts with is theirs to decide. At once on a\nbicycle or a motorcycle; refused by name otherwise (FleetMoveService.rideAlone).",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RideAloneDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/drivers/{did}/fleet-offers/{offerId}/decline": {
       "post": {
         "operationId": "Sbg.declineFleetOffer",
@@ -36096,6 +36155,29 @@
           "did",
           "companyName",
           "runs"
+        ]
+      },
+      "RideAloneDto": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "type": "string",
+            "description": "ISO country code of where they legally reside: it decides the company of ours that contracts them.",
+            "pattern": "/^[A-Za-z]{2}$/"
+          },
+          "vehicleClass": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "plate": {
+            "type": "string",
+            "maxLength": 32
+          }
+        },
+        "required": [
+          "country",
+          "vehicleClass",
+          "plate"
         ]
       },
       "FleetOfferDto": {

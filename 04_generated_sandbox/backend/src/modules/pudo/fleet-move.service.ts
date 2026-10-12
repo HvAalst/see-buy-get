@@ -11,7 +11,21 @@ import { FleetManagerService } from './fleet-manager.service';
 import { FleetService } from './fleet.service';
 import { ParcelService } from './parcel.service';
 import { PersonService } from './person.service';
-import type { FleetDriver, FleetRemovalReason } from './fleet.types';
+import { VehicleService } from './vehicle.service';
+import { betweenFleets } from './driver.service';
+import type { VehicleClass } from './fleet.config';
+import type { FleetDriver, FleetRemovalReason, Vehicle } from './fleet.types';
+
+/** What riding for themselves would take, said to the driver before anything is asked of them. */
+export interface RideAloneTerms {
+  /** Whether it can be done from the app at all — and when not, the sentence that says why. */
+  offered: boolean;
+  why?: string;
+  /** What they are cleared to ride: the vehicle of their own has to be one of these. */
+  classes: VehicleClass[];
+  /** Where a courier can register, and the company of ours that would contract them there (none where we only match). */
+  countries: Array<{ jurisdiction: string; companyName?: string }>;
+}
 
 /** What a fleet's own words may say when it takes a driver off: why, in a sentence the driver is shown. */
 export const REMOVAL_REASONS: readonly FleetRemovalReason[] = ['left', 'ended', 'other'];
@@ -26,6 +40,9 @@ export const REMOVAL_REASONS: readonly FleetRemovalReason[] = ['left', 'ended', 
  *   - OUT: the fleet takes a driver off.
  *   - OUT: the driver leaves, by themselves, from their own sign-in — once their shift has ended and nothing is in
  *     their hands. No office is asked: a driver who had to be let go could be kept.
+ *   - AND ON THEIR OWN: a driver who is in no fleet rides for themselves (rideAlone) — at once on a bicycle or a
+ *     motorcycle, as anybody signing up on one would be. The sign-up itself refuses them, rightly: their ID, their
+ *     number and their licence are already theirs, on the record they keep.
  *
  * It used to be "type the fleet's join code". That code also names the company at its own console sign-in, it is
  * handed round a depot, it never expires, and it is six characters of hexadecimal — so anybody who guessed it,
@@ -55,6 +72,7 @@ export class FleetMoveService {
     private readonly accounts: AccountService,
     private readonly auth: AuthService,
     private readonly events: EventBus,
+    private readonly vehicles: VehicleService,
   ) {}
 
   /** What a driver has to finish before they may move to another fleet — as sentences they can act on. Empty: free to go. */
@@ -161,6 +179,65 @@ export class FleetMoveService {
       .publish(GlosEvent.Pudo.DriverLeftFleet, { driverDid, driverName: left.displayName, fleetDid, companyName: company, reason: 'own', ...(runs.length ? { runs } : {}) }, { source: 'pudo' })
       .catch(() => undefined);
     return { driver: left, companyName: company, runs };
+  }
+
+  /**
+   * WHY THIS DRIVER CANNOT BECOME A COURIER FROM THE APP, as a sentence they can act on — or nothing, when they can.
+   *
+   * The rule is the one a stranger signing up meets, no stricter and no looser: a bicycle or a motorcycle starts at
+   * once; anything heavier is checked by network staff first. A fleet's driver has not been through THAT check as a
+   * courier, and the app has no way to ask for it yet, so it says so instead of offering a button that would refuse.
+   */
+  private rideAloneBlock(driver: FleetDriver): string | null {
+    if (driver.managerDid) return `You drive for ${this.managers.get(driver.managerDid).companyName}. Leave that fleet first: “Your fleet”, under your name`;
+    if (!betweenFleets(driver)) return 'You already ride for yourself';
+    if (driver.status === 'SUSPENDED') return 'Your driver account is suspended, so this cannot be done from here';
+    if (driver.idHold) return `The national ID on your registration went to somebody else (reference ${driver.idHold.reference}). Put the number of your own ID card on record first, in Settings`;
+    if (driver.registry !== 'light' || driver.status !== 'ACTIVE') {
+      return 'To ride for yourself on anything heavier than a motorcycle, the network checks you first, and that check cannot be asked for from the app yet. A fleet can still offer you a place';
+    }
+    return null;
+  }
+
+  /** What it would take, for the sheet that offers it. Reads only: asking changes nothing. */
+  rideAloneTerms(driverDid: string): RideAloneTerms {
+    const driver = this.drivers.get(driverDid);
+    const why = this.rideAloneBlock(driver);
+    return { offered: !why, ...(why ? { why } : {}), classes: why ? [] : [...driver.licence.classes], countries: why ? [] : this.drivers.courierCountries() };
+  }
+
+  /**
+   * A DRIVER WHO IS IN NO FLEET RIDES FOR THEMSELVES — the user, 2026-10-12: "they should become courier at once if
+   * a bike or motorcycle."
+   *
+   * Until this a driver a fleet took off, or who left one, had exactly one way back onto the road: another fleet's
+   * offer. Signing up again as a courier was refused, because their ID, number and licence are already registered —
+   * to them. So it is the SAME record that becomes a courier's: their trips, papers, rating and badge are theirs
+   * already and nothing is registered twice.
+   *
+   * WHAT A COURIER HAS THAT A FLEET'S DRIVER NEVER DID, asked for here: where they legally reside — which decides
+   * the company of ours that contracts them — and a vehicle of their own, of a class they are cleared for.
+   *
+   * THE VEHICLE IS REGISTERED FIRST. It is the one step that can still be refused once the questions are answered,
+   * and a refusal must leave them exactly as they were: in no fleet, and not half a courier.
+   */
+  rideAlone(driverDid: string, input: { country: string; vehicleClass: VehicleClass; plate: string }): { driver: FleetDriver; vehicle: Vehicle; companyName?: string } {
+    const driver = this.drivers.get(driverDid);
+    const why = this.rideAloneBlock(driver);
+    if (why) throw new GlosError('INVALID_STATE', why);
+    const country = (input.country ?? '').trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(country)) throw new GlosError('FIELD_REQUIRED', 'Say which country you live in: it decides which company you ride for');
+    const where = this.drivers.courierCountries().find((c) => c.jurisdiction === country);
+    if (!where) throw new GlosError('FORBIDDEN', `The network does not operate in ${country} yet, so a courier cannot register there`);
+    if (!driver.licence.classes.includes(input.vehicleClass)) {
+      throw new GlosError('CANNOT_COUPLE', `You are not licence-cleared for a ${input.vehicleClass}. Choose a vehicle you are cleared for`);
+    }
+    // Theirs, and nobody else's: no fleet, and the courier recorded as the one who owns and drives it.
+    const vehicle = this.vehicles.register({ plate: input.plate, vehicleClass: input.vehicleClass, managerDid: undefined, ownerType: 'driver_owned', ownerName: driver.displayName, ownerDriverDid: driverDid } as never);
+    const now = this.drivers.rideAlone(driverDid, country);
+    // On their screen from the first morning: the vehicle list is a history, and they have none of their own yet.
+    this.fleet.claimOwnVehicle(driverDid, vehicle.vehicleId);
+    return { driver: now, vehicle, ...(where.companyName ? { companyName: where.companyName } : {}) };
   }
 
   /**

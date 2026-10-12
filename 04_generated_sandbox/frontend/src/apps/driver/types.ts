@@ -39,6 +39,8 @@ export interface DriverRecord {
    */
   /** `own`: they left by themselves. The other three are the fleet's words, from when its office took them off. */
   removedFrom?: { fleetDid: string; companyName: string; reason: 'left' | 'ended' | 'other' | 'own'; note?: string; at: string };
+  /** Light is a bicycle or a motorcycle: cleared with no check, and so able to ride for themselves at once. */
+  registry?: 'light' | 'heavy';
   /** FP4 — a renewed licence they sent, not yet checked. Its date is their reading and switches nothing on. */
   licenceRenewal?: { copyRef: string; expiresAt: string; number?: string; sentAt: string };
   /** Why the last card they sent was not accepted, so they can send a better one. */
@@ -485,4 +487,16 @@ export interface DepartureView {
   waiting?: { freeMin: number; perHour: number };
   rate: { basis: string; amount: number; currency: string; minCharge?: number };
   bookings: DepartureBookingView[];
+}
+
+/**
+ * What riding for themselves would take, for a driver who is in no fleet: whether the app offers it, and the
+ * server's sentence when it does not; what they are cleared to ride; and where a courier can register, with the
+ * company of ours that would contract them there (none where the network only matches).
+ */
+export interface RideAloneTerms {
+  offered: boolean;
+  why?: string;
+  classes: string[];
+  countries: Array<{ jurisdiction: string; companyName?: string }>;
 }

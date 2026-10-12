@@ -1,9 +1,27 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Note, RefusalNote, Sheet } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
-import { removalWords, removedLine } from '../logic';
+import { removalWords, removedLine, rideAloneCompany, rideAloneMissing, rideAloneStart, type RideAloneForm } from '../logic';
+import type { RideAloneTerms } from '../types';
+import { vehicleWord } from '../vehicle-words';
 import type { DriverActions, DriverState, FleetOffer } from '../useDriverApp';
+
+const regions = (() => {
+  try {
+    return new Intl.DisplayNames(undefined, { type: 'region' });
+  } catch {
+    return null;
+  }
+})();
+/** A country by its name, in the phone's own language; its code where the phone cannot say. */
+const countryName = (code: string): string => {
+  try {
+    return regions?.of(code) ?? code;
+  } catch {
+    return code;
+  }
+};
 
 const DAY: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
 
@@ -21,6 +39,11 @@ const DAY: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
  * AND THE WAY OUT, which is theirs alone too. A driver in a fleet can leave it from here, with nobody's leave: once
  * their shift has ended and nothing is in their hands. What leaving means is said before the button that does it —
  * above all that no shift can start afterwards until a fleet offers them a place.
+ *
+ * AND, FOR SOMEBODY IN NO FLEET, THE OTHER WAY BACK ONTO THE ROAD: riding for themselves. On a bicycle or a
+ * motorcycle that is done here, at once — the country they live in, the company that follows from it, and the
+ * vehicle of their own. For anything heavier the server says why not, and that sentence is shown instead of a
+ * button that would refuse.
  */
 export function FleetSheet({ open, onClose, state, actions }: { open: boolean; onClose: () => void; state: DriverState; actions: DriverActions }) {
   const t = useT();
@@ -44,7 +67,7 @@ export function FleetSheet({ open, onClose, state, actions }: { open: boolean; o
   return (
     <Sheet open={open} onClose={close} title={t('driver.fleet.title')}>
       <p class="t-body">{driver?.fleetName ? t('driver.fleet.now', { company: driver.fleetName }) : removed ? t('driver.fleet.nowNone') : t('driver.fleet.nowOwn')}</p>
-      {removed ? <Note tone="warn" icon="truck" title={removedLine(removed, formatDate(removed.at, DAY), t)} detail={removalWords(removed, t)} /> : null}
+      {removed ? <Note tone="warn" icon="truck" title={removedLine(removed, formatDate(removed.at, DAY), t)} detail={removalWords(removed, t, Boolean(state.rideAlone?.offered))} /> : null}
       {error ? <RefusalNote error={error} /> : null}
 
       {/* THE WAY OUT. Quiet until asked for; then what it means, and one button that does it. A refusal — a shift
@@ -52,7 +75,7 @@ export function FleetSheet({ open, onClose, state, actions }: { open: boolean; o
       {driver?.managerDid && driver.fleetName ? (
         leaving ? (
           <Card title={t('driver.fleet.leaveTitle', { company: driver.fleetName })}>
-            <Note tone="warn" icon="truck" title={t('driver.fleet.leaveMeans')} detail={t('driver.fleet.leaveDetail', { company: driver.fleetName })} />
+            <Note tone="warn" icon="truck" title={t('driver.fleet.leaveMeans')} detail={t(driver.registry === 'light' ? 'driver.fleet.leaveDetailLight' : 'driver.fleet.leaveDetail', { company: driver.fleetName })} />
             <div class="stack">
               <Button
                 chevron={false}
@@ -79,6 +102,16 @@ export function FleetSheet({ open, onClose, state, actions }: { open: boolean; o
         )
       ) : null}
 
+      {/* IN NO FLEET: the way back that needs nobody's offer — or, where the app cannot do it, the reason in the
+          server's own words. Before the offers, because it is the one thing here they can do by themselves. */}
+      {removed && state.rideAlone ? (
+        state.rideAlone.offered ? (
+          <RideAloneCard terms={state.rideAlone} busy={state.busy === 'ride-alone'} onSubmit={(form) => void answer(() => actions.rideAlone({ country: form.country, vehicleClass: form.vehicleClass, plate: form.plate.trim() }), true)} />
+        ) : state.rideAlone.why ? (
+          <Note tone="info" icon="info" title={t('driver.alone.notOfferedTitle')} detail={state.rideAlone.why + '.'} />
+        ) : null
+      ) : null}
+
       {state.fleetOffers.map((offer) => (
         <OfferCard key={offer.offerId} offer={offer} courier={courier} busy={state.busy === 'fleet-offer'} onYes={() => void answer(() => actions.acceptFleetOffer(offer.offerId), true)} onNo={() => void answer(() => actions.declineFleetOffer(offer.offerId), false)} />
       ))}
@@ -90,6 +123,67 @@ export function FleetSheet({ open, onClose, state, actions }: { open: boolean; o
         {t('driver.fleet.notNow')}
       </Button>
     </Sheet>
+  );
+}
+
+/**
+ * RIDE FOR YOURSELF. Three answers, each one a fleet's driver never had to give, and what follows from the first
+ * said before the button: WHICH COMPANY they would be riding for. Where there is one country or one vehicle to
+ * choose from, it is chosen already.
+ */
+function RideAloneCard({ terms, busy, onSubmit }: { terms: RideAloneTerms; busy: boolean; onSubmit: (form: RideAloneForm) => void }) {
+  const t = useT();
+  const [form, setForm] = useState<RideAloneForm>(() => rideAloneStart(terms));
+  // What can be chosen changed under the form (the network opened or closed a country): start from what is true now.
+  useEffect(() => setForm(rideAloneStart(terms)), [terms.countries.map((c) => c.jurisdiction).join(','), terms.classes.join(',')]);
+  const missing = rideAloneMissing(form, terms);
+  const company = rideAloneCompany(terms.countries, form.country);
+  return (
+    <Card title={t('driver.alone.title')}>
+      <p class="card__note">{t('driver.alone.lede')}</p>
+      {/* One stack: the questions, what the first one decides, and the button — spaced as the offer's buttons are. */}
+      <div class="stack">
+        <div class="field">
+          <label class="field__label" for="alone-country">
+            {t('driver.alone.country')}
+          </label>
+          <select id="alone-country" class="select" value={form.country} onChange={(e) => setForm({ ...form, country: e.currentTarget.value })}>
+            {terms.countries.length === 1 ? null : <option value="">{t('driver.alone.choose')}</option>}
+            {terms.countries.map((c) => (
+              <option key={c.jurisdiction} value={c.jurisdiction}>
+                {countryName(c.jurisdiction)}
+              </option>
+            ))}
+          </select>
+        </div>
+        {/* WHO THEY WOULD CONTRACT WITH, the moment the country says it — the thing this choice decides. */}
+        {form.country ? <Note tone="info" icon="badge" title={company ? t('driver.alone.company', { company }) : t('driver.alone.noCompany', { country: countryName(form.country) })} detail={t(company ? 'driver.alone.companyDetail' : 'driver.alone.noCompanyDetail')} /> : null}
+        <div class="field">
+          <label class="field__label" for="alone-class">
+            {t('driver.alone.vehicle')}
+          </label>
+          <select id="alone-class" class="select" value={form.vehicleClass} onChange={(e) => setForm({ ...form, vehicleClass: e.currentTarget.value })}>
+            {terms.classes.length === 1 ? null : <option value="">{t('driver.alone.choose')}</option>}
+            {terms.classes.map((c) => (
+              <option key={c} value={c}>
+                {vehicleWord(c, t)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div class="field">
+          <label class="field__label" for="alone-plate">
+            {t('driver.alone.plate')}
+          </label>
+          <input id="alone-plate" class="input input--mono" value={form.plate} maxLength={32} autoComplete="off" spellcheck={false} onInput={(e) => setForm({ ...form, plate: e.currentTarget.value })} />
+          {form.vehicleClass === 'bike' ? <p class="hint">{t('driver.alone.plateBike')}</p> : null}
+        </div>
+        <Button chevron={false} disabled={missing !== null} busy={busy} onClick={() => onSubmit(form)}>
+          {t('driver.alone.cta')}
+        </Button>
+        {missing ? <p class="hint">{t(missing)}</p> : null}
+      </div>
+    </Card>
   );
 }
 

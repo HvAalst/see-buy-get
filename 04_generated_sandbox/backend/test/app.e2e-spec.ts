@@ -1093,6 +1093,60 @@ describe('GLOS backend (e2e)', () => {
     await request(http).get(`/v1/sbg/fleet/drivers/${amos.did}/jobs/summary`).set(asColleague).expect(403);
   });
 
+  it('a rider who has left their fleet becomes a courier at once, from their own sign-in — not their old office, not staff, nobody signed out', async () => {
+    const http = app.getHttpServer();
+    const u = Math.floor(Math.random() * 1e6);
+    const as = async (body: Record<string, unknown>) => ({ Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ ...body, type: 'client_credentials' }).expect(201)).body.access_token}` });
+    const operator = await as({ role: 'operator' });
+    const fleetDid = (await (async () => {
+      const m = (await request(http).post('/v1/sbg/fleet/managers').set(operator).send({ companyName: 'AloneCo', tradingName: 'AloneCo', contactPhone: `+25473${u}7`, contactEmail: 'ops@AloneCo.example', ownerFullName: 'Owner', ownerNationalId: `MGR-AL-${u}`, depotAddress: '1 Depot Rd', location: { lat: -1.3, lng: 36.8 }, requirements: { businessRegistrationNo: `BRN-AL-${u}`, transportOperatorLicence: `TOL-AL-${u}`, taxId: `TAX-AL-${u}`, declaredFleetSize: 3 } }).expect(201)).body;
+      await sendFleetPapers(m.did, operator);
+      await request(http).post(`/v1/sbg/fleet/managers/${m.did}/kyc-decision`).set(operator).send({ approve: true, by: 'A second member of staff' }).expect(201);
+      await request(http).post(`/v1/sbg/fleet/managers/${m.did}/bond`).set(operator).expect(201);
+      return m.did as string;
+    })());
+    const office = await as({ role: 'fleet_manager', did: fleetDid, tenant: fleetDid });
+    const rider = (await request(http).post('/v1/sbg/drivers/onboard').set(operator).send({ displayName: 'Wanjiru', fullName: 'Wanjiru Rider', nationalId: `ALONE-${u}`, mobile: `+25474${u}3`, licenceClasses: ['motorcycle'], managerDid: fleetDid }).expect(201)).body as { did: string };
+    const inFleet = await as({ role: 'driver', did: rider.did, tenant: fleetDid });
+    const terms = `/v1/sbg/drivers/${rider.did}/ride-alone`;
+    const body = { country: 'KE', vehicleClass: 'motorcycle', plate: `kmal ${u}` };
+
+    // IN A FLEET it is not offered, and says what comes first. Asking changes nothing.
+    expect((await request(http).get(terms).set(inFleet).expect(200)).body).toMatchObject({ offered: false, why: 'You drive for AloneCo. Leave that fleet first: “Your fleet”, under your name', classes: [], countries: [] });
+    expect((await request(http).post(terms).set(inFleet).send(body)).body.code).toBe('INVALID_STATE');
+
+    // They leave. The phone is handed a sign-in that names no fleet; that is the one that asks from here on.
+    const left = (await request(http).post(`/v1/sbg/drivers/${rider.did}/leave-fleet`).set(inFleet).expect(201)).body;
+    const asRider = { Authorization: `Bearer ${left.token.access_token}` };
+    const offered = (await request(http).get(terms).set(asRider).expect(200)).body;
+    expect(offered).toMatchObject({ offered: true, classes: ['motorcycle'] });
+    const kenya = (offered.countries as Array<{ jurisdiction: string; companyName?: string }>).find((c) => c.jurisdiction === 'KE')!;
+    expect(kenya.companyName).toEqual(expect.any(String));
+
+    // NOBODY ELSE'S TO DO: not the office they left, not staff, not a stranger with no sign-in — and none of them is told what it would take.
+    for (const who of [office, operator]) {
+      await request(http).post(terms).set(who).send(body).expect(403);
+      await request(http).get(terms).set(who).expect(403);
+    }
+    await request(http).post(terms).send(body).expect(401);
+    // What cannot be meant is refused before anything is made: a country in words, a vehicle they are not cleared for.
+    await request(http).post(terms).set(asRider).send({ ...body, country: 'Kenya' }).expect(400);
+    expect((await request(http).post(terms).set(asRider).send({ ...body, vehicleClass: 'truck' })).body.code).toBe('CANNOT_COUPLE');
+    expect((await request(http).get(`/v1/sbg/fleet/drivers/${rider.did}`).set(asRider).expect(200)).body.removedFrom).toBeDefined();
+
+    // AT ONCE: a courier, in Kenya, for Kenya's company, with a motorcycle of their own.
+    const done = (await request(http).post(terms).set(asRider).send(body).expect(201)).body;
+    expect(done).toMatchObject({ did: rider.did, jurisdiction: 'KE', companyName: kenya.companyName, vehicle: { plate: `KMAL ${u}`, vehicleClass: 'motorcycle' } });
+    const me = (await request(http).get(`/v1/sbg/fleet/drivers/${rider.did}`).set(asRider).expect(200)).body;
+    expect(me).toMatchObject({ did: rider.did, jurisdiction: 'KE', status: 'ACTIVE', offRoad: [] });
+    expect(me.managerDid).toBeUndefined();
+    expect(me.removedFrom).toBeUndefined();
+    // The same sign-in goes on working, and their earnings are theirs from here.
+    expect((await request(http).get(`/v1/sbg/fleet/drivers/${rider.did}/jobs/summary`).set(asRider).expect(200)).body.settlement).toMatchObject({ payeeDid: rider.did, paidToMe: true, standing: 'own' });
+    // Done once.
+    expect((await request(http).post(terms).set(asRider).send({ ...body, plate: `kmal2 ${u}` })).body).toMatchObject({ code: 'INVALID_STATE', detail: 'You already ride for yourself' });
+  });
+
   it('staff find a store in the list and open it; the store itself, another store and nobody signed out are each refused the staff view', async () => {
     const http = app.getHttpServer();
     const u = Math.floor(Math.random() * 1e6);

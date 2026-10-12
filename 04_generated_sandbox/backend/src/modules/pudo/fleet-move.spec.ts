@@ -611,6 +611,147 @@ describe('a driver changing fleet', () => {
    * THE USER, 2026-10-11: a driver leaves a fleet BY THEMSELVES, once their shift has ended and no load is on them;
    * the office is told. Nobody's leave is asked — a driver who had to be let go could be kept.
    */
+  /**
+   * THE USER, 2026-10-12: "they should become courier at once if a bike or motorcycle."
+   *
+   * A driver who is in no fleet had one way back onto the road: another fleet's offer. Now the record they already
+   * have becomes a courier's — at once on a bicycle or a motorcycle, exactly as a stranger signing up on one is.
+   */
+  describe('a driver who is in no fleet rides for themselves', () => {
+    /** A rider a fleet added itself: light registry, so cleared the moment they were registered. */
+    function aRider(managerDid: string, classes: string[] = ['motorcycle']) {
+      seq += 1;
+      const phone = `+2547820${seq}00`;
+      const d = drivers.register({ displayName: `Rider ${seq}`, fullName: `R ${seq}`, nationalId: `ID-RA-${seq}`, mobile: phone, licenceClasses: classes, criminalRecordClear: true, managerDid } as never);
+      persons.attachRole(phone, 'driver', d.did, managerDid);
+      return { driver: drivers.get(d.did), phone };
+    }
+    const ownedBy = (did: string) => vehicles.list().filter((v) => (v as { ownerDriverDid?: string }).ownerDriverDid === did);
+
+    it('on a motorcycle they are a courier at once: the same record, a country, a company, and a vehicle of their own to start on', () => {
+      const kilima = aFleet('Kilima Logistics');
+      const r = aRider(kilima.did);
+      const before = drivers.get(r.driver.did);
+      const kept = { driverId: before.driverId, badgeId: before.badgeId, displayName: before.displayName, classes: [...before.licence.classes] };
+      moves.leave(r.driver.did);
+      expect(drivers.canOperate(r.driver.did)).toBe(false); // in no fleet: nobody to drive for
+      expect(drivers.isIndependent(drivers.get(r.driver.did))).toBe(false);
+
+      // What it would take, read before anything is asked of them.
+      const terms = moves.rideAloneTerms(r.driver.did);
+      const kenya = entities.forJurisdiction('KE')!;
+      expect(terms).toMatchObject({ offered: true, classes: ['motorcycle'] });
+      expect(terms).not.toHaveProperty('why');
+      expect(terms.countries).toEqual(expect.arrayContaining([{ jurisdiction: 'KE', companyName: kenya.name }]));
+
+      const done = moves.rideAlone(r.driver.did, { country: 'ke', vehicleClass: 'motorcycle', plate: 'kmdx 123a' });
+      const now = drivers.get(r.driver.did);
+      // A COURIER: contracted where they live, by that country's company — and no longer "between fleets".
+      expect(done.companyName).toBe(kenya.name);
+      expect(now).toMatchObject({ jurisdiction: 'KE', entityId: kenya.entityId, status: 'ACTIVE' });
+      expect(now.managerDid).toBeUndefined();
+      expect(now.removedFrom).toBeUndefined();
+      expect(drivers.isIndependent(now)).toBe(true);
+      expect(drivers.canOperate(r.driver.did)).toBe(true);
+      // THE SAME RECORD: nothing was registered twice, and what was theirs still is.
+      expect({ driverId: now.driverId, badgeId: now.badgeId, displayName: now.displayName, classes: now.licence.classes }).toEqual(kept);
+      // PAID AS ONE: the money for work they do now is theirs, from the company that contracts them.
+      expect(drivers.payeeOf(r.driver.did)).toEqual({ entityId: kenya.entityId, payeeDid: r.driver.did });
+      // THEIR OWN VEHICLE: no fleet's, recorded as theirs, and on their screen before they have ever driven it.
+      expect(done.vehicle).toMatchObject({ plate: 'KMDX 123A', vehicleClass: 'motorcycle', ownerType: 'driver_owned', ownerDriverDid: r.driver.did });
+      expect(done.vehicle.managerDid).toBeUndefined();
+      expect(fleet.recentVehicles(r.driver.did).map((v) => v.vehicleId)).toEqual([done.vehicle.vehicleId]);
+      expect(() => fleet.couple(r.driver.did, done.vehicle.vehicleId)).not.toThrow();
+      // Asking again: they already are one.
+      expect(moves.rideAloneTerms(r.driver.did)).toMatchObject({ offered: false, why: 'You already ride for yourself', classes: [], countries: [] });
+    });
+
+    it('a rider a fleet TOOK OFF has the same way back as one who left', () => {
+      const kilima = aFleet('Kilima Logistics');
+      const r = aRider(kilima.did, ['bike']);
+      moves.remove(kilima.did, r.driver.did, { reason: 'ended' });
+      expect(moves.rideAloneTerms(r.driver.did)).toMatchObject({ offered: true, classes: ['bike'] });
+      moves.rideAlone(r.driver.did, { country: 'KE', vehicleClass: 'bike', plate: 'BLUE FRAME 7' });
+      expect(drivers.isIndependent(drivers.get(r.driver.did))).toBe(true);
+    });
+
+    it('anything heavier than a motorcycle is not offered from the app, says why, and changes nothing', () => {
+      const kilima = aFleet('Kilima Logistics');
+      const trucker = aDriver(kilima.did);
+      moves.leave(trucker.driver.did);
+      const terms = moves.rideAloneTerms(trucker.driver.did);
+      expect(terms).toMatchObject({ offered: false, classes: [], countries: [] });
+      expect(terms.why).toBe('To ride for yourself on anything heavier than a motorcycle, the network checks you first, and that check cannot be asked for from the app yet. A fleet can still offer you a place');
+      const owned = ownedBy(trucker.driver.did).length;
+      expect(() => moves.rideAlone(trucker.driver.did, { country: 'KE', vehicleClass: 'truck', plate: 'KCA 001T' })).toThrow(/heavier than a motorcycle/);
+      expect(drivers.isIndependent(drivers.get(trucker.driver.did))).toBe(false);
+      expect(drivers.get(trucker.driver.did).removedFrom).toBeDefined();
+      expect(ownedBy(trucker.driver.did)).toHaveLength(owned);
+      // One licence that covers a van as well as a motorcycle is checked as the van it covers.
+      const both = aDriver(kilima.did);
+      drivers.get(both.driver.did).licence.classes = ['truck', 'motorcycle'];
+      moves.leave(both.driver.did);
+      expect(moves.rideAloneTerms(both.driver.did).offered).toBe(false);
+    });
+
+    it('is refused by name — in a fleet, already a courier, suspended, no country, a country we are not in, a vehicle they are not cleared for, no plate — and a refusal leaves them as they were', () => {
+      const kilima = aFleet('Kilima Logistics');
+      const r = aRider(kilima.did);
+      const ask = (over: Partial<{ country: string; vehicleClass: string; plate: string }> = {}) => () =>
+        moves.rideAlone(r.driver.did, { country: 'KE', vehicleClass: 'motorcycle', plate: 'KMDY 456B', ...over } as never);
+
+      // Still in a fleet: leaving is its own act, with its own questions.
+      expect(ask()).toThrow('You drive for Kilima Logistics. Leave that fleet first: “Your fleet”, under your name');
+      expect(moves.rideAloneTerms(r.driver.did)).toMatchObject({ offered: false, classes: [], countries: [] });
+      expect(drivers.get(r.driver.did).managerDid).toBe(kilima.did);
+
+      moves.leave(r.driver.did);
+      const untouched = () => {
+        const d = drivers.get(r.driver.did);
+        expect({ own: drivers.isIndependent(d), between: Boolean(d.removedFrom), country: d.jurisdiction, vehicles: ownedBy(r.driver.did).length }).toEqual({ own: false, between: true, country: undefined, vehicles: 0 });
+      };
+      expect(ask({ country: '' })).toThrow('Say which country you live in: it decides which company you ride for');
+      untouched();
+      expect(ask({ country: 'Kenya' })).toThrow(/which country you live in/);
+      untouched();
+      expect(ask({ country: 'zz' })).toThrow('The network does not operate in ZZ yet, so a courier cannot register there');
+      untouched();
+      expect(ask({ vehicleClass: 'bike' })).toThrow('You are not licence-cleared for a bike. Choose a vehicle you are cleared for');
+      untouched();
+      expect(ask({ vehicleClass: 'truck' })).toThrow(/not licence-cleared for a truck/);
+      untouched();
+      expect(ask({ plate: '  ' })).toThrow('A number plate is required');
+      untouched();
+
+      drivers.suspend(r.driver.did);
+      expect(ask()).toThrow('Your driver account is suspended, so this cannot be done from here');
+      untouched();
+      drivers.get(r.driver.did).status = 'ACTIVE';
+
+      // And once done, it is done once.
+      ask()();
+      expect(ask({ plate: 'KMDZ 789C' })).toThrow('You already ride for yourself');
+      expect(ownedBy(r.driver.did)).toHaveLength(1);
+    });
+
+    it('a courier who came this way can be offered a place by a fleet like any other — and the motorcycle stays theirs', () => {
+      const kilima = aFleet('Kilima Logistics');
+      const pwani = aFleet('Pwani Haulage');
+      const r = aRider(kilima.did);
+      moves.leave(r.driver.did);
+      const { vehicle } = moves.rideAlone(r.driver.did, { country: 'KE', vehicleClass: 'motorcycle', plate: 'KMEA 111A' });
+      joins(pwani.did, r);
+      const now = drivers.get(r.driver.did);
+      expect(now.managerDid).toBe(pwani.did);
+      // A fleet's driver carries neither a residence nor a company of ours: the fleet is who we contract.
+      expect(now.jurisdiction).toBeUndefined();
+      expect(now.entityId).toBeUndefined();
+      // The motorcycle is still theirs: joining a fleet does not hand it over.
+      expect(vehicles.get(vehicle.vehicleId)).toMatchObject({ ownerDriverDid: r.driver.did });
+      expect(vehicles.get(vehicle.vehicleId).managerDid).toBeUndefined();
+    });
+  });
+
   describe('a driver leaves their fleet, by themselves', () => {
     /** A parcel a shop scanned to this driver's badge over its counter: not in a bag, not a freight load. */
     function handedAParcel(badgeId: string) {
@@ -757,12 +898,11 @@ describe('a driver changing fleet', () => {
     });
 
     /**
-     * NOT WANTED, AND WRITTEN DOWN AS IT IS. The user's decision is that a driver who leaves and wants to ride for
-     * themselves signs up as a courier again. Today the sign-up refuses them: their national ID is still held by
-     * their own record. progress.html has the row ("cannot become a courier"). When the way back is built, this test
-     * is the first thing that has to change.
+     * THE SIGN-UP STILL REFUSES THEM, AND RIGHTLY. Their national ID, their number and their licence are registered
+     * already — to them. A second registration would be a second driver with the same ID. The way onto the road on
+     * their own is the record they already have (the tests after this one), not a new one.
      */
-    it('KNOWN GAP: cannot yet sign up as a courier — the sign-up finds their own record and calls them a duplicate', () => {
+    it('does not let them sign up a second time: their ID is already registered, to them', () => {
       const kilima = aFleet('Kilima Logistics');
       const d = aDriver(kilima.did);
       moves.leave(d.driver.did);

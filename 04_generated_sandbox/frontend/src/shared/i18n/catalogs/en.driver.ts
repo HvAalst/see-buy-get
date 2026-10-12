@@ -829,6 +829,32 @@ export const enDriver = {
   'driver.fleet.removedEnded': 'They say they ended your contract.',
   'driver.fleet.removedNote': 'Their reason: “{note}”',
   'driver.fleet.removedNext': 'Your trips, papers and rating stay yours. You cannot start a shift until a fleet offers you a place.',
+  // Said only to somebody who has both ways back: a rider on a bicycle or a motorcycle.
+  'driver.fleet.removedNextAlone': 'Your trips, papers and rating stay yours. You cannot start a shift until a fleet offers you a place, or you choose to ride for yourself: “Your fleet”, under your name.',
+  'driver.fleet.leaveDetailLight': 'You stop driving for {company} now, and their office is told. You need nobody’s permission. Your licence, your trips and your rating stay yours. You cannot start a shift again until a fleet offers you a place, or you choose to ride for yourself, which on a bicycle or a motorcycle you can do at once from this screen. If you are on one of their runs that has not left yet, you come off it.',
+  /*
+   * RIDE FOR YOURSELF — a driver who is in no fleet becomes a courier, at once on a bicycle or a motorcycle.
+   * What it changes is said before the button: who contracts them, and who is paid.
+   */
+  'driver.alone.title': 'Ride for yourself',
+  'driver.alone.lede': 'On a bicycle or a motorcycle you can ride for yourself from now, with no fleet. The network then works with you directly and pays you for what you carry. Your licence, your trips and your rating stay as they are.',
+  'driver.alone.country': 'The country you live in',
+  'driver.alone.choose': 'Choose',
+  'driver.alone.company': 'You would ride for {company}',
+  'driver.alone.companyDetail': 'That is the company the network trades as where you live, and it is who pays you. Afterwards its licences are in Settings, under “Who you contract with”.',
+  'driver.alone.noCompany': 'No company of ours stands in {country}',
+  'driver.alone.noCompanyDetail': 'You can still ride there. Whoever you carry for pays you directly, and the network holds no money for you.',
+  'driver.alone.vehicle': 'Your own vehicle',
+  'driver.alone.plate': 'Number plate',
+  'driver.alone.plateBike': 'A bicycle has no plate: type what is painted or marked on yours, so it can be told from another.',
+  'driver.alone.cta': 'Ride for myself from now',
+  'driver.alone.needCountry': 'Choose the country you live in.',
+  'driver.alone.needVehicle': 'Choose which vehicle is yours.',
+  'driver.alone.needPlate': 'Type its number plate.',
+  'driver.alone.doneToast': 'You ride for yourself now',
+  'driver.alone.doneDetail': 'Your vehicle is on your start screen. Start a shift when you are ready.',
+  'driver.alone.doneDetailCompany': 'You ride for {company}. Your vehicle is on your start screen: start a shift when you are ready.',
+  'driver.alone.notOfferedTitle': 'Riding for yourself',
   'driver.fleet.howTitle': 'How a fleet takes you on',
   'driver.fleet.how': 'Give the fleet office the phone number you sign in with. They offer you a place, and it shows here for you to say yes or no. Nobody can say yes for you, and no code is typed anywhere.',
   'driver.fleet.offerTitle': '{company} offers you a place',

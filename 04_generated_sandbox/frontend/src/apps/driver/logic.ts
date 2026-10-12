@@ -154,10 +154,41 @@ export function driverStatusNotice(status: DriverStatus | undefined, t: Translat
  * Why this driver is off a fleet, and what it means — the fleet's own words when its office took them off and chose
  * to give them; and NOTHING put in a fleet's mouth when the driver left by themselves.
  */
-export function removalWords(removed: { reason: 'left' | 'ended' | 'other' | 'own'; note?: string }, t: Translate): string {
+export function removalWords(removed: { reason: 'left' | 'ended' | 'other' | 'own'; note?: string }, t: Translate, canRideAlone = false): string {
   const why =
     removed.reason === 'own' ? '' : removed.reason === 'left' ? t('driver.fleet.removedLeft') : removed.reason === 'ended' ? t('driver.fleet.removedEnded') : removed.note ? t('driver.fleet.removedNote', { note: removed.note }) : '';
-  return [why, t('driver.fleet.removedNext')].filter(Boolean).join(' ');
+  // What comes next names BOTH ways back only to somebody who has both: a rider on a bicycle or a motorcycle.
+  return [why, t(canRideAlone ? 'driver.fleet.removedNextAlone' : 'driver.fleet.removedNext')].filter(Boolean).join(' ');
+}
+
+/**
+ * RIDING FOR THEMSELVES — what the form holds, and whether it can be sent.
+ *
+ * Three answers, and each is one a fleet's driver never had to give: the country they live in (it decides the
+ * company that contracts them), which of the vehicles they are cleared for is their own, and its plate. When
+ * there is only one country or one class to choose from, it is chosen already: a question with one answer is
+ * not a question.
+ */
+export interface RideAloneForm {
+  country: string;
+  vehicleClass: string;
+  plate: string;
+}
+
+export function rideAloneStart(terms: { classes: string[]; countries: Array<{ jurisdiction: string }> }): RideAloneForm {
+  return { country: terms.countries.length === 1 ? terms.countries[0].jurisdiction : '', vehicleClass: terms.classes.length === 1 ? terms.classes[0] : '', plate: '' };
+}
+
+/** Why it cannot be sent yet, as the key of the sentence to show — or null when it can. First things first. */
+export function rideAloneMissing(form: RideAloneForm, terms: { classes: string[]; countries: Array<{ jurisdiction: string }> }): 'driver.alone.needCountry' | 'driver.alone.needVehicle' | 'driver.alone.needPlate' | null {
+  if (!terms.countries.some((c) => c.jurisdiction === form.country)) return 'driver.alone.needCountry';
+  if (!terms.classes.includes(form.vehicleClass)) return 'driver.alone.needVehicle';
+  return form.plate.trim() ? null : 'driver.alone.needPlate';
+}
+
+/** The company they would ride for in the country chosen — or null where the network has none there, or no country is chosen. */
+export function rideAloneCompany(countries: Array<{ jurisdiction: string; companyName?: string }>, country: string): string | null {
+  return countries.find((c) => c.jurisdiction === country)?.companyName ?? null;
 }
 
 /** What happened, as its own sentence: "you left" is not "they took you off", and the screen must not say the second for the first. */

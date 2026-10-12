@@ -16,6 +16,9 @@ import {
   boardSummary,
   canLoadBag,
   canStartShift,
+  rideAloneCompany,
+  rideAloneMissing,
+  rideAloneStart,
   settlementLines,
   cardReader,
   cardWords,
@@ -646,5 +649,40 @@ describe('who was paid, said to the driver', () => {
   it('reads an answer from before “standing” existed the way it always was read', () => {
     expect(settlementLines({ paidToMe: false, ...none }, cash, t)).toEqual(['Your earnings are paid to your fleet, not to you directly.']);
     expect(settlementLines({ paidToMe: true, ...none }, cash, t)).toEqual(['Nothing has been paid out to you yet.']);
+  });
+});
+
+describe('a rider who is in no fleet rides for themselves', () => {
+  const kenya = { jurisdiction: 'KE', companyName: 'SeeBuyGet Kenya' };
+  const uganda = { jurisdiction: 'UG' };
+
+  it('a question with one answer is answered already; one with several is left to them', () => {
+    expect(rideAloneStart({ classes: ['motorcycle'], countries: [kenya] })).toEqual({ country: 'KE', vehicleClass: 'motorcycle', plate: '' });
+    expect(rideAloneStart({ classes: ['bike', 'motorcycle'], countries: [kenya, uganda] })).toEqual({ country: '', vehicleClass: '', plate: '' });
+    expect(rideAloneStart({ classes: [], countries: [] })).toEqual({ country: '', vehicleClass: '', plate: '' });
+  });
+
+  it('says what is still missing, first things first, and nothing once it can be sent', () => {
+    const terms = { classes: ['bike', 'motorcycle'], countries: [kenya, uganda] };
+    expect(rideAloneMissing({ country: '', vehicleClass: '', plate: '' }, terms)).toBe('driver.alone.needCountry');
+    expect(rideAloneMissing({ country: 'KE', vehicleClass: '', plate: 'KMDX 1' }, terms)).toBe('driver.alone.needVehicle');
+    expect(rideAloneMissing({ country: 'KE', vehicleClass: 'motorcycle', plate: '   ' }, terms)).toBe('driver.alone.needPlate');
+    expect(rideAloneMissing({ country: 'KE', vehicleClass: 'motorcycle', plate: 'KMDX 123A' }, terms)).toBeNull();
+    // A country or a vehicle that is not among what the server offers is not a choice, whatever the form holds.
+    expect(rideAloneMissing({ country: 'TZ', vehicleClass: 'motorcycle', plate: 'T 1' }, terms)).toBe('driver.alone.needCountry');
+    expect(rideAloneMissing({ country: 'KE', vehicleClass: 'truck', plate: 'T 1' }, terms)).toBe('driver.alone.needVehicle');
+  });
+
+  it('names the company they would ride for — and says nothing of one where the network has none', () => {
+    expect(rideAloneCompany([kenya, uganda], 'KE')).toBe('SeeBuyGet Kenya');
+    expect(rideAloneCompany([kenya, uganda], 'UG')).toBeNull();
+    expect(rideAloneCompany([kenya, uganda], '')).toBeNull();
+    expect(t('driver.alone.company', { company: 'SeeBuyGet Kenya' })).toBe('You would ride for SeeBuyGet Kenya');
+  });
+
+  it('tells a rider both ways back, and somebody on a truck the one they have', () => {
+    expect(removalWords({ reason: 'own' }, t, true)).toBe('Your trips, papers and rating stay yours. You cannot start a shift until a fleet offers you a place, or you choose to ride for yourself: “Your fleet”, under your name.');
+    expect(removalWords({ reason: 'own' }, t, false)).toBe('Your trips, papers and rating stay yours. You cannot start a shift until a fleet offers you a place.');
+    expect(removalWords({ reason: 'ended' }, t, true)).toMatch(/^They say they ended your contract\. .*ride for yourself/);
   });
 });
