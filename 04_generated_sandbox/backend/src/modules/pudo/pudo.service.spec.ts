@@ -2446,6 +2446,122 @@ describe('PUDO Light', () => {
       expect(parcels.openDisputes().map((x) => x.parcelId)).toContain(parcel.parcelId);
     });
 
+    /**
+     * THE ANSWER REACHED NOBODY. A decision was recorded with its reason, the parcel went back to "delivered", and
+     * the person who had reported broken goods could find no trace in their app that anybody had answered. Nor was
+     * anybody told. And the decision was signed with whatever name the request carried.
+     */
+    it('shows both people on the parcel how it ended — the decision and the reason, never the receiver’s own words — and says so on the wire', async () => {
+      const { parcel } = await disputedOrder();
+      const buyer = hashPhone('+254700931100');
+      const decided: unknown[] = [];
+      events.subscribe(GlosEvent.Pudo.ParcelDisputeDecided, (e) => {
+        decided.push(e.payload);
+      });
+      // Open: there is no outcome to show yet, and the receiver still reads what they wrote.
+      const open = parcels.consumerParcel(parcel.parcelId, buyer);
+      expect(open).not.toHaveProperty('disputeOutcome');
+      expect(open.disputeReason).toBe('Arrived smashed');
+
+      parcels.resolveDispute(parcel.parcelId, { decision: 'partly_upheld', award: 15, note: 'The box was crushed on our van. The scratch on the lid was there in the store’s own photograph.', by: 'Amina Otieno' });
+
+      const mine = parcels.consumerParcel(parcel.parcelId, buyer);
+      expect(mine.status).toBe('Delivered');
+      expect(mine.disputeOutcome).toEqual({
+        origin: 'buyer', // filed from the receiver's own app
+        decision: 'partly_upheld',
+        note: 'The box was crushed on our van. The scratch on the lid was there in the store’s own photograph.',
+        decidedAt: expect.any(String),
+        award: 15,
+        currency: parcels.get(parcel.parcelId).currency ?? 'USD',
+        paidTo: 'store', // a store sold this shipment: the award is the store's, to pass on
+      });
+      // Nothing of who decided it, how it was funded, or which account was paid.
+      expect(JSON.stringify(mine.disputeOutcome)).not.toMatch(/Amina|fromProvision|ven_/);
+      expect(decided).toEqual([expect.objectContaining({ parcelId: parcel.parcelId, decision: 'partly_upheld', award: 15, origin: 'buyer', note: expect.stringContaining('crushed on our van') })]);
+    });
+
+    it('a rejection is an answer too: the reason is shown, and no award is named', async () => {
+      const { parcel } = await disputedOrder();
+      parcels.resolveDispute(parcel.parcelId, { decision: 'rejected', note: 'The photograph shows the seal unbroken and the contents as listed.' });
+      const outcome = parcels.consumerParcel(parcel.parcelId, hashPhone('+254700931100')).disputeOutcome!;
+      expect(outcome).toEqual({ origin: 'buyer', decision: 'rejected', note: 'The photograph shows the seal unbroken and the contents as listed.', decidedAt: expect.any(String) });
+      expect(parcels.get(parcel.parcelId).dispute).not.toHaveProperty('currency');
+    });
+
+    it('a walk-up sender reads that the award is owed to THEM — and not what the receiver wrote', async () => {
+      const origin = onboardAgent('Walk Origin', 'NorthTown', 50);
+      const dest = onboardAgent('Walk Dest', 'SouthTown', 50);
+      const corridor = corridors.addCorridor({ name: 'W', originZone: 'NorthTown', destZone: 'SouthTown' });
+      const driver = corridors.addDriver({ driverDid: 'did:glos:walkd', name: 'D', corridorId: corridor.corridorId });
+      const [sender, receiver] = ['+254700931201', '+254700931202'];
+      const taken = parcels.accept({ agentDid: origin.did, parcelId: 'QR-WALK-DISPUTE', size: 'M', destZone: 'SouthTown', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: 'r.jpg' });
+      parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-WALK-DISPUTE'] });
+      parcels.arrive('QR-WALK-DISPUTE', dest.did);
+      // Reported at the counter, before it was taken away: the goods stay on the shelf.
+      parcels.dispute('QR-WALK-DISPUTE', dest.did, 'The lid is cracked', 'counter.jpg');
+      const slot = parcels.get('QR-WALK-DISPUTE').binSlot;
+      const said: Array<{ currency?: string }> = [];
+      events.subscribe<{ currency?: string }>(GlosEvent.Pudo.ParcelDisputeDecided, (e) => {
+        said.push(e.payload);
+      });
+      const resolved = parcels.resolveDispute('QR-WALK-DISPUTE', { decision: 'upheld', award: 3, note: 'Cracked in our hands.', by: 'Brian Kamau' });
+
+      const theirs = parcels.consumerParcel('QR-WALK-DISPUTE', hashPhone(sender));
+      expect(theirs.relation).toBe('sent');
+      // Raised by the SHOP, at its counter — and said so, to the sender and to the receiver alike.
+      expect(theirs.disputeOutcome).toMatchObject({ origin: 'counter', decision: 'upheld', award: 3, paidTo: 'sender', note: 'Cracked in our hands.' });
+      expect(parcels.consumerParcel('QR-WALK-DISPUTE', hashPhone(receiver)).disputeOutcome).toMatchObject({ origin: 'counter', decision: 'upheld' });
+      // IN WHAT MONEY. A parcel taken in at a counter names no currency of its own; the award is in the money of
+      // the company whose books carry it, written on the decision — and the notice once read "3.00  is owed".
+      const company = entities.get(resolved.collectingEntityId ?? resolved.sellerEntityId!)!.currency;
+      expect(resolved.currency).toBeUndefined();
+      expect(company).toMatch(/^[A-Z]{3}$/);
+      expect(resolved.dispute!.currency).toBe(company);
+      expect(theirs.disputeOutcome!.currency).toBe(company);
+      expect(said).toEqual([expect.objectContaining({ currency: company })]);
+      expect(theirs).not.toHaveProperty('disputePhotoRef', expect.any(String));
+      expect(theirs.disputeReason).toBeUndefined();
+      // Decided, it is what it factually is again: on the shelf, in the slot it never left, to be collected.
+      expect(parcels.get('QR-WALK-DISPUTE')).toMatchObject({ status: 'Ready_For_Pickup', binSlot: slot });
+      expect(taken.otp).toBeDefined();
+      expect(parcels.pickup('QR-WALK-DISPUTE', dest.did, taken.otp!, 'handed.jpg').status).toBe('Delivered');
+    });
+
+    it('names the money of the company whose books carry the award — a shop in Ethiopia is not answered in shillings', () => {
+      const shop = (shopName: string, zone: string) => {
+        agentSeq += 1;
+        const a = agents.register({ shopName, zone, country: 'ET', location: { lat: 9.03, lng: 38.74 }, landmark: 'by the roundabout', openingHours: uniformHours(), shelf: defaultShelf, fullName: `${shopName} owner`, nationalId: `ID-ET-${agentSeq}`, mobile: `+2519${agentSeq}`, deviceImei: `IMEI-ET-${agentSeq}`, requirements: eligibleReqs() } as never);
+        agents.submitKyc(a.did, kycDocs);
+        agents.decideKyc(a.did, true);
+        gate.topUp(a.did, 5000);
+        return agents.get(a.did);
+      };
+      const origin = shop('Bole Counter', 'Bole');
+      const dest = shop('Piassa Counter', 'Piassa');
+      const corridor = corridors.addCorridor({ name: 'Addis', originZone: 'Bole', destZone: 'Piassa' });
+      const driver = corridors.addDriver({ driverDid: 'did:glos:addisd', name: 'D', corridorId: corridor.corridorId });
+      parcels.accept({ agentDid: origin.did, parcelId: 'QR-ADDIS-DISPUTE', size: 'M', destZone: 'Piassa', senderMobile: '+251911000001', receiverMobile: '+251911000002', dropoffPhotoRef: 'r.jpg' });
+      parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-ADDIS-DISPUTE'] });
+      parcels.arrive('QR-ADDIS-DISPUTE', dest.did);
+      parcels.dispute('QR-ADDIS-DISPUTE', dest.did, 'Wet through', 'counter.jpg');
+      const resolved = parcels.resolveDispute('QR-ADDIS-DISPUTE', { decision: 'upheld', award: 120, note: 'It stood under our leaking roof.', by: 'Brian Kamau' });
+
+      expect(resolved.currency).toBeUndefined(); // a counter parcel names no money of its own
+      expect(entities.requireForJurisdiction('ET').currency).toBe('ETB');
+      expect(resolved.dispute!.currency).toBe('ETB');
+      expect(parcels.consumerParcel('QR-ADDIS-DISPUTE', hashPhone('+251911000001')).disputeOutcome).toMatchObject({ award: 120, currency: 'ETB', paidTo: 'sender' });
+    });
+
+    it('is signed by the member of staff who is signed in — not by the name the request carries, and never by “ops”', async () => {
+      const { parcel } = await disputedOrder();
+      const amina = { active: true, role: 'operator', sub: 'operator:opr_a', actorName: 'Amina Otieno', scopes: ['*'] } as never;
+      const decidedByAmina = controller.resolveDispute(parcel.parcelId, { decision: 'rejected', note: 'No damage is visible.', by: 'Somebody Else' } as never, amina);
+      expect(decidedByAmina.dispute).toMatchObject({ decidedBy: 'Amina Otieno' });
+      const last = decidedByAmina.scans[decidedByAmina.scans.length - 1];
+      expect(last).toMatchObject({ by: 'Amina Otieno' });
+    });
+
     it('pays an upheld claim to the STORE — the party that actually contracted with the sister', async () => {
       // Not the buyer. The buyer's claim is against the merchant they bought from, exactly as it would
       // be for goods broken on a shelf; ours is with the business that bought a shipment from us.
@@ -2748,6 +2864,86 @@ describe('PUDO Light', () => {
     expect(() => dispatch.claim(offer.offerId)).toThrow(/capability|coldChain/i);
     expect(totes.requireByCode(bag.code).status).toBe('available'); // never reserved to an incapable driver
     expect(totes.requireByCode(bag.code).claimedBy).toBeUndefined();
+  });
+
+  /**
+   * A FULL SHELF. A shop is approved with as few as six slots, and a shop that size is full by lunchtime — so what
+   * happens to the next parcel, and to a bag of them, is not an edge. Both used to leave records half-written.
+   */
+  describe('a full shelf: a parcel stays as it was, and a bag goes on whole or not at all', () => {
+    /** A shop in SouthTown with six slots, `taken` of them already holding something. */
+    const smallShop = (tag: string, taken: number) => {
+      const dest = onboardAgent(`Full Dest ${tag}`, 'SouthTown', 50);
+      agents.setLocation(dest.did, { lat: -1.35, lng: 36.95 });
+      shelfSvc.reconfigure(dest.did, { rows: 2, cols: 3 });
+      for (let i = 0; i < taken; i += 1) shelfSvc.assign(dest.did, `WAITING-${tag}-${i}`, 'M');
+      return agents.get(dest.did);
+    };
+
+    it('a parcel arriving at a full shelf is left on the bus exactly as it was, and is taken the moment a slot is free', () => {
+      const origin = onboardAgent('Full Origin P', 'NorthTown', 50);
+      const dest = smallShop('P', 6);
+      const corridor = corridors.addCorridor({ name: 'Full P', originZone: 'NorthTown', destZone: 'SouthTown' });
+      const driver = corridors.addDriver({ driverDid: 'did:glos:fullp', name: 'D', corridorId: corridor.corridorId });
+      parcels.accept({ agentDid: origin.did, parcelId: 'QR-FULL-P', size: 'M', destZone: 'SouthTown', senderMobile: '+254700941101', receiverMobile: '+254700941102', dropoffPhotoRef: 'r.jpg' });
+      parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-FULL-P'] });
+      const scans = parcels.get('QR-FULL-P').scans.length;
+      const paid = agents.balance(dest.did);
+
+      expect(() => parcels.arrive('QR-FULL-P', dest.did)).toThrow(/shelf here is full/);
+      // It was marked ready to collect BEFORE a slot was asked for: refused, it stayed "ready", in no slot, and
+      // could never be scanned in again.
+      const after = parcels.get('QR-FULL-P');
+      expect(after.status).toBe('On_Bus');
+      expect(after.binSlot).toBeUndefined();
+      expect(after.readyAt).toBeUndefined();
+      expect(after.scans).toHaveLength(scans);
+      expect(agents.balance(dest.did)).toBe(paid);
+
+      shelfSvc.release(dest.did, 'WAITING-P-0');
+      expect(parcels.arrive('QR-FULL-P', dest.did)).toMatchObject({ status: 'Ready_For_Pickup', binSlot: 'Red-1' });
+    });
+
+    it('a bag that does not fit is refused whole — nothing shelved, nothing paid, the bag as it was — and received once there is room, each parcel with its slot', () => {
+      const origin = onboardAgent('Full Origin B', 'NorthTown', 50);
+      const dest = smallShop('B', 4); // two slots free
+      const d = drivers.register({ displayName: 'HFB', fullName: 'H FB', nationalId: 'DRV-FULL-B', mobile: '+254733941177', licenceClasses: ['bike'] });
+      const bike = vehicles.register({ plate: 'FB-1', vehicleClass: 'bike', ownerName: 'H', pricePerKm: 0.1, toteCapacity: 4 });
+      fleet.couple(d.did, bike.vehicleId);
+      const bag = totes.register(origin.did);
+      totes.assign(bag.code, dest.did, dest.shopName);
+      const ids = ['FULL-B-0', 'FULL-B-1', 'FULL-B-2'];
+      for (const pid of ids) {
+        parcels.accept({ agentDid: origin.did, parcelId: pid, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+        mdps.fillTote(bag.code, pid);
+      }
+      dispatch.release(bag.code);
+      const [offer] = dispatch.suggest(d.did, { from: origin.location, to: dest.location }).filter((o) => o.ref === bag.code);
+      dispatch.claim(offer.offerId);
+      mdps.loadBag(bag.code, drivers.get(d.did).badgeId!);
+      const statuses = () => ids.map((id) => parcels.get(id).status);
+      const aboard = statuses();
+      const paid = agents.balance(dest.did);
+
+      // Three parcels, two slots. The first two used to be shelved and paid for before the third was refused.
+      expect(() => mdps.deliverBag(dest.did, bag.code)).toThrow(`Bag ${bag.code} holds 3 parcels and your shelf has no room for all of them. Hand over parcels that are waiting, or add a row under “Set up shelves”, then scan the bag again`);
+      expect(statuses()).toEqual(aboard);
+      expect(ids.map((id) => parcels.get(id).binSlot)).toEqual([undefined, undefined, undefined]);
+      expect(shelfSvc.available(dest.did)).toBe(2);
+      expect(totes.requireByCode(bag.code).parcels).toEqual(ids);
+      expect(agents.balance(dest.did)).toBe(paid);
+
+      // A waiting parcel is handed over; the same bag, scanned again, goes on whole.
+      shelfSvc.release(dest.did, 'WAITING-B-0');
+      const received = mdps.deliverBag(dest.did, bag.code);
+      expect(received.delivered).toEqual(ids);
+      // WHERE EACH ONE GOES: every parcel with the slot it was given, and no two in one.
+      expect(received.shelved).toEqual(ids.map((id) => ({ parcelId: id, slot: parcels.get(id).binSlot })));
+      expect(new Set(received.shelved.map((s) => s.slot)).size).toBe(3);
+      expect(statuses()).toEqual(['Ready_For_Pickup', 'Ready_For_Pickup', 'Ready_For_Pickup']);
+      expect(shelfSvc.available(dest.did)).toBe(0);
+      expect(totes.requireByCode(bag.code).parcels).toEqual([]);
+    });
   });
 
   describe('a bag is paid for the road it travels, not a flat fee', () => {

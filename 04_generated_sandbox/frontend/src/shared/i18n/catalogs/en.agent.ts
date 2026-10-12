@@ -859,6 +859,9 @@ export const enAgent = {
   'agent.receivebag.step1': 'Every parcel inside goes onto your shelf',
   'agent.receivebag.step2': 'Each customer gets their pickup code',
   'agent.receivebag.step3': 'The empty bag goes back with the next bus',
+  'agent.receivebag.putAwayTitle': 'Put each parcel in its slot',
+  'agent.receivebag.putAwayLede': 'Each customer is sent to the slot named here. You can find a slot again under Hand out.',
+  'agent.receivebag.putAwayDone': 'All on the shelf',
   'agent.receivebag.aloud': 'Scan the bag code. Every parcel inside is shelved and the customers get their pickup codes.',
 
   // Undo a drop-off (Void).
@@ -1121,6 +1124,8 @@ export const enAgent = {
   'agent.toast.onBusLoaded': 'Loaded onto {vehicle}.',
   'agent.toast.arrived': 'Parcel arrived',
   'agent.toast.arrivedDetail': 'It is on the shelf, waiting for its code.',
+  'agent.toast.arrivedAt': 'Put it on shelf {slot}. It waits there for its code.',
+  'agent.toast.bagPutAway': 'Each parcel has a slot. Put them in now.',
   'agent.toast.delivered': 'Delivered',
   'agent.toast.deliveredDetail': 'The customer has the parcel.',
   'agent.toast.thankYou': 'Thank you',

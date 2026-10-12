@@ -18,7 +18,7 @@ import { agentConfig, clearDid, createAgentClient, purgeAgentTokens, readDid, re
 import { signal } from '../../shared/feedback';
 import { triggerDownload } from '../../shared/download';
 import { topUpTermsOf, type TopUpTerms } from '../../shared/topup-fee';
-import { bodyHintValue, bookFreightMissing, EMPTY_ACCEPT, excludedBodiesValue, handoverRoute, incotermValue, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, termsBlock, type AcceptForm, type DimsForm } from './logic';
+import { bodyHintValue, bookFreightMissing, EMPTY_ACCEPT, excludedBodiesValue, handoverRoute, incotermValue, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, putAwayList, termsBlock, type AcceptForm, type DimsForm } from './logic';
 import type { GeoPoint } from '../../shared/geo';
 import type {
   AgentLedgerRow,
@@ -279,7 +279,8 @@ export interface AgentState {
   handover: { badge: string; selected: string[]; missed: string[] };
   release: { stickerId: string; parcel: ParcelView | null; otp: string; stars: number; photoRef: string };
   collect: { code: string; found: CollectView | null; disputing: boolean; reason: string; photoRef: string };
-  receivebag: { code: string };
+  /** `putAway`: a bag was just received, and these are the slots its parcels go in — shown until the shop says they are in. */
+  receivebag: { code: string; putAway?: Array<{ slot: string; parcelIds: string[] }>; driverDid?: string };
   /** The reverse-logistics window: which recent drop-off is being undone, + its torn-label photo. */
   void: { parcelId: string | null; photoRef: string };
   /** REP2 — the "rate the driver" prompt, opened after a handover/bag-receipt. `profile` fills in once fetched. */
@@ -1912,7 +1913,8 @@ export function useAgentApp() {
       // sender + receiver, never by the shop about to hand the goods over.
       const again = await client.api.parcel(f.parcel!.parcelId);
       setRelease({ parcel: again.error ? f.parcel : narrow<ParcelView>(again.data) });
-      pushToast({ tone: 'ok', icon: 'box', title: t('agent.toast.arrived'), detail: t('agent.toast.arrivedDetail') });
+      const slot = narrow<{ binSlot?: string }>(r.data)?.binSlot;
+      pushToast({ tone: 'ok', icon: 'box', title: t('agent.toast.arrived'), detail: slot ? t('agent.toast.arrivedAt', { slot }) : t('agent.toast.arrivedDetail') });
     });
   }, [client, did, run, fail, pushToast, setRelease]);
 
@@ -2032,17 +2034,27 @@ export function useAgentApp() {
       }
       signal('ok');
       const v = narrow<ReceiveBagView>(r.data);
-      setState((s) => ({ ...s, receivebag: { code: '' }, screen: 'home' }));
+      // WHERE EACH ONE GOES, before anything else: the shop is holding the parcels now. It stays on this screen
+      // until they say the parcels are in; rating the driver waits for that (donePutAway).
+      const putAway = putAwayList(v?.shelved ?? []);
+      setState((s) => (putAway.length ? { ...s, receivebag: { code: '', putAway, driverDid: v?.driverDid } } : { ...s, receivebag: { code: '' }, screen: 'home' }));
       pushToast({
         tone: 'ok',
         icon: 'bag',
         title: t('agent.toast.bagReceived'),
-        detail: t('agent.toast.bagReceivedDetail', { count: v?.delivered?.length ?? 0 }),
+        detail: putAway.length ? t('agent.toast.bagPutAway') : t('agent.toast.bagReceivedDetail', { count: v?.delivered?.length ?? 0 }),
       });
       await refresh();
-      if (v?.driverDid) void openRateDriver(v.driverDid); // REP2 — offer to rate the driver for this arrival
+      if (!putAway.length && v?.driverDid) void openRateDriver(v.driverDid); // REP2 — offer to rate the driver for this arrival
     });
   }, [client, did, run, fail, pushToast, refresh, openRateDriver]);
+
+  /** The parcels out of the bag are in their slots: back to the shop's home, and only now the question about the driver. */
+  const donePutAway = useCallback(() => {
+    const driverDid = stateRef.current.receivebag.driverDid;
+    setState((s) => ({ ...s, receivebag: { code: '' }, screen: 'home' }));
+    if (driverDid) void openRateDriver(driverDid);
+  }, [openRateDriver]);
 
   /**
    * Reverse logistics (compendium Ch 16.1): undo a drop-off inside the 5-minute window with
@@ -2166,6 +2178,7 @@ export function useAgentApp() {
       confirmCollect,
       submitDispute,
       submitReceiveBag,
+      donePutAway,
       openVoid,
       setVoidPhoto,
       submitVoid,

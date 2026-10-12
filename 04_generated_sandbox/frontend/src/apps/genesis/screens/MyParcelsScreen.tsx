@@ -3,9 +3,9 @@ import { ConversationSheet } from '../../../shared/conversation/Conversations';
 import { narrow } from '../../../lib/sbg';
 import { useEffect, useState } from 'preact/hooks';
 import { errorSentence, Button, Card, Checklist, CodeCard, ErrorNote, Icon, Note, Pill, PushPrompt, ReadAloud, Sheet } from '../../../shared/ui';
-import { useT } from '../../../shared/i18n';
+import { formatMoney, useT } from '../../../shared/i18n';
 import { PhotoField } from './PhotoField';
-import { LADDER, isOffLadder, ladderIndex, parcelRowLine, relationWord, sortForPerson, statusPresentation, stepTime } from '../logic';
+import { LADDER, disputeOutcomeWords, isOffLadder, ladderIndex, parcelRowLine, relationWord, sortForPerson, statusPresentation, stepTime } from '../logic';
 import { MERCHANT_TAGS, POSITIVE_TAGS, type MerchantTag } from '../../../lib/sbg/personas/consumer';
 import type { ConsumerParcelView, FreightShipmentView, ParcelStatus } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
@@ -355,6 +355,15 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
           detail={parcel.disputeReason ? t('send.parcels.problemYou', { reason: parcel.disputeReason }) : t('send.parcels.problemTold')}
         />
       ) : null}
+
+      {/* HOW IT ENDED — for the receiver who reported it and for the sender who paid. The decision, the reason as
+          it was written, and where an award went. Until this the answer was recorded and shown to neither. */}
+      {parcel.disputeOutcome
+        ? (() => {
+            const said = disputeOutcomeWords(parcel.disputeOutcome, parcel.relation, formatMoney, t);
+            return <Note tone={said.tone} icon={said.tone === 'ok' ? 'check' : 'info'} title={said.title} detail={said.lines.join(' ')} />;
+          })()
+        : null}
 
       {/* S23: once it is delivered, the receiver keeps their own proof of what arrived, and can report a
           problem — a reason + a photo — which routes to the seller (or the sender) and the control tower. */}

@@ -95,6 +95,8 @@ export const GlosEvent = {
     ParcelReleaseCodeReissued: 'pudo.parcel_release_code_reissued',
     ParcelDelivered: 'pudo.parcel_delivered',
     ParcelDisputed: 'pudo.parcel_disputed',
+    /** A dispute on a parcel was decided — upheld, in part, or rejected — with the reason the people concerned are shown. */
+    ParcelDisputeDecided: 'pudo.parcel_dispute_decided',
     ParcelVoided: 'pudo.parcel_voided',
     BagLoaded: 'pudo.bag_loaded', // a tote (with its parcels) scanned onto a bus
     BagArrivedAtMdp: 'pudo.bag_arrived_at_mdp', // bus drops a bag; MDP empties it

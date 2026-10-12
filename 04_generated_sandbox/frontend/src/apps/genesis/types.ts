@@ -245,6 +245,11 @@ export interface ConsumerParcelView {
   podPhotoRef?: string;
   disputePhotoRef?: string;
   disputeReason?: string;
+  /**
+   * How a reported problem ENDED — on the receiver's view and the sender's: the decision, the network's own
+   * reason, and when something was awarded, how much and to whom. Absent while it is open, or there was none.
+   */
+  disputeOutcome?: DisputeOutcome;
   /** The closed-window facts — RECEIVER ONLY. A sender owns the shipment, not the goods, so whether the
    *  person at the other end has come and what that is costing them is not the sender's business. */
   unclaimedAt?: string;
@@ -290,4 +295,17 @@ export interface InviteView {
 export interface InviteSummary {
   invites: InviteView[]; // the person's one reusable link (or empty)
   joined: number; // total joins it drove
+}
+
+/** How a dispute ended, as the two people on the parcel read it. */
+export interface DisputeOutcome {
+  /** Where it was raised: from the receiver's own app, or by the shop at its counter. */
+  origin: 'buyer' | 'counter';
+  decision: 'upheld' | 'partly_upheld' | 'rejected';
+  note: string;
+  decidedAt: string;
+  award?: number;
+  currency?: string;
+  /** Who the award goes to: the store that sold the shipment, or the sender who paid for it at a counter. */
+  paidTo?: 'store' | 'sender';
 }

@@ -17,7 +17,7 @@ import type { Amounts } from './amounts';
 import { DEFAULT_TAX_LABEL, MAX_CLAIM_AWARD, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, OTP_MAX_ATTEMPTS, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, UNCOLLECTED_H, VOID_WINDOW_MS, WHOLESALE, classifySize, coverFor, holdingFeeFor, taxOn, withPlatformFee } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import type { ResolvedTax } from '../../foundation/entity/entity.types';
-import { Birthplace, ConsumerParcelView, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, isCollectable } from './pudo.types';
+import { Birthplace, ConsumerParcelView, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, isCollectable } from './pudo.types';
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
 import { MediaService } from './media.service';
@@ -161,6 +161,24 @@ export function filterVendorParcels(rows: Parcel[], q: VendorOrdersQuery): Parce
  */
 export function parcelCurrency(p: Parcel): string {
   return p.currency ?? NETWORK_CURRENCY;
+}
+
+/**
+ * How a parcel's dispute ended, for the people on it — or nothing while it is open or there never was one.
+ * The decision and the reason given; the award and who it goes to. Nothing of who decided it (a name inside
+ * the network), of how it was funded, or of what the receiver wrote.
+ */
+export function disputeOutcomeOf(p: Parcel): DisputeOutcomeView | undefined {
+  const d = p.dispute;
+  if (!d || d.state !== 'resolved' || !d.decision || !d.decidedAt) return undefined;
+  const award = d.award ?? 0;
+  return {
+    origin: d.origin,
+    decision: d.decision,
+    note: d.note ?? '',
+    decidedAt: d.decidedAt,
+    ...(award > 0 ? { award, currency: d.currency ?? parcelCurrency(p), paidTo: d.paidTo?.kind === 'vendor' ? ('store' as const) : ('sender' as const) } : {}),
+  };
 }
 
 /** Project a Parcel to a register row (adds the DID, buyer + product names the raw list lacked). */
@@ -939,6 +957,7 @@ export class ParcelService implements OnApplicationBootstrap {
       podPhotoRef: relation === 'received' ? p.buyerPodPhotoRef : undefined,
       disputePhotoRef: relation === 'received' ? p.buyerDisputePhotoRef : undefined,
       disputeReason: relation === 'received' && p.status === 'Disputed' ? (p.buyerDisputeReason ?? p.disputeReason) : undefined,
+      ...(disputeOutcomeOf(p) ? { disputeOutcome: disputeOutcomeOf(p) } : {}),
       // The closed-window facts, receiver-only — see ConsumerParcelView. The owed figure is DERIVED here
       // rather than left to the app, so the number somebody reads on their phone and the number the
       // counter asks for cannot come from two different pieces of arithmetic.
@@ -1379,12 +1398,16 @@ export class ParcelService implements OnApplicationBootstrap {
   arrive(parcelId: string, destAgentDid: string): { parcelId: string; status: string; binSlot: string } {
     const parcel = this.require(parcelId);
     if (parcel.status !== 'On_Bus') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected On_Bus`);
+    // A SLOT FIRST, and nothing else until there is one. The record was marked ready to collect and THEN asked for
+    // a slot: on a full shelf the ask was refused, and the parcel stayed marked ready, in no slot, with nobody told
+    // — and could not be scanned again, because it was no longer "on the bus". A six-slot shop is full by lunchtime.
+    const slot = this.shelf.assign(destAgentDid, parcelId, parcel.size); // small parcels may bundle
     parcel.status = 'Ready_For_Pickup';
     parcel.destAgentDid = destAgentDid;
     if (!parcel.otp && !parcel.collectionCode) parcel.otp = releaseOtp(); // legacy record, minted before the code moved to genesis
     parcel.otpAttempts = 0;
     parcel.otpLockedAt = undefined;
-    parcel.binSlot = this.shelf.assign(destAgentDid, parcelId, parcel.size); // commit to a shelf slot for pickup (small parcels may bundle)
+    parcel.binSlot = slot;
     this.handTo(parcel, 'shop', destAgentDid, 'arrived at the collection point');
     parcel.readyAt = new Date().toISOString(); // when the wait began — see Parcel.readyAt
     // The shelving half, paid HERE rather than at release. Receiving, scanning and committing a shelf
@@ -1394,6 +1417,11 @@ export class ParcelService implements OnApplicationBootstrap {
     void this.events.publish(GlosEvent.Pudo.ParcelReadyForPickup, { parcelId, destAgentDid, binSlot: parcel.binSlot }, { source: 'pudo' }).catch(() => undefined);
     // No secret in this response: the customer brings the code, the shop checks it.
     return { parcelId, status: parcel.status, binSlot: parcel.binSlot };
+  }
+
+  /** Would this shop's shelf take ALL of these as it stands? Asked before a bag is opened — see MdpService.deliverBag. */
+  shelfTakes(agentDid: string, parcelIds: string[]): boolean {
+    return this.shelf.fits(agentDid, parcelIds.map((id) => this.require(id).size));
   }
 
   /** Screen 3 — Customer Pickup (release) with the code the CUSTOMER brings. */
@@ -2001,8 +2029,9 @@ export class ParcelService implements OnApplicationBootstrap {
     const parcel = this.require(parcelId);
     if (parcel.status !== 'On_Bus') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected On_Bus`);
     if (parcel.destAgentDid && parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Shelve only at the buyer-selected destination PUDO');
-    parcel.destAgentDid = agentDid;
+    // The slot before anything is written, as in arrive(): a full shelf leaves the record exactly as it was.
     parcel.binSlot = this.shelf.assign(agentDid, parcelId, parcel.size); // chaos-shelf slot from the grid (binId hint ignored; small parcels may bundle)
+    parcel.destAgentDid = agentDid;
     void binId;
     parcel.status = 'Ready_For_Pickup';
     // The collection code becomes live at this moment — start its attempt budget clean, exactly as
@@ -2310,6 +2339,10 @@ export class ParcelService implements OnApplicationBootstrap {
 
     let funding: { fromProvision: number; fromExpense: number } | undefined;
     let paidTo: { kind: 'vendor' | 'off_platform'; id: string } | undefined;
+    // WHAT MONEY THE AWARD IS IN. The parcel's own, where it was quoted in one; a parcel taken in at a counter
+    // names none, and then it is the money of the company whose books carry the award.
+    const booksOf = parcel.collectingEntityId ?? parcel.sellerEntityId;
+    const currency = award > 0 ? (parcel.currency ?? (booksOf ? this.entities.get(booksOf)?.currency : undefined) ?? NETWORK_CURRENCY) : undefined;
     if (award > 0) {
       const note = `damage claim · ${parcel.parcelId}`;
       if (parcel.vendorId && this.vendors.has(parcel.vendorId)) {
@@ -2335,6 +2368,7 @@ export class ParcelService implements OnApplicationBootstrap {
       note: input.note.trim(),
       decidedBy: input.by ?? 'ops',
       decidedAt: new Date().toISOString(),
+      ...(currency ? { currency } : {}),
       funding,
       paidTo,
     };
@@ -2343,6 +2377,11 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.status = fromStatus;
     this.scan(parcel, fromStatus, input.by ?? 'ops', `dispute ${input.decision}${award > 0 ? ` · awarded ${award.toFixed(2)}` : ''}`);
     this.persist(parcel);
+    // THE ANSWER LEAVES THE BUILDING. It was written down and told to nobody: the receiver who reported it, the
+    // sender who is owed an award, and the shop still holding the goods each had to guess that it had been decided.
+    void this.events
+      .publish(GlosEvent.Pudo.ParcelDisputeDecided, { parcelId: parcel.parcelId, decision: input.decision, award, currency, note: input.note.trim(), origin, raisedBy: parcel.dispute.raisedBy }, { source: 'pudo' })
+      .catch(() => undefined);
     return parcel;
   }
 

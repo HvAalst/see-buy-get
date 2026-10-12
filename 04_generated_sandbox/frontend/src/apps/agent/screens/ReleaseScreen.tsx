@@ -41,7 +41,7 @@ export function ReleaseScreen({ state, actions }: ReleaseScreenProps) {
       <h1 class="scr__title">{t('agent.counter.title')}</h1>
       <p class="scr__lede">{t('agent.counter.lede')}</p>
 
-      {state.error ? <ErrorNote error={state.error} /> : null}
+      {state.error ? <ErrorNote error={state.error} showDetail={state.error.code === 'SHELF_FULL'} /> : null}
 
       {/* The one question the customer can always answer. */}
       <Card>

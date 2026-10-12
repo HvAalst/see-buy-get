@@ -287,6 +287,8 @@ export interface CollectView {
 
 export interface ReceiveBagView {
   delivered: string[];
+  /** The slot each parcel out of the bag was given — what the shop needs to put each one where its customer is sent. */
+  shelved?: Array<{ parcelId: string; slot: string }>;
   /** REP2 — the driver who carried the bag here, so the receiving shop can rate the arrival. */
   driverDid?: string;
 }

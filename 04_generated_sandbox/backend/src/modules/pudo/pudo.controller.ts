@@ -2417,12 +2417,15 @@ export class SbgController {
     return this.agents.setHours(did, dto.openingHours);
   }
 
-  /** Reconfigure the shelf grid (rows × columns). */
+  /**
+   * Reconfigure the shelf grid (rows × columns). Through the shelf itself, which knows what is standing on
+   * it: a change that would strand a parcel in a slot that no longer exists is refused, by slot and parcel.
+   */
   @Roles('agent', 'operator')
   @Post('agents/:did/shelf')
   setShelf(@Param('did') did: string, @Body() dto: ShelfDto, @Actor() actor: IntrospectionResult) {
     this.assertAgentActs(did, actor);
-    return this.agents.setShelf(did, dto);
+    return this.shelf.reconfigure(did, dto);
   }
 
   /** Declare the floor room for outbound BAGS — the shelf's counterpart for the other pile in the room. */
@@ -4246,8 +4249,10 @@ export class SbgController {
    */
   @Roles('operator')
   @Post('disputes/:parcelId/resolve')
-  resolveDispute(@Param('parcelId') parcelId: string, @Body() dto: ResolveDisputeDto) {
-    return this.parcels.resolveDispute(parcelId, dto);
+  resolveDispute(@Param('parcelId') parcelId: string, @Body() dto: ResolveDisputeDto, @Actor() actor: IntrospectionResult) {
+    // WHO DECIDED is the member of staff signed in, by the name on their sign-in. It was whatever the request said,
+    // and "ops" when it said nothing: a decision that pays out of the network's books, signed by anybody.
+    return this.parcels.resolveDispute(parcelId, { ...dto, by: auditActor(actor, dto.by) });
   }
 
   /** PUDO coverage heatmap — points + density + open/closed counts (feeds journey-leg planning). */

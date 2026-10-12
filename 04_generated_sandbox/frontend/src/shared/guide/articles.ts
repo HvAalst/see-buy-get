@@ -784,6 +784,27 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "shop-shelves",
+    apps: [
+      "agent"
+    ],
+    title: "Your pickup shelves, and the slot each parcel is given",
+    summary: "Every parcel that arrives for collection is given a slot of its own, named by a colour and a number, such as Red-2. The shop says how many rows and colour columns it has.",
+    steps: [
+      "Shop app, My shop, “Set up shelves”. Rows are numbered and each column is a colour. Choose how many of each you have, then “Save shelf”.",
+      "One parcel off the bus: when you mark it arrived, the app names its slot. Put it there.",
+      "A bag: after “Receive and shelve” the app lists every slot and the parcels that go in it, under “Put each parcel in its slot”. Press “All on the shelf” when they are in.",
+      "When the customer comes, the app shows the same slot. A slot can be found again under Hand out, beside each parcel that is waiting.",
+      "Tap an empty slot to make it a bundle slot. Letters and small parcels then share it, up to twelve, instead of each taking a whole slot."
+    ],
+    notes: [
+      "A bag goes onto the shelf whole or not at all. If there is no room for every parcel in it, the bag is refused and nothing is shelved: hand over parcels that are waiting, or add a row, then scan the bag again. One parcel that finds no slot stays with the driver in the same way.",
+      "A slot that holds a parcel cannot be taken away. Hand the parcel over first, or keep the shelf large enough for that slot. The app says which slot and which parcel.",
+      "A shelf has at least 6 slots and at most 10 colour columns, because every column is a colour of its own.",
+      "A slot is free again the moment its parcel is collected. A parcel with a problem reported keeps its slot until the report is decided."
+    ]
+  },
+  {
     id: "message-shop",
     apps: [
       "send",
@@ -798,6 +819,28 @@ export const ARTICLES: GuideArticle[] = [
     ],
     notes: [
       "Only the two of you can read it, and nothing in it can be edited or deleted. The collection code is never sent in a message — it stays on the parcel in the Send app."
+    ]
+  },
+  {
+    id: "parcel-problem",
+    apps: [
+      "send",
+      "agent",
+      "console"
+    ],
+    title: "A problem with a parcel: reporting it, and how it ends",
+    summary: "Broken, opened or wrong goods are reported with a photograph: by the receiver from the Send app, or by the shop at its counter. A member of staff decides it and writes the reason, and the receiver, the sender and the shop are each told.",
+    steps: [
+      "Send app, after collecting: My parcels, open the parcel, “Got your parcel?”, then “Report a problem”. Say what is wrong and add a photograph. The parcel then reads “Problem reported”.",
+      "Shop app, at the counter, before handing over: Hand over a parcel, then “Report a problem instead”. Say what is wrong and take a photograph. The parcel stays in its slot and cannot be handed over until the report is decided.",
+      "Operator console, Damage claims: each open report with its reason and its photograph. A member of staff upholds it, upholds it in part, or does not uphold it, and writes the reason. The decision is recorded under the name of the member of staff who is signed in.",
+      "The receiver and the sender each get a notice, and each reads the outcome and the reason on the parcel in the Send app. A shop that reported it gets a notice naming the slot the parcel is in, and hands it over as any parcel."
+    ],
+    notes: [
+      "An award goes to whoever paid the network for the shipment: the store, for something bought in a store; the sender, for a parcel handed in at a counter. It is not paid to the receiver. The app says so on the parcel, to both of them.",
+      "An award to a sender is recorded as owed to them, in the money of the company that carried the parcel, and is paid outside the app.",
+      "The sender is shown that a problem was reported and how it ended, never what the receiver wrote or photographed. Neither of them is shown which member of staff decided.",
+      "Nobody is texted about a report or its outcome. Somebody without the Send app reads it on the parcel the day they sign in with the number the parcel was addressed to."
     ]
   },
   {

@@ -85,7 +85,9 @@ export function ShelfScreen({ state, actions }: ShelfScreenProps) {
       <h1 class="scr__title">{t('agent.shelf.title')}</h1>
       <p class="scr__lede">{t('agent.shelf.lede')}</p>
 
-      {state.error ? <ErrorNote error={state.error} /> : null}
+      {/* A refused change names the slot and the parcel standing in it — a parcel that arrived after this screen
+          was read, so the screen's own warning below could not have known. That sentence is the server's, and is shown. */}
+      {state.error ? <ErrorNote error={state.error} showDetail={state.error.code === 'INVALID_STATE' || state.error.code === 'INVALID_INPUT'} /> : null}
 
       <Card>
         <Stepper id="shelf-rows" label={t('agent.shelf.rows')} value={r} min={1} max={MAX_ROWS} onChange={setRows} />

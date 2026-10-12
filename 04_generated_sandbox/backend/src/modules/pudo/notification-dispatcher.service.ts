@@ -118,6 +118,7 @@ interface RunClaimOpened { departureId: string; bookingId: string; managerDid: s
 interface RunClaimAnswered { departureId: string; bookingId: string; shipperDid: string; managerDid: string; company: string; load: string; answer: 'accepted' | 'refused'; note?: string }
 interface FleetPaperChecked { did: string; kind: 'operator_licence' | 'carrier_insurance'; accepted: boolean; expiresAt?: string; reason?: string }
 interface LicenceSent { did: string; displayName: string; expiresAt: string; managerDid?: string }
+interface DisputeDecided { parcelId: string; decision: 'upheld' | 'partly_upheld' | 'rejected'; award: number; currency?: string; note: string; origin: 'counter' | 'buyer'; raisedBy: string }
 import { UnclaimedService } from './unclaimed.service';
 import { VendorService } from './vendor.service';
 import { MARKET_SUPPLY_STALE_MIN, NUDGE_COOLDOWN_MIN, NUDGE_MIN_MOVE_KM, UNCOLLECTED_REMINDER_H, UNCOLLECTED_SWEEP_MS } from './pudo.config';
@@ -384,6 +385,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     // FP4 (courier) — the renewed licence they sent was checked. They sent it and are waiting: either answer.
     this.events.subscribe<{ did: string; accepted: boolean; expiresAt?: string; reason?: string }>(GlosEvent.Pudo.DriverLicenceChecked, (e) => this.onLicenceChecked(e.payload));
     this.events.subscribe<LicenceSent>(GlosEvent.Pudo.DriverLicenceSent, (e) => this.onLicenceSent(e.payload));
+    this.events.subscribe<DisputeDecided>(GlosEvent.Pudo.ParcelDisputeDecided, (e) => this.onParcelDisputeDecided(e.payload));
 
     // Retention: the parties hear about it a month before the document goes, not afterwards.
     this.events.subscribe<{ docId: string; number: string; parties: string[]; goesAt: string }>(GlosEvent.Pudo.NoteExpiringSoon, (e) =>
@@ -437,6 +439,43 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       });
     } catch (err) {
       this.logger.warn(`licence check notice failed for ${payload.did}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * A DISPUTE ON A PARCEL WAS DECIDED — and each of the people it concerns is told, in their own inbox.
+   *
+   * The receiver: the outcome and the network's reason — as THEIR report where they filed it from their app,
+   * and as "the report" where the shop raised it at its counter, which they may never have heard of. The
+   * sender, who paid for the shipment: the same, and — where something was awarded on a parcel no
+   * store sold — that it is owed to them. And the shop that raised it at its counter, which is still holding
+   * the goods: that the question is answered and the parcel can be handed over again.
+   *
+   * Nothing here is a text. Each goes to an account, where there is one; a person with no account reads it the
+   * day they open the app, because the outcome is on the parcel itself.
+   */
+  private async onParcelDisputeDecided(p: DisputeDecided): Promise<void> {
+    let parcel: ReturnType<ParcelService['get']>;
+    try {
+      parcel = this.parcels.get(p.parcelId);
+    } catch {
+      return;
+    }
+    const outcome = p.decision === 'upheld' ? 'upheld' : p.decision === 'partly_upheld' ? 'upheld in part' : 'not upheld';
+    const tag = `dispute:${p.parcelId}:decided`;
+    const receiver = accountFor(this.parcels.receiverOf(parcel), this.persons);
+    const sender = accountFor(this.parcels.senderOf(parcel), this.persons);
+    if (receiver) {
+      await this.tell(receiver.personDid, { kind: 'claim_decided', title: `${p.origin === 'buyer' ? 'Your report' : 'The report'} on parcel ${p.parcelId} was ${outcome}`, body: p.note, tag, data: { parcelId: p.parcelId } });
+    }
+    if (sender && sender.personDid !== receiver?.personDid) {
+      // Owed to the sender only where no store sold the shipment: a store's award goes to the store's float.
+      const owed = p.award > 0 && p.currency && !parcel.vendorId ? ` ${p.award.toFixed(2)} ${p.currency} is owed to you for it.` : '';
+      await this.tell(sender.personDid, { kind: 'claim_decided', title: `The report on parcel ${p.parcelId} was ${outcome}`, body: `${p.note}${owed}`, tag, data: { parcelId: p.parcelId } });
+    }
+    if (p.origin === 'counter' && p.raisedBy.startsWith('did:')) {
+      const slot = parcel.binSlot ? ` It is on your shelf at ${parcel.binSlot}, to be handed over as any parcel.` : '';
+      await this.tell(p.raisedBy, { kind: 'claim_decided', title: `The dispute on parcel ${p.parcelId} was decided`, body: `It was ${outcome}. ${p.note}${slot}`, tag, data: { parcelId: p.parcelId } });
     }
   }
 

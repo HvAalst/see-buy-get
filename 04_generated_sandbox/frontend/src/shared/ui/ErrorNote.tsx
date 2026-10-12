@@ -67,7 +67,7 @@ const SAY: Record<string, string> = {
   'error.bag_full': 'That bag is full.',
   'error.already_in_bag': 'That parcel is already in a bag. Check the other bag if it is not in this one.',
   'error.staging_full': 'There is no room for another bag. Give one to a driver, or make room for more in your shelf setup.',
-  'error.shelf_full': 'There is no shelf space left.',
+  'error.shelf_full': 'There is not enough room on the shelf.',
   'error.manifest_incomplete': 'Some parcels for this bus are still waiting. Load them, or leave them behind.',
   // S26 media upload + retention.
   'error.photo_too_large': 'That photo is too big. Try taking it again.',

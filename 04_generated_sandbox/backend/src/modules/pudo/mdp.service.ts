@@ -413,25 +413,40 @@ export class MdpService {
    * Deliver a bag at its destination PUDO: shelve each parcel for pickup (inbound) or issue an OTP
    * (outbound), then empty the tote — freeing it for reuse AND releasing the carrying driver's
    * reserved capacity. This closes the last mile of the tote flow (the PUDO-side equivalent of dropBag).
+   *
+   * THE WHOLE BAG, OR NONE OF IT. Each parcel was shelved in turn, and a shelf that filled up part-way was refused
+   * there: the first parcels shelved and paid for, the rest not, the bag still listing all of them — and a second
+   * scan refused too, because the first ones were no longer on the bus. A bag nobody could ever receive. So the
+   * shelf is asked first whether it takes all of them.
+   *
+   * AND WHERE EACH ONE GOES. `shelved` names the slot every parcel was given. The shop was told "5 parcels
+   * shelved" and nothing else — at the one moment it has five parcels in its hands and has to put each in the
+   * slot its customer will be sent to.
    */
-  deliverBag(agentDid: string, code: string): { code: string; agentDid: string; delivered: string[]; driverDid?: string } {
+  deliverBag(agentDid: string, code: string): { code: string; agentDid: string; delivered: string[]; shelved: Array<{ parcelId: string; slot: string }>; driverDid?: string } {
     const agent = this.agents.get(agentDid);
     const tote = this.totes.requireByCode(code);
     if (!tote.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is empty`);
     const driverDid = tote.claimedBy; // REP2 — the driver who carried the bag here, captured before empty() clears it
     if (tote.destinationNodeId && tote.destinationNodeId !== agentDid) throw new GlosError('BAG_MISADDRESSED', `Bag ${code} is addressed to ${tote.destinationLabel || tote.destinationNodeId}, not ${agent.shopName}`);
+    if (!this.parcels.shelfTakes(agentDid, tote.parcels)) {
+      const holds = tote.parcels.length === 1 ? '1 parcel' : `${tote.parcels.length} parcels`;
+      throw new GlosError('SHELF_FULL', `Bag ${code} holds ${holds} and your shelf has no room for all of them. Hand over parcels that are waiting, or add a row under “Set up shelves”, then scan the bag again`, { parcels: tote.parcels.length });
+    }
     const delivered: string[] = [];
+    const shelved: Array<{ parcelId: string; slot: string }> = [];
     for (const parcelId of [...tote.parcels]) {
       const parcel = this.parcels.get(parcelId);
-      if (parcel.direction === 'inbound') this.parcels.shelve(parcelId, agentDid);
-      else this.parcels.arrive(parcelId, agentDid); // outbound → OTP issued to the receiver
+      // inbound → shelved for its collection code; outbound → the receiver's code goes live
+      const put = parcel.direction === 'inbound' ? this.parcels.shelve(parcelId, agentDid) : this.parcels.arrive(parcelId, agentDid);
       parcel.toteId = undefined;
       delivered.push(parcelId);
+      shelved.push({ parcelId, slot: put.binSlot });
     }
     this.totes.empty(code, agentDid); // free the tote + release the driver's reserved capacity
     this.payHaul(tote, driverDid);
     void this.events.publish(GlosEvent.Pudo.BagDelivered, { code, agentDid, delivered: delivered.length }, { source: 'pudo' }).catch(() => undefined);
-    return { code, agentDid, delivered, driverDid };
+    return { code, agentDid, delivered, shelved, driverDid };
   }
 
   /**

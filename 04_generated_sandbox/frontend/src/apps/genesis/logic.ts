@@ -497,3 +497,48 @@ export function followLanding(search: string, device: { session: boolean; knownP
   if (device.session) return { following: false };
   return { following: true, authMode: device.knownPhone ? 'login' : 'enroll' };
 }
+
+/* ---------------------------------------------------- how a reported problem ended -- */
+
+/** Whose report it was, by how it went: the receiver's own, the receiver's as the sender reads it, or the shop's. */
+const OUTCOME_TITLES = {
+  mine: { upheld: 'send.outcome.upheldMine', partly_upheld: 'send.outcome.partlyMine', rejected: 'send.outcome.rejectedMine' },
+  theirs: { upheld: 'send.outcome.upheldTheirs', partly_upheld: 'send.outcome.partlyTheirs', rejected: 'send.outcome.rejectedTheirs' },
+  shop: { upheld: 'send.outcome.upheldShop', partly_upheld: 'send.outcome.partlyShop', rejected: 'send.outcome.rejectedShop' },
+} as const;
+
+/**
+ * HOW A REPORTED PROBLEM ENDED, in words — for whoever is reading: the receiver who reported it, or the
+ * sender who paid for the shipment.
+ *
+ * It used to end in silence. The decision and its reason were written down and the parcel went back to
+ * "delivered"; the person who had reported broken goods opened the app and found nothing had been said.
+ *
+ * THE TITLE says whose report it was and how it went: the receiver's own, the receiver's as the sender reads
+ * it, or the SHOP's — a problem the shop raised at its counter is nobody's "your report", and a receiver told
+ * theirs was "not upheld" about a parcel they had not yet come for would not know what was meant. A shop's
+ * report that is not upheld is no bad news to either of them: the parcel is as it should be.
+ *
+ * THE LINES under it are: the network's reason, as it was written; and, when something was awarded, WHERE
+ * THE MONEY WENT — because that is the surprising part. An award is paid to whoever bought the shipment from
+ * the network: the store, for something bought in a store; the sender, for a parcel handed in at a counter.
+ * Never to the receiver directly, and saying so here is what stops somebody waiting for money that was never
+ * coming to them.
+ */
+export function disputeOutcomeWords(
+  outcome: { origin?: 'buyer' | 'counter'; decision: 'upheld' | 'partly_upheld' | 'rejected'; note: string; award?: number; currency?: string; paidTo?: 'store' | 'sender' },
+  relation: 'sent' | 'received',
+  cash: (amount: number, currency?: string) => string,
+  t: Translate,
+): { tone: 'ok' | 'warn'; title: string; lines: string[] } {
+  const mine = relation === 'received';
+  const whose = outcome.origin === 'counter' ? 'shop' : mine ? 'mine' : 'theirs';
+  const title = t(OUTCOME_TITLES[whose][outcome.decision]);
+  const lines = [outcome.note.trim()].filter(Boolean);
+  if (outcome.award && outcome.award > 0) {
+    const amount = cash(outcome.award, outcome.currency);
+    if (outcome.paidTo === 'store') lines.push(t(mine ? 'send.outcome.toStoreMine' : 'send.outcome.toStoreTheirs', { amount }));
+    else lines.push(t(mine ? 'send.outcome.toSenderMine' : 'send.outcome.toSenderTheirs', { amount }));
+  }
+  return { tone: outcome.decision === 'rejected' && whose !== 'shop' ? 'warn' : 'ok', title, lines };
+}

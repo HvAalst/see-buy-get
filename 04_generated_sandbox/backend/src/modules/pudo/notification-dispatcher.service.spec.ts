@@ -22,7 +22,7 @@ interface HarnessOpts {
   /** What the window-closing half of the shelf sweep found, so the final-notice cases can name it. */
   unclaimedSweep?: () => Array<{ parcelId: string }>;
   // rule 1 + rule 4 (senderMobile picks the peer-send vs vendor copy)
-  parcel?: { receiverPhoneHash?: string; destAgentDid?: string; destZone?: string; senderMobile?: string } | null;
+  parcel?: { receiverPhoneHash?: string; senderPhoneHash?: string; vendorId?: string; binSlot?: string; destAgentDid?: string; destZone?: string; senderMobile?: string } | null;
   personByHash?: Record<string, { personDid: string }>;
   // agents: did → { shopName?, location? } (used by rule 1 shop name, rule 2 pickup geo, rule 3 dest check)
   agents?: Record<string, { shopName?: string; location?: Geo }>;
@@ -565,6 +565,69 @@ describe('NotificationDispatcher — the uncollected reminder', () => {
  * '/?x=y' means home with something selected; anything else is a page the build does not contain. The
  * driver's offer link had always been the right shape — the new one simply did not copy it.
  */
+describe('NotificationDispatcher — a dispute is decided, and the people it concerns are told', () => {
+  const people = { 'hash-rx': { personDid: 'did:person:rx' }, 'hash-tx': { personDid: 'did:person:tx' } };
+  const walkUp = { receiverPhoneHash: 'hash-rx', senderPhoneHash: 'hash-tx', binSlot: 'Amber-2' };
+  const decided = (over: Record<string, unknown>) => ({ parcelId: 'P1', decision: 'upheld', award: 40, currency: 'KES', note: 'It broke in our hands.', origin: 'buyer', raisedBy: 'did:person:rx', ...over });
+
+  it('tells the receiver how their report ended, with the reason as it was written', async () => {
+    const { events, notifications } = harness({ parcel: walkUp, personByHash: people });
+    await events.publish(GlosEvent.Pudo.ParcelDisputeDecided, decided({}));
+    const told = notifications.inboxFor('did:person:rx');
+    expect(told).toHaveLength(1);
+    expect(told[0]).toMatchObject({ kind: 'claim_decided', title: 'Your report on parcel P1 was upheld', body: 'It broke in our hands.', data: { parcelId: 'P1' } });
+  });
+
+  it('tells a walk-up sender what is owed to them, in a named money', async () => {
+    const { events, notifications } = harness({ parcel: walkUp, personByHash: people });
+    await events.publish(GlosEvent.Pudo.ParcelDisputeDecided, decided({ decision: 'partly_upheld', award: 12.5 }));
+    const told = notifications.inboxFor('did:person:tx');
+    expect(told).toHaveLength(1);
+    expect(told[0]).toMatchObject({ kind: 'claim_decided', title: 'The report on parcel P1 was upheld in part', body: 'It broke in our hands. 12.50 KES is owed to you for it.' });
+    expect(notifications.inboxFor('did:person:rx')[0].title).toBe('Your report on parcel P1 was upheld in part');
+  });
+
+  it('promises the sender nothing when the store was paid, when nothing was awarded, or when the money has no name', async () => {
+    const body = async (parcel: Record<string, unknown>, over: Record<string, unknown>) => {
+      const { events, notifications } = harness({ parcel, personByHash: people });
+      await events.publish(GlosEvent.Pudo.ParcelDisputeDecided, decided(over));
+      return notifications.inboxFor('did:person:tx')[0];
+    };
+    // A store sold the shipment: the award went to the store's float, not to whoever the store names as sender.
+    expect((await body({ ...walkUp, vendorId: 'ven_1' }, {})).body).toBe('It broke in our hands.');
+    expect(await body(walkUp, { decision: 'rejected', award: 0, currency: undefined, note: 'No damage is visible.' })).toMatchObject({ title: 'The report on parcel P1 was not upheld', body: 'No damage is visible.' });
+    // An amount without a currency is not a sentence anybody should be sent ("40.00  is owed to you").
+    expect((await body(walkUp, { currency: undefined })).body).toBe('It broke in our hands.');
+  });
+
+  it('tells the shop that raised it at its counter, with the slot the parcel is still standing in', async () => {
+    const { events, notifications } = harness({ parcel: walkUp, personByHash: people });
+    await events.publish(GlosEvent.Pudo.ParcelDisputeDecided, decided({ decision: 'rejected', award: 0, currency: undefined, note: 'The wrap is torn, the contents are whole.', origin: 'counter', raisedBy: 'did:agent:9' }));
+    const told = notifications.inboxFor('did:agent:9');
+    expect(told).toHaveLength(1);
+    expect(told[0]).toMatchObject({ kind: 'claim_decided', title: 'The dispute on parcel P1 was decided', body: 'It was not upheld. The wrap is torn, the contents are whole. It is on your shelf at Amber-2, to be handed over as any parcel.' });
+    // The two people on the parcel hear of it as well — and the receiver is not told it was THEIR report: the shop
+    // raised it, perhaps before they had ever come for the parcel.
+    expect(notifications.inboxFor('did:person:rx').map((n) => n.title)).toEqual(['The report on parcel P1 was not upheld']);
+    expect(notifications.inboxFor('did:person:tx').map((n) => n.title)).toEqual(['The report on parcel P1 was not upheld']);
+  });
+
+  it('does not tell a shop about a report a person filed from their own app, and tells one person once when they sent it to themselves', async () => {
+    const { events, notifications } = harness({ parcel: { receiverPhoneHash: 'hash-rx', senderPhoneHash: 'hash-rx' }, personByHash: people });
+    await events.publish(GlosEvent.Pudo.ParcelDisputeDecided, decided({}));
+    const told = notifications.inboxFor('did:person:rx');
+    expect(told.map((n) => n.title)).toEqual(['Your report on parcel P1 was upheld']);
+  });
+
+  it('is silent, without throwing into the bus, when nobody on the parcel has an account or the parcel is gone', async () => {
+    const none = harness({ parcel: walkUp, personByHash: {} });
+    await expect(none.events.publish(GlosEvent.Pudo.ParcelDisputeDecided, decided({}))).resolves.not.toThrow();
+    expect([...none.notifications.inboxFor('did:person:rx'), ...none.notifications.inboxFor('did:person:tx')]).toEqual([]);
+    const gone = harness({ parcel: null });
+    await expect(gone.events.publish(GlosEvent.Pudo.ParcelDisputeDecided, decided({}))).resolves.not.toThrow();
+  });
+});
+
 describe('notification deep links resolve to a page that exists', () => {
   const rx = { 'hash-rx': { personDid: 'did:person:rx' } };
   const store = { 'did:agent:9': { shopName: "Mama Sarah's" } };

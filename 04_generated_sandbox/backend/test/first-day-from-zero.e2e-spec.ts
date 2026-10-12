@@ -526,4 +526,161 @@ describe('the first day of a new installation, as it would be live', () => {
     expect(account('revenue').map((a) => cents(-a.balance))).toEqual([WHOLESALE]);
     expect(account('expense.provider_fees').map((a) => cents(a.balance))).toEqual([cents(HANDOVER_FEE + SHELVING_FEE + RELEASE_FEE)]);
   });
+
+  /* ------------------------------------------- the second day: the shelf, and a dispute -- */
+
+  /*
+   * The user, 2026-10-12: returns are not part of the first test, "but dispute, chaos shelving etc is". Neither was
+   * walked here: the first parcel was given a slot and collected, and nothing was ever reported broken.
+   */
+  const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  /** A parcel from Mama Sarah's counter to Riverside's shelf, carried by Amos. Returns the code the SENDER was given. */
+  const toRiverside = async (parcelId: string, sender: string, receiver: string): Promise<{ code: string; slot: string }> => {
+    const taken = await must(
+      http().post('/v1/sbg/parcels/accept').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, parcelId, size: 'M', destZone: 'Westlands', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: 'dropoff.jpg' }),
+    );
+    await must(http().post('/v1/sbg/parcels/handover').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, driverBadgeId: amos.badgeId, parcelIds: [parcelId] }));
+    const arrived = await must(http().post(`/v1/sbg/parcels/${parcelId}/arrive`).set(bearer(riverside.token)).send({ destAgentDid: riverside.did }));
+    return { code: taken.otp as string, slot: arrived.binSlot as string };
+  };
+  type Slot = { label: string; occupiedBy?: string };
+  const shelfOf = async (shop: Shop) => (await must(http().get(`/v1/sbg/agents/${encodeURIComponent(shop.did)}/shelf`).set(bearer(shop.token)), 200)) as { grid: Slot[]; capacity: number; available: number };
+  const standing = (grid: Slot[]) => Object.fromEntries(grid.filter((s) => s.occupiedBy).map((s) => [s.label, s.occupiedBy]));
+  /** A person with the Send app: their number confirmed by a texted code, a PIN of their own, signed in on that phone. */
+  const aPerson = async (phone: string, email: string): Promise<string> => {
+    const device = await enrol(phone, email, '48213');
+    return (await must(http().post('/v1/sbg/identity/login').send({ phone, pin: '48213', device }))).token.access_token as string;
+  };
+  const inboxOf = async (token: string) => ((await must(http().get('/v1/sbg/notifications/inbox').set(bearer(token)), 200)).items as Array<{ kind: string; title: string; body: string }>);
+
+  it('10 · the chaos shelf: every parcel has a slot of its own, the shop reads where each one stands, and a slot comes back when its parcel goes', async () => {
+    const empty = await shelfOf(riverside);
+    expect(empty).toMatchObject({ capacity: 20, available: 20 });
+    expect(standing(empty.grid)).toEqual({});
+
+    const first = await toRiverside('QR-SHELF-0001', '+254722000011', '+254722000012');
+    const second = await toRiverside('QR-SHELF-0002', '+254722000013', '+254722000014');
+    // WHERE EACH ONE STANDS — two parcels, two places, and the shop's own screen says which is which.
+    expect(first.slot).not.toBe(second.slot);
+    const two = await shelfOf(riverside);
+    expect(standing(two.grid)).toEqual({ [first.slot]: 'QR-SHELF-0001', [second.slot]: 'QR-SHELF-0002' });
+    expect(two.available).toBe(18);
+    // A shelf is its own shop's to read: the shop that sent them cannot see where they were put.
+    await must(http().get(`/v1/sbg/agents/${encodeURIComponent(riverside.did)}/shelf`).set(bearer(mamaSarah.token)), 403);
+
+    // THE SHOP MAY NOT RESHAPE ITS SHELF OUT FROM UNDER A PARCEL. Both stand in the first column; three rows of
+    // it would take away the fourth, and a shelf of two rows would take away a slot something is standing in.
+    const reshape = (rows: number, cols: number) => http().post(`/v1/sbg/agents/${encodeURIComponent(riverside.did)}/shelf`).set(bearer(riverside.token)).send({ rows, cols });
+    const refused = await reshape(1, 6);
+    expect(refused.status).toBeGreaterThanOrEqual(400);
+    expect(refused.body.detail).toBe(`${second.slot} holds QR-SHELF-0002. Hand it over first, or keep the shelf large enough for that slot`);
+    expect((await reshape(1, 5)).body.detail).toBe('A shop keeps at least 6 slots (rows × columns)');
+    expect((await reshape(2, 11)).body.detail).toMatch(/at most 10 columns/);
+    expect(standing((await shelfOf(riverside)).grid)).toEqual({ [first.slot]: 'QR-SHELF-0001', [second.slot]: 'QR-SHELF-0002' });
+    // Larger is always allowed, and nothing moves.
+    await must(reshape(5, 5));
+    expect(await shelfOf(riverside)).toMatchObject({ capacity: 25, available: 23 });
+
+    // COLLECTED: its slot is free again, and the next parcel to arrive is put there — not on top of the one still waiting.
+    await must(http().post('/v1/sbg/parcels/QR-SHELF-0001/pickup').set(bearer(riverside.token)).send({ agentDid: riverside.did, otp: first.code, deliveredPhotoRef: 'handed.jpg' }));
+    expect(standing((await shelfOf(riverside)).grid)).toEqual({ [second.slot]: 'QR-SHELF-0002' });
+    const third = await toRiverside('QR-SHELF-0003', '+254722000015', '+254722000016');
+    expect(third.slot).toBe(first.slot);
+    expect(standing((await shelfOf(riverside)).grid)).toEqual({ [first.slot]: 'QR-SHELF-0003', [second.slot]: 'QR-SHELF-0002' });
+
+    // A PROBLEM REPORTED AT THE COUNTER leaves the goods where they stand: the parcel is in question, its slot is not free.
+    const proof = (await must(http().post('/v1/sbg/media').set(bearer(riverside.token)).send({ kind: 'dispute', dataUrl: PNG }))).mediaId as string;
+    await must(http().post('/v1/sbg/parcels/QR-SHELF-0002/dispute').set(bearer(riverside.token)).send({ reason: 'The box is torn open at one corner', photoProofRef: proof }));
+    expect(standing((await shelfOf(riverside)).grid)[second.slot]).toBe('QR-SHELF-0002');
+    // It cannot be handed over while it is in question, even with the right code.
+    const handedAnyway = await http().post('/v1/sbg/parcels/QR-SHELF-0002/pickup').set(bearer(riverside.token)).send({ agentDid: riverside.did, otp: second.code, deliveredPhotoRef: 'handed.jpg' });
+    expect(handedAnyway.status).toBeGreaterThanOrEqual(400);
+
+    // STAFF DECIDE IT, by name; the shop holding it is told, with the slot; and it is collected like any parcel.
+    const queue = (await must(http().get('/v1/sbg/disputes').set(bearer(amina)), 200)).disputes as Array<{ parcelId: string; origin: string; reason: string; evidence: string[] }>;
+    expect(queue.find((d) => d.parcelId === 'QR-SHELF-0002')).toMatchObject({ origin: 'counter', reason: 'The box is torn open at one corner', evidence: expect.arrayContaining([proof]) });
+    await must(http().get('/v1/sbg/disputes').set(bearer(riverside.token)), 403);
+    const decided = await must(http().post('/v1/sbg/disputes/QR-SHELF-0002/resolve').set(bearer(amina)).send({ decision: 'rejected', note: 'The tear is in the outer wrap only. The contents are sealed and whole.', by: 'Somebody Else' }));
+    expect(decided.dispute).toMatchObject({ state: 'resolved', decision: 'rejected', decidedBy: AMINA.name });
+    expect(decided.status).toBe('Ready_For_Pickup');
+    const told = (await inboxOf(riverside.token)).find((n) => n.kind === 'claim_decided');
+    expect(told).toMatchObject({ title: 'The dispute on parcel QR-SHELF-0002 was decided' });
+    expect(told!.body).toBe(`It was not upheld. The tear is in the outer wrap only. The contents are sealed and whole. It is on your shelf at ${second.slot}, to be handed over as any parcel.`);
+    await must(http().post('/v1/sbg/parcels/QR-SHELF-0002/pickup').set(bearer(riverside.token)).send({ agentDid: riverside.did, otp: second.code, deliveredPhotoRef: 'handed.jpg' }));
+    expect(standing((await shelfOf(riverside)).grid)).toEqual({ [first.slot]: 'QR-SHELF-0003' });
+  });
+
+  it('11 · a dispute, to its end: the receiver reports broken goods from their own app, a member of staff decides it by name, and both people on the parcel are told how it ended', async () => {
+    const SENDER = '+254722000021';
+    const RECEIVER = '+254722000022';
+    const sent = texts.length;
+    const receiver = await aPerson(RECEIVER, 'wanjiku@people.sbg-rehearsal.org');
+    const sender = await aPerson(SENDER, 'otieno@people.sbg-rehearsal.org');
+    // The only texts of this whole step: the two sign-in codes. Nothing about a parcel is ever texted.
+    const codes = texts.slice(sent);
+    expect(codes.map((t) => t.to).sort()).toEqual([SENDER, RECEIVER].sort());
+
+    const { code } = await toRiverside('QR-BROKEN-0001', SENDER, RECEIVER);
+    const mine = `/v1/sbg/identity/parcels/QR-BROKEN-0001`;
+    // It is theirs to follow the moment it exists: the number given at the counter is the whole of the link.
+    expect(await must(http().get(mine).set(bearer(receiver)), 200)).toMatchObject({ relation: 'received', status: 'Ready_For_Pickup' });
+    expect(await must(http().get(mine).set(bearer(sender)), 200)).toMatchObject({ relation: 'sent' });
+    // A problem cannot be reported on a parcel nobody has opened yet.
+    const photo = (await must(http().post('/v1/sbg/media').set(bearer(receiver)).send({ kind: 'dispute', dataUrl: PNG }))).mediaId as string;
+    const early = await http().post(`${mine}/dispute`).set(bearer(receiver)).send({ reason: 'Broken', photoRef: photo });
+    expect(early.status).toBeGreaterThanOrEqual(400);
+
+    await must(http().post('/v1/sbg/parcels/QR-BROKEN-0001/pickup').set(bearer(riverside.token)).send({ agentDid: riverside.did, otp: code, deliveredPhotoRef: 'handed.jpg' }));
+    // REPORTED, from the receiver's own app, with a photograph. Not by the sender, whose parcel it also is.
+    await must(http().post(`${mine}/dispute`).set(bearer(sender)).send({ reason: 'Broken', photoRef: photo }), 404);
+    const reported = await must(http().post(`${mine}/dispute`).set(bearer(receiver)).send({ reason: 'The screen is cracked from corner to corner', photoRef: photo }));
+    expect(reported).toMatchObject({ status: 'Disputed', disputeReason: 'The screen is cracked from corner to corner' });
+    expect(reported).not.toHaveProperty('disputeOutcome');
+    // The sender sees that it is in question, and none of what the receiver wrote or photographed.
+    const theirs = await must(http().get(mine).set(bearer(sender)), 200);
+    expect(theirs.status).toBe('Disputed');
+    expect(JSON.stringify(theirs)).not.toContain('cracked');
+    expect(JSON.stringify(theirs)).not.toContain(photo);
+
+    // STAFF'S QUEUE has it, with the photograph; a shop does not read that queue.
+    const queue = (await must(http().get('/v1/sbg/disputes').set(bearer(brian)), 200)).disputes as Array<{ parcelId: string; origin: string; reason: string; evidence: string[] }>;
+    expect(queue.map((d) => d.parcelId)).toEqual(['QR-BROKEN-0001']);
+    expect(queue[0]).toMatchObject({ origin: 'buyer', reason: 'The screen is cracked from corner to corner', evidence: expect.arrayContaining([photo]) });
+    // The evidence opens for staff, as an image.
+    const opened = await http().get(`/v1/sbg/media/${photo}`).set(bearer(brian));
+    expect([opened.status, String(opened.headers['content-type']).startsWith('image/png')]).toEqual([200, true]);
+
+    // DECIDED, with a reason, by the member of staff who is signed in — whatever name the request carries.
+    const noReason = await http().post('/v1/sbg/disputes/QR-BROKEN-0001/resolve').set(bearer(brian)).send({ decision: 'upheld', award: 40, note: ' ' });
+    expect(noReason.status).toBeGreaterThanOrEqual(400);
+    const decided = await must(http().post('/v1/sbg/disputes/QR-BROKEN-0001/resolve').set(bearer(brian)).send({ decision: 'upheld', award: 40, note: 'It left the first shop whole and reached the second cracked: it broke in our hands.', by: 'Somebody Else' }));
+    expect(decided.dispute).toMatchObject({ state: 'resolved', decision: 'upheld', award: 40, decidedBy: BRIAN.name, paidTo: { kind: 'off_platform' } });
+    expect(decided.status).toBe('Delivered');
+    expect((await must(http().get('/v1/sbg/disputes').set(bearer(amina)), 200)).disputes).toEqual([]);
+    // Once is all: a decision is not made twice.
+    const again = await http().post('/v1/sbg/disputes/QR-BROKEN-0001/resolve').set(bearer(amina)).send({ decision: 'rejected', note: 'On reflection, no.' });
+    expect(again.status).toBeGreaterThanOrEqual(400);
+
+    // BOTH PEOPLE ARE TOLD, each in their own inbox, and each reads it on the parcel itself.
+    const toReceiver = (await inboxOf(receiver)).find((n) => n.kind === 'claim_decided');
+    expect(toReceiver).toEqual(expect.objectContaining({ title: 'Your report on parcel QR-BROKEN-0001 was upheld', body: 'It left the first shop whole and reached the second cracked: it broke in our hands.' }));
+    const toSender = (await inboxOf(sender)).find((n) => n.kind === 'claim_decided');
+    expect(toSender).toEqual(expect.objectContaining({ title: 'The report on parcel QR-BROKEN-0001 was upheld', body: 'It left the first shop whole and reached the second cracked: it broke in our hands. 40.00 KES is owed to you for it.' }));
+    const outcome = { origin: 'buyer', decision: 'upheld', note: 'It left the first shop whole and reached the second cracked: it broke in our hands.', decidedAt: expect.any(String), award: 40, currency: 'KES', paidTo: 'sender' };
+    expect((await must(http().get(mine).set(bearer(receiver)), 200)).disputeOutcome).toEqual(outcome);
+    const senderNow = await must(http().get(mine).set(bearer(sender)), 200);
+    expect(senderNow.disputeOutcome).toEqual(outcome);
+    expect(JSON.stringify(senderNow)).not.toContain('cracked from corner');
+    // Who decided is the network's to know: neither of them is shown a member of staff's name.
+    expect(JSON.stringify([toReceiver, toSender, senderNow.disputeOutcome])).not.toContain(BRIAN.name);
+
+    // NOBODY WAS TEXTED about any of it: a text carries a sign-in code and nothing else.
+    expect(texts.slice(sent)).toEqual(codes);
+
+    // THE MONEY: what was awarded is a cost to the Kenyan company and a debt it now owes — and its books still balance.
+    const books = await must(http().get(`/v1/sbg/entities/${kenya}/books`).set(bearer(amina)), 200);
+    expect(books.integrity).toEqual({ balanced: true, drift: 0 });
+    const account = (code: string) => (books.accounts as Array<{ code: string; balance: number }>).filter((a) => a.code === code).reduce((sum, a) => sum + a.balance, 0);
+    expect(Math.round(account('expense.claims') * 100) / 100).toBe(40);
+  });
 });

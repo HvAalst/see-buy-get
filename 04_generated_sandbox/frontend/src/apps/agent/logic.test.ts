@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import {
+  putAwayAloud,
+  putAwayList,
   BODY_HINTS,
   EMPTY_ACCEPT,
   EXCLUDABLE_BODIES,
@@ -525,5 +527,41 @@ describe('handoverRoute', () => {
     expect(handoverRoute('48210')).toBe('unknown'); // one too many
     expect(handoverRoute('PUD-12')).toBe('unknown'); // a parcel sticker is not a customer's code
     expect(handoverRoute('')).toBe('unknown');
+  });
+});
+
+describe('where each parcel out of a bag goes', () => {
+  it('lists slot by slot in the order a shelf is walked: column by column, top row first', () => {
+    const list = putAwayList([
+      { parcelId: 'P-3', slot: 'Amber-1' },
+      { parcelId: 'P-1', slot: 'Red-2' },
+      { parcelId: 'P-2', slot: 'Red-1' },
+      { parcelId: 'P-4', slot: 'Orange-10' },
+      { parcelId: 'P-5', slot: 'Orange-2' },
+    ]);
+    expect(list.map((row) => row.slot)).toEqual(['Red-1', 'Red-2', 'Orange-2', 'Orange-10', 'Amber-1']);
+    expect(list[0]).toEqual({ slot: 'Red-1', parcelIds: ['P-2'] });
+  });
+
+  it('puts small parcels that share a slot on one line, and drops none of them', () => {
+    const list = putAwayList([
+      { parcelId: 'L-1', slot: 'Red-1' },
+      { parcelId: 'P-9', slot: 'Orange-1' },
+      { parcelId: 'L-2', slot: 'Red-1' },
+    ]);
+    expect(list).toEqual([
+      { slot: 'Red-1', parcelIds: ['L-1', 'L-2'] },
+      { slot: 'Orange-1', parcelIds: ['P-9'] },
+    ]);
+  });
+
+  it('is empty for a bag that named no slots, and leaves out a parcel given none', () => {
+    expect(putAwayList([])).toEqual([]);
+    expect(putAwayList([{ parcelId: 'P-1', slot: '' }])).toEqual([]);
+  });
+
+  it('reads out every slot and every parcel in it', () => {
+    const aloud = putAwayAloud(putAwayList([{ parcelId: 'L-1', slot: 'Red-1' }, { parcelId: 'L-2', slot: 'Red-1' }, { parcelId: 'P-9', slot: 'Orange-1' }]), t);
+    expect(aloud).toBe('Put each parcel in its slot. Red 1: L-1, L-2. Orange 1: P-9.');
   });
 });

@@ -255,12 +255,32 @@ export class DisputeCase {
   /** Who decided, and when. */
   decidedBy?: string;
   decidedAt?: string;
+  /** The money the award is in: the parcel's own where it names one, otherwise that of the company whose books
+   *  carry the award. Stamped at the decision — a parcel taken in at a counter names no currency of its own, and
+   *  the sender was once told "40.00  is owed to you". Absent on a rejection. */
+  currency?: string;
   /** How the award was funded — what the provision covered, and what it cost beyond that. Stamped at
    *  the decision so a later top-up of the provision cannot rewrite what a claim actually cost. */
   funding?: { fromProvision: number; fromExpense: number };
   /** Where the money went: a store's float, or a payable settled off-platform for somebody who paid
    *  cash and has no account. Absent on a rejection. */
   paidTo?: { kind: 'vendor' | 'off_platform'; id: string };
+}
+
+/** How a dispute ended, as the two people on the parcel may read it. */
+export interface DisputeOutcomeView {
+  /** Where the problem was raised: from the receiver's own app, or by the shop at its counter. It decides whose
+   *  report this is said to have been — a receiver is not told "your report" about one the shop made. */
+  origin: DisputeOrigin;
+  decision: DisputeDecision;
+  /** The network's reason, written for the claimant. Required on every decision, a rejection included. */
+  note: string;
+  decidedAt: string;
+  /** What was awarded, in `currency`. Absent on a rejection. */
+  award?: number;
+  currency?: string;
+  /** Who the award goes to: the store that bought the shipment, or the sender who paid for it at a counter. */
+  paidTo?: 'store' | 'sender';
 }
 
 /** Where a parcel came into being: a shop counter, a store's own premises, or somebody's hands. */
@@ -653,6 +673,15 @@ export interface ConsumerParcelView {
   podPhotoRef?: string; // their delivered-state photo, if they took one
   disputePhotoRef?: string; // their dispute-evidence photo, if they disputed
   disputeReason?: string; // what they reported (free text — kept off the counterparty's view)
+  /**
+   * HOW A DISPUTE ENDED, for both people on the parcel: the receiver who reported it, and the sender who paid
+   * for the shipment. The decision, the network's own reason for it, and — when something was awarded — how much
+   * and to whom. Never the receiver's words or their photograph, which stay theirs.
+   *
+   * It was recorded and shown to nobody: once decided, the parcel went back to "delivered" and the person who had
+   * reported broken goods could find no trace that anybody had answered.
+   */
+  disputeOutcome?: DisputeOutcomeView;
   /**
    * The in-app collection token (S22) — present ONLY on the single-parcel detail, only for the RECEIVER,
    * and only while the parcel is Ready_For_Pickup. The QR is what the PUDO scans; the code is the typed

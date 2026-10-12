@@ -4,6 +4,7 @@ import {
   LADDER,
   cleanPhone,
   coverLine,
+  disputeOutcomeWords,
   followLanding,
   codeReady,
   dimsBlocker,
@@ -472,5 +473,45 @@ describe('followLanding — arriving from a store’s checkout', () => {
   it('somebody already signed in goes straight to their parcels: no sign-in is touched, nothing is explained', () => {
     expect(followLanding('?follow=1', { session: true, knownPhone: true })).toEqual({ following: false });
     expect(followLanding('?follow=1', { session: true, knownPhone: false })).toEqual({ following: false });
+  });
+});
+
+describe('how a reported problem ended, said to whoever is reading', () => {
+  const cash = (amount: number, currency?: string) => `${currency ?? ''} ${amount.toFixed(2)}`.trim();
+
+  it('tells the receiver it was upheld, why, and that the award went to the store they bought from', () => {
+    const said = disputeOutcomeWords({ decision: 'upheld', note: 'Crushed on our van.', award: 40, currency: 'KES', paidTo: 'store' }, 'received', cash, t);
+    expect(said).toEqual({ tone: 'ok', title: 'Your report was upheld', lines: ['Crushed on our van.', 'KES 40.00 was paid to the store you bought from, because the store is who shipped it with us. Ask the store about your refund.'] });
+  });
+
+  it('tells a walk-up sender the award is owed to THEM, and the receiver that it is the sender’s', () => {
+    const outcome = { decision: 'partly_upheld' as const, note: 'The lid cracked in our hands.', award: 3, currency: 'KES', paidTo: 'sender' as const };
+    expect(disputeOutcomeWords(outcome, 'sent', cash, t)).toEqual({ tone: 'ok', title: 'The receiver’s report was upheld in part', lines: ['The lid cracked in our hands.', 'KES 3.00 is owed to you, because you paid for the shipment. It is paid outside the app.'] });
+    expect(disputeOutcomeWords(outcome, 'received', cash, t).lines[1]).toBe('KES 3.00 is owed to the sender, who paid for the shipment. Settle it with them.');
+    expect(disputeOutcomeWords(outcome, 'received', cash, t).title).toBe('Your report was upheld in part');
+  });
+
+  it('a rejection gives the reason and names no money', () => {
+    const said = disputeOutcomeWords({ decision: 'rejected', note: 'The seal is unbroken in your own photograph.' }, 'received', cash, t);
+    expect(said).toEqual({ tone: 'warn', title: 'Your report was not upheld', lines: ['The seal is unbroken in your own photograph.'] });
+    expect(disputeOutcomeWords({ decision: 'rejected', note: 'No damage is visible.' }, 'sent', cash, t).title).toBe('The receiver’s report was not upheld');
+    // An award of nothing is not an award.
+    expect(disputeOutcomeWords({ decision: 'rejected', note: 'No.', award: 0, paidTo: 'sender' }, 'sent', cash, t).lines).toEqual(['No.']);
+  });
+
+  it('a problem the SHOP raised at its counter is nobody’s “your report” — and not upheld, it is no bad news', () => {
+    const fine = { origin: 'counter' as const, decision: 'rejected' as const, note: 'The tear is in the outer wrap only.' };
+    expect(disputeOutcomeWords(fine, 'received', cash, t)).toEqual({ tone: 'ok', title: 'The shop reported a problem, and it was not upheld', lines: ['The tear is in the outer wrap only.'] });
+    expect(disputeOutcomeWords(fine, 'sent', cash, t).title).toBe('The shop reported a problem, and it was not upheld');
+    const broken = { origin: 'counter' as const, decision: 'upheld' as const, note: 'Cracked in our hands.', award: 3, currency: 'KES', paidTo: 'sender' as const };
+    expect(disputeOutcomeWords(broken, 'received', cash, t)).toEqual({ tone: 'ok', title: 'The shop’s report of a problem was upheld', lines: ['Cracked in our hands.', 'KES 3.00 is owed to the sender, who paid for the shipment. Settle it with them.'] });
+    expect(disputeOutcomeWords({ ...broken, decision: 'partly_upheld' }, 'sent', cash, t).title).toBe('The shop’s report of a problem was upheld in part');
+    // A report filed from the app is still the receiver's own.
+    expect(disputeOutcomeWords({ ...fine, origin: 'buyer' }, 'received', cash, t)).toMatchObject({ tone: 'warn', title: 'Your report was not upheld' });
+  });
+
+  it('says where the money went to the store’s buyer and to its sender in different words', () => {
+    const outcome = { decision: 'upheld' as const, note: 'Ours.', award: 10, currency: 'KES', paidTo: 'store' as const };
+    expect(disputeOutcomeWords(outcome, 'sent', cash, t).lines[1]).toBe('KES 10.00 was paid to the store that shipped it.');
   });
 });

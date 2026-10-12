@@ -7994,7 +7994,7 @@
       "post": {
         "operationId": "Sbg.setShelf",
         "summary": "",
-        "description": "Reconfigure the shelf grid (rows × columns).",
+        "description": "Reconfigure the shelf grid (rows × columns). Through the shelf itself, which knows what is standing on\nit: a change that would strand a parcel in a slot that no longer exists is refused, by slot and parcel.",
         "parameters": [
           {
             "name": "did",
@@ -31456,6 +31456,10 @@
           },
           "decidedAt": {
             "type": "string"
+          },
+          "currency": {
+            "type": "string",
+            "description": "The money the award is in: the parcel's own where it names one, otherwise that of the company whose books\n carry the award. Stamped at the decision — a parcel taken in at a counter names no currency of its own, and\n the sender was once told \"40.00  is owed to you\". Absent on a rejection."
           },
           "funding": {
             "type": "object",

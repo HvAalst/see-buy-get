@@ -144,6 +144,29 @@ export function money(v: number | null | undefined): string {
  *  same "Green-3" grid the server labels. Presentation only; the server stays authoritative on real slots. */
 export const SHELF_COLORS = ['Red', 'Orange', 'Amber', 'Green', 'Teal', 'Blue', 'Indigo', 'Violet', 'Pink', 'Brown'];
 
+/**
+ * WHERE EACH PARCEL OUT OF A BAG GOES — one line per slot, in the order somebody walks a shelf: column by
+ * column (a column is a colour), top row first. Several small parcels given the same slot share a line.
+ *
+ * A bag is opened with five parcels in it and the app said "5 parcels shelved". Which of them in which slot was
+ * known to the server and shown to nobody, and a parcel in the wrong slot is a customer sent to an empty one.
+ */
+export function putAwayList(shelved: Array<{ parcelId: string; slot: string }>): Array<{ slot: string; parcelIds: string[] }> {
+  const place = (slot: string) => {
+    const [colour, row] = slot.split('-');
+    const column = SHELF_COLORS.indexOf(colour);
+    return (column < 0 ? SHELF_COLORS.length : column) * 1000 + (Number(row) || 0);
+  };
+  const bySlot = new Map<string, string[]>();
+  for (const s of shelved) if (s.slot) bySlot.set(s.slot, [...(bySlot.get(s.slot) ?? []), s.parcelId]);
+  return [...bySlot.entries()].sort((a, b) => place(a[0]) - place(b[0])).map(([slot, parcelIds]) => ({ slot, parcelIds }));
+}
+
+/** The put-away list, read out: "Red 2: parcel …. Amber 1: parcels … and …." */
+export function putAwayAloud(list: Array<{ slot: string; parcelIds: string[] }>, t: Translate): string {
+  return [t('agent.receivebag.putAwayTitle') + '.', ...list.map((row) => `${row.slot.replace('-', ' ')}: ${row.parcelIds.join(', ')}.`)].join(' ');
+}
+
 /** A shelf must hold at least this many slots (mirrors the backend MIN_SLOTS). */
 export const MIN_SHELF_SLOTS = 6;
 

@@ -648,6 +648,22 @@ export const en = {
   'send.parcels.problemTitle': 'Problem reported',
   'send.parcels.problemYou': 'You reported: {reason}',
   'send.parcels.problemTold': 'The seller and our team have been told.',
+  // How a reported problem ended. "Mine": the receiver, who reported it. "Theirs": the sender, who paid.
+  'send.outcome.upheldMine': 'Your report was upheld',
+  'send.outcome.partlyMine': 'Your report was upheld in part',
+  'send.outcome.rejectedMine': 'Your report was not upheld',
+  'send.outcome.upheldTheirs': 'The receiver’s report was upheld',
+  'send.outcome.partlyTheirs': 'The receiver’s report was upheld in part',
+  'send.outcome.rejectedTheirs': 'The receiver’s report was not upheld',
+  // "Shop": the collection shop raised it at its counter. Said the same way to the receiver and to the sender.
+  'send.outcome.upheldShop': 'The shop’s report of a problem was upheld',
+  'send.outcome.partlyShop': 'The shop’s report of a problem was upheld in part',
+  'send.outcome.rejectedShop': 'The shop reported a problem, and it was not upheld',
+  // Where an award went: to whoever bought the shipment from the network, never to the receiver directly.
+  'send.outcome.toStoreMine': '{amount} was paid to the store you bought from, because the store is who shipped it with us. Ask the store about your refund.',
+  'send.outcome.toStoreTheirs': '{amount} was paid to the store that shipped it.',
+  'send.outcome.toSenderMine': '{amount} is owed to the sender, who paid for the shipment. Settle it with them.',
+  'send.outcome.toSenderTheirs': '{amount} is owed to you, because you paid for the shipment. It is paid outside the app.',
   'send.parcels.gotParcel': 'Got your parcel?',
   'send.parcels.addPodPhoto': 'Add a photo of what you received',
   'send.parcels.reportProblem': 'Report a problem',
