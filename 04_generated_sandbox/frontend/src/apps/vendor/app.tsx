@@ -15,7 +15,7 @@ import { AccountSetup } from './screens/AccountSetup';
 import { BooksScreen } from './screens/BooksScreen';
 import { DockScreen } from './screens/DockScreen';
 import { MintScreen } from './screens/MintScreen';
-import { OrdersScreen } from './screens/OrdersScreen';
+import { OrdersScreen, type OrdersScreenProps } from './screens/OrdersScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { StoreScreen } from './screens/StoreScreen';
 import { useVendorApp, type Screen, type VendorActions, type VendorState } from './useVendorApp';
@@ -109,7 +109,7 @@ export function App() {
         <ConnectivityNote stale={state.stale} />
         {/* Said above every screen until it is done: a store still signing in with its secret sets its account up. */}
         <AccountSetup state={state} actions={actions} />
-        <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} destination={destination} />
+        <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} destination={destination} client={sbg} />
       </main>
 
       <BottomNav<Screen> items={tabs} active={state.screen} onSelect={(key) => (key === 'mint' ? actions.startMint() : actions.go(key))} labels={false} />
@@ -121,7 +121,7 @@ export function App() {
   );
 }
 
-function ScreenRouter({ screen, state, actions, archive, destination }: { screen: Screen; state: VendorState; actions: VendorActions; archive: ArchiveApiState; destination: DestinationApiState }) {
+function ScreenRouter({ screen, state, actions, archive, destination, client }: { screen: Screen; state: VendorState; actions: VendorActions; archive: ArchiveApiState; destination: DestinationApiState; client: OrdersScreenProps['client'] }) {
   switch (screen) {
     case 'notes':
       return (
@@ -138,7 +138,7 @@ function ScreenRouter({ screen, state, actions, archive, destination }: { screen
     case 'store':
       return <StoreScreen state={state} actions={actions} />;
     default:
-      return <OrdersScreen state={state} actions={actions} />;
+      return <OrdersScreen state={state} actions={actions} client={client} />;
   }
 }
 

@@ -454,6 +454,8 @@ describe('a driver changing fleet', () => {
       const kilima = aFleet('Kilima Logistics');
       const pwani = aFleet('Pwani Haulage');
       const d = aDriver(kilima.did);
+      // An award needs a company that pays: one that has stated cover for dedicated freight (the user, 2026-10-13).
+      entities.setInsurance(entities.requireForJurisdiction('KE').entityId, { lane: 'dedicated', freeLimit: 5000 }, 'Amina Otieno');
       const { freight, vendor } = aDeliveredHaul(d.driver.did, d.truck.vehicleId, kilima.did);
       expect(freight.driverPayee).toMatchObject({ payeeDid: kilima.did });
       const owedKilima = owedTo(kilima.did);
@@ -464,6 +466,7 @@ describe('a driver changing fleet', () => {
       expect(decided.clawback?.amount).toBeGreaterThan(0);
       expect(owedTo(kilima.did)).toBeCloseTo(owedKilima - decided.clawback!.amount, 2);
       expect(owedTo(pwani.did)).toBe(0);
+      entities.setInsurance(entities.requireForJurisdiction('KE').entityId, { lane: 'dedicated', freeLimit: null }, 'Amina Otieno');
     });
   });
 

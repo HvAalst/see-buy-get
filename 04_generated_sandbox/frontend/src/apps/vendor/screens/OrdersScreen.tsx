@@ -5,7 +5,9 @@ import { triggerDownload } from '../../../shared/download';
 import { toggleAll, toggleId } from '../../../shared/register';
 import { useDebounced } from '../../../shared/useDebounced';
 import { formatDate } from '../../../shared/i18n';
-import { handoffLine, money, orderRowsToCsv, orderStatus, ordersSummary, paidWord } from '../logic';
+import { handoffLine, money, orderRowsToCsv, orderStatus, ordersSummary, paidWord, reportRowLine } from '../logic';
+import { DamageReportCard } from '../../../shared/damage/DamageReportCard';
+import type { SbgClient } from '../../../lib/sbg';
 import { ORDER_LIMIT, type OrderQuery, type VendorActions, type VendorState } from '../useVendorApp';
 import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
 import type { ChatThread } from '../../../shared/conversation/logic';
@@ -14,6 +16,8 @@ import type { NetworkPoint, OrderRow } from '../types';
 export interface OrdersScreenProps {
   state: VendorState;
   actions: VendorActions;
+  /** The signed-in client: a damage claim report is read, taken and handed on from the order it is about. */
+  client?: SbgClient | null;
 }
 
 /**
@@ -29,7 +33,7 @@ const SORT_OPTIONS: Array<{ value: OrderQuery['sort']; labelKey: MessageKey }> =
   { value: 'cost_asc', labelKey: 'vendor.sort.costAsc' },
 ];
 
-export function OrdersScreen({ state, actions }: OrdersScreenProps) {
+export function OrdersScreen({ state, actions, client = null }: OrdersScreenProps) {
   const t = useT();
   const [topupOpen, setTopupOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -214,6 +218,31 @@ export function OrdersScreen({ state, actions }: OrdersScreenProps) {
         </Card>
       ) : null}
 
+      {/* THE DAMAGE CLAIM REPORTS on this store's orders — each opens its order, where the report is. A store with an
+          insurer on its policy sees where each one went. Shown only where there is one: most stores never see this. */}
+      {state.damageReports.length ? (
+        <Card title={t('vendor.reports.title')} aside={<span class="row__count">{state.damageReports.length}</span>}>
+          <p class="hint">{t('vendor.reports.lede')}</p>
+          <div class="rows" role="list">
+            {state.damageReports.map((r) => (
+              <button key={r.parcelId} type="button" class="row" onClick={() => void actions.openOrder(r.parcelId)}>
+                <span class="row__ic">
+                  <Icon name="info" size={24} />
+                </span>
+                <span class="row__body">
+                  <span class="row__t mono-t">{r.number}</span>
+                  <span class="row__s">{r.reason}</span>
+                  <span class="row__meta">{reportRowLine(r, t)}</span>
+                </span>
+                <span class="row__end">
+                  <Icon name="chevronRight" size={22} />
+                </span>
+              </button>
+            ))}
+          </div>
+        </Card>
+      ) : null}
+
       <Card title={t('vendor.orders.shipmentsTitle')} aside={<span class="row__count">{state.ordersTotal}</span>}>
         <div class="reg__controls">
           <SearchInput value={searchText} onInput={setSearchText} placeholder={t('vendor.orders.searchPh')} label={t('vendor.orders.searchLabel')} />
@@ -289,7 +318,7 @@ export function OrdersScreen({ state, actions }: OrdersScreenProps) {
 
       <FilterSheet open={filterOpen} onClose={() => setFilterOpen(false)} query={q} points={state.points} onApply={(patch) => { actions.queryOrders(patch); setFilterOpen(false); }} onClearAll={() => { resetAll(); setFilterOpen(false); }} />
       <TopUpSheet open={topupOpen} onClose={() => setTopupOpen(false)} state={state} actions={actions} />
-      <OrderSheet state={state} actions={actions} />
+      <OrderSheet state={state} actions={actions} client={client} />
     </div>
   );
 }
@@ -493,7 +522,7 @@ function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose:
   );
 }
 
-function OrderSheet({ state, actions }: { state: VendorState; actions: VendorActions }) {
+function OrderSheet({ state, actions, client }: { state: VendorState; actions: VendorActions; client: SbgClient | null }) {
   const t = useT();
   const d = state.detail;
   const st = d ? orderStatus(d.status, t) : null;
@@ -548,6 +577,8 @@ function OrderSheet({ state, actions }: { state: VendorState; actions: VendorAct
             </Button>
           ) : null}
           {d.collectionCode ? <CodeCard label={t('vendor.buyerCollectionCode')} code={d.collectionCode} scanAs="collect" /> : null}
+          {/* The damage claim report on this order: the store reads it, keeps the file, and hands it on — the same three things the receiver has. */}
+          {d.damageReport ? <DamageReportCard client={client} parcelId={d.parcelId} number={d.damageReport.number} /> : null}
           {d.scans?.length ? (
             <div>
               {d.scans.map((s) => (

@@ -650,6 +650,19 @@ describe('NotificationDispatcher — a dispute is decided, and the people it con
   });
 });
 
+describe('NotificationDispatcher — a freight claim that nobody of ours decides', () => {
+  it('tells the claimant where the report is, and nothing about an outcome', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.FreightClaimDecided, { freightId: 'f1', code: 'FRT-9', decision: 'report_only', award: 0, note: 'No company of the network decides a claim on this load or pays one.', posterDid: 'did:shop:p', claimantDid: 'did:shop:p' });
+    const told = notifications.inboxFor('did:shop:p');
+    expect(told).toEqual([expect.objectContaining({ kind: 'claim_decided', title: 'A damage claim report was made for FRT-9', body: 'Nobody of the network decides it or pays. The consignment note, frozen with your claim on it, is the report: open the load to read it, and to pass it on by a link to the carrier or an insurer.' })]);
+    expect(`${told[0].title} ${told[0].body}`).not.toMatch(/upheld|rejected|credited/);
+    // A decision a company that stated cover made is still told as one.
+    await events.publish(GlosEvent.Pudo.FreightClaimDecided, { freightId: 'f2', code: 'FRT-10', decision: 'partly_upheld', award: 120, note: 'Two boxes short of the manifest', posterDid: 'did:shop:p', claimantDid: 'did:shop:p' });
+    expect(notifications.inboxFor('did:shop:p').map((n) => n.title)).toEqual(['Your claim on FRT-10 was upheld in part', 'A damage claim report was made for FRT-9']);
+  });
+});
+
 describe('notification deep links resolve to a page that exists', () => {
   const rx = { 'hash-rx': { personDid: 'did:person:rx' } };
   const store = { 'did:agent:9': { shopName: "Mama Sarah's" } };

@@ -888,7 +888,15 @@ export class SurgeRuleDto {
 
 // --- inbound / e-commerce pickup-at-PUDO ---
 
+/** The store's insurer: a name to address the report to, and the address a link to it is emailed to. */
+class InsurerDto {
+  @IsString() @MaxLength(80) name!: string;
+  @IsString() @MaxLength(254) @Matches(/^[^@\s]+@[^@\s]+\.[^@\s]+$/, { message: 'The insurer’s email address is not one' }) email!: string;
+}
+
 class ShippingPolicyDto {
+  /** Null takes the insurer off the policy. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @ValidateNested() @Type(() => InsurerDto) insurer?: InsurerDto | null;
   @IsOptional() @IsIn(['full', 'capped']) mode?: 'full' | 'capped';
   @IsOptional() @IsNumber() @Min(0) freeOverSubtotal?: number;
   @IsOptional() @IsNumber() @Min(0) buyerContributionCap?: number;

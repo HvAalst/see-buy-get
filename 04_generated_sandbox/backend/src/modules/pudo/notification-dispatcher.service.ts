@@ -551,12 +551,16 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   private async onFreightClaimDecided(payload: { freightId: string; code: string; decision: string; award: number; note: string; posterDid?: string; claimantDid?: string }): Promise<void> {
     const to = payload.claimantDid ?? payload.posterDid;
     if (!to) return;
+    // Nobody of ours decided anything: the claimant is told where the report is, and nothing about an outcome.
+    const reportOnly = payload.decision === 'report_only';
     const outcome = payload.decision === 'upheld' ? 'upheld' : payload.decision === 'partly_upheld' ? 'upheld in part' : 'rejected';
     try {
       await this.notifications.notify(to, {
         kind: 'claim_decided',
-        title: `Your claim on ${payload.code} was ${outcome}`,
-        body: `${payload.award > 0 ? `${payload.award.toFixed(2)} is credited to your balance. ` : ''}${payload.note}`,
+        title: reportOnly ? `A damage claim report was made for ${payload.code}` : `Your claim on ${payload.code} was ${outcome}`,
+        body: reportOnly
+          ? 'Nobody of the network decides it or pays. The consignment note, frozen with your claim on it, is the report: open the load to read it, and to pass it on by a link to the carrier or an insurer.'
+          : `${payload.award > 0 ? `${payload.award.toFixed(2)} is credited to your balance. ` : ''}${payload.note}`,
         link: '/',
         tag: `freight:${payload.freightId}:claim`,
         data: { freightId: payload.freightId },

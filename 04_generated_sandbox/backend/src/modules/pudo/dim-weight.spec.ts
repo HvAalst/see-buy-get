@@ -17,6 +17,7 @@ import { MdpService } from './mdp.service';
 import { RoutingService, publicQuote } from './routing.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
+import { DamageReportService } from './damage-report.service';
 import { VendorService } from './vendor.service';
 import { ParcelService } from './parcel.service';
 import { ToteService } from './tote.service';
@@ -125,7 +126,7 @@ describe('dimensional weight', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
-        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService,
+        GraduationService, VendorService, VendorCallbackService, ShelfService, DamageReportService, RoutingService, MdpService,
         BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, ImportService, SiteService, TransitAuthorityService, FieldObservationService, ContainerBoxService, EmptyDepotService, ContactCardService, VehicleService,
         DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService,
         MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,

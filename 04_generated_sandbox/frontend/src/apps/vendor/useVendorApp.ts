@@ -29,6 +29,7 @@ import type {
   LedgerSummary,
   MintView,
   NetworkPoint,
+  DamageReportRow,
   OrderDetail,
   OrderRow,
   OrderStats,
@@ -119,6 +120,8 @@ export interface VendorState {
    *  Null where nobody decided a fee — the default, and then no sentence is shown at all. */
   topUpTerms: TopUpTerms | null;
   orders: OrderRow[];
+  /** The damage claim reports on this store's orders, newest first. Read with the orders. */
+  damageReports: DamageReportRow[];
   ordersTotal: number;
   ordersState: 'idle' | 'loading' | 'ready' | 'error';
   orderQuery: OrderQuery;
@@ -175,6 +178,7 @@ const INITIAL: VendorState = {
   funding: null,
   topUpTerms: null,
   orders: [],
+  damageReports: [],
   ordersTotal: 0,
   ordersState: 'idle',
   orderQuery: INITIAL_ORDER_QUERY,
@@ -310,6 +314,11 @@ export function useVendorApp() {
         return;
       }
       setState((s) => ({ ...s, orders: items, ordersTotal: total, ordersState: 'ready' }));
+      // The reports on the store's orders, read beside them. A failed read leaves the list as it was: it is not an error a store can act on.
+      void client.api.damageReports(creds.vendorId).then((rr) => {
+        if (epoch !== ordersEpoch.current || rr.error) return;
+        setState((s) => ({ ...s, damageReports: narrow<{ items?: DamageReportRow[] }>(rr.data)?.items ?? [] }));
+      });
     },
     [client, creds, fail],
   );
@@ -1031,7 +1040,7 @@ export function useVendorApp() {
   /* ----------------------------------------------------------------- store */
 
   const savePolicy = useCallback(
-    async (patch: { mode: 'full' | 'capped'; freeOverSubtotal: number; buyerContributionCap: number; maxTransportSpend?: number }) => {
+    async (patch: { mode: 'full' | 'capped'; freeOverSubtotal: number; buyerContributionCap: number; maxTransportSpend?: number; insurer?: { name: string; email: string } | null }) => {
       if (!client || !creds) return;
       await run('policy', async () => {
         const r = await client.api.update(creds.vendorId, { shippingPolicy: patch });

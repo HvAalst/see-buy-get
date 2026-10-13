@@ -52,7 +52,7 @@ export function createVendorApi(sbg: SbgClient) {
         callbackCarriesCode?: boolean;
         location?: { lat: number; lng: number };
         address?: string;
-        shippingPolicy?: { mode?: 'full' | 'capped'; freeOverSubtotal?: number; buyerContributionCap?: number; maxTransportSpend?: number };
+        shippingPolicy?: { mode?: 'full' | 'capped'; freeOverSubtotal?: number; buyerContributionCap?: number; maxTransportSpend?: number; insurer?: { name: string; email: string } | null };
       },
     ) => sbg.request((c) => c.PATCH('/v1/sbg/vendors/{id}', { params: { path: { id: vendorId } }, body: patch })),
 
@@ -76,6 +76,8 @@ export function createVendorApi(sbg: SbgClient) {
     /** Store-wide shipment counts (total / unpaid / active) for the console header nudge + spoken summary —
      *  computed over the WHOLE store, never the current register page. Owner-scoped. */
     orderStats: (vendorId: string) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/orders/stats', { params: { path: { id: vendorId } } })),
+    /** The damage claim reports on this store's orders, newest first, each with where it was emailed. */
+    damageReports: (vendorId: string) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/damage-reports', { params: { path: { id: vendorId } } })),
 
     /** Export the WHOLE matching set (every page, current filters) as a CSV string — the vendor's OWN
      *  shipment export. Owner-scoped; parsed as text (the endpoint returns text/csv, not JSON). */

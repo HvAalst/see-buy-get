@@ -226,8 +226,26 @@ export const enVendor = {
   'vendor.store.freightCapLabel': 'Most you\'ll pay to ship a heavy order',
   'vendor.store.freightCapPh': 'no limit',
   'vendor.store.freightCapHint': 'A big order goes by dedicated freight at a live market rate. Leave blank for no limit; set a cap and it waits for a rate within it.',
+  'vendor.store.insurerLabel': 'Your insurer',
+  'vendor.store.insurerPh': 'Name, as it should be addressed',
+  'vendor.store.insurerEmailLabel': 'Your insurer’s email address for claims',
+  'vendor.store.insurerEmailPh': 'claims@…',
+  'vendor.store.insurerHint': 'When a problem is reported on one of your shipments, the damage claim report is emailed there as a link, the moment it is made. Leave both blank and you read your reports here only.',
+  'vendor.store.insurerHalf': 'Give both the name and the address, or neither.',
+  'vendor.store.insurerBad': 'That is not an email address.',
   'vendor.store.savePolicy': 'Save the policy',
   'vendor.store.keepPolicy': 'Keep it as it is',
+
+  'vendor.logic.insurer': 'Insurer: {name} ({email}). A damage claim report on one of your shipments is emailed there as a link.',
+  'vendor.logic.noInsurer': 'No insurer named. A damage claim report on one of your shipments is on the order, here, and goes nowhere else.',
+
+  // Damage claim reports, listed with the orders.
+  'vendor.reports.title': 'Damage claim reports',
+  'vendor.reports.lede': 'A problem was reported on these shipments. SeeBuyGet does not judge a claim or pay one: each report is the record, on its order, to keep and to hand to your insurer.',
+  'vendor.reports.byShop': 'Reported by the collection shop',
+  'vendor.reports.byReceiver': 'Reported by the receiver',
+  'vendor.reports.lineSent': '{by} on {when} · emailed to {insurer}',
+  'vendor.reports.lineKept': '{by} on {when}',
 
   // Orders screen.
   'vendor.orders.balanceSubUnknown': 'Your prepaid balance pays for each label.',

@@ -240,7 +240,7 @@ export class VendorService {
     return !!vendor && !!this.entityIdOrNone(vendor);
   }
 
-  private static policy(p?: Partial<ShippingPolicy>): ShippingPolicy {
+  private static policy(p?: Partial<Omit<ShippingPolicy, 'insurer'>> & { insurer?: ShippingPolicy['insurer'] | null }): ShippingPolicy {
     // S34c — carry the freight-spend cap. A zero/negative/non-finite value means "no cap" (never a shipment
     // nobody can afford to move), so it is normalised to undefined here at the single policy chokepoint.
     const cap = p?.maxTransportSpend;
@@ -250,10 +250,13 @@ export class VendorService {
     // me" — a different sentence and a real one. So only a negative or non-finite value is normalised away.
     const recover = p?.recoverAboveValue;
     const recoverAboveValue = recover != null && Number.isFinite(recover) && recover >= 0 ? Math.round(recover * 100) / 100 : undefined;
-    return { mode: p?.mode === 'full' ? 'full' : 'capped', freeOverSubtotal: p?.freeOverSubtotal ?? 50, buyerContributionCap: p?.buyerContributionCap ?? 3, maxTransportSpend, recoverAboveValue };
+    // The insurer: kept only whole — a name and an address — and NULL takes it off (the merge above would otherwise keep the old one).
+    const named = p?.insurer;
+    const insurer = named && named.name?.trim() && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(named.email?.trim() ?? '') ? { name: named.name.trim().slice(0, 80), email: named.email.trim().toLowerCase().slice(0, 254) } : undefined;
+    return { mode: p?.mode === 'full' ? 'full' : 'capped', freeOverSubtotal: p?.freeOverSubtotal ?? 50, buyerContributionCap: p?.buyerContributionCap ?? 3, maxTransportSpend, recoverAboveValue, ...(insurer ? { insurer } : {}) };
   }
 
-  register(input: { name: string; callbackUrl?: string; secret?: string; location?: { lat: number; lng: number }; address?: string; country?: string; ownerPhone?: string; shippingPolicy?: Partial<ShippingPolicy> }): Vendor {
+  register(input: { name: string; callbackUrl?: string; secret?: string; location?: { lat: number; lng: number }; address?: string; country?: string; ownerPhone?: string; shippingPolicy?: Partial<Omit<ShippingPolicy, 'insurer'>> & { insurer?: ShippingPolicy['insurer'] | null } }): Vendor {
     const country = requireCountryCode(input.country, DEFAULT_VENDOR_COUNTRY);
     // The presence decides whether a store may stand here, not the existence of a sister. Where we only match,
     // a store registers with no sister behind it: it posts freight and settles it with the carrier itself, and
@@ -538,7 +541,7 @@ export class VendorService {
   }
 
   /** Update the store profile (map pin, address, callback URL, split/contribution policy). */
-  updateProfile(vendorId: string, patch: { callbackUrl?: string; callbackCarriesCode?: boolean; location?: { lat: number; lng: number }; address?: string; shippingPolicy?: Partial<ShippingPolicy> }): Vendor {
+  updateProfile(vendorId: string, patch: { callbackUrl?: string; callbackCarriesCode?: boolean; location?: { lat: number; lng: number }; address?: string; shippingPolicy?: Partial<Omit<ShippingPolicy, 'insurer'>> & { insurer?: ShippingPolicy['insurer'] | null } }): Vendor {
     const vendor = this.get(vendorId);
     if (patch.callbackUrl !== undefined) vendor.callbackUrl = patch.callbackUrl || undefined;
     if (patch.callbackCarriesCode !== undefined) vendor.callbackCarriesCode = patch.callbackCarriesCode;

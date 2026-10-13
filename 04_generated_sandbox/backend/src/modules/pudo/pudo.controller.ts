@@ -69,6 +69,7 @@ import { RatingService, belowFloor } from './rating.service';
 import { VendorService } from './vendor.service';
 import { storeDeskOf, storeRowOf, type StoreDesk, type StoreRecord, type StoreRow, type StoreStanding } from './store-desk';
 import { ShelfService } from './shelf.service';
+import { DamageReportService } from './damage-report.service';
 import { RoutingService, publicQuote } from './routing.service';
 import { MdpService } from './mdp.service';
 import { ToteService } from './tote.service';
@@ -233,6 +234,7 @@ export class SbgController {
     private readonly vendors: VendorService,
     private readonly dock: DockService,
     private readonly shelf: ShelfService,
+    private readonly damageReports: DamageReportService,
     private readonly routing: RoutingService,
     private readonly mdps: MdpService,
     private readonly totes: ToteService,
@@ -3258,6 +3260,14 @@ export class SbgController {
   vendorOrderStats(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     this.assertVendorOwner(id, actor);
     return this.parcels.vendorOrderStats(id);
+  }
+
+  /** The damage claim reports on this store's orders, newest first — each with where it was emailed, where the store names an insurer. */
+  @Scopes('vendor:read:self')
+  @Get('vendors/:id/damage-reports')
+  vendorDamageReports(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
+    return { items: this.damageReports.listForStore(id, actor) };
   }
 
   /** Full detail for one order (the watch-only status screen's drill-down). Owner-scoped; strips the

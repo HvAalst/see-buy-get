@@ -118,6 +118,11 @@ export interface MailParams {
   'country-open': { country: string; settles: boolean; company?: string; joinUrl: string };
   /** B1 — SeeBuyGet checked a business, or refused to, with the reason. Sent to its owners by the decision itself. */
   'business-checked': { business: string; outcome: 'verified' | 'refused'; reason?: string; when: string };
+  /**
+   * A problem was reported on one of a store's shipments, and the store names an insurer on its shipping policy: the
+   * damage claim report, by a link. Sent the moment the report is made. `by`: who reported the problem.
+   */
+  'damage-report': { number: string; parcelId: string; orderNumber?: string; store: string; insurer: string; reportedAt: string; by: 'receiver' | 'shop'; problem: string; from: string; to: string; url: string; until: string };
 }
 
 export type MailTemplateId = keyof MailParams;
@@ -911,6 +916,48 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
         : p.business.as === 'poster'
           ? `You are getting this email because you posted this load for ${p.business.name} on SeeBuyGet.`
           : `You are getting this email because you are an owner of ${p.business.name}, which posted this load on SeeBuyGet, and the person who posted it cannot be emailed.`,
+    }),
+  },
+
+  /*
+   * TO AN INSURER, who may never have heard of SeeBuyGet. The user, 2026-10-12: the report goes "to an insurer of the
+   * claimants choice, to the claimant themselves or one set by the vendor according to their shipping policy" — and
+   * 2026-10-13, that sending it is "only emailing a link". So the email says what SeeBuyGet is and is not, what the
+   * report holds, and that the claim itself is the store's and theirs: nothing here decides anything or offers to pay.
+   */
+  'damage-report': {
+    title: 'Damage claim report (a store’s insurer)',
+    sentWhen: 'A problem is reported on one of a store’s shipments and the store names an insurer on its shipping policy: to that insurer, the moment the report is made.',
+    wired: true,
+    // The link works for a month; a report three days late is still the report.
+    sendLater: 72,
+    sample: { number: 'DCR-PUD-40257F1F7F', parcelId: 'PUD-40257F1F7F', orderNumber: 'ORD-20481', store: 'Nairobi Threads', insurer: 'Jubilee Allianz Claims', reportedAt: '2026-10-12T09:30:00Z', by: 'receiver', problem: 'The screen is cracked from corner to corner', from: 'Mama Sarah Shop, Nairobi CBD', to: 'Riverside Corner, Westlands', url: 'https://seebuyget.com/#report=k3ZbQp8vR1tYw0xLm2nHc4dJf6sAe9uGiB7oVzXyT5q', until: '2026-11-11T09:30:00Z' },
+    build: (p) => ({
+      subject: `Damage claim report ${p.number} — ${p.store}${p.orderNumber ? `, order ${p.orderNumber}` : ''}`,
+      preheader: `${p.store} names you as its insurer. A problem was reported on a shipment it sent through SeeBuyGet.`,
+      reason: `You are getting this email because ${p.store} names ${p.insurer} as its insurer for the shipments it sends through SeeBuyGet.`,
+      blocks: [
+        { kind: 'heading', text: `A damage claim report from ${p.store}` },
+        { kind: 'paragraph', text: `${p.store} names ${p.insurer} as its insurer for the shipments it sends through SeeBuyGet. A problem was reported on one of them, and this is the record of it.` },
+        {
+          kind: 'facts',
+          rows: [
+            ['Report', p.number],
+            ['Store', p.store],
+            ...(p.orderNumber ? [['The store’s order', p.orderNumber] as [string, string]] : []),
+            ['Parcel', p.parcelId],
+            ['From', p.from],
+            ['To', p.to],
+            ['Reported', formatWhen(p.reportedAt)],
+            ['Reported by', p.by === 'shop' ? 'The collection shop, at its counter' : 'The receiver, from their own app'],
+            ['In their words', p.problem],
+          ],
+        },
+        { kind: 'paragraph', text: 'The report is one file: the parcel as it was made, every hand it passed through and when, each recorded step with its fingerprint, the photographs, and the terms it travelled under — as the record stood the moment the problem was reported. It carries a fingerprint of its own, so two copies can be compared.' },
+        { kind: 'button', label: 'Get the damage claim report', href: p.url },
+        { kind: 'warning', title: 'This button works without signing in', text: `Until ${formatWhen(p.until)}, it opens the report for whoever has this email — so forward it only to somebody who should have it. The store sees this link on the report and can stop it.` },
+        { kind: 'note', text: `SeeBuyGet carries parcels and keeps the record of every hand each one passes through. It does not judge a claim for damage or loss and it offers no payment: the claim is between ${p.store}, its customer and you. Questions about the claim go to ${p.store}.` },
+      ],
     }),
   },
 

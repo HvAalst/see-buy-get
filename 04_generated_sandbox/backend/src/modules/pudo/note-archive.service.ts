@@ -85,11 +85,15 @@ export class NoteArchiveService implements OnModuleInit, OnModuleDestroy {
       [GlosEvent.Pudo.FreightDeliveryFailed, 'not_delivered', 'The carrier was at the door and could not hand over'],
       [GlosEvent.Pudo.FreightCancelled, 'cancelled', 'The load was withdrawn'],
       [GlosEvent.Pudo.FreightClaimOpened, 'claimed', 'The sender raised a claim against the delivered goods'],
-      [GlosEvent.Pudo.FreightClaimDecided, 'answered', 'The claim was decided'],
     ];
     for (const [type, stage, event] of board) {
       this.events.subscribe<{ freightId: string }>(type, (e) => this.freezeFreight(e.payload.freightId, stage, event));
     }
+    // The copy that answers a claim: a decision, where a company that stated cover made one — or, where nothing of
+    // ours pays, the damage claim report itself: the note frozen with the claim on it, for the sender to hand on.
+    this.events.subscribe<{ freightId: string; decision?: string }>(GlosEvent.Pudo.FreightClaimDecided, (e) =>
+      this.freezeFreight(e.payload.freightId, 'answered', e.payload.decision === 'report_only' ? 'A damage claim report was made from the record: no company of the network decides this claim or pays one' : 'The claim was decided'),
+    );
 
     const booking: Array<[string, NoteStage, string]> = [
       [GlosEvent.Pudo.DepartureDelivered, 'delivered', 'The goods were handed over and the receiver was recorded'],

@@ -3,6 +3,7 @@ import { createHash, randomBytes } from 'crypto';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { zip, ZipEntry } from '../../foundation/archive/zip';
 import { GlosError } from '../../foundation/http/glos-error';
+import { maskAddress, MailService } from '../../foundation/mail/mail.service';
 import { appUrl } from '../../foundation/mail/mail.templates';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { isFor } from './addressed-to';
@@ -79,6 +80,7 @@ export class DamageReportService implements OnModuleInit {
     @Optional() private readonly drivers?: DriverService,
     @Optional() private readonly managers?: FleetManagerService,
     @Optional() private readonly mdps?: MdpService,
+    @Optional() private readonly mail?: MailService,
   ) {}
 
   onModuleInit(): void {
@@ -102,7 +104,46 @@ export class DamageReportService implements OnModuleInit {
     const body = this.bodyOf(parcel);
     const report: DamageReportView = { parcelId, madeAt: parcel.dispute.raisedAt, sha256: fingerprintOf(body), body };
     this.reports.set(parcelId, report);
+    void this.handToInsurer(report, parcel);
     return report;
+  }
+
+  /**
+   * TO THE INSURER THE STORE NAMES — by a link, in an email, the moment the report is made.
+   *
+   * The user, 2026-10-12: the report goes "to an insurer of the claimants choice, to the claimant themselves or one
+   * set by the vendor according to their shipping policy"; and 2026-10-13, that sending it is "indeed only emailing a
+   * link" ([[rule-files-by-link-not-attachment]]: the file stays here, the email carries a key that opens it, and the
+   * store sees the link on the report and can stop it). The link is made FOR THE STORE: it is one of the store's
+   * handful, counted against it, and reads the report as the store does. The store itself is not emailed: it has the
+   * report in its own app, and its systems are told by the callback they already get.
+   *
+   * Never a reason the report could not be made: an address that will not take mail is the outbox's business.
+   */
+  private async handToInsurer(report: DamageReportView, parcel: Parcel): Promise<void> {
+    if (!parcel.vendorId || !this.mail) return;
+    const store = attempt(() => this.vendors?.get(parcel.vendorId!));
+    const insurer = store?.shippingPolicy?.insurer;
+    if (!store || !insurer?.email) return;
+    const now = Date.now();
+    const made = this.issueLink(parcel.parcelId, store.did, now);
+    const sent = await this.mail.send('damage-report', { address: insurer.email, name: insurer.name }, {
+      number: report.body.number,
+      parcelId: parcel.parcelId,
+      ...(report.body.parcel.orderNumber ? { orderNumber: report.body.parcel.orderNumber } : {}),
+      store: store.name,
+      insurer: insurer.name,
+      reportedAt: report.body.problem.reportedAt,
+      by: report.body.problem.origin === 'counter' ? 'shop' : 'receiver',
+      problem: report.body.problem.reason,
+      from: report.body.parcel.from,
+      to: report.body.parcel.to,
+      url: made.url,
+      until: made.link.expiresAt,
+    });
+    if (!sent) return;
+    const kept = this.reports.get(parcel.parcelId);
+    if (kept) this.reports.set(parcel.parcelId, { ...kept, insurer: { insurer: insurer.name, sentTo: maskAddress(insurer.email), at: new Date(now).toISOString() } });
   }
 
   /** The report, for whoever may read it. A stranger is told nothing — not even that there is one. */
@@ -110,11 +151,21 @@ export class DamageReportService implements OnModuleInit {
     return this.reading(parcelId, actor).report;
   }
 
+  /**
+   * THE REPORTS ON A STORE'S OWN ORDERS, newest first — for the store, signed in as itself, and for staff. Another
+   * store is told the store does not exist: that it does is not theirs to learn here.
+   */
+  listForStore(vendorId: string, actor: IntrospectionResult | undefined, now: number = Date.now()): DamageReportRow[] {
+    const store = attempt(() => this.vendors?.get(vendorId));
+    if (!store || !actor || (actor.role !== 'operator' && actor.did !== store.did)) throw new GlosError('NOT_FOUND', 'No such store');
+    return this.list(now, vendorId);
+  }
+
   /** Every problem reported, newest first — what staff read. They decide nothing here; this is the record of what was handed over. */
-  list(now: number = Date.now()): DamageReportRow[] {
+  list(now: number = Date.now(), vendorId?: string): DamageReportRow[] {
     const rows: DamageReportRow[] = [];
     for (const parcel of this.parcels.list()) {
-      if (!parcel.dispute) continue;
+      if (!parcel.dispute || (vendorId !== undefined && parcel.vendorId !== vendorId)) continue;
       const report = this.ensure(parcel.parcelId);
       if (!report) continue;
       const links = [...this.links.values()].filter((l) => l.parcelId === parcel.parcelId);
@@ -130,6 +181,7 @@ export class DamageReportService implements OnModuleInit {
         ...(report.body.problem.heldBy ? { heldBy: report.body.problem.heldBy.name } : {}),
         links: links.filter((l) => this.stateOf(l, now) === 'ready').length,
         opened: links.reduce((sum, l) => sum + l.opened, 0),
+        ...(report.insurer ? { insurer: report.insurer } : {}),
       });
     }
     return rows.sort((a, b) => (a.madeAt < b.madeAt ? 1 : -1));
@@ -151,7 +203,11 @@ export class DamageReportService implements OnModuleInit {
     const reading = this.reading(parcelId, actor);
     if (reading.as === 'staff') throw new GlosError('FORBIDDEN', 'A link is made by whoever the report is for. Staff read the report itself.');
     if (reading.as === 'shop') throw new GlosError('FORBIDDEN', 'A link is made by whoever the report is for: the receiver, or the store whose order it is.');
-    const forDid = reading.forDid!;
+    return this.issueLink(parcelId, reading.forDid!, now);
+  }
+
+  /** The key, made and handed back ONCE — in the address and nowhere else, ever again. */
+  private issueLink(parcelId: string, forDid: string, now: number): { url: string; link: DamageReportLinkRow } {
     if (this.live(parcelId, forDid, now) >= LINK_MAX_LIVE) throw new GlosError('INVALID_STATE', `This report already has ${LINK_MAX_LIVE} links that work. Cancel one to make another.`, { field: 'parcelId' });
     const token = randomBytes(32).toString('base64url');
     const link: DamageReportLink = {

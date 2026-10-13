@@ -22,6 +22,8 @@ export interface ShippingPolicy {
   freeOverSubtotal: number;
   buyerContributionCap: number;
   maxTransportSpend?: number; // S34c — the store's per-shipment dedicated-freight spend cap (undefined = no cap)
+  /** The store's insurer: every damage claim report on one of its orders is emailed there as a link. */
+  insurer?: { name: string; email: string };
 }
 
 /**
@@ -117,6 +119,8 @@ export interface OrderStats {
 }
 
 export interface OrderDetail extends OrderRow {
+  /** The damage claim report made when a problem was reported on this order. */
+  damageReport?: { number: string };
   destAgentDid?: string;
   originAgentDid?: string;
   buyerMobile?: string;
@@ -307,4 +311,21 @@ export interface VendorFundingView {
   openedAt: string;
   confirmedAmount?: number;
   confirmedAt?: string;
+}
+
+/** One damage claim report on an order of this store's, as the store's list reports it. */
+export interface DamageReportRow {
+  parcelId: string;
+  number: string;
+  madeAt: string;
+  origin: 'buyer' | 'counter';
+  reason: string;
+  from: string;
+  to: string;
+  store?: string;
+  heldBy?: string;
+  links: number;
+  opened: number;
+  /** Where it was emailed the moment it was made: the insurer on the shipping policy. */
+  insurer?: { insurer: string; sentTo: string; at: string };
 }

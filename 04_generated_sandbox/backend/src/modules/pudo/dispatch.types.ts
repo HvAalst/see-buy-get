@@ -235,7 +235,13 @@ export class FreightInstructionsView {
 export const FREIGHT_CLAIM_KINDS = ['damaged', 'short', 'not_received'] as const;
 export type FreightClaimKind = (typeof FREIGHT_CLAIM_KINDS)[number];
 export const FREIGHT_CLAIM_DECISIONS = ['upheld', 'partly_upheld', 'rejected'] as const;
-export type FreightClaimDecision = (typeof FREIGHT_CLAIM_DECISIONS)[number];
+/**
+ * `report_only` is not a fourth thing staff may answer. It is what a claim ends in where the company that billed
+ * the load has stated no cover — or nobody of ours billed it at all — and so nothing of ours pays: nobody of the
+ * network decides it, and the consignment note, frozen with the claim on it, is the damage claim report. The user,
+ * 2026-10-13: "the rule holds for freight too."
+ */
+export type FreightClaimDecision = (typeof FREIGHT_CLAIM_DECISIONS)[number] | 'report_only';
 
 /**
  * FP3b — the claim against a delivered load. The freight analogue of the parcel's DisputeCase, with one
@@ -443,7 +449,16 @@ export class Freight {
    *
    * Absent on a freight nobody was billed for — the bulletin load settled off-platform, which is most of them.
    */
-  billed?: { net: number; tax: number; gross: number; feePct: number; taxPct: number; provision: number };
+  billed?: {
+    net: number;
+    tax: number;
+    gross: number;
+    feePct: number;
+    taxPct: number;
+    provision: number;
+    /** What the billing company stated it pays from its own books on a claim, stamped at billing. Absent or zero: nothing. */
+    coverLimit?: number;
+  };
   driverPaid?: boolean;
   /**
    * B2 — WHO SETTLES THIS HAUL, stamped when it is posted and never re-derived.
@@ -1159,7 +1174,8 @@ export class FreightClaimQueueRow {
   coverable: boolean;
   awardCap: number;
   @ApiProperty({ enum: ['sanity-bound', 'none'] })
-  capBasis: 'sanity-bound' | 'none';
+  /** `free-limit`: the billing company has stated cover, up to `awardCap`. `none`: nothing of ours pays — nothing can be awarded. */
+  capBasis: 'free-limit' | 'none';
   evidence: string[];
   attempts: number;
   receiverName?: string;

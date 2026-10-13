@@ -5,6 +5,7 @@ import {
   DISPOSAL_LONG_DAYS,
   amount,
   claimBlocker,
+  freightCoverLine,
   reportRowWords,
   coverLine,
   daysWaiting,
@@ -127,10 +128,21 @@ describe('what stops a decision being submitted', () => {
     expect(claimBlocker('rejected', '', ' ', uncovered, t)).toBe('tower.claims.needReason');
   });
 
-  it('says a freight claim’s sanity bound is a sanity bound, not cover', () => {
-    const bound = { awardCap: 1_000_000, capBasis: 'sanity-bound' as const, currency: 'KES' };
-    expect(claimBlocker('upheld', '2000000', 'agreed', bound, t)).toContain('tower.claims.overBound');
-    expect(claimBlocker('partly_upheld', '250', 'part worn', bound, t)).toBeNull();
+  it('caps a freight claim at the cover the billing company stated, and allows nothing where it stated none', () => {
+    const covered = { awardCap: 5000, capBasis: 'free-limit' as const, currency: 'KES' };
+    expect(claimBlocker('upheld', '5000.01', 'agreed', covered, t)).toContain('tower.claims.overCover');
+    expect(claimBlocker('partly_upheld', '250', 'part worn', covered, t)).toBeNull();
+    // The million that stopped a typing mistake is gone with the policy it stood in for.
+    const none = { awardCap: 0, capBasis: 'none' as const, currency: 'KES' };
+    expect(claimBlocker('upheld', '250', 'agreed', none, t)).toBe('tower.claims.freightNoAward');
+    expect(claimBlocker('rejected', '', 'the note is the report', none, t)).toBeNull();
+  });
+
+  it('says what a freight claim is covered for: the stated cover, none stated, or nothing billed', () => {
+    const row = { freightId: 'f', code: 'FRT-1', description: 'x', destLabel: 'y', kind: 'damaged' as const, reason: 'r', raisedAt: '2026-09-15T00:00:00.000Z', raisedBy: 's', senderName: 'S', carriage: 10.2, currency: 'KES', evidence: [], attempts: 0 };
+    expect(freightCoverLine({ ...row, coverable: true, awardCap: 5000, capBasis: 'free-limit' }, t)).toBe('tower.claims.freightCovered(amount=10.20 KES,cover=5,000.00 KES)');
+    expect(freightCoverLine({ ...row, coverable: true, awardCap: 0, capBasis: 'none' }, t)).toBe('tower.claims.freightBilled(amount=10.20 KES)');
+    expect(freightCoverLine({ ...row, coverable: false, awardCap: 0, capBasis: 'none' }, t)).toBe('tower.claims.freightNoBooks');
   });
 });
 
@@ -145,6 +157,8 @@ describe('a damage claim report in the list staff read', () => {
   it('says whether whoever it is for has handed it on — a link stopped after use still counts as handed on', () => {
     expect(reportRowWords({ ...row, links: 1 }, t).handedOn).toBe('tower.reports.links(links=1,opened=0)');
     expect(reportRowWords({ ...row, links: 0, opened: 3 }, t).handedOn).toBe('tower.reports.links(links=0,opened=3)');
+    // Emailed to the store's insurer the moment it was made: said first, with the address masked as the server sends it.
+    expect(reportRowWords({ ...row, links: 1, insurer: { insurer: 'Jubilee', sentTo: 'c…s@jubilee.example', at: '2026-10-13T08:00:00.000Z' } }, t).handedOn).toBe('tower.reports.emailedTo(insurer=Jubilee,address=c…s@jubilee.example) tower.reports.links(links=1,opened=0)');
   });
 });
 
@@ -218,7 +232,7 @@ describe('the shops that started and stopped', () => {
 });
 
 describe('FP8 — what the carrier bears of an award', () => {
-  const base = { freightId: 'f1', code: 'FRT-1', description: 'x', destLabel: 'y', kind: 'damaged' as const, reason: 'r', raisedAt: '2026-09-15T00:00:00.000Z', raisedBy: 's', senderName: 'S', capBasis: 'sanity-bound' as const, evidence: [], attempts: 0, currency: 'KES' };
+  const base = { freightId: 'f1', code: 'FRT-1', description: 'x', destLabel: 'y', kind: 'damaged' as const, reason: 'r', raisedAt: '2026-09-15T00:00:00.000Z', raisedBy: 's', senderName: 'S', capBasis: 'free-limit' as const, evidence: [], attempts: 0, currency: 'KES' };
   it('names the haul price where the network paid the carrier, and nothing where it did not', () => {
     expect(carrierBearsLine({ ...base, coverable: true, awardCap: 100, carrierPaid: 10 }, t)).toContain('10');
     expect(carrierBearsLine({ ...base, coverable: true, awardCap: 100 }, t)).toBeNull(); // paid nothing yet — or settled between the parties

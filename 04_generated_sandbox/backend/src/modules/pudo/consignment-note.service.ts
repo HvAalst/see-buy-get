@@ -138,7 +138,9 @@ export class ConsignmentNoteService implements OnModuleInit {
     const claim = f.claim
       ? {
           line: `Claim by the sender ${when(f.claim.raisedAt)} — goods ${f.claim.kind === 'damaged' ? 'damaged' : f.claim.kind === 'short' ? 'short' : 'not received'}: ${f.claim.description}`,
-          ...(f.claim.state === 'resolved' && f.claim.decision
+          ...(f.claim.state === 'resolved' && f.claim.decision === 'report_only'
+            ? { decision: `Damage claim report made ${when(f.claim.decidedAt ?? f.claim.raisedAt)}: no company of the network decides this claim or pays one. This note, frozen with the claim on it, is the report.` }
+            : f.claim.state === 'resolved' && f.claim.decision
             ? { decision: `Decided ${when(f.claim.decidedAt ?? f.claim.raisedAt)}: ${f.claim.decision === 'upheld' ? 'upheld' : f.claim.decision === 'partly_upheld' ? 'upheld in part' : 'rejected'}${f.claim.award ? `, ${f.claim.award} ${NETWORK_CURRENCY} awarded` : f.claim.paidTo?.kind === 'between_parties' ? ', to be settled between sender and carrier' : ''}${f.claim.note ? ` — ${f.claim.note}` : ''}` }
             : {}),
         }

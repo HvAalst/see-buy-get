@@ -517,6 +517,13 @@ export class ShippingPolicy {
    * chance to pay for its return.
    */
   recoverAboveValue?: number;
+  /**
+   * THE STORE'S INSURER, where it names one. The user, 2026-10-12: a damage claim report goes "to an insurer of the
+   * claimants choice, to the claimant themselves or one set by the vendor according to their shipping policy". Every
+   * report on one of this store's orders is emailed to this address as a link. Absent: the store reads its reports in
+   * its own app, and nothing is sent anywhere.
+   */
+  insurer?: { name: string; email: string };
 }
 
 /** A registered e-commerce vendor that wires its checkout into PUDO for click-and-collect. */

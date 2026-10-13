@@ -202,6 +202,8 @@ export function disputeOutcomeOf(p: Parcel): DisputeOutcomeView | undefined {
  * entitled to reconcile — and nothing about how the price was built.
  */
 export interface VendorOrderDetail extends VendorOrderRow {
+  /** The damage claim report made when a problem was reported on this order: the store reads it at `GET parcels/:id/damage-report`. */
+  damageReport?: { number: string };
   originAgentDid?: string;
   buyerMobile?: string;
   subtotal?: number;
@@ -254,6 +256,7 @@ export function vendorOrderDetailOf(p: Parcel): VendorOrderDetail {
     declaredValue: p.declaredValue,
     coverLimit: p.coverLimit,
     shipmentPremium: p.shipmentPremium,
+    ...(p.dispute ? { damageReport: { number: `DCR-${p.parcelId}` } } : {}),
   };
 }
 

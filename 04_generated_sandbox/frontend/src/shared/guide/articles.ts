@@ -827,6 +827,7 @@ export const ARTICLES: GuideArticle[] = [
     apps: [
       "send",
       "agent",
+      "vendor",
       "console"
     ],
     title: "A problem with a parcel: reporting it, and the damage claim report",
@@ -835,14 +836,16 @@ export const ARTICLES: GuideArticle[] = [
       "Send app, after collecting: My parcels, open the parcel, “Got your parcel?”, then “Report a problem”. Say what is wrong and add a photograph. The parcel stays “Delivered”, and a “Damage claim report” appears on it.",
       "Shop app, at the counter, before handing over: Hand over a parcel, then “Report a problem instead”. Say what is wrong and take a photograph. The report is made at once, the parcel stays in its slot, and it can still be handed over: the customer decides whether to take it.",
       "On the parcel in the Send app, the receiver has three things under “Damage claim report”: “Read the report”; “Download the report and its photographs”, which is the copy to keep; and “Make a link to pass on”, for an insurer, the sender or the store. A link opens the report with nobody signed in, works for 30 days, and can be stopped there at any time.",
-      "The receiver and the sender each get a notice. A shop that reported it gets a notice naming the slot the parcel is in. Operator console, Damage claims, lists every report made, and staff can download one; they decide nothing there."
+      "The receiver and the sender each get a notice. A shop that reported it gets a notice naming the slot the parcel is in. Operator console, Damage claims, lists every report made, and staff can download one; they decide nothing there.",
+      "Store app: a report on one of your orders is listed under Orders, and opens the order, where the report is with the same three things. Under Store → What the buyer pays → Change, name your insurer and their email address for claims: every report on one of your shipments is then emailed there as a link, the moment it is made, and the list says where each went."
     ],
     notes: [
       "The report says what the record held when the problem was reported: the parcel as it was made, every hand it passed through and when, each recorded step with its fingerprint, the photographs, and the terms it travelled under. It names shops and carriers as companies, never a person, and it carries a fingerprint of its own so two copies can be compared.",
       "The report is the receiver’s, because it holds what they wrote and photographed. The sender is told that a problem was reported and that the receiver holds the report; the receiver passes it on with a link. A store reads the report on its own order.",
       "One parcel has one report. A second problem on the same parcel is not recorded: pass the first report on, and tell whoever you pass it to what you have found since.",
       "Nobody is texted about a report or its outcome. Somebody without the Send app reads it on the parcel the day they sign in with the number the parcel was addressed to.",
-      "A company that carries parcels pays a claim from its own books only where it has stated cover, and no company can state cover yet. Where one has, a claim waits under Damage claims for staff to decide, with a written reason, up to the cover stated."
+      "A company that carries parcels pays a claim from its own books only where it has stated cover, and no company can state cover yet. Where one has, a claim waits under Damage claims for staff to decide, with a written reason, up to the cover stated.",
+      "The email to an insurer carries a link, never the file: it opens the report for whoever holds the email, for thirty days, and the store sees that link on the report and can stop it."
     ]
   },
   {
@@ -909,7 +912,8 @@ export const ARTICLES: GuideArticle[] = [
     ],
     notes: [
       "Nobody signs on a screen: the driver records the name, and the photo is the proof. A delivered load cannot be withdrawn — a problem with the goods is a claim, not a cancellation.",
-      "When a claim is upheld the carrier bears it, up to what they were paid for the haul and never more: the amount taken back shows on that load in the driver’s and the fleet’s earnings."
+      "When a claim is upheld the carrier bears it, up to what they were paid for the haul and never more: the amount taken back shows on that load in the driver’s and the fleet’s earnings.",
+      "A claim on a delivered load — damaged, short, not received — goes onto the consignment note, and the note is frozen with the claim on it: that copy is the damage claim report, under Notes, to hand on by a link. Nobody of the network decides the claim or pays. Only where the company that billed the load has stated cover does a member of staff decide it, up to that cover."
     ]
   },
   {

@@ -10293,6 +10293,28 @@
         }
       }
     },
+    "/v1/sbg/vendors/{id}/damage-reports": {
+      "get": {
+        "operationId": "Sbg.vendorDamageReports",
+        "summary": "",
+        "description": "The damage claim reports on this store's orders, newest first — each with where it was emailed, where the store names an insurer.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/vendors/{id}/orders/{parcelId}": {
       "get": {
         "operationId": "Sbg.vendorOrder",
@@ -32439,9 +32461,36 @@
           "code"
         ]
       },
+      "InsurerDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 254,
+            "pattern": "/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/"
+          }
+        },
+        "required": [
+          "name",
+          "email"
+        ]
+      },
       "ShippingPolicyDto": {
         "type": "object",
         "properties": {
+          "insurer": {
+            "nullable": true,
+            "description": "Null takes the insurer off the policy.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/InsurerDto"
+              }
+            ]
+          },
           "mode": {
             "type": "string",
             "enum": [
@@ -35585,6 +35634,10 @@
               },
               "provision": {
                 "required": true,
+                "type": "number"
+              },
+              "coverLimit": {
+                "required": false,
                 "type": "number"
               }
             }
@@ -45657,6 +45710,27 @@
           "url"
         ]
       },
+      "DamageReportSentTo": {
+        "type": "object",
+        "properties": {
+          "insurer": {
+            "type": "string",
+            "description": "The insurer's name, as the store wrote it."
+          },
+          "sentTo": {
+            "type": "string",
+            "description": "The address, masked."
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "insurer",
+          "sentTo",
+          "at"
+        ]
+      },
       "DamageReportRow": {
         "type": "object",
         "properties": {
@@ -45672,6 +45746,14 @@
           },
           "heldBy": {
             "type": "string"
+          },
+          "insurer": {
+            "description": "Where it was emailed the moment it was made, where the store names an insurer.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DamageReportSentTo"
+              }
+            ]
           },
           "parcelId": {
             "type": "string"
@@ -45993,6 +46075,14 @@
         "properties": {
           "body": {
             "$ref": "#/components/schemas/DamageReportBody"
+          },
+          "insurer": {
+            "description": "Beside the body, not in it: the fingerprint covers what the report SAYS, and where a copy went is not part of that.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DamageReportSentTo"
+              }
+            ]
           },
           "parcelId": {
             "type": "string"

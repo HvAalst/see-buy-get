@@ -100,7 +100,7 @@ export interface FreightClaim {
   description: string;
   photoRef?: string;
   raisedAt: string;
-  decision?: 'upheld' | 'partly_upheld' | 'rejected';
+  decision?: 'upheld' | 'partly_upheld' | 'rejected' | 'report_only';
   award?: number;
   note?: string;
   decidedAt?: string;

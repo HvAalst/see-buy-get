@@ -34,8 +34,8 @@ export interface ClaimRow {
 
 export type ClaimDecision = 'upheld' | 'partly_upheld' | 'rejected';
 
-/** FP3b — one open FREIGHT claim, as the queue reports it. Same decision, different cover: a freight has no declared
- *  cover, so the cap is the sanity bound where a sister billed the load and NOTHING where nobody was billed. */
+/** FP3b — one open FREIGHT claim, as the queue reports it. Same decision, different cover: a freight declares no value,
+ *  so the cap is the cover the billing company has stated — and NOTHING where it has stated none, or nobody of ours billed it. */
 export interface FreightClaimRow {
   freightId: string;
   code: string;
@@ -51,7 +51,7 @@ export interface FreightClaimRow {
   currency?: string;
   coverable: boolean;
   awardCap: number;
-  capBasis: 'sanity-bound' | 'none';
+  capBasis: 'free-limit' | 'none';
   /** FP8 — what the network paid the carrier for the haul; an upheld award is taken back from them up to this. */
   carrierPaid?: number;
   /** CL1 — the agreed term, who it gives standing to, and why. Absent where no term was recorded. */
@@ -73,9 +73,10 @@ export function carrierBearsLine(row: FreightClaimRow, t: Translate): string | n
 /** What a decision is checked against — the part of a row claimBlocker reads, shared by parcels and freight. */
 export type ClaimCap = { awardCap: number; capBasis: ClaimRow['capBasis'] | FreightClaimRow['capBasis']; currency?: string; parcelId?: string };
 
-/** FP3b — what a freight claim is covered for: the carriage the network billed, or the plain fact that it billed nothing. */
+/** FP3b — what a freight claim is covered for: the cover the billing company stated, that it stated none, or that nobody of ours billed the load. */
 export function freightCoverLine(row: FreightClaimRow, t: Translate): string {
   if (!row.coverable) return t('tower.claims.freightNoBooks');
+  if (row.awardCap > 0) return t('tower.claims.freightCovered', { amount: amount(row.carriage, row.currency), cover: amount(row.awardCap, row.currency) });
   return t('tower.claims.freightBilled', { amount: amount(row.carriage, row.currency) });
 }
 
@@ -125,11 +126,7 @@ export function claimBlocker(decision: ClaimDecision, award: string, note: strin
   if (row.capBasis === 'none') return award.trim() && Number(award.trim()) > 0 ? t('tower.claims.freightNoAward') : null;
   const value = Number(award.trim());
   if (!award.trim() || !Number.isFinite(value) || value <= 0) return t('tower.claims.needAward');
-  if (value > row.awardCap) {
-    return row.capBasis === 'sanity-bound'
-      ? t('tower.claims.overBound', { max: amount(row.awardCap, row.currency) })
-      : t('tower.claims.overCover', { max: amount(row.awardCap, row.currency) });
-  }
+  if (value > row.awardCap) return t('tower.claims.overCover', { max: amount(row.awardCap, row.currency) });
   return null;
 }
 
@@ -337,13 +334,16 @@ export interface DamageReportRow {
   heldBy?: string;
   links: number;
   opened: number;
+  /** Where it was emailed the moment it was made: the insurer the store names on its shipping policy. */
+  insurer?: { insurer: string; sentTo: string; at: string };
 }
 
-/** A report's row in words: who reported it, where the parcel was, and whether whoever it is for has handed it on. */
+/** A report's row in words: who reported it, where the parcel was, and whether it was handed on — emailed to the store's insurer, or by a link. */
 export function reportRowWords(row: DamageReportRow, t: Translate): { by: string; hands: string; handedOn: string } {
+  const links = row.links === 0 && row.opened === 0 ? t('tower.reports.noLink') : t('tower.reports.links', { links: row.links, opened: row.opened });
   return {
     by: t(row.origin === 'counter' ? 'tower.reports.byShop' : 'tower.reports.byReceiver'),
     hands: row.heldBy ? t('tower.reports.heldBy', { name: row.heldBy }) : t('tower.reports.handedOver'),
-    handedOn: row.links === 0 && row.opened === 0 ? t('tower.reports.noLink') : t('tower.reports.links', { links: row.links, opened: row.opened }),
+    handedOn: row.insurer ? `${t('tower.reports.emailedTo', { insurer: row.insurer.insurer, address: row.insurer.sentTo })} ${links}` : links,
   };
 }

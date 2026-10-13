@@ -56,6 +56,18 @@ export function policyLine(p: ShippingPolicy, t: Translate): string {
   return t('vendor.logic.policyCapped', { cap: money(p.buyerContributionCap), free: money(p.freeOverSubtotal) });
 }
 
+/** The insurer on the policy, in a sentence — or that there is none, and what that means. */
+export function insurerLine(p: Pick<ShippingPolicy, 'insurer'>, t: Translate): string {
+  return p.insurer ? t('vendor.logic.insurer', { name: p.insurer.name, email: p.insurer.email }) : t('vendor.logic.noInsurer');
+}
+
+/** One damage claim report in the store's list: who reported it, and whether it went to the insurer. */
+export function reportRowLine(row: { origin: 'buyer' | 'counter'; madeAt: string; insurer?: { insurer: string } }, t: Translate): string {
+  const by = t(row.origin === 'counter' ? 'vendor.reports.byShop' : 'vendor.reports.byReceiver');
+  const when = new Date(row.madeAt).toLocaleDateString();
+  return row.insurer ? t('vendor.reports.lineSent', { by, when, insurer: row.insurer.insurer }) : t('vendor.reports.lineKept', { by, when });
+}
+
 /* ----------------------------------------------------------------- status -- */
 
 export interface StatusPresentation {

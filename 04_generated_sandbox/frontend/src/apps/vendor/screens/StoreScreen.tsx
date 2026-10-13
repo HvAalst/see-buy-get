@@ -6,7 +6,7 @@ import { useT } from '../../../shared/i18n';
 import { toPlaceWords } from '../../../shared/placewords';
 import type { GeoPoint } from '../../../shared/geo';
 import type { SbgError } from '../../../lib/sbg';
-import { ledgerTypeWord, money, policyLine } from '../logic';
+import { insurerLine, ledgerTypeWord, money, policyLine } from '../logic';
 import type { VendorActions, VendorState } from '../useVendorApp';
 
 export interface StoreScreenProps {
@@ -36,6 +36,8 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
 
       <Card title={t('vendor.store.buyerPaysTitle')} aside={<Button variant="link" full={false} onClick={() => setPolicyOpen(true)}>{t('vendor.store.change')}</Button>}>
         <p class="t-body">{v ? policyLine(v.shippingPolicy, t) : ''}</p>
+        {/* The insurer, on the same policy: where every damage claim report on this store's orders is emailed. */}
+        <p class="card__note">{v ? insurerLine(v.shippingPolicy, t) : ''}</p>
       </Card>
 
       <PinCard state={state} actions={actions} />
@@ -315,6 +317,11 @@ function PolicySheet({ open, onClose, state, actions }: { open: boolean; onClose
   const [cap, setCap] = useState(String(p?.buyerContributionCap ?? 3));
   const [freeOver, setFreeOver] = useState(String(p?.freeOverSubtotal ?? 50));
   const [freightCap, setFreightCap] = useState(p?.maxTransportSpend != null ? String(p.maxTransportSpend) : '');
+  const [insurerName, setInsurerName] = useState(p?.insurer?.name ?? '');
+  const [insurerEmail, setInsurerEmail] = useState(p?.insurer?.email ?? '');
+  // Half an insurer is none: a name with nowhere to send to, or an address with nobody to address.
+  const insurerHalf = (insurerName.trim() === '') !== (insurerEmail.trim() === '');
+  const insurerBad = insurerEmail.trim() !== '' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(insurerEmail.trim());
 
   return (
     <Sheet open={open} onClose={onClose} title={t('vendor.store.buyerPaysTitle')}>
@@ -351,12 +358,34 @@ function PolicySheet({ open, onClose, state, actions }: { open: boolean; onClose
         <input id="p-freight" class="input" type="number" inputMode="decimal" min="0" step="1" placeholder={t('vendor.store.freightCapPh')} value={freightCap} onInput={(e) => setFreightCap(e.currentTarget.value)} />
         <p class="hint" style="margin-top:6px">{t('vendor.store.freightCapHint')}</p>
       </div>
+      {/* THE INSURER. The user, 2026-10-12: a damage claim report goes "to an insurer … set by the vendor according to
+          their shipping policy" — and sending it is emailing a link. Both fields or neither. */}
+      <div class="field" style="margin-top:12px">
+        <label class="field__label" for="p-insurer">
+          {t('vendor.store.insurerLabel')}
+        </label>
+        <input id="p-insurer" class="input" type="text" maxLength={80} placeholder={t('vendor.store.insurerPh')} value={insurerName} onInput={(e) => setInsurerName(e.currentTarget.value)} />
+      </div>
+      <div class="field" style="margin-top:12px">
+        <label class="field__label" for="p-insurer-email">
+          {t('vendor.store.insurerEmailLabel')}
+        </label>
+        <input id="p-insurer-email" class="input" type="email" inputMode="email" autocomplete="off" maxLength={254} placeholder={t('vendor.store.insurerEmailPh')} value={insurerEmail} onInput={(e) => setInsurerEmail(e.currentTarget.value)} />
+        <p class="hint" style="margin-top:6px">{insurerHalf ? t('vendor.store.insurerHalf') : insurerBad ? t('vendor.store.insurerBad') : t('vendor.store.insurerHint')}</p>
+      </div>
       <Button
         chevron={false}
         busy={state.busy === 'policy'}
+        disabled={insurerHalf || insurerBad}
         onClick={() => {
           onClose();
-          void actions.savePolicy({ mode, buyerContributionCap: Number(cap) || 0, freeOverSubtotal: Number(freeOver) || 0, maxTransportSpend: freightCap.trim() ? Number(freightCap) || 0 : 0 });
+          void actions.savePolicy({
+            mode,
+            buyerContributionCap: Number(cap) || 0,
+            freeOverSubtotal: Number(freeOver) || 0,
+            maxTransportSpend: freightCap.trim() ? Number(freightCap) || 0 : 0,
+            insurer: insurerName.trim() && insurerEmail.trim() ? { name: insurerName.trim(), email: insurerEmail.trim() } : null,
+          });
         }}
       >
         {t('vendor.store.savePolicy')}

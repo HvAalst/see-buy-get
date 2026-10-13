@@ -113,6 +113,15 @@ export class DamageReportBody {
   @ApiProperty({ type: [DamageReportPhoto] }) photographs: DamageReportPhoto[];
 }
 
+/** Where a report was emailed, as a link, the moment it was made: the insurer the store names on its shipping policy. */
+export class DamageReportSentTo {
+  /** The insurer's name, as the store wrote it. */
+  insurer: string;
+  /** The address, masked. */
+  sentTo: string;
+  at: string;
+}
+
 /** The report as it is kept and as it is read: what it says, when it was made, and the fingerprint of what it says. */
 export class DamageReportView {
   parcelId: string;
@@ -120,6 +129,8 @@ export class DamageReportView {
   /** SHA-256 over the body, keys sorted. Two copies with the same fingerprint say the same thing. */
   sha256: string;
   @ApiProperty({ type: DamageReportBody }) body: DamageReportBody;
+  /** Beside the body, not in it: the fingerprint covers what the report SAYS, and where a copy went is not part of that. */
+  @ApiPropertyOptional({ type: DamageReportSentTo }) insurer?: DamageReportSentTo;
 }
 
 /** A row of the list staff read: every problem reported, newest first. Nothing in it is decided by them. */
@@ -136,6 +147,8 @@ export class DamageReportRow {
   /** How many links to it are working, and how often the file was taken with one. */
   links: number;
   opened: number;
+  /** Where it was emailed the moment it was made, where the store names an insurer. */
+  @ApiPropertyOptional({ type: DamageReportSentTo }) insurer?: DamageReportSentTo;
 }
 
 export class DamageReportList {

@@ -104,6 +104,8 @@ function attemptLine(a: NonNullable<PostedFreight['attempts']>[number], t: Retur
 function claimLine(c: FreightClaim, t: ReturnType<typeof useT>): string {
   const kind = c.kind === 'damaged' ? t('agent.freight.claimDamaged') : c.kind === 'short' ? t('agent.freight.claimShort') : t('agent.freight.claimNotReceived');
   if (c.state === 'open') return t('agent.freight.claimOpenLine', { kind, when: formatDate(c.raisedAt) });
+  // Nobody of the network decided anything: the note, frozen with the claim on it, is the damage claim report.
+  if (c.decision === 'report_only') return t('agent.freight.claimReportLine', { kind, when: formatDate(c.decidedAt ?? c.raisedAt) });
   const decision = c.decision === 'upheld' ? t('agent.freight.claimUpheld') : c.decision === 'partly_upheld' ? t('agent.freight.claimPartly') : t('agent.freight.claimRejected');
   const money = c.award ? t('agent.freight.claimAward', { amount: c.award.toFixed(2) }) : c.paidTo?.kind === 'between_parties' ? t('agent.freight.claimBetween') : '';
   return t('agent.freight.claimDecidedLine', { kind, decision, money: money ? ` — ${money}` : '', note: c.note ?? '' });

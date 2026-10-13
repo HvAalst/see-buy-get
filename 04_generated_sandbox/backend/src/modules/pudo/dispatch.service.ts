@@ -44,7 +44,7 @@ import { MediaService } from './media.service';
 import { MarketPulseStore } from './market-pulse.store';
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, toteCapacityOf, VEHICLE_SPEC } from './fleet.config';
 import { Router, ROUTER } from './router';
-import { DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MARKET_MIN_DEMAND, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, taxOn, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH, MAX_CLAIM_AWARD } from './pudo.config';
+import { coverFor, DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MARKET_MIN_DEMAND, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, taxOn, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
@@ -312,6 +312,9 @@ export function driverJobsToCsv(rows: Freight[]): string {
  * capacity of the driver's coupled vehicle (whose total load the fleet manager set). The driver
  * claims, ignores, or simply doesn't answer — in which case the offer auto-ignores when it lapses.
  */
+/** Written on a freight claim that closed itself with the report. Never shown as somebody's reasoning: nobody reasoned. */
+export const FREIGHT_REPORT_ONLY_NOTE = 'No company of the network decides a claim on this load or pays one. The consignment note, frozen with the claim on it, is the damage claim report.';
+
 @Injectable()
 export class DispatchService {
   // Durable: a freight job is a real transport obligation (a diverted P4+ order is a paid commitment),
@@ -1225,7 +1228,9 @@ export class DispatchService {
       // Stamped at the instant of charging, so a release reverses THIS, not whatever the rates resolve to
       // whenever the release happens to run. Kept even on a failed billing: what the shipper owes is a real
       // debt for a Local Admin to collect, and it is only collectable if somebody can say what it was.
-      f.billed = bill;
+      // The cover the billing company has stated, stamped with the bill: a company that states cover later does not
+      // thereby owe it on a load it billed before, and one that withdraws it does not thereby escape what it promised.
+      f.billed = { ...bill, coverLimit: this.freightCoverStated(f) };
     } else {
       f.paidStatus = 'unpaid';
     }
@@ -2855,6 +2860,8 @@ export class DispatchService {
     this.media.holdFreightForDispute(f.freightId, new Date(now));
     this.freights.set(f.freightId, f);
     void this.events.publish(GlosEvent.Pudo.FreightClaimOpened, { freightId: f.freightId, code: f.code, kind: input.kind, byDid, driverDid: f.claimedBy }, { source: 'pudo' }).catch(() => undefined);
+    // Where nothing of ours pays, nobody of ours decides: the claim closes with the report, the moment it is made.
+    if (this.claimCoverLimit(f) <= 0) this.closeFreightClaimWithReport(f, now);
     return f;
   }
 
@@ -2891,9 +2898,50 @@ export class DispatchService {
     return Boolean(f.billed && f.shipperDid && this.vendors.has(f.shipperDid));
   }
 
+  /**
+   * WHAT THE COMPANY THAT BILLED THIS LOAD PAYS FROM ITS OWN BOOKS ON A CLAIM, at most: the cover it has stated for
+   * dedicated freight, as it stood when the load was billed. Zero where it has stated none, and zero where nobody of
+   * ours billed the load at all — and zero means no award, by anybody (the user, 2026-10-13: "the rule holds for
+   * freight too"). A load billed before the cover was stamped reads as zero: nothing was promised on it.
+   */
+  claimCoverLimit(f: Freight): number {
+    if (!this.claimCoverable(f)) return 0;
+    return Math.max(0, f.billed?.coverLimit ?? 0);
+  }
+
+  /** The cover the billing company states for dedicated freight, read at billing. A freight declares no value: the free limit is the whole of it. */
+  private freightCoverStated(f: Freight): number {
+    if (!f.shipperDid || !this.vendors.has(f.shipperDid)) return 0;
+    try {
+      return coverFor({ ...this.entities.insuranceFor(this.vendors.entityIdOf(this.vendors.get(f.shipperDid)), 'dedicated') }).limit;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * NOTHING OF OURS TO DECIDE, so the claim closes itself — and the consignment note, frozen with the claim on it,
+   * is the damage claim report (the same copy the archive keeps at every signature, handed on by its links).
+   *
+   * The user, 2026-10-13: "the rule holds for freight too." Where the company that billed the load has stated no
+   * cover — or nobody of ours billed it — a member of staff reading the claim has nothing to grant or refuse. So it
+   * does not wait in a queue for a decision nobody will make: the sender has the note at once, and whoever they
+   * claim from — the carrier, an insurer — is theirs to choose. `decidedBy` names nobody, because nobody decided.
+   */
+  private closeFreightClaimWithReport(f: Freight, now: number): void {
+    const c = f.claim;
+    if (!c || c.state !== 'open') return;
+    f.claim = { ...c, state: 'resolved', decision: 'report_only', award: 0, note: FREIGHT_REPORT_ONLY_NOTE, decidedBy: 'the record', decidedAt: new Date(now).toISOString() };
+    this.freights.set(f.freightId, f);
+    void this.events
+      .publish(GlosEvent.Pudo.FreightClaimDecided, { freightId: f.freightId, code: f.code, decision: 'report_only', award: 0, note: FREIGHT_REPORT_ONLY_NOTE, posterDid: f.postedByDid ?? f.shipperDid, claimantDid: c.raisedBy, driverDid: f.claimedBy }, { source: 'pudo' })
+      .catch(() => undefined);
+  }
+
   freightClaimRowOf(f: Freight, names: { sender: string; carrier?: string }): FreightClaimQueueRow {
     const c = f.claim!;
     const coverable = this.claimCoverable(f);
+    const cover = this.claimCoverLimit(f);
     return {
       freightId: f.freightId,
       code: f.code,
@@ -2912,8 +2960,9 @@ export class DispatchService {
       // FP8 — what the network paid the carrier for this haul, and so the most an upheld award takes back from them.
       ...(f.driverPaid && f.claimedBy && (f.lockedPrice ?? 0) > 0 ? { carrierPaid: f.lockedPrice } : {}),
       coverable,
-      awardCap: coverable ? MAX_CLAIM_AWARD : 0,
-      capBasis: coverable ? 'sanity-bound' : 'none',
+      // No cover stated is no award at all: the queue shows the stated cover, or that there is nothing to award.
+      awardCap: cover,
+      capBasis: cover > 0 ? 'free-limit' : 'none',
       evidence: [f.loadSafety?.securementPhotoRef, f.proofOfDelivery?.photoRef, c.photoRef].filter((x): x is string => Boolean(x)),
       attempts: f.deliveryAttempts?.length ?? 0,
       ...(f.proofOfDelivery ? { receiverName: f.proofOfDelivery.receiverName } : {}),
@@ -2931,14 +2980,19 @@ export class DispatchService {
     const f = this.requireFreight(freightId);
     const c = f.claim;
     if (!c || c.state !== 'open') throw new GlosError('INVALID_STATE', c ? 'This claim has already been decided' : 'There is no claim on this load');
-    if (!FREIGHT_CLAIM_DECISIONS.includes(input.decision)) throw new GlosError('INVALID_INPUT', 'A decision is upheld, partly upheld or rejected');
+    if (!(FREIGHT_CLAIM_DECISIONS as readonly string[]).includes(input.decision)) throw new GlosError('INVALID_INPUT', 'A decision is upheld, partly upheld or rejected');
     const note = (input.note ?? '').trim();
     if (!note) throw new GlosError('FIELD_REQUIRED', 'A decision needs a reason the claimant can be shown — including a rejection');
     const award = input.decision === 'rejected' ? 0 : Math.round(Math.max(0, Number(input.award) || 0) * 100) / 100;
     const coverable = this.claimCoverable(f);
+    // AN AWARD NEEDS A COMPANY THAT PAYS. Nothing of ours pays unless the company that billed the load has stated
+    // cover — a claim on such a load closes itself with the report and never reaches here; one still open from
+    // before can be closed with a reason and no money. It used to allow up to a sanity bound of a million.
+    const cover = this.claimCoverLimit(f);
     if (award > 0 && !coverable) throw new GlosError('INVALID_STATE', 'Nobody was billed for this load through the network, so there is nothing to award from — uphold it with a reason that says the money is between sender and carrier, or reject it');
-    if (award > 0 && award > MAX_CLAIM_AWARD) throw new GlosError('INVALID_INPUT', `An award over ${MAX_CLAIM_AWARD} needs to be settled off-platform — this is a sanity bound, not a policy`);
-    if (input.decision !== 'rejected' && coverable && award <= 0) throw new GlosError('INVALID_INPUT', 'Upholding a covered claim means awarding something — reject it instead of awarding nothing');
+    if (award > 0 && cover <= 0) throw new GlosError('INVALID_STATE', 'The company that billed this load has stated no cover, so it pays nothing from its own books and there is nothing to award. Close it with a reason and no award: the consignment note, with the claim on it, is the damage claim report.');
+    if (award > cover) throw new GlosError('INVALID_INPUT', `This load is covered to ${cover.toFixed(2)} by the company that billed it. Award up to that, or settle the excess off-platform.`);
+    if (input.decision !== 'rejected' && cover > 0 && award <= 0) throw new GlosError('INVALID_INPUT', 'Upholding a covered claim means awarding something — reject it instead of awarding nothing');
     let funding: { fromProvision: number; fromExpense: number } | undefined;
     let paidTo: NonNullable<Freight['claim']>['paidTo'];
     if (award > 0) {

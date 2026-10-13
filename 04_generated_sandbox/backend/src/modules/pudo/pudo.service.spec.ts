@@ -23,6 +23,7 @@ import { HeuristicRouter, ROUTER } from './router';
 import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { DamageReportService, fingerprintOf, termsSentence } from './damage-report.service';
+import { FREIGHT_REPORT_ONLY_NOTE } from './dispatch.service';
 import { DAMAGE_REPORT_STATEMENT } from './damage-report.types';
 import { canonicalJson } from './note-archive.types';
 import { LINK_DAYS, LINK_MAX_LIVE, LINK_MAX_OPENS } from './document-link.service';
@@ -139,6 +140,7 @@ describe('PUDO Light', () => {
   let otp: OtpService;
   let persons: PersonService;
   let mailOutbox: OutboxMailSender;
+  let mailSvc: MailService;
   let invites: InviteService;
   let auth: AuthService;
   let graduation: GraduationService;
@@ -161,7 +163,7 @@ describe('PUDO Light', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
-        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, ImportService, SiteService, TransitAuthorityService, FieldObservationService, ContainerBoxService, EmptyDepotService, ContactCardService, VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService, FleetMoveService, FleetOfferService, EmailCodeService, AccountRecoveryService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
+        GraduationService, VendorService, VendorCallbackService, ShelfService, DamageReportService, RoutingService, MdpService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, ImportService, SiteService, TransitAuthorityService, FieldObservationService, ContainerBoxService, EmptyDepotService, ContactCardService, VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService, FleetMoveService, FleetOfferService, EmailCodeService, AccountRecoveryService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, EntityAdminService, OperatorAccountService, ConsignmentNoteService, DepartureNoteService, NoteArchiveService, NoteBundleService, DestinationService, MailService, OutboxMailSender, { provide: MAIL_SENDER, useExisting: OutboxMailSender }, PresenceService, InterestService, DepartureService, CompanyDocumentService, HandleService, HandleDirectory, BusinessService, BusinessMemberGuard, BusinessClientService, CompanyReadinessService, BorderRuleService, BooksService, FxService, ApiKeyService,
         PayoutService, ReturnService, UnclaimedService, MerchantRatingService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
@@ -207,6 +209,7 @@ describe('PUDO Light', () => {
     otp = moduleRef.get(OtpService);
     persons = moduleRef.get(PersonService);
     mailOutbox = moduleRef.get(OutboxMailSender);
+    mailSvc = moduleRef.get(MailService);
     invites = moduleRef.get(InviteService);
     auth = moduleRef.get(AuthService);
     graduation = moduleRef.get(GraduationService);
@@ -3264,6 +3267,125 @@ describe('PUDO Light', () => {
   });
 
   /**
+   * THE STORE'S HALF of the damage claim report (the user, 2026-10-13: "the other half needs to be build as well, and
+   * sending is indeed only emailing a link"). A store names an insurer on its shipping policy; every report on one of
+   * its orders is emailed to that insurer as a link, the moment it is made; the store lists the reports on its orders.
+   */
+  describe('the store’s half: an insurer on the shipping policy, and the report emailed to it', () => {
+    const settle = async () => {
+      for (let i = 0; i < 4; i += 1) await new Promise((r) => setImmediate(r));
+    };
+    const RECEIVER = '+254700971102';
+    const staff = { active: true, role: 'operator', sub: 'operator:opr_a', actorName: 'Amina Otieno', scopes: ['*'] } as never;
+    const asStore = (did: string) => ({ active: true, role: 'vendor', did, sub: did, scopes: [] }) as never;
+    /** The report service as the module runs it: with the mail service, so a report made can be handed on. */
+    const reportsOf = () => {
+      const reports = new DamageReportService(parcels, agents, media, vendors, persons, drivers, managers, mdps, mailSvc);
+      reports.onModuleInit();
+      return reports;
+    };
+    /** A delivered order of the store's, with a problem reported by its buyer from their app. */
+    async function reportedOrder(vendor: { vendorId: string }, tag: string, externalOrderId?: string) {
+      const origin = onboardAgent(`Insurer Origin ${tag}`, 'NorthTown');
+      const dest = onboardAgent(`Insurer Dest ${tag}`, 'SouthTown');
+      const corridor = corridors.addCorridor({ name: `I ${tag}`, originZone: 'NorthTown', destZone: 'SouthTown' });
+      const driver = corridors.addDriver({ driverDid: `did:glos:ins${tag}`, name: 'D', corridorId: corridor.corridorId });
+      const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, ...(externalOrderId ? { externalOrderId } : {}), originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: RECEIVER, size: 'M', contentPhotoRef: 'content.jpg', shippingPolicy: vendors.get(vendor.vendorId).shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });
+      parcels.intakeInbound(parcel.parcelId, origin.did);
+      parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: [parcel.parcelId] });
+      parcels.shelve(parcel.parcelId, dest.did);
+      parcels.collectConfirm(parcel.parcelId, dest.did, parcel.collectionCode!);
+      await settle();
+      const person = persons.ensurePerson(RECEIVER);
+      parcels.buyerDispute(parcel.parcelId, person, person.personDid, 'The handle came off in the box', 'problem.jpg');
+      await settle();
+      return parcel;
+    }
+
+    it('a store names its insurer on its shipping policy — whole or not at all, and null takes it off', () => {
+      const store = vendors.register({ name: 'Insured Store' });
+      expect(vendors.get(store.vendorId).shippingPolicy).not.toHaveProperty('insurer');
+      vendors.updateProfile(store.vendorId, { shippingPolicy: { insurer: { name: '  Jubilee Allianz Claims ', email: ' Claims@Jubilee.Example ' } } });
+      expect(vendors.get(store.vendorId).shippingPolicy.insurer).toEqual({ name: 'Jubilee Allianz Claims', email: 'claims@jubilee.example' });
+      // The rest of the policy is untouched by naming an insurer, and the insurer by changing the rest.
+      vendors.updateProfile(store.vendorId, { shippingPolicy: { mode: 'full' } });
+      expect(vendors.get(store.vendorId).shippingPolicy).toMatchObject({ mode: 'full', insurer: { name: 'Jubilee Allianz Claims' } });
+      // Half an insurer is none: a name with no address to send to, or an address that is not one.
+      vendors.updateProfile(store.vendorId, { shippingPolicy: { insurer: { name: 'Somebody', email: 'not-an-address' } } });
+      expect(vendors.get(store.vendorId).shippingPolicy).not.toHaveProperty('insurer');
+      vendors.updateProfile(store.vendorId, { shippingPolicy: { insurer: { name: 'Jubilee', email: 'claims@jubilee.example' } } });
+      vendors.updateProfile(store.vendorId, { shippingPolicy: { insurer: null } });
+      expect(vendors.get(store.vendorId).shippingPolicy).not.toHaveProperty('insurer');
+    });
+
+    it('the report is emailed to the insurer as a link the moment it is made — a link the store sees on the report and can stop', async () => {
+      const reports = reportsOf();
+      const store = vendors.register({ name: 'Nairobi Threads' });
+      vendors.topUp(store.vendorId, 200);
+      vendors.updateProfile(store.vendorId, { shippingPolicy: { insurer: { name: 'Jubilee Allianz Claims', email: 'claims.threads@jubilee.example' } } });
+      const parcel = await reportedOrder(store, 'A', 'ORD-20481');
+
+      const [mail] = mailOutbox.recent('claims.threads@jubilee.example');
+      expect(mail).toMatchObject({ template: 'damage-report', to: { address: 'claims.threads@jubilee.example', name: 'Jubilee Allianz Claims' }, subject: `Damage claim report DCR-${parcel.parcelId} — Nairobi Threads, order ORD-20481` });
+      expect(mail.text).toContain('Nairobi Threads names Jubilee Allianz Claims as its insurer');
+      expect(mail.text).toContain('The handle came off in the box');
+      expect(mail.text).toContain('The receiver, from their own app');
+      expect(mail.text).toMatch(/does not judge a claim for damage or loss and it offers no payment/);
+      // THE LINK: a key of ours, in the part of an address no server is sent; it opens the report, signed out.
+      const key = /#report=([A-Za-z0-9_-]{43})/.exec(mail.text)?.[1];
+      expect(key).toBeDefined();
+      expect(reports.look(key!)).toMatchObject({ state: 'ready', number: `DCR-${parcel.parcelId}`, parcelId: parcel.parcelId });
+      expect(reports.fetch(key!).filename).toBe(`damage-claim-report-${parcel.parcelId}.zip`);
+      // It is the STORE's link: on the store's report, counted against the store's handful, and the store's to stop.
+      const mine = reports.linksFor(parcel.parcelId, asStore(store.did));
+      expect(mine).toEqual([expect.objectContaining({ state: 'ready', opened: 1 })]);
+      expect(reports.linksFor(parcel.parcelId, { active: true, role: 'consumer', did: persons.ensurePerson(RECEIVER).personDid, sub: 'x', scopes: [] } as never)).toEqual([]);
+      // The report says where it went, beside what it says — not inside it: the fingerprint is of what it SAYS.
+      const read = reports.read(parcel.parcelId, asStore(store.did));
+      expect(read.insurer).toEqual({ insurer: 'Jubilee Allianz Claims', sentTo: expect.stringMatching(/^c.*@.*example$/), at: expect.any(String) });
+      expect(read.insurer!.sentTo).not.toContain('claims.threads');
+      expect(read.sha256).toBe(fingerprintOf(read.body));
+      expect(JSON.stringify(read.body)).not.toContain('Jubilee');
+      expect(reports.cancelLink(parcel.parcelId, mine[0].linkId, asStore(store.did)).state).toBe('cancelled');
+      expect(reports.look(key!).state).toBe('cancelled');
+      // And the order itself says it has a report, for the store's own screen.
+      expect(parcels.vendorOrderView(store.vendorId, parcel.parcelId).damageReport).toEqual({ number: `DCR-${parcel.parcelId}` });
+    });
+
+    it('lists the reports on a store’s own orders, for the store and for staff, and for nobody else', async () => {
+      const reports = reportsOf();
+      const store = vendors.register({ name: 'Listed Store' });
+      vendors.topUp(store.vendorId, 200);
+      vendors.updateProfile(store.vendorId, { shippingPolicy: { insurer: { name: 'Britam', email: 'claims.listed@britam.example' } } });
+      const other = vendors.register({ name: 'Other Store' });
+      const parcel = await reportedOrder(store, 'B');
+
+      const rows = reports.listForStore(store.vendorId, asStore(store.did));
+      expect(rows).toEqual([expect.objectContaining({ parcelId: parcel.parcelId, number: `DCR-${parcel.parcelId}`, origin: 'buyer', store: 'Listed Store', reason: 'The handle came off in the box', links: 1, insurer: expect.objectContaining({ insurer: 'Britam' }) })]);
+      expect(reports.listForStore(store.vendorId, staff)).toHaveLength(1);
+      expect(reports.listForStore(other.vendorId, asStore(other.did))).toEqual([]);
+      // Another store, nobody signed in, and a store that does not exist: told nothing.
+      expect(() => reports.listForStore(store.vendorId, asStore(other.did))).toThrow(/No such store/);
+      expect(() => reports.listForStore(store.vendorId, undefined)).toThrow(/No such store/);
+      expect(() => reports.listForStore('ven_nobody', staff)).toThrow(/No such store/);
+    });
+
+    it('sends nothing where the store names no insurer — the store reads the report in its own app', async () => {
+      const reports = reportsOf();
+      const store = vendors.register({ name: 'Uninsured Store' });
+      vendors.topUp(store.vendorId, 200);
+      const sent = mailOutbox.recent().length;
+      const parcel = await reportedOrder(store, 'C');
+      expect(mailOutbox.recent().filter((m) => m.template === 'damage-report')).toHaveLength(mailOutbox.recent().slice(0, mailOutbox.recent().length - sent).filter((m) => m.template === 'damage-report').length);
+      expect(mailOutbox.recent().length).toBe(sent);
+      const read = reports.read(parcel.parcelId, asStore(store.did));
+      expect(read).not.toHaveProperty('insurer');
+      expect(reports.linksFor(parcel.parcelId, asStore(store.did))).toEqual([]);
+      expect(reports.listForStore(store.vendorId, asStore(store.did))[0]).not.toHaveProperty('insurer');
+    });
+  });
+
+  /**
    * A FULL SHELF. A shop is approved with as few as six slots, and a shop that size is full by lunchtime — so what
    * happens to the next parcel, and to a bag of them, is not an edge. Both used to leave records half-written.
    */
@@ -4992,6 +5114,8 @@ describe('PUDO Light', () => {
     const truck = vehicles.register({ plate: 'CB-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5 });
     fleet.couple(d.did, truck.vehicleId);
     const vendor = vendors.register({ name: 'ClawbackVendor' });
+    // An award needs a company that pays — one that has stated cover for dedicated freight (the user, 2026-10-13).
+    entities.setInsurance(entities.requireForJurisdiction('KE').entityId, { lane: 'dedicated', freeLimit: 5000 }, 'Amina Otieno');
     vendors.topUp(vendor.vendorId, 500);
     const pickup = { lat: -1.2, lng: 36.8 };
     const f = dispatch.registerFreight({ description: 'Machinery', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickup, weightKg: 200, packaging: 'palletised', shipperDid: vendor.vendorId });
@@ -5008,6 +5132,7 @@ describe('PUDO Light', () => {
     const row = dispatch.driverJobsPage(d.did, {} as never).items.find((r) => r.freightId === f.freightId)!;
     expect(row).toMatchObject({ earning: 10, paid: true, clawback: 10 });
     expect(dispatch.driverJobsSummary(d.did, {} as never).earned).toBe(0);
+    entities.setInsurance(entities.requireForJurisdiction('KE').entityId, { lane: 'dedicated', freeLimit: null }, 'Amina Otieno');
   });
 
   it('FP7: the sender’s instructions are rewritten before pickup, only added to on the road, reach the driver and the board, and never the tracking page', () => {
@@ -7514,10 +7639,24 @@ describe('PUDO Light', () => {
     expect(dispatch.postedBy('did:shop:p').find((r) => r.freightId === f.freightId)?.canClaim).toBe(true);
   });
 
-  it('FP3b: a claim on a load nobody was billed for is decided with a reason and no award; on a billed load the award is paid from the sister’s books', () => {
+  /**
+   * THE RULE HOLDS FOR FREIGHT TOO (the user, 2026-10-13). A claim is decided by staff, with an award, only where the
+   * company that billed the load has STATED COVER for dedicated freight. Everywhere else — a load settled between the
+   * parties, or billed by a company that has stated nothing — the claim closes itself the moment it is made, and the
+   * consignment note, frozen with the claim on it, is the damage claim report. It used to wait in a queue for one
+   * member of staff to award up to a million.
+   */
+  it('FP3b: a claim on a load nothing of ours pays for closes itself with the report; only a company that has stated cover decides, up to what it stated', () => {
     const pickup = { lat: -1.89, lng: 36.39 };
-    const d = coupleTipper('CL1', { min: 0.8, max: 1.5 });
+    const ke = entities.requireForJurisdiction('KE').entityId;
+    entities.setInsurance(ke, { lane: 'dedicated', freeLimit: null }, 'Amina Otieno');
+    const heard: Array<Record<string, unknown>> = [];
+    events.subscribe<Record<string, unknown>>(GlosEvent.Pudo.FreightClaimDecided, (e) => {
+      heard.push(e.payload);
+    });
+
     // A shop's own load — settled between the parties, nothing of ours to award from.
+    const d = coupleTipper('CL1', { min: 0.8, max: 1.5 });
     const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, packaging: 'loose', postedByDid: 'did:shop:q' });
     claimFreight(d.did, pickup, f.freightId);
     dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_sec' });
@@ -7527,21 +7666,17 @@ describe('PUDO Light', () => {
     expect(() => dispatch.openFreightClaim(f.freightId, 'did:shop:q', { kind: 'damaged', description: 'Three bags split open' }, t0 + 8 * 86_400_000)).toThrow(/within 7 days/);
     const holdSpy = jest.spyOn(media, 'holdFreightForDispute');
     const opened = dispatch.openFreightClaim(f.freightId, 'did:shop:q', { kind: 'damaged', description: 'Three bags split open', photoRef: 'med_claim' });
-    expect(opened.claim).toMatchObject({ state: 'open', kind: 'damaged', raisedBy: 'did:shop:q' });
     expect(holdSpy).toHaveBeenCalledWith(f.freightId, expect.any(Date));
     holdSpy.mockRestore();
-    expect(() => dispatch.openFreightClaim(f.freightId, 'did:shop:q', { kind: 'short', description: 'again' })).toThrow(/already open/);
-    expect(dispatch.openFreightClaims().map((x) => x.freightId)).toContain(f.freightId);
-    const row = dispatch.freightClaimRowOf(dispatch.openFreightClaims().find((x) => x.freightId === f.freightId)!, { sender: 'Shop Q', carrier: 'CL1' });
-    expect(row).toMatchObject({ code: f.code, kind: 'damaged', coverable: false, awardCap: 0, capBasis: 'none', evidence: ['med_sec', 'med_pod', 'med_claim'], receiverName: 'Joseph' });
-    expect(() => dispatch.resolveFreightClaim(f.freightId, { decision: 'upheld', award: 50, note: 'Photos show it' })).toThrow(/nothing to award from/);
-    expect(() => dispatch.resolveFreightClaim(f.freightId, { decision: 'rejected', note: '' })).toThrow(/reason/);
-    const decided = dispatch.resolveFreightClaim(f.freightId, { decision: 'upheld', note: 'The photos show the bags split; settle it with the carrier', by: 'Ops One' });
-    expect(decided.claim).toMatchObject({ state: 'resolved', decision: 'upheld', award: 0, paidTo: { kind: 'between_parties' }, decidedBy: 'Ops One' });
-    expect(() => dispatch.resolveFreightClaim(f.freightId, { decision: 'rejected', note: 'again' })).toThrow(/already been decided/);
+    // NOBODY OF OURS DECIDES IT: closed with the report the moment it was made, and told so on the wire — nothing waits.
+    expect(opened.claim).toMatchObject({ state: 'resolved', decision: 'report_only', award: 0, kind: 'damaged', raisedBy: 'did:shop:q', decidedBy: 'the record', note: FREIGHT_REPORT_ONLY_NOTE });
+    expect(opened.claim).not.toHaveProperty('paidTo');
     expect(dispatch.openFreightClaims().map((x) => x.freightId)).not.toContain(f.freightId);
+    expect(heard).toEqual([expect.objectContaining({ freightId: f.freightId, decision: 'report_only', award: 0, claimantDid: 'did:shop:q', posterDid: 'did:shop:q' })]);
+    expect(() => dispatch.openFreightClaim(f.freightId, 'did:shop:q', { kind: 'short', description: 'again' })).toThrow(/already been decided/);
+    expect(() => dispatch.resolveFreightClaim(f.freightId, { decision: 'upheld', award: 50, note: 'Photos show it' })).toThrow(/already been decided/);
 
-    // A store's load, billed through the network: the award comes from the sister's claims provision to the store.
+    // A store's load, billed through the network by a company that has stated NO cover: the same ending.
     const vendor = vendors.register({ name: 'ClaimShipper' });
     vendors.topUp(vendor.vendorId, 1000);
     const g = dispatch.registerFreight({ description: 'Sand', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 300, packaging: 'loose', shipperDid: vendor.vendorId });
@@ -7549,23 +7684,57 @@ describe('PUDO Light', () => {
     claimFreight(d2.did, pickup, g.freightId);
     const billed = dispatch.listFreight().find((x) => x.freightId === g.freightId)!;
     expect(billed.paidStatus).toBe('billed');
+    expect(billed.billed).toMatchObject({ coverLimit: 0 });
     dispatch.pickupFreight(g.freightId, d2.did, { confirmed: requiredLoadKeys(g), securementPhotoId: 'med_sec' });
     dispatch.deliverFreight(g.freightId, d2.did, { confirmed: requiredUnloadKeys(), receiverName: 'Anne', podPhotoId: 'med_pod' });
     const before = vendors.balanceOf(vendor.vendorId);
-    dispatch.openFreightClaim(g.freightId, vendor.vendorId, { kind: 'short', description: 'Two boxes of tiles missing' });
-    const row2 = dispatch.freightClaimRowOf(dispatch.openFreightClaims().find((x) => x.freightId === g.freightId)!, { sender: 'ClaimShipper' });
-    expect(row2).toMatchObject({ coverable: true, capBasis: 'sanity-bound', currency: 'KES' });
-    expect(row2.carriage).toBeGreaterThan(0);
-    expect(() => dispatch.resolveFreightClaim(g.freightId, { decision: 'upheld', note: 'yes' })).toThrow(/awarding something/);
-    const heard: unknown[] = [];
-    events.subscribe(GlosEvent.Pudo.FreightClaimDecided, (e) => {
-      heard.push(e.payload);
-    });
-    const paid = dispatch.resolveFreightClaim(g.freightId, { decision: 'partly_upheld', award: 120, note: 'Two boxes short of the manifest' });
-    expect(paid.claim).toMatchObject({ decision: 'partly_upheld', award: 120, paidTo: { kind: 'vendor', id: vendor.vendorId } });
-    expect(paid.claim?.funding).toBeDefined();
-    expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(before + 120, 2);
-    expect(heard).toEqual([expect.objectContaining({ freightId: g.freightId, decision: 'partly_upheld', award: 120, claimantDid: vendor.vendorId })]);
+    const closed = dispatch.openFreightClaim(g.freightId, vendor.vendorId, { kind: 'short', description: 'Two boxes of tiles missing' });
+    expect(closed.claim).toMatchObject({ state: 'resolved', decision: 'report_only', award: 0 });
+    expect(vendors.balanceOf(vendor.vendorId)).toBe(before);
+    expect(dispatch.claimCoverLimit(closed)).toBe(0);
+
+    // A CLAIM STILL OPEN FROM BEFORE on such a load — as the record would stand — waits with nothing to award, and is
+    // closed with a reason and never with money.
+    const old = dispatch.requireFreightPublic(g.freightId);
+    old.claim = { ...old.claim!, state: 'open', decision: undefined, decidedBy: undefined, decidedAt: undefined, note: undefined };
+    expect(dispatch.openFreightClaims().map((x) => x.freightId)).toContain(g.freightId);
+    expect(dispatch.freightClaimRowOf(old, { sender: 'ClaimShipper' })).toMatchObject({ coverable: true, awardCap: 0, capBasis: 'none' });
+    expect(() => dispatch.resolveFreightClaim(g.freightId, { decision: 'upheld', award: 1, note: 'ours' })).toThrow(/stated no cover/);
+    expect(() => dispatch.resolveFreightClaim(g.freightId, { decision: 'partly_upheld', award: 0.01, note: 'a little' })).toThrow(/stated no cover/);
+    expect(dispatch.resolveFreightClaim(g.freightId, { decision: 'rejected', note: 'The consignment note is the report', by: 'Ops One' }).claim).toMatchObject({ state: 'resolved', decision: 'rejected', award: 0, decidedBy: 'Ops One' });
+    expect(vendors.balanceOf(vendor.vendorId)).toBe(before);
+
+    // THE COMPANY STATES COVER — and from then a load it bills carries it, stamped at billing, and its claim waits for staff.
+    entities.setInsurance(ke, { lane: 'dedicated', freeLimit: 5000 }, 'Amina Otieno');
+    try {
+      const h = dispatch.registerFreight({ description: 'Tiles', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 300, packaging: 'loose', shipperDid: vendor.vendorId });
+      const d3 = coupleTipper('CL3', { min: 0.8, max: 1.5 });
+      claimFreight(d3.did, pickup, h.freightId);
+      expect(dispatch.listFreight().find((x) => x.freightId === h.freightId)!.billed).toMatchObject({ coverLimit: 5000 });
+      dispatch.pickupFreight(h.freightId, d3.did, { confirmed: requiredLoadKeys(h), securementPhotoId: 'med_sec' });
+      dispatch.deliverFreight(h.freightId, d3.did, { confirmed: requiredUnloadKeys(), receiverName: 'Anne', podPhotoId: 'med_pod' });
+      // The cover a load was billed under is the cover on its claim: stating more afterwards changes nothing on it.
+      entities.setInsurance(ke, { lane: 'dedicated', freeLimit: 9000 }, 'Amina Otieno');
+      const beforeAward = vendors.balanceOf(vendor.vendorId);
+      const waiting = dispatch.openFreightClaim(h.freightId, vendor.vendorId, { kind: 'short', description: 'Two boxes of tiles missing', photoRef: 'med_claim' });
+      expect(waiting.claim).toMatchObject({ state: 'open', kind: 'short' });
+      expect(dispatch.openFreightClaims().map((x) => x.freightId)).toEqual([h.freightId]);
+      const row = dispatch.freightClaimRowOf(waiting, { sender: 'ClaimShipper', carrier: 'CL3' });
+      expect(row).toMatchObject({ code: h.code, coverable: true, awardCap: 5000, capBasis: 'free-limit', currency: 'KES', evidence: ['med_sec', 'med_pod', 'med_claim'], receiverName: 'Anne' });
+      expect(row.carriage).toBeGreaterThan(0);
+      expect(() => dispatch.resolveFreightClaim(h.freightId, { decision: 'upheld', note: 'yes' })).toThrow(/awarding something/);
+      expect(() => dispatch.resolveFreightClaim(h.freightId, { decision: 'upheld', award: 5000.01, note: 'all of it' })).toThrow(/covered to 5000.00 by the company that billed it/);
+      expect(() => dispatch.resolveFreightClaim(h.freightId, { decision: 'rejected', note: '' })).toThrow(/reason/);
+      const paid = dispatch.resolveFreightClaim(h.freightId, { decision: 'partly_upheld', award: 120, note: 'Two boxes short of the manifest', by: 'Ops One' });
+      expect(paid.claim).toMatchObject({ decision: 'partly_upheld', award: 120, paidTo: { kind: 'vendor', id: vendor.vendorId }, decidedBy: 'Ops One' });
+      expect(paid.claim?.funding).toBeDefined();
+      expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(beforeAward + 120, 2);
+      expect(heard[heard.length - 1]).toEqual(expect.objectContaining({ freightId: h.freightId, decision: 'partly_upheld', award: 120, claimantDid: vendor.vendorId }));
+      expect(() => dispatch.resolveFreightClaim(h.freightId, { decision: 'rejected', note: 'again' })).toThrow(/already been decided/);
+      expect(dispatch.openFreightClaims()).toEqual([]);
+    } finally {
+      entities.setInsurance(ke, { lane: 'dedicated', freeLimit: null }, 'Amina Otieno');
+    }
   });
 
   it('FP3: a load already on the road cannot be cancelled, and open prices on a withdrawn load are superseded', () => {

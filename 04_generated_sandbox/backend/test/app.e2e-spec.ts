@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { OutboxMailSender } from '../src/foundation/mail/outbox-mail.sender';
 
 describe('GLOS backend (e2e)', () => {
   let app: INestApplication;
@@ -730,6 +731,11 @@ describe('GLOS backend (e2e)', () => {
     expect(reFetched.body.secret).toBeUndefined();
     // The store pays in and mints its own order, signed in as itself: staff do neither in a store's name.
     const acme = await asStore(vendor.body);
+    // THE STORE NAMES ITS INSURER on its shipping policy, signed in as itself: staff cannot, and half an insurer is refused.
+    await request(http).patch(`/v1/sbg/vendors/${vendor.body.vendorId}`).set(auth).send({ shippingPolicy: { insurer: { name: 'Jubilee', email: 'claims@jubilee.example' } } }).expect(403);
+    expect((await request(http).patch(`/v1/sbg/vendors/${vendor.body.vendorId}`).set(acme).send({ shippingPolicy: { insurer: { name: 'Jubilee', email: 'not-an-address' } } })).status).toBe(400);
+    const insured = await request(http).patch(`/v1/sbg/vendors/${vendor.body.vendorId}`).set(acme).send({ shippingPolicy: { insurer: { name: 'Jubilee Allianz Claims', email: 'Claims@Jubilee.Example' } } }).expect(200);
+    expect(insured.body.shippingPolicy.insurer).toEqual({ name: 'Jubilee Allianz Claims', email: 'claims@jubilee.example' });
     await request(http).post(`/v1/sbg/vendors/${vendor.body.vendorId}/top-up`).set(auth).send({ amount: 50 }).expect(403);
     const { asked: topped } = await fund(`/v1/sbg/vendors/${vendor.body.vendorId}/top-up`, 50, acme, auth); // prepay the daughter co
     expect(topped.body.secret).toBeUndefined();
@@ -745,6 +751,27 @@ describe('GLOS backend (e2e)', () => {
     const shelf = await request(http).post(`/v1/sbg/parcels/${parcelId}/shelve`).set(auth).send({ agentDid: dest }).expect(201);
     expect(shelf.body.binSlot).toMatch(/^[A-Za-z]+-[1-9]$/);
 
+    // A PROBLEM REPORTED AT THE COUNTER. Nobody of ours decides it: the damage claim report is made on the spot, the
+    // parcel stays collectable, and the report is emailed to the store's insurer as a link — the user, 2026-10-13.
+    const reported = await request(http).post(`/v1/sbg/parcels/${parcelId}/dispute`).set(auth).send({ agentDid: dest, reason: 'The box is torn at one corner', photoProofRef: 'proof.jpg' }).expect(201);
+    expect(reported.body).toMatchObject({ status: 'Ready_For_Pickup', dispute: { state: 'resolved', decision: 'report_only' } });
+    const [mail] = app.get(OutboxMailSender).recent('claims@jubilee.example');
+    expect(mail).toMatchObject({ template: 'damage-report', to: { address: 'claims@jubilee.example', name: 'Jubilee Allianz Claims' }, subject: `Damage claim report DCR-${parcelId} — ACME Store, order ORD-77` });
+    expect(mail.text).toContain('The box is torn at one corner');
+    const key = /#report=([A-Za-z0-9_-]{43})/.exec(mail.text)?.[1] ?? '';
+    expect(key).toHaveLength(43);
+    // Whoever holds the email opens it with nobody signed in.
+    expect((await request(http).post('/v1/sbg/damage-report-links/look').send({ token: key }).expect(200)).body).toMatchObject({ state: 'ready', number: `DCR-${parcelId}`, parcelId });
+    // The store lists it with where it went; staff read the list too; the order itself says it has a report.
+    const mine = await request(http).get(`/v1/sbg/vendors/${vendor.body.vendorId}/damage-reports`).set(acme).expect(200);
+    expect(mine.body.items).toEqual([expect.objectContaining({ parcelId, number: `DCR-${parcelId}`, origin: 'counter', links: 1, insurer: expect.objectContaining({ insurer: 'Jubilee Allianz Claims' }) })]);
+    expect(mine.body.items[0].insurer.sentTo).not.toContain('claims@');
+    await request(http).get(`/v1/sbg/vendors/${vendor.body.vendorId}/damage-reports`).set(auth).expect(200);
+    expect((await request(http).get(`/v1/sbg/vendors/${vendor.body.vendorId}/orders/${parcelId}`).set(acme).expect(200)).body.damageReport).toEqual({ number: `DCR-${parcelId}` });
+    const theirs = await request(http).get(`/v1/sbg/parcels/${parcelId}/damage-report`).set(acme).expect(200);
+    expect(theirs.body.insurer).toMatchObject({ insurer: 'Jubilee Allianz Claims' });
+    expect((await request(http).get(`/v1/sbg/parcels/${parcelId}/damage-report/links`).set(acme).expect(200)).body.items).toEqual([expect.objectContaining({ state: 'ready', opened: 0 })]);
+
     // Buyer collection.
     const found = await request(http).post('/v1/sbg/parcels/collect').set(auth).send({ agentDid: dest, collectionCode }).expect(201);
     expect(found.body.parcel.parcelId).toBe(parcelId);
@@ -753,7 +780,7 @@ describe('GLOS backend (e2e)', () => {
 
     // Vendor received signed status callbacks.
     const cbs = await request(http).get(`/v1/sbg/vendors/${vendor.body.vendorId}/callbacks`).set(auth).expect(200);
-    expect(cbs.body.map((c: { event: string }) => c.event)).toEqual(expect.arrayContaining(['ready_for_pickup', 'collected']));
+    expect(cbs.body.map((c: { event: string }) => c.event)).toEqual(expect.arrayContaining(['ready_for_pickup', 'disputed', 'collected']));
   });
 
   it('PUDO MDP hub: pack a bag → bus scans it → drop+empty → sort each parcel → re-bag (tote-bag flow)', async () => {
