@@ -5,6 +5,8 @@
 #                    console's entrance"); CONSOLE_ALLOW_IPS narrows who may load it at all
 #   CADDY_EDGE       what stands in front of this server: `direct` (nothing — a laptop, or a server the world reaches
 #                    itself) or `cloudflare` (Cloudflare's proxy, the orange cloud)
+#   SBG_REDIRECT_HOSTS  other names sent on to the public site (www.…), names with spaces between — `direct` only:
+#                    behind Cloudflare its own redirect rule does this (DEPLOY.md)
 #
 # An http:// address (a laptop, http://localhost:8080) is served as is, on the port it names. An https:// address gets
 # a certificate Caddy obtains and renews on its own: `direct`, by Let's Encrypt reaching this server; `cloudflare`,
@@ -57,6 +59,20 @@
 	header @unhashed Cache-Control "no-cache"
 }
 
+# Asked by the container's own health check, from inside the container, and by nothing else.
+http://127.0.0.1:9180 {
+	bind 127.0.0.1
+	respond "ok" 200
+}
+
+# THE OTHER NAMES PEOPLE TYPE for the public site — www, above all — sent on to the one address it has, with whatever
+# came after the name. Each needs its own DNS record, and gets its own certificate. Unset, this answers a name nobody
+# has.
+{$SBG_REDIRECT_HOSTS:http://nobody.invalid:9181} {
+	import security_headers
+	redir {$SBG_PUBLIC_URL}{uri} 308
+}
+
 {$SBG_PUBLIC_URL} {
 	import tls_{$CADDY_EDGE}
 	import security_headers
@@ -76,6 +92,17 @@
 
 		@bare path_regexp ^/(driver|agent|send|fleet|mdp|vendor|business)$
 		redir @bare {path}/ 308
+
+		# A FILE ASKED FOR BY NAME THAT IS NOT THERE IS A 404 — never an app's page with a 200. After a release an
+		# open app may still ask for a script the release replaced: handed a page, it fails on the first character;
+		# told "not found", its service worker knows to fetch the new one.
+		@gone {
+			not file {path} {path}/
+			path_regexp \.[A-Za-z0-9]+$
+		}
+		handle @gone {
+			respond "Not found" 404
+		}
 
 		# Each app answers any path under its own base with its own shell.
 		@app path_regexp app ^/(driver|agent|send|fleet|mdp|vendor|business)/
@@ -101,13 +128,29 @@
 		X-Frame-Options DENY
 	}
 
-	# A stranger outside the allow-list gets nothing that says a console is here.
+	# A stranger outside the allow-list gets nothing that says a console is here. The first of the handles below, so
+	# that it comes before everything else on this address (handles are tried in the order they are written).
 	@outside not client_ip {$CONSOLE_ALLOW_IPS}
-	respond @outside 404
+	handle @outside {
+		respond 404
+	}
 
-	encode zstd gzip
-	root * /srv/console
-	import static_caching
-	try_files {path} /index.html
-	file_server
+	handle {
+		encode zstd gzip
+		root * /srv/console
+		import static_caching
+
+		@gone {
+			not file {path} {path}/
+			path_regexp \.[A-Za-z0-9]+$
+		}
+		handle @gone {
+			respond "Not found" 404
+		}
+
+		handle {
+			try_files {path} /index.html
+			file_server
+		}
+	}
 }

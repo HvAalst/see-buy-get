@@ -5,6 +5,7 @@ import { AppModule } from './app.module';
 import { isSandbox } from './foundation/runtime/sandbox';
 import { applyEdge } from './edge';
 import { readProviderEventsRaw } from './foundation/mail/provider-events.raw';
+import { flushPersistentMaps } from './foundation/store/persistent-map';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -47,6 +48,30 @@ async function bootstrap() {
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
   Logger.log(`GLOS backend listening on http://localhost:${port}/v1`, 'Bootstrap');
+
+  /*
+   * A STOP THAT LOSES NOTHING. A deploy and a reboot both stop this process on purpose, with SIGTERM. A value changed
+   * in place is written on a two-second backstop (see PersistentMap), so a process that simply died took up to two
+   * seconds of such changes with it, every time. Told to stop: take no new request, answer the ones in hand, write
+   * every map, go. The timer is for a connection that never ends — what is in memory is written either way.
+   */
+  let stopping = false;
+  const stop = (signal: string) => {
+    if (stopping) return;
+    stopping = true;
+    Logger.log(`${signal}: answering what is in hand, then writing what is in memory to disk`, 'Bootstrap');
+    const written = () => {
+      flushPersistentMaps();
+      process.exit(0);
+    };
+    setTimeout(written, 8000).unref();
+    void app
+      .close()
+      .catch(() => undefined)
+      .then(written);
+  };
+  process.once('SIGTERM', () => stop('SIGTERM'));
+  process.once('SIGINT', () => stop('SIGINT'));
 }
 
 void bootstrap();

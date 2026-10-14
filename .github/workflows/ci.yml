@@ -1,0 +1,118 @@
+name: CI
+
+# What has to hold before anything is merged or released: the backend builds, boots and passes its tests; the
+# frontend type-checks against the backend's contract and passes its tests; both images build.
+#
+# On main this is not run by itself: deploy.yml runs it as the first thing a release does.
+
+on:
+  pull_request:
+    # The application, and the things outside its folder that its tests or its images read.
+    paths:
+      - '04_platform/**'
+      - 'help.html'
+      - 'brand/**'
+      - '.dockerignore'
+      - '.github/workflows/**'
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      skip-images:
+        description: Do not build the two images as a check (a release builds them anyway, straight after)
+        type: boolean
+        default: false
+
+# A pull request that is pushed to again stops the run it replaced. A release is never stopped by another.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: 04_platform/backend
+    steps:
+      - uses: actions/checkout@v7
+      # The Node the images run (04_platform/*/Dockerfile).
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: 04_platform/backend/package-lock.json
+      - run: npm ci
+
+      # REPORTS, DOES NOT STOP — for now. The linter finds about a hundred things in code that was already here
+      # (unused names, `require` in tests), and a check that fails on every run teaches everybody to look past it.
+      # When they are cleared, take the next line out and the linter decides again.
+      - name: Lint
+        continue-on-error: true
+        run: npx eslint "{src,test}/**/*.ts"
+
+      # `spec` builds, then starts the whole application to write its contract down — the one step that proves the
+      # server can start at all, which no unit test does — then checks the contract over.
+      - name: Build, start the whole application once, and write its contract
+        run: npm run spec
+      - name: The contract in the repository is the one this code makes
+        run: git diff --exit-code -- contracts/openapi.json
+
+      - name: Unit tests
+        run: npm test
+      - name: End-to-end tests
+        run: npm run test:e2e
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: 04_platform/frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: 04_platform/frontend/package-lock.json
+      - run: npm ci
+      - name: Types, from the backend's contract
+        run: npm run types
+      - name: Type-check
+        run: npm run typecheck
+      - name: Tests
+        run: npm test
+
+  # The frontend's own build runs inside its image, so building the images is also what proves every app builds.
+  images:
+    name: Images build
+    if: ${{ !inputs.skip-images }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: API image
+        uses: docker/build-push-action@v7
+        with:
+          context: 04_platform/backend
+          push: false
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+      - name: Web image
+        uses: docker/build-push-action@v7
+        with:
+          # From the repository root: the site serves help.html (04_platform/frontend/Dockerfile, and .dockerignore).
+          context: .
+          file: 04_platform/frontend/Dockerfile
+          # Any address will do to prove it builds; nothing built here is kept.
+          build-args: SBG_PUBLIC_URL=https://ci.invalid
+          push: false
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max

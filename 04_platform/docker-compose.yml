@@ -27,6 +27,8 @@ services:
     volumes:
       # Sign-ins, wallets, prepaid balances, the identity vault and uploaded media. Lose this, lose them.
       - api-data:/data
+    # Told to stop, it answers what is in hand and writes what is in memory to disk (src/main.ts). Give it the time.
+    stop_grace_period: 20s
 
   web:
     build:
@@ -40,6 +42,8 @@ services:
       SBG_PUBLIC_URL: ${SBG_PUBLIC_URL}
       SBG_CONSOLE_URL: ${SBG_CONSOLE_URL}
       CONSOLE_ALLOW_IPS: ${CONSOLE_ALLOW_IPS:-0.0.0.0/0 ::/0}
+      # Other names sent on to the public site (www.…). Unset: a name nobody has, so the Caddyfile still reads.
+      SBG_REDIRECT_HOSTS: ${SBG_REDIRECT_HOSTS:-http://nobody.invalid:9181}
       # What stands in front: direct (nothing) or cloudflare (its proxy; needs CLOUDFLARE_API_TOKEN). See Caddyfile.
       CADDY_EDGE: ${CADDY_EDGE:-direct}
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}

@@ -51,7 +51,8 @@ Where the surfaces live:
 Each app runs on its own Vite port and only when you start it: `SBG_APP=<app> npm --prefix frontend run dev`.
 The sign-in sheet `seed:demo` prints has the logins for each one.
 
-> Note: it's an in-memory backend — restarting it clears the data; just run `seed:demo` again.
+> Note: what matters is kept in files under `backend/data/` and is read back when the backend starts, so a restart
+> keeps the demo world. To start from nothing, stop the backend, delete `backend/data/`, and run `seed:demo` again.
 
 ## Start, stop, restart
 
@@ -62,4 +63,5 @@ you name in the background (logs in `.run/`); docker mode runs the Compose stack
 ## Docker, and deploying it
 
 `DEPLOY.md` — one Compose stack for a laptop (`.env.local.example`, http://localhost:8080) and for a server
-(`.env.cloud.example`, HTTPS on a DigitalOcean Droplet).
+(`.env.cloud.example`, HTTPS on a DigitalOcean Droplet). A push to `main` is tested, built and released to the server
+by `.github/workflows/deploy.yml` once the repository knows where the server is (DEPLOY.md, "Releases from GitHub").

@@ -1,7 +1,7 @@
-import { mkdtempSync, rmSync, existsSync, writeFileSync } from 'fs';
+import { mkdtempSync, readFileSync, rmSync, existsSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { PersistentMap } from './persistent-map';
+import { PersistentMap, flushPersistentMaps } from './persistent-map';
 
 /**
  * These tests must exercise REAL disk (the whole point of the class), but the global Jest guard
@@ -83,5 +83,34 @@ describe('PersistentMap', () => {
     const m = new PersistentMap<string, number>('eph', { file, ephemeral: true });
     m.set('a', 1);
     expect(existsSync(file)).toBe(false);
+  });
+
+  it('writes a value changed in place when the server is told to stop, without waiting for the backstop', () => {
+    const file = join(dir, 'stop.json');
+    const m = new PersistentMap<string, { status: string }>('stop', { file });
+    m.set('p1', { status: 'At_PUDO' });
+    (m.get('p1') as { status: string }).status = 'Collected'; // in place, no set(): only the backstop would write it
+
+    // What a process that simply died would have left behind.
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual([['p1', { status: 'At_PUDO' }]]);
+    flushPersistentMaps();
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual([['p1', { status: 'Collected' }]]);
+    m.stop();
+  });
+
+  it('leaves a map alone once it has been stopped', () => {
+    const file = join(dir, 'stopped.json');
+    const m = new PersistentMap<string, { n: number }>('stopped', { file });
+    m.set('a', { n: 1 });
+    m.stop();
+    (m.get('a') as { n: number }).n = 2;
+    flushPersistentMaps();
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual([['a', { n: 1 }]]);
+  });
+
+  it('is what the server does on SIGTERM, which is how a deploy stops it', () => {
+    const main = readFileSync(join(__dirname, '..', '..', 'main.ts'), 'utf8');
+    expect(main).toContain("process.once('SIGTERM'");
+    expect(main).toContain('flushPersistentMaps();');
   });
 });

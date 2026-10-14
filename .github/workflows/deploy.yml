@@ -1,0 +1,191 @@
+name: Deploy
+
+# A push to main that touches the application is a release: tested, built into two images, and put on the server.
+# Setting it up, and what to do when it goes wrong: 04_platform/DEPLOY.md, "Releases from GitHub".
+#
+# Until the repository has been told where its server is (the variable DEPLOY_HOST), a push is tested and nothing
+# more — so this can sit on main before there is a server.
+
+on:
+  push:
+    branches: [main]
+    # The application, and the things outside its folder that its tests or its images read. A push that touches
+    # none of them (progress.html, the playbooks) releases nothing.
+    paths:
+      - '04_platform/**'
+      - 'help.html'
+      - 'brand/**'
+      - '.dockerignore'
+      - '.github/workflows/**'
+  workflow_dispatch:
+    inputs:
+      release:
+        description: >-
+          Leave empty to release this commit. To put an earlier release on again (going back), give its full
+          commit id: it is not tested or built again, its images are used as they were made.
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    if: ${{ inputs.release == '' }}
+    uses: ./.github/workflows/ci.yml
+    with:
+      skip-images: true
+
+  not-set-up:
+    name: Tested, not released
+    if: ${{ vars.DEPLOY_HOST == '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "::notice::Nothing was released - this repository has not been told where its server is (the variable DEPLOY_HOST). See 04_platform/DEPLOY.md."
+
+  publish:
+    name: Build the images
+    needs: test
+    if: ${{ vars.DEPLOY_HOST != '' && inputs.release == '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      # The apps are built FOR an address (04_platform/frontend/Dockerfile). Asked for here, before a quarter of an
+      # hour is spent finding out.
+      - name: The site's two addresses are known
+        if: ${{ vars.SBG_PUBLIC_URL == '' || vars.SBG_CONSOLE_URL == '' }}
+        run: |
+          echo "::error::Set the repository variables SBG_PUBLIC_URL (the public site, like https://example.com) and SBG_CONSOLE_URL (the operator console, like https://ops.example.com)."
+          exit 1
+
+      # `pages` is what makes the build fetch the town pages again instead of taking yesterday's from its cache
+      # (04_platform/frontend/Dockerfile, PAGES_AS_OF): the day for a push, and always for a run started by hand.
+      - name: Where the images go, and how fresh the public pages are to be
+        id: names
+        run: |
+          echo "repo=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            echo "pages=run-$GITHUB_RUN_ID" >> "$GITHUB_OUTPUT"
+          else
+            echo "pages=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: API image
+        uses: docker/build-push-action@v7
+        with:
+          context: 04_platform/backend
+          push: true
+          tags: ${{ steps.names.outputs.repo }}/api:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+
+      - name: Web image
+        uses: docker/build-push-action@v7
+        with:
+          # From the repository root: the site serves help.html (04_platform/frontend/Dockerfile, and .dockerignore).
+          context: .
+          file: 04_platform/frontend/Dockerfile
+          build-args: |
+            SBG_PUBLIC_URL=${{ vars.SBG_PUBLIC_URL }}
+            PAGES_AS_OF=${{ steps.names.outputs.pages }}
+          push: true
+          tags: ${{ steps.names.outputs.repo }}/web:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+
+  deploy:
+    name: Put it on the server
+    needs: publish
+    # After a build that succeeded — or with no build at all, when an earlier release was asked for by its id.
+    if: ${{ !cancelled() && vars.DEPLOY_HOST != '' && (needs.publish.result == 'success' || (inputs.release != '' && needs.publish.result == 'skipped')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Give this environment required reviewers (Settings → Environments) and every release waits for a yes.
+    environment:
+      name: production
+      url: ${{ vars.SBG_PUBLIC_URL }}
+    # One release at a time, and one that has started is never stopped half way by the next.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    env:
+      RELEASE: ${{ inputs.release || github.sha }}
+      TARGET: deploy@${{ vars.DEPLOY_HOST }}
+      SBG_PUBLIC_URL: ${{ vars.SBG_PUBLIC_URL }}
+      SBG_CONSOLE_URL: ${{ vars.SBG_CONSOLE_URL }}
+      SBG_REDIRECT_HOSTS: ${{ vars.SBG_REDIRECT_HOSTS }}
+      CONSOLE_ALLOW_IPS: ${{ vars.CONSOLE_ALLOW_IPS }}
+    steps:
+      # The server's own files, as they were in the release being put on: the two compose files, the settings
+      # template and the script (the files directly in 04_platform/ come with its scripts/ folder).
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release || github.sha }}
+          sparse-checkout: 04_platform/scripts
+
+      - name: The key, and whose server it opens
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          [ -n "$DEPLOY_SSH_KEY" ] || { echo "::error::The secret DEPLOY_SSH_KEY is not set (the private half of the deploy key)."; exit 1; }
+          [ -n "$DEPLOY_KNOWN_HOSTS" ] || { echo "::error::The variable DEPLOY_KNOWN_HOSTS is not set. setup-droplet.sh prints it. Without it this would sign in to whatever answered at that address."; exit 1; }
+          install -m 700 -d ~/.ssh
+          # A key pasted from a Windows file carries carriage returns, and ssh then calls it invalid.
+          printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
+          printf '%s\n' 'Host *' '  IdentityFile ~/.ssh/id_deploy' '  IdentitiesOnly yes' '  StrictHostKeyChecking yes' '  BatchMode yes' '  ConnectTimeout 20' > ~/.ssh/config
+          echo "IMAGE_REPO=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - name: Send the server its files
+        working-directory: 04_platform
+        run: scp docker-compose.yml docker-compose.cloud.yml .env.cloud.example scripts/deploy.sh "$TARGET:/opt/seebuyget/"
+
+      - name: Release
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Signed in for the length of this job only: the token stops working when the job ends.
+          printf '%s' "$GHCR_TOKEN" | ssh "$TARGET" "docker login ghcr.io --username $(printf '%q' "$GITHUB_ACTOR") --password-stdin" >/dev/null
+          ssh "$TARGET" "$(printf 'cd /opt/seebuyget && chmod +x deploy.sh && IMAGE_REPO=%q SBG_PUBLIC_URL=%q SBG_CONSOLE_URL=%q SBG_REDIRECT_HOSTS=%q CONSOLE_ALLOW_IPS=%q ./deploy.sh %q' \
+            "$IMAGE_REPO" "$SBG_PUBLIC_URL" "$SBG_CONSOLE_URL" "$SBG_REDIRECT_HOSTS" "$CONSOLE_ALLOW_IPS" "$RELEASE")"
+
+      - name: Sign the server out of the registry
+        if: ${{ always() }}
+        run: ssh "$TARGET" "docker logout ghcr.io" >/dev/null 2>&1 || true
+
+      # The server said it is up. This asks from outside, through the address and its certificate, as a phone would.
+      - name: Ask the site, from outside
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl -fsS --max-time 10 "${SBG_PUBLIC_URL%/}/v1/health" | grep -q '"status":"ok"'; then
+              echo "${SBG_PUBLIC_URL%/}/v1/health answers."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::The release is running on the server, but ${SBG_PUBLIC_URL%/}/v1/health did not answer from outside. On a first release this is the name not pointing at the server yet (DNS), or ports 80 and 443 not open: the certificate cannot be issued until both are right."
+          exit 1

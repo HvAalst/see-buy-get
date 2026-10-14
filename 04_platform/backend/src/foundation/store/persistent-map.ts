@@ -59,6 +59,21 @@ export interface PersistentMapOptions {
  */
 const FLUSH_MS = Number(process.env.GLOS_FLUSH_MS ?? 2000);
 
+/** Every map that writes to disk, so that a stop can write all of them: see flushPersistentMaps. */
+const LIVE = new Set<{ touch(): void }>();
+
+/**
+ * Write every map's pending change NOW — what the server does when it is told to stop.
+ *
+ * A value changed in place reaches disk only on the backstop above, so a process that simply died took up to
+ * FLUSH_MS of such changes with it. On a laptop that is a restart nobody notices; on a server it is every deploy
+ * and every reboot, each one stopping the process on purpose. `main.ts` calls this on SIGTERM, after the last
+ * request has been answered.
+ */
+export function flushPersistentMaps(): void {
+  for (const map of LIVE) map.touch();
+}
+
 export class PersistentMap<K extends string, V> implements Map<K, V> {
   private readonly logger = new Logger(PersistentMap.name);
   private readonly cache = new Map<K, V>();
@@ -80,6 +95,7 @@ export class PersistentMap<K extends string, V> implements Map<K, V> {
       // Backstop for in-place mutations. unref() so this timer never holds the process open.
       this.timer = setInterval(() => this.flush(), FLUSH_MS);
       this.timer.unref?.();
+      LIVE.add(this);
     }
   }
 
@@ -186,6 +202,7 @@ export class PersistentMap<K extends string, V> implements Map<K, V> {
   stop(): void {
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
+    LIVE.delete(this);
     this.flush();
   }
 }

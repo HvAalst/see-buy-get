@@ -1,0 +1,8 @@
+# Files that Linux reads — in an image, or on the server — whatever machine they were checked out on. With a
+# carriage return on the end of each line a shell script does not run at all.
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+Caddyfile   text eol=lf
+.dockerignore text eol=lf
+# Copied to the server as the start of its settings (04_platform/scripts/deploy.sh).
+.env*.example text eol=lf
