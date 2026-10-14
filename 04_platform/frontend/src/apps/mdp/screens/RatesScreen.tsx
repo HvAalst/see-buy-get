@@ -13,7 +13,10 @@ export function RatesScreen({ state, actions }: RatesScreenProps) {
   const t = useT();
   const mine = Number(state.hub?.pricePerParcel ?? 0);
   const b = state.rates?.benchmark;
-  const band = priceBand(mine, b ?? null, t);
+  // Every fee here is in the one money the server compared them in; the hub's own, before any hub is beside it,
+  // in its company's.
+  const currency = state.rates?.currency;
+  const band = priceBand(mine, b ?? null, t, currency);
   const pins = (state.rates?.pins ?? []).filter((p) => p.id !== state.hub?.mdpId).slice(0, 8);
 
   return (
@@ -28,15 +31,15 @@ export function RatesScreen({ state, actions }: RatesScreenProps) {
       {state.ratesState === 'ready' && !band ? (
         <Card>
           <p class="t-body">{t('mdp.rates.nonePublished')}</p>
-          <p class="card__note">{t('mdp.rates.settingBenchmark', { price: money(mine) })}</p>
+          <p class="card__note">{t('mdp.rates.settingBenchmark', { price: money(mine, state.hub?.currency) })}</p>
         </Card>
       ) : null}
 
       {band && b ? (
         <>
           <Card label={`${t('mdp.rates.nearbyHubs', { count: b.count })}${state.rates?.radiusKm ? t('mdp.rates.withinKm', { km: state.rates.radiusKm }) : ''}`}>
-            <p class="rates__median">{money(b.median)}</p>
-            <p class="card__note">{t('mdp.rates.mostCharge', { low: money(b.p25), high: money(b.p75) })}</p>
+            <p class="rates__median">{money(b.median, currency)}</p>
+            <p class="card__note">{t('mdp.rates.mostCharge', { low: money(b.p25, currency), high: money(b.p75, currency) })}</p>
             <BandScale
               min={b.min}
               p25={b.p25}
@@ -44,7 +47,7 @@ export function RatesScreen({ state, actions }: RatesScreenProps) {
               p75={b.p75}
               max={b.max}
               mine={mine}
-              label={t('mdp.rates.bandAria', { min: money(b.min), max: money(b.max), mine: money(mine) })}
+              label={t('mdp.rates.bandAria', { min: money(b.min, currency), max: money(b.max, currency), mine: money(mine, currency) })}
             />
             <p class="t-body" style="margin-top:6px">
               {band.headline}
@@ -66,7 +69,7 @@ export function RatesScreen({ state, actions }: RatesScreenProps) {
           {pins.map((p) => (
             <div key={p.id} class="kv">
               <span>{`${p.label}${p.km != null ? t('mdp.rates.kmSuffix', { km: p.km }) : ''}`}</span>
-              <b>{money(p.price)}</b>
+              <b>{money(p.price, currency)}</b>
             </div>
           ))}
         </Card>

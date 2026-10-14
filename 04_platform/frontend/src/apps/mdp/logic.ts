@@ -5,6 +5,7 @@
  */
 
 import type { Translate } from '../../shared/i18n';
+import { cash } from '../../shared/money';
 import type { Benchmark, MdpView, ParcelRow, SortView, ToteView } from './types';
 
 /* ------------------------------------------------------------------- hub -- */
@@ -87,8 +88,10 @@ export function placeLine(sort: SortView, t: Translate): string {
 
 /* ------------------------------------------------------------------ money -- */
 
-export function money(v: number | null | undefined): string {
-  return (Number(v) || 0).toFixed(2);
+/** A fee with two decimals, in the money the server named for it (the hub’s company’s); bare where none is named —
+ *  what the fee box holds. */
+export function money(v: number | null | undefined, currency?: string): string {
+  return cash(v, currency);
 }
 
 export function roundMoney(v: number): number {
@@ -104,9 +107,10 @@ export interface PriceBand {
   matchLabel: string;
 }
 
-/** The hub's sort fee against nearby hubs — same band rules as the agent app, hub wording. */
-export function priceBand(pricePerParcel: number | null | undefined, benchmark: Benchmark | null | undefined, t: Translate): PriceBand | null {
-  if (!benchmark || !benchmark.count) return null;
+/** The hub's sort fee against nearby hubs — same band rules as the agent app, hub wording. Null without the money
+ *  the hubs were compared in: a comparison that cannot say its money is not shown at all. */
+export function priceBand(pricePerParcel: number | null | undefined, benchmark: Benchmark | null | undefined, t: Translate, currency?: string): PriceBand | null {
+  if (!benchmark || !benchmark.count || !currency) return null;
 
   const mine = Number(pricePerParcel ?? 0);
   const pct = benchmark.median > 0 ? Math.round(((mine - benchmark.median) / benchmark.median) * 100) : 0;
@@ -119,10 +123,10 @@ export function priceBand(pricePerParcel: number | null | undefined, benchmark: 
         : t('mdp.logic.chargeSame');
 
   const detail = t('mdp.logic.bandDetail', {
-    mine: money(mine),
-    median: money(benchmark.median),
-    min: money(benchmark.min),
-    max: money(benchmark.max),
+    mine: money(mine, currency),
+    median: money(benchmark.median, currency),
+    min: money(benchmark.min, currency),
+    max: money(benchmark.max, currency),
     count: benchmark.count,
   });
 
@@ -132,7 +136,7 @@ export function priceBand(pricePerParcel: number | null | undefined, benchmark: 
     detail,
     showMatch: Math.abs(pct) > 1,
     matchPrice: roundMoney(benchmark.median),
-    matchLabel: t('mdp.logic.matchLabel', { price: money(benchmark.median) }),
+    matchLabel: t('mdp.logic.matchLabel', { price: money(benchmark.median, currency) }),
   };
 }
 

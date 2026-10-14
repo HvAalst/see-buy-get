@@ -135,9 +135,19 @@ describe('priceBand', () => {
   const bm: Benchmark = { count: 4, median: 0.5, p25: 0.4, p75: 0.6, min: 0.3, max: 0.8 };
 
   it('mirrors the agent band with hub wording', () => {
-    expect(priceBand(0.75, bm, t)?.headline).toContain('50% more than nearby hubs');
-    expect(priceBand(0.5, bm, t)?.showMatch).toBe(false);
-    expect(priceBand(0.75, null, t)).toBeNull();
+    expect(priceBand(0.75, bm, t, 'KES')?.headline).toContain('50% more than nearby hubs');
+    expect(priceBand(0.5, bm, t, 'KES')?.showMatch).toBe(false);
+    expect(priceBand(0.75, null, t, 'KES')).toBeNull();
+  });
+
+  it('is not shown at all without the money the hubs were compared in', () => {
+    expect(priceBand(0.75, bm, t)).toBeNull();
+  });
+
+  it('says every fee in that money', () => {
+    const b = priceBand(0.75, bm, t, 'ETB');
+    for (const fee of ['ETB 0.75', 'ETB 0.50', 'ETB 0.30', 'ETB 0.80']) expect(b?.detail).toContain(fee);
+    expect(b?.matchLabel).toContain('ETB 0.50');
   });
 });
 
@@ -155,5 +165,6 @@ describe('speaking', () => {
       }, t),
     ).toBe('Place parcel P-1 in bag BAG-2. 3 left to sort.');
     expect(money(0.5)).toBe('0.50');
+    expect(money(0.5, 'KES')).toBe('KES 0.50');
   });
 });

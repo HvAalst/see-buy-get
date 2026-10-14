@@ -14,7 +14,7 @@ import { FleetService } from './fleet.service';
 import { WalletGateService } from './wallet-gate.service';
 import { CargoService } from './cargo.service';
 import { CargoNature, VehicleCapability } from './cargo.types';
-import { DEFAULT_MDP_PRICE_PER_PARCEL } from './pudo.config';
+import { DEFAULT_MDP_PRICE_PER_PARCEL, NETWORK_CURRENCY } from './pudo.config';
 import { countryOfSite, requireCountryCode } from './country';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
@@ -71,6 +71,12 @@ export class MdpService {
   /** The read-and-custody twin: the sister, or nothing where the hub stands in a country we only match. */
   entityIdOrNone(mdp: Mdp): string | undefined {
     return mdp.entityId ?? this.entities.forJurisdiction(this.countryOf(mdp))?.entityId;
+  }
+
+  /** The money a hub's sort fee is in: the company's that contracts it, as a shop's price is its company's. The
+   *  network's for a hub no company of ours contracts — what it was always shown in. */
+  currencyOf(mdp: Mdp): string {
+    return this.entities.amountsFor(this.entityIdOrNone(mdp)).currency ?? NETWORK_CURRENCY;
   }
 
   // --- cargo helpers (S31): the tote path's view of what its parcels are + need ---

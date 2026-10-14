@@ -75,6 +75,7 @@ export const enMdp = {
   'mdp.home.feeSheetTitle': 'Your sort fee per parcel',
   'mdp.home.feeSheetBody': 'Senders pay this fee for every parcel your hub sorts. Nearby hubs see it and compete.',
   'mdp.home.feeSheetLabel': 'Fee per parcel',
+  'mdp.home.feeSheetLabelIn': 'Fee per parcel, in {currency}',
   'mdp.home.feeSheetSave': 'Save the new fee',
   'mdp.home.feeSheetKeep': 'Keep it as it is',
 

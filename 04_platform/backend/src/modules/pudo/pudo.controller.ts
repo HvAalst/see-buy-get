@@ -3441,7 +3441,7 @@ export class SbgController {
    *
    * SHOPS THE SAME WAY: a shop's price per parcel is in its company's money (`shopCurrency`), so a shop is
    * set beside the shops in its own money — a circle drawn near a border reaches shops of another company — and told
-   * which. Hubs are still compared as they always were.
+   * which. HUBS THE SAME WAY: a hub is set beside the hubs in its own company's money (`MdpService.currencyOf`).
    */
   @SignedIn()
   @Get('pricing/near')
@@ -3465,9 +3465,14 @@ export class SbgController {
     };
     type Row = { id: string; label: string; location?: { lat: number; lng: number }; price: number };
     // The money rates are compared in for this caller: see the comment above.
-    const compared = type === 'vehicle' || type === 'pudo';
+    const compared = type === 'vehicle' || type === 'pudo' || type === 'mdp';
     const askerCurrency = (): string | undefined => {
       if (type === 'vehicle') return actor.role === 'driver' && actor.did ? this.drivers.rateCurrencyForDriver(actor.did) : NETWORK_CURRENCY;
+      if (type === 'mdp') {
+        if (actor.role !== 'mdp' || !actor.did) return NETWORK_CURRENCY;
+        const own = this.mdps.list().find((m) => m.did === actor.did);
+        return own ? this.mdps.currencyOf(own) : undefined; // a hub sign-in with no hub on record is compared with nobody
+      }
       if (actor.role !== 'agent' || !actor.did) return NETWORK_CURRENCY;
       try {
         return this.shopCurrency(actor.did);
@@ -3480,7 +3485,7 @@ export class SbgController {
     // nobody compares themselves against, keeps every rate as it always has.
     const inAskersMoney = <T,>(all: T[], moneyOf: (x: T) => string | undefined): T[] => (!type ? all : money ? all.filter((x) => moneyOf(x) === money) : []);
     const rowsFor = (t: string): Row[] => {
-      if (t === 'mdp') return this.mdps.list().map((m) => ({ id: m.mdpId, label: m.name, location: m.location, price: m.pricePerParcel }));
+      if (t === 'mdp') return inAskersMoney(this.mdps.list(), (m) => this.mdps.currencyOf(m)).map((m) => ({ id: m.mdpId, label: m.name, location: m.location, price: m.pricePerParcel }));
       if (t === 'vehicle') {
         return inAskersMoney(this.vehicles.list({ status: 'ACTIVE' }), (v) => this.drivers.rateCurrencyOf(v)).map((v) => ({ id: v.vehicleId, label: v.plate, price: v.pricePerKm }));
       }
@@ -4385,8 +4390,10 @@ export class SbgController {
   listMdps(@Actor() actor: IntrospectionResult) {
     // The number to ring, the company a hub contracts with and how many bags stand there went to any sign-in that asked.
     return this.mdps.list().map((m) => {
-      if (actor?.role === 'operator' || (actor?.did && actor.did === m.did)) return { ...m, totes: this.totes.list({ locationId: m.mdpId }).length };
-      return { mdpId: m.mdpId, did: m.did, name: m.name, country: m.country, zones: m.zones, location: m.location, address: m.address, pricePerParcel: m.pricePerParcel };
+      // What it charges is said with the money it charges in: the company's that contracts the hub.
+      const currency = this.mdps.currencyOf(m);
+      if (actor?.role === 'operator' || (actor?.did && actor.did === m.did)) return { ...m, currency, totes: this.totes.list({ locationId: m.mdpId }).length };
+      return { mdpId: m.mdpId, did: m.did, name: m.name, country: m.country, zones: m.zones, location: m.location, address: m.address, pricePerParcel: m.pricePerParcel, currency };
     });
   }
 

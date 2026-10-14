@@ -6624,9 +6624,36 @@ describe('PUDO Light', () => {
       for (const who of [staff, as('mdp', hub.did)]) expect(row(who)).toMatchObject({ contactPhone: '+254700999001', totes: 1, entityId: hub.entityId });
       // Another hub, a driver, a hub's role with no hub behind it, a shopper.
       for (const who of [as('mdp', other.did), as('driver', 'did:glos:a-driver'), as('mdp'), as('consumer')]) {
-        expect(row(who)).toEqual({ mdpId: hub.mdpId, did: hub.did, name: 'Read Hub', country: hub.country, zones: ['ReadZone'], location: at, address: 'Depot Road 1', pricePerParcel: hub.pricePerParcel });
+        expect(row(who)).toEqual({ mdpId: hub.mdpId, did: hub.did, name: 'Read Hub', country: hub.country, zones: ['ReadZone'], location: at, address: 'Depot Road 1', pricePerParcel: hub.pricePerParcel, currency: 'KES' });
         for (const kept of ['contactPhone', 'totes', 'entityId']) expect(row(who)).not.toHaveProperty(kept);
       }
+    });
+
+    it('a hub’s sort fee is said in its company’s money, and set beside the hubs in that money only', () => {
+      // A circle drawn near a border reaches a hub of another company: a median of shillings and birr is a number about
+      // nothing. The fee is public, and so is the money it is in — without it the figure says nothing.
+      const home = mdps.register({ name: 'Nairobi Fee Hub', zones: ['FeeZone'], location: at });
+      const ets = [mdps.register({ name: 'Addis Fee Hub A', zones: ['FeeAddisA'], location: at, country: 'ET' } as never), mdps.register({ name: 'Addis Fee Hub B', zones: ['FeeAddisB'], location: at, country: 'ET' } as never)];
+      mdps.setPrice(home.mdpId, 0.4);
+      ets.forEach((h, i) => mdps.setPrice(h.mdpId, 20 + i * 5));
+      const listed = (who: never, id: string) => (controller.listMdps(who) as Row[]).find((m) => m.mdpId === id)!;
+      expect(listed(as('consumer'), ets[0].mdpId).currency).toBe('ETB');
+      expect(listed(as('mdp', ets[0].did), ets[0].mdpId).currency).toBe('ETB');
+      expect(listed(staff, home.mdpId).currency).toBe('KES');
+      type Rates = { currency?: string; benchmark: { count: number; min: number; max: number }; pins: Array<{ id: string }> };
+      const ratesFor = (who: never) => controller.pricingNear(who, 'mdp') as Rates;
+      const inBirr = ratesFor(as('mdp', ets[0].did));
+      expect(inBirr.currency).toBe('ETB');
+      expect(inBirr.pins.map((p) => p.id).sort()).toEqual(ets.map((h) => h.mdpId).sort());
+      expect(inBirr.benchmark).toMatchObject({ count: 2, min: 20, max: 25 });
+      const inShillings = ratesFor(as('mdp', home.did));
+      expect(inShillings.currency).toBe('KES');
+      expect(inShillings.pins.map((p) => p.id)).toContain(home.mdpId);
+      expect(inShillings.pins.map((p) => p.id)).not.toContain(ets[0].mdpId);
+      expect(inShillings.benchmark.max).toBeLessThan(20);
+      // A hub’s sign-in with no hub behind it is compared with nobody.
+      expect(ratesFor(as('mdp', 'did:glos:no-such-hub'))).toMatchObject({ benchmark: { count: 0 }, pins: [] });
+      expect(ratesFor(as('mdp', 'did:glos:no-such-hub')).currency).toBeUndefined();
     });
 
     it('the bags standing at a hub are read by that hub; the whole pool by staff', () => {

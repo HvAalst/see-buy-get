@@ -101,7 +101,7 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
         </Card>
       ) : null}
 
-      <Card title={t('mdp.home.yourFee')} aside={<b class="mono">{money(hub?.pricePerParcel)}</b>}>
+      <Card title={t('mdp.home.yourFee')} aside={<b class="mono">{money(hub?.pricePerParcel, hub?.currency)}</b>}>
         <p class="card__note">{t('mdp.home.feeNote')}</p>
         <div class="btnrow">
           <Button variant="link" full={false} onClick={() => actions.go('rates')}>
@@ -144,7 +144,7 @@ function PriceSheet({ open, onClose, state, actions }: { open: boolean; onClose:
       <p class="t-body">{t('mdp.home.feeSheetBody')}</p>
       <div class="field">
         <label class="field__label" for="fee">
-          {t('mdp.home.feeSheetLabel')}
+          {state.hub?.currency ? t('mdp.home.feeSheetLabelIn', { currency: state.hub.currency }) : t('mdp.home.feeSheetLabel')}
         </label>
         <input
           id="fee"

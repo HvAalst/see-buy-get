@@ -4,7 +4,7 @@ import type { IconName } from '../../shared/ui/Icon';
 import { signal } from '../../shared/feedback';
 import { t } from '../../shared/i18n';
 import { clearDid, createMdpClient, mdpConfig, purgeMdpTokens, readDid, readEmail, saveDid, saveEmail } from './api';
-import { addToQueue, dropFromQueue, findMyHub, unsortedAt } from './logic';
+import { addToQueue, dropFromQueue, findMyHub, money, unsortedAt } from './logic';
 import type { DropView, LoadView, MdpView, NewToteView, ParcelRow, RatesView, SortView, ToteView } from './types';
 
 export type Screen = 'home' | 'drop' | 'sort' | 'load' | 'newtote' | 'rates';
@@ -458,7 +458,7 @@ export function useMdpApp() {
         const r = await client.api.setPrice(hub.mdpId, price);
         if (r.error) return fail(r.error);
         buzz();
-        pushToast({ tone: 'ok', icon: 'wallet', title: t('mdp.toast.feeUpdatedTitle'), detail: t('mdp.toast.feeUpdatedDetail', { price: price.toFixed(2) }) });
+        pushToast({ tone: 'ok', icon: 'wallet', title: t('mdp.toast.feeUpdatedTitle'), detail: t('mdp.toast.feeUpdatedDetail', { price: money(price, hub.currency) }) });
         await refresh();
         if (stateRef.current.screen === 'rates') await loadRates();
       });

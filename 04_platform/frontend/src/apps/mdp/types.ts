@@ -15,6 +15,8 @@ export interface MdpView {
   zones: string[];
   location?: { lat: number; lng: number };
   pricePerParcel: number;
+  /** The money the fee is in: the company’s that contracts the hub. Merged in by the controller. */
+  currency?: string;
   /** Merged in by the controller: totes currently at this hub. */
   totes?: number;
 }
@@ -90,4 +92,6 @@ export interface RatesView {
   benchmark?: Benchmark;
   pins: RatePin[];
   radiusKm?: number;
+  /** The money every fee here is in — only hubs in this hub’s own money are set beside it. Absent: none are. */
+  currency?: string;
 }
