@@ -803,7 +803,7 @@ export const enAgent = {
   'agent.handover.title': 'Hand to the bus',
   'agent.handover.lede': 'Scan the driver\'s badge, then tap every parcel you are giving them.',
   'agent.handover.badgeLabel': 'Driver badge',
-  'agent.handover.badgePh': 'Scan the badge',
+  'agent.handover.badgePh': 'Scan the badge on the driver’s phone',
   'agent.handover.waitingAt': 'Waiting at your shop ({count})',
   'agent.handover.gettingParcels': 'Getting your parcels…',
   'agent.handover.noWaiting': 'No parcels waiting for the bus right now.',

@@ -9211,6 +9211,8 @@
     "/v1/sbg/parcels/handover": {
       "post": {
         "operationId": "Sbg.handover",
+        "summary": "",
+        "description": "Handing parcels to a driver is the driver's act: the counter scans the pass on the driver's own phone (badgeShown).",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -12436,7 +12438,7 @@
       "post": {
         "operationId": "Sbg.loadBag",
         "summary": "",
-        "description": "Scan the bag onto a bus — one scan moves the whole tote + every parcel to On_Bus.",
+        "description": "Scan the bag onto a bus — one scan moves the whole tote + every parcel to On_Bus.\n\nA shop or hub scans the pass on the driver's own phone (badgeShown). A driver loading it themselves loads it onto\ntheir OWN badge: it took any badge from a driver's sign-in, so one driver could put a bag on another's name.",
         "parameters": [
           {
             "name": "code",
@@ -34061,12 +34063,10 @@
         "type": "object",
         "properties": {
           "driverBadgeId": {
-            "type": "string"
+            "type": "string",
+            "description": "What the shop or hub scanned on the driver's phone. A driver loading a bag themselves sends none: it goes onto their own badge."
           }
-        },
-        "required": [
-          "driverBadgeId"
-        ]
+        }
       },
       "DropBagDto": {
         "type": "object",

@@ -114,7 +114,7 @@ describe('who the door lets in', () => {
   });
 
   /** READS. Facts about the network that belong to no one party: for anybody signed in — written down, not left blank. */
-  it.each(['GET sbg/module-info', 'GET sbg/presence', 'GET sbg/presence/:jurisdiction', 'GET sbg/border-rules', 'GET sbg/drivers', 'GET sbg/pricing/near', 'GET sbg/agents/:did/rating', 'GET sbg/departures', 'GET sbg/route-constraints', 'GET sbg/route-constraints/route'])(
+  it.each(['GET sbg/module-info', 'GET sbg/presence', 'GET sbg/presence/:jurisdiction', 'GET sbg/border-rules', 'GET sbg/pricing/near', 'GET sbg/agents/:did/rating', 'GET sbg/departures', 'GET sbg/route-constraints', 'GET sbg/route-constraints/route'])(
     '%s is for anybody signed in, and says so',
     (route) => {
       expect(door(route)).toMatchObject({ open: false, signedIn: true, labelled: true });
@@ -128,7 +128,8 @@ describe('who the door lets in', () => {
   });
 
   /** The network's own working lists. */
-  it.each(['GET sbg/vendors', 'GET sbg/vendors/:id/desk', 'GET sbg/pricing', 'GET sbg/heatmap', 'GET sbg/dispatch/freight'])('%s is read by network staff', (route) => {
+  // The corridor drivers' badges among them: a badge on that list is what a counter hands parcels to (corridor-authority.spec.ts).
+  it.each(['GET sbg/vendors', 'GET sbg/vendors/:id/desk', 'GET sbg/pricing', 'GET sbg/heatmap', 'GET sbg/dispatch/freight', 'GET sbg/drivers'])('%s is read by network staff', (route) => {
     expect(door(route)).toMatchObject({ open: false, roles: ['operator'] });
   });
 
@@ -393,7 +394,13 @@ describe('who the door lets in', () => {
         'GET sbg/consignment-notes/destination/secret',
         'POST sbg/consignment-notes/destination/test',
         'GET sbg/consignment-notes/deliveries',
-        // What is on the road: reported, confirmed and refuted by anybody signed in (route-constraint.spec.ts holds that).
+      ],
+    ],
+    [
+      // The user, 2026-10-15: "only drivers can do what drivers can do". Staff pass the door and are refused inside.
+      'what is on the road — reported, confirmed, refuted: a driver, from their own sign-in',
+      { roles: ['driver'] },
+      [
         'POST sbg/route-constraints',
         'POST sbg/route-constraints/:id/confirm',
         'POST sbg/route-constraints/:id/refute',

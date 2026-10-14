@@ -175,6 +175,9 @@ export interface SessionView {
    * `tellWhenRested` that they asked to be told at that moment.
    */
   hours?: { onDuty: number; limit: number; over: boolean; near?: boolean; restOwed?: boolean; restHours: number; restUntil?: string; tellWhenRested?: boolean };
+  /** What a counter scans to hand this driver parcels: their badge and this shift's code. Sent to the driver's own
+   *  sign-in only, and only on shift — see `badgeToShow`. */
+  handoverPass?: string;
   assignment?: AssignmentView;
   vehicle?: VehicleView;
   /**

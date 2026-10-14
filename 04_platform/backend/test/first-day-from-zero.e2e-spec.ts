@@ -473,6 +473,10 @@ describe('the first day of a new installation, as it would be live', () => {
 
   /* ------------------------------------------------------- the first parcel -- */
 
+  /** What the driver's phone shows a counter: read from the driver's own session, as the app reads it. */
+  const passOf = async (driver: { did: string; token: string }): Promise<string> =>
+    (await must(http().get(`/v1/sbg/fleet/drivers/${encodeURIComponent(driver.did)}/session`).set(bearer(driver.token)), 200)).handoverPass as string;
+
   it('8 · the first parcel: taken in at one shop, handed to the driver, arrived at the other, and collected with the code', async () => {
     const sender = '+254722000001';
     const receiver = '+254722000002';
@@ -485,7 +489,10 @@ describe('the first day of a new installation, as it would be live', () => {
     const code = taken.otp as string;
     expect(code).toMatch(/^\d{4,8}$/);
 
-    const handed = await must(http().post('/v1/sbg/parcels/handover').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, driverBadgeId: amos.badgeId, parcelIds: ['QR-FIRST-0001'] }));
+    // Amos shows the badge on his own phone: its number alone hands over nothing.
+    const bare = await http().post('/v1/sbg/parcels/handover').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, driverBadgeId: amos.badgeId, parcelIds: ['QR-FIRST-0001'] });
+    expect([bare.status, bare.body.code]).toEqual([403, 'DRIVER_PASS_NEEDED']);
+    const handed = await must(http().post('/v1/sbg/parcels/handover').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, driverBadgeId: await passOf(amos), parcelIds: ['QR-FIRST-0001'] }));
     expect(handed).toMatchObject({ driverDid: amos.did, handed: ['QR-FIRST-0001'], rejected: [], shortShipped: false });
     expect(await must(http().post('/v1/sbg/parcels/QR-FIRST-0001/arrive').set(bearer(riverside.token)).send({ destAgentDid: riverside.did }))).toMatchObject({ status: 'Ready_For_Pickup', binSlot: expect.any(String) });
 
@@ -539,7 +546,7 @@ describe('the first day of a new installation, as it would be live', () => {
     const taken = await must(
       http().post('/v1/sbg/parcels/accept').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, parcelId, size: 'M', destZone: 'Westlands', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: 'dropoff.jpg' }),
     );
-    await must(http().post('/v1/sbg/parcels/handover').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, driverBadgeId: amos.badgeId, parcelIds: [parcelId] }));
+    await must(http().post('/v1/sbg/parcels/handover').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, driverBadgeId: await passOf(amos), parcelIds: [parcelId] }));
     const arrived = await must(http().post(`/v1/sbg/parcels/${parcelId}/arrive`).set(bearer(riverside.token)).send({ destAgentDid: riverside.did }));
     return { code: taken.otp as string, slot: arrived.binSlot as string };
   };

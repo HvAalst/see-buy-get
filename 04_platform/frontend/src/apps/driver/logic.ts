@@ -533,6 +533,18 @@ export function canLoadBag(badgeId: string | undefined): boolean {
   return typeof badgeId === 'string' && badgeId.length > 0;
 }
 
+/**
+ * What the phone shows a counter: the pass the server gave THIS sign-in for the shift running now — the badge and
+ * the shift's code. Never the badge number alone: a counter hands nothing over on it (the user, 2026-10-15: "only
+ * drivers can do what drivers can do"). Null off shift, or where the server gave no pass — then there is nothing to
+ * show, rather than a badge that would be refused at the counter.
+ */
+export function badgeToShow(session: { active: boolean; handoverPass?: string } | undefined, badgeId: string | undefined): { pass: string; code: string } | null {
+  const pass = session?.active ? session.handoverPass : undefined;
+  if (!pass || !badgeId || !pass.startsWith(`${badgeId}-`)) return null;
+  return { pass, code: pass.slice(badgeId.length + 1) };
+}
+
 /* ----------------------------------------------------------------- nodes -- */
 
 /** Hubs and shops flattened into one pick-list. Agents with no location cannot be routed to. */

@@ -4280,6 +4280,140 @@ describe('PUDO Light', () => {
     expect(r.vehicle).toBe('bus'); // a bike maps onto the bus corridor-vehicle
   });
 
+  /**
+   * ONLY THE DRIVER IS HANDED PARCELS AS THE DRIVER. A badge number alone handed parcels over at any counter: it is
+   * printed under the badge, every shop sees it, and the list of them was readable by any sign-in. The user,
+   * 2026-10-15: "only drivers can do what drivers can do". The counter now scans the pass on the driver's own phone —
+   * their badge and the code of the shift they are on — which goes to nobody else.
+   */
+  describe('a counter hands parcels to the driver, not to a number', () => {
+    const asDriver = (did: string) => ({ active: true, role: 'driver', did }) as never;
+    const asShop = (did: string) => ({ active: true, role: 'agent', did }) as never;
+    const asOffice = (did: string) => ({ active: true, role: 'fleet_manager', did, tenant: did }) as never;
+    const staff = { active: true, role: 'operator', sub: 'operator:opr_pass', scopes: ['*'] } as never;
+    let seq = 0;
+    const onShift = () => {
+      seq += 1;
+      const origin = onboardAgent(`Pass Counter ${seq}`, 'NorthTown', 50);
+      const corridor = corridors.forZones('NorthTown', 'SouthTown') ?? corridors.addCorridor({ name: `pass ${seq}`, originZone: 'NorthTown', destZone: 'SouthTown' });
+      const d = drivers.register({ displayName: `Pass ${seq}`, fullName: `Pass Rider ${seq}`, nationalId: `PASS-${seq}`, mobile: `+254771000${seq}`, licenceClasses: ['bike'] });
+      const bike = vehicles.register({ plate: `PS-${seq}`, vehicleClass: 'bike', ownerName: 'P' });
+      fleet.couple(d.did, bike.vehicleId, corridor.corridorId);
+      parcels.accept({ agentDid: origin.did, parcelId: `PASS-P-${seq}`, size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      const pass = (controller.driverSession(d.did, asDriver(d.did)) as { handoverPass?: string }).handoverPass!;
+      return { origin, d, badge: drivers.get(d.did).badgeId!, pass, parcelId: `PASS-P-${seq}` };
+    };
+    const handTo = (origin: { did: string }, shown: string, parcelId: string) =>
+      controller.handover({ agentDid: origin.did, driverBadgeId: shown, parcelIds: [parcelId] } as never, asShop(origin.did)) as { handed: string[]; driverBadgeId: string };
+
+    it('refuses the badge number on its own, and hands over on the pass from the driver’s phone', () => {
+      const { origin, badge, pass, parcelId } = onShift();
+      expect(pass).toMatch(new RegExp(`^${badge}-\\d{6}$`));
+      expect(() => handTo(origin, badge, parcelId)).toThrow(/badge number on its own hands over nothing/);
+      expect(parcels.get(parcelId).status).toBe('At_PUDO'); // refused before anything moved
+      // Typed in lower case at a counter whose scanner is broken: the same pass.
+      const r = handTo(origin, pass.toLowerCase(), parcelId);
+      expect(r.handed).toEqual([parcelId]);
+      // What the parcel records is the badge, never the code.
+      expect(r.driverBadgeId).toBe(badge);
+      expect(parcels.get(parcelId).driverBadgeId).toBe(badge);
+    });
+
+    it('gives the pass to the driver’s own sign-in only — not to their office, not to staff', () => {
+      const { d } = onShift();
+      const office = managers.register({ companyName: 'Pass Haulage', contactPhone: '+254800977', ownerFullName: 'P H', ownerNationalId: 'MGR-PASS', location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: 'BRN-PASS', transportOperatorLicence: 'TOL-PASS', taxId: 'TAX-PASS' } });
+      drivers.get(d.did).managerDid = office.did;
+      const read = (actor: never) => controller.driverSession(d.did, actor) as { handoverPass?: string; active: boolean };
+      expect(read(asDriver(d.did)).handoverPass).toBeDefined();
+      expect(read(asOffice(office.did)).active).toBe(true);
+      expect(read(asOffice(office.did))).not.toHaveProperty('handoverPass');
+      expect(read(staff)).not.toHaveProperty('handoverPass');
+      // Nor is it anywhere on the shift itself, which the office and staff read.
+      expect(JSON.stringify(fleet.activeForDriver(d.did))).not.toContain(read(asDriver(d.did)).handoverPass!.slice(-6));
+    });
+
+    it('is one code per shift: the next shift’s pass is a different one, and the old one hands over nothing', () => {
+      const { origin, d, pass, parcelId } = onShift();
+      fleet.uncouple(d.did);
+      expect((controller.driverSession(d.did, asDriver(d.did)) as { handoverPass?: string }).handoverPass).toBeUndefined();
+      expect(() => handTo(origin, pass, parcelId)).toThrow(/not on shift/);
+      fleet.couple(d.did, vehicles.list({}).find((v) => v.plate === `PS-${seq}`)!.vehicleId, corridors.forZones('NorthTown', 'SouthTown')!.corridorId);
+      const next = (controller.driverSession(d.did, asDriver(d.did)) as { handoverPass?: string }).handoverPass!;
+      expect(next).not.toBe(pass);
+      expect(() => handTo(origin, pass, parcelId)).toThrow(/not the code on the driver’s phone/);
+      expect(handTo(origin, next, parcelId).handed).toEqual([parcelId]);
+    });
+
+    it('replaces the code after five wrong ones — a clerk mistypes, a guesser keeps going', () => {
+      const { origin, d, badge, pass, parcelId } = onShift();
+      const right = pass.slice(-6);
+      const wrong = (n: number) => `${badge}-${String((Number(right) + n) % 1_000_000).padStart(6, '0')}`;
+      for (let n = 1; n <= 4; n += 1) expect(() => handTo(origin, wrong(n), parcelId)).toThrow(/not the code on the driver’s phone/);
+      // Four wrong, then the right one: the clerk got there.
+      expect(handTo(origin, pass, parcelId).handed).toEqual([parcelId]);
+      const another = (n: number) => {
+        parcels.accept({ agentDid: origin.did, parcelId: `${parcelId}-${n}`, size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+        return `${parcelId}-${n}`;
+      };
+      // The count started again after the right one: four more wrong ones, and the same code still hands over.
+      const second = another(2);
+      for (let n = 1; n <= 4; n += 1) expect(() => handTo(origin, wrong(n), second)).toThrow(/not the code on the driver’s phone/);
+      expect(handTo(origin, pass, second).handed).toEqual([second]);
+      // Five wrong in a row replace it: the old code hands over nothing, the phone's new one does.
+      const third = another(3);
+      for (let n = 1; n <= 5; n += 1) expect(() => handTo(origin, wrong(n), third)).toThrow(/not the code on the driver’s phone/);
+      expect(() => handTo(origin, pass, third)).toThrow(/not the code on the driver’s phone/);
+      const fresh = (controller.driverSession(d.did, asDriver(d.did)) as { handoverPass?: string }).handoverPass!;
+      expect(fresh).not.toBe(pass);
+      expect(handTo(origin, fresh, third).handed).toEqual([third]);
+    });
+
+    it('still takes a bus driver on staff’s corridor list as shown — and that list is staff’s to read', () => {
+      const origin = onboardAgent('Pass Bus Counter', 'NorthTown', 50);
+      const corridor = corridors.forZones('NorthTown', 'SouthTown') ?? corridors.addCorridor({ name: 'pass bus', originZone: 'NorthTown', destZone: 'SouthTown' });
+      const bus = corridors.addDriver({ driverDid: 'did:glos:pass-bus', name: 'Bus', corridorId: corridor.corridorId });
+      parcels.accept({ agentDid: origin.did, parcelId: 'PASS-BUS', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      expect(handTo(origin, bus.badgeId, 'PASS-BUS').handed).toEqual(['PASS-BUS']);
+      // Something that is no badge at all is refused where it is used, as before.
+      parcels.accept({ agentDid: origin.did, parcelId: 'PASS-NONE', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      expect(() => handTo(origin, 'NOBODY-123456', 'PASS-NONE')).toThrow(/Unknown driver badge/);
+    });
+
+    it('takes a bag onto a driver the same way, and a driver takes one onto their own badge only', () => {
+      const { origin, d, badge, pass } = onShift();
+      const other = onShift();
+      const mdp = mdps.register({ name: `Pass Hub ${seq}`, zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } });
+      const bagWith = (id: string) => {
+        const bag = totes.register(origin.did);
+        totes.assign(bag.code, mdp.mdpId, mdp.name);
+        parcels.accept({ agentDid: origin.did, parcelId: id, size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+        mdps.fillTote(bag.code, id);
+        return bag.code;
+      };
+      const one = bagWith(`PASS-BAG-${seq}-1`);
+      expect(() => controller.loadBag(one, { driverBadgeId: badge } as never, asShop(origin.did))).toThrow(/badge number on its own/);
+      controller.loadBag(one, { driverBadgeId: pass } as never, asShop(origin.did));
+      expect(totes.byCodeMaybe(one)!.carriedBy).toBe(d.did);
+      // A driver loading a bag themselves: onto their own badge, never somebody else's. (A bike holds one bag, so
+      // this is the other rider's.)
+      const two = bagWith(`PASS-BAG-${seq}-2`);
+      expect(() => controller.loadBag(two, { driverBadgeId: badge } as never, asDriver(other.d.did))).toThrow(/their own badge/);
+      expect(totes.byCodeMaybe(two)!.status).not.toBe('in_transit');
+      controller.loadBag(two, {} as never, asDriver(other.d.did));
+      expect(totes.byCodeMaybe(two)!.carriedBy).toBe(other.d.did);
+    });
+
+    it('lets only a driver say what is on the road — staff pass the door and are refused inside', () => {
+      const { d } = onShift();
+      const at = { lat: -1.3, lng: 36.8 };
+      const reported = controller.reportConstraint({ kind: 'LOW_BRIDGE', at, value: 3.9 } as never, asDriver(d.did));
+      expect(reported.constraintId).toBeDefined();
+      expect(() => controller.reportConstraint({ kind: 'LOW_BRIDGE', at, value: 3.9 } as never, staff)).toThrow(/Only a driver says what is on the road/);
+      expect(() => controller.confirmConstraint(reported.constraintId, {} as never, staff)).toThrow(/Only a driver/);
+      expect(() => controller.refuteConstraint(reported.constraintId, { note: 'gone' } as never, staff)).toThrow(/Only a driver/);
+    });
+  });
+
   it('S30: refuses to load incompatible cargo on one vehicle — cement dust never rides with fresh produce', () => {
     const origin = onboardAgent('Cargo Origin', 'NorthTown', 50);
     onboardAgent('Cargo Dest', 'SouthTown', 50);

@@ -338,6 +338,7 @@ export const enDriver = {
   'driver.home.badgeSheetTitle': 'Your driver badge',
   'driver.home.badgeBody': 'Hold this up at the counter. The shop or hub scans it to hand you their parcels.',
   'driver.home.badgeQrLabel': 'Driver badge {id} as a scannable code',
+  'driver.home.badgeShift': 'The code at the end is new each shift: your badge number on its own hands over nothing',
   'driver.home.badge1': 'Works with no signal',
   'driver.home.badge2': 'They can also type the code under it',
   'driver.home.endSheetTitle': 'End your shift?',

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
-import { randomBytes } from 'crypto';
+import { randomBytes, randomInt, timingSafeEqual } from 'crypto';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { CorridorService } from './corridor.service';
@@ -24,6 +24,10 @@ export interface LegInput {
 const LEG_HISTORY = 5;
 /** …and how many vehicles. A driver has one bus, or swaps between a couple; nobody scrolls their history. */
 const VEHICLE_HISTORY = 5;
+/** Wrong handover codes said against one shift before its code is replaced. A clerk mistypes; a guesser keeps going. */
+export const WRONG_HANDOVER_CODES = 5;
+/** Six digits: short enough to read out at a counter whose scanner is broken. */
+const freshHandoverCode = (): string => String(randomInt(0, 1_000_000)).padStart(6, '0');
 
 /**
  * FP8 — hours of service. Two limits, network-wide until a jurisdiction says otherwise: how long one shift may
@@ -128,6 +132,17 @@ export class FleetService {
    * days is the middle of the night, and a driver asleep has no use for the news. By driver.
    */
   private readonly restAsks = new PersistentMap<string, { askedAt: string; until: string }>('pudo-fleet-rest-asks');
+  /**
+   * THE CODE A DRIVER SHOWS AT A COUNTER, one per shift — kept beside the shifts, never on one: a shift is read by the
+   * driver's office and by staff, and this is the one thing about it only the driver holds. By assignment id.
+   *
+   * A badge number alone handed parcels over. It is printed under the badge, a shop sees it at every handover, and the
+   * list of them was readable by any sign-in — so anybody who had one could say it at a counter and be handed other
+   * people's goods. The user, 2026-10-15: "only drivers can do what drivers can do".
+   */
+  private readonly handoverCodes = new PersistentMap<string, string>('pudo-fleet-handover-codes');
+  /** Wrong codes said against a shift, by assignment id. Not kept over a restart: it only has to outlast a guesser. */
+  private readonly wrongCodes = new Map<string, number>();
 
   constructor(
     private readonly drivers: DriverService,
@@ -623,6 +638,67 @@ export class FleetService {
     this.corridors.requireUsableBy(corridorId, this.drivers.get(driverDid).managerDid);
     active.corridorId = corridorId;
     return active;
+  }
+
+  /**
+   * What the driver's phone shows at a counter while their shift runs: their badge and this shift's code, as one
+   * string. Only for the driver's own sign-in (the controller asks). Nothing while no shift runs: a counter hands
+   * parcels only to a driver on shift.
+   */
+  handoverPassFor(driverDid: string): string | undefined {
+    const badge = this.drivers.get(driverDid).badgeId;
+    const active = this.activeForDriver(driverDid);
+    if (!badge || !active) return undefined;
+    return `${badge}-${this.handoverCodeOf(active.assignmentId)}`;
+  }
+
+  /**
+   * WHAT A COUNTER WAS SHOWN → THE BADGE IT PROVES. Asked at every door that hands parcels or a bag to a driver.
+   *
+   * A driver of ours proves it with the pass from their own phone; their badge number on its own is refused, with a
+   * sentence that says where the pass is. A badge on the corridor list — a bus driver staff added, with no app — is
+   * still taken as shown: that list is staff's alone to read. Anything else goes on as shown, and is refused as an
+   * unknown badge where it is used. Five wrong codes against one shift replace its code: the driver's phone shows
+   * the new one when the badge is opened again.
+   */
+  badgeShown(shown: string): string {
+    const said = (shown ?? '').trim().toUpperCase();
+    if (this.drivers.byBadge(said)) {
+      throw new GlosError('DRIVER_PASS_NEEDED', 'A driver’s badge number on its own hands over nothing. Ask the driver to open “Show my badge” in their app, and scan that, or type the code under it.');
+    }
+    const cut = said.lastIndexOf('-');
+    const badge = cut > 0 ? said.slice(0, cut) : '';
+    const code = said.slice(cut + 1);
+    const driver = badge ? this.drivers.byBadge(badge) : undefined;
+    if (!driver || !/^\d{6}$/.test(code)) return said;
+    const active = this.activeForDriver(driver.did);
+    const kept = active ? this.handoverCodes.get(active.assignmentId) : undefined;
+    if (active && kept && timingSafeEqual(Buffer.from(kept), Buffer.from(code))) {
+      this.wrongCodes.delete(active.assignmentId);
+      return badge;
+    }
+    if (active) {
+      const wrong = (this.wrongCodes.get(active.assignmentId) ?? 0) + 1;
+      if (wrong >= WRONG_HANDOVER_CODES) {
+        this.handoverCodes.set(active.assignmentId, freshHandoverCode());
+        this.wrongCodes.delete(active.assignmentId);
+      } else this.wrongCodes.set(active.assignmentId, wrong);
+    }
+    throw new GlosError(
+      'DRIVER_PASS_WRONG',
+      active
+        ? 'That is not the code on the driver’s phone for this shift. Ask them to open “Show my badge” again, and scan it from there.'
+        : 'That driver is not on shift. A counter hands parcels to a driver whose shift has started.',
+    );
+  }
+
+  /** This shift's code, made the first time it is asked for. */
+  private handoverCodeOf(assignmentId: string): string {
+    const kept = this.handoverCodes.get(assignmentId);
+    if (kept) return kept;
+    const code = freshHandoverCode();
+    this.handoverCodes.set(assignmentId, code);
+    return code;
   }
 
   /** Resolve a scanned badge → the coupled vehicle + capacity/handling, for handover / bag-load. */

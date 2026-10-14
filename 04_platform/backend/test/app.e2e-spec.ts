@@ -890,8 +890,18 @@ describe('GLOS backend (e2e)', () => {
     for (const p of [{ id: `OK-${u}`, size: 'S' }, { id: `FR-${u}`, size: 'S', fragile: true }, { id: `HV-${u}`, size: 'HEAVY' }]) {
       await request(http).post('/v1/sbg/parcels/accept').set(auth).send({ agentDid: origin, parcelId: p.id, size: p.size, destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'd.jpg', fragile: p.fragile }).expect(201);
     }
-    const h = await request(http).post('/v1/sbg/parcels/handover').set(auth).send({ agentDid: origin, driverBadgeId: driver.body.badgeId, parcelIds: [`OK-${u}`, `FR-${u}`, `HV-${u}`] }).expect(201);
+    // The badge NUMBER hands over nothing (user, 2026-10-15: only drivers can do what drivers can do)…
+    const parcelIds = [`OK-${u}`, `FR-${u}`, `HV-${u}`];
+    const bare = await request(http).post('/v1/sbg/parcels/handover').set(auth).send({ agentDid: origin, driverBadgeId: driver.body.badgeId, parcelIds }).expect(403);
+    expect(bare.body.code).toBe('DRIVER_PASS_NEEDED');
+    // …the pass on the driver's own phone does — and the session that carries it carries it to the driver alone.
+    const asRider = { Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ role: 'driver', did: driver.body.did, type: 'client_credentials' }).expect(201)).body.access_token}` };
+    const pass = (await request(http).get(`/v1/sbg/fleet/drivers/${driver.body.did}/session`).set(asRider).expect(200)).body.handoverPass as string;
+    expect(pass).toMatch(new RegExp(`^${driver.body.badgeId}-\\d{6}$`));
+    expect((await request(http).get(`/v1/sbg/fleet/drivers/${driver.body.did}/session`).set(auth).expect(200)).body).not.toHaveProperty('handoverPass');
+    const h = await request(http).post('/v1/sbg/parcels/handover').set(auth).send({ agentDid: origin, driverBadgeId: pass, parcelIds }).expect(201);
     expect(h.body.handed).toEqual([`OK-${u}`]);
+    expect(h.body.driverBadgeId).toBe(driver.body.badgeId);
     expect(h.body.rejected).toHaveLength(2);
     expect(h.body.vehicle).toBe('bus');
   });
@@ -938,7 +948,9 @@ describe('GLOS backend (e2e)', () => {
     await request(http).post(`/v1/sbg/dispatch/offers/${sug.body.offers[0].offerId}/claim`).set(auth).expect(201);
     const claims = await request(http).get(`/v1/sbg/fleet/drivers/${driver.body.did}/claims`).set(auth).expect(200);
     expect(claims.body.remainingCapacityKg).toBe(40);
-    const loaded = await request(http).post(`/v1/sbg/totes/${bag.body.code}/load`).set(auth).send({ driverBadgeId: driver.body.badgeId }).expect(201);
+    // Loaded by the driver, onto their own badge: nothing to show anybody.
+    const asMoto = { Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ role: 'driver', did: driver.body.did, type: 'client_credentials' }).expect(201)).body.access_token}` };
+    const loaded = await request(http).post(`/v1/sbg/totes/${bag.body.code}/load`).set(asMoto).send({}).expect(201);
     expect(loaded.body.moved).toHaveLength(2);
 
     // Fleet-manager dashboard reflects the on-shift driver (located by the phone) + active cargo.

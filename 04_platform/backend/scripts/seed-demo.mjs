@@ -336,6 +336,9 @@ const run = async () => {
   };
   const amosIn = await signInDriver(amos, 'amos');
   const amosToken = amosIn.token;
+  // What Amos's phone shows a counter: his badge and the code of the shift he is on, read from his own session as the
+  // driver app reads it. His badge NUMBER alone hands over nothing (the user, 2026-10-15).
+  const amosPass = async () => need(await req('GET', `/v1/sbg/fleet/drivers/${encodeURIComponent(amos.did)}/session`, { token: amosToken }), 'Amos’s badge').handoverPass;
   say(`driver Amos K.   phone ${amosIn.phone} PIN ${DRIVER_PIN}`);
 
   let grace = drivers.find((d) => d.displayName === 'Grace M.');
@@ -486,7 +489,7 @@ const run = async () => {
   need(
     await req('POST', '/v1/sbg/parcels/handover', {
       token: tokA1,
-      body: { agentDid: a1.did, driverBadgeId: amos.badgeId, parcelIds: [p3.parcelId], acknowledgeShortShip: true, shortShipReason: 'demo seed — the bus takes one parcel' },
+      body: { agentDid: a1.did, driverBadgeId: await amosPass(), parcelIds: [p3.parcelId], acknowledgeShortShip: true, shortShipReason: 'demo seed — the bus takes one parcel' },
     }),
     'handover p3',
   );
@@ -496,7 +499,7 @@ const run = async () => {
   need(
     await req('POST', '/v1/sbg/parcels/handover', {
       token: tokA1,
-      body: { agentDid: a1.did, driverBadgeId: amos.badgeId, parcelIds: [p6.parcelId], acknowledgeShortShip: true, shortShipReason: 'demo seed — the bus takes one parcel' },
+      body: { agentDid: a1.did, driverBadgeId: await amosPass(), parcelIds: [p6.parcelId], acknowledgeShortShip: true, shortShipReason: 'demo seed — the bus takes one parcel' },
     }),
     'handover p6',
   );
@@ -553,7 +556,7 @@ const run = async () => {
   for (const p of [p4, p5]) {
     need(await req('POST', `/v1/sbg/totes/${encodeURIComponent(bag.code)}/fill`, { token: tokA1, body: { parcelId: p.parcelId } }), `fill ${p.parcelId}`);
   }
-  need(await req('POST', `/v1/sbg/totes/${encodeURIComponent(bag.code)}/load`, { token: tokA1, body: { driverBadgeId: amos.badgeId } }), 'load bag');
+  need(await req('POST', `/v1/sbg/totes/${encodeURIComponent(bag.code)}/load`, { token: tokA1, body: { driverBadgeId: await amosPass() } }), 'load bag');
   need(await req('POST', `/v1/sbg/mdps/${encodeURIComponent(hubRow.mdpId)}/drop-bag`, { token: tokHub, body: { code: bag.code } }), 'drop bag');
   const sorted = need(
     await req('POST', `/v1/sbg/mdps/${encodeURIComponent(hubRow.mdpId)}/sort`, { token: tokHub, body: { parcelId: p5.parcelId } }),
@@ -779,7 +782,7 @@ const run = async () => {
     for (const p of [p7, p8]) {
       need(await req('POST', `/v1/sbg/totes/${encodeURIComponent(rolling.code)}/fill`, { token: tokA1, body: { parcelId: p.parcelId } }), `fill ${p.parcelId}`);
     }
-    const loaded = await req('POST', `/v1/sbg/totes/${encodeURIComponent(rolling.code)}/load`, { token: tokA1, body: { driverBadgeId: amos.badgeId } });
+    const loaded = await req('POST', `/v1/sbg/totes/${encodeURIComponent(rolling.code)}/load`, { token: tokA1, body: { driverBadgeId: await amosPass() } });
     say(loaded.ok ? `bag ${rolling.code} is on ${bike.plate} with Amos, still rolling` : `  (could not load ${rolling.code}: ${loaded.status})`);
   }
 

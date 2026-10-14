@@ -19,7 +19,7 @@ export type SbgErrorCode =
   | 'CANNOT_COUPLE' | 'HOURS_EXCEEDED' | 'CAPACITY_EXCEEDED' | 'NO_ROOM' | 'CARRIER_NOT_TRADING' | 'REASON_REQUIRED' | 'SAFETY_CHECK_INCOMPLETE' | 'RECEIVER_REQUIRED' | 'DELIVERY_PHOTO_REQUIRED' | 'FRAGILE_NOT_ALLOWED' | 'BAG_FULL' | 'BAG_EMPTY' | 'BAG_RESERVED'
   | 'BAG_MISADDRESSED' | 'ALREADY_IN_BAG' | 'STAGING_FULL' | 'SHELF_FULL' | 'NO_CAPACITY_AVAILABLE' | 'OTP_INVALID' | 'OTP_LOCKED' | 'PIN_INVALID' | 'UNAUTHORIZED'
   | 'AUTH_FAILED' | 'AUTH_CODE_INVALID' | 'AUTH_NOT_ACTIVE' | 'PAYMENT_REQUIRED' | 'WALLET_INSUFFICIENT'
-  | 'FORBIDDEN' | 'WRONG_PUDO' | 'AGENT_LOCKED' | 'PIN_LOCKED' | 'PIN_WRONG' | 'DEVICE_NOT_KNOWN' | 'PASSWORD_WRONG' | 'SECRET_WRONG' | 'PASSWORD_LOCKED' | 'PIN_GUESSABLE' | 'ROLE_NOT_HELD' | 'MEDIA_LOCKED' | 'CARGO_REQUIRES_DEDICATED' | 'CARGO_INCOMPATIBLE' | 'VEHICLE_MISSING_CAPABILITY' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE' | 'INCOMPLETE_MANIFEST' | 'INVITE_LIMIT'
+  | 'FORBIDDEN' | 'WRONG_PUDO' | 'AGENT_LOCKED' | 'PIN_LOCKED' | 'PIN_WRONG' | 'DEVICE_NOT_KNOWN' | 'PASSWORD_WRONG' | 'SECRET_WRONG' | 'PASSWORD_LOCKED' | 'PIN_GUESSABLE' | 'ROLE_NOT_HELD' | 'DRIVER_PASS_NEEDED' | 'DRIVER_PASS_WRONG' | 'MEDIA_LOCKED' | 'CARGO_REQUIRES_DEDICATED' | 'CARGO_INCOMPATIBLE' | 'VEHICLE_MISSING_CAPABILITY' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE' | 'INCOMPLETE_MANIFEST' | 'INVITE_LIMIT'
   | 'MEDIA_EXPIRED' | 'MEDIA_TOO_LARGE' | 'UNSUPPORTED_MEDIA' | 'RATE_LIMITED' | 'PRICE_CHANGED' | 'SMS_NOT_SENT'
   | 'INTERNAL'
   | 'NETWORK' | 'TIMEOUT' | 'OFFLINE' | 'CLIENT_OUTDATED'; // client-synthesised (no HTTP response)
@@ -92,6 +92,9 @@ const PRESENTATION: Partial<Record<SbgErrorCode, ErrorPresentation>> = {
   PIN_WRONG: { icon: 'keypad', tone: 'warn', say: 'error.pin_wrong' },
   PASSWORD_WRONG: { icon: 'lock', tone: 'warn', say: 'error.password_wrong' },
   PASSWORD_LOCKED: { icon: 'lock', tone: 'warn', say: 'error.password_locked' },
+  // A counter scanned a driver's badge NUMBER, or a code that is not this shift's: what proves the driver is on their phone.
+  DRIVER_PASS_NEEDED: { icon: 'keypad', tone: 'warn', say: 'error.driver_pass' },
+  DRIVER_PASS_WRONG: { icon: 'keypad', tone: 'warn', say: 'error.driver_pass' },
   PASSWORD_TOO_SHORT: { icon: 'lock', tone: 'warn', say: 'error.password_short' },
   PASSWORD_GUESSABLE: { icon: 'lock', tone: 'warn', say: 'error.password_guessable' },
   SECRET_WRONG: { icon: 'lock', tone: 'warn', say: 'error.secret_wrong' },

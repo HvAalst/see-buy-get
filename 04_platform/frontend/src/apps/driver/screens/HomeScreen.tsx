@@ -16,6 +16,7 @@ import {
   type CardReader,
   driverStatusNotice,
   afterShiftLine,
+  badgeToShow,
   hoursWords,
   restSays,
   isFull,
@@ -730,6 +731,7 @@ function OnShift({ state, actions, onOpenFleet }: HomeScreenProps) {
   const t = useT();
   const [confirm, setConfirm] = useState<'end' | 'rate' | null>(null);
   const [badgeOpen, setBadgeOpen] = useState(false);
+  const shown = badgeToShow(state.session, state.driver?.badgeId);
   const v = state.vehicle!;
   const band = rateBand(v.pricePerKm, state.rates?.benchmark, t, state.rates?.currency);
   const pct = usedPercent(v.capacityKg, state.remaining);
@@ -812,9 +814,17 @@ function OnShift({ state, actions, onOpenFleet }: HomeScreenProps) {
       </button>
 
       {/* The badge is what a shop or hub scans to hand parcels over — it must be
-          showable, not just stored. Typing it was the only way until now. */}
-      {state.driver?.badgeId ? (
-        <button type="button" class="row" onClick={() => setBadgeOpen(true)}>
+          showable, not just stored. What it shows is this shift's pass, never the bare number. */}
+      {shown ? (
+        <button
+          type="button"
+          class="row"
+          onClick={() => {
+            setBadgeOpen(true);
+            // A counter that got the code wrong five times has had it replaced: show the one in force.
+            void actions.refresh();
+          }}
+        >
           <span class="row__ic">
             <Icon name="badge" size={24} />
           </span>
@@ -832,15 +842,12 @@ function OnShift({ state, actions, onOpenFleet }: HomeScreenProps) {
         <ReadAloud text={() => shiftSummary(v.plate, state.remaining, state.claims.length, t)} />
       </div>
 
-      <Sheet open={badgeOpen} onClose={() => setBadgeOpen(false)} title={t('driver.home.badgeSheetTitle')}>
+      <Sheet open={badgeOpen && Boolean(shown)} onClose={() => setBadgeOpen(false)} title={t('driver.home.badgeSheetTitle')}>
         <p class="t-body">{t('driver.home.badgeBody')}</p>
-        <QrBlock
-          value={qrPayload('badge', state.driver!.badgeId!)}
-          size={188}
-          caption={state.driver!.badgeId}
-          label={t('driver.home.badgeQrLabel', { id: state.driver!.badgeId! })}
-        />
-        <Checklist items={[t('driver.home.badge1'), t('driver.home.badge2')]} />
+        {shown ? (
+          <QrBlock value={qrPayload('badge', shown.pass)} size={188} caption={shown.pass} label={t('driver.home.badgeQrLabel', { id: shown.pass })} />
+        ) : null}
+        <Checklist items={[t('driver.home.badgeShift'), t('driver.home.badge1'), t('driver.home.badge2')]} />
         <Button variant="link" onClick={() => setBadgeOpen(false)}>
           {t('driver.close')}
         </Button>

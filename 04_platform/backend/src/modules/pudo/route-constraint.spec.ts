@@ -585,11 +585,13 @@ describe('route constraints — the road as its drivers report it', () => {
    * guard then honours the label is auth.guard.ts's own business, and is tested there.
    */
   describe('the HTTP surface: reporting is open, clearing is not', () => {
-    it('lets any authenticated driver report, confirm and refute', () => {
-      // The whole premise. A hazard map that only operators may add to is a hazard map nobody reports to.
+    it('lets every driver report, confirm and refute — and only drivers', () => {
+      // The whole premise. A hazard map that only operators may add to is a hazard map nobody reports to. But each
+      // account is one vote, and votes are what make a hazard count: an account that is not a driver's was one more
+      // (user, 2026-10-15: "only drivers can do what drivers can do").
       for (const route of ['reportConstraint', 'confirmConstraint', 'refuteConstraint'] as const) {
-        expect(Reflect.getMetadata(ROLES_KEY, SbgController.prototype[route])).toBeUndefined();
-        // …but never anonymously: an unauthenticated report cannot be held against anybody.
+        expect(Reflect.getMetadata(ROLES_KEY, SbgController.prototype[route])).toEqual(['driver']);
+        // …and never anonymously: an unauthenticated report cannot be held against anybody.
         expect(Reflect.getMetadata(IS_PUBLIC_KEY, SbgController.prototype[route])).toBeUndefined();
       }
     });

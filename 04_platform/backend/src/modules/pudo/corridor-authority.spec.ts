@@ -22,14 +22,18 @@ describe('corridors are network geography', () => {
     expect(Reflect.getMetadata(ROLES_KEY, SbgController.prototype.addDriver)).toEqual(['operator']);
   });
 
-  it('keeps READING them open to everyone who has to work with them', () => {
+  it('keeps READING the corridors open to everyone who has to work with them', () => {
     // The fleet app offers corridors when a manager starts a shift; the agent app checks them. A list
     // only operators may read is a list the people using it cannot see.
     expect(Reflect.getMetadata(ROLES_KEY, SbgController.prototype.listCorridors)).toBeUndefined();
-    expect(Reflect.getMetadata(ROLES_KEY, SbgController.prototype.listDrivers)).toBeUndefined();
     // …but never anonymously.
     expect(Reflect.getMetadata(IS_PUBLIC_KEY, SbgController.prototype.listCorridors)).toBeUndefined();
-    expect(Reflect.getMetadata(IS_PUBLIC_KEY, SbgController.prototype.listDrivers)).toBeUndefined();
+  });
+
+  it('keeps the badge list for staff, who keep it: a badge on it is what a counter hands parcels to', () => {
+    // It was read by any sign-in, "as the corridors are" — and no app read it. Anybody with an account could take a
+    // bus driver's badge number off it and say it at a counter. (User, 2026-10-15: only drivers can do what drivers can do.)
+    expect(Reflect.getMetadata(ROLES_KEY, SbgController.prototype.listDrivers)).toEqual(['operator']);
   });
 });
 

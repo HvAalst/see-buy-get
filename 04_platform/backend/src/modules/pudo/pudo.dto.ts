@@ -1482,7 +1482,8 @@ export class FillToteDto {
 }
 
 export class LoadBagDto {
-  @IsString() driverBadgeId!: string;
+  /** What the shop or hub scanned on the driver's phone. A driver loading a bag themselves sends none: it goes onto their own badge. */
+  @IsOptional() @IsString() driverBadgeId?: string;
 }
 
 export class DropBagDto {

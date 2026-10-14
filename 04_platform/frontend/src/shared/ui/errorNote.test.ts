@@ -13,7 +13,7 @@ const GENERIC = 'Something went wrong. Try again.';
  * pins the fix so the six can never silently fall back again.
  */
 describe('errorSentence — identity codes resolve to specific guidance (not the generic fallback)', () => {
-  const codes: SbgErrorCode[] = ['AUTH_FAILED', 'DEVICE_NOT_KNOWN', 'PIN_INVALID', 'PIN_LOCKED', 'PIN_WRONG', 'PASSWORD_WRONG', 'SECRET_WRONG', 'PASSWORD_LOCKED', 'PASSWORD_TOO_SHORT', 'PASSWORD_GUESSABLE', 'PIN_GUESSABLE', 'ROLE_NOT_HELD', 'PHONE_INVALID', 'PHONE_NOT_SERVED', 'SMS_NOT_SENT', 'PHONE_NOT_VERIFIED'];
+  const codes: SbgErrorCode[] = ['AUTH_FAILED', 'DEVICE_NOT_KNOWN', 'PIN_INVALID', 'PIN_LOCKED', 'PIN_WRONG', 'PASSWORD_WRONG', 'SECRET_WRONG', 'PASSWORD_LOCKED', 'PASSWORD_TOO_SHORT', 'PASSWORD_GUESSABLE', 'PIN_GUESSABLE', 'ROLE_NOT_HELD', 'DRIVER_PASS_NEEDED', 'DRIVER_PASS_WRONG', 'PHONE_INVALID', 'PHONE_NOT_SERVED', 'SMS_NOT_SENT', 'PHONE_NOT_VERIFIED'];
   for (const code of codes) {
     it(`${code} has its own sentence`, () => {
       expect(errorSentence(mk(code))).not.toBe(GENERIC);

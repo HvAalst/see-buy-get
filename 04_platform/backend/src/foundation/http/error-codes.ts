@@ -165,6 +165,10 @@ export const ERROR_CODES = {
   // inside an app too (changing a password, replacing a store's secret) and a 401 there would sign the person out.
   PASSWORD_LOCKED: { status: 403, title: 'Too many wrong passwords' },
   ROLE_NOT_HELD: { status: 403, title: 'You do not hold that role' },
+  // A counter was shown a driver's badge NUMBER: a driver of ours shows the badge from their own phone, with the code
+  // of the shift they are on. What only a driver can do needs something only the driver holds.
+  DRIVER_PASS_NEEDED: { status: 403, title: 'Scan the badge on the driver’s phone' },
+  DRIVER_PASS_WRONG: { status: 403, title: 'That is not the code on the driver’s phone' },
 
   // --- 403 Forbidden: media ---------------------------------------------------------------------
   MEDIA_LOCKED: { status: 403, title: 'This image is kept as evidence and cannot be removed yet' },

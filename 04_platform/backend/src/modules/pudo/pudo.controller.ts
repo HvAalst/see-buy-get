@@ -2734,8 +2734,9 @@ export class SbgController {
     return this.corridors.addDriver(dto);
   }
 
-  // Read by everybody who works with corridors, as the corridors themselves are (corridor-authority.spec.ts holds both).
-  @SignedIn()
+  // Staff's list, as adding to it is. It was read by any sign-in "because the apps work with corridors" — no app reads
+  // it — and a badge on it is what a counter hands parcels to (corridor-authority.spec.ts).
+  @Roles('operator')
   @Get('drivers')
   listDrivers() {
     return this.corridors.listDrivers();
@@ -2835,10 +2836,12 @@ export class SbgController {
     };
   }
 
+  /** Handing parcels to a driver is the driver's act: the counter scans the pass on the driver's own phone (badgeShown). */
   @Roles('agent', 'operator')
   @Post('parcels/handover')
   handover(@Body() dto: HandoverDto, @Actor() actor: IntrospectionResult) {
-    return this.parcels.handover({ ...dto, agentDid: actingDid(actor, dto.agentDid) });
+    const driverBadgeId = this.fleet.badgeShown(dto.driverBadgeId);
+    return this.parcels.handover({ ...dto, driverBadgeId, agentDid: actingDid(actor, dto.agentDid) });
   }
 
   @Roles('agent', 'operator')
@@ -4493,11 +4496,23 @@ export class SbgController {
     return this.mdps.fillTote(code, dto.parcelId);
   }
 
-  /** Scan the bag onto a bus — one scan moves the whole tote + every parcel to On_Bus. */
+  /**
+   * Scan the bag onto a bus — one scan moves the whole tote + every parcel to On_Bus.
+   *
+   * A shop or hub scans the pass on the driver's own phone (badgeShown). A driver loading it themselves loads it onto
+   * their OWN badge: it took any badge from a driver's sign-in, so one driver could put a bag on another's name.
+   */
   @Roles('agent', 'mdp', 'driver', 'operator')
   @Post('totes/:code/load')
-  loadBag(@Param('code') code: string, @Body() dto: LoadBagDto) {
-    return this.mdps.loadBag(code, dto.driverBadgeId);
+  loadBag(@Param('code') code: string, @Body() dto: LoadBagDto, @Actor() actor: IntrospectionResult) {
+    if (actor?.role === 'driver') {
+      const own = actor.did ? this.drivers.get(actor.did).badgeId : undefined;
+      if (!own) throw new GlosError('FORBIDDEN', 'Only a driver with a badge can take a bag');
+      if (dto.driverBadgeId && dto.driverBadgeId.trim().toUpperCase() !== own) throw new GlosError('FORBIDDEN', 'A driver takes a bag onto their own badge');
+      return this.mdps.loadBag(code, own);
+    }
+    if (!dto.driverBadgeId?.trim()) throw new GlosError('FIELD_REQUIRED', 'Scan the badge on the driver’s phone');
+    return this.mdps.loadBag(code, this.fleet.badgeShown(dto.driverBadgeId));
   }
 
   /** A bus drops a bag at an MDP → scan the bag code, empty it; parcels become unsorted (At_MDP). */
@@ -5956,8 +5971,11 @@ export class SbgController {
   driverSession(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
     this.assertDriverReader(did, actor);
     const currency = this.drivers.rateCurrencyForDriver(did);
+    // The pass a counter scans goes to the driver's own sign-in only — never to their office or to staff, who read
+    // this same session: what only the driver can do needs something only the driver holds.
+    const handoverPass = actor?.role === 'driver' && actor.did === did ? this.fleet.handoverPassFor(did) : undefined;
     // FP8 — the shift clock rides with the session: the home screen reads it without a second call.
-    return { ...this.fleet.sessionFor(did), quiet: this.dispatch.quietReport(did), hours: this.fleet.hoursFor(did), ...(currency ? { currency } : {}) };
+    return { ...this.fleet.sessionFor(did), quiet: this.dispatch.quietReport(did), hours: this.fleet.hoursFor(did), ...(currency ? { currency } : {}), ...(handoverPass ? { handoverPass } : {}) };
   }
 
   @Roles('driver', 'fleet_manager', 'operator')
@@ -6065,8 +6083,9 @@ export class SbgController {
   //
   // Nobody sells bridge clearances for these corridors, so the fleet that needs the map builds it. The
   // asymmetry that governs the whole feature lives in the service; what the HTTP surface has to get right
-  // is who may do which half. Reporting, confirming and refuting are open to any authenticated driver —
-  // that is the point, and the cost of a bad report is a detour. CLEARING is operator-only, because it is
+  // is who may do which half. Reporting, confirming and refuting are a DRIVER's, from their own sign-in — anybody
+  // else's account was one more vote (user, 2026-10-15: "only drivers can do what drivers can do"); the cost of a bad
+  // report is a detour. CLEARING is operator-only, because it is
   // the one action that takes a warning off everybody's map.
 
   /**
@@ -6076,17 +6095,17 @@ export class SbgController {
    * one anybody can poison anonymously. Reports of the same obstacle from different laybys fold into one
    * constraint and count as corroboration; the service handles that, so the client may report freely.
    */
-  @SignedIn()
+  @Roles('driver')
   @Post('route-constraints')
   reportConstraint(@Body() dto: ReportConstraintDto, @Actor() actor: IntrospectionResult): ConstraintView {
-    return this.constraints.report({ kind: dto.kind, at: dto.at, value: dto.value, note: dto.note, photoRef: dto.photoRef, by: actingDid(actor) });
+    return this.constraints.report({ kind: dto.kind, at: dto.at, value: dto.value, note: dto.note, photoRef: dto.photoRef, by: this.driverOnTheRoad(actor) });
   }
 
   /** A later passer-by agrees it is there. One vote each, and never the original reporter's own. */
-  @SignedIn()
+  @Roles('driver')
   @Post('route-constraints/:id/confirm')
   confirmConstraint(@Param('id') id: string, @Body() dto: ConfirmConstraintDto, @Actor() actor: IntrospectionResult): ConstraintView {
-    return this.constraints.confirm(id, actingDid(actor), dto?.note, dto?.photoRef);
+    return this.constraints.confirm(id, this.driverOnTheRoad(actor), dto?.note, dto?.photoRef);
   }
 
   /**
@@ -6097,10 +6116,19 @@ export class SbgController {
    * it in front of an operator. Letting the crowd remove a hazard would mean one mistaken tap — or one
    * driver who wanted a shorter route — could take a low bridge off everybody's map.
    */
-  @SignedIn()
+  @Roles('driver')
   @Post('route-constraints/:id/refute')
   refuteConstraint(@Param('id') id: string, @Body() dto: RefuteConstraintDto, @Actor() actor: IntrospectionResult): ConstraintView {
-    return this.constraints.refute(id, actingDid(actor), dto.note, dto.photoRef);
+    return this.constraints.refute(id, this.driverOnTheRoad(actor), dto.note, dto.photoRef);
+  }
+
+  /**
+   * Who is voting about the road: a driver, from their own sign-in. Staff pass every role at the door, and a staff
+   * account was one more vote; staff's own act here is CLEARING, below, with a reason that is kept.
+   */
+  private driverOnTheRoad(actor: IntrospectionResult): string {
+    if (actor?.role !== 'driver' || !actor.did) throw new GlosError('FORBIDDEN', 'Only a driver says what is on the road, from their own sign-in');
+    return actor.did;
   }
 
   /**

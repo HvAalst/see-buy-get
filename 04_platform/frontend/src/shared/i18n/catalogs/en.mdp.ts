@@ -112,7 +112,7 @@ export const enMdp = {
   'mdp.load.pickBag': 'Pick the bag',
   'mdp.load.bagsGroup': 'Bags ready to load',
   'mdp.load.driverBadge': 'Driver badge',
-  'mdp.load.scanBadge': 'Scan the badge',
+  'mdp.load.scanBadge': 'Scan the badge on the driver’s phone',
   'mdp.load.oneScan': 'One scan moves the whole bag — every parcel inside goes on the bus.',
   'mdp.load.loadOnto': 'Load {code} onto the bus',
   'mdp.load.pickAbove': 'Pick a bag above',

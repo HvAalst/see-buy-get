@@ -14,6 +14,7 @@ import {
   boardDistanceLine,
   boardOriginPin,
   boardSummary,
+  badgeToShow,
   canLoadBag,
   canStartShift,
   rideAloneCompany,
@@ -221,6 +222,18 @@ describe('claim rows', () => {
     expect(canLoadBag('BADGE-1')).toBe(true);
     expect(canLoadBag(undefined)).toBe(false);
     expect(canLoadBag('')).toBe(false);
+  });
+
+  it('shows a counter this shift’s pass — never the badge number alone, and nothing off shift', () => {
+    const on = { active: true, handoverPass: 'DRV-7CFC59B2-482913' };
+    expect(badgeToShow(on, 'DRV-7CFC59B2')).toEqual({ pass: 'DRV-7CFC59B2-482913', code: '482913' });
+    // Off shift: a counter hands nothing to a driver whose shift has not started, so there is nothing to show.
+    expect(badgeToShow({ ...on, active: false }, 'DRV-7CFC59B2')).toBeNull();
+    // An answer with no pass (an older server, or a reader who is not the driver) shows nothing, not the bare badge.
+    expect(badgeToShow({ active: true }, 'DRV-7CFC59B2')).toBeNull();
+    // A pass that is not this driver's badge is not shown as theirs.
+    expect(badgeToShow(on, 'DRV-00000000')).toBeNull();
+    expect(badgeToShow(on, undefined)).toBeNull();
   });
 });
 
