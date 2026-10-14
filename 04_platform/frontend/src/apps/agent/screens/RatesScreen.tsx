@@ -17,7 +17,10 @@ export function RatesScreen({ state, actions }: RatesScreenProps) {
   const t = useT();
   const mine = Number(state.agent?.pricePerParcel ?? 0);
   const b = state.rates?.benchmark;
-  const band = priceBand(mine, b ?? null, t);
+  // Every price on this screen is in the one money the server compared them in; the shop's own price, before any
+  // shop is beside it, in its company's.
+  const currency = state.rates?.currency;
+  const band = priceBand(mine, b ?? null, t, currency);
   const pins = (state.rates?.pins ?? []).filter((p) => p.id !== state.agent?.did).slice(0, 8);
 
   return (
@@ -32,15 +35,15 @@ export function RatesScreen({ state, actions }: RatesScreenProps) {
       {state.ratesState === 'ready' && !band ? (
         <Card>
           <p class="t-body">{t('agent.rates.noneYet')}</p>
-          <p class="card__note">{t('agent.rates.benchmarkYou', { price: money(mine) })}</p>
+          <p class="card__note">{t('agent.rates.benchmarkYou', { price: money(mine, state.agent?.currency) })}</p>
         </Card>
       ) : null}
 
       {band && b ? (
         <>
           <Card label={`${t('agent.rates.nearbyCount', { count: b.count })}${state.rates?.radiusKm ? ` · ${t('agent.rates.within', { km: state.rates.radiusKm })}` : ''}`}>
-            <p class="rates__median">{money(b.median)}</p>
-            <p class="card__note">{t('agent.rates.between', { low: money(b.p25), high: money(b.p75) })}</p>
+            <p class="rates__median">{money(b.median, currency)}</p>
+            <p class="card__note">{t('agent.rates.between', { low: money(b.p25, currency), high: money(b.p75, currency) })}</p>
             <BandScale
               min={b.min}
               p25={b.p25}
@@ -48,7 +51,7 @@ export function RatesScreen({ state, actions }: RatesScreenProps) {
               p75={b.p75}
               max={b.max}
               mine={mine}
-              label={t('agent.rates.scaleLabel', { min: money(b.min), max: money(b.max), mine: money(mine) })}
+              label={t('agent.rates.scaleLabel', { min: money(b.min, currency), max: money(b.max, currency), mine: money(mine, currency) })}
             />
             <p class="t-body" style="margin-top:6px">
               {band.headline}
@@ -70,7 +73,7 @@ export function RatesScreen({ state, actions }: RatesScreenProps) {
           {pins.map((p) => (
             <div key={p.id} class="kv">
               <span>{`${p.label}${p.km != null ? ` · ${p.km} km` : ''}`}</span>
-              <b>{money(p.price)}</b>
+              <b>{money(p.price, currency)}</b>
             </div>
           ))}
         </Card>

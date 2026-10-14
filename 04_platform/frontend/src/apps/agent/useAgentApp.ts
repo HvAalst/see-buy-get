@@ -18,7 +18,7 @@ import { agentConfig, clearDid, createAgentClient, purgeAgentTokens, readDid, re
 import { signal } from '../../shared/feedback';
 import { triggerDownload } from '../../shared/download';
 import { topUpTermsOf, type TopUpTerms } from '../../shared/topup-fee';
-import { bodyHintValue, bookFreightMissing, EMPTY_ACCEPT, excludedBodiesValue, handoverRoute, incotermValue, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, putAwayList, termsBlock, type AcceptForm, type DimsForm } from './logic';
+import { bodyHintValue, bookFreightMissing, EMPTY_ACCEPT, excludedBodiesValue, handoverRoute, incotermValue, money, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, putAwayList, termsBlock, type AcceptForm, type DimsForm } from './logic';
 import type { GeoPoint } from '../../shared/geo';
 import type {
   AgentLedgerRow,
@@ -268,7 +268,7 @@ export interface AgentState {
   previewNonce: number;
   intakePhotoRef: string;
   /** The last completed intake — drives the "taken in, cash collected" sheet. */
-  intakeDone: { parcelId: string; kind: IntakePreview['kind']; cashDue: number; destShopName?: string } | null;
+  intakeDone: { parcelId: string; kind: IntakePreview['kind']; cashDue: number; currency?: string; destShopName?: string } | null;
   /** P3 — whose promise a walk-up taken in here is under. Re-asked every time the take-in screen opens,
    *  because a country can move down the ladder while the shop stands open. */
   takeInTerms: TakeInTerms | null;
@@ -1322,7 +1322,7 @@ export function useAgentApp() {
         const r = await client.api.setPrice(did, price);
         if (r.error) return fail(r.error);
         buzz();
-        pushToast({ tone: 'ok', icon: 'wallet', title: t('agent.toast.priceUpdated'), detail: t('agent.toast.priceUpdatedDetail', { price: price.toFixed(2) }) });
+        pushToast({ tone: 'ok', icon: 'wallet', title: t('agent.toast.priceUpdated'), detail: t('agent.toast.priceUpdatedDetail', { price: money(price, stateRef.current.agent?.currency) }) });
         await refresh();
         if (stateRef.current.screen === 'rates') await loadRates();
       });
@@ -1671,9 +1671,9 @@ export function useAgentApp() {
         preMint: null,
         preMintState: 'idle',
         preMintError: null,
-        intakeDone: { parcelId: pm.parcelId, kind: pm.kind, cashDue: pm.cashDue, destShopName: pm.destShopName },
+        intakeDone: { parcelId: pm.parcelId, kind: pm.kind, cashDue: pm.cashDue, currency: pm.currency, destShopName: pm.destShopName },
       }));
-      pushToast({ tone: 'ok', icon: 'wallet', title: t('agent.toast.parcelTakenIn'), detail: pm.kind === 'peer_send' ? t('agent.toast.takenInCash', { amount: pm.cashDue.toFixed(2) }) : t('agent.toast.takenInPrepaid') });
+      pushToast({ tone: 'ok', icon: 'wallet', title: t('agent.toast.parcelTakenIn'), detail: pm.kind === 'peer_send' ? t('agent.toast.takenInCash', { amount: money(pm.cashDue, pm.currency) }) : t('agent.toast.takenInPrepaid') });
       await refresh();
     });
   }, [client, did, run, fail, pushToast, refresh]);

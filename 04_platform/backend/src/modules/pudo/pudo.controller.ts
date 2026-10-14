@@ -63,7 +63,7 @@ import { AuthService } from '../../foundation/auth/auth.service';
 import { AgentService } from './agent.service';
 import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
-import { operationalParcelView, ParcelService } from './parcel.service';
+import { operationalParcelView, parcelCurrency, ParcelService } from './parcel.service';
 import { MonitorService } from './monitor.service';
 import { RatingService, belowFloor } from './rating.service';
 import { VendorService } from './vendor.service';
@@ -2522,6 +2522,11 @@ export class SbgController {
     return { currency: list.currency ?? NETWORK_CURRENCY, parcelPrice: list.wholesale };
   }
 
+  /** The money a shop's prices are in: the one `shopMoney` tells the shop it keeps. */
+  private shopCurrency(did: string): string {
+    return this.agents.amountsOf(did).currency ?? NETWORK_CURRENCY;
+  }
+
   /**
    * P3 — what this counter must SAY before it takes a walk-up in: whose promise the goods are under, who
    * answers for them, and the cover. Asked when the take-in screen opens rather than learned from a
@@ -3433,6 +3438,10 @@ export class SbgController {
    * the money THEY are paid in (`rateCurrencyForDriver`) and told which money that is (`currency`). Anybody else is answered in the network's. A median across two currencies is a number about
    * nothing, and the button beside it would have set a driver's price to it. A driver whose work no company of ours
    * settles is compared with nobody: no `currency`, and a benchmark of none.
+   *
+   * SHOPS THE SAME WAY: a shop's price per parcel is in its company's money (`shopCurrency`), so a shop is
+   * set beside the shops in its own money — a circle drawn near a border reaches shops of another company — and told
+   * which. Hubs are still compared as they always were.
    */
   @SignedIn()
   @Get('pricing/near')
@@ -3455,26 +3464,35 @@ export class SbgController {
       return { count: s.length, median: pct(s, 0.5), p25: pct(s, 0.25), p75: pct(s, 0.75), min: s[0] ?? 0, max: s[s.length - 1] ?? 0 };
     };
     type Row = { id: string; label: string; location?: { lat: number; lng: number }; price: number };
-    // The money vehicles are compared in for this caller: see the comment above.
-    const rateCurrency = (): string | undefined => (actor.role === 'driver' && actor.did ? this.drivers.rateCurrencyForDriver(actor.did) : NETWORK_CURRENCY);
-    const vehicleCurrency = type === 'vehicle' ? rateCurrency() : undefined;
+    // The money rates are compared in for this caller: see the comment above.
+    const compared = type === 'vehicle' || type === 'pudo';
+    const askerCurrency = (): string | undefined => {
+      if (type === 'vehicle') return actor.role === 'driver' && actor.did ? this.drivers.rateCurrencyForDriver(actor.did) : NETWORK_CURRENCY;
+      if (actor.role !== 'agent' || !actor.did) return NETWORK_CURRENCY;
+      try {
+        return this.shopCurrency(actor.did);
+      } catch {
+        return undefined; // a shop sign-in with no shop on record is compared with nobody
+      }
+    };
+    const money = compared ? askerCurrency() : undefined;
+    // Asked about one kind (`type`): only the rates in the asker's money, or none. The summary without a type, which
+    // nobody compares themselves against, keeps every rate as it always has.
+    const inAskersMoney = <T,>(all: T[], moneyOf: (x: T) => string | undefined): T[] => (!type ? all : money ? all.filter((x) => moneyOf(x) === money) : []);
     const rowsFor = (t: string): Row[] => {
       if (t === 'mdp') return this.mdps.list().map((m) => ({ id: m.mdpId, label: m.name, location: m.location, price: m.pricePerParcel }));
       if (t === 'vehicle') {
-        const vehicles = this.vehicles.list({ status: 'ACTIVE' });
-        // Asked about one kind (`type`): only the rates in the asker's money, or none. The summary below, which no
-        // driver reads, keeps every vehicle as it always has.
-        const inMoney = !type ? vehicles : vehicleCurrency ? vehicles.filter((v) => this.drivers.rateCurrencyOf(v) === vehicleCurrency) : [];
-        return inMoney.map((v) => ({ id: v.vehicleId, label: v.plate, price: v.pricePerKm }));
+        return inAskersMoney(this.vehicles.list({ status: 'ACTIVE' }), (v) => this.drivers.rateCurrencyOf(v)).map((v) => ({ id: v.vehicleId, label: v.plate, price: v.pricePerKm }));
       }
-      return this.agents.list().filter((a) => a.status === 'ACTIVE').map((a) => ({ id: a.did, label: a.shopName, location: a.location, price: a.pricePerParcel }));
+      const shops = this.agents.list().filter((a) => a.status === 'ACTIVE');
+      return inAskersMoney(shops, (a) => this.shopCurrency(a.did)).map((a) => ({ id: a.did, label: a.shopName, location: a.location, price: a.pricePerParcel }));
     };
     const forType = (t: string) => {
       let rows = rowsFor(t).map((r) => ({ ...r, km: here && r.location ? Math.round(haversineKm(here, r.location) * 10) / 10 : undefined }));
       if (here && t !== 'vehicle') rows = rows.filter((r) => r.km != null && r.km <= R).sort((a, b) => (a.km ?? 0) - (b.km ?? 0)); // vehicles roam → network benchmark
       return { benchmark: benchmark(rows.map((r) => r.price)), pins: t === 'vehicle' ? [] : rows.slice(0, L) };
     };
-    if (type) return { type, radiusKm: here ? R : null, ...(vehicleCurrency ? { currency: vehicleCurrency } : {}), ...forType(type) };
+    if (type) return { type, radiusKm: here ? R : null, ...(money ? { currency: money } : {}), ...forType(type) };
     return { pudo: forType('pudo').benchmark, mdp: forType('mdp').benchmark, vehicle: forType('vehicle').benchmark };
   }
 
@@ -3851,6 +3869,8 @@ export class SbgController {
       destZone: parcel.destZone,
       destShopName: parcel.destAgentDid ? this.agents.get(parcel.destAgentDid).shopName : undefined,
       cashDue: kind === 'peer_send' ? parcel.shipmentCost ?? 0 : 0,
+      // The money the cash is counted in: the selling company's, stamped on the parcel when it was priced.
+      currency: parcelCurrency(parcel),
       // P3 — said in the same breath as the price: whose promise, who answers, and this parcel's own cover.
       ...(parcel.originAgentDid ? { terms: this.parcels.intakeTermsFor(parcel) } : {}),
     };

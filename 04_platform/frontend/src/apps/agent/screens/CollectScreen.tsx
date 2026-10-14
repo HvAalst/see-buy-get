@@ -1,6 +1,7 @@
 import { Button, Card, Checklist, Note, QrBlock, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { qrPayload } from '../../../shared/qr';
+import { money } from '../logic';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
 
@@ -52,7 +53,7 @@ export function CollectBody({ state, actions }: CollectScreenProps) {
             <Note
               tone="warn"
               icon="clock"
-              title={t('agent.collect.holdingTitle', { amount: found.holdingOwed.toFixed(2) })}
+              title={t('agent.collect.holdingTitle', { amount: money(found.holdingOwed, found.currency) })}
               detail={t('agent.collect.holdingDetail')}
             />
           ) : null}

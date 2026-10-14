@@ -226,8 +226,8 @@ const EARN_SORT: Array<{ value: EarnQuery['sort']; labelKey: MessageKey }> = [
   { value: 'amount_asc', labelKey: 'agent.records.sortAmountAsc' },
 ];
 
-function netLabel(net: number): string {
-  return `${net < 0 ? '−' : ''}${money(Math.abs(net))}`;
+function netLabel(net: number, currency?: string): string {
+  return `${net < 0 ? '−' : ''}${money(Math.abs(net), currency)}`;
 }
 
 function Earnings({ state, actions }: RecordsScreenProps) {
@@ -256,7 +256,7 @@ function Earnings({ state, actions }: RecordsScreenProps) {
     <>
       {/* The BALANCE is the live wallet (state.agent), never the summary's fetch-time snapshot — a top-up on
           another screen must not leave a stale figure here. The summary drives only the in/out/net sub-line. */}
-      <GlanceNumber label={t('agent.records.walletBalance')} value={money(state.agent?.balance)} sub={sum ? t('agent.records.viewSummary', { in: money(sum.in), out: money(sum.out), net: netLabel(sum.net) }) : t('agent.records.summaryHint')} />
+      <GlanceNumber label={t('agent.records.walletBalance')} value={money(state.agent?.balance, state.agent?.currency)} sub={sum ? t('agent.records.viewSummary', { in: money(sum.in, sum.currency), out: money(sum.out, sum.currency), net: netLabel(sum.net, sum.currency) }) : t('agent.records.summaryHint')} />
 
       <Card title={t('agent.records.earnings')} aside={<span class="row__count">{state.ledgerTotal}</span>}>
         <div class="reg__controls">
@@ -288,7 +288,7 @@ function Earnings({ state, actions }: RecordsScreenProps) {
           ) : (
             <div class={`rows${state.ledgerState === 'loading' ? ' rows--loading' : ''}`} role="list">
               {state.ledger.map((e) => (
-                <EarnRow key={e.id} e={e} />
+                <EarnRow key={e.id} e={e} currency={state.agent?.currency} />
               ))}
             </div>
           )}
@@ -304,7 +304,7 @@ function Earnings({ state, actions }: RecordsScreenProps) {
       </Card>
 
       <div class="scr__foot">
-        <ReadAloud text={() => `${t('agent.records.aloudBalance', { balance: money(state.agent?.balance ?? 0) })}${sum ? t('agent.records.aloudView', { in: money(sum.in), out: money(sum.out), net: `${sum.net < 0 ? t('agent.records.minus') : ''}${money(Math.abs(sum.net))}` }) : ''}`} label={t('agent.readAloud')} />
+        <ReadAloud text={() => `${t('agent.records.aloudBalance', { balance: money(state.agent?.balance ?? 0, state.agent?.currency) })}${sum ? t('agent.records.aloudView', { in: money(sum.in, sum.currency), out: money(sum.out, sum.currency), net: `${sum.net < 0 ? t('agent.records.minus') : ''}${money(Math.abs(sum.net), sum.currency)}` }) : ''}`} label={t('agent.readAloud')} />
       </div>
 
       <EarnFilterSheet open={filterOpen} onClose={() => setFilterOpen(false)} query={q} onApply={(patch) => { actions.queryLedger(patch); setFilterOpen(false); }} onClearAll={() => { resetAll(); setFilterOpen(false); }} />
@@ -312,7 +312,8 @@ function Earnings({ state, actions }: RecordsScreenProps) {
   );
 }
 
-function EarnRow({ e }: { e: AgentLedgerRow }) {
+/** A line is written in the money of the books it was posted to; one written before lines said so, in the shop's. */
+function EarnRow({ e, currency }: { e: AgentLedgerRow; currency?: string }) {
   const t = useT();
   return (
     <div class="row row--static">
@@ -325,7 +326,7 @@ function EarnRow({ e }: { e: AgentLedgerRow }) {
         <span class="row__meta">{new Date(e.at).toLocaleDateString()}</span>
       </span>
       <span class="row__end">
-        <b class={`amt amt--${e.sign === '+' ? 'in' : 'out'}`}>{`${e.sign}${money(e.amount)}`}</b>
+        <b class={`amt amt--${e.sign === '+' ? 'in' : 'out'}`}>{`${e.sign}${money(e.amount, e.currency ?? currency)}`}</b>
       </span>
     </div>
   );

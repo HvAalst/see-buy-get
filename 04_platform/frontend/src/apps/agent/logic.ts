@@ -12,6 +12,7 @@
 
 import { distanceLabel, haversineKm, type GeoPoint } from '../../shared/geo';
 import type { MessageKey, Translate } from '../../shared/i18n';
+import { cash } from '../../shared/money';
 import type { AgentStatus, AgentView, Benchmark, CorridorRow, GateView, NetworkPoint, ParcelSize, ParcelStatus, ParcelView, TakeInTerms } from './types';
 
 /* ---------------------------------------------------------- take-in terms -- */
@@ -108,7 +109,7 @@ export function gateNotice(agent: Pick<AgentView, 'status' | 'kycRejection'> | n
     title: t('agent.logic.gateLowTitle'),
     detail:
       gate.shortfall && gate.shortfall > 0
-        ? t('agent.logic.gateLowShortfall', { amount: money(gate.shortfall) })
+        ? t('agent.logic.gateLowShortfall', { amount: money(gate.shortfall, gate.currency) })
         : t('agent.logic.gateLowDetail'),
   };
 }
@@ -146,9 +147,13 @@ export function papersReady(papers: { idCopy: string; licence: string; shopFront
 
 /* ------------------------------------------------------------------ money -- */
 
-/** Money is always shown with two decimals — a shopkeeper reconciles against this figure. */
-export function money(v: number | null | undefined): string {
-  return (Number(v) || 0).toFixed(2);
+/**
+ * Money is always shown with two decimals — a shopkeeper reconciles against this figure — and in the money the
+ * server named for it (the shop's company's, or the books a line was posted to). Without one, the bare number: what
+ * a price box holds, and what is shown where nothing says which money it is.
+ */
+export function money(v: number | null | undefined, currency?: string): string {
+  return cash(v, currency);
 }
 
 /* ------------------------------------------------------------------ shelf -- */
@@ -646,10 +651,11 @@ export function roundMoney(v: number): number {
 /**
  * The shop's handling fee against nearby shops. Same shape and dead zone as the driver's
  * per-km band, but 2-decimal money and "shops" wording. Null without a usable benchmark —
- * a median of one shop would talk an agent into repricing against themselves.
+ * a median of one shop would talk an agent into repricing against themselves — and null without
+ * the money the benchmark is in: a comparison that cannot say its money is not shown at all.
  */
-export function priceBand(pricePerParcel: number | null | undefined, benchmark: Benchmark | null | undefined, t: Translate): PriceBand | null {
-  if (!benchmark || !benchmark.count) return null;
+export function priceBand(pricePerParcel: number | null | undefined, benchmark: Benchmark | null | undefined, t: Translate, currency?: string): PriceBand | null {
+  if (!benchmark || !benchmark.count || !currency) return null;
 
   const mine = Number(pricePerParcel ?? 0);
   const pct = benchmark.median > 0 ? Math.round(((mine - benchmark.median) / benchmark.median) * 100) : 0;
@@ -662,10 +668,10 @@ export function priceBand(pricePerParcel: number | null | undefined, benchmark: 
         : t('agent.logic.priceSame');
 
   const detail = t('agent.logic.priceDetail', {
-    mine: money(mine),
-    median: money(benchmark.median),
-    min: money(benchmark.min),
-    max: money(benchmark.max),
+    mine: money(mine, currency),
+    median: money(benchmark.median, currency),
+    min: money(benchmark.min, currency),
+    max: money(benchmark.max, currency),
     count: benchmark.count,
   });
 
@@ -675,7 +681,7 @@ export function priceBand(pricePerParcel: number | null | undefined, benchmark: 
     detail,
     showMatch: Math.abs(pct) > 1,
     matchPrice: roundMoney(benchmark.median),
-    matchLabel: t('agent.logic.priceMatch', { price: money(benchmark.median) }),
+    matchLabel: t('agent.logic.priceMatch', { price: money(benchmark.median, currency) }),
   };
 }
 
@@ -684,7 +690,7 @@ export function priceBand(pricePerParcel: number | null | undefined, benchmark: 
 export function homeSummary(agent: AgentView | null, gate: GateView | null, t: Translate): string {
   if (!agent) return t('agent.logic.homeConnecting');
   const canScan = Boolean(gate?.ok);
-  const bits = [t('agent.logic.homeWallet', { balance: money(agent.balance) })];
+  const bits = [t('agent.logic.homeWallet', { balance: money(agent.balance, agent.currency) })];
   bits.push(canScan ? t('agent.logic.homeCanAccept') : t('agent.logic.homeTopUp'));
   if (agent.openState === 'closed') bits.push(t('agent.logic.homeClosed'));
   return bits.join(' ');

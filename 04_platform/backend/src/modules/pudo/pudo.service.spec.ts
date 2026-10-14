@@ -290,6 +290,33 @@ describe('PUDO Light', () => {
       expect(gate.agentLedgerSummary(home.did, {} as never).currency).toBe('KES');
     });
 
+    it('sets a shop’s price per parcel beside the shops in its own money, and says which', () => {
+      // A circle drawn near a border reaches shops of another company: a median of shillings and birr is a number about
+      // nothing, and the button beside it would have set this shop’s price to it.
+      const asShop = (did: string) => ({ active: true, role: 'agent', did }) as never;
+      const ratesFor = (actor: unknown) => controller.pricingNear(actor as never, 'pudo') as { currency?: string; benchmark: { count: number; min: number; max: number }; pins: { id: string }[] };
+      const home = onboardAgent('Nairobi Rate Shop', 'NorthTown', 100);
+      agents.setPrice(home.did, 7);
+      const ets = [abroad('Addis Rate Shop A'), abroad('Addis Rate Shop B')];
+      ets.forEach((s, i) => {
+        gate.topUp(s.did, 4000);
+        agents.setPrice(s.did, 300 + i * 100);
+      });
+      expect(ets.map((s) => agents.get(s.did).status)).toEqual(['ACTIVE', 'ACTIVE']);
+
+      const inBirr = ratesFor(asShop(ets[0].did));
+      expect(inBirr.currency).toBe('ETB');
+      expect(inBirr.pins.map((p) => p.id)).not.toContain(home.did);
+      expect(inBirr.pins.map((p) => p.id)).toEqual(expect.arrayContaining(ets.map((s) => s.did)));
+      expect(inBirr.benchmark.min).toBeGreaterThanOrEqual(300);
+
+      const inShillings = ratesFor(asShop(home.did));
+      expect(inShillings.currency).toBe('KES');
+      expect(inShillings.pins.map((p) => p.id)).toContain(home.did);
+      expect(inShillings.pins.map((p) => p.id)).not.toContain(ets[0].did);
+      expect(inShillings.benchmark.max).toBeLessThan(300);
+    });
+
     it('refuses to add up register lines in two moneys rather than give a figure in nothing', () => {
       const line = (currency: string) => ({ id: currency, type: 'TOP_UP', sign: '+', amount: 10, currency, reference: 'r', refType: 'bank', at: '2026-10-14T00:00:00Z' }) as never;
       expect(agentLedgerSummaryOf([line('KES'), line('KES')])).toMatchObject({ in: 20, currency: 'KES' });
@@ -1344,6 +1371,11 @@ describe('PUDO Light', () => {
     expect(preview.kind).toBe('peer_send');
     expect(preview.intakeReady).toBe(true);
     expect(preview.cashDue).toBe(due);
+    // …and in what money: the selling company's, stamped on the parcel — not assumed to be the network's.
+    expect(preview.currency).toBe('KES');
+    parcels.get(parcelId).currency = 'ETB';
+    expect((controller.intakePreview(parcelId, { role: 'agent', did: origin.did } as never) as { currency: string }).currency).toBe('ETB');
+    parcels.get(parcelId).currency = 'KES';
     expect(preview.destShopName).toBe(dest.shopName);
     expect(JSON.stringify(preview)).not.toContain('+2547006');
     const elsewhere = onboardAgent('PG2P X', 'NorthTown', 50);

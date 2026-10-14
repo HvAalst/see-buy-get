@@ -906,7 +906,7 @@ export class Parcel {
   coverLimit?: number;
   shipmentPremium?: number;
   /** The money every figure above is in — the SELLING sister's, stamped at mint. Absent on records
-   *  written before prices named their unit; read it through ParcelService.currencyOf. */
+   *  written before prices named their unit; read it through `parcelCurrency` (parcel.service.ts). */
   currency?: string;
   /** The paperwork this parcel crosses a border with. Absent on a domestic shipment, which needs none —
    *  and never absent on one that crosses, because the mint refuses to sell that shipment without it. */

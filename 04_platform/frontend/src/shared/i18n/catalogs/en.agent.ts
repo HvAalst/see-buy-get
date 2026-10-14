@@ -261,6 +261,7 @@ export const enAgent = {
   // sees it sit still assumes the app is broken — and then rings somebody about it.
   'agent.home.topUpBody': 'Every parcel you accept is paid from this wallet. Tell us how much you are paying in, and where to send the payment request — your balance changes once the payment comes through.',
   'agent.home.amount': 'Amount',
+  'agent.home.amountIn': 'Amount, in {currency}',
   'agent.home.askAmount': 'Pay in {amount}',
   'agent.home.addAmount': 'Add {amount}',
   'agent.home.addMoney': 'Add money',
@@ -300,6 +301,7 @@ export const enAgent = {
   'agent.home.priceTitle': 'Your price per parcel',
   'agent.home.priceBody': 'This is what senders pay your shop to handle a parcel. It is public — nearby shops compete on it.',
   'agent.home.pricePerParcel': 'Price per parcel',
+  'agent.home.pricePerParcelIn': 'Price per parcel, in {currency}',
   'agent.home.savePrice': 'Save the new price',
   'agent.home.keepPrice': 'Keep it as it is',
 

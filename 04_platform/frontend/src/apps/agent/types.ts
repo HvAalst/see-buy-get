@@ -81,6 +81,10 @@ export interface AgentView {
   /** Merged in by the controller alongside the record. NULL where we hold no money for this shop at all —
    *  a different fact from an empty float, and never to be shown as 0.00. */
   balance: number | null;
+  /** The money the shop's float and its price per parcel are in: its company's. Merged in by the controller. */
+  currency?: string;
+  /** What one parcel costs this shop's float, in that money. */
+  parcelPrice?: number;
   rating?: { count: number; average: number; isNew?: boolean } | null;
 }
 
@@ -111,6 +115,8 @@ export interface GateView {
   code?: 'WALLET_INSUFFICIENT' | 'AGENT_LOCKED' | 'ID_HELD' | string;
   balance: number;
   shortfall?: number;
+  /** The money the balance and the shortfall are in. */
+  currency?: string;
 }
 
 /**
@@ -240,6 +246,8 @@ export interface IntakePreview {
   destShopName?: string;
   /** The locked price the shop collects in cash — 0 for a prepaid store order. */
   cashDue: number;
+  /** The money it is counted in: the selling company's, stamped on the parcel. */
+  currency?: string;
   /** P3 — whose promise, who answers, and this parcel's own cover. */
   terms?: TakeInTerms;
 }
@@ -283,6 +291,8 @@ export interface CollectView {
    * nobody wins.
    */
   holdingOwed?: number;
+  /** The money the charge is in: the parcel's own, as the price it is reckoned from. */
+  currency?: string;
 }
 
 export interface ReceiveBagView {
@@ -324,6 +334,8 @@ export interface RatesView {
   benchmark?: Benchmark;
   pins: RatePin[];
   radiusKm?: number;
+  /** The money every price here is in — only shops in this shop's own money are set beside it. Absent: none are. */
+  currency?: string;
 }
 
 /* ------------------------------------------------------------- registers (R4) -- */
@@ -347,6 +359,8 @@ export interface AgentLedgerRow {
   type: 'TOP_UP' | 'FEE' | 'LABOR_PAYOUT' | 'REFUND' | string;
   sign: '+' | '-';
   amount: number;
+  /** The money of the books the line was posted to. */
+  currency?: string;
   reference: string;
   refType?: string;
   at: string;
@@ -359,6 +373,8 @@ export interface LedgerSummary {
   net: number;
   count: number;
   balance: number;
+  /** The one money every line in the view is in — the server refuses to add two. */
+  currency?: string;
 }
 
 /* ------------------------------------ F3: space on a run that is already going -- */

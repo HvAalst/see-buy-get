@@ -3,7 +3,7 @@ import type { ComponentChildren } from 'preact';
 export interface GlanceNumberProps {
   /** Uppercase 14px label above the figure. */
   label: string;
-  /** The one number that carries the screen — 64px, 800, navy, tabular. */
+  /** The one number that carries the screen — 64px, 800, navy, tabular; smaller only where it would not fit the card. */
   value: string | number;
   /** Trailing unit, set smaller so the figure keeps the weight. */
   unit?: string;
@@ -31,7 +31,7 @@ export function GlanceNumber({ label, value, unit, percent, sub, alert, aside }:
         {aside ?? null}
       </div>
       <p class="glance__figure">
-        <span class="glance__value">{value}</span>
+        <span class="glance__value" style={`--glance-chars:${Math.max(String(value).length, 1)}`}>{value}</span>
         {unit ? <span class="glance__unit">{unit}</span> : null}
       </p>
       {pct === undefined ? null : (

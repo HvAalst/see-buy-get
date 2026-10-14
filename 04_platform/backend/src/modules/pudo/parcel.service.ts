@@ -2078,7 +2078,7 @@ export class ParcelService implements OnApplicationBootstrap {
    * A burned code opens nothing: the counter learns at the lookup that this parcel needs a reissue,
    * rather than being walked to the confirm step only to be refused there.
    */
-  collect(collectionCode: string, agentDid: string): { parcel: Parcel; binSlot?: string; holdingOwed?: number } {
+  collect(collectionCode: string, agentDid: string): { parcel: Parcel; binSlot?: string; holdingOwed?: number; currency?: string } {
     const parcel = [...this.parcels.values()].find(
       (p) => (p.collectionCode === collectionCode || p.collectProxy?.code === collectionCode) && p.destAgentDid === agentDid && isCollectable(p.status),
     );
@@ -2088,7 +2088,9 @@ export class ParcelService implements OnApplicationBootstrap {
     // only after the customer has the box in their hands has to ask for money back, which is the one
     // conversation across a counter that nobody wins.
     const holdingOwed = holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, shipmentCost: parcel.shipmentCost, settled: parcel.holdingSettled, perDay: parcel.holdingFeePerDay });
-    return { parcel, binSlot: parcel.binSlot, ...(holdingOwed > 0 ? { holdingOwed } : {}) };
+    // In the parcel's own money, as the price it is reckoned from: said beside the figure, for a counter that may be
+    // handed a parcel sold by another company.
+    return { parcel, binSlot: parcel.binSlot, ...(holdingOwed > 0 ? { holdingOwed, currency: parcelCurrency(parcel) } : {}) };
   }
 
   /**

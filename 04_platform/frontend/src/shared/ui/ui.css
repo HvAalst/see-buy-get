@@ -261,6 +261,8 @@
   border-radius: var(--r-card);
   box-shadow: var(--sh-sm);
   padding: 22px 20px 20px;
+  /* The figure below is sized against this card's own width — see .glance__value. */
+  container-type: inline-size;
 }
 
 .glance__label {
@@ -281,6 +283,10 @@
 
 .glance__value {
   font-size: 64px;
+  /* NEVER WIDER THAN THE CARD. A figure that says its money ("KES 115,874.00") ran off the edge of a phone at
+     64px. Each character is a little over half the type size wide, so the card's width over the character count
+     (--glance-chars, set by GlanceNumber) gives the largest size that still fits; a short figure keeps 64px. */
+  font-size: min(64px, calc(100cqi / var(--glance-chars, 1) * 1.75));
   line-height: 1;
   font-weight: 800;
   letter-spacing: -0.045em;

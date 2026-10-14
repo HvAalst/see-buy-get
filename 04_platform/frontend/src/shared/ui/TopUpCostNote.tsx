@@ -1,4 +1,5 @@
 import { useT } from '../i18n';
+import { cash } from '../money';
 import { topUpCost, type TopUpTerms } from '../topup-fee';
 
 /**
@@ -29,7 +30,8 @@ export function TopUpCostNote({ terms, amount, risesBy }: { terms: TopUpTerms | 
   const t = useT();
   if (!terms) return null;
 
-  const n = (v: number) => v.toFixed(2);
+  // In the money the terms are set in: the company's that holds this float.
+  const n = (v: number) => cash(v, terms.currency);
   const cost = topUpCost(terms, amount);
 
   if (!cost) return <p class="hint">{t('common.topUpFee.terms', { charge: n(terms.charge), freeAbove: n(terms.freeAbove) })}</p>;

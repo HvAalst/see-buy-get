@@ -441,6 +441,11 @@ describe('the collection window closing', () => {
       // The counter learns it at the LOOKUP, not after the box has changed hands — asking for money back
       // across a counter is the one conversation nobody wins.
       expect(parcels.collect(parcel.collectionCode!, to.did).holdingOwed).toBeCloseTo(owed, 2);
+      // Said in the parcel's own money: a counter can be handed a parcel another company sold.
+      p.currency = 'ETB';
+      expect(parcels.collect(parcel.collectionCode!, to.did).currency).toBe('ETB');
+      delete p.currency;
+      expect(parcels.collect(parcel.collectionCode!, to.did).currency).toBe('KES');
       parcels.collectConfirm(parcel.parcelId, to.did, parcel.collectionCode!);
       expect(parcels.get(parcel.parcelId).holdingSettled).toBeCloseTo(owed, 2);
       expect(unclaimed.owed(parcel.parcelId)).toBe(0); // and the network does not then pay it again

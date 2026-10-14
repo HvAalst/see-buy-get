@@ -6,7 +6,8 @@
  * PWA and the old page can never disagree about what "72 / 800 kg" or "12% above" means.
  */
 
-import { formatMoney, type Translate } from '../../shared/i18n';
+import type { Translate } from '../../shared/i18n';
+import { cash, perKmText } from '../../shared/money';
 import type { GeoPoint } from '../../shared/geo';
 import type { AgentRow, Benchmark, BlockerKind, BoardRow, Claimable, DriverStatus, MdpRow, NodeOption, PriceBreakdown } from './types';
 
@@ -344,19 +345,11 @@ export function money(v: number | null | undefined): string {
 }
 
 /**
- * MONEY AS THIS DRIVER READS IT: in the money the session says everything priced for them is in — that of the
- * company that pays them (`SessionView.currency`). Where no company of ours pays them there is none to say, and the
- * figure is the bare price they agreed. One helper for every screen, so a figure is never written in no money while
- * the session names one.
+ * MONEY AS THIS DRIVER READS IT: `cash(v, session.currency)` — in the money the session says everything priced for
+ * them is in, that of the company that pays them; the bare price they agreed where no company of ours does. Shared
+ * with every other app (shared/money.ts).
  */
-export function cash(v: number | null | undefined, currency?: string): string {
-  return currency ? formatMoney(Number(v) || 0, currency) : money(v);
-}
-
-/** A per-km rate, set to the thousandth, in its money where there is one. */
-export function perKmText(v: number, currency?: string): string {
-  return currency ? formatMoney(v, currency, 3) : v.toFixed(3);
-}
+export { cash, perKmText };
 
 /**
  * FB3a — the point the board is read from.

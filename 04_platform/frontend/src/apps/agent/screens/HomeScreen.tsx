@@ -107,8 +107,8 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
       ) : (
         <GlanceNumber
           label={t('agent.home.walletLabel')}
-          value={money(agent?.balance)}
-          sub={agent ? t('agent.home.chargePer', { price: money(agent.pricePerParcel) }) : undefined}
+          value={money(agent?.balance, agent?.currency)}
+          sub={agent ? t('agent.home.chargePer', { price: money(agent.pricePerParcel, agent.currency) }) : undefined}
           aside={
             <Button variant="link" full={false} onClick={() => setSheet('topup')}>
               {t('agent.home.topUp')}
@@ -141,7 +141,7 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
             <Icon name="clock" size={24} />
           </span>
           <span class="row__body">
-            <span class="row__t">{t('agent.home.topUpWaitNote', { amount: money(state.funding.amount) })}</span>
+            <span class="row__t">{t('agent.home.topUpWaitNote', { amount: money(state.funding.amount, state.funding.currency) })}</span>
             <span class="row__s">{t('agent.home.topUpWaitRow', { reference: state.funding.reference })}</span>
           </span>
           <span class="row__end">
@@ -191,7 +191,7 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
         <div class="rows">
           <SettingRow icon="pin" title={t('agent.home.locationRow')} sub={t('agent.home.locationSub')} onClick={() => setSheet('location')} />
           <SettingRow icon="clock" title={t('agent.home.hoursRow')} sub={t('agent.home.hoursSub')} onClick={() => setSheet('hours')} />
-          <SettingRow icon="scale" title={t('agent.home.changePrice')} sub={t('agent.home.priceSub', { price: money(agent?.pricePerParcel) })} onClick={() => setSheet('price')} />
+          <SettingRow icon="scale" title={t('agent.home.changePrice')} sub={t('agent.home.priceSub', { price: money(agent?.pricePerParcel, agent?.currency) })} onClick={() => setSheet('price')} />
           <SettingRow icon="grid" title={t('agent.home.shelfLink')} sub={t('agent.home.shelfSub')} onClick={() => actions.go('shelf')} />
           <SettingRow icon="keypad" title={t('agent.home.passwordRow')} sub={t('agent.home.passwordSub')} onClick={() => setSheet('password')} />
         </div>
@@ -258,6 +258,8 @@ function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose:
   const [amount, setAmount] = useState('50');
   const [phone, setPhone] = useState('');
   const value = Number(amount);
+  // A float is paid into in the shop's company's money: the box says which, and so does the button.
+  const currency = state.agent?.currency;
   const waiting = state.funding?.status === 'awaiting' ? state.funding : null;
   const refused = state.funding?.status === 'failed' ? state.funding : null;
 
@@ -275,7 +277,7 @@ function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose:
         <Note
           tone="info"
           icon={waiting.pushed ? 'keypad' : 'clock'}
-          title={t(waiting.pushed ? 'agent.home.topUpPushNote' : 'agent.home.topUpWaitNote', { amount: money(waiting.amount) })}
+          title={t(waiting.pushed ? 'agent.home.topUpPushNote' : 'agent.home.topUpWaitNote', { amount: money(waiting.amount, waiting.currency) })}
           detail={waiting.instructions}
         />
         <div class="field">
@@ -301,7 +303,7 @@ function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose:
       {refused?.failureReason ? <Note tone="warn" icon="clock" title={t('agent.home.topUpRefused')} detail={refused.failureReason} /> : null}
       <div class="field">
         <label class="field__label" for="topup">
-          {t('agent.home.amount')}
+          {currency ? t('agent.home.amountIn', { currency }) : t('agent.home.amount')}
         </label>
         <input id="topup" class="input" type="number" inputMode="decimal" min="1" step="1" value={amount} onInput={(e) => setAmount(e.currentTarget.value)} />
       </div>
@@ -343,7 +345,7 @@ function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose:
         disabled={!(value > 0)}
         onClick={() => void actions.topUp(value, phone.trim() || undefined)}
       >
-        {value > 0 ? t(phone.trim() ? 'agent.home.askAmountPush' : 'agent.home.askAmount', { amount: value.toFixed(2) }) : t('agent.home.addMoney')}
+        {value > 0 ? t(phone.trim() ? 'agent.home.askAmountPush' : 'agent.home.askAmount', { amount: money(value, currency) }) : t('agent.home.addMoney')}
       </Button>
       <Button variant="link" onClick={onClose}>
         {t('agent.home.notNow')}
@@ -361,7 +363,7 @@ function PriceSheet({ open, onClose, state, actions }: { open: boolean; onClose:
       <p class="t-body">{t('agent.home.priceBody')}</p>
       <div class="field">
         <label class="field__label" for="price">
-          {t('agent.home.pricePerParcel')}
+          {state.agent?.currency ? t('agent.home.pricePerParcelIn', { currency: state.agent.currency }) : t('agent.home.pricePerParcel')}
         </label>
         <input id="price" class="input" type="number" inputMode="decimal" min="0" step="0.05" value={price} onInput={(e) => setPrice(e.currentTarget.value)} />
       </div>

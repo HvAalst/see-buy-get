@@ -91,6 +91,11 @@ describe('gateNotice', () => {
     expect(n?.detail).toContain('4.60');
   });
 
+  it('names the money the top-up is needed in — the shop’s company’s, as the gate says', () => {
+    const n = gateNotice(agent(), gate({ ok: false, code: 'WALLET_INSUFFICIENT', balance: 0.4, shortfall: 4.6, currency: 'ETB' }), t);
+    expect(n?.detail).toContain('ETB\u00a04.60');
+  });
+
   it('canAccept follows the gate alone', () => {
     expect(canAccept(gate())).toBe(true);
     expect(canAccept(gate({ ok: false }))).toBe(false);
@@ -323,18 +328,29 @@ describe('priceBand', () => {
   const bm: Benchmark = { count: 8, median: 2, p25: 1.5, p75: 2.5, min: 1, max: 3 };
 
   it('needs a usable benchmark', () => {
-    expect(priceBand(1.5, null, t)).toBeNull();
-    expect(priceBand(1.5, { ...bm, count: 0 }, t)).toBeNull();
+    expect(priceBand(1.5, null, t, 'KES')).toBeNull();
+    expect(priceBand(1.5, { ...bm, count: 0 }, t, 'KES')).toBeNull();
+  });
+
+  it('is not shown at all without the money the shops were compared in', () => {
+    // A median that cannot say its money is a number about nothing — and the button beside it would set a price to it.
+    expect(priceBand(1.5, bm, t)).toBeNull();
+  });
+
+  it('says every price in that money', () => {
+    const b = priceBand(2.5, bm, t, 'ETB');
+    expect(b?.detail).toBe('Your price ETB\u00a02.50 per parcel. Nearby shops charge ETB\u00a02.00 (ETB\u00a01.00–ETB\u00a03.00 across 8 shops).');
+    expect(b?.matchLabel).toBe('Match ETB\u00a02.00');
   });
 
   it('reads above / below / at with a ±1% dead zone', () => {
-    expect(priceBand(2.5, bm, t)?.headline).toContain('25% more');
-    expect(priceBand(1.5, bm, t)?.headline).toContain('25% less');
-    expect(priceBand(2.01, bm, t)?.showMatch).toBe(false);
+    expect(priceBand(2.5, bm, t, 'KES')?.headline).toContain('25% more');
+    expect(priceBand(1.5, bm, t, 'KES')?.headline).toContain('25% less');
+    expect(priceBand(2.01, bm, t, 'KES')?.showMatch).toBe(false);
   });
 
   it('the match price is money-rounded exactly as it will be PATCHed', () => {
-    const b = priceBand(3, { ...bm, median: 1.999 }, t);
+    const b = priceBand(3, { ...bm, median: 1.999 }, t, 'KES');
     expect(b?.matchPrice).toBe(2);
     expect(roundMoney(1.006)).toBe(1.01);
     expect(roundMoney(2.994)).toBe(2.99);
@@ -347,10 +363,16 @@ describe('speaking', () => {
     expect(money(undefined)).toBe('0.00');
   });
 
+  it('money says which money where the server named one', () => {
+    expect(money(5, 'KES')).toBe('KES\u00a05.00');
+    expect(money(1234.5, 'ETB')).toBe('ETB\u00a01,234.50');
+  });
+
   it('home summary reads the gate and the closed state', () => {
     expect(homeSummary(agent({ balance: 12.5, openState: 'closed' }), gate({ ok: false }), t)).toBe(
       'Wallet balance 12.50. Top up to accept parcels. Your shop is marked closed.',
     );
+    expect(homeSummary(agent({ balance: 12.5, currency: 'UGX' }), gate(), t)).toMatch(/^Wallet balance UGX\u00a012\.50\./);
   });
 
   it('handover summary counts the waiting and the chosen', () => {
