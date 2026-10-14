@@ -20,6 +20,8 @@ import {
   carrierBearsLine,
   stuckLabel,
   reportRowWords,
+  applicationPapers,
+  needsRecordTick,
   type ApprovalRow,
   type DamageReportRow,
   type ClaimCap,
@@ -30,6 +32,7 @@ import {
   type StalledRow,
   type DriverApplication,
 } from '../queues';
+import { countryNameOf } from '../presence';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
 /**
@@ -632,8 +635,9 @@ function DriverApplicationRow({ row, state, actions }: { row: DriverApplication;
    * something the applicant may tick: a self-declared clear record is not a check.
    */
   const [cleared, setCleared] = useState(false);
-  const needsRecord = !row.criminalRecordClear;
-  const refs = [row.kyc?.licenceCopyRef, row.kyc?.idCopyRef].filter((x): x is string => Boolean(x));
+  const needsRecord = needsRecordTick(row);
+  const refs = applicationPapers(row);
+  const ask = row.courierAsk;
 
   return (
     <>
@@ -642,14 +646,16 @@ function DriverApplicationRow({ row, state, actions }: { row: DriverApplication;
           <div class="ctbl__strong">{row.displayName}</div>
           <div class="ctbl__sub">
             {row.registry} · {row.jurisdiction ?? '—'}
-            {row.criminalRecordClear ? '' : ` · ${t('tower.drivers.recordNotClear')}`}
+            {row.criminalRecordClear || ask ? '' : ` · ${t('tower.drivers.recordNotClear')}`}
           </div>
+          {/* AN ASK, NOT A SIGN-UP: somebody a fleet's office once vetted, now asking to be contracted directly. */}
+          {ask ? <div class="ctbl__sub">{t('tower.drivers.asks', { vehicle: ask.vehicleClass, plate: ask.plate, country: countryNameOf(ask.country, state.catalogue) })}</div> : null}
         </td>
         <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.drivers.col.licence')}</span>
           <div class="ctbl__mono">{row.licence?.number ?? '—'}</div>
           <div>{row.licence?.expiresAt ? row.licence.expiresAt.slice(0, 10) : t('tower.papers.noDate')}</div>
         </td>
-        <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.drivers.col.papers')}</span>{row.kyc?.submittedAt ? t('tower.drivers.sent', { date: row.kyc.submittedAt.slice(0, 10) }) : t('tower.drivers.noPapers')}</td>
+        <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.drivers.col.papers')}</span>{ask ? t('tower.drivers.sent', { date: ask.askedAt.slice(0, 10) }) : row.kyc?.submittedAt ? t('tower.drivers.sent', { date: row.kyc.submittedAt.slice(0, 10) }) : t('tower.drivers.noPapers')}</td>
         <td>
           {needsRecord ? (
             <label class="cfield cfield--check">
@@ -662,7 +668,7 @@ function DriverApplicationRow({ row, state, actions }: { row: DriverApplication;
               type="button"
               class="cbtn cbtn--primary cbtn--sm"
               disabled={busy || (needsRecord && !cleared)}
-              onClick={() => void actions.decideDriver(row.did, true, undefined, cleared)}
+              onClick={() => void actions.decideDriver(row.did, true, undefined, cleared, Boolean(ask))}
             >
               {t('tower.approvals.approve')}
             </button>
@@ -689,7 +695,7 @@ function DriverApplicationRow({ row, state, actions }: { row: DriverApplication;
                   class="cbtn cbtn--danger cbtn--sm"
                   disabled={busy || !why.trim()}
                   onClick={() => {
-                    void actions.decideDriver(row.did, false, why.trim());
+                    void actions.decideDriver(row.did, false, why.trim(), undefined, Boolean(ask));
                     setWhy(null);
                   }}
                 >

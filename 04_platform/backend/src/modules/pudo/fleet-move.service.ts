@@ -13,8 +13,8 @@ import { ParcelService } from './parcel.service';
 import { PersonService } from './person.service';
 import { VehicleService } from './vehicle.service';
 import { betweenFleets } from './driver.service';
-import type { VehicleClass } from './fleet.config';
-import type { FleetDriver, FleetRemovalReason, Vehicle } from './fleet.types';
+import { TRUCK_SUBTYPE_CATALOG, type TruckSubtype, type VehicleClass } from './fleet.config';
+import type { CourierAsk, FleetDriver, FleetRemovalReason, Vehicle } from './fleet.types';
 
 /** What riding for themselves would take, said to the driver before anything is asked of them. */
 export interface RideAloneTerms {
@@ -25,6 +25,18 @@ export interface RideAloneTerms {
   classes: VehicleClass[];
   /** Where a courier can register, and the company of ours that would contract them there (none where we only match). */
   countries: Array<{ jurisdiction: string; companyName?: string }>;
+  /**
+   * Whether staff check them first: anything heavier than a motorcycle on their licence, as for anybody signing up on
+   * one. Then the ask carries a photograph of their ID and of their licence, and they ride once two things are true:
+   * staff read both, and staff checked their record.
+   */
+  check: boolean;
+  /** An ask already with staff: what they asked for, and when. Nothing else can be asked while it waits. */
+  waiting?: { country: string; vehicleClass: VehicleClass; plate: string; askedAt: string };
+  /** Why the last ask was refused, in staff’s words. They may ask again. */
+  refused?: { reason: string; at: string };
+  /** A truck is registered with its body: the ones there are, when a truck is among what they may ride. */
+  bodies?: Array<{ id: string; label: string }>;
 }
 
 /** What a fleet's own words may say when it takes a driver off: why, in a sentence the driver is shown. */
@@ -193,9 +205,7 @@ export class FleetMoveService {
     if (!betweenFleets(driver)) return 'You already ride for yourself';
     if (driver.status === 'SUSPENDED') return 'Your driver account is suspended, so this cannot be done from here';
     if (driver.idHold) return `The national ID on your registration went to somebody else (reference ${driver.idHold.reference}). Put the number of your own ID card on record first, in Settings`;
-    if (driver.registry !== 'light' || driver.status !== 'ACTIVE') {
-      return 'To ride for yourself on anything heavier than a motorcycle, the network checks you first, and that check cannot be asked for from the app yet. A fleet can still offer you a place';
-    }
+    if (driver.status !== 'ACTIVE') return 'Your registration has not been checked by the network yet, so this cannot be done from here';
     return null;
   }
 
@@ -203,7 +213,14 @@ export class FleetMoveService {
   rideAloneTerms(driverDid: string): RideAloneTerms {
     const driver = this.drivers.get(driverDid);
     const why = this.rideAloneBlock(driver);
-    return { offered: !why, ...(why ? { why } : {}), classes: why ? [] : [...driver.licence.classes], countries: why ? [] : this.drivers.courierCountries() };
+    const check = driver.registry === 'heavy';
+    const refused = driver.courierAskRefusal ? { refused: { reason: driver.courierAskRefusal.reason, at: driver.courierAskRefusal.at } } : {};
+    if (!why && driver.courierAsk) {
+      const { country, vehicleClass, plate, askedAt } = driver.courierAsk;
+      return { offered: false, check, waiting: { country, vehicleClass, plate, askedAt }, classes: [], countries: [] };
+    }
+    const bodies = !why && driver.licence.classes.includes('truck') ? { bodies: Object.entries(TRUCK_SUBTYPE_CATALOG).map(([id, s]) => ({ id, label: s.label })) } : {};
+    return { offered: !why, ...(why ? { why } : {}), check, ...refused, ...bodies, classes: why ? [] : [...driver.licence.classes], countries: why ? [] : this.drivers.courierCountries() };
   }
 
   /**
@@ -221,10 +238,15 @@ export class FleetMoveService {
    * THE VEHICLE IS REGISTERED FIRST. It is the one step that can still be refused once the questions are answered,
    * and a refusal must leave them exactly as they were: in no fleet, and not half a courier.
    */
-  rideAlone(driverDid: string, input: { country: string; vehicleClass: VehicleClass; plate: string }): { driver: FleetDriver; vehicle: Vehicle; companyName?: string } {
+  rideAlone(
+    driverDid: string,
+    input: { country: string; vehicleClass: VehicleClass; plate: string; truckSubtype?: TruckSubtype; idCopyRef?: string; licenceCopyRef?: string },
+    now: number = Date.now(),
+  ): { driver: FleetDriver; vehicle?: Vehicle; companyName?: string; asked?: CourierAsk } {
     const driver = this.drivers.get(driverDid);
     const why = this.rideAloneBlock(driver);
     if (why) throw new GlosError('INVALID_STATE', why);
+    if (driver.courierAsk) throw new GlosError('INVALID_STATE', 'You have asked already: the network is checking your papers, and you are told here when it decides');
     const country = (input.country ?? '').trim().toUpperCase();
     if (!/^[A-Z]{2}$/.test(country)) throw new GlosError('FIELD_REQUIRED', 'Say which country you live in: it decides which company you ride for');
     const where = this.drivers.courierCountries().find((c) => c.jurisdiction === country);
@@ -232,12 +254,75 @@ export class FleetMoveService {
     if (!driver.licence.classes.includes(input.vehicleClass)) {
       throw new GlosError('CANNOT_COUPLE', `You are not licence-cleared for a ${input.vehicleClass}. Choose a vehicle you are cleared for`);
     }
+    if (input.vehicleClass === 'truck' && !TRUCK_SUBTYPE_CATALOG[input.truckSubtype as TruckSubtype]) {
+      throw new GlosError('FIELD_REQUIRED', 'Say what body your truck has: flatbed, tipper, refrigerated…');
+    }
+    // ANYTHING HEAVIER THAN A MOTORCYCLE ON THEIR LICENCE: an ask, read by staff before they ride — refused before
+    // anything is written, and nothing about them changes while it waits.
+    if (driver.registry === 'heavy') {
+      if (!input.plate?.trim()) throw new GlosError('FIELD_REQUIRED', 'A number plate is required');
+      const asked = this.drivers.askToRideAlone(driverDid, {
+        country,
+        vehicleClass: input.vehicleClass,
+        plate: input.plate.trim().toUpperCase(),
+        ...(input.vehicleClass === 'truck' ? { truckSubtype: input.truckSubtype } : {}),
+        idCopyRef: input.idCopyRef ?? '',
+        licenceCopyRef: input.licenceCopyRef ?? '',
+      }, now);
+      return { driver: asked, asked: asked.courierAsk, ...(where.companyName ? { companyName: where.companyName } : {}) };
+    }
     // Theirs, and nobody else's: no fleet, and the courier recorded as the one who owns and drives it.
     const vehicle = this.vehicles.register({ plate: input.plate, vehicleClass: input.vehicleClass, managerDid: undefined, ownerType: 'driver_owned', ownerName: driver.displayName, ownerDriverDid: driverDid } as never);
-    const now = this.drivers.rideAlone(driverDid, country);
+    const rides = this.drivers.rideAlone(driverDid, country);
     // On their screen from the first morning: the vehicle list is a history, and they have none of their own yet.
     this.fleet.claimOwnVehicle(driverDid, vehicle.vehicleId);
-    return { driver: now, vehicle, ...(where.companyName ? { companyName: where.companyName } : {}) };
+    return { driver: rides, vehicle, ...(where.companyName ? { companyName: where.companyName } : {}) };
+  }
+
+  /**
+   * STAFF DECIDE AN ASK TO RIDE FOR THEMSELVES — the check a van or truck courier signing up meets, no looser.
+   *
+   * Approving takes what vetting takes, by the member of staff who looked: they read the ID and the licence (on the
+   * row, not behind a tap), and THEY tick that the record check is clear — a fleet said so of its own driver once, and
+   * a fleet's word is not the network's check of somebody it is about to contract with directly. The licence must not
+   * have lapsed. The vehicle is registered FIRST, so a refusal there leaves the driver as they were; then the record
+   * they have becomes a courier's, exactly as a rider's does at once.
+   *
+   * Refusing takes a reason, which the driver reads. They stay in no fleet, and may ask again.
+   */
+  decideRideAlone(driverDid: string, input: { approve: boolean; by?: string; reason?: string; criminalRecordClear?: boolean }, now: number = Date.now()): FleetDriver {
+    const driver = this.drivers.get(driverDid);
+    const ask = driver.courierAsk;
+    if (!ask) throw new GlosError('INVALID_STATE', `${driver.displayName} has not asked to ride for themselves, or the ask was already decided`);
+    const at = new Date(now).toISOString();
+    if (!input.approve) {
+      const reason = input.reason?.trim();
+      if (!reason) throw new GlosError('REASON_REQUIRED', 'A refusal must say why: the driver is shown it');
+      const closed = this.drivers.closeCourierAsk(driverDid, { reason, at, ...(input.by ? { by: input.by } : {}) });
+      this.tellRideAlone(closed, false, reason);
+      return closed;
+    }
+    if (!input.criminalRecordClear) throw new GlosError('APPROVAL_BLOCKED', 'Tick that you checked their record and it is clear: a courier is checked by the network itself');
+    if (driver.licence.expiresAt && Date.parse(driver.licence.expiresAt) <= now) throw new GlosError('APPROVAL_BLOCKED', 'Cannot approve: the driving licence has expired');
+    const why = this.rideAloneBlock(driver);
+    if (why) throw new GlosError('INVALID_STATE', why);
+    if (!this.drivers.courierCountries().some((c) => c.jurisdiction === ask.country)) {
+      throw new GlosError('FORBIDDEN', `The network does not operate in ${ask.country} any more, so a courier cannot be registered there`);
+    }
+    const vehicle = this.vehicles.register({ plate: ask.plate, vehicleClass: ask.vehicleClass, ...(ask.truckSubtype ? { truckSubtype: ask.truckSubtype } : {}), managerDid: undefined, ownerType: 'driver_owned', ownerName: driver.displayName, ownerDriverDid: driverDid } as never);
+    this.drivers.recordCourierCheck(driverDid, { idCopyRef: ask.idCopyRef, licenceCopyRef: ask.licenceCopyRef, at: ask.askedAt });
+    this.drivers.rideAlone(driverDid, ask.country);
+    this.fleet.claimOwnVehicle(driverDid, vehicle.vehicleId);
+    const rides = this.drivers.closeCourierAsk(driverDid);
+    this.tellRideAlone(rides, true);
+    return rides;
+  }
+
+  private tellRideAlone(driver: FleetDriver, approved: boolean, reason?: string): void {
+    const companyName = approved && driver.entityId ? this.drivers.courierCountries().find((c) => c.jurisdiction === driver.jurisdiction)?.companyName : undefined;
+    void this.events
+      .publish(GlosEvent.Pudo.DriverRideAloneDecided, { did: driver.did, approved, ...(reason ? { reason } : {}), ...(companyName ? { companyName } : {}) }, { source: 'pudo' })
+      .catch(() => undefined);
   }
 
   /**

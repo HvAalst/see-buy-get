@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applicationPapers,
+  needsRecordTick,
   carrierBearsLine,
   CLAIM_SLOW_DAYS,
   DISPOSAL_LONG_DAYS,
@@ -237,5 +239,20 @@ describe('FP8 — what the carrier bears of an award', () => {
     expect(carrierBearsLine({ ...base, coverable: true, awardCap: 100, carrierPaid: 10 }, t)).toContain('10');
     expect(carrierBearsLine({ ...base, coverable: true, awardCap: 100 }, t)).toBeNull(); // paid nothing yet — or settled between the parties
     expect(carrierBearsLine({ ...base, coverable: false, awardCap: 0, capBasis: 'none', carrierPaid: 10 }, t)).toBeNull();
+  });
+});
+
+/** A driver in no fleet asking to ride for themselves: the papers are the ask’s own, and the record check is staff’s every time. */
+describe('an ask to ride for themselves, on the driver applications row', () => {
+  const ask = { country: 'KE', vehicleClass: 'van', plate: 'KVAN 1', idCopyRef: 'med_ask_id', licenceCopyRef: 'med_ask_lic', askedAt: '2026-10-15T08:00:00.000Z' };
+  it('shows the ask’s own photographs, the licence first — not the ones a fleet once sent', () => {
+    expect(applicationPapers({ kyc: { idCopyRef: 'fleet-id', licenceCopyRef: 'fleet-lic' }, courierAsk: ask })).toEqual(['med_ask_lic', 'med_ask_id']);
+    expect(applicationPapers({ kyc: { idCopyRef: 'id', licenceCopyRef: 'lic' } })).toEqual(['lic', 'id']);
+    expect(applicationPapers({})).toEqual([]);
+  });
+  it('asks staff to tick the record check on an ask even where a fleet once said it was clear', () => {
+    expect(needsRecordTick({ criminalRecordClear: true, courierAsk: ask })).toBe(true);
+    expect(needsRecordTick({ criminalRecordClear: true })).toBe(false);
+    expect(needsRecordTick({ criminalRecordClear: false })).toBe(true);
   });
 });

@@ -3,7 +3,7 @@
 // the MDP→PUDO feeder today and a van tomorrow, and a vehicle may change hands between drivers.
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { TruckSubtype, VehicleClass } from './fleet.config';
+import { TruckSubtype, VEHICLE_CLASSES, VehicleClass } from './fleet.config';
 import { Equipment } from './cargo.types';
 import type { CarrierPaperKind, PaperKind } from './papers';
 import { GeoPoint } from './pudo.types';
@@ -347,6 +347,20 @@ export class FleetRemoval {
   by?: string;
 }
 
+/** What a driver in no fleet asked for when they asked to ride for themselves on something heavy. See FleetDriver.courierAsk. */
+export class CourierAsk {
+  /** Where they legally reside: it decides the company of ours that would contract them. */
+  country: string;
+  @ApiProperty({ enum: VEHICLE_CLASSES }) vehicleClass: VehicleClass;
+  plate: string;
+  /** A truck's body, which a truck is registered with. */
+  @ApiPropertyOptional() truckSubtype?: TruckSubtype;
+  /** Their own photographs, sent with the ask: the ID card and the driving licence staff read. */
+  idCopyRef: string;
+  licenceCopyRef: string;
+  askedAt: string;
+}
+
 export class FleetDriver {
   driverId: string;
   did: string;
@@ -359,6 +373,14 @@ export class FleetDriver {
    * until a fleet offers them a place and they take it. Cleared the moment they join one.
    */
   removedFrom?: FleetRemoval;
+  /**
+   * IN NO FLEET, AND ASKING TO RIDE FOR THEMSELVES on a van, a truck or anything heavier than a motorcycle — which a
+   * courier does only once network staff have read their ID and licence and checked their record. Waits in the queue
+   * staff already have (Joining the network) until decided; cleared then, or the moment they take a fleet’s place.
+   */
+  @ApiPropertyOptional({ type: () => CourierAsk }) courierAsk?: CourierAsk;
+  /** Why the last ask to ride for themselves was refused, in staff’s words. Shown to them; cleared when they ask again. */
+  courierAskRefusal?: { reason: string; at: string; by?: string };
   /**
    * THE NATIONAL ID THEY REGISTERED WITH WENT TO SOMEBODY ELSE, by a decision of two members of staff
    * (id-dispute.service.ts). They finish what they carry and start nothing new until an ID of their own is on

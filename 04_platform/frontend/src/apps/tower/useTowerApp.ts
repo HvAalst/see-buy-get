@@ -295,7 +295,8 @@ export interface TowerActions {
   decideApproval(did: string, approve: boolean, reason?: string): Promise<void>;
   /** Vet a heavy-registry driver. A refusal carries the reason the driver is shown. */
   /** `criminalRecordClear` is the vetting staff member's own tick — never the applicant's. */
-  decideDriver(did: string, approve: boolean, reason?: string, criminalRecordClear?: boolean): Promise<void>;
+  /** `asked`: the row was a driver in no fleet asking to ride for themselves — said so in what the screen confirms. */
+  decideDriver(did: string, approve: boolean, reason?: string, criminalRecordClear?: boolean, asked?: boolean): Promise<void>;
   /** A fleet is set up by staff: register it, put its four papers on record, approve or send back, record its bond. */
   registerFleet(form: FleetForm): Promise<boolean>;
   putFleetPapers(did: string, pictures: Record<FleetPaperKey, string>): Promise<boolean>;
@@ -1339,7 +1340,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
        *
        * A refusal carries the reason: the driver is shown it and is the only person who can put it right.
        */
-      decideDriver: async (did: string, approve: boolean, reason?: string, criminalRecordClear?: boolean) => {
+      decideDriver: async (did: string, approve: boolean, reason?: string, criminalRecordClear?: boolean, asked?: boolean) => {
         const client = clientRef.current;
         if (!client) return;
         setState((s) => ({ ...s, busyId: did, queueError: null }));
@@ -1348,7 +1349,8 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
           return;
         }
-        setState((s) => ({ ...s, busyId: null, queueError: null, done: approve ? t('tower.drivers.approved') : t('tower.drivers.refused') }));
+        const said = asked ? (approve ? 'tower.drivers.askApproved' : 'tower.drivers.askRefused') : approve ? 'tower.drivers.approved' : 'tower.drivers.refused';
+        setState((s) => ({ ...s, busyId: null, queueError: null, done: t(said) }));
         await loadQueues(client);
       },
       /**

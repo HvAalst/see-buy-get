@@ -98,6 +98,7 @@ describe('a driver changing fleet', () => {
   let books: BooksService;
   let entities: EntityService;
   let moves: FleetMoveService;
+  let media: MediaService;
   let parcels: ParcelService;
   let agents: AgentService;
   let gate: WalletGateService;
@@ -133,6 +134,7 @@ describe('a driver changing fleet', () => {
     books = moduleRef.get(BooksService);
     books.reset();
     drivers = moduleRef.get(DriverService);
+    media = moduleRef.get(MediaService);
     vehicles = moduleRef.get(VehicleService);
     fleet = moduleRef.get(FleetService);
     managers = moduleRef.get(FleetManagerService);
@@ -662,9 +664,9 @@ describe('a driver changing fleet', () => {
       expect(drivers.payeeOf(r.driver.did)).toEqual({ entityId: kenya.entityId, payeeDid: r.driver.did });
       // THEIR OWN VEHICLE: no fleet's, recorded as theirs, and on their screen before they have ever driven it.
       expect(done.vehicle).toMatchObject({ plate: 'KMDX 123A', vehicleClass: 'motorcycle', ownerType: 'driver_owned', ownerDriverDid: r.driver.did });
-      expect(done.vehicle.managerDid).toBeUndefined();
-      expect(fleet.recentVehicles(r.driver.did).map((v) => v.vehicleId)).toEqual([done.vehicle.vehicleId]);
-      expect(() => fleet.couple(r.driver.did, done.vehicle.vehicleId)).not.toThrow();
+      expect(done.vehicle!.managerDid).toBeUndefined();
+      expect(fleet.recentVehicles(r.driver.did).map((v) => v.vehicleId)).toEqual([done.vehicle!.vehicleId]);
+      expect(() => fleet.couple(r.driver.did, done.vehicle!.vehicleId)).not.toThrow();
       // Asking again: they already are one.
       expect(moves.rideAloneTerms(r.driver.did)).toMatchObject({ offered: false, why: 'You already ride for yourself', classes: [], countries: [] });
     });
@@ -678,23 +680,111 @@ describe('a driver changing fleet', () => {
       expect(drivers.isIndependent(drivers.get(r.driver.did))).toBe(true);
     });
 
-    it('anything heavier than a motorcycle is not offered from the app, says why, and changes nothing', () => {
+    /**
+     * THE USER, 2026-10-15: "a driver with no fleet should be able to drive for themselves." On anything heavier than a
+     * motorcycle that is what a courier signing up on a van meets: their ID and licence, read by staff, and their record
+     * checked by the network itself — asked from the app, decided in the queue staff already have.
+     */
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const papersOf = (did: string) => ({ idCopyRef: media.upload({ ownerDid: did, kind: 'kyc_id', dataUrl: PNG }).mediaId, licenceCopyRef: media.upload({ ownerDid: did, kind: 'kyc_licence', dataUrl: PNG }).mediaId });
+    const aTruckerOutOf = (fleetName: string) => {
+      const fleetCo = aFleet(fleetName);
+      const t = aDriver(fleetCo.did);
+      moves.leave(t.driver.did);
+      return { fleetCo, did: t.driver.did };
+    };
+
+    it('anything heavier than a motorcycle is an ASK: offered, the check said, their own photographs — and nothing about them changes while it waits', () => {
+      const { did } = aTruckerOutOf('Kilima Logistics');
+      expect(moves.rideAloneTerms(did)).toMatchObject({ offered: true, check: true, classes: ['truck'], bodies: expect.arrayContaining([{ id: 'flatbed', label: 'Flatbed (open)' }]) });
+      const owned = ownedBy(did).length;
+      // Refused before anything is written: no photographs, a truck with no body, somebody else's photograph.
+      expect(() => moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'KCA 001T' })).toThrow(/photograph of your ID card and one of your driving licence/);
+      expect(() => moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', plate: 'KCA 001T', ...papersOf(did) })).toThrow(/what body your truck has/);
+      expect(() => moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'KCA 001T', ...papersOf('did:glos:somebody-else') })).toThrow(/could not be attached/);
+      expect(drivers.get(did).courierAsk).toBeUndefined();
+
+      const done = moves.rideAlone(did, { country: 'ke', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'kca 001t', ...papersOf(did) });
+      expect(done.asked).toMatchObject({ country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'KCA 001T' });
+      expect(done.vehicle).toBeUndefined();
+      // Still in no fleet, still nobody's courier, no vehicle of their own yet.
+      const now = drivers.get(did);
+      expect(now.removedFrom).toBeDefined();
+      expect(drivers.isIndependent(now)).toBe(false);
+      expect(drivers.canOperate(did)).toBe(false);
+      expect(ownedBy(did)).toHaveLength(owned);
+      // What they read now, and staff's queue has them.
+      expect(moves.rideAloneTerms(did)).toMatchObject({ offered: false, check: true, waiting: { country: 'KE', vehicleClass: 'truck', plate: 'KCA 001T' }, classes: [], countries: [] });
+      expect(moves.rideAloneTerms(did)).not.toHaveProperty('why');
+      expect(drivers.kycQueue().map((d) => d.did)).toContain(did);
+      // Asked twice: the one waiting stands.
+      expect(() => moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'KCA 002T', ...papersOf(did) })).toThrow(/asked already/);
+    });
+
+    it('staff approve with their OWN record check, the vehicle is registered first, and the same record becomes a courier’s — told on their phone', async () => {
+      const { did } = aTruckerOutOf('Kilima Logistics');
+      const kept = { driverId: drivers.get(did).driverId, badgeId: drivers.get(did).badgeId };
+      const papers = papersOf(did);
+      moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', truckSubtype: 'tipper', plate: 'KCB 777T', ...papers });
+      // The fleet said its driver's record was clear; that is not the network's check of somebody it contracts itself.
+      expect(drivers.get(did).criminalRecordClear).toBe(true);
+      expect(() => moves.decideRideAlone(did, { approve: true, by: 'Amina Otieno' })).toThrow(/checked their record/);
+      expect(drivers.isIndependent(drivers.get(did))).toBe(false);
+
+      const kenya = entities.forJurisdiction('KE')!;
+      const rides = moves.decideRideAlone(did, { approve: true, by: 'Amina Otieno', criminalRecordClear: true });
+      expect(rides).toMatchObject({ jurisdiction: 'KE', entityId: kenya.entityId, status: 'ACTIVE', criminalRecordClear: true, kyc: { idCopyRef: papers.idCopyRef, licenceCopyRef: papers.licenceCopyRef } });
+      expect(rides.courierAsk).toBeUndefined();
+      expect(rides.removedFrom).toBeUndefined();
+      expect(drivers.isIndependent(rides)).toBe(true);
+      expect({ driverId: rides.driverId, badgeId: rides.badgeId }).toEqual(kept);
+      const [truck] = ownedBy(did);
+      expect(truck).toMatchObject({ plate: 'KCB 777T', vehicleClass: 'truck', truckSubtype: 'tipper', ownerType: 'driver_owned' });
+      expect(fleet.recentVehicles(did).map((v) => v.vehicleId)).toEqual([truck.vehicleId]);
+      expect(() => fleet.couple(did, truck.vehicleId)).not.toThrow();
+      expect(drivers.kycQueue().map((d) => d.did)).not.toContain(did);
+      expect(() => moves.decideRideAlone(did, { approve: true, criminalRecordClear: true })).toThrow(/already decided/);
+      await settle();
+      expect(notifications.inboxFor(did)[0]).toMatchObject({ kind: 'papers_checked', title: 'You ride for yourself now' });
+      expect(notifications.inboxFor(did)[0].body).toContain(kenya.name);
+    });
+
+    it('staff refuse with a reason the driver reads; they stay as they were, and may ask again', async () => {
+      const { did } = aTruckerOutOf('Kilima Logistics');
+      moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'KCC 100T', ...papersOf(did) });
+      expect(() => moves.decideRideAlone(did, { approve: false, by: 'Amina Otieno' })).toThrow(/must say why/);
+      expect(() => moves.decideRideAlone(did, { approve: false, by: 'Amina Otieno', reason: '   ' })).toThrow(/must say why/);
+      const no = moves.decideRideAlone(did, { approve: false, by: 'Amina Otieno', reason: 'The licence photograph is too dark to read.' });
+      expect(no.courierAsk).toBeUndefined();
+      expect(no.removedFrom).toBeDefined();
+      expect(drivers.isIndependent(no)).toBe(false);
+      expect(ownedBy(did)).toHaveLength(0);
+      expect(moves.rideAloneTerms(did)).toMatchObject({ offered: true, check: true, refused: { reason: 'The licence photograph is too dark to read.' } });
+      await settle();
+      expect(notifications.inboxFor(did)[0]).toMatchObject({ kind: 'papers_checked', title: 'Your ask to ride for yourself was not approved' });
+      expect(notifications.inboxFor(did)[0].body).toContain('The licence photograph is too dark to read.');
+      // Asking again clears the refusal they read.
+      moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'KCC 100T', ...papersOf(did) });
+      expect(moves.rideAloneTerms(did)).not.toHaveProperty('refused');
+    });
+
+    it('taking a fleet’s place while the ask waits ends the ask: they chose', () => {
+      const { did } = aTruckerOutOf('Kilima Logistics');
+      moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'KCD 200T', ...papersOf(did) });
+      const pwani = aFleet('Pwani Haulage');
+      moves.join(did, pwani.did);
+      expect(drivers.get(did).courierAsk).toBeUndefined();
+      expect(drivers.kycQueue().map((d) => d.did)).not.toContain(did);
+      expect(() => moves.decideRideAlone(did, { approve: true, criminalRecordClear: true })).toThrow(/has not asked/);
+    });
+
+    it('one licence that covers a van as well as a motorcycle is checked as the van it covers', () => {
       const kilima = aFleet('Kilima Logistics');
-      const trucker = aDriver(kilima.did);
-      moves.leave(trucker.driver.did);
-      const terms = moves.rideAloneTerms(trucker.driver.did);
-      expect(terms).toMatchObject({ offered: false, classes: [], countries: [] });
-      expect(terms.why).toBe('To ride for yourself on anything heavier than a motorcycle, the network checks you first, and that check cannot be asked for from the app yet. A fleet can still offer you a place');
-      const owned = ownedBy(trucker.driver.did).length;
-      expect(() => moves.rideAlone(trucker.driver.did, { country: 'KE', vehicleClass: 'truck', plate: 'KCA 001T' })).toThrow(/heavier than a motorcycle/);
-      expect(drivers.isIndependent(drivers.get(trucker.driver.did))).toBe(false);
-      expect(drivers.get(trucker.driver.did).removedFrom).toBeDefined();
-      expect(ownedBy(trucker.driver.did)).toHaveLength(owned);
-      // One licence that covers a van as well as a motorcycle is checked as the van it covers.
       const both = aDriver(kilima.did);
       drivers.get(both.driver.did).licence.classes = ['truck', 'motorcycle'];
       moves.leave(both.driver.did);
-      expect(moves.rideAloneTerms(both.driver.did).offered).toBe(false);
+      expect(moves.rideAloneTerms(both.driver.did)).toMatchObject({ offered: true, check: true });
+      expect(() => moves.rideAlone(both.driver.did, { country: 'KE', vehicleClass: 'motorcycle', plate: 'KMEE 1' })).toThrow(/photograph of your ID card/);
     });
 
     it('is refused by name — in a fleet, already a courier, suspended, no country, a country we are not in, a vehicle they are not cleared for, no plate — and a refusal leaves them as they were', () => {
@@ -750,8 +840,8 @@ describe('a driver changing fleet', () => {
       expect(now.jurisdiction).toBeUndefined();
       expect(now.entityId).toBeUndefined();
       // The motorcycle is still theirs: joining a fleet does not hand it over.
-      expect(vehicles.get(vehicle.vehicleId)).toMatchObject({ ownerDriverDid: r.driver.did });
-      expect(vehicles.get(vehicle.vehicleId).managerDid).toBeUndefined();
+      expect(vehicles.get(vehicle!.vehicleId)).toMatchObject({ ownerDriverDid: r.driver.did });
+      expect(vehicles.get(vehicle!.vehicleId).managerDid).toBeUndefined();
     });
   });
 

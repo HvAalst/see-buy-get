@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Note, RefusalNote, Sheet } from '../../../shared/ui';
+import { Button, Card, Note, PhotoField, RefusalNote, Sheet } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import { removalWords, removedLine, rideAloneCompany, rideAloneMissing, rideAloneStart, type RideAloneForm } from '../logic';
@@ -42,8 +42,8 @@ const DAY: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
  *
  * AND, FOR SOMEBODY IN NO FLEET, THE OTHER WAY BACK ONTO THE ROAD: riding for themselves. On a bicycle or a
  * motorcycle that is done here, at once — the country they live in, the company that follows from it, and the
- * vehicle of their own. For anything heavier the server says why not, and that sentence is shown instead of a
- * button that would refuse.
+ * vehicle of their own. On anything heavier it is an ASK, with a photograph of their ID and of their licence, that
+ * network staff read before they ride; while it waits the sheet says so, and a refusal is shown in staff's words.
  */
 export function FleetSheet({ open, onClose, state, actions }: { open: boolean; onClose: () => void; state: DriverState; actions: DriverActions }) {
   const t = useT();
@@ -105,8 +105,32 @@ export function FleetSheet({ open, onClose, state, actions }: { open: boolean; o
       {/* IN NO FLEET: the way back that needs nobody's offer — or, where the app cannot do it, the reason in the
           server's own words. Before the offers, because it is the one thing here they can do by themselves. */}
       {removed && state.rideAlone ? (
-        state.rideAlone.offered ? (
-          <RideAloneCard terms={state.rideAlone} busy={state.busy === 'ride-alone'} onSubmit={(form) => void answer(() => actions.rideAlone({ country: form.country, vehicleClass: form.vehicleClass, plate: form.plate.trim() }), true)} />
+        state.rideAlone.waiting ? (
+          <Note
+            tone="info"
+            icon="clock"
+            title={t('driver.alone.waitingTitle')}
+            detail={t('driver.alone.waiting', { day: formatDate(state.rideAlone.waiting.askedAt, DAY), vehicle: vehicleWord(state.rideAlone.waiting.vehicleClass, t), plate: state.rideAlone.waiting.plate })}
+          />
+        ) : state.rideAlone.offered ? (
+          <RideAloneCard
+            terms={state.rideAlone}
+            busy={state.busy === 'ride-alone'}
+            upload={actions.uploadPhoto}
+            onSubmit={(form) =>
+              void answer(
+                () =>
+                  actions.rideAlone({
+                    country: form.country,
+                    vehicleClass: form.vehicleClass,
+                    plate: form.plate.trim(),
+                    ...(form.vehicleClass === 'truck' && form.truckSubtype ? { truckSubtype: form.truckSubtype } : {}),
+                    ...(state.rideAlone?.check ? { idCopyRef: form.idCopyRef, licenceCopyRef: form.licenceCopyRef } : {}),
+                  }),
+                true,
+              )
+            }
+          />
         ) : state.rideAlone.why ? (
           <Note tone="info" icon="info" title={t('driver.alone.notOfferedTitle')} detail={state.rideAlone.why + '.'} />
         ) : null
@@ -129,9 +153,20 @@ export function FleetSheet({ open, onClose, state, actions }: { open: boolean; o
 /**
  * RIDE FOR YOURSELF. Three answers, each one a fleet's driver never had to give, and what follows from the first
  * said before the button: WHICH COMPANY they would be riding for. Where there is one country or one vehicle to
- * choose from, it is chosen already.
+ * choose from, it is chosen already. On anything heavier than a motorcycle, two photographs more, and what happens to
+ * them said beside them: staff read them before they ride.
  */
-function RideAloneCard({ terms, busy, onSubmit }: { terms: RideAloneTerms; busy: boolean; onSubmit: (form: RideAloneForm) => void }) {
+function RideAloneCard({
+  terms,
+  busy,
+  upload,
+  onSubmit,
+}: {
+  terms: RideAloneTerms;
+  busy: boolean;
+  upload: (kind: 'kyc_id' | 'kyc_licence', file: File) => Promise<string | null>;
+  onSubmit: (form: RideAloneForm) => void;
+}) {
   const t = useT();
   const [form, setForm] = useState<RideAloneForm>(() => rideAloneStart(terms));
   // What can be chosen changed under the form (the network opened or closed a country): start from what is true now.
@@ -140,7 +175,8 @@ function RideAloneCard({ terms, busy, onSubmit }: { terms: RideAloneTerms; busy:
   const company = rideAloneCompany(terms.countries, form.country);
   return (
     <Card title={t('driver.alone.title')}>
-      <p class="card__note">{t('driver.alone.lede')}</p>
+      <p class="card__note">{t(terms.check ? 'driver.alone.ledeCheck' : 'driver.alone.lede')}</p>
+      {terms.refused ? <Note tone="warn" icon="warning" title={t('driver.alone.refusedTitle')} detail={terms.refused.reason} /> : null}
       {/* One stack: the questions, what the first one decides, and the button — spaced as the offer's buttons are. */}
       <div class="stack">
         <div class="field">
@@ -178,8 +214,31 @@ function RideAloneCard({ terms, busy, onSubmit }: { terms: RideAloneTerms; busy:
           <input id="alone-plate" class="input input--mono" value={form.plate} maxLength={32} autoComplete="off" spellcheck={false} onInput={(e) => setForm({ ...form, plate: e.currentTarget.value })} />
           {form.vehicleClass === 'bike' ? <p class="hint">{t('driver.alone.plateBike')}</p> : null}
         </div>
+        {form.vehicleClass === 'truck' && terms.bodies?.length ? (
+          <div class="field">
+            <label class="field__label" for="alone-body">
+              {t('driver.alone.body')}
+            </label>
+            <select id="alone-body" class="select" value={form.truckSubtype ?? ''} onChange={(e) => setForm({ ...form, truckSubtype: e.currentTarget.value })}>
+              <option value="">{t('driver.alone.choose')}</option>
+              {terms.bodies.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+        {/* WHAT STAFF READ, said beside the camera rather than after the photograph exists. */}
+        {terms.check ? (
+          <>
+            <Note tone="info" icon="badge" title={t('driver.alone.checkTitle')} detail={t('driver.alone.checkDetail')} />
+            <PhotoField id="alone-id" value={form.idCopyRef ?? ''} label={t('driver.alone.idPhoto')} upload={(file) => upload('kyc_id', file)} onCapture={(ref) => setForm({ ...form, idCopyRef: ref })} />
+            <PhotoField id="alone-licence" value={form.licenceCopyRef ?? ''} label={t('driver.alone.licencePhoto')} upload={(file) => upload('kyc_licence', file)} onCapture={(ref) => setForm({ ...form, licenceCopyRef: ref })} />
+          </>
+        ) : null}
         <Button chevron={false} disabled={missing !== null} busy={busy} onClick={() => onSubmit(form)}>
-          {t('driver.alone.cta')}
+          {t(terms.check ? 'driver.alone.ctaAsk' : 'driver.alone.cta')}
         </Button>
         {missing ? <p class="hint">{t(missing)}</p> : null}
       </div>

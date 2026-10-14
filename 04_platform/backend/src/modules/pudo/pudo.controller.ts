@@ -5104,15 +5104,18 @@ export class SbgController {
   /**
    * A DRIVER WHO IS IN NO FLEET BECOMES A COURIER — from their own sign-in and nobody else's: not a fleet's office
    * (they are in none), not staff standing in. Whom somebody contracts with is theirs to decide. At once on a
-   * bicycle or a motorcycle; refused by name otherwise (FleetMoveService.rideAlone).
+   * bicycle or a motorcycle; on anything heavier it is an ask, with a photograph of their ID and their licence, that
+   * staff decide in Joining the network (FleetMoveService.rideAlone, decideRideAlone).
    */
   @Roles('driver')
   @Post('drivers/:did/ride-alone')
   rideAlone(@Param('did') did: string, @Body() dto: RideAloneDto, @Actor() actor: IntrospectionResult) {
     this.assertDriverSelf(did, actor, 'Only the driver can choose to ride for themselves, from their own sign-in');
-    const { driver, vehicle, companyName } = this.mover().rideAlone(did, { country: dto.country, vehicleClass: dto.vehicleClass as never, plate: dto.plate });
+    const { driver, vehicle, companyName, asked } = this.mover().rideAlone(did, { country: dto.country, vehicleClass: dto.vehicleClass as never, plate: dto.plate, truckSubtype: dto.truckSubtype as never, idCopyRef: dto.idCopyRef, licenceCopyRef: dto.licenceCopyRef });
+    // An ask, waiting for staff: what was asked, and nothing else about them has changed.
+    if (asked) return { did, asked: { country: asked.country, vehicleClass: asked.vehicleClass, plate: asked.plate, askedAt: asked.askedAt }, ...(companyName ? { companyName } : {}) };
     // No new sign-in: the one they hold already names no fleet, and nothing about who they are has changed.
-    return { did, jurisdiction: driver.jurisdiction, ...(companyName ? { companyName } : {}), vehicle: { vehicleId: vehicle.vehicleId, plate: vehicle.plate, vehicleClass: vehicle.vehicleClass } };
+    return { did, jurisdiction: driver.jurisdiction, ...(companyName ? { companyName } : {}), ...(vehicle ? { vehicle: { vehicleId: vehicle.vehicleId, plate: vehicle.plate, vehicleClass: vehicle.vehicleClass } } : {}) };
   }
 
   /** No — from the driver's own sign-in. The fleet hears it by the number it typed; nothing else changes. */
@@ -5786,6 +5789,8 @@ export class SbgController {
   @Roles('operator')
   @Post('fleet/drivers/:did/kyc-decision')
   driverDecideKyc(@Param('did') did: string, @Body() dto: DriverKycDecisionDto, @Actor() actor: IntrospectionResult) {
+    // A driver in no fleet asking to ride for themselves waits in the same queue, and is decided here by the same hands.
+    if (this.drivers.get(did).courierAsk) return this.mover().decideRideAlone(did, { approve: dto.approve, by: auditActor(actor, dto.by), reason: dto.reason, criminalRecordClear: dto.criminalRecordClear });
     return this.drivers.decideKyc(did, dto.approve, auditActor(actor, dto.by), dto.reason, dto.criminalRecordClear);
   }
 

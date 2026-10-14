@@ -926,14 +926,16 @@ export function useDriverApp() {
    * looking; null means they are a courier now. No new sign-in: the one they hold already names no fleet.
    */
   const rideAlone = useCallback(
-    async (body: { country: string; vehicleClass: string; plate: string }): Promise<SbgError | null> => {
+    async (body: { country: string; vehicleClass: string; plate: string; truckSubtype?: string; idCopyRef?: string; licenceCopyRef?: string }): Promise<SbgError | null> => {
       if (!client || !did) return null;
       setState((s) => ({ ...s, busy: 'ride-alone' }));
       const r = await client.api.rideAlone(did, body);
       setState((s) => ({ ...s, busy: null }));
       if (r.error) return r.error;
-      const done = narrow<{ companyName?: string }>(r.data);
-      pushToast({ tone: 'ok', icon: 'check', title: t('driver.alone.doneToast'), detail: done?.companyName ? t('driver.alone.doneDetailCompany', { company: done.companyName }) : t('driver.alone.doneDetail') });
+      const done = narrow<{ companyName?: string; asked?: unknown }>(r.data);
+      // Something heavier than a motorcycle is an ask staff decide; a bicycle or a motorcycle is done.
+      if (done?.asked) pushToast({ tone: 'ok', icon: 'check', title: t('driver.alone.askedToast'), detail: t('driver.alone.askedDetail') });
+      else pushToast({ tone: 'ok', icon: 'check', title: t('driver.alone.doneToast'), detail: done?.companyName ? t('driver.alone.doneDetailCompany', { company: done.companyName }) : t('driver.alone.doneDetail') });
       await refresh();
       return null;
     },

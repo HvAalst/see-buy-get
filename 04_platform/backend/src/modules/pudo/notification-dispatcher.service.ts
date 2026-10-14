@@ -382,6 +382,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ did: string; reason: string }>(GlosEvent.Pudo.AgentKycRejected, (e) => this.onSignupStalled(e.payload.did));
     // …and the same for a driver, who was left in exactly the same silence.
     this.events.subscribe<{ did: string; reason: string }>(GlosEvent.Pudo.DriverKycRejected, (e) => this.onDriverRefused(e.payload));
+    this.events.subscribe<{ did: string; approved: boolean; reason?: string; companyName?: string }>(GlosEvent.Pudo.DriverRideAloneDecided, (e) => this.onRideAloneDecided(e.payload));
     // FP4 (courier) — the renewed licence they sent was checked. They sent it and are waiting: either answer.
     this.events.subscribe<{ did: string; accepted: boolean; expiresAt?: string; reason?: string }>(GlosEvent.Pudo.DriverLicenceChecked, (e) => this.onLicenceChecked(e.payload));
     this.events.subscribe<LicenceSent>(GlosEvent.Pudo.DriverLicenceSent, (e) => this.onLicenceSent(e.payload));
@@ -1221,6 +1222,27 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       });
     } catch (err) {
       this.logger.warn(`driver refusal notice failed for ${payload.did}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * A DRIVER IN NO FLEET ASKED TO RIDE FOR THEMSELVES on something heavy, and staff decided: told either way, on the
+   * event. Yes says who they ride for now; no says why, in staff's words, and that they may ask again.
+   */
+  private async onRideAloneDecided(payload: { did: string; approved: boolean; reason?: string; companyName?: string }): Promise<void> {
+    try {
+      await this.notifications.notify(payload.did, {
+        kind: 'papers_checked',
+        title: payload.approved ? 'You ride for yourself now' : 'Your ask to ride for yourself was not approved',
+        body: payload.approved
+          ? `The network read your ID and licence${payload.companyName ? ` and ${payload.companyName} contracts you directly` : ''}. Your vehicle is on your list: start a shift when you are ready.`
+          : `${payload.reason ?? ''} You are still in no fleet: ask again from “Your fleet”, or take a fleet's place when one is offered.`.trim(),
+        link: '/',
+        tag: `ride-alone:${payload.did}:${Date.now()}`,
+        data: { did: payload.did },
+      });
+    } catch (err) {
+      this.logger.warn(`ride-alone notice failed for ${payload.did}: ${(err as Error).message}`);
     }
   }
 

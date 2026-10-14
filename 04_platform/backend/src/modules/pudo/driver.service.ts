@@ -12,7 +12,7 @@ import { OperationalStore } from '../../foundation/data-firewall/operational-sto
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { VEHICLE_SPEC, VehicleClass } from './fleet.config';
-import { DriverKyc, DriverRegistry, FleetDriver, FleetRemoval, Vehicle } from './fleet.types';
+import { CourierAsk, DriverKyc, DriverRegistry, FleetDriver, FleetRemoval, Vehicle } from './fleet.types';
 import { FleetManagerService } from './fleet-manager.service';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
@@ -555,6 +555,8 @@ export class DriverService {
     delete driver.jurisdiction;
     delete driver.entityId;
     delete driver.removedFrom; // a fleet took them on: whoever took them off before is history, not a state
+    delete driver.courierAsk; // …and an ask to ride for themselves lapses: they chose a fleet instead
+    delete driver.courierAskRefusal;
     this.drivers.set(did, driver);
     return driver;
   }
@@ -734,8 +736,49 @@ export class DriverService {
     return driver;
   }
 
+  /** Waiting on staff: papers sent for vetting, and drivers in no fleet asking to ride for themselves on something heavy. */
   kycQueue(): FleetDriver[] {
-    return [...this.drivers.values()].filter((d) => d.status === 'KYC_PENDING');
+    return [...this.drivers.values()].filter((d) => d.status === 'KYC_PENDING' || Boolean(d.courierAsk));
+  }
+
+  /**
+   * ASKING TO RIDE FOR THEMSELVES — the driver record’s half. FleetMoveService has already checked they may ask.
+   *
+   * Their two photographs are adopted as theirs and nobody else’s (a picture uploaded by another account, or attached
+   * elsewhere, is refused) before anything is written, and the ask waits for staff in the queue papers already go to.
+   * Nothing about the driver changes while it waits: they are in no fleet, as they were.
+   */
+  askToRideAlone(did: string, ask: Omit<CourierAsk, 'askedAt'>, now: number = Date.now()): FleetDriver {
+    const driver = this.require(did);
+    if (!this.media) throw new GlosError('INVALID_STATE', 'Photographs cannot be kept in this deployment, so papers cannot be sent');
+    if (!ask.idCopyRef || !ask.licenceCopyRef) throw new GlosError('KYC_INCOMPLETE', 'Send a photograph of your ID card and one of your driving licence');
+    if (ask.idCopyRef === ask.licenceCopyRef) throw new GlosError('KYC_INCOMPLETE', 'Your ID card and your licence are two photographs, not one');
+    const link = { type: 'driver' as const, id: did };
+    if (!this.media.adopt(ask.idCopyRef, did, link, 'kyc_id') || !this.media.adopt(ask.licenceCopyRef, did, link, 'kyc_licence')) {
+      throw new GlosError('PHOTO_REQUIRED', 'A photograph could not be attached — take it again');
+    }
+    driver.courierAsk = { ...ask, askedAt: new Date(now).toISOString() };
+    delete driver.courierAskRefusal;
+    this.drivers.set(did, driver);
+    return driver;
+  }
+
+  /** The ask is over — decided, or overtaken by a fleet’s place. A refusal is kept for the driver to read. */
+  closeCourierAsk(did: string, refusal?: { reason: string; at: string; by?: string }): FleetDriver {
+    const driver = this.require(did);
+    delete driver.courierAsk;
+    if (refusal) driver.courierAskRefusal = refusal;
+    this.drivers.set(did, driver);
+    return driver;
+  }
+
+  /** Staff’s own check, recorded when they approve an ask: one way, as at vetting. */
+  recordCourierCheck(did: string, papers: { idCopyRef: string; licenceCopyRef: string; at: string }): FleetDriver {
+    const driver = this.require(did);
+    driver.criminalRecordClear = true;
+    driver.kyc = { idCopyRef: papers.idCopyRef, licenceCopyRef: papers.licenceCopyRef, submittedAt: papers.at } as DriverKyc;
+    this.drivers.set(did, driver);
+    return driver;
   }
 
   byBadge(badgeId: string): FleetDriver | undefined {

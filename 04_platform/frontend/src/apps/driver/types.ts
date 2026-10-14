@@ -512,4 +512,12 @@ export interface RideAloneTerms {
   why?: string;
   classes: string[];
   countries: Array<{ jurisdiction: string; companyName?: string }>;
+  /** Anything heavier than a motorcycle on their licence: an ask, with their ID and licence, that staff decide. */
+  check?: boolean;
+  /** An ask already with staff, and what it asked for. */
+  waiting?: { country: string; vehicleClass: string; plate: string; askedAt: string };
+  /** Why the last ask was refused, in staff's words. */
+  refused?: { reason: string; at: string };
+  /** A truck's possible bodies, when a truck is among what they may ride. */
+  bodies?: Array<{ id: string; label: string }>;
 }

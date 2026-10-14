@@ -183,6 +183,11 @@ export interface RideAloneForm {
   country: string;
   vehicleClass: string;
   plate: string;
+  /** A truck's body: a truck is registered with one. */
+  truckSubtype?: string;
+  /** Anything heavier than a motorcycle: their own photographs of their ID card and their licence, for staff to read. */
+  idCopyRef?: string;
+  licenceCopyRef?: string;
 }
 
 export function rideAloneStart(terms: { classes: string[]; countries: Array<{ jurisdiction: string }> }): RideAloneForm {
@@ -190,10 +195,17 @@ export function rideAloneStart(terms: { classes: string[]; countries: Array<{ ju
 }
 
 /** Why it cannot be sent yet, as the key of the sentence to show — or null when it can. First things first. */
-export function rideAloneMissing(form: RideAloneForm, terms: { classes: string[]; countries: Array<{ jurisdiction: string }> }): 'driver.alone.needCountry' | 'driver.alone.needVehicle' | 'driver.alone.needPlate' | null {
+export function rideAloneMissing(
+  form: RideAloneForm,
+  terms: { classes: string[]; countries: Array<{ jurisdiction: string }>; check?: boolean },
+): 'driver.alone.needCountry' | 'driver.alone.needVehicle' | 'driver.alone.needBody' | 'driver.alone.needPlate' | 'driver.alone.needPapers' | null {
   if (!terms.countries.some((c) => c.jurisdiction === form.country)) return 'driver.alone.needCountry';
   if (!terms.classes.includes(form.vehicleClass)) return 'driver.alone.needVehicle';
-  return form.plate.trim() ? null : 'driver.alone.needPlate';
+  if (form.vehicleClass === 'truck' && !form.truckSubtype) return 'driver.alone.needBody';
+  if (!form.plate.trim()) return 'driver.alone.needPlate';
+  // Staff read both before they ride: an ask without them is no ask.
+  if (terms.check && (!form.idCopyRef || !form.licenceCopyRef)) return 'driver.alone.needPapers';
+  return null;
 }
 
 /** The company they would ride for in the country chosen — or null where the network has none there, or no country is chosen. */

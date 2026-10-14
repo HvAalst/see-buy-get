@@ -723,6 +723,21 @@ describe('a rider who is in no fleet rides for themselves', () => {
     expect(rideAloneMissing({ country: 'KE', vehicleClass: 'truck', plate: 'T 1' }, terms)).toBe('driver.alone.needVehicle');
   });
 
+  it('on anything heavier than a motorcycle it is an ask: a truck names its body, and staff are sent both photographs', () => {
+    const heavy = { classes: ['van', 'truck'], countries: [kenya], check: true };
+    const van = { country: 'KE', vehicleClass: 'van', plate: 'KVAN 1' };
+    expect(rideAloneMissing(van, heavy)).toBe('driver.alone.needPapers');
+    expect(rideAloneMissing({ ...van, idCopyRef: 'med_id' }, heavy)).toBe('driver.alone.needPapers');
+    expect(rideAloneMissing({ ...van, idCopyRef: 'med_id', licenceCopyRef: 'med_lic' }, heavy)).toBeNull();
+    // A truck: its body first, then the plate, then the photographs.
+    expect(rideAloneMissing({ country: 'KE', vehicleClass: 'truck', plate: '' }, heavy)).toBe('driver.alone.needBody');
+    expect(rideAloneMissing({ country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: '' }, heavy)).toBe('driver.alone.needPlate');
+    expect(rideAloneMissing({ country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'KCA 1' }, heavy)).toBe('driver.alone.needPapers');
+    // A rider is asked for no photographs: they ride at once.
+    expect(rideAloneMissing({ country: 'KE', vehicleClass: 'motorcycle', plate: 'KMDX 1' }, { classes: ['motorcycle'], countries: [kenya], check: false })).toBeNull();
+    expect(t('driver.alone.waiting', { day: '15 Oct', vehicle: 'van', plate: 'KVAN 1' })).toBe('On 15 Oct you asked to ride for yourself on your van (KVAN 1). You are told here when it is decided.');
+  });
+
   it('names the company they would ride for — and says nothing of one where the network has none', () => {
     expect(rideAloneCompany([kenya, uganda], 'KE')).toBe('SeeBuyGet Kenya');
     expect(rideAloneCompany([kenya, uganda], 'UG')).toBeNull();

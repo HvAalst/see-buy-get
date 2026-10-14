@@ -59,7 +59,7 @@ export function createDriverApi(sbg: SbgClient) {
     rideAloneTerms: (did: string) => sbg.request((c) => c.GET('/v1/sbg/drivers/{did}/ride-alone', { params: { path: { did } } })),
 
     /** A driver who is in no fleet becomes a courier, at once: where they live, and the vehicle of their own. */
-    rideAlone: (did: string, body: { country: string; vehicleClass: string; plate: string }) =>
+    rideAlone: (did: string, body: { country: string; vehicleClass: string; plate: string; truckSubtype?: string; idCopyRef?: string; licenceCopyRef?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/drivers/{did}/ride-alone', { params: { path: { did } }, body })),
 
     /**

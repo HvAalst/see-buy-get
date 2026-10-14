@@ -233,6 +233,22 @@ export interface DriverApplication {
   licence?: { number?: string; expiresAt?: string };
   /** The media ids the driver submitted. Whether bytes exist behind them is the media route's answer. */
   kyc?: { idCopyRef?: string; licenceCopyRef?: string; submittedAt?: string };
+  /**
+   * A driver in no fleet ASKING TO RIDE FOR THEMSELVES on something heavy: what they asked for, and their own two
+   * photographs. Approving it makes them a courier with that vehicle; the record check is staff's own, every time.
+   */
+  courierAsk?: { country: string; vehicleClass: string; plate: string; truckSubtype?: string; idCopyRef: string; licenceCopyRef: string; askedAt: string };
+}
+
+/** The papers on a row: an ask's own photographs when it is an ask, else what was sent for vetting — the licence first. */
+export function applicationPapers(row: Pick<DriverApplication, 'kyc' | 'courierAsk'>): string[] {
+  const from = row.courierAsk ?? row.kyc;
+  return [from?.licenceCopyRef, from?.idCopyRef].filter((x): x is string => Boolean(x));
+}
+
+/** Staff tick the record check on every ask: a fleet's word was for the fleet's driver, not the network's courier. */
+export function needsRecordTick(row: Pick<DriverApplication, 'criminalRecordClear' | 'courierAsk'>): boolean {
+  return !row.criminalRecordClear || Boolean(row.courierAsk);
 }
 
 /* ------------------------------------------------------------- stalled sign-ups -- */

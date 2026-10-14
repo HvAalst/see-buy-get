@@ -1217,6 +1217,54 @@ describe('GLOS backend (e2e)', () => {
     expect((await request(http).post(terms).set(asRider).send({ ...body, plate: `kmal2 ${u}` })).body).toMatchObject({ code: 'INVALID_STATE', detail: 'You already ride for yourself' });
   });
 
+  it('a van driver who has left their fleet ASKS to ride for themselves with their ID and licence; staff read both, check the record themselves, and decide', async () => {
+    const http = app.getHttpServer();
+    const u = Math.floor(Math.random() * 1e6);
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const as = async (body: Record<string, unknown>) => ({ Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ ...body, type: 'client_credentials' }).expect(201)).body.access_token}` });
+    const operator = await as({ role: 'operator' });
+    const m = (await request(http).post('/v1/sbg/fleet/managers').set(operator).send({ companyName: 'VanCo', tradingName: 'VanCo', contactPhone: `+25473${u}8`, contactEmail: 'ops@VanCo.example', ownerFullName: 'Owner', ownerNationalId: `MGR-VN-${u}`, depotAddress: '2 Depot Rd', location: { lat: -1.3, lng: 36.8 }, requirements: { businessRegistrationNo: `BRN-VN-${u}`, transportOperatorLicence: `TOL-VN-${u}`, taxId: `TAX-VN-${u}`, declaredFleetSize: 3 } }).expect(201)).body;
+    await sendFleetPapers(m.did, operator);
+    await request(http).post(`/v1/sbg/fleet/managers/${m.did}/kyc-decision`).set(operator).send({ approve: true, by: 'A second member of staff' }).expect(201);
+    await request(http).post(`/v1/sbg/fleet/managers/${m.did}/bond`).set(operator).expect(201);
+    // A van driver the fleet registered and staff vetted as the FLEET's driver.
+    const van = (await request(http).post('/v1/sbg/drivers/onboard').set(operator).send({ displayName: 'Otieno', fullName: 'Otieno Vandriver', nationalId: `VAN-${u}`, mobile: `+25474${u}4`, licenceClasses: ['van'], licenceNumber: `L-VAN-${u}`, licenceExpiresAt: new Date(Date.now() + 400 * 86_400_000).toISOString(), criminalRecordClear: true, managerDid: m.did }).expect(201)).body as { did: string };
+    await request(http).post(`/v1/sbg/fleet/drivers/${van.did}/submit-kyc`).set(operator).send({ idCopyRef: 'fleet-id.jpg', licenceCopyRef: 'fleet-licence.jpg' }).expect(201);
+    await request(http).post(`/v1/sbg/fleet/drivers/${van.did}/kyc-decision`).set(operator).send({ approve: true, by: 'Staff' }).expect(201);
+    const inFleet = await as({ role: 'driver', did: van.did, tenant: m.did });
+    const left = (await request(http).post(`/v1/sbg/drivers/${van.did}/leave-fleet`).set(inFleet).expect(201)).body;
+    const asVan = { Authorization: `Bearer ${left.token.access_token}` };
+    const terms = `/v1/sbg/drivers/${van.did}/ride-alone`;
+
+    // OFFERED, with the check said before anything is asked of them.
+    expect((await request(http).get(terms).set(asVan).expect(200)).body).toMatchObject({ offered: true, check: true, classes: ['van'] });
+    const shot = async (kind: string) => (await request(http).post('/v1/sbg/media').set(asVan).send({ kind, dataUrl: PNG }).expect(201)).body.mediaId as string;
+    const ask = { country: 'KE', vehicleClass: 'van', plate: `kvan ${u}`, idCopyRef: await shot('kyc_id'), licenceCopyRef: await shot('kyc_licence') };
+    // Without the photographs it is no ask at all.
+    expect((await request(http).post(terms).set(asVan).send({ country: 'KE', vehicleClass: 'van', plate: `kvan ${u}` })).body.code).toBe('KYC_INCOMPLETE');
+    const asked = (await request(http).post(terms).set(asVan).send(ask).expect(201)).body;
+    expect(asked).toMatchObject({ did: van.did, asked: { country: 'KE', vehicleClass: 'van', plate: `KVAN ${u}` } });
+    expect(asked).not.toHaveProperty('vehicle');
+    expect((await request(http).get(terms).set(asVan).expect(200)).body).toMatchObject({ offered: false, waiting: { vehicleClass: 'van', plate: `KVAN ${u}` } });
+
+    // STAFF'S QUEUE has them, with what they asked for; the photographs open for staff.
+    const queue = (await request(http).get('/v1/sbg/fleet/drivers/kyc-queue').set(operator).expect(200)).body as Array<{ did: string; courierAsk?: { idCopyRef: string; plate: string } }>;
+    const row = queue.find((d) => d.did === van.did)!;
+    expect(row.courierAsk).toMatchObject({ plate: `KVAN ${u}`, idCopyRef: ask.idCopyRef });
+    const decide = `/v1/sbg/fleet/drivers/${van.did}/kyc-decision`;
+    // Not without staff's own record check — the fleet's word was for the fleet's driver.
+    expect((await request(http).post(decide).set(operator).send({ approve: true, by: 'Amina' })).body.code).toBe('APPROVAL_BLOCKED');
+    const approved = (await request(http).post(decide).set(operator).send({ approve: true, by: 'Amina', criminalRecordClear: true }).expect(201)).body;
+    expect(approved).toMatchObject({ did: van.did, jurisdiction: 'KE', status: 'ACTIVE' });
+    expect(approved.courierAsk).toBeUndefined();
+    const me = (await request(http).get(`/v1/sbg/fleet/drivers/${van.did}`).set(asVan).expect(200)).body;
+    expect(me.removedFrom).toBeUndefined();
+    expect(me.managerDid).toBeUndefined();
+    expect((await request(http).get(`/v1/sbg/fleet/drivers/${van.did}/jobs/summary`).set(asVan).expect(200)).body.settlement).toMatchObject({ payeeDid: van.did, paidToMe: true, standing: 'own' });
+    const told = (await request(http).get('/v1/sbg/notifications/inbox').set(asVan).expect(200)).body.items as Array<{ kind: string; title: string }>;
+    expect(told.map((n) => n.title)).toContain('You ride for yourself now');
+  });
+
   it('staff find a store in the list and open it; the store itself, another store and nobody signed out are each refused the staff view', async () => {
     const http = app.getHttpServer();
     const u = Math.floor(Math.random() * 1e6);

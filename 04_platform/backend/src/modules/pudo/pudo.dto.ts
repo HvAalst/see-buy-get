@@ -1698,6 +1698,11 @@ export class RideAloneDto {
   @IsString() @Matches(/^[A-Za-z]{2}$/) country!: string;
   @IsString() @MaxLength(32) vehicleClass!: string;
   @IsString() @MaxLength(32) plate!: string;
+  /** A truck's body — a truck is registered with one. */
+  @IsOptional() @IsString() @MaxLength(32) truckSubtype?: string;
+  /** Anything heavier than a motorcycle: their own photographs of their ID card and their driving licence, for staff to read. */
+  @IsOptional() @IsString() @MaxLength(80) idCopyRef?: string;
+  @IsOptional() @IsString() @MaxLength(80) licenceCopyRef?: string;
 }
 
 /** A fleet takes a driver off — always with a reason the driver is shown. */

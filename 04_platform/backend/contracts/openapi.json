@@ -13672,7 +13672,7 @@
       "post": {
         "operationId": "Sbg.rideAlone",
         "summary": "",
-        "description": "A DRIVER WHO IS IN NO FLEET BECOMES A COURIER — from their own sign-in and nobody else's: not a fleet's office\n(they are in none), not staff standing in. Whom somebody contracts with is theirs to decide. At once on a\nbicycle or a motorcycle; refused by name otherwise (FleetMoveService.rideAlone).",
+        "description": "A DRIVER WHO IS IN NO FLEET BECOMES A COURIER — from their own sign-in and nobody else's: not a fleet's office\n(they are in none), not staff standing in. Whom somebody contracts with is theirs to decide. At once on a\nbicycle or a motorcycle; on anything heavier it is an ask, with a photograph of their ID and their licence, that\nstaff decide in Joining the network (FleetMoveService.rideAlone, decideRideAlone).",
         "parameters": [
           {
             "name": "did",
@@ -13695,7 +13695,14 @@
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -36070,6 +36077,52 @@
           "licenceClasses"
         ]
       },
+      "CourierAsk": {
+        "type": "object",
+        "properties": {
+          "vehicleClass": {
+            "type": "string",
+            "enum": [
+              "bike",
+              "motorcycle",
+              "tuktuk",
+              "car",
+              "van",
+              "bus",
+              "truck"
+            ]
+          },
+          "truckSubtype": {
+            "type": "object",
+            "description": "A truck's body, which a truck is registered with."
+          },
+          "country": {
+            "type": "string",
+            "description": "Where they legally reside: it decides the company of ours that would contract them."
+          },
+          "plate": {
+            "type": "string"
+          },
+          "idCopyRef": {
+            "type": "string",
+            "description": "Their own photographs, sent with the ask: the ID card and the driving licence staff read."
+          },
+          "licenceCopyRef": {
+            "type": "string"
+          },
+          "askedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "vehicleClass",
+          "country",
+          "plate",
+          "idCopyRef",
+          "licenceCopyRef",
+          "askedAt"
+        ]
+      },
       "DriverPortrait": {
         "type": "object",
         "properties": {
@@ -36191,6 +36244,14 @@
       "FleetDriver": {
         "type": "object",
         "properties": {
+          "courierAsk": {
+            "description": "IN NO FLEET, AND ASKING TO RIDE FOR THEMSELVES on a van, a truck or anything heavier than a motorcycle — which a\ncourier does only once network staff have read their ID and licence and checked their record. Waits in the queue\nstaff already have (Joining the network) until decided; cleared then, or the moment they take a fleet’s place.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CourierAsk"
+              }
+            ]
+          },
           "driverId": {
             "type": "string"
           },
@@ -36210,6 +36271,23 @@
           },
           "removedFrom": {
             "$ref": "#/components/schemas/FleetRemoval"
+          },
+          "courierAskRefusal": {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": false,
+                "type": "string"
+              }
+            }
           },
           "idHold": {
             "type": "object",
@@ -36331,6 +36409,7 @@
         "required": [
           "driverId",
           "did",
+          "courierAskRefusal",
           "idHold",
           "vaultRef",
           "displayName",
@@ -36488,6 +36567,20 @@
           "plate": {
             "type": "string",
             "maxLength": 32
+          },
+          "truckSubtype": {
+            "type": "string",
+            "description": "A truck's body — a truck is registered with one.",
+            "maxLength": 32
+          },
+          "idCopyRef": {
+            "type": "string",
+            "description": "Anything heavier than a motorcycle: their own photographs of their ID card and their driving licence, for staff to read.",
+            "maxLength": 80
+          },
+          "licenceCopyRef": {
+            "type": "string",
+            "maxLength": 80
           }
         },
         "required": [
