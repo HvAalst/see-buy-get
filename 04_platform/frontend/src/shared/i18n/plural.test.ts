@@ -52,4 +52,20 @@ describe('a counted word', () => {
     expect(all.length).toBeGreaterThan(1000);
     expect(all.filter(([, text]) => /\w\(s\)/.test(text)).map(([key]) => key)).toEqual([]);
   });
+
+  it('reads right at exactly one: a number before a counted noun is a plural, outside the “many” half of a pair', () => {
+    // "1 bags on the road" was on the console's front screen. A string named …Many is only ever shown for many.
+    const COUNTED = /\{\w+\} (days|hours|minutes|loads|orders|parcels|shops|vehicles|drivers|papers|slots|bags|jobs|fleets|kilograms|kilometres|ratings|lanes|hubs|stores|shipments|consignments|buyers|deliveries)\b/;
+    const all = Object.entries(en as Record<string, string>);
+    expect(all.filter(([key, text]) => !/Many$|many$|N$/.test(key) && COUNTED.test(text)).map(([key]) => key)).toEqual([]);
+    expect(t('driver.board.countAll', { n: 1 })).toBe('1 load');
+    expect(t('driver.board.countAll', { n: 4 })).toBe('4 loads');
+    expect(t('fleet.orders.planNew', { n: 1 })).toBe('1 order has come in since — plan again.');
+    expect(t('fleet.orders.planNew', { n: 2 })).toBe('2 orders have come in since — plan again.');
+    expect(t('driver.road.agreeCount', { count: 1 })).toBe('1 driver agrees');
+    // The verb after the noun goes with it.
+    expect(t('home.town.lede', { n: 1, town: 'Nairobi', open: 1 })).toMatch(/^1 shop takes parcels in Nairobi today/);
+    expect(t('home.town.lede', { n: 3, town: 'Nairobi', open: 2 })).toMatch(/^3 shops take parcels in Nairobi today/);
+    expect(t('tower.network.bagsOnRoad', { n: 1 })).toBe('1 bag on the road');
+  });
 });

@@ -37,7 +37,7 @@ export const enMdp = {
   'mdp.logic.chargeMore': 'You charge {pct}% more than nearby hubs.',
   'mdp.logic.chargeLess': 'You charge {pct}% less than nearby hubs.',
   'mdp.logic.chargeSame': 'You charge about the same as nearby hubs.',
-  'mdp.logic.bandDetail': 'Your sort fee {mine} per parcel. Nearby hubs charge {median} ({min}–{max} across {count} hubs).',
+  'mdp.logic.bandDetail': 'Your sort fee {mine} per parcel. Nearby hubs charge {median} ({min}–{max} across {count, plural, one {# hub} other {# hubs}}).',
   'mdp.logic.matchLabel': 'Match {price}',
   'mdp.logic.toSortOne': '{count} parcel to sort.',
   'mdp.logic.toSortMany': '{count} parcels to sort.',
@@ -102,7 +102,7 @@ export const enMdp = {
   'mdp.drop.item1': 'The bag is emptied and freed for reuse',
   'mdp.drop.item2': 'Every parcel inside joins the sort queue',
   'mdp.drop.item3': 'Sort them one scan at a time',
-  'mdp.drop.aloudReady': '{count} parcels are ready to sort. Tap start sorting.',
+  'mdp.drop.aloudReady': '{count, plural, one {# parcel is} other {# parcels are}} ready to sort. Tap start sorting.',
   'mdp.drop.aloudEmpty': 'Scan the bag code. The bag is emptied and its parcels join the sort queue.',
 
   // ---- Load screen ----------------------------------------------------------
