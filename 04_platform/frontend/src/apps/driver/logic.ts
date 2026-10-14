@@ -109,7 +109,7 @@ export function roundPrice(price: number): number {
  */
 export function rateBand(pricePerKm: number | null | undefined, benchmark: Benchmark | null | undefined, t: Translate, currency?: string): RateBand | null {
   if (!benchmark || !benchmark.count || !currency) return null;
-  const perKm = (n: number) => formatMoney(n, currency, 3);
+  const perKm = (n: number) => perKmText(n, currency);
 
   const mine = Number(pricePerKm ?? 0);
   const pct = benchmark.median > 0 ? Math.round(((mine - benchmark.median) / benchmark.median) * 100) : 0;
@@ -317,9 +317,10 @@ export function countdownLabel(seconds: number, t: Translate): string {
 export function offerSpoken(
   o: { message: string; weightKg: number; destLabel: string; detourKm: number; earn?: number; parcels?: number; collectMin?: number; deliverMin?: number },
   t: Translate,
+  currency?: string,
 ): string {
   const base = t('driver.logic.offerSpokenBase', { message: o.message, kg: o.weightKg, dest: o.destLabel, detour: o.detourKm });
-  const withEarn = o.earn != null ? t('driver.logic.offerSpokenEarn', { base, amount: money(o.earn) }) : base;
+  const withEarn = o.earn != null ? t('driver.logic.offerSpokenEarn', { base, amount: cash(o.earn, currency) }) : base;
   // The time cost is spoken too, and for the same reason the card leads with it: a driver hears "nine extra
   // minutes" and knows at once whether it fits the day, where kilometres need converting first.
   const withTime =
@@ -337,9 +338,24 @@ export function offerSpoken(
 
 /* ---------------------------------------------------------------- pricing -- */
 
-/** Plain money, two decimals, no symbol — the driver's local currency is set by their zone. */
+/** Plain money, two decimals, no symbol — for a figure whose money nobody of ours can name. Write money through `cash`. */
 export function money(v: number | null | undefined): string {
   return (Number(v) || 0).toFixed(2);
+}
+
+/**
+ * MONEY AS THIS DRIVER READS IT: in the money the session says everything priced for them is in — that of the
+ * company that pays them (`SessionView.currency`). Where no company of ours pays them there is none to say, and the
+ * figure is the bare price they agreed. One helper for every screen, so a figure is never written in no money while
+ * the session names one.
+ */
+export function cash(v: number | null | undefined, currency?: string): string {
+  return currency ? formatMoney(Number(v) || 0, currency) : money(v);
+}
+
+/** A per-km rate, set to the thousandth, in its money where there is one. */
+export function perKmText(v: number, currency?: string): string {
+  return currency ? formatMoney(v, currency, 3) : v.toFixed(3);
 }
 
 /**
@@ -387,11 +403,11 @@ export function lastReadingBreached(readings: Array<{ breach: boolean }> | undef
  * can see and trust: the flag-down fee, the distance × the rate actually applied, and — only when the
  * market moved the rate off the base — a note that a busy- or quiet-time rate is in effect.
  */
-export function priceBreakdownLines(price: PriceBreakdown | undefined, t: Translate): string[] {
+export function priceBreakdownLines(price: PriceBreakdown | undefined, t: Translate, currency?: string): string[] {
   if (!price) return [];
   const lines = [
-    t('driver.logic.baseFee', { amount: money(price.baseFee) }),
-    t('driver.logic.distanceAt', { km: price.distanceKm, rate: price.effectiveRate.toFixed(3) }),
+    t('driver.logic.baseFee', { amount: cash(price.baseFee, currency) }),
+    t('driver.logic.distanceAt', { km: price.distanceKm, rate: perKmText(price.effectiveRate, currency) }),
   ];
   // FB0a — how much of that distance is run EMPTY. The pay is on the total either way; this line exists
   // because "80 km, 8 of them loaded" and "80 km, 72 of them loaded" are not the same job. Only shown when the

@@ -2,7 +2,7 @@ import { borderLines } from '../border';
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Checklist, ErrorNote, Icon, Note, OpenInMaps, Pill, ReadAloud, Sheet, SwipeDeck } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
-import { countdownLabel, money, offerSpoken, offersSummary, priceBreakdownLines, secondsLeft } from '../logic';
+import { cash, countdownLabel, offerSpoken, offersSummary, priceBreakdownLines, secondsLeft } from '../logic';
 import type { ExpectedLoadView, OfferView } from '../types';
 import type { DriverActions, DriverState } from '../useDriverApp';
 
@@ -89,7 +89,7 @@ export function OffersScreen({ state, actions }: OffersScreenProps) {
         label={t('driver.offers.deckLabel')}
       >
         {offers.map((o) => (
-          <OfferCard key={o.offerId} offer={o} now={now} />
+          <OfferCard key={o.offerId} offer={o} now={now} currency={state.session.currency} />
         ))}
       </SwipeDeck>
 
@@ -118,7 +118,7 @@ export function OffersScreen({ state, actions }: OffersScreenProps) {
         <Button variant="link" full={false} onClick={() => actions.go('route')}>
           {t('driver.offers.tryAnother')}
         </Button>
-        <ReadAloud text={() => (active ? offerSpoken(active, t) : offersSummary(offers.length, t))} />
+        <ReadAloud text={() => (active ? offerSpoken(active, t, state.session.currency) : offersSummary(offers.length, t))} />
       </div>
 
       <Sheet open={confirm && !!active} onClose={() => setConfirm(false)} title={t('driver.offers.claimSheetTitle')}>
@@ -127,7 +127,7 @@ export function OffersScreen({ state, actions }: OffersScreenProps) {
             <p class="t-body">{active.message}</p>
             <Checklist
               items={[
-                ...(active.earn != null ? [t('driver.offers.earnAbout', { amount: money(active.earn) })] : []),
+                ...(active.earn != null ? [t('driver.offers.earnAbout', { amount: cash(active.earn, state.session.currency) })] : []),
                 t('driver.offers.fits', { kg: active.weightKg }),
                 t('driver.offers.detour', { km: active.detourKm }),
                 t('driver.offers.dropAt', { dest: active.destLabel }),
@@ -186,7 +186,7 @@ function ComingSoon({ expected }: { expected: ExpectedLoadView[] }) {
   );
 }
 
-function OfferCard({ offer, now }: { offer: OfferView; now: number }) {
+function OfferCard({ offer, now, currency }: { offer: OfferView; now: number; currency?: string }) {
   const t = useT();
   const left = secondsLeft(offer.expiresAt, now);
   return (
@@ -209,7 +209,7 @@ function OfferCard({ offer, now }: { offer: OfferView; now: number }) {
         <div class="offer__pay">
           <Icon name="wallet" size={24} class="offer__pay-ic" />
           <span class="offer__pay-amt">
-            {t('driver.offers.youEarnLead')} <b>{money(offer.earn)}</b>
+            {t('driver.offers.youEarnLead')} <b>{cash(offer.earn, currency)}</b>
           </span>
         </div>
       ) : null}
@@ -266,7 +266,7 @@ function OfferCard({ offer, now }: { offer: OfferView; now: number }) {
             </span>
           </p>
         ) : null}
-        {priceBreakdownLines(offer.price, t).map((line) => (
+        {priceBreakdownLines(offer.price, t, currency).map((line) => (
           <p class="meta" key={line}>
             <Icon name="check" size={21} class="meta__ic" />
             <span>{line}</span>

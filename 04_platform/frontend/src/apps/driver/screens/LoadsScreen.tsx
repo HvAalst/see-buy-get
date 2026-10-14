@@ -3,7 +3,7 @@ import { DocumentButton, Button, Card, CheckGate, Checklist, ErrorNote, GlanceNu
 import { InstructionsBlock } from '../../../shared/InstructionsBlock';
 import { hasInstructions } from '../../../shared/instructions';
 import { useT } from '../../../shared/i18n';
-import { canLoadBag, capacitySubLine, claimControl, isFull, loadsSummary, money, usedPercent } from '../logic';
+import { canLoadBag, capacitySubLine, cash, claimControl, isFull, loadsSummary, usedPercent } from '../logic';
 import { vehicleWord } from '../vehicle-words';
 import { RunSection } from './RunSection';
 import type { Claimable } from '../types';
@@ -71,7 +71,7 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   <span class="load__ref">{c.code ?? c.ref}</span>
                   <span class="load__meta">{t('driver.loads.meta', { pickup: c.pickupLabel, dest: c.destLabel, kg: c.weightKg })}</span>
                   {/* S34 — the locked earning rides on the claimed freight, so a driver always sees what this job pays. */}
-                  {c.lockedPrice != null ? <span class="load__earn">{t('driver.loads.youEarn', { amount: money(c.lockedPrice) })}</span> : null}
+                  {c.lockedPrice != null ? <span class="load__earn">{t('driver.loads.youEarn', { amount: cash(c.lockedPrice, state.session.currency) })}</span> : null}
                   {/* FP5 — not their choice: said plainly, with whose it was. */}
                   {c.assignedBy ? <span class="load__meta">{t('driver.loads.assignedBy', { name: c.assignedBy.name ?? t('driver.loads.theOffice') })}</span> : null}
                   {/* FP7 — what the sender wrote for the door, on the card so it is read before the walk to the gate. */}

@@ -5868,13 +5868,19 @@ export class SbgController {
    *
    *  Carries WHY TODAY WAS QUIET, split by cause. A setting that silences a phone without ever saying so is
    *  how somebody hears nothing for a week and blames the network — so the two things the network knows and
-   *  was never saying, their own floor and their own rate, travel with the card that shows them. */
+   *  was never saying, their own floor and their own rate, travel with the card that shows them.
+   *
+   *  And THE MONEY everything priced for this driver is in — a load on the board, an offer, their own loads, what
+   *  they earned: the money of the company that pays them (`rateCurrencyForDriver`). Said once, here, so that no
+   *  figure on their screens is a bare number. Absent where no company of ours pays them: their price is then what
+   *  they agree with the shipper, in whatever money that is. */
   @Roles('driver', 'fleet_manager', 'operator')
   @Get('fleet/drivers/:did/session')
   driverSession(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
     this.assertDriverReader(did, actor);
+    const currency = this.drivers.rateCurrencyForDriver(did);
     // FP8 — the shift clock rides with the session: the home screen reads it without a second call.
-    return { ...this.fleet.sessionFor(did), quiet: this.dispatch.quietReport(did), hours: this.fleet.hoursFor(did) };
+    return { ...this.fleet.sessionFor(did), quiet: this.dispatch.quietReport(did), hours: this.fleet.hoursFor(did), ...(currency ? { currency } : {}) };
   }
 
   @Roles('driver', 'fleet_manager', 'operator')

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Chip, ErrorNote, GlanceNumber, Icon, Pager, Pill, ReadAloud, SearchInput, Sheet } from '../../../shared/ui';
 import { useDebounced } from '../../../shared/useDebounced';
-import { formatMoney, useT, type MessageKey, type Translate } from '../../../shared/i18n';
-import { money, settlementLines } from '../logic';
+import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
+import { cash, settlementLines } from '../logic';
 import { JOBS_LIMIT, type DriverActions, type DriverState, type JobsQuery } from '../useDriverApp';
 import type { DriverJobRow } from '../types';
 
@@ -49,6 +49,8 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
   const debounced = useDebounced(searchText, 300);
   const q = state.jobsQuery;
   const sum = state.jobsSummary;
+  // What was paid says the money it was paid in; the rest is in the money the session says this driver is paid in.
+  const currency = sum?.settlement?.currency ?? state.session.currency;
   const loading = state.jobsState === 'loading' || state.jobsState === 'idle';
 
   useEffect(() => {
@@ -80,15 +82,14 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
 
       <GlanceNumber
         label={t('driver.earn.earned')}
-        value={sum ? money(sum.earned) : '—'}
-        sub={sum ? t('driver.earn.sub', { booked: money(sum.paid), unpaid: money(sum.unpaid), delivered: sum.delivered }) : t('driver.earn.subEmpty')}
+        value={sum ? cash(sum.earned, currency) : '—'}
+        sub={sum ? t('driver.earn.sub', { booked: cash(sum.paid, currency), unpaid: cash(sum.unpaid, currency), delivered: sum.delivered }) : t('driver.earn.subEmpty')}
       />
       {/* What has actually LEFT, which is a different question from what the network has booked. Kept as
           its own line rather than folded into the one above, because merging them is exactly how "we owe
           you this" came to be displayed as "you have been paid". */}
-      {/* In the money it was paid in, which the answer says: a payout in no money is a figure taken on trust. */}
       {sum?.settlement
-        ? settlementLines(sum.settlement, (n) => (sum.settlement?.currency ? formatMoney(n, sum.settlement.currency) : money(n)), t).map((line) => (
+        ? settlementLines(sum.settlement, (n) => cash(n, currency), t).map((line) => (
             <p key={line} class="card__note">
               {line}
             </p>
@@ -125,7 +126,7 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
           ) : (
             <div class={`rows${state.jobsState === 'loading' ? ' rows--loading' : ''}`} role="list">
               {state.jobs.map((j) => (
-                <JobRow key={j.freightId} j={j} />
+                <JobRow key={j.freightId} j={j} currency={currency} />
               ))}
             </div>
           )}
@@ -141,7 +142,7 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
       </Card>
 
       <div class="scr__foot">
-        <ReadAloud text={() => (sum ? t('driver.earn.aloud', { earned: money(sum.earned), paid: money(sum.paid), unpaid: money(sum.unpaid), delivered: sum.delivered }) : t('driver.earn.aloudEmpty'))} label={t('driver.readAloud')} />
+        <ReadAloud text={() => (sum ? t('driver.earn.aloud', { earned: cash(sum.earned, currency), paid: cash(sum.paid, currency), unpaid: cash(sum.unpaid, currency), delivered: sum.delivered }) : t('driver.earn.aloudEmpty'))} label={t('driver.readAloud')} />
       </div>
 
       <JobFilterSheet open={filterOpen} onClose={() => setFilterOpen(false)} query={q} onApply={(patch) => { actions.queryJobs(patch); setFilterOpen(false); }} onClearAll={() => { resetAll(); setFilterOpen(false); }} />
@@ -149,7 +150,7 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
   );
 }
 
-function JobRow({ j }: { j: DriverJobRow }) {
+function JobRow({ j, currency }: { j: DriverJobRow; currency?: string }) {
   const t = useT();
   const when = j.deliveredAt ?? j.claimedAt;
   return (
@@ -165,10 +166,10 @@ function JobRow({ j }: { j: DriverJobRow }) {
           {when ? t('driver.earn.rowDate', { date: new Date(when).toLocaleDateString() }) : ''}
         </span>
         {/* FP8 — an upheld claim took part of this pay back. The agreed figure stays; the line says what left. */}
-        {j.clawback ? <span class="row__meta row__s--danger">{t('driver.earn.clawbackLine', { amount: money(j.clawback) })}</span> : null}
+        {j.clawback ? <span class="row__meta row__s--danger">{t('driver.earn.clawbackLine', { amount: cash(j.clawback, currency) })}</span> : null}
       </span>
       <span class="row__end">
-        <b class="amt amt--in">{money(j.earning)}</b>
+        <b class="amt amt--in">{cash(j.earning, currency)}</b>
         <Pill tone={j.paid || j.direct ? 'ok' : 'warn'} dot>
           {j.paid ? t('driver.earn.paid') : j.direct ? t('driver.earn.direct') : t('driver.earn.owed')}
         </Pill>

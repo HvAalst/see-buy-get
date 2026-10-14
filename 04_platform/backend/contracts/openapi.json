@@ -10742,7 +10742,7 @@
       "get": {
         "operationId": "Sbg.pricingNear",
         "summary": "",
-        "description": "Competitive price discovery, BOUNDED so it scales to 30k PUDOs. Returns a local **benchmark**\n(median / p25–p75 / min–max / count of nearby same-type rates) + a **capped** set of nearby price\npins for the map — never the whole network. With `type` → that one service (PUDO/MDP per-parcel,\nvehicle per-km); without `type` → just the three network benchmarks (the public hub summary).\nWithout lat/lng → network-wide (no radius filter). In-memory haversine here; a geo-index at real scale.",
+        "description": "Competitive price discovery, BOUNDED so it scales to 30k PUDOs. Returns a local **benchmark**\n(median / p25–p75 / min–max / count of nearby same-type rates) + a **capped** set of nearby price\npins for the map — never the whole network. With `type` → that one service (PUDO/MDP per-parcel,\nvehicle per-km); without `type` → just the three network benchmarks (the public hub summary).\nWithout lat/lng → network-wide (no radius filter). In-memory haversine here; a geo-index at real scale.\n\nVEHICLES ARE COMPARED IN ONE MONEY, AND SAY WHICH. A per-km rate is in the money of the company that settles\nthe work done in that vehicle (`DriverService.rateCurrencyOf`), so a driver is set beside the vehicles priced in\nthe money THEY are paid in (`rateCurrencyForDriver`) and told which money that is (`currency`). Anybody else is answered in the network's. A median across two currencies is a number about\nnothing, and the button beside it would have set a driver's price to it. A driver whose work no company of ours\nsettles is compared with nobody: no `currency`, and a benchmark of none.",
         "parameters": [
           {
             "name": "type",
@@ -15753,7 +15753,7 @@
       "get": {
         "operationId": "Sbg.driverSession",
         "summary": "",
-        "description": "The driver's current shift session (active coupling + vehicle), or { active:false } off duty.\n\n Carries WHY TODAY WAS QUIET, split by cause. A setting that silences a phone without ever saying so is\n how somebody hears nothing for a week and blames the network — so the two things the network knows and\n was never saying, their own floor and their own rate, travel with the card that shows them.",
+        "description": "The driver's current shift session (active coupling + vehicle), or { active:false } off duty.\n\n Carries WHY TODAY WAS QUIET, split by cause. A setting that silences a phone without ever saying so is\n how somebody hears nothing for a week and blames the network — so the two things the network knows and\n was never saying, their own floor and their own rate, travel with the card that shows them.\n\n And THE MONEY everything priced for this driver is in — a load on the board, an offer, their own loads, what\n they earned: the money of the company that pays them (`rateCurrencyForDriver`). Said once, here, so that no\n figure on their screens is a bare number. Absent where no company of ours pays them: their price is then what\n they agree with the shipper, in whatever money that is.",
         "parameters": [
           {
             "name": "did",

@@ -3792,6 +3792,20 @@ describe('PUDO Light', () => {
       fleetIn('KE', [0.1]);
       expect(ratesFor({ active: true, role: 'operator', did: 'did:glos:staff' })).toMatchObject({ currency: 'KES', benchmark: { count: 1 } });
     });
+
+    it('says once, on the driver’s session, the money everything priced for them is in — and none where nobody of ours pays them', () => {
+      // The board, an offer, their own loads and their earnings were all bare numbers. The session is the one answer
+      // every one of those screens already has.
+      uganda();
+      presence.set({ jurisdiction: 'TZ', level: 'matched' });
+      const session = (did: string) => controller.driverSession(did, asDriver(did)) as { currency?: string; active: boolean };
+      expect(session(fleetIn('KE', [0.1]).driver.did)).toMatchObject({ active: true, currency: 'KES' });
+      expect(session(fleetIn('UG', [300]).driver.did)).toMatchObject({ active: true, currency: 'UGX' });
+      expect(session(fleetIn('TZ', [0.5]).driver.did).currency).toBeUndefined();
+      // Off shift too: the board and the earnings are read without a vehicle.
+      const idle = drivers.register({ displayName: 'Idle', fullName: 'I D', nationalId: 'DRV-RATE-IDLE', mobile: '+254700800901', licenceClasses: ['bike'], jurisdiction: 'KE' });
+      expect(session(idle.did)).toMatchObject({ active: false, currency: 'KES' });
+    });
   });
 
   it('onboards a bike courier on the light registry — ACTIVE immediately with a badge (Ch 19)', () => {

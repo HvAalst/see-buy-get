@@ -4,7 +4,7 @@ import { formatDate, useT, type Translate } from '../../../shared/i18n';
 import { narrow } from '../../../lib/sbg';
 import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
 import type { ChatThread } from '../../../shared/conversation/logic';
-import { blockerTone, boardDistanceLine, boardSummary, money, originReady, unlocks } from '../logic';
+import { blockerTone, boardDistanceLine, boardSummary, cash, originReady, unlocks } from '../logic';
 import type { BoardRow } from '../types';
 import { BOARD_REACHES, type BoardReach, type DriverActions, type DriverState } from '../useDriverApp';
 
@@ -86,11 +86,11 @@ export function BoardScreen({ state, actions }: BoardScreenProps) {
             <span>{t('driver.board.countSplit', { can, blocked: rows.length - can })}</span>
           </p>
 
-          <Unlocks items={opportunities} />
+          <Unlocks items={opportunities} currency={state.session.currency} />
 
           <div class="rows board__list" role="list">
             {rows.map((row) => (
-              <BoardCard key={row.freightId} row={row} onPropose={() => setProposing(row)} onAsk={() => void ask(row)} />
+              <BoardCard key={row.freightId} row={row} currency={state.session.currency} onPropose={() => setProposing(row)} onAsk={() => void ask(row)} />
             ))}
           </div>
         </>
@@ -233,7 +233,7 @@ function Reach({ value, onChange, who }: { value: BoardReach; onChange: (r: Boar
  * Counted only where the change is the ONE thing in the way, so the number is work the operator would really
  * win. Promising loads that a forklift alone would not unlock is the most expensive wrong number here.
  */
-function Unlocks({ items }: { items: ReturnType<typeof unlocks> }) {
+function Unlocks({ items, currency }: { items: ReturnType<typeof unlocks>; currency?: string }) {
   const t = useT();
   if (items.length === 0) return null;
   return (
@@ -249,7 +249,7 @@ function Unlocks({ items }: { items: ReturnType<typeof unlocks> }) {
               <span class="row__t">{u.message}</span>
               <span class="row__s">
                 {u.earnings > 0
-                  ? t('driver.board.unlockCount', { loads: u.loads, amount: money(u.earnings) })
+                  ? t('driver.board.unlockCount', { loads: u.loads, amount: cash(u.earnings, currency) })
                   : t('driver.board.unlockCountNoPay', { loads: u.loads })}
               </span>
             </span>
@@ -260,7 +260,7 @@ function Unlocks({ items }: { items: ReturnType<typeof unlocks> }) {
   );
 }
 
-function BoardCard({ row, onPropose, onAsk }: { row: BoardRow; onPropose: () => void; onAsk: () => void }) {
+function BoardCard({ row, currency, onPropose, onAsk }: { row: BoardRow; currency?: string; onPropose: () => void; onAsk: () => void }) {
   const t = useT();
   const body = row.bodyDerived;
   return (
@@ -285,7 +285,7 @@ function BoardCard({ row, onPropose, onAsk }: { row: BoardRow; onPropose: () => 
         <span>
           {row.earningsPerKm != null ? (
             <>
-              <b>{money(row.price?.total ?? 0)}</b> · {t('driver.board.perKm', { amount: money(row.earningsPerKm) })}
+              <b>{cash(row.price?.total ?? 0, currency)}</b> · {t('driver.board.perKm', { amount: cash(row.earningsPerKm, currency) })}
             </>
           ) : (
             t('driver.board.perKmNone')
@@ -381,7 +381,7 @@ function ProposeSheet({ row, state, actions, onClose }: { row: BoardRow | null; 
           </p>
           <div class="field">
             <label class="field__label" for="propose-price">
-              {t('driver.board.proposePrice')}
+              {state.session.currency ? t('driver.board.proposePriceIn', { currency: state.session.currency }) : t('driver.board.proposePrice')}
             </label>
             <input
               id="propose-price"

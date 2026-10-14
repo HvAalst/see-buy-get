@@ -162,6 +162,10 @@ export interface AssignmentView {
 
 export interface SessionView {
   active: boolean;
+  /** The money everything priced for this driver is in — board, offers, their loads, earnings: that of the company
+   *  that pays them. Absent where no company of ours does (their price is then what they agree). Write money with
+   *  `cash(…, session.currency)`. */
+  currency?: string;
   /**
    * FP8 — the shift clock: hours on duty, the limit, whether it is passed (`near`: in its last hour), and the rest
    * owed after a working day (`restOwed`: this shift is one already, so ending it now owes the rest). Off duty and resting: `restUntil` is when the next shift can start, and

@@ -641,6 +641,7 @@ export const enDriver = {
   'driver.board.proposeTitle': 'Name your price',
   'driver.board.proposeLede': 'The shipper wants to agree a price before anyone commits. Tell them your number — it holds nothing, and they can still say no.',
   'driver.board.proposePrice': 'Your price',
+  'driver.board.proposePriceIn': 'Your price, in {currency}',
   'driver.board.proposeNote': 'Why (optional)',
   'driver.board.proposeNotePlaceholder': 'e.g. I am running empty past your gate on Thursday',
   'driver.board.proposeSend': 'Send my price',

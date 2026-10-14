@@ -33,6 +33,8 @@ import {
   lastReadingBreached,
   minEarnFilter,
   money,
+  cash,
+  perKmText,
   nodeOptions,
   offerSpoken,
   offersSummary,
@@ -262,6 +264,23 @@ describe('freight pricing (S34)', () => {
     expect(money(16.9)).toBe('16.90');
     expect(money(undefined)).toBe('0.00');
     expect(money(null)).toBe('0.00');
+  });
+
+  it('writes money in the money the session names, and as the bare figure only where it names none', () => {
+    // Every figure on the board, an offer, a load and the earnings was a bare number. The session now says the money
+    // of the company that pays this driver; where no company of ours does, the price is what they agreed, and bare.
+    expect(cash(16.9, 'KES')).toBe('KES 16.90');
+    expect(cash(400, 'UGX')).toBe('UGX 400');
+    expect(cash(16.9)).toBe('16.90');
+    expect(cash(null, 'KES')).toBe('KES 0.00');
+    expect(perKmText(0.575, 'KES')).toBe('KES 0.575');
+    expect(perKmText(0.575)).toBe('0.575');
+  });
+
+  it('says the money in a price’s lines and in the spoken offer, when there is one', () => {
+    expect(priceBreakdownLines(price, t, 'KES').slice(0, 2)).toEqual(['Base fee KES 10.00', '12 km at KES 0.575 per km']);
+    const base = { message: 'Ready.', weightKg: 200, destLabel: 'Site', detourKm: 3 };
+    expect(offerSpoken({ ...base, earn: price.total }, t, 'KES')).toContain('You earn KES 16.90.');
   });
 
   it('breaks a price into plain lines a driver can trust', () => {
