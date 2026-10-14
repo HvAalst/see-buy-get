@@ -3,6 +3,7 @@ import { Button, CodeCard, Icon, Note, RefusalNote } from '../ui';
 import { useT } from '../i18n';
 import type { Result, SbgError } from '../../lib/sbg';
 import { downscaleImage } from '../media';
+import { slotLabel } from '../visitHours';
 import { DISPUTE_PHOTOS, appointmentDays, bringLines, dayChoices, dayLabel, hoursOn, idActions, idStatusSays, readyToAppoint, reminderLine, ticketLines, visitingWords, type DisputePhoto, type DisputeStatus, type IdDisputeApi } from './idDispute';
 
 export interface IdDisputeCaseProps {
@@ -177,7 +178,7 @@ export function IdDisputeCase({ api, reference, initial, ownId, onChanged }: IdD
                   <div id="id-hour" class="tapset" role="group">
                     {hours.map((h) => (
                       <button type="button" key={h.at} class={`tapset__btn${at === h.at ? ' tapset__btn--on' : ''}`} aria-pressed={at === h.at} disabled={busy !== null || h.free < 1} onClick={() => setAt(h.at)}>
-                        {h.free < 1 ? t('account.id.hourFull', { at: h.at }) : h.at}
+                        {h.free < 1 ? t('account.id.hourFull', { at: slotLabel(h.at, h.until) }) : slotLabel(h.at, h.until)}
                       </button>
                     ))}
                   </div>

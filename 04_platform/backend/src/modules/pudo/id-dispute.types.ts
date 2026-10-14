@@ -158,12 +158,17 @@ export class SendBackDisputeDto {
 export class DisputeClosedDate {
   date: string;
   @ApiPropertyOptional() note?: string;
+  /** With both, the date is not closed but SHORTER: visitors from `from` until `to` that day only. */
+  @ApiPropertyOptional() from?: string;
+  @ApiPropertyOptional() to?: string;
 }
 
 /** An hour of a day, and how many places are still free in it. */
 export class DisputeHour {
-  /** When it starts, `HH:MM`. It lasts an hour. */
+  /** When it starts, `HH:MM`. */
   at: string;
+  /** When it ends: an hour later, or at closing time for the last part of an hour. */
+  @ApiPropertyOptional() until?: string;
   free: number;
 }
 
@@ -187,6 +192,8 @@ export class DisputePlace {
   /** From when until when on those days, `HH:MM`. */
   @ApiPropertyOptional() visitFrom?: string;
   @ApiPropertyOptional() visitTo?: string;
+  /** A day of the week with hours of its own (`{ sat: { from, to } }`), where the company gave one. */
+  @ApiPropertyOptional({ type: Object }) visitHoursByDay?: Partial<Record<string, { from: string; to: string }>>;
   /** How many visitors it sees in an hour, where it has said. With it, an appointment is for an hour. */
   @ApiPropertyOptional() visitorsPerHour?: number;
   /** The dates it is closed: public holidays, one-off closures. */

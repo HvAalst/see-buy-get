@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
-import { addClosedDate, closedDateWords, removeClosedDate, visitorsPerHourOf, type ClosedDate } from '../contactCard';
+import { addClosedDate, closedDateWords, ownHoursOf, removeClosedDate, visitorsPerHourOf, windowOk, type ClosedDate, type VisitWindow } from '../contactCard';
 
 export interface ContactCardView {
   contactName?: string;
@@ -13,6 +13,8 @@ export interface ContactCardView {
   visitDays?: string[];
   visitFrom?: string;
   visitTo?: string;
+  /** A day of the week with hours of its own. */
+  visitHoursByDay?: Record<string, VisitWindow>;
   closedDates?: ClosedDate[];
   visitorsPerHour?: number;
   saidAt: string;
@@ -56,9 +58,25 @@ export function ContactCardPanel({
 }) {
   const t = useT();
   const [card, setCard] = useState<ContactCardView | null>(null);
-  const [form, setForm] = useState({ contactName: '', phone: '', phoneAlt: '', email: '', website: '', address: '', hours: '', visitDays: [] as string[], visitFrom: '', visitTo: '', visitorsPerHour: '', closedDates: [] as ClosedDate[] });
-  // The date being added to the closed dates, before it joins the list.
-  const [closing, setClosing] = useState({ date: '', note: '' });
+  const [form, setForm] = useState({
+    contactName: '',
+    phone: '',
+    phoneAlt: '',
+    email: '',
+    website: '',
+    address: '',
+    hours: '',
+    visitDays: [] as string[],
+    visitFrom: '',
+    visitTo: '',
+    visitHoursByDay: {} as Record<string, VisitWindow | undefined>,
+    visitorsPerHour: '',
+    closedDates: [] as ClosedDate[],
+  });
+  // The date being added to the closed dates, before it joins the list — with hours, a shorter day instead.
+  const [closing, setClosing] = useState({ date: '', note: '', from: '', to: '' });
+  const ownOf = (day: string, patch: Partial<VisitWindow> | null) =>
+    setForm({ ...form, visitHoursByDay: { ...form.visitHoursByDay, [day]: patch === null ? undefined : { from: '', to: '', ...form.visitHoursByDay[day], ...patch } } });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -81,6 +99,7 @@ export function ContactCardPanel({
         visitDays: got.visitDays ?? [],
         visitFrom: got.visitFrom ?? '',
         visitTo: got.visitTo ?? '',
+        visitHoursByDay: got.visitHoursByDay ?? {},
         visitorsPerHour: got.visitorsPerHour ? String(got.visitorsPerHour) : '',
         closedDates: got.closedDates ?? [],
       });
@@ -102,6 +121,9 @@ export function ContactCardPanel({
       ...form,
       // A number, or zero to say none — and the whole list of closed dates, which replaces the one before.
       visitorsPerHour: visitorsPerHourOf(form.visitorsPerHour),
+      // The ticked days' own hours, which replace the ones before: a day left alone keeps the usual hours. A day
+      // given half a window is sent as it is, so the server says what is missing rather than this dropping it.
+      visitHoursByDay: ownHoursOf(form.visitDays, form.visitHoursByDay),
       ...(who ? { by: who } : {}),
     });
     setBusy(false);
@@ -189,6 +211,39 @@ export function ContactCardPanel({
         </label>
       </div>
 
+      {/* A DAY WITH OTHER HOURS — "a Saturday morning only". Offered for the days ticked above; a day left alone keeps
+          the hours above. */}
+      {form.visitDays.length ? (
+        <div class="cfield" style="margin-top:14px">
+          <span class="cfield__label">{t('tower.contact.visit.ownTitle')}</span>
+          <span class="chint">{t('tower.contact.visit.ownHint')}</span>
+          {VISIT_DAYS.filter((d) => form.visitDays.includes(d)).map((d) => {
+            const own = form.visitHoursByDay[d];
+            const dayName = t(`tower.contact.day.${d}` as never);
+            return (
+              <div class="twr-knobs__row" key={d}>
+                <label class="twr-knob cfield cfield--check">
+                  <input type="checkbox" checked={Boolean(own)} onChange={(e) => ownOf(d, (e.target as HTMLInputElement).checked ? { from: form.visitFrom, to: form.visitTo } : null)} />
+                  <span>{own ? t('tower.contact.visit.ownOn', { day: dayName }) : `${dayName} · ${t('tower.contact.visit.ownSame')}`}</span>
+                </label>
+                {own ? (
+                  <>
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.contact.visit.from')}</span>
+                      <input class="cinput" type="time" aria-label={`${dayName} ${t('tower.contact.visit.from')}`} value={own.from} onChange={(e) => ownOf(d, { from: (e.target as HTMLInputElement).value })} />
+                    </label>
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.contact.visit.to')}</span>
+                      <input class="cinput" type="time" aria-label={`${dayName} ${t('tower.contact.visit.to')}`} value={own.to} onChange={(e) => ownOf(d, { to: (e.target as HTMLInputElement).value })} />
+                    </label>
+                  </>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
       {/* WHEN IT IS CLOSED: public holidays and one-off closures, each a date and what the day is. */}
       <div class="cfield" style="margin-top:14px">
         <span class="cfield__label">{t('tower.contact.closed.title')}</span>
@@ -200,6 +255,7 @@ export function ContactCardPanel({
                 <span class="crow__body">
                   <span class="crow__top">
                     <span class="crow__name">{closedDateWords(c.date)}</span>
+                    <span class={`ctag ${c.from && c.to ? 'ctag--warn' : 'ctag--quiet'}`}>{c.from && c.to ? t('tower.contact.closed.openOnly', { from: c.from, to: c.to }) : t('tower.contact.closed.allDay')}</span>
                   </span>
                   {c.note ? <span class="crow__sub">{c.note}</span> : null}
                 </span>
@@ -222,21 +278,31 @@ export function ContactCardPanel({
           <span class="cfield__label">{t('tower.contact.closed.note')}</span>
           <input class="cinput" maxLength={60} value={closing.note} onChange={(e) => setClosing({ ...closing, note: (e.target as HTMLInputElement).value })} placeholder={t('tower.contact.closed.notePh')} />
         </label>
+        <label class="twr-knob cfield">
+          <span class="cfield__label">{t('tower.contact.closed.from')}</span>
+          <input class="cinput" type="time" value={closing.from} onChange={(e) => setClosing({ ...closing, from: (e.target as HTMLInputElement).value })} />
+        </label>
+        <label class="twr-knob cfield">
+          <span class="cfield__label">{t('tower.contact.closed.to')}</span>
+          <input class="cinput" type="time" value={closing.to} onChange={(e) => setClosing({ ...closing, to: (e.target as HTMLInputElement).value })} />
+        </label>
         <div class="twr-knob cfield">
           <span class="cfield__label">&nbsp;</span>
           <button
             type="button"
             class="cbtn cbtn--ghost"
-            disabled={!closing.date}
+            // Half a window is neither closed nor shorter: both times, or neither.
+            disabled={!closing.date || (Boolean(closing.from || closing.to) && !windowOk(closing.from, closing.to))}
             onClick={() => {
-              setForm({ ...form, closedDates: addClosedDate(form.closedDates, closing.date, closing.note) });
-              setClosing({ date: '', note: '' });
+              setForm({ ...form, closedDates: addClosedDate(form.closedDates, closing.date, closing.note, closing.from, closing.to) });
+              setClosing({ date: '', note: '', from: '', to: '' });
             }}
           >
             {t('tower.contact.closed.add')}
           </button>
         </div>
       </div>
+      <span class="chint">{t('tower.contact.closed.shortHint')}</span>
 
       <div class="twr-panelend">
         <button type="button" class="cbtn cbtn--primary" disabled={busy} onClick={() => void save()}>

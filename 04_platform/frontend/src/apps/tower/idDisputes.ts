@@ -1,4 +1,5 @@
 import type { MessageKey, Translate } from '../../shared/i18n';
+import { visitSpans } from '../../shared/visitHours';
 
 /*
  * TWO PEOPLE SAY ONE NATIONAL ID IS THEIRS — what the console says about a dispute, and what its reader may do.
@@ -59,7 +60,7 @@ export interface DisputeRow {
   /** The appointment is on a day the country's company no longer receives visitors. */
   appointmentOffDay?: boolean;
   /** Where people are sent and when visitors are received — the country's company's own entry. Absent: it wrote nothing. */
-  place?: { company: string; address?: string; hours?: string; visitDays?: string[]; visitFrom?: string; visitTo?: string; visitorsPerHour?: number; closedDates?: Array<{ date: string; note?: string }> };
+  place?: { company: string; address?: string; hours?: string; visitDays?: string[]; visitFrom?: string; visitTo?: string; visitHoursByDay?: Record<string, { from: string; to: string }>; visitorsPerHour?: number; closedDates?: Array<{ date: string; note?: string; from?: string; to?: string }> };
   finalTo?: DisputeSide;
   finalBy?: string;
   finalAt?: string;
@@ -177,14 +178,19 @@ const WEEK = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
  */
 export function placeWords(row: Pick<DisputeRow, 'place'>, t: Translate): { where: string; visiting: string; closed: string; missing: boolean } {
   const p = row.place;
-  const days = p?.visitDays?.length ? WEEK.filter((d) => p.visitDays!.includes(d)).map((d) => t(`tower.contact.day.${d}` as never)) : [];
-  const hours = p?.visitFrom && p?.visitTo ? t('tower.ids.place.hours', { from: p.visitFrom, to: p.visitTo }) : '';
+  const days = p?.visitDays?.length ? WEEK.filter((d) => p.visitDays!.includes(d)) : [];
+  // Each group of days with the hours it keeps: a Saturday morning is said apart from the week.
+  const spans = visitSpans(p)
+    .map((s) => [s.days.map((d) => t(`tower.contact.day.${d}` as never)).join(', '), s.from && s.to ? t('tower.ids.place.hours', { from: s.from, to: s.to }) : ''].filter(Boolean).join(' · '))
+    .join('; ');
+  // A shorter date says its hours beside it; a closed one does not.
+  const dated = (c: { date: string; note?: string; from?: string; to?: string }) => [c.date, c.from && c.to ? t('tower.ids.place.hours', { from: c.from, to: c.to }) : '', c.note ? `(${c.note})` : ''].filter(Boolean).join(' ');
   return {
     where: p?.address ? `${p.company}, ${p.address}` : t('tower.ids.place.noAddress'),
     // Its days, its hours, and — where it has said — how many it sees in an hour: then an appointment is for an hour.
-    visiting: days.length ? t('tower.ids.place.visiting', { when: [days.join(', '), hours, p?.visitorsPerHour ? t('tower.ids.place.perHour', { n: p.visitorsPerHour }) : ''].filter(Boolean).join(' · ') }) : t('tower.ids.place.noDays'),
-    // The dates it has said it is closed, soonest first: nobody is offered one, and nobody can take one.
-    closed: p?.closedDates?.length ? t('tower.ids.place.closed', { dates: p.closedDates.slice(0, 6).map((c) => (c.note ? `${c.date} (${c.note})` : c.date)).join(', ') + (p.closedDates.length > 6 ? ` +${p.closedDates.length - 6}` : '') }) : '',
+    visiting: days.length ? t('tower.ids.place.visiting', { when: [spans, p?.visitorsPerHour ? t('tower.ids.place.perHour', { n: p.visitorsPerHour }) : ''].filter(Boolean).join(' · ') }) : t('tower.ids.place.noDays'),
+    // The dates it has said it is closed — or open shorter — soonest first.
+    closed: p?.closedDates?.length ? t('tower.ids.place.closed', { dates: p.closedDates.slice(0, 6).map(dated).join(', ') + (p.closedDates.length > 6 ? ` +${p.closedDates.length - 6}` : '') }) : '',
     missing: !p?.address || !days.length,
   };
 }

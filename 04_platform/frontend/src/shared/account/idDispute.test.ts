@@ -115,6 +115,10 @@ describe('a dispute over a national ID, as each of the two is told it', () => {
       expect(lines.where).toEqual(['SeeBuyGet Kenya', 'Mombasa Road, gate 4', 'Visitors: Monday, Friday · 09:00 to 16:00', 'Ask for Grace', 'Telephone +254 20 000 111']);
       expect(visitingWords({ company: 'x', visitDays: ['sun', 'sat'] }, t as never)).toBe('Saturday, Sunday');
       expect(visitingWords({ company: 'x' }, t as never)).toBeNull();
+      // A Saturday morning only is said apart from the week, not folded into its hours.
+      expect(visitingWords({ company: 'x', visitDays: ['mon', 'sat'], visitFrom: '09:00', visitTo: '16:00', visitHoursByDay: { sat: { from: '09:00', to: '12:00' } } }, t as never)).toBe(
+        'Monday · 09:00 to 16:00; Saturday · 09:00 to 12:00',
+      );
     });
 
     it('says what the company has not written, beside what it has — and to ask before travelling', () => {

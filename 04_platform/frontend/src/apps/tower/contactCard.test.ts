@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addClosedDate, closedDateWords, removeClosedDate, visitorsPerHourOf } from './contactCard';
+import { addClosedDate, closedDateWords, ownHoursOf, removeClosedDate, visitorsPerHourOf, windowOk } from './contactCard';
 
 describe('a company’s closed dates, while it edits them', () => {
   it('keeps one of each date, in date order, with what the day is', () => {
@@ -13,6 +13,22 @@ describe('a company’s closed dates, while it edits them', () => {
     expect(addClosedDate(list, '', 'x')).toBe(list);
     expect(addClosedDate(list, '25 December', 'x')).toBe(list);
     expect(addClosedDate([], '2026-10-20', 'x'.repeat(90))[0].note).toHaveLength(60);
+  });
+
+  it('makes a date SHORTER rather than closed when it is given a window — both ends, the end after the start', () => {
+    expect(addClosedDate([], '2026-12-24', 'Half day', '09:00', '12:00')).toEqual([{ date: '2026-12-24', note: 'Half day', from: '09:00', to: '12:00' }]);
+    // Half a window, or one the wrong way round, is not a window: the date is closed, as it would have been.
+    expect(addClosedDate([], '2026-12-24', '', '09:00', '')).toEqual([{ date: '2026-12-24' }]);
+    expect(addClosedDate([], '2026-12-24', '', '12:00', '09:00')).toEqual([{ date: '2026-12-24' }]);
+    expect(windowOk('09:00', '12:00')).toBe(true);
+    expect(windowOk('9:00', '12:00')).toBe(false);
+  });
+
+  it('saves the days’ own hours only for the days ticked, in the shape the server keeps', () => {
+    const own = { sat: { from: '09:00', to: '12:00' }, sun: { from: '10:00', to: '11:00' }, mon: undefined };
+    // Sunday was unticked: its hours are not sent, and the day keeps none.
+    expect(ownHoursOf(['mon', 'sat'], own)).toEqual({ sat: { from: '09:00', to: '12:00' } });
+    expect(ownHoursOf([], own)).toEqual({});
   });
 
   it('removes a date and leaves the rest', () => {

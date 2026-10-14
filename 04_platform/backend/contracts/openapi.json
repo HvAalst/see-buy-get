@@ -29575,8 +29575,12 @@
             "type": "string",
             "maxLength": 5
           },
+          "visitHoursByDay": {
+            "type": "object",
+            "description": "A day of the week with hours of its own: `{ sat: { from: '09:00', to: '12:00' } }`. The object REPLACES the days'\n own hours; an empty one clears them, and a day given null keeps the hours of most days."
+          },
           "closedDates": {
-            "description": "The dates it is closed: public holidays, one-off closures. The list REPLACES the list; an empty one clears it.",
+            "description": "The dates it is closed: public holidays, one-off closures — or, with `from` and `to`, a shorter day. The list\n REPLACES the list; an empty one clears it.",
             "type": "array",
             "items": {
               "type": "string"
@@ -29637,8 +29641,12 @@
           "visitTo": {
             "type": "string"
           },
+          "visitHoursByDay": {
+            "type": "object",
+            "description": "A day of the week with hours of its own — `{ sat: { from: '09:00', to: '12:00' } }`. Theirs to set."
+          },
           "closedDates": {
-            "description": "The dates it is closed — `{ date: 'YYYY-MM-DD', note? }` — and how many visitors it sees in an hour. Theirs to set.",
+            "description": "The dates it is closed — `{ date: 'YYYY-MM-DD', note?, from?, to? }`, shorter rather than closed where it has\n hours — and how many visitors it sees in an hour. Theirs to set.",
             "type": "array",
             "items": {
               "type": "object"
@@ -41110,6 +41118,13 @@
           "note": {
             "type": "string"
           },
+          "from": {
+            "type": "string",
+            "description": "With both, the date is not closed but SHORTER: visitors from `from` until `to` that day only."
+          },
+          "to": {
+            "type": "string"
+          },
           "date": {
             "type": "string"
           }
@@ -41152,6 +41167,10 @@
           },
           "visitTo": {
             "type": "string"
+          },
+          "visitHoursByDay": {
+            "type": "object",
+            "description": "A day of the week with hours of its own (`{ sat: { from, to } }`), where the company gave one."
           },
           "visitorsPerHour": {
             "type": "number",
@@ -41270,9 +41289,13 @@
       "DisputeHour": {
         "type": "object",
         "properties": {
+          "until": {
+            "type": "string",
+            "description": "When it ends: an hour later, or at closing time for the last part of an hour."
+          },
           "at": {
             "type": "string",
-            "description": "When it starts, `HH:MM`. It lasts an hour."
+            "description": "When it starts, `HH:MM`."
           },
           "free": {
             "type": "number"

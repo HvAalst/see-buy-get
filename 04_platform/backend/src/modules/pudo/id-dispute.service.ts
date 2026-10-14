@@ -9,7 +9,7 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { countryOfPhone } from './account-move.service';
 import { AccountRecoveryService } from './account-recovery.service';
 import { AgentService } from './agent.service';
-import { ContactCardService, WEEKDAYS, hourAfter, visitingHours, weekdayOf, type Weekday } from './contact-card.service';
+import { ContactCardService, WEEKDAYS, placesIn, slotEnd, visitWindowOn, visitingHours, weekdayOf, type Weekday } from './contact-card.service';
 import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import {
@@ -343,9 +343,10 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
       // "The limitation is set by the country as an actual number of visitors per hour." Where it has set one, the
       // appointment is for an hour, and an hour that is full is refused. Where it has not, a day is enough.
       if (!place?.visitorsPerHour) return undefined;
-      const hours = visitingHours(place);
+      // That DATE's hours: a day of the week may keep its own, and a date may be shorter.
+      const hours = visitingHours(place, date);
       if (!at || !hours.includes(at)) throw new GlosError('INVALID_INPUT', `Choose the hour you will come: ${hours.join(', ')}.`, { field: 'at', hours });
-      if (this.takenAt(dispute, date, at, now) >= place.visitorsPerHour) throw new GlosError('CONFLICT', `${at} on ${dayOf(date)} is full. Choose another hour.`, { field: 'at' });
+      if (this.takenAt(dispute, date, at, now) >= placesIn(place, date, at)) throw new GlosError('CONFLICT', `${at} on ${dayOf(date)} is full. Choose another hour.`, { field: 'at' });
       return at;
     };
     if (dispute.state === 'decided') {
@@ -368,7 +369,8 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
     this.disputes.set(dispute.disputeId, dispute);
     const hour = dispute.appointment!.at;
     const when = hour ? `${dayOf(date)} at ${hour}` : dayOf(date);
-    const visitors = !hour && place?.visitFrom && place?.visitTo ? `, between ${place.visitFrom} and ${place.visitTo}` : '';
+    const window = visitWindowOn(place, date);
+    const visitors = !hour && window ? `, between ${window.from} and ${window.to}` : '';
     const where = place ? `${place.company}${place.address ? `, ${place.address}` : ''}${visitors}` : 'the SeeBuyGet office for your country';
     for (const s of ['claimant', 'holder'] as const) {
       const mine = dispute.appointment!.by === s;
@@ -418,7 +420,7 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
     const a = d.appointment!;
     const place = this.placeFor(d.country);
     const fits = !offDay(place, a.date, a.at);
-    const hour = a.at ? `${a.at} to ${hourAfter(a.at)}` : undefined;
+    const hour = a.at ? `${a.at} to ${slotEnd(place, a.date, a.at)}` : undefined;
     const when = hour ? `${dayOf(a.date)}, ${hour}` : dayOf(a.date);
     const where = place ? `${place.company}${place.address ? `, ${place.address}` : ''}` : 'the SeeBuyGet office for your country';
     for (const side of ['claimant', 'holder'] as const) {
@@ -468,7 +470,7 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
         days.push({ date });
         continue;
       }
-      const hours = visitingHours(place).map((at) => ({ at, free: Math.max(0, (place.visitorsPerHour as number) - this.takenAt(d, date, at, now)) }));
+      const hours = visitingHours(place, date).map((at) => ({ at, until: slotEnd(place, date, at), free: Math.max(0, placesIn(place, date, at) - this.takenAt(d, date, at, now)) }));
       if (hours.some((h) => h.free > 0)) days.push({ date, hours });
     }
     return days;
@@ -846,7 +848,7 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
     return {
       reference: d[side].reference,
       date: d.appointment.date,
-      ...(d.appointment.at ? { at: d.appointment.at, until: hourAfter(d.appointment.at) } : {}),
+      ...(d.appointment.at ? { at: d.appointment.at, until: slotEnd(place, d.appointment.date, d.appointment.at) } : {}),
       yours,
       bring: [...BRING],
       changesLeft: yours ? Math.max(0, APPOINTMENT_CHANGES - d.appointment.changes) : 0,
@@ -1059,6 +1061,7 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
       ...(card.visitDays?.length ? { visitDays: [...card.visitDays] } : {}),
       ...(card.visitFrom ? { visitFrom: card.visitFrom } : {}),
       ...(card.visitTo ? { visitTo: card.visitTo } : {}),
+      ...(card.visitHoursByDay && Object.keys(card.visitHoursByDay).length ? { visitHoursByDay: { ...card.visitHoursByDay } } : {}),
       ...(card.visitorsPerHour ? { visitorsPerHour: card.visitorsPerHour } : {}),
       ...(card.closedDates?.length ? { closedDates: card.closedDates.map((c) => ({ ...c })) } : {}),
     };
@@ -1084,15 +1087,18 @@ function daysInWords(days: Weekday[]): string {
   const names = WEEKDAYS.filter((d) => days.includes(d)).map((d) => DAY_NAME[d]);
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : (names[0] ?? '');
 }
-/** Has this company said which days it receives visitors — and is this date not one of them? */
+/** Has this company said which days it receives visitors — and is this date not one of them? A date it gave hours of
+ *  its own is one it opens on, whatever day of the week it falls. */
 function notVisitingDay(place: DisputePlace | undefined, date: string): boolean {
   const days = place?.visitDays;
   const day = weekdayOf(date);
+  if (place?.closedDates?.some((c) => c.date === date && c.from && c.to)) return false;
   return Boolean(days?.length) && Boolean(day) && !days!.includes(day as string);
 }
-/** Is it closed on this date — a public holiday, a one-off closure — as it said itself? */
+/** Is it closed on this date — a public holiday, a one-off closure — as it said itself? A date with hours is open,
+ *  only shorter. */
 function closedOn(place: DisputePlace | undefined, date: string): { date: string; note?: string } | undefined {
-  return place?.closedDates?.find((c) => c.date === date);
+  return place?.closedDates?.find((c) => c.date === date && !(c.from && c.to));
 }
 /**
  * AN APPOINTMENT THAT NO LONGER FITS what the company says now: not one of its days, a date it has since closed,
@@ -1101,7 +1107,7 @@ function closedOn(place: DisputePlace | undefined, date: string): { date: string
 function offDay(place: DisputePlace | undefined, date: string, at?: string): boolean {
   if (notVisitingDay(place, date) || Boolean(closedOn(place, date))) return true;
   if (!place?.visitorsPerHour) return false;
-  return !at || !visitingHours(place).includes(at);
+  return !at || !visitingHours(place, date).includes(at);
 }
 
 /** What to bring, as the reminder says it — the same four things the ticket lists, in the same order. */

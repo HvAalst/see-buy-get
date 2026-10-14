@@ -62,7 +62,7 @@ import { MailService } from '../../foundation/mail/mail.service';
 import { OutboxMailSender } from '../../foundation/mail/outbox-mail.sender';
 import { MAIL_SENDER } from '../../foundation/mail/mail.types';
 
-import { ContactCardService, hourAfter, visitingHours, weekdayOf } from './contact-card.service';
+import { ContactCardService, placesIn, slotEnd, visitWindowOn, visitingHours, weekdayOf } from './contact-card.service';
 import { CompanyReadinessService } from '../../foundation/entity/company-readiness.service';
 import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
 import { IdDisputeService, normalizeIdReference } from './id-dispute.service';
@@ -816,7 +816,7 @@ describe('two people say one national ID is theirs', () => {
       const [a, b, c] = [wonByClaimant(aDriver()), wonByClaimant(aDriver()), wonByClaimant(aDriver())];
       const day = dayStr(a.at + 2 * DAY);
       const hoursOf = (ref: string) => disputes.status(ref, a.at).choices!.find((x) => x.date === day)!.hours;
-      expect(hoursOf(a.holderReference)).toEqual([{ at: '09:00', free: 2 }, { at: '10:00', free: 2 }, { at: '11:00', free: 2 }]);
+      expect(hoursOf(a.holderReference)).toEqual([{ at: '09:00', until: '10:00', free: 2 }, { at: '10:00', until: '11:00', free: 2 }, { at: '11:00', until: '12:00', free: 2 }]);
 
       // A day alone is not enough any more, and an hour has to be one of its hours.
       expect(failure(() => appoint(a.holderReference, day, a.at))).toMatch(/^INVALID_INPUT: Choose the hour you will come: 09:00, 10:00, 11:00\.$/);
@@ -829,23 +829,23 @@ describe('two people say one national ID is theirs', () => {
       expect(disputes.one(a.disputeId, AMINA, a.at)).toMatchObject({ appointmentDate: day, appointmentAt: '10:00', place: { visitorsPerHour: 2 } });
       expect(mine.ticket!.offDay).toBeUndefined();
       // One place is gone from that hour, for everybody else. Their own does not count against themselves.
-      expect(hoursOf(b.holderReference)).toEqual([{ at: '09:00', free: 2 }, { at: '10:00', free: 1 }, { at: '11:00', free: 2 }]);
-      expect(hoursOf(a.holderReference)!.find((h) => h.at === '10:00')).toEqual({ at: '10:00', free: 2 });
+      expect(hoursOf(b.holderReference)).toEqual([{ at: '09:00', until: '10:00', free: 2 }, { at: '10:00', until: '11:00', free: 1 }, { at: '11:00', until: '12:00', free: 2 }]);
+      expect(hoursOf(a.holderReference)!.find((h) => h.at === '10:00')).toEqual({ at: '10:00', until: '11:00', free: 2 });
       appoint(b.holderReference, day, a.at, '10:00');
       // Full: said as full, and refused.
-      expect(hoursOf(c.holderReference)!.find((h) => h.at === '10:00')).toEqual({ at: '10:00', free: 0 });
+      expect(hoursOf(c.holderReference)!.find((h) => h.at === '10:00')).toEqual({ at: '10:00', until: '11:00', free: 0 });
       expect(failure(() => appoint(c.holderReference, day, a.at, '10:00'))).toMatch(/^CONFLICT: 10:00 on \d+ \w+ \d{4} is full\. Choose another hour\.$/);
       expect(disputes.status(c.holderReference, a.at).state).toBe('decided');
       expect(appoint(c.holderReference, day, a.at, '11:00').ticket).toMatchObject({ at: '11:00', until: '12:00' });
       // An appointment at ANOTHER country's office takes no place at this one.
       const elsewhere = stored().find((x) => x.disputeId === b.disputeId)!;
       elsewhere.country = 'TZ';
-      expect(hoursOf(c.holderReference)!.find((h) => h.at === '10:00')).toEqual({ at: '10:00', free: 1 });
+      expect(hoursOf(c.holderReference)!.find((h) => h.at === '10:00')).toEqual({ at: '10:00', until: '11:00', free: 1 });
       elsewhere.country = 'KE';
-      expect(hoursOf(c.holderReference)!.find((h) => h.at === '10:00')).toEqual({ at: '10:00', free: 0 });
+      expect(hoursOf(c.holderReference)!.find((h) => h.at === '10:00')).toEqual({ at: '10:00', until: '11:00', free: 0 });
       // Somebody moves away, and the place is free again.
       appoint(b.holderReference, day, a.at, '09:00');
-      expect(hoursOf(c.holderReference)!.find((h) => h.at === '10:00')).toEqual({ at: '10:00', free: 1 });
+      expect(hoursOf(c.holderReference)!.find((h) => h.at === '10:00')).toEqual({ at: '10:00', until: '11:00', free: 1 });
       // The notice says the hour.
       expect(notifications.inboxFor(stored().find((x) => x.disputeId === a.disputeId)!.holder.personDid).some((n) => / at 10:00 at /.test(n.body))).toBe(true);
     });
@@ -861,9 +861,9 @@ describe('two people say one national ID is theirs', () => {
       expect(offered).not.toContain(day);
 
       for (const bad of [1.5, -1, 201]) expect(failure(() => contacts.set(ke.entityId, { visitorsPerHour: bad }, 'Grace'))).toMatch(/^VALIDATION_FAILED: Visitors an hour is a whole number/);
-      // Hours that no longer hold a whole hour cannot carry a number an hour — and are refused, not half-saved.
-      expect(failure(() => contacts.set(ke.entityId, { visitTo: '09:30' }, 'Grace'))).toMatch(/^VALIDATION_FAILED: Say from when until when you receive visitors/);
-      expect(contacts.of(ke.entityId)).toMatchObject({ visitTo: '10:00', visitorsPerHour: 1 });
+      // Hours taken away cannot leave a number an hour with nothing to count in — refused, not half-saved.
+      expect(failure(() => contacts.set(ke.entityId, { visitFrom: '' }, 'Grace'))).toMatch(/^VALIDATION_FAILED: Say from when until when you receive visitors/);
+      expect(contacts.of(ke.entityId)).toMatchObject({ visitFrom: '09:00', visitTo: '10:00', visitorsPerHour: 1 });
       // Taken off again — by zero — no hour is asked for and none fills: the day is offered to everybody.
       expect(contacts.set(ke.entityId, { visitorsPerHour: 0 }, 'Grace').visitorsPerHour).toBeUndefined();
       expect(disputes.status(b.holderReference, a.at).choices!.find((x) => x.date === day)).toEqual({ date: day });
@@ -871,9 +871,82 @@ describe('two people say one national ID is theirs', () => {
       // And a number brought in after somebody chose only a day: their ticket says to choose again.
       contacts.set(ke.entityId, { visitorsPerHour: 3 }, 'Grace');
       expect(disputes.status(b.holderReference, a.at).ticket).toMatchObject({ offDay: true });
-      expect(hourAfter('09:00')).toBe('10:00');
-      expect(visitingHours({ visitFrom: '08:30', visitTo: '11:00' })).toEqual(['08:30', '09:30']);
+      // The last part of an hour is an hour of its own now, ending at closing time.
+      expect(visitingHours({ visitFrom: '08:30', visitTo: '11:00' })).toEqual(['08:30', '09:30', '10:30']);
+      expect(slotEnd({ visitFrom: '08:30', visitTo: '11:00' }, day, '10:30')).toBe('11:00');
+      expect(slotEnd({ visitFrom: '08:30', visitTo: '11:00' }, day, '09:30')).toBe('10:30');
       expect(visitingHours({ visitFrom: '09:00' })).toEqual([]);
+    });
+
+    it('a day of the week may keep hours of its own — a Saturday morning only — and the rest keep the usual ones', () => {
+      const ke = entities.forJurisdiction('KE')!;
+      contacts.set(ke.entityId, { visitDays: EVERY_DAY, visitFrom: '09:00', visitTo: '16:00', visitHoursByDay: { sat: { from: '09:00', to: '12:00' } }, visitorsPerHour: 2 }, 'Grace');
+      const a = wonByClaimant(aDriver());
+      const next = (wanted: string) => [...Array(8).keys()].map((i) => dayStr(a.at + (i + 1) * DAY)).find((d) => weekdayOf(d) === wanted)!;
+      const [saturday, monday] = [next('sat'), next('mon')];
+      const hoursOn = (date: string) => disputes.status(a.holderReference, a.at).choices!.find((x) => x.date === date)!.hours!.map((h) => h.at);
+      expect(hoursOn(saturday)).toEqual(['09:00', '10:00', '11:00']);
+      expect(hoursOn(monday)).toHaveLength(7);
+      // An afternoon hour is a Monday's, not a Saturday's.
+      expect(failure(() => appoint(a.holderReference, saturday, a.at, '13:00'))).toMatch(/^INVALID_INPUT: Choose the hour you will come: 09:00, 10:00, 11:00\.$/);
+      expect(appoint(a.holderReference, monday, a.at, '13:00').ticket).toMatchObject({ at: '13:00', until: '14:00' });
+      // The person is told which hours are which, on their ticket.
+      expect(disputes.status(a.holderReference, a.at).ticket!.place).toMatchObject({ visitFrom: '09:00', visitTo: '16:00', visitHoursByDay: { sat: { from: '09:00', to: '12:00' } } });
+    });
+
+    it('a date may be shorter rather than closed — the half-day before a holiday — or opened specially on a day it does not usually receive', () => {
+      const ke = entities.forJurisdiction('KE')!;
+      const a = wonByClaimant(aDriver());
+      const next = (wanted: string) => [...Array(8).keys()].map((i) => dayStr(a.at + (i + 1) * DAY)).find((d) => weekdayOf(d) === wanted)!;
+      const [tuesday, sunday] = [next('tue'), next('sun')];
+      contacts.set(
+        ke.entityId,
+        {
+          visitDays: ['mon', 'tue', 'wed', 'thu', 'fri'],
+          visitFrom: '09:00',
+          visitTo: '16:00',
+          visitorsPerHour: 4,
+          closedDates: [{ date: tuesday, note: 'Half day', from: '09:00', to: '10:30' }, { date: sunday, note: 'Open day', from: '10:00', to: '12:00' }],
+        },
+        'Grace',
+        a.at,
+      );
+      const day = (date: string) => disputes.status(a.holderReference, a.at).choices!.find((x) => x.date === date);
+      // Shorter: two hours to choose from, and the last is half of one — with half its places.
+      expect(day(tuesday)!.hours).toEqual([{ at: '09:00', until: '10:00', free: 4 }, { at: '10:00', until: '10:30', free: 2 }]);
+      expect(placesIn(contacts.of(ke.entityId)!, tuesday, '10:00')).toBe(2);
+      expect(failure(() => appoint(a.holderReference, tuesday, a.at, '11:00'))).toMatch(/^INVALID_INPUT: Choose the hour you will come: 09:00, 10:00\.$/);
+      // Opened specially on a Sunday, which is otherwise not offered.
+      expect(day(sunday)!.hours!.map((h) => h.at)).toEqual(['10:00', '11:00']);
+      expect(day(next('sat'))).toBeUndefined();
+      const ticket = appoint(a.holderReference, tuesday, a.at, '10:00').ticket!;
+      expect(ticket).toMatchObject({ date: tuesday, at: '10:00', until: '10:30' });
+      expect(ticket.offDay).toBeUndefined();
+      expect(visitWindowOn(contacts.of(ke.entityId), tuesday)).toEqual({ from: '09:00', to: '10:30' });
+    });
+
+    it('a day’s own hours and a shorter date are said properly or refused, and a day given nothing keeps the usual hours', () => {
+      const ke = entities.forJurisdiction('KE')!;
+      const at = Date.parse('2026-10-08T10:00:00.000Z');
+      contacts.set(ke.entityId, { visitDays: EVERY_DAY, visitFrom: '09:00', visitTo: '16:00' }, 'Grace', at);
+      expect(failure(() => contacts.set(ke.entityId, { visitHoursByDay: { someday: { from: '09:00', to: '12:00' } } }, 'Grace', at))).toMatch(/^VALIDATION_FAILED: A day with hours of its own is a day of the week/);
+      expect(failure(() => contacts.set(ke.entityId, { visitHoursByDay: { sat: { from: '12:00', to: '09:00' } } }, 'Grace', at))).toMatch(/^VALIDATION_FAILED: Saturday: visiting hours end after they begin/);
+      expect(failure(() => contacts.set(ke.entityId, { visitHoursByDay: { sat: { from: '9am', to: '12:00' } } }, 'Grace', at))).toMatch(/^VALIDATION_FAILED: Saturday: visiting hours are a time of day/);
+      expect(failure(() => contacts.set(ke.entityId, { closedDates: [{ date: '2026-12-24', from: '09:00' }] }, 'Grace', at))).toMatch(/^VALIDATION_FAILED: 2026-12-24: visiting hours are a time of day/);
+      // Kept in week order; a day given null drops back to the usual hours; an empty object clears them all.
+      const set = contacts.set(ke.entityId, { visitHoursByDay: { sat: { from: '09:00', to: '12:00' }, mon: { from: '10:00', to: '15:00' } } }, 'Grace', at);
+      expect(Object.keys(set.visitHoursByDay!)).toEqual(['mon', 'sat']);
+      expect(contacts.set(ke.entityId, { visitHoursByDay: { mon: null, sat: { from: '09:00', to: '12:00' } } }, 'Grace', at).visitHoursByDay).toEqual({ sat: { from: '09:00', to: '12:00' } });
+      expect(contacts.set(ke.entityId, { phone: '+254 20 000 111' }, 'Grace', at).visitHoursByDay).toEqual({ sat: { from: '09:00', to: '12:00' } });
+      expect(contacts.set(ke.entityId, { visitHoursByDay: {} }, 'Grace', at).visitHoursByDay).toBeUndefined();
+      // A shorter date keeps its hours; a closed one has none.
+      expect(contacts.set(ke.entityId, { closedDates: [{ date: '2026-12-24', note: 'Half day', from: '09:00', to: '12:00' }, { date: '2026-12-25' }] }, 'Grace', at).closedDates).toEqual([
+        { date: '2026-12-24', note: 'Half day', from: '09:00', to: '12:00' },
+        { date: '2026-12-25' },
+      ]);
+      // Hours of a day's own are enough to count visitors in, with none kept on most days.
+      contacts.set(ke.entityId, { visitFrom: '', visitTo: '', visitDays: ['sat'], visitHoursByDay: { sat: { from: '09:00', to: '12:00' } } }, 'Grace', at);
+      expect(contacts.set(ke.entityId, { visitorsPerHour: 2 }, 'Grace', at).visitorsPerHour).toBe(2);
     });
 
     it('the days to choose from are told only to somebody who may choose — and nothing is told where the company set no days', () => {

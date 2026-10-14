@@ -24,6 +24,7 @@ import { EntityService } from '../../foundation/entity/entity.service';
 export const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 export type Weekday = (typeof WEEKDAYS)[number];
 const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
+const DAY_WORD: Record<Weekday, string> = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
 
 /** The weekday a calendar date falls on. A date is the same date wherever it is read, so no time zone enters into it. */
 export function weekdayOf(date: string): Weekday | undefined {
@@ -31,10 +32,33 @@ export function weekdayOf(date: string): Weekday | undefined {
   return Number.isNaN(at) ? undefined : WEEKDAYS[(new Date(at).getUTCDay() + 6) % 7];
 }
 
-/** A day the company is closed: a public holiday, a one-off closure — and what the day is, in its own words. */
+/**
+ * A day the company is closed: a public holiday, a one-off closure — and what the day is, in its own words.
+ *
+ * WITH HOURS IT IS NOT CLOSED BUT SHORTER: that date it receives visitors from `from` until `to` and no other time —
+ * the half-day before a holiday. And on a day of the week it does not usually receive on, a date with hours is a day
+ * it opens specially.
+ */
 export interface ClosedDate {
   date: string;
   note?: string;
+  from?: string;
+  to?: string;
+}
+
+/** From when until when, `HH:MM`, on the clock of wherever the company is. */
+export interface VisitWindow {
+  from: string;
+  to: string;
+}
+
+/** What the hours of a visit are worked out from — a company's own entry, or the place a ticket names. */
+export interface VisitCard {
+  visitDays?: readonly string[];
+  visitFrom?: string;
+  visitTo?: string;
+  visitHoursByDay?: Partial<Record<Weekday, VisitWindow>>;
+  closedDates?: readonly ClosedDate[];
 }
 export const MAX_CLOSED_DATES = 120;
 export const MAX_VISITORS_PER_HOUR = 200;
@@ -43,21 +67,51 @@ const minutesOf = (clock: string | undefined): number | undefined => (clock && C
 const clockOf = (minutes: number): string => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 
 /**
- * THE HOURS A COMPANY RECEIVES VISITORS IN, as the time each starts: from when it opens to visitors, an hour each,
- * for as long as a whole hour still fits before it closes to them. "09:00 to 16:00" is seven: 09:00 … 15:00.
+ * WHEN IT RECEIVES VISITORS ON ONE DATE — or not at all. A date it is closed is closed; a date it gave shorter hours
+ * keeps them; a day of the week it does not receive on is not one; a day of the week with hours of its own keeps
+ * those; any other day keeps the hours it keeps on most days. Where it named no visiting days, every day is one.
  */
-export function visitingHours(card: { visitFrom?: string; visitTo?: string } | undefined): string[] {
-  const from = minutesOf(card?.visitFrom);
-  const to = minutesOf(card?.visitTo);
+export function visitWindowOn(card: VisitCard | undefined, date: string): VisitWindow | undefined {
+  const dated = card?.closedDates?.find((c) => c.date === date);
+  if (dated) return dated.from && dated.to ? { from: dated.from, to: dated.to } : undefined;
+  const day = weekdayOf(date);
+  if (!day || (card?.visitDays?.length && !card.visitDays.includes(day))) return undefined;
+  const own = card?.visitHoursByDay?.[day];
+  if (own) return { from: own.from, to: own.to };
+  return card?.visitFrom && card.visitTo ? { from: card.visitFrom, to: card.visitTo } : undefined;
+}
+
+/**
+ * THE HOURS A COMPANY RECEIVES VISITORS IN, as the time each starts: from when it opens to visitors, an hour each —
+ * and the last part of an hour as well, which used to be dropped: "09:00 to 16:30" is eight, 09:00 … 15:00 and then
+ * 16:00 until 16:30. Of one date when one is given (`visitWindowOn`); without, the hours it keeps on most days.
+ */
+export function visitingHours(card: VisitCard | undefined, date?: string): string[] {
+  const window = date ? visitWindowOn(card, date) : card?.visitFrom && card.visitTo ? { from: card.visitFrom, to: card.visitTo } : undefined;
+  const from = minutesOf(window?.from);
+  const to = minutesOf(window?.to);
   if (from === undefined || to === undefined) return [];
   const out: string[] = [];
-  for (let m = from; m + 60 <= to; m += 60) out.push(clockOf(m));
+  for (let m = from; m < to; m += 60) out.push(clockOf(m));
   return out;
 }
 
-/** An hour later — when the hour that starts at `at` ends. */
-export function hourAfter(at: string): string {
-  return clockOf(((minutesOf(at) ?? 0) + 60) % (24 * 60));
+/** When the hour that starts at `at` on `date` ends: an hour later, or at closing time where the day ends sooner. */
+export function slotEnd(card: VisitCard | undefined, date: string, at: string): string {
+  const end = (minutesOf(at) ?? 0) + 60;
+  const close = minutesOf(visitWindowOn(card, date)?.to);
+  return clockOf((close !== undefined && close < end ? close : end) % (24 * 60));
+}
+
+/**
+ * HOW MANY IT SEES IN ONE HOUR OF ONE DATE: its number an hour — and for the last part of an hour, its share of it,
+ * because a desk that sees ten an hour sees five in half of one. Never none: a part of an hour it offers is one it
+ * can see somebody in.
+ */
+export function placesIn(card: VisitCard & { visitorsPerHour?: number }, date: string, at: string): number {
+  const perHour = card.visitorsPerHour ?? 0;
+  const minutes = (minutesOf(slotEnd(card, date, at)) ?? 0) - (minutesOf(at) ?? 0);
+  return minutes >= 60 ? perHour : Math.max(1, Math.floor((perHour * minutes) / 60));
 }
 
 export interface ContactCard {
@@ -82,6 +136,11 @@ export interface ContactCard {
   /** `HH:MM`, on the clock of wherever the company is. */
   visitFrom?: string;
   visitTo?: string;
+  /**
+   * A DAY OF THE WEEK WITH HOURS OF ITS OWN — "a Saturday morning only". Where a visiting day has none here, it keeps
+   * the hours above. Its own to set, in the same place as the rest.
+   */
+  visitHoursByDay?: Partial<Record<Weekday, VisitWindow>>;
   /**
    * THE DATES IT IS CLOSED — public holidays, one-off closures. The user, 2026-10-08: "the country should set it's
    * own public holidays and/or one off closure." No appointment is offered or taken on one.
@@ -121,7 +180,8 @@ export class ContactCardService {
       const card = this.cards.get(entity.entityId);
       return [
         { key: 'visitors_address', met: Boolean(card?.address), label: 'Where people are sent when they have to come in person: its address, written by the company in its own Settings' },
-        { key: 'visiting_days', met: Boolean(card?.visitDays?.length && card.visitFrom && card.visitTo), label: 'The days and hours it receives visitors, set by the company in its own Settings' },
+        // Every day it receives on has hours to receive in: the ones it keeps on most days, or the day's own.
+        { key: 'visiting_days', met: Boolean(card?.visitDays?.length && card.visitDays.every((d) => card.visitHoursByDay?.[d] || (card.visitFrom && card.visitTo))), label: 'The days and hours it receives visitors, set by the company in its own Settings' },
       ];
     });
   }
@@ -135,7 +195,7 @@ export class ContactCardService {
    */
   set(
     entityId: string,
-    patch: { contactName?: string; phone?: string; phoneAlt?: string; email?: string; website?: string; address?: string; hours?: string; visitDays?: string[]; visitFrom?: string; visitTo?: string; closedDates?: ClosedDate[]; visitorsPerHour?: number | null },
+    patch: { contactName?: string; phone?: string; phoneAlt?: string; email?: string; website?: string; address?: string; hours?: string; visitDays?: string[]; visitFrom?: string; visitTo?: string; visitHoursByDay?: Record<string, { from?: string; to?: string } | null>; closedDates?: ClosedDate[]; visitorsPerHour?: number | null },
     by: string,
     now = Date.now(),
   ): ContactCard {
@@ -196,6 +256,32 @@ export class ContactCardService {
     clock('visitTo', patch.visitTo);
     if (card.visitFrom && card.visitTo && card.visitFrom >= card.visitTo) throw new GlosError('VALIDATION_FAILED', 'Visiting hours end after they begin');
 
+    /** Both ends of a window, as times of day, the end after the start — or a refusal that says which is wrong. */
+    const windowOf = (raw: { from?: string; to?: string } | undefined, what: string): VisitWindow => {
+      const from = String(raw?.from ?? '').trim();
+      const to = String(raw?.to ?? '').trim();
+      if (!CLOCK.test(from) || !CLOCK.test(to)) throw new GlosError('VALIDATION_FAILED', `${what}: visiting hours are a time of day, such as 09:00, from and until`);
+      if (from >= to) throw new GlosError('VALIDATION_FAILED', `${what}: visiting hours end after they begin`);
+      return { from, to };
+    };
+
+    // A day's own hours: absent is unchanged; the object REPLACES the days' own hours (an empty one clears them), and
+    // a day given null keeps the hours of most days.
+    if (patch.visitHoursByDay !== undefined) {
+      if (!patch.visitHoursByDay || typeof patch.visitHoursByDay !== 'object' || Array.isArray(patch.visitHoursByDay)) {
+        throw new GlosError('VALIDATION_FAILED', 'A day’s own hours are given by the day of the week');
+      }
+      const own: Partial<Record<Weekday, VisitWindow>> = {};
+      for (const [day, raw] of Object.entries(patch.visitHoursByDay)) {
+        if (!(WEEKDAYS as readonly string[]).includes(day)) throw new GlosError('VALIDATION_FAILED', 'A day with hours of its own is a day of the week');
+        if (raw === null) continue;
+        own[day as Weekday] = windowOf(raw, DAY_WORD[day as Weekday]);
+      }
+      const ordered = WEEKDAYS.filter((d) => own[d]).map((d) => [d, own[d]] as const);
+      if (ordered.length) card.visitHoursByDay = Object.fromEntries(ordered) as Partial<Record<Weekday, VisitWindow>>;
+      else delete card.visitHoursByDay;
+    }
+
     // Closed dates: absent is unchanged; a list REPLACES the list (an empty one clears it). Sorted, one of each,
     // and what is already behind us is let go — a closure last spring is nobody's appointment.
     if (patch.closedDates !== undefined) {
@@ -208,7 +294,9 @@ export class ContactCardService {
           throw new GlosError('VALIDATION_FAILED', 'A closed date is a date, such as 2026-12-25');
         }
         const note = String(raw?.note ?? '').trim().slice(0, 60);
-        if (date >= since) byDate.set(date, { date, ...(note ? { note } : {}) });
+        // Hours make it a SHORTER day rather than a closed one: both of them, or neither.
+        const shorter = raw?.from || raw?.to ? windowOf(raw, date) : undefined;
+        if (date >= since) byDate.set(date, { date, ...(note ? { note } : {}), ...(shorter ?? {}) });
       }
       if (byDate.size > MAX_CLOSED_DATES) throw new GlosError('VALIDATION_FAILED', `That is more closed dates than can be kept (${MAX_CLOSED_DATES})`);
       const dates = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
@@ -223,9 +311,9 @@ export class ContactCardService {
       else if (!Number.isInteger(n) || n < 0 || n > MAX_VISITORS_PER_HOUR) throw new GlosError('VALIDATION_FAILED', `Visitors an hour is a whole number, up to ${MAX_VISITORS_PER_HOUR}`);
       else card.visitorsPerHour = n;
     }
-    // A number of visitors AN HOUR needs hours to count in: at least one whole one.
-    if (card.visitorsPerHour && !visitingHours(card).length) {
-      throw new GlosError('VALIDATION_FAILED', 'Say from when until when you receive visitors — at least an hour — before saying how many an hour');
+    // A number of visitors AN HOUR needs hours to count in: on most days, or on a day of its own.
+    if (card.visitorsPerHour && !visitingHours(card).length && !Object.keys(card.visitHoursByDay ?? {}).length) {
+      throw new GlosError('VALIDATION_FAILED', 'Say from when until when you receive visitors before saying how many an hour');
     }
 
     this.cards.set(company.entityId, card);

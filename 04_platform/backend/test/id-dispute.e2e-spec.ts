@@ -199,8 +199,8 @@ describe('two people say one national ID is theirs, over the wire', () => {
     // "The limitation is set by the country as an actual number of visitors per hour." Then the appointment is for an hour.
     await http().post(`/v1/sbg/entities/${ke.entityId}/contact`).set(bearer(setupKey)).send({ visitorsPerHour: 2.5, by: 'Grace' }).expect(400);
     await http().post(`/v1/sbg/entities/${ke.entityId}/contact`).set(bearer(setupKey)).send({ visitorsPerHour: 1, by: 'Grace' }).expect(201);
-    const offered = ((await status(opened.body.reference)).choices as Array<{ date: string; hours?: Array<{ at: string; free: number }> }>).find((c) => c.date === tomorrow)!;
-    expect(offered.hours![0]).toEqual({ at: '09:00', free: 1 });
+    const offered = ((await status(opened.body.reference)).choices as Array<{ date: string; hours?: Array<{ at: string; until?: string; free: number }> }>).find((c) => c.date === tomorrow)!;
+    expect(offered.hours![0]).toEqual({ at: '09:00', until: '10:00', free: 1 });
     expect(offered.hours).toHaveLength(7);
     const noHour = await http().post('/v1/sbg/identity/id-disputes/appointment').send({ reference: opened.body.reference, date: tomorrow }).expect(400);
     expect(noHour.body.detail).toMatch(/^Choose the hour you will come: 09:00, 10:00/);

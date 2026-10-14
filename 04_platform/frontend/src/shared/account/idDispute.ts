@@ -1,4 +1,5 @@
 import type { Result } from '../../lib/sbg';
+import { visitSpans } from '../visitHours';
 
 /*
  * TWO PEOPLE SAY ONE NATIONAL ID IS THEIRS — what each of them is told, at each point.
@@ -32,16 +33,19 @@ export interface DisputePlace {
   visitDays?: string[];
   visitFrom?: string;
   visitTo?: string;
+  /** A day of the week with hours of its own — a Saturday morning only. */
+  visitHoursByDay?: Record<string, { from: string; to: string }>;
   /** How many visitors it sees in an hour, where it has said — then an appointment is for an hour. */
   visitorsPerHour?: number;
-  /** The dates it is closed: public holidays, one-off closures. */
-  closedDates?: Array<{ date: string; note?: string }>;
+  /** The dates it is closed: public holidays, one-off closures — or, with hours, open shorter that day. */
+  closedDates?: Array<{ date: string; note?: string; from?: string; to?: string }>;
 }
 
-/** A day an appointment can be made for — with its hours and the places left in each, where the office counts by the hour. */
+/** A day an appointment can be made for — with its hours and the places left in each, where the office counts by the hour.
+ *  An hour ends at `until`: an hour later, or at closing time for the last part of one. */
 export interface DisputeDay {
   date: string;
-  hours?: Array<{ at: string; free: number }>;
+  hours?: Array<{ at: string; until?: string; free: number }>;
 }
 
 export interface DisputeTicket {
@@ -209,7 +213,6 @@ export function idActions(status: DisputeStatus): { photos: boolean; withdraw: b
   };
 }
 
-const WEEK = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 /**
  * THE DAYS THERE ARE TO CHOOSE FROM — the server's own list, never worked out here. The user, 2026-10-08: "it's up
  * to the countries to set visiting days and visiting hours"; "the country should set it's own public holidays
@@ -226,7 +229,7 @@ export function dayChoices(status: Pick<DisputeStatus, 'choices' | 'ticket'>): D
 }
 
 /** The hours of the day that was chosen, where the office counts by the hour. Null: a day is all there is to choose. */
-export function hoursOn(status: Pick<DisputeStatus, 'choices'>, date: string): Array<{ at: string; free: number }> | null {
+export function hoursOn(status: Pick<DisputeStatus, 'choices'>, date: string): NonNullable<DisputeDay['hours']> | null {
   return status.choices?.find((c) => c.date === date)?.hours ?? null;
 }
 
@@ -242,14 +245,14 @@ export function dayLabel(date: string): string {
   return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
-/** When the company receives visitors, in a line: its days in the week's order, then its hours. Null where it has set no days. */
+/** When the company receives visitors, in a line: its days in the week's order, each group with the hours it keeps —
+ *  "Monday, … Friday · 09:00 to 16:00; Saturday · 09:00 to 12:00". Null where it has set no days. */
 export function visitingWords(place: DisputePlace | undefined, t: T): string | null {
   const say = t as Say;
-  const days = place?.visitDays;
-  if (!days?.length) return null;
-  const names = WEEK.filter((d) => days.includes(d)).map((d) => say(`account.id.day.${d}`));
-  const hours = place?.visitFrom && place?.visitTo ? say('account.id.visitHours', { from: place.visitFrom, to: place.visitTo }) : '';
-  return [names.join(', '), hours].filter(Boolean).join(' · ');
+  if (!place?.visitDays?.length) return null;
+  return visitSpans(place)
+    .map((s) => [s.days.map((d) => say(`account.id.day.${d}`)).join(', '), s.from && s.to ? say('account.id.visitHours', { from: s.from, to: s.to }) : ''].filter(Boolean).join(' · '))
+    .join('; ');
 }
 
 /** The ticket, as lines to read at a glance and say at a desk: when, where, who to ask for. */

@@ -23,8 +23,11 @@ export class ContactCardView {
   @ApiPropertyOptional({ type: [String] }) visitDays?: string[];
   @ApiPropertyOptional() visitFrom?: string;
   @ApiPropertyOptional() visitTo?: string;
-  /** The dates it is closed — `{ date: 'YYYY-MM-DD', note? }` — and how many visitors it sees in an hour. Theirs to set. */
-  @ApiPropertyOptional({ type: [Object] }) closedDates?: Array<{ date: string; note?: string }>;
+  /** A day of the week with hours of its own — `{ sat: { from: '09:00', to: '12:00' } }`. Theirs to set. */
+  @ApiPropertyOptional({ type: Object }) visitHoursByDay?: Partial<Record<string, { from: string; to: string }>>;
+  /** The dates it is closed — `{ date: 'YYYY-MM-DD', note?, from?, to? }`, shorter rather than closed where it has
+   *  hours — and how many visitors it sees in an hour. Theirs to set. */
+  @ApiPropertyOptional({ type: [Object] }) closedDates?: Array<{ date: string; note?: string; from?: string; to?: string }>;
   @ApiPropertyOptional() visitorsPerHour?: number;
   @ApiProperty() saidAt: string;
   @ApiProperty() saidBy: string;

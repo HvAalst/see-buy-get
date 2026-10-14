@@ -132,6 +132,13 @@ describe('ID disputes, as the console says them', () => {
     const counted = placeWords(row({ place: { company: 'SeeBuyGet Kenya', address: 'Gate 4', visitDays: ['mon'], visitFrom: '09:00', visitTo: '12:00', visitorsPerHour: 3, closedDates: [{ date: '2026-10-20', note: 'Mashujaa Day' }, { date: '2026-12-25' }] } }), t);
     expect(counted.visiting).toBe('Visitors: Monday · 09:00 to 12:00 · 3 visitor(s) an hour');
     expect(counted.closed).toBe('Closed: 2026-10-20 (Mashujaa Day), 2026-12-25');
+    // A day with hours of its own, and a date open shorter rather than closed — both said as they are.
+    const shaped = placeWords(
+      row({ place: { company: 'x', address: 'y', visitDays: ['mon', 'sat'], visitFrom: '09:00', visitTo: '16:00', visitHoursByDay: { sat: { from: '09:00', to: '12:00' } }, closedDates: [{ date: '2026-12-24', note: 'Half day', from: '09:00', to: '12:00' }] } }),
+      t,
+    );
+    expect(shaped.visiting).toBe('Visitors: Monday · 09:00 to 16:00; Saturday · 09:00 to 12:00');
+    expect(shaped.closed).toBe('Closed: 2026-12-24 09:00 to 12:00 (Half day)');
     // A long list is cut, and says how many more there are.
     const many = Array.from({ length: 9 }, (_, i) => ({ date: `2026-11-0${i + 1}` }));
     expect(placeWords(row({ place: { company: 'x', address: 'y', visitDays: ['mon'], closedDates: many } }), t).closed).toMatch(/2026-11-06 \+3$/);
