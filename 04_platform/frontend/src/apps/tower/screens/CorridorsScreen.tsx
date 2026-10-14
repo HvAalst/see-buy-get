@@ -1,4 +1,5 @@
 import { Icon } from '../../../shared/ui';
+import { ConsolePick } from '../ConsolePick';
 import { useT } from '../../../shared/i18n';
 import { corridorBlocker, corridorViews, zoneOptions } from '../corridors';
 import type { TowerActions, TowerState } from '../useTowerApp';
@@ -144,26 +145,22 @@ export function CorridorsScreen({ state, actions }: { state: TowerState; actions
         </div>
 
         <div class="twr-corridorform">
-          <label class="cfield">
-            <span class="cfield__label">{t('tower.corridors.f.origin')}</span>
-            <input
-              class="cinput"
-              list="twr-zones"
-              value={form.originZone}
-              onInput={(e) => actions.setCorridorForm({ originZone: e.currentTarget.value })}
-            />
-          </label>
-          <label class="cfield">
-            <span class="cfield__label">{t('tower.corridors.f.dest')}</span>
-            <input class="cinput" list="twr-zones" value={form.destZone} onInput={(e) => actions.setCorridorForm({ destZone: e.currentTarget.value })} />
-          </label>
           {/* Suggestions, never a closed list: the first corridor into a new zone is drawn before any
-              shop is there, and this is the screen that plans that. */}
-          <datalist id="twr-zones">
-            {zones.map((z) => (
-              <option key={z} value={z} />
-            ))}
-          </datalist>
+              shop is there, and this is the screen that plans that — so a zone not on the list is typed and taken. */}
+          <ConsolePick
+            label={t('tower.corridors.f.origin')}
+            value={form.originZone}
+            onChange={(v) => actions.setCorridorForm({ originZone: v })}
+            options={zones.map((z) => ({ value: z, label: z }))}
+            allowFree={(q) => q || null}
+          />
+          <ConsolePick
+            label={t('tower.corridors.f.dest')}
+            value={form.destZone}
+            onChange={(v) => actions.setCorridorForm({ destZone: v })}
+            options={zones.map((z) => ({ value: z, label: z }))}
+            allowFree={(q) => q || null}
+          />
           <label class="cfield">
             <span class="cfield__label">{t('tower.corridors.f.name')}</span>
             <input
@@ -173,17 +170,15 @@ export function CorridorsScreen({ state, actions }: { state: TowerState; actions
               onInput={(e) => actions.setCorridorForm({ name: e.currentTarget.value })}
             />
           </label>
-          <label class="cfield">
-            <span class="cfield__label">{t('tower.corridors.f.vehicle')}</span>
-            <select
-              class="cinput"
-              value={form.vehicleType}
-              onChange={(e) => actions.setCorridorForm({ vehicleType: e.currentTarget.value === 'truck' ? 'truck' : 'bus' })}
-            >
-              <option value="bus">{t('tower.corridors.bus')}</option>
-              <option value="truck">{t('tower.corridors.truck')}</option>
-            </select>
-          </label>
+          <ConsolePick
+            label={t('tower.corridors.f.vehicle')}
+            value={form.vehicleType}
+            onChange={(v) => actions.setCorridorForm({ vehicleType: v === 'truck' ? 'truck' : 'bus' })}
+            options={[
+              { value: 'bus', label: t('tower.corridors.bus') },
+              { value: 'truck', label: t('tower.corridors.truck') },
+            ]}
+          />
           <label class="cfield">
             <span class="cfield__label">{t('tower.corridors.f.schedule')}</span>
             <input

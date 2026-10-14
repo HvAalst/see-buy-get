@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
+import { ConsolePick } from '../ConsolePick';
 import { useT } from '../../../shared/i18n';
 import {
   DOCUMENT_KINDS,
@@ -117,17 +118,13 @@ export function CompanyRecordScreen({ state, actions }: { state: TowerState; act
 
       <section class="cons__panel">
         <div class="twr-corridorform">
-          <label class="cfield">
-            <span class="cfield__label">{t('tower.company.choose')}</span>
-            <select class="cinput" value={entityId ?? ''} onChange={(e) => actions.openCompany(e.currentTarget.value)}>
-              <option value="">{t('tower.company.f.choose')}</option>
-              {companies.map((c) => (
-                <option key={c.entityId} value={c.entityId}>
-                  {c.name} ({c.jurisdiction})
-                </option>
-              ))}
-            </select>
-          </label>
+          <ConsolePick
+            label={t('tower.company.choose')}
+            value={entityId ?? ''}
+            onChange={(v) => actions.openCompany(v)}
+            placeholder={t('tower.company.f.choose')}
+            options={companies.map((c) => ({ value: c.entityId, label: c.name, tag: c.jurisdiction }))}
+          />
         </div>
       </section>
 
@@ -281,17 +278,13 @@ function LegalSection({ view, busy, onSave }: { view: CompanyRecordView; busy: b
       <div class="twr-corridorform">
         <Text label={t('tower.company.f.legalName')} value={form.legalName} onInput={(v) => set({ legalName: v })} />
         <Text label={t('tower.company.f.tradingName')} value={form.tradingName} onInput={(v) => set({ tradingName: v })} />
-        <label class="cfield">
-          <span class="cfield__label">{t('tower.company.f.legalForm')}</span>
-          <select class="cinput" value={form.legalForm} onChange={(e) => set({ legalForm: e.currentTarget.value })}>
-            <option value="">{t('tower.company.f.choose')}</option>
-            {LEGAL_FORMS.map((f) => (
-              <option key={f} value={f}>
-                {t(LEGAL_FORM_LABEL[f])}
-              </option>
-            ))}
-          </select>
-        </label>
+        <ConsolePick
+          label={t('tower.company.f.legalForm')}
+          value={form.legalForm}
+          onChange={(v) => set({ legalForm: v })}
+          placeholder={t('tower.company.f.choose')}
+          options={LEGAL_FORMS.map((f) => ({ value: f, label: t(LEGAL_FORM_LABEL[f]) }))}
+        />
         <Text label={t('tower.company.f.registrationNumber')} value={form.registrationNumber} onInput={(v) => set({ registrationNumber: v })} />
         <Text label={t('tower.company.f.registrationDate')} value={form.registrationDate} type="date" onInput={(v) => set({ registrationDate: v })} />
       </div>
@@ -370,16 +363,13 @@ function ListEditor({ section, view, busy, onSave }: { section: ListSection; vie
         <div key={i} class="twr-corridorform" style="border-bottom:1px solid var(--line, #eee);padding-bottom:8px">
           {fields.map((f) =>
             f.type === 'select' ? (
-              <label key={f.key} class="cfield">
-                <span class="cfield__label">{t(f.labelKey)}</span>
-                <select class="cinput" value={row[f.key] as string} onChange={(e) => update(i, f.key, e.currentTarget.value)}>
-                  {(f.options ?? []).map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {t(o.labelKey)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <ConsolePick
+                key={f.key}
+                label={t(f.labelKey)}
+                value={row[f.key] as string}
+                onChange={(v) => update(i, f.key, v)}
+                options={(f.options ?? []).map((o) => ({ value: o.value, label: t(o.labelKey) }))}
+              />
             ) : f.type === 'caps' ? (
               <fieldset key={f.key} class="cfield">
                 <legend class="cfield__label">{t(f.labelKey)}</legend>
@@ -533,31 +523,24 @@ function PaperBoundEditor({ section, view, busy, onDeclare }: { section: PaperBo
           <div class="twr-corridorform">
             {declareFields(section, Boolean(form.was)).map((f) =>
               f.type === 'select' ? (
-                <label key={f.key} class="cfield">
-                  <span class="cfield__label">{t(f.labelKey)}</span>
-                  <select class="cinput" value={form.row[f.key] as string} onChange={(e) => set(f.key, e.currentTarget.value)}>
-                    {(f.options ?? []).map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {t(o.labelKey)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <ConsolePick
+                  key={f.key}
+                  label={t(f.labelKey)}
+                  value={form.row[f.key] as string}
+                  onChange={(v) => set(f.key, v)}
+                  options={(f.options ?? []).map((o) => ({ value: o.value, label: t(o.labelKey) }))}
+                />
               ) : (
                 <Text key={f.key} label={t(f.labelKey)} value={form.row[f.key] as string} type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'} onInput={(v) => set(f.key, v)} />
               ),
             )}
             {PAPER_KINDS_FOR[section].length > 1 ? (
-              <label class="cfield">
-                <span class="cfield__label">{t('tower.company.doc.kind')}</span>
-                <select class="cinput" value={paperKind} onChange={(e) => setPaperKind(e.currentTarget.value as DocumentKind)}>
-                  {PAPER_KINDS_FOR[section].map((k) => (
-                    <option key={k} value={k}>
-                      {t(DOCUMENT_LABEL[k])}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <ConsolePick
+                label={t('tower.company.doc.kind')}
+                value={paperKind}
+                onChange={(v) => setPaperKind(v as DocumentKind)}
+                options={PAPER_KINDS_FOR[section].map((k) => ({ value: k, label: t(DOCUMENT_LABEL[k]) }))}
+              />
             ) : null}
             <label class="cfield">
               <span class="cfield__label">{t('tower.company.declare.paper')}</span>
@@ -744,28 +727,20 @@ function PutOnRecord({
   return (
     <>
       <div class="twr-corridorform" style="margin-top:12px">
-        <label class="cfield">
-          <span class="cfield__label">{t('tower.company.doc.kind')}</span>
-          <select class="cinput" value={form.kind} onChange={(e) => setForm({ ...form, kind: e.currentTarget.value, relatesTo: '' })}>
-            {DOCUMENT_KINDS.map((k) => (
-              <option key={k} value={k}>
-                {t(DOCUMENT_LABEL[k])}
-              </option>
-            ))}
-          </select>
-        </label>
+        <ConsolePick
+          label={t('tower.company.doc.kind')}
+          value={form.kind}
+          onChange={(v) => setForm({ ...form, kind: v, relatesTo: '' })}
+          options={DOCUMENT_KINDS.map((k) => ({ value: k, label: t(DOCUMENT_LABEL[k]) }))}
+        />
         {needsRelatesTo(form.kind) ? (
-          <label class="cfield">
-            <span class="cfield__label">{t('tower.company.doc.relatesTo')}</span>
-            <select class="cinput" value={form.relatesTo} onChange={(e) => setForm({ ...form, relatesTo: e.currentTarget.value })}>
-              <option value="">{t('tower.company.f.choose')}</option>
-              {choices.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <ConsolePick
+            label={t('tower.company.doc.relatesTo')}
+            value={form.relatesTo}
+            onChange={(v) => setForm({ ...form, relatesTo: v })}
+            placeholder={t('tower.company.f.choose')}
+            options={choices.map((c) => ({ value: c.value, label: c.label }))}
+          />
         ) : null}
         <Text label={t('tower.company.doc.title')} value={form.title} onInput={(v) => setForm({ ...form, title: v })} />
         <Text label={t('tower.company.f.expiresAt')} type="date" value={form.expiresAt} onInput={(v) => setForm({ ...form, expiresAt: v })} />
@@ -987,16 +962,12 @@ function SayForm({ kind, busy, onSend, onCancel }: { kind: 'report' | 'answer'; 
       <p class="chint">{t(kind === 'report' ? 'tower.paperReport.form.reportHint' : 'tower.paperReport.form.answerHint')}</p>
       <div class="twr-corridorform">
         {kind === 'report' ? (
-          <label class="cfield">
-            <span class="cfield__label">{t('tower.paperReport.form.category')}</span>
-            <select class="cinput" value={category} onChange={(e) => setCategory(e.currentTarget.value as ReportCategory)}>
-              {REPORT_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {t(CATEGORY_LABEL[c])}
-                </option>
-              ))}
-            </select>
-          </label>
+          <ConsolePick
+            label={t('tower.paperReport.form.category')}
+            value={category}
+            onChange={(v) => setCategory(v as ReportCategory)}
+            options={REPORT_CATEGORIES.map((c) => ({ value: c, label: t(CATEGORY_LABEL[c]) }))}
+          />
         ) : null}
         <label class="cfield" style="grid-column: span 2">
           <span class="cfield__label">{t(kind === 'report' ? 'tower.paperReport.form.note' : 'tower.paperReport.form.answerNote')}</span>

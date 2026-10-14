@@ -807,6 +807,13 @@
   border-color: var(--tx3);
 }
 
+/* The compact twin of .cinput--sm, for a choice standing in a row of small controls. */
+.cselect__btn--sm {
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: var(--c-fs-sm);
+}
+
 .cselect--open .cselect__btn {
   border-color: var(--blue);
   box-shadow: 0 0 0 3px var(--blue-light);
@@ -1353,6 +1360,17 @@
 /* Orange, because it is the row you have OPEN — a state, never an action. The same signal as the rail. */
 .crow--on {
   background: var(--org-light);
+}
+
+/* A choice that is on the list but cannot be made now — it stays where it would be, greyed, with the reason as its
+   second line, so a reader learns why rather than wondering where it went. */
+.crow:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.crow:disabled:hover {
+  background: var(--bg);
 }
 
 .crow__body {

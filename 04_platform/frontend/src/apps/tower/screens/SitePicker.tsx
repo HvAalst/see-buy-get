@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { PlaceMap, Sheet } from '../../../shared/ui';
+import { ConsolePick } from '../ConsolePick';
 import { useT } from '../../../shared/i18n';
 import type { GeoPoint } from '../../../shared/geo';
 
@@ -105,14 +106,7 @@ export function SitePicker({
     <div class="cfield">
       <span class="cfield__label">{label}</span>
       <div class="twr-panelend">
-        <select class="cinput" value={value} onChange={(e) => onChange((e.target as HTMLSelectElement).value)}>
-          <option value="">{t('tower.sites.choose')}</option>
-          {sites.map((s) => (
-            <option key={s.siteId} value={s.siteId}>
-              {s.name}
-            </option>
-          ))}
-        </select>
+        <ConsolePick bare label={label} value={value} onChange={onChange} placeholder={t('tower.sites.choose')} options={sites.map((s) => ({ value: s.siteId, label: s.name }))} />
         <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setAdding(true)}>
           {addLabel}
         </button>

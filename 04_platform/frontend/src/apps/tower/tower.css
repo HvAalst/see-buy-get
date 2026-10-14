@@ -132,7 +132,8 @@
 }
 
 /* A control in one of these takes the width it is given rather than its content's idea of it. */
-.twr-panelend > .cinput {
+.twr-panelend > .cinput,
+.twr-panelend > .cselect__btn {
   flex: 1 1 160px;
   min-width: 0;
   max-width: 100%;

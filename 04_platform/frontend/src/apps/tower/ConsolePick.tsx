@@ -8,6 +8,8 @@ export interface PickOption {
   /** The second line — what the choice MEANS, where the label alone is a code. */
   sub?: string;
   tag?: string;
+  /** On the list but not to be chosen now. Shown greyed where it would be, with `sub` saying why. */
+  disabled?: boolean;
 }
 
 /**
@@ -32,6 +34,11 @@ export interface PickOption {
  * field: the container type is ANY valid ISO 6346 code and the list is only the common ones, so a box
  * stencilled with something rarer must still be recordable. Offered as a row rather than accepted
  * silently, so choosing it is deliberate.
+ *
+ * BARE, FOR A CHOICE THAT STANDS IN A ROW OF CONTROLS. A form field carries its own label above it; a choice
+ * beside a note and a button on one line (a customs hold, a paper picked in a row of a table, a saved place beside
+ * "add a new one") has none, so `bare` draws only the button — named for a screen reader by `label`, which is also
+ * the sheet's title — and `small` matches the compact controls around it.
  */
 export function ConsolePick({
   label,
@@ -42,6 +49,9 @@ export function ConsolePick({
   placeholder,
   searchFrom = 12,
   allowFree,
+  bare,
+  small,
+  className,
 }: {
   label: string;
   value: string;
@@ -53,6 +63,12 @@ export function ConsolePick({
   searchFrom?: number;
   /** Given what was typed, the value to offer as a row of its own — or null when it is not usable. */
   allowFree?: (query: string) => string | null;
+  /** Only the button and its sheet: no field around it and no label above it. */
+  bare?: boolean;
+  /** The compact size, beside other compact controls. */
+  small?: boolean;
+  /** Further classes for the field around it (a knob in a row of knobs). */
+  className?: string;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -72,61 +88,82 @@ export function ConsolePick({
     setOpen(false);
   };
 
-  return (
-    <div class="cfield">
-      <span class="cfield__label">{label}</span>
-      <button type="button" class="cselect__btn" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
-        <span class={`cselect__val${chosen || value ? '' : ' cselect__val--none'}`}>
-          {/* A value chosen from outside the list still shows: it is what was recorded. */}
-          {chosen ? chosen.label : value || placeholder || t('tower.choose.choose')}
-        </span>
-        <Icon name="chevronRight" size={16} class="cselect__caret" />
-      </button>
-      {hint ? <span class="chint">{hint}</span> : null}
+  const shown = chosen ? chosen.label : value || placeholder || t('tower.choose.choose');
+  const button = (
+    <button
+      type="button"
+      class={`cselect__btn${small ? ' cselect__btn--sm' : ''}`}
+      aria-haspopup="dialog"
+      aria-expanded={open}
+      aria-label={bare ? `${label}: ${shown}` : undefined}
+      onClick={() => setOpen(true)}
+    >
+      <span class={`cselect__val${chosen || value ? '' : ' cselect__val--none'}`}>
+        {/* A value chosen from outside the list still shows: it is what was recorded. */}
+        {shown}
+      </span>
+      <Icon name="chevronRight" size={16} class="cselect__caret" />
+    </button>
+  );
 
-      {open ? (
-        <Sheet open onClose={() => setOpen(false)} title={label}>
-          {options.length >= searchFrom || allowFree ? (
-            <input
-              class="cinput"
-              value={q}
-              onInput={(e) => setQ((e.target as HTMLInputElement).value)}
-              placeholder={allowFree ? t('tower.choose.searchOrType') : t('tower.choose.search')}
-              aria-label={allowFree ? t('tower.choose.searchOrType') : t('tower.choose.search')}
-            />
-          ) : null}
+  const sheet = open ? (
+    <Sheet open onClose={() => setOpen(false)} title={label}>
+      {options.length >= searchFrom || allowFree ? (
+        <input
+          class="cinput"
+          value={q}
+          onInput={(e) => setQ((e.target as HTMLInputElement).value)}
+          placeholder={allowFree ? t('tower.choose.searchOrType') : t('tower.choose.search')}
+          aria-label={allowFree ? t('tower.choose.searchOrType') : t('tower.choose.search')}
+        />
+      ) : null}
 
-          {freeIsNew ? (
-            <button type="button" class="crow" onClick={() => take(free)}>
+      {freeIsNew ? (
+        <button type="button" class="crow" onClick={() => take(free)}>
+          <span class="crow__body">
+            <span class="crow__top">
+              <span class="crow__name">{t('tower.choose.use', { what: free })}</span>
+            </span>
+            <span class="crow__sub">{t('tower.choose.useSub')}</span>
+          </span>
+        </button>
+      ) : null}
+
+      {found.length === 0 && !freeIsNew ? (
+        <p class="cons__empty">{t('tower.choose.none')}</p>
+      ) : (
+        <div class="crows">
+          {found.map((o) => (
+            <button key={o.value} type="button" class={`crow${o.value === value ? ' crow--on' : ''}`} disabled={o.disabled} onClick={() => take(o.value)}>
               <span class="crow__body">
                 <span class="crow__top">
-                  <span class="crow__name">{t('tower.choose.use', { what: free })}</span>
+                  <span class="crow__name">{o.label}</span>
+                  {o.tag ? <span class="ctag ctag--quiet">{o.tag}</span> : null}
                 </span>
-                <span class="crow__sub">{t('tower.choose.useSub')}</span>
+                {o.sub ? <span class="crow__sub">{o.sub}</span> : null}
               </span>
+              <span class="crow__tail">{o.value === value ? <Icon name="check" size={16} /> : null}</span>
             </button>
-          ) : null}
+          ))}
+        </div>
+      )}
+    </Sheet>
+  ) : null;
 
-          {found.length === 0 && !freeIsNew ? (
-            <p class="cons__empty">{t('tower.choose.none')}</p>
-          ) : (
-            <div class="crows">
-              {found.map((o) => (
-                <button key={o.value} type="button" class={`crow${o.value === value ? ' crow--on' : ''}`} onClick={() => take(o.value)}>
-                  <span class="crow__body">
-                    <span class="crow__top">
-                      <span class="crow__name">{o.label}</span>
-                      {o.tag ? <span class="ctag ctag--quiet">{o.tag}</span> : null}
-                    </span>
-                    {o.sub ? <span class="crow__sub">{o.sub}</span> : null}
-                  </span>
-                  <span class="crow__tail">{o.value === value ? <Icon name="check" size={16} /> : null}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </Sheet>
-      ) : null}
+  if (bare) {
+    return (
+      <>
+        {button}
+        {sheet}
+      </>
+    );
+  }
+  return (
+    <div class={`cfield${className ? ` ${className}` : ''}`}>
+      <span class="cfield__label">{label}</span>
+      {button}
+      {hint ? <span class="chint">{hint}</span> : null}
+      {sheet}
     </div>
   );
 }

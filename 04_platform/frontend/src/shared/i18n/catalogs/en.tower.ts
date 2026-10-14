@@ -1095,6 +1095,7 @@ export const enTower = {
   'tower.imports.holdDisputed': 'Disputed',
   'tower.imports.holdReleased': 'Released {on}',
   'tower.imports.f.holdNote': 'What happened (not required)',
+  'tower.imports.f.holdKind': 'Kind of hold',
   'tower.imports.f.holdAnswer': 'What you say happened instead',
   'tower.imports.holdRecord': 'Record it',
   'tower.imports.holdRecorded': 'Recorded. The other party can see it and answer it.',

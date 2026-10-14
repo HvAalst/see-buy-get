@@ -846,23 +846,23 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
               >
                 <p class="cons__lede">{t('tower.imports.uploadHint')}</p>
                 <div class="twr-knobs__row">
-                  <label class="twr-knob cfield">
-                    <span class="cfield__label">{t('tower.imports.f.kind')}</span>
-                    <select class="cinput" value={upload.kind} onChange={(e) => setUpload({ ...upload, kind: (e.target as HTMLSelectElement).value })}>
-                      {DOCUMENT_KINDS.map((k) => (
-                        <option key={k} value={k}>
-                          {t(DOCUMENT_LABEL[k])}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label class="twr-knob cfield">
-                    <span class="cfield__label">{t('tower.imports.f.belongs')}</span>
-                    <select class="cinput" value={upload.belongs} onChange={(e) => setUpload({ ...upload, belongs: (e.target as HTMLSelectElement).value })}>
-                      <option value="company">{t('tower.imports.belongs.company')}</option>
-                      <option value="consignment">{t('tower.imports.belongs.consignment')}</option>
-                    </select>
-                  </label>
+                  <ConsolePick
+                    className="twr-knob"
+                    label={t('tower.imports.f.kind')}
+                    value={upload.kind}
+                    onChange={(v) => setUpload({ ...upload, kind: v })}
+                    options={DOCUMENT_KINDS.map((k) => ({ value: k, label: t(DOCUMENT_LABEL[k]) }))}
+                  />
+                  <ConsolePick
+                    className="twr-knob"
+                    label={t('tower.imports.f.belongs')}
+                    value={upload.belongs}
+                    onChange={(v) => setUpload({ ...upload, belongs: v })}
+                    options={[
+                      { value: 'company', label: t('tower.imports.belongs.company') },
+                      { value: 'consignment', label: t('tower.imports.belongs.consignment') },
+                    ]}
+                  />
                   <label class="twr-knob cfield">
                     <span class="cfield__label">{t('tower.imports.f.title')}</span>
                     <input class="cinput" value={upload.title} onChange={(e) => setUpload({ ...upload, title: (e.target as HTMLInputElement).value })} />
@@ -1286,17 +1286,16 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                         <span class="cfield__label">{t('tower.imports.f.cleanedAt')}</span>
                         <input class="cinput" type="date" value={cargoForm.cleanedAt} onChange={(e) => setCargoForm({ ...cargoForm, cleanedAt: (e.target as HTMLInputElement).value })} />
                       </label>
-                      <label class="twr-knob cfield">
-                        <span class="cfield__label">{t('tower.imports.f.cleanCert')}</span>
-                        <select class="cinput" value={cargoForm.certificateDocumentId} onChange={(e) => setCargoForm({ ...cargoForm, certificateDocumentId: (e.target as HTMLSelectElement).value })}>
-                          <option value="">{t('tower.imports.certNone')}</option>
-                          {detail.documents.filter((d) => d.status !== 'superseded').map((d) => (
-                            <option key={d.documentId} value={d.documentId}>
-                              {d.title}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                      <ConsolePick
+                        className="twr-knob"
+                        label={t('tower.imports.f.cleanCert')}
+                        value={cargoForm.certificateDocumentId}
+                        onChange={(v) => setCargoForm({ ...cargoForm, certificateDocumentId: v })}
+                        options={[
+                          { value: '', label: t('tower.imports.certNone') },
+                          ...detail.documents.filter((d) => d.status !== 'superseded').map((d) => ({ value: d.documentId, label: d.title })),
+                        ]}
+                      />
                     </div>
                     <div class="twr-panelend">
                       <button
@@ -1537,13 +1536,16 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                   <>
                     <p class="chint">{t('tower.imports.gateFormHint')}</p>
                     <div class="twr-knobs__row">
-                      <label class="twr-knob cfield">
-                        <span class="cfield__label">{t('tower.imports.f.stance')}</span>
-                        <select class="cinput" value={gateForm.stance} onChange={(e) => setGateForm({ ...gateForm, stance: (e.target as HTMLSelectElement).value })}>
-                          <option value="damaged">{t('tower.imports.stance.damaged')}</option>
-                          <option value="sound">{t('tower.imports.stance.sound')}</option>
-                        </select>
-                      </label>
+                      <ConsolePick
+                        className="twr-knob"
+                        label={t('tower.imports.f.stance')}
+                        value={gateForm.stance}
+                        onChange={(v) => setGateForm({ ...gateForm, stance: v })}
+                        options={[
+                          { value: 'damaged', label: t('tower.imports.stance.damaged') },
+                          { value: 'sound', label: t('tower.imports.stance.sound') },
+                        ]}
+                      />
                       <label class="twr-knob cfield">
                         <span class="cfield__label">{t('tower.imports.f.gateNote')}</span>
                         <input class="cinput" value={gateForm.note} onChange={(e) => setGateForm({ ...gateForm, note: (e.target as HTMLInputElement).value })} placeholder={t('tower.imports.f.gateNotePh')} />
@@ -1607,24 +1609,19 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                           that yard's own list when it arrives. A typed label does not, and matching two
                           yards that call themselves the same thing would be worse than not trying. */}
                       {depotOptions.length ? (
-                        <label class="twr-knob cfield">
-                          <span class="cfield__label">{t('tower.imports.f.depotPick')}</span>
-                          <select
-                            value={homeForm.depotEntityId}
-                            onChange={(e) => {
-                              const id = (e.target as HTMLSelectElement).value;
-                              const yard = depotOptions.find((d) => d.entityId === id);
-                              setHomeForm({ ...homeForm, depotEntityId: id, depotLabel: yard ? yard.placeLabel : homeForm.depotLabel });
-                            }}
-                          >
-                            <option value="">{t('tower.imports.depotPickNone')}</option>
-                            {depotOptions.map((d) => (
-                              <option key={d.entityId} value={d.entityId}>
-                                {d.placeLabel} · {d.country}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                        <ConsolePick
+                          className="twr-knob"
+                          label={t('tower.imports.f.depotPick')}
+                          value={homeForm.depotEntityId}
+                          onChange={(id) => {
+                            const yard = depotOptions.find((d) => d.entityId === id);
+                            setHomeForm({ ...homeForm, depotEntityId: id, depotLabel: yard ? yard.placeLabel : homeForm.depotLabel });
+                          }}
+                          options={[
+                            { value: '', label: t('tower.imports.depotPickNone') },
+                            ...depotOptions.map((d) => ({ value: d.entityId, label: d.placeLabel, tag: d.country })),
+                          ]}
+                        />
                       ) : null}
                       <label class="twr-knob cfield">
                         <span class="cfield__label">{t('tower.imports.f.depot')}</span>
@@ -1680,13 +1677,16 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                           contract with the line, so nobody else is in a position to state the figure. */}
                       {detail.youAre === 'importer' ? (
                         <>
-                          <label class="twr-knob cfield">
-                            <span class="cfield__label">{t('tower.imports.f.freeDayKind')}</span>
-                            <select class="cinput" value={boxForm.freeDayKind} onChange={(e) => setBoxForm({ ...boxForm, freeDayKind: (e.target as HTMLSelectElement).value })}>
-                              <option value="detention">{t('tower.imports.freeDays.detention')}</option>
-                              <option value="demurrage">{t('tower.imports.freeDays.demurrage')}</option>
-                            </select>
-                          </label>
+                          <ConsolePick
+                            className="twr-knob"
+                            label={t('tower.imports.f.freeDayKind')}
+                            value={boxForm.freeDayKind}
+                            onChange={(v) => setBoxForm({ ...boxForm, freeDayKind: v })}
+                            options={[
+                              { value: 'detention', label: t('tower.imports.freeDays.detention') },
+                              { value: 'demurrage', label: t('tower.imports.freeDays.demurrage') },
+                            ]}
+                          />
                           <label class="twr-knob cfield">
                             <span class="cfield__label">{t('tower.imports.f.freeDays')}</span>
                             <input class="cinput" type="number" min={0} max={365} step={1} value={boxForm.freeDays} onChange={(e) => setBoxForm({ ...boxForm, freeDays: (e.target as HTMLInputElement).value })} />
@@ -1850,13 +1850,14 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
 
             {isCompany ? (
               <div class="twr-panelend">
-                <select class="cinput cinput--sm" value={holdForm.kind} onChange={(e) => setHoldForm({ ...holdForm, kind: (e.target as HTMLSelectElement).value as CustomsHoldKind })}>
-                  {CUSTOMS_HOLD_KINDS.map((k) => (
-                    <option key={k} value={k}>
-                      {t(`tower.imports.holdKind.${k}` as never)}
-                    </option>
-                  ))}
-                </select>
+                <ConsolePick
+                  bare
+                  small
+                  label={t('tower.imports.f.holdKind')}
+                  value={holdForm.kind}
+                  onChange={(v) => setHoldForm({ ...holdForm, kind: v as CustomsHoldKind })}
+                  options={CUSTOMS_HOLD_KINDS.map((k) => ({ value: k, label: t(`tower.imports.holdKind.${k}` as never) }))}
+                />
                 <input class="cinput cinput--sm" placeholder={t('tower.imports.f.holdNote')} value={holdForm.note} onChange={(e) => setHoldForm({ ...holdForm, note: (e.target as HTMLInputElement).value })} />
                 <button
                   type="button"
@@ -2110,14 +2111,8 @@ function PaperRow({
             {choices.length === 0 ? (
               <span class="chint">{t('tower.imports.pickNone')}</span>
             ) : (
-              <select class="cinput" value={pick} onChange={(e) => onPick((e.target as HTMLSelectElement).value)}>
-                <option value="">{t('tower.imports.pick')}</option>
-                {choices.map((d) => (
-                  <option key={d.documentId} value={d.documentId}>
-                    {d.title}
-                  </option>
-                ))}
-              </select>
+              // Named by the paper it answers: that is the sheet's title, and what a screen reader says of the button.
+              <ConsolePick bare small label={paper.label} value={pick} onChange={onPick} placeholder={t('tower.imports.pick')} options={choices.map((d) => ({ value: d.documentId, label: d.title }))} />
             )}
             {choices.length > 0 ? (
               <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={!pick || busy === 'supply:' + paper.key} onClick={onSupply}>

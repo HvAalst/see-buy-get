@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
+import { ConsolePick } from '../ConsolePick';
 import { useT } from '../../../shared/i18n';
 import { laneLabel, pctLabel } from '../money';
 import { companyCreateBlocker } from '../company';
@@ -112,24 +113,22 @@ function CreateCompany({ state, actions }: { state: TowerState; actions: TowerAc
         {t('tower.companies.createLede')}
       </p>
       <div class="twr-corridorform">
-        <label class="cfield">
-          <span class="cfield__label">{t('tower.companies.f.kind')}</span>
-          <select class="cinput" value={form.kind} onChange={(e) => setForm({ ...form, kind: e.currentTarget.value as 'sister' | 'partner' })}>
-            <option value="sister">{t('tower.companies.kind.sister')}</option>
-            <option value="partner">{t('tower.companies.kind.partner')}</option>
-          </select>
-        </label>
-        <label class="cfield">
-          <span class="cfield__label">{t('tower.companies.f.country')}</span>
-          <select class="cinput" value={form.jurisdiction} onChange={(e) => setForm({ ...form, jurisdiction: e.currentTarget.value })}>
-            <option value="">{t('tower.companies.f.countryChoose')}</option>
-            {catalogue.map((c) => (
-              <option key={c.code} value={c.code}>
-                {c.name} ({c.code})
-              </option>
-            ))}
-          </select>
-        </label>
+        <ConsolePick
+          label={t('tower.companies.f.kind')}
+          value={form.kind}
+          onChange={(v) => setForm({ ...form, kind: v as 'sister' | 'partner' })}
+          options={[
+            { value: 'sister', label: t('tower.companies.kind.sister') },
+            { value: 'partner', label: t('tower.companies.kind.partner') },
+          ]}
+        />
+        <ConsolePick
+          label={t('tower.companies.f.country')}
+          value={form.jurisdiction}
+          onChange={(v) => setForm({ ...form, jurisdiction: v })}
+          placeholder={t('tower.companies.f.countryChoose')}
+          options={catalogue.map((c) => ({ value: c.code, label: c.name, tag: c.code }))}
+        />
         <label class="cfield">
           <span class="cfield__label">{t('tower.companies.f.name')}</span>
           <input class="cinput" value={form.name} onInput={(e) => setForm({ ...form, name: e.currentTarget.value })} />

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
+import { ConsolePick } from '../ConsolePick';
 
 export interface CountryOption {
   code: string;
@@ -35,18 +36,16 @@ export function CountrySelect({
   /** Given, the list offers "no country in particular" as its first row. */
   anyLabel?: string;
 }) {
+  // "No country in particular" is a choice somebody makes, so it is a row; without it, an empty value is only unanswered.
+  const countries = options.map((c) => ({ value: c.code, label: c.name, tag: c.code }));
   return (
-    <label class="cfield">
-      <span class="cfield__label">{label}</span>
-      <select class="cinput" value={value} onChange={(e) => onChange((e.target as HTMLSelectElement).value)}>
-        {anyLabel ? <option value="">{anyLabel}</option> : <option value="">—</option>}
-        {options.map((c) => (
-          <option key={c.code} value={c.code}>
-            {c.name} ({c.code})
-          </option>
-        ))}
-      </select>
-    </label>
+    <ConsolePick
+      label={label}
+      value={value}
+      onChange={onChange}
+      placeholder="—"
+      options={anyLabel ? [{ value: '', label: anyLabel }, ...countries] : countries}
+    />
   );
 }
 

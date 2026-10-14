@@ -5,6 +5,7 @@ import { EMPTY_BORDER_FORM, borderFormBlocker, crossingLine, formFromRule, toBor
 import { countryNameOf, type CatalogueCountry } from '../presence';
 import type { TowerActions, TowerState } from '../useTowerApp';
 import { FieldObservationsPanel } from './FieldObservationsPanel';
+import { ConsolePick } from '../ConsolePick';
 
 /**
  * CA6 — THE RULES OF CROSSING A BORDER.
@@ -135,25 +136,24 @@ export function BordersScreen({ state, actions }: { state: TowerState; actions: 
         </div>
         <div class="twr-corridorform">
           {(['from', 'to'] as const).map((key) => (
-            <label key={key} class="cfield">
-              <span class="cfield__label">{t(key === 'from' ? 'tower.borders.f.from' : 'tower.borders.f.to')}</span>
-              <select class="cinput" value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.currentTarget.value })}>
-                <option value="">{t('tower.borders.f.choose')}</option>
-                {catalogue.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.name} ({c.code})
-                  </option>
-                ))}
-              </select>
-            </label>
+            <ConsolePick
+              key={key}
+              label={t(key === 'from' ? 'tower.borders.f.from' : 'tower.borders.f.to')}
+              value={form[key]}
+              onChange={(v) => setForm({ ...form, [key]: v })}
+              placeholder={t('tower.borders.f.choose')}
+              options={catalogue.map((c) => ({ value: c.code, label: c.name, tag: c.code }))}
+            />
           ))}
-          <label class="cfield">
-            <span class="cfield__label">{t('tower.borders.f.cabotage')}</span>
-            <select class="cinput" value={form.cabotage} onChange={(e) => setForm({ ...form, cabotage: e.currentTarget.value as 'allowed' | 'forbidden' })}>
-              <option value="forbidden">{t('tower.borders.cabotage.forbidden')}</option>
-              <option value="allowed">{t('tower.borders.cabotage.allowed')}</option>
-            </select>
-          </label>
+          <ConsolePick
+            label={t('tower.borders.f.cabotage')}
+            value={form.cabotage}
+            onChange={(v) => setForm({ ...form, cabotage: v as 'allowed' | 'forbidden' })}
+            options={[
+              { value: 'forbidden', label: t('tower.borders.cabotage.forbidden') },
+              { value: 'allowed', label: t('tower.borders.cabotage.allowed') },
+            ]}
+          />
           <label class="cfield">
             <span class="cfield__label">{t('tower.borders.f.crossings')}</span>
             <textarea class="cinput" rows={3} value={form.crossings} onInput={(e) => setForm({ ...form, crossings: e.currentTarget.value })} />

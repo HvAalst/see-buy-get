@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 import { Icon, PlaceMap, type PlaceMapLine } from '../../../shared/ui';
+import { ConsolePick } from '../ConsolePick';
 import { useT } from '../../../shared/i18n';
 import {
   MOOD_LABEL,
@@ -300,44 +301,29 @@ export function MarketScreen({ actions }: { actions: TowerActions }) {
                     placeholder={t('tower.market.searchPh')}
                   />
                 </label>
-                <label class="twr-knob cfield">
-                  <span class="cfield__label">{t('tower.market.near')}</span>
-                  <select
-                    class="cinput"
-                    value={centre}
-                    onChange={(e) => {
-                      setCentre((e.target as HTMLSelectElement).value);
+                {/* The places the market actually runs through, alphabetical. It cannot offer a town no lane
+                    reaches, which is the whole advantage over a free-text box. */}
+                <ConsolePick
+                  className="twr-knob"
+                  label={t('tower.market.near')}
+                  value={centre}
+                  onChange={(v) => {
+                    setCentre(v);
+                    setLanePage(0);
+                  }}
+                  options={[{ value: '', label: t('tower.market.nearAnywhere') }, ...ends.map((e) => ({ value: e.name, label: e.name }))]}
+                />
+                {centre ? (
+                  <ConsolePick
+                    className="twr-knob"
+                    label={t('tower.market.within')}
+                    value={String(radius)}
+                    onChange={(v) => {
+                      setRadius(Number(v));
                       setLanePage(0);
                     }}
-                  >
-                    {/* The places the market actually runs through, alphabetical. It cannot offer a town
-                        no lane reaches, which is the whole advantage over a free-text box. */}
-                    <option value="">{t('tower.market.nearAnywhere')}</option>
-                    {ends.map((e) => (
-                      <option key={e.name} value={e.name}>
-                        {e.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {centre ? (
-                  <label class="twr-knob cfield">
-                    <span class="cfield__label">{t('tower.market.within')}</span>
-                    <select
-                      class="cinput"
-                      value={String(radius)}
-                      onChange={(e) => {
-                        setRadius(Number((e.target as HTMLSelectElement).value));
-                        setLanePage(0);
-                      }}
-                    >
-                      {RADII.map((km) => (
-                        <option key={km} value={String(km)}>
-                          {t('tower.market.km', { n: km })}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                    options={RADII.map((km) => ({ value: String(km), label: t('tower.market.km', { n: km }) }))}
+                  />
                 ) : null}
               </div>
             ) : null}

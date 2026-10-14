@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
+import { ConsolePick } from '../ConsolePick';
 import { useT } from '../../../shared/i18n';
 import {
   CAPABILITY_LABEL,
@@ -346,32 +347,24 @@ function RecordCountry({ state, actions }: { state: TowerState; actions: TowerAc
       </div>
 
       <div class="twr-corridorform">
-        <label class="cfield">
-          <span class="cfield__label">{t('tower.presence.f.country')}</span>
-          <select class="cinput" value={form.jurisdiction} onChange={(e) => actions.setCountryForm({ jurisdiction: e.currentTarget.value })}>
-            <option value="">{t('tower.presence.f.countryPlaceholder')}</option>
-            {catalogue.map((c) => (
-              <option key={c.code} value={c.code}>
-                {c.name} ({c.code}){c.priceable ? '' : ` · ${t('tower.presence.noRate')}`}
-              </option>
-            ))}
-          </select>
-          {chosen ? (
-            <span class="chint">
-              {t('tower.presence.countryFacts', { currency: chosen.currency, dial: chosen.dialCode, side: t(chosen.drivingSide === 'left' ? 'tower.presence.side.left' : 'tower.presence.side.right') })}
-            </span>
-          ) : null}
-        </label>
-        <label class="cfield">
-          <span class="cfield__label">{t('tower.presence.f.level')}</span>
-          <select class="cinput" value={form.level} onChange={(e) => actions.setCountryForm({ level: e.currentTarget.value as PresenceLevel })}>
-            {PRESENCE_LEVELS.map((option) => (
-              <option key={option} value={option}>
-                {t(LEVEL_LABEL[option])}
-              </option>
-            ))}
-          </select>
-        </label>
+        <ConsolePick
+          label={t('tower.presence.f.country')}
+          value={form.jurisdiction}
+          onChange={(v) => actions.setCountryForm({ jurisdiction: v })}
+          placeholder={t('tower.presence.f.countryPlaceholder')}
+          options={catalogue.map((c) => ({ value: c.code, label: c.name, tag: c.code, ...(c.priceable ? {} : { sub: t('tower.presence.noRate') }) }))}
+          hint={
+            chosen
+              ? t('tower.presence.countryFacts', { currency: chosen.currency, dial: chosen.dialCode, side: t(chosen.drivingSide === 'left' ? 'tower.presence.side.left' : 'tower.presence.side.right') })
+              : undefined
+          }
+        />
+        <ConsolePick
+          label={t('tower.presence.f.level')}
+          value={form.level}
+          onChange={(v) => actions.setCountryForm({ level: v as PresenceLevel })}
+          options={PRESENCE_LEVELS.map((option) => ({ value: option, label: t(LEVEL_LABEL[option]) }))}
+        />
         <label class="cfield">
           <span class="cfield__label">{t('tower.presence.f.note')}</span>
           <input class="cinput" value={form.note} onInput={(e) => actions.setCountryForm({ note: e.currentTarget.value })} />
@@ -472,17 +465,17 @@ function PresenceEditor({ row, state, actions }: { row: PresenceRow; state: Towe
 
   return (
     <div class="twr-presedit">
-      <label class="cfield">
-        <span class="cfield__label">{t('tower.presence.f.level')}</span>
-        <select class="cinput" value={level} onChange={(e) => actions.setPresenceForm({ level: e.currentTarget.value as PresenceLevel })}>
-          {PRESENCE_LEVELS.map((option) => (
-            <option key={option} value={option} disabled={levelBlocker(row, option) !== null}>
-              {t(LEVEL_LABEL[option])}
-            </option>
-          ))}
-        </select>
-        {blocker ? <span class="chint">{t(blocker)}</span> : null}
-      </label>
+      {/* A level this country cannot take stays on the list, greyed, with the reason under it. */}
+      <ConsolePick
+        label={t('tower.presence.f.level')}
+        value={level}
+        onChange={(v) => actions.setPresenceForm({ level: v as PresenceLevel })}
+        options={PRESENCE_LEVELS.map((option) => {
+          const why = levelBlocker(row, option);
+          return { value: option, label: t(LEVEL_LABEL[option]), ...(why ? { disabled: true, sub: t(why) } : {}) };
+        })}
+        hint={blocker ? t(blocker) : undefined}
+      />
 
       <label class="cfield twr-presedit__note">
         <span class="cfield__label">{t('tower.presence.f.note')}</span>
