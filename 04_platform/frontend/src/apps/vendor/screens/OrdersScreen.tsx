@@ -143,16 +143,16 @@ export function OrdersScreen({ state, actions, client = null }: OrdersScreenProp
                   <span class="row__t">{r.parcelId}</span>
                   <span class="row__s">
                     {t('vendor.returns.line', {
-                      value: `${r.currency} ${r.declaredValue.toFixed(2)}`,
-                      cost: `${r.currency} ${(r.returnCost + (r.holdingCost ?? 0)).toFixed(2)}`,
+                      value: money(r.declaredValue, r.currency),
+                      cost: money(r.returnCost + (r.holdingCost ?? 0), r.currency),
                     })}
                   </span>
                   <span class="row__s">{t('vendor.returns.waitingSince', { date: formatDate(r.offeredAt, { dateStyle: 'medium' }) })}</span>
                   {r.holdingCost ? (
                     <span class="row__s">
                       {t('vendor.returns.holdingLine', {
-                        trip: `${r.currency} ${r.returnCost.toFixed(2)}`,
-                        shelf: `${r.currency} ${r.holdingCost.toFixed(2)}`,
+                        trip: money(r.returnCost, r.currency),
+                        shelf: money(r.holdingCost, r.currency),
                       })}
                     </span>
                   ) : null}
@@ -180,7 +180,7 @@ export function OrdersScreen({ state, actions, client = null }: OrdersScreenProp
       ) : (
         <GlanceNumber
           label={t('vendor.balanceLabel')}
-          value={money(state.vendor?.balance)}
+          value={money(state.vendor?.balance, state.vendor?.currency)}
           sub={
             !statsKnown
               ? t('vendor.orders.balanceSubUnknown')
@@ -207,7 +207,7 @@ export function OrdersScreen({ state, actions, client = null }: OrdersScreenProp
                 </span>
                 <span class="row__body">
                   <span class="row__t">{handoffLine(c, t)}</span>
-                  <span class="row__s">{c.subtotal != null ? t('vendor.orders.orderValue', { value: money(c.subtotal) }) : t('vendor.orders.tapToMake')}</span>
+                  <span class="row__s">{c.subtotal != null ? t('vendor.orders.orderValue', { value: money(c.subtotal, state.vendor?.currency) }) : t('vendor.orders.tapToMake')}</span>
                 </span>
                 <span class="row__end">
                   <Icon name="chevronRight" size={22} />
@@ -306,7 +306,7 @@ export function OrdersScreen({ state, actions, client = null }: OrdersScreenProp
       </Card>
 
       <div class="scr__foot">
-        <ReadAloud text={() => (statsKnown ? ordersSummary(state.vendor?.balance ?? 0, moving, unpaid, t) : t('vendor.orders.countsUpdating', { balance: money(state.vendor?.balance ?? 0) }))} label={t('vendor.readAloud')} />
+        <ReadAloud text={() => (statsKnown ? ordersSummary(state.vendor?.balance ?? 0, moving, unpaid, t, state.vendor?.currency) : t('vendor.orders.countsUpdating', { balance: money(state.vendor?.balance ?? 0, state.vendor?.currency) }))} label={t('vendor.readAloud')} />
         <ExplainerReset who={state.vendor?.did} />
       </div>
 
@@ -342,7 +342,7 @@ function OrderRowItem({ o, selected, onToggle, onOpen }: { o: OrderRow; selected
         <span class="row__body">
           <span class="row__t mono-t">{label}</span>
           {who ? <span class="row__s">{who}</span> : null}
-          <span class="row__meta">{`${st.word} · ${o.size} → ${o.destZone}${o.shipmentCost != null ? ` · ${money(o.shipmentCost)}` : ''}`}</span>
+          <span class="row__meta">{`${st.word} · ${o.size} → ${o.destZone}${o.shipmentCost != null ? ` · ${money(o.shipmentCost, o.currency)}` : ''}`}</span>
         </span>
         <span class="row__end">
           <Pill tone={paid.tone === 'ok' ? 'ok' : 'warn'} dot>
@@ -464,7 +464,7 @@ function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose:
         <Note
           tone="info"
           icon={waiting.pushed ? 'keypad' : 'clock'}
-          title={t(waiting.pushed ? 'vendor.topup.pushNote' : 'vendor.topup.waitNote', { amount: waiting.amount.toFixed(2) })}
+          title={t(waiting.pushed ? 'vendor.topup.pushNote' : 'vendor.topup.waitNote', { amount: money(waiting.amount, waiting.currency) })}
           detail={waiting.instructions}
         />
         <div class="field">
@@ -488,7 +488,7 @@ function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose:
       {refused?.failureReason ? <Note tone="warn" icon="clock" title={t('vendor.topup.refused')} detail={refused.failureReason} /> : null}
       <div class="field">
         <label class="field__label" for="vtopup">
-          {t('vendor.topup.amount')}
+          {state.vendor?.currency ? t('vendor.topup.amountIn', { currency: state.vendor.currency }) : t('vendor.topup.amount')}
         </label>
         <input id="vtopup" class="input" type="number" inputMode="decimal" min="1" step="1" value={amount} onInput={(e) => setAmount(e.currentTarget.value)} />
       </div>
@@ -513,7 +513,7 @@ function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose:
         <p class="hint">{t('vendor.topup.phoneHint')}</p>
       </div>
       <Button chevron={false} busy={state.busy === 'topup'} disabled={!(value > 0)} onClick={() => void actions.topUp(value, phone.trim() || undefined)}>
-        {value > 0 ? t(phone.trim() ? 'vendor.topup.askPush' : 'vendor.topup.ask', { amount: value.toFixed(2) }) : t('vendor.topup.addMoney')}
+        {value > 0 ? t(phone.trim() ? 'vendor.topup.askPush' : 'vendor.topup.ask', { amount: money(value, state.vendor?.currency) }) : t('vendor.topup.addMoney')}
       </Button>
       <Button variant="link" onClick={onClose}>
         {t('vendor.topup.notNow')}
@@ -541,7 +541,7 @@ function OrderSheet({ state, actions, client }: { state: VendorState; actions: V
           {d.shipmentCost != null ? (
             <div class="kv">
               <span>{t('vendor.order.shippingCost')}</span>
-              <b>{money(d.shipmentCost)}</b>
+              <b>{money(d.shipmentCost, d.currency)}</b>
             </div>
           ) : null}
           {/* Inside the shipping cost above, never on top of it. Shown only when there is something to
@@ -550,19 +550,19 @@ function OrderSheet({ state, actions, client }: { state: VendorState; actions: V
           {d.platformFee ? (
             <div class="kv kv--quiet">
               <span>{d.platformFeePct ? t('vendor.order.platformFeePct', { pct: (d.platformFeePct * 100).toFixed(2) }) : t('vendor.order.platformFee')}</span>
-              <b>{money(d.platformFee)}</b>
+              <b>{money(d.platformFee, d.currency)}</b>
             </div>
           ) : null}
           {d.shipmentTax ? (
             <div class="kv kv--quiet">
               <span>{d.taxLabel ?? t('vendor.order.tax')}</span>
-              <b>{money(d.shipmentTax)}</b>
+              <b>{money(d.shipmentTax, d.currency)}</b>
             </div>
           ) : null}
           {d.buyerCharge != null ? (
             <div class="kv">
               <span>{t('vendor.order.buyerPaid')}</span>
-              <b>{money(d.buyerCharge)}</b>
+              <b>{money(d.buyerCharge, d.currency)}</b>
             </div>
           ) : null}
           {d.trackingKey ? (

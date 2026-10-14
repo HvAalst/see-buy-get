@@ -56,6 +56,9 @@ export interface VendorView {
   country: string;
   /** Null where the store stands in a country we only match: it keeps no till with us. */
   balance: number | null;
+  /** The money the balance, the bills and the shipping policy are in: the store’s company’s. Absent where it keeps
+   *  no till with us. */
+  currency?: string;
   shippingPolicy: ShippingPolicy;
   createdAt: string;
   /** When the signing secret was last changed; absent if never, since the store was made. */
@@ -189,6 +192,8 @@ export interface SettlementRow {
   type: 'TOP_UP' | 'TOP_UP_FEE' | 'BILLING' | 'REBATE';
   sign: '+' | '-';
   amount: number;
+  /** The money of the books the line was posted to. */
+  currency?: string;
   parcelId?: string;
   note?: string;
   at: string;
@@ -203,6 +208,8 @@ export interface LedgerSummary {
   count: number;
   /** Null where the store stands in a country we only match: it keeps no till with us. */
   balance: number | null;
+  /** The one money every line in the view is in. */
+  currency?: string;
 }
 
 export interface CallbackRow {
@@ -223,6 +230,8 @@ export interface NetworkPoint {
   /** False: no new parcel can name this shop — it is not offered as a place to hand one in. */
   takesNew?: boolean;
   pricePerParcel: number;
+  /** The money that price is in: the shop’s company’s. */
+  currency?: string;
   rating?: { count: number; average: number } | null;
   freeSlots?: number;
 }
@@ -280,6 +289,8 @@ export interface QuoteView {
   size: ParcelSize;
   flexible: QuoteLegPrice;
   locked: QuoteLegPrice;
+  /** The money every figure of the quote is in: the selling company’s. */
+  currency?: string;
 }
 
 /** quote/options → one price per drop-off candidate (or the reason there is none). */

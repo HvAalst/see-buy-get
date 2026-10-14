@@ -301,7 +301,7 @@ function DestStep({ state, actions }: MintScreenProps) {
 /** The detail lines a shop preview shows: price to handle, distance, open state, free slots, rating. */
 function shopFacts(shop: NetworkPoint, away: string | null, t: Translate): string[] {
   return [
-    t('vendor.shop.handleTheParcel', { price: money(shop.pricePerParcel) }),
+    t('vendor.shop.handleTheParcel', { price: money(shop.pricePerParcel, shop.currency) }),
     away ? t('vendor.shop.away', { dist: away }) : t('vendor.zone', { zone: shop.zone }),
     shop.openState === 'open' ? t('vendor.shop.openNow') : t('vendor.shop.closedNow'),
     ...(shop.freeSlots != null ? [shop.freeSlots === 1 ? t('vendor.shop.slotOne', { count: shop.freeSlots }) : t('vendor.shop.slotMany', { count: shop.freeSlots })] : []),
@@ -348,7 +348,7 @@ function OriginStep({ state, actions }: MintScreenProps) {
       {rows.length ? (
         <PlaceMap
           label={t('vendor.mint.mapDropoff', { count: rows.length })}
-          pins={rows.filter((r) => r.point.location).map((r) => ({ id: r.point.did, label: r.total === null ? r.point.shopName : `${r.point.shopName} · ${money(r.total)}`, point: r.point.location! }))}
+          pins={rows.filter((r) => r.point.location).map((r) => ({ id: r.point.did, label: r.total === null ? r.point.shopName : `${r.point.shopName} · ${money(r.total, r.currency)}`, point: r.point.location! }))}
           selectedId={openShop}
           onPick={setOpenShop}
           reference={state.vendor?.location ?? null}
@@ -360,7 +360,7 @@ function OriginStep({ state, actions }: MintScreenProps) {
           <PointRow
             key={r.point.did}
             point={r.point}
-            price={r.total === null ? null : money(r.total)}
+            price={r.total === null ? null : money(r.total, r.currency)}
             sub={state.vendor?.location && r.point.location ? distanceLabel(haversineKm(state.vendor.location, r.point.location)) : undefined}
             onPick={() => void actions.pickOrigin(r.point.did)}
           />
@@ -381,7 +381,7 @@ function OriginStep({ state, actions }: MintScreenProps) {
         lines={
           preview
             ? [
-                preview.total === null ? t('vendor.mint.noRouteYet') : t('vendor.mint.toShipAllIn', { price: money(preview.total) }),
+                preview.total === null ? t('vendor.mint.noRouteYet') : t('vendor.mint.toShipAllIn', { price: money(preview.total, preview.currency) }),
                 ...shopFacts(
                   preview.point,
                   state.vendor?.location && preview.point.location ? distanceLabel(haversineKm(state.vendor.location, preview.point.location)) : null,
@@ -442,7 +442,7 @@ function PriceStep({ state, actions }: MintScreenProps) {
               return (
                 <button key={c.key} type="button" class={`price price--tap${on ? ' price--on' : ''}`} aria-pressed={on} onClick={() => actions.setForm({ routeMode: c.key })}>
                   <span class="price__title">{c.title}</span>
-                  <span class="price__total">{money(c.total)}</span>
+                  <span class="price__total">{money(c.total, q.currency)}</span>
                   <span class="price__sub">{c.sub}</span>
                 </button>
               );
@@ -454,7 +454,7 @@ function PriceStep({ state, actions }: MintScreenProps) {
           {feeLines(f.routeMode === 'locked' ? q.locked : q.flexible, t).map((line: { label: string; amount: number }) => (
             <p key={line.label} class="kv kv--quiet">
               <span>{line.label}</span>
-              <b>{money(line.amount)}</b>
+              <b>{money(line.amount, q.currency)}</b>
             </p>
           ))}
 
@@ -462,7 +462,7 @@ function PriceStep({ state, actions }: MintScreenProps) {
             <Checklist
               items={[
                 t('vendor.mint.happen1'),
-                t('vendor.mint.happen2', { amount: money(chargeOf(f.routeMode === 'locked' ? q.locked : q.flexible)) }),
+                t('vendor.mint.happen2', { amount: money(chargeOf(f.routeMode === 'locked' ? q.locked : q.flexible), q.currency) }),
                 t('vendor.mint.happen3'),
               ]}
             />
@@ -561,7 +561,7 @@ function LabelStep({ state, actions }: MintScreenProps) {
         {m.parcel.shipmentCost != null ? (
           <div class="kv">
             <span>{t('vendor.mint.billed')}</span>
-            <b>{money(m.parcel.shipmentCost)}</b>
+            <b>{money(m.parcel.shipmentCost, m.parcel.currency)}</b>
           </div>
         ) : null}
       </Card>

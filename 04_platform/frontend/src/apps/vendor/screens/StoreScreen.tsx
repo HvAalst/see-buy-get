@@ -35,7 +35,7 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
       </Card>
 
       <Card title={t('vendor.store.buyerPaysTitle')} aside={<Button variant="link" full={false} onClick={() => setPolicyOpen(true)}>{t('vendor.store.change')}</Button>}>
-        <p class="t-body">{v ? policyLine(v.shippingPolicy, t) : ''}</p>
+        <p class="t-body">{v ? policyLine(v.shippingPolicy, t, v.currency) : ''}</p>
         {/* The insurer, on the same policy: where every damage claim report on this store's orders is emailed. */}
         <p class="card__note">{v ? insurerLine(v.shippingPolicy, t) : ''}</p>
       </Card>
@@ -99,13 +99,13 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
         {state.settlement.slice(0, 10).map((s) => (
           <div key={s.id} class="kv">
             <span>{`${ledgerTypeWord(s.type, t)}${s.parcelId ? ` · ${s.parcelId}` : ''}`}</span>
-            <b>{`${s.sign}${money(s.amount)}`}</b>
+            <b>{`${s.sign}${money(s.amount, s.currency ?? v?.currency)}`}</b>
           </div>
         ))}
       </Card>
 
       <div class="scr__foot">
-        <ReadAloud text={() => `${v?.balance === null ? t('vendor.noTillSpoken') : t('vendor.store.balanceSpoken', { balance: money(v?.balance) })}${v ? policyLine(v.shippingPolicy, t) : ''}`} label={t('vendor.readAloud')} />
+        <ReadAloud text={() => `${v?.balance === null ? t('vendor.noTillSpoken') : t('vendor.store.balanceSpoken', { balance: money(v?.balance, v?.currency) })}${v ? policyLine(v.shippingPolicy, t, v.currency) : ''}`} label={t('vendor.readAloud')} />
         <Button variant="link" full={false} onClick={actions.signOut}>
           {t('vendor.store.signOut')}
         </Button>
@@ -275,7 +275,7 @@ function PinCard({ state, actions }: { state: VendorState; actions: VendorAction
         lines={
           preview
             ? [
-                t('vendor.shop.handleParcel', { price: money(preview.pricePerParcel) }),
+                t('vendor.shop.handleParcel', { price: money(preview.pricePerParcel, preview.currency) }),
                 preview.openState === 'open' ? t('vendor.shop.openNow') : t('vendor.shop.closedNow'),
                 ...(preview.rating?.count ? [t('vendor.shop.rated', { avg: preview.rating.average.toFixed(1), count: preview.rating.count })] : []),
               ]
@@ -338,13 +338,13 @@ function PolicySheet({ open, onClose, state, actions }: { open: boolean; onClose
         <>
           <div class="field" style="margin-top:12px">
             <label class="field__label" for="p-cap">
-              {t('vendor.store.buyerPaysAtMost')}
+              {state.vendor?.currency ? t('vendor.store.buyerPaysAtMostIn', { currency: state.vendor.currency }) : t('vendor.store.buyerPaysAtMost')}
             </label>
             <input id="p-cap" class="input" type="number" inputMode="decimal" min="0" step="0.5" value={cap} onInput={(e) => setCap(e.currentTarget.value)} />
           </div>
           <div class="field" style="margin-top:12px">
             <label class="field__label" for="p-free">
-              {t('vendor.store.freeOver')}
+              {state.vendor?.currency ? t('vendor.store.freeOverIn', { currency: state.vendor.currency }) : t('vendor.store.freeOver')}
             </label>
             <input id="p-free" class="input" type="number" inputMode="decimal" min="0" step="1" value={freeOver} onInput={(e) => setFreeOver(e.currentTarget.value)} />
           </div>
@@ -353,7 +353,7 @@ function PolicySheet({ open, onClose, state, actions }: { open: boolean; onClose
       {/* S34c — the freight-spend cap applies to heavy (dedicated-freight) orders, independent of the buyer split. */}
       <div class="field" style="margin-top:12px">
         <label class="field__label" for="p-freight">
-          {t('vendor.store.freightCapLabel')}
+          {state.vendor?.currency ? t('vendor.store.freightCapLabelIn', { currency: state.vendor.currency }) : t('vendor.store.freightCapLabel')}
         </label>
         <input id="p-freight" class="input" type="number" inputMode="decimal" min="0" step="1" placeholder={t('vendor.store.freightCapPh')} value={freightCap} onInput={(e) => setFreightCap(e.currentTarget.value)} />
         <p class="hint" style="margin-top:6px">{t('vendor.store.freightCapHint')}</p>

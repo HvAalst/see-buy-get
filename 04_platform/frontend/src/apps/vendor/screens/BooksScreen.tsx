@@ -89,8 +89,8 @@ export function BooksScreen({ state, actions }: BooksScreenProps) {
       ) : (
         <GlanceNumber
           label={t('vendor.balanceLabel')}
-          value={money(state.vendor?.balance)}
-          sub={sum ? t('vendor.books.balanceSubSummary', { in: money(sum.in), out: money(sum.out), net: netLabel(sum.net) }) : t('vendor.books.balanceSubEmpty')}
+          value={money(state.vendor?.balance, state.vendor?.currency)}
+          sub={sum ? t('vendor.books.balanceSubSummary', { in: money(sum.in, sum.currency), out: money(sum.out, sum.currency), net: netLabel(sum.net, sum.currency) }) : t('vendor.books.balanceSubEmpty')}
         />
       )}
 
@@ -132,7 +132,7 @@ export function BooksScreen({ state, actions }: BooksScreenProps) {
               </div>
               <div class={`rows${state.ledgerState === 'loading' ? ' rows--loading' : ''}`} role="list">
                 {state.ledger.map((s) => (
-                  <LedgerRowItem key={s.id} s={s} selected={selected.has(s.id)} onToggle={() => setSelected(toggleId(selected, s.id))} />
+                  <LedgerRowItem key={s.id} s={s} currency={state.vendor?.currency} selected={selected.has(s.id)} onToggle={() => setSelected(toggleId(selected, s.id))} />
                 ))}
               </div>
             </>
@@ -151,7 +151,7 @@ export function BooksScreen({ state, actions }: BooksScreenProps) {
       </Card>
 
       <div class="scr__foot">
-        <ReadAloud text={() => ledgerSpoken(state.vendor?.balance ?? 0, sum, t)} label={t('vendor.readAloud')} />
+        <ReadAloud text={() => ledgerSpoken(state.vendor?.balance ?? 0, sum, t, state.vendor?.currency)} label={t('vendor.readAloud')} />
       </div>
 
       <SelectionBar count={selectedRows.length} onClear={() => setSelected(new Set())}>
@@ -178,19 +178,20 @@ export function BooksScreen({ state, actions }: BooksScreenProps) {
 }
 
 /** "net 42.00" or "net −8.00" — a real minus for a spend-heavy view. */
-function netLabel(net: number): string {
-  return `${net < 0 ? '−' : ''}${money(Math.abs(net))}`;
+function netLabel(net: number, currency?: string): string {
+  return `${net < 0 ? '−' : ''}${money(Math.abs(net), currency)}`;
 }
 
 /** One ledger row — type + parcel/note + date, with the signed amount. Tapping the row (or its checkbox)
  *  selects it; there is no drill-down, so the row IS the select target. */
-function LedgerRowItem({ s, selected, onToggle }: { s: SettlementRow; selected: boolean; onToggle: () => void }) {
+/** A line is in the money of the books it was posted to; one from before lines said so, in the store’s. */
+function LedgerRowItem({ s, currency, selected, onToggle }: { s: SettlementRow; currency?: string; selected: boolean; onToggle: () => void }) {
   const t = useT();
   const word = ledgerTypeWord(s.type, t);
   const sub = [s.parcelId, s.note].filter(Boolean).join(' · ');
   return (
     <div class={`orow${selected ? ' orow--on' : ''}`}>
-      <Checkbox checked={selected} onChange={() => onToggle()} label={t('vendor.books.selectEntry', { word, amount: `${s.sign}${money(s.amount)}` })} />
+      <Checkbox checked={selected} onChange={() => onToggle()} label={t('vendor.books.selectEntry', { word, amount: `${s.sign}${money(s.amount, s.currency ?? currency)}` })} />
       {/* The row is a select target (no drill-down), so it is a toggle button — aria-pressed announces its
           state, and the visible content is its accessible name. */}
       <button type="button" class="row orow__row" aria-pressed={selected} onClick={onToggle}>
@@ -203,7 +204,7 @@ function LedgerRowItem({ s, selected, onToggle }: { s: SettlementRow; selected: 
           <span class="row__meta">{new Date(s.at).toLocaleDateString()}</span>
         </span>
         <span class="row__end">
-          <b class={`amt amt--${s.sign === '+' ? 'in' : 'out'}`}>{`${s.sign}${money(s.amount)}`}</b>
+          <b class={`amt amt--${s.sign === '+' ? 'in' : 'out'}`}>{`${s.sign}${money(s.amount, s.currency ?? currency)}`}</b>
         </span>
       </button>
     </div>
@@ -220,10 +221,10 @@ function ledgerFilterChips(q: LedgerQuery, t: Translate): Array<{ key: string; l
   return out;
 }
 
-function ledgerSpoken(balance: number, sum: LedgerSummary | null, t: Translate): string {
-  if (!sum) return t('vendor.books.spokenBalance', { balance: money(balance) });
-  const net = `${sum.net < 0 ? t('vendor.books.spokenMinus') : ''}${money(Math.abs(sum.net))}`;
-  return t('vendor.books.spokenFull', { balance: money(balance), in: money(sum.in), out: money(sum.out), net });
+function ledgerSpoken(balance: number, sum: LedgerSummary | null, t: Translate, currency?: string): string {
+  if (!sum) return t('vendor.books.spokenBalance', { balance: money(balance, currency) });
+  const net = `${sum.net < 0 ? t('vendor.books.spokenMinus') : ''}${money(Math.abs(sum.net), sum.currency)}`;
+  return t('vendor.books.spokenFull', { balance: money(balance, currency), in: money(sum.in, sum.currency), out: money(sum.out, sum.currency), net });
 }
 
 /** The filter sheet — a local draft applied all at once. "Clear all filters" also clears the search box. */

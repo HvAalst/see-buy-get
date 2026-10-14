@@ -91,7 +91,7 @@ export function App() {
             ) : null}
             {state.vendor?.balance === null ? null : (
               <Pill tone={(state.vendor?.balance ?? 0) > 0 ? 'ok' : 'idle'} dot>
-                {money(state.vendor?.balance)}
+                {money(state.vendor?.balance, state.vendor?.currency)}
               </Pill>
             )}
             {/* Last in the bar: live state first, the place you visit last. */}

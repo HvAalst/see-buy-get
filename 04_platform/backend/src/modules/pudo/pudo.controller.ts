@@ -3071,7 +3071,9 @@ export class SbgController {
     this.assertVendorOwner(id, actor);
     const vendor = this.vendors.get(id);
     // Whether it has an account of its own — never the address: a console signed in the old way is told to set one up.
-    return { ...VendorService.publicView(vendor), hasAccount: Boolean(this.accounts.emailForDid(vendor.did)) };
+    // And the money every figure of its own is in, named once for its screens.
+    const currency = this.vendors.currencyOf(vendor);
+    return { ...VendorService.publicView(vendor), hasAccount: Boolean(this.accounts.emailForDid(vendor.did)), ...(currency ? { currency } : {}) };
   }
 
   /** Update the store profile: map pin (origin-PUDO ranking), address, callback URL, split policy.
@@ -3730,6 +3732,8 @@ export class SbgController {
       // holds — so it stays on the map for whoever is collecting — and a picker simply does not offer it.
       takesNew: !a.idHold,
       pricePerParcel: a.pricePerParcel,
+      // The money that price is in — its company's. A price is public; without its money it says nothing.
+      currency: this.shopCurrency(a.did),
       rating: this.ratings.agentRating(a.did),
       freeSlots: this.shelf.available(a.did),
       since: a.createdAt, // REP1 — a "serving since" trust signal for the public profile (an onboarding date, not PII)

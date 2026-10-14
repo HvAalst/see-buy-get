@@ -315,6 +315,11 @@ describe('PUDO Light', () => {
       expect(inShillings.pins.map((p) => p.id)).toContain(home.did);
       expect(inShillings.pins.map((p) => p.id)).not.toContain(ets[0].did);
       expect(inShillings.benchmark.max).toBeLessThan(300);
+
+      // On the public map too, each shop’s price beside its own money.
+      const onTheMap = (did: string) => (controller.networkPoints() as Array<{ did: string; currency?: string }>).find((p) => p.did === did)?.currency;
+      expect(onTheMap(ets[0].did)).toBe('ETB');
+      expect(onTheMap(home.did)).toBe('KES');
     });
 
     it('refuses to add up register lines in two moneys rather than give a figure in nothing', () => {
@@ -6623,7 +6628,9 @@ describe('PUDO Light', () => {
         const card = (controller.listAgents(who) as Row[]).find((a) => a.did === shop.did)!;
         expect(card).toMatchObject({ did: shop.did, shopName: 'Read Shop', location: shop.location });
         expect(card).toEqual(onTheMap);
-        for (const kept of ['balance', 'currency', 'deviceImei', 'vaultRef', 'kyc', 'requirements', 'equipmentDepositPaid', 'capacity', 'status', 'lastPingAt']) expect(card).not.toHaveProperty(kept);
+        for (const kept of ['balance', 'parcelPrice', 'deviceImei', 'vaultRef', 'kyc', 'requirements', 'equipmentDepositPaid', 'capacity', 'status', 'lastPingAt']) expect(card).not.toHaveProperty(kept);
+        // What it charges is public, and so is the money it charges in: a price without its money says nothing.
+        expect(card.currency).toBe('KES');
       }
     });
 
@@ -6695,6 +6702,10 @@ describe('PUDO Light', () => {
       // The record carries the store's balance: its own, and staff's.
       for (const who of [own, staff]) expect(controller.getVendor(store.vendorId, who)).toMatchObject({ vendorId: store.vendorId, balance: vendors.get(store.vendorId).balance });
       expect(controller.getVendor(store.vendorId, own)).not.toHaveProperty('secret');
+      // …and the money that balance, its bills and its policy are in: its company's, named once for its screens.
+      expect(controller.getVendor(store.vendorId, own)).toMatchObject({ currency: 'KES' });
+      const addis = vendors.register({ name: 'Addis Read Store', country: 'ET' });
+      expect(controller.getVendor(addis.vendorId, as('genesis', addis.did))).toMatchObject({ currency: 'ETB' });
       for (const who of others) expect(() => controller.getVendor(store.vendorId, who)).toThrow('This store is not yours to view');
 
       for (const who of [own, staff]) expect(controller.parcelRoute(parcel.parcelId, who)).toMatchObject({ planned: true });

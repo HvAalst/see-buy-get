@@ -90,6 +90,12 @@ describe('policy', () => {
     expect(capped).toContain('at most 3.00');
     expect(capped).toContain('over 50.00');
   });
+
+  it('says the cap and the threshold in the store’s money', () => {
+    const capped = policyLine({ mode: 'capped', freeOverSubtotal: 50, buyerContributionCap: 3 }, t, 'KES');
+    expect(capped).toContain('at most KES 3.00');
+    expect(capped).toContain('over KES 50.00');
+  });
 });
 
 describe('status words', () => {
@@ -164,6 +170,11 @@ describe('originRows', () => {
     // A shop that takes no new parcels is not somewhere to hand one in, whatever it would have cost.
     expect(originRows([...pts, point({ did: 'held', shopName: 'Held', takesNew: false })], 'dest', [...options, { did: 'held', quote: quote(1) }]).map((r) => r.point.did)).toEqual(['cheap', 'dear', 'nowhere']);
     expect(rows[2].total).toBeNull();
+  });
+
+  it('carries the money each price is in — the quote’s — and none where there is no price', () => {
+    const rows = originRows([point({ did: 'a', shopName: 'A' }), point({ did: 'b', shopName: 'B' })], 'dest', [{ did: 'a', quote: { ...quote(3), currency: 'ETB' } }, { did: 'b', error: 'no route' }]);
+    expect(rows.map((r) => [r.point.did, r.currency])).toEqual([['a', 'ETB'], ['b', undefined]]);
   });
 });
 
@@ -245,6 +256,11 @@ describe('speaking', () => {
     expect(ordersSummary(12.5, 3, 0, t)).toBe('Balance 12.50. 3 orders on the move.');
     expect(ordersSummary(0, 1, 1, t)).toContain('1 unpaid — top up to release it.');
     expect(money(undefined)).toBe('0.00');
+  });
+
+  it('says the balance in the store’s money where it has one', () => {
+    expect(ordersSummary(12.5, 3, 0, t, 'ETB')).toBe('Balance ETB 12.50. 3 orders on the move.');
+    expect(money(12.5, 'KES')).toBe('KES 12.50');
   });
 });
 

@@ -222,6 +222,13 @@ export class VendorService {
     return vendor.entityId ?? this.entities.forJurisdiction(vendor.country)?.entityId;
   }
 
+  /** The money this store's balance, its bills and its shipping policy are in: its sister's. None where the store
+   *  stands in a country we only match — it keeps no till with us, and its figures are the bare ones it typed. */
+  currencyOf(vendor: Pick<Vendor, 'entityId' | 'country'>): string | undefined {
+    const entityId = this.entityIdOrNone(vendor);
+    return entityId ? this.entities.get(entityId).currency : undefined;
+  }
+
   /**
    * WHO SETTLES THIS STORE, by name, and in what money — for somebody reading about the store rather than
    * posting to its books. Nothing where the store stands in a country we only match: it has no till with

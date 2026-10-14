@@ -6,14 +6,16 @@
 
 import { toCsv } from '../../shared/csv';
 import type { MessageKey, Translate } from '../../shared/i18n';
+import { cash } from '../../shared/money';
 import type { IconName } from '../../shared/ui/Icon';
 import type { Measure } from '../../lib/sbg/personas/vendor';
 import type { CheckoutRow, NetworkPoint, OrderRow, OriginOption, ParcelStatus, QuoteLegPrice, QuoteView, SettlementRow, ShippingPolicy } from './types';
 
 /* ------------------------------------------------------------------ money -- */
 
-export function money(v: number | null | undefined): string {
-  return (Number(v) || 0).toFixed(2);
+/** Two decimals, in the money the server named for the figure; bare where it named none — what a box holds. */
+export function money(v: number | null | undefined, currency?: string): string {
+  return cash(v, currency);
 }
 
 /* ------------------------------------------------------------------- dock -- */
@@ -51,9 +53,9 @@ export function stagingTone(s: { capacity: number; used: number; free: number })
 /* ----------------------------------------------------------------- policy -- */
 
 /** The split policy in plain words — what the BUYER pays at checkout. */
-export function policyLine(p: ShippingPolicy, t: Translate): string {
+export function policyLine(p: ShippingPolicy, t: Translate, currency?: string): string {
   if (p.mode === 'full') return t('vendor.logic.policyFull');
-  return t('vendor.logic.policyCapped', { cap: money(p.buyerContributionCap), free: money(p.freeOverSubtotal) });
+  return t('vendor.logic.policyCapped', { cap: money(p.buyerContributionCap, currency), free: money(p.freeOverSubtotal, currency) });
 }
 
 /** The insurer on the policy, in a sentence — or that there is none, and what that means. */
@@ -204,6 +206,8 @@ export function handoffLine(c: CheckoutRow, t: Translate): string {
 export interface OriginRow {
   point: NetworkPoint;
   total: number | null;
+  /** The money the total is in: the quote’s. */
+  currency?: string;
 }
 
 /**
@@ -212,10 +216,13 @@ export interface OriginRow {
  * a merchant standing next to one deserves to see why it offers no price.
  */
 export function originRows(points: NetworkPoint[] | null, destDid: string, options: OriginOption[] | null): OriginRow[] {
-  const totals = new Map((options ?? []).map((o) => [o.did, o.quote?.locked.total ?? null]));
+  const quotes = new Map((options ?? []).map((o) => [o.did, o.quote]));
   return (points ?? [])
     .filter((p) => p.did !== destDid && p.openState === 'open' && p.takesNew !== false)
-    .map((point) => ({ point, total: totals.get(point.did) ?? null }))
+    .map((point) => {
+      const quote = quotes.get(point.did);
+      return { point, total: quote?.locked.total ?? null, ...(quote?.currency ? { currency: quote.currency } : {}) };
+    })
     .sort((a, b) => {
       if (a.total === null && b.total === null) return a.point.shopName.localeCompare(b.point.shopName);
       if (a.total === null) return 1;
@@ -270,8 +277,8 @@ export function priceCards(q: QuoteView, t: Translate): PriceCard[] {
 
 /* --------------------------------------------------------------- speaking -- */
 
-export function ordersSummary(balance: number, open: number, unpaid: number, t: Translate): string {
-  const base = t(open === 1 ? 'vendor.logic.ordersSummaryOne' : 'vendor.logic.ordersSummaryMany', { balance: money(balance), open });
+export function ordersSummary(balance: number, open: number, unpaid: number, t: Translate, currency?: string): string {
+  const base = t(open === 1 ? 'vendor.logic.ordersSummaryOne' : 'vendor.logic.ordersSummaryMany', { balance: money(balance, currency), open });
   const tail = unpaid ? ' ' + t(unpaid === 1 ? 'vendor.logic.ordersUnpaidOne' : 'vendor.logic.ordersUnpaidMany', { count: unpaid }) : '';
   return base + tail;
 }
