@@ -166,6 +166,9 @@ describe('a customer’s business, over the wire', () => {
     expect(posted.body).toMatchObject({ settlement: 'between_parties', postedByName: 'Tigist Owner' });
     const mine = await http().get('/v1/sbg/dispatch/posted').set(bearer(biz)).expect(200);
     expect(JSON.stringify(mine.body)).toContain(posted.body.code);
+    // …in the money of where the business stands, stamped when it was posted: its list says it beside the budget.
+    expect(posted.body.postedCurrency).toBe('ETB');
+    expect(mine.body.items.find((r: { freightId: string }) => r.freightId === posted.body.freightId)).toMatchObject({ currency: 'ETB' });
     const note = await http().get(`/v1/sbg/dispatch/freight/${posted.body.freightId}/consignment-note`).set(bearer(biz)).expect(200);
     expect(note.body.sender.name).toBe(`Sidama Coffee ${tag}`);
     // Not priced until a carrier takes it — and never "paid by the sender through SeeBuyGet".

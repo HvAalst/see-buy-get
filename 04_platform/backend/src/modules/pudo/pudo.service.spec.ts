@@ -4282,6 +4282,38 @@ describe('PUDO Light', () => {
   });
 
   /**
+   * A LOAD SAYS THE MONEY ITS BUDGET WAS SET IN. A shop's freight screen wrote the budget, the prices offered, the one
+   * agreed and any refund as bare numbers: the load recorded its carrier's money once claimed, never its poster's. The
+   * user, 2026-10-15, took my recommendation: the poster's company's money is stamped when the load is posted.
+   */
+  describe('a load keeps the money its poster set the budget in', () => {
+    const depot = { lat: -1.2, lng: 36.8 };
+    const post = (by: string | undefined) =>
+      dispatch.registerFreight({ description: 'Sugar', pickupLocation: depot, pickupLabel: 'Depot', destLabel: 'Site', destLocation: depot, weightKg: 400, packaging: 'bagged', ...(by ? { postedByDid: by } : {}), maxSpend: 120 });
+
+    it('stamps its poster’s company’s money when it is posted — a shop’s, a store’s, a business’s, a fleet’s — and the poster’s list says it', () => {
+      const shop = onboardAgent('Budget Counter', 'NorthTown', 50);
+      const kenyan = post(shop.did);
+      expect(kenyan.postedCurrency).toBe('KES');
+      expect(dispatch.postedBy(shop.did).find((r) => r.freightId === kenyan.freightId)).toMatchObject({ currency: 'KES', maxSpend: 120 });
+
+      const addis = vendors.register({ name: 'Budget Store Addis', country: 'ET' });
+      expect(post(addis.did).postedCurrency).toBe('ETB');
+      // A business carries its own, from where it stands — with or without a company of ours there.
+      const kampala = entities.createBusiness({ name: 'Budget Import Kampala', jurisdiction: 'UG', profile: { activities: ['shipper'], registrationNo: 'R-BUDGET', createdBy: 'Okello', createdByPersonDid: 'did:glos:okello' } });
+      expect(post(kampala.did).postedCurrency).toBe('UGX');
+      const haulier = managers.register({ companyName: 'Budget Haulage', contactPhone: '+254800978', ownerFullName: 'B H', ownerNationalId: 'MGR-BUDGET', location: depot, requirements: { businessRegistrationNo: 'BRN-BUDGET', transportOperatorLicence: 'TOL-BUDGET', taxId: 'TAX-BUDGET' } });
+      expect(post(haulier.did).postedCurrency).toBe('KES');
+    });
+
+    it('says no money for a load nobody posted, rather than one it was never set in', () => {
+      const bulletin = post(undefined);
+      expect(bulletin).not.toHaveProperty('postedCurrency');
+      expect(dispatch.posterCurrencyOf('did:glos:nobody-we-know')).toBeUndefined();
+    });
+  });
+
+  /**
    * ONLY THE DRIVER IS HANDED PARCELS AS THE DRIVER. A badge number alone handed parcels over at any counter: it is
    * printed under the badge, every shop sees it, and the list of them was readable by any sign-in. The user,
    * 2026-10-15: "only drivers can do what drivers can do". The counter now scans the pass on the driver's own phone —
@@ -8270,6 +8302,7 @@ describe('PUDO Light', () => {
     expect(res.status).toBe('available'); // immediate
     expect(res.cargoClass).toBe('P4'); // 200 kg discrete
     expect(res.maxSpend).toBe(40); // the cash cap became the ceiling
+    expect(res.currency).toBe('KES'); // …in the shop's company's money, which the receipt names
 
     const f = dispatch.listFreight().find((x) => x.freightId === res.freightId)!;
     expect(f.shipperDid).toBeUndefined(); // no on-platform shipper → it settles as cash off-platform

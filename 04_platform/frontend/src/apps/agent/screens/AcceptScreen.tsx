@@ -367,7 +367,7 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
               {state.bookedFreight.trackingKey ? <p class="hint">{t('agent.accept.freightKey', { key: state.bookedFreight.trackingKey })}</p> : null}
             </Card>
             {state.bookedFreight.maxSpend != null ? (
-              <p class="hint">{t('agent.accept.freightCollect', { amount: state.bookedFreight.maxSpend.toFixed(2) })}</p>
+              <p class="hint">{t('agent.accept.freightCollect', { amount: money(state.bookedFreight.maxSpend, state.bookedFreight.currency) })}</p>
             ) : null}
             {/* FB2c — hand the conclusion back to the person who supplied the facts it ran on. It is also the
                 only place a clerk finds out that skipping the measurements left us guessing from weight. */}

@@ -2833,6 +2833,8 @@ export class SbgController {
       cargoClass: freight.cargoClass,
       equipmentGaps: freight.equipmentGaps,
       maxSpend: freight.maxSpend,
+      // The money that cap is in: the shop’s company’s, stamped on the load as it was booked.
+      ...(freight.postedCurrency ? { currency: freight.postedCurrency } : {}),
     };
   }
 

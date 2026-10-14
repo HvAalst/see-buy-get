@@ -553,6 +553,13 @@ export class Freight {
    *  PAYS: a counter booking deliberately has no shipperDid (the customer's cash settles off-platform) yet
    *  still has a shop that must be able to answer a proposal. Absent for a bulletin freight → operators only. */
   postedByDid?: string;
+  /**
+   * THE MONEY ITS POSTER SET THE BUDGET IN — its poster’s company’s (a shop’s, a store’s, a business’s, a fleet’s), stamped
+   * when it is posted and never re-derived. The budget, the prices offered on it, the one agreed and any refund or award
+   * its poster is told of are in it. The carrier’s side has its own (`lockedCurrency`, frozen at the claim). Absent where
+   * no company of ours settles its poster, or nobody posted it: then its figures are the bare ones that were typed.
+   */
+  @ApiPropertyOptional() postedCurrency?: string;
   @ApiProperty({ enum: FREIGHT_STATUSES })
   status: FreightStatus;
   claimedBy?: string;
@@ -1093,6 +1100,8 @@ export class PostedFreightRow {
   status: FreightStatus;
   @ApiProperty({ enum: ['instant', 'negotiate'] })
   commitMode: FreightCommitMode;
+  /** The money the budget, the prices offered and the one agreed are in: the poster’s company’s (Freight.postedCurrency). */
+  @ApiPropertyOptional() currency?: string;
   /** The cash cap the customer agreed — what a price is judged against. */
   maxSpend?: number;
   scheduledPickupAt?: string;

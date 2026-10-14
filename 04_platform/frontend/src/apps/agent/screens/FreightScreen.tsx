@@ -8,6 +8,7 @@ import type { ChatThread } from '../../../shared/conversation/logic';
 import { MyBookingsSection } from './MyBookingsSection';
 import { OffersSection } from './OffersSection';
 import type { AgentActions, AgentState, FreightClaim, FreightPrice, PostedFreight } from '../useAgentApp';
+import { money } from '../logic';
 
 export interface FreightScreenProps {
   state: AgentState;
@@ -101,14 +102,14 @@ function attemptLine(a: NonNullable<PostedFreight['attempts']>[number], t: Retur
 }
 
 /** FP3b — where the claim stands, in one line. */
-function claimLine(c: FreightClaim, t: ReturnType<typeof useT>): string {
+function claimLine(c: FreightClaim, t: ReturnType<typeof useT>, currency?: string): string {
   const kind = c.kind === 'damaged' ? t('agent.freight.claimDamaged') : c.kind === 'short' ? t('agent.freight.claimShort') : t('agent.freight.claimNotReceived');
   if (c.state === 'open') return t('agent.freight.claimOpenLine', { kind, when: formatDate(c.raisedAt) });
   // Nobody of the network decided anything: the note, frozen with the claim on it, is the damage claim report.
   if (c.decision === 'report_only') return t('agent.freight.claimReportLine', { kind, when: formatDate(c.decidedAt ?? c.raisedAt) });
   const decision = c.decision === 'upheld' ? t('agent.freight.claimUpheld') : c.decision === 'partly_upheld' ? t('agent.freight.claimPartly') : t('agent.freight.claimRejected');
-  const money = c.award ? t('agent.freight.claimAward', { amount: c.award.toFixed(2) }) : c.paidTo?.kind === 'between_parties' ? t('agent.freight.claimBetween') : '';
-  return t('agent.freight.claimDecidedLine', { kind, decision, money: money ? ` — ${money}` : '', note: c.note ?? '' });
+  const paid = c.award ? t('agent.freight.claimAward', { amount: money(c.award, currency) }) : c.paidTo?.kind === 'between_parties' ? t('agent.freight.claimBetween') : '';
+  return t('agent.freight.claimDecidedLine', { kind, decision, money: paid ? ` — ${paid}` : '', note: c.note ?? '' });
 }
 
 function PostedRow({ f, onOpen }: { f: PostedFreight; onOpen: () => void }) {
@@ -123,8 +124,8 @@ function PostedRow({ f, onOpen }: { f: PostedFreight; onOpen: () => void }) {
           {f.code} — {f.description}
         </span>
         <span class="row__s">{t('agent.freight.statusLine', { status: f.status.replace('_', ' '), kg: f.weightKg, dest: f.destLabel })}</span>
-        {f.maxSpend != null ? <span class="row__s">{t('agent.freight.budget', { amount: f.maxSpend.toFixed(2) })}</span> : null}
-        {f.agreedPrice != null ? <span class="row__s">{t('agent.freight.agreed', { amount: f.agreedPrice.toFixed(2) })}</span> : null}
+        {f.maxSpend != null ? <span class="row__s">{t('agent.freight.budget', { amount: money(f.maxSpend, f.currency) })}</span> : null}
+        {f.agreedPrice != null ? <span class="row__s">{t('agent.freight.agreed', { amount: money(f.agreedPrice, f.currency) })}</span> : null}
         {f.scheduledPickupAt ? <span class="row__s">{formatDate(f.scheduledPickupAt)}</span> : null}
         {/* FP3 — what became of it: who signed for the goods, or that the shop withdrew it. */}
         {f.receiverName && f.deliveredAt ? <span class="row__s">{t('agent.freight.receivedBy', { name: f.receiverName, when: formatDate(f.deliveredAt) })}</span> : null}
@@ -132,7 +133,7 @@ function PostedRow({ f, onOpen }: { f: PostedFreight; onOpen: () => void }) {
         {/* FP8 — a driver gave it back: the latest, with their reason, while the load is still looking for a carrier. */}
         {f.handBacks?.length && !f.pickedUpAt ? <span class="row__s">{t('agent.freight.handBackLine', { when: formatDate(f.handBacks[f.handBacks.length - 1].at), reason: f.handBacks[f.handBacks.length - 1].reason })}</span> : null}
         {f.attempts?.length && f.status === 'in_transit' ? <span class="row__s">{attemptLine(f.attempts[f.attempts.length - 1], t)}</span> : null}
-        {f.claim ? <span class="row__s">{claimLine(f.claim, t)}</span> : null}
+        {f.claim ? <span class="row__s">{claimLine(f.claim, t, f.currency)}</span> : null}
         {/* FP6 — who has it, and what the shop said of them. */}
         {f.carrier ? <span class="row__s">{t('agent.freight.carrierLine', { driver: f.carrier.driverName ?? t('agent.freight.carrierUnknown'), plate: f.carrier.plate ?? '' })}</span> : null}
         {f.rating ? <span class="row__s">{t('agent.freight.ratedLine', { stars: f.rating.stars })}</span> : null}
@@ -172,7 +173,7 @@ function Prices({ load, state, actions }: { load: PostedFreight } & FreightScree
     <>
       <h1 class="scr__title">{t('agent.freight.pricesTitle', { code: load.code })}</h1>
       <p class="scr__lede">{load.description}</p>
-      {load.maxSpend != null ? <p class="scr__lede">{t('agent.freight.budget', { amount: load.maxSpend.toFixed(2) })}</p> : null}
+      {load.maxSpend != null ? <p class="scr__lede">{t('agent.freight.budget', { amount: money(load.maxSpend, load.currency) })}</p> : null}
       {/* FP2 — the load's own document, from posting to delivery. */}
       {load.receiverName && load.deliveredAt ? <p class="scr__lede">{t('agent.freight.receivedBy', { name: load.receiverName, when: formatDate(load.deliveredAt) })}</p> : null}
       {load.cancelledAt ? <p class="scr__lede">{t('agent.freight.cancelledLine', { when: formatDate(load.cancelledAt) })}</p> : null}
@@ -208,7 +209,7 @@ function Prices({ load, state, actions }: { load: PostedFreight } & FreightScree
       ) : null}
       {load.claim ? (
         <Card tone="soft">
-          <p class="card__note">{claimLine(load.claim, t)}</p>
+          <p class="card__note">{claimLine(load.claim, t, load.currency)}</p>
         </Card>
       ) : null}
       {/* FP7 — box 13: what the driver is told at the door, and the door to change it while it still can be. */}
@@ -363,11 +364,11 @@ function Prices({ load, state, actions }: { load: PostedFreight } & FreightScree
       <Sheet open={!!confirm} onClose={() => setConfirm(null)} title={t('agent.freight.confirmTitle')}>
         {confirm ? (
           <>
-            <p class="t-body">{t('agent.freight.confirmBody', { amount: confirm.price.toFixed(2), code: load.code })}</p>
+            <p class="t-body">{t('agent.freight.confirmBody', { amount: money(confirm.price, load.currency), code: load.code })}</p>
             <Checklist
               items={[
                 t('agent.freight.confirmRun', { empty: confirm.deadheadKm, loaded: confirm.loadedKm }),
-                ...(load.maxSpend != null ? [t('agent.freight.budget', { amount: load.maxSpend.toFixed(2) })] : []),
+                ...(load.maxSpend != null ? [t('agent.freight.budget', { amount: money(load.maxSpend, load.currency) })] : []),
               ]}
             />
             <Button
@@ -403,7 +404,7 @@ function PriceRow({ p, load, state, actions, onTake }: { p: FreightPrice; load: 
         <Icon name="wallet" size={24} />
       </span>
       <span class="row__body">
-        <span class="row__t">{t('agent.freight.priceLine', { amount: p.price.toFixed(2) })}</span>
+        <span class="row__t">{t('agent.freight.priceLine', { amount: money(p.price, load.currency) })}</span>
         <span class="row__s">{t('agent.freight.priceRun', { empty: p.deadheadKm, loaded: p.loadedKm })}</span>
         {/* The driver's own words for the number. Often the whole reason it is low. */}
         {p.note ? <span class="row__s">“{p.note}”</span> : null}

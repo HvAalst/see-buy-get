@@ -35430,6 +35430,10 @@
               "negotiate"
             ]
           },
+          "postedCurrency": {
+            "type": "string",
+            "description": "THE MONEY ITS POSTER SET THE BUDGET IN — its poster’s company’s (a shop’s, a store’s, a business’s, a fleet’s), stamped\nwhen it is posted and never re-derived. The budget, the prices offered on it, the one agreed and any refund or award\nits poster is told of are in it. The carrier’s side has its own (`lockedCurrency`, frozen at the claim). Absent where\nno company of ours settles its poster, or nobody posted it: then its figures are the bare ones that were typed."
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -39382,6 +39386,10 @@
               "instant",
               "negotiate"
             ]
+          },
+          "currency": {
+            "type": "string",
+            "description": "The money the budget, the prices offered and the one agreed are in: the poster’s company’s (Freight.postedCurrency)."
           },
           "onBehalfOf": {
             "description": "B4 — the client an expeditor sent this for, as their agent. The client is the SENDER on the note. A copy, not a link.",

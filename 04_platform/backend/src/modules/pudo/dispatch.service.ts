@@ -536,6 +536,8 @@ export class DispatchService {
       // Who NEGOTIATES for the load — not necessarily who pays. A counter booking has no shipperDid at all
       // (the customer's cash settles off-platform) and still needs a shop that can answer a proposal.
       postedByDid: input.postedByDid,
+      // …and the money it set its budget in, frozen with it: a load re-read in another money later would be a different load.
+      ...(this.posterCurrencyOf(input.postedByDid) ? { postedCurrency: this.posterCurrencyOf(input.postedByDid) } : {}),
       ...(input.postedByName?.trim() ? { postedByName: input.postedByName.trim().slice(0, 80) } : {}),
       ...(input.onBehalfOf ? { onBehalfOf: input.onBehalfOf } : {}),
       // B2 — a customer's business settles with the carrier itself: stamped here, once, from who posted it, so
@@ -1568,6 +1570,22 @@ export class DispatchService {
   }
 
   /**
+   * THE MONEY A POSTER SETS A BUDGET IN: its company’s. A business carries its own (where it stands decides it); a shop’s
+   * is its sister’s; a store’s is its sister’s; a fleet’s is the company that settles work in it. None where no company of
+   * ours settles the poster — a country we only match in — and none for a load nobody posted.
+   */
+  posterCurrencyOf(did: string | undefined): string | undefined {
+    if (!did) return undefined;
+    const entity = this.entities.byDid(did);
+    if (entity) return entity.currency;
+    if (this.agents.find(did)) return this.agents.amountsOf(did).currency;
+    const store = this.vendors.byDid(did);
+    if (store) return this.vendors.currencyOf(store);
+    // A fleet's office, or nobody we know: the company that settles a fleet's work, or none.
+    return this.drivers.rateCurrencyOf({ managerDid: did });
+  }
+
+  /**
    * FB2b — the loads THIS shop posted, newest first, each with how many prices are waiting.
    *
    * Owner-scoped at the source rather than by filtering the public list: a screen that filters someone
@@ -1592,6 +1610,7 @@ export class DispatchService {
         weightKg: f.weightKg,
         status: f.status,
         commitMode: commitModeOf(f),
+        ...(f.postedCurrency ? { currency: f.postedCurrency } : {}),
         maxSpend: f.maxSpend,
         scheduledPickupAt: f.scheduledPickupAt,
         createdAt: f.createdAt,

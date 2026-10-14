@@ -163,6 +163,8 @@ export interface ClientRef {
 export interface PostedLoad {
   freightId: string;
   code: string;
+  /** The money its prices are in: the business’s own, stamped when it was posted. */
+  currency?: string;
   /** One load of an order its carrier brings in several: which one, of how many, of which order. */
   partOf?: { rootCode: string; no: number; of: number; orderKg: number };
   /** The carrier's accepted plan has it outside the window asked for: about when, the window as the plan read it, by how much. */

@@ -8,6 +8,9 @@ import { NATURES, PACKAGING_OPTIONS } from '../../agent/logic';
 import type { BusinessClient, BusinessView, CarriageContract, LoadProposal, PostedLoad } from '../api';
 import { deliverySays, loadGaps, loadStage, mayAct, nextDay, noteKept, orderableContracts, planDo, planSays, type LoadForm, type LoadStage } from '../logic';
 import { NoteFile, NoteLinksPanel } from './LoadNote';
+
+/** A price on a load, in the money the load was posted in — the figure alone only where no company of ours names one. */
+const priced = (amount: number, currency?: string): string => (currency ? quoteFigure({ amount, currency }) : amount.toLocaleString());
 import { SentFor } from './SentFor';
 import type { BusinessActions } from '../useBusinessApp';
 
@@ -462,7 +465,7 @@ function LoadDetail({ row, client, act, onClose, onChanged }: { row: PostedLoad;
           {row.agreedPrice != null ? (
             <div class="cons__fact">
               <dt class="cons__factk">{t('business.loads.fact.agreed')}</dt>
-              <dd class="cons__factv">{row.agreedPrice.toLocaleString()}</dd>
+              <dd class="cons__factv">{priced(row.agreedPrice, row.currency)}</dd>
             </div>
           ) : null}
           {row.deliveredAt ? (
@@ -510,7 +513,7 @@ function LoadDetail({ row, client, act, onClose, onChanged }: { row: PostedLoad;
                 <div class="crow" key={p.proposalId}>
                   <span class="crow__body">
                     <span class="crow__top">
-                      <span class="crow__name">{p.price.toLocaleString()}</span>
+                      <span class="crow__name">{priced(p.price, row.currency)}</span>
                     </span>
                     {p.note ? <span class="crow__sub">{p.note}</span> : null}
                   </span>

@@ -59,6 +59,8 @@ export interface PostedFreight {
   weightKg: number;
   status: string;
   commitMode: 'instant' | 'negotiate';
+  /** The money the budget, the prices offered and the one agreed are in: the shop’s company’s, stamped when it was posted. */
+  currency?: string;
   maxSpend?: number;
   scheduledPickupAt?: string;
   createdAt: string;
@@ -252,6 +254,8 @@ export interface AgentState {
     cargoClass: string;
     equipmentGaps?: Array<'origin' | 'dest'>;
     maxSpend?: number;
+    /** The money the cap is in: the shop’s company’s. */
+    currency?: string;
     /** FB2c — what the system concluded the load needs, and how strong that claim is. Shown back on the
      *  receipt so the derivation is visible to the person who supplied the facts it ran on. */
     bodyDerived?: { body: string; basis: 'measured' | 'weight-only' };
@@ -1446,7 +1450,7 @@ export function useAgentApp() {
         const r = await client.api.acceptProposal(p.proposalId);
         if (r.error) return fail(r.error);
         buzz();
-        pushToast({ tone: 'ok', icon: 'truck', title: t('agent.freight.acceptedToast'), detail: t('agent.freight.acceptedToastDetail', { amount: p.price.toFixed(2) }) });
+        pushToast({ tone: 'ok', icon: 'truck', title: t('agent.freight.acceptedToast'), detail: t('agent.freight.acceptedToastDetail', { amount: money(p.price, stateRef.current.posted.find((f) => f.freightId === p.freightId)?.currency) }) });
         await Promise.all([loadPosted(), openPrices(p.freightId)]);
       });
     },
@@ -1465,7 +1469,7 @@ export function useAgentApp() {
           tone: 'ok',
           icon: 'truck',
           title: t('agent.freight.cancelledToast', { code: out.code ?? '' }),
-          detail: out.refunded != null ? t('agent.freight.cancelledRefund', { amount: out.refunded.toFixed(2) }) : t('agent.freight.cancelledDetail'),
+          detail: out.refunded != null ? t('agent.freight.cancelledRefund', { amount: money(out.refunded, stateRef.current.posted.find((f) => f.freightId === freightId)?.currency) }) : t('agent.freight.cancelledDetail'),
         });
         await Promise.all([loadPosted(), openPrices(null)]);
       });
