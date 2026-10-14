@@ -166,5 +166,5 @@ presence screen already does:
 ## 12. Related
 
 - `presence_ladder.md` — the ladder this activates.
-- `04_generated_sandbox/backend/src/foundation/entity/` — the company record today.
+- `04_platform/backend/src/foundation/entity/` — the company record today.
 - `backend/src/modules/pudo/conversation.service.ts` — the fingerprinting pattern documents reuse.

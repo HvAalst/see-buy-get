@@ -24,7 +24,7 @@ labels, and a signature left active-indicator bar on selected items.
 | `--danger` | `#B0233A` / bg `#FBE9EC` | Error status |
 | `--info` | `#0E3B2D` / bg `#E7F3EC` | Neutral/info (green-tinted) |
 
-Tokens live in `04_generated_sandbox/frontend/src/styles.css`. Legacy names `--navy`/`--azure`
+Tokens live in `04_platform/frontend/src/styles.css`. Legacy names `--navy`/`--azure`
 are kept as aliases (→ forest/emerald) so existing styles re-skin automatically.
 
 ## Contrast rule

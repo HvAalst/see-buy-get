@@ -1,0 +1,11 @@
+node_modules
+dist
+coverage
+data
+data.bak-*
+test
+*.md
+.env
+.env.*
+Dockerfile
+.dockerignore

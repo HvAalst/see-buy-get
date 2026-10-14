@@ -22,10 +22,13 @@ coverage/
 data/
 
 # Generated API contract client types (S7 — regenerated from contracts/openapi.json via `npm run types`)
-04_generated_sandbox/frontend/src/lib/sbg/schema.d.ts
+04_platform/frontend/src/lib/sbg/schema.d.ts
 
 # Editor / OS noise
 .DS_Store
 Thumbs.db
 # Microsoft Word lock files (the .docx compendiums are opened for editing)
 ~$*
+
+# scripts/app.sh: dev-mode pids and logs
+.run/

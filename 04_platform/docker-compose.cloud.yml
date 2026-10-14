@@ -1,0 +1,22 @@
+# On a server: production mode, HTTPS on 80/443 with certificates Caddy obtains itself, and log rotation.
+# Chosen by COMPOSE_FILE in .env.cloud.example. Only `web` is reachable from outside; the API's port is not published.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  api:
+    environment:
+      # The server will not start until every secret in .env is set to its own random value.
+      GLOS_ENV: production
+    logging: *logging
+
+  web:
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    logging: *logging

@@ -6,7 +6,7 @@ The hand-rolled vanilla pages are all gone; `frontend/README.md` is the guide to
 ## Run it
 
 ```bash
-# from 04_generated_sandbox/
+# from 04_platform/
 npm run dev        # backend (:3000) + the default app (driver, :5173), prefixed logs
 ```
 
@@ -52,3 +52,14 @@ Each app runs on its own Vite port and only when you start it: `SBG_APP=<app> np
 The sign-in sheet `seed:demo` prints has the logins for each one.
 
 > Note: it's an in-memory backend — restarting it clears the data; just run `seed:demo` again.
+
+## Start, stop, restart
+
+`scripts/app.sh start|stop|restart|status|logs|seed [dev|docker] [app...]` — dev mode runs the backend and the apps
+you name in the background (logs in `.run/`); docker mode runs the Compose stack. In Claude Code: `/start`, `/stop`,
+`/restart`.
+
+## Docker, and deploying it
+
+`DEPLOY.md` — one Compose stack for a laptop (`.env.local.example`, http://localhost:8080) and for a server
+(`.env.cloud.example`, HTTPS on a DigitalOcean Droplet).

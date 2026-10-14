@@ -1,0 +1,18 @@
+# On a laptop: plain HTTP on localhost, the API in sandbox mode (no secrets, no Twilio; one-time codes are shown on
+# screen; /v1/docs is served), and the API's own port open for tools. Chosen by COMPOSE_FILE in .env.local.example.
+#
+#   http://localhost:8080   the public site and every app       http://localhost:8081   the operator console
+#   http://localhost:3000   the API directly (also at :8080/v1)
+
+services:
+  api:
+    environment:
+      GLOS_ENV: sandbox
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  web:
+    ports:
+      # Caddy listens on the port in each address (SBG_PUBLIC_URL, SBG_CONSOLE_URL); these must match them.
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8081"

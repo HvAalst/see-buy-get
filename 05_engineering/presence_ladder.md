@@ -195,6 +195,6 @@ and what the cover is, in the same breath as the price.
 
 ## 9. Related
 
-- `04_generated_sandbox/backend/src/foundation/entity/` — sisters, the group, and the isolation gate.
+- `04_platform/backend/src/foundation/entity/` — sisters, the group, and the isolation gate.
 - The corridors work (`b821e2b`) — who may draw a route, and the screen that does it.
 - The money model: compare across sisters, never total across them.

@@ -1,0 +1,8 @@
+# Only the web image builds from the repository root (04_platform/frontend/Dockerfile). Send it what it needs, nothing
+# else: the docs, the .docx compendiums and the backend stay out of the build context.
+*
+!04_platform/frontend/
+!help.html
+04_platform/frontend/node_modules
+04_platform/frontend/dist
+04_platform/frontend/dist-console

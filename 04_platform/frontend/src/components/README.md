@@ -37,5 +37,5 @@ mount(container, BigButton({ label: 'Cash out', icon: '💸', onClick: pay }));
 Include the styles once: `<link rel="stylesheet" href="./components/components.css">`.
 
 ## Preview
-Open `../components-demo.html` (e.g. `npm run start` in `04_generated_sandbox/frontend`, then
+Open `../components-demo.html` (e.g. `npm run start` in `04_platform/frontend`, then
 `http://localhost:4173/components-demo.html`) to see every component with sample data.

@@ -1,0 +1,79 @@
+# SeeBuyGet edge — two sites, each named by its full address.
+#
+#   SBG_PUBLIC_URL   the public site: the front door at /, each app under its own path, the API under /v1
+#   SBG_CONSOLE_URL  the operator console, alone on its own address (see frontend/README.md, "The operator
+#                    console's entrance"); CONSOLE_ALLOW_IPS narrows who may load it at all
+#
+# An https:// address (a server) gets a certificate Caddy obtains and renews on its own: pointing the domain's DNS at
+# the server is all the HTTPS setup there is. An http:// address (a laptop, http://localhost:8080) is served as is,
+# on the port it names. The values come from .env, through docker-compose.yml.
+
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}
+
+# Vite fingerprints everything under <app>/assets/, so those may be kept forever. Everything else — the pages, the
+# service workers, the manifests — is asked for again (and answered 304 when unchanged), or an installed app never
+# learns there is a new version. Matched on what was ASKED for, before a deep link falls back to its app's
+# index.html, which is why this is "not assets" rather than a list of page names.
+(static_caching) {
+	@hashed path */assets/*
+	header @hashed Cache-Control "public, max-age=31536000, immutable"
+	@unhashed not path */assets/*
+	header @unhashed Cache-Control "no-cache"
+}
+
+{$SBG_PUBLIC_URL} {
+	import security_headers
+	encode zstd gzip
+
+	# The API. Same origin as the apps, so they need no CORS. Server-sent events are flushed as they come.
+	handle /v1/* {
+		reverse_proxy api:3000
+	}
+
+	handle {
+		root * /srv/site
+		import static_caching
+
+		@bare path_regexp ^/(driver|agent|send|fleet|mdp|vendor|business)$
+		redir @bare {path}/ 308
+
+		# Each app answers any path under its own base with its own shell.
+		@app path_regexp app ^/(driver|agent|send|fleet|mdp|vendor|business)/
+		handle @app {
+			try_files {path} {path}/index.html /{re.app.1}/index.html
+			file_server
+		}
+
+		# Everything else is the front door: prerendered town pages (/towns/<slug>/), help.html, and the
+		# front door's own routes (a participant's page, /@handle).
+		handle {
+			try_files {path} {path}/index.html /index.html
+			file_server
+		}
+	}
+}
+
+{$SBG_CONSOLE_URL} {
+	import security_headers
+	header {
+		X-Robots-Tag "noindex, nofollow"
+		X-Frame-Options DENY
+	}
+
+	# A stranger outside the allow-list gets nothing that says a console is here.
+	@outside not remote_ip {$CONSOLE_ALLOW_IPS}
+	respond @outside 404
+
+	encode zstd gzip
+	root * /srv/console
+	import static_caching
+	try_files {path} /index.html
+	file_server
+}

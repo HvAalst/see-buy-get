@@ -1,7 +1,7 @@
 # Shipper "Send Something" Wizard — Scope (M2-U1…U5 / T-310, T-410)
 
 > Self-contained: frontend only, calls existing **stable** M2 endpoints. WS-UX kit, one task per
-> screen, read-aloud, plain words. Page: `04_generated_sandbox/frontend/src/send.html` + `send.js`.
+> screen, read-aloud, plain words. Page: `04_platform/frontend/src/send.html` + `send.js`.
 > Auth: page fetches a client-credentials token from `POST /v1/auth/token` (like tracking/settlement).
 
 ## Steps (one task per screen, `StepProgress`)

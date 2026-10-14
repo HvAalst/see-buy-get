@@ -100,7 +100,7 @@ served (`src/foundation/http/cors.ts`, `src/main.ts`).
 
 ## Develop
 ```bash
-cd 04_generated_sandbox/backend
+cd 04_platform/backend
 npm install
 npm run start:dev     # http://localhost:3000/v1
 npm test              # unit

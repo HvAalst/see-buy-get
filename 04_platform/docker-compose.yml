@@ -1,0 +1,54 @@
+# SeeBuyGet — the Docker stack, the same on a laptop and on a server. See DEPLOY.md.
+#
+#   cp .env.local.example .env      # on a laptop:   http://localhost:8080, demo-friendly sandbox
+#   cp .env.cloud.example .env      # on a Droplet:  https://<your domain>, production
+#   docker compose up -d --build
+#
+# This file is what both share. `.env` names the one other file that makes it local or cloud (COMPOSE_FILE):
+# docker-compose.local.yml or docker-compose.cloud.yml.
+#
+# Two containers: `web` (Caddy: the static apps, and /v1 proxied on to the API) and `api` (NestJS).
+
+name: seebuyget
+
+services:
+  api:
+    build: ./backend
+    image: ${REGISTRY:-seebuyget}/api:${TAG:-latest}
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      GLOS_DATA_DIR: /data
+      # One hop: Caddy. Without it every caller looks like Caddy and the sign-in limits count everybody together.
+      GLOS_TRUST_PROXY: "1"
+      SBG_PUBLIC_URL: ${SBG_PUBLIC_URL:?set SBG_PUBLIC_URL in .env}
+      SBG_CONSOLE_URL: ${SBG_CONSOLE_URL:?set SBG_CONSOLE_URL in .env}
+    volumes:
+      # Sign-ins, wallets, prepaid balances, the identity vault and uploaded media. Lose this, lose them.
+      - api-data:/data
+
+  web:
+    build:
+      context: ..
+      dockerfile: 04_platform/frontend/Dockerfile
+      args:
+        SBG_PUBLIC_URL: ${SBG_PUBLIC_URL}
+    image: ${REGISTRY:-seebuyget}/web:${TAG:-latest}
+    restart: unless-stopped
+    environment:
+      SBG_PUBLIC_URL: ${SBG_PUBLIC_URL}
+      SBG_CONSOLE_URL: ${SBG_CONSOLE_URL}
+      CONSOLE_ALLOW_IPS: ${CONSOLE_ALLOW_IPS:-0.0.0.0/0 ::/0}
+    volumes:
+      # Caddy's certificates and keys: kept, so a restart does not ask Let's Encrypt again (it rate-limits).
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  api-data:
+  caddy-data:
+  caddy-config:

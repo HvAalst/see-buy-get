@@ -3,11 +3,11 @@ name: backend-ci
 on:
   push:
     paths:
-      - '04_generated_sandbox/backend/**'
+      - '04_platform/backend/**'
       - '.github/workflows/backend-ci.yml'
   pull_request:
     paths:
-      - '04_generated_sandbox/backend/**'
+      - '04_platform/backend/**'
       - '.github/workflows/backend-ci.yml'
 
 jobs:
@@ -15,14 +15,14 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: 04_generated_sandbox/backend
+        working-directory: 04_platform/backend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
-          cache-dependency-path: 04_generated_sandbox/backend/package-lock.json
+          cache-dependency-path: 04_platform/backend/package-lock.json
       - run: npm ci
       - run: npm run lint
       - run: npm run build

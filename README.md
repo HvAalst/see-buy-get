@@ -19,5 +19,5 @@ inclusive UX is a non-negotiable cross-cutting requirement on every participant-
 - `01_system_governance/` — branding, business dictionary, governance requirements
 - `02_epic_domains/` — per-module epic definitions (M1–M8)
 - `03_verification_suites/` — UAT scenarios
-- `04_generated_sandbox/` — backend / frontend / mobile reference implementations
+- `04_platform/` — the running system: NestJS backend and the frontend apps
 - `05_engineering/` — implementation plan and engineering notes

@@ -15,7 +15,7 @@
 > Nothing in Sprint 1+ is "done" until these exist. Built once, reused everywhere.
 
 - **T-001 · NestJS backend bootstrap + module skeletons** — `INF-3` · **3pt** · ✅ done
-  - DoD: replace `04_generated_sandbox/backend/src/main.ts` placeholder with a NestJS app; empty `m1`, `m2`, `m6` modules wired; health endpoint; lint/test/CI green.
+  - DoD: replace `04_platform/backend/src/main.ts` placeholder with a NestJS app; empty `m1`, `m2`, `m6` modules wired; health endpoint; lint/test/CI green.
   - Deps: —
 - **T-002 · Event-driven async backbone** — `INF-1` · **5pt** · ✅ done
   - DoD: a publish/subscribe event bus exists; modules emit/consume typed domain events (the cascade spine for SSE/M5/M7); at-least-once delivery; trace IDs propagate.
