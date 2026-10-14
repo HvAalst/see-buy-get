@@ -63,7 +63,7 @@ import { AuthService } from '../../foundation/auth/auth.service';
 import { AgentService } from './agent.service';
 import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
-import { operationalParcelView, parcelCurrency, ParcelService } from './parcel.service';
+import { operationalParcelView, parcelCurrency, ParcelService, planVsActual } from './parcel.service';
 import { MonitorService } from './monitor.service';
 import { RatingService, belowFloor } from './rating.service';
 import { VendorService } from './vendor.service';
@@ -88,6 +88,7 @@ import { MediaService } from './media.service';
 import { EmptyDepot, EmptyDepotService } from './empty-depot.service';
 import { CONTACT_BASIS, ContactCardService } from './contact-card.service';
 import { CountryNoticeService } from './country-notice.service';
+import { JourneyPlanService } from './journey-plan.service';
 import { ContactCardView, DepotListResponse, DepotRegisterView } from './depot.types';
 import { FleetManagerService } from './fleet-manager.service';
 import { AccountService } from './account.service';
@@ -283,7 +284,21 @@ export class SbgController {
     @Optional() private readonly paperReports?: CompanyPaperReportService,
     @Optional() private readonly sms?: SmsService,
     @Optional() private readonly countryNotice?: CountryNoticeService,
+    @Optional() private readonly journeyPlans?: JourneyPlanService,
   ) {}
+
+  /**
+   * PLAN VERSUS ACTUAL, lane by lane: every parcel ready to collect in the last `days` (30 unless said) against the plan
+   * kept when it was taken in — how many by the time promised, how late the late ones usually were, and how many went
+   * through the shops and hubs planned. The late lanes first. Operator-only.
+   */
+  @Roles('operator')
+  @Get('network/plan-vs-actual')
+  @ApiQuery({ name: 'days', required: false })
+  planVersusActual(@Query('days') days?: string) {
+    const window = Math.min(Math.max(Math.round(Number(days)) || 30, 1), 365);
+    return { days: window, lanes: this.journeyPlans?.lanes(window) ?? [] };
+  }
 
   /**
    * What a change to a country TOOK AWAY, worked out from what it could do before and what it can do now — and, where
@@ -2892,7 +2907,15 @@ export class SbgController {
       this.assertVendorOwner(parcel.vendorId, actor);
     }
     if (!parcel.destAgentDid) return { planned: false, reason: 'No destination PUDO nominated yet (set at accept or arrival).' };
-    return { planned: true, ...this.routing.planJourney({ originAgentDid: parcel.committedNodeDid ?? parcel.originAgentDid, destAgentDid: parcel.destAgentDid }) };
+    // Beside today's estimate: the PROMISE kept when it was taken in, and — once it is ready to collect — how it went
+    // against that promise. A store reading its own order sees the same comparison staff read by the lane.
+    const against = planVsActual(parcel);
+    return {
+      planned: true,
+      ...this.routing.planJourney({ originAgentDid: parcel.committedNodeDid ?? parcel.originAgentDid, destAgentDid: parcel.destAgentDid }),
+      ...(parcel.plan ? { promise: parcel.plan } : {}),
+      ...(against ? { againstPromise: against } : {}),
+    };
   }
 
   /** DT — the printable label for a parcel (reprint). The label no longer carries any release secret (it
@@ -3676,7 +3699,11 @@ export class SbgController {
     // (no destination / no corridor) just omits the plannedRoute; the status ladder still renders.
     const parcel = this.parcels.get(t.ref);
     let plannedRoute: { hops: string[]; mdpRouted: boolean; pickupReadyAt: string } | undefined;
-    if (parcel.destAgentDid) {
+    // Once it is in custody the plan is the one KEPT when it was taken in — the promise, not a fresh estimate from
+    // whenever somebody looks (JourneyPlanService). Before that, an estimate is all there is.
+    if (parcel.plan) {
+      plannedRoute = { hops: parcel.plan.hops.map((h) => h.label), mdpRouted: parcel.plan.mdpRouted, pickupReadyAt: parcel.plan.pickupReadyAt };
+    } else if (parcel.destAgentDid) {
       try {
         const j = this.routing.planJourney({ originAgentDid: parcel.committedNodeDid ?? parcel.originAgentDid, destAgentDid: parcel.destAgentDid });
         plannedRoute = { hops: j.hops.map((h) => h.label), mdpRouted: j.mdpRouted, pickupReadyAt: j.pickupReadyAt };

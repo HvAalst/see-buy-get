@@ -324,6 +324,14 @@ export type CustodyKind = 'sender' | 'shop' | 'driver' | 'hub' | 'receiver';
  * owns the goods (they inspect, they dispute, they hold a collection secret nobody else has). Custody is
  * the chain of hands in between, and it is the only one of the three that changes on every leg.
  */
+/** A planned journey, as it was promised: the shops and hubs in order, and when it should be ready to collect. */
+export interface JourneyPlan {
+  hops: Array<{ type: 'pudo' | 'mdp' | 'dock'; id: string; label: string; zone: string }>;
+  mdpRouted: boolean;
+  pickupReadyAt: string;
+  plannedAt: string;
+}
+
 export class CustodyLeg {
   holderId: string; // an agent DID, a driver DID, an MDP id, a vendorId, or the sender/receiver's own id
   holderKind: CustodyKind;
@@ -1019,6 +1027,13 @@ export class Parcel {
   birthplace?: Birthplace;
   /** Who has physically held it, in order. Absent on pre-slice records — read through `custodianOf`. */
   custody?: CustodyLeg[];
+  /**
+   * THE PROMISE, KEPT — the route it should take and when it should be ready to collect, as planned the moment it
+   * entered custody at its first shop (JourneyPlanService). Frozen then and never rewritten, so it can be held
+   * against what happened (`planVsActual`). The tracking page used to work its plan out again at every read, and a
+   * promise worked out afresh every time is always on time. Absent where no route could be planned.
+   */
+  plan?: JourneyPlan;
   scans: ParcelScan[];
 }
 

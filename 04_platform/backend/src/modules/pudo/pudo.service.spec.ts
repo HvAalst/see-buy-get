@@ -1402,6 +1402,18 @@ describe('PUDO Light', () => {
     expect(() => controller.intake(res.parcel.parcelId, { dropoffPhotoRef: 'd.jpg' } as never, { role: 'agent', did: brokeOrigin.did } as never)).toThrow(/Insufficient funds/);
   });
 
+  it('keeps the plan made as a parcel is taken in — once: a promise is not rewritten afterwards', () => {
+    const { parcelId } = mintPeerSend('PLAN', '30');
+    const promise = { hops: [{ type: 'pudo' as const, id: 'a', label: 'A', zone: 'Z' }], mdpRouted: false, pickupReadyAt: '2026-10-15T12:00:00.000Z', plannedAt: '2026-10-14T08:00:00.000Z' };
+    expect(parcels.keepPlan(parcelId, promise)).toBe(true);
+    expect(parcels.keepPlan(parcelId, { ...promise, pickupReadyAt: '2026-10-16T12:00:00.000Z' })).toBe(false);
+    expect(parcels.get(parcelId).plan!.pickupReadyAt).toBe('2026-10-15T12:00:00.000Z');
+    expect(parcels.keepPlan('NO-SUCH-PARCEL', promise)).toBe(false);
+    // The tracking page reads the kept promise — not an estimate worked out again from now, which would always be on time.
+    const key = parcels.get(parcelId).trackingKey!;
+    expect((controller.track(key) as { plannedRoute?: { pickupReadyAt: string; hops: string[] } }).plannedRoute).toEqual({ hops: ['A'], mdpRouted: false, pickupReadyAt: '2026-10-15T12:00:00.000Z' });
+  });
+
   it('PG2: the intake preview tells the counter what is due — and only the booked shop may ask', () => {
     const { origin, dest, parcelId, due } = mintPeerSend('PG2P', '30');
     const preview: any = controller.intakePreview(parcelId, { role: 'agent', did: origin.did } as never);

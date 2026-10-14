@@ -751,6 +751,21 @@ describe('GLOS backend (e2e)', () => {
     const shelf = await request(http).post(`/v1/sbg/parcels/${parcelId}/shelve`).set(auth).send({ agentDid: dest }).expect(201);
     expect(shelf.body.binSlot).toMatch(/^[A-Za-z]+-[1-9]$/);
 
+    // THE PROMISE IS KEPT. The plan made when the counter took it in — the route, and when it should be ready — is kept
+    // on the parcel, and the tracking page reads THAT, not an estimate worked out again from whenever somebody looks.
+    const route = (await request(http).get(`/v1/sbg/parcels/${parcelId}/route`).set(acme).expect(200)).body;
+    const kept = route.promise as { pickupReadyAt: string; plannedAt: string; hops: Array<{ id: string }> };
+    expect(kept.hops[0].id).toBe(origin);
+    expect(kept.hops[kept.hops.length - 1].id).toBe(dest);
+    // Shelved, so it is ready to collect: the store reads how it went against that promise.
+    expect(route.againstPromise).toMatchObject({ promisedAt: kept.pickupReadyAt, onTime: expect.any(Boolean), routeKept: expect.any(Boolean) });
+    const trackKey = order.body.parcel.trackingKey as string;
+    expect((await request(http).get(`/v1/sbg/track/${trackKey}`).expect(200)).body.plannedRoute.pickupReadyAt).toBe(kept.pickupReadyAt);
+    // Staff read each lane against its plans: every parcel counted is on time or late, and this one is among them.
+    const lanes = (await request(http).get('/v1/sbg/network/plan-vs-actual').set(auth).expect(200)).body.lanes as Array<{ arrived: number; late: number; onTime: number; routeKnown: number }>;
+    expect(lanes.reduce((n, l) => n + l.arrived, 0)).toBeGreaterThanOrEqual(1);
+    expect(lanes.every((l) => l.onTime + l.late === l.arrived && l.routeKnown <= l.arrived)).toBe(true);
+
     // A PROBLEM REPORTED AT THE COUNTER. Nobody of ours decides it: the damage claim report is made on the spot, the
     // parcel stays collectable, and the report is emailed to the store's insurer as a link — the user, 2026-10-13.
     const reported = await request(http).post(`/v1/sbg/parcels/${parcelId}/dispute`).set(auth).send({ agentDid: dest, reason: 'The box is torn at one corner', photoProofRef: 'proof.jpg' }).expect(201);

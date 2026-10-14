@@ -387,6 +387,27 @@ export function birthplaceOf(p: Parcel): Birthplace | undefined {
  * scan. That reconstruction is a reading, not a record: it says where the parcel was, and infers from that
  * who must have had it. Anything that needs proof (a damage claim) should say so when it is relying on it.
  */
+/**
+ * PLAN VERSUS WHAT HAPPENED, for a parcel that has arrived: was it ready by the time it was promised, how late if not,
+ * and did it go through the shops and hubs it was planned through. Nothing for a parcel with no kept plan, or one not
+ * yet ready to collect. `routeKept` is absent where the custody chain was never recorded (an older parcel).
+ */
+export function planVsActual(p: Pick<Parcel, 'plan' | 'readyAt' | 'custody'>): { promisedAt: string; readyAt: string; onTime: boolean; lateHours: number; routeKept?: boolean } | undefined {
+  if (!p.plan || !p.readyAt) return undefined;
+  const late = (Date.parse(p.readyAt) - Date.parse(p.plan.pickupReadyAt)) / 3_600_000;
+  const lateHours = late > 0 ? Math.round(late * 10) / 10 : 0;
+  // The places it was held, in order, without the drivers between them — and each once, however often it was scanned.
+  const held = (p.custody ?? []).filter((l) => l.holderKind === 'shop' || l.holderKind === 'hub').map((l) => l.holderId).filter((id, i, all) => id !== all[i - 1]);
+  const planned = p.plan.hops.filter((h) => h.type !== 'dock').map((h) => h.id);
+  return {
+    promisedAt: p.plan.pickupReadyAt,
+    readyAt: p.readyAt,
+    onTime: late <= 0,
+    lateHours,
+    ...(p.custody?.length ? { routeKept: held.length === planned.length && held.every((id, i) => id === planned[i]) } : {}),
+  };
+}
+
 export function custodianOf(p: Parcel): CustodyLeg | undefined {
   const open = (p.custody ?? []).find((l) => !l.to);
   if (open) return open;
@@ -2532,6 +2553,15 @@ export class ParcelService implements OnApplicationBootstrap {
     if (parcel.label) return parcel.label;
     const destShop = parcel.destAgentDid ? this.agents.get(parcel.destAgentDid).shopName : undefined;
     return this.label(parcel, destShop);
+  }
+
+  /** Keep the plan made as the parcel entered custody — once: a plan is a promise, and it is not rewritten afterwards. */
+  keepPlan(parcelId: string, plan: NonNullable<Parcel['plan']>): boolean {
+    const parcel = this.parcels.get(parcelId);
+    if (!parcel || parcel.plan) return false;
+    parcel.plan = plan;
+    this.parcels.set(parcelId, parcel);
+    return true;
   }
 
   list(filter: { status?: Parcel['status']; agentDid?: string; vendorId?: string } = {}): Parcel[] {

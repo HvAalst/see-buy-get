@@ -3,6 +3,7 @@ import { resetTwoStep, sendStaffLink, stopStaffRemoval, type StaffInvited, type 
 import { useState, useCallback, useEffect } from 'preact/hooks';
 import { Icon, PlaceMap } from '../../../shared/ui';
 import { ConsoleFold } from '../ConsoleFold';
+import { PlanVsActualFold } from './PlanVsActualFold';
 import { useT } from '../../../shared/i18n';
 import {
   AGENT_OFFLINE_H,
@@ -118,6 +119,9 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
           </table>
         )}
       </ConsoleFold>
+
+      {/* Each lane against the promises kept when its parcels were taken in. */}
+      <PlanVsActualFold client={actions.client()} />
 
       <ConsoleFold
         title={t('tower.network.flagsTitle')}

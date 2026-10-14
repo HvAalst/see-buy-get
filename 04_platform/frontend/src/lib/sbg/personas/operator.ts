@@ -199,6 +199,8 @@ export function createOperatorApi(sbg: SbgClient) {
 
     /** The five numbers, where every parcel is, and every standing alert — in one read. */
     dashboard: () => sbg.request((c) => c.GET('/v1/sbg/dashboard', {})),
+    /** Each lane against the plans kept when its parcels were taken in: on time, how late, which way they went. */
+    planVsActual: (days?: number) => sbg.request((c) => c.GET('/v1/sbg/network/plan-vs-actual', { params: { query: days ? { days: String(days) } : {} } })),
 
     /** Every shop on the network, with its float, its shelf and when it last checked in. */
     agents: () => sbg.request((c) => c.GET('/v1/sbg/agents', {})),

@@ -3879,6 +3879,28 @@
         }
       }
     },
+    "/v1/sbg/network/plan-vs-actual": {
+      "get": {
+        "operationId": "Sbg.planVersusActual",
+        "summary": "",
+        "description": "PLAN VERSUS ACTUAL, lane by lane: every parcel ready to collect in the last `days` (30 unless said) against the plan\nkept when it was taken in — how many by the time promised, how late the late ones usually were, and how many went\nthrough the shops and hubs planned. The late lanes first. Operator-only.",
+        "parameters": [
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/auth/phone/request": {
       "post": {
         "operationId": "Sbg.phoneRequest",
@@ -32168,6 +32190,10 @@
             "items": {
               "$ref": "#/components/schemas/CustodyLeg"
             }
+          },
+          "plan": {
+            "type": "object",
+            "description": "THE PROMISE, KEPT — the route it should take and when it should be ready to collect, as planned the moment it\nentered custody at its first shop (JourneyPlanService). Frozen then and never rewritten, so it can be held\nagainst what happened (`planVsActual`). The tracking page used to work its plan out again at every read, and a\npromise worked out afresh every time is always on time. Absent where no route could be planned."
           },
           "scans": {
             "type": "array",
