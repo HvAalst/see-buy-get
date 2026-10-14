@@ -3113,7 +3113,7 @@ export class SbgController {
   @Get('vendors/:id')
   getVendor(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     // Its balance, the number to reach it on and where its systems are called: the store's own. Its id was all it took.
-    this.assertVendorOwner(id, actor);
+    this.assertVendorReads(id, actor);
     const vendor = this.vendors.get(id);
     // Whether it has an account of its own — never the address: a console signed in the old way is told to set one up.
     // And the money every figure of its own is in, named once for its screens.
@@ -3145,6 +3145,22 @@ export class SbgController {
     if (actor?.role !== 'operator' && (!actor?.did || actor.did !== vendor.did)) {
       throw new GlosError('FORBIDDEN', 'This store is not yours to view');
     }
+  }
+
+  /**
+   * THE STORE ITSELF, AND NOBODY STANDING IN — the gate on everything a store READS of its own.
+   *
+   * The user, 2026-10-15, after staff lost the door to change a store: staff do not read its own routes either. They
+   * answered a staff sign-in with each buyer’s number and email, each parcel’s collection code, each message to the
+   * store’s systems with its signature and body — and nothing recorded that anybody looked. No screen of the console
+   * called them: staff read a store under Stores (vendors/:id/desk, made field by field for a support desk) and a
+   * parcel under Find a parcel. So a store’s orders, checkouts, messages, returns, keys, dock, money and reports are
+   * read by the store, signed in as itself, and staff are told where theirs is.
+   */
+  private assertVendorReads(id: string, actor: IntrospectionResult): void {
+    const vendor = this.vendors.get(id); // 404 if unknown
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A store’s own records are the store’s: its buyers, its collection codes, its messages to its systems. Staff read a store under Stores, and a parcel under Find a parcel');
+    if (!actor?.did || actor.did !== vendor.did) throw new GlosError('FORBIDDEN', 'This store is not yours to view');
   }
 
   /**
@@ -3234,7 +3250,7 @@ export class SbgController {
   @Scopes('vendor:read:self')
   @Get('vendors/:id/api-keys')
   listApiKeys(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorReads(id, actor);
     return this.apiKeys.list(id);
   }
 
@@ -3258,7 +3274,7 @@ export class SbgController {
   @Scopes('vendor:read:self')
   @Get('vendors/:id/dock')
   dockPlan(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorReads(id, actor);
     return this.dock.plan(id);
   }
 
@@ -3289,7 +3305,7 @@ export class SbgController {
   @Scopes('vendor:read:self')
   @Get('vendors/:id/orders')
   vendorOrders(@Param('id') id: string, @Query() query: VendorOrdersQueryDto, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorReads(id, actor);
     return this.parcels.vendorOrdersPage(id, query);
   }
 
@@ -3300,7 +3316,7 @@ export class SbgController {
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @Header('Content-Disposition', 'attachment; filename="shipments.csv"')
   vendorOrdersExport(@Param('id') id: string, @Query() query: VendorOrdersQueryDto, @Actor() actor: IntrospectionResult): string {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorReads(id, actor);
     return this.parcels.vendorOrdersCsv(id, query);
   }
 
@@ -3310,7 +3326,7 @@ export class SbgController {
   @Scopes('vendor:read:self')
   @Get('vendors/:id/orders/stats')
   vendorOrderStats(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorReads(id, actor);
     return this.parcels.vendorOrderStats(id);
   }
 
@@ -3318,7 +3334,7 @@ export class SbgController {
   @Scopes('vendor:read:self')
   @Get('vendors/:id/damage-reports')
   vendorDamageReports(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorReads(id, actor);
     return { items: this.damageReports.listForStore(id, actor) };
   }
 
@@ -3327,7 +3343,7 @@ export class SbgController {
   @Scopes('vendor:read:self')
   @Get('vendors/:id/orders/:parcelId')
   vendorOrder(@Param('id') id: string, @Param('parcelId') parcelId: string, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorReads(id, actor);
     return this.parcels.vendorOrderView(id, parcelId);
   }
 
@@ -3336,7 +3352,7 @@ export class SbgController {
   @Scopes('vendor:read:self')
   @Get('vendors/:id/checkouts')
   vendorCheckouts(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorReads(id, actor);
     return this.vendors.checkoutsFor(id);
   }
 
@@ -3357,7 +3373,7 @@ export class SbgController {
   @Scopes('vendor:read:self')
   @Get('vendors/:id/callbacks')
   vendorCallbacks(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorReads(id, actor);
     return this.vendors.outboxFor(id);
   }
 
@@ -3373,7 +3389,7 @@ export class SbgController {
   @Scopes('shipment:create')
   @Get('vendors/:id/returns')
   vendorReturns(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorReads(id, actor);
     return { items: this.returns.pendingFor(id) };
   }
 
@@ -3622,7 +3638,7 @@ export class SbgController {
   @Scopes('vendor:read:self')
   @Get('vendors/:id/funding')
   vendorFunding(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorReads(id, actor);
     return {
       open: this.funding.openFor(id),
       items: this.funding.list({ payerDid: id }).slice(0, 10),
@@ -3635,7 +3651,7 @@ export class SbgController {
   @Scopes('vendor:read:self')
   @Get('vendors/:id/settlement')
   vendorSettlement(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorReads(id, actor);
     return { balance: this.vendors.balanceOrNone(id), entries: this.vendors.settlementsFor(id) };
   }
 
@@ -3644,7 +3660,7 @@ export class SbgController {
   @Scopes('vendor:read:self')
   @Get('vendors/:id/ledger')
   vendorLedger(@Param('id') id: string, @Query() query: VendorLedgerQueryDto, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorReads(id, actor);
     return this.vendors.vendorLedgerPage(id, query);
   }
 
@@ -3653,7 +3669,7 @@ export class SbgController {
   @Scopes('vendor:read:self')
   @Get('vendors/:id/ledger/summary')
   vendorLedgerSummary(@Param('id') id: string, @Query() query: VendorLedgerQueryDto, @Actor() actor: IntrospectionResult) {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorReads(id, actor);
     return { ...this.vendors.vendorLedgerSummary(id, query), balance: this.vendors.balanceOrNone(id) };
   }
 
@@ -3664,7 +3680,7 @@ export class SbgController {
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @Header('Content-Disposition', 'attachment; filename="bookkeeping.csv"')
   vendorLedgerExport(@Param('id') id: string, @Query() query: VendorLedgerQueryDto, @Actor() actor: IntrospectionResult): string {
-    this.assertVendorOwner(id, actor);
+    this.assertVendorReads(id, actor);
     return this.vendors.vendorLedgerCsv(id, query);
   }
 

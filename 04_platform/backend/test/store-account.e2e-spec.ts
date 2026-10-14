@@ -170,12 +170,14 @@ describe('a store has an account of its own, over the wire', () => {
     await setUp({ email, password }, operator).expect(403);
     const staffMade = (await http().post('/v1/sbg/operators').set(bearer(operator)).send({ email: `zainab-${u}@sbg.test`, name: `Zainab ${u}` }).expect(201)).body;
     const staff = (await http().post('/v1/sbg/operators/login').send({ email: staffMade.email, password: staffMade.temporaryPassword }).expect(201)).body.token.access_token as string;
-    await http().get(`/v1/sbg/vendors/${old.vendorId}/orders/stats`).set(bearer(staff)).expect(200);
+    // A real staff sign-in: it reads a store at staff's own desk — never the store's own records (user, 2026-10-15).
+    await http().get(`/v1/sbg/vendors/${old.vendorId}/desk`).set(bearer(staff)).expect(200);
+    await http().get(`/v1/sbg/vendors/${old.vendorId}/orders/stats`).set(bearer(staff)).expect(403);
     await setUp({ email, password }, staff).expect(403);
     // …nor a staff token asked for with the store's ID in it: the server puts no store in a staff token, so it is
-    // still staff's — it reads the store, as staff may, and sets nothing up.
+    // still staff's — it neither reads the store's own records nor sets anything up.
     const pointed = await http().post('/v1/auth/token').send({ role: 'operator', did: old.did, type: 'client_credentials' }).expect(201);
-    await http().get(`/v1/sbg/vendors/${old.vendorId}/orders/stats`).set(bearer(pointed.body.access_token)).expect(200);
+    await http().get(`/v1/sbg/vendors/${old.vendorId}/orders/stats`).set(bearer(pointed.body.access_token)).expect(403);
     await setUp({ email, password }, pointed.body.access_token).expect(403);
     expect((await session(email, password)).body.code).toBe('AUTH_FAILED');
     // Not another store.

@@ -951,8 +951,9 @@ describe('PUDO Light', () => {
     expect(tries).toHaveLength(15);
     expect(asItIs()).toEqual(before);
 
-    // What staff keep is READING, and the same store's own sign-in still changes it.
-    expect(controller.getVendor(store.vendorId, staff)).toMatchObject({ vendorId: store.vendorId, callbackUrl: 'https://door.example/hook' });
+    // What staff keep is THEIR OWN DESK — not the store's own records (user, 2026-10-15) — and the same store's own
+    // sign-in still changes it.
+    expect(() => controller.getVendor(store.vendorId, staff)).toThrow(/A store’s own records are the store’s/);
     expect(controller.storeDesk(store.vendorId)).toMatchObject({ vendorId: store.vendorId });
     expect(controller.updateVendor(store.vendorId, { callbackUrl: 'https://door.example/hook2' } as never, asStore)).toMatchObject({ callbackUrl: 'https://door.example/hook2' });
     // A stranger is told it is not theirs; an unknown store is not found, whoever asks.
@@ -6877,8 +6878,21 @@ describe('PUDO Light', () => {
       const own = as('genesis', store.did);
       const others = [as('genesis', stranger.did), as('genesis'), as('agent', origin.did)];
 
-      // The record carries the store's balance: its own, and staff's.
-      for (const who of [own, staff]) expect(controller.getVendor(store.vendorId, who)).toMatchObject({ vendorId: store.vendorId, balance: vendors.get(store.vendorId).balance });
+      // The record carries the store's balance — for the store. Staff read a store at their own desk (user, 2026-10-15).
+      expect(controller.getVendor(store.vendorId, own)).toMatchObject({ vendorId: store.vendorId, balance: vendors.get(store.vendorId).balance });
+      expect(() => controller.getVendor(store.vendorId, staff)).toThrow(/Staff read a store under Stores/);
+      // Where a buyer's number, a collection code and a message's body live: the store reads them, staff do not.
+      const ownRecords: Array<[string, (who: never) => unknown]> = [
+        ['its orders', (who) => controller.vendorOrders(store.vendorId, {} as never, who)],
+        ['one order', (who) => controller.vendorOrder(store.vendorId, parcel.parcelId, who)],
+        ['its checkouts', (who) => controller.vendorCheckouts(store.vendorId, who)],
+        ['its messages to its systems', (who) => controller.vendorCallbacks(store.vendorId, who)],
+        ['its returns', (who) => controller.vendorReturns(store.vendorId, who)],
+      ];
+      for (const [what, readIt] of ownRecords) {
+        expect({ what, store: (() => { try { readIt(own as never); return 'read'; } catch (e) { return (e as Error).message; } })() }).toEqual({ what, store: 'read' });
+        expect({ what, staff: (() => { try { readIt(staff as never); return 'read'; } catch (e) { return (e as Error).message; } })() }).toEqual({ what, staff: expect.stringMatching(/^A store’s own records are the store’s/) });
+      }
       expect(controller.getVendor(store.vendorId, own)).not.toHaveProperty('secret');
       // …and the money that balance, its bills and its policy are in: its company's, named once for its screens.
       expect(controller.getVendor(store.vendorId, own)).toMatchObject({ currency: 'KES' });

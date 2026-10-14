@@ -726,11 +726,14 @@ describe('GLOS backend (e2e)', () => {
     // Vendor onboarding + the shipment webhook.
     const vendor = await request(http).post('/v1/sbg/vendors').set(auth).send({ name: 'ACME Store', callbackUrl: 'https://acme.example/hook' }).expect(201);
     expect(vendor.body.secret).toMatch(/^whsec_/); // issued exactly once, at registration
-    // But a later fetch must NOT re-expose the signing secret (a guessed vendorId would leak the key).
-    const reFetched = await request(http).get(`/v1/sbg/vendors/${vendor.body.vendorId}`).set(auth).expect(200);
-    expect(reFetched.body.secret).toBeUndefined();
     // The store pays in and mints its own order, signed in as itself: staff do neither in a store's name.
     const acme = await asStore(vendor.body);
+    // But a later fetch must NOT re-expose the signing secret (a guessed vendorId would leak the key) — and the record
+    // is the store's to read: staff read a store at their own desk (user, 2026-10-15).
+    const reFetched = await request(http).get(`/v1/sbg/vendors/${vendor.body.vendorId}`).set(acme).expect(200);
+    expect(reFetched.body.secret).toBeUndefined();
+    expect((await request(http).get(`/v1/sbg/vendors/${vendor.body.vendorId}`).set(auth).expect(403)).body.detail).toMatch(/Staff read a store under Stores/);
+    await request(http).get(`/v1/sbg/vendors/${vendor.body.vendorId}/desk`).set(auth).expect(200);
     // THE STORE NAMES ITS INSURER on its shipping policy, signed in as itself: staff cannot, and half an insurer is refused.
     await request(http).patch(`/v1/sbg/vendors/${vendor.body.vendorId}`).set(auth).send({ shippingPolicy: { insurer: { name: 'Jubilee', email: 'claims@jubilee.example' } } }).expect(403);
     expect((await request(http).patch(`/v1/sbg/vendors/${vendor.body.vendorId}`).set(acme).send({ shippingPolicy: { insurer: { name: 'Jubilee', email: 'not-an-address' } } })).status).toBe(400);
@@ -777,11 +780,12 @@ describe('GLOS backend (e2e)', () => {
     expect(key).toHaveLength(43);
     // Whoever holds the email opens it with nobody signed in.
     expect((await request(http).post('/v1/sbg/damage-report-links/look').send({ token: key }).expect(200)).body).toMatchObject({ state: 'ready', number: `DCR-${parcelId}`, parcelId });
-    // The store lists it with where it went; staff read the list too; the order itself says it has a report.
+    // The store lists it with where it went; staff read reports under Damage claims, not on the store's own route; the
+    // order itself says it has a report.
     const mine = await request(http).get(`/v1/sbg/vendors/${vendor.body.vendorId}/damage-reports`).set(acme).expect(200);
     expect(mine.body.items).toEqual([expect.objectContaining({ parcelId, number: `DCR-${parcelId}`, origin: 'counter', links: 1, insurer: expect.objectContaining({ insurer: 'Jubilee Allianz Claims' }) })]);
     expect(mine.body.items[0].insurer.sentTo).not.toContain('claims@');
-    await request(http).get(`/v1/sbg/vendors/${vendor.body.vendorId}/damage-reports`).set(auth).expect(200);
+    await request(http).get(`/v1/sbg/vendors/${vendor.body.vendorId}/damage-reports`).set(auth).expect(403);
     expect((await request(http).get(`/v1/sbg/vendors/${vendor.body.vendorId}/orders/${parcelId}`).set(acme).expect(200)).body.damageReport).toEqual({ number: `DCR-${parcelId}` });
     const theirs = await request(http).get(`/v1/sbg/parcels/${parcelId}/damage-report`).set(acme).expect(200);
     expect(theirs.body.insurer).toMatchObject({ insurer: 'Jubilee Allianz Claims' });
@@ -793,8 +797,9 @@ describe('GLOS backend (e2e)', () => {
     const delivered = await request(http).post(`/v1/sbg/parcels/${parcelId}/collect-confirm`).set(auth).send({ agentDid: dest, collectionCode }).expect(201);
     expect(delivered.body.status).toBe('Delivered');
 
-    // Vendor received signed status callbacks.
-    const cbs = await request(http).get(`/v1/sbg/vendors/${vendor.body.vendorId}/callbacks`).set(auth).expect(200);
+    // Vendor received signed status callbacks — read by the store; their bodies and signatures are not staff's.
+    await request(http).get(`/v1/sbg/vendors/${vendor.body.vendorId}/callbacks`).set(auth).expect(403);
+    const cbs = await request(http).get(`/v1/sbg/vendors/${vendor.body.vendorId}/callbacks`).set(acme).expect(200);
     expect(cbs.body.map((c: { event: string }) => c.event)).toEqual(expect.arrayContaining(['ready_for_pickup', 'disputed', 'collected']));
   });
 

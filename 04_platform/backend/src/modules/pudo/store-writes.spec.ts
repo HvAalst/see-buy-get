@@ -88,3 +88,51 @@ describe('who may change a store', () => {
     expect(Object.keys(EXEMPT).filter((k) => !live.has(k))).toEqual([]);
   });
 });
+
+/**
+ * AND EVERY ROUTE THAT READS A STORE'S OWN RECORDS IS THE STORE'S ALONE — the user, 2026-10-15, after the writes:
+ * staff's sign-in answered with every buyer's number, every collection code and every message to the store's systems,
+ * and nothing recorded the look. The console reads a store through its own desk (made field by field for staff) and
+ * never called these. `assertVendorReads` refuses staff with a sentence that says where theirs is.
+ */
+function reads(): Route[] {
+  const lines = SOURCE.split(/\r?\n/);
+  const out: Route[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^\s*@Get\('(vendors\/:id[^']*)'\)/);
+    if (!m) continue;
+    let end = i + 1;
+    while (end < lines.length && !/^ {2}\}\s*$/.test(lines[end])) end++;
+    out.push({ key: `GET ${m[1]}`, body: lines.slice(i + 1, end).join('\n') });
+  }
+  return out;
+}
+
+/** Staff's own doors onto a store, each made for staff. */
+const STAFF_VIEWS = ['GET vendors/:id/desk'];
+
+const read = reads();
+
+describe('who may read a store’s own records', () => {
+  it('read the controller at all — a guard that saw nothing proves nothing', () => {
+    expect(read.length).toBeGreaterThanOrEqual(16);
+    for (const key of ['GET vendors/:id', 'GET vendors/:id/orders', 'GET vendors/:id/orders/:parcelId', 'GET vendors/:id/orders/export', 'GET vendors/:id/checkouts', 'GET vendors/:id/callbacks', 'GET vendors/:id/returns', 'GET vendors/:id/ledger', ...STAFF_VIEWS]) {
+      expect({ key, found: read.some((r) => r.key === key) }).toEqual({ key, found: true });
+    }
+  });
+
+  it('asks for the store itself on every one, apart from staff’s own desk', () => {
+    const open = read.filter((r) => !STAFF_VIEWS.includes(r.key)).filter((r) => !code(r.body).includes('this.assertVendorReads(')).map((r) => r.key);
+    expect(open).toEqual([]);
+  });
+
+  it('never with the gate that lets staff through', () => {
+    expect(read.filter((r) => code(r.body).includes('this.assertVendorOwner(')).map((r) => r.key)).toEqual([]);
+  });
+
+  it('refuses staff by the rule, saying where theirs is — not as a wrong id', () => {
+    const gate = SOURCE.slice(SOURCE.indexOf('private assertVendorReads('), SOURCE.indexOf('private assertVendorSelf('));
+    expect(gate).toMatch(/actor\?\.role === 'operator'\) throw new GlosError\('FORBIDDEN', 'A store’s own records are the store’s/);
+    expect(gate).toMatch(/Staff read a store under Stores, and a parcel under Find a parcel/);
+  });
+});

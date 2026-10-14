@@ -474,7 +474,7 @@ export const ARTICLES: GuideArticle[] = [
       "Its systems: the address they are told at, how many messages arrived, are still owed or were given up on, and why the last ones failed, in our words. A store with no address set has no software of its own to tell, which is ordinary and not a fault. Under that, the keys it has made: in use, never used, or revoked."
     ],
     notes: [
-      "Staff are shown no buyer, no collection code, no signing secret and no key. The number on file for a store is shown by its last three digits only.",
+      "Staff are shown no buyer, no collection code, no signing secret and no key. The number on file for a store is shown by its last three digits only. Nor can a staff sign-in read them anywhere else: a store’s orders, its checkouts and the messages to its systems are read by the store, signed in as itself.",
       "Nothing is changed from this screen, and a staff sign-in cannot change a store anywhere else either: its address, its keys, its dock, its orders and the payments it starts are the store’s own to make, signed in as itself in the Store app. What staff do about a store they do under their own names: a payment is confirmed under Money in."
     ]
   },
