@@ -3,6 +3,9 @@
  * back to these strings key-by-key, so translating is additive and never blocks a release.
  *
  * Keys are namespaced dotted paths (`common.retry`). Interpolate with `{name}` placeholders — `t('x', {name})`.
+ * A COUNTED word is a plural, never "parcel(s)": `{count, plural, one {# parcel} other {# parcels}}` — `#` is the
+ * number, `=0 {…}` answers one exact number, and a translation writes the forms its own language has (Arabic: zero,
+ * one, two, few, many, other). A test refuses "(s)" in these strings.
  * Not `as const`: the values must be typed `string` so a translation may differ from the English literal.
  *
  * Per-app slices live in their own files (en.<app>.ts) so each app owns its <app>.* namespace and the six
@@ -938,7 +941,7 @@ export const en = {
   'account.id.day.sun': 'Sunday',
   'account.id.chooseDayCta': 'Make the appointment',
   'account.id.changeDay': 'Change the day',
-  'account.id.changeDayHint': 'You can change it {n} more time(s), before the day comes.',
+  'account.id.changeDayHint': 'You can change it {n, plural, one {once more} other {# more times}}, before the day comes.',
   'account.id.changeDayCta': 'Change the day',
   'account.id.ticket.title': 'Your ticket',
   'account.id.ticket.when': 'When',

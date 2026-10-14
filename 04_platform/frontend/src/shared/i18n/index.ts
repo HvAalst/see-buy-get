@@ -66,14 +66,62 @@ export function initI18n(): void {
   applyToDocument(current);
 }
 
-function interpolate(msg: string, params: Record<string, string | number>): string {
-  return msg.replace(/\{(\w+)\}/g, (_m, k: string) => (k in params ? String(params[k]) : `{${k}}`));
+/** The index of the brace that closes the one at `open`, counting the ones in between; -1 where it is never closed. */
+function closing(s: string, open: number): number {
+  let depth = 0;
+  for (let i = open; i < s.length; i += 1) {
+    if (s[i] === '{') depth += 1;
+    else if (s[i] === '}' && --depth === 0) return i;
+  }
+  return -1;
 }
 
-/** Translate a key in the active locale → English fallback → the key itself; interpolate `{params}`. */
+/**
+ * A COUNTED WORD IN THE FORM ITS LANGUAGE GIVES THAT NUMBER — `{count, plural, one {# parcel} other {# parcels}}`.
+ *
+ * Without it every counted string had to be phrased to read at one as well as at five, and "3 parcel(s)" was the
+ * shape it kept coming out in. The form is chosen by the language's own rule (Intl.PluralRules): English has two,
+ * Arabic six (zero, one, two, few, many, other), and a translator writes the ones theirs has. `=0 {…}` answers one
+ * exact number before the rule is asked; `other` is what is left; `#` is the number itself. A branch may hold
+ * `{params}` and plurals of its own.
+ */
+function pluralOf(name: string, body: string, params: Record<string, string | number>, locale: string): string {
+  if (!(name in params)) return `{${name}, plural,${body}}`; // left exactly as it was written
+  const n = Number(params[name]);
+  const forms = new Map<string, string>();
+  let rest = body.trim();
+  for (let m = /^(=\d+|zero|one|two|few|many|other)\s*\{/.exec(rest); m; m = /^(=\d+|zero|one|two|few|many|other)\s*\{/.exec(rest)) {
+    const end = closing(rest, m[0].length - 1);
+    if (end < 0) break;
+    forms.set(m[1], rest.slice(m[0].length, end));
+    rest = rest.slice(end + 1).trim();
+  }
+  const form = forms.get(`=${n}`) ?? forms.get(new Intl.PluralRules(locale).select(n)) ?? forms.get('other') ?? '';
+  return interpolate(form.replace(/#/g, String(params[name])), params, locale);
+}
+
+/** `{name}` becomes its value, and `{name, plural, …}` the form for its number (pluralOf). Anything else is left as written. */
+export function interpolate(msg: string, params: Record<string, string | number>, locale: string = DEFAULT_LOCALE): string {
+  let out = '';
+  let at = 0;
+  for (let open = msg.indexOf('{'); open >= 0; open = msg.indexOf('{', at)) {
+    const end = closing(msg, open);
+    if (end < 0) break;
+    out += msg.slice(at, open);
+    const inner = msg.slice(open + 1, end);
+    const plural = /^(\w+),\s*plural,([\s\S]*)$/.exec(inner);
+    out += plural ? pluralOf(plural[1], plural[2], params, locale) : /^\w+$/.test(inner) && inner in params ? String(params[inner]) : `{${inner}}`;
+    at = end + 1;
+  }
+  return out + msg.slice(at);
+}
+
+/** Translate a key in the active locale → English fallback → the key itself; interpolate `{params}`. A plural is chosen
+ *  by the rule of the language the words came from: English words keep English plurals in a language not yet written. */
 export function t(key: MessageKey, params?: Record<string, string | number>): string {
-  const msg = CATALOGS[current]?.[key] ?? en[key] ?? (key as string);
-  return params ? interpolate(msg, params) : msg;
+  const own = CATALOGS[current]?.[key];
+  const msg = own ?? en[key] ?? (key as string);
+  return params ? interpolate(msg, params, own !== undefined ? current : 'en') : msg;
 }
 
 /** The signature of `t`, for threading into pure logic functions (they take it as a trailing param). */
