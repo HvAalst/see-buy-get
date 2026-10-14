@@ -322,6 +322,38 @@ describe('PUDO Light', () => {
       expect(onTheMap(home.did)).toBe('KES');
     });
 
+    it('a country lowered tells the people registered there what stopped — and a change that only raises tells nobody', () => {
+      const staff = { active: true, role: 'operator', sub: 'operator:opr_a', actorName: 'Amina Otieno', scopes: ['*'] } as never;
+      const told: Array<{ jurisdiction: string; level: string; lost: string[] }> = [];
+      const self = controller as unknown as { countryNotice?: unknown };
+      const kept = self.countryNotice;
+      self.countryNotice = { tellLowered: async (x: { jurisdiction: string; level: string; lost: string[] }) => (told.push(x), { told: 0, emailed: 0 }) };
+      const was = presence.resolve('ET');
+      try {
+        if (!was.capabilities.holdFloat) presence.set({ jurisdiction: 'ET', level: 'established', by: 'test' });
+        controller.setPresence('ET', { level: 'matched', by: 'Amina Otieno' } as never, staff);
+        expect(told).toHaveLength(1);
+        expect(told[0]).toMatchObject({ jurisdiction: 'ET', level: 'matched' });
+        expect(told[0].lost).toEqual(expect.arrayContaining(['holdFloat', 'payouts', 'merchantOfRecord']));
+        expect(told[0].lost).not.toContain('takeIn');
+        // Raising it again waits for a second person and takes nothing away: nobody is told anything.
+        const raised = controller.setPresence('ET', { level: 'established', by: 'Amina Otieno' } as never, staff) as { proposal?: { proposalId: string } };
+        expect(told).toHaveLength(1);
+        const second = { active: true, role: 'operator', sub: 'operator:opr_b', actorName: 'Brian Kamau', scopes: ['*'] } as never;
+        controller.approvePresence(raised.proposal!.proposalId, { by: 'Brian Kamau' } as never, second);
+        expect(told).toHaveLength(1);
+        // A change that adds one thing and takes another away is approved by a second person — and what it took is said.
+        const mixed = controller.setPresence('ET', { level: 'established', overrides: { fieldEvidence: true, payouts: false }, by: 'Amina Otieno' } as never, staff) as { proposal?: { proposalId: string } };
+        expect(told).toHaveLength(1);
+        controller.approvePresence(mixed.proposal!.proposalId, { by: 'Brian Kamau' } as never, second);
+        expect(told).toHaveLength(2);
+        expect(told[1]).toMatchObject({ jurisdiction: 'ET', lost: ['payouts'] });
+      } finally {
+        self.countryNotice = kept;
+        presence.set({ jurisdiction: 'ET', level: was.level, by: 'test' });
+      }
+    });
+
     it('refuses to add up register lines in two moneys rather than give a figure in nothing', () => {
       const line = (currency: string) => ({ id: currency, type: 'TOP_UP', sign: '+', amount: 10, currency, reference: 'r', refType: 'bank', at: '2026-10-14T00:00:00Z' }) as never;
       expect(agentLedgerSummaryOf([line('KES'), line('KES')])).toMatchObject({ in: 20, currency: 'KES' });

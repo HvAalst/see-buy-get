@@ -2257,6 +2257,7 @@ export const enTowerQueues = {
   'tower.presence.status.expired': 'expired — nobody decided',
   'tower.presence.approvedBy': 'approved by {who}',
   'tower.presence.impact.title': 'What this leaves behind',
+  'tower.presence.impact.told': 'Everybody registered there is told what stops for them, and what does not — in their app, and by email where they gave an address.',
   'tower.presence.impact.loading': 'Working out what this leaves behind…',
   'tower.presence.impact.failed': 'Could not work out what this leaves behind — read the map before pressing.',
   'tower.presence.impact.none': 'Nothing is left behind: no parcels, loads, debts or participants there.',

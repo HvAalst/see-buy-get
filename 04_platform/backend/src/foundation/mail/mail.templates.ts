@@ -87,6 +87,8 @@ export interface MailParams {
   'fleet-code-issued': { company: string; when: string; byStaff: boolean };
   'fleet-code-due': { company: string; days: number };
   'papers-due': { company: string; lapsed: string[]; due: string[] };
+  /** A country was lowered: what stops there for this participant, what does not, and which app they use. */
+  'country-changed': { country: string; lost: string[]; kept: string[]; app: MailApp };
   /**
    * A licence or an insurance policy of one of OUR companies is running out, or has lapsed — to that company's own
    * administrators. `stops`: what switches off the day after, in words; empty when nothing does by itself.
@@ -829,6 +831,32 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
         { kind: 'note', text: 'A paper with no date recorded switches nothing off — but nothing protects you either. Record the dates and the network watches them for you.' },
       ],
       reason: 'You are getting this email because it is the contact address of a fleet on SeeBuyGet.',
+    }),
+  },
+  'country-changed': {
+    title: 'What changes in your country (shop, hub, store, fleet)',
+    sentWhen: 'A change to a country takes something away — to everybody registered there who gave an email address. The apps say it in their inbox as well.',
+    wired: true,
+    // Sent once, when the change is made, and nothing sends it again: still worth having three days on.
+    sendLater: 72,
+    sample: {
+      country: 'Uganda',
+      lost: ['we no longer charge customers here — a local carrier prices and bills', 'a shop here can no longer keep a float with us', 'we cannot pay out here for now, so what is owed waits'],
+      kept: ['Parcels already on a shelf stay there to be collected', 'What is owed to you stays owed'],
+      app: 'agent',
+    },
+    build: (p) => ({
+      subject: `What changes for you in ${p.country} from today`,
+      preheader: `${p.lost.length === 1 ? 'One thing stops' : `${p.lost.length} things stop`} from today. Parcels on a shelf can still be collected.`,
+      blocks: [
+        { kind: 'heading', text: `What changes in ${p.country}` },
+        { kind: 'paragraph', text: 'From today:' },
+        { kind: 'facts', rows: p.lost.map((l, i) => [String(i + 1), l.replace(/^./, (c) => c.toUpperCase())] as [string, string]) },
+        { kind: 'paragraph', text: 'What does not change:' },
+        { kind: 'facts', rows: p.kept.map((k, i) => [String(i + 1), k] as [string, string]) },
+        { kind: 'button', label: 'Open the app', href: appUrl(p.app) },
+      ],
+      reason: `You are getting this email because you are registered with SeeBuyGet in ${p.country}. It is about the service you use there, so it cannot be turned off.`,
     }),
   },
   'order-on-its-way': {

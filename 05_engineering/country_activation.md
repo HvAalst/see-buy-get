@@ -161,7 +161,9 @@ presence screen already does:
 - **Lowering by one person** was built as proposed (§4); say if it should need two as well.
 - **Where documents live in production.** Development keeps the bytes in the persistent store beside the metadata.
 - **Reminders ahead of a lapse** reach the console only; company administrators have no inbox to send them to.
-- **Telling participants** in a wound-down country: the impact counts them; nothing messages them yet.
+- ~~**Telling participants** in a wound-down country~~ — built 2026-10-14 (`CountryNoticeService`): a change that takes
+  something away tells every shop, hub, store, fleet and driver registered there what stops and what does not, in
+  their app's inbox and by email where they gave an address. A change that only adds tells nobody here.
 
 ## 12. Related
 

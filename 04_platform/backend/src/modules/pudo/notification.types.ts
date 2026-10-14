@@ -44,6 +44,8 @@ export const NOTIFICATION_KINDS = [
   'load_cancelled',
   'freight_problem',
   'claim_decided',
+  /** Their country was lowered: what stops for them there from today, and what does not (CountryNoticeService). */
+  'country_changed',
   /**
    * A DRIVER'S HOURS, said by the clock: an hour before the shift limit, at the limit, and — to somebody who asked —
    * when their rest is over. The fleet's office hears the limit being passed too. Until this, everything about the

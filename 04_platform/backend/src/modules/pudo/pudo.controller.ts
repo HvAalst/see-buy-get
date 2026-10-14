@@ -30,7 +30,7 @@ import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Quer
 import { staffNetworkAllows } from '../../foundation/auth/staff-network';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
-import { PRESENCE_CAPABILITIES, PRESENCE_LEVELS, type PresenceLevel } from '../../foundation/presence/presence.types';
+import { PRESENCE_CAPABILITIES, PRESENCE_LEVELS, type PresenceCapability, type PresenceLevel } from '../../foundation/presence/presence.types';
 import { capabilitiesOf } from '../../foundation/presence/presence.service';
 import { countryImpactOf } from './country-impact';
 import { BorderRuleService } from './border-rules.service';
@@ -87,6 +87,7 @@ import { CargoService } from './cargo.service';
 import { MediaService } from './media.service';
 import { EmptyDepot, EmptyDepotService } from './empty-depot.service';
 import { CONTACT_BASIS, ContactCardService } from './contact-card.service';
+import { CountryNoticeService } from './country-notice.service';
 import { ContactCardView, DepotListResponse, DepotRegisterView } from './depot.types';
 import { FleetManagerService } from './fleet-manager.service';
 import { AccountService } from './account.service';
@@ -281,7 +282,18 @@ export class SbgController {
     @Optional() private readonly declarations?: CompanyDeclarationService,
     @Optional() private readonly paperReports?: CompanyPaperReportService,
     @Optional() private readonly sms?: SmsService,
+    @Optional() private readonly countryNotice?: CountryNoticeService,
   ) {}
+
+  /**
+   * What a change to a country TOOK AWAY, worked out from what it could do before and what it can do now — and, where
+   * that is anything, everybody registered there is told (CountryNoticeService). Sent after the change, never ahead of it.
+   */
+  private tellWhatStopped(jurisdiction: string, before: Record<PresenceCapability, boolean>): void {
+    const after = this.presence.resolve(jurisdiction);
+    const lost = PRESENCE_CAPABILITIES.filter((c) => before[c] && !after.capabilities[c]);
+    if (lost.length) void this.countryNotice?.tellLowered({ jurisdiction, level: after.level, lost }).catch(() => undefined);
+  }
 
   // --- phone verification (mandatory at onboarding — control-tower contact + GPS) ---
   // (CODE_NOT_SENT, below the class: one sentence for a code that could not be texted, whichever way it could not.)
@@ -796,7 +808,10 @@ export class SbgController {
      * a company that does not exist.
      */
     const waiting = this.interest.waitingFor(proposal.jurisdiction);
+    // A change that raises one thing may lower another (an override switched off beside a level going up).
+    const before = { ...this.presence.resolve(proposal.jurisdiction).capabilities };
     const decided = this.presence.approve(proposalId, by, undefined, who.key);
+    this.tellWhatStopped(proposal.jurisdiction, before);
 
     if (waiting.length && this.presence.resolve(proposal.jurisdiction).capabilities.takeIn) {
       const name = catalogueEntry(proposal.jurisdiction)?.name ?? proposal.jurisdiction;
@@ -840,8 +855,10 @@ export class SbgController {
   setPresence(@Param('jurisdiction') jurisdiction: string, @Body() dto: PresenceDto, @Actor() actor: IntrospectionResult) {
     this.requirePriceableSwitchOn(jurisdiction, dto.level);
     this.requireReadyCompanyFor(jurisdiction, dto.level);
-    // CA2 — a change that raises the country becomes a proposal for a second person; a lowering is applied now.
-    return this.presence.propose({
+    // CA2 — a change that raises the country becomes a proposal for a second person; a lowering is applied now — and
+    // the people it lowers it for are told.
+    const before = { ...this.presence.resolve(jurisdiction).capabilities };
+    const result = this.presence.propose({
       // CL1 — the trade terms this country allows, per direction. A term switched ON is a gain like any
       // other, so the service holds it to the same two-person rule.
       incoterms: dto.incoterms,
@@ -851,6 +868,8 @@ export class SbgController {
       note: dto.note,
       ...this.signed(actor, dto.by),
     });
+    if (result.applied) this.tellWhatStopped(jurisdiction, before);
+    return result;
   }
 
   /* ----------------------------------------------- CA6: the rules of crossing a border -- */

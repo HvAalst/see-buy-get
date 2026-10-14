@@ -628,6 +628,12 @@ function Impact({ jurisdiction, level, actions }: { jurisdiction: string; level:
               <Icon name="badge" size={14} /> {t('tower.presence.impact.registered', { ...impact.registered })}
             </li>
           ) : null}
+          {/* Said before it is pressed: the people it is pressed on hear about it, so whoever presses knows it. */}
+          {impact.lost.length && Object.values(impact.registered).some((n) => n > 0) ? (
+            <li>
+              <Icon name="bell" size={14} /> {t('tower.presence.impact.told')}
+            </li>
+          ) : null}
         </ul>
       )}
     </div>

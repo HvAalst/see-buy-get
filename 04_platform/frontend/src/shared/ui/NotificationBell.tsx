@@ -26,6 +26,8 @@ const KIND_ICON: Record<string, IconName> = {
   load_cancelled: 'truck',
   freight_problem: 'truck',
   claim_decided: 'check',
+  // Their country was lowered: what stops there for them, and what does not.
+  country_changed: 'pin',
   bus_inbound: 'bag',
   intake_expected: 'box',
   bag_ready_to_close: 'bag',
