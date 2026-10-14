@@ -66,18 +66,77 @@ docker compose exec api node scripts/seed-demo.mjs     # demo data + the sign-in
 Ports 3000, 8080 and 8081 are on 127.0.0.1 only. The dev mode (`scripts/app.sh start dev`) also uses port 3000,
 so run one or the other.
 
-## On a DigitalOcean Droplet
+## On a DigitalOcean Droplet, behind Cloudflare
+
+The chain: the domain is registered at **MijnDomein**, its DNS is run by **Cloudflare** (with the proxy on, the orange
+cloud), and Cloudflare sends visitors on to the **Droplet**.
+
+```
+visitor ──HTTPS──► Cloudflare (DNS, proxy, cache) ──HTTPS──► Droplet: Caddy ──► api
+                    ▲                                         firewall: only Cloudflare may knock
+ MijnDomein: nameservers point at Cloudflare
+```
+
+With `CADDY_EDGE=cloudflare` (the default in `.env.cloud.example`), Caddy:
+
+- reads the visitor's address from `CF-Connecting-IP`, but only on connections from Cloudflare's own address ranges,
+  which it fetches from Cloudflare and keeps current. The API's sign-in limits, the staff network fence and the
+  console allow-list therefore see the visitor, not Cloudflare.
+- gets its certificates by writing a DNS record through Cloudflare's API. Let's Encrypt cannot reach a server
+  behind the proxy, so this is how Cloudflare can talk to the Droplet over HTTPS in "Full (strict)" mode.
+
+To run without Cloudflare's proxy (grey cloud, or another DNS host), set `CADDY_EDGE=direct`.
 
 **1. A Droplet.** Ubuntu 24.04 with Docker (the "Docker" image in the Marketplace has it installed), **2 GB RAM or
-more**: the web image builds eight apps, which a 1 GB Droplet runs out of memory on. Add an SSH key.
+more**: the web image builds eight apps, which a 1 GB Droplet runs out of memory on. Add an SSH key. Note its IP.
 
-**2. A firewall** (Networking → Firewalls): inbound TCP 22, 80, 443 and UDP 443 (HTTP/3). Nothing else. The API's
-port is not published, so it needs no rule.
+**2. Cloudflare takes over the domain's DNS.**
 
-**3. DNS.** Two A records pointing at the Droplet's IP, for the domains in `SBG_PUBLIC_URL` (e.g. `seebuyget.com`)
-and `SBG_CONSOLE_URL` (e.g. `ops.seebuyget.com`). Do this first: Caddy asks for certificates on its first start.
+1. In Cloudflare, *Add a domain* (the Free plan is enough). It copies the records it finds at MijnDomein.
+   Check that every **MX and TXT** record came across (email, SPF, DKIM, site verifications): anything missing stops
+   working when the nameservers change.
+2. At **MijnDomein**: if DNSSEC is switched on for the domain, switch it **off** first. Otherwise the domain stops
+   resolving during the move. Then, in the domain's DNS settings, replace MijnDomein's nameservers with the two
+   Cloudflare shows you. It usually takes an hour or two, sometimes up to a day. Cloudflare emails you when the
+   domain is active.
+3. Once it is active: turn DNSSEC on in Cloudflare (DNS → Settings), and paste the DS record it gives you into
+   MijnDomein's DNSSEC settings.
 
-**4. The code and its settings.**
+**3. Cloudflare settings.**
+
+| Where | Set |
+|---|---|
+| DNS → Records | `A` `@` → the Droplet's IP, **Proxied**. `A` `ops` (the console) → the same IP, **Proxied**. Optional: `CNAME` `www` → `@`, Proxied |
+| SSL/TLS → Overview | **Full (strict)**. Never "Flexible": that sends the traffic on to the Droplet unencrypted |
+| SSL/TLS → Edge Certificates | Always Use HTTPS **on**, Minimum TLS 1.2 |
+| Speed → Optimization | Rocket Loader **off**: it rewrites the pages' scripts and breaks the apps |
+| Rules → Redirect Rules | if you added `www`: the "Redirect from WWW to root" template |
+| My Profile → API Tokens | *Create Token* → template **Edit zone DNS**, zone: your domain only. Goes in `.env` as `CLOUDFLARE_API_TOKEN` |
+
+Record emails (ZeptoMail's DKIM and return-path records, when email is set up) are **DNS only** (grey cloud):
+Cloudflare cannot proxy anything but web traffic.
+
+**4. A DigitalOcean firewall that admits only Cloudflare.** Otherwise anybody who learns the Droplet's IP walks
+around Cloudflare and its protection. Ports 80/443 accept Cloudflare's ranges only, and SSH accepts your own
+address. Outbound must stay open: Caddy talks to Cloudflare and Let's Encrypt, and the API to Twilio and ZeptoMail.
+With [`doctl`](https://docs.digitalocean.com/reference/doctl/), from your own machine:
+
+```bash
+CF=$( (curl -s https://www.cloudflare.com/ips-v4; echo; curl -s https://www.cloudflare.com/ips-v6) | grep . | sed 's/^/address:/' | paste -sd, -)
+doctl compute firewall create --name seebuyget-web --droplet-ids <droplet id> \
+  --inbound-rules "protocol:tcp,ports:22,address:<your IP>/32 protocol:tcp,ports:80,$CF protocol:tcp,ports:443,$CF" \
+  --outbound-rules "protocol:tcp,ports:all,address:0.0.0.0/0,address:::/0 protocol:udp,ports:all,address:0.0.0.0/0,address:::/0 protocol:icmp,address:0.0.0.0/0,address:::/0"
+```
+
+Or the same by hand under Networking → Firewalls. Cloudflare's ranges change rarely: if they do (they announce it),
+run `doctl compute firewall update` with the same rules.
+
+**5. The console's gate (recommended): Cloudflare Access.** In Zero Trust → Access → Applications, add a
+*self-hosted* application for the console's domain, with a policy listing the staff's email addresses. A stranger
+then gets Cloudflare's login page, never ours. It is free for up to 50 users. With it in place, leave
+`CONSOLE_ALLOW_IPS` unset.
+
+**6. The code and its settings.**
 
 ```bash
 git clone <this repo> seebuyget && cd seebuyget/04_platform
@@ -86,25 +145,26 @@ for k in GLOS_AUTH_SECRET GLOS_VAULT_KEY GLOS_PHONE_PEPPER GLOS_IDENTITY_PEPPER 
          GLOS_LABEL_KEY GLOS_DISCLOSURE_KEY GLOS_VAPID_PRIVATE GLOS_CLIENT_SECRET; do
   sed -i "s|^$k=.*|$k=$(openssl rand -hex 32)|" .env
 done
-nano .env          # the two addresses, Twilio, ZeptoMail
+nano .env          # the two addresses, CLOUDFLARE_API_TOKEN, Twilio, ZeptoMail
 chmod 600 .env
 ```
 
 Keep a copy of `.env` somewhere safe (a password manager). The vault key and the two peppers can never be
 changed or regenerated once real data exists: without them, what is stored cannot be read.
 
-**5. Start it.**
+**7. Start it.**
 
 ```bash
 docker compose up -d --build
 docker compose ps                 # api: healthy, web: running
 docker compose logs -f api        # a missing secret is named here, and the API will not start without it
+docker compose logs -f web        # "certificate obtained successfully" for both domains
 ```
 
-**6. The first member of staff.** Open the console address, use the setup-key link under the sign-in form, and
+**8. The first member of staff.** Open the console address, use the setup-key link under the sign-in form, and
 enter `GLOS_CLIENT_SECRET`. See `frontend/README.md`, "The operator console's entrance".
 
-**7. Rebuild the web image once,** now that the API is live: `docker compose up -d --build web`. The front page's
+**9. Rebuild the web image once,** now that the API is live: `docker compose up -d --build web`. The front page's
 town pages are fetched from the API while building, and on the very first build there was no API to ask.
 
 ### Updating
@@ -136,8 +196,9 @@ Restore by stopping `api` and unpacking into the same volume.
 
 ### Worth knowing
 
-- **Behind Cloudflare** (proxied, orange cloud) is not set up here. As it stands Caddy would see only Cloudflare's
-  addresses and pass those on, so the API's per-caller limits and the console allow-list would see Cloudflare, not
-  the caller. It needs Caddy's `trusted_proxies` set to Cloudflare's ranges, `GLOS_TRUST_PROXY=2`, and Cloudflare
-  Access in place of `CONSOLE_ALLOW_IPS`. Until then, keep the DNS records "DNS only" (grey cloud).
+- **Cloudflare caches** what it may: the apps' fingerprinted files for a year (Caddy says so), and the pages and service
+  workers not at all (Caddy says `no-cache`). There is nothing to purge after a deploy.
+- **Something wrong only through Cloudflare?** Set the record to DNS only (grey cloud) for a minute and try the site
+  directly. Caddy's certificate is a real Let's Encrypt one, so the site works the same either way (the firewall in
+  step 4 must let you through for that).
 - **Logs** rotate at 10 MB × 5 per container. `docker compose logs --since 1h web` for requests.

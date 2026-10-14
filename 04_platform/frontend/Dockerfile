@@ -18,7 +18,16 @@ RUN npm ci
 COPY 04_platform/frontend/ ./
 RUN npm run build
 
+# Caddy with the two plugins a site behind Cloudflare needs: certificates by DNS challenge through Cloudflare's API
+# (the proxy stands between Let's Encrypt and this server), and Cloudflare's address ranges, kept current, so the
+# visitor's own address can be believed from Cloudflare and from nobody else. Unused when CADDY_EDGE is not cloudflare.
+FROM caddy:2.11-builder-alpine AS caddy
+RUN xcaddy build \
+      --with github.com/caddy-dns/cloudflare \
+      --with github.com/WeidiDeng/caddy-cloudflare-ip
+
 FROM caddy:2.11-alpine
+COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
 COPY 04_platform/frontend/Caddyfile /etc/caddy/Caddyfile
 COPY --from=builder /repo/04_platform/frontend/dist /srv/site
 COPY --from=builder /repo/04_platform/frontend/dist-console /srv/console

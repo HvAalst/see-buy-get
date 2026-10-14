@@ -40,6 +40,9 @@ services:
       SBG_PUBLIC_URL: ${SBG_PUBLIC_URL}
       SBG_CONSOLE_URL: ${SBG_CONSOLE_URL}
       CONSOLE_ALLOW_IPS: ${CONSOLE_ALLOW_IPS:-0.0.0.0/0 ::/0}
+      # What stands in front: direct (nothing) or cloudflare (its proxy; needs CLOUDFLARE_API_TOKEN). See Caddyfile.
+      CADDY_EDGE: ${CADDY_EDGE:-direct}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
     volumes:
       # Caddy's certificates and keys: kept, so a restart does not ask Let's Encrypt again (it rate-limits).
       - caddy-data:/data

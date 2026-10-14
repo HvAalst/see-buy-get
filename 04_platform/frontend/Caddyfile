@@ -3,10 +3,39 @@
 #   SBG_PUBLIC_URL   the public site: the front door at /, each app under its own path, the API under /v1
 #   SBG_CONSOLE_URL  the operator console, alone on its own address (see frontend/README.md, "The operator
 #                    console's entrance"); CONSOLE_ALLOW_IPS narrows who may load it at all
+#   CADDY_EDGE       what stands in front of this server: `direct` (nothing — a laptop, or a server the world reaches
+#                    itself) or `cloudflare` (Cloudflare's proxy, the orange cloud)
 #
-# An https:// address (a server) gets a certificate Caddy obtains and renews on its own: pointing the domain's DNS at
-# the server is all the HTTPS setup there is. An http:// address (a laptop, http://localhost:8080) is served as is,
-# on the port it names. The values come from .env, through docker-compose.yml.
+# An http:// address (a laptop, http://localhost:8080) is served as is, on the port it names. An https:// address gets
+# a certificate Caddy obtains and renews on its own: `direct`, by Let's Encrypt reaching this server; `cloudflare`,
+# by a DNS record Caddy writes through Cloudflare's API (CLOUDFLARE_API_TOKEN), because Let's Encrypt cannot reach a
+# server behind the proxy. The values come from .env, through docker-compose.yml.
+
+# WHO IS ASKING. `direct`: whoever opened the connection, and no header is believed. `cloudflare`: every connection
+# comes from Cloudflare, so the visitor's address is read from the header Cloudflare sets — believed only from
+# Cloudflare's own address ranges (fetched from Cloudflare and kept current), never from anybody else.
+(global_direct) {
+}
+
+(global_cloudflare) {
+	servers {
+		trusted_proxies cloudflare
+		client_ip_headers CF-Connecting-IP
+	}
+}
+
+{
+	import global_{$CADDY_EDGE}
+}
+
+(tls_direct) {
+}
+
+(tls_cloudflare) {
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+	}
+}
 
 (security_headers) {
 	header {
@@ -29,12 +58,16 @@
 }
 
 {$SBG_PUBLIC_URL} {
+	import tls_{$CADDY_EDGE}
 	import security_headers
 	encode zstd gzip
 
-	# The API. Same origin as the apps, so they need no CORS. Server-sent events are flushed as they come.
+	# The API. Same origin as the apps, so they need no CORS. It is told the visitor's address and nothing else
+	# (GLOS_TRUST_PROXY=1): whatever a visitor wrote in X-Forwarded-For themselves is dropped here.
 	handle /v1/* {
-		reverse_proxy api:3000
+		reverse_proxy api:3000 {
+			header_up X-Forwarded-For {client_ip}
+		}
 	}
 
 	handle {
@@ -61,6 +94,7 @@
 }
 
 {$SBG_CONSOLE_URL} {
+	import tls_{$CADDY_EDGE}
 	import security_headers
 	header {
 		X-Robots-Tag "noindex, nofollow"
@@ -68,7 +102,7 @@
 	}
 
 	# A stranger outside the allow-list gets nothing that says a console is here.
-	@outside not remote_ip {$CONSOLE_ALLOW_IPS}
+	@outside not client_ip {$CONSOLE_ALLOW_IPS}
 	respond @outside 404
 
 	encode zstd gzip
