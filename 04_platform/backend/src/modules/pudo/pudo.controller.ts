@@ -6707,7 +6707,11 @@ export class SbgController {
     const items = cargo.items.map((c) => ({ ...c, driver: this.driverNameOf(c.driverDid) }));
     // FP4 — what is off the road and what is running out, read live from the same rules the sweep enforces.
     const papers = managerDid && this.papers ? this.papers.reportFor(managerDid) : null;
-    return { managerDid: managerDid ?? null, ...overview, cargo: { ...cargo, items }, papers };
+    // The money the fleet's vehicles are priced in and its drivers' work is paid in: the company's that settles it
+    // (DriverService.rateCurrencyOf). Named once, here, for every figure the office's screens write. Absent for the
+    // network's own view and for a fleet no company of ours settles.
+    const currency = managerDid ? this.drivers.rateCurrencyOf({ managerDid }) : undefined;
+    return { managerDid: managerDid ?? null, ...overview, cargo: { ...cargo, items }, papers, ...(currency ? { currency } : {}) };
   }
 
   private driverNameOf(did: string): string {

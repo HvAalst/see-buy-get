@@ -3817,6 +3817,17 @@ describe('PUDO Light', () => {
       expect(ratesFor(asDriver(ug.driver.did))).toMatchObject({ currency: 'UGX', benchmark: { count: 3, median: 400, min: 300, max: 500 } });
     });
 
+    it('tells a fleet’s office the money its vehicles are priced in and its drivers are paid in — once, on its dashboard', () => {
+      // The office's screens wrote a vehicle's rate, a dispatch price and the earnings as bare numbers.
+      uganda();
+      const office = (managerDid: string) => ({ active: true, role: 'fleet_manager', did: 'did:glos:an-office-hand', tenant: managerDid, scopes: [] }) as never;
+      const dashboard = (actor: never) => controller.fleetDashboard(actor) as { currency?: string };
+      expect(dashboard(office(fleetIn('KE', [0.08]).manager.did)).currency).toBe('KES');
+      expect(dashboard(office(fleetIn('UG', [300]).manager.did)).currency).toBe('UGX');
+      // The network's own view is every fleet at once, in no one money.
+      expect(dashboard({ active: true, role: 'operator', sub: 'operator:opr_a', scopes: ['*'] } as never)).not.toHaveProperty('currency');
+    });
+
     it('compares a driver whose work no company of ours pays with nobody, and names no money for them', () => {
       presence.set({ jurisdiction: 'TZ', level: 'matched' });
       fleetIn('KE', [0.1]);

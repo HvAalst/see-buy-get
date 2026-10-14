@@ -1007,6 +1007,7 @@ export const enFleet = {
   'fleet.vehicles.priceSheetTitle': 'Rate for {plate}',
   'fleet.vehicles.priceBody': 'This vehicle currently charges {rate} per kilometre. The rate is public — shippers compare before offering work.',
   'fleet.vehicles.newPrice': 'New price per km',
+  'fleet.vehicles.newPriceIn': 'New price per km, in {currency}',
   'fleet.vehicles.saveRate': 'Save the new rate',
   'fleet.vehicles.keepRate': 'Keep it as it is',
 

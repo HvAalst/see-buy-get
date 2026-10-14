@@ -4,13 +4,14 @@ import { useDebounced } from '../../../shared/useDebounced';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { EARN_LIMIT, type EarningsQuery, type FleetActions, type FleetState } from '../useFleetApp';
 import type { FleetJobRow } from '../types';
+import { cash } from '../../../shared/money';
 
 export interface EarningsScreenProps {
   state: FleetState;
   actions: FleetActions;
 }
 
-const money = (n: number | undefined | null) => (n ?? 0).toFixed(2);
+const money = (n: number | undefined | null, currency?: string) => cash(n, currency);
 
 const STATUS_OPTIONS: Array<{ value: 'claimed' | 'in_transit' | 'delivered' | 'cancelled'; labelKey: MessageKey }> = [
   { value: 'claimed', labelKey: 'fleet.earn.statusClaimed' },
@@ -49,6 +50,8 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
   const debounced = useDebounced(searchText, 300);
   const q = state.earnQuery;
   const sum = state.earnSummary;
+  // Every total in the money the fleet is settled in; a job in the money it was locked in (JobRow).
+  const currency = sum?.settlement?.currency ?? state.dashboard?.currency;
   const loading = state.earnState === 'loading' || state.earnState === 'idle';
 
   useEffect(() => {
@@ -77,8 +80,8 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
 
       <GlanceNumber
         label={t('fleet.earn.earned')}
-        value={sum ? money(sum.earned) : '—'}
-        sub={sum ? t('fleet.earn.sub', { booked: money(sum.paid), pending: money(sum.unpaid), delivered: sum.delivered, count: sum.count }) : t('fleet.earn.subEmpty')}
+        value={sum ? money(sum.earned, currency) : '—'}
+        sub={sum ? t('fleet.earn.sub', { booked: money(sum.paid, currency), pending: money(sum.unpaid, currency), delivered: sum.delivered, count: sum.count }) : t('fleet.earn.subEmpty')}
       />
 
       {/* The money itself — three facts, three lines, never one number. */}
@@ -86,15 +89,15 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
         <Card title={t('fleet.earn.moneyTitle')}>
           <div class="kv">
             <span>{t('fleet.earn.owed')}</span>
-            <b class="mono-t">{sum.settlement.owed == null ? t('fleet.earn.owedNoSister') : `${money(sum.settlement.owed)}${sum.settlement.currency ? ` ${sum.settlement.currency}` : ''}`}</b>
+            <b class="mono-t">{sum.settlement.owed == null ? t('fleet.earn.owedNoSister') : money(sum.settlement.owed, currency)}</b>
           </div>
           <div class="kv">
             <span>{t('fleet.earn.inFlight')}</span>
-            <b class="mono-t">{money(sum.settlement.inFlight)}</b>
+            <b class="mono-t">{money(sum.settlement.inFlight, currency)}</b>
           </div>
           <div class="kv">
             <span>{t('fleet.earn.settled')}</span>
-            <b class="mono-t">{money(sum.settlement.settled)}</b>
+            <b class="mono-t">{money(sum.settlement.settled, currency)}</b>
           </div>
           <p class="card__note">{sum.settlement.owed == null ? t('fleet.earn.moneyNoteNoSister') : t('fleet.earn.moneyNote')}</p>
         </Card>
@@ -113,7 +116,7 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
                   <span class="row__s">{t('fleet.earn.driverLine', { delivered: d.delivered, count: d.count })}</span>
                 </span>
                 <span class="row__end">
-                  <b class="amt amt--in">{money(d.earned)}</b>
+                  <b class="amt amt--in">{money(d.earned, currency)}</b>
                 </span>
               </button>
             ))}
@@ -127,7 +130,7 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
             <div key={m.month} class="kv">
               <span>{monthWords(m.month)}</span>
               <b class="mono-t">
-                {money(m.earned)} <span class="hint">· {t('fleet.earn.monthLine', { delivered: m.delivered, count: m.count })}</span>
+                {money(m.earned, currency)} <span class="hint">· {t('fleet.earn.monthLine', { delivered: m.delivered, count: m.count })}</span>
               </b>
             </div>
           ))}
@@ -168,7 +171,7 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
           ) : (
             <div class={`rows${state.earnState === 'loading' ? ' rows--loading' : ''}`} role="list">
               {state.earnRows.map((j) => (
-                <JobRow key={j.freightId} j={j} actions={actions} />
+                <JobRow key={j.freightId} j={j} currency={currency} actions={actions} />
               ))}
             </div>
           )}
@@ -184,7 +187,7 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
       </Card>
 
       <div class="scr__foot">
-        <ReadAloud text={() => (sum ? t('fleet.earn.aloud', { earned: money(sum.earned), owed: money(sum.settlement?.owed ?? 0), settled: money(sum.settlement?.settled ?? 0) }) : t('fleet.earn.aloudEmpty'))} label={t('fleet.readAloud')} />
+        <ReadAloud text={() => (sum ? t('fleet.earn.aloud', { earned: money(sum.earned, currency), owed: money(sum.settlement?.owed ?? 0, currency), settled: money(sum.settlement?.settled ?? 0, currency) }) : t('fleet.earn.aloudEmpty'))} label={t('fleet.readAloud')} />
       </div>
 
       <FilterSheet
@@ -205,7 +208,7 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
   );
 }
 
-function JobRow({ j, actions }: { j: FleetJobRow; actions: FleetActions }) {
+function JobRow({ j, currency, actions }: { j: FleetJobRow; currency?: string; actions: FleetActions }) {
   const t = useT();
   const when = j.deliveredAt ?? j.claimedAt;
   return (
@@ -223,13 +226,13 @@ function JobRow({ j, actions }: { j: FleetJobRow; actions: FleetActions }) {
           {when ? ` · ${new Date(when).toLocaleDateString()}` : ''}
         </span>
         {/* FP8 — an upheld claim took part of this haul's pay back. */}
-        {j.clawback ? <span class="row__meta row__s--danger">{t('fleet.earn.clawbackLine', { amount: money(j.clawback) })}</span> : null}
+        {j.clawback ? <span class="row__meta row__s--danger">{t('fleet.earn.clawbackLine', { amount: money(j.clawback, j.currency ?? currency) })}</span> : null}
         <span class="row__meta">
           <DocumentButton label={t('common.cmr.open')} title={t('common.cmr.title')} fetch={() => actions.freightNote(j.freightId)} />
         </span>
       </span>
       <span class="row__end">
-        <b class="amt amt--in">{money(j.earning)}</b>
+        <b class="amt amt--in">{money(j.earning, j.currency ?? currency)}</b>
         <Pill tone={j.paid || j.direct ? 'ok' : 'warn'} dot>
           {j.paid ? t('fleet.earn.booked') : j.direct ? t('fleet.earn.direct') : t('fleet.earn.pending')}
         </Pill>

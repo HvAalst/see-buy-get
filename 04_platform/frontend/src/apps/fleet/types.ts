@@ -181,6 +181,9 @@ export interface DashboardView {
   cargo: { count?: number; totalKg?: number; items?: CargoRow[] };
   /** FP4 — what is off the road and what is running out, from the same rules the six-hourly sweep enforces. */
   papers?: PapersReport | null;
+  /** The money this fleet’s vehicles are priced in and its drivers are paid in: the company’s that settles its work.
+   *  Absent where no company of ours does — its figures are then the bare numbers agreed. */
+  currency?: string;
 }
 
 /* ------------------------------------------------- FP1: the fleet's earnings register -- */
@@ -194,6 +197,8 @@ export interface FleetJobRow {
   cargoClass: string;
   weightKg: number;
   earning?: number;
+  /** The money the earning was locked in at the claim. */
+  currency?: string;
   /** BOOKED by the network at delivery — owed to the fleet, not yet money that moved. */
   paid: boolean;
   /** B2 — the shipper pays the carrier for this haul directly; nothing is owed by SeeBuyGet. */

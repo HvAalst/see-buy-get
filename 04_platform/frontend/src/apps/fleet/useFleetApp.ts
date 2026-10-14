@@ -6,6 +6,7 @@ import type { MediaKind } from '../../lib/sbg/personas/media';
 import type { MarketSeriesView } from '../../shared/market';
 import { t } from '../../shared/i18n';
 import { downscaleImage } from '../../shared/media';
+import { perKmText } from '../../shared/money';
 import type { IconName } from '../../shared/ui/Icon';
 import { clearManager, createFleetClient, managerLookup, managerSession, managerChoices, managerSessionByFleet, changeManagerPin, purgeFleetTokens, readManager, saveManager } from './api';
 import { EMPTY_DRIVER, EMPTY_LINE, EMPTY_RUN, EMPTY_VEHICLE, isHeavySelection, lineBlocker, runBlocker, type DriverForm, type LineForm, type RunForm, type VehicleForm } from './logic';
@@ -774,7 +775,7 @@ export function useFleetApp() {
       await run(`price:${vehicleId}`, async () => {
         const r = await client.api.setVehiclePrice(vehicleId, price);
         if (r.error) return fail(r.error);
-        pushToast({ tone: 'ok', icon: 'wallet', title: t('fleet.toast.rateUpdated'), detail: t('fleet.toast.rateUpdatedDetail', { price: price.toFixed(3) }) });
+        pushToast({ tone: 'ok', icon: 'wallet', title: t('fleet.toast.rateUpdated'), detail: t('fleet.toast.rateUpdatedDetail', { price: perKmText(price, stateRef.current.dashboard?.currency) }) });
         await refresh();
       });
     },

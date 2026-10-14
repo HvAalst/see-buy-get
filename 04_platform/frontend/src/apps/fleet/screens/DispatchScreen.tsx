@@ -1,5 +1,6 @@
 import { Button, Card, ErrorNote, Explainer, Icon, Pill, ReadAloud } from '../../../shared/ui';
-import { formatDate, formatMoney, useT } from '../../../shared/i18n';
+import { formatDate, useT } from '../../../shared/i18n';
+import { cash } from '../../../shared/money';
 import { blockerTone } from '../../../shared/board';
 import { boardVsMarket } from '../../../shared/market';
 import { dispatchDistanceLine, dispatchRowState, dispatchSummary } from '../logic';
@@ -110,7 +111,7 @@ function LoadRow({ row, driver, state, actions }: { row: DispatchRow; driver: { 
         <span class="row__s">{t('fleet.dispatch.meta', { kg: row.weightKg, pickup: row.pickupLabel, dest: row.destLabel })}</span>
         <span class="row__s">
           {dispatchDistanceLine(row, t)}
-          {row.price ? ' · ' + t('fleet.dispatch.earns', { name: driver.name, amount: formatMoney(row.price.total) }) : ''}
+          {row.price ? ' · ' + t('fleet.dispatch.earns', { name: driver.name, amount: cash(row.price.total, state.dashboard?.currency) }) : ''}
         </span>
         {row.scheduledPickupAt ? <span class="row__s">{t('fleet.dispatch.scheduled', { date: formatDate(row.scheduledPickupAt) })}</span> : null}
         {row.deliveryWindow ? <span class="row__s row__s--warn">{t('common.instructions.deliver', { window: row.deliveryWindow })}</span> : null}

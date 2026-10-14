@@ -2,6 +2,7 @@ import { useRef, useState } from 'preact/hooks';
 import { AuthImage, Button, Card, ErrorNote, Icon, Note, OptionInfo, OptionPicker, Pill, QrBlock, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { qrPayload } from '../../../shared/qr';
+import { cash, perKmText } from '../../../shared/money';
 import type { MediaKind } from '../../../lib/sbg/personas/media';
 import { fleetConfig } from '../api';
 import { bodyPickerOptions, equipmentHelp, equipmentOptions, paperLine, paperLineClass, papersToShow, subtypeLine, vehicleMissing } from '../logic';
@@ -300,8 +301,8 @@ export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
         {Number(f.pricePerKm) > 0 && Number(f.minMultiplier) > 0 && Number(f.maxMultiplier) > 0 ? (
           <p class="hint" style="margin-top:6px">
             {t('fleet.vehicles.multiplierRates', {
-              low: (Number(f.pricePerKm) * Number(f.minMultiplier)).toFixed(2),
-              high: (Number(f.pricePerKm) * Number(f.maxMultiplier)).toFixed(2),
+              low: cash(Number(f.pricePerKm) * Number(f.minMultiplier), state.dashboard?.currency),
+              high: cash(Number(f.pricePerKm) * Number(f.maxMultiplier), state.dashboard?.currency),
             })}
           </p>
         ) : null}
@@ -356,7 +357,7 @@ export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
                 <span class="row__body">
                   <span class="row__t mono">{v.plate}</span>
                   <span class="row__s">
-                    {`${v.vehicleClass}${v.truckSubtype ? ` · ${v.truckSubtype.replace(/_/g, ' ')}` : ''} · ${v.capacityKg} kg · QR ${v.qr} · ${Number(v.pricePerKm ?? 0).toFixed(3)}/km`}
+                    {`${v.vehicleClass}${v.truckSubtype ? ` · ${v.truckSubtype.replace(/_/g, ' ')}` : ''} · ${v.capacityKg} kg · QR ${v.qr} · ${perKmText(Number(v.pricePerKm ?? 0), state.dashboard?.currency)}/km`}
                   </span>
                   {/* FP4 — a paper that has lapsed, is running out, or was never dated. In date says nothing. */}
                   {papersToShow(v.papers).map((p) => (
@@ -511,12 +512,13 @@ function PriceSheet({ vehicle, onClose, state, actions }: { vehicle: VehicleRow 
   const [price, setPrice] = useState('');
   const value = Number(price);
   const current = vehicle ? Number(vehicle.pricePerKm ?? 0).toFixed(3) : '';
+  const currency = state.dashboard?.currency;
   return (
     <Sheet open={Boolean(vehicle)} onClose={onClose} title={vehicle ? t('fleet.vehicles.priceSheetTitle', { plate: vehicle.plate }) : ''}>
-      <p class="t-body">{t('fleet.vehicles.priceBody', { rate: current })}</p>
+      <p class="t-body">{t('fleet.vehicles.priceBody', { rate: vehicle ? perKmText(Number(vehicle.pricePerKm ?? 0), currency) : '' })}</p>
       <div class="field">
         <label class="field__label" for="rate">
-          {t('fleet.vehicles.newPrice')}
+          {currency ? t('fleet.vehicles.newPriceIn', { currency }) : t('fleet.vehicles.newPrice')}
         </label>
         <input id="rate" class="input" type="number" inputMode="decimal" min="0" step="0.001" placeholder={current} value={price} onInput={(e) => setPrice(e.currentTarget.value)} />
       </div>
