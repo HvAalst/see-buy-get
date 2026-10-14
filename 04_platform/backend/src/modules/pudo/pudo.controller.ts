@@ -3427,6 +3427,12 @@ export class SbgController {
    * pins for the map — never the whole network. With `type` → that one service (PUDO/MDP per-parcel,
    * vehicle per-km); without `type` → just the three network benchmarks (the public hub summary).
    * Without lat/lng → network-wide (no radius filter). In-memory haversine here; a geo-index at real scale.
+   *
+   * VEHICLES ARE COMPARED IN ONE MONEY, AND SAY WHICH. A per-km rate is in the money of the company that settles
+   * the work done in that vehicle (`DriverService.rateCurrencyOf`), so a driver is set beside the vehicles priced in
+   * the money THEY are paid in (`rateCurrencyForDriver`) and told which money that is (`currency`). Anybody else is answered in the network's. A median across two currencies is a number about
+   * nothing, and the button beside it would have set a driver's price to it. A driver whose work no company of ours
+   * settles is compared with nobody: no `currency`, and a benchmark of none.
    */
   @SignedIn()
   @Get('pricing/near')
@@ -3435,7 +3441,7 @@ export class SbgController {
   @ApiQuery({ name: 'lng', required: false })
   @ApiQuery({ name: 'radiusKm', required: false })
   @ApiQuery({ name: 'limit', required: false })
-  pricingNear(@Query('type') type?: string, @Query('lat') lat?: string, @Query('lng') lng?: string, @Query('radiusKm') radiusKm?: string, @Query('limit') limit?: string) {
+  pricingNear(@Actor() actor: IntrospectionResult, @Query('type') type?: string, @Query('lat') lat?: string, @Query('lng') lng?: string, @Query('radiusKm') radiusKm?: string, @Query('limit') limit?: string) {
     const R = Number(radiusKm) || 25;
     const L = Math.min(Number(limit) || 50, 200);
     const here = lat && lng ? { lat: Number(lat), lng: Number(lng) } : undefined;
@@ -3449,9 +3455,18 @@ export class SbgController {
       return { count: s.length, median: pct(s, 0.5), p25: pct(s, 0.25), p75: pct(s, 0.75), min: s[0] ?? 0, max: s[s.length - 1] ?? 0 };
     };
     type Row = { id: string; label: string; location?: { lat: number; lng: number }; price: number };
+    // The money vehicles are compared in for this caller: see the comment above.
+    const rateCurrency = (): string | undefined => (actor.role === 'driver' && actor.did ? this.drivers.rateCurrencyForDriver(actor.did) : NETWORK_CURRENCY);
+    const vehicleCurrency = type === 'vehicle' ? rateCurrency() : undefined;
     const rowsFor = (t: string): Row[] => {
       if (t === 'mdp') return this.mdps.list().map((m) => ({ id: m.mdpId, label: m.name, location: m.location, price: m.pricePerParcel }));
-      if (t === 'vehicle') return this.vehicles.list({ status: 'ACTIVE' }).map((v) => ({ id: v.vehicleId, label: v.plate, price: v.pricePerKm }));
+      if (t === 'vehicle') {
+        const vehicles = this.vehicles.list({ status: 'ACTIVE' });
+        // Asked about one kind (`type`): only the rates in the asker's money, or none. The summary below, which no
+        // driver reads, keeps every vehicle as it always has.
+        const inMoney = !type ? vehicles : vehicleCurrency ? vehicles.filter((v) => this.drivers.rateCurrencyOf(v) === vehicleCurrency) : [];
+        return inMoney.map((v) => ({ id: v.vehicleId, label: v.plate, price: v.pricePerKm }));
+      }
       return this.agents.list().filter((a) => a.status === 'ACTIVE').map((a) => ({ id: a.did, label: a.shopName, location: a.location, price: a.pricePerParcel }));
     };
     const forType = (t: string) => {
@@ -3459,7 +3474,7 @@ export class SbgController {
       if (here && t !== 'vehicle') rows = rows.filter((r) => r.km != null && r.km <= R).sort((a, b) => (a.km ?? 0) - (b.km ?? 0)); // vehicles roam → network benchmark
       return { benchmark: benchmark(rows.map((r) => r.price)), pins: t === 'vehicle' ? [] : rows.slice(0, L) };
     };
-    if (type) return { type, radiusKm: here ? R : null, ...forType(type) };
+    if (type) return { type, radiusKm: here ? R : null, ...(vehicleCurrency ? { currency: vehicleCurrency } : {}), ...forType(type) };
     return { pudo: forType('pudo').benchmark, mdp: forType('mdp').benchmark, vehicle: forType('vehicle').benchmark };
   }
 

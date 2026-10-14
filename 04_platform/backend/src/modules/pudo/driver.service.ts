@@ -12,7 +12,7 @@ import { OperationalStore } from '../../foundation/data-firewall/operational-sto
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { VEHICLE_SPEC, VehicleClass } from './fleet.config';
-import { DriverKyc, DriverRegistry, FleetDriver, FleetRemoval } from './fleet.types';
+import { DriverKyc, DriverRegistry, FleetDriver, FleetRemoval, Vehicle } from './fleet.types';
 import { FleetManagerService } from './fleet-manager.service';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
@@ -144,6 +144,39 @@ export class DriverService {
   payTermsOf(did: string): { bagLoadPay: number; currency: string } {
     const list = this.entities.amountsFor(this.payeeOrNone(did).entityId);
     return { bagLoadPay: list.toteLoadFee, currency: list.currency ?? NETWORK_CURRENCY };
+  }
+
+  /**
+   * WHAT MONEY A VEHICLE'S PER-KM RATE IS IN: the money of the company that settles the work done in it — the
+   * fleet's company for a fleet's vehicle, the courier's own for a courier's, the same answer `payTermsOf` gives
+   * the driver at the wheel. A rate is a figure a driver weighs against other drivers' and then changes; said in
+   * no money, or set beside rates in another, it is worse than no figure at all.
+   *
+   * Undefined where no company of ours settles that work — a fleet standing in a country we only match, a vehicle
+   * with no fleet and no owner on record: there the money is whatever the two parties agree, and such a rate is
+   * left out of a comparison rather than given a currency by guesswork.
+   */
+  rateCurrencyOf(vehicle: Pick<Vehicle, 'managerDid' | 'ownerDriverDid'>): string | undefined {
+    let entityId: string | undefined;
+    try {
+      if (vehicle.managerDid) entityId = this.managers.entityIdOrNone(this.managers.get(vehicle.managerDid));
+      else if (vehicle.ownerDriverDid) entityId = this.payeeOrNone(vehicle.ownerDriverDid).entityId;
+    } catch {
+      // An owner that is no longer on record: the rate stands in no money we can name.
+    }
+    return this.currencyOfCompany(entityId);
+  }
+
+  /**
+   * The money a driver's per-km rate earns them: that of the company that pays them for the work (`payeeOrNone`, the
+   * same answer `driverPayout` posts to), whichever vehicle they are in. Undefined where no company of ours pays them.
+   */
+  rateCurrencyForDriver(did: string): string | undefined {
+    return this.currencyOfCompany(this.payeeOrNone(did).entityId);
+  }
+
+  private currencyOfCompany(entityId: string | undefined): string | undefined {
+    return entityId ? (this.entities.amountsFor(entityId).currency ?? NETWORK_CURRENCY) : undefined;
   }
 
   payeeOf(did: string): { entityId: string; payeeDid: string } {

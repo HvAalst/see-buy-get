@@ -300,6 +300,9 @@ export interface Benchmark {
 
 export interface RatesView {
   benchmark?: Benchmark;
+  /** The money every figure in `benchmark` is in — the money this driver is paid in. Absent where no company of
+   *  ours pays them, and then the benchmark is of nobody. */
+  currency?: string;
   pins: unknown[];
 }
 

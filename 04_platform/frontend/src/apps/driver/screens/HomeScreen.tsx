@@ -731,7 +731,7 @@ function OnShift({ state, actions, onOpenFleet }: HomeScreenProps) {
   const [confirm, setConfirm] = useState<'end' | 'rate' | null>(null);
   const [badgeOpen, setBadgeOpen] = useState(false);
   const v = state.vehicle!;
-  const band = rateBand(v.pricePerKm, state.rates?.benchmark, t);
+  const band = rateBand(v.pricePerKm, state.rates?.benchmark, t, state.rates?.currency);
   const pct = usedPercent(v.capacityKg, state.remaining);
 
   return (
@@ -867,7 +867,7 @@ function OnShift({ state, actions, onOpenFleet }: HomeScreenProps) {
       <Sheet open={confirm === 'rate'} onClose={() => setConfirm(null)} title={t('driver.home.rateSheetTitle')}>
         {band ? (
           <>
-            <p class="t-body">{t('driver.home.rateBody', { price: band.matchPrice.toFixed(3) })}</p>
+            <p class="t-body">{t('driver.home.rateBody', { price: band.matchText })}</p>
             <Checklist items={[t('driver.home.rate1'), t('driver.home.rate2')]} />
             <Button
               chevron={false}
@@ -877,7 +877,7 @@ function OnShift({ state, actions, onOpenFleet }: HomeScreenProps) {
                 void actions.matchRate(v.vehicleId, band.matchPrice);
               }}
             >
-              {t('driver.home.setPerKm', { price: band.matchPrice.toFixed(3) })}
+              {t('driver.home.setPerKm', { price: band.matchText })}
             </Button>
             <Button variant="link" onClick={() => setConfirm(null)}>
               {t('driver.home.leavePrice')}

@@ -3723,6 +3723,77 @@ describe('PUDO Light', () => {
     });
   });
 
+  describe('a driver’s per-km rate is said in the money it earns them, beside rates in the same money', () => {
+    // It read “Your rate 0.080 per km. Most drivers charge 0.080 (0.080–0.080 across 7 vehicles)”: four figures and
+    // not one said what money it was — and the median was taken across every vehicle on the network, whatever it
+    // is paid in, with a button beside it that sets the driver's own price to it.
+    let seq = 0;
+    const fleetIn = (country: string, prices: number[]) => {
+      seq += 1;
+      const m = managers.register({ companyName: `Rate Haulage ${seq}`, jurisdiction: country, contactPhone: `+2567009${seq}`, ownerFullName: 'R R', ownerNationalId: `MGR-RATE-${seq}`, location: { lat: 0.3, lng: 32.6 }, requirements: { businessRegistrationNo: `BRN-R${seq}`, transportOperatorLicence: `TOL-R${seq}`, taxId: `TAX-R${seq}` } } as never);
+      managers.submitKyc(m.did, { businessRegCertRef: 'r.jpg', operatorLicenceRef: 'l.jpg', ownerIdRef: 'i.jpg', proofOfAddressRef: 'a.jpg' });
+      managers.decideKyc(m.did, true);
+      managers.recordBond(m.did);
+      const owned = prices.map((p, i) => vehicles.register({ plate: `RT-${seq}-${i}`, vehicleClass: 'bike', ownerName: 'R', managerDid: m.did, pricePerKm: p }));
+      const driver = drivers.register({ displayName: `Rate ${seq}`, fullName: 'R D', nationalId: `DRV-RATE-${seq}`, mobile: `+2567008${seq}`, licenceClasses: ['bike'], managerDid: m.did });
+      fleet.couple(driver.did, owned[0].vehicleId);
+      return { manager: m, driver, owned };
+    };
+    const asDriver = (did: string) => ({ active: true, role: 'driver', did }) as never;
+    const ratesFor = (actor: unknown) => controller.pricingNear(actor as never, 'vehicle') as { currency?: string; benchmark: { count: number; median: number; min: number; max: number } };
+    const uganda = () => {
+      const ug = entities.createCompany({ kind: 'sister', jurisdiction: 'UG', name: 'SeeBuyGet Uganda' }, 'Amina Otieno');
+      return entities.activate(ug.entityId, 'Amina Otieno');
+    };
+
+    it('names the money: the company’s that pays the driver — their fleet’s', () => {
+      const ke = fleetIn('KE', [0.08, 0.1, 0.12]);
+      expect(drivers.rateCurrencyOf(ke.owned[0])).toBe('KES');
+      expect(drivers.rateCurrencyForDriver(ke.driver.did)).toBe('KES');
+      expect(ratesFor(asDriver(ke.driver.did))).toMatchObject({ currency: 'KES', benchmark: { count: 3, median: 0.1, min: 0.08, max: 0.12 } });
+    });
+
+    it('sets a driver only beside vehicles priced in their own money — another country’s rates stay out of the median', () => {
+      uganda();
+      const ke = fleetIn('KE', [0.08, 0.1]);
+      const ug = fleetIn('UG', [300, 400, 500]);
+      expect(drivers.rateCurrencyOf(ug.owned[0])).toBe('UGX');
+
+      // The point: before, both drivers were told the median of five rates in two currencies.
+      expect(ratesFor(asDriver(ke.driver.did))).toMatchObject({ currency: 'KES', benchmark: { count: 2, min: 0.08, max: 0.1 } });
+      expect(ratesFor(asDriver(ug.driver.did))).toMatchObject({ currency: 'UGX', benchmark: { count: 3, median: 400, min: 300, max: 500 } });
+    });
+
+    it('compares a driver whose work no company of ours pays with nobody, and names no money for them', () => {
+      presence.set({ jurisdiction: 'TZ', level: 'matched' });
+      fleetIn('KE', [0.1]);
+      const tz = fleetIn('TZ', [0.5]);
+      expect(drivers.rateCurrencyOf(tz.owned[0])).toBeUndefined(); // agreed between the two parties, in whatever money
+      const answer = ratesFor(asDriver(tz.driver.did));
+      expect(answer.currency).toBeUndefined();
+      expect(answer.benchmark.count).toBe(0); // and the app shows nothing rather than a guess
+    });
+
+    it('leaves out a rate nobody can be said to be paid in — a vehicle with no fleet and no owner on record', () => {
+      const ke = fleetIn('KE', [0.1, 0.1]);
+      const nobodys = vehicles.register({ plate: 'RT-NONE', vehicleClass: 'bike', ownerName: 'Legacy', pricePerKm: 9 });
+      expect(drivers.rateCurrencyOf(nobodys)).toBeUndefined();
+      expect(ratesFor(asDriver(ke.driver.did)).benchmark).toMatchObject({ count: 2, max: 0.1 });
+    });
+
+    it('prices a courier’s own vehicle in the money of the company that pays the courier', () => {
+      const courier = drivers.register({ displayName: 'Own Rate', fullName: 'O R', nationalId: 'DRV-RATE-OWN', mobile: '+254700800900', licenceClasses: ['bike'], jurisdiction: 'KE' });
+      const own = vehicles.register({ plate: 'RT-OWN', vehicleClass: 'bike', ownerName: 'Own Rate', ownerType: 'driver_owned', ownerDriverDid: courier.did, pricePerKm: 0.2 } as never);
+      expect(drivers.rateCurrencyOf(own)).toBe('KES');
+      expect(ratesFor(asDriver(courier.did))).toMatchObject({ currency: 'KES', benchmark: { count: 1, median: 0.2 } });
+    });
+
+    it('answers anybody who is not a driver in the network’s money', () => {
+      fleetIn('KE', [0.1]);
+      expect(ratesFor({ active: true, role: 'operator', did: 'did:glos:staff' })).toMatchObject({ currency: 'KES', benchmark: { count: 1 } });
+    });
+  });
+
   it('onboards a bike courier on the light registry — ACTIVE immediately with a badge (Ch 19)', () => {
     const d = drivers.register({ displayName: 'Boda J.', fullName: 'James K', nationalId: 'DRV-ID-1', mobile: '+254900001', licenceClasses: ['bike'] });
     expect(d.registry).toBe('light');

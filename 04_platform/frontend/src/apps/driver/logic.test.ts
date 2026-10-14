@@ -101,49 +101,65 @@ describe('rateBand — per-km price against the network median', () => {
   const b: Benchmark = { count: 12, median: 0.8, p25: 0.7, p75: 0.9, min: 0.5, max: 1.2 };
 
   it('renders nothing without a benchmark — a median of one vehicle is not a market', () => {
-    expect(rateBand(0.9, null, t)).toBeNull();
-    expect(rateBand(0.9, undefined, t)).toBeNull();
-    expect(rateBand(0.9, { ...b, count: 0 }, t)).toBeNull();
+    expect(rateBand(0.9, null, t, 'KES')).toBeNull();
+    expect(rateBand(0.9, undefined, t, 'KES')).toBeNull();
+    expect(rateBand(0.9, { ...b, count: 0 }, t, 'KES')).toBeNull();
   });
 
   it('computes the whole-percent delta and the legacy wording', () => {
-    expect(rateBand(1.0, b, t)?.pct).toBe(25);
-    expect(rateBand(1.0, b, t)?.word).toBe('25% above');
-    expect(rateBand(0.6, b, t)?.pct).toBe(-25);
-    expect(rateBand(0.6, b, t)?.word).toBe('25% below');
+    expect(rateBand(1.0, b, t, 'KES')?.pct).toBe(25);
+    expect(rateBand(1.0, b, t, 'KES')?.word).toBe('25% above');
+    expect(rateBand(0.6, b, t, 'KES')?.pct).toBe(-25);
+    expect(rateBand(0.6, b, t, 'KES')?.word).toBe('25% below');
   });
 
   it('treats ±1% as a dead zone, for both the wording and the action', () => {
-    const almost = rateBand(0.806, b, t); // +0.75% -> rounds to 1
+    const almost = rateBand(0.806, b, t, 'KES'); // +0.75% -> rounds to 1
     expect(almost?.pct).toBe(1);
     expect(almost?.word).toBe('at');
     expect(almost?.showMatch).toBe(false);
 
-    const under = rateBand(0.794, b, t); // -0.75% -> rounds to -1
+    const under = rateBand(0.794, b, t, 'KES'); // -0.75% -> rounds to -1
     expect(under?.word).toBe('at');
     expect(under?.showMatch).toBe(false);
 
-    expect(rateBand(0.82, b, t)?.showMatch).toBe(true); // +2.5%
+    expect(rateBand(0.82, b, t, 'KES')?.showMatch).toBe(true); // +2.5%
   });
 
   it('offers a match price rounded to 3 decimals, matching the display', () => {
-    const band = rateBand(1.0, { ...b, median: 0.8266666 }, t);
+    const band = rateBand(1.0, { ...b, median: 0.8266666 }, t, 'KES');
     expect(band?.matchPrice).toBe(0.827);
-    expect(band?.matchLabel).toBe('Match 0.827');
+    expect(band?.matchLabel).toBe('Match KES\u00a00.827');
+    expect(band?.matchText).toBe('KES\u00a00.827');
   });
 
   it('treats a zero median as no delta rather than dividing by zero', () => {
-    expect(rateBand(1.0, { ...b, median: 0 }, t)?.pct).toBe(0);
+    expect(rateBand(1.0, { ...b, median: 0 }, t, 'KES')?.pct).toBe(0);
   });
 
   it('defaults a missing price to zero rather than producing NaN', () => {
-    expect(rateBand(null, b, t)?.pct).toBe(-100);
+    expect(rateBand(null, b, t, 'KES')?.pct).toBe(-100);
   });
 
   it('speaks plain language, not just numbers', () => {
-    expect(rateBand(1.0, b, t)?.headline).toBe('You charge 25% more than most drivers.');
-    expect(rateBand(0.6, b, t)?.headline).toBe('You charge 25% less than most drivers.');
-    expect(rateBand(0.8, b, t)?.headline).toBe('You charge about the same as most drivers.');
+    expect(rateBand(1.0, b, t, 'KES')?.headline).toBe('You charge 25% more than most drivers.');
+    expect(rateBand(0.6, b, t, 'KES')?.headline).toBe('You charge 25% less than most drivers.');
+    expect(rateBand(0.8, b, t, 'KES')?.headline).toBe('You charge about the same as most drivers.');
+  });
+
+  it('shows nothing for a rate in no money — a figure the driver cannot place is worse than none', () => {
+    // The server names the money only where a company of ours pays this driver; anywhere else it compares them with
+    // nobody, and an older answer names none at all.
+    expect(rateBand(1.0, b, t)).toBeNull();
+    expect(rateBand(1.0, b, t, '')).toBeNull();
+  });
+
+  it('says every figure in the money it is — the driver’s, the market’s and the button’s', () => {
+    const band = rateBand(1.0, b, t, 'KES');
+    expect(band?.detail).toBe('Your rate KES\u00a01.000 per km. Most drivers charge KES\u00a00.800 (KES\u00a00.500–KES\u00a01.200 across 12 vehicles).');
+    expect(band?.matchLabel).toBe('Match KES\u00a00.800');
+    // …in whatever money the server compared in, not one the app assumes.
+    expect(rateBand(450, { ...b, median: 400, min: 300, max: 500 }, t, 'UGX')?.detail).toContain('UGX\u00a0400.000');
   });
 
   it('rounds a price to 3 decimals', () => {

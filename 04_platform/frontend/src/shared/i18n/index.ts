@@ -106,9 +106,11 @@ export function formatNumber(n: number, opts?: Intl.NumberFormatOptions): string
 }
 
 /** Money, grouped for the locale. `currency` is an ISO code (e.g. 'KES', 'USD'); omit it to render a bare
- *  2-decimal amount (the app often shows a plain figure beside its own label). */
-export function formatMoney(amount: number, currency?: string): string {
-  return new Intl.NumberFormat(current, currency ? { style: 'currency', currency } : { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(amount) || 0);
+ *  2-decimal amount (the app often shows a plain figure beside its own label). `digits` fixes the decimals, for a
+ *  figure finer than the currency's own (a per-km rate is set to the thousandth). */
+export function formatMoney(amount: number, currency?: string, digits?: number): string {
+  const fixed = digits == null ? {} : { minimumFractionDigits: digits, maximumFractionDigits: digits };
+  return new Intl.NumberFormat(current, currency ? { style: 'currency', currency, ...fixed } : { minimumFractionDigits: 2, maximumFractionDigits: 2, ...fixed }).format(Number(amount) || 0);
 }
 
 export function formatDate(iso: string | number | Date, opts: Intl.DateTimeFormatOptions = { dateStyle: 'medium' }): string {

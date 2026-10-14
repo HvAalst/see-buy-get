@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Chip, ErrorNote, GlanceNumber, Icon, Pager, Pill, ReadAloud, SearchInput, Sheet } from '../../../shared/ui';
 import { useDebounced } from '../../../shared/useDebounced';
-import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
+import { formatMoney, useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { money, settlementLines } from '../logic';
 import { JOBS_LIMIT, type DriverActions, type DriverState, type JobsQuery } from '../useDriverApp';
 import type { DriverJobRow } from '../types';
@@ -86,8 +86,9 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
       {/* What has actually LEFT, which is a different question from what the network has booked. Kept as
           its own line rather than folded into the one above, because merging them is exactly how "we owe
           you this" came to be displayed as "you have been paid". */}
+      {/* In the money it was paid in, which the answer says: a payout in no money is a figure taken on trust. */}
       {sum?.settlement
-        ? settlementLines(sum.settlement, money, t).map((line) => (
+        ? settlementLines(sum.settlement, (n) => (sum.settlement?.currency ? formatMoney(n, sum.settlement.currency) : money(n)), t).map((line) => (
             <p key={line} class="card__note">
               {line}
             </p>

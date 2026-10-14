@@ -6,7 +6,7 @@
  * PWA and the old page can never disagree about what "72 / 800 kg" or "12% above" means.
  */
 
-import type { Translate } from '../../shared/i18n';
+import { formatMoney, type Translate } from '../../shared/i18n';
 import type { GeoPoint } from '../../shared/geo';
 import type { AgentRow, Benchmark, BlockerKind, BoardRow, Claimable, DriverStatus, MdpRow, NodeOption, PriceBreakdown } from './types';
 
@@ -84,6 +84,8 @@ export interface RateBand {
   /** Already rounded to 3 decimals, exactly as it will be sent to the server. */
   matchPrice: number;
   matchLabel: string;
+  /** `matchPrice` as the driver reads it: in its money, to the thousandth. */
+  matchText: string;
 }
 
 /** The price the API is given — 3 decimals, matching the 3-dp display. */
@@ -100,9 +102,14 @@ export function roundPrice(price: number): number {
  *
  * Queried without lat/lng on purpose — vehicles roam, so the meaningful comparison is the
  * whole network, not a radius around wherever the phone happens to be.
+ *
+ * EVERY FIGURE SAYS WHAT MONEY IT IS. `currency` is the money the server compared in — the one this driver is paid
+ * in, and the only one the benchmark's vehicles were taken from. Without it there is no band at all: a rate in no
+ * money, on the screen where a driver decides whether to change theirs, is worse than no figure.
  */
-export function rateBand(pricePerKm: number | null | undefined, benchmark: Benchmark | null | undefined, t: Translate): RateBand | null {
-  if (!benchmark || !benchmark.count) return null;
+export function rateBand(pricePerKm: number | null | undefined, benchmark: Benchmark | null | undefined, t: Translate, currency?: string): RateBand | null {
+  if (!benchmark || !benchmark.count || !currency) return null;
+  const perKm = (n: number) => formatMoney(n, currency, 3);
 
   const mine = Number(pricePerKm ?? 0);
   const pct = benchmark.median > 0 ? Math.round(((mine - benchmark.median) / benchmark.median) * 100) : 0;
@@ -116,21 +123,23 @@ export function rateBand(pricePerKm: number | null | undefined, benchmark: Bench
         : t('driver.logic.rateSame');
 
   const detail = t('driver.logic.rateDetail', {
-    mine: mine.toFixed(3),
-    median: benchmark.median.toFixed(3),
-    min: benchmark.min.toFixed(3),
-    max: benchmark.max.toFixed(3),
+    mine: perKm(mine),
+    median: perKm(benchmark.median),
+    min: perKm(benchmark.min),
+    max: perKm(benchmark.max),
     count: benchmark.count,
   });
 
+  const matchPrice = roundPrice(benchmark.median);
   return {
     pct,
     word,
     headline,
     detail,
     showMatch: Math.abs(pct) > 1,
-    matchPrice: roundPrice(benchmark.median),
-    matchLabel: t('driver.logic.matchLabel', { price: benchmark.median.toFixed(3) }),
+    matchPrice,
+    matchLabel: t('driver.logic.matchLabel', { price: perKm(matchPrice) }),
+    matchText: perKm(matchPrice),
   };
 }
 

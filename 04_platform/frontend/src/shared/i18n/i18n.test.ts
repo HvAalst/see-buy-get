@@ -44,5 +44,10 @@ describe('i18n core', () => {
     expect(formatNumber(1000)).toBe('1,000');
     expect(formatMoney(1234.5)).toBe('1,234.50');
     expect(formatMoney(1234.5, 'USD')).toContain('1,234.50');
+    // A per-km rate is set to the thousandth: the currency's own two decimals would show 0.083 as 0.08. Intl keeps the
+    // code and the figure together with a no-break space ( ).
+    expect(formatMoney(0.0834, 'KES', 3)).toBe('KES\u00a00.083');
+    expect(formatMoney(0.08, 'KES', 3)).toBe('KES\u00a00.080');
+    expect(formatMoney(0.0834, undefined, 3)).toBe('0.083');
   });
 });
