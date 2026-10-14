@@ -20,7 +20,7 @@ import { Test } from '@nestjs/testing';
 import { AgentService } from './agent.service';
 import { GazetteerGeocoder, GEOCODER } from './geocoder';
 import { HeuristicRouter, ROUTER } from './router';
-import { WalletGateService } from './wallet-gate.service';
+import { WalletGateService, agentLedgerSummaryOf } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { DamageReportService, fingerprintOf, termsSentence } from './damage-report.service';
 import { FREIGHT_REPORT_ONLY_NOTE } from './dispatch.service';
@@ -57,7 +57,7 @@ import { ContactCardService } from './contact-card.service';
 import { VehicleService } from './vehicle.service';
 import { DriverService } from './driver.service';
 import { FleetService } from './fleet.service';
-import { DispatchService } from './dispatch.service';
+import { DispatchService, driverJobRowOf, driverJobsToCsv, fleetJobsToCsv, lockedCurrencyOf } from './dispatch.service';
 import { RouteConstraintService } from './route-constraint.service';
 import { MarketPulseStore } from './market-pulse.store';
 import { MarketPulseService } from './market-pulse.service';
@@ -274,6 +274,27 @@ describe('PUDO Light', () => {
       agents.decideKyc(a.did, true);
       return agents.get(a.did);
     };
+
+    it('writes each line of a shop’s register in the money of the books it was posted to — another company’s shop in its own', () => {
+      // Every line was stamped with the network’s money: right for a Kenyan shop, and “KES” beside a birr amount for a
+      // shop of another company — on its screen, in its totals and in every export.
+      const home = onboardAgent('Nairobi Ledger Shop', 'NorthTown', 100);
+      const et = abroad('Addis Ledger Shop');
+      gate.topUp(et.did, 250);
+      expect([...new Set(gate.entries({ did: home.did }).map((e) => e.currency))]).toEqual(['KES']);
+      expect([...new Set(gate.entries({ did: et.did }).map((e) => e.currency))]).toEqual(['ETB']);
+      expect(gate.agentLedgerSummary(et.did, {} as never)).toMatchObject({ currency: 'ETB', in: 250 });
+      expect(gate.agentLedgerCsv(et.did, {} as never).split('\n')[1]).toContain(',ETB,');
+      // A shop with nothing on its register yet is still in its own money.
+      expect(gate.agentLedgerSummary(abroad('Addis Quiet Shop').did, {} as never)).toMatchObject({ currency: 'ETB', count: 0 });
+      expect(gate.agentLedgerSummary(home.did, {} as never).currency).toBe('KES');
+    });
+
+    it('refuses to add up register lines in two moneys rather than give a figure in nothing', () => {
+      const line = (currency: string) => ({ id: currency, type: 'TOP_UP', sign: '+', amount: 10, currency, reference: 'r', refType: 'bank', at: '2026-10-14T00:00:00Z' }) as never;
+      expect(agentLedgerSummaryOf([line('KES'), line('KES')])).toMatchObject({ in: 20, currency: 'KES' });
+      expect(() => agentLedgerSummaryOf([line('KES'), line('ETB')])).toThrow(/more than one money \(KES, ETB\)/);
+    });
 
     it('reports one float PER CURRENCY, and never one total across them', () => {
       const home = onboardAgent('Nairobi Float Shop', 'NorthTown', 100);
@@ -3805,6 +3826,23 @@ describe('PUDO Light', () => {
       // Off shift too: the board and the earnings are read without a vehicle.
       const idle = drivers.register({ displayName: 'Idle', fullName: 'I D', nationalId: 'DRV-RATE-IDLE', mobile: '+254700800901', licenceClasses: ['bike'], jurisdiction: 'KE' });
       expect(session(idle.did)).toMatchObject({ active: false, currency: 'KES' });
+    });
+
+    it('freezes a job’s money with its price at the claim — the register row and the exports say it, whatever the carrier does next', () => {
+      // A job's export said the network's money; and a driver who later moved to a fleet in another country would have
+      // read an old job in today's money. The money is now kept with the price, when the price is locked.
+      uganda();
+      const ug = fleetIn('UG', [300]);
+      const kampala = { lat: 0.31, lng: 32.58 };
+      const f = dispatch.registerFreight({ description: 'Shoes', pickupLocation: kampala, pickupLabel: 'Depot', destLabel: 'Shop', destLocation: { lat: 0.33, lng: 32.6 }, weightKg: 5, packaging: 'bagged' });
+      const [offer] = dispatch.suggest(ug.driver.did, { from: kampala, to: { lat: 0.33, lng: 32.6 } }).filter((o) => o.ref === f.freightId);
+      dispatch.claim(offer.offerId);
+      const locked = dispatch.listFreight().find((x) => x.freightId === f.freightId)!;
+      expect(locked.lockedCurrency).toBe('UGX');
+      expect(driverJobRowOf(locked)).toMatchObject({ earning: locked.lockedPrice, currency: 'UGX' });
+      expect(driverJobsToCsv([locked]).split('\n')[1]).toContain(',UGX,');
+      expect(fleetJobsToCsv([locked], () => 'Rate D').split('\n')[1]).toContain(',UGX,'); // the fleet office's export too
+      expect(lockedCurrencyOf({})).toBe('KES'); // a haul locked before the money was kept reads as it always did
     });
   });
 

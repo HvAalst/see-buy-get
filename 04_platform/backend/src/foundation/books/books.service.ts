@@ -105,6 +105,11 @@ export class BooksService {
     return entry;
   }
 
+  /** One entry, by its id. */
+  entry(entryId: string): JournalEntry | undefined {
+    return this.entries.get(entryId);
+  }
+
   /** Every entry, newest first — optionally scoped to one entity, or to one domain reference. */
   journal(filter?: { entityId?: string; ref?: string }): JournalEntry[] {
     return [...this.entries.values()]

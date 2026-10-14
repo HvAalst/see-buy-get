@@ -428,6 +428,11 @@ export class Freight {
   // shipper charge at claim ('billed' paid | 'billing_failed' known shipper short of prepaid funds, a debt to
   // collect | 'unpaid' bulletin freight settled off-platform); driverPaid tracks the driver payout at delivery.
   lockedPrice?: number;
+  /** The money `lockedPrice` is in, frozen with it at the claim: that of the company paying the carrier then. A
+   *  carrier can move to a fleet in another country, and a price read in today's money would change its meaning
+   *  after the fact. Absent where no company of ours pays the carrier, and on a haul locked before this existed —
+   *  read then, as it always was, in the network's money. */
+  lockedCurrency?: string;
   priceBreakdown?: PriceBreakdown;
   /** FB0c — where lockedPrice came from. 'computed' (or absent, for anything locked before FB0c) means it IS
    *  priceBreakdown.total. 'negotiated' means two parties agreed a number, so lockedPrice is authoritative and

@@ -57,6 +57,9 @@ export interface DriverJobRow {
   cargoClass: string;
   weightKg: number;
   earning?: number;
+  /** The money `earning` is in, frozen when the price was locked. Absent on a haul locked before it was kept: that one
+   *  is read in the money the session names. */
+  currency?: string;
   paid: boolean;
   /** B2 — the shipper pays the carrier for this haul directly; nothing is owed by SeeBuyGet. */
   direct?: boolean;

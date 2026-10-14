@@ -166,10 +166,10 @@ function JobRow({ j, currency }: { j: DriverJobRow; currency?: string }) {
           {when ? t('driver.earn.rowDate', { date: new Date(when).toLocaleDateString() }) : ''}
         </span>
         {/* FP8 — an upheld claim took part of this pay back. The agreed figure stays; the line says what left. */}
-        {j.clawback ? <span class="row__meta row__s--danger">{t('driver.earn.clawbackLine', { amount: cash(j.clawback, currency) })}</span> : null}
+        {j.clawback ? <span class="row__meta row__s--danger">{t('driver.earn.clawbackLine', { amount: cash(j.clawback, j.currency ?? currency) })}</span> : null}
       </span>
       <span class="row__end">
-        <b class="amt amt--in">{cash(j.earning, currency)}</b>
+        <b class="amt amt--in">{cash(j.earning, j.currency ?? currency)}</b>
         <Pill tone={j.paid || j.direct ? 'ok' : 'warn'} dot>
           {j.paid ? t('driver.earn.paid') : j.direct ? t('driver.earn.direct') : t('driver.earn.owed')}
         </Pill>

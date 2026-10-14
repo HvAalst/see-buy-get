@@ -153,6 +153,8 @@ export interface DriverJobRow {
   cargoClass: string;
   weightKg: number;
   earning?: number; // lockedPrice — the driver's agreed pay for the haul
+  /** The money `earning` is in, frozen at the claim. Absent on a haul locked before it was kept. */
+  currency?: string;
   paid: boolean; // driverPaid
   /** B2 — the shipper pays the carrier for this one directly; nothing is owed by us, now or later. */
   direct?: boolean;
@@ -169,7 +171,7 @@ function jobDate(f: Freight): string {
 }
 
 export function driverJobRowOf(f: Freight): DriverJobRow {
-  return { freightId: f.freightId, code: f.code, description: f.description, destLabel: f.destLabel, status: f.status, cargoClass: f.cargoClass, weightKg: f.weightKg, earning: f.status === 'cancelled' ? undefined : f.lockedPrice, paid: Boolean(f.driverPaid), ...(f.settlement === 'between_parties' ? { direct: true } : {}), ...(f.clawback ? { clawback: f.clawback.amount } : {}), claimedAt: f.claimedAt, deliveredAt: f.deliveredAt, createdAt: f.createdAt };
+  return { freightId: f.freightId, code: f.code, description: f.description, destLabel: f.destLabel, status: f.status, cargoClass: f.cargoClass, weightKg: f.weightKg, earning: f.status === 'cancelled' ? undefined : f.lockedPrice, ...(f.lockedCurrency ? { currency: f.lockedCurrency } : {}), paid: Boolean(f.driverPaid), ...(f.settlement === 'between_parties' ? { direct: true } : {}), ...(f.clawback ? { clawback: f.clawback.amount } : {}), claimedAt: f.claimedAt, deliveredAt: f.deliveredAt, createdAt: f.createdAt };
 }
 
 export interface DriverJobsSummary {
@@ -280,10 +282,15 @@ export function fleetEarningsSummaryOf(rows: Freight[], nameOf: (did: string) =>
   };
 }
 
+/** The money a job's price is in: frozen at the claim (`Freight.lockedCurrency`), else the network's, as it always was. */
+export function lockedCurrencyOf(f: Pick<Freight, 'lockedCurrency'>): string {
+  return f.lockedCurrency ?? NETWORK_CURRENCY;
+}
+
 export function fleetJobsToCsv(rows: Freight[], nameOf: (did: string) => string): string {
   return toCsv(
     ['Driver', 'Job', 'Description', 'Destination', 'Status', 'Class', 'Weight kg', 'Earning', 'Currency', 'Booked', 'Claimed', 'Delivered'],
-    rows.map((f) => [nameOf(f.claimedBy ?? ''), f.code, f.description, f.destLabel, f.status, f.cargoClass, f.weightKg, f.lockedPrice ?? '', f.lockedPrice == null ? '' : NETWORK_CURRENCY, f.driverPaid ? 'yes' : f.settlement === 'between_parties' ? 'by the shipper' : 'no', f.claimedAt ?? '', f.deliveredAt ?? '']),
+    rows.map((f) => [nameOf(f.claimedBy ?? ''), f.code, f.description, f.destLabel, f.status, f.cargoClass, f.weightKg, f.lockedPrice ?? '', f.lockedPrice == null ? '' : lockedCurrencyOf(f), f.driverPaid ? 'yes' : f.settlement === 'between_parties' ? 'by the shipper' : 'no', f.claimedAt ?? '', f.deliveredAt ?? '']),
   );
 }
 
@@ -300,7 +307,7 @@ function filterJobsFor(rows: Freight[], mine: (f: Freight) => boolean, q: Driver
 export function driverJobsToCsv(rows: Freight[]): string {
   return toCsv(
     ['Job', 'Description', 'Destination', 'Status', 'Class', 'Weight kg', 'Earning', 'Currency', 'Paid', 'Claimed', 'Delivered'],
-    rows.map((f) => [f.code, f.description, f.destLabel, f.status, f.cargoClass, f.weightKg, f.lockedPrice ?? '', f.lockedPrice == null ? '' : NETWORK_CURRENCY, f.driverPaid ? 'yes' : f.settlement === 'between_parties' ? 'by the shipper' : 'no', f.claimedAt ?? '', f.deliveredAt ?? '']),
+    rows.map((f) => [f.code, f.description, f.destLabel, f.status, f.cargoClass, f.weightKg, f.lockedPrice ?? '', f.lockedPrice == null ? '' : lockedCurrencyOf(f), f.driverPaid ? 'yes' : f.settlement === 'between_parties' ? 'by the shipper' : 'no', f.claimedAt ?? '', f.deliveredAt ?? '']),
   );
 }
 
@@ -644,6 +651,7 @@ export class DispatchService {
         f.carriedBy = undefined;
         f.claimedAt = undefined;
         f.lockedPrice = undefined;
+        f.lockedCurrency = undefined;
         f.priceBreakdown = undefined;
         f.lockedAt = undefined;
         f.paidStatus = undefined;
@@ -1211,6 +1219,9 @@ export class DispatchService {
     f.claimedAt = new Date(now).toISOString(); // stamp the injected clock — the no-show deadline is anchored to this
     f.priceBreakdown = breakdown;
     f.lockedPrice = earning;
+    const lockedIn = this.drivers.rateCurrencyForDriver(driverDid);
+    if (lockedIn) f.lockedCurrency = lockedIn;
+    else delete f.lockedCurrency;
     f.priceOrigin = agreedPrice == null ? 'computed' : 'negotiated';
     f.lockedAt = f.claimedAt;
     f.driverPaid = false;

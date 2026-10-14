@@ -35603,6 +35603,10 @@
           "lockedPrice": {
             "type": "number"
           },
+          "lockedCurrency": {
+            "type": "string",
+            "description": "The money `lockedPrice` is in, frozen with it at the claim: that of the company paying the carrier then. A\n carrier can move to a fleet in another country, and a price read in today's money would change its meaning\n after the fact. Absent where no company of ours pays the carrier, and on a haul locked before this existed —\n read then, as it always was, in the network's money."
+          },
           "priceBreakdown": {
             "$ref": "#/components/schemas/PriceBreakdown"
           },

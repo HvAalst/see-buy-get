@@ -84,7 +84,14 @@ export interface AgentLedgerSummary {
   currency: string;
 }
 
-export function agentLedgerSummaryOf(rows: PudoLedgerEntry[]): AgentLedgerSummary {
+/**
+ * In / out / net over a set of lines, IN THE MONEY THOSE LINES ARE IN. A shop's lines are all its own company's, so
+ * a set is in one money; with no lines at all, it is in the money the shop keeps (`currency`). A set in more than one
+ * money is refused rather than totalled: a shilling and a birr added together is a figure in nothing.
+ */
+export function agentLedgerSummaryOf(rows: PudoLedgerEntry[], currency: string = NETWORK_CURRENCY): AgentLedgerSummary {
+  const moneys = [...new Set(rows.map(agentLedgerCurrencyOf))];
+  if (moneys.length > 1) throw new GlosError('CONFLICT', `These lines are in more than one money (${moneys.join(', ')}), and are not added together — look at them one money at a time`);
   let inSum = 0;
   let outSum = 0;
   for (const e of rows) {
@@ -93,9 +100,7 @@ export function agentLedgerSummaryOf(rows: PudoLedgerEntry[]): AgentLedgerSummar
   }
   inSum = Math.round(inSum * 100) / 100;
   outSum = Math.round(outSum * 100) / 100;
-  // Single-currency by construction today (one network, one currency). When sisters own their own
-  // accounts this must become the entity's currency, and a mixed set must refuse to total at all.
-  return { in: inSum, out: outSum, net: Math.round((inSum - outSum) * 100) / 100, count: rows.length, currency: NETWORK_CURRENCY };
+  return { in: inSum, out: outSum, net: Math.round((inSum - outSum) * 100) / 100, count: rows.length, currency: moneys[0] ?? currency };
 }
 
 function agentLedgerSort(sort?: AgentLedgerQuery['sort']): (a: PudoLedgerEntry, b: PudoLedgerEntry) => number {
@@ -595,7 +600,18 @@ export class WalletGateService {
   /** Running totals (in / out / net / count) for the CURRENT filtered view — the always-current balance
    *  stays on the wallet, not here (parity with the vendor bookkeeping register). */
   agentLedgerSummary(did: string, q: AgentLedgerQuery): AgentLedgerSummary {
-    return agentLedgerSummaryOf(filterAgentLedger(this.entries({ did }), q));
+    return agentLedgerSummaryOf(filterAgentLedger(this.entries({ did }), q), this.agentCurrency(did));
+  }
+
+  /** The money a shop keeps: its company's. The network's for a shop no company of ours holds. */
+  private agentCurrency(did: string): string {
+    let entityId: string | undefined;
+    try {
+      entityId = this.agents.entityIdOrNone(this.agents.get(did));
+    } catch {
+      // Not a shop on record: its register is empty, and the network's money is as good a name as any for nothing.
+    }
+    return (entityId ? this.entities.get(entityId).currency : undefined) ?? NETWORK_CURRENCY;
   }
 
   agentLedgerCsv(did: string, q: AgentLedgerQuery): string {
@@ -640,8 +656,15 @@ export class WalletGateService {
     return this.floats().find((f) => f.currency === NETWORK_CURRENCY)?.amount ?? 0;
   }
 
+  /**
+   * A line of the register, in THE MONEY OF THE BOOKS IT WAS POSTED TO. Every line was stamped with the network's
+   * currency, which was right for a Kenyan shop and would have read “KES” beside a birr amount for a shop of
+   * another company — on the screen and in every export. A line with no entry behind it (a reconciliation record,
+   * kept outside the books) is what it always was.
+   */
   private record(type: LedgerType, sign: '+' | '-', amount: number, did: string | undefined, reference: string, refType: PudoLedgerEntry['refType'], entryId?: string): PudoLedgerEntry {
-    const entry: PudoLedgerEntry = { id: `led_${randomBytes(8).toString('hex')}`, type, sign, amount: Math.round(amount * 100) / 100, currency: NETWORK_CURRENCY, did, reference, refType, entryId, at: new Date().toISOString() };
+    const currency = (entryId ? this.books.entry(entryId)?.currency : undefined) ?? NETWORK_CURRENCY;
+    const entry: PudoLedgerEntry = { id: `led_${randomBytes(8).toString('hex')}`, type, sign, amount: Math.round(amount * 100) / 100, currency, did, reference, refType, entryId, at: new Date().toISOString() };
     this.ledger.set(entry.id, entry);
     return entry;
   }
