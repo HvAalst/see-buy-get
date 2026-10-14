@@ -156,6 +156,11 @@ describe('a damage claim report in the list staff read', () => {
     expect(reportRowWords({ ...row, origin: 'buyer', heldBy: undefined }, t)).toMatchObject({ by: 'tower.reports.byReceiver', hands: 'tower.reports.handedOver' });
   });
 
+  it('says how many notes the receiver added after handover, and nothing where there are none', () => {
+    expect(reportRowWords({ ...row, notes: 2 }, t).handedOn).toBe('tower.reports.noLink tower.reports.notes(count=2)');
+    expect(reportRowWords(row, t).handedOn).toBe('tower.reports.noLink');
+  });
+
   it('says whether whoever it is for has handed it on — a link stopped after use still counts as handed on', () => {
     expect(reportRowWords({ ...row, links: 1 }, t).handedOn).toBe('tower.reports.links(links=1,opened=0)');
     expect(reportRowWords({ ...row, links: 0, opened: 3 }, t).handedOn).toBe('tower.reports.links(links=0,opened=3)');

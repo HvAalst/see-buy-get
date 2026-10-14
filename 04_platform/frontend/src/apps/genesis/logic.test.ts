@@ -528,18 +528,18 @@ describe('a reported problem that nobody of ours decides: the report, said to wh
     });
   });
 
-  it('tells the sender that the receiver reported it, and who holds the report', () => {
+  it('tells the sender that the receiver reported it, and that a copy of the report is theirs', () => {
     expect(disputeOutcomeWords(made('buyer'), 'sent', cash, t)).toEqual({
       tone: 'info',
       title: 'The receiver reported a problem, and a damage claim report was made',
-      lines: ['SeeBuyGet does not judge a claim or pay one. The report was made for the receiver: ask them to pass it on if you need it for a claim.'],
+      lines: ['SeeBuyGet does not judge a claim or pay one. A copy of the report is yours: it is below, to keep and to hand to an insurer.'],
     });
   });
 
-  it('says it was the shop that reported it, to both, when it was — and the report is still the receiver’s', () => {
+  it('says it was the shop that reported it, to both, when it was — and the report is on the parcel for both', () => {
     expect(disputeOutcomeWords(made('counter'), 'received', cash, t)).toMatchObject({ tone: 'info', title: 'The shop reported a problem, and a damage claim report was made' });
     expect(disputeOutcomeWords(made('counter'), 'received', cash, t).lines[0]).toMatch(/The report is below/);
-    expect(disputeOutcomeWords(made('counter'), 'sent', cash, t).lines[0]).toMatch(/made for the receiver/);
+    expect(disputeOutcomeWords(made('counter'), 'sent', cash, t).lines[0]).toMatch(/A copy of the report is yours/);
   });
 
   it('says nothing was upheld, refused or owed: nobody judged anything, and the record’s own note is not shown as a reason', () => {

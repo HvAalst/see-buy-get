@@ -23481,11 +23481,48 @@
         }
       }
     },
+    "/v1/sbg/parcels/{id}/damage-report/notes": {
+      "post": {
+        "operationId": "DamageReport.addNote",
+        "summary": "",
+        "description": "The links the caller made on this report.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddDamageReportNoteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DamageReportNote"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/parcels/{id}/damage-report/links": {
       "get": {
         "operationId": "DamageReport.links",
-        "summary": "",
-        "description": "The links the caller made on this report.",
         "parameters": [
           {
             "name": "id",
@@ -45909,6 +45946,10 @@
               }
             ]
           },
+          "notes": {
+            "type": "number",
+            "description": "Notes the receiver added after handover."
+          },
           "parcelId": {
             "type": "string"
           },
@@ -46224,6 +46265,49 @@
           "statement"
         ]
       },
+      "DamageReportNote": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "description": "Who wrote it: the receiver, whose goods they are, and who is the one to open the parcel.",
+            "enum": [
+              "receiver"
+            ]
+          },
+          "photographs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DamageReportPhoto"
+            }
+          },
+          "noteId": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "statement": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string",
+            "description": "SHA-256 over this note, keys sorted, without this field. The report's own fingerprint is untouched by it."
+          }
+        },
+        "required": [
+          "by",
+          "photographs",
+          "noteId",
+          "at",
+          "text",
+          "statement",
+          "sha256"
+        ]
+      },
       "DamageReportView": {
         "type": "object",
         "properties": {
@@ -46237,6 +46321,13 @@
                 "$ref": "#/components/schemas/DamageReportSentTo"
               }
             ]
+          },
+          "notes": {
+            "description": "What the receiver found after handover, oldest first — beside the body, each with a fingerprint of its own.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DamageReportNote"
+            }
           },
           "parcelId": {
             "type": "string"
@@ -46254,6 +46345,26 @@
           "parcelId",
           "madeAt",
           "sha256"
+        ]
+      },
+      "AddDamageReportNoteDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "photoRefs": {
+            "description": "Up to four of their own photographs of what they found.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "text"
         ]
       },
       "DamageReportLinkRow": {
@@ -46369,6 +46480,10 @@
           },
           "opensLeft": {
             "type": "number"
+          },
+          "notes": {
+            "type": "number",
+            "description": "Notes the receiver added after handover — in the file the link opens."
           },
           "expiresAt": {
             "type": "string"

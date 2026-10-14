@@ -537,9 +537,9 @@ export function disputeOutcomeWords(
   const title = t(OUTCOME_TITLES[whose][outcome.decision]);
   // NOBODY OF OURS DECIDED ANYTHING (the user, 2026-10-12: "I wonder whether that is our jurisdiction"). So there is
   // no reasoning to show and nothing to call good or bad news: what is said is that the problem is on record, and
-  // where the report is — on this parcel for the receiver, with the receiver for the sender.
+  // where the report is: on this parcel, for the receiver and — a copy of it — for the sender (the user, 2026-10-15).
   if (outcome.decision === 'report_only') {
-    return { tone: 'info', title, lines: [t(mine ? 'send.outcome.reportOnParcel' : 'send.outcome.reportHeldByReceiver')] };
+    return { tone: 'info', title, lines: [t(mine ? 'send.outcome.reportOnParcel' : 'send.outcome.reportCopyForSender')] };
   }
   const lines = [outcome.note.trim()].filter(Boolean);
   if (outcome.award && outcome.award > 0) {

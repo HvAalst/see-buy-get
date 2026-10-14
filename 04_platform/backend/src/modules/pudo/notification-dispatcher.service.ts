@@ -387,6 +387,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ did: string; accepted: boolean; expiresAt?: string; reason?: string }>(GlosEvent.Pudo.DriverLicenceChecked, (e) => this.onLicenceChecked(e.payload));
     this.events.subscribe<LicenceSent>(GlosEvent.Pudo.DriverLicenceSent, (e) => this.onLicenceSent(e.payload));
     this.events.subscribe<DisputeDecided>(GlosEvent.Pudo.ParcelDisputeDecided, (e) => this.onParcelDisputeDecided(e.payload));
+    this.events.subscribe<{ parcelId: string; number: string; at: string }>(GlosEvent.Pudo.DamageReportNoted, (e) => this.onDamageReportNoted(e.payload));
 
     // Retention: the parties hear about it a month before the document goes, not afterwards.
     this.events.subscribe<{ docId: string; number: string; parties: string[]; goesAt: string }>(GlosEvent.Pudo.NoteExpiringSoon, (e) =>
@@ -482,6 +483,29 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   }
 
   /**
+   * THE RECEIVER ADDED A NOTE to a damage claim report, after handover: the sender is told, because their copy now
+   * says more. What the note says is in the report, not in the message — a notice is read on a lock screen.
+   */
+  private async onDamageReportNoted(p: { parcelId: string; number: string; at: string }): Promise<void> {
+    let parcel: ReturnType<ParcelService['get']>;
+    try {
+      parcel = this.parcels.get(p.parcelId);
+    } catch {
+      return;
+    }
+    const receiver = accountFor(this.parcels.receiverOf(parcel), this.persons);
+    const sender = accountFor(this.parcels.senderOf(parcel), this.persons);
+    if (!sender || sender.personDid === receiver?.personDid) return;
+    await this.tell(sender.personDid, {
+      kind: 'claim_decided',
+      title: `The receiver added a note to the report on parcel ${p.parcelId}`,
+      body: 'What they found after it was handed over is on the damage claim report, beside it and dated. Open the parcel in your app to read it.',
+      tag: `report-note:${p.parcelId}:${p.at}`,
+      data: { parcelId: p.parcelId },
+    });
+  }
+
+  /**
    * A PROBLEM WAS REPORTED, AND NOBODY OF OURS DECIDES IT: a damage claim report was made instead.
    *
    * The receiver is told where it is — on the parcel in their app, theirs to read and to pass to an insurer. Where
@@ -503,7 +527,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       );
     }
     if (sender && sender.personDid !== receiver?.personDid) {
-      await this.tell(sender.personDid, { kind: 'claim_decided', title: `A problem was reported on parcel ${p.parcelId}`, body: 'A damage claim report was made for the receiver. Ask them to pass it on if you need it for a claim.', tag, data });
+      // A copy is theirs too (the user, 2026-10-15): on the parcel in their own app, to read, keep and pass on.
+      await this.tell(sender.personDid, { kind: 'claim_decided', title: `A problem was reported on parcel ${p.parcelId}`, body: 'A damage claim report was made. A copy is yours: open the parcel in your app to read it, keep the file, or pass it to an insurer.', tag, data });
     }
     if (p.origin === 'counter' && p.raisedBy.startsWith('did:')) {
       const slot = parcel.binSlot ? ` It is on your shelf at ${parcel.binSlot}, and can be handed over as any parcel.` : '';

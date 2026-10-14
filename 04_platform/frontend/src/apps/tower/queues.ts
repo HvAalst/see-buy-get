@@ -352,6 +352,8 @@ export interface DamageReportRow {
   opened: number;
   /** Where it was emailed the moment it was made: the insurer the store names on its shipping policy. */
   insurer?: { insurer: string; sentTo: string; at: string };
+  /** Notes the receiver added after handover, beside the report. */
+  notes?: number;
 }
 
 /** A report's row in words: who reported it, where the parcel was, and whether it was handed on — emailed to the store's insurer, or by a link. */
@@ -360,6 +362,6 @@ export function reportRowWords(row: DamageReportRow, t: Translate): { by: string
   return {
     by: t(row.origin === 'counter' ? 'tower.reports.byShop' : 'tower.reports.byReceiver'),
     hands: row.heldBy ? t('tower.reports.heldBy', { name: row.heldBy }) : t('tower.reports.handedOver'),
-    handedOn: row.insurer ? `${t('tower.reports.emailedTo', { insurer: row.insurer.insurer, address: row.insurer.sentTo })} ${links}` : links,
+    handedOn: [row.insurer ? `${t('tower.reports.emailedTo', { insurer: row.insurer.insurer, address: row.insurer.sentTo })} ${links}` : links, row.notes ? t('tower.reports.notes', { count: row.notes }) : ''].filter(Boolean).join(' '),
   };
 }

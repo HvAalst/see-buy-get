@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, MaxLength, MinLength } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { CustodyKind, DisputeOrigin } from './pudo.types';
 
 /*
@@ -114,6 +114,37 @@ export class DamageReportBody {
 }
 
 /** Where a report was emailed, as a link, the moment it was made: the insurer the store names on its shipping policy. */
+/**
+ * Printed on every note added after the parcel was handed over, and part of what that note's own fingerprint covers.
+ * The user, 2026-10-15: "the damage claim is static after the handover to the consumer, because that is when the
+ * logistics responsibility ended. However there is a chance that the minter did not take good care of the goods inside
+ * a packaging and these got damaged inside a good looking packaging; they can be added as notes on the original report
+ * and it is outside sbg's jurisdiction."
+ */
+export const NOTE_STATEMENT =
+  'Added by the receiver after the parcel was handed over to them. The report above is the record as it stood when the problem was reported, and it does not change. ' +
+  'What is found afterwards inside packaging that arrived whole is outside SeeBuyGet’s jurisdiction: how the goods were packed is for the sender to answer.';
+
+/** A note added after handover: dated, with its own fingerprint, beside the report and never inside it. */
+export class DamageReportNote {
+  noteId: string;
+  at: string;
+  /** Who wrote it: the receiver, whose goods they are, and who is the one to open the parcel. */
+  @ApiProperty({ enum: ['receiver'] }) by: 'receiver';
+  text: string;
+  @ApiProperty({ type: [DamageReportPhoto] }) photographs: DamageReportPhoto[];
+  statement: string;
+  /** SHA-256 over this note, keys sorted, without this field. The report's own fingerprint is untouched by it. */
+  sha256: string;
+}
+
+/** A note, as the receiver writes it. */
+export class AddDamageReportNoteDto {
+  @IsString() @MinLength(1) @MaxLength(2000) text: string;
+  /** Up to four of their own photographs of what they found. */
+  @IsOptional() @IsArray() @ArrayMaxSize(4) @IsString({ each: true }) photoRefs?: string[];
+}
+
 export class DamageReportSentTo {
   /** The insurer's name, as the store wrote it. */
   insurer: string;
@@ -131,6 +162,8 @@ export class DamageReportView {
   @ApiProperty({ type: DamageReportBody }) body: DamageReportBody;
   /** Beside the body, not in it: the fingerprint covers what the report SAYS, and where a copy went is not part of that. */
   @ApiPropertyOptional({ type: DamageReportSentTo }) insurer?: DamageReportSentTo;
+  /** What the receiver found after handover, oldest first — beside the body, each with a fingerprint of its own. */
+  @ApiPropertyOptional({ type: [DamageReportNote] }) notes?: DamageReportNote[];
 }
 
 /** A row of the list staff read: every problem reported, newest first. Nothing in it is decided by them. */
@@ -149,6 +182,8 @@ export class DamageReportRow {
   opened: number;
   /** Where it was emailed the moment it was made, where the store names an insurer. */
   @ApiPropertyOptional({ type: DamageReportSentTo }) insurer?: DamageReportSentTo;
+  /** Notes the receiver added after handover. */
+  @ApiPropertyOptional() notes?: number;
 }
 
 export class DamageReportList {
@@ -177,6 +212,8 @@ export class DamageReportLinkView {
   @ApiPropertyOptional() reportedAt?: string;
   @ApiPropertyOptional() sha256?: string;
   @ApiPropertyOptional() opensLeft?: number;
+  /** Notes the receiver added after handover — in the file the link opens. */
+  @ApiPropertyOptional() notes?: number;
 }
 
 /** A link as whoever made it sees it on the report. */

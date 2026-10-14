@@ -67,6 +67,8 @@ export const GlosEvent = {
     DriverKycRejected: 'pudo.driver_kyc_rejected',
     // A driver in no fleet asked to ride for themselves on something heavy, and staff decided: told to the driver.
     DriverRideAloneDecided: 'pudo.driver_ride_alone_decided',
+    // The receiver added a note to a damage claim report, after handover: the sender is told.
+    DamageReportNoted: 'pudo.damage_report_noted',
     /**
      * A renewed licence a courier sent was checked: recorded (they may start shifts again) or refused,
      * with the reason. Published only when somebody was waiting on the answer.

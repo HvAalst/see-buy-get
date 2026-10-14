@@ -15,6 +15,9 @@ export function createDamageReportApi(sbg: SbgClient) {
     /** The address in the answer is shown this once: the key is not kept. */
     makeLink: (parcelId: string) => sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/damage-report/links', { params: { path: { id: parcelId } } })),
     cancelLink: (parcelId: string, linkId: string) => sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/damage-report/links/{linkId}/cancel', { params: { path: { id: parcelId, linkId } } })),
+    /** The receiver adds what they found after the parcel was handed over: a note beside the report, which does not change. */
+    addNote: (parcelId: string, body: { text: string; photoRefs?: string[] }) =>
+      sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/damage-report/notes', { params: { path: { id: parcelId } }, body })),
     /** Staff: every problem reported, newest first. */
     list: () => sbg.request((c) => c.GET('/v1/sbg/damage-reports')),
   };

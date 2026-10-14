@@ -1003,8 +1003,8 @@ export class ParcelService implements OnApplicationBootstrap {
       disputePhotoRef: relation === 'received' ? p.buyerDisputePhotoRef : undefined,
       disputeReason: relation === 'received' && p.status === 'Disputed' ? (p.buyerDisputeReason ?? p.disputeReason) : undefined,
       ...(disputeOutcomeOf(p) ? { disputeOutcome: disputeOutcomeOf(p) } : {}),
-      // The report holds the receiver's own words and photograph, so it is the receiver's to open — and to pass on.
-      ...(p.dispute && relation === 'received' ? { damageReport: { number: `DCR-${p.parcelId}` } } : {}),
+      // The receiver's to open and pass on — and the sender's to read and keep a copy of (the user, 2026-10-15).
+      ...(p.dispute ? { damageReport: { number: `DCR-${p.parcelId}` } } : {}),
       // The closed-window facts, receiver-only — see ConsumerParcelView. The owed figure is DERIVED here
       // rather than left to the app, so the number somebody reads on their phone and the number the
       // counter asks for cannot come from two different pieces of arithmetic.

@@ -26,11 +26,22 @@ export interface DamageReportBody {
   events: Array<{ at: string; status: string; note: string; fingerprint?: string }>;
   photographs: Array<{ what: string; reference: string; mediaId?: string; takenAt?: string; sha256?: string }>;
 }
+/** What the receiver added after the parcel was handed over: beside the report, dated, with a fingerprint of its own. */
+export interface ReportNote {
+  noteId: string;
+  at: string;
+  by: 'receiver';
+  text: string;
+  photographs: Array<{ what: string; reference: string; mediaId?: string; takenAt?: string; sha256?: string }>;
+  statement: string;
+  sha256: string;
+}
 export interface DamageReportView {
   parcelId: string;
   madeAt: string;
   sha256: string;
   body: DamageReportBody;
+  notes?: ReportNote[];
 }
 
 export type ReportLinkState = 'ready' | 'expired' | 'cancelled' | 'used_up';
@@ -44,6 +55,8 @@ export interface ReportLinkView {
   reportedAt?: string;
   sha256?: string;
   opensLeft?: number;
+  /** Notes the receiver added after handover — in the file the link opens. */
+  notes?: number;
 }
 export interface ReportLinkRow {
   linkId: string;
@@ -158,6 +171,21 @@ export function reportSections(report: DamageReportView, t: Translate): ReportSe
       rows: b.photographs.length ? b.photographs.map((p) => ({ label: t(PHOTO[p.what] ?? 'dreport.photo.problem'), value: p.mediaId ? t('dreport.photo.inFile') : t('dreport.photo.referenceOnly', { reference: p.reference }) })) : [{ value: t('dreport.photo.noneAtAll') }],
     },
     { title: t('dreport.section.fingerprint'), rows: [{ value: report.sha256 }, { value: t('dreport.fingerprintHint') }] },
+    // AFTER the report and its fingerprint, and said to be outside it: the report itself does not change after handover.
+    ...(report.notes?.length
+      ? [
+          {
+            title: t('dreport.section.notes'),
+            rows: [
+              { value: t('dreport.note.outside') },
+              ...report.notes.map((n) => ({
+                label: moment(n.at),
+                value: n.photographs.length ? `${n.text} ${t('dreport.note.withPhotos', { count: n.photographs.length })}` : n.text,
+              })),
+            ],
+          },
+        ]
+      : []),
   ];
 }
 
@@ -190,6 +218,7 @@ export function reportLinkSays(answer: ReportLinkAnswer, t: Translate): ReportLi
   if (v.state === 'cancelled') return stopped(t('dreport.link.cancelled.title'), [t('dreport.link.cancelled.detail'), t('dreport.link.askGiver')], { icon: 'warning' });
   if (v.state === 'used_up') return stopped(t('dreport.link.usedUp.title'), [t('dreport.link.usedUp.detail'), t('dreport.link.askGiver')]);
   const lines = [t('dreport.link.ready.about', { number: v.number ?? '', from: v.from ?? '', to: v.to ?? '', date: day(v.reportedAt) }), t('dreport.link.ready.what'), t('dreport.link.ready.until', { date: day(v.expiresAt) })];
+  if (v.notes) lines.push(t('dreport.link.ready.notes', { count: v.notes }));
   if (v.opensLeft !== undefined && v.opensLeft <= FEW_OPENINGS) lines.push(t('dreport.link.ready.fewLeft', { count: v.opensLeft }));
   return { tone: 'info', icon: 'info', title: t('dreport.link.ready.title'), lines, canTake: true, canRetry: false };
 }

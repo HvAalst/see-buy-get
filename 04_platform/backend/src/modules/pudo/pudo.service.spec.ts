@@ -22,7 +22,7 @@ import { GazetteerGeocoder, GEOCODER } from './geocoder';
 import { HeuristicRouter, ROUTER } from './router';
 import { WalletGateService, agentLedgerSummaryOf } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
-import { DamageReportService, fingerprintOf, termsSentence } from './damage-report.service';
+import { DamageReportService, MAX_NOTES, fingerprintOf, termsSentence, unsignedNote } from './damage-report.service';
 import { FREIGHT_REPORT_ONLY_NOTE } from './dispatch.service';
 import { DAMAGE_REPORT_STATEMENT } from './damage-report.types';
 import { canonicalJson } from './note-archive.types';
@@ -2484,13 +2484,13 @@ describe('PUDO Light', () => {
     expect(mine.disputePhotoRef).toBe('damage.jpg');
     expect(mine.damageReport).toEqual({ number: 'DCR-PEER-1' });
 
-    // The SENDER sees that a problem was reported and how it ended — but NOT the receiver's free-text reason, their
-    // photos, a timeline note carrying the reason, or the report that holds all three.
+    // The SENDER sees that a problem was reported and how it ended, and is offered the damage claim report — a copy is
+    // theirs (the user, 2026-10-15). The parcel view itself still carries none of the receiver's words or photographs.
     const theirs = parcels.consumerParcel('PEER-1', sndHash);
     expect(theirs.relation).toBe('sent');
     expect(theirs.status).toBe('Delivered');
     expect(theirs.disputeOutcome).toMatchObject({ origin: 'buyer', decision: 'report_only' });
-    expect(theirs.damageReport).toBeUndefined();
+    expect(theirs.damageReport).toEqual({ number: 'DCR-PEER-1' });
     expect(theirs.disputeReason).toBeUndefined();
     expect(theirs.disputePhotoRef).toBeUndefined();
     expect(theirs.podPhotoRef).toBeUndefined();
@@ -3035,12 +3035,12 @@ describe('PUDO Light', () => {
       expect(reported.dispute).not.toHaveProperty('funding');
       expect(parcels.openDisputes().map((p) => p.parcelId)).not.toContain(parcelId);
       expect(said).toEqual([{ parcelId, decision: 'report_only', award: 0, note: REPORT_ONLY_NOTE, origin: 'counter', raisedBy: dest.did }]);
-      // Both people read how it ended; only the receiver is handed the report.
+      // Both people read how it ended, and both are offered the report: the receiver's to pass on, the sender's to keep a copy of.
       expect(parcels.consumerParcel(parcelId, hashPhone('+254700951102'))).toMatchObject({ disputeOutcome: { origin: 'counter', decision: 'report_only' }, damageReport: { number: `DCR-${parcelId}` } });
       const theirs = parcels.consumerParcel(parcelId, hashPhone('+254700951101'));
       expect(theirs.disputeOutcome).toMatchObject({ decision: 'report_only' });
       expect(theirs.disputeOutcome).not.toHaveProperty('award');
-      expect(theirs).not.toHaveProperty('damageReport');
+      expect(theirs.damageReport).toEqual({ number: `DCR-${parcelId}` });
       // And it is collected as any parcel.
       expect(parcels.pickup(parcelId, dest.did, code, 'handed.jpg').status).toBe('Delivered');
     });
@@ -3238,13 +3238,13 @@ describe('PUDO Light', () => {
       expect(reports.read(parcelId, asPerson(RECEIVER)).body.number).toBe(`DCR-${parcelId}`);
       expect(reports.read(parcelId, asShop(dest.did)).body.number).toBe(`DCR-${parcelId}`);
       expect(reports.read(parcelId, staff).body.number).toBe(`DCR-${parcelId}`);
-      // The SENDER is on the parcel, so they are told why — and are not handed what the receiver's side wrote.
-      expect(() => reports.read(parcelId, asPerson(SENDER))).toThrow('The damage claim report was made for the receiver, who holds what was written and photographed. Ask them to pass it on to you.');
+      // THE SENDER reads it too: a copy is theirs (the user, 2026-10-15) — the same report, the same fingerprint.
+      expect(reports.read(parcelId, asPerson(SENDER)).sha256).toBe(reports.read(parcelId, asPerson(RECEIVER)).sha256);
+      expect(reports.file(parcelId, asPerson(SENDER)).filename).toBe(`damage-claim-report-${parcelId}.zip`);
       // Anybody else is told nothing, not even that there is one: another person, the first shop, nobody signed in.
       expect(() => reports.read(parcelId, asPerson('+254700961199'))).toThrow(/No damage claim report on such a parcel/);
       expect(() => reports.read(parcelId, asShop(origin.did))).toThrow(/No damage claim report on such a parcel/);
       expect(() => reports.read(parcelId, undefined)).toThrow(/No damage claim report on such a parcel/);
-      expect(() => reports.file(parcelId, asPerson(SENDER))).toThrow(/made for the receiver/);
       // A parcel nobody reported a problem on has no report, for anybody.
       const quiet = onboardAgent('Report Quiet', 'NorthTown', 50);
       parcels.accept({ agentDid: quiet.did, parcelId: 'QR-REPORT-QUIET', size: 'M', destZone: 'SouthTown', senderMobile: SENDER, receiverMobile: RECEIVER, dropoffPhotoRef: 'drop.jpg' });
@@ -3300,6 +3300,66 @@ describe('PUDO Light', () => {
       expect(reports.list()[0]).not.toHaveProperty('heldBy'); // it had been handed over
     });
 
+    /**
+     * THE USER, 2026-10-15: "the damage claim is static after the handover to the consumer, because that is when the
+     * logistics responsibility ended. However there is a chance that the minter did not take good care of the goods
+     * inside a packaging … they can be added as notes on the original report and it is outside sbg's jurisdiction. In
+     * both cases the sender has a right to a copy."
+     */
+    it('after handover the report does not change: the receiver adds NOTES beside it — dated, fingerprinted, outside our jurisdiction — and the sender reads them too', async () => {
+      const told: Array<{ name: string; payload: unknown }> = [];
+      const reports = new DamageReportService(parcels, agents, media, vendors, persons, drivers, managers, mdps, undefined, { publish: async (name: string, payload: unknown) => void told.push({ name, payload }) } as never);
+      reports.onModuleInit();
+      const { parcelId, dest, code } = reportedAtCounter('N');
+      await settle();
+      const receiver = asPerson(RECEIVER);
+      const before = reports.read(parcelId, receiver);
+      const photo = () => media.upload({ ownerDid: (receiver as unknown as { did: string }).did, kind: 'dispute', dataUrl: PNG }).mediaId;
+
+      // Still on the shelf: the network holds it, and what is wrong with it is what the report is for.
+      expect(() => reports.addNote(parcelId, receiver, { text: 'The bowl inside is broken too' })).toThrow(/after the parcel was handed over/);
+      expect(parcels.pickup(parcelId, dest.did, code, 'handed.jpg').status).toBe('Delivered');
+
+      // Only the receiver adds one: not the sender, not the shop, not staff.
+      for (const who of [asPerson(SENDER), asShop(dest.did), staff]) expect(() => reports.addNote(parcelId, who, { text: 'x' })).toThrow(/added by the receiver/);
+      expect(() => reports.addNote(parcelId, receiver, { text: '   ' })).toThrow(/Say what you found/);
+      expect(() => reports.addNote(parcelId, receiver, { text: 'x', photoRefs: [media.upload({ ownerDid: 'did:glos:somebody-else', kind: 'dispute', dataUrl: PNG }).mediaId] })).toThrow(/could not be attached/);
+      expect(() => reports.addNote(parcelId, receiver, { text: 'x', photoRefs: [photo(), photo(), photo(), photo(), photo()] })).toThrow(/Up to 4 photographs/);
+      expect(reports.read(parcelId, receiver).notes ?? []).toEqual([]);
+
+      const now = Date.parse('2026-10-16T09:30:00Z');
+      const note = reports.addNote(parcelId, receiver, { text: '  Opened at home: the bowl inside the box was in three pieces, the box itself unmarked.  ', photoRefs: [photo()] }, now);
+      expect(note).toMatchObject({ at: '2026-10-16T09:30:00.000Z', by: 'receiver', text: 'Opened at home: the bowl inside the box was in three pieces, the box itself unmarked.' });
+      expect(note.statement).toMatch(/outside SeeBuyGet’s jurisdiction/);
+      expect(note.photographs).toEqual([expect.objectContaining({ what: 'note', mediaId: expect.any(String) })]);
+      // Its own fingerprint, over itself; THE REPORT'S IS UNTOUCHED, so every copy already handed on still matches.
+      const { createHash } = await import('crypto');
+      expect(note.sha256).toBe(createHash('sha256').update(canonicalJson(unsignedNote(note))).digest('hex'));
+      const after = reports.read(parcelId, receiver);
+      expect(after.sha256).toBe(before.sha256);
+      expect(after.body).toEqual(before.body);
+      expect(after.notes).toEqual([note]);
+
+      // The sender reads it: same report, same notes, same fingerprints — and is told one was added.
+      expect(reports.read(parcelId, asPerson(SENDER))).toMatchObject({ sha256: before.sha256, notes: [{ sha256: note.sha256 }] });
+      expect(told).toEqual([{ name: 'pudo.damage_report_noted', payload: { parcelId, number: `DCR-${parcelId}`, at: note.at } }]);
+
+      // THE FILE carries each note as the bytes its fingerprint was taken over, its photograph, and the page says it.
+      const file = reports.file(parcelId, asPerson(SENDER));
+      expect(file.bytes.includes(Buffer.from(`notes/${note.noteId}.json`))).toBe(true);
+      expect(file.bytes.includes(Buffer.from(canonicalJson(unsignedNote(note)), 'utf8'))).toBe(true);
+      expect(file.bytes.includes(Buffer.from(`photographs/note-${note.photographs[0].mediaId}`))).toBe(true);
+      expect(file.bytes.includes(Buffer.from('Added after it was handed over'))).toBe(true);
+      // Staff's list says there is one; a link says so before the file is taken.
+      expect(reports.list().find((r) => r.parcelId === parcelId)).toMatchObject({ notes: 1 });
+      const made = reports.makeLink(parcelId, receiver, now);
+      expect(reports.look(made.url.split('#report=')[1], now)).toMatchObject({ state: 'ready', notes: 1 });
+
+      // A report takes a handful of notes, not a channel.
+      for (let i = 1; i < MAX_NOTES; i += 1) reports.addNote(parcelId, receiver, { text: `More, ${i}` }, now + i);
+      expect(() => reports.addNote(parcelId, receiver, { text: 'One too many' }, now + MAX_NOTES)).toThrow(/as many as one report takes/);
+    });
+
     it('is handed on by a link its holder makes: unguessable, counted, limited, and theirs to cancel', async () => {
       const reports = reportsOf();
       const { parcelId, dest, proof } = reportedAtCounter('E');
@@ -3310,7 +3370,10 @@ describe('PUDO Light', () => {
       // Not staff, and not the shop: a link is a way in that whoever the report is for made, can see, and can cancel.
       expect(() => reports.makeLink(parcelId, staff, now)).toThrow(/Staff read the report itself/);
       expect(() => reports.makeLink(parcelId, asShop(dest.did), now)).toThrow(/made by whoever the report is for/);
-      expect(() => reports.makeLink(parcelId, asPerson(SENDER), now)).toThrow(/made for the receiver/);
+      // The sender may pass their copy on too — by links of their own, which the receiver neither sees nor cancels.
+      const sendersLink = reports.makeLink(parcelId, asPerson(SENDER), now);
+      expect(reports.linksFor(parcelId, asPerson(SENDER), now).map((l) => l.linkId)).toEqual([sendersLink.link.linkId]);
+      expect(reports.linksFor(parcelId, receiver, now).map((l) => l.linkId)).not.toContain(sendersLink.link.linkId);
 
       const made = reports.makeLink(parcelId, receiver, now);
       const token = made.url.split('#report=')[1];
@@ -3337,7 +3400,8 @@ describe('PUDO Light', () => {
       // The bytes the fingerprint is taken over are in the file, exactly: anybody can work it out again from them.
       expect(file.bytes.includes(Buffer.from(canonicalJson(report.body), 'utf8'))).toBe(true);
       expect(reports.linksFor(parcelId, receiver, now)[0]).toMatchObject({ opened: 1, lastOpenedAt: new Date(now).toISOString() });
-      expect(reports.list(now).find((r) => r.parcelId === parcelId)).toMatchObject({ links: 1, opened: 1 });
+      // Two links work: the receiver’s, and the sender’s own copy passed on.
+      expect(reports.list(now).find((r) => r.parcelId === parcelId)).toMatchObject({ links: 2, opened: 1 });
       // Signed in, the same file without a link.
       expect(reports.file(parcelId, receiver).bytes.length).toBe(file.bytes.length);
 
@@ -3354,7 +3418,8 @@ describe('PUDO Light', () => {
       expect(reports.look(key2, now + LINK_DAYS * 86_400_000).state).toBe('expired');
       expect(() => reports.fetch(key2, now + LINK_DAYS * 86_400_000)).toThrow(/its time is up/);
       // Somebody else's link is answered as one that does not exist.
-      expect(() => reports.cancelLink(parcelId, second.link.linkId, asPerson(SENDER), now)).toThrow(/made for the receiver/);
+      // The sender reads the report, but the receiver’s links are not theirs to see or to stop.
+      expect(() => reports.cancelLink(parcelId, second.link.linkId, asPerson(SENDER), now)).toThrow(/No such link on this report/);
       expect(() => reports.cancelLink(parcelId, 'drl_nothing', receiver, now)).toThrow(/No such link on this report/);
       expect(reports.cancelLink(parcelId, second.link.linkId, receiver, now).state).toBe('cancelled');
       expect(reports.cancelLink(parcelId, second.link.linkId, receiver, now + 5000).cancelledAt).toBe(new Date(now).toISOString());
@@ -3364,7 +3429,8 @@ describe('PUDO Light', () => {
       for (let i = 0; i < LINK_MAX_LIVE; i += 1) reports.makeLink(parcelId, receiver, now);
       expect(() => reports.makeLink(parcelId, receiver, now)).toThrow(`This report already has ${LINK_MAX_LIVE} links that work. Cancel one to make another.`);
       // Staff see them all, and may cancel one; they are the only others who can.
-      expect(reports.linksFor(parcelId, staff, now)).toHaveLength(LINK_MAX_LIVE + 2);
+      // (the receiver’s five working ones, the cancelled one, the used-up one — and the sender’s own)
+      expect(reports.linksFor(parcelId, staff, now)).toHaveLength(LINK_MAX_LIVE + 3);
       expect(reports.linksFor(parcelId, asShop(dest.did), now)).toEqual([]);
     });
   });

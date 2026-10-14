@@ -6,7 +6,7 @@ import { Public } from '../../foundation/auth/public.decorator';
 import { Roles, SignedIn } from '../../foundation/auth/scopes.decorator';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { DamageReportService } from './damage-report.service';
-import { DamageReportLinkList, DamageReportLinkRow, DamageReportLinkView, DamageReportList, DamageReportTokenDto, DamageReportView, MadeDamageReportLink } from './damage-report.types';
+import { AddDamageReportNoteDto, DamageReportLinkList, DamageReportLinkRow, DamageReportLinkView, DamageReportList, DamageReportNote, DamageReportTokenDto, DamageReportView, MadeDamageReportLink } from './damage-report.types';
 
 /**
  * THE DAMAGE CLAIM REPORT, from both ends.
@@ -48,6 +48,16 @@ export class DamageReportController {
   }
 
   /** The links the caller made on this report. */
+  /**
+   * The receiver adds what they found after the parcel was handed over: a note beside the report, which itself does not
+   * change. Refused to anybody else, and before handover (DamageReportService.addNote).
+   */
+  @SignedIn()
+  @Post('parcels/:id/damage-report/notes')
+  addNote(@Param('id') id: string, @Body() dto: AddDamageReportNoteDto, @Actor() actor: IntrospectionResult): DamageReportNote {
+    return this.reports.addNote(id, actor, { text: dto.text, photoRefs: dto.photoRefs });
+  }
+
   @SignedIn()
   @Get('parcels/:id/damage-report/links')
   links(@Param('id') id: string, @Actor() actor: IntrospectionResult): DamageReportLinkList {

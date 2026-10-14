@@ -140,6 +140,23 @@ describe('the report on a screen', () => {
   });
 });
 
+describe('notes added after handover, on the screen', () => {
+  const note = { noteId: 'drn_1', at: '2026-10-16T09:30:00.000Z', by: 'receiver' as const, text: 'The bowl inside was in three pieces.', photographs: [{ what: 'note', reference: 'm1', mediaId: 'm1' }], statement: 'x', sha256: 'b'.repeat(64) };
+
+  it('come after the report and its fingerprint, say they are outside it, and say what each one holds', () => {
+    const sections = reportSections({ ...REPORT, notes: [note, { ...note, noteId: 'drn_2', text: 'And the lid.', photographs: [] }] }, t);
+    const last = sections[sections.length - 1];
+    expect(sections[sections.length - 2].title).toBe('The fingerprint of this report');
+    expect(last.title).toBe('Added after it was handed over');
+    expect(last.rows[0].value).toMatch(/outside SeeBuyGet’s jurisdiction/);
+    expect(last.rows.slice(1).map((r) => r.value)).toEqual(['The bowl inside was in three pieces. (1 photograph in the file)', 'And the lid.']);
+  });
+
+  it('are not a section at all where there are none', () => {
+    expect(reportSections(REPORT, t).map((s) => s.title)).not.toContain('Added after it was handed over');
+  });
+});
+
 describe('what the page says to whoever was handed a link', () => {
   const ready: ReportLinkView = { state: 'ready', expiresAt: '2026-11-11T10:00:00.000Z', number: 'DCR-QR-1', parcelId: 'QR-1', from: 'Mama Sarah Shop, Nairobi CBD', to: 'Riverside Corner, Westlands', reportedAt: '2026-10-12T09:30:00.000Z', sha256: 'a'.repeat(64), opensLeft: 25 };
 
@@ -150,6 +167,11 @@ describe('what the page says to whoever was handed a link', () => {
     expect(says.lines[1]).toBe('It holds who held the parcel and when, the photographs, and the terms it travelled under.');
     expect(says.lines[2]).toMatch(/^This link works until .*\. The file is the copy to keep\.$/);
     expect(says.lines).toHaveLength(3);
+  });
+
+  it('says the file holds notes added after handover, when it does', () => {
+    expect(reportLinkSays({ view: { ...ready, notes: 2 } }, t).lines).toContain('With 2 notes the receiver added after it was handed over.');
+    expect(reportLinkSays({ view: { ...ready, notes: 1 } }, t).lines).toContain('With 1 note the receiver added after it was handed over.');
   });
 
   it('says so when few openings are left, and not before', () => {

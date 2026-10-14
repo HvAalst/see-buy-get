@@ -370,7 +370,16 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
         : null}
 
       {/* THE DAMAGE CLAIM REPORT — the receiver's: to read, to keep, and to hand to whoever they choose. */}
-      {parcel.damageReport ? <DamageReportCard client={client} parcelId={parcel.parcelId} number={parcel.damageReport.number} /> : null}
+      {/* The receiver's to pass on and to add to after handover; the sender's to read and keep a copy of. */}
+      {parcel.damageReport ? (
+        <DamageReportCard
+          client={client}
+          parcelId={parcel.parcelId}
+          number={parcel.damageReport.number}
+          canAddNote={parcel.relation === 'received' && parcel.status === 'Delivered'}
+          uploadPhoto={(file) => actions.uploadPhoto('dispute', file)}
+        />
+      ) : null}
 
       {/* S23: once it is delivered, the receiver keeps their own proof of what arrived, and can report a
           problem — a reason + a photo. One report to a parcel: once it is made, the button is gone. */}

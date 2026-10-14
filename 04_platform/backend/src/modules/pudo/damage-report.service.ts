@@ -1,6 +1,8 @@
 import { Injectable, OnModuleInit, Optional } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
+import { EventBus } from '../../foundation/events/event-bus.service';
+import { GlosEvent } from '../../foundation/events/glos-events';
 import { zip, ZipEntry } from '../../foundation/archive/zip';
 import { GlosError } from '../../foundation/http/glos-error';
 import { maskAddress, MailService } from '../../foundation/mail/mail.service';
@@ -14,9 +16,11 @@ import {
   DamageReportHolder,
   DamageReportLinkRow,
   DamageReportLinkView,
+  DamageReportNote,
   DamageReportPhoto,
   DamageReportRow,
   DamageReportView,
+  NOTE_STATEMENT,
   ReportLinkState,
 } from './damage-report.types';
 import { LINK_DAYS, LINK_MAX_LIVE, LINK_MAX_OPENS } from './document-link.service';
@@ -31,6 +35,10 @@ import { CustodyKind, Parcel } from './pudo.types';
 import { VendorService } from './vendor.service';
 
 const DAY_MS = 86_400_000;
+/** Notes on one report: enough for what is found over the days after a parcel is opened, not a channel. */
+export const MAX_NOTES = 10;
+/** Photographs on one note. */
+export const MAX_NOTE_PHOTOS = 4;
 
 /** What is kept of a link to a report. NEVER THE KEY: only its fingerprint, so that reading this store opens nothing. */
 interface DamageReportLink {
@@ -46,8 +54,8 @@ interface DamageReportLink {
   cancelledAt?: string;
 }
 
-/** Who is reading, and what that lets them do. Only whoever the report is FOR may make a link to it. */
-type ReadingAs = 'staff' | 'receiver' | 'store' | 'shop';
+/** Who is reading, and what that lets them do. Whoever the report is for, and the sender, may make a link to it. */
+type ReadingAs = 'staff' | 'receiver' | 'store' | 'shop' | 'sender';
 
 /**
  * THE DAMAGE CLAIM REPORT (damage-report.types.ts says why it exists).
@@ -58,8 +66,12 @@ type ReadingAs = 'staff' | 'receiver' | 'store' | 'shop';
  * dates no later than the report.
  *
  * WHO READS IT. The receiver, whose goods they are; the store, on its own order; the shop that reported it at its
- * counter; and staff. NOT the sender of a parcel between two people: what the receiver wrote and photographed has
- * always been the receiver's to show them (ParcelService.toConsumerView), and a link is how they do.
+ * counter; staff; and THE SENDER — the user, 2026-10-15: "in both cases the sender has a right to a copy". Between two
+ * people the sender paid for the carriage and is often who claims. They read it, take the file, and pass it on.
+ *
+ * AFTER HANDOVER THE REPORT DOES NOT CHANGE: the network's part ended when the parcel was handed over. What the
+ * receiver finds later — goods broken inside packaging that arrived whole — is added as a NOTE beside it (addNote),
+ * dated, with a fingerprint of its own, and saying that it is outside SeeBuyGet's jurisdiction.
  *
  * A LINK is the same key a consignment note's link is (document-link.service.ts), held to the same limits: it cannot
  * be guessed, it stops, it opens exactly this report, every opening is counted, and whoever made it can cancel it.
@@ -81,6 +93,7 @@ export class DamageReportService implements OnModuleInit {
     @Optional() private readonly managers?: FleetManagerService,
     @Optional() private readonly mdps?: MdpService,
     @Optional() private readonly mail?: MailService,
+    @Optional() private readonly events?: EventBus,
   ) {}
 
   onModuleInit(): void {
@@ -182,6 +195,7 @@ export class DamageReportService implements OnModuleInit {
         links: links.filter((l) => this.stateOf(l, now) === 'ready').length,
         opened: links.reduce((sum, l) => sum + l.opened, 0),
         ...(report.insurer ? { insurer: report.insurer } : {}),
+        ...(report.notes?.length ? { notes: report.notes.length } : {}),
       });
     }
     return rows.sort((a, b) => (a.madeAt < b.madeAt ? 1 : -1));
@@ -190,6 +204,40 @@ export class DamageReportService implements OnModuleInit {
   /** The file, for somebody signed in who may read the report. */
   file(parcelId: string, actor: IntrospectionResult | undefined): { filename: string; bytes: Buffer } {
     return this.bundle(this.reading(parcelId, actor).report);
+  }
+
+  /* ------------------------------------------------------------------ notes -- */
+
+  /**
+   * THE RECEIVER ADDS WHAT THEY FOUND AFTER HANDOVER — as a note beside the report, never inside it.
+   *
+   * Only the receiver: they opened the parcel. Only once it was handed over to them: before that the network still
+   * held it, and a problem then is what the report itself is for. Dated, with up to four of their own photographs and a
+   * fingerprint of its own; the report's fingerprint, and every copy already handed on, stay as they were. Every note
+   * says it is outside SeeBuyGet's jurisdiction. The sender is told a note was added.
+   */
+  addNote(parcelId: string, actor: IntrospectionResult | undefined, input: { text: string; photoRefs?: string[] }, now: number = Date.now()): DamageReportNote {
+    const reading = this.reading(parcelId, actor);
+    if (reading.as !== 'receiver') throw new GlosError('FORBIDDEN', 'A note is added by the receiver, who opened the parcel');
+    const parcel = this.parcels.get(parcelId);
+    if (!handedOver(parcel)) throw new GlosError('INVALID_STATE', 'A note is for what you find after the parcel was handed over to you');
+    const text = (input.text ?? '').trim();
+    if (!text) throw new GlosError('FIELD_REQUIRED', 'Say what you found', { field: 'text' });
+    const notes = reading.report.notes ?? [];
+    if (notes.length >= MAX_NOTES) throw new GlosError('INVALID_STATE', `This report has ${MAX_NOTES} notes, which is as many as one report takes`);
+    const refs = [...new Set(input.photoRefs ?? [])];
+    if (refs.length > MAX_NOTE_PHOTOS) throw new GlosError('INVALID_INPUT', `Up to ${MAX_NOTE_PHOTOS} photographs on one note`);
+    // Their own photographs, and nobody else's: refused before anything is kept.
+    for (const ref of refs) {
+      if (!this.media.adopt(ref, actor!.did!, { type: 'parcel', id: parcelId }, 'dispute')) throw new GlosError('PHOTO_REQUIRED', 'A photograph could not be attached — take it again');
+    }
+    const unsigned = { noteId: `drn_${randomBytes(6).toString('hex')}`, at: new Date(now).toISOString(), by: 'receiver' as const, text: text.slice(0, 2000), photographs: refs.map((r) => this.photo('note', r)), statement: NOTE_STATEMENT };
+    const note: DamageReportNote = { ...unsigned, sha256: createHash('sha256').update(canonicalJson(unsigned)).digest('hex') };
+    this.reports.set(parcelId, { ...reading.report, notes: [...notes, note] });
+    void this.events
+      ?.publish(GlosEvent.Pudo.DamageReportNoted, { parcelId, number: reading.report.body.number, at: note.at }, { source: 'pudo' })
+      .catch(() => undefined);
+    return note;
   }
 
   /* ------------------------------------------------------------------ links -- */
@@ -259,6 +307,7 @@ export class DamageReportService implements OnModuleInit {
       reportedAt: report.body.problem.reportedAt,
       sha256: report.sha256,
       opensLeft: LINK_MAX_OPENS - link.opened,
+      ...(report.notes?.length ? { notes: report.notes.length } : {}),
     };
   }
 
@@ -296,10 +345,8 @@ export class DamageReportService implements OnModuleInit {
     const person = this.persons?.findByDid(did);
     if (person) {
       if (isFor(this.parcels.receiverOf(parcel), person)) return { report, as: 'receiver', forDid: person.personDid };
-      // The sender IS on the parcel, so they are told why rather than told nothing.
-      if (isFor(this.parcels.senderOf(parcel), person)) {
-        throw new GlosError('FORBIDDEN', 'The damage claim report was made for the receiver, who holds what was written and photographed. Ask them to pass it on to you.');
-      }
+      // The sender has a right to a copy (the user, 2026-10-15): to read, to keep, and to pass on.
+      if (isFor(this.parcels.senderOf(parcel), person)) return { report, as: 'sender', forDid: person.personDid };
       throw none();
     }
     if (parcel.vendorId && this.storeDid(parcel.vendorId) === did) return { report, as: 'store', forDid: did };
@@ -455,7 +502,7 @@ export class DamageReportService implements OnModuleInit {
     const entries: ZipEntry[] = [];
     const files = new Map<string, string>();
     const missing = new Map<string, string>();
-    for (const photo of report.body.photographs) {
+    for (const photo of [...report.body.photographs, ...(report.notes ?? []).flatMap((n) => n.photographs)]) {
       if (!photo.mediaId) continue;
       try {
         const { bytes, contentType } = this.media.blob(photo.mediaId);
@@ -471,6 +518,8 @@ export class DamageReportService implements OnModuleInit {
       { name: 'damage-claim-report.html', bytes: Buffer.from(reportHtml(report, files, missing), 'utf8'), at: new Date(report.madeAt) },
       { name: 'report.json', bytes: Buffer.from(canonicalJson(report.body), 'utf8'), at: new Date(report.madeAt) },
       { name: 'README.txt', bytes: Buffer.from(readme(report), 'utf8') },
+      // Each note as the bytes its own fingerprint was taken over (without the fingerprint itself).
+      ...(report.notes ?? []).map((n) => ({ name: `notes/${n.noteId}.json`, bytes: Buffer.from(canonicalJson(unsignedNote(n)), 'utf8'), at: new Date(n.at) })),
     );
     return { filename: `damage-claim-report-${safe(report.parcelId)}.zip`, bytes: zip(entries) };
   }
@@ -548,7 +597,18 @@ function extensionFor(contentType: string): string {
   return 'jpg';
 }
 
+/** A note without its fingerprint: the bytes the fingerprint is taken over. */
+export function unsignedNote(n: DamageReportNote): Omit<DamageReportNote, 'sha256'> {
+  return { noteId: n.noteId, at: n.at, by: n.by, text: n.text, photographs: n.photographs, statement: n.statement };
+}
+
+/** Whether the parcel has been handed over to its receiver: delivered, or with them on the record of who held it. */
+function handedOver(p: Parcel): boolean {
+  return p.status === 'Delivered' || p.dispute?.fromStatus === 'Delivered' || Boolean(p.custody?.some((leg) => leg.holderKind === 'receiver'));
+}
+
 const PHOTO_WORDS: Record<string, string> = {
+  note: 'What the receiver found after it was handed over',
   contents: 'The contents, when the parcel was made',
   drop_off: 'The parcel at the counter, when it was handed in',
   handed_over: 'The parcel at the counter, when it was handed to the receiver',
@@ -650,11 +710,34 @@ ${photos || '<p class="none">No photograph belongs to this parcel.</p>'}
 
 <h2>The fingerprint of this report</h2>
 <p class="fp"><code>${esc(report.sha256)}</code><br>SHA-256 over <code>report.json</code>, which is in the same file as this page. Two copies with the same fingerprint say the same thing.</p>
+${notesHtml(report, files, missing)}
 </body></html>
 `;
 }
 
+/** Notes added after handover: after the report and its fingerprint, each with its own, and each saying whose it is. */
+function notesHtml(report: DamageReportView, files: Map<string, string>, missing: Map<string, string>): string {
+  const notes = report.notes ?? [];
+  if (!notes.length) return '';
+  const one = (n: DamageReportNote) => {
+    const pics = n.photographs
+      .map((p) => {
+        const file = p.mediaId ? files.get(p.mediaId) : undefined;
+        return file ? `<a href="${esc(file)}"><img src="${esc(file)}" alt="${esc(PHOTO_WORDS.note)}"></a>` : `<p class="none">${esc(p.mediaId ? (missing.get(p.mediaId) ?? 'Not available') : p.reference)}</p>`;
+      })
+      .join('\n');
+    return `<h3>${esc(when(n.at))}</h3>
+<p class="statement">${esc(n.statement)}</p>
+<p>${esc(n.text)}</p>
+${pics}
+<p class="fp"><code>${esc(n.sha256)}</code><br>SHA-256 over <code>notes/${esc(n.noteId)}.json</code>.</p>`;
+  };
+  return `<h2>Added after it was handed over</h2>
+${notes.map(one).join('\n')}`;
+}
+
 function readme(report: DamageReportView): string {
+  const notes = report.notes ?? [];
   return [
     `DAMAGE CLAIM REPORT ${report.body.number}`,
     '',
@@ -664,6 +747,7 @@ function readme(report: DamageReportView): string {
     '  damage-claim-report.html   The report, to read or to print.',
     '  report.json                The same facts for a machine. The fingerprint is taken over exactly these bytes.',
     '  photographs/               Every photograph that belongs to the parcel and is still kept.',
+    ...(notes.length ? ['  notes/                     What the receiver added after the parcel was handed over, one file a note.'] : []),
     '',
     'THE FINGERPRINT',
     `  ${report.sha256}`,
@@ -672,6 +756,9 @@ function readme(report: DamageReportView): string {
     '',
     `The report was made ${when(report.madeAt)}, from the record as it stood at that moment. Nothing that happened to the`,
     'parcel afterwards is in it.',
+    ...(notes.length
+      ? ['', `NOTES (${notes.length})`, `  ${NOTE_STATEMENT}`, ...notes.map((n) => `  ${when(n.at)}  ${n.sha256}`), '  Each fingerprint is the SHA-256 of that note\'s file in notes/.']
+      : []),
     '',
   ].join('\n');
 }

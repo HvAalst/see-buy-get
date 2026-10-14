@@ -22,6 +22,9 @@ export interface DamageReportState {
   cancelLink: (linkId: string) => Promise<void>;
   /** Why something could not be done, in the server's own words — it has limits, and says what to do. */
   problem: string;
+  /** The receiver adds a note, after handover. Resolves to whether it was kept; the report is read again with it. */
+  addNote: (text: string, photoRefs?: string[]) => Promise<boolean>;
+  noting: boolean;
 }
 
 /**
@@ -110,5 +113,24 @@ export function useDamageReport(client: SbgClient | null, parcelId: string | und
     [api, parcelId, loadLinks],
   );
 
-  return { phase, report, load, takeFile, taking, links, made, making, makeLink, cancelling, cancelLink, problem };
+  const [noting, setNoting] = useState(false);
+  const addNote = useCallback(
+    async (text: string, photoRefs?: string[]) => {
+      if (!api || !parcelId) return false;
+      setNoting(true);
+      setProblem('');
+      const r = await api.addNote(parcelId, { text, ...(photoRefs?.length ? { photoRefs } : {}) });
+      if (current.current !== parcelId) return false;
+      setNoting(false);
+      if (r.error) {
+        setProblem(r.error.detail ?? '');
+        return false;
+      }
+      await load();
+      return true;
+    },
+    [api, parcelId, load],
+  );
+
+  return { phase, report, load, takeFile, taking, links, made, making, makeLink, cancelling, cancelLink, problem, addNote, noting };
 }

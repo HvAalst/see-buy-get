@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'preact/hooks';
 import type { SbgClient } from '../../lib/sbg';
-import { Button, Card, Note } from '../ui';
+import { Button, Card, Note, PhotoField } from '../ui';
 import { useT } from '../i18n';
 import { day } from '../archive/words';
 import { canShareFiles, handOverFile, passOnLink, waysToPassOn, type HandedOver, type PassedOn } from '../archive/handOver';
@@ -12,6 +12,10 @@ export interface DamageReportCardProps {
   parcelId: string;
   /** The report's own number, as the parcel names it. */
   number: string;
+  /** The receiver, once the parcel is handed over to them: they may add what they found as a note beside the report. */
+  canAddNote?: boolean;
+  /** Their own photograph for a note. */
+  uploadPhoto?: (file: File) => Promise<string | null>;
 }
 
 /**
@@ -25,13 +29,16 @@ export interface DamageReportCardProps {
  * A link opens the report with nobody signed in. So each one made is shown, with how often it was used, and can be
  * stopped; and the address is shown ONCE, because the server keeps no copy of the key.
  */
-export function DamageReportCard({ client, parcelId, number }: DamageReportCardProps) {
+export function DamageReportCard({ client, parcelId, number, canAddNote, uploadPhoto }: DamageReportCardProps) {
   const t = useT();
   const r = useDamageReport(client, parcelId);
   const [open, setOpen] = useState(false);
   const [handed, setHanded] = useState<HandedOver | 'failed' | null>(null);
   const [passed, setPassed] = useState<PassedOn | null>(null);
   const [asking, setAsking] = useState('');
+  const [noteText, setNoteText] = useState('');
+  const [notePhoto, setNotePhoto] = useState('');
+  const [noted, setNoted] = useState(false);
   const share = useMemo(() => canShareFiles(), []);
   const ways = useMemo(() => waysToPassOn(), []);
   const sections = useMemo(() => (r.report ? reportSections(r.report, t) : []), [r.report, t]);
@@ -45,6 +52,15 @@ export function DamageReportCard({ client, parcelId, number }: DamageReportCardP
     const blob = await r.takeFile();
     if (!blob) return setHanded('failed');
     setHanded(await handOverFile(reportFileName(number), blob, t('dreport.title')));
+  };
+  const addNote = async () => {
+    setNoted(false);
+    if (await r.addNote(noteText.trim(), notePhoto ? [notePhoto] : undefined)) {
+      setNoteText('');
+      setNotePhoto('');
+      setNoted(true);
+      setOpen(true);
+    }
   };
   const pass = async (how: 'share' | 'copy') => {
     if (r.made) setPassed(await passOnLink(r.made.url, `${t('dreport.title')} ${number}`, how, ways));
@@ -85,6 +101,28 @@ export function DamageReportCard({ client, parcelId, number }: DamageReportCardP
             </section>
           ))}
         </div>
+      ) : null}
+
+      {/* WHAT THEY FOUND AFTERWARDS: a note beside the report, which itself does not change after handover — and what
+          that means said before the button, not after. */}
+      {canAddNote ? (
+        <>
+          <h3 class="scr__section">{t('dreport.note.title')}</h3>
+          <Note tone="info" icon="info" title={t('dreport.note.whatTitle')} detail={t('dreport.note.what')} />
+          <label class="field">
+            <span class="field__label">{t('dreport.note.label')}</span>
+            <textarea id="report-note" class="input" rows={3} maxLength={2000} value={noteText} onInput={(e) => setNoteText((e.target as HTMLTextAreaElement).value)} />
+          </label>
+          {uploadPhoto ? <PhotoField id="report-note-photo" value={notePhoto} label={t('dreport.note.photo')} upload={uploadPhoto} onCapture={setNotePhoto} /> : null}
+          <Button busy={r.noting} disabled={!noteText.trim()} onClick={() => void addNote()}>
+            {t('dreport.note.add')}
+          </Button>
+          {noted ? (
+            <p class="hint" role="status">
+              {t('dreport.note.added')}
+            </p>
+          ) : null}
+        </>
       ) : null}
 
       <h3 class="scr__section">{t('dreport.keepTitle')}</h3>
