@@ -8,6 +8,8 @@ export interface PlaceMapPin {
   id: string;
   label: string;
   point: GeoPoint;
+  /** A warning — something reported on a road — drawn as a red diamond, so it is told from a place without colour. */
+  tone?: 'warn';
 }
 
 /**

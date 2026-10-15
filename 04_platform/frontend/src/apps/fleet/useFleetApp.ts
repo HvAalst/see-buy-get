@@ -9,7 +9,7 @@ import { downscaleImage } from '../../shared/media';
 import { perKmText } from '../../shared/money';
 import type { IconName } from '../../shared/ui/Icon';
 import { clearManager, createFleetClient, managerLookup, managerSession, managerChoices, managerSessionByFleet, changeManagerPin, purgeFleetTokens, readManager, saveManager } from './api';
-import { EMPTY_DRIVER, EMPTY_LINE, EMPTY_RUN, EMPTY_VEHICLE, isHeavySelection, lineBlocker, runBlocker, type DriverForm, type LineForm, type RunForm, type VehicleForm } from './logic';
+import { EMPTY_DRIVER, EMPTY_LINE, EMPTY_RUN, EMPTY_VEHICLE, hazardArea, isHeavySelection, lineBlocker, runBlocker, type DriverForm, type LineForm, type RunForm, type VehicleForm } from './logic';
 import type { FleetEarningsSummary, FleetJobRow,
   DispatchView,
   AssignmentRow,
@@ -17,9 +17,13 @@ import type { FleetEarningsSummary, FleetJobRow,
   DepartureRow,
   DashboardView,
   DriverRow,
+  HazardRow,
   SubtypeRow,
   VehicleRow,
 } from './types';
+
+/** How often the dashboard’s map reads itself again while it is open and in front: a vehicle moves, a minute is long. */
+export const MAP_EVERY_MS = 45_000;
 import type { PaperView } from '../../shared/papers';
 import type { GiveBackReason } from '../../shared/giveBack';
 import { duplicateField, type DuplicateField } from '../../shared/duplicate';
@@ -64,6 +68,10 @@ export interface FleetState {
   screen: Screen;
   manager: { did: string; company: string } | null;
   dashboard: DashboardView | null;
+  /** What drivers reported on the roads around the fleet's vehicles. Empty is "nothing reported", never "clear". */
+  hazards: HazardRow[];
+  /** When the map was last read: it reads itself again every MAP_EVERY_MS while the dashboard is open. */
+  mapReadAt: string | null;
   vehicles: VehicleRow[];
   drivers: DriverRow[];
   assignments: AssignmentRow[];
@@ -160,6 +168,8 @@ const INITIAL: FleetState = {
   screen: 'dash',
   manager: null,
   dashboard: null,
+  hazards: [],
+  mapReadAt: null,
   vehicles: [],
   drivers: [],
   assignments: [],
@@ -246,6 +256,31 @@ export function useFleetApp() {
   const refreshEpoch = useRef(0);
   const refreshesRunning = useRef(0);
 
+  /** The hazards around the vehicles on the road; the ones already shown where they cannot be read just now. */
+  const readHazards = useCallback(
+    async (dashboard: DashboardView | null | undefined): Promise<HazardRow[] | null> => {
+      if (!client) return null;
+      const area = hazardArea(dashboard?.sessions.list ?? [], dashboard?.cargo.items ?? []);
+      if (!area) return [];
+      const r = await client.api.hazardsNear(area.at, area.radiusKm);
+      return r.error ? null : (narrow<{ items: HazardRow[] }>(r.data)?.items ?? []);
+    },
+    [client],
+  );
+
+  /**
+   * THE MAP, READ AGAIN — the positions, the loads and the hazards, and nothing else. What the dashboard runs every
+   * MAP_EVERY_MS while it is open and the tab is in front: a live map that has to be reopened to move is not live.
+   */
+  const refreshMap = useCallback(async () => {
+    if (!client || !managerDid) return;
+    const dashR = await client.api.dashboard();
+    if (dashR.error) return;
+    const dashboard = narrow<DashboardView>(dashR.data);
+    const hazards = await readHazards(dashboard);
+    setState((s) => ({ ...s, dashboard, hazards: hazards ?? s.hazards, mapReadAt: new Date().toISOString() }));
+  }, [client, managerDid, readHazards]);
+
   /** One sweep loads the whole console; partial failures keep what arrived and say so. */
   const refresh = useCallback(async () => {
     if (!client || !managerDid) return;
@@ -269,11 +304,15 @@ export function useFleetApp() {
       if (superseded()) return;
 
       const firstError = dashR.error ?? vehR.error ?? drvR.error ?? asgR.error ?? corR.error ?? subR.error;
+      const hazards = dashR.error ? null : await readHazards(narrow<DashboardView>(dashR.data));
+      if (superseded()) return;
 
       setState((s) => ({
         ...s,
         phase: 'ready',
         dashboard: dashR.error ? s.dashboard : narrow<DashboardView>(dashR.data),
+        hazards: hazards ?? s.hazards,
+        mapReadAt: dashR.error ? s.mapReadAt : new Date().toISOString(),
         vehicles: vehR.error ? s.vehicles : (narrow<VehicleRow[]>(vehR.data) ?? []),
         drivers: drvR.error ? s.drivers : (narrow<DriverRow[]>(drvR.data) ?? []),
         assignments: asgR.error ? s.assignments : (narrow<AssignmentRow[]>(asgR.data) ?? []),
@@ -294,7 +333,26 @@ export function useFleetApp() {
     } finally {
       refreshesRunning.current -= 1;
     }
-  }, [client, managerDid, fail]);
+  }, [client, managerDid, fail, readHazards]);
+
+  /* ---------------------------------------------------------- the live map */
+
+  // While the dashboard is open and the tab is in front, the map reads itself again — and stops the moment either
+  // is no longer true, so a fleet office's laptop left on another screen costs nobody's data.
+  const refreshMapRef = useRef(refreshMap);
+  useEffect(() => {
+    refreshMapRef.current = refreshMap;
+  });
+  useEffect(() => {
+    if (state.screen !== 'dash' || state.phase !== 'ready') return;
+    const tick = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      if (refreshesRunning.current > 0) return;
+      void refreshMapRef.current();
+    };
+    const id = setInterval(tick, MAP_EVERY_MS);
+    return () => clearInterval(id);
+  }, [state.screen, state.phase]);
 
   /* -------------------------------------------------------------- recovery */
 
@@ -1266,6 +1324,7 @@ export function useFleetApp() {
     sbg: client?.client.sbg ?? null,
     actions: {
       refresh,
+      refreshMap,
       signIn,
       findCompany,
       clearCompany,

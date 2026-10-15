@@ -1577,6 +1577,13 @@
   stroke: #8a3b00;
 }
 
+.pmap__pin--warn .pmap__dot,
+.pmap__pin--warn.pmap__pin--on .pmap__dot {
+  background: var(--dang);
+  border-radius: 3px;
+  transform: rotate(45deg);
+}
+
 .pmap__line--on {
   stroke: var(--org);
   stroke-opacity: 1;
@@ -1748,6 +1755,19 @@
 }
 .pmap-marker__dot--ref {
   background: var(--org);
+}
+/* Something reported on a road: the danger red the driver app shows hazards in, and a diamond rather than a dot, so it reads without colour too. */
+.pmap-marker__dot--warn,
+.pmap-marker__dot--warn-on {
+  background: var(--dang);
+  border-radius: 3px;
+  transform: rotate(45deg);
+}
+/* Selected, it stays what it is — a warning — and only grows. */
+.pmap-marker__dot--warn-on {
+  width: 18px;
+  height: 18px;
+  margin: -2px 0 0 -2px;
 }
 .pmap-marker__dot--dropped {
   background: var(--navy);

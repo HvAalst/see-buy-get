@@ -31,6 +31,13 @@ export function createFleetApi(sbg: SbgClient) {
      *  (`manager` is required by the contract but operator-only at runtime; empty = my tenant.) */
     dashboard: () => sbg.request((c) => c.GET('/v1/sbg/fleet/dashboard', { params: { query: { manager: '' } } })),
 
+    /**
+     * What drivers reported on the roads around a place — closures, washouts, low bridges. An empty list means
+     * nothing was REPORTED, never that the roads are clear: nobody surveys them.
+     */
+    hazardsNear: (at: { lat: number; lng: number }, radiusKm: number) =>
+      sbg.request((c) => c.GET('/v1/sbg/route-constraints', { params: { query: { lat: at.lat, lng: at.lng, radiusKm } } })),
+
     /** This fleet's vehicles. (Empty filters = no filter, per the backend.) */
     vehicles: () => sbg.request((c) => c.GET('/v1/sbg/vehicles', { params: { query: { status: '', class: '' } } })),
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import type { DepartureBookingRow, DepartureRow } from './types';
 import { EMPTY_OWN_LOAD, EMPTY_RUN, ownLoadBlocker, runBlocker, runManifest, runMoney, runRemaining, runWaits, type OwnLoadForm, type RunForm } from './logic';
-import { ageWords, signalState, shiftHours, overShiftLimit,
+import { ageWords, signalState, shiftHours, overShiftLimit, fleetMap, hazardArea, hazardWords, HAZARD_MIN_KM, nextStopOf, vehicleDetail,
   EMPTY_DRIVER,
   EMPTY_VEHICLE,
   bodyPickerOptions,
@@ -533,5 +533,71 @@ describe('a renewed licence one of the fleet’s drivers sent', () => {
     expect(t('fleet.card.differs', { expires: '31 Mar 2031' })).toBe('That is not the date they read (31 Mar 2031)');
     expect(t('fleet.card.waitingMany', { count: 2 })).toBe('2 renewed licences to read');
     expect(t('fleet.card.waitingOne')).toBe('A renewed licence to read');
+  });
+});
+
+/**
+ * THE OFFICE'S LIVE MAP: vehicles where their phones last reported, a straight line to each one's next stop, and what
+ * drivers reported on the roads around them.
+ */
+describe('the fleet map', () => {
+  const NOW = Date.parse('2026-10-15T10:00:00.000Z');
+  const recent = '2026-10-15T09:58:00.000Z';
+  const sessions = [
+    { driverDid: 'did:a', driverName: 'Amos K.', plate: 'KLM 002B', vehicleClass: 'bike', hoursOnDuty: 3, location: { lat: -1.29, lng: 36.82 }, lastLocatedAt: recent },
+    { driverDid: 'did:b', driverName: 'Grace M.', plate: 'KDA 100V', vehicleClass: 'van', hoursOnDuty: 12.5, location: { lat: -1.3, lng: 36.9 }, lastLocatedAt: '2026-10-15T08:00:00.000Z' },
+    // On shift, and no position yet: on the list, never a pin at 0,0.
+    { driverDid: 'did:c', driverName: 'Otieno', plate: 'KCB 777T', vehicleClass: 'truck', hoursOnDuty: 1 },
+  ];
+  const cargo = [
+    { ref: 'BAG-1', kind: 'tote', weightKg: 8, destLabel: 'Central Sort', driver: 'Amos K.', driverDid: 'did:a', status: 'in_transit', nextStop: { what: 'drop' as const, label: 'Central Sort', location: { lat: -1.4, lng: 36.95 } } },
+    { ref: 'FRT-9', kind: 'freight', weightKg: 20, destLabel: 'Kitengela', driver: 'Amos K.', driverDid: 'did:a', status: 'claimed', nextStop: { what: 'pickup' as const, label: 'Gikomba depot', location: { lat: -1.285, lng: 36.835 } } },
+  ];
+  const hazards = [{ constraintId: 'rc1', kind: 'LOW_BRIDGE', at: { lat: -1.31, lng: 36.85 }, value: 4.2, status: 'active', reportedAt: '2026-10-14T08:00:00.000Z', confirmations: 2, refutations: 0 }];
+
+  it('pins each vehicle that reported a position, says so when it has gone dark, and pins hazards as warnings', () => {
+    const { pins } = fleetMap(sessions, cargo, hazards, t, NOW);
+    expect(pins.map((p) => p.id)).toEqual(['v:did:a', 'v:did:b', 'h:rc1']);
+    expect(pins[0].label).toBe('KLM 002B · Amos K.');
+    expect(pins[1].label).toMatch(/^KDA 100V · Grace M\. · no signal /);
+    expect(pins[2]).toMatchObject({ tone: 'warn', point: { lat: -1.31, lng: 36.85 } });
+    expect(pins[2].label).toMatch(/^Low bridge/);
+    expect(pins[0]).not.toHaveProperty('tone');
+  });
+
+  it('draws one line per vehicle to its NEAREST stop, and says it is a straight line, not the road', () => {
+    const { lines } = fleetMap(sessions, cargo, hazards, t, NOW);
+    // Amos has a drop far off and a pickup round the corner: the pickup is next.
+    expect(lines).toEqual([{ id: 'n:did:a', label: 'KLM 002B to collect at Gikomba depot — a straight line, not the road', from: { lat: -1.29, lng: 36.82 }, to: { lat: -1.285, lng: 36.835 } }]);
+    expect(nextStopOf('did:b', { lat: -1.3, lng: 36.9 }, cargo)).toBeUndefined();
+  });
+
+  it('asks for hazards around the vehicles, wide enough to take them all in — and not at all with none on the road', () => {
+    // One vehicle in town: the corridors around it, not the block it stands on.
+    expect(hazardArea([sessions[0]])).toEqual({ at: { lat: -1.29, lng: 36.82 }, radiusKm: HAZARD_MIN_KM });
+    // The stop a vehicle is heading for is in the area too, however far it is — up to the most that is asked.
+    const far = [{ ...cargo[0], nextStop: { what: 'drop' as const, label: 'Nakuru', location: { lat: -0.3, lng: 36.07 } } }];
+    expect(hazardArea([sessions[0]], far)!.radiusKm).toBeGreaterThan(HAZARD_MIN_KM);
+    expect(hazardArea([sessions[0]], far)!.radiusKm).toBeLessThanOrEqual(150);
+    // Another fleet's stop, or a driver not on the road, does not stretch it.
+    expect(hazardArea([sessions[0]], [{ ...far[0], driverDid: 'did:someone-else' }])!.radiusKm).toBe(HAZARD_MIN_KM);
+    // No vehicle on the road: nothing to ask about.
+    expect(hazardArea([sessions[2]])).toBeNull();
+  });
+
+  it('opens a vehicle with its loads, where it goes next and the hours left of its shift', () => {
+    const v = vehicleDetail('did:a', sessions, cargo, 13, NOW)!;
+    expect(v).toMatchObject({ hoursLeft: 10, next: { what: 'pickup', label: 'Gikomba depot' } });
+    expect(v.loads.map((l) => l.ref)).toEqual(['BAG-1', 'FRT-9']);
+    expect(vehicleDetail('did:b', sessions, cargo, 13, NOW)).toMatchObject({ hoursLeft: 0.5, loads: [] });
+    expect(vehicleDetail('did:nobody', sessions, cargo, 13, NOW)).toBeNull();
+  });
+
+  it('keeps a hazard’s label short — the dispute is said in its sheet — and never says a road with nothing reported is clear', () => {
+    // A long label lay over a vehicle's dot in the walk and took the tap meant for the vehicle.
+    expect(hazardWords({ ...hazards[0], status: 'disputed' }, t)).toBe(hazardWords(hazards[0], t));
+    expect(hazardWords(hazards[0], t)).toMatch(/^Low bridge · /);
+    expect(t('fleet.map.hazardDisputedDetail', { count: 1 })).toMatch(/1 driver says it is gone/);
+    expect(t('fleet.map.keyNoHazards')).toMatch(/not the same as the roads being clear/);
   });
 });

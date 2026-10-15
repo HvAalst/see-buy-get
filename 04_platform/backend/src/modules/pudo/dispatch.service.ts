@@ -282,6 +282,13 @@ export function fleetEarningsSummaryOf(rows: Freight[], nameOf: (did: string) =>
   };
 }
 
+/** Where a load in motion goes next: collected there, or delivered there. A place, never the road to it. */
+export interface NextStop {
+  what: 'pickup' | 'drop';
+  label: string;
+  location: { lat: number; lng: number };
+}
+
 /** The money a job's price is in: frozen at the claim (`Freight.lockedCurrency`), else the network's, as it always was. */
 export function lockedCurrencyOf(f: Pick<Freight, 'lockedCurrency'>): string {
   return f.lockedCurrency ?? NETWORK_CURRENCY;
@@ -3221,7 +3228,12 @@ export class DispatchService {
   }
 
   /** All cargo currently claimed or moving (optionally scoped to one fleet's drivers) for the dashboard. */
-  activeCargo(driverDids?: Set<string>): { items: Array<{ kind: 'tote' | 'freight'; ref: string; weightKg: number; destLabel: string; status: string; driverDid: string; parcels?: number }>; count: number; totalKg: number } {
+  /**
+   * Cargo on the fleet's vehicles, and each one's NEXT STOP: where it is to be collected while it is only claimed,
+   * where it is going once it is aboard. A place the network knows — a shop, a hub, a pinned pickup — and never a
+   * road: nothing here knows which road a driver takes. Absent where the place has no position on record.
+   */
+  activeCargo(driverDids?: Set<string>): { items: Array<{ kind: 'tote' | 'freight'; ref: string; weightKg: number; destLabel: string; status: string; driverDid: string; parcels?: number; nextStop?: NextStop }>; count: number; totalKg: number } {
     const mine = (did: string) => !driverDids || driverDids.has(did);
     // Claimed off the board OR handed over a counter — both are cargo on somebody's vehicle, and only the
     // first used to count. A manager watching a driver ride around with three bags saw an empty fleet.
@@ -3229,8 +3241,18 @@ export class DispatchService {
       .list()
       .map((t) => ({ t, holder: t.claimedBy ?? t.carriedBy }))
       .filter(({ t, holder }) => holder && mine(holder) && (t.status === 'claimed' || t.status === 'in_transit'))
-      .map(({ t, holder }) => ({ kind: 'tote' as const, ref: t.code, weightKg: t.weightKg, destLabel: t.destinationLabel || 'destination', status: t.status, driverDid: holder!, parcels: t.parcels.length }));
-    const freight = [...this.freights.values()].filter((f) => f.claimedBy && mine(f.claimedBy) && (f.status === 'claimed' || f.status === 'in_transit')).map((f) => ({ kind: 'freight' as const, ref: f.code, weightKg: f.weightKg, destLabel: f.destLabel, status: f.status, driverDid: f.claimedBy! }));
+      .map(({ t, holder }) => {
+        const place = t.status === 'claimed' ? this.pickupPlace(t.locationId) : this.destinationPlace(t);
+        const nextStop = place && (place.loc.lat !== 0 || place.loc.lng !== 0) ? { what: t.status === 'claimed' ? ('pickup' as const) : ('drop' as const), label: place.label, location: place.loc } : undefined;
+        return { kind: 'tote' as const, ref: t.code, weightKg: t.weightKg, destLabel: t.destinationLabel || 'destination', status: t.status, driverDid: holder!, parcels: t.parcels.length, ...(nextStop ? { nextStop } : {}) };
+      });
+    const freight = [...this.freights.values()]
+      .filter((f) => f.claimedBy && mine(f.claimedBy) && (f.status === 'claimed' || f.status === 'in_transit'))
+      .map((f) => {
+        const nextStop: NextStop | undefined =
+          f.status === 'claimed' ? { what: 'pickup', label: f.pickupLabel, location: f.pickupLocation } : f.destLocation ? { what: 'drop', label: f.destLabel, location: f.destLocation } : undefined;
+        return { kind: 'freight' as const, ref: f.code, weightKg: f.weightKg, destLabel: f.destLabel, status: f.status, driverDid: f.claimedBy!, ...(nextStop ? { nextStop } : {}) };
+      });
     const items = [...totes, ...freight];
     return { items, count: items.length, totalKg: Math.round(items.reduce((s, i) => s + i.weightKg, 0) * 100) / 100 };
   }

@@ -4,7 +4,8 @@ import { useState, useEffect } from 'preact/hooks';
 import { Button, Card, ErrorNote, ExplainerReset, Icon, PhotoField, PlaceMap, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
-import { ageWords, signalState, dashboardSummary, hoursLabel, paperDay, paperKindLabel, paperLine, paperLineClass, papersAloud, vehiclePins } from '../logic';
+import { ageWords, signalState, dashboardSummary, fleetMap, hazardWords, hoursLabel, paperDay, paperKindLabel, paperLine, paperLineClass, papersAloud, vehicleDetail } from '../logic';
+import { vehicleWord } from '../../driver/vehicle-words';
 import type { PapersReport } from '../types';
 import type { FleetActions, FleetState, OwnPaperKind, OwnPapers } from '../useFleetApp';
 
@@ -17,10 +18,17 @@ export interface DashboardScreenProps {
 export function DashboardScreen({ state, actions }: DashboardScreenProps) {
   const t = useT();
   const [bigMap, setBigMap] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null);
   const d = state.dashboard;
-  const pins = vehiclePins(d?.positions ?? []);
   const sessions = d?.sessions.list ?? [];
   const cargo = d?.cargo.items ?? [];
+  const map = fleetMap(sessions, cargo, state.hazards, t);
+  const vehicles = map.pins.filter((p) => p.id.startsWith('v:'));
+  const pins = vehicles;
+  const vehicle = picked?.startsWith('v:') ? vehicleDetail(picked.slice(2), sessions, cargo, d?.hours?.limit) : null;
+  const hazard = picked?.startsWith('h:') ? state.hazards.find((h) => `h:${h.constraintId}` === picked) ?? null : null;
+  // A line belongs to its vehicle: tapping it opens the same sheet, which names the stop the line ends at.
+  const mapProps = { pins: map.pins, lines: map.lines, selectedId: picked, onPick: (id: string) => setPicked(id.startsWith('n:') ? `v:${id.slice(2)}` : id) };
 
   return (
     <div class="scr">
@@ -62,16 +70,19 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
           the place they operate in. The shared map handles that already: no pins simply means the
           operating area at city zoom, and it falls back to the plot when the tiles cannot load.
 
-          Pins are INFO-ONLY — no onPick — because there is nothing to choose here. A tappable vehicle
-          that did nothing would be a dead tap on every dot. */}
+          A vehicle opens what an office asks next: who drives it, what it carries, where it goes next and the
+          hours left. A line runs to that next stop — straight, because nothing here knows the road. Red
+          diamonds are what drivers reported on the roads around the vehicles. It reads itself again every
+          45 seconds while this screen is open. */}
       <FleetCodeCard state={state} actions={actions} />
 
       <Card title={t('fleet.dash.mapTitle')} label={t('fleet.dash.mapLabel')}>
         <p class="card__note">{pins.length === 0 ? t('fleet.dash.mapNoneNote') : t('fleet.dash.mapNote')}</p>
         <PlaceMap
-          pins={pins}
+          {...mapProps}
           label={pins.length === 1 ? t('fleet.dash.mapAriaOne', { count: pins.length }) : t('fleet.dash.mapAriaMany', { count: pins.length })}
         />
+        <MapKey lines={map.lines.length} hazards={state.hazards.length} readAt={state.mapReadAt} />
         {/* Its own control rather than a tap on the surface: the map underneath pans and zooms, and a
             surface that both moves under your finger and opens something is a surface that does the
             wrong one of those about half the time. */}
@@ -89,10 +100,59 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
           <>
             <PlaceMap
               tall
-              pins={pins}
+              {...mapProps}
               label={pins.length === 1 ? t('fleet.dash.mapAriaOne', { count: pins.length }) : t('fleet.dash.mapAriaMany', { count: pins.length })}
             />
             <p class="card__note">{pins.length === 0 ? t('fleet.dash.mapNoneNote') : t('fleet.dash.mapNote')}</p>
+            <MapKey lines={map.lines.length} hazards={state.hazards.length} readAt={state.mapReadAt} />
+          </>
+        ) : null}
+      </Sheet>
+
+      {/* WHAT A TAP OPENS. A vehicle: the driver, the hours left, each load and where it goes next. A hazard: what
+          was reported, how many agree, and whether somebody says it is gone. */}
+      <Sheet open={Boolean(vehicle)} onClose={() => setPicked(null)} title={vehicle ? `${vehicle.session.plate} · ${vehicle.session.driverName}` : ''}>
+        {vehicle ? (
+          <>
+            <p class="t-body">
+              {vehicleWord(vehicle.session.vehicleClass, t)} · {t('fleet.map.onDuty', { hours: hoursLabel(vehicle.session.hoursOnDuty) })}
+              {vehicle.hoursLeft != null ? ` · ${t('fleet.map.hoursLeft', { hours: hoursLabel(vehicle.hoursLeft) })}` : ''}
+            </p>
+            {vehicle.signal.kind === 'dark' ? <p class="hint">{t('fleet.map.dark', { age: ageWords(vehicle.signal.minutes) })}</p> : null}
+            {vehicle.next ? <p class="t-body">{t(vehicle.next.what === 'pickup' ? 'fleet.map.nextPickup' : 'fleet.map.nextDrop', { place: vehicle.next.label })}</p> : null}
+            {vehicle.loads.length === 0 ? (
+              <p class="hint">{t('fleet.map.noLoad')}</p>
+            ) : (
+              <ul class="rows">
+                {vehicle.loads.map((l) => (
+                  <li key={l.ref} class="row row--static">
+                    <span class="row__body">
+                      <span class="row__t">
+                        {l.ref} · {l.weightKg} kg
+                      </span>
+                      <span class="row__s">
+                        {l.nextStop ? t(l.nextStop.what === 'pickup' ? 'fleet.map.loadPickup' : 'fleet.map.loadDrop', { place: l.nextStop.label }) : l.destLabel}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Button variant="link" onClick={() => setPicked(null)}>
+              {t('common.close')}
+            </Button>
+          </>
+        ) : null}
+      </Sheet>
+      <Sheet open={Boolean(hazard)} onClose={() => setPicked(null)} title={hazard ? hazardWords(hazard, t) : ''}>
+        {hazard ? (
+          <>
+            <p class="t-body">{t('fleet.map.hazardReported', { day: formatDate(hazard.reportedAt), agree: hazard.confirmations })}</p>
+            {hazard.status === 'disputed' ? <p class="hint">{t('fleet.map.hazardDisputedDetail', { count: hazard.refutations })}</p> : null}
+            <p class="hint">{t('fleet.map.hazardBasis')}</p>
+            <Button variant="link" onClick={() => setPicked(null)}>
+              {t('common.close')}
+            </Button>
           </>
         ) : null}
       </Sheet>
@@ -449,5 +509,17 @@ function FleetCodeCard({ actions }: DashboardScreenProps) {
         </Button>
       </Sheet>
     </>
+  );
+}
+
+/** What the lines and the diamonds are, said where they are drawn — and when the map was read. */
+function MapKey({ lines, hazards, readAt }: { lines: number; hazards: number; readAt: string | null }) {
+  const t = useT();
+  return (
+    <p class="hint">
+      {[lines ? t('fleet.map.keyLines') : '', hazards ? t('fleet.map.keyHazards', { count: hazards }) : t('fleet.map.keyNoHazards'), readAt ? t('fleet.map.readAt', { time: formatDate(readAt, { hour: '2-digit', minute: '2-digit' }) }) : '']
+        .filter(Boolean)
+        .join(' ')}
+    </p>
   );
 }

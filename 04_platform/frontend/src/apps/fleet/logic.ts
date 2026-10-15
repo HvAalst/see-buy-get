@@ -6,16 +6,21 @@
 
 import type { DepartureBookingRow, DepartureRow, WaitingRow } from './types';
 import type { MessageKey, Translate } from '../../shared/i18n';
+// The words for what a driver reports on a road live with the driver app, which is where they are reported.
+import { roadValueLabel } from '../driver/logic';
 import {
   HEAVY_CLASSES,
   type AssignmentRow,
+  type CargoRow,
   type CorridorRow,
   type DriverRow,
   type DispatchRow,
   type DispatchView,
   type DriverStatus,
+  type HazardRow,
   type PapersReport,
   type PositionRow,
+  type SessionRow,
   type SubtypeRow,
   type VehicleClass,
   type VehicleRow,
@@ -196,6 +201,89 @@ export function vehiclePins(positions: PositionRow[], now: number = Date.now()):
       point: { lat: p.location.lat, lng: p.location.lng },
     };
   });
+}
+
+/* ---------------------------------------------------------------------------------------------- the map -- */
+
+/**
+ * THE OFFICE'S MAP: each vehicle on shift where its phone last said it was; a straight line from it to its NEXT STOP,
+ * which is a place the network knows and never the road to it (nothing here knows which road a driver takes); and
+ * what drivers reported on the roads around them, as red diamonds. Pin ids say what they are: `v:` a vehicle (its
+ * driver), `h:` a hazard.
+ */
+export function fleetMap(
+  sessions: SessionRow[],
+  cargo: CargoRow[],
+  hazards: HazardRow[],
+  t: Translate,
+  now: number = Date.now(),
+): { pins: Array<{ id: string; label: string; point: { lat: number; lng: number }; tone?: 'warn' }>; lines: Array<{ id: string; label: string; from: { lat: number; lng: number }; to: { lat: number; lng: number } }> } {
+  const placed = sessions.filter((s): s is SessionRow & { driverDid: string; location: { lat: number; lng: number } } => Boolean(s.driverDid && s.location));
+  const pins: Array<{ id: string; label: string; point: { lat: number; lng: number }; tone?: 'warn' }> = placed.map((s) => {
+    const signal = signalState(s.lastLocatedAt, now);
+    return { id: `v:${s.driverDid}`, label: `${s.plate} · ${s.driverName}${signal.kind === 'dark' ? ` · no signal ${ageWords(signal.minutes)}` : ''}`, point: s.location };
+  });
+  const lines = placed.flatMap((s) => {
+    const stop = nextStopOf(s.driverDid, s.location, cargo);
+    return stop ? [{ id: `n:${s.driverDid}`, label: t(stop.what === 'pickup' ? 'fleet.map.lineToPickup' : 'fleet.map.lineToDrop', { plate: s.plate, place: stop.label }), from: s.location, to: stop.location }] : [];
+  });
+  for (const h of hazards) pins.push({ id: `h:${h.constraintId}`, label: hazardWords(h, t), point: h.at, tone: 'warn' });
+  return { pins, lines };
+}
+
+/**
+ * Of everything a driver carries or has claimed, the stop to show: the NEAREST place they have business at. The order
+ * they will take them in is theirs; the nearest is a fact about where they are.
+ */
+export function nextStopOf(driverDid: string, from: { lat: number; lng: number }, cargo: CargoRow[]): CargoRow['nextStop'] | undefined {
+  const stops = cargo.filter((c) => c.driverDid === driverDid && c.nextStop).map((c) => c.nextStop!);
+  return stops.sort((a, b) => metresBetween(from, a.location) - metresBetween(from, b.location))[0];
+}
+
+/**
+ * A hazard in words: what it is and its measure where it has one. SHORT ON PURPOSE: it is a label on the map, and a
+ * long one lay across a vehicle's dot and took the tap meant for the vehicle. Whether somebody says it is gone is said
+ * in the sheet the tap opens.
+ */
+export function hazardWords(h: HazardRow, t: Translate): string {
+  const what = t(`driver.road.kind.${h.kind}` as MessageKey);
+  const measure = roadValueLabel(h, t);
+  return [what, measure].filter(Boolean).join(' · ');
+}
+
+/** The least distance around the fleet’s vehicles that hazards are asked for: a fleet drives corridors, not a city block. */
+export const HAZARD_MIN_KM = 50;
+
+/**
+ * Where to ask for hazards: around the vehicles on the road AND the stops they are heading for, wide enough to take
+ * them all in and never narrower than HAZARD_MIN_KM. Nothing with no vehicle on the road.
+ */
+export function hazardArea(sessions: SessionRow[], cargo: CargoRow[] = []): { at: { lat: number; lng: number }; radiusKm: number } | null {
+  const vehicles = sessions.map((s) => s.location).filter((p): p is { lat: number; lng: number } => Boolean(p));
+  if (!vehicles.length) return null;
+  const onShift = new Set(sessions.filter((s) => s.location).map((s) => s.driverDid));
+  const points = [...vehicles, ...cargo.filter((c) => c.nextStop && onShift.has(c.driverDid)).map((c) => c.nextStop!.location)];
+  const at = { lat: points.reduce((n, p) => n + p.lat, 0) / points.length, lng: points.reduce((n, p) => n + p.lng, 0) / points.length };
+  const furthest = Math.max(...points.map((p) => metresBetween(at, p))) / 1000;
+  return { at, radiusKm: Math.min(150, Math.max(HAZARD_MIN_KM, Math.ceil(furthest + 20))) };
+}
+
+/** What a tap on a vehicle opens: who drives it, what it carries and where each load goes next, and the hours left. */
+export function vehicleDetail(driverDid: string, sessions: SessionRow[], cargo: CargoRow[], limitHours: number | undefined, now: number = Date.now()) {
+  const s = sessions.find((x) => x.driverDid === driverDid);
+  if (!s) return null;
+  const loads = cargo.filter((c) => c.driverDid === driverDid);
+  const hoursLeft = limitHours != null ? Math.max(0, Math.round((limitHours - s.hoursOnDuty) * 10) / 10) : null;
+  return { session: s, loads, hoursLeft, signal: signalState(s.lastLocatedAt, now), next: s.location ? nextStopOf(driverDid, s.location, cargo) : undefined };
+}
+
+/** Straight-line distance in metres — for choosing the nearest stop, never for a promise about the road. */
+function metresBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const rad = (d: number) => (d * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLng = rad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6_371_000 * Math.asin(Math.sqrt(h));
 }
 
 /** "12 min" up to an hour and a half, then hours: a vehicle dark since yesterday is not "1428 min" to anybody. */

@@ -152,6 +152,7 @@ export interface PositionRow {
 }
 
 export interface SessionRow {
+  driverDid?: string;
   driverName: string;
   plate: string;
   vehicleClass: string;
@@ -168,7 +169,23 @@ export interface CargoRow {
   weightKg: number;
   destLabel: string;
   driver: string;
+  driverDid?: string;
   status: string;
+  parcels?: number;
+  /** Where it is collected while claimed, where it goes once aboard: a place, never the road to it. */
+  nextStop?: { what: 'pickup' | 'drop'; label: string; location: { lat: number; lng: number } };
+}
+
+/** Something a driver reported on a road, as the fleet's map shows it. */
+export interface HazardRow {
+  constraintId: string;
+  kind: string;
+  at: { lat: number; lng: number };
+  value?: number;
+  status: string;
+  reportedAt: string;
+  confirmations: number;
+  refutations: number;
 }
 
 export interface DashboardView {

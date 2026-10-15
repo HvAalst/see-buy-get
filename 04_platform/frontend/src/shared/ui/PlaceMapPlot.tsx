@@ -59,7 +59,7 @@ export function PlaceMapPlot({ pins = [], lines = [], selectedId, onPick, refere
           <button
             key={pin.id}
             type="button"
-            class={`pmap__pin${on ? ' pmap__pin--on' : ''}`}
+            class={`pmap__pin${on ? ' pmap__pin--on' : ''}${pin.tone === 'warn' ? ' pmap__pin--warn' : ''}`}
             style={`left:${x}%;top:${y}%`}
             aria-pressed={on}
             aria-label={pin.label}

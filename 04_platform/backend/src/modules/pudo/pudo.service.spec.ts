@@ -4288,6 +4288,24 @@ describe('PUDO Light', () => {
     expect(cargo.count).toBe(1);
     expect(cargo.items[0].driverDid).toBe(d.did);
     expect(cargo.items[0].parcels).toBe(1);
+    // Its next stop, for the office’s map: the hub it is going to — a place, never a road.
+    expect(cargo.items[0].nextStop).toEqual({ what: 'drop', label: 'Counter Hub', location: { lat: -1.25, lng: 36.85 } });
+  });
+
+  it('names a load’s next stop for the office’s map: where it is collected while claimed, where it goes once aboard', () => {
+    const d = drivers.register({ displayName: 'Stops', fullName: 'St', nationalId: 'STOP-1', mobile: '+254stop1', licenceClasses: ['motorcycle'] });
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const drop = { lat: -1.3, lng: 36.9 };
+    const f = dispatch.registerFreight({ description: 'Crates', pickupLocation: pickup, pickupLabel: 'Gikomba depot', destLabel: 'Kitengela site', destLocation: drop, weightKg: 20, packaging: 'piece' });
+    const stopOf = () => dispatch.activeCargo(new Set([d.did])).items.find((i) => i.ref === f.code)?.nextStop;
+    f.claimedBy = d.did;
+    f.status = 'claimed';
+    expect(stopOf()).toEqual({ what: 'pickup', label: 'Gikomba depot', location: pickup });
+    f.status = 'in_transit';
+    expect(stopOf()).toEqual({ what: 'drop', label: 'Kitengela site', location: drop });
+    // A destination with no position on record names no stop rather than a wrong one.
+    delete (f as { destLocation?: unknown }).destLocation;
+    expect(stopOf()).toBeUndefined();
   });
 
   it('flexibly couples a driver to a vehicle and re-assigns to another (separate IDs, not bound)', () => {
