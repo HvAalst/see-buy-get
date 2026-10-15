@@ -19,11 +19,38 @@ export function careApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/off-road/{spellId}/end', { params: { path: { id: vehicleId, spellId } } })) as never,
     recordReading: (vehicleId: string, km: number, newMeter: boolean): Promise<Result<VehicleCare>> =>
       sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/readings', { params: { path: { id: vehicleId } }, body: { km, ...(newMeter ? { newMeter: true } : {}) } })) as never,
+    decideDefect: (vehicleId: string, defectId: string, decision: 'fixed' | 'cleared', note: string): Promise<Result<VehicleCare>> =>
+      sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/defects/{defectId}/decide', { params: { path: { id: vehicleId, defectId } }, body: { decision, note } })) as never,
+    /** A defect's photograph, for <AuthImage>: the key is "vehicleId|defectId". */
+    defectPhoto: (key: string): Promise<{ data: Blob | null; error: unknown }> => {
+      const [id, defectId] = key.split('|');
+      return sbg.request((c) => c.GET('/v1/sbg/vehicles/{id}/defects/{defectId}/photo', { params: { path: { id, defectId }, query: { variant: 'thumb' } }, parseAs: 'blob' } as never)) as never;
+    },
+    settings: (fleetDid: string): Promise<Result<CareSettings>> => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/care-settings', { params: { path: { did: fleetDid } } })) as never,
+    setSettings: (fleetDid: string, requireDailyCheck: boolean): Promise<Result<CareSettings>> =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/care-settings', { params: { path: { did: fleetDid } }, body: { requireDailyCheck } })) as never,
     backOnRoad: (vehicleId: string): Promise<Result<VehicleCare>> => sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/back-on-road', { params: { path: { id: vehicleId } } })) as never,
   };
 }
 
 export type OdometerReading = components['schemas']['OdometerReading'];
+export type VehicleDefect = components['schemas']['VehicleDefect'];
+export type CareSettings = components['schemas']['CareSettings'];
+
+/** What a defect is about, in the office's words. */
+export const DEFECT_WORD: Record<VehicleDefect['item'], MessageKey> = {
+  tyres: 'fleet.care.item.tyres',
+  brakes: 'fleet.care.item.brakes',
+  lights: 'fleet.care.item.lights',
+  mirrors: 'fleet.care.item.mirrors',
+  horn: 'fleet.care.item.horn',
+  wipers: 'fleet.care.item.wipers',
+  leaks: 'fleet.care.item.leaks',
+  chain: 'fleet.care.item.chain',
+  load_gear: 'fleet.care.item.load_gear',
+  body: 'fleet.care.item.body',
+  other: 'fleet.care.item.other',
+};
 
 /** Who gave a reading, and when in the day: "at shift start", "by the office". */
 export const SOURCE_WORD: Record<OdometerReading['source'], MessageKey> = {

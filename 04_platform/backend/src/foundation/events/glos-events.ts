@@ -69,6 +69,9 @@ export const GlosEvent = {
     DriverRideAloneDecided: 'pudo.driver_ride_alone_decided',
     // A fleet office put a driver on a day's roster, or took them off a day they had been told they drive.
     DriverRostered: 'pudo.driver_rostered',
+    // A defect reported on a vehicle (its office is told), and the office's word on it (the driver who reported it is told).
+    VehicleDefectReported: 'pudo.vehicle_defect_reported',
+    VehicleDefectDecided: 'pudo.vehicle_defect_decided',
     // The receiver added a note to a damage claim report, after handover: the sender is told.
     DamageReportNoted: 'pudo.damage_report_noted',
     /**

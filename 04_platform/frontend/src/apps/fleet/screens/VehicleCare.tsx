@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { Button, ErrorNote, Note, Sheet } from '../../../shared/ui';
+import { AuthImage, Button, ErrorNote, Note, Pill, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import type { Result, SbgClient } from '../../../lib/sbg';
-import { OFF_ROAD_REASONS, REASON_WORD, SOURCE_WORD, careApi, kmWords, localDay, spellBegun, spellSpan, type OffRoadReason, type VehicleCare } from '../care';
+import { DEFECT_WORD, OFF_ROAD_REASONS, REASON_WORD, SOURCE_WORD, careApi, kmWords, localDay, spellBegun, spellSpan, type OffRoadReason, type VehicleCare } from '../care';
 import { formatDate } from '../../../shared/i18n';
 import type { VehicleRow } from '../types';
 
@@ -23,6 +23,9 @@ export function VehicleCareSheet({ vehicle, sbg, onClose, onChanged }: { vehicle
   const [untilDay, setUntilDay] = useState('');
   const [note, setNote] = useState('');
   const [km, setKm] = useState('');
+  // The defect being decided, how, and the reason said with it.
+  const [deciding, setDeciding] = useState<{ defectId: string; decision: 'fixed' | 'cleared' } | null>(null);
+  const [why, setWhy] = useState('');
   const [newMeter, setNewMeter] = useState(false);
 
   useEffect(() => {
@@ -96,6 +99,81 @@ export function VehicleCareSheet({ vehicle, sbg, onClose, onChanged }: { vehicle
                 ))}
               </ul>
             </>
+          ) : null}
+
+          {/* DEFECTS: what drivers found, safety-critical first, each with its photo — and the office's word on it. */}
+          <p class="field__label" style="margin-top:16px">
+            {t('fleet.care.defectsTitle')}
+          </p>
+          {care.lastCheckAt ? (
+            <p class="hint">{t(care.lastCheckClean ? 'fleet.care.lastCheckClean' : 'fleet.care.lastCheckProblems', { who: care.lastCheckBy ?? '', when: formatDate(care.lastCheckAt, { dateStyle: 'medium', timeStyle: 'short' }) })}</p>
+          ) : (
+            <p class="hint">{t('fleet.care.noCheck')}</p>
+          )}
+          {care.defects.length === 0 ? <p class="hint">{t('fleet.care.noDefects')}</p> : null}
+          <ul class="rows">
+            {care.defects.map((d) => (
+              <li key={d.defectId} class="row row--static" style="flex-wrap:wrap">
+                <span class="row__body">
+                  <span class="row__t">{t(DEFECT_WORD[d.item])}</span>
+                  {d.note ? <span class="row__s">“{d.note}”</span> : null}
+                  <span class="row__s">{t('fleet.care.reported', { who: d.reportedBy, when: formatDate(d.reportedAt, { dateStyle: 'medium', timeStyle: 'short' }) })}</span>
+                  {d.hasPhoto ? <AuthImage mediaId={`${care.vehicleId}|${d.defectId}`} load={api!.defectPhoto} alt={t('fleet.care.defectPhoto', { item: t(DEFECT_WORD[d.item]) })} class="photos__thumb photos__thumb--sm" /> : null}
+                </span>
+                <span class="row__end">
+                  <Pill tone={d.safety ? 'danger' : 'warn'} dot>
+                    {t(d.safety ? 'fleet.care.unsafe' : 'fleet.care.canGo')}
+                  </Pill>
+                </span>
+                {deciding?.defectId === d.defectId ? (
+                  <div style="width:100%;margin-top:8px">
+                    <input class="input" maxLength={300} value={why} placeholder={t(deciding.decision === 'fixed' ? 'fleet.care.fixedPh' : 'fleet.care.clearedPh')} aria-label={t(deciding.decision === 'fixed' ? 'fleet.care.fixedPh' : 'fleet.care.clearedPh')} onInput={(e) => setWhy(e.currentTarget.value)} />
+                    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+                      <Button
+                        full={false}
+                        chevron={false}
+                        busy={busy}
+                        disabled={busy || !why.trim()}
+                        onClick={() =>
+                          void act(async () => {
+                            const r = await api!.decideDefect(care.vehicleId, d.defectId, deciding.decision, why.trim());
+                            if (!r.error) {
+                              setDeciding(null);
+                              setWhy('');
+                            }
+                            return r;
+                          })
+                        }
+                      >
+                        {t(deciding.decision === 'fixed' ? 'fleet.care.saveFixed' : 'fleet.care.saveCleared')}
+                      </Button>
+                      <Button variant="link" full={false} onClick={() => setDeciding(null)}>
+                        {t('fleet.care.cancel')}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <span style="display:flex;gap:2px 16px;flex-wrap:wrap;width:100%">
+                    <Button variant="link" full={false} onClick={() => { setDeciding({ defectId: d.defectId, decision: 'fixed' }); setWhy(''); }}>
+                      {t('fleet.care.fixed')}
+                    </Button>
+                    {d.safety ? (
+                      <Button variant="link" full={false} onClick={() => { setDeciding({ defectId: d.defectId, decision: 'cleared' }); setWhy(''); }}>
+                        {t('fleet.care.cleared')}
+                      </Button>
+                    ) : null}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+          {care.decided.length ? (
+            <p class="hint">
+              {care.decided
+                .slice(0, 3)
+                .map((d) => t(d.status === 'fixed' ? 'fleet.care.wasFixed' : 'fleet.care.wasCleared', { item: t(DEFECT_WORD[d.item]), who: d.decidedBy ?? '', why: d.decisionNote ?? '' }))
+                .join(' · ')}
+            </p>
           ) : null}
 
           {/* THE ODOMETER: the last reading and who gave it, any that look wrong, and one recorded by hand. */}

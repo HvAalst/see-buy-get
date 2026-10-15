@@ -52,6 +52,76 @@ export class OdometerReading {
   @ApiPropertyOptional() doubtful?: string;
 }
 
+/** What a daily check asks about. Which of them a vehicle is asked, and which are safety-critical, depends on its class. */
+export const CHECK_ITEMS = ['tyres', 'brakes', 'lights', 'mirrors', 'horn', 'wipers', 'leaks', 'chain', 'load_gear', 'body'] as const;
+export type CheckItem = (typeof CHECK_ITEMS)[number];
+/** What a defect is about: a check item, or something the check does not name. */
+export const DEFECT_ITEMS = [...CHECK_ITEMS, 'other'] as const;
+export type DefectItem = (typeof DEFECT_ITEMS)[number];
+
+export class CheckItemView {
+  @ApiProperty({ enum: CHECK_ITEMS }) item: CheckItem;
+  /** A problem with it keeps the vehicle off the road until the office has it fixed, or says it is safe as it is. */
+  safety: boolean;
+}
+
+/** What the driver is asked before a shift: the vehicle, its items, and whether it was checked today already. */
+export class CheckSheet {
+  vehicleId: string;
+  plate: string;
+  vehicleClass: string;
+  @ApiProperty({ type: [CheckItemView] }) items: CheckItemView[];
+  /** Checked today already (by anybody): who, and when. */
+  @ApiPropertyOptional() checkedTodayBy?: string;
+  @ApiPropertyOptional() checkedTodayAt?: string;
+  /** The fleet asks for a check before a shift: none today, and the shift does not start. */
+  required: boolean;
+}
+
+export const DEFECT_STATUSES = ['open', 'fixed', 'cleared'] as const;
+export type DefectStatus = (typeof DEFECT_STATUSES)[number];
+
+/**
+ * A DEFECT: what is wrong, with a photograph where there is one, who found it and when. Safety-critical — brakes,
+ * tyres, lights at a check, or anything the driver says is not safe to drive — keeps the vehicle off the road until the
+ * office marks it FIXED, or CLEARED (safe to drive as it is, with its reason). The driver who reported it is told which.
+ */
+export class VehicleDefect {
+  defectId: string;
+  vehicleId: string;
+  @ApiProperty({ enum: DEFECT_ITEMS }) item: DefectItem;
+  @ApiPropertyOptional() note?: string;
+  /** The photograph, served by the upkeep routes to the vehicle's owner (GET vehicles/:id/defects/:defectId/photo). */
+  @ApiPropertyOptional() hasPhoto?: boolean;
+  safety: boolean;
+  reportedBy: string;
+  @ApiPropertyOptional() reportedByDid?: string;
+  reportedAt: string;
+  @ApiProperty({ enum: ['check', 'report'] }) found: 'check' | 'report';
+  @ApiProperty({ enum: DEFECT_STATUSES }) status: DefectStatus;
+  @ApiPropertyOptional() decidedBy?: string;
+  @ApiPropertyOptional() decidedAt?: string;
+  @ApiPropertyOptional() decisionNote?: string;
+}
+
+/** What came of a check: what it found new, what was already reported, and whether the vehicle can go out. */
+export class CheckResult {
+  checkId: string;
+  /** Nothing wrong. */
+  clean: boolean;
+  @ApiProperty({ type: [VehicleDefect] }) found: VehicleDefect[];
+  /** Problems already reported and still open: not reported twice. */
+  @ApiProperty({ type: [VehicleDefect] }) alreadyOpen: VehicleDefect[];
+  usable: boolean;
+  offRoad: string[];
+}
+
+/** A fleet's own rules for its vehicles' upkeep. */
+export class CareSettings {
+  /** A driver checks the vehicle before a shift, or the shift does not start. Off unless the fleet turns it on. */
+  requireDailyCheck: boolean;
+}
+
 /** A vehicle's upkeep as its owner reads it. */
 export class VehicleCareView {
   vehicleId: string;
@@ -69,6 +139,13 @@ export class VehicleCareView {
   @ApiPropertyOptional({ type: OdometerReading }) odometer?: OdometerReading;
   /** The last few readings, newest first. */
   @ApiProperty({ type: [OdometerReading] }) readings: OdometerReading[];
+  /** Defects still open, safety-critical first; and the last few decided. */
+  @ApiProperty({ type: [VehicleDefect] }) defects: VehicleDefect[];
+  @ApiProperty({ type: [VehicleDefect] }) decided: VehicleDefect[];
+  /** The last daily check: who, when, and what it found. */
+  @ApiPropertyOptional() lastCheckBy?: string;
+  @ApiPropertyOptional() lastCheckAt?: string;
+  @ApiPropertyOptional() lastCheckClean?: boolean;
 }
 
 /** What became of a reading given as a shift ended: the shift ends whatever it said. */

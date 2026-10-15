@@ -55,7 +55,8 @@ import type { ContractRef } from './carriage-contract.types';
 import { FleetPlanService } from './fleet-plan.service';
 import { ROUTER as ROUTER_TOKEN, type Router } from './router';
 import { clockAt } from './fleet-clock';
-import { VehicleCareService } from './vehicle-care.service';
+import { CHECKLIST, VehicleCareService } from './vehicle-care.service';
+import { GlosEvent } from '../../foundation/events/glos-events';
 
 const DAY = 86_400_000;
 
@@ -71,6 +72,8 @@ describe('a vehicle’s upkeep', () => {
   let dispatch: DispatchService;
   let plans: FleetPlanService;
   let care: VehicleCareService;
+  let bus: EventBus;
+  let media: MediaService;
   let seq = 0;
 
   beforeEach(async () => {
@@ -98,7 +101,9 @@ describe('a vehicle’s upkeep', () => {
     fleet = moduleRef.get(FleetService);
     dispatch = moduleRef.get(DispatchService);
     plans = new FleetPlanService(dispatch, vehicles, drivers, managers, moduleRef.get<Router>(ROUTER_TOKEN), fleet, moduleRef.get(EventBus));
-    care = new VehicleCareService(vehicles, managers, fleet);
+    bus = moduleRef.get(EventBus);
+    media = moduleRef.get(MediaService);
+    care = new VehicleCareService(vehicles, managers, fleet, drivers, media, bus);
   });
 
   // Kenyan fleets: their days are Nairobi's.
@@ -282,6 +287,145 @@ describe('a vehicle’s upkeep', () => {
       expect(care.recordEndReading(truck.vehicleId, 79_000, { by: 'Amos' }, Date.now() + HOUR)).toEqual({ kept: false, why: expect.stringMatching(/^KVC 700T's last reading was 80,000 km/) });
       expect(care.recordEndReading(truck.vehicleId, 80_250, { by: 'Amos' }, Date.now() + HOUR)).toEqual({ kept: true });
       expect(care.view(truck.vehicleId).odometer!.km).toBe(80_250);
+    });
+  });
+  describe('the daily check, and defects', () => {
+    const allOk = (vehicleClass: keyof typeof CHECKLIST) => CHECKLIST[vehicleClass].map((c) => ({ item: c.item, ok: true }));
+    let told: Array<{ fleetDid?: string; plate: string; defect: { item: string; safety: boolean } }>;
+    beforeEach(() => {
+      told = [];
+      bus.subscribe<{ fleetDid?: string; plate: string; defect: { item: string; safety: boolean } }>(GlosEvent.Pudo.VehicleDefectReported, (e) => {
+        told.push(e.payload);
+      });
+    });
+
+    it('asks a truck about its brakes, tyres and lights, and the rest; says who checked it today', () => {
+      const f = aFleet();
+      const truck = aTruck(f.did, 'KVC 800T');
+      const amos = aDriver(f.did);
+      const sheet = care.checkSheet(amos.did, { vehicleQr: truck.qr });
+      expect(sheet).toMatchObject({ vehicleId: truck.vehicleId, plate: 'KVC 800T', vehicleClass: 'truck', required: false });
+      expect(sheet.items.filter((i) => i.safety).map((i) => i.item)).toEqual(['tyres', 'brakes', 'lights']);
+      expect(sheet).not.toHaveProperty('checkedTodayBy');
+      const result = care.submitCheck(amos.did, { vehicleId: truck.vehicleId }, allOk('truck'));
+      expect(result).toMatchObject({ clean: true, found: [], alreadyOpen: [], usable: true });
+      expect(care.checkSheet(amos.did, { vehicleId: truck.vehicleId }).checkedTodayBy).toBe(amos.displayName);
+      expect(care.view(truck.vehicleId)).toMatchObject({ lastCheckBy: amos.displayName, lastCheckClean: true });
+    });
+
+    it('takes a vehicle off the road for a safety problem found at the check, tells its office, and not for a minor one', async () => {
+      const f = aFleet();
+      const truck = aTruck(f.did, 'KVC 810T');
+      const amos = aDriver(f.did);
+      const answers = allOk('truck').map((a) => (a.item === 'brakes' ? { ...a, ok: false, note: 'pulling left' } : a.item === 'mirrors' ? { ...a, ok: false, note: 'cracked' } : a));
+      const result = care.submitCheck(amos.did, { vehicleId: truck.vehicleId }, answers);
+      expect(result.clean).toBe(false);
+      expect(result.found.map((d) => [d.item, d.safety])).toEqual([
+        ['brakes', true],
+        ['mirrors', false],
+      ]);
+      expect(result.usable).toBe(false);
+      expect(result.offRoad).toEqual([expect.stringMatching(new RegExp(`^Brakes reported unsafe by ${amos.displayName} on .*: pulling left$`))]);
+      expect(() => fleet.couple(amos.did, truck.vehicleId)).toThrow(/KVC 810T is off the road: Brakes reported unsafe/);
+      await new Promise((r) => setImmediate(r));
+      expect(told.map((t) => [t.fleetDid, t.plate, t.defect.item, t.defect.safety])).toEqual([
+        [f.did, 'KVC 810T', 'brakes', true],
+        [f.did, 'KVC 810T', 'mirrors', false],
+      ]);
+      // A second check the next morning finds the same brakes: not reported twice.
+      const again = care.submitCheck(amos.did, { vehicleId: truck.vehicleId }, answers, Date.now() + DAY);
+      expect(again.found).toEqual([]);
+      expect(again.alreadyOpen.map((d) => d.item)).toEqual(['brakes', 'mirrors']);
+    });
+
+    it('is refused whole when an item is missing or twice, a problem says nothing, or the vehicle is not theirs to drive', () => {
+      const f = aFleet();
+      const truck = aTruck(f.did, 'KVC 820T');
+      const amos = aDriver(f.did);
+      const other = aDriver(aFleet('Pwani Haulage').did);
+      const answers = allOk('truck');
+      expect(() => care.submitCheck(amos.did, { vehicleId: truck.vehicleId }, answers.slice(1))).toThrow(/Answer every item: tyres is not answered/);
+      expect(() => care.submitCheck(amos.did, { vehicleId: truck.vehicleId }, [...answers, answers[0]])).toThrow(/Tyres is answered twice/);
+      expect(() => care.submitCheck(amos.did, { vehicleId: truck.vehicleId }, [...answers.slice(0, -1), { item: 'chain', ok: true }])).toThrow(/A truck is not checked for chain/);
+      expect(() => care.submitCheck(amos.did, { vehicleId: truck.vehicleId }, answers.map((a) => (a.item === 'lights' ? { ...a, ok: false } : a)))).toThrow(/Say what is wrong with the lights, or add a photo/);
+      expect(() => care.submitCheck(other.did, { vehicleId: truck.vehicleId }, answers)).toThrow(/KVC 820T is not a vehicle you drive/);
+      expect(() => care.submitCheck(amos.did, { vehicleQr: 'NO-SUCH-QR' }, answers)).toThrow(/No vehicle has that QR/);
+      expect(care.view(truck.vehicleId)).not.toHaveProperty('lastCheckBy');
+      expect(told).toEqual([]);
+    });
+
+    it('takes a defect reported later off the road only when the driver says it is not safe — and not twice', () => {
+      const f = aFleet();
+      const truck = aTruck(f.did, 'KVC 830T');
+      const amos = aDriver(f.did);
+      const minor = care.reportDefect(truck.vehicleId, { by: amos.displayName, byDid: amos.did }, { item: 'horn', note: 'quiet', safe: true });
+      expect(minor).toMatchObject({ item: 'horn', safety: false, found: 'report', status: 'open' });
+      expect(vehicles.isUsable(truck.vehicleId)).toBe(true);
+      care.reportDefect(truck.vehicleId, { by: amos.displayName, byDid: amos.did }, { item: 'other', note: 'steering shakes at speed', safe: false });
+      expect(vehicles.offRoadReasons(truck.vehicleId)).toEqual([expect.stringMatching(/^Something else reported unsafe by .*: steering shakes at speed$/)]);
+      expect(() => care.reportDefect(truck.vehicleId, { by: 'Grace' }, { item: 'horn', note: 'still quiet', safe: true })).toThrow(/Horn on KVC 830T is already reported/);
+      expect(() => care.reportDefect(truck.vehicleId, { by: 'Grace' }, { item: 'body', note: '  ', safe: true })).toThrow(/Say what is wrong/);
+    });
+
+    it('is back on the road when the office says fixed, or safe to drive as it is — each with its reason — and the driver is told', async () => {
+      const f = aFleet();
+      const truck = aTruck(f.did, 'KVC 840T');
+      const amos = aDriver(f.did);
+      const decided: Array<{ defect: { status: string; decisionNote?: string; reportedByDid?: string } }> = [];
+      bus.subscribe<{ defect: { status: string; decisionNote?: string; reportedByDid?: string } }>(GlosEvent.Pudo.VehicleDefectDecided, (e) => {
+        decided.push(e.payload);
+      });
+      const brakes = care.reportDefect(truck.vehicleId, { by: amos.displayName, byDid: amos.did }, { item: 'brakes', note: 'pulling left', safe: false });
+      const tyre = care.reportDefect(truck.vehicleId, { by: amos.displayName, byDid: amos.did }, { item: 'tyres', note: 'worn front left', safe: false });
+      expect(() => care.decideDefect(truck.vehicleId, brakes.defectId, 'fixed', ' ', 'Amina')).toThrow(/Say what was done/);
+      expect(() => care.decideDefect(truck.vehicleId, tyre.defectId, 'cleared', '', 'Amina')).toThrow(/Say why it is safe to drive as it is/);
+      care.decideDefect(truck.vehicleId, brakes.defectId, 'fixed', 'New pads at Ngong Road workshop', 'Amina');
+      expect(vehicles.isUsable(truck.vehicleId)).toBe(false); // the tyre still
+      const view = care.decideDefect(truck.vehicleId, tyre.defectId, 'cleared', 'Within the legal tread; replaced at the next service', 'Amina');
+      expect(view.usable).toBe(true);
+      expect(view.defects).toEqual([]);
+      expect(view.decided.map((d) => [d.item, d.status, d.decidedBy])).toEqual([
+        ['tyres', 'cleared', 'Amina'],
+        ['brakes', 'fixed', 'Amina'],
+      ]);
+      expect(() => care.decideDefect(truck.vehicleId, brakes.defectId, 'fixed', 'again', 'Amina')).toThrow(/already been decided/);
+      await new Promise((r) => setImmediate(r));
+      expect(decided.map((d) => [d.defect.status, d.defect.reportedByDid])).toEqual([
+        ['fixed', amos.did],
+        ['cleared', amos.did],
+      ]);
+    });
+
+    it('refuses a shift in an unchecked vehicle only where the fleet asks for a check, and not once it is checked today', () => {
+      const f = aFleet();
+      const truck = aTruck(f.did, 'KVC 850T');
+      const amos = aDriver(f.did);
+      expect(care.checkBlocker(truck.vehicleId)).toBeUndefined();
+      expect(care.setSettings(f.did, { requireDailyCheck: true })).toEqual({ requireDailyCheck: true });
+      expect(care.checkBlocker(truck.vehicleId)).toBe('Check KVC 850T first: Kilima Logistics asks for a daily check before a shift');
+      expect(care.checkSheet(amos.did, { vehicleId: truck.vehicleId }).required).toBe(true);
+      care.submitCheck(amos.did, { vehicleId: truck.vehicleId }, allOk('truck'));
+      expect(care.checkBlocker(truck.vehicleId)).toBeUndefined();
+      // Tomorrow is another day.
+      expect(care.checkBlocker(truck.vehicleId, Date.now() + DAY)).toMatch(/^Check KVC 850T first/);
+      // Another fleet's rule is not this one's.
+      expect(care.settingsOf(aFleet('Pwani Haulage').did)).toEqual({ requireDailyCheck: false });
+    });
+
+    it('keeps a photo only when it is the driver’s own, and makes it the vehicle’s: no longer theirs to delete', () => {
+      const f = aFleet();
+      const truck = aTruck(f.did, 'KVC 860T');
+      const amos = aDriver(f.did);
+      const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      const theirs = media.upload({ ownerDid: amos.did, kind: 'defect', dataUrl: png });
+      const someoneElses = media.upload({ ownerDid: 'did:glos:somebody', kind: 'defect', dataUrl: png });
+      expect(() => care.reportDefect(truck.vehicleId, { by: amos.displayName, byDid: amos.did }, { item: 'body', note: 'dent', photoRef: someoneElses.mediaId, safe: true })).toThrow(/not one you took/);
+      const d = care.reportDefect(truck.vehicleId, { by: amos.displayName, byDid: amos.did }, { item: 'body', note: 'dent in the left door', photoRef: theirs.mediaId, safe: true });
+      expect(d).toMatchObject({ hasPhoto: true });
+      expect(d).not.toHaveProperty('photoRef');
+      expect(care.defectPhoto(truck.vehicleId, d.defectId, 'full').contentType).toBe('image/png');
+      expect(() => care.defectPhoto(truck.vehicleId, 'dft_nope', 'full')).toThrow(/No photograph/);
+      expect(() => media.removeByOwner(theirs.mediaId, amos.did)).toThrow(/kept as evidence/);
     });
   });
 });

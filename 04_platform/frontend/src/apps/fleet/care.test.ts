@@ -38,3 +38,15 @@ describe('an odometer reading, in words', () => {
     expect(t(SOURCE_WORD.office)).toBe('by the office');
   });
 });
+
+describe('a defect, in words', () => {
+  it('names every item a check asks about and a driver can report, in both apps — never a code', async () => {
+    const { DEFECT_WORD } = await import('./care');
+    const { ITEM_WORD } = await import('../driver/screens/VehicleCheck');
+    for (const [item, key] of Object.entries(DEFECT_WORD)) {
+      expect(t(key)).not.toBe(key);
+      expect(t(ITEM_WORD[item as keyof typeof ITEM_WORD])).not.toMatch(/^driver\./);
+    }
+    expect(Object.keys(ITEM_WORD).sort()).toEqual(Object.keys(DEFECT_WORD).sort());
+  });
+});

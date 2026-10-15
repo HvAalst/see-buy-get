@@ -5870,6 +5870,9 @@ export class SbgController {
     if (!dto.vehicleId?.trim() && !dto.vehicleQr?.trim()) throw new GlosError('FIELD_REQUIRED', 'Scan the vehicle QR, or pick one you have driven before');
     // The odometer, read as the shift starts: a reading that cannot be kept is refused BEFORE the shift starts.
     const vehicleId = dto.vehicleId?.trim() || this.vehicles.byQr(dto.vehicleQr!)?.vehicleId;
+    // The daily check a fleet asks for comes first: no check today, no shift — with its own code, so the app opens it.
+    const unchecked = vehicleId && this.care?.checkBlocker(vehicleId);
+    if (unchecked) throw new GlosError('VEHICLE_CHECK_NEEDED', unchecked);
     if (dto.odometerKm !== undefined && vehicleId && this.care) this.care.checkReading(vehicleId, dto.odometerKm);
     const shift = dto.vehicleId?.trim() ? this.fleet.couple(did, dto.vehicleId.trim(), undefined, dto.leg) : this.fleet.startSession(did, dto.vehicleQr!, dto.leg);
     if (dto.odometerKm !== undefined && this.care) this.care.recordReading(shift.vehicleId, dto.odometerKm, { by: this.drivers.get(did).displayName, byDid: did, source: 'shift_start' });

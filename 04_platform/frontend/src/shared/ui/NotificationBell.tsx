@@ -44,6 +44,8 @@ const KIND_ICON: Record<string, IconName> = {
   driver_roster: 'clock',
   // A parcel past the time it was promised, still on its way.
   parcel_late: 'clock',
+  // A defect on a vehicle: reported to the office, decided to the driver.
+  vehicle_defect: 'warning',
   // A driver sent their fleet's office the renewed licence: a card to read.
   papers_sent: 'badge',
   /** A payment the shop made was confirmed by the provider — or came back. */

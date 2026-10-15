@@ -51,6 +51,7 @@ const SAY: Record<string, string> = {
   'error.pin_wrong': 'That is not your PIN. Five wrong tries lock it.',
   'error.password_wrong': 'That is not the password. Try again.',
   'error.driver_pass': 'Scan the badge on the driver’s phone: their badge number on its own hands over nothing.',
+  'error.vehicle_check': 'Check the vehicle first: your fleet asks for a daily check before a shift.',
   // Five wrong passwords at one account. The server's own sentence says how long is left, and is what is shown
   // (`SERVER_SAYS`); this is the line for when it sent none.
   'error.password_locked': 'Too many wrong passwords. This sign-in is locked for now: wait, or reset the password.',

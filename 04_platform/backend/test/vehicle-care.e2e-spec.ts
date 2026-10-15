@@ -96,4 +96,66 @@ describe('a vehicle’s upkeep, over the wire', () => {
     await http().post(`/v1/sbg/fleet/drivers/${njeri.did}/start-session`).set(bearer(njeri.token)).send({ vehicleId: njeri.vehicleId, pin: PIN }).expect(201);
     expect((await http().post(`/v1/sbg/fleet/drivers/${njeri.did}/end-session`).set(bearer(njeri.token)).expect(201)).body).not.toHaveProperty('odometer');
   });
+
+  /** A fleet's office, one of its drivers signed in to the driver app, and one of its trucks. */
+  async function aFleetDriver(): Promise<{ fleetDid: string; office: string; did: string; token: string; truckId: string; plate: string }> {
+    const managers = app.get(FleetManagerService);
+    const n = digits();
+    const m = managers.register({
+      companyName: `Check Fleet ${n}`, contactPhone: `+2548${n}1`, ownerFullName: 'O O', ownerNationalId: `MGR-CHK-${n}`, location: { lat: -1.2, lng: 36.8 },
+      requirements: { businessRegistrationNo: `BRN-CHK-${n}`, transportOperatorLicence: `TOL-CHK-${n}`, taxId: `TAX-CHK-${n}` },
+    });
+    managers.submitKyc(m.did, { businessRegCertRef: 'reg.pdf', operatorLicenceRef: 'lic.pdf', ownerIdRef: 'id.pdf', proofOfAddressRef: 'addr.pdf' });
+    managers.decideKyc(m.did, true);
+    managers.recordBond(m.did);
+    const office = (await http().post('/v1/auth/token').send({ role: 'fleet_manager', did: m.did, tenant: m.did, type: 'client_credentials' }).expect(201)).body.access_token as string;
+    const phone = `+2547${digits()}2`;
+    const onboarded = await http().post('/v1/sbg/drivers/onboard').set(bearer(operator)).send({ displayName: 'Baraka', fullName: 'Baraka Driver', nationalId: `ID-CHK-${n}`, mobile: phone, licenceClasses: ['truck'], licenceNumber: `L-CHK-${n}`, licenceExpiresAt: new Date(Date.now() + 400 * 86_400_000).toISOString(), criminalRecordClear: true, managerDid: m.did }).expect(201);
+    const did = onboarded.body.did as string;
+    await http().post(`/v1/sbg/fleet/drivers/${did}/submit-kyc`).set(bearer(operator)).send({ idCopyRef: 'id.jpg', licenceCopyRef: 'licence.jpg' }).expect(201);
+    await http().post(`/v1/sbg/fleet/drivers/${did}/kyc-decision`).set(bearer(operator)).send({ approve: true, by: 'Test' }).expect(201);
+    const asked = await http().post('/v1/sbg/auth/phone/request').send({ phone }).expect(201);
+    await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
+    const email = `chk${digits()}@example.com`;
+    const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
+    const session = await http().post('/v1/sbg/drivers/session').send({ phone, pin: PIN, device: enrolled.body.device }).expect(201);
+    const plate = `CHK ${n.slice(-3)}T`;
+    const truck = app.get(VehicleService).register({ plate, vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 8000, ownerName: 'Check Fleet', equipment: ['TLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, managerDid: m.did } as never);
+    return { fleetDid: m.did, office, did, token: session.body.token.access_token as string, truckId: truck.vehicleId, plate };
+  }
+
+  it('asks for the daily check where the fleet does, takes the vehicle off the road for an unsafe defect, and tells the office and then the driver', async () => {
+    const x = await aFleetDriver();
+    const other = await aFleetDriver();
+    const start = () => http().post(`/v1/sbg/fleet/drivers/${x.did}/start-session`).set(bearer(x.token)).send({ vehicleId: x.truckId, pin: PIN });
+    // The fleet asks for a check: a shift without one is refused with its own code, and nothing starts.
+    await http().post(`/v1/sbg/fleet/managers/${x.fleetDid}/care-settings`).set(bearer(other.office)).send({ requireDailyCheck: true }).expect(403);
+    await http().post(`/v1/sbg/fleet/managers/${x.fleetDid}/care-settings`).set(bearer(x.office)).send({ requireDailyCheck: true }).expect(201);
+    const unchecked = await start();
+    expect(unchecked.status).toBe(409);
+    expect(unchecked.body.code).toBe('VEHICLE_CHECK_NEEDED');
+    expect(unchecked.body.message).toMatch(new RegExp(`^Check ${x.plate} first: Check Fleet \\d+ asks for a daily check before a shift$`));
+    // The check: another fleet's driver may not; this one answers every item.
+    const sheet = await http().get(`/v1/sbg/fleet/drivers/${x.did}/vehicle-check`).query({ vehicleId: x.truckId }).set(bearer(x.token)).expect(200);
+    expect(sheet.body).toMatchObject({ plate: x.plate, required: true });
+    await http().get(`/v1/sbg/fleet/drivers/${other.did}/vehicle-check`).query({ vehicleId: x.truckId }).set(bearer(other.token)).expect(403);
+    await http().get(`/v1/sbg/fleet/drivers/${x.did}/vehicle-check`).query({ vehicleId: x.truckId }).set(bearer(other.token)).expect(403);
+    const answers = (sheet.body.items as Array<{ item: string }>).map((i) => ({ item: i.item, ok: true }));
+    expect((await http().post(`/v1/sbg/fleet/drivers/${x.did}/vehicle-check`).set(bearer(x.token)).send({ vehicleId: x.truckId, answers }).expect(201)).body).toMatchObject({ clean: true, usable: true });
+    await start().expect(201);
+    // On the road, the brakes go: reported not safe, on the vehicle they are out in.
+    const defect = await http().post(`/v1/sbg/fleet/drivers/${x.did}/defects`).set(bearer(x.token)).send({ item: 'brakes', note: 'pedal goes soft', safe: false }).expect(201);
+    expect(defect.body).toMatchObject({ item: 'brakes', safety: true, status: 'open' });
+    const officeInbox = (await http().get('/v1/sbg/notifications/inbox').set(bearer(x.office)).expect(200)).body;
+    expect((officeInbox.items ?? officeInbox).find((n: { kind: string }) => n.kind === 'vehicle_defect')).toMatchObject({ title: `${x.plate} is off the road: brakes reported unsafe` });
+    // Another fleet's office sees none of it.
+    await http().get(`/v1/sbg/vehicles/${x.truckId}/care`).set(bearer(other.office)).expect(403);
+    await http().post(`/v1/sbg/vehicles/${x.truckId}/defects/${defect.body.defectId}/decide`).set(bearer(other.office)).send({ decision: 'fixed', note: 'no' }).expect(403);
+    // The office's word: fixed. The driver hears it.
+    const after = await http().post(`/v1/sbg/vehicles/${x.truckId}/defects/${defect.body.defectId}/decide`).set(bearer(x.office)).send({ decision: 'fixed', note: 'Brake fluid topped up, line replaced' }).expect(201);
+    expect(after.body).toMatchObject({ defects: [], decided: [{ status: 'fixed', decisionNote: 'Brake fluid topped up, line replaced' }] });
+    const driverInbox = (await http().get('/v1/sbg/notifications/inbox').set(bearer(x.token)).expect(200)).body;
+    expect((driverInbox.items ?? driverInbox).find((n: { kind: string }) => n.kind === 'vehicle_defect')).toMatchObject({ title: `${x.plate}: brakes — fixed` });
+  });
 });

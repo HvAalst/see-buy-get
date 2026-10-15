@@ -30,6 +30,7 @@ import {
   usedPercent,
 } from '../logic';
 import type { RecentVehicleView } from '../types';
+import { ReportDefectSheet, VehicleCheckSheet } from './VehicleCheck';
 import type { DriverActions, DriverState } from '../useDriverApp';
 
 export interface HomeScreenProps {
@@ -123,6 +124,7 @@ function OffShift({ state, actions, onOpenFleet }: HomeScreenProps) {
   const [pinOpen, setPinOpen] = useState(false);
   const [pin, setPin] = useState('');
   const [odo, setOdo] = useState('');
+  const [checkOpen, setCheckOpen] = useState(false);
   const [refused, setRefused] = useState<SbgError | null>(null);
   // Which of this driver's usual roads they are running today. Optional: a driver who does not yet know
   // starts the shift anyway and says it later, when they look for work.
@@ -354,6 +356,10 @@ function OffShift({ state, actions, onOpenFleet }: HomeScreenProps) {
       ) : null}
 
       <div class="scr__cta">
+        {/* THE DAILY CHECK: any time before the shift, and on its own where the fleet asks for one. */}
+        <Button variant="outline" chevron={false} disabled={!vehicleId && !state.form.vehicleQr.trim()} onClick={() => setCheckOpen(true)}>
+          {t('driver.check.open')}
+        </Button>
         <Button
           onClick={() => {
             setPin('');
@@ -392,6 +398,12 @@ function OffShift({ state, actions, onOpenFleet }: HomeScreenProps) {
           onClick={async () => {
             const failed = await actions.startShift(pin, vehicleId ?? undefined, leg && { fromLabel: leg.fromLabel, from: leg.from, toLabel: leg.toLabel, to: leg.to }, odometerOf(odo));
             setPin('');
+            // The fleet asks for a check first: the check opens, instead of a refusal to read.
+            if ((failed as SbgError | null)?.code === 'VEHICLE_CHECK_NEEDED') {
+              setPinOpen(false);
+              setCheckOpen(true);
+              return;
+            }
             setRefused(failed);
             if (!failed) {
               setPinOpen(false);
@@ -405,6 +417,8 @@ function OffShift({ state, actions, onOpenFleet }: HomeScreenProps) {
           {t('driver.close')}
         </Button>
       </Sheet>
+
+      <VehicleCheckSheet open={checkOpen} pick={vehicleId ? { vehicleId } : { vehicleQr: state.form.vehicleQr.trim() }} actions={actions} onClose={() => setCheckOpen(false)} />
 
       <ExplainerBlock who={state.driver?.did} id="driver.shift.what">
         <Card title={t('driver.home.whatHappens')} tone="soft">
@@ -744,6 +758,7 @@ function OnShift({ state, actions, onOpenFleet }: HomeScreenProps) {
   const t = useT();
   const [confirm, setConfirm] = useState<'end' | 'rate' | null>(null);
   const [endOdo, setEndOdo] = useState('');
+  const [defectOpen, setDefectOpen] = useState(false);
   const [badgeOpen, setBadgeOpen] = useState(false);
   const shown = badgeToShow(state.session, state.driver?.badgeId);
   const v = state.vehicle!;
@@ -781,9 +796,13 @@ function OnShift({ state, actions, onOpenFleet }: HomeScreenProps) {
           {v.truckSubtype ? ` · ${v.truckSubtype.replace(/_/g, ' ')}` : ''}
           {t('driver.home.carriesUpTo', { kg: v.capacityKg })}
         </p>
+        <Button variant="link" full={false} onClick={() => setDefectOpen(true)}>
+          {t('driver.defect.open')}
+        </Button>
         <Button variant="link" full={false} danger onClick={() => setConfirm('end')}>
           {t('driver.home.endMyShift')}
         </Button>
+        <ReportDefectSheet open={defectOpen} actions={actions} onClose={() => setDefectOpen(false)} />
       </Card>
 
       {band ? (

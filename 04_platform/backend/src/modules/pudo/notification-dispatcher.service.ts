@@ -1,5 +1,6 @@
 import type { OrderHandedOn } from './fleet-overflow.types';
 import type { DriverRostered } from './fleet-roster.service';
+import { ITEM_WORDS, type VehicleDefectDecided, type VehicleDefectReported } from './vehicle-care.service';
 import type { DeliveryTiming, PlanLeftWhy } from './dispatch.types';
 import { UNCOLLECTED_H } from './pudo.config';
 import { runningLate } from './parcel.service';
@@ -408,6 +409,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ did: string; reason: string }>(GlosEvent.Pudo.DriverKycRejected, (e) => this.onDriverRefused(e.payload));
     this.events.subscribe<{ did: string; approved: boolean; reason?: string; companyName?: string }>(GlosEvent.Pudo.DriverRideAloneDecided, (e) => this.onRideAloneDecided(e.payload));
     this.events.subscribe<DriverRostered>(GlosEvent.Pudo.DriverRostered, (e) => this.onDriverRostered(e.payload));
+    this.events.subscribe<VehicleDefectReported>(GlosEvent.Pudo.VehicleDefectReported, (e) => this.onDefectReported(e.payload));
+    this.events.subscribe<VehicleDefectDecided>(GlosEvent.Pudo.VehicleDefectDecided, (e) => this.onDefectDecided(e.payload));
     // FP4 (courier) — the renewed licence they sent was checked. They sent it and are waiting: either answer.
     this.events.subscribe<{ did: string; accepted: boolean; expiresAt?: string; reason?: string }>(GlosEvent.Pudo.DriverLicenceChecked, (e) => this.onLicenceChecked(e.payload));
     this.events.subscribe<LicenceSent>(GlosEvent.Pudo.DriverLicenceSent, (e) => this.onLicenceSent(e.payload));
@@ -1322,6 +1325,42 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
    * A DRIVER IN NO FLEET ASKED TO RIDE FOR THEMSELVES on something heavy, and staff decided: told either way, on the
    * event. Yes says who they ride for now; no says why, in staff's words, and that they may ask again.
    */
+  /** A defect reported on one of a fleet's vehicles: its office hears, at once — and whether it is off the road. */
+  private async onDefectReported(p: VehicleDefectReported): Promise<void> {
+    if (!p.fleetDid) return; // a courier's own vehicle: they reported it themselves, and decide it themselves
+    const d = p.defect;
+    try {
+      await this.notifications.notify(p.fleetDid, {
+        kind: 'vehicle_defect',
+        title: d.safety ? `${p.plate} is off the road: ${ITEM_WORDS[d.item].toLowerCase()} reported unsafe` : `${p.plate}: ${ITEM_WORDS[d.item].toLowerCase()} reported`,
+        body: `${d.reportedBy}${d.note ? `: “${d.note}”` : ''}${d.hasPhoto ? ' (with a photo)' : ''}. ${d.safety ? 'No shift starts in it until you mark it fixed, or safe to drive as it is, under Vehicles → Upkeep.' : 'It can still go out; mark it fixed when it is, under Vehicles → Upkeep.'}`,
+        link: '/',
+        tag: `defect:${d.defectId}`,
+        data: { vehicleId: d.vehicleId, defectId: d.defectId },
+      });
+    } catch (err) {
+      this.logger.warn(`defect notice failed for ${d.defectId}: ${(err as Error).message}`);
+    }
+  }
+
+  /** The office's word on a defect: the driver who reported it hears which. */
+  private async onDefectDecided(p: VehicleDefectDecided): Promise<void> {
+    const d = p.defect;
+    if (!d.reportedByDid) return;
+    try {
+      await this.notifications.notify(d.reportedByDid, {
+        kind: 'vehicle_defect',
+        title: `${p.plate}: ${ITEM_WORDS[d.item].toLowerCase()} — ${d.status === 'fixed' ? 'fixed' : 'safe to drive as it is'}`,
+        body: `${d.decidedBy}: “${d.decisionNote ?? ''}”. You reported it${d.note ? ` (“${d.note}”)` : ''}.`,
+        link: '/',
+        tag: `defect:${d.defectId}`,
+        data: { vehicleId: d.vehicleId, defectId: d.defectId },
+      });
+    } catch (err) {
+      this.logger.warn(`defect decision notice failed for ${d.defectId}: ${(err as Error).message}`);
+    }
+  }
+
   /**
    * A day of the driver's changed on their fleet's roster. Said by the day's name, not its number: "Thursday 16 October".
    * Being left off a day starts nothing and stops nothing — a shift can still be started — so it says who to speak to.

@@ -23010,6 +23010,303 @@
         }
       }
     },
+    "/v1/sbg/fleet/drivers/{did}/vehicle-check": {
+      "get": {
+        "operationId": "VehicleCare.checkSheet",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "vehicleId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "vehicleQr",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckSheet"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "VehicleCare.submitCheck",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleCheckDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/defects": {
+      "post": {
+        "operationId": "VehicleCare.reportByDriver",
+        "summary": "",
+        "description": "A defect reported by the driver, on the vehicle named or the one they are out in.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportDefectDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleDefect"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vehicles/{id}/defects": {
+      "post": {
+        "operationId": "VehicleCare.reportByOwner",
+        "summary": "",
+        "description": "A defect reported by the office (or an owner-driver for their own vehicle) — it says whether it is safe to drive.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportDefectDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleDefect"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vehicles/{id}/defects/{defectId}/decide": {
+      "post": {
+        "operationId": "VehicleCare.decideDefect",
+        "summary": "",
+        "description": "The office's word on a defect: fixed, or safe to drive as it is.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "defectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideDefectDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleCareView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vehicles/{id}/defects/{defectId}/photo": {
+      "get": {
+        "operationId": "VehicleCare.defectPhoto",
+        "summary": "",
+        "description": "A defect's photograph, to the vehicle's owner — asked of the defect, never of the photo, so it stays the vehicle's.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "defectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/care-settings": {
+      "get": {
+        "operationId": "VehicleCare.careSettings",
+        "summary": "",
+        "description": "A fleet's own rules for its vehicles' upkeep: its office's and staff's to read and set.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CareSettings"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "VehicleCare.setCareSettings",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CareSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CareSettings"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/managers/{did}/partners": {
       "get": {
         "operationId": "FleetOverflow.list",
@@ -42635,7 +42932,8 @@
               "hazard",
               "interchange",
               "field_evidence",
-              "id_check"
+              "id_check",
+              "defect"
             ]
           },
           "dataUrl": {
@@ -45596,6 +45894,86 @@
           "by"
         ]
       },
+      "VehicleDefect": {
+        "type": "object",
+        "properties": {
+          "item": {
+            "type": "string",
+            "enum": [
+              "tyres",
+              "brakes",
+              "lights",
+              "mirrors",
+              "horn",
+              "wipers",
+              "leaks",
+              "chain",
+              "load_gear",
+              "body",
+              "other"
+            ]
+          },
+          "note": {
+            "type": "string"
+          },
+          "hasPhoto": {
+            "type": "boolean",
+            "description": "The photograph, served by the upkeep routes to the vehicle's owner (GET vehicles/:id/defects/:defectId/photo)."
+          },
+          "reportedByDid": {
+            "type": "string"
+          },
+          "found": {
+            "type": "string",
+            "enum": [
+              "check",
+              "report"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "fixed",
+              "cleared"
+            ]
+          },
+          "decidedBy": {
+            "type": "string"
+          },
+          "decidedAt": {
+            "type": "string"
+          },
+          "decisionNote": {
+            "type": "string"
+          },
+          "defectId": {
+            "type": "string"
+          },
+          "vehicleId": {
+            "type": "string"
+          },
+          "safety": {
+            "type": "boolean"
+          },
+          "reportedBy": {
+            "type": "string"
+          },
+          "reportedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "item",
+          "found",
+          "status",
+          "defectId",
+          "vehicleId",
+          "safety",
+          "reportedBy",
+          "reportedAt"
+        ]
+      },
       "VehicleCareView": {
         "type": "object",
         "properties": {
@@ -45625,6 +46003,29 @@
               "$ref": "#/components/schemas/OdometerReading"
             }
           },
+          "defects": {
+            "description": "Defects still open, safety-critical first; and the last few decided.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VehicleDefect"
+            }
+          },
+          "decided": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VehicleDefect"
+            }
+          },
+          "lastCheckBy": {
+            "type": "string",
+            "description": "The last daily check: who, when, and what it found."
+          },
+          "lastCheckAt": {
+            "type": "string"
+          },
+          "lastCheckClean": {
+            "type": "boolean"
+          },
           "vehicleId": {
             "type": "string"
           },
@@ -45649,6 +46050,8 @@
         "required": [
           "spells",
           "readings",
+          "defects",
+          "decided",
           "vehicleId",
           "plate",
           "usable",
@@ -45701,6 +46104,252 @@
         },
         "required": [
           "km"
+        ]
+      },
+      "CheckItemView": {
+        "type": "object",
+        "properties": {
+          "item": {
+            "type": "string",
+            "enum": [
+              "tyres",
+              "brakes",
+              "lights",
+              "mirrors",
+              "horn",
+              "wipers",
+              "leaks",
+              "chain",
+              "load_gear",
+              "body"
+            ]
+          },
+          "safety": {
+            "type": "boolean",
+            "description": "A problem with it keeps the vehicle off the road until the office has it fixed, or says it is safe as it is."
+          }
+        },
+        "required": [
+          "item",
+          "safety"
+        ]
+      },
+      "CheckSheet": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CheckItemView"
+            }
+          },
+          "checkedTodayBy": {
+            "type": "string",
+            "description": "Checked today already (by anybody): who, and when."
+          },
+          "checkedTodayAt": {
+            "type": "string"
+          },
+          "vehicleId": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "vehicleClass": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean",
+            "description": "The fleet asks for a check before a shift: none today, and the shift does not start."
+          }
+        },
+        "required": [
+          "items",
+          "vehicleId",
+          "plate",
+          "vehicleClass",
+          "required"
+        ]
+      },
+      "CheckAnswerDto": {
+        "type": "object",
+        "properties": {
+          "item": {
+            "type": "string",
+            "enum": [
+              "tyres",
+              "brakes",
+              "lights",
+              "mirrors",
+              "horn",
+              "wipers",
+              "leaks",
+              "chain",
+              "load_gear",
+              "body"
+            ]
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "photoRef": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "item",
+          "ok"
+        ]
+      },
+      "VehicleCheckDto": {
+        "type": "object",
+        "properties": {
+          "vehicleId": {
+            "type": "string"
+          },
+          "vehicleQr": {
+            "type": "string"
+          },
+          "answers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CheckAnswerDto"
+            }
+          }
+        },
+        "required": [
+          "answers"
+        ]
+      },
+      "CheckResult": {
+        "type": "object",
+        "properties": {
+          "found": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VehicleDefect"
+            }
+          },
+          "alreadyOpen": {
+            "description": "Problems already reported and still open: not reported twice.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VehicleDefect"
+            }
+          },
+          "checkId": {
+            "type": "string"
+          },
+          "clean": {
+            "type": "boolean",
+            "description": "Nothing wrong."
+          },
+          "usable": {
+            "type": "boolean"
+          },
+          "offRoad": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "found",
+          "alreadyOpen",
+          "checkId",
+          "clean",
+          "usable",
+          "offRoad"
+        ]
+      },
+      "ReportDefectDto": {
+        "type": "object",
+        "properties": {
+          "vehicleId": {
+            "type": "string"
+          },
+          "item": {
+            "type": "string",
+            "enum": [
+              "tyres",
+              "brakes",
+              "lights",
+              "mirrors",
+              "horn",
+              "wipers",
+              "leaks",
+              "chain",
+              "load_gear",
+              "body",
+              "other"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "photoRef": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "safe": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "item",
+          "note",
+          "safe"
+        ]
+      },
+      "DecideDefectDto": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "fixed",
+              "cleared"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "decision",
+          "note"
+        ]
+      },
+      "CareSettings": {
+        "type": "object",
+        "properties": {
+          "requireDailyCheck": {
+            "type": "boolean",
+            "description": "A driver checks the vehicle before a shift, or the shift does not start. Off unless the fleet turns it on."
+          }
+        },
+        "required": [
+          "requireDailyCheck"
+        ]
+      },
+      "CareSettingsDto": {
+        "type": "object",
+        "properties": {
+          "requireDailyCheck": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "requireDailyCheck"
         ]
       },
       "PartnershipEnd": {

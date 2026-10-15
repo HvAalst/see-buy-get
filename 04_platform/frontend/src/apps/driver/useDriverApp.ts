@@ -2,6 +2,7 @@ import { drain, outboxItems } from '../../shared/outbox';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { asksForEmail, isPinReset } from '../../shared/account/recovery';
 import type { SbgError } from '../../lib/sbg';
+import type { CheckResultView, CheckSheetView } from './screens/VehicleCheck';
 import type { IconName } from '../../shared/ui/Icon';
 import { choosePin, createDriverClient, driverConfig, driverSession, isMintSourced, isSignInRequired, narrow, purgeDriverTokens, requestPhoneCode, verifyPhoneCode } from './api';
 import { adoptDidFromUrl, clearDid, saveDid, saveRadius, saveRoute, savedRadius, savedRoute } from './storage';
@@ -1273,6 +1274,41 @@ export function useDriverApp() {
     });
   }, [client, did, run, fail, pushToast, refresh]);
 
+  /** The daily check: what the vehicle is asked about. The sheet shows the server's refusal in its own words. */
+  const loadCheck = useCallback(
+    async (pick: { vehicleId?: string; vehicleQr?: string }): Promise<{ data?: CheckSheetView; error?: SbgError }> => {
+      if (!client || !did) return {};
+      const r = await client.api.checkSheet(did, pick);
+      return r.error ? { error: r.error } : { data: narrow<CheckSheetView>(r.data) ?? undefined };
+    },
+    [client, did],
+  );
+
+  const sendCheck = useCallback(
+    async (pick: { vehicleId?: string; vehicleQr?: string }, answers: Array<{ item: string; ok: boolean; note?: string; photoRef?: string }>): Promise<{ data?: CheckResultView; error?: SbgError }> => {
+      if (!client || !did) return {};
+      const r = await client.api.submitCheck(did, { ...pick, answers });
+      if (r.error) return { error: r.error };
+      buzz();
+      await refresh();
+      return { data: narrow<CheckResultView>(r.data) ?? undefined };
+    },
+    [client, did, refresh],
+  );
+
+  /** A problem with the vehicle they are out in. The office hears at once; said back in a toast. */
+  const sendDefect = useCallback(
+    async (body: { item: string; note: string; photoRef?: string; safe: boolean }): Promise<SbgError | null> => {
+      if (!client || !did) return null;
+      const r = await client.api.reportDefect(did, body);
+      if (r.error) return r.error;
+      buzz();
+      pushToast(body.safe ? { tone: 'ok', icon: 'check', title: t('driver.toast.defectSent'), detail: t('driver.toast.defectSentDetail') } : { tone: 'warn', icon: 'warning', title: t('driver.toast.defectUnsafe'), detail: t('driver.toast.defectUnsafeDetail') });
+      return null;
+    },
+    [client, did, pushToast],
+  );
+
   /** "Tell me when I can start": asked while resting; the answer comes the moment the rest is over. */
   const tellWhenRested = useCallback(async () => {
     if (!client || !did) return;
@@ -1803,6 +1839,9 @@ export function useDriverApp() {
       loadNodes,
       startShift,
       endShift,
+      loadCheck,
+      sendCheck,
+      sendDefect,
       tellWhenRested,
       /** FP2 — the consignment note of a load this driver carries. */
       freightNote: (freightId: string) => client!.api.freightNote(freightId),

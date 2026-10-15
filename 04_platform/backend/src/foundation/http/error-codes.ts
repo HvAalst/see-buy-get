@@ -169,6 +169,8 @@ export const ERROR_CODES = {
   // of the shift they are on. What only a driver can do needs something only the driver holds.
   DRIVER_PASS_NEEDED: { status: 403, title: 'Scan the badge on the driver’s phone' },
   DRIVER_PASS_WRONG: { status: 403, title: 'That is not the code on the driver’s phone' },
+  // The fleet asks for a daily check of a vehicle before a shift, and there is none today: the app opens the check.
+  VEHICLE_CHECK_NEEDED: { status: 409, title: 'Check the vehicle first' },
 
   // --- 403 Forbidden: media ---------------------------------------------------------------------
   MEDIA_LOCKED: { status: 403, title: 'This image is kept as evidence and cannot be removed yet' },

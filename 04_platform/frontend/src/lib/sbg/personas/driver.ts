@@ -121,6 +121,15 @@ export function createDriverApi(sbg: SbgClient) {
     startSession: (did: string, vehicle: { vehicleQr?: string; vehicleId?: string }, pin: string, leg?: DeclaredLegBody, odometerKm?: number) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/start-session', { params: { path: { did } }, body: { ...vehicle, pin, leg, ...(odometerKm !== undefined ? { odometerKm } : {}) } })),
 
+    /** The daily check: what this vehicle is asked about (as picked, or by its QR), and the answers. */
+    checkSheet: (did: string, pick: { vehicleId?: string; vehicleQr?: string }) =>
+      sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/vehicle-check', { params: { path: { did }, query: pick } })),
+    submitCheck: (did: string, body: { vehicleId?: string; vehicleQr?: string; answers: Array<{ item: string; ok: boolean; note?: string; photoRef?: string }> }) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/vehicle-check', { params: { path: { did } }, body: body as never })),
+    /** A problem with the vehicle they are out in: what, a photo, and whether it is safe to keep driving. */
+    reportDefect: (did: string, body: { item: string; note: string; photoRef?: string; safe: boolean }) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/defects', { params: { path: { did } }, body: body as never })),
+
     /** The coming days this driver's fleet has said who drives, and whether they do. */
     driverRoster: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/roster', { params: { path: { did } } })),
 

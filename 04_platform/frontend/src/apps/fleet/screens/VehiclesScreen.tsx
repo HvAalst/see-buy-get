@@ -10,6 +10,7 @@ import { VEHICLE_CLASSES, type VehicleRow } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
 import type { SbgClient } from '../../../lib/sbg';
 import { VehicleCareSheet } from './VehicleCare';
+import { DailyCheckCard } from './DailyCheckCard';
 
 /**
  * Capture pad (S26) — one (registration) or many (vehicle/trailer) photos. Each capture is downscaled,
@@ -348,6 +349,8 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
           {missing ? <p class="hint" style="margin-top:8px">{missing}</p> : null}
         </div>
       </Card>
+
+      <DailyCheckCard sbg={sbg} fleetDid={state.manager?.did} />
 
       <Card title={t('fleet.vehicles.listTitle', { count: state.vehicles.length })}>
         <p class="card__note">{t('fleet.vehicles.listNote')}</p>

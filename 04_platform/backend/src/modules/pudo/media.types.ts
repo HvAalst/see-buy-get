@@ -47,6 +47,12 @@ export const MEDIA_KINDS = [
    * theirs (id-dispute.service.ts). Seen by the two members of staff who decide, and by nobody else.
    */
   'id_check',
+  /**
+   * A DEFECT ON A VEHICLE, photographed by whoever found it — the driver at the daily check, or later. The vehicle's
+   * record, not the driver's: its owner sees it (through the upkeep routes, which ask the defect, not the photo), and
+   * nobody deletes it while the vehicle is on the road. See vehicle-care.service.
+   */
+  'defect',
 ] as const;
 
 export type MediaKind = (typeof MEDIA_KINDS)[number];
@@ -54,7 +60,7 @@ export type MediaKind = (typeof MEDIA_KINDS)[number];
 /** How long a photograph of somebody holding their ID is kept after the decision it was sent for. */
 export const IDENTITY_CHECK_DAYS = 30;
 
-export type RetentionClass = 'shipment-proof' | 'dispute-evidence' | 'account-doc' | 'vehicle-asset' | 'road-report' | 'field-evidence' | 'identity-check';
+export type RetentionClass = 'shipment-proof' | 'dispute-evidence' | 'account-doc' | 'vehicle-asset' | 'vehicle-record' | 'road-report' | 'field-evidence' | 'identity-check';
 export type MediaStatus = 'active' | 'expired';
 
 /** What a media item is attached to — drives who may see it and when its retention clock starts. */
@@ -99,6 +105,9 @@ export const RETENTION_DAYS: Record<RetentionClass, number> = {
   'dispute-evidence': 180, // after the dispute is resolved
   'account-doc': 30, // grace after the account/entity is closed
   'vehicle-asset': 30, // grace after the vehicle is retired; user-managed while the vehicle is active
+  // A vehicle's own history — a defect photographed — is evidence in an insurance claim or a damage dispute: kept for
+  // as long as the vehicle is on the road, and half a year after it is retired. Not the uploader's to delete.
+  'vehicle-record': 180,
   // A road hazard's photo is kept for as long as the hazard is on the map, and its clock starts only when
   // an operator CLEARS it — the one moment the evidence stops being live and starts being a record of a
   // decision somebody may have to review. Nothing here expires on a timer, because time passing is not
@@ -150,6 +159,7 @@ export const KIND_RETENTION: Record<MediaKind, RetentionClass> = {
   interchange: 'dispute-evidence',
   field_evidence: 'field-evidence',
   id_check: 'identity-check',
+  defect: 'vehicle-record',
 };
 
 /** Only real raster image types — no SVG (it can carry script), no arbitrary bytes. */

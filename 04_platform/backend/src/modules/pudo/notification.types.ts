@@ -156,6 +156,11 @@ export const NOTIFICATION_KINDS = [
    */
   'driver_roster',
   /**
+   * A defect on a vehicle: reported (to its fleet's office — off the road when it is not safe), and decided (to the
+   * driver who reported it: fixed, or safe to drive as it is). Nobody else.
+   */
+  'vehicle_defect',
+  /**
    * Something happened to the way somebody signs in that they did not do — five wrong PINs locked it. Said to the
    * person, because the one who typed them may know their number, and the owner is the only one who can act.
    */

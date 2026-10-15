@@ -219,6 +219,7 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
   /** Vehicle retired → start the grace clock on its asset media (so retired-fleet photos don't linger). */
   anchorVehicleRetired(vehicleId: string, at: Date = new Date()): void {
     this.anchorLink('vehicle', vehicleId, 'vehicle-asset', at);
+    this.anchorLink('vehicle', vehicleId, 'vehicle-record', at);
   }
 
   /** Freight delivered (terminal) → start the 90-day clock on its securement proof. Idempotent (S33). */
