@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { GeoPoint } from './pudo.types';
 
 /**
  * A VEHICLE'S UPKEEP — what the network keeps about the state a vehicle is in, as far as it touches the work: whether it
@@ -145,6 +146,53 @@ export class ServiceRecord {
   at: string;
 }
 
+export const BREAKDOWN_CAUSES = ['engine', 'tyre', 'electrical', 'brakes', 'fuel', 'accident', 'other'] as const;
+export type BreakdownCause = (typeof BREAKDOWN_CAUSES)[number];
+
+/** A load that was in the vehicle, or on its way to be collected by it, when it broke down. */
+export class BreakdownLoad {
+  @ApiProperty({ enum: ['freight', 'booking'] }) kind: 'freight' | 'booking';
+  /** The order's id, or the run booking's. */
+  id: string;
+  /** What the office calls it: the order's code, or what the booking said it was. */
+  label: string;
+  @ApiProperty({ enum: ['aboard', 'to_collect'] }) state: 'aboard' | 'to_collect';
+  @ApiPropertyOptional() departureId?: string;
+  /** Its shipper is somebody here, and was told. The fleet's own loads tell nobody. */
+  shipperTold: boolean;
+}
+
+/**
+ * BROKEN DOWN ON THE ROAD: what happened, where, who was driving, what was aboard then, and which of today's planned
+ * orders were held for it. Open until the office says how it ended: back on the road, or into the workshop.
+ */
+export class VehicleBreakdown {
+  breakdownId: string;
+  vehicleId: string;
+  plate: string;
+  @ApiProperty({ enum: BREAKDOWN_CAUSES }) cause: BreakdownCause;
+  note: string;
+  @ApiPropertyOptional() hasPhoto?: boolean;
+  reportedBy: string;
+  @ApiPropertyOptional() reportedByDid?: string;
+  /** The driver on a shift in it then, if anybody was. */
+  @ApiPropertyOptional() driverDid?: string;
+  @ApiPropertyOptional() driverName?: string;
+  reportedAt: string;
+  @ApiPropertyOptional({ type: GeoPoint }) location?: GeoPoint;
+  @ApiPropertyOptional() locatedAt?: string;
+  /** Where the position came from: the phone as it was reported, or the shift's last known. */
+  @ApiPropertyOptional({ enum: ['phone', 'last_known'] }) locationFrom?: 'phone' | 'last_known';
+  @ApiProperty({ type: [BreakdownLoad] }) aboard: BreakdownLoad[];
+  /** Today's planned orders that were waiting for it, held: their codes. */
+  @ApiProperty({ type: [String] }) held: string[];
+  @ApiProperty({ enum: ['open', 'resolved'] }) status: 'open' | 'resolved';
+  @ApiPropertyOptional({ enum: ['back_on_road', 'workshop'] }) outcome?: 'back_on_road' | 'workshop';
+  @ApiPropertyOptional() resolvedBy?: string;
+  @ApiPropertyOptional() resolvedAt?: string;
+  @ApiPropertyOptional() resolutionNote?: string;
+}
+
 /** How often it is serviced: every so many km or months, whichever comes first. The class's usual unless the office set its own. */
 export class ServicePlanView {
   @ApiPropertyOptional() everyKm?: number;
@@ -192,6 +240,8 @@ export class VehicleCareView {
   @ApiProperty({ type: ServiceDueView }) service: ServiceDueView;
   /** What was done to it, newest first. */
   @ApiProperty({ type: [ServiceRecord] }) services: ServiceRecord[];
+  /** Broken down: the open one, and those resolved in the last month, newest first. */
+  @ApiProperty({ type: [VehicleBreakdown] }) breakdowns: VehicleBreakdown[];
   /** The last daily check: who, when, and what it found. */
   @ApiPropertyOptional() lastCheckBy?: string;
   @ApiPropertyOptional() lastCheckAt?: string;

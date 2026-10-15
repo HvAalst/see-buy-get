@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
-import { CHECK_ITEMS, DEFECT_ITEMS, OFF_ROAD_REASONS, SERVICE_KINDS, type CheckItem, type DefectItem, type OffRoadReason, type ServiceKind } from './vehicle-care.types';
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { BREAKDOWN_CAUSES, CHECK_ITEMS, DEFECT_ITEMS, OFF_ROAD_REASONS, SERVICE_KINDS, type BreakdownCause, type CheckItem, type DefectItem, type OffRoadReason, type ServiceKind } from './vehicle-care.types';
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -42,6 +42,22 @@ export class ReportDefectDto {
 export class DecideDefectDto {
   @IsIn(['fixed', 'cleared']) decision!: 'fixed' | 'cleared';
   @IsString() @MaxLength(300) note!: string;
+}
+
+/** Broken down: what happened, a photo, and where the phone is now — when it can say. */
+export class ReportBreakdownDto {
+  @IsIn(BREAKDOWN_CAUSES) cause!: BreakdownCause;
+  @IsString() @MaxLength(300) note!: string;
+  @IsOptional() @IsString() @MaxLength(80) photoRef?: string;
+  @IsOptional() @IsNumber() @Min(-90) @Max(90) lat?: number;
+  @IsOptional() @IsNumber() @Min(-180) @Max(180) lng?: number;
+}
+
+/** How a breakdown ended: back on the road, or into the workshop (until a day, or until put back) — with what was done. */
+export class ResolveBreakdownDto {
+  @IsIn(['back_on_road', 'workshop']) outcome!: 'back_on_road' | 'workshop';
+  @IsString() @MaxLength(300) note!: string;
+  @IsOptional() @Matches(DAY, { message: 'A day is YYYY-MM-DD' }) untilDay?: string;
 }
 
 /** A fleet's upkeep rules: either or both. What is not sent stays as it was. */

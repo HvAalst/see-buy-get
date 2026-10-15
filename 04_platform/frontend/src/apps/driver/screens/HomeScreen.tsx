@@ -31,6 +31,7 @@ import {
 } from '../logic';
 import type { RecentVehicleView } from '../types';
 import { ReportDefectSheet, VehicleCheckSheet } from './VehicleCheck';
+import { BreakdownSheet } from './Breakdown';
 import type { DriverActions, DriverState } from '../useDriverApp';
 
 export interface HomeScreenProps {
@@ -759,6 +760,7 @@ function OnShift({ state, actions, onOpenFleet }: HomeScreenProps) {
   const [confirm, setConfirm] = useState<'end' | 'rate' | null>(null);
   const [endOdo, setEndOdo] = useState('');
   const [defectOpen, setDefectOpen] = useState(false);
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [badgeOpen, setBadgeOpen] = useState(false);
   const shown = badgeToShow(state.session, state.driver?.badgeId);
   const v = state.vehicle!;
@@ -799,10 +801,14 @@ function OnShift({ state, actions, onOpenFleet }: HomeScreenProps) {
         <Button variant="link" full={false} onClick={() => setDefectOpen(true)}>
           {t('driver.defect.open')}
         </Button>
+        <Button variant="link" full={false} onClick={() => setBreakdownOpen(true)}>
+          {t('driver.brk.open')}
+        </Button>
         <Button variant="link" full={false} danger onClick={() => setConfirm('end')}>
           {t('driver.home.endMyShift')}
         </Button>
         <ReportDefectSheet open={defectOpen} actions={actions} onClose={() => setDefectOpen(false)} />
+        <BreakdownSheet open={breakdownOpen} actions={actions} onClose={() => setBreakdownOpen(false)} />
       </Card>
 
       {band ? (

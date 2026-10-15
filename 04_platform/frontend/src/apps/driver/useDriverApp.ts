@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { asksForEmail, isPinReset } from '../../shared/account/recovery';
 import type { SbgError } from '../../lib/sbg';
 import type { CheckResultView, CheckSheetView } from './screens/VehicleCheck';
+import type { BreakdownView } from './screens/Breakdown';
 import type { IconName } from '../../shared/ui/Icon';
 import { choosePin, createDriverClient, driverConfig, driverSession, isMintSourced, isSignInRequired, narrow, purgeDriverTokens, requestPhoneCode, verifyPhoneCode } from './api';
 import { adoptDidFromUrl, clearDid, saveDid, saveRadius, saveRoute, savedRadius, savedRoute } from './storage';
@@ -1309,6 +1310,18 @@ export function useDriverApp() {
     [client, did, pushToast],
   );
 
+  /** Broken down on the road: the office hears at once, with where the phone is. Answers what was kept, or why not. */
+  const sendBreakdown = useCallback(
+    async (body: { cause: string; note: string; photoRef?: string; lat?: number; lng?: number }): Promise<{ data?: BreakdownView; error?: SbgError }> => {
+      if (!client || !did) return {};
+      const r = await client.api.reportBreakdown(did, body);
+      if (r.error) return { error: r.error };
+      buzz();
+      return { data: narrow<BreakdownView>(r.data) ?? undefined };
+    },
+    [client, did],
+  );
+
   /** "Tell me when I can start": asked while resting; the answer comes the moment the rest is over. */
   const tellWhenRested = useCallback(async () => {
     if (!client || !did) return;
@@ -1842,6 +1855,7 @@ export function useDriverApp() {
       loadCheck,
       sendCheck,
       sendDefect,
+      sendBreakdown,
       tellWhenRested,
       /** FP2 — the consignment note of a load this driver carries. */
       freightNote: (freightId: string) => client!.api.freightNote(freightId),

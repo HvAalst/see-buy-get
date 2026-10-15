@@ -317,6 +317,13 @@ export class FleetPlanService implements OnModuleInit {
     const base = { vehicleId, plate, sent: [], held: [] };
     const waiting = this.dispatch.plannedOrdersOn(fleetDid, day, vehicleId);
     if (waiting.length === 0) return { ...base, state: 'nothing_left' };
+    // A truck off the road gets no trip — broken down, in the workshop, a lapsed paper: what waits for it is held, in
+    // the gate's own words, until the office plans the day again. Its driver may well still be on the shift.
+    if (!this.vehicles.isUsable(vehicleId, now)) {
+      const why = `${plate} is off the road: ${this.vehicles.offRoadReasons(vehicleId, now).join('; ') || 'grounded'}`;
+      for (const f of waiting) this.dispatch.holdPlanned(f.freightId, why, now);
+      return { ...base, state: 'off_road', held: waiting.map((f) => ({ code: f.code, why })) };
+    }
     const shift = this.fleet.activeForVehicle(vehicleId);
     const driver = shift ? this.drivers.list({ managerDid: fleetDid }).find((d) => d.did === shift.driverDid) : undefined;
     // Somebody else's driver in the truck is nobody the plan can give this fleet's work to.

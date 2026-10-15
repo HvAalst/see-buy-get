@@ -40,6 +40,18 @@ export function careApi(sbg: SbgClient) {
       return sbg.request((c) => c.GET('/v1/sbg/vehicles/{id}/services/{recordId}/photo', { params: { path: { id, recordId }, query: { variant: 'thumb' } }, parseAs: 'blob' } as never)) as never;
     },
     backOnRoad: (vehicleId: string): Promise<Result<VehicleCare>> => sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/back-on-road', { params: { path: { id: vehicleId } } })) as never,
+    /** A breakdown the office heard of by telephone. */
+    recordBreakdown: (vehicleId: string, body: { cause: BreakdownCause; note: string }): Promise<Result<VehicleCare>> =>
+      sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/breakdowns', { params: { path: { id: vehicleId } }, body })) as never,
+    resolveBreakdown: (vehicleId: string, breakdownId: string, body: { outcome: 'back_on_road' | 'workshop'; note: string; untilDay?: string }): Promise<Result<VehicleCare>> =>
+      sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/breakdowns/{breakdownId}/resolve', { params: { path: { id: vehicleId, breakdownId } }, body })) as never,
+    /** A breakdown's photograph, for <AuthImage>: the key is "vehicleId|breakdownId". */
+    breakdownPhoto: (key: string): Promise<{ data: Blob | null; error: unknown }> => {
+      const [id, breakdownId] = key.split('|');
+      return sbg.request((c) => c.GET('/v1/sbg/vehicles/{id}/breakdowns/{breakdownId}/photo', { params: { path: { id, breakdownId }, query: { variant: 'thumb' } }, parseAs: 'blob' } as never)) as never;
+    },
+    /** The fleet's vehicles broken down now. */
+    fleetBreakdowns: (fleetDid: string): Promise<Result<VehicleBreakdown[]>> => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/breakdowns', { params: { path: { did: fleetDid } } })) as never,
   };
 }
 
@@ -50,6 +62,27 @@ export type ServiceRecord = components['schemas']['ServiceRecord'];
 export type ServiceKind = ServiceRecord['what'];
 export type ServiceDue = components['schemas']['ServiceDueView'];
 export type CareApi = ReturnType<typeof careApi>;
+export type VehicleBreakdown = components['schemas']['VehicleBreakdown'];
+export type BreakdownCause = VehicleBreakdown['cause'];
+
+/** What broke, in the order a driver or an office meets it. */
+export const BREAKDOWN_CAUSES: BreakdownCause[] = ['engine', 'tyre', 'electrical', 'brakes', 'fuel', 'accident', 'other'];
+export const CAUSE_WORD: Record<BreakdownCause, MessageKey> = {
+  engine: 'fleet.brk.cause.engine',
+  tyre: 'fleet.brk.cause.tyre',
+  electrical: 'fleet.brk.cause.electrical',
+  brakes: 'fleet.brk.cause.brakes',
+  fuel: 'fleet.brk.cause.fuel',
+  accident: 'fleet.brk.cause.accident',
+  other: 'fleet.brk.cause.other',
+};
+
+/** Where it broke down, in words: where the phone was, or the last known position — or that nobody knows. */
+export function whereWords(b: Pick<VehicleBreakdown, 'location' | 'locationFrom'>, t: Translate): string {
+  if (!b.location) return t('fleet.brk.whereNone');
+  const at = `${b.location.lat.toFixed(5)}, ${b.location.lng.toFixed(5)}`;
+  return t(b.locationFrom === 'phone' ? 'fleet.brk.wherePhone' : 'fleet.brk.whereLast', { at });
+}
 
 /** What can be recorded as done to a vehicle, in the order an office meets them. Only a service restarts the count. */
 export const SERVICE_KINDS: ServiceKind[] = ['service', 'repair', 'tyres', 'inspection', 'other'];
@@ -103,8 +136,11 @@ export function kmWords(km: number): string {
   return `${km.toLocaleString()} km`;
 }
 
-/** The reasons, in the order the office meets them. A breakdown is usually the driver's report; the office may record one too. */
-export const OFF_ROAD_REASONS: OffRoadReason[] = ['repair', 'service', 'accident', 'breakdown', 'other'];
+/**
+ * The reasons a spell is taken for, in the order the office meets them. Not a breakdown: that is recorded as one (the
+ * driver's report, or the office's "It has broken down"), which tells the shippers of what is aboard and holds the plan.
+ */
+export const OFF_ROAD_REASONS: OffRoadReason[] = ['repair', 'service', 'accident', 'other'];
 export const REASON_WORD: Record<OffRoadReason, MessageKey> = {
   repair: 'fleet.care.reason.repair',
   service: 'fleet.care.reason.service',

@@ -11,6 +11,7 @@ import type { FleetActions, FleetState } from '../useFleetApp';
 import type { SbgClient } from '../../../lib/sbg';
 import { VehicleCareSheet } from './VehicleCare';
 import { UpkeepRulesCard } from './UpkeepRulesCard';
+import { BrokenDownCard } from './Breakdowns';
 
 /**
  * Capture pad (S26) — one (registration) or many (vehicle/trailer) photos. Each capture is downscaled,
@@ -95,6 +96,8 @@ export interface VehiclesScreenProps {
 export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenProps) {
   const t = useT();
   const [careFor, setCareFor] = useState<VehicleRow | null>(null);
+  // Bumped whenever the upkeep sheet changes something, so the "broken down now" card reads again.
+  const [upkeepChanged, setUpkeepChanged] = useState(0);
   const [priceFor, setPriceFor] = useState<VehicleRow | null>(null);
   const [qrFor, setQrFor] = useState<VehicleRow | null>(null);
   const [papersFor, setPapersFor] = useState<VehicleRow | null>(null);
@@ -107,6 +110,7 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
   return (
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
+      <BrokenDownCard sbg={sbg} fleetDid={state.manager?.did} reload={upkeepChanged} onOpen={(id) => setCareFor((state.vehicles.find((v) => v.vehicleId === id) as VehicleRow | undefined) ?? null)} />
 
       <Card title={t('fleet.vehicles.registerTitle')}>
         <p class="card__note">{t('fleet.vehicles.registerNote')}</p>
@@ -449,7 +453,16 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
 
       <PriceSheet vehicle={priceFor} onClose={() => setPriceFor(null)} state={state} actions={actions} />
       <PapersSheet vehicle={papersFor} onClose={() => setPapersFor(null)} state={state} actions={actions} />
-      <VehicleCareSheet vehicle={careFor} sbg={sbg} onClose={() => setCareFor(null)} onChanged={actions.refresh} uploadPhoto={actions.uploadPhoto} />
+      <VehicleCareSheet
+        vehicle={careFor}
+        sbg={sbg}
+        onClose={() => setCareFor(null)}
+        onChanged={async () => {
+          setUpkeepChanged((n) => n + 1);
+          await actions.refresh();
+        }}
+        uploadPhoto={actions.uploadPhoto}
+      />
     </div>
   );
 }

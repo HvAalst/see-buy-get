@@ -1,4 +1,4 @@
-import { Injectable, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap, OnModuleDestroy, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
@@ -12,6 +12,8 @@ import { FleetManagerService } from './fleet-manager.service';
 import { FleetService } from './fleet.service';
 import { Vehicle } from './fleet.types';
 import { VehicleService } from './vehicle.service';
+import { VehicleBreakdownService } from './vehicle-breakdown.service';
+import { dayWords, kmWords } from './upkeep-words';
 import { CareSettings, CheckItem, CheckResult, CheckSheet, DefectItem, EndReadingResult, OdometerReading, OffRoadReason, OffRoadSpell, ReadingSource, ServiceDueView, ServiceKind, ServicePlanView, ServiceRecord, VehicleCareView, VehicleDefect } from './vehicle-care.types';
 
 /** The most a vehicle drives in a day, for telling a doubtful reading from a likely one. */
@@ -132,6 +134,8 @@ export class VehicleCareService implements OnApplicationBootstrap, OnModuleDestr
     private readonly drivers: DriverService,
     private readonly media: MediaService,
     private readonly events: EventBus,
+    // Optional so the specs that build this by hand keep working; app.boot.spec is what catches it missing.
+    @Optional() private readonly breakdowns?: VehicleBreakdownService,
   ) {
     // Registered here rather than on module start, so a service built by hand in a test reads the same gate.
     this.vehicles.addOffRoadSource((v, at) => this.spellsOn(v.vehicleId, at.day ?? this.todayOf(v, at.now)).map(spellLine));
@@ -188,6 +192,7 @@ export class VehicleCareService implements OnApplicationBootstrap, OnModuleDestr
       decided: this.defectsOf(v.vehicleId).filter((d) => d.status !== 'open').sort((a, b) => (b.decidedAt ?? '').localeCompare(a.decidedAt ?? '')).slice(0, DECIDED_SHOWN).map(publicDefect),
       service: this.serviceDue(v, now),
       services: this.servicesOf(v.vehicleId).slice(0, SERVICES_SHOWN).map(publicService),
+      breakdowns: this.breakdowns?.of(v.vehicleId, now) ?? [],
       ...this.lastCheckOf(v.vehicleId),
     };
   }
@@ -367,6 +372,18 @@ export class VehicleCareService implements OnApplicationBootstrap, OnModuleDestr
   private lastCheckOf(vehicleId: string): { lastCheckBy?: string; lastCheckAt?: string; lastCheckClean?: boolean } {
     const last = [...this.checks.values()].filter((c) => c.vehicleId === vehicleId).sort((a, b) => b.at.localeCompare(a.at))[0];
     return last ? { lastCheckBy: last.by, lastCheckAt: last.at, lastCheckClean: last.clean } : {};
+  }
+
+  /**
+   * HOW A BREAKDOWN ENDED: back on the road, or into the workshop — which keeps it off the road as a repair from today,
+   * until the day said or until put back. Refused before anything is written, the workshop's spell included.
+   */
+  resolveBreakdown(vehicleId: string, breakdownId: string, input: { outcome: 'back_on_road' | 'workshop'; note: string; untilDay?: string }, by: string, now: number = Date.now()): VehicleCareView {
+    if (!this.breakdowns) throw new GlosError('INVALID_STATE', 'Breakdowns are not kept here');
+    this.breakdowns.assertResolvable(vehicleId, breakdownId, input.note);
+    if (input.outcome === 'workshop') this.takeOffRoad(vehicleId, { reason: 'repair', note: input.note.trim(), ...(input.untilDay ? { untilDay: input.untilDay } : {}) }, by, now);
+    this.breakdowns.resolve(vehicleId, breakdownId, input.outcome, input.note, by, now);
+    return this.view(vehicleId, now);
   }
 
   /* ------------------------------------------------------------------------------------- services -- */
@@ -674,11 +691,6 @@ function publicService(s: ServiceRecord & { photoRef?: string }): ServiceRecord 
   return rest;
 }
 
-/** "135,000": km the way the readings say them. */
-function kmWords(km: number): string {
-  return km.toLocaleString('en-GB');
-}
-
 /** The same day so many months on — the last day of the month when that month is shorter (31 Aug + 6 = 28 Feb). */
 function addMonths(day: string, months: number): string {
   const [y, m, d] = day.split('-').map(Number);
@@ -712,12 +724,6 @@ function overlaps(s: OffRoadSpell, fromDay: string, untilDay?: string): boolean 
   const endsBefore = untilDay !== undefined && untilDay < s.fromDay;
   const startsAfter = s.untilDay !== undefined && fromDay > s.untilDay;
   return !endsBefore && !startsAfter;
-}
-
-/** "17 Oct 2026": the way papers already say a day. */
-function dayWords(day: string): string {
-  const d = new Date(`${day}T12:00:00Z`);
-  return Number.isNaN(d.getTime()) ? day : `${d.getUTCDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
 function addDays(day: string, n: number): string {

@@ -7,6 +7,7 @@ import { DEFECT_WORD, OFF_ROAD_REASONS, REASON_WORD, SOURCE_WORD, careApi, kmWor
 import { formatDate } from '../../../shared/i18n';
 import type { VehicleRow } from '../types';
 import { ServiceSection } from './ServiceSection';
+import { OpenBreakdown, RecordBreakdown } from './Breakdowns';
 
 /**
  * A VEHICLE'S UPKEEP, in one sheet under the vehicle's name: whether it can go out and every reason it cannot, its
@@ -89,6 +90,7 @@ export function VehicleCareSheet({
             <Note tone="warn" icon="warning" title={t('fleet.care.offRoad')} detail={care.offRoad.join(' · ')} />
           )}
           {care.inUse && !care.usable ? <p class="hint">{t('fleet.care.inUse')}</p> : null}
+          <OpenBreakdown care={care} api={api!} act={act} busy={busy} />
           {!care.usable && (spellNow || care.grounded) ? (
             <Button variant="outline" chevron={false} busy={busy} disabled={busy} onClick={() => void act(() => api!.backOnRoad(care.vehicleId))}>
               {t('fleet.care.backOnRoad')}
@@ -253,6 +255,7 @@ export function VehicleCareSheet({
           <p class="field__label" style="margin-top:16px">
             {t('fleet.care.takeOffTitle')}
           </p>
+          <RecordBreakdown care={care} api={api!} act={act} busy={busy} />
           <div class="chips" role="radiogroup" aria-label={t('fleet.care.reasonLabel')}>
             {OFF_ROAD_REASONS.map((r) => (
               <button key={r} type="button" role="radio" aria-checked={reason === r} class={'chip chip--tap' + (reason === r ? ' chip--on' : '')} onClick={() => setReason(r)}>

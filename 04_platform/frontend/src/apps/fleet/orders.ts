@@ -519,6 +519,8 @@ export function sendLine(truck: PlanSendTruck, t: Translate): string {
       return t('fleet.plan.send.noDriver', { plate: truck.plate });
     case 'carrying':
       return t('fleet.plan.send.carrying', { plate: truck.plate, driver: truck.driverName ?? '' });
+    case 'off_road':
+      return t('fleet.plan.send.offRoad', { why: truck.held[0]?.why ?? truck.plate });
     case 'nothing_left':
       return t('fleet.plan.send.done', { plate: truck.plate });
     default: {

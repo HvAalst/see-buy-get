@@ -5,6 +5,8 @@ import { AppModule } from '../src/app.module';
 import { VehicleService } from '../src/modules/pudo/vehicle.service';
 import { FleetManagerService } from '../src/modules/pudo/fleet-manager.service';
 import { VehicleCareService } from '../src/modules/pudo/vehicle-care.service';
+import { DispatchService } from '../src/modules/pudo/dispatch.service';
+import { requiredLoadKeys } from '../src/modules/pudo/heavy-cargo';
 
 /**
  * A VEHICLE'S UPKEEP — through the booted application, over HTTP. The unit spec proves the rules on the real services;
@@ -122,7 +124,7 @@ describe('a vehicle’s upkeep, over the wire', () => {
     const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
     const session = await http().post('/v1/sbg/drivers/session').send({ phone, pin: PIN, device: enrolled.body.device }).expect(201);
     const plate = `CHK ${n.slice(-3)}T`;
-    const truck = app.get(VehicleService).register({ plate, vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 8000, ownerName: 'Check Fleet', equipment: ['TLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, managerDid: m.did } as never);
+    const truck = app.get(VehicleService).register({ plate, vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 8000, ownerName: 'Check Fleet', equipment: ['TLT', 'FLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, managerDid: m.did } as never);
     return { fleetDid: m.did, office, did, token: session.body.token.access_token as string, truckId: truck.vehicleId, plate };
   }
 
@@ -198,5 +200,58 @@ describe('a vehicle’s upkeep, over the wire', () => {
     expect((driverInbox.items ?? driverInbox).some((n: { kind: string }) => n.kind === 'vehicle_service')).toBe(false);
     const otherInbox = (await http().get('/v1/sbg/notifications/inbox').set(bearer(other.office)).expect(200)).body;
     expect((otherInbox.items ?? otherInbox).some((n: { kind: string; title: string }) => n.kind === 'vehicle_service' && n.title.startsWith(x.plate))).toBe(false);
+  });
+
+  it('takes a breakdown from the driver out in the vehicle, tells the office and the shipper at once, and the driver how it ended', async () => {
+    const x = await aFleetDriver();
+    const other = await aFleetDriver();
+    const report = (did: string, token: string, body: Record<string, unknown>) => http().post(`/v1/sbg/fleet/drivers/${did}/breakdown`).set(bearer(token)).send(body);
+    // Not out in a vehicle: nothing to report from.
+    expect((await report(x.did, x.token, { cause: 'engine', note: 'Steam' })).body.message).toMatch(/^You are not on a shift/);
+    await http().post(`/v1/sbg/fleet/drivers/${x.did}/start-session`).set(bearer(x.token)).send({ vehicleId: x.truckId, pin: PIN }).expect(201);
+    // A load aboard, placed by somebody else under this fleet's contract: the other office stands in for that shipper.
+    const dispatch = app.get(DispatchService);
+    const load = dispatch.registerFreight({
+      description: 'Cement, 40 bags', pickupLocation: { lat: -1.3, lng: 36.85 }, pickupLabel: 'Bamburi depot', destLabel: 'Site 7', destLocation: { lat: -1.25, lng: 36.9 },
+      weightKg: 2000, packaging: 'palletised', postedByDid: other.fleetDid, postedByName: 'Wanjiku',
+      contract: { contractId: 'ctr_brk', fleetDid: x.fleetDid, fleetName: 'Check Fleet', shipperName: 'Wanjiku Builders' }, deliverOn: new Date().toISOString().slice(0, 10), orderRef: `BRK-${digits()}`,
+    } as never);
+    dispatch.assign(load.freightId, x.did, { managerDid: x.fleetDid, name: 'Office' });
+    dispatch.pickupFreight(load.freightId, x.did, { confirmed: requiredLoadKeys(dispatch.requireFreightPublic(load.freightId)), securementPhotoId: 'med_test' });
+    // Somebody else's driver may not report for this one; a position is both halves or neither.
+    expect((await report(x.did, other.token, { cause: 'engine', note: 'Steam' })).status).toBe(403);
+    expect((await report(x.did, x.token, { cause: 'engine', note: 'Steam', lat: 200, lng: 36.8 })).status).toBe(400);
+    const broke = await report(x.did, x.token, { cause: 'engine', note: 'Steam from the bonnet', lat: -1.31, lng: 36.84 }).expect(201);
+    expect(broke.body).toMatchObject({ plate: x.plate, status: 'open', locationFrom: 'phone', location: { lat: -1.31, lng: 36.84 }, aboard: [{ kind: 'freight', label: load.code, state: 'aboard', shipperTold: true }] });
+    expect((await report(x.did, x.token, { cause: 'engine', note: 'Again' })).body).toMatchObject({ code: 'INVALID_STATE', message: expect.stringMatching(new RegExp(`^${x.plate} is already reported broken down`)) });
+    await new Promise((r) => setTimeout(r, 50));
+    const inboxOf = async (token: string) => {
+      const body = (await http().get('/v1/sbg/notifications/inbox').set(bearer(token)).expect(200)).body;
+      return (body.items ?? body) as Array<{ kind: string; title: string; body: string }>;
+    };
+    // The office, at once, with where.
+    const officeNotice = (await inboxOf(x.office)).find((n) => n.kind === 'vehicle_breakdown');
+    expect(officeNotice).toMatchObject({ title: `${x.plate} has broken down — Baraka` });
+    expect(officeNotice!.body).toMatch(/^Engine: “Steam from the bonnet”\. Where the phone was: -1\.31000, 36\.84000\. One load aboard or to collect: their shippers have been told\./);
+    // The shipper: by its load, never by the plate.
+    const shipperNotice = (await inboxOf(other.office)).find((n) => n.kind === 'freight_problem' && n.title.startsWith(`Load ${load.code}`));
+    expect(shipperNotice).toMatchObject({ title: `Load ${load.code}: the vehicle carrying it broke down` });
+    expect(shipperNotice!.body).not.toContain(x.plate);
+    // The office's list, and nobody else's.
+    expect((await http().get(`/v1/sbg/fleet/managers/${x.fleetDid}/breakdowns`).set(bearer(x.office)).expect(200)).body.map((b: { plate: string }) => b.plate)).toEqual([x.plate]);
+    await http().get(`/v1/sbg/fleet/managers/${x.fleetDid}/breakdowns`).set(bearer(other.office)).expect(403);
+    // How it ended: the office's to say, with what was done. The driver hears, and so does the shipper.
+    const id = broke.body.breakdownId as string;
+    await http().post(`/v1/sbg/vehicles/${x.truckId}/breakdowns/${id}/resolve`).set(bearer(other.office)).send({ outcome: 'back_on_road', note: 'no' }).expect(403);
+    await http().post(`/v1/sbg/vehicles/${x.truckId}/breakdowns/${id}/resolve`).set(bearer(x.token)).send({ outcome: 'back_on_road', note: 'no' }).expect(403);
+    const resolved = await http().post(`/v1/sbg/vehicles/${x.truckId}/breakdowns/${id}/resolve`).set(bearer(x.office)).send({ outcome: 'back_on_road', note: 'Fan belt replaced at the roadside' }).expect(201);
+    expect(resolved.body).toMatchObject({ usable: true, breakdowns: [{ breakdownId: id, status: 'resolved', outcome: 'back_on_road' }] });
+    await new Promise((r) => setTimeout(r, 50));
+    expect((await inboxOf(x.token)).find((n) => n.kind === 'vehicle_breakdown')).toMatchObject({ title: `${x.plate} is back on the road` });
+    expect((await inboxOf(other.office)).some((n) => n.title === `Load ${load.code}: the vehicle is back on the road`)).toBe(true);
+    // The office records one it heard of by telephone.
+    const phoned = await http().post(`/v1/sbg/vehicles/${x.truckId}/breakdowns`).set(bearer(x.office)).send({ cause: 'tyre', note: 'Baraka rang: a blow-out near Mlolongo' }).expect(201);
+    expect(phoned.body).toMatchObject({ usable: false, breakdowns: [{ status: 'open', cause: 'tyre', reportedBy: expect.any(String) }, { status: 'resolved' }] });
+    await http().post(`/v1/sbg/vehicles/${x.truckId}/breakdowns`).set(bearer(other.office)).send({ cause: 'tyre', note: 'x' }).expect(403);
   });
 });

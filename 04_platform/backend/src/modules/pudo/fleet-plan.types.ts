@@ -217,7 +217,7 @@ export class PlanHeld {
  * `sent` its next trip went onto the driver · `no_driver` nobody is on a shift in this truck · `carrying` the driver
  * still has goods aboard, so the next trip waits · `nothing_left` every trip planned on it has gone out.
  */
-export const PLAN_SEND_STATES = ['sent', 'no_driver', 'carrying', 'nothing_left'] as const;
+export const PLAN_SEND_STATES = ['sent', 'no_driver', 'carrying', 'off_road', 'nothing_left'] as const;
 export type PlanSendState = (typeof PLAN_SEND_STATES)[number];
 
 export class PlanSendHeld {

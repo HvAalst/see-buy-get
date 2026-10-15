@@ -113,6 +113,7 @@ describe('P1 — a fleet’s orders', () => {
     expect(sendLine(truck({ state: 'no_driver' }), t)).toBe('KPL 005T: nobody is on a shift in it yet.');
     expect(sendLine(truck({ state: 'carrying', driverName: 'Wanjiru' }), t)).toMatch(/Wanjiru still has goods aboard/);
     expect(sendLine(truck({ state: 'nothing_left' }), t)).toBe('KPL 005T: every trip planned on it has gone out.');
+    expect(sendLine(truck({ state: 'off_road', held: [{ code: 'FRT-3', why: 'KPL 005T is off the road: Broken down (engine), reported by Wanjiru on 16 Oct 2026 at 14:05: steam' }] }), t)).toBe('KPL 005T is off the road: Broken down (engine), reported by Wanjiru on 16 Oct 2026 at 14:05: steam. Its trips wait: plan the day again to put them on another truck.');
     expect(sendLine(truck({ driverName: 'Wanjiru', tripNo: 1, held: [{ code: 'FRT-9', why: 'On duty 14 h — over the 13 h limit' }] }), t)).toBe('KPL 005T: nothing of trip 1 could go on. FRT-9 did not go on: On duty 14 h — over the 13 h limit.');
   });
 

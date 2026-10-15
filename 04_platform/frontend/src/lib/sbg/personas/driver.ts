@@ -129,6 +129,9 @@ export function createDriverApi(sbg: SbgClient) {
     /** A problem with the vehicle they are out in: what, a photo, and whether it is safe to keep driving. */
     reportDefect: (did: string, body: { item: string; note: string; photoRef?: string; safe: boolean }) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/defects', { params: { path: { did } }, body: body as never })),
+    /** Broken down on the road: what happened, a photo, and where the phone is now when it can say. */
+    reportBreakdown: (did: string, body: { cause: string; note: string; photoRef?: string; lat?: number; lng?: number }) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/breakdown', { params: { path: { did } }, body: body as never })),
 
     /** The coming days this driver's fleet has said who drives, and whether they do. */
     driverRoster: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/roster', { params: { path: { did } } })),

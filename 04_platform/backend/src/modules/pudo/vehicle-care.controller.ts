@@ -8,8 +8,9 @@ import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { VehicleService } from './vehicle.service';
 import { VehicleCareService } from './vehicle-care.service';
-import { CareSettingsDto, CheckSheetQueryDto, DecideDefectDto, RecordReadingDto, ReportDefectDto, ServicePlanDto, ServiceRecordDto, TakeOffRoadDto, VehicleCheckDto } from './vehicle-care.dto';
-import { CareSettings, CheckResult, CheckSheet, VehicleCareView, VehicleDefect } from './vehicle-care.types';
+import { CareSettingsDto, CheckSheetQueryDto, DecideDefectDto, RecordReadingDto, ReportBreakdownDto, ReportDefectDto, ResolveBreakdownDto, ServicePlanDto, ServiceRecordDto, TakeOffRoadDto, VehicleCheckDto } from './vehicle-care.dto';
+import { CareSettings, CheckResult, CheckSheet, VehicleBreakdown, VehicleCareView, VehicleDefect } from './vehicle-care.types';
+import { VehicleBreakdownService } from './vehicle-breakdown.service';
 import { FleetService } from './fleet.service';
 
 /**
@@ -24,6 +25,7 @@ export class VehicleCareController {
     private readonly managers: FleetManagerService,
     private readonly drivers: DriverService,
     private readonly fleet: FleetService,
+    private readonly breakdowns: VehicleBreakdownService,
   ) {}
 
   @Roles('fleet_manager', 'driver', 'operator')
@@ -86,6 +88,55 @@ export class VehicleCareController {
     this.ownerOf(id, actor);
     const { bytes, contentType } = this.care.servicePhoto(id, recordId, variant === 'thumb' ? 'thumb' : 'full');
     return new StreamableFile(bytes, { type: contentType });
+  }
+
+  /* --------------------------------------------------------------------------------- breakdowns -- */
+
+  /** Broken down on the road: the driver, of the vehicle they are out in — with where the phone is now, when it can say. */
+  @Roles('driver', 'operator')
+  @Post('fleet/drivers/:did/breakdown')
+  reportBreakdown(@Param('did') did: string, @Body() dto: ReportBreakdownDto, @Actor() actor: IntrospectionResult): VehicleBreakdown {
+    this.driverActs(did, actor);
+    const vehicleId = this.fleet.activeForDriver(did)?.vehicleId;
+    if (!vehicleId) throw new GlosError('INVALID_STATE', 'You are not on a shift: a breakdown is reported from the vehicle you are out in');
+    const { cause, note, photoRef, lat, lng } = dto;
+    return this.breakdowns.report(vehicleId, { by: this.drivers.get(did).displayName, byDid: did }, { cause, note, photoRef, lat, lng });
+  }
+
+  /** A breakdown the office heard of by telephone — or an owner-driver's own vehicle. */
+  @Roles('fleet_manager', 'driver', 'operator')
+  @Post('vehicles/:id/breakdowns')
+  recordBreakdown(@Param('id') id: string, @Body() dto: ReportBreakdownDto, @Actor() actor: IntrospectionResult): VehicleCareView {
+    const by = this.ownerOf(id, actor);
+    const { cause, note, lat, lng } = dto;
+    this.breakdowns.report(id, { by }, { cause, note, lat, lng });
+    return this.care.view(id);
+  }
+
+  /** How it ended: back on the road, or into the workshop — with what was done. */
+  @Roles('fleet_manager', 'driver', 'operator')
+  @Post('vehicles/:id/breakdowns/:breakdownId/resolve')
+  resolveBreakdown(@Param('id') id: string, @Param('breakdownId') breakdownId: string, @Body() dto: ResolveBreakdownDto, @Actor() actor: IntrospectionResult): VehicleCareView {
+    return this.care.resolveBreakdown(id, breakdownId, dto, this.ownerOf(id, actor));
+  }
+
+  /** A breakdown's photograph, to the vehicle's owner — asked of the breakdown, never of the photo. */
+  @Roles('fleet_manager', 'driver', 'operator')
+  @Get('vehicles/:id/breakdowns/:breakdownId/photo')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('X-Content-Type-Options', 'nosniff')
+  breakdownPhoto(@Param('id') id: string, @Param('breakdownId') breakdownId: string, @Query('variant') variant: string | undefined, @Actor() actor: IntrospectionResult): StreamableFile {
+    this.ownerOf(id, actor);
+    const { bytes, contentType } = this.breakdowns.photo(id, breakdownId, variant === 'thumb' ? 'thumb' : 'full');
+    return new StreamableFile(bytes, { type: contentType });
+  }
+
+  /** A fleet's vehicles broken down now: its office's and staff's to read. */
+  @Roles('fleet_manager', 'operator')
+  @Get('fleet/managers/:did/breakdowns')
+  fleetBreakdowns(@Param('did') did: string, @Actor() actor: IntrospectionResult): VehicleBreakdown[] {
+    this.officeOf(did, actor);
+    return this.breakdowns.openForFleet(did);
   }
 
   /* ------------------------------------------------------------------- the daily check, defects -- */

@@ -758,3 +758,22 @@
   font-size: 14px;
   color: var(--tx-soft);
 }
+
+/* A row of choices to tap — a problem's item, a breakdown's cause. The shared .chip is a filter chip with a label
+   inside; a choice is the button itself, so it carries its own padding. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip--tap {
+  min-height: 40px;
+  padding: 6px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tx2);
+  cursor: pointer;
+}
+.chip--tap.chip--on {
+  color: var(--blue);
+}

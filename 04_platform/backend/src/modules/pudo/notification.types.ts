@@ -163,6 +163,11 @@ export const NOTIFICATION_KINDS = [
   /** A fleet's vehicle due for a service soon, or overdue: to its office, once each — never to a driver. */
   'vehicle_service',
   /**
+   * A vehicle broken down on the road: to its fleet's office at once, with where; how it ended, to the driver who was
+   * out in it. The shippers of what was aboard are told as a freight problem, never by the plate.
+   */
+  'vehicle_breakdown',
+  /**
    * Something happened to the way somebody signs in that they did not do — five wrong PINs locked it. Said to the
    * person, because the one who typed them may know their number, and the owner is the only one who can act.
    */

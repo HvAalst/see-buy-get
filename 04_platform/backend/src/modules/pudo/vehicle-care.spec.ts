@@ -56,6 +56,8 @@ import { FleetPlanService } from './fleet-plan.service';
 import { ROUTER as ROUTER_TOKEN, type Router } from './router';
 import { clockAt } from './fleet-clock';
 import { CHECKLIST, VehicleCareService } from './vehicle-care.service';
+import { VehicleBreakdownService } from './vehicle-breakdown.service';
+import { requiredLoadKeys, requiredUnloadKeys } from './heavy-cargo';
 import { GlosEvent } from '../../foundation/events/glos-events';
 
 const DAY = 86_400_000;
@@ -72,6 +74,7 @@ describe('a vehicle’s upkeep', () => {
   let dispatch: DispatchService;
   let plans: FleetPlanService;
   let care: VehicleCareService;
+  let breakdowns: VehicleBreakdownService;
   let bus: EventBus;
   let media: MediaService;
   let seq = 0;
@@ -103,7 +106,8 @@ describe('a vehicle’s upkeep', () => {
     plans = new FleetPlanService(dispatch, vehicles, drivers, managers, moduleRef.get<Router>(ROUTER_TOKEN), fleet, moduleRef.get(EventBus));
     bus = moduleRef.get(EventBus);
     media = moduleRef.get(MediaService);
-    care = new VehicleCareService(vehicles, managers, fleet, drivers, media, bus);
+    breakdowns = new VehicleBreakdownService(vehicles, managers, fleet, drivers, dispatch, moduleRef.get(DepartureService), media, bus);
+    care = new VehicleCareService(vehicles, managers, fleet, drivers, media, bus, breakdowns);
   });
 
   // Kenyan fleets: their days are Nairobi's.
@@ -135,11 +139,12 @@ describe('a vehicle’s upkeep', () => {
     return vehicles.register({ plate, vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 8000, ownerName: 'X', equipment: ['TLT', 'FLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, managerDid } as never);
   }
   const contractOf = (f: { did: string; companyName: string }): ContractRef => ({ contractId: 'ctr_vc', fleetDid: f.did, fleetName: f.companyName, shipperName: 'Jenga Bricks' });
-  function anOrder(f: { did: string; companyName: string }, day: string) {
+  /** An order under the fleet's contract — typed in by its own office, unless the shipper placed it. */
+  function anOrder(f: { did: string; companyName: string }, day: string, postedByDid = f.did) {
     seq += 1;
     return dispatch.registerFreight({
       description: `Bricks ${seq}`, pickupLocation: { lat: -1.3, lng: 36.85 }, pickupLabel: 'Jenga yard', destLabel: `Site ${seq}`, destLocation: { lat: -1.25, lng: 36.9 },
-      weightKg: 2000, packaging: 'palletised', postedByDid: f.did, postedByName: 'Amina', contract: contractOf(f), deliverOn: day, orderRef: `WS-${seq}`,
+      weightKg: 2000, packaging: 'palletised', postedByDid, postedByName: 'Amina', contract: contractOf(f), deliverOn: day, orderRef: `WS-${seq}`,
     });
   }
 
@@ -453,6 +458,149 @@ describe('a vehicle’s upkeep', () => {
       expect(care.servicePhoto(truck.vehicleId, view.services[0].recordId, 'full').contentType).toBe('image/png');
       expect(() => care.servicePhoto(truck.vehicleId, 'svc_nope', 'full')).toThrow(/No job card/);
       expect(() => media.removeByOwner(theirs.mediaId, f.did)).toThrow(/kept as evidence/);
+    });
+  });
+
+  describe('a breakdown on the road', () => {
+    const JENGA = 'did:glos:jenga-bricks';
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    type Told = { fleetDid?: string; plate: string; carrier: string; breakdown: { breakdownId: string }; tell: Array<Record<string, unknown>> };
+    let broke: Told[];
+    let ended: Told[];
+    beforeEach(() => {
+      broke = [];
+      ended = [];
+      bus.subscribe<Told>(GlosEvent.Pudo.VehicleBrokeDown, (e) => {
+        broke.push(e.payload);
+      });
+      bus.subscribe<Told>(GlosEvent.Pudo.VehicleBreakdownResolved, (e) => {
+        ended.push(e.payload);
+      });
+    });
+    /** A truck of a fleet, out on a shift with one of its drivers. */
+    function outOnTheRoad(plate: string) {
+      const f = aFleet();
+      const truck = aTruck(f.did, plate);
+      const amos = aDriver(f.did);
+      fleet.couple(amos.did, truck.vehicleId);
+      return { f, truck, amos, who: { by: amos.displayName, byDid: amos.did } };
+    }
+    const onTruck = (f: { did: string }, freightId: string, driverDid: string, pickUp: boolean) => {
+      dispatch.assign(freightId, driverDid, { managerDid: f.did, name: 'Amina' });
+      if (pickUp) dispatch.pickupFreight(freightId, driverDid, { confirmed: requiredLoadKeys(dispatch.requireFreightPublic(freightId)), securementPhotoId: 'med_test' });
+    };
+
+    it('is reported by the driver with where the phone is: off the road at once, and the office and the shippers told — never by the plate', () => {
+      const { f, truck, amos, who } = outOnTheRoad('KVC 980T');
+      const aboard = anOrder(f, dayPlus(0), JENGA);
+      onTruck(f, aboard.freightId, amos.did, true);
+      const toCollect = anOrder(f, dayPlus(0), JENGA);
+      onTruck(f, toCollect.freightId, amos.did, false);
+      const own = anOrder(f, dayPlus(0)); // typed in by the fleet's own office: nobody to tell
+      onTruck(f, own.freightId, amos.did, false);
+      const b = breakdowns.report(truck.vehicleId, who, { cause: 'engine', note: 'Steam from the bonnet', lat: -1.31, lng: 36.84 });
+      expect(b).toMatchObject({ plate: 'KVC 980T', cause: 'engine', driverDid: amos.did, driverName: amos.displayName, location: { lat: -1.31, lng: 36.84 }, locationFrom: 'phone', status: 'open', held: [] });
+      expect(b.aboard).toHaveLength(3);
+      expect(b.aboard).toEqual(
+        expect.arrayContaining([
+          { kind: 'freight', id: aboard.freightId, label: aboard.code, state: 'aboard', shipperTold: true },
+          { kind: 'freight', id: toCollect.freightId, label: toCollect.code, state: 'to_collect', shipperTold: true },
+          { kind: 'freight', id: own.freightId, label: own.code, state: 'to_collect', shipperTold: false },
+        ]),
+      );
+      // Off the road at once, said at every door.
+      expect(vehicles.isUsable(truck.vehicleId)).toBe(false);
+      expect(vehicles.offRoadReasons(truck.vehicleId)).toEqual([expect.stringMatching(new RegExp(`^Broken down \\(engine\\), reported by ${amos.displayName} on \\d+ \\w{3} \\d{4} at \\d\\d:\\d\\d: Steam from the bonnet$`))]);
+      // The office, and the shippers to tell: by what they sent, never the plate.
+      expect(broke).toHaveLength(1);
+      expect(broke[0]).toMatchObject({ fleetDid: f.did, plate: 'KVC 980T', carrier: 'Kilima Logistics' });
+      expect(broke[0].tell).toHaveLength(2);
+      expect(broke[0].tell).toEqual(
+        expect.arrayContaining([
+          { shipperDid: JENGA, kind: 'freight', label: aboard.code, state: 'aboard', freightId: aboard.freightId },
+          { shipperDid: JENGA, kind: 'freight', label: toCollect.code, state: 'to_collect', freightId: toCollect.freightId },
+        ]),
+      );
+      expect(JSON.stringify(broke[0].tell)).not.toContain('KVC 980T');
+      // The driver's shift goes on: they are standing beside it.
+      expect(fleet.activeForDriver(amos.did)?.vehicleId).toBe(truck.vehicleId);
+    });
+
+    it('is refused before anything is kept when it says nothing, half a position, a photo not theirs, or twice — and takes the last known position', () => {
+      const { truck, amos, who } = outOnTheRoad('KVC 981T');
+      expect(() => breakdowns.report(truck.vehicleId, who, { cause: 'tyre', note: '  ' })).toThrow('Say what happened');
+      expect(() => breakdowns.report(truck.vehicleId, who, { cause: 'tyre', note: 'Blow-out', lat: -1.3 })).toThrow('A position is a latitude and a longitude together');
+      const someoneElses = media.upload({ ownerDid: 'did:glos:somebody', kind: 'defect', dataUrl: PNG });
+      expect(() => breakdowns.report(truck.vehicleId, who, { cause: 'tyre', note: 'Blow-out', photoRef: someoneElses.mediaId })).toThrow(/not one you took/);
+      expect(vehicles.isUsable(truck.vehicleId)).toBe(true);
+      expect(broke).toEqual([]);
+      // No position from the phone: the shift's last known one.
+      fleet.reportLocation(amos.did, { lat: -1.28, lng: 36.81 });
+      const theirs = media.upload({ ownerDid: amos.did, kind: 'defect', dataUrl: PNG });
+      const b = breakdowns.report(truck.vehicleId, who, { cause: 'tyre', note: 'Blow-out, rear left', photoRef: theirs.mediaId });
+      expect(b).toMatchObject({ location: { lat: -1.28, lng: 36.81 }, locationFrom: 'last_known', hasPhoto: true, aboard: [], held: [] });
+      expect(b).not.toHaveProperty('photoRef');
+      expect(breakdowns.photo(truck.vehicleId, b.breakdownId, 'full').contentType).toBe('image/png');
+      expect(() => media.removeByOwner(theirs.mediaId, amos.did)).toThrow(/kept as evidence/);
+      expect(() => breakdowns.report(truck.vehicleId, who, { cause: 'engine', note: 'Again' })).toThrow(/^KVC 981T is already reported broken down \(.+\): the office has it$/);
+    });
+
+    it('holds today’s planned trips for it, and the plan sends it nothing more while it is off the road', () => {
+      const { f, truck, who } = outOnTheRoad('KVC 982T');
+      const one = anOrder(f, dayPlus(0));
+      const two = anOrder(f, dayPlus(0));
+      plans.accept(f.did, { day: dayPlus(0) }, 'Amina');
+      expect(dispatch.plannedOrdersOn(f.did, dayPlus(0), truck.vehicleId).map((x) => x.code).sort()).toEqual([one.code, two.code].sort());
+      const b = breakdowns.report(truck.vehicleId, who, { cause: 'fuel', note: 'Ran dry outside Athi River' });
+      expect([...b.held].sort()).toEqual([one.code, two.code].sort());
+      expect(dispatch.requireFreightPublic(one.freightId).planned?.held?.why).toBe('KVC 982T broke down on the road: plan the day again to put it on another truck');
+      // Its driver is on the shift with nothing aboard — the plan would have sent the next trip. Not to a truck off the road.
+      const sent = plans.send(f.did, dayPlus(0)).trucks.find((t) => t.vehicleId === truck.vehicleId)!;
+      expect(sent).toMatchObject({ state: 'off_road', sent: [] });
+      expect(sent.held).toHaveLength(2);
+      expect(sent.held[0].why).toMatch(/^KVC 982T is off the road: Broken down \(fuel\)/);
+      expect(dispatch.requireFreightPublic(one.freightId).status).toBe('ordered');
+    });
+
+    it('ends back on the road as the office says, with what was done: the driver and the shippers of what is still aboard are told', () => {
+      const { f, truck, amos, who } = outOnTheRoad('KVC 983T');
+      const load = anOrder(f, dayPlus(0), JENGA);
+      onTruck(f, load.freightId, amos.did, true);
+      const b = breakdowns.report(truck.vehicleId, who, { cause: 'engine', note: 'Overheating' });
+      expect(() => care.resolveBreakdown(truck.vehicleId, b.breakdownId, { outcome: 'back_on_road', note: ' ' }, 'Amina')).toThrow('Say what was done');
+      expect(() => care.resolveBreakdown(truck.vehicleId, 'brk_nope', { outcome: 'back_on_road', note: 'x' }, 'Amina')).toThrow('No such breakdown on this vehicle');
+      const view = care.resolveBreakdown(truck.vehicleId, b.breakdownId, { outcome: 'back_on_road', note: 'Fan belt replaced at the roadside' }, 'Amina');
+      expect(view).toMatchObject({ usable: true, offRoad: [] });
+      expect(view.breakdowns[0]).toMatchObject({ breakdownId: b.breakdownId, status: 'resolved', outcome: 'back_on_road', resolvedBy: 'Amina', resolutionNote: 'Fan belt replaced at the roadside' });
+      expect(ended).toHaveLength(1);
+      expect(ended[0].tell).toEqual([{ shipperDid: JENGA, kind: 'freight', label: load.code, state: 'aboard', freightId: load.freightId }]);
+      expect(() => care.resolveBreakdown(truck.vehicleId, b.breakdownId, { outcome: 'back_on_road', note: 'Again' }, 'Amina')).toThrow('That breakdown has already been resolved');
+      // A load delivered since is nobody's news any more.
+      const again = breakdowns.report(truck.vehicleId, who, { cause: 'engine', note: 'Overheating again' });
+      dispatch.deliverFreight(load.freightId, amos.did, { confirmed: requiredUnloadKeys(), receiverName: 'Site foreman', podPhotoId: 'med_pod' });
+      care.resolveBreakdown(truck.vehicleId, again.breakdownId, { outcome: 'back_on_road', note: 'Radiator topped up' }, 'Amina');
+      expect(ended[1].tell).toEqual([]);
+    });
+
+    it('ends in the workshop: off the road as a repair until the day said — refused whole when those days are taken', () => {
+      const { truck, who } = outOnTheRoad('KVC 984T');
+      const b = breakdowns.report(truck.vehicleId, who, { cause: 'electrical', note: 'Dead, will not crank' });
+      care.takeOffRoad(truck.vehicleId, { reason: 'service', fromDay: dayPlus(2), untilDay: dayPlus(2) }, 'Amina');
+      expect(() => care.resolveBreakdown(truck.vehicleId, b.breakdownId, { outcome: 'workshop', note: 'Towed to Mombasa Road Motors' }, 'Amina')).toThrow(/already off the road from/);
+      expect(breakdowns.of(truck.vehicleId)[0].status).toBe('open'); // nothing written
+      const view = care.resolveBreakdown(truck.vehicleId, b.breakdownId, { outcome: 'workshop', note: 'Towed to Mombasa Road Motors', untilDay: dayPlus(1) }, 'Amina');
+      expect(view.usable).toBe(false);
+      expect(view.offRoad).toEqual([expect.stringMatching(/^In the workshop until .+: Towed to Mombasa Road Motors$/)]);
+      expect(view.breakdowns[0]).toMatchObject({ status: 'resolved', outcome: 'workshop' });
+      expect(ended[0]).toMatchObject({ plate: 'KVC 984T', tell: [] });
+    });
+
+    it('is the owning fleet’s to see: on the vehicle’s sheet, and on the fleet’s list of what is broken down now', () => {
+      const { f, truck, who } = outOnTheRoad('KVC 985T');
+      breakdowns.report(truck.vehicleId, who, { cause: 'accident', note: 'Hit by a matatu, nobody hurt' });
+      expect(care.view(truck.vehicleId).breakdowns).toHaveLength(1);
+      expect(breakdowns.openForFleet(f.did).map((b) => b.plate)).toEqual(['KVC 985T']);
+      expect(breakdowns.openForFleet(aFleet('Pwani Haulage').did)).toEqual([]);
     });
   });
 

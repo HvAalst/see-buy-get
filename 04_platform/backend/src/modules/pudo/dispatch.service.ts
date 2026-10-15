@@ -2050,6 +2050,19 @@ export class DispatchService {
     return [...this.freights.values()].filter((f) => f.claimedBy === driverDid && (f.status === 'claimed' || f.status === 'in_transit')).length;
   }
 
+  /**
+   * A BREAKDOWN'S QUESTION: the loads a driver has taken on and not delivered — in this vehicle now, or still to be
+   * collected by it — and the shipper to tell about each, where that is somebody here and not the carrier's own office.
+   */
+  loadsOnVehicle(driverDid: string, vehicleId: string): Array<{ freightId: string; code: string; state: 'aboard' | 'to_collect'; shipperDid?: string }> {
+    return [...this.freights.values()]
+      .filter((f) => f.claimedBy === driverDid && (f.status === 'claimed' || (f.status === 'in_transit' && (!f.carriage || f.carriage.vehicleId === vehicleId))))
+      .map((f) => {
+        const shipperDid = this.shipperToTell(f);
+        return { freightId: f.freightId, code: f.code, state: f.status === 'in_transit' ? ('aboard' as const) : ('to_collect' as const), ...(shipperDid ? { shipperDid } : {}) };
+      });
+  }
+
   /** P3b — the plan tried to put this order on its truck and was refused: kept on the order, in the refusal's own words. */
   holdPlanned(freightId: string, why: string | undefined, now: number = Date.now()): void {
     const f = this.freights.get(freightId);

@@ -887,6 +887,20 @@ export class DepartureService {
   }
 
   /**
+   * A BREAKDOWN'S QUESTION: the bookings aboard a vehicle's runs that have left, and the shipper of each where the load
+   * was sold to one. The fleet's own bookings name nobody to tell: the office is the one telling.
+   */
+  bookingsAboard(vehicleId: string): Array<{ departureId: string; bookingId: string; lineName: string; description: string; shipperDid?: string }> {
+    return this.list()
+      .filter((d) => d.vehicleId === vehicleId && d.status === 'departed')
+      .flatMap((d) =>
+        d.bookings
+          .filter((b) => b.status === 'booked')
+          .map((b) => ({ departureId: d.departureId, bookingId: b.bookingId, lineName: d.lineName, description: b.description, ...(b.kind === 'sold' ? { shipperDid: b.shipperDid } : {}) })),
+      );
+  }
+
+  /**
    * A DRIVER LEFT THEIR FLEET: they come off every run of it that has not left yet. A run is sold before anybody is
    * rostered on it — "no driver yet" is an ordinary state — so the run stands, its bookings stand, and the office has
    * to put somebody else on it. A run that HAS left is not touched: goods are aboard, and that is finished first.

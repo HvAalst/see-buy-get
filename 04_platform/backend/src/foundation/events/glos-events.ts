@@ -74,6 +74,9 @@ export const GlosEvent = {
     VehicleDefectDecided: 'pudo.vehicle_defect_decided',
     // A fleet's vehicle comes due for a service, or is overdue: its office is told, once each.
     VehicleServiceDue: 'pudo.vehicle_service_due',
+    // A vehicle broke down on the road (its office and the shippers of what is aboard are told), and how it ended.
+    VehicleBrokeDown: 'pudo.vehicle_broke_down',
+    VehicleBreakdownResolved: 'pudo.vehicle_breakdown_resolved',
     // The receiver added a note to a damage claim report, after handover: the sender is told.
     DamageReportNoted: 'pudo.damage_report_noted',
     /**

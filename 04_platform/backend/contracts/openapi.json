@@ -23116,6 +23116,191 @@
         }
       }
     },
+    "/v1/sbg/fleet/drivers/{did}/breakdown": {
+      "post": {
+        "operationId": "VehicleCare.reportBreakdown",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportBreakdownDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleBreakdown"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vehicles/{id}/breakdowns": {
+      "post": {
+        "operationId": "VehicleCare.recordBreakdown",
+        "summary": "",
+        "description": "A breakdown the office heard of by telephone — or an owner-driver's own vehicle.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportBreakdownDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleCareView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vehicles/{id}/breakdowns/{breakdownId}/resolve": {
+      "post": {
+        "operationId": "VehicleCare.resolveBreakdown",
+        "summary": "",
+        "description": "How it ended: back on the road, or into the workshop — with what was done.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "breakdownId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveBreakdownDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleCareView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vehicles/{id}/breakdowns/{breakdownId}/photo": {
+      "get": {
+        "operationId": "VehicleCare.breakdownPhoto",
+        "summary": "",
+        "description": "A breakdown's photograph, to the vehicle's owner — asked of the breakdown, never of the photo.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "breakdownId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/breakdowns": {
+      "get": {
+        "operationId": "VehicleCare.fleetBreakdowns",
+        "summary": "",
+        "description": "A fleet's vehicles broken down now: its office's and staff's to read.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VehicleBreakdown"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/vehicle-check": {
       "get": {
         "operationId": "VehicleCare.checkSheet",
@@ -45453,6 +45638,7 @@
               "sent",
               "no_driver",
               "carrying",
+              "off_road",
               "nothing_left"
             ]
           },
@@ -46207,6 +46393,157 @@
           "at"
         ]
       },
+      "BreakdownLoad": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "freight",
+              "booking"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "aboard",
+              "to_collect"
+            ]
+          },
+          "departureId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "description": "The order's id, or the run booking's."
+          },
+          "label": {
+            "type": "string",
+            "description": "What the office calls it: the order's code, or what the booking said it was."
+          },
+          "shipperTold": {
+            "type": "boolean",
+            "description": "Its shipper is somebody here, and was told. The fleet's own loads tell nobody."
+          }
+        },
+        "required": [
+          "kind",
+          "state",
+          "id",
+          "label",
+          "shipperTold"
+        ]
+      },
+      "VehicleBreakdown": {
+        "type": "object",
+        "properties": {
+          "cause": {
+            "type": "string",
+            "enum": [
+              "engine",
+              "tyre",
+              "electrical",
+              "brakes",
+              "fuel",
+              "accident",
+              "other"
+            ]
+          },
+          "hasPhoto": {
+            "type": "boolean"
+          },
+          "reportedByDid": {
+            "type": "string"
+          },
+          "driverDid": {
+            "type": "string",
+            "description": "The driver on a shift in it then, if anybody was."
+          },
+          "driverName": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "locatedAt": {
+            "type": "string"
+          },
+          "locationFrom": {
+            "type": "string",
+            "description": "Where the position came from: the phone as it was reported, or the shift's last known.",
+            "enum": [
+              "phone",
+              "last_known"
+            ]
+          },
+          "aboard": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BreakdownLoad"
+            }
+          },
+          "held": {
+            "description": "Today's planned orders that were waiting for it, held: their codes.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "resolved"
+            ]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "back_on_road",
+              "workshop"
+            ]
+          },
+          "resolvedBy": {
+            "type": "string"
+          },
+          "resolvedAt": {
+            "type": "string"
+          },
+          "resolutionNote": {
+            "type": "string"
+          },
+          "breakdownId": {
+            "type": "string"
+          },
+          "vehicleId": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "reportedBy": {
+            "type": "string"
+          },
+          "reportedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "cause",
+          "aboard",
+          "held",
+          "status",
+          "breakdownId",
+          "vehicleId",
+          "plate",
+          "note",
+          "reportedBy",
+          "reportedAt"
+        ]
+      },
       "VehicleCareView": {
         "type": "object",
         "properties": {
@@ -46264,6 +46601,13 @@
               "$ref": "#/components/schemas/ServiceRecord"
             }
           },
+          "breakdowns": {
+            "description": "Broken down: the open one, and those resolved in the last month, newest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VehicleBreakdown"
+            }
+          },
           "lastCheckBy": {
             "type": "string",
             "description": "The last daily check: who, when, and what it found."
@@ -46306,6 +46650,7 @@
           "decided",
           "service",
           "services",
+          "breakdowns",
           "vehicleId",
           "plate",
           "today",
@@ -46417,6 +46762,69 @@
         "required": [
           "day",
           "what"
+        ]
+      },
+      "ReportBreakdownDto": {
+        "type": "object",
+        "properties": {
+          "cause": {
+            "type": "string",
+            "enum": [
+              "engine",
+              "tyre",
+              "electrical",
+              "brakes",
+              "fuel",
+              "accident",
+              "other"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "photoRef": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "lat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "lng": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          }
+        },
+        "required": [
+          "cause",
+          "note"
+        ]
+      },
+      "ResolveBreakdownDto": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "back_on_road",
+              "workshop"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "untilDay": {
+            "type": "string",
+            "pattern": "DAY"
+          }
+        },
+        "required": [
+          "outcome",
+          "note"
         ]
       },
       "CheckItemView": {

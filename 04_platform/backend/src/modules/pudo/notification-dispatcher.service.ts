@@ -1,6 +1,7 @@
 import type { OrderHandedOn } from './fleet-overflow.types';
 import type { DriverRostered } from './fleet-roster.service';
 import { ITEM_WORDS, type VehicleDefectDecided, type VehicleDefectReported, type VehicleServiceDue } from './vehicle-care.service';
+import { CAUSE_WORDS, type VehicleBreakdownResolved, type VehicleBrokeDown } from './vehicle-breakdown.service';
 import type { DeliveryTiming, PlanLeftWhy } from './dispatch.types';
 import { UNCOLLECTED_H } from './pudo.config';
 import { runningLate } from './parcel.service';
@@ -412,6 +413,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<VehicleDefectReported>(GlosEvent.Pudo.VehicleDefectReported, (e) => this.onDefectReported(e.payload));
     this.events.subscribe<VehicleDefectDecided>(GlosEvent.Pudo.VehicleDefectDecided, (e) => this.onDefectDecided(e.payload));
     this.events.subscribe<VehicleServiceDue>(GlosEvent.Pudo.VehicleServiceDue, (e) => this.onServiceDue(e.payload));
+    this.events.subscribe<VehicleBrokeDown>(GlosEvent.Pudo.VehicleBrokeDown, (e) => this.onVehicleBrokeDown(e.payload));
+    this.events.subscribe<VehicleBreakdownResolved>(GlosEvent.Pudo.VehicleBreakdownResolved, (e) => this.onBreakdownResolved(e.payload));
     // FP4 (courier) — the renewed licence they sent was checked. They sent it and are waiting: either answer.
     this.events.subscribe<{ did: string; accepted: boolean; expiresAt?: string; reason?: string }>(GlosEvent.Pudo.DriverLicenceChecked, (e) => this.onLicenceChecked(e.payload));
     this.events.subscribe<LicenceSent>(GlosEvent.Pudo.DriverLicenceSent, (e) => this.onLicenceSent(e.payload));
@@ -1353,6 +1356,72 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       });
     } catch (err) {
       this.logger.warn(`service notice failed for ${p.vehicleId}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * A VEHICLE BROKE DOWN: its office hears at once, with where. The shippers of what is aboard it, or on its way to be
+   * collected by it, hear too — by what they sent, never the plate, which a shipper is not shown.
+   */
+  private async onVehicleBrokeDown(p: VehicleBrokeDown): Promise<void> {
+    const b = p.breakdown;
+    if (p.fleetDid) {
+      const where = b.location ? `${b.locationFrom === 'phone' ? 'Where the phone was' : 'Last known position'}: ${b.location.lat.toFixed(5)}, ${b.location.lng.toFixed(5)}` : 'No position known';
+      const aboard = b.aboard.length ? `${b.aboard.length === 1 ? 'One load' : `${b.aboard.length} loads`} aboard or to collect${b.aboard.some((l) => l.shipperTold) ? ': their shippers have been told' : ''}.` : 'Nothing aboard.';
+      const held = b.held.length ? ` ${b.held.length === 1 ? 'One planned order' : `${b.held.length} planned orders`} for today held: plan the day again.` : '';
+      await this.tell(p.fleetDid, {
+        kind: 'vehicle_breakdown',
+        title: `${p.plate} has broken down${b.driverName ? ` — ${b.driverName}` : ''}`,
+        body: `${CAUSE_WORDS[b.cause]}: “${b.note}”. ${where}. ${aboard}${held} Say how it ends under Vehicles → Upkeep.`,
+        tag: `breakdown:${b.breakdownId}`,
+        data: { vehicleId: b.vehicleId, breakdownId: b.breakdownId, ...(b.location ? { lat: b.location.lat, lng: b.location.lng } : {}) },
+      });
+    }
+    for (const s of p.tell) {
+      await this.tell(s.shipperDid, {
+        kind: 'freight_problem',
+        title: s.kind === 'booking' ? `${s.lineName}: the vehicle carrying your goods broke down` : s.state === 'aboard' ? `Load ${s.label}: the vehicle carrying it broke down` : `Load ${s.label}: the vehicle coming to collect it broke down`,
+        body:
+          s.kind === 'booking'
+            ? `${p.carrier} reported it on the road, ${p.when}, with your goods aboard (${s.label}). Your booking stands; you will be told how they go on.`
+            : s.state === 'aboard'
+              ? `${p.carrier} reported it on the road, ${p.when}. Your goods are still with the driver; you will be told how they go on.`
+              : `${p.carrier} reported it on the road, ${p.when}, before it collected your goods. You will be told when they are collected.`,
+        tag: `breakdown:${b.breakdownId}:${s.freightId ?? s.departureId ?? s.label}`,
+        data: { breakdownId: b.breakdownId, ...(s.freightId ? { freightId: s.freightId } : {}), ...(s.departureId ? { departureId: s.departureId } : {}) },
+      });
+    }
+  }
+
+  /** How a breakdown ended: the driver who was out in it hears, and so do the shippers of what is still aboard. */
+  private async onBreakdownResolved(p: VehicleBreakdownResolved): Promise<void> {
+    const b = p.breakdown;
+    const back = b.outcome === 'back_on_road';
+    const driver = b.driverDid ?? b.reportedByDid;
+    if (driver) {
+      await this.tell(driver, {
+        kind: 'vehicle_breakdown',
+        title: back ? `${p.plate} is back on the road` : `${p.plate} is going to the workshop`,
+        body: `${b.resolvedBy}: “${b.resolutionNote ?? ''}”.`,
+        tag: `breakdown:${b.breakdownId}`,
+        data: { vehicleId: b.vehicleId, breakdownId: b.breakdownId },
+      });
+    }
+    for (const s of p.tell) {
+      const what = s.kind === 'booking' ? `${s.lineName}:` : `Load ${s.label}:`;
+      await this.tell(s.shipperDid, {
+        kind: 'freight_problem',
+        title: back ? `${what} the vehicle is back on the road` : `${what} the vehicle went to the workshop`,
+        body: back
+          ? s.state === 'aboard'
+            ? 'The vehicle carrying your goods is moving again.'
+            : 'The vehicle coming to collect your goods is moving again.'
+          : s.state === 'aboard'
+            ? `${p.carrier} will move your goods to another vehicle; you will be told when they go on.`
+            : `${p.carrier} will send another vehicle to collect your goods.`,
+        tag: `breakdown:${b.breakdownId}:${s.freightId ?? s.departureId ?? s.label}:end`,
+        data: { breakdownId: b.breakdownId, ...(s.freightId ? { freightId: s.freightId } : {}), ...(s.departureId ? { departureId: s.departureId } : {}) },
+      });
     }
   }
 
