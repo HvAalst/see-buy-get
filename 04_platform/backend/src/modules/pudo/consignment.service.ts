@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
+import { PersistentMap } from '../../foundation/store/persistent-map';
 import { CargoNature } from './cargo.types';
 import { Consignment, GeoPoint } from './pudo.types';
 import { tempBand } from './heavy-cargo';
@@ -21,11 +22,23 @@ import { CONSIGNMENT_MAX_WAIT_H, MAX_CONSIGNMENT_TARGET_KG } from './pudo.config
  */
 @Injectable()
 export class ConsignmentService {
-  private readonly lots = new Map<string, Consignment>(); // consignmentId → lot
-  private readonly byCode = new Map<string, string>(); // code → consignmentId
+  /**
+   * The lots themselves — a cooperative's members' deposits — kept across a restart. They were held in memory alone,
+   * so a deploy emptied every open lot and the kilos its members had brought in with it.
+   */
+  private readonly lots = new PersistentMap<string, Consignment>('consignment-lots'); // consignmentId → lot
+  /** code → consignmentId: an index, rebuilt from the lots, never a second record. */
+  private readonly byCode = new Map<string, string>();
+  /** The last LOT number given: carried on from the lots kept, so a restart never gives LOT-001 again. */
   private seq = 0;
 
-  constructor(private readonly dispatch: DispatchService) {}
+  constructor(private readonly dispatch: DispatchService) {
+    for (const lot of this.lots.values()) {
+      this.byCode.set(lot.code, lot.consignmentId);
+      const n = Number(/^LOT-(\d+)$/.exec(lot.code)?.[1] ?? 0);
+      if (n > this.seq) this.seq = n;
+    }
+  }
 
   /**
    * Open a consolidation lot. Rejects a perishable commodity (it books freight directly, never consolidates)
