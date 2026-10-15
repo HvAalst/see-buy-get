@@ -2,13 +2,13 @@ import { Body, Controller, Get, Header, Param, Post, Query, StreamableFile } fro
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
-import { actingTenant, auditActor } from '../../foundation/auth/acting';
+import { actingDid, actingTenant, auditActor } from '../../foundation/auth/acting';
 import { GlosError } from '../../foundation/http/glos-error';
 import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { VehicleService } from './vehicle.service';
 import { VehicleCareService } from './vehicle-care.service';
-import { CareSettingsDto, CheckSheetQueryDto, DecideDefectDto, RecordReadingDto, ReportDefectDto, TakeOffRoadDto, VehicleCheckDto } from './vehicle-care.dto';
+import { CareSettingsDto, CheckSheetQueryDto, DecideDefectDto, RecordReadingDto, ReportDefectDto, ServicePlanDto, ServiceRecordDto, TakeOffRoadDto, VehicleCheckDto } from './vehicle-care.dto';
 import { CareSettings, CheckResult, CheckSheet, VehicleCareView, VehicleDefect } from './vehicle-care.types';
 import { FleetService } from './fleet.service';
 
@@ -57,6 +57,35 @@ export class VehicleCareController {
   recordReading(@Param('id') id: string, @Body() dto: RecordReadingDto, @Actor() actor: IntrospectionResult): VehicleCareView {
     this.care.recordReading(id, dto.km, { by: this.ownerOf(id, actor), source: 'office', ...(dto.newMeter ? { newMeter: true } : {}) });
     return this.care.view(id);
+  }
+
+  /* ----------------------------------------------------------------------------------- services -- */
+
+  /** How often it is serviced: every so many km or months — or back to its class's usual. */
+  @Roles('fleet_manager', 'driver', 'operator')
+  @Post('vehicles/:id/service-plan')
+  setServicePlan(@Param('id') id: string, @Body() dto: ServicePlanDto, @Actor() actor: IntrospectionResult): VehicleCareView {
+    return this.care.setServicePlan(id, dto, this.ownerOf(id, actor));
+  }
+
+  /** What was done to it, and when: a service, a repair, tyres, an inspection — with its job card. */
+  @Roles('fleet_manager', 'driver', 'operator')
+  @Post('vehicles/:id/services')
+  recordService(@Param('id') id: string, @Body() dto: ServiceRecordDto, @Actor() actor: IntrospectionResult): VehicleCareView {
+    const by = this.ownerOf(id, actor);
+    // The job card is the uploader's until it is attached: the same principal the upload was kept under.
+    return this.care.recordService(id, dto, { by, byDid: actor.role === 'operator' ? auditActor(actor) : actingDid(actor) });
+  }
+
+  /** A service's job card, to the vehicle's owner — asked of the service, never of the photo, so it stays the vehicle's. */
+  @Roles('fleet_manager', 'driver', 'operator')
+  @Get('vehicles/:id/services/:recordId/photo')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('X-Content-Type-Options', 'nosniff')
+  servicePhoto(@Param('id') id: string, @Param('recordId') recordId: string, @Query('variant') variant: string | undefined, @Actor() actor: IntrospectionResult): StreamableFile {
+    this.ownerOf(id, actor);
+    const { bytes, contentType } = this.care.servicePhoto(id, recordId, variant === 'thumb' ? 'thumb' : 'full');
+    return new StreamableFile(bytes, { type: contentType });
   }
 
   /* ------------------------------------------------------------------- the daily check, defects -- */

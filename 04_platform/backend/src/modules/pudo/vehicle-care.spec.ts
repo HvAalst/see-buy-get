@@ -150,7 +150,7 @@ describe('a vehicle’s upkeep', () => {
       const amos = aDriver(f.did);
       const view = care.takeOffRoad(truck.vehicleId, { reason: 'repair', note: 'brakes', untilDay: dayPlus(2) }, 'Amina');
       const line = `In the workshop until ${new Date(`${dayPlus(2)}T12:00:00Z`).getUTCDate()} `;
-      expect(view).toMatchObject({ usable: false, inUse: false });
+      expect(view).toMatchObject({ usable: false, inUse: false, today: dayPlus(0) }); // the fleet's day, Nairobi's
       expect(view.offRoad[0]).toMatch(new RegExp(`^${line}.*: brakes$`));
       expect(vehicles.isUsable(truck.vehicleId)).toBe(false);
       // The door a driver uses says the same words.
@@ -289,6 +289,173 @@ describe('a vehicle’s upkeep', () => {
       expect(care.view(truck.vehicleId).odometer!.km).toBe(80_250);
     });
   });
+  describe('service due dates', () => {
+    const HOUR = 3_600_000;
+    const words = (day: string) => {
+      const d = new Date(`${day}T12:00:00Z`);
+      return `${d.getUTCDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+    };
+    const shift = (day: string, n: number) => new Date(Date.parse(`${day}T12:00:00Z`) + n * DAY).toISOString().slice(0, 10);
+    const noonOf = (day: string) => Date.parse(`${day}T09:00:00Z`); // noon in Nairobi
+
+    it('counts from when it was registered: six months or 15,000 km for a truck, whichever comes first — soon a fortnight before, overdue after', () => {
+      const f = aFleet();
+      const truck = aTruck(f.did, 'KVC 900T');
+      const v = vehicles.get(truck.vehicleId);
+      const first = care.view(truck.vehicleId).service;
+      expect(first).toMatchObject({ plan: { everyKm: 15_000, everyMonths: 6, source: 'class' }, state: 'ok', from: 'registered' });
+      expect(first).not.toHaveProperty('dueKm'); // no reading yet to count km from
+      const due = first.dueDay!;
+      expect(first.line).toBe(`Next service by ${words(due)}`);
+      // The first reading starts the km count.
+      care.recordReading(truck.vehicleId, 120_000, { by: 'Amos', source: 'shift_start' });
+      expect(care.view(truck.vehicleId).service).toMatchObject({ dueKm: 135_000, currentKm: 120_000, state: 'ok', line: `Next service by ${words(due)} or at 135,000 km, whichever comes first` });
+      // By the day: soon a fortnight before, overdue the day after.
+      expect(care.serviceDue(v, Date.now(), shift(due, -15)).state).toBe('ok');
+      expect(care.serviceDue(v, Date.now(), shift(due, -14)).state).toBe('soon');
+      expect(care.serviceDue(v, Date.now(), due).state).toBe('soon');
+      expect(care.serviceDue(v, Date.now(), shift(due, 1))).toMatchObject({ state: 'overdue', line: `Service overdue: it was due by ${words(due)}` });
+      // By the km: a tenth of the 15,000 before, it is soon; at 135,000, overdue.
+      care.recordReading(truck.vehicleId, 133_499, { by: 'Amos', source: 'shift_end' }, Date.now() + 9 * HOUR);
+      expect(care.view(truck.vehicleId).service.state).toBe('ok');
+      care.recordReading(truck.vehicleId, 133_500, { by: 'Amos', source: 'shift_start' }, Date.now() + DAY);
+      expect(care.view(truck.vehicleId, Date.now() + DAY).service).toMatchObject({ state: 'soon', line: `Service due soon: by ${words(due)} or at 135,000 km, whichever comes first (it reads 133,500 km)` });
+      care.recordReading(truck.vehicleId, 135_000, { by: 'Amos', source: 'shift_end' }, Date.now() + DAY + 9 * HOUR);
+      const late = care.view(truck.vehicleId, Date.now() + DAY + 9 * HOUR).service;
+      expect(late).toMatchObject({ state: 'overdue', line: 'Service overdue: it was due at 135,000 km, and reads 135,000 km' });
+      // Most fleets only want to be told: it still goes out, and its row says so.
+      expect(vehicles.isUsable(truck.vehicleId)).toBe(true);
+      const row = vehicles.listFor({ managerDid: f.did }, f.did, false).find((x) => x.vehicleId === truck.vehicleId)!;
+      expect(row.notes).toEqual(['Service overdue: it was due at 135,000 km, and reads 135,000 km']);
+      // Another fleet does not see it.
+      expect(vehicles.listFor({ managerDid: f.did }, aFleet('Pwani Haulage').did, false).find((x) => x.vehicleId === truck.vehicleId)).not.toHaveProperty('notes');
+    });
+
+    it('a service recorded starts the count again; a repair does not — and a km that cannot be is refused before anything is kept', () => {
+      const f = aFleet();
+      const truck = aTruck(f.did, 'KVC 910T');
+      const today = dayPlus(0);
+      care.recordReading(truck.vehicleId, 120_000, { by: 'Amos', source: 'shift_start' }, Date.now() - 5 * DAY);
+      care.recordReading(truck.vehicleId, 121_000, { by: 'Amos', source: 'shift_start' }, Date.now() - 2 * DAY);
+      // A service before the first reading at more km than it showed later, or after one at fewer: neither can be.
+      expect(() => care.recordService(truck.vehicleId, { day: dayPlus(-3), what: 'service', km: 119_000 }, { by: 'Amina' })).toThrow(`KVC 910T read 120,000 km on ${words(dayPlus(-5))}: a service after that is not at fewer`);
+      expect(() => care.recordService(truck.vehicleId, { day: dayPlus(-3), what: 'service', km: 121_500 }, { by: 'Amina' })).toThrow(`KVC 910T read 121,000 km on ${words(dayPlus(-2))}: a service before that is not at more`);
+      expect(() => care.recordService(truck.vehicleId, { day: dayPlus(1), what: 'service' }, { by: 'Amina' })).toThrow('A service is recorded once it is done: the day is today or earlier');
+      expect(care.view(truck.vehicleId).services).toEqual([]);
+      // Serviced today at 121,400 km: the next is 15,000 km on, and today's reading is kept too.
+      const view = care.recordService(truck.vehicleId, { day: today, what: 'service', km: 121_400, workshop: 'Mombasa Road Motors', note: 'Oil, filters, brake pads' }, { by: 'Amina' });
+      expect(view.service).toMatchObject({ from: 'service', dueKm: 136_400, currentKm: 121_400, state: 'ok' });
+      expect(view.odometer).toMatchObject({ km: 121_400, source: 'office', by: 'Amina' });
+      expect(view.services[0]).toMatchObject({ day: today, what: 'service', km: 121_400, workshop: 'Mombasa Road Motors', note: 'Oil, filters, brake pads', by: 'Amina' });
+      expect(view.services[0]).not.toHaveProperty('photoRef');
+      // A repair afterwards — 50 km on, at another garage — is on the record, and the next service is due where it was.
+      const after = care.recordService(truck.vehicleId, { day: today, what: 'repair', km: 121_450, note: 'Mirror replaced' }, { by: 'Amina' }, Date.now() + HOUR);
+      expect(after.services.map((s) => s.what)).toEqual(['repair', 'service']);
+      expect(after.service).toMatchObject({ from: 'service', fromDay: today, dueKm: 136_400, currentKm: 121_450, dueDay: view.service.dueDay });
+      // A service a while ago, recorded now, with no km: the count runs from the first reading on or after that day.
+      const older = aTruck(f.did, 'KVC 920T');
+      care.recordReading(older.vehicleId, 40_000, { by: 'Amos', source: 'shift_start' }, Date.now() - 20 * DAY);
+      care.recordReading(older.vehicleId, 42_000, { by: 'Amos', source: 'shift_start' }, Date.now() - 10 * DAY);
+      care.recordReading(older.vehicleId, 43_000, { by: 'Amos', source: 'shift_start' }, Date.now() - DAY);
+      expect(care.recordService(older.vehicleId, { day: dayPlus(-12), what: 'service' }, { by: 'Amina' }).service).toMatchObject({ dueKm: 57_000, currentKm: 43_000 });
+    });
+
+    it('does not lose the count when the meter is changed', () => {
+      const f = aFleet();
+      const truck = aTruck(f.did, 'KVC 930T');
+      care.recordReading(truck.vehicleId, 299_900, { by: 'Amos', source: 'shift_start' }, Date.now() - 5 * DAY);
+      care.recordService(truck.vehicleId, { day: dayPlus(-4), what: 'service', km: 300_000 }, { by: 'Amina' });
+      care.recordReading(truck.vehicleId, 305_000, { by: 'Amos', source: 'shift_end' }, Date.now() - 3 * DAY);
+      care.recordReading(truck.vehicleId, 0, { by: 'Amina', source: 'office', newMeter: true }, Date.now() - 2 * DAY);
+      care.recordReading(truck.vehicleId, 4_000, { by: 'Amos', source: 'shift_end' }, Date.now() - DAY);
+      // 5,000 km on the old meter and 4,000 on the new: 6,000 to go, on the new meter's count.
+      expect(care.view(truck.vehicleId).service).toMatchObject({ dueKm: 10_000, currentKm: 4_000, state: 'ok' });
+    });
+
+    it('takes the office’s own schedule, and goes back to the class’s usual', () => {
+      const f = aFleet();
+      const truck = aTruck(f.did, 'KVC 940T');
+      expect(() => care.setServicePlan(truck.vehicleId, {}, 'Amina')).toThrow('Say how often: every so many km, every so many months, or both');
+      const own = care.setServicePlan(truck.vehicleId, { everyKm: 5000 }, 'Amina').service;
+      expect(own).toMatchObject({ plan: { everyKm: 5000, source: 'office' }, state: 'unknown', line: 'Serviced every 5,000 km — no odometer reading yet to count from' });
+      expect(own.plan).not.toHaveProperty('everyMonths');
+      expect(care.setServicePlan(truck.vehicleId, { useClassUsual: true }, 'Amina').service.plan).toEqual({ everyKm: 15_000, everyMonths: 6, source: 'class' });
+      // A bike goes by the calendar alone; a month that is shorter ends on its last day.
+      seq += 1;
+      const bike = vehicles.register({ plate: `KVC ${seq}B`, vehicleClass: 'bike', capacityKg: 20, ownerName: 'X', baseFee: 1, pricePerKm: 0.1, minMultiplier: 0.8, maxMultiplier: 1.5, managerDid: f.did } as never);
+      expect(care.recordService(bike.vehicleId, { day: '2026-08-31', what: 'service' }, { by: 'Amina' }).service).toMatchObject({ plan: { everyMonths: 3, source: 'class' }, dueDay: '2026-11-30' });
+      expect(care.setServicePlan(bike.vehicleId, { everyMonths: 6 }, 'Amina').service.dueDay).toBe('2027-02-28');
+    });
+
+    it('where the fleet says so, an overdue service keeps it off the road — at every door, and on a day a plan asks about — until a service is recorded', () => {
+      const f = aFleet();
+      const truck = aTruck(f.did, 'KVC 950T');
+      const amos = aDriver(f.did);
+      const due = care.recordService(truck.vehicleId, { day: dayPlus(0), what: 'service', km: 60_000 }, { by: 'Amina' }).service.dueDay!;
+      // One rule changed leaves the other as it was.
+      care.setSettings(f.did, { requireDailyCheck: true });
+      care.setSettings(f.did, { serviceOverdue: 'off_road' });
+      expect(care.settingsOf(f.did)).toEqual({ requireDailyCheck: true, serviceOverdue: 'off_road' });
+      // A plan for the day it falls due may use it; one for the day after may not.
+      expect(vehicles.isUsable(truck.vehicleId, Date.now(), due)).toBe(true);
+      expect(vehicles.isUsable(truck.vehicleId, Date.now(), shift(due, 1))).toBe(false);
+      expect(vehicles.offRoadReasons(truck.vehicleId, Date.now(), shift(due, 1))).toEqual([`Service overdue: it was due by ${words(due)}`]);
+      // Overdue by the km, today: off the road, said at the door a driver uses.
+      care.recordReading(truck.vehicleId, 75_000, { by: 'Amina', source: 'office' }, Date.now() + HOUR);
+      expect(vehicles.isUsable(truck.vehicleId)).toBe(false);
+      expect(() => fleet.couple(amos.did, truck.vehicleId)).toThrow('KVC 950T is off the road: Service overdue: it was due at 75,000 km, and reads 75,000 km');
+      // The row says it once — off the road, not also a note.
+      const row = vehicles.listFor({ managerDid: f.did }, f.did, false).find((x) => x.vehicleId === truck.vehicleId)!;
+      expect(row.offRoad).toEqual(['Service overdue: it was due at 75,000 km, and reads 75,000 km']);
+      expect(row.notes).toEqual([]);
+      // Serviced: back on the road.
+      care.recordService(truck.vehicleId, { day: dayPlus(0), what: 'service', km: 75_010 }, { by: 'Amina' }, Date.now() + 2 * HOUR);
+      expect(vehicles.isUsable(truck.vehicleId)).toBe(true);
+      expect(() => fleet.couple(amos.did, truck.vehicleId)).not.toThrow();
+      // Back to warning only: a fleet's rule, changed by itself alone.
+      expect(care.setSettings(f.did, { serviceOverdue: 'warn' })).toEqual({ requireDailyCheck: true, serviceOverdue: 'warn' });
+    });
+
+    it('tells the office once when a service comes due soon, once when it is overdue — and again only for the next one', () => {
+      const f = aFleet();
+      const truck = aTruck(f.did, 'KVC 960T');
+      const told: Array<{ fleetDid: string; plate: string; state: string; line: string; offRoad: boolean }> = [];
+      bus.subscribe<{ fleetDid: string; plate: string; state: string; line: string; offRoad: boolean }>(GlosEvent.Pudo.VehicleServiceDue, (e) => {
+        told.push(e.payload);
+      });
+      const due = care.recordService(truck.vehicleId, { day: dayPlus(0), what: 'service' }, { by: 'Amina' }).service.dueDay!;
+      const mine = () => care.sweepServiceDue(noonOf(shift(due, 0)) - 10 * DAY).filter((n) => n.plate === 'KVC 960T');
+      expect(care.sweepServiceDue().filter((n) => n.plate === 'KVC 960T')).toEqual([]);
+      expect(mine()).toEqual([{ fleetDid: f.did, vehicleId: truck.vehicleId, plate: 'KVC 960T', state: 'soon', line: `Service due soon: by ${words(due)}`, offRoad: false }]);
+      expect(mine()).toEqual([]); // told once
+      const late = () => care.sweepServiceDue(noonOf(shift(due, 2))).filter((n) => n.plate === 'KVC 960T');
+      expect(late()).toMatchObject([{ state: 'overdue', line: `Service overdue: it was due by ${words(due)}`, offRoad: false }]);
+      expect(late()).toEqual([]);
+      expect(told.filter((n) => n.plate === 'KVC 960T').map((n) => n.state)).toEqual(['soon', 'overdue']);
+      // A service recorded: a new count, told afresh when it comes due.
+      const next = care.recordService(truck.vehicleId, { day: dayPlus(0), what: 'service' }, { by: 'Amina' }, Date.now() + HOUR).service.dueDay!;
+      expect(care.sweepServiceDue(noonOf(shift(next, -3))).filter((n) => n.plate === 'KVC 960T').map((n) => n.state)).toEqual(['soon']);
+      // A courier's own vehicle tells no office.
+      const own = vehicles.register({ plate: 'KVC 961M', vehicleClass: 'motorcycle', capacityKg: 50, ownerName: 'X', baseFee: 1, pricePerKm: 0.1, minMultiplier: 0.8, maxMultiplier: 1.5 } as never);
+      expect(care.sweepServiceDue(noonOf(shift(dayPlus(0), 400))).some((n) => n.vehicleId === own.vehicleId)).toBe(false);
+    });
+
+    it('keeps the job card only when it is the uploader’s own, and makes it the vehicle’s', () => {
+      const f = aFleet();
+      const truck = aTruck(f.did, 'KVC 970T');
+      const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      const theirs = media.upload({ ownerDid: f.did, kind: 'job_card', dataUrl: png });
+      const someoneElses = media.upload({ ownerDid: 'did:glos:somebody', kind: 'job_card', dataUrl: png });
+      expect(() => care.recordService(truck.vehicleId, { day: dayPlus(0), what: 'service', photoRef: someoneElses.mediaId }, { by: 'Amina', byDid: f.did })).toThrow(/not one you took/);
+      expect(care.view(truck.vehicleId).services).toEqual([]);
+      const view = care.recordService(truck.vehicleId, { day: dayPlus(0), what: 'service', photoRef: theirs.mediaId }, { by: 'Amina', byDid: f.did });
+      expect(view.services[0]).toMatchObject({ hasPhoto: true });
+      expect(care.servicePhoto(truck.vehicleId, view.services[0].recordId, 'full').contentType).toBe('image/png');
+      expect(() => care.servicePhoto(truck.vehicleId, 'svc_nope', 'full')).toThrow(/No job card/);
+      expect(() => media.removeByOwner(theirs.mediaId, f.did)).toThrow(/kept as evidence/);
+    });
+  });
+
   describe('the daily check, and defects', () => {
     const allOk = (vehicleClass: keyof typeof CHECKLIST) => CHECKLIST[vehicleClass].map((c) => ({ item: c.item, ok: true }));
     let told: Array<{ fleetDid?: string; plate: string; defect: { item: string; safety: boolean } }>;
@@ -401,7 +568,7 @@ describe('a vehicle’s upkeep', () => {
       const truck = aTruck(f.did, 'KVC 850T');
       const amos = aDriver(f.did);
       expect(care.checkBlocker(truck.vehicleId)).toBeUndefined();
-      expect(care.setSettings(f.did, { requireDailyCheck: true })).toEqual({ requireDailyCheck: true });
+      expect(care.setSettings(f.did, { requireDailyCheck: true })).toEqual({ requireDailyCheck: true, serviceOverdue: 'warn' });
       expect(care.checkBlocker(truck.vehicleId)).toBe('Check KVC 850T first: Kilima Logistics asks for a daily check before a shift');
       expect(care.checkSheet(amos.did, { vehicleId: truck.vehicleId }).required).toBe(true);
       care.submitCheck(amos.did, { vehicleId: truck.vehicleId }, allOk('truck'));
@@ -409,7 +576,7 @@ describe('a vehicle’s upkeep', () => {
       // Tomorrow is another day.
       expect(care.checkBlocker(truck.vehicleId, Date.now() + DAY)).toMatch(/^Check KVC 850T first/);
       // Another fleet's rule is not this one's.
-      expect(care.settingsOf(aFleet('Pwani Haulage').did)).toEqual({ requireDailyCheck: false });
+      expect(care.settingsOf(aFleet('Pwani Haulage').did)).toEqual({ requireDailyCheck: false, serviceOverdue: 'warn' });
     });
 
     it('keeps a photo only when it is the driver’s own, and makes it the vehicle’s: no longer theirs to delete', () => {

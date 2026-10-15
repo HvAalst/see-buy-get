@@ -2,24 +2,41 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { AuthImage, Button, ErrorNote, Note, Pill, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import type { Result, SbgClient } from '../../../lib/sbg';
+import type { MediaKind } from '../../../lib/sbg/personas/media';
 import { DEFECT_WORD, OFF_ROAD_REASONS, REASON_WORD, SOURCE_WORD, careApi, kmWords, localDay, spellBegun, spellSpan, type OffRoadReason, type VehicleCare } from '../care';
 import { formatDate } from '../../../shared/i18n';
 import type { VehicleRow } from '../types';
+import { ServiceSection } from './ServiceSection';
 
 /**
  * A VEHICLE'S UPKEEP, in one sheet under the vehicle's name: whether it can go out and every reason it cannot, its
  * spells off the road (now and to come), and taking it off — with a reason, from a day, until a day or until it is put
- * back. Whatever is saved here is what the plan, the driver's list and the shift start read.
+ * back; its service; its defects; its odometer. Whatever is saved here is what the plan, the driver's list and the
+ * shift start read.
  */
-export function VehicleCareSheet({ vehicle, sbg, onClose, onChanged }: { vehicle: VehicleRow | null; sbg: SbgClient | null; onClose: () => void; onChanged: () => Promise<void> | void }) {
+export function VehicleCareSheet({
+  vehicle,
+  sbg,
+  onClose,
+  onChanged,
+  uploadPhoto,
+}: {
+  vehicle: VehicleRow | null;
+  sbg: SbgClient | null;
+  onClose: () => void;
+  onChanged: () => Promise<void> | void;
+  /** For a job card's photograph. */
+  uploadPhoto?: (kind: MediaKind, file: File) => Promise<string | null>;
+}) {
   const t = useT();
   const api = useMemo(() => (sbg ? careApi(sbg) : null), [sbg]);
   const [care, setCare] = useState<VehicleCare | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
-  const today = localDay();
+  // The fleet's today, as the server judges every day here; the device's only until the sheet has loaded.
+  const today = care?.today ?? localDay();
   const [reason, setReason] = useState<OffRoadReason>('repair');
-  const [fromDay, setFromDay] = useState(today);
+  const [fromDay, setFromDay] = useState('');
   const [untilDay, setUntilDay] = useState('');
   const [note, setNote] = useState('');
   const [km, setKm] = useState('');
@@ -32,7 +49,11 @@ export function VehicleCareSheet({ vehicle, sbg, onClose, onChanged }: { vehicle
     setCare(null);
     setError(null);
     if (!vehicle || !api) return;
-    void api.care(vehicle.vehicleId).then((r) => (r.error || !r.data ? setError(r.error) : setCare(r.data)));
+    void api.care(vehicle.vehicleId).then((r) => {
+      if (r.error || !r.data) return setError(r.error);
+      setCare(r.data);
+      setFromDay(r.data.today);
+    });
   }, [vehicle, api]);
 
   const act = async (call: () => Promise<Result<VehicleCare>>) => {
@@ -100,6 +121,8 @@ export function VehicleCareSheet({ vehicle, sbg, onClose, onChanged }: { vehicle
               </ul>
             </>
           ) : null}
+
+          <ServiceSection care={care} api={api!} act={act} busy={busy} uploadPhoto={uploadPhoto ? (file) => uploadPhoto('job_card', file) : undefined} />
 
           {/* DEFECTS: what drivers found, safety-critical first, each with its photo — and the office's word on it. */}
           <p class="field__label" style="margin-top:16px">

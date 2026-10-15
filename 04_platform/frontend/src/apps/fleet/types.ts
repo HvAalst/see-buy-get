@@ -70,6 +70,8 @@ export interface VehicleRow {
   managerDid?: string;
   /** Why it is off the road besides its papers: in the workshop, a defect, a service overdue. The owner's view only. */
   upkeep?: string[];
+  /** What to know that does not keep it off the road: a service due soon. The owner's view only. */
+  notes?: string[];
   vehiclePhotoRefs?: string[]; // S26 — mediaIds of the vehicle-body photos
   trailerPhotoRefs?: string[]; // S26 — mediaIds of a coupled trailer's photos
   /** FP4 — the owner's read carries the papers as recorded, their state today, and the lapsed ones in words. */

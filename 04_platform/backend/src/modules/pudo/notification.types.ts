@@ -160,6 +160,8 @@ export const NOTIFICATION_KINDS = [
    * driver who reported it: fixed, or safe to drive as it is). Nobody else.
    */
   'vehicle_defect',
+  /** A fleet's vehicle due for a service soon, or overdue: to its office, once each — never to a driver. */
+  'vehicle_service',
   /**
    * Something happened to the way somebody signs in that they did not do — five wrong PINs locked it. Said to the
    * person, because the one who typed them may know their number, and the owner is the only one who can act.

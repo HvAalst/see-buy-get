@@ -50,6 +50,7 @@ export class VehicleService {
   // Durable: registered fleet vehicles (documents, verification, pricing, manager ownership).
   private readonly vehicles = new PersistentMap<string, Vehicle>('pudo-vehicles');
   private readonly offRoadSources: OffRoadSource[] = [];
+  private readonly noteSources: Array<(vehicle: Vehicle, now: number) => string[]> = [];
 
   constructor(
     private readonly managers: FleetManagerService,
@@ -162,7 +163,7 @@ export class VehicleService {
    */
   private scopedView(v: Vehicle, tenant: string | undefined, isOperator: boolean): Vehicle | Partial<Vehicle> {
     // FP4 — the owner sees the papers as they stand today, derived here and never written back.
-    if (isOperator || (tenant && v.managerDid === tenant)) return { ...v, papers: vehiclePapers(v), offRoad: this.offRoadReasons(v.vehicleId), upkeep: this.upkeepReasons(v) };
+    if (isOperator || (tenant && v.managerDid === tenant)) return { ...v, papers: vehiclePapers(v), offRoad: this.offRoadReasons(v.vehicleId), upkeep: this.upkeepReasons(v), notes: this.noteSources.flatMap((source) => source(v, Date.now())) };
     const publicView: Partial<Vehicle> = { ...v };
     delete publicView.managerDid;
     delete publicView.documents;
@@ -222,6 +223,11 @@ export class VehicleService {
    */
   addOffRoadSource(source: OffRoadSource): void {
     this.offRoadSources.push(source);
+  }
+
+  /** Something its owner should know that does NOT keep it off the road — a service due soon — for the owner's list. */
+  addNoteSource(source: (vehicle: Vehicle, now: number) => string[]): void {
+    this.noteSources.push(source);
   }
 
   /** Back to ACTIVE, for a vehicle grounded before grounding had a way back. */

@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
-import { CHECK_ITEMS, DEFECT_ITEMS, OFF_ROAD_REASONS, type CheckItem, type DefectItem, type OffRoadReason } from './vehicle-care.types';
+import { CHECK_ITEMS, DEFECT_ITEMS, OFF_ROAD_REASONS, SERVICE_KINDS, type CheckItem, type DefectItem, type OffRoadReason, type ServiceKind } from './vehicle-care.types';
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -44,8 +44,27 @@ export class DecideDefectDto {
   @IsString() @MaxLength(300) note!: string;
 }
 
+/** A fleet's upkeep rules: either or both. What is not sent stays as it was. */
 export class CareSettingsDto {
-  @IsBoolean() requireDailyCheck!: boolean;
+  @IsOptional() @IsBoolean() requireDailyCheck?: boolean;
+  @IsOptional() @IsIn(['warn', 'off_road']) serviceOverdue?: 'warn' | 'off_road';
+}
+
+/** How often a vehicle is serviced — or back to its class's usual. */
+export class ServicePlanDto {
+  @IsOptional() @IsInt() @Min(500) @Max(200_000) everyKm?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(36) everyMonths?: number;
+  @IsOptional() @IsBoolean() useClassUsual?: boolean;
+}
+
+/** What was done to it: the day, what, the odometer then, the workshop, and its job card. No costs, no parts. */
+export class ServiceRecordDto {
+  @Matches(DAY, { message: 'A day is YYYY-MM-DD' }) day!: string;
+  @IsIn(SERVICE_KINDS) what!: ServiceKind;
+  @IsOptional() @IsInt() @Min(0) @Max(MAX_ODOMETER_KM) km?: number;
+  @IsOptional() @IsString() @MaxLength(120) workshop?: string;
+  @IsOptional() @IsString() @MaxLength(300) note?: string;
+  @IsOptional() @IsString() @MaxLength(80) photoRef?: string;
 }
 
 export class CheckSheetQueryDto {

@@ -120,12 +120,58 @@ export class CheckResult {
 export class CareSettings {
   /** A driver checks the vehicle before a shift, or the shift does not start. Off unless the fleet turns it on. */
   requireDailyCheck: boolean;
+  /** What a service overdue does: only warns (the default), or takes the vehicle off the road until one is recorded. */
+  @ApiProperty({ enum: ['warn', 'off_road'] }) serviceOverdue: 'warn' | 'off_road';
+}
+
+export const SERVICE_KINDS = ['service', 'repair', 'tyres', 'inspection', 'other'] as const;
+export type ServiceKind = (typeof SERVICE_KINDS)[number];
+
+/**
+ * WHAT WAS DONE TO IT, AND WHEN: a service, a repair, new tyres, an inspection. The day, the odometer then, the
+ * workshop's name and a photo of its job card. Never what it cost or which parts — that is the workshop's business.
+ * Only a SERVICE starts the count to the next one again.
+ */
+export class ServiceRecord {
+  recordId: string;
+  vehicleId: string;
+  day: string;
+  @ApiProperty({ enum: SERVICE_KINDS }) what: ServiceKind;
+  @ApiPropertyOptional() km?: number;
+  @ApiPropertyOptional() workshop?: string;
+  @ApiPropertyOptional() note?: string;
+  @ApiPropertyOptional() hasPhoto?: boolean;
+  by: string;
+  at: string;
+}
+
+/** How often it is serviced: every so many km or months, whichever comes first. The class's usual unless the office set its own. */
+export class ServicePlanView {
+  @ApiPropertyOptional() everyKm?: number;
+  @ApiPropertyOptional() everyMonths?: number;
+  @ApiProperty({ enum: ['class', 'office'] }) source: 'class' | 'office';
+}
+
+/** When the next service is due, and how it stands. */
+export class ServiceDueView {
+  @ApiProperty({ type: ServicePlanView }) plan: ServicePlanView;
+  @ApiPropertyOptional() dueDay?: string;
+  @ApiPropertyOptional() dueKm?: number;
+  @ApiPropertyOptional() currentKm?: number;
+  @ApiProperty({ enum: ['ok', 'soon', 'overdue', 'unknown'] }) state: 'ok' | 'soon' | 'overdue' | 'unknown';
+  /** The state in words, as notices and the vehicle's row say it. */
+  line: string;
+  /** What the count runs from: the last service, or (none yet) when the vehicle was registered — and that day. */
+  @ApiProperty({ enum: ['service', 'registered'] }) from: 'service' | 'registered';
+  fromDay: string;
 }
 
 /** A vehicle's upkeep as its owner reads it. */
 export class VehicleCareView {
   vehicleId: string;
   plate: string;
+  /** Today on the owner's clock (the fleet's): what every day on this sheet is judged by — not the reader's device. */
+  today: string;
   /** Can it start a shift now, and if not, every reason — its papers, and whatever else keeps it off the road. */
   usable: boolean;
   offRoad: string[];
@@ -142,6 +188,10 @@ export class VehicleCareView {
   /** Defects still open, safety-critical first; and the last few decided. */
   @ApiProperty({ type: [VehicleDefect] }) defects: VehicleDefect[];
   @ApiProperty({ type: [VehicleDefect] }) decided: VehicleDefect[];
+  /** The next service: when it is due, and how it stands. */
+  @ApiProperty({ type: ServiceDueView }) service: ServiceDueView;
+  /** What was done to it, newest first. */
+  @ApiProperty({ type: [ServiceRecord] }) services: ServiceRecord[];
   /** The last daily check: who, when, and what it found. */
   @ApiPropertyOptional() lastCheckBy?: string;
   @ApiPropertyOptional() lastCheckAt?: string;

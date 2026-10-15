@@ -10,7 +10,7 @@ import { VEHICLE_CLASSES, type VehicleRow } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
 import type { SbgClient } from '../../../lib/sbg';
 import { VehicleCareSheet } from './VehicleCare';
-import { DailyCheckCard } from './DailyCheckCard';
+import { UpkeepRulesCard } from './UpkeepRulesCard';
 
 /**
  * Capture pad (S26) — one (registration) or many (vehicle/trailer) photos. Each capture is downscaled,
@@ -350,7 +350,7 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
         </div>
       </Card>
 
-      <DailyCheckCard sbg={sbg} fleetDid={state.manager?.did} />
+      <UpkeepRulesCard sbg={sbg} fleetDid={state.manager?.did} />
 
       <Card title={t('fleet.vehicles.listTitle', { count: state.vehicles.length })}>
         <p class="card__note">{t('fleet.vehicles.listNote')}</p>
@@ -376,6 +376,12 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
                   {/* What keeps it off the road besides its papers: in the workshop, a defect, a service overdue. */}
                   {(v.upkeep ?? []).map((line) => (
                     <span key={line} class={paperLineClass('lapsed')}>
+                      {line}
+                    </span>
+                  ))}
+                  {/* What to know that does not keep it off the road: a service due soon. */}
+                  {(v.notes ?? []).map((line) => (
+                    <span key={line} class={paperLineClass('due')}>
                       {line}
                     </span>
                   ))}
@@ -443,7 +449,7 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
 
       <PriceSheet vehicle={priceFor} onClose={() => setPriceFor(null)} state={state} actions={actions} />
       <PapersSheet vehicle={papersFor} onClose={() => setPapersFor(null)} state={state} actions={actions} />
-      <VehicleCareSheet vehicle={careFor} sbg={sbg} onClose={() => setCareFor(null)} onChanged={actions.refresh} />
+      <VehicleCareSheet vehicle={careFor} sbg={sbg} onClose={() => setCareFor(null)} onChanged={actions.refresh} uploadPhoto={actions.uploadPhoto} />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import type { OrderHandedOn } from './fleet-overflow.types';
 import type { DriverRostered } from './fleet-roster.service';
-import { ITEM_WORDS, type VehicleDefectDecided, type VehicleDefectReported } from './vehicle-care.service';
+import { ITEM_WORDS, type VehicleDefectDecided, type VehicleDefectReported, type VehicleServiceDue } from './vehicle-care.service';
 import type { DeliveryTiming, PlanLeftWhy } from './dispatch.types';
 import { UNCOLLECTED_H } from './pudo.config';
 import { runningLate } from './parcel.service';
@@ -411,6 +411,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<DriverRostered>(GlosEvent.Pudo.DriverRostered, (e) => this.onDriverRostered(e.payload));
     this.events.subscribe<VehicleDefectReported>(GlosEvent.Pudo.VehicleDefectReported, (e) => this.onDefectReported(e.payload));
     this.events.subscribe<VehicleDefectDecided>(GlosEvent.Pudo.VehicleDefectDecided, (e) => this.onDefectDecided(e.payload));
+    this.events.subscribe<VehicleServiceDue>(GlosEvent.Pudo.VehicleServiceDue, (e) => this.onServiceDue(e.payload));
     // FP4 (courier) — the renewed licence they sent was checked. They sent it and are waiting: either answer.
     this.events.subscribe<{ did: string; accepted: boolean; expiresAt?: string; reason?: string }>(GlosEvent.Pudo.DriverLicenceChecked, (e) => this.onLicenceChecked(e.payload));
     this.events.subscribe<LicenceSent>(GlosEvent.Pudo.DriverLicenceSent, (e) => this.onLicenceSent(e.payload));
@@ -1321,10 +1322,6 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     }
   }
 
-  /**
-   * A DRIVER IN NO FLEET ASKED TO RIDE FOR THEMSELVES on something heavy, and staff decided: told either way, on the
-   * event. Yes says who they ride for now; no says why, in staff's words, and that they may ask again.
-   */
   /** A defect reported on one of a fleet's vehicles: its office hears, at once — and whether it is off the road. */
   private async onDefectReported(p: VehicleDefectReported): Promise<void> {
     if (!p.fleetDid) return; // a courier's own vehicle: they reported it themselves, and decide it themselves
@@ -1340,6 +1337,22 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       });
     } catch (err) {
       this.logger.warn(`defect notice failed for ${d.defectId}: ${(err as Error).message}`);
+    }
+  }
+
+  /** A fleet's vehicle due for a service soon, or overdue: its office hears — and whether that keeps it off the road. */
+  private async onServiceDue(p: VehicleServiceDue): Promise<void> {
+    try {
+      await this.notifications.notify(p.fleetDid, {
+        kind: 'vehicle_service',
+        title: p.state === 'overdue' ? `${p.plate}: service overdue${p.offRoad ? ' — off the road' : ''}` : `${p.plate}: service due soon`,
+        body: `${p.line}. ${p.offRoad ? 'No shift starts in it until a service is recorded under Vehicles → Upkeep.' : 'Record it under Vehicles → Upkeep once it is done.'}`,
+        link: '/',
+        tag: `service:${p.vehicleId}`,
+        data: { vehicleId: p.vehicleId },
+      });
+    } catch (err) {
+      this.logger.warn(`service notice failed for ${p.vehicleId}: ${(err as Error).message}`);
     }
   }
 
@@ -1382,6 +1395,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     }
   }
 
+  /**
+   * A DRIVER IN NO FLEET ASKED TO RIDE FOR THEMSELVES on something heavy, and staff decided: told either way, on the
+   * event. Yes says who they ride for now; no says why, in staff's words, and that they may ask again.
+   */
   private async onRideAloneDecided(payload: { did: string; approved: boolean; reason?: string; companyName?: string }): Promise<void> {
     try {
       await this.notifications.notify(payload.did, {

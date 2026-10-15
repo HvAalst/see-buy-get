@@ -17,6 +17,7 @@ export type MediaKind =
   | 'securement' // S33 — a driver's photo of a secured dedicated-freight load at pickup
   | 'hazard' // a driver's photo of a road constraint — the bridge, the washout, or the road now clear
   | 'defect' // a defect on a vehicle, found at the daily check or later — the vehicle's record
+  | 'job_card' // a workshop's job card for a service or repair — the vehicle's record
   | 'interchange' // Y3 — a party's photo of a CONTAINER's condition at a gate, beside the driver's own
   // CL5 — a photograph of an OFFICIAL DOCUMENT, behind two gates: the country's and the person's.
   | 'field_evidence';

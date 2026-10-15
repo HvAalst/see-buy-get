@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
@@ -12,7 +12,7 @@ import { FleetManagerService } from './fleet-manager.service';
 import { FleetService } from './fleet.service';
 import { Vehicle } from './fleet.types';
 import { VehicleService } from './vehicle.service';
-import { CareSettings, CheckItem, CheckResult, CheckSheet, DefectItem, EndReadingResult, OdometerReading, OffRoadReason, OffRoadSpell, ReadingSource, VehicleCareView, VehicleDefect } from './vehicle-care.types';
+import { CareSettings, CheckItem, CheckResult, CheckSheet, DefectItem, EndReadingResult, OdometerReading, OffRoadReason, OffRoadSpell, ReadingSource, ServiceDueView, ServiceKind, ServicePlanView, ServiceRecord, VehicleCareView, VehicleDefect } from './vehicle-care.types';
 
 /** The most a vehicle drives in a day, for telling a doubtful reading from a likely one. */
 export const MAX_KM_PER_DAY = 1500;
@@ -59,6 +59,36 @@ export interface VehicleDefectDecided {
   defect: VehicleDefect;
 }
 
+/** How often each class is serviced unless its office says otherwise: every so many km or months, whichever comes first. */
+export const SERVICE_USUAL: Record<VehicleClass, { everyKm?: number; everyMonths: number }> = {
+  bike: { everyMonths: 3 },
+  motorcycle: { everyKm: 3000, everyMonths: 3 },
+  tuktuk: { everyKm: 5000, everyMonths: 3 },
+  car: { everyKm: 10_000, everyMonths: 6 },
+  van: { everyKm: 10_000, everyMonths: 6 },
+  bus: { everyKm: 10_000, everyMonths: 6 },
+  truck: { everyKm: 15_000, everyMonths: 6 },
+};
+/** "Due soon": this many days before the day it is due — or a tenth of the km between services before the km, never under 500. */
+export const SERVICE_SOON_DAYS = 14;
+const SOON_KM_SHARE = 0.1;
+const SOON_KM_LEAST = 500;
+/** How many services a vehicle's sheet lists. */
+const SERVICES_SHOWN = 10;
+/** How often the network looks for services coming due, to tell the offices. */
+const SERVICE_SWEEP_MS = 60 * 60 * 1000;
+
+/** A service coming due on one of a fleet's vehicles, for its office (NotificationDispatcher). */
+export interface VehicleServiceDue {
+  fleetDid: string;
+  vehicleId: string;
+  plate: string;
+  state: 'soon' | 'overdue';
+  line: string;
+  /** Overdue, and the fleet keeps a vehicle overdue for a service off the road. */
+  offRoad: boolean;
+}
+
 /** How far ahead a vehicle may be booked off the road. */
 export const OFF_ROAD_DAYS_AHEAD = 365;
 
@@ -81,13 +111,19 @@ const REASON_WORDS: Record<OffRoadReason, string> = {
  * days does not use it, a run is not booked on it, and the driver's list of vehicles says why.
  */
 @Injectable()
-export class VehicleCareService {
+export class VehicleCareService implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly spells = new PersistentMap<string, OffRoadSpell>('vehicle-off-road');
   private readonly readings = new PersistentMap<string, OdometerReading>('vehicle-readings');
   private readonly defects = new PersistentMap<string, VehicleDefect & { photoRef?: string }>('vehicle-defects');
   /** One check per vehicle per day is what a fleet can ask for: vehicleId|day → who, when, and whether it was clean. */
   private readonly checks = new PersistentMap<string, { vehicleId: string; day: string; by: string; byDid: string; at: string; clean: boolean }>('vehicle-checks');
   private readonly settings = new PersistentMap<string, CareSettings>('fleet-care-settings');
+  /** A vehicle's own schedule, where its office set one; otherwise its class's usual. */
+  private readonly plans = new PersistentMap<string, { everyKm?: number; everyMonths?: number; setBy: string; setAt: string }>('vehicle-service-plans');
+  private readonly services = new PersistentMap<string, ServiceRecord & { photoRef?: string }>('vehicle-services');
+  /** Which notices went out for a vehicle's present count (its last service, its schedule): each told once. */
+  private readonly serviceTold = new PersistentMap<string, { cycle: string; soon?: string; overdue?: string }>('vehicle-service-told');
+  private timer?: ReturnType<typeof setInterval>;
 
   constructor(
     private readonly vehicles: VehicleService,
@@ -101,6 +137,36 @@ export class VehicleCareService {
     this.vehicles.addOffRoadSource((v, at) => this.spellsOn(v.vehicleId, at.day ?? this.todayOf(v, at.now)).map(spellLine));
     // An open safety defect keeps it off the road until the office says otherwise — whatever day is asked about.
     this.vehicles.addOffRoadSource((v) => this.openDefectsOf(v.vehicleId).filter((d) => d.safety).map(defectLine));
+    // A service overdue keeps it off the road only where its fleet says so — on the day asked about, so a plan for next
+    // week leaves out a truck whose service falls due before then. Anywhere else it is a note on its row.
+    this.vehicles.addOffRoadSource((v, at) => {
+      if (v.status === 'RETIRED' || !this.enforcesService(v)) return [];
+      const due = this.serviceDue(v, at.now, at.day);
+      return due.state === 'overdue' ? [due.line] : [];
+    });
+    this.vehicles.addNoteSource((v, now) => {
+      if (v.status === 'RETIRED') return [];
+      const due = this.serviceDue(v, now);
+      return due.state === 'soon' || (due.state === 'overdue' && !this.enforcesService(v)) ? [due.line] : [];
+    });
+  }
+
+  /** A look as the server starts — one restarted more often than hourly would otherwise never look — and every hour. */
+  onApplicationBootstrap(): void {
+    const look = () => {
+      try {
+        this.sweepServiceDue();
+      } catch {
+        // the next pass tries again
+      }
+    };
+    look();
+    this.timer = setInterval(look, SERVICE_SWEEP_MS);
+    this.timer.unref?.();
+  }
+
+  onModuleDestroy(): void {
+    if (this.timer) clearInterval(this.timer);
   }
 
   /** A vehicle's upkeep, as its owner reads it. */
@@ -110,6 +176,7 @@ export class VehicleCareService {
     return {
       vehicleId: v.vehicleId,
       plate: v.plate,
+      today,
       usable: this.vehicles.isUsable(v.vehicleId, now),
       offRoad: [...(v.status === 'GROUNDED' ? ['Grounded'] : []), ...this.vehicles.offRoadReasons(v.vehicleId, now)],
       ...(v.status === 'GROUNDED' ? { grounded: true } : {}),
@@ -119,6 +186,8 @@ export class VehicleCareService {
       readings: this.readingsOf(v.vehicleId).slice(0, READINGS_SHOWN),
       defects: this.openDefectsOf(v.vehicleId).map(publicDefect),
       decided: this.defectsOf(v.vehicleId).filter((d) => d.status !== 'open').sort((a, b) => (b.decidedAt ?? '').localeCompare(a.decidedAt ?? '')).slice(0, DECIDED_SHOWN).map(publicDefect),
+      service: this.serviceDue(v, now),
+      services: this.servicesOf(v.vehicleId).slice(0, SERVICES_SHOWN).map(publicService),
       ...this.lastCheckOf(v.vehicleId),
     };
   }
@@ -128,12 +197,16 @@ export class VehicleCareService {
   /** A fleet's own rules for its vehicles' upkeep. */
   settingsOf(fleetDid: string): CareSettings {
     this.managers.get(fleetDid);
-    return this.settings.get(fleetDid) ?? { requireDailyCheck: false };
+    return { requireDailyCheck: false, serviceOverdue: 'warn', ...this.settings.get(fleetDid) };
   }
 
-  setSettings(fleetDid: string, next: CareSettings): CareSettings {
-    this.managers.get(fleetDid);
-    this.settings.set(fleetDid, { requireDailyCheck: next.requireDailyCheck });
+  /** Either rule, or both: what is not said stays as it was. */
+  setSettings(fleetDid: string, next: Partial<CareSettings>): CareSettings {
+    const was = this.settingsOf(fleetDid);
+    this.settings.set(fleetDid, {
+      requireDailyCheck: next.requireDailyCheck ?? was.requireDailyCheck,
+      serviceOverdue: next.serviceOverdue ?? was.serviceOverdue,
+    });
     return this.settingsOf(fleetDid);
   }
 
@@ -296,6 +369,172 @@ export class VehicleCareService {
     return last ? { lastCheckBy: last.by, lastCheckAt: last.at, lastCheckClean: last.clean } : {};
   }
 
+  /* ------------------------------------------------------------------------------------- services -- */
+
+  /**
+   * WHEN THE NEXT SERVICE IS DUE: so many months after the last service, or so many km — whichever comes first. With no
+   * service recorded the count runs from when the vehicle was registered, and from its first reading. The km driven are
+   * added reading by reading, so a new meter (which starts lower) does not lose the count. "Soon" is a fortnight before
+   * the day, or a tenth of the km between services before the km.
+   */
+  serviceDue(v: Vehicle, now: number, day?: string): ServiceDueView {
+    const stored = this.plans.get(v.vehicleId);
+    const usual = SERVICE_USUAL[v.vehicleClass];
+    const plan: ServicePlanView = stored
+      ? { ...(stored.everyKm ? { everyKm: stored.everyKm } : {}), ...(stored.everyMonths ? { everyMonths: stored.everyMonths } : {}), source: 'office' }
+      : { ...(usual.everyKm ? { everyKm: usual.everyKm } : {}), everyMonths: usual.everyMonths, source: 'class' };
+    const today = day ?? this.todayOf(v, now);
+    const last = this.servicesOf(v.vehicleId).find((s) => s.what === 'service');
+    const from = last ? 'service' : 'registered';
+    const baseDay = last?.day ?? this.todayOf(v, Date.parse(v.createdAt));
+    const dueDay = plan.everyMonths ? addMonths(baseDay, plan.everyMonths) : undefined;
+
+    // The km driven since the base, reading by reading after it; a new meter adds nothing on the day it is fitted.
+    const ascending = this.readingsOf(v.vehicleId).reverse();
+    let baseKm = last?.km;
+    let after = ascending;
+    // Readings the same day as the service count when they are at or past its km (taken after it), or a new meter.
+    if (last) after = ascending.filter((r) => this.dayOf(v, r.at) > last.day || (this.dayOf(v, r.at) === last.day && baseKm !== undefined && (r.newMeter || r.km >= baseKm)));
+    if (baseKm === undefined) {
+      const first = last ? ascending.find((r) => this.dayOf(v, r.at) >= last.day) : ascending[0];
+      baseKm = first?.km;
+      after = first ? ascending.slice(ascending.indexOf(first) + 1) : [];
+    }
+    const currentKm = this.latestReading(v.vehicleId)?.km;
+    let dueKm: number | undefined;
+    if (plan.everyKm && baseKm !== undefined && currentKm === undefined) dueKm = baseKm + plan.everyKm;
+    if (plan.everyKm && baseKm !== undefined && currentKm !== undefined) {
+      let driven = 0;
+      let prev = baseKm;
+      for (const r of after) {
+        if (!r.newMeter) driven += Math.max(0, r.km - prev);
+        prev = r.km;
+      }
+      dueKm = currentKm + plan.everyKm - driven;
+    }
+
+    const soonKm = plan.everyKm ? Math.max(SOON_KM_LEAST, Math.round(plan.everyKm * SOON_KM_SHARE)) : 0;
+    const kmLeft = dueKm !== undefined && currentKm !== undefined ? dueKm - currentKm : undefined;
+    const lateByDay = dueDay !== undefined && today > dueDay;
+    const lateByKm = kmLeft !== undefined && kmLeft <= 0;
+    const state: ServiceDueView['state'] =
+      lateByDay || lateByKm ? 'overdue' : (dueDay && today >= addDays(dueDay, -SERVICE_SOON_DAYS)) || (kmLeft !== undefined && kmLeft <= soonKm) ? 'soon' : dueDay || dueKm !== undefined ? 'ok' : 'unknown';
+
+    const by = [dueDay ? `by ${dayWords(dueDay)}` : '', dueKm !== undefined ? `at ${kmWords(dueKm)} km` : ''].filter(Boolean);
+    const when = by.join(' or ') + (by.length > 1 ? ', whichever comes first' : '');
+    const line =
+      state === 'overdue'
+        ? lateByDay
+          ? `Service overdue: it was due by ${dayWords(dueDay!)}`
+          : `Service overdue: it was due at ${kmWords(dueKm!)} km, and reads ${kmWords(currentKm!)} km`
+        : state === 'soon'
+          ? `Service due soon: ${when}${kmLeft !== undefined ? ` (it reads ${kmWords(currentKm!)} km)` : ''}`
+          : state === 'ok'
+            ? `Next service ${when}`
+            : `Serviced every ${kmWords(plan.everyKm ?? 0)} km — no odometer reading yet to count from`;
+    return { plan, ...(dueDay ? { dueDay } : {}), ...(dueKm !== undefined ? { dueKm } : {}), ...(currentKm !== undefined ? { currentKm } : {}), state, line, from, fromDay: baseDay };
+  }
+
+  /** How often this vehicle is serviced — or back to its class's usual. Either or both of km and months. */
+  setServicePlan(vehicleId: string, input: { everyKm?: number; everyMonths?: number; useClassUsual?: boolean }, by: string, now: number = Date.now()): VehicleCareView {
+    this.vehicles.get(vehicleId);
+    if (input.useClassUsual) {
+      this.plans.delete(vehicleId);
+      return this.view(vehicleId, now);
+    }
+    if (!input.everyKm && !input.everyMonths) throw new GlosError('INVALID_INPUT', 'Say how often: every so many km, every so many months, or both');
+    this.plans.set(vehicleId, { ...(input.everyKm ? { everyKm: input.everyKm } : {}), ...(input.everyMonths ? { everyMonths: input.everyMonths } : {}), setBy: by, setAt: new Date(now).toISOString() });
+    return this.view(vehicleId, now);
+  }
+
+  /**
+   * WHAT WAS DONE TO IT: a service, a repair, tyres, an inspection — on a day already past or today, with the odometer
+   * then, the workshop and its job card. A km that cannot be — fewer than a reading before that day, more than one after
+   * it — is refused before anything is kept. A service recorded for today with a higher km is also today's reading.
+   * Only a SERVICE starts the count to the next one again. Never a price, never a part.
+   */
+  recordService(vehicleId: string, input: { day: string; what: ServiceKind; km?: number; workshop?: string; note?: string; photoRef?: string }, who: { by: string; byDid?: string }, now: number = Date.now()): VehicleCareView {
+    const v = this.vehicles.get(vehicleId);
+    if (v.status === 'RETIRED') throw new GlosError('INVALID_STATE', `${v.plate} is retired: nothing more is recorded on it`);
+    const today = this.todayOf(v, now);
+    if (!isDay(input.day)) throw new GlosError('INVALID_INPUT', 'A day is YYYY-MM-DD', { field: 'day' });
+    if (input.day > today) throw new GlosError('INVALID_INPUT', 'A service is recorded once it is done: the day is today or earlier', { field: 'day' });
+    if (input.km !== undefined) {
+      const rs = this.readingsOf(vehicleId);
+      const before = rs.find((r) => this.dayOf(v, r.at) < input.day);
+      const next = [...rs].reverse().find((r) => this.dayOf(v, r.at) > input.day);
+      if (before && input.km < before.km) throw new GlosError('INVALID_INPUT', `${v.plate} read ${kmWords(before.km)} km on ${dayWords(this.dayOf(v, before.at))}: a service after that is not at fewer`, { field: 'km' });
+      if (next && !next.newMeter && input.km > next.km) throw new GlosError('INVALID_INPUT', `${v.plate} read ${kmWords(next.km)} km on ${dayWords(this.dayOf(v, next.at))}: a service before that is not at more`, { field: 'km' });
+    }
+    if (input.photoRef && who.byDid) this.assertOwnPhoto(input.photoRef, who.byDid);
+    const workshop = input.workshop?.trim();
+    const note = input.note?.trim();
+    const record: ServiceRecord & { photoRef?: string } = {
+      recordId: `svc_${randomBytes(6).toString('hex')}`,
+      vehicleId,
+      day: input.day,
+      what: input.what,
+      ...(input.km !== undefined ? { km: input.km } : {}),
+      ...(workshop ? { workshop } : {}),
+      ...(note ? { note } : {}),
+      by: who.by,
+      at: new Date(now).toISOString(),
+    };
+    // The job card becomes the vehicle's record: attached to it, kept with it, no longer the uploader's to delete.
+    if (input.photoRef && who.byDid && this.media.adopt(input.photoRef, who.byDid, { type: 'vehicle', id: vehicleId }, 'job_card')) {
+      record.photoRef = input.photoRef;
+      record.hasPhoto = true;
+    }
+    this.services.set(record.recordId, record);
+    const latest = this.latestReading(vehicleId);
+    if (input.km !== undefined && input.day === today && (!latest || input.km > latest.km)) this.recordReading(vehicleId, input.km, { by: who.by, ...(who.byDid ? { byDid: who.byDid } : {}), source: 'office' }, now);
+    return this.view(vehicleId, now);
+  }
+
+  /** A job card's photograph, for the vehicle's owner — the upkeep routes decide who that is. */
+  servicePhoto(vehicleId: string, recordId: string, variant: 'full' | 'thumb'): { bytes: Buffer; contentType: string } {
+    const s = this.services.get(recordId);
+    if (!s || s.vehicleId !== vehicleId || !s.photoRef) throw new GlosError('NOT_FOUND', 'No job card for this service');
+    return this.media.blob(s.photoRef, variant);
+  }
+
+  /**
+   * TELL THE OFFICE, ONCE: a fleet's vehicle whose service comes due soon, and again when it is overdue. Told once each
+   * for the present count — a service recorded, or a schedule changed, starts a new one. Run every hour; a test calls it.
+   */
+  sweepServiceDue(now: number = Date.now()): VehicleServiceDue[] {
+    const told: VehicleServiceDue[] = [];
+    for (const v of this.vehicles.list()) {
+      if (!v.managerDid || v.status === 'RETIRED') continue;
+      const due = this.serviceDue(v, now);
+      if (due.state !== 'soon' && due.state !== 'overdue') continue;
+      const plan = this.plans.get(v.vehicleId);
+      const cycle = `${this.servicesOf(v.vehicleId).find((s) => s.what === 'service')?.recordId ?? 'registered'}|${plan?.everyKm ?? ''}|${plan?.everyMonths ?? ''}`;
+      const was = this.serviceTold.get(v.vehicleId);
+      const mark = was?.cycle === cycle ? was : { cycle };
+      if (mark[due.state]) continue;
+      this.serviceTold.set(v.vehicleId, { ...mark, [due.state]: new Date(now).toISOString() });
+      const notice: VehicleServiceDue = { fleetDid: v.managerDid, vehicleId: v.vehicleId, plate: v.plate, state: due.state, line: due.line, offRoad: due.state === 'overdue' && this.enforcesService(v) };
+      void this.events.publish(GlosEvent.Pudo.VehicleServiceDue, notice, { source: 'pudo' }).catch(() => undefined);
+      told.push(notice);
+    }
+    return told;
+  }
+
+  private enforcesService(v: Vehicle): boolean {
+    return Boolean(v.managerDid && this.settings.get(v.managerDid)?.serviceOverdue === 'off_road');
+  }
+
+  /** Newest first: by the day it was done, then by when it was recorded. */
+  private servicesOf(vehicleId: string): Array<ServiceRecord & { photoRef?: string }> {
+    return [...this.services.values()].filter((s) => s.vehicleId === vehicleId).sort((a, b) => b.day.localeCompare(a.day) || b.at.localeCompare(a.at));
+  }
+
+  /** The owner's day a moment fell on. */
+  private dayOf(v: Vehicle, iso: string): string {
+    return this.todayOf(v, Date.parse(iso));
+  }
+
   /* ---------------------------------------------------------------------------------------- readings -- */
 
   /**
@@ -426,6 +665,26 @@ function jumpWords(last: OdometerReading, km: number, now: number): string | und
   const most = MAX_KM_PER_DAY * days;
   if (km - last.km <= most) return undefined;
   return `${(km - last.km).toLocaleString('en-GB')} km since the last reading — more than ${most.toLocaleString('en-GB')} km in ${days === 1 ? 'a day' : `${days} days`}`;
+}
+
+/** A service as it is shown: never the job card's id, only that there is one. */
+function publicService(s: ServiceRecord & { photoRef?: string }): ServiceRecord {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { photoRef, ...rest } = s;
+  return rest;
+}
+
+/** "135,000": km the way the readings say them. */
+function kmWords(km: number): string {
+  return km.toLocaleString('en-GB');
+}
+
+/** The same day so many months on — the last day of the month when that month is shorter (31 Aug + 6 = 28 Feb). */
+function addMonths(day: string, months: number): string {
+  const [y, m, d] = day.split('-').map(Number);
+  const target = new Date(Date.UTC(y, m - 1 + months, 1));
+  const last = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth(), Math.min(d, last))).toISOString().slice(0, 10);
 }
 
 /** A defect as it is shown: never the photograph's id, only that there is one. */

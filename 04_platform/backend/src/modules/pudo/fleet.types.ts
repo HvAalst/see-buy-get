@@ -271,6 +271,8 @@ export class Vehicle {
   offRoad?: string[];
   /** DERIVED on the owner's read, never stored: the reasons besides its papers — in the workshop, a defect, a service overdue. */
   upkeep?: string[];
+  /** DERIVED on the owner's read: what to know that does not keep it off the road — a service due soon. */
+  notes?: string[];
   createdAt: string;
 }
 

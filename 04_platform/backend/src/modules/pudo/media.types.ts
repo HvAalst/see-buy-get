@@ -53,6 +53,8 @@ export const MEDIA_KINDS = [
    * nobody deletes it while the vehicle is on the road. See vehicle-care.service.
    */
   'defect',
+  /** The workshop's job card for a service or repair: the vehicle's record, like a defect's photo. */
+  'job_card',
 ] as const;
 
 export type MediaKind = (typeof MEDIA_KINDS)[number];
@@ -160,6 +162,7 @@ export const KIND_RETENTION: Record<MediaKind, RetentionClass> = {
   field_evidence: 'field-evidence',
   id_check: 'identity-check',
   defect: 'vehicle-record',
+  job_card: 'vehicle-record',
 };
 
 /** Only real raster image types — no SVG (it can carry script), no arbitrary bytes. */

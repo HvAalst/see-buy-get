@@ -72,6 +72,8 @@ export const GlosEvent = {
     // A defect reported on a vehicle (its office is told), and the office's word on it (the driver who reported it is told).
     VehicleDefectReported: 'pudo.vehicle_defect_reported',
     VehicleDefectDecided: 'pudo.vehicle_defect_decided',
+    // A fleet's vehicle comes due for a service, or is overdue: its office is told, once each.
+    VehicleServiceDue: 'pudo.vehicle_service_due',
     // The receiver added a note to a damage claim report, after handover: the sender is told.
     DamageReportNoted: 'pudo.damage_report_noted',
     /**

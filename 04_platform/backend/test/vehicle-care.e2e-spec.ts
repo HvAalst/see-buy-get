@@ -4,6 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { VehicleService } from '../src/modules/pudo/vehicle.service';
 import { FleetManagerService } from '../src/modules/pudo/fleet-manager.service';
+import { VehicleCareService } from '../src/modules/pudo/vehicle-care.service';
 
 /**
  * A VEHICLE'S UPKEEP — through the booted application, over HTTP. The unit spec proves the rules on the real services;
@@ -157,5 +158,45 @@ describe('a vehicle’s upkeep, over the wire', () => {
     expect(after.body).toMatchObject({ defects: [], decided: [{ status: 'fixed', decisionNote: 'Brake fluid topped up, line replaced' }] });
     const driverInbox = (await http().get('/v1/sbg/notifications/inbox').set(bearer(x.token)).expect(200)).body;
     expect((driverInbox.items ?? driverInbox).find((n: { kind: string }) => n.kind === 'vehicle_defect')).toMatchObject({ title: `${x.plate}: brakes — fixed` });
+  });
+
+  it('keeps a vehicle’s services and job cards for its office alone — never a price — and tells the office when the next comes due', async () => {
+    const x = await aFleetDriver();
+    const other = await aFleetDriver();
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    // The schedule: the office's own, refused to anybody else and to nonsense.
+    const planned = await http().post(`/v1/sbg/vehicles/${x.truckId}/service-plan`).set(bearer(x.office)).send({ everyKm: 10_000, everyMonths: 3 }).expect(201);
+    expect(planned.body.service.plan).toEqual({ everyKm: 10_000, everyMonths: 3, source: 'office' });
+    await http().post(`/v1/sbg/vehicles/${x.truckId}/service-plan`).set(bearer(other.office)).send({ everyMonths: 3 }).expect(403);
+    await http().post(`/v1/sbg/vehicles/${x.truckId}/service-plan`).set(bearer(x.token)).send({ everyMonths: 3 }).expect(403);
+    await http().post(`/v1/sbg/vehicles/${x.truckId}/service-plan`).set(bearer(x.office)).send({ everyKm: 10 }).expect(400);
+    // A service, with the workshop's job card. Whatever is said about money is not kept: there is nowhere for it.
+    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const card = await http().post('/v1/sbg/media').set(bearer(x.office)).send({ kind: 'job_card', dataUrl: png }).expect(201);
+    const service = { day: yesterday, what: 'service', km: 88_000, workshop: 'Mombasa Road Motors', photoRef: card.body.mediaId, cost: 25_000 };
+    await http().post(`/v1/sbg/vehicles/${x.truckId}/services`).set(bearer(other.office)).send(service).expect(403);
+    const kept = await http().post(`/v1/sbg/vehicles/${x.truckId}/services`).set(bearer(x.office)).send(service).expect(201);
+    expect(kept.body.services[0]).toMatchObject({ day: yesterday, what: 'service', km: 88_000, workshop: 'Mombasa Road Motors', hasPhoto: true });
+    expect(kept.body.services[0]).not.toHaveProperty('cost');
+    expect(kept.body.services[0]).not.toHaveProperty('photoRef');
+    expect(kept.body.service).toMatchObject({ from: 'service', dueKm: 98_000, state: 'ok' });
+    const recordId = kept.body.services[0].recordId as string;
+    const photo = await http().get(`/v1/sbg/vehicles/${x.truckId}/services/${recordId}/photo`).set(bearer(x.office)).expect(200);
+    expect(photo.headers['content-type']).toMatch(/^image\/png/);
+    await http().get(`/v1/sbg/vehicles/${x.truckId}/services/${recordId}/photo`).set(bearer(other.office)).expect(403);
+    // Overdue keeps it off the road only where the fleet says so — its own rule, and nobody else's.
+    await http().post(`/v1/sbg/fleet/managers/${x.fleetDid}/care-settings`).set(bearer(x.office)).send({ serviceOverdue: 'never' }).expect(400);
+    await http().post(`/v1/sbg/fleet/managers/${x.fleetDid}/care-settings`).set(bearer(other.office)).send({ serviceOverdue: 'off_road' }).expect(403);
+    expect((await http().post(`/v1/sbg/fleet/managers/${x.fleetDid}/care-settings`).set(bearer(x.office)).send({ serviceOverdue: 'off_road' }).expect(201)).body).toEqual({ requireDailyCheck: false, serviceOverdue: 'off_road' });
+    // Ten days before it is due, the hourly look tells the office — and nobody else.
+    const dueDay = kept.body.service.dueDay as string;
+    app.get(VehicleCareService).sweepServiceDue(Date.parse(`${dueDay}T09:00:00Z`) - 10 * 86_400_000);
+    await new Promise((r) => setTimeout(r, 50));
+    const inbox = (await http().get('/v1/sbg/notifications/inbox').set(bearer(x.office)).expect(200)).body;
+    expect((inbox.items ?? inbox).find((n: { kind: string }) => n.kind === 'vehicle_service')).toMatchObject({ title: `${x.plate}: service due soon` });
+    const driverInbox = (await http().get('/v1/sbg/notifications/inbox').set(bearer(x.token)).expect(200)).body;
+    expect((driverInbox.items ?? driverInbox).some((n: { kind: string }) => n.kind === 'vehicle_service')).toBe(false);
+    const otherInbox = (await http().get('/v1/sbg/notifications/inbox').set(bearer(other.office)).expect(200)).body;
+    expect((otherInbox.items ?? otherInbox).some((n: { kind: string; title: string }) => n.kind === 'vehicle_service' && n.title.startsWith(x.plate))).toBe(false);
   });
 });

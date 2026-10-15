@@ -23010,6 +23010,112 @@
         }
       }
     },
+    "/v1/sbg/vehicles/{id}/service-plan": {
+      "post": {
+        "operationId": "VehicleCare.setServicePlan",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServicePlanDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleCareView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vehicles/{id}/services": {
+      "post": {
+        "operationId": "VehicleCare.recordService",
+        "summary": "",
+        "description": "What was done to it, and when: a service, a repair, tyres, an inspection — with its job card.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServiceRecordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleCareView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vehicles/{id}/services/{recordId}/photo": {
+      "get": {
+        "operationId": "VehicleCare.servicePhoto",
+        "summary": "",
+        "description": "A service's job card, to the vehicle's owner — asked of the service, never of the photo, so it stays the vehicle's.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "recordId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/vehicle-check": {
       "get": {
         "operationId": "VehicleCare.checkSheet",
@@ -33943,6 +34049,13 @@
               "type": "string"
             }
           },
+          "notes": {
+            "description": "DERIVED on the owner's read: what to know that does not keep it off the road — a service due soon.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "createdAt": {
             "type": "string"
           }
@@ -42933,7 +43046,8 @@
               "interchange",
               "field_evidence",
               "id_check",
-              "defect"
+              "defect",
+              "job_card"
             ]
           },
           "dataUrl": {
@@ -45974,6 +46088,125 @@
           "reportedAt"
         ]
       },
+      "ServicePlanView": {
+        "type": "object",
+        "properties": {
+          "everyKm": {
+            "type": "number"
+          },
+          "everyMonths": {
+            "type": "number"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "class",
+              "office"
+            ]
+          }
+        },
+        "required": [
+          "source"
+        ]
+      },
+      "ServiceDueView": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "$ref": "#/components/schemas/ServicePlanView"
+          },
+          "dueDay": {
+            "type": "string"
+          },
+          "dueKm": {
+            "type": "number"
+          },
+          "currentKm": {
+            "type": "number"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "soon",
+              "overdue",
+              "unknown"
+            ]
+          },
+          "from": {
+            "type": "string",
+            "description": "What the count runs from: the last service, or (none yet) when the vehicle was registered — and that day.",
+            "enum": [
+              "service",
+              "registered"
+            ]
+          },
+          "line": {
+            "type": "string",
+            "description": "The state in words, as notices and the vehicle's row say it."
+          },
+          "fromDay": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan",
+          "state",
+          "from",
+          "line",
+          "fromDay"
+        ]
+      },
+      "ServiceRecord": {
+        "type": "object",
+        "properties": {
+          "what": {
+            "type": "string",
+            "enum": [
+              "service",
+              "repair",
+              "tyres",
+              "inspection",
+              "other"
+            ]
+          },
+          "km": {
+            "type": "number"
+          },
+          "workshop": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "hasPhoto": {
+            "type": "boolean"
+          },
+          "recordId": {
+            "type": "string"
+          },
+          "vehicleId": {
+            "type": "string"
+          },
+          "day": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "what",
+          "recordId",
+          "vehicleId",
+          "day",
+          "by",
+          "at"
+        ]
+      },
       "VehicleCareView": {
         "type": "object",
         "properties": {
@@ -46016,6 +46249,21 @@
               "$ref": "#/components/schemas/VehicleDefect"
             }
           },
+          "service": {
+            "description": "The next service: when it is due, and how it stands.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ServiceDueView"
+              }
+            ]
+          },
+          "services": {
+            "description": "What was done to it, newest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceRecord"
+            }
+          },
           "lastCheckBy": {
             "type": "string",
             "description": "The last daily check: who, when, and what it found."
@@ -46031,6 +46279,10 @@
           },
           "plate": {
             "type": "string"
+          },
+          "today": {
+            "type": "string",
+            "description": "Today on the owner's clock (the fleet's): what every day on this sheet is judged by — not the reader's device."
           },
           "usable": {
             "type": "boolean",
@@ -46052,8 +46304,11 @@
           "readings",
           "defects",
           "decided",
+          "service",
+          "services",
           "vehicleId",
           "plate",
+          "today",
           "usable",
           "offRoad",
           "inUse"
@@ -46104,6 +46359,64 @@
         },
         "required": [
           "km"
+        ]
+      },
+      "ServicePlanDto": {
+        "type": "object",
+        "properties": {
+          "everyKm": {
+            "type": "number",
+            "minimum": 500,
+            "maximum": 200000
+          },
+          "everyMonths": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 36
+          },
+          "useClassUsual": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ServiceRecordDto": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string",
+            "pattern": "DAY"
+          },
+          "what": {
+            "type": "string",
+            "enum": [
+              "service",
+              "repair",
+              "tyres",
+              "inspection",
+              "other"
+            ]
+          },
+          "km": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 9999999
+          },
+          "workshop": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "photoRef": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "day",
+          "what"
         ]
       },
       "CheckItemView": {
@@ -46332,12 +46645,21 @@
       "CareSettings": {
         "type": "object",
         "properties": {
+          "serviceOverdue": {
+            "type": "string",
+            "description": "What a service overdue does: only warns (the default), or takes the vehicle off the road until one is recorded.",
+            "enum": [
+              "warn",
+              "off_road"
+            ]
+          },
           "requireDailyCheck": {
             "type": "boolean",
             "description": "A driver checks the vehicle before a shift, or the shift does not start. Off unless the fleet turns it on."
           }
         },
         "required": [
+          "serviceOverdue",
           "requireDailyCheck"
         ]
       },
@@ -46346,11 +46668,15 @@
         "properties": {
           "requireDailyCheck": {
             "type": "boolean"
+          },
+          "serviceOverdue": {
+            "type": "string",
+            "enum": [
+              "warn",
+              "off_road"
+            ]
           }
-        },
-        "required": [
-          "requireDailyCheck"
-        ]
+        }
       },
       "PartnershipEnd": {
         "type": "object",

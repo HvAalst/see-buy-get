@@ -27,8 +27,18 @@ export function careApi(sbg: SbgClient) {
       return sbg.request((c) => c.GET('/v1/sbg/vehicles/{id}/defects/{defectId}/photo', { params: { path: { id, defectId }, query: { variant: 'thumb' } }, parseAs: 'blob' } as never)) as never;
     },
     settings: (fleetDid: string): Promise<Result<CareSettings>> => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/care-settings', { params: { path: { did: fleetDid } } })) as never,
-    setSettings: (fleetDid: string, requireDailyCheck: boolean): Promise<Result<CareSettings>> =>
-      sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/care-settings', { params: { path: { did: fleetDid } }, body: { requireDailyCheck } })) as never,
+    /** Either rule, or both: what is not sent stays as it was. */
+    setSettings: (fleetDid: string, body: Partial<CareSettings>): Promise<Result<CareSettings>> =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/care-settings', { params: { path: { did: fleetDid } }, body })) as never,
+    setServicePlan: (vehicleId: string, body: { everyKm?: number; everyMonths?: number; useClassUsual?: boolean }): Promise<Result<VehicleCare>> =>
+      sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/service-plan', { params: { path: { id: vehicleId } }, body })) as never,
+    recordService: (vehicleId: string, body: { day: string; what: ServiceKind; km?: number; workshop?: string; note?: string; photoRef?: string }): Promise<Result<VehicleCare>> =>
+      sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/services', { params: { path: { id: vehicleId } }, body })) as never,
+    /** A job card's photograph, for <AuthImage>: the key is "vehicleId|recordId". */
+    servicePhoto: (key: string): Promise<{ data: Blob | null; error: unknown }> => {
+      const [id, recordId] = key.split('|');
+      return sbg.request((c) => c.GET('/v1/sbg/vehicles/{id}/services/{recordId}/photo', { params: { path: { id, recordId }, query: { variant: 'thumb' } }, parseAs: 'blob' } as never)) as never;
+    },
     backOnRoad: (vehicleId: string): Promise<Result<VehicleCare>> => sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/back-on-road', { params: { path: { id: vehicleId } } })) as never,
   };
 }
@@ -36,6 +46,35 @@ export function careApi(sbg: SbgClient) {
 export type OdometerReading = components['schemas']['OdometerReading'];
 export type VehicleDefect = components['schemas']['VehicleDefect'];
 export type CareSettings = components['schemas']['CareSettings'];
+export type ServiceRecord = components['schemas']['ServiceRecord'];
+export type ServiceKind = ServiceRecord['what'];
+export type ServiceDue = components['schemas']['ServiceDueView'];
+export type CareApi = ReturnType<typeof careApi>;
+
+/** What can be recorded as done to a vehicle, in the order an office meets them. Only a service restarts the count. */
+export const SERVICE_KINDS: ServiceKind[] = ['service', 'repair', 'tyres', 'inspection', 'other'];
+export const SERVICE_WORD: Record<ServiceKind, MessageKey> = {
+  service: 'fleet.svc.kind.service',
+  repair: 'fleet.svc.kind.repair',
+  tyres: 'fleet.svc.kind.tyres',
+  inspection: 'fleet.svc.kind.inspection',
+  other: 'fleet.svc.kind.other',
+};
+
+/** How the next service stands, as a pill: its words and its tone. */
+export const SERVICE_STATE: Record<ServiceDue['state'], { key: MessageKey; tone: 'ok' | 'warn' | 'danger' | 'idle' }> = {
+  ok: { key: 'fleet.svc.state.ok', tone: 'ok' },
+  soon: { key: 'fleet.svc.state.soon', tone: 'warn' },
+  overdue: { key: 'fleet.svc.state.overdue', tone: 'danger' },
+  unknown: { key: 'fleet.svc.state.unknown', tone: 'idle' },
+};
+
+/** How often, in words: "Serviced every 15,000 km or 6 months, whichever comes first". */
+export function planWords(p: Pick<ServiceDue['plan'], 'everyKm' | 'everyMonths'>, t: Translate): string {
+  if (p.everyKm && p.everyMonths) return t('fleet.svc.planKmMonths', { km: kmWords(p.everyKm), months: p.everyMonths });
+  if (p.everyKm) return t('fleet.svc.planKm', { km: kmWords(p.everyKm) });
+  return t('fleet.svc.planMonths', { months: p.everyMonths ?? 0 });
+}
 
 /** What a defect is about, in the office's words. */
 export const DEFECT_WORD: Record<VehicleDefect['item'], MessageKey> = {
@@ -95,7 +134,7 @@ export function spellBegun(s: Pick<OffRoadSpell, 'fromDay'>, today: string): boo
   return s.fromDay <= today;
 }
 
-/** Today, as YYYY-MM-DD on this device's clock — what a date field means to the person filling it. */
+/** Today, as YYYY-MM-DD on this device's clock — only until a sheet has the fleet's own today (VehicleCare.today). */
 export function localDay(now: Date = new Date()): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
