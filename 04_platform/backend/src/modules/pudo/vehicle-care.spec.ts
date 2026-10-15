@@ -235,4 +235,53 @@ describe('a vehicle’s upkeep', () => {
       expect(fleet.recentVehicles(amos.did).find((v) => v.vehicleId === truck.vehicleId)!.offRoad).toEqual(['In the workshop']);
     });
   });
+  describe('the odometer', () => {
+    const HOUR = 3_600_000;
+
+    it('keeps each reading, newest first, and refuses one lower than the last — in words a driver can act on', () => {
+      const f = aFleet();
+      const truck = aTruck(f.did, 'KVC 600T');
+      const t0 = Date.now() - 2 * DAY;
+      care.recordReading(truck.vehicleId, 120_000, { by: 'Amos', source: 'shift_start' }, t0);
+      care.recordReading(truck.vehicleId, 120_340, { by: 'Amos', source: 'shift_end' }, t0 + 9 * HOUR);
+      const view = care.view(truck.vehicleId);
+      expect(view.odometer).toMatchObject({ km: 120_340, source: 'shift_end', by: 'Amos' });
+      expect(view.readings.map((r) => r.km)).toEqual([120_340, 120_000]);
+      expect(() => care.checkReading(truck.vehicleId, 119_999)).toThrow("KVC 600T's last reading was 120,340 km: a reading cannot go back. If the meter was changed, the office records the new one.");
+      expect(() => care.checkReading(truck.vehicleId, 12.5)).toThrow(/whole kilometres/);
+      expect(() => care.checkReading(truck.vehicleId, 120_340)).not.toThrow();
+    });
+
+    it('takes a new meter from the office, lower than the last, and counts on from it', () => {
+      const f = aFleet();
+      const truck = aTruck(f.did);
+      care.recordReading(truck.vehicleId, 300_000, { by: 'Amos', source: 'shift_end' });
+      const fresh = care.recordReading(truck.vehicleId, 12, { by: 'Amina', source: 'office', newMeter: true }, Date.now() + 1000);
+      expect(fresh).toMatchObject({ km: 12, newMeter: true });
+      expect(fresh).not.toHaveProperty('doubtful');
+      expect(care.view(truck.vehicleId).odometer!.km).toBe(12);
+      expect(() => care.checkReading(truck.vehicleId, 11)).toThrow(/last reading was 12 km/);
+    });
+
+    it('keeps a jump bigger than a vehicle can drive, and says it is doubtful', () => {
+      const f = aFleet();
+      const truck = aTruck(f.did);
+      const t0 = Date.now() - 3 * DAY;
+      care.recordReading(truck.vehicleId, 50_000, { by: 'Amos', source: 'shift_start' }, t0);
+      // Three days: up to 4,500 km is likely.
+      expect(care.recordReading(truck.vehicleId, 54_000, { by: 'Amos', source: 'shift_start' }, t0 + 3 * DAY)).not.toHaveProperty('doubtful');
+      // An hour later, 5,000 km more: a slip of the finger, kept and said.
+      const slip = care.recordReading(truck.vehicleId, 59_000, { by: 'Amos', source: 'shift_end' }, t0 + 3 * DAY + HOUR);
+      expect(slip.doubtful).toBe('5,000 km since the last reading — more than 1,500 km in a day');
+    });
+
+    it('never stands in the way of a shift ending: a reading that cannot be kept is not kept, and says why', () => {
+      const f = aFleet();
+      const truck = aTruck(f.did, 'KVC 700T');
+      care.recordReading(truck.vehicleId, 80_000, { by: 'Amos', source: 'shift_start' });
+      expect(care.recordEndReading(truck.vehicleId, 79_000, { by: 'Amos' }, Date.now() + HOUR)).toEqual({ kept: false, why: expect.stringMatching(/^KVC 700T's last reading was 80,000 km/) });
+      expect(care.recordEndReading(truck.vehicleId, 80_250, { by: 'Amos' }, Date.now() + HOUR)).toEqual({ kept: true });
+      expect(care.view(truck.vehicleId).odometer!.km).toBe(80_250);
+    });
+  });
 });

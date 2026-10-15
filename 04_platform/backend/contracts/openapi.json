@@ -15727,13 +15727,23 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EndSessionDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Assignment"
+                  "type": "object"
                 }
               }
             }
@@ -22947,6 +22957,45 @@
             }
           }
         ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleCareView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vehicles/{id}/readings": {
+      "post": {
+        "operationId": "VehicleCare.recordReading",
+        "summary": "",
+        "description": "The office's reading: at a service, or a new meter (which may be lower than the last).",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordReadingDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "",
@@ -38296,6 +38345,12 @@
                 "$ref": "#/components/schemas/DeclareLegDto"
               }
             ]
+          },
+          "odometerKm": {
+            "type": "number",
+            "description": "What the odometer says as the shift starts, in whole km. Checked before the shift starts: lower than the last is refused.",
+            "minimum": 0,
+            "maximum": 9999999
           }
         }
       },
@@ -38350,6 +38405,16 @@
           "at",
           "radiusKm"
         ]
+      },
+      "EndSessionDto": {
+        "type": "object",
+        "properties": {
+          "odometerKm": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 9999999
+          }
+        }
       },
       "NudgeMinEarnDto": {
         "type": "object",
@@ -45484,6 +45549,53 @@
           "setAt"
         ]
       },
+      "OdometerReading": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "shift_start",
+              "shift_end",
+              "office"
+            ]
+          },
+          "byDid": {
+            "type": "string"
+          },
+          "newMeter": {
+            "type": "boolean",
+            "description": "The office recorded a new meter: this reading starts again from what it shows."
+          },
+          "doubtful": {
+            "type": "string",
+            "description": "Why the reading is doubtful, in words. Absent: nothing odd about it."
+          },
+          "readingId": {
+            "type": "string"
+          },
+          "vehicleId": {
+            "type": "string"
+          },
+          "km": {
+            "type": "number"
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "readingId",
+          "vehicleId",
+          "km",
+          "at",
+          "by"
+        ]
+      },
       "VehicleCareView": {
         "type": "object",
         "properties": {
@@ -45496,6 +45608,21 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/OffRoadSpell"
+            }
+          },
+          "odometer": {
+            "description": "The latest odometer reading. Absent: none yet.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OdometerReading"
+              }
+            ]
+          },
+          "readings": {
+            "description": "The last few readings, newest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OdometerReading"
             }
           },
           "vehicleId": {
@@ -45521,6 +45648,7 @@
         },
         "required": [
           "spells",
+          "readings",
           "vehicleId",
           "plate",
           "usable",
@@ -45556,6 +45684,23 @@
         },
         "required": [
           "reason"
+        ]
+      },
+      "RecordReadingDto": {
+        "type": "object",
+        "properties": {
+          "km": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 9999999
+          },
+          "newMeter": {
+            "type": "boolean",
+            "description": "A new meter: this reading may be lower than the last, and starts again from here."
+          }
+        },
+        "required": [
+          "km"
         ]
       },
       "PartnershipEnd": {

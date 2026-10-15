@@ -214,6 +214,12 @@ export function rideAloneCompany(countries: Array<{ jurisdiction: string; compan
 }
 
 /** What happened, as its own sentence: "you left" is not "they took you off", and the screen must not say the second for the first. */
+/** What a driver typed into the odometer box, as whole kilometres: spaces and separators dropped. Nothing typed: none. */
+export function odometerOf(typed: string): number | undefined {
+  const digits = typed.replace(/[^0-9]/g, '');
+  return digits ? Number(digits) : undefined;
+}
+
 /** A day on the roster by its name — "Thursday 16 October" — in the phone's own language. Built at noon, so no clock shifts the day. */
 export function rosterDayName(day: string): string {
   return formatDate(`${day}T12:00:00Z`, { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });

@@ -8100,7 +8100,7 @@ describe('PUDO Light', () => {
 
     // A driver's own shift and work: ending it, snoozing it, their dot on the map, their floor, their area.
     const own: Array<(who: never) => unknown> = [
-      (who) => controller.endSession(courier.did, who),
+      (who) => controller.endSession(courier.did, {}, who),
       (who) => controller.snoozeWork(courier.did, { minutes: 30 } as never, who),
       (who) => controller.resumeWork(courier.did, who),
       (who) => controller.pingDriver(courier.did, who),

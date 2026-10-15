@@ -30,6 +30,7 @@ import {
   removalWords,
   removedLine,
   rosterDayName,
+  odometerOf,
   leftDetail,
   isFull,
   lastReadingBreached,
@@ -764,5 +765,15 @@ describe('a driver’s days on the roster', () => {
       for (const w of words) expect(said.split(/[\s,]+/)).toContain(w);
       expect(said).not.toMatch(/2026/);
     }
+  });
+});
+
+describe('the odometer box', () => {
+  it('reads whole kilometres whatever separators were typed, and nothing typed as no reading', () => {
+    expect(odometerOf('120400')).toBe(120400);
+    expect(odometerOf(' 120,400 ')).toBe(120400);
+    expect(odometerOf('120 400 km')).toBe(120400);
+    expect(odometerOf('')).toBeUndefined();
+    expect(odometerOf('   ')).toBeUndefined();
   });
 });

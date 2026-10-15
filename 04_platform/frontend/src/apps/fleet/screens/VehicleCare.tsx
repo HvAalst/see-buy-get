@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { Button, ErrorNote, Note, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import type { Result, SbgClient } from '../../../lib/sbg';
-import { OFF_ROAD_REASONS, REASON_WORD, careApi, localDay, spellBegun, spellSpan, type OffRoadReason, type VehicleCare } from '../care';
+import { OFF_ROAD_REASONS, REASON_WORD, SOURCE_WORD, careApi, kmWords, localDay, spellBegun, spellSpan, type OffRoadReason, type VehicleCare } from '../care';
+import { formatDate } from '../../../shared/i18n';
 import type { VehicleRow } from '../types';
 
 /**
@@ -21,6 +22,8 @@ export function VehicleCareSheet({ vehicle, sbg, onClose, onChanged }: { vehicle
   const [fromDay, setFromDay] = useState(today);
   const [untilDay, setUntilDay] = useState('');
   const [note, setNote] = useState('');
+  const [km, setKm] = useState('');
+  const [newMeter, setNewMeter] = useState(false);
 
   useEffect(() => {
     setCare(null);
@@ -94,6 +97,56 @@ export function VehicleCareSheet({ vehicle, sbg, onClose, onChanged }: { vehicle
               </ul>
             </>
           ) : null}
+
+          {/* THE ODOMETER: the last reading and who gave it, any that look wrong, and one recorded by hand. */}
+          <p class="field__label" style="margin-top:16px">
+            {t('fleet.care.odoTitle')}
+          </p>
+          {care.odometer ? (
+            <p class="t-body">
+              {t('fleet.care.odoLast', { km: kmWords(care.odometer.km), how: t(SOURCE_WORD[care.odometer.source]), who: care.odometer.by, when: formatDate(care.odometer.at, { dateStyle: 'medium', timeStyle: 'short' }) })}
+            </p>
+          ) : (
+            <p class="hint">{t('fleet.care.odoNone')}</p>
+          )}
+          {care.readings
+            .filter((r) => r.doubtful)
+            .slice(0, 3)
+            .map((r) => (
+              <p key={r.readingId} class="hint plan__win--warn">
+                {t('fleet.care.odoDoubtful', { km: kmWords(r.km), who: r.by, why: r.doubtful ?? '' })}
+              </p>
+            ))}
+          <div class="plan__tune" style="margin-top:6px">
+            <div class="field">
+              <label class="field__label" for="care-km">
+                {t('fleet.care.odoRecord')}
+              </label>
+              <input id="care-km" class="input input--mono" inputMode="numeric" value={km} onInput={(e) => setKm(e.currentTarget.value)} />
+            </div>
+          </div>
+          <label class="checkline" style="margin:6px 0 10px">
+            <input type="checkbox" checked={newMeter} onChange={(e) => setNewMeter(e.currentTarget.checked)} />
+            <span>{t('fleet.care.odoNewMeter')}</span>
+          </label>
+          <Button
+            variant="outline"
+            chevron={false}
+            busy={busy}
+            disabled={busy || !km.replace(/[^0-9]/g, '')}
+            onClick={() =>
+              void act(async () => {
+                const r = await api!.recordReading(care.vehicleId, Number(km.replace(/[^0-9]/g, '')), newMeter);
+                if (!r.error) {
+                  setKm('');
+                  setNewMeter(false);
+                }
+                return r;
+              })
+            }
+          >
+            {t('fleet.care.odoSave')}
+          </Button>
 
           {/* TAKE IT OFF THE ROAD: why, from when, until when. What it does is said beside the button. */}
           <p class="field__label" style="margin-top:16px">

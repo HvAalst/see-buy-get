@@ -118,8 +118,8 @@ export function createDriverApi(sbg: SbgClient) {
      * Start a shift: scan the vehicle QR, or name one already driven before — optionally saying where it goes.
      * With the driver's PIN: a phone left signed in is not proof of who is holding it.
      */
-    startSession: (did: string, vehicle: { vehicleQr?: string; vehicleId?: string }, pin: string, leg?: DeclaredLegBody) =>
-      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/start-session', { params: { path: { did } }, body: { ...vehicle, pin, leg } })),
+    startSession: (did: string, vehicle: { vehicleQr?: string; vehicleId?: string }, pin: string, leg?: DeclaredLegBody, odometerKm?: number) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/start-session', { params: { path: { did } }, body: { ...vehicle, pin, leg, ...(odometerKm !== undefined ? { odometerKm } : {}) } })),
 
     /** The coming days this driver's fleet has said who drives, and whether they do. */
     driverRoster: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/roster', { params: { path: { did } } })),
@@ -183,7 +183,9 @@ export function createDriverApi(sbg: SbgClient) {
     geocode: (q: string) => sbg.request((c) => c.GET('/v1/sbg/geocode', { params: { query: { q } } })),
 
     /** End the shift (decouple). */
-    endSession: (did: string) => sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/end-session', { params: { path: { did } } })),
+    /** End the shift — with what the odometer says now, if the driver read it. It never stops the shift ending. */
+    endSession: (did: string, odometerKm?: number) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/end-session', { params: { path: { did } }, body: odometerKm !== undefined ? { odometerKm } : {} })),
 
     /** Declare a route A→B and get offered nearby totes/freight sized to the vehicle's remaining capacity. */
     suggestWork: (did: string, body: { from: { lat: number; lng: number }; to: { lat: number; lng: number }; departAt?: string; minEarn?: number }) =>

@@ -1,6 +1,6 @@
 import { DESTINATION_KINDS } from './destination.types';
 import { PaperCaseView } from '../../foundation/entity/company-paper-reports.service';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { INCOTERM_CODES } from '../../foundation/incoterms/catalogue';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE } from '../../foundation/interest/interest.service';
 import { CLAIM_KINDS, DELAY_PLACES, GIVE_BACK_REASONS, RATE_BASES, RUN_CANCEL_REASONS, SETTLE_METHODS, SETTLE_WHEN, type DelayPlace, type GiveBackReason, type RunCancelReason } from './departure.types';
@@ -2321,6 +2321,13 @@ export class StartSessionDto {
   @IsOptional() @IsString() @MaxLength(8) pin?: string;
   /** The leg for this shift, declared in the same breath as picking the vehicle. */
   @IsOptional() @ValidateNested() @Type(() => DeclareLegDto) leg?: DeclareLegDto;
+  /** What the odometer says as the shift starts, in whole km. Checked before the shift starts: lower than the last is refused. */
+  @IsOptional() @IsInt() @Min(0) @Max(9_999_999) odometerKm?: number;
+}
+
+/** Ending a shift: what the odometer says now, if the driver read it. It never stops the shift ending. */
+export class EndSessionDto {
+  @IsOptional() @IsInt() @Min(0) @Max(9_999_999) odometerKm?: number;
 }
 
 export class LocateDto {

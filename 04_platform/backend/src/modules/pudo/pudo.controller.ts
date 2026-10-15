@@ -89,6 +89,7 @@ import { EmptyDepot, EmptyDepotService } from './empty-depot.service';
 import { CONTACT_BASIS, ContactCardService } from './contact-card.service';
 import { CountryNoticeService } from './country-notice.service';
 import { JourneyPlanService } from './journey-plan.service';
+import { VehicleCareService } from './vehicle-care.service';
 import { ContactCardView, DepotListResponse, DepotRegisterView } from './depot.types';
 import { FleetManagerService } from './fleet-manager.service';
 import { AccountService } from './account.service';
@@ -135,7 +136,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyDeclarationDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, SuggestVehicleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto } from './pudo.dto';
+  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, SuggestVehicleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto } from './pudo.dto';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
@@ -285,6 +286,8 @@ export class SbgController {
     @Optional() private readonly sms?: SmsService,
     @Optional() private readonly countryNotice?: CountryNoticeService,
     @Optional() private readonly journeyPlans?: JourneyPlanService,
+    // A vehicle's upkeep: the odometer read as a shift starts and ends.
+    @Optional() private readonly care?: VehicleCareService,
   ) {}
 
   /**
@@ -5864,9 +5867,13 @@ export class SbgController {
     }
     // Naming a vehicle they have driven before is the same act as scanning it — the coupling rules (licence,
     // usable vehicle, nobody else on it) are what actually protect this, and they run either way.
-    if (dto.vehicleId?.trim()) return this.fleet.couple(did, dto.vehicleId.trim(), undefined, dto.leg);
-    if (!dto.vehicleQr?.trim()) throw new GlosError('FIELD_REQUIRED', 'Scan the vehicle QR, or pick one you have driven before');
-    return this.fleet.startSession(did, dto.vehicleQr, dto.leg);
+    if (!dto.vehicleId?.trim() && !dto.vehicleQr?.trim()) throw new GlosError('FIELD_REQUIRED', 'Scan the vehicle QR, or pick one you have driven before');
+    // The odometer, read as the shift starts: a reading that cannot be kept is refused BEFORE the shift starts.
+    const vehicleId = dto.vehicleId?.trim() || this.vehicles.byQr(dto.vehicleQr!)?.vehicleId;
+    if (dto.odometerKm !== undefined && vehicleId && this.care) this.care.checkReading(vehicleId, dto.odometerKm);
+    const shift = dto.vehicleId?.trim() ? this.fleet.couple(did, dto.vehicleId.trim(), undefined, dto.leg) : this.fleet.startSession(did, dto.vehicleQr!, dto.leg);
+    if (dto.odometerKm !== undefined && this.care) this.care.recordReading(shift.vehicleId, dto.odometerKm, { by: this.drivers.get(did).displayName, byDid: did, source: 'shift_start' });
+    return shift;
   }
 
   /** The vehicles this driver has driven before — the "which one today?" list, before they reach the yard. */
@@ -5959,9 +5966,13 @@ export class SbgController {
   /** Driver closes the shift → decouples driver + vehicle. */
   @Roles('driver', 'operator')
   @Post('fleet/drivers/:did/end-session')
-  endSession(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+  endSession(@Param('did') did: string, @Body() dto: EndSessionDto, @Actor() actor: IntrospectionResult) {
     this.assertDriverActs(did, actor);
-    return this.fleet.endSession(did);
+    const vehicleId = this.fleet.activeForDriver(did)?.vehicleId;
+    const ended = this.fleet.endSession(did);
+    // The odometer, read as the shift ends: kept if it can be, and the shift has ended either way.
+    if (dto?.odometerKm === undefined || !vehicleId || !this.care) return ended;
+    return { ...ended, odometer: this.care.recordEndReading(vehicleId, dto.odometerKm, { by: this.drivers.get(did).displayName, byDid: did }) };
   }
 
   /**

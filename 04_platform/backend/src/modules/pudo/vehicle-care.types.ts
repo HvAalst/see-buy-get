@@ -30,6 +30,28 @@ export class OffRoadSpell {
   @ApiPropertyOptional() endedBy?: string;
 }
 
+export const READING_SOURCES = ['shift_start', 'shift_end', 'office'] as const;
+export type ReadingSource = (typeof READING_SOURCES)[number];
+
+/**
+ * WHAT THE ODOMETER SAID — the one usage reading service intervals run on. Typed by the driver as a shift starts and
+ * ends, or by the office (at a service, or when a meter is replaced). Never lower than the last unless the office
+ * records a new meter. A jump bigger than a vehicle can drive in the time since the last is kept, and said to be doubtful.
+ */
+export class OdometerReading {
+  readingId: string;
+  vehicleId: string;
+  km: number;
+  at: string;
+  @ApiProperty({ enum: READING_SOURCES }) source: ReadingSource;
+  by: string;
+  @ApiPropertyOptional() byDid?: string;
+  /** The office recorded a new meter: this reading starts again from what it shows. */
+  @ApiPropertyOptional() newMeter?: boolean;
+  /** Why the reading is doubtful, in words. Absent: nothing odd about it. */
+  @ApiPropertyOptional() doubtful?: string;
+}
+
 /** A vehicle's upkeep as its owner reads it. */
 export class VehicleCareView {
   vehicleId: string;
@@ -43,4 +65,15 @@ export class VehicleCareView {
   @ApiProperty({ type: [OffRoadSpell] }) spells: OffRoadSpell[];
   /** A driver is on a shift in it right now: a spell starting today leaves that shift running, and stops the next. */
   inUse: boolean;
+  /** The latest odometer reading. Absent: none yet. */
+  @ApiPropertyOptional({ type: OdometerReading }) odometer?: OdometerReading;
+  /** The last few readings, newest first. */
+  @ApiProperty({ type: [OdometerReading] }) readings: OdometerReading[];
+}
+
+/** What became of a reading given as a shift ended: the shift ends whatever it said. */
+export class EndReadingResult {
+  kept: boolean;
+  @ApiPropertyOptional() why?: string;
+  @ApiPropertyOptional() doubtful?: string;
 }

@@ -16,6 +16,7 @@ import {
   type CardReader,
   driverStatusNotice,
   afterShiftLine,
+  odometerOf,
   badgeToShow,
   hoursWords,
   restSays,
@@ -121,6 +122,7 @@ function OffShift({ state, actions, onOpenFleet }: HomeScreenProps) {
   // in — in a cab, on a depot charger — is not proof of who is holding the phone.
   const [pinOpen, setPinOpen] = useState(false);
   const [pin, setPin] = useState('');
+  const [odo, setOdo] = useState('');
   const [refused, setRefused] = useState<SbgError | null>(null);
   // Which of this driver's usual roads they are running today. Optional: a driver who does not yet know
   // starts the shift anyway and says it later, when they look for work.
@@ -371,6 +373,14 @@ function OffShift({ state, actions, onOpenFleet }: HomeScreenProps) {
             own words for a wrong PIN, which say what the next wrong one costs. */}
         {refused ? refused.code === 'PIN_WRONG' || refused.code === 'PIN_LOCKED' ? <ErrorNote error={refused} /> : <RefusalNote error={refused} /> : null}
         {refused?.code === 'PIN_LOCKED' ? <p class="hint">{t('driver.home.pinLocked')}</p> : null}
+        {/* THE ODOMETER, read as the day starts: optional, and how the office knows when a service is due. */}
+        <div class="field">
+          <label class="field__label" for="shift-odo">
+            {t('driver.home.odoLabel')}
+          </label>
+          <input id="shift-odo" class="input input--mono" inputMode="numeric" autoComplete="off" value={odo} placeholder={t('driver.home.odoPh')} onInput={(e) => setOdo(e.currentTarget.value)} />
+          <span class="hint">{t('driver.home.odoHint')}</span>
+        </div>
         <div class="field">
           <span class="field__label">{t('driver.home.pinLabel')}</span>
           <CodeBoxes id="shift-pin" label={t('driver.home.pinLabel')} length={PIN_LENGTH} value={pin} onInput={setPin} disabled={state.busy === 'start'} mask />
@@ -380,10 +390,13 @@ function OffShift({ state, actions, onOpenFleet }: HomeScreenProps) {
           disabled={pin.length !== PIN_LENGTH}
           busy={state.busy === 'start'}
           onClick={async () => {
-            const failed = await actions.startShift(pin, vehicleId ?? undefined, leg && { fromLabel: leg.fromLabel, from: leg.from, toLabel: leg.toLabel, to: leg.to });
+            const failed = await actions.startShift(pin, vehicleId ?? undefined, leg && { fromLabel: leg.fromLabel, from: leg.from, toLabel: leg.toLabel, to: leg.to }, odometerOf(odo));
             setPin('');
             setRefused(failed);
-            if (!failed) setPinOpen(false);
+            if (!failed) {
+              setPinOpen(false);
+              setOdo('');
+            }
           }}
         >
           {t('driver.home.startShift')}
@@ -730,6 +743,7 @@ function WorkCard({ state, actions }: HomeScreenProps) {
 function OnShift({ state, actions, onOpenFleet }: HomeScreenProps) {
   const t = useT();
   const [confirm, setConfirm] = useState<'end' | 'rate' | null>(null);
+  const [endOdo, setEndOdo] = useState('');
   const [badgeOpen, setBadgeOpen] = useState(false);
   const shown = badgeToShow(state.session, state.driver?.badgeId);
   const v = state.vehicle!;
@@ -856,12 +870,20 @@ function OnShift({ state, actions, onOpenFleet }: HomeScreenProps) {
       <Sheet open={confirm === 'end'} onClose={() => setConfirm(null)} title={t('driver.home.endSheetTitle')}>
         <p class="t-body">{t('driver.home.endBody', { plate: v.plate })}</p>
         <Checklist items={[t('driver.home.end1'), afterShiftLine(state.session.hours, t)]} />
+        <div class="field">
+          <label class="field__label" for="end-odo">
+            {t('driver.home.odoEndLabel')}
+          </label>
+          <input id="end-odo" class="input input--mono" inputMode="numeric" autoComplete="off" value={endOdo} placeholder={t('driver.home.odoPh')} onInput={(e) => setEndOdo(e.currentTarget.value)} />
+          <span class="hint">{t('driver.home.odoEndHint')}</span>
+        </div>
         <Button
           chevron={false}
           busy={state.busy === 'end'}
           onClick={() => {
             setConfirm(null);
-            void actions.endShift();
+            void actions.endShift(odometerOf(endOdo));
+            setEndOdo('');
           }}
         >
           {t('driver.home.endConfirm')}

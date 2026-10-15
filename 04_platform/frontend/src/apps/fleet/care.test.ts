@@ -29,3 +29,12 @@ describe('a vehicle off the road, in words', () => {
     expect(localDay(new Date(2026, 9, 5, 23, 30))).toBe('2026-10-05');
   });
 });
+
+describe('an odometer reading, in words', () => {
+  it('says kilometres with the digits grouped, and who gave a reading', async () => {
+    const { kmWords, SOURCE_WORD } = await import('./care');
+    expect(kmWords(120400)).toMatch(/^120.400 km$/);
+    expect(t(SOURCE_WORD.shift_start)).toBe('at a shift start');
+    expect(t(SOURCE_WORD.office)).toBe('by the office');
+  });
+});

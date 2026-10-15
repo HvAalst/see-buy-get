@@ -1055,6 +1055,16 @@ export const enFleet = {
   'fleet.care.span': '{from} to {until}',
   'fleet.care.spanOne': '{day} only',
   'fleet.care.spanOpen': 'from {from}, until put back',
+  'fleet.care.odoTitle': 'Odometer',
+  'fleet.care.odoLast': '{km} — {how}, by {who}, {when}',
+  'fleet.care.odoNone': 'No reading yet. Drivers give one as they start and end a shift; you can record one here.',
+  'fleet.care.odoDoubtful': '{km} from {who} looks wrong: {why}.',
+  'fleet.care.odoRecord': 'Record a reading (km)',
+  'fleet.care.odoNewMeter': 'A new meter: the reading starts again from here',
+  'fleet.care.odoSave': 'Record the reading',
+  'fleet.care.src.start': 'at a shift start',
+  'fleet.care.src.end': 'at a shift end',
+  'fleet.care.src.office': 'by the office',
   'fleet.vehicles.aloud': '{count, plural, one {# vehicle} other {# vehicles}} in the fleet.',
 
   // Vehicles screen — the QR sheet.

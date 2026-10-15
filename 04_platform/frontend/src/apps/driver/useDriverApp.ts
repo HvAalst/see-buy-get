@@ -1153,7 +1153,7 @@ export function useDriverApp() {
    * and an open app is not proof of who is holding the phone. Resolves to the refusal, so the PIN sheet — which
    * sits over the screen — can say "that is not your PIN" where the driver is looking; null means it started.
    */
-  const startShift = useCallback(async (pin: string, vehicleId?: string, leg?: DeclaredLegBody): Promise<SbgError | null> => {
+  const startShift = useCallback(async (pin: string, vehicleId?: string, leg?: DeclaredLegBody, odometerKm?: number): Promise<SbgError | null> => {
     if (!client || !did) return null;
     const qr = state.form.vehicleQr.trim();
     // One of the two: the vehicle they picked from their own history, or the QR on a dashboard in front of them.
@@ -1165,7 +1165,7 @@ export function useDriverApp() {
     await run('start', async () => {
       // An end still in the pocket goes first: the server must hear "ended" before "started" or it refuses the second.
       if (endQueued()) await drain({ baseUrl: driverConfig().baseUrl, token: () => client.client.session.getToken() });
-      const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehicleQr: qr }, pin.trim(), leg);
+      const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehicleQr: qr }, pin.trim(), leg, odometerKm);
       if (r.error) {
         // A dead sign-in is the shell's to handle; anything else is said in the sheet that asked for the PIN.
         if (isSignInRequired(r.error)) fail(r.error);
@@ -1256,12 +1256,15 @@ export function useDriverApp() {
     });
   }, [client, did, run, fail, pushToast, refresh]);
 
-  const endShift = useCallback(async () => {
+  const endShift = useCallback(async (odometerKm?: number) => {
     if (!client || !did) return;
     await run('end', async () => {
-      const r = await client.api.endSession(did);
+      const r = await client.api.endSession(did, odometerKm);
       if (r.error) return fail(r.error);
       buzz();
+      // The shift has ended whatever the reading said; a reading that could not be kept is said, with the reason.
+      const odo = (r.data as { odometer?: { kept: boolean; why?: string } } | undefined)?.odometer;
+      if (odo && !odo.kept) pushToast({ tone: 'warn', icon: 'warning', title: t('driver.toast.readingNotKept'), detail: odo.why ?? '' });
       // A 202 is the outbox: the end is recorded here and goes when there is signal. Said as such, and the shift
       // shows as over from now — the refresh reads the queue before it believes what it last knew.
       if (r.status === 202) pushToast({ tone: 'ok', icon: 'offline', title: t('driver.toast.shiftClosed'), detail: t('driver.toast.shiftEndQueued') });

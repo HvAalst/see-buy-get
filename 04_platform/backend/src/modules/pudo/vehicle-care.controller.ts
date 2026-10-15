@@ -8,7 +8,7 @@ import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { VehicleService } from './vehicle.service';
 import { VehicleCareService } from './vehicle-care.service';
-import { TakeOffRoadDto } from './vehicle-care.dto';
+import { RecordReadingDto, TakeOffRoadDto } from './vehicle-care.dto';
 import { VehicleCareView } from './vehicle-care.types';
 
 /**
@@ -47,6 +47,14 @@ export class VehicleCareController {
   @Post('vehicles/:id/back-on-road')
   backOnTheRoad(@Param('id') id: string, @Actor() actor: IntrospectionResult): VehicleCareView {
     return this.care.backOnTheRoad(id, this.ownerOf(id, actor));
+  }
+
+  /** The office's reading: at a service, or a new meter (which may be lower than the last). */
+  @Roles('fleet_manager', 'driver', 'operator')
+  @Post('vehicles/:id/readings')
+  recordReading(@Param('id') id: string, @Body() dto: RecordReadingDto, @Actor() actor: IntrospectionResult): VehicleCareView {
+    this.care.recordReading(id, dto.km, { by: this.ownerOf(id, actor), source: 'office', ...(dto.newMeter ? { newMeter: true } : {}) });
+    return this.care.view(id);
   }
 
   /** The vehicle's owner, or staff — and the name what they do is signed with. Anybody else: refused. */

@@ -7,7 +7,12 @@ import { FleetManagerService } from './fleet-manager.service';
 import { FleetService } from './fleet.service';
 import { Vehicle } from './fleet.types';
 import { VehicleService } from './vehicle.service';
-import { OffRoadReason, OffRoadSpell, VehicleCareView } from './vehicle-care.types';
+import { EndReadingResult, OdometerReading, OffRoadReason, OffRoadSpell, ReadingSource, VehicleCareView } from './vehicle-care.types';
+
+/** The most a vehicle drives in a day, for telling a doubtful reading from a likely one. */
+export const MAX_KM_PER_DAY = 1500;
+/** How many readings a vehicle's sheet lists. */
+const READINGS_SHOWN = 10;
 
 /** How far ahead a vehicle may be booked off the road. */
 export const OFF_ROAD_DAYS_AHEAD = 365;
@@ -33,6 +38,7 @@ const REASON_WORDS: Record<OffRoadReason, string> = {
 @Injectable()
 export class VehicleCareService {
   private readonly spells = new PersistentMap<string, OffRoadSpell>('vehicle-off-road');
+  private readonly readings = new PersistentMap<string, OdometerReading>('vehicle-readings');
 
   constructor(
     private readonly vehicles: VehicleService,
@@ -55,7 +61,67 @@ export class VehicleCareService {
       ...(v.status === 'GROUNDED' ? { grounded: true } : {}),
       spells: this.liveSpellsOf(v.vehicleId).filter((s) => !s.untilDay || s.untilDay >= today),
       inUse: Boolean(this.fleet.activeForVehicle(v.vehicleId)),
+      ...(this.latestReading(v.vehicleId) ? { odometer: this.latestReading(v.vehicleId) } : {}),
+      readings: this.readingsOf(v.vehicleId).slice(0, READINGS_SHOWN),
     };
+  }
+
+  /* ---------------------------------------------------------------------------------------- readings -- */
+
+  /**
+   * Is this reading one that can be kept? Asked BEFORE a shift starts on it, so a slip is refused with nothing written.
+   * Lower than the last is refused — unless the office records a new meter.
+   */
+  checkReading(vehicleId: string, km: number, newMeter = false): void {
+    const v = this.vehicles.get(vehicleId);
+    if (!Number.isInteger(km) || km < 0) throw new GlosError('INVALID_INPUT', 'An odometer reading is whole kilometres', { field: 'odometerKm' });
+    const last = this.latestReading(vehicleId);
+    if (last && km < last.km && !newMeter) {
+      throw new GlosError('INVALID_INPUT', `${v.plate}'s last reading was ${last.km.toLocaleString('en-GB')} km: a reading cannot go back. If the meter was changed, the office records the new one.`, { field: 'odometerKm' });
+    }
+  }
+
+  /** Keep a reading, checked first. A jump bigger than the vehicle could have driven since the last is kept, and said to be doubtful. */
+  recordReading(vehicleId: string, km: number, who: { by: string; byDid?: string; source: ReadingSource; newMeter?: boolean }, now: number = Date.now()): OdometerReading {
+    this.checkReading(vehicleId, km, who.newMeter);
+    const last = this.latestReading(vehicleId);
+    const doubtful = !who.newMeter && last ? jumpWords(last, km, now) : undefined;
+    const reading: OdometerReading = {
+      readingId: `odo_${randomBytes(6).toString('hex')}`,
+      vehicleId,
+      km,
+      at: new Date(now).toISOString(),
+      source: who.source,
+      by: who.by,
+      ...(who.byDid ? { byDid: who.byDid } : {}),
+      ...(who.newMeter ? { newMeter: true } : {}),
+      ...(doubtful ? { doubtful } : {}),
+    };
+    this.readings.set(reading.readingId, reading);
+    return reading;
+  }
+
+  /**
+   * A reading given as a shift ENDED. Never in the way of ending it — an end can be sent from an outbox long after the
+   * phone lost signal, and a shift that would not end over a typing slip is a driver who cannot go home. A reading that
+   * cannot be kept is not kept, and the answer says why.
+   */
+  recordEndReading(vehicleId: string, km: number, who: { by: string; byDid?: string }, now: number = Date.now()): EndReadingResult {
+    try {
+      const r = this.recordReading(vehicleId, km, { ...who, source: 'shift_end' }, now);
+      return { kept: true, ...(r.doubtful ? { doubtful: r.doubtful } : {}) };
+    } catch (err) {
+      return { kept: false, why: (err as Error).message };
+    }
+  }
+
+  /** The latest reading of a vehicle: what service intervals count from. */
+  latestReading(vehicleId: string): OdometerReading | undefined {
+    return this.readingsOf(vehicleId)[0];
+  }
+
+  private readingsOf(vehicleId: string): OdometerReading[] {
+    return [...this.readings.values()].filter((r) => r.vehicleId === vehicleId).sort((a, b) => b.at.localeCompare(a.at) || b.km - a.km);
   }
 
   /**
@@ -122,6 +188,14 @@ export class VehicleCareService {
   private todayOf(v: Vehicle, now: number): string {
     return this.managers.todayOf(v.managerDid, now);
   }
+}
+
+/** A jump past what the vehicle could drive since the last reading, in words; nothing when it is likely. */
+function jumpWords(last: OdometerReading, km: number, now: number): string | undefined {
+  const days = Math.max(1, Math.ceil((now - Date.parse(last.at)) / 86_400_000));
+  const most = MAX_KM_PER_DAY * days;
+  if (km - last.km <= most) return undefined;
+  return `${(km - last.km).toLocaleString('en-GB')} km since the last reading — more than ${most.toLocaleString('en-GB')} km in ${days === 1 ? 'a day' : `${days} days`}`;
 }
 
 /** One spell as the line every refusal and screen says: "In the workshop until 17 Oct 2026: brakes". */

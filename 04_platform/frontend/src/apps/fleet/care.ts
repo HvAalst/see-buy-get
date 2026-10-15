@@ -17,8 +17,24 @@ export function careApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/off-road', { params: { path: { id: vehicleId } }, body })) as never,
     endSpell: (vehicleId: string, spellId: string): Promise<Result<VehicleCare>> =>
       sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/off-road/{spellId}/end', { params: { path: { id: vehicleId, spellId } } })) as never,
+    recordReading: (vehicleId: string, km: number, newMeter: boolean): Promise<Result<VehicleCare>> =>
+      sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/readings', { params: { path: { id: vehicleId } }, body: { km, ...(newMeter ? { newMeter: true } : {}) } })) as never,
     backOnRoad: (vehicleId: string): Promise<Result<VehicleCare>> => sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/back-on-road', { params: { path: { id: vehicleId } } })) as never,
   };
+}
+
+export type OdometerReading = components['schemas']['OdometerReading'];
+
+/** Who gave a reading, and when in the day: "at shift start", "by the office". */
+export const SOURCE_WORD: Record<OdometerReading['source'], MessageKey> = {
+  shift_start: 'fleet.care.src.start',
+  shift_end: 'fleet.care.src.end',
+  office: 'fleet.care.src.office',
+};
+
+/** "120,400 km" — in the reader's own way of grouping digits. */
+export function kmWords(km: number): string {
+  return `${km.toLocaleString()} km`;
 }
 
 /** The reasons, in the order the office meets them. A breakdown is usually the driver's report; the office may record one too. */
