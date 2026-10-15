@@ -363,10 +363,16 @@
 
 <!-- ─────────────────────────────────────────────────────────── built -->
 <h2 id="built">Built from this assessment</h2>
-<p class="lead">The two smaller recommendations, built on 2026-10-15. Neither needed a decision above.</p>
+<p class="lead">The two smaller recommendations, built on 2026-10-15. Neither needed a decision above. Both are rows on progress.html.</p>
 <div class="grid" id="built-cards">
-  <div class="card"><span class="tag t-partial">Being built</span><h3>Who drives on which day</h3><p>A fleet office says who drives on a day, and the day plan counts those drivers instead of every active one. Drivers see their own days.</p></div>
-  <div class="card"><span class="tag t-partial">Being built</span><h3>A parcel running late is told</h3><p>When a parcel the network holds passes the time it was promised to be ready, whoever follows it is told once, in the app. The tracking page says it too.</p></div>
+  <div class="card"><span class="tag t-strong">Built</span><h3>Who drives on which day</h3>
+    <p>On the plan board for a day, the office ticks who drives and saves. The plan counts those drivers instead of every active one and names them; where nobody has said, it says it counted everybody. A driver put on a day or taken off one is told, and sees their coming days under “Your fleet”.</p>
+    <ul><li>A planning fact only: no hours, no pay, and anybody can still start a shift.</li><li>Still open, a decision of its own: different start times within one fleet, and two drivers sharing a truck in a day.</li></ul>
+    <p class="note">Commit <code>83c5f84</code>.</p></div>
+  <div class="card"><span class="tag t-strong">Built</span><h3>A parcel running late is told</h3>
+    <p>A parcel is running late when the network holds it on its way and the time it was promised to be ready is more than two hours behind it. The receiver and a person who sent it are told once, in the app; a store hears on its systems. The tracking page, the parcel's screen and the list say it too.</p>
+    <ul><li>Never before it was handed in, and not once it has arrived.</li><li>The two hours is because the promise is optimistic by decision.</li></ul>
+    <p class="note">Commit <code>a306058</code>.</p></div>
 </div>
 
 </div>
