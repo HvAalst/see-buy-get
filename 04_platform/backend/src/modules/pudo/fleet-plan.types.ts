@@ -143,7 +143,7 @@ export class PlanTotals {
   emptyKm: number;
   trucksUsed: number;
   trucksAvailable: number;
-  /** Drivers the fleet has to send out: the plan uses no more trucks than this. */
+  /** Drivers the fleet has to send out — on the day's roster, or every active driver where there is none: the plan uses no more trucks than this. */
   drivers: number;
   /** Planned orders that reach their door outside the window their shipper asked for — late, or early. Each is marked. */
   outsideWindow: number;
@@ -167,6 +167,12 @@ export class PlanDistances {
   @ApiPropertyOptional() gaps?: number;
 }
 
+/** WHO THE PLAN COUNTED as driving that day, and why: the office's roster for the day, or — where it set none — everybody. */
+export class PlanRoster {
+  @ApiProperty({ enum: ['roster', 'everyone'] }) source: 'roster' | 'everyone';
+  names: string[];
+}
+
 export class DayPlanView {
   day: string;
   madeAt: string;
@@ -178,6 +184,8 @@ export class DayPlanView {
   @ApiProperty({ type: [PlanVehicle] }) vehicles: PlanVehicle[];
   /** The rules this plan was made under. Empty when there are none. */
   @ApiProperty({ type: [PlanRuleView] }) rules: PlanRuleView[];
+  /** Who it counted as driving. A plan kept from before there were rosters has none: it counted everybody. */
+  @ApiPropertyOptional({ type: PlanRoster }) roster?: PlanRoster;
   /** What its distances are. A plan kept from before there was a routing server to ask has none: it was an estimate. */
   @ApiPropertyOptional({ type: PlanDistances }) distances?: PlanDistances;
   /** The clock its times are on: the fleet's own time zone when the plan was made. Absent: the fleet had none. */

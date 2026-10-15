@@ -146,6 +146,11 @@ export const NOTIFICATION_KINDS = [
   /** A fleet offered this driver a place, or took the offer back. Only the driver can answer it, so only they are told. */
   'fleet_offer',
   /**
+   * The driver's fleet put them on a day's roster, or took them off a day they had been told they drive. Said to the
+   * driver alone, once per day changed; on the phone a later change to the same day replaces it.
+   */
+  'driver_roster',
+  /**
    * Something happened to the way somebody signs in that they did not do — five wrong PINs locked it. Said to the
    * person, because the one who typed them may know their number, and the owner is the only one who can act.
    */

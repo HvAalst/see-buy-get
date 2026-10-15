@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Note, PhotoField, RefusalNote, Sheet } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
-import { removalWords, removedLine, rideAloneCompany, rideAloneMissing, rideAloneStart, type RideAloneForm } from '../logic';
+import { removalWords, removedLine, rosterDayName, rideAloneCompany, rideAloneMissing, rideAloneStart, type RideAloneForm } from '../logic';
 import type { RideAloneTerms } from '../types';
 import { vehicleWord } from '../vehicle-words';
 import type { DriverActions, DriverState, FleetOffer } from '../useDriverApp';
@@ -69,6 +69,27 @@ export function FleetSheet({ open, onClose, state, actions }: { open: boolean; o
       <p class="t-body">{driver?.fleetName ? t('driver.fleet.now', { company: driver.fleetName }) : removed ? t('driver.fleet.nowNone') : t('driver.fleet.nowOwn')}</p>
       {removed ? <Note tone="warn" icon="truck" title={removedLine(removed, formatDate(removed.at, DAY), t)} detail={removalWords(removed, t, Boolean(state.rideAlone?.offered))} /> : null}
       {error ? <RefusalNote error={error} /> : null}
+
+      {/* THEIR DAYS: what the office has said about who drives each coming day. Planning, never a gate — said so. */}
+      {driver?.managerDid && driver.fleetName ? (
+        <Card title={t('driver.fleet.daysTitle')}>
+          {state.rosterDays.length === 0 ? (
+            <p class="card__note">{t('driver.fleet.daysNone', { company: driver.fleetName })}</p>
+          ) : (
+            <ul class="rows">
+              {state.rosterDays.map((d) => (
+                <li key={d.day} class="row row--static">
+                  <span class="row__body">
+                    <span class="row__t">{rosterDayName(d.day)}</span>
+                    <span class="row__s">{t(d.rostered ? 'driver.fleet.dayOn' : 'driver.fleet.dayOff')}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p class="hint">{t('driver.fleet.daysHint')}</p>
+        </Card>
+      ) : null}
 
       {/* THE WAY OUT. Quiet until asked for; then what it means, and one button that does it. A refusal — a shift
           still running, something still in their hands — is shown above in the server's own words. */}

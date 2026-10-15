@@ -40,6 +40,8 @@ const KIND_ICON: Record<string, IconName> = {
   papers_due: 'clock',
   papers_lapsed: 'block',
   papers_checked: 'check',
+  // A day on the driver's roster changed: put on it, or taken off.
+  driver_roster: 'clock',
   // A driver sent their fleet's office the renewed licence: a card to read.
   papers_sent: 'badge',
   /** A payment the shop made was confirmed by the provider — or came back. */

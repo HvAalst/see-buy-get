@@ -3,7 +3,8 @@ import { Button, Card, ErrorNote, Icon, Note, Pill } from '../../../shared/ui';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { PlanAdviser } from './PlanAdviser';
 import { SplitOrder } from './SplitOrder';
-import { acceptTellsShippers, askOf, clockLine, dayWord, distanceLine, isFleetToday, mayChooseClock, handOnLine, hoursWords, keptOff, leftByReason, putOnto, ruleLine, windowLine, sendLine, weightWords, withoutRule, type DayPlan, type FleetClock, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi } from '../orders';
+import { RosterCard } from './RosterCard';
+import { acceptTellsShippers, askOf, clockLine, rosterLine, dayWord, distanceLine, isFleetToday, mayChooseClock, handOnLine, hoursWords, keptOff, leftByReason, putOnto, ruleLine, windowLine, sendLine, weightWords, withoutRule, type DayPlan, type FleetClock, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi } from '../orders';
 
 const REASON: Record<PlanLeftReason, { title: MessageKey; what: MessageKey }> = {
   no_pin: { title: 'fleet.plan.left.noPin', what: 'fleet.plan.left.noPinDo' },
@@ -165,6 +166,11 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
             {plan.totals.outsideWindow ? <Note tone="warn" icon="warning" title={t(plan.totals.outsideWindow === 1 ? 'fleet.plan.win.outsideOne' : 'fleet.plan.win.outside', { n: plan.totals.outsideWindow })} detail={t('fleet.plan.win.outsideDetail')} /> : null}
             {plan.totals.unreadWindows ? <p class="hint">{t(plan.totals.unreadWindows === 1 ? 'fleet.plan.win.unreadOne' : 'fleet.plan.win.unreadMany', { n: plan.totals.unreadWindows })}</p> : null}
             {plan.totals.drivers < plan.totals.trucksAvailable ? <p class="hint">{t('fleet.plan.driversShort', { drivers: plan.totals.drivers, trucks: plan.totals.trucksAvailable })}</p> : null}
+            {/* WHO IT COUNTED AS DRIVING: the day's roster by name, or — nobody having said — everybody, said as such. */}
+            {(() => {
+              const r = rosterLine(plan, t);
+              return r ? <p class={'hint' + (r.tone === 'warn' ? ' plan__win--warn' : '')}>{r.text}</p> : null;
+            })()}
             <p class="hint">{t('fleet.plan.estimate', { start: s!.dayStart, hours: hoursWords(s!.dayHours * 60), speed: s!.speedKmh, load: s!.loadMin, unload: s!.unloadMin })}</p>
             {/* WHAT THE DISTANCES ARE: by road, or the estimate — and, where a routing server was there and failed, that. */}
             {(() => {
@@ -267,6 +273,17 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
               </div>
             ) : null}
           </Card>
+
+          {/* WHO DRIVES THAT DAY. Saying it plans the day again; an accepted plan stays as accepted until planned again. */}
+          <RosterCard
+            api={api}
+            day={day}
+            dayLabel={dayWord(day, now, t)}
+            planAccepted={Boolean(plan.accepted)}
+            onSaved={async () => {
+              if (!plan.accepted) await propose(ask);
+            }}
+          />
 
           {/* THE RULES IN FORCE: said in full, and each one the office's to take off. On an accepted plan, a record. */}
           {rules.length ? (

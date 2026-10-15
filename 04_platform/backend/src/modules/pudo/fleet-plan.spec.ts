@@ -59,6 +59,7 @@ import type { ImportService } from './import.service';
 import type { ContractRef } from './carriage-contract.types';
 
 import { FleetPlanService } from './fleet-plan.service';
+import { FleetRosterService, ROSTER_DAYS_AHEAD, type DriverRostered } from './fleet-roster.service';
 import type { RoadDistances, RoadMatrix } from './road-matrix';
 import { clockAt } from './fleet-clock';
 import { ROUTER as ROUTER_TOKEN, type Router } from './router';
@@ -83,6 +84,7 @@ describe('a fleet’s plan for a day', () => {
   let withRoads: (roads: RoadMatrix) => FleetPlanService;
   let heuristic: Router;
   let fleetSvc: FleetService;
+  let bus: EventBus;
   let seq = 0;
   const settle = async () => {
     for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
@@ -112,6 +114,7 @@ describe('a fleet’s plan for a day', () => {
     vehicles = moduleRef.get(VehicleService);
     managers = moduleRef.get(FleetManagerService);
     fleetSvc = moduleRef.get(FleetService);
+    bus = moduleRef.get(EventBus);
     plans = new FleetPlanService(dispatch, vehicles, drivers, managers, moduleRef.get<Router>(ROUTER_TOKEN), fleetSvc, moduleRef.get(EventBus));
     plans.onModuleInit();
     heuristic = moduleRef.get<Router>(ROUTER_TOKEN);
@@ -953,5 +956,130 @@ describe('a fleet’s plan for a day', () => {
     expect(() => plans.propose(fleet.did, { day: tomorrow(), dayHours: 20 })).toThrow(/between 1 and 13/);
     expect(() => plans.propose(fleet.did, { day: tomorrow(), dayStart: '25:00' })).toThrow(/HH:MM/);
     expect(() => plans.accept(fleet.did, { day: tomorrow() }, 'Amina')).toThrow(/nothing in this plan/);
+  });
+
+  /**
+   * WHO DRIVES ON THE DAY. A plan counted every active driver, so a fleet with three drivers and one of them off
+   * planned three trucks' work. The office now says who drives, and the plan counts those.
+   */
+  describe('who drives on the day', () => {
+    let roster: FleetRosterService;
+    let rostered: FleetPlanService;
+    let told: DriverRostered[];
+    beforeEach(() => {
+      roster = new FleetRosterService(drivers, managers, bus);
+      rostered = new FleetPlanService(dispatch, vehicles, drivers, managers, heuristic, fleetSvc, bus, undefined, roster);
+      told = [];
+      bus.subscribe<DriverRostered>(GlosEvent.Pudo.DriverRostered, (e) => {
+        told.push(e.payload);
+      });
+    });
+
+    /** Three 5 t trucks, three drivers, three orders that each fill a truck — and a day long enough for one round. */
+    function threeOfEach() {
+      const fleet = aFleet('Kilima Logistics');
+      ['KPL 005A', 'KPL 005B', 'KPL 005C'].forEach((plate) => aTruck(fleet.did, plate, 5000));
+      const crew = [aDriver(fleet.did), aDriver(fleet.did), aDriver(fleet.did)];
+      const pace = { speedKmh: 30, loadMin: 5, unloadMin: 5 };
+      anOrder(fleet, { kg: 4000, n: 1 });
+      const oneRound = rostered.propose(fleet.did, { day: tomorrow(), ...pace, dayHours: 13 }).routes[0].minutes;
+      anOrder(fleet, { kg: 4000, n: 1 });
+      anOrder(fleet, { kg: 4000, n: 1 });
+      return { fleet, crew, ask: { day: tomorrow(), ...pace, dayHours: (oneRound + 5) / 60 } };
+    }
+
+    it('counts every active driver while nobody has said who drives that day, and says it did', () => {
+      const { fleet, crew, ask } = threeOfEach();
+      const plan = rostered.propose(fleet.did, ask);
+      expect(plan.totals).toMatchObject({ drivers: 3, trucksUsed: 3, planned: 3 });
+      expect(plan.roster).toEqual({ source: 'everyone', names: crew.map((d) => d.displayName) });
+      expect(roster.view(fleet.did, tomorrow())).toMatchObject({ source: 'everyone', drivers: 3 });
+      expect(roster.view(fleet.did, tomorrow()).list.every((d) => d.rostered)).toBe(true);
+    });
+
+    it('counts only the drivers the office put on the day, and plans what the rest would have driven as work to hire', () => {
+      const { fleet, crew, ask } = threeOfEach();
+      roster.set(fleet.did, tomorrow(), [crew[0].did, crew[2].did], 'Amina');
+      const plan = rostered.propose(fleet.did, ask);
+      expect(plan.totals).toMatchObject({ drivers: 2, trucksUsed: 2, planned: 2 });
+      expect(plan.unplanned.map((u) => u.reason)).toEqual(['no_driver']);
+      expect(plan.hire).toMatchObject({ trucks: 1, orders: 1 });
+      expect(plan.roster).toEqual({ source: 'roster', names: [crew[0].displayName, crew[2].displayName] });
+      // Another day is not this one: nobody has said, so everybody counts.
+      expect(rostered.propose(fleet.did, { ...ask, day: dayPlus(2) }).roster).toMatchObject({ source: 'everyone' });
+      // A plan accepted keeps who it counted.
+      expect(rostered.accept(fleet.did, ask, 'Amina').roster).toMatchObject({ source: 'roster' });
+      expect(rostered.state(fleet.did, tomorrow()).plan!.roster!.names).toHaveLength(2);
+    });
+
+    it('stops counting a rostered driver who is no longer active, and never counts one who left the fleet', () => {
+      const { fleet, crew, ask } = threeOfEach();
+      roster.set(fleet.did, tomorrow(), crew.map((d) => d.did), 'Amina');
+      drivers.suspend(crew[1].did, 'Licence under review');
+      expect(rostered.propose(fleet.did, ask).totals.drivers).toBe(2);
+      expect(roster.view(fleet.did, tomorrow()).list.map((d) => d.driverDid)).not.toContain(crew[1].did);
+    });
+
+    it('is refused whole, before anything is kept: a day gone, a day too far off, a driver not active or not this fleet’s', () => {
+      const { fleet, crew } = threeOfEach();
+      const other = aFleet('Pwani Haulage');
+      const theirs = aDriver(other.did);
+      expect(() => roster.set(fleet.did, dayPlus(-1), [crew[0].did], 'Amina')).toThrow(/That day has gone/);
+      expect(() => roster.set(fleet.did, dayPlus(ROSTER_DAYS_AHEAD + 1), [crew[0].did], 'Amina')).toThrow(/next 62 days at most/);
+      expect(() => roster.set(fleet.did, tomorrow(), [crew[0].did, theirs.did], 'Amina')).toThrow(/not in this fleet/);
+      drivers.suspend(crew[2].did, 'Licence under review');
+      expect(() => roster.set(fleet.did, tomorrow(), [crew[0].did, crew[2].did], 'Amina')).toThrow(new RegExp(`${crew[2].displayName} is not an active driver`));
+      // Nothing of any of those was kept, and nobody was told anything.
+      expect(roster.view(fleet.did, tomorrow())).toMatchObject({ source: 'everyone' });
+      expect(roster.view(fleet.did, tomorrow())).not.toHaveProperty('setBy');
+      expect(told).toEqual([]);
+      // Today is not gone; the same name twice is one driver.
+      expect(roster.set(fleet.did, dayPlus(0), [crew[0].did, crew[0].did], 'Amina')).toMatchObject({ source: 'roster', drivers: 1, setBy: 'Amina' });
+    });
+
+    it('tells each driver only what changed for them: put on a day, or taken off a day they had been told they drive', async () => {
+      const { fleet, crew } = threeOfEach();
+      roster.set(fleet.did, tomorrow(), [crew[0].did, crew[1].did], 'Amina');
+      await settle();
+      // Crew 2 was left off a day nobody had rostered: never told they drive it, so nothing to take back.
+      expect(told.map((x) => [x.driverDid, x.on])).toEqual([
+        [crew[0].did, true],
+        [crew[1].did, true],
+      ]);
+      expect(told[0]).toMatchObject({ fleetName: 'Kilima Logistics', day: tomorrow() });
+      told.length = 0;
+      roster.set(fleet.did, tomorrow(), [crew[1].did, crew[2].did], 'Amina');
+      await settle();
+      expect(told.map((x) => [x.driverDid, x.on]).sort()).toEqual(
+        [
+          [crew[0].did, false],
+          [crew[2].did, true],
+        ].sort(),
+      );
+      told.length = 0;
+      // Saying the same again changes nobody's day.
+      roster.set(fleet.did, tomorrow(), [crew[2].did, crew[1].did], 'Amina');
+      await settle();
+      expect(told).toEqual([]);
+    });
+
+    it('shows a driver their own coming days — each day their fleet has said, and whether they drive it', () => {
+      const { fleet, crew } = threeOfEach();
+      roster.set(fleet.did, dayPlus(3), [crew[1].did], 'Amina');
+      roster.set(fleet.did, tomorrow(), [crew[0].did, crew[1].did], 'Amina');
+      expect(roster.forDriver(crew[0].did)).toEqual({
+        fleetName: 'Kilima Logistics',
+        days: [
+          { day: tomorrow(), rostered: true },
+          { day: dayPlus(3), rostered: false },
+        ],
+      });
+      expect(roster.forDriver(crew[1].did).days.every((d) => d.rostered)).toBe(true);
+      // A day that has gone is not a coming day.
+      expect(roster.forDriver(crew[0].did, Date.now() + 2 * DAY).days.map((d) => d.day)).toEqual([dayPlus(3)]);
+      // Another fleet's roster is not theirs, and a driver in no fleet has none.
+      const other = aFleet('Pwani Haulage');
+      expect(roster.forDriver(aDriver(other.did).did)).toEqual({ fleetName: 'Pwani Haulage', days: [] });
+    });
   });
 });

@@ -69,6 +69,8 @@ import type { AgentService as Agents } from './agent.service';
 import type { UnclaimedService } from './unclaimed.service';
 import type { ImportService } from './import.service';
 import type { FleetDriver } from './fleet.types';
+import { FleetRosterService } from './fleet-roster.service';
+import { clockAt } from './fleet-clock';
 
 const DAY = 86_400_000;
 
@@ -1030,6 +1032,27 @@ describe('a driver changing fleet', () => {
   });
 
   /* ------------------------------------------------------ whose vehicle it is -- */
+
+  describe('a driver’s days on their fleet’s roster', () => {
+    it('are told to the driver by the day’s name: put on, and taken off with who to speak to', async () => {
+      const roster = new FleetRosterService(drivers, managers, events);
+      const fleet = aFleet('Kilima Logistics');
+      const { driver } = aDriver(fleet.did);
+      const day = clockAt(Date.now() + 2 * DAY, 'Africa/Nairobi').day;
+      const named = new Date(`${day}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+      roster.set(fleet.did, day, [driver.did], 'Amina');
+      await settle();
+      expect(notifications.inboxFor(driver.did)[0]).toMatchObject({ kind: 'driver_roster', title: `Kilima Logistics has you down to drive on ${named}` });
+      expect(named).toMatch(/^[A-Z][a-z]+day \d{1,2} [A-Z][a-z]+$/);
+      roster.set(fleet.did, day, [], 'Amina');
+      await settle();
+      // Newest first in the inbox; on the phone the second replaces the first (the same day, the same tag).
+      const forDay = notifications.inboxFor(driver.did).filter((n) => n.kind === 'driver_roster');
+      expect(forDay).toHaveLength(2);
+      expect(forDay[0]).toMatchObject({ title: `Kilima Logistics no longer has you down to drive on ${named}` });
+      expect(forDay[0].body).toMatch(/speak to your fleet’s office/);
+    });
+  });
 
   describe('a vehicle is driven by the drivers it belongs to', () => {
     it('a fleet’s truck only by that fleet’s drivers — not a driver of another fleet, not a courier on their own', () => {

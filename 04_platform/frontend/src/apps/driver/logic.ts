@@ -6,7 +6,7 @@
  * PWA and the old page can never disagree about what "72 / 800 kg" or "12% above" means.
  */
 
-import type { Translate } from '../../shared/i18n';
+import { formatDate, type Translate } from '../../shared/i18n';
 import { cash, perKmText } from '../../shared/money';
 import type { GeoPoint } from '../../shared/geo';
 import type { AgentRow, Benchmark, BlockerKind, BoardRow, Claimable, DriverStatus, MdpRow, NodeOption, PriceBreakdown } from './types';
@@ -214,6 +214,11 @@ export function rideAloneCompany(countries: Array<{ jurisdiction: string; compan
 }
 
 /** What happened, as its own sentence: "you left" is not "they took you off", and the screen must not say the second for the first. */
+/** A day on the roster by its name — "Thursday 16 October" — in the phone's own language. Built at noon, so no clock shifts the day. */
+export function rosterDayName(day: string): string {
+  return formatDate(`${day}T12:00:00Z`, { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+}
+
 export function removedLine(removed: { reason: 'left' | 'ended' | 'other' | 'own'; companyName: string }, day: string, t: Translate): string {
   return t(removed.reason === 'own' ? 'driver.fleet.leftOwn' : 'driver.fleet.removed', { company: removed.companyName, day });
 }

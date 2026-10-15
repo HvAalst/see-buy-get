@@ -23,6 +23,7 @@ export type OrderLoads = components['schemas']['OrderLoads'];
 export type PlanStop = components['schemas']['PlanStopView'];
 export type PlanAdvice = components['schemas']['PlanAdviceView'];
 export type AdviserFailure = NonNullable<PlanAdvice['failed']>;
+export type RosterView = components['schemas']['RosterView'];
 /** One order and one vehicle: what a rule on a plan names. */
 export interface PlanPair {
   freightId: string;
@@ -87,6 +88,10 @@ export function ordersApi(sbg: SbgClient, did: string) {
     /** P3b — send the next trip to every truck in today's accepted plan that is ready for one. */
     sendPlan: (day: string): Promise<Result<PlanSendResult>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/plan/send', { params: { path }, body: { day } })) as never,
     planState: (day: string): Promise<Result<DayPlanState>> => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/plan', { params: { path, query: { day } } })) as never,
+    /** Who drives on a day: as it stands, and saying it — the whole list, which replaces what was said for that day. */
+    roster: (day: string): Promise<Result<RosterView>> => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/roster', { params: { path, query: { day } } })) as never,
+    setRoster: (day: string, driverDids: string[]): Promise<Result<RosterView>> =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/roster', { params: { path }, body: { day, driverDids } })) as never,
     /** The fleet's own clock: which time zone its plans, its "today" and its deliveries are read on — and choosing it. */
     clock: (): Promise<Result<FleetClock>> => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/clock', { params: { path } })) as never,
     setClock: (timeZone: string): Promise<Result<FleetClock>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/clock', { params: { path }, body: { timeZone } })) as never,
@@ -198,6 +203,32 @@ export function dayWord(day: string, now: Date, t: Translate): string {
   if (day === dayOf(now, 1)) return t('fleet.orders.tomorrow');
   if (day === dayOf(now, -1)) return t('fleet.orders.yesterday');
   return day;
+}
+
+/**
+ * WHO THE PLAN COUNTED AS DRIVING, in a line under its answer: the day's roster, by name — or, where nobody has said
+ * who drives that day, that it counted every active driver. Nothing for a plan kept from before there were rosters.
+ */
+export function rosterLine(plan: Pick<DayPlan, 'roster' | 'totals'>, t: Translate): { tone: 'warn' | 'idle'; text: string } | null {
+  if (!plan.roster) return null;
+  if (plan.roster.source === 'everyone') return { tone: 'warn', text: t('fleet.roster.planEveryone', { n: plan.totals.drivers }) };
+  if (plan.roster.names.length === 0) return { tone: 'warn', text: t('fleet.roster.planNobody') };
+  return { tone: 'idle', text: t('fleet.roster.planCounted', { n: plan.roster.names.length, names: plan.roster.names.join(', ').replace(/\.$/, '') }) };
+}
+
+/** The drivers ticked on a day's roster card, as first shown: whoever the day counts now. */
+export function rosterPicks(view: Pick<RosterView, 'list'>): Set<string> {
+  return new Set(view.list.filter((d) => d.rostered).map((d) => d.driverDid));
+}
+
+/**
+ * Whether what is ticked says something new. A day nobody has rostered is not the same as one rostered with everybody:
+ * a driver who joins later is counted on the first and not on the second — so saying "everybody" is a change too.
+ */
+export function rosterChanged(view: Pick<RosterView, 'list' | 'source'>, picked: ReadonlySet<string>): boolean {
+  if (view.source === 'everyone') return true;
+  const was = rosterPicks(view);
+  return was.size !== picked.size || [...picked].some((did) => !was.has(did));
 }
 
 /** The largest workbook sent. The server holds the same line; said here so a big file is refused before it is read. */

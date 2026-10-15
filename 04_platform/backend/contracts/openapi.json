@@ -22735,6 +22735,106 @@
         }
       }
     },
+    "/v1/sbg/fleet/managers/{did}/roster": {
+      "get": {
+        "operationId": "FleetRoster.dayRoster",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "day",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "pattern": "DAY",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RosterView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "FleetRoster.setDayRoster",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRosterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RosterView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/roster": {
+      "get": {
+        "operationId": "FleetRoster.driverRoster",
+        "summary": "",
+        "description": "A driver's own coming days. Theirs, their fleet office's and the network's to read — as their hours are.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriverRosterView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/managers/{did}/partners": {
       "get": {
         "operationId": "FleetOverflow.list",
@@ -44434,7 +44534,7 @@
           },
           "drivers": {
             "type": "number",
-            "description": "Drivers the fleet has to send out: the plan uses no more trucks than this."
+            "description": "Drivers the fleet has to send out — on the day's roster, or every active driver where there is none: the plan uses no more trucks than this."
           },
           "outsideWindow": {
             "type": "number",
@@ -44562,6 +44662,28 @@
           "plate"
         ]
       },
+      "PlanRoster": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "roster",
+              "everyone"
+            ]
+          },
+          "names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "source",
+          "names"
+        ]
+      },
       "PlanDistances": {
         "type": "object",
         "properties": {
@@ -44634,6 +44756,14 @@
             "items": {
               "$ref": "#/components/schemas/PlanRuleView"
             }
+          },
+          "roster": {
+            "description": "Who it counted as driving. A plan kept from before there were rosters has none: it counted everybody.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PlanRoster"
+              }
+            ]
           },
           "distances": {
             "description": "What its distances are. A plan kept from before there was a routing server to ask has none: it was an estimate.",
@@ -45052,6 +45182,118 @@
         },
         "required": [
           "code"
+        ]
+      },
+      "RosterDriverView": {
+        "type": "object",
+        "properties": {
+          "driverDid": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "rostered": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "driverDid",
+          "name",
+          "rostered"
+        ]
+      },
+      "RosterView": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "`roster` — the office said who drives that day · `everyone` — it has not, so a plan counts every active driver.",
+            "enum": [
+              "roster",
+              "everyone"
+            ]
+          },
+          "list": {
+            "description": "Every active driver of the fleet, and whether they drive that day.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RosterDriverView"
+            }
+          },
+          "setAt": {
+            "type": "string",
+            "description": "When the office last said, and who. Absent when it never has for this day."
+          },
+          "setBy": {
+            "type": "string"
+          },
+          "day": {
+            "type": "string"
+          },
+          "drivers": {
+            "type": "number",
+            "description": "How many drivers a plan for the day counts."
+          }
+        },
+        "required": [
+          "source",
+          "list",
+          "day",
+          "drivers"
+        ]
+      },
+      "SetRosterDto": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string",
+            "pattern": "DAY"
+          },
+          "driverDids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        },
+        "required": [
+          "day",
+          "driverDids"
+        ]
+      },
+      "DriverRosterDay": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string"
+          },
+          "rostered": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "day",
+          "rostered"
+        ]
+      },
+      "DriverRosterView": {
+        "type": "object",
+        "properties": {
+          "fleetName": {
+            "type": "string",
+            "description": "Their fleet. Absent for a driver in no fleet, who has no roster."
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DriverRosterDay"
+            }
+          }
+        },
+        "required": [
+          "days"
         ]
       },
       "PartnershipEnd": {

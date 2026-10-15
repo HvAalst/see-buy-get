@@ -1,4 +1,5 @@
 import type { OrderHandedOn } from './fleet-overflow.types';
+import type { DriverRostered } from './fleet-roster.service';
 import type { DeliveryTiming, PlanLeftWhy } from './dispatch.types';
 import { UNCOLLECTED_H } from './pudo.config';
 import { appUrl } from '../../foundation/mail/mail.templates';
@@ -383,6 +384,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     // …and the same for a driver, who was left in exactly the same silence.
     this.events.subscribe<{ did: string; reason: string }>(GlosEvent.Pudo.DriverKycRejected, (e) => this.onDriverRefused(e.payload));
     this.events.subscribe<{ did: string; approved: boolean; reason?: string; companyName?: string }>(GlosEvent.Pudo.DriverRideAloneDecided, (e) => this.onRideAloneDecided(e.payload));
+    this.events.subscribe<DriverRostered>(GlosEvent.Pudo.DriverRostered, (e) => this.onDriverRostered(e.payload));
     // FP4 (courier) — the renewed licence they sent was checked. They sent it and are waiting: either answer.
     this.events.subscribe<{ did: string; accepted: boolean; expiresAt?: string; reason?: string }>(GlosEvent.Pudo.DriverLicenceChecked, (e) => this.onLicenceChecked(e.payload));
     this.events.subscribe<LicenceSent>(GlosEvent.Pudo.DriverLicenceSent, (e) => this.onLicenceSent(e.payload));
@@ -1254,6 +1256,27 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
    * A DRIVER IN NO FLEET ASKED TO RIDE FOR THEMSELVES on something heavy, and staff decided: told either way, on the
    * event. Yes says who they ride for now; no says why, in staff's words, and that they may ask again.
    */
+  /**
+   * A day of the driver's changed on their fleet's roster. Said by the day's name, not its number: "Thursday 16 October".
+   * Being left off a day starts nothing and stops nothing — a shift can still be started — so it says who to speak to.
+   */
+  private async onDriverRostered(p: DriverRostered): Promise<void> {
+    try {
+      const day = new Date(`${p.day}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+      await this.notifications.notify(p.driverDid, {
+        kind: 'driver_roster',
+        title: p.on ? `${p.fleetName} has you down to drive on ${day}` : `${p.fleetName} no longer has you down to drive on ${day}`,
+        body: p.on ? 'Start your shift that day as you always do. Your days are under “Your fleet”.' : 'If you were going to drive that day, speak to your fleet’s office. Your days are under “Your fleet”.',
+        link: '/',
+        // On the phone a later change to the same day replaces this one; the inbox keeps both, newest first.
+        tag: `roster:${p.day}:${p.driverDid}`,
+        data: { day: p.day },
+      });
+    } catch (err) {
+      this.logger.warn(`roster notice failed for ${p.driverDid}: ${(err as Error).message}`);
+    }
+  }
+
   private async onRideAloneDecided(payload: { did: string; approved: boolean; reason?: string; companyName?: string }): Promise<void> {
     try {
       await this.notifications.notify(payload.did, {

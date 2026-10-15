@@ -103,6 +103,8 @@ export interface DriverState {
   vehicles: RecentVehicleView[];
   /** Fleets that have offered this driver a place. Only they can answer one, and only from this sign-in. */
   fleetOffers: FleetOffer[];
+  /** The coming days their fleet has said who drives, and whether they do. Empty in no fleet, or where nobody has said. */
+  rosterDays: Array<{ day: string; rostered: boolean }>;
   /** What riding for themselves would take — read only for a driver who is in no fleet; null for everybody else. */
   rideAlone: RideAloneTerms | null;
   /** R5 — the driver jobs + earnings register (a filtered/paged page + the current view's totals). */
@@ -210,6 +212,7 @@ const INITIAL: DriverState = {
   route: null,
   legs: [],
   departures: [],
+  rosterDays: [],
   vehicles: [],
   fleetOffers: [],
   rideAlone: null,
@@ -442,6 +445,14 @@ export function useDriverApp() {
       if (superseded()) return;
       const fleetOffers = offR.error ? [] : narrow<FleetOffer[]>(offR.data) ?? [];
 
+      // Their days on the fleet's roster. Soft-fail: a roster is the office's planning, never a gate on the day.
+      let rosterDays: Array<{ day: string; rostered: boolean }> = [];
+      if (driver?.managerDid) {
+        const rosR = await client.api.driverRoster(did);
+        if (superseded()) return;
+        rosterDays = rosR.error ? [] : narrow<{ days: Array<{ day: string; rostered: boolean }> }>(rosR.data)?.days ?? [];
+      }
+
       // In no fleet: the other way back onto the road, and whether this app can offer it. Soft-fail to "not said"
       // — the sheet then shows only how a fleet takes somebody on, which is still true.
       let rideAlone: RideAloneTerms | null = null;
@@ -459,6 +470,7 @@ export function useDriverApp() {
         vehicle,
         departures,
         fleetOffers,
+        rosterDays,
         rideAlone,
         remaining,
         remainingTotes,

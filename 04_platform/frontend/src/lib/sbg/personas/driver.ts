@@ -121,6 +121,9 @@ export function createDriverApi(sbg: SbgClient) {
     startSession: (did: string, vehicle: { vehicleQr?: string; vehicleId?: string }, pin: string, leg?: DeclaredLegBody) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/start-session', { params: { path: { did } }, body: { ...vehicle, pin, leg } })),
 
+    /** The coming days this driver's fleet has said who drives, and whether they do. */
+    driverRoster: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/roster', { params: { path: { did } } })),
+
     /** The vehicles this driver has driven before — the "which one today?" list, before they reach the yard. */
     driverVehicles: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/vehicles', { params: { path: { did } } })),
 

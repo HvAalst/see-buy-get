@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { ADVISER_HISTORY, acceptTellsShippers, base64Of, clockLine, deliveredLine, isFleetToday, mayChooseClock, distanceLine, evenLoads, historyOf, isWorkbook, keptOff, loadLine, mayRejoin, maySplit, passOnState, putOnto, ruleLine, windowLine, rulesAsk, withoutRule, type PlanRule } from './orders';
+import { ADVISER_HISTORY, rosterChanged, rosterLine, rosterPicks, acceptTellsShippers, base64Of, clockLine, deliveredLine, isFleetToday, mayChooseClock, distanceLine, evenLoads, historyOf, isWorkbook, keptOff, loadLine, mayRejoin, maySplit, passOnState, putOnto, ruleLine, windowLine, rulesAsk, withoutRule, type PlanRule } from './orders';
 import { askOf, byDay, dayOf, daySummary, dayWord, handOnLine, hoursWords, mayHandOn, importVerdictLine, leftByReason, mayWithdraw, notASheet, orderTag, sendLine, weightWords, type DayPlan, type FleetOrder, type PlanLeft, type PlanSendTruck } from './orders';
 
 const order = (over: Partial<FleetOrder> = {}): FleetOrder =>
@@ -389,5 +389,33 @@ describe('P1 — a fleet’s orders', () => {
   it('weighs a day in tonnes and a small order in kilos', () => {
     expect(weightWords(38_400)).toMatch(/^38\.4 t$/);
     expect(weightWords(800)).toBe('800 kg');
+  });
+});
+
+describe('who drives on the day', () => {
+  const totals = { drivers: 3 } as DayPlan['totals'];
+
+  it('says whom the plan counted — the roster by name, everybody where nobody said, nothing for an older plan', () => {
+    expect(rosterLine({ totals, roster: { source: 'roster', names: ['Amos K.', 'Grace M.'] } }, t)).toEqual({ tone: 'idle', text: 'Planned for the 2 drivers on the roster: Amos K., Grace M.' });
+    expect(rosterLine({ totals, roster: { source: 'everyone', names: ['A', 'B', 'C'] } }, t)).toEqual({ tone: 'warn', text: 'Nobody has said who drives that day: the plan counts all 3 active drivers. Say who drives below.' });
+    // Nobody on the roster is a roster — and a day with no vehicle going out, said as such.
+    expect(rosterLine({ totals: { ...totals, drivers: 0 }, roster: { source: 'roster', names: [] } }, t)!.text).toMatch(/no vehicle goes out/);
+    // A name that is not short for anything keeps its last letter.
+    expect(rosterLine({ totals, roster: { source: 'roster', names: ['Otieno'] } }, t)!.text).toBe('Planned for the 1 driver on the roster: Otieno.');
+    expect(rosterLine({ totals }, t)).toBeNull();
+  });
+
+  it('starts from whoever the day counts now, and saves only something new', () => {
+    const list = [
+      { driverDid: 'did:a', name: 'Amos K.', rostered: true },
+      { driverDid: 'did:b', name: 'Grace M.', rostered: false },
+    ];
+    expect([...rosterPicks({ list })]).toEqual(['did:a']);
+    expect(rosterChanged({ list, source: 'roster' }, new Set(['did:a']))).toBe(false);
+    expect(rosterChanged({ list, source: 'roster' }, new Set(['did:b']))).toBe(true);
+    expect(rosterChanged({ list, source: 'roster' }, new Set(['did:a', 'did:b']))).toBe(true);
+    expect(rosterChanged({ list, source: 'roster' }, new Set())).toBe(true);
+    // Saying "everybody" on a day nobody rostered is still saying something: a driver who joins later is not on it.
+    expect(rosterChanged({ list: list.map((d) => ({ ...d, rostered: true })), source: 'everyone' }, new Set(['did:a', 'did:b']))).toBe(true);
   });
 });

@@ -29,6 +29,7 @@ import {
   driverStatusNotice,
   removalWords,
   removedLine,
+  rosterDayName,
   leftDetail,
   isFull,
   lastReadingBreached,
@@ -749,5 +750,19 @@ describe('a rider who is in no fleet rides for themselves', () => {
     expect(removalWords({ reason: 'own' }, t, true)).toBe('Your trips, papers and rating stay yours. You cannot start a shift until a fleet offers you a place, or you choose to ride for yourself: “Your fleet”, under your name.');
     expect(removalWords({ reason: 'own' }, t, false)).toBe('Your trips, papers and rating stay yours. You cannot start a shift until a fleet offers you a place.');
     expect(removalWords({ reason: 'ended' }, t, true)).toMatch(/^They say they ended your contract\. .*ride for yourself/);
+  });
+});
+
+describe('a driver’s days on the roster', () => {
+  it('names a day the way a person says it, in the phone’s language, the same day wherever the phone is', () => {
+    // The order of the words is the language's ("Friday 16 October", "Friday, October 16"); the day is the day.
+    for (const [day, words] of [
+      ['2026-10-16', ['Friday', '16', 'October']],
+      ['2026-01-01', ['Thursday', '1', 'January']],
+    ] as const) {
+      const said = rosterDayName(day);
+      for (const w of words) expect(said.split(/[\s,]+/)).toContain(w);
+      expect(said).not.toMatch(/2026/);
+    }
   });
 });

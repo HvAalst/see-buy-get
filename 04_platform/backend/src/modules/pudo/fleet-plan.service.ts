@@ -11,6 +11,7 @@ import { DispatchService } from './dispatch.service';
 import { Freight } from './dispatch.types';
 import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
+import { FleetRosterService } from './fleet-roster.service';
 import { DEFAULT_DAY_START, DayPlanState, DayPlanView, PlanLeftView, PlanRouteView, PlanRuleView, PlanSendResult, PlanSendTruck, PlanSettings, PlannedOn } from './fleet-plan.types';
 import { ROAD_MATRIX, type RoadDistances, type RoadMatrix } from './road-matrix';
 import { ROUTER, Router } from './router';
@@ -76,6 +77,8 @@ export class FleetPlanService implements OnModuleInit {
     private readonly events: EventBus,
     // Where real road distances come from, when the operator has a routing server. Without one a plan is the estimate it always was.
     @Optional() @Inject(ROAD_MATRIX) private readonly roads?: RoadMatrix,
+    // Who drives on the day, where the office has said. Without it a plan counts every active driver, as it always did.
+    @Optional() private readonly roster?: FleetRosterService,
   ) {}
 
   /**
@@ -159,7 +162,10 @@ export class FleetPlanService implements OnModuleInit {
         return { v, excluded: excluded.has(v.vehicleId), offRoad };
       });
     const going = fleet.filter((x) => !x.excluded && x.offRoad.length === 0);
-    const driverCount = this.drivers.list({ managerDid: fleetDid }).filter((d) => d.status === 'ACTIVE').length;
+    // WHO DRIVES THAT DAY: the office's roster where it set one, else every active driver. The plan sends out no more
+    // trucks than that — it says which it counted, so a plan for a day nobody rostered is not mistaken for one that was.
+    const crew = this.roster?.driversFor(fleetDid, ask.day) ?? { source: 'everyone' as const, drivers: this.drivers.list({ managerDid: fleetDid }).filter((d) => d.status === 'ACTIVE') };
+    const driverCount = crew.drivers.length;
 
     const rules = this.rulesOf(fleetDid, ask, orders, new Map(fleet.map((x) => [x.v.vehicleId, x.v.plate])));
     // What a rule means to the math: a vehicle this order may not go on. "Put it on that one" is every other one.
@@ -263,6 +269,7 @@ export class FleetPlanService implements OnModuleInit {
       settings,
       vehicles: fleet.map(({ v, excluded: out, offRoad }) => ({ vehicleId: v.vehicleId, plate: v.plate, vehicleClass: v.vehicleClass, capacityKg: v.capacityKg, excluded: out, ...(offRoad.length ? { offRoad } : {}) })),
       rules,
+      roster: { source: crew.source, names: crew.drivers.map((d) => d.displayName) },
       ...(this.managers.zoneOf(fleetDid) ? { timeZone: this.managers.zoneOf(fleetDid) } : {}),
       distances: { source: roads?.source ?? 'estimate', ...(roads?.why ? { why: roads.why } : {}), ...(roads?.gaps ? { gaps: roads.gaps } : {}) },
     };
