@@ -2,6 +2,7 @@ import type { OrderHandedOn } from './fleet-overflow.types';
 import type { DriverRostered } from './fleet-roster.service';
 import type { DeliveryTiming, PlanLeftWhy } from './dispatch.types';
 import { UNCOLLECTED_H } from './pudo.config';
+import { runningLate } from './parcel.service';
 import { appUrl } from '../../foundation/mail/mail.templates';
 import { MailService } from '../../foundation/mail/mail.service';
 import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
@@ -128,6 +129,23 @@ import { MARKET_SUPPLY_STALE_MIN, NUDGE_COOLDOWN_MIN, NUDGE_MIN_MOVE_KM, UNCOLLE
 const SIGNUP_SWEEP_MS = 60 * 60 * 1000;
 /** How often the loads that should have arrived are looked at. A shipper learns of a late load within this long. */
 const LATE_SWEEP_MS = 10 * 60 * 1000;
+
+/** Where a parcel running late is, in the words of its notice. */
+const PARCEL_WHERE: Record<'shop' | 'road' | 'hub', string> = {
+  shop: 'It is still at the shop it was handed in at.',
+  road: 'It is on its way.',
+  hub: 'It is at a sorting hub.',
+};
+
+/** How late, as a person says it: hours up to a day, then days. */
+function lateWords(hours: number): string {
+  if (hours < 24) {
+    const h = Math.max(1, Math.round(hours));
+    return h === 1 ? '1 hour' : `${h} hours`;
+  }
+  const d = Math.round(hours / 24);
+  return d === 1 ? '1 day' : `${d} days`;
+}
 /** How often the shift clocks are looked at. A driver hears of the limit within this of passing it. */
 const HOURS_SWEEP_MS = 5 * 60 * 1000;
 
@@ -215,8 +233,13 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.signupTimer = setInterval(() => void this.sweepSignups().catch(() => undefined), SIGNUP_SWEEP_MS);
     this.signupTimer.unref?.();
     // And a load that has not arrived: the third absence nobody was told about.
-    void this.sweepLate().catch(() => undefined);
-    this.lateTimer = setInterval(() => void this.sweepLate().catch(() => undefined), LATE_SWEEP_MS);
+    // …and a parcel past the time it was promised, the same absence on the parcel side.
+    const late = () => {
+      void this.sweepLate().catch(() => undefined);
+      void this.sweepParcelsLate().catch(() => undefined);
+    };
+    late();
+    this.lateTimer = setInterval(late, LATE_SWEEP_MS);
     this.lateTimer.unref?.();
     // And a shift that has run long: nothing HAPPENS when thirteen hours pass, so nothing ever said so.
     void this.sweepHours().catch(() => undefined);
@@ -761,6 +784,49 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       }
     }
     return due.length;
+  }
+
+  /**
+   * A PARCEL RUNNING LATE (see runningLate). Nothing happens when a parcel does not arrive in time, so a sweep says it:
+   * once, to the receiver and to a person who sent it, in the app — never a text (the user, 2026-10-11) — and to a
+   * store's systems on its webhook. Stamped even when there is nobody to tell, so somebody who signs up next week is not
+   * told about a parcel that was late last week. Answers how many parcels were found late.
+   */
+  async sweepParcelsLate(now: number = Date.now()): Promise<number> {
+    let found = 0;
+    for (const status of ['At_PUDO', 'On_Bus', 'At_MDP'] as const) {
+      for (const parcel of this.parcels.list({ status })) {
+        const late = runningLate(parcel, now);
+        if (!late || parcel.lateToldAt) continue;
+        parcel.lateToldAt = new Date(now).toISOString();
+        found += 1;
+        const shop = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'the pickup point';
+        const ago = lateWords(late.lateHours);
+        const where = PARCEL_WHERE[late.where];
+        const seen = new Set<string>();
+        // A store's order: the buyer is told, and the store hears on its systems. A person's send: both people.
+        const sides = parcel.vendorId ? [['receiver', this.parcels.receiverOf(parcel)] as const] : ([['receiver', this.parcels.receiverOf(parcel)], ['sender', this.parcels.senderOf(parcel)]] as const);
+        for (const [side, who] of sides) {
+          const person = accountFor(who, this.persons);
+          if (!person || seen.has(person.personDid)) continue; // a person sending to themselves is told once
+          seen.add(person.personDid);
+          try {
+            await this.notifications.notify(person.personDid, {
+              kind: 'parcel_late',
+              title: side === 'receiver' ? 'Your parcel is running late' : 'A parcel you sent is running late',
+              body: side === 'receiver' ? `It should have been ready at ${shop} about ${ago} ago. ${where} You are told when it is ready to collect.` : `It should have been ready at ${shop} about ${ago} ago. ${where} Its tracking page shows where it is.`,
+              link: `/?parcel=${parcel.parcelId}`,
+              tag: `parcel-late:${parcel.parcelId}`,
+              data: { parcelId: parcel.parcelId },
+            });
+          } catch (err) {
+            this.logger.warn(`parcel-late notice failed for ${parcel.parcelId}: ${(err as Error).message}`);
+          }
+        }
+        if (parcel.vendorId) this.vendors.notify(parcel.vendorId, 'parcel.late', { parcelId: parcel.parcelId, externalOrderId: parcel.externalOrderId, status: parcel.status, promisedAt: late.promisedAt, lateHours: late.lateHours });
+      }
+    }
+    return found;
   }
 
   /** A load reached the other end. Whoever sent it hears it once, with who signed for it. */

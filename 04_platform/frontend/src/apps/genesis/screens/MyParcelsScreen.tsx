@@ -6,7 +6,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { errorSentence, Button, Card, Checklist, CodeCard, ErrorNote, Icon, Note, Pill, PushPrompt, ReadAloud, Sheet } from '../../../shared/ui';
 import { formatMoney, useT } from '../../../shared/i18n';
 import { PhotoField } from './PhotoField';
-import { LADDER, disputeOutcomeWords, isOffLadder, ladderIndex, parcelRowLine, relationWord, sortForPerson, statusPresentation, stepTime } from '../logic';
+import { LADDER, disputeOutcomeWords, isOffLadder, ladderIndex, lateLine, parcelRowLine, relationWord, sortForPerson, statusPresentation, stepTime } from '../logic';
 import { MERCHANT_TAGS, POSITIVE_TAGS, type MerchantTag } from '../../../lib/sbg/personas/consumer';
 import type { ConsumerParcelView, FreightShipmentView, ParcelStatus } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
@@ -222,6 +222,8 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
           </span>
         </span>
       </section>
+
+      {parcel.runningLate ? <Note tone="warn" icon="clock" title={t('send.late.title')} detail={lateLine(parcel.runningLate, t)} /> : null}
 
       {/* The single-parcel twin (which carries the collect token) failed to load — surface it + let them
           retry, instead of silently showing the token-less list row for a parcel that is ready to collect. */}

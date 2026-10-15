@@ -138,6 +138,16 @@ export interface TrackView {
   /** The collect card (rev 5): where the shop is, in words and as a pin. */
   destinationLandmark?: string;
   destinationLocation?: { lat: number; lng: number };
+  /** Present while it is running late: past the time it was promised to be ready, and still on its way. */
+  runningLate?: RunningLate;
+}
+
+/** A parcel running late — the server's one rule, behind the notice, this page and the list alike. */
+export interface RunningLate {
+  promisedAt: string;
+  lateHours: number;
+  /** Where it is: still at the shop it was handed in at, on the road, or at a sorting hub. */
+  where: 'shop' | 'road' | 'hub';
 }
 
 /* ------------------------------------------------- booking (PG3) -- */
@@ -235,6 +245,8 @@ export interface ConsumerParcelView {
   createdAt: string;
   updatedAt: string;
   timeline: Array<{ at: string; status: ParcelStatus | 'CREATED'; note?: string }>;
+  /** Present while it is running late (see RunningLate). */
+  runningLate?: RunningLate;
   /** The in-app collection token (S22) — only on the single-parcel detail, for the receiver, when ready. */
   collectToken?: { code: string; qrPayload: string };
   /** There is a code and it is not shown until then: the account was moved to a new number without its PIN. */

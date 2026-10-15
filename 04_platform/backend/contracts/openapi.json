@@ -32284,6 +32284,10 @@
             "type": "string",
             "description": "When the receiver was reminded it was still waiting. Set once — see the dispatcher for why one\n reminder and not a series — and set even when there was nobody to tell, so somebody who signs up\n later is not greeted by a nudge about a parcel that has been sitting a fortnight."
           },
+          "lateToldAt": {
+            "type": "string",
+            "description": "When the people on it were told it is running late (see runningLate). Once, and set even when there was nobody\n to tell, for the same reason as the reminder above."
+          },
           "returnParcelId": {
             "type": "string",
             "description": "The journey home, for a parcel nobody came for. Present only on a 'Returned' one — the two read as\n one story rather than as an abandonment and an unexplained new shipment."

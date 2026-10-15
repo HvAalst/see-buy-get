@@ -1,5 +1,6 @@
 import { JourneyPlanService } from './journey-plan.service';
-import { planVsActual } from './parcel.service';
+import { planVsActual, runningLate } from './parcel.service';
+import { PARCEL_LATE_GRACE_H } from './pudo.config';
 import type { JourneyPlan, Parcel } from './pudo.types';
 
 /**
@@ -41,6 +42,26 @@ describe('a parcel held against its promise', () => {
   it('says nothing for a parcel with no kept plan, or one not ready to collect yet', () => {
     expect(planVsActual({ readyAt: '2026-10-14T11:00:00.000Z' })).toBeUndefined();
     expect(planVsActual({ plan: plan('CBD', 'Westlands', '2026-10-14T12:00:00.000Z') })).toBeUndefined();
+  });
+});
+
+describe('a parcel running late, while it is on its way', () => {
+  const NOW = Date.parse('2026-10-15T15:00:00.000Z');
+  const promised = (hoursAgo: number) => plan('CBD', 'Westlands', new Date(NOW - hoursAgo * 3_600_000).toISOString());
+
+  it('is late only past the grace, and says where it is: the shop it was handed in at, the road, a hub', () => {
+    expect(PARCEL_LATE_GRACE_H).toBe(2);
+    expect(runningLate({ status: 'On_Bus', plan: promised(2) }, NOW)).toBeUndefined();
+    expect(runningLate({ status: 'On_Bus', plan: promised(2.05) }, NOW)).toEqual({ promisedAt: '2026-10-15T12:57:00.000Z', lateHours: 2.1, where: 'road' });
+    expect(runningLate({ status: 'At_PUDO', plan: promised(5) }, NOW)).toMatchObject({ lateHours: 5, where: 'shop' });
+    expect(runningLate({ status: 'At_MDP', plan: promised(30) }, NOW)).toMatchObject({ lateHours: 30, where: 'hub' });
+  });
+
+  it('is never said before it was handed in, once it has arrived, or against a promise nobody kept', () => {
+    for (const status of ['Created', 'Ready_For_Pickup', 'Unclaimed', 'Delivered', 'Disputed', 'Voided', 'Returned'] as const) {
+      expect(runningLate({ status, plan: promised(30) }, NOW)).toBeUndefined();
+    }
+    expect(runningLate({ status: 'On_Bus' }, NOW)).toBeUndefined();
   });
 });
 

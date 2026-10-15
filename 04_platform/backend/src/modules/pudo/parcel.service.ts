@@ -14,10 +14,10 @@ import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
 import { FleetService } from './fleet.service';
 import type { Amounts } from './amounts';
-import { DEFAULT_TAX_LABEL, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, OTP_MAX_ATTEMPTS, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, UNCOLLECTED_H, VOID_WINDOW_MS, WHOLESALE, classifySize, coverFor, holdingFeeFor, taxOn, withPlatformFee } from './pudo.config';
+import { DEFAULT_TAX_LABEL, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, OTP_MAX_ATTEMPTS, PARCEL_LATE_GRACE_H, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, UNCOLLECTED_H, VOID_WINDOW_MS, WHOLESALE, classifySize, coverFor, holdingFeeFor, taxOn, withPlatformFee } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import type { ResolvedTax } from '../../foundation/entity/entity.types';
-import { Birthplace, ConsumerParcelView, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, isCollectable } from './pudo.types';
+import { Birthplace, ConsumerParcelView, RunningLate, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, isCollectable } from './pudo.types';
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
 import { MediaService } from './media.service';
@@ -392,6 +392,23 @@ export function birthplaceOf(p: Parcel): Birthplace | undefined {
  * and did it go through the shops and hubs it was planned through. Nothing for a parcel with no kept plan, or one not
  * yet ready to collect. `routeKept` is absent where the custody chain was never recorded (an older parcel).
  */
+/** Where the network holds a parcel on its way, by its status: the shop it was handed in at, the road, a hub. */
+const ON_ITS_WAY: Partial<Record<ParcelStatus, RunningLate['where']>> = { At_PUDO: 'shop', On_Bus: 'road', At_MDP: 'hub' };
+
+/**
+ * IS IT RUNNING LATE? Only while the network holds it on its way, and only against the promise KEPT when it was taken
+ * in (`plan`) — never against an estimate worked out afresh. Not before it was handed in (that is the sender's own
+ * time), and not once it is ready to collect (it has arrived: `planVsActual` says how late it was). The one rule
+ * behind the notice, the tracking page and the parcel list, so they cannot disagree.
+ */
+export function runningLate(p: Pick<Parcel, 'plan' | 'status'>, now: number = Date.now()): RunningLate | undefined {
+  const where = ON_ITS_WAY[p.status];
+  if (!where || !p.plan?.pickupReadyAt) return undefined;
+  const late = (now - Date.parse(p.plan.pickupReadyAt)) / 3_600_000;
+  if (!(late > PARCEL_LATE_GRACE_H)) return undefined;
+  return { promisedAt: p.plan.pickupReadyAt, lateHours: Math.round(late * 10) / 10, where };
+}
+
 export function planVsActual(p: Pick<Parcel, 'plan' | 'readyAt' | 'custody'>): { promisedAt: string; readyAt: string; onTime: boolean; lateHours: number; routeKept?: boolean } | undefined {
   if (!p.plan || !p.readyAt) return undefined;
   const late = (Date.parse(p.readyAt) - Date.parse(p.plan.pickupReadyAt)) / 3_600_000;
@@ -997,6 +1014,7 @@ export class ParcelService implements OnApplicationBootstrap {
       createdAt: p.acceptedAt,
       updatedAt: p.scans.length ? p.scans[p.scans.length - 1].at : p.acceptedAt,
       timeline: p.scans.map((s) => ({ at: s.at, status: s.status, note: s.note })),
+      ...(runningLate(p) ? { runningLate: runningLate(p) } : {}),
       // The receiver's OWN photos + free-text reason are theirs alone — the sender's sent-twin sees the
       // status flip to Disputed, never the buyer's evidence or the words they wrote for the control tower.
       podPhotoRef: relation === 'received' ? p.buyerPodPhotoRef : undefined,
@@ -1915,6 +1933,7 @@ export class ParcelService implements OnApplicationBootstrap {
     binSlot?: string;
     destinationLandmark?: string;
     destinationLocation?: { lat: number; lng: number };
+    runningLate?: RunningLate;
   } {
     const parcel = [...this.parcels.values()].find((p) => p.trackingKey === trackingKey);
     if (!parcel) throw new GlosError('NOT_FOUND', 'No parcel for that tracking key');
@@ -1935,6 +1954,9 @@ export class ParcelService implements OnApplicationBootstrap {
       // It carried the vendor's externalOrderId ("inbound · order …") and other operator text; the public
       // track ladder derives its words from `status`, so dropping the note removes the leak with no UI cost.
       steps: parcel.scans.map((s) => ({ status: s.status, at: s.at })),
+      // Running late, by the same rule the notice uses: a page that says "on its way" for a parcel a day behind its
+      // promise is the page telling somebody nothing.
+      ...(runningLate(parcel) ? { runningLate: runningLate(parcel) } : {}),
     };
   }
 

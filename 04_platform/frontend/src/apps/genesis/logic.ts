@@ -8,7 +8,7 @@ import { distanceLabel, haversineKm, type GeoPoint } from '../../shared/geo';
 import type { IconName } from '../../shared/ui/Icon';
 import { PIN_LENGTH } from '../../shared/account/pin';
 import type { MessageKey } from '../../shared/i18n';
-import type { ConsumerParcelView, NetworkPoint, ParcelSize, ParcelStatus, PersonRole, QuoteView, TrackView, FreightTrackView } from './types';
+import type { ConsumerParcelView, NetworkPoint, ParcelSize, ParcelStatus, PersonRole, QuoteView, RunningLate, TrackView, FreightTrackView } from './types';
 
 /**
  * The translate function, threaded into every prose-producing helper so this module stays pure (no direct
@@ -293,10 +293,21 @@ export function freightTrackSummary(view: FreightTrackView, t: Translate, locale
 export function trackSummary(view: TrackView, t: Translate): string {
   const status = statusPresentation(view.status, t).word.toLowerCase();
   const atDest = view.status === 'Ready_For_Pickup' || view.status === 'Unclaimed' || view.status === 'Delivered';
-  return atDest
-    ? t('send.logic.trackAt', { ref: view.ref, status, dest: view.destination })
-    : t('send.logic.trackPlain', { ref: view.ref, status });
+  const said = atDest ? t('send.logic.trackAt', { ref: view.ref, status, dest: view.destination }) : t('send.logic.trackPlain', { ref: view.ref, status });
+  // Read aloud as it is shown: a parcel running late says so, in the same words as the note on the page.
+  return view.runningLate ? `${said} ${t('send.late.title')}. ${lateLine(view.runningLate, t)}` : said;
 }
+
+/**
+ * A PARCEL RUNNING LATE, in words: how long past the time it should have been ready, and where it is. The server says
+ * whether it is late; this only says it.
+ */
+export function lateLine(late: Pick<RunningLate, 'lateHours' | 'where'>, t: Translate): string {
+  const ago = late.lateHours < 24 ? t('send.late.hours', { n: Math.max(1, Math.round(late.lateHours)) }) : t('send.late.days', { n: Math.round(late.lateHours / 24) });
+  return t('send.late.line', { ago, where: t(LATE_WHERE[late.where]) });
+}
+
+const LATE_WHERE: Record<RunningLate['where'], MessageKey> = { shop: 'send.late.whereShop', road: 'send.late.whereRoad', hub: 'send.late.whereHub' };
 
 /** Who withdrew a load, in words — never why: that is between the parties. */
 export function freightWithdrawnLine(c: NonNullable<FreightTrackView['cancelled']>, t: Translate): string {
@@ -418,6 +429,7 @@ export function relationWord(relation: 'sent' | 'received', t: Translate): strin
 export function parcelRowLine(p: ConsumerParcelView, t: Translate): string {
   const bits = [p.relation === 'received' ? t('send.logic.rowFrom', { zone: p.originZone }) : t('send.logic.rowTo', { zone: p.destZone })];
   bits.push(p.vendorOrder ? t('send.logic.storeOrder') : t('send.logic.personalSend'));
+  if (p.runningLate) bits.push(t('send.late.short'));
   return bits.join(' · ');
 }
 

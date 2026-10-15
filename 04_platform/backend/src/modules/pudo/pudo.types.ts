@@ -674,6 +674,17 @@ export class ParcelScan {
  * to the parcel, its live status, and a status timeline. The receiver's collection token is a later
  * (S22) surface, not this one.
  */
+/**
+ * A parcel RUNNING LATE: the network holds it on its way — at the shop it was handed in at, on the road, at a hub — and
+ * the time it was promised to be ready to collect is more than PARCEL_LATE_GRACE_H behind it. `where` is which of
+ * the three, so whoever reads it is told where it is as well as that it is late.
+ */
+export interface RunningLate {
+  promisedAt: string;
+  lateHours: number;
+  where: 'shop' | 'road' | 'hub';
+}
+
 export interface ConsumerParcelView {
   parcelId: string;
   did?: string; // DT — the shipment's stable GLOS identity (the digital twin), shown to its owner
@@ -716,6 +727,8 @@ export interface ConsumerParcelView {
    * authenticated app, never on the public track and never in the list.
    */
   collectToken?: { code: string; qrPayload: string };
+  /** Present while it is RUNNING LATE: past the time it was promised to be ready, and still on its way. */
+  runningLate?: RunningLate;
   /**
    * There IS a code, and it is not shown until then: this account was moved to a new number without its PIN, and for
    * the day in which that can be undone nobody on it reads what a shop will ask for. In place of `collectToken`.
@@ -985,6 +998,9 @@ export class Parcel {
    *  reminder and not a series — and set even when there was nobody to tell, so somebody who signs up
    *  later is not greeted by a nudge about a parcel that has been sitting a fortnight. */
   uncollectedRemindedAt?: string;
+  /** When the people on it were told it is running late (see runningLate). Once, and set even when there was nobody
+   *  to tell, for the same reason as the reminder above. */
+  lateToldAt?: string;
   /** The journey home, for a parcel nobody came for. Present only on a 'Returned' one — the two read as
    *  one story rather than as an abandonment and an unexplained new shipment. */
   returnParcelId?: string;

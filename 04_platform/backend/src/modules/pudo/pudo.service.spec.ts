@@ -1415,6 +1415,25 @@ describe('PUDO Light', () => {
     expect((controller.track(key) as { plannedRoute?: { pickupReadyAt: string; hops: string[] } }).plannedRoute).toEqual({ hops: ['A'], mdpRouted: false, pickupReadyAt: '2026-10-15T12:00:00.000Z' });
   });
 
+  it('says a parcel is running late on its tracking page and to the person who sent it — by the rule the notice uses', () => {
+    const ago = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
+    const promise = (readyBy: string) => ({ hops: [{ type: 'pudo' as const, id: 'a', label: 'A', zone: 'Z' }], mdpRouted: false, pickupReadyAt: readyBy, plannedAt: ago(30) });
+    const late = mintPeerSend('LATE', '40');
+    parcels.keepPlan(late.parcelId, promise(ago(5)));
+    const key = parcels.get(late.parcelId).trackingKey!;
+    // Not handed in yet: its own sender's time, not the network's lateness.
+    expect(controller.track(key)).not.toHaveProperty('runningLate');
+    controller.intake(late.parcelId, { dropoffPhotoRef: 'd.jpg' } as never, { role: 'agent', did: late.origin.did } as never);
+    expect((controller.track(key) as { runningLate?: unknown }).runningLate).toMatchObject({ lateHours: 5, where: 'shop' });
+    expect(parcels.consumerParcel(late.parcelId, late.sender as never).runningLate).toMatchObject({ where: 'shop' });
+    // Within the grace: on its way, and not said to be late.
+    const onTime = mintPeerSend('ONTIME', '41');
+    parcels.keepPlan(onTime.parcelId, promise(ago(1)));
+    controller.intake(onTime.parcelId, { dropoffPhotoRef: 'd.jpg' } as never, { role: 'agent', did: onTime.origin.did } as never);
+    expect(controller.track(parcels.get(onTime.parcelId).trackingKey!)).not.toHaveProperty('runningLate');
+    expect(parcels.consumerParcel(onTime.parcelId, onTime.sender as never)).not.toHaveProperty('runningLate');
+  });
+
   it('PG2: the intake preview tells the counter what is due — and only the booked shop may ask', () => {
     const { origin, dest, parcelId, due } = mintPeerSend('PG2P', '30');
     const preview: any = controller.intakePreview(parcelId, { role: 'agent', did: origin.did } as never);

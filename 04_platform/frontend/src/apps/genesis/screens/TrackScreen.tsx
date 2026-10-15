@@ -1,7 +1,7 @@
 import { Button, Card, ErrorNote, Icon, Note, ReadAloud } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { toPlaceWords } from '../../../shared/placewords';
-import { LADDER, freightTrackSummary, ladderIndex, mapsHref, showCollectCard, statusPresentation, stepTime, trackSummary } from '../logic';
+import { LADDER, freightTrackSummary, ladderIndex, lateLine, mapsHref, showCollectCard, statusPresentation, stepTime, trackSummary } from '../logic';
 import { isFreightTrack } from '../types';
 import { FreightTrack } from './FreightTrack';
 import type { SendActions, SendState } from '../useSendApp';
@@ -95,6 +95,9 @@ export function TrackScreen({ state, actions }: TrackScreenProps) {
               </span>
             </span>
           </section>
+          {/* RUNNING LATE, said where the status is — a page that says "going to" for a parcel a day behind is the
+              page telling somebody nothing. The server decides it; the same rule sent the notice. */}
+          {res.runningLate ? <Note tone="warn" icon="clock" title={t('send.late.title')} detail={lateLine(res.runningLate, t)} /> : null}
 
           {showCollectCard(res.status) ? (
             <>

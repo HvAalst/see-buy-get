@@ -39,6 +39,8 @@ interface HarnessOpts {
   heading?: (driverDid: string) => boolean;
   // the uncollected sweep — what is sitting on destination shelves right now
   onShelf?: unknown[];
+  // what the dispatcher said to stores' systems, as [vendorId, event, payload]
+  vendorCalls?: unknown[][];
   // rule 2c — the single best load near a moving driver, and what they are already deciding
   offerNear?: () => unknown | null;
   activeOffers?: () => unknown[];
@@ -115,7 +117,12 @@ function harness(opts: HarnessOpts) {
   // The window-closing half of the shelf sweep, stubbed: these cases are about who gets TOLD what, and a
   // real UnclaimedService would drag a shelf, a wallet and a return book into every one of them.
   const unclaimed = { sweep: () => (opts.unclaimedSweep ? opts.unclaimedSweep() : []) } as unknown as UnclaimedService;
-  const vendors = { notify: () => null } as unknown as VendorService;
+  const vendors = {
+    notify: (...call: unknown[]) => {
+      opts.vendorCalls?.push(call);
+      return null;
+    },
+  } as unknown as VendorService;
 
   const dispatcher = new NotificationDispatcher(events, notifications, parcels, persons, agents, fleet, totes, mdps, dispatch, unclaimed, vendors);
   dispatcher.onModuleInit();
@@ -481,6 +488,90 @@ describe('NotificationDispatcher — rule 5: driver "load near you" for a posted
  * republishing collapses onto it — so if they were on a bus or the phone was flat, that was the whole
  * conversation, and the parcel then sat on a shop's shelf holding a slot with nobody aware of it.
  */
+/**
+ * A PARCEL RUNNING LATE — the same absence as the uncollected shelf, earlier in the journey: nothing happens when a
+ * parcel does not arrive by the time it was promised, so a sweep says it.
+ */
+describe('NotificationDispatcher — a parcel running late', () => {
+  const HOUR = 3_600_000;
+  const onItsWay = (over: Record<string, unknown> = {}) => ({
+    parcelId: 'PUD-LATE',
+    status: 'On_Bus',
+    receiverPhoneHash: 'hash-r',
+    senderPhoneHash: 'hash-s',
+    destAgentDid: 'did:glos:shop',
+    destZone: 'Kisumu',
+    plan: { hops: [], mdpRouted: false, pickupReadyAt: new Date(Date.now() - 5 * HOUR).toISOString(), plannedAt: new Date(Date.now() - 30 * HOUR).toISOString() },
+    ...over,
+  });
+  const people = { 'hash-r': { personDid: 'did:glos:person-r' }, 'hash-s': { personDid: 'did:glos:person-s' } };
+  const shop = { 'did:glos:shop': { shopName: "Mama Sarah's" } };
+  /** The harness sweeps once as it starts; the parcels are put on the road after that, as they would be. */
+  const started = (over: Record<string, unknown> = {}) => {
+    const list: unknown[] = [];
+    const vendorCalls: unknown[][] = [];
+    return { ...harness({ onShelf: list, personByHash: people, agents: shop, vendorCalls, ...over }), list, vendorCalls };
+  };
+
+  it('tells the receiver and the person who sent it — once — how late, and where it is', async () => {
+    const { dispatcher, notifications, list } = started();
+    list.push(onItsWay());
+    expect(await dispatcher.sweepParcelsLate()).toBe(1);
+    const [r] = notifications.inboxFor('did:glos:person-r');
+    expect(r).toMatchObject({ kind: 'parcel_late', title: 'Your parcel is running late', body: "It should have been ready at Mama Sarah's about 5 hours ago. It is on its way. You are told when it is ready to collect.", link: '/?parcel=PUD-LATE' });
+    const [s] = notifications.inboxFor('did:glos:person-s');
+    expect(s).toMatchObject({ kind: 'parcel_late', title: 'A parcel you sent is running late' });
+    expect(s.body).toBe("It should have been ready at Mama Sarah's about 5 hours ago. It is on its way. Its tracking page shows where it is.");
+    // Once, however often the sweep runs.
+    expect(await dispatcher.sweepParcelsLate()).toBe(0);
+    expect(notifications.inboxFor('did:glos:person-r')).toHaveLength(1);
+  });
+
+  it('says nothing within the grace, before it was handed in, once it has arrived, or with no promise kept', async () => {
+    const { dispatcher, notifications, list } = started();
+    list.push(
+      onItsWay({ parcelId: 'A', plan: { hops: [], mdpRouted: false, pickupReadyAt: new Date(Date.now() - HOUR).toISOString() } }),
+      onItsWay({ parcelId: 'B', status: 'Created' }),
+      onItsWay({ parcelId: 'C', status: 'Ready_For_Pickup' }),
+      onItsWay({ parcelId: 'D', plan: undefined }),
+    );
+    expect(await dispatcher.sweepParcelsLate()).toBe(0);
+    expect(notifications.inboxFor('did:glos:person-r')).toHaveLength(0);
+  });
+
+  it('a store’s order: the buyer is told in the app, the store on its own systems — and nobody else', async () => {
+    const { dispatcher, notifications, list, vendorCalls } = started();
+    list.push(onItsWay({ status: 'At_MDP', vendorId: 'vnd_1', externalOrderId: 'ORD-9' }));
+    expect(await dispatcher.sweepParcelsLate()).toBe(1);
+    expect(notifications.inboxFor('did:glos:person-r')[0].body).toContain('It is at a sorting hub.');
+    expect(notifications.inboxFor('did:glos:person-s')).toHaveLength(0);
+    expect(vendorCalls).toEqual([['vnd_1', 'parcel.late', { parcelId: 'PUD-LATE', externalOrderId: 'ORD-9', status: 'At_MDP', promisedAt: expect.any(String), lateHours: 5 }]]);
+  });
+
+  it('says a day late in days, and a parcel still at the shop it was handed in at as that', async () => {
+    const { dispatcher, notifications, list } = started();
+    list.push(onItsWay({ status: 'At_PUDO', plan: { hops: [], mdpRouted: false, pickupReadyAt: new Date(Date.now() - 50 * HOUR).toISOString() } }));
+    await dispatcher.sweepParcelsLate();
+    expect(notifications.inboxFor('did:glos:person-r')[0].body).toBe("It should have been ready at Mama Sarah's about 2 days ago. It is still at the shop it was handed in at. You are told when it is ready to collect.");
+  });
+
+  it('marks a parcel it could tell nobody about, so somebody who signs up later is not told stale news', async () => {
+    const { dispatcher, list } = started({ personByHash: {} });
+    const late = onItsWay();
+    list.push(late);
+    expect(await dispatcher.sweepParcelsLate()).toBe(1);
+    expect((late as { lateToldAt?: string }).lateToldAt).toBeDefined();
+    expect(await dispatcher.sweepParcelsLate()).toBe(0);
+  });
+
+  it('tells a person who sent a parcel to themselves once, not twice', async () => {
+    const { dispatcher, notifications, list } = started();
+    list.push(onItsWay({ senderPhoneHash: 'hash-r' }));
+    await dispatcher.sweepParcelsLate();
+    expect(notifications.inboxFor('did:glos:person-r')).toHaveLength(1);
+  });
+});
+
 describe('NotificationDispatcher — the uncollected reminder', () => {
   const HOUR = 3_600_000;
   const shelved = (over: Record<string, unknown> = {}) => ({

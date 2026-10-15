@@ -143,6 +143,11 @@ export const NOTIFICATION_KINDS = [
    * once more for the day.
    */
   'order_late',
+  /**
+   * A parcel is running late: past the time it was promised to be ready, and still on its way. Said once, to the
+   * receiver and to a person who sent it; a store hears on its webhook.
+   */
+  'parcel_late',
   /** A fleet offered this driver a place, or took the offer back. Only the driver can answer it, so only they are told. */
   'fleet_offer',
   /**

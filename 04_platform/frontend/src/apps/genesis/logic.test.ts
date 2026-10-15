@@ -19,6 +19,7 @@ import {
   money,
   normalizeKey,
   parcelRowLine,
+  lateLine,
   parseDims,
   phoneBlocker,
   phoneReady,
@@ -247,6 +248,17 @@ describe('track', () => {
     });
     expect(trackSummary(mkTrack('On_Bus'), t)).toBe('Parcel P-1: on the bus.');
     expect(trackSummary(mkTrack('Ready_For_Pickup'), t)).toBe('Parcel P-1: ready to collect at Riverside.');
+    // Running late is read aloud as the page shows it.
+    expect(trackSummary({ ...mkTrack('On_Bus'), runningLate: { promisedAt: '2026-10-15T12:00:00.000Z', lateHours: 5.2, where: 'road' } }, t)).toBe('Parcel P-1: on the bus. Running late. It should have been ready about 5 hours ago. It is on its way.');
+  });
+
+  it('says a parcel running late in hours, then days, with where it is — and in its row', () => {
+    expect(lateLine({ lateHours: 2.1, where: 'shop' }, t)).toBe('It should have been ready about 2 hours ago. It is still at the shop it was handed in at.');
+    expect(lateLine({ lateHours: 0.6, where: 'road' }, t)).toBe('It should have been ready about 1 hour ago. It is on its way.');
+    expect(lateLine({ lateHours: 26, where: 'hub' }, t)).toBe('It should have been ready about 1 day ago. It is at a sorting hub.');
+    expect(lateLine({ lateHours: 50, where: 'hub' }, t)).toMatch(/about 2 days ago/);
+    expect(parcelRowLine(mkParcel({ runningLate: { promisedAt: '2026-10-15T12:00:00.000Z', lateHours: 5, where: 'road' } }), t)).toMatch(/ · running late$/);
+    expect(parcelRowLine(mkParcel({}), t)).not.toMatch(/running late/);
   });
 
   it('says when a load is expected: the day always, and about when only where the page was given an hour', () => {

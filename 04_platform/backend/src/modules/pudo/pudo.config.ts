@@ -479,6 +479,14 @@ export const UNCOLLECTED_REMINDER_H = 24;
  */
 export const NEVER_DROPPED_H = 48;
 /**
+ * How long past the time it was promised to be ready a parcel may be before it is RUNNING LATE, and said to be.
+ *
+ * The promise is optimistic by decision (a leg is one continuous run; see "ETA realism"), so a parcel an hour behind
+ * it is ordinary. Two hours is late enough to be worth a person's attention and early enough to be news before they
+ * walk to the shop for nothing.
+ */
+export const PARCEL_LATE_GRACE_H = 2;
+/**
  * What a shop is paid, per started day, for a shelf slot held past the free window.
  *
  * The free window (UNCOLLECTED_H) is bought and paid for: it is part of the journey the sender purchased.
