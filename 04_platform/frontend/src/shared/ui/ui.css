@@ -1584,6 +1584,16 @@
   transform: rotate(45deg);
 }
 
+/* Where a line ends: a ring, as on the tiled map. */
+.pmap__pin--stop .pmap__dot,
+.pmap__pin--stop.pmap__pin--on .pmap__dot {
+  background: var(--bg);
+  border: 3px solid var(--blue);
+}
+.pmap__pin--stop.pmap__pin--on .pmap__dot {
+  border-color: var(--navy);
+}
+
 .pmap__line--on {
   stroke: var(--org);
   stroke-opacity: 1;
@@ -1771,6 +1781,22 @@
 }
 .pmap-marker__dot--dropped {
   background: var(--navy);
+}
+/* Where a line ends — somebody's next stop: a ring, so it is told from a vehicle (filled) and a hazard (a diamond)
+   without colour, and its name a step quieter than theirs. */
+.pmap-marker__dot--stop,
+.pmap-marker__dot--stop-on {
+  background: var(--bg);
+  border: 3px solid var(--blue);
+}
+.pmap-marker__dot--stop-on {
+  width: 18px;
+  height: 18px;
+  margin: -2px 0 0 -2px;
+  border-color: var(--blue-dark);
+}
+.pmap-marker__dot--stop + .pmap-marker__lbl {
+  font-weight: 600;
 }
 .pmap-marker__lbl {
   position: absolute;

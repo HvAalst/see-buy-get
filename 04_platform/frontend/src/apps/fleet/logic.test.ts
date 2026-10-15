@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import type { DepartureBookingRow, DepartureRow } from './types';
 import { EMPTY_OWN_LOAD, EMPTY_RUN, ownLoadBlocker, runBlocker, runManifest, runMoney, runRemaining, runWaits, type OwnLoadForm, type RunForm } from './logic';
-import { ageWords, signalState, shiftHours, overShiftLimit, fleetMap, hazardArea, hazardWords, HAZARD_MIN_KM, nextStopOf, vehicleDetail,
+import { ageWords, signalState, shiftHours, overShiftLimit, fleetMap, hazardArea, hazardWords, HAZARD_MIN_KM, stopDetail, nextStopOf, vehicleDetail,
   EMPTY_DRIVER,
   EMPTY_VEHICLE,
   bodyPickerOptions,
@@ -557,12 +557,35 @@ describe('the fleet map', () => {
 
   it('pins each vehicle that reported a position, says so when it has gone dark, and pins hazards as warnings', () => {
     const { pins } = fleetMap(sessions, cargo, hazards, t, NOW);
-    expect(pins.map((p) => p.id)).toEqual(['v:did:a', 'v:did:b', 'h:rc1']);
-    expect(pins[0].label).toBe('KLM 002B · Amos K.');
-    expect(pins[1].label).toMatch(/^KDA 100V · Grace M\. · no signal /);
-    expect(pins[2]).toMatchObject({ tone: 'warn', point: { lat: -1.31, lng: 36.85 } });
-    expect(pins[2].label).toMatch(/^Low bridge/);
-    expect(pins[0]).not.toHaveProperty('tone');
+    const [stop, amos, grace, hazard] = pins;
+    expect(pins.map((p) => p.id)).toEqual(['s:-1.28500,36.83500', 'v:did:a', 'v:did:b', 'h:rc1']);
+    expect(amos.label).toBe('KLM 002B · Amos K.');
+    expect(grace.label).toMatch(/^KDA 100V · Grace M\. · no signal /);
+    expect(hazard).toMatchObject({ tone: 'warn', point: { lat: -1.31, lng: 36.85 } });
+    expect(hazard.label).toMatch(/^Low bridge/);
+    expect(amos).not.toHaveProperty('tone');
+    // The end of the line is marked, named for the place — and drawn first, under the vehicles.
+    expect(stop).toEqual({ id: 's:-1.28500,36.83500', label: 'Gikomba depot', point: { lat: -1.285, lng: 36.835 }, tone: 'stop' });
+  });
+
+  it('marks only where a line ends, once for a place two vehicles share, and opens who is heading there', () => {
+    // Grace's next stop is the same depot as Amos's, to within a metre: one ring, two vehicles in it.
+    const both = [...cargo, { ref: 'FRT-12', kind: 'freight', weightKg: 300, destLabel: 'Athi River', driver: 'Grace M.', driverDid: 'did:b', status: 'claimed', nextStop: { what: 'pickup' as const, label: 'Gikomba depot', location: { lat: -1.285000001, lng: 36.835 } } }];
+    const { pins, lines } = fleetMap(sessions, both, [], t, NOW);
+    expect(pins.filter((p) => p.tone === 'stop').map((p) => p.id)).toEqual(['s:-1.28500,36.83500']);
+    expect(lines).toHaveLength(2);
+    // Amos's far drop is not his next stop: no line ends there, so no ring.
+    expect(pins.some((p) => p.label === 'Central Sort')).toBe(false);
+    const d = stopDetail('-1.28500,36.83500', sessions, both)!;
+    expect(d.label).toBe('Gikomba depot');
+    expect(d.vehicles.map((v) => v.session.plate)).toEqual(['KLM 002B', 'KDA 100V']);
+    // Each with what it does THERE — not everything it carries.
+    expect(d.vehicles[0].loads.map((l) => l.ref)).toEqual(['FRT-9']);
+    expect(t('fleet.map.stopCollects', { ref: 'FRT-9', kg: 20 })).toBe('collects FRT-9 · 20 kg here');
+    // The vehicle moved on and the map read itself again: the stop opens nothing rather than a stale list.
+    expect(stopDetail('-1.40000,36.95000', sessions, both)).toBeNull();
+    // A driver not on the road is nobody's line.
+    expect(stopDetail('-1.28500,36.83500', [sessions[2]], both)).toBeNull();
   });
 
   it('draws one line per vehicle to its NEAREST stop, and says it is a straight line, not the road', () => {

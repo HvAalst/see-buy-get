@@ -4,7 +4,7 @@ import { useState, useEffect } from 'preact/hooks';
 import { Button, Card, ErrorNote, ExplainerReset, Icon, PhotoField, PlaceMap, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
-import { ageWords, signalState, dashboardSummary, fleetMap, hazardWords, hoursLabel, paperDay, paperKindLabel, paperLine, paperLineClass, papersAloud, vehicleDetail } from '../logic';
+import { ageWords, signalState, dashboardSummary, fleetMap, hazardWords, hoursLabel, paperDay, paperKindLabel, paperLine, paperLineClass, papersAloud, stopDetail, vehicleDetail } from '../logic';
 import { vehicleWord } from '../../driver/vehicle-words';
 import type { PapersReport } from '../types';
 import type { FleetActions, FleetState, OwnPaperKind, OwnPapers } from '../useFleetApp';
@@ -27,6 +27,7 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
   const pins = vehicles;
   const vehicle = picked?.startsWith('v:') ? vehicleDetail(picked.slice(2), sessions, cargo, d?.hours?.limit) : null;
   const hazard = picked?.startsWith('h:') ? state.hazards.find((h) => `h:${h.constraintId}` === picked) ?? null : null;
+  const stop = picked?.startsWith('s:') ? stopDetail(picked.slice(2), sessions, cargo) : null;
   // A line belongs to its vehicle: tapping it opens the same sheet, which names the stop the line ends at.
   const mapProps = { pins: map.pins, lines: map.lines, selectedId: picked, onPick: (id: string) => setPicked(id.startsWith('n:') ? `v:${id.slice(2)}` : id) };
 
@@ -71,7 +72,8 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
           operating area at city zoom, and it falls back to the plot when the tiles cannot load.
 
           A vehicle opens what an office asks next: who drives it, what it carries, where it goes next and the
-          hours left. A line runs to that next stop — straight, because nothing here knows the road. Red
+          hours left. A line runs to that next stop — straight, because nothing here knows the road — and ends at a
+          ring named for the place, which opens who is heading there. Red
           diamonds are what drivers reported on the roads around the vehicles. It reads itself again every
           45 seconds while this screen is open. */}
       <FleetCodeCard state={state} actions={actions} />
@@ -109,8 +111,9 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
         ) : null}
       </Sheet>
 
-      {/* WHAT A TAP OPENS. A vehicle: the driver, the hours left, each load and where it goes next. A hazard: what
-          was reported, how many agree, and whether somebody says it is gone. */}
+      {/* WHAT A TAP OPENS. A vehicle: the driver, the hours left, each load and where it goes next. A stop: who is
+          heading there and what each does there, a tap from their vehicle. A hazard: what was reported, how many
+          agree, and whether somebody says it is gone. */}
       <Sheet open={Boolean(vehicle)} onClose={() => setPicked(null)} title={vehicle ? `${vehicle.session.plate} · ${vehicle.session.driverName}` : ''}>
         {vehicle ? (
           <>
@@ -138,6 +141,30 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
                 ))}
               </ul>
             )}
+            <Button variant="link" onClick={() => setPicked(null)}>
+              {t('common.close')}
+            </Button>
+          </>
+        ) : null}
+      </Sheet>
+      <Sheet open={Boolean(stop)} onClose={() => setPicked(null)} title={stop?.label ?? ''}>
+        {stop ? (
+          <>
+            <p class="hint">{t('fleet.map.stopNote', { count: stop.vehicles.length })}</p>
+            <div class="rows" role="list">
+              {stop.vehicles.map((v) => (
+                <button key={v.session.driverDid} type="button" class="row" role="listitem" onClick={() => setPicked(`v:${v.session.driverDid}`)}>
+                  <span class="row__body">
+                    <span class="row__t">
+                      {v.session.plate} · {v.session.driverName}
+                    </span>
+                    <span class="row__s">
+                      {v.loads.map((l) => t(l.nextStop?.what === 'pickup' ? 'fleet.map.stopCollects' : 'fleet.map.stopDelivers', { ref: l.ref, kg: l.weightKg })).join(', ')}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
             <Button variant="link" onClick={() => setPicked(null)}>
               {t('common.close')}
             </Button>

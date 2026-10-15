@@ -85,7 +85,10 @@ export function PlaceMapLeaflet({ pins = [], lines = [], selectedId, onPick, ref
       points.push([lane.from.lat, lane.from.lng], [lane.to.lat, lane.to.lng]);
     }
     for (const pin of pins) {
-      const marker = L.marker([pin.point.lat, pin.point.lng], { icon: dotIcon(pin.tone === 'warn' ? (pin.id === selectedId ? 'warn-on' : 'warn') : pin.id === selectedId ? 'on' : 'pin', pin.label) });
+      const on = pin.id === selectedId;
+      const kind = pin.tone === 'warn' ? (on ? 'warn-on' : 'warn') : pin.tone === 'stop' ? (on ? 'stop-on' : 'stop') : on ? 'on' : 'pin';
+      // Leaflet stacks markers by how far down the screen they stand; a stop goes beneath them all, whatever its place.
+      const marker = L.marker([pin.point.lat, pin.point.lng], { icon: dotIcon(kind, pin.label), zIndexOffset: pin.tone === 'stop' ? -1000 : 0 });
       marker.on('click', () => {
         // Tapping a pin flies the map in to it (the fit is signature-gated, so this zoom sticks), then
         // hands the tap to the consumer — which opens its detail sheet.
@@ -122,7 +125,7 @@ export function PlaceMapLeaflet({ pins = [], lines = [], selectedId, onPick, ref
 }
 
 /** A custom marker: a coloured dot + a name chip, drawn in HTML (no external PNGs, no emoji). */
-function dotIcon(kind: 'pin' | 'on' | 'ref' | 'dropped' | 'warn' | 'warn-on', text: string): L.DivIcon {
+function dotIcon(kind: 'pin' | 'on' | 'ref' | 'dropped' | 'warn' | 'warn-on' | 'stop' | 'stop-on', text: string): L.DivIcon {
   return L.divIcon({
     className: 'pmap-marker',
     html: `<span class="pmap-marker__dot pmap-marker__dot--${kind}"></span><span class="pmap-marker__lbl">${escapeHtml(text)}</span>`,

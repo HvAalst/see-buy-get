@@ -8,8 +8,12 @@ export interface PlaceMapPin {
   id: string;
   label: string;
   point: GeoPoint;
-  /** A warning — something reported on a road — drawn as a red diamond, so it is told from a place without colour. */
-  tone?: 'warn';
+  /**
+   * A warning — something reported on a road — drawn as a red diamond, so it is told from a place without colour. A
+   * stop — the place a line ends, somebody's next stop — drawn as a ring, under everything else, so a vehicle or a
+   * warning standing on top of it keeps its tap.
+   */
+  tone?: 'warn' | 'stop';
 }
 
 /**

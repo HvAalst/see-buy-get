@@ -208,8 +208,9 @@ export function vehiclePins(positions: PositionRow[], now: number = Date.now()):
 /**
  * THE OFFICE'S MAP: each vehicle on shift where its phone last said it was; a straight line from it to its NEXT STOP,
  * which is a place the network knows and never the road to it (nothing here knows which road a driver takes); and
- * what drivers reported on the roads around them, as red diamonds. Pin ids say what they are: `v:` a vehicle (its
- * driver), `h:` a hazard.
+ * what drivers reported on the roads around them, as red diamonds. The end of each line is marked too, with a ring named
+ * for the place: a line that stops at nothing makes the reader guess where it goes. Pin ids say what they are: `v:` a
+ * vehicle (its driver), `s:` a stop (its place, see stopKey), `h:` a hazard.
  */
 export function fleetMap(
   sessions: SessionRow[],
@@ -217,18 +218,46 @@ export function fleetMap(
   hazards: HazardRow[],
   t: Translate,
   now: number = Date.now(),
-): { pins: Array<{ id: string; label: string; point: { lat: number; lng: number }; tone?: 'warn' }>; lines: Array<{ id: string; label: string; from: { lat: number; lng: number }; to: { lat: number; lng: number } }> } {
+): { pins: Array<{ id: string; label: string; point: { lat: number; lng: number }; tone?: 'warn' | 'stop' }>; lines: Array<{ id: string; label: string; from: { lat: number; lng: number }; to: { lat: number; lng: number } }> } {
   const placed = sessions.filter((s): s is SessionRow & { driverDid: string; location: { lat: number; lng: number } } => Boolean(s.driverDid && s.location));
-  const pins: Array<{ id: string; label: string; point: { lat: number; lng: number }; tone?: 'warn' }> = placed.map((s) => {
+  const pins: Array<{ id: string; label: string; point: { lat: number; lng: number }; tone?: 'warn' | 'stop' }> = placed.map((s) => {
     const signal = signalState(s.lastLocatedAt, now);
     return { id: `v:${s.driverDid}`, label: `${s.plate} · ${s.driverName}${signal.kind === 'dark' ? ` · no signal ${ageWords(signal.minutes)}` : ''}`, point: s.location };
   });
+  // Two vehicles heading for the same place share one ring.
+  const ends = new Map<string, { label: string; point: { lat: number; lng: number } }>();
   const lines = placed.flatMap((s) => {
     const stop = nextStopOf(s.driverDid, s.location, cargo);
-    return stop ? [{ id: `n:${s.driverDid}`, label: t(stop.what === 'pickup' ? 'fleet.map.lineToPickup' : 'fleet.map.lineToDrop', { plate: s.plate, place: stop.label }), from: s.location, to: stop.location }] : [];
+    if (!stop) return [];
+    const key = stopKey(stop.location);
+    if (!ends.has(key)) ends.set(key, { label: stop.label, point: stop.location });
+    return [{ id: `n:${s.driverDid}`, label: t(stop.what === 'pickup' ? 'fleet.map.lineToPickup' : 'fleet.map.lineToDrop', { plate: s.plate, place: stop.label }), from: s.location, to: stop.location }];
   });
   for (const h of hazards) pins.push({ id: `h:${h.constraintId}`, label: hazardWords(h, t), point: h.at, tone: 'warn' });
-  return { pins, lines };
+  // The stops go first, so where a map draws in order (the plain one) a vehicle standing on its stop is drawn over it.
+  const stops = [...ends].map(([key, e]) => ({ id: `s:${key}`, label: e.label, point: e.point, tone: 'stop' as const }));
+  return { pins: [...stops, ...pins], lines };
+}
+
+/** The key a stop goes by: its place to about a metre, so two loads for the same place are one stop on the map. */
+export function stopKey(p: { lat: number; lng: number }): string {
+  return `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`;
+}
+
+/**
+ * What a tap on a stop opens: every vehicle whose line ends there, and what each has to do at that place — the loads it
+ * collects or delivers there, not everything it carries. Null when no line ends there any more (the map read itself
+ * again and the vehicle moved on).
+ */
+export function stopDetail(key: string, sessions: SessionRow[], cargo: CargoRow[]) {
+  const vehicles = sessions.flatMap((s) => {
+    if (!s.driverDid || !s.location) return [];
+    const stop = nextStopOf(s.driverDid, s.location, cargo);
+    if (!stop || stopKey(stop.location) !== key) return [];
+    const loads = cargo.filter((c) => c.driverDid === s.driverDid && c.nextStop && stopKey(c.nextStop.location) === key);
+    return [{ session: s, label: stop.label, loads }];
+  });
+  return vehicles.length ? { label: vehicles[0].label, vehicles } : null;
 }
 
 /**
