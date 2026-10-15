@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, ErrorNote, Note, PhotoField, Sheet } from '../../../shared/ui';
+import { Button, ErrorNote, Note, PhotoField, ScanField, Sheet } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import type { components } from '../../../lib/sbg/schema';
 import type { DriverActions } from '../useDriverApp';
 
 export type BreakdownView = components['schemas']['VehicleBreakdown'];
+export type TakeOverView = components['schemas']['BreakdownToTakeOver'];
+export type TakenOverView = components['schemas']['TakeOverResult'];
 type Cause = BreakdownView['cause'];
 
 /** What broke, for the driver: a word, never a code. In the order a driver meets it. */
@@ -77,6 +79,7 @@ export function BreakdownSheet({ open, actions, onClose }: { open: boolean; acti
         <>
           <Note tone="warn" icon="warning" title={t('driver.brk.toldTitle')} detail={t('driver.brk.toldDetail')} />
           {told ? <p class="t-body">{t('driver.brk.shippersTold', { n: told })}</p> : null}
+          {done.aboard.length ? <p class="hint">{t('driver.brk.keepShift')}</p> : null}
           <Button chevron={false} onClick={close}>
             {t('driver.close')}
           </Button>
@@ -107,6 +110,123 @@ export function BreakdownSheet({ open, actions, onClose }: { open: boolean; acti
           <Button chevron={false} busy={busy} disabled={busy || !cause || !note.trim()} onClick={() => void send()}>
             {t('driver.brk.send')}
           </Button>
+          <Button variant="link" onClick={close}>
+            {t('driver.close')}
+          </Button>
+        </>
+      )}
+    </Sheet>
+  );
+}
+
+/**
+ * TAKE THE LOADS OVER from a broken-down vehicle of the driver's own fleet — shown only while there is one. The driver
+ * picks it, sees what it carries, and types the six digits the other driver reads out from "Show my badge" (or scans
+ * that badge): the two of them, at the vehicle together. Every load moves, or none does.
+ */
+export function TakeOverLink({ actions }: { actions: DriverActions }) {
+  const t = useT();
+  const [list, setList] = useState<TakeOverView[]>([]);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    let live = true;
+    const look = () => void actions.loadTakeOvers().then((l) => live && setList(l));
+    look();
+    const every = setInterval(look, 60_000);
+    return () => {
+      live = false;
+      clearInterval(every);
+    };
+  }, [actions.loadTakeOvers]);
+  if (!list.length && !open) return null;
+  return (
+    <>
+      <Button variant="link" full={false} onClick={() => setOpen(true)}>
+        {t('driver.tko.open')}
+      </Button>
+      <TakeOverSheet
+        open={open}
+        list={list}
+        actions={actions}
+        onClose={() => {
+          setOpen(false);
+          void actions.loadTakeOvers().then(setList);
+        }}
+      />
+    </>
+  );
+}
+
+function TakeOverSheet({ open, list, actions, onClose }: { open: boolean; list: TakeOverView[]; actions: DriverActions; onClose: () => void }) {
+  const t = useT();
+  const [pick, setPick] = useState<string | null>(null);
+  const [pass, setPass] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<SbgError | null>(null);
+  const [done, setDone] = useState<TakenOverView | null>(null);
+  const chosen = list.find((b) => b.breakdownId === pick) ?? (list.length === 1 ? list[0] : undefined);
+  const close = () => {
+    setPick(null);
+    setPass('');
+    setError(null);
+    setDone(null);
+    onClose();
+  };
+  const send = async () => {
+    if (!chosen) return;
+    setBusy(true);
+    setError(null);
+    const where = await new Promise<{ lat: number; lng: number } | null>((resolve) => {
+      if (typeof navigator === 'undefined' || !navigator.geolocation) return resolve(null);
+      navigator.geolocation.getCurrentPosition((p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }), () => resolve(null), { timeout: 8_000, maximumAge: 60_000 });
+    });
+    const r = await actions.sendTakeOver({ breakdownId: chosen.breakdownId, pass: pass.trim(), ...(where ? { lat: where.lat, lng: where.lng } : {}) });
+    setBusy(false);
+    if (r.error) return setError(r.error);
+    setDone(r.data ?? null);
+  };
+
+  return (
+    <Sheet open={open} onClose={close} title={t('driver.tko.title')}>
+      {done ? (
+        <>
+          <Note tone="ok" icon="check" title={t('driver.tko.doneTitle', { plate: done.toPlate })} detail={t('driver.tko.doneDetail', { list: done.moved.join(', '), from: done.fromPlate })} />
+          <Button chevron={false} onClick={close}>
+            {t('driver.close')}
+          </Button>
+        </>
+      ) : (
+        <>
+          {error ? <ErrorNote error={error as never} showDetail /> : null}
+          {list.length > 1 ? (
+            <div class="chips">
+              {list.map((b) => (
+                <button key={b.breakdownId} type="button" class={'chip chip--tap' + (chosen?.breakdownId === b.breakdownId ? ' chip--on' : '')} aria-pressed={chosen?.breakdownId === b.breakdownId} onClick={() => setPick(b.breakdownId)}>
+                  {b.plate}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {chosen ? (
+            <>
+              <p class="t-body">{t('driver.tko.what', { plate: chosen.plate })}</p>
+              <ul class="rows">
+                {chosen.loads.map((l) => (
+                  <li key={l.label} class="row row--static">
+                    <span class="row__body">
+                      <span class="row__t">{l.label}</span>
+                      <span class="row__s">{t(l.state === 'aboard' ? 'driver.tko.aboard' : 'driver.tko.toCollect', { kg: l.weightKg.toLocaleString() })}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <ScanField id="tko-pass" expect="badge" label={t('driver.tko.passLabel', { who: chosen.driverName ?? '' })} value={pass} onValue={setPass} placeholder="123456" />
+              <p class="hint">{t('driver.tko.passHint')}</p>
+              <Button chevron={false} busy={busy} disabled={busy || pass.replace(/\s/g, '').length < 6} onClick={() => void send()}>
+                {t('driver.tko.send', { kg: chosen.totalKg.toLocaleString() })}
+              </Button>
+            </>
+          ) : null}
           <Button variant="link" onClick={close}>
             {t('driver.close')}
           </Button>

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { asksForEmail, isPinReset } from '../../shared/account/recovery';
 import type { SbgError } from '../../lib/sbg';
 import type { CheckResultView, CheckSheetView } from './screens/VehicleCheck';
-import type { BreakdownView } from './screens/Breakdown';
+import type { BreakdownView, TakeOverView, TakenOverView } from './screens/Breakdown';
 import type { IconName } from '../../shared/ui/Icon';
 import { choosePin, createDriverClient, driverConfig, driverSession, isMintSourced, isSignInRequired, narrow, purgeDriverTokens, requestPhoneCode, verifyPhoneCode } from './api';
 import { adoptDidFromUrl, clearDid, saveDid, saveRadius, saveRoute, savedRadius, savedRoute } from './storage';
@@ -1322,6 +1322,26 @@ export function useDriverApp() {
     [client, did],
   );
 
+  /** The broken-down vehicles of this driver's fleet with loads still to take over. Nothing on a failure: it is only a link. */
+  const loadTakeOvers = useCallback(async (): Promise<TakeOverView[]> => {
+    if (!client || !did) return [];
+    const r = await client.api.breakdownsToTakeOver(did);
+    return r.error ? [] : (narrow<TakeOverView[]>(r.data) ?? []);
+  }, [client, did]);
+
+  /** The loads taken over, with the other driver's code: they are this driver's from now. */
+  const sendTakeOver = useCallback(
+    async (body: { breakdownId: string; pass: string; lat?: number; lng?: number }): Promise<{ data?: TakenOverView; error?: SbgError }> => {
+      if (!client || !did) return {};
+      const r = await client.api.takeOver(did, body);
+      if (r.error) return { error: r.error };
+      buzz();
+      await refresh();
+      return { data: narrow<TakenOverView>(r.data) ?? undefined };
+    },
+    [client, did, refresh],
+  );
+
   /** "Tell me when I can start": asked while resting; the answer comes the moment the rest is over. */
   const tellWhenRested = useCallback(async () => {
     if (!client || !did) return;
@@ -1856,6 +1876,8 @@ export function useDriverApp() {
       sendCheck,
       sendDefect,
       sendBreakdown,
+      loadTakeOvers,
+      sendTakeOver,
       tellWhenRested,
       /** FP2 — the consignment note of a load this driver carries. */
       freightNote: (freightId: string) => client!.api.freightNote(freightId),

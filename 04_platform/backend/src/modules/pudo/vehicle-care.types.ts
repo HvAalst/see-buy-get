@@ -163,6 +163,24 @@ export class BreakdownLoad {
 }
 
 /**
+ * A BREAKDOWN'S LOADS, TAKEN OVER by another of the fleet's vehicles: who took them, in what, when and where, and on
+ * whose word — the pass of the driver handing over (the two of them at the vehicle together), or the office's.
+ */
+export class BreakdownHandover {
+  at: string;
+  toDriverDid: string;
+  toDriverName: string;
+  toVehicleId: string;
+  toPlate: string;
+  /** What moved: order codes, and what run bookings said they were. */
+  @ApiProperty({ type: [String] }) loads: string[];
+  @ApiProperty({ enum: ['pass', 'office'] }) proof: 'pass' | 'office';
+  /** Who recorded it: the driver who took them over, or the office. */
+  by: string;
+  @ApiPropertyOptional({ type: GeoPoint }) location?: GeoPoint;
+}
+
+/**
  * BROKEN DOWN ON THE ROAD: what happened, where, who was driving, what was aboard then, and which of today's planned
  * orders were held for it. Open until the office says how it ended: back on the road, or into the workshop.
  */
@@ -186,11 +204,53 @@ export class VehicleBreakdown {
   @ApiProperty({ type: [BreakdownLoad] }) aboard: BreakdownLoad[];
   /** Today's planned orders that were waiting for it, held: their codes. */
   @ApiProperty({ type: [String] }) held: string[];
+  /** DERIVED on read: what of it is still with the driver it broke down under — what a handover would move. */
+  @ApiProperty({ type: [String] }) stillAboard: string[];
+  /** Its loads, taken over by other vehicles of the fleet. */
+  @ApiProperty({ type: [BreakdownHandover] }) handovers: BreakdownHandover[];
   @ApiProperty({ enum: ['open', 'resolved'] }) status: 'open' | 'resolved';
   @ApiPropertyOptional({ enum: ['back_on_road', 'workshop'] }) outcome?: 'back_on_road' | 'workshop';
   @ApiPropertyOptional() resolvedBy?: string;
   @ApiPropertyOptional() resolvedAt?: string;
   @ApiPropertyOptional() resolutionNote?: string;
+}
+
+/** One load a rescuing driver would take over: what it is, whether it is aboard or still to collect, and its weight. */
+export class TakeOverLoad {
+  @ApiProperty({ enum: ['freight', 'booking'] }) kind: 'freight' | 'booking';
+  label: string;
+  @ApiProperty({ enum: ['aboard', 'to_collect'] }) state: 'aboard' | 'to_collect';
+  weightKg: number;
+}
+
+/** A broken-down vehicle of the driver's own fleet with loads still to take over — as the driver coming for them sees it. */
+export class BreakdownToTakeOver {
+  breakdownId: string;
+  vehicleId: string;
+  plate: string;
+  /** Who is with it: the one whose pass hands the loads over. */
+  @ApiPropertyOptional() driverName?: string;
+  reportedAt: string;
+  @ApiPropertyOptional({ type: GeoPoint }) location?: GeoPoint;
+  @ApiProperty({ type: [TakeOverLoad] }) loads: TakeOverLoad[];
+  totalKg: number;
+}
+
+/** A driver of the fleet out in another vehicle now, who could take a broken-down vehicle's loads over — and the room left. */
+export class BreakdownTaker {
+  driverDid: string;
+  driverName: string;
+  vehicleId: string;
+  plate: string;
+  roomKg: number;
+}
+
+/** What a handover moved. */
+export class TakeOverResult {
+  breakdownId: string;
+  fromPlate: string;
+  toPlate: string;
+  @ApiProperty({ type: [String] }) moved: string[];
 }
 
 /** How often it is serviced: every so many km or months, whichever comes first. The class's usual unless the office set its own. */

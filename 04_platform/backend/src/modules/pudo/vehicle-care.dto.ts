@@ -53,6 +53,20 @@ export class ReportBreakdownDto {
   @IsOptional() @IsNumber() @Min(-180) @Max(180) lng?: number;
 }
 
+/** Taking over a broken-down vehicle's loads: which breakdown, and the pass of the driver handing them over. */
+export class TakeOverDto {
+  @IsString() @MaxLength(40) breakdownId!: string;
+  /** The six digits under "Show my badge" on the other driver's phone — or the whole pass. */
+  @IsString() @MaxLength(60) pass!: string;
+  @IsOptional() @IsNumber() @Min(-90) @Max(90) lat?: number;
+  @IsOptional() @IsNumber() @Min(-180) @Max(180) lng?: number;
+}
+
+/** The office moving a broken-down vehicle's loads to a driver of the fleet out in another vehicle. */
+export class HandOverDto {
+  @IsString() @MaxLength(80) toDriverDid!: string;
+}
+
 /** How a breakdown ended: back on the road, or into the workshop (until a day, or until put back) — with what was done. */
 export class ResolveBreakdownDto {
   @IsIn(['back_on_road', 'workshop']) outcome!: 'back_on_road' | 'workshop';

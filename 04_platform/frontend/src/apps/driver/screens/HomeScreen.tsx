@@ -31,7 +31,7 @@ import {
 } from '../logic';
 import type { RecentVehicleView } from '../types';
 import { ReportDefectSheet, VehicleCheckSheet } from './VehicleCheck';
-import { BreakdownSheet } from './Breakdown';
+import { BreakdownSheet, TakeOverLink } from './Breakdown';
 import type { DriverActions, DriverState } from '../useDriverApp';
 
 export interface HomeScreenProps {
@@ -804,6 +804,7 @@ function OnShift({ state, actions, onOpenFleet }: HomeScreenProps) {
         <Button variant="link" full={false} onClick={() => setBreakdownOpen(true)}>
           {t('driver.brk.open')}
         </Button>
+        <TakeOverLink actions={actions} />
         <Button variant="link" full={false} danger onClick={() => setConfirm('end')}>
           {t('driver.home.endMyShift')}
         </Button>

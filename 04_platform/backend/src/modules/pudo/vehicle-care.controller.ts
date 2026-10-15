@@ -8,8 +8,8 @@ import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { VehicleService } from './vehicle.service';
 import { VehicleCareService } from './vehicle-care.service';
-import { CareSettingsDto, CheckSheetQueryDto, DecideDefectDto, RecordReadingDto, ReportBreakdownDto, ReportDefectDto, ResolveBreakdownDto, ServicePlanDto, ServiceRecordDto, TakeOffRoadDto, VehicleCheckDto } from './vehicle-care.dto';
-import { CareSettings, CheckResult, CheckSheet, VehicleBreakdown, VehicleCareView, VehicleDefect } from './vehicle-care.types';
+import { CareSettingsDto, CheckSheetQueryDto, DecideDefectDto, HandOverDto, RecordReadingDto, ReportBreakdownDto, ReportDefectDto, ResolveBreakdownDto, ServicePlanDto, ServiceRecordDto, TakeOffRoadDto, TakeOverDto, VehicleCheckDto } from './vehicle-care.dto';
+import { BreakdownTaker, BreakdownToTakeOver, CareSettings, CheckResult, CheckSheet, TakeOverResult, VehicleBreakdown, VehicleCareView, VehicleDefect } from './vehicle-care.types';
 import { VehicleBreakdownService } from './vehicle-breakdown.service';
 import { FleetService } from './fleet.service';
 
@@ -129,6 +129,39 @@ export class VehicleCareController {
     this.ownerOf(id, actor);
     const { bytes, contentType } = this.breakdowns.photo(id, breakdownId, variant === 'thumb' ? 'thumb' : 'full');
     return new StreamableFile(bytes, { type: contentType });
+  }
+
+  /** The broken-down vehicles of the driver's own fleet with loads still to take over — for the driver coming for them. */
+  @Roles('driver', 'operator')
+  @Get('fleet/drivers/:did/breakdowns')
+  toTakeOver(@Param('did') did: string, @Actor() actor: IntrospectionResult): BreakdownToTakeOver[] {
+    this.driverActs(did, actor);
+    return this.breakdowns.toTakeOver(did);
+  }
+
+  /** Taking a broken-down vehicle's loads over, at the vehicle, with the pass of the driver handing them over. */
+  @Roles('driver', 'operator')
+  @Post('fleet/drivers/:did/take-over')
+  takeOver(@Param('did') did: string, @Body() dto: TakeOverDto, @Actor() actor: IntrospectionResult): TakeOverResult {
+    this.driverActs(did, actor);
+    const { pass, lat, lng } = dto;
+    return this.breakdowns.takeOverByPass(dto.breakdownId, did, { pass, lat, lng });
+  }
+
+  /** Who of the fleet could take a breakdown's loads: out in another vehicle on the road now, and the room each has. */
+  @Roles('fleet_manager', 'operator')
+  @Get('vehicles/:id/breakdowns/:breakdownId/takers')
+  takers(@Param('id') id: string, @Param('breakdownId') breakdownId: string, @Actor() actor: IntrospectionResult): BreakdownTaker[] {
+    this.ownerOf(id, actor);
+    return this.breakdowns.takersFor(id, breakdownId);
+  }
+
+  /** The office moves a breakdown's loads to a driver of the fleet out in another vehicle. */
+  @Roles('fleet_manager', 'operator')
+  @Post('vehicles/:id/breakdowns/:breakdownId/hand-over')
+  handOver(@Param('id') id: string, @Param('breakdownId') breakdownId: string, @Body() dto: HandOverDto, @Actor() actor: IntrospectionResult): VehicleCareView {
+    this.breakdowns.handOverByOffice(id, breakdownId, dto.toDriverDid, this.ownerOf(id, actor));
+    return this.care.view(id);
   }
 
   /** A fleet's vehicles broken down now: its office's and staff's to read. */

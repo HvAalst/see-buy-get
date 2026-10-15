@@ -269,6 +269,14 @@ export class FreightClaim {
 
 /** A bulk/dedicated freight job (sugar/cement, or a P4+ order diverted out of the PUDO network) — trucks
  *  only, never via MDP. Same marketplace as totes. */
+/** The vehicle goods are in now, after a breakdown moved them to another of the carrier's vehicles. */
+export class FreightMovedTo {
+  vehicleId: string;
+  plate: string;
+  vehicleClass: string;
+  at: string;
+}
+
 export class Freight {
   freightId: string;
   code: string; // human-readable reference
@@ -366,6 +374,12 @@ export class Freight {
    * the driver's later shifts; a note must name the vehicle that carried this load.
    */
   @ApiPropertyOptional() carriage?: { vehicleId: string; plate: string; vehicleClass: string; driverDid: string; managerDid?: string; at: string };
+  /**
+   * The vehicle the goods are in NOW, when they were moved to another of the carrier's vehicles after a breakdown on the
+   * road. The one they were taken over in stays on `carriage`, as the consignment note says; who moved them, and on
+   * whose word, is kept on the breakdown.
+   */
+  @ApiPropertyOptional({ type: () => FreightMovedTo }) movedTo?: FreightMovedTo;
   /** FP3 — proof of delivery: who took the goods in, the driver's photo of them as put down, and what the receiver
    *  said about them. This is box 24 of the consignment note; without it "delivered" is only the driver's word. */
   @ApiPropertyOptional() proofOfDelivery?: { receiverName: string; photoRef?: string; remarks?: string; at: string; by?: string };

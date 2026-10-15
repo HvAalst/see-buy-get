@@ -128,6 +128,25 @@ describe('a vehicle’s upkeep, over the wire', () => {
     return { fleetDid: m.did, office, did, token: session.body.token.access_token as string, truckId: truck.vehicleId, plate };
   }
 
+  /** Another driver of a fleet, signed in to the driver app, with a truck of that fleet's to be out in. */
+  async function aDriverIn(fleetDid: string): Promise<{ did: string; token: string; truckId: string; plate: string }> {
+    const n = digits();
+    const phone = `+2547${digits()}3`;
+    const onboarded = await http().post('/v1/sbg/drivers/onboard').set(bearer(operator)).send({ displayName: 'Wanjiru', fullName: 'Wanjiru Driver', nationalId: `ID-RSC-${n}`, mobile: phone, licenceClasses: ['truck'], licenceNumber: `L-RSC-${n}`, licenceExpiresAt: new Date(Date.now() + 400 * 86_400_000).toISOString(), criminalRecordClear: true, managerDid: fleetDid }).expect(201);
+    const did = onboarded.body.did as string;
+    await http().post(`/v1/sbg/fleet/drivers/${did}/submit-kyc`).set(bearer(operator)).send({ idCopyRef: 'id.jpg', licenceCopyRef: 'licence.jpg' }).expect(201);
+    await http().post(`/v1/sbg/fleet/drivers/${did}/kyc-decision`).set(bearer(operator)).send({ approve: true, by: 'Test' }).expect(201);
+    const asked = await http().post('/v1/sbg/auth/phone/request').send({ phone }).expect(201);
+    await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
+    const email = `rsc${digits()}@example.com`;
+    const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
+    const session = await http().post('/v1/sbg/drivers/session').send({ phone, pin: PIN, device: enrolled.body.device }).expect(201);
+    const plate = `RSC ${n.slice(-3)}T`;
+    const truck = app.get(VehicleService).register({ plate, vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 8000, ownerName: 'Check Fleet', equipment: ['TLT', 'FLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, managerDid: fleetDid } as never);
+    return { did, token: session.body.token.access_token as string, truckId: truck.vehicleId, plate };
+  }
+
   it('asks for the daily check where the fleet does, takes the vehicle off the road for an unsafe defect, and tells the office and then the driver', async () => {
     const x = await aFleetDriver();
     const other = await aFleetDriver();
@@ -253,5 +272,57 @@ describe('a vehicle’s upkeep, over the wire', () => {
     const phoned = await http().post(`/v1/sbg/vehicles/${x.truckId}/breakdowns`).set(bearer(x.office)).send({ cause: 'tyre', note: 'Baraka rang: a blow-out near Mlolongo' }).expect(201);
     expect(phoned.body).toMatchObject({ usable: false, breakdowns: [{ status: 'open', cause: 'tyre', reportedBy: expect.any(String) }, { status: 'resolved' }] });
     await http().post(`/v1/sbg/vehicles/${x.truckId}/breakdowns`).set(bearer(other.office)).send({ cause: 'tyre', note: 'x' }).expect(403);
+  });
+
+  it('moves a broken-down truck’s loads to another of the fleet’s trucks over the wire: by the other driver’s code, or by the office', async () => {
+    const x = await aFleetDriver();
+    const other = await aFleetDriver();
+    await http().post(`/v1/sbg/fleet/drivers/${x.did}/start-session`).set(bearer(x.token)).send({ vehicleId: x.truckId, pin: PIN }).expect(201);
+    const dispatch = app.get(DispatchService);
+    const load = dispatch.registerFreight({
+      description: 'Cement, 40 bags', pickupLocation: { lat: -1.3, lng: 36.85 }, pickupLabel: 'Bamburi depot', destLabel: 'Site 9', destLocation: { lat: -1.25, lng: 36.9 },
+      weightKg: 2000, packaging: 'palletised', postedByDid: other.fleetDid, postedByName: 'Wanjiku',
+      contract: { contractId: 'ctr_tko', fleetDid: x.fleetDid, fleetName: 'Check Fleet', shipperName: 'Wanjiku Builders' }, deliverOn: new Date().toISOString().slice(0, 10), orderRef: `TKO-${digits()}`,
+    } as never);
+    dispatch.assign(load.freightId, x.did, { managerDid: x.fleetDid, name: 'Office' });
+    dispatch.pickupFreight(load.freightId, x.did, { confirmed: requiredLoadKeys(dispatch.requireFreightPublic(load.freightId)), securementPhotoId: 'med_test' });
+    const broke = await http().post(`/v1/sbg/fleet/drivers/${x.did}/breakdown`).set(bearer(x.token)).send({ cause: 'engine', note: 'Head gasket' }).expect(201);
+    const id = broke.body.breakdownId as string;
+    // A second driver of the same fleet, out in a second truck.
+    const rescuer = await aDriverIn(x.fleetDid);
+    await http().post(`/v1/sbg/fleet/drivers/${rescuer.did}/start-session`).set(bearer(rescuer.token)).send({ vehicleId: rescuer.truckId, pin: PIN }).expect(201);
+    const list = await http().get(`/v1/sbg/fleet/drivers/${rescuer.did}/breakdowns`).set(bearer(rescuer.token)).expect(200);
+    expect(list.body).toEqual([expect.objectContaining({ breakdownId: id, plate: x.plate, driverName: 'Baraka', totalKg: 2000 })]);
+    await http().get(`/v1/sbg/fleet/drivers/${rescuer.did}/breakdowns`).set(bearer(x.token)).expect(403);
+    // The office's view of who could take them; nobody else's.
+    const takers = await http().get(`/v1/sbg/vehicles/${x.truckId}/breakdowns/${id}/takers`).set(bearer(x.office)).expect(200);
+    expect(takers.body).toEqual([expect.objectContaining({ driverDid: rescuer.did, plate: rescuer.plate, roomKg: 8000 })]);
+    await http().get(`/v1/sbg/vehicles/${x.truckId}/breakdowns/${id}/takers`).set(bearer(other.office)).expect(403);
+    await http().get(`/v1/sbg/vehicles/${x.truckId}/breakdowns/${id}/takers`).set(bearer(rescuer.token)).expect(403);
+    // The code on the broken-down driver's phone: only their own sign-in gets it.
+    const pass = (await http().get(`/v1/sbg/fleet/drivers/${x.did}/session`).set(bearer(x.token)).expect(200)).body.handoverPass as string;
+    const code = pass.split('-').pop()!;
+    const takeOver = (body: Record<string, unknown>) => http().post(`/v1/sbg/fleet/drivers/${rescuer.did}/take-over`).set(bearer(rescuer.token)).send({ breakdownId: id, ...body });
+    expect((await takeOver({ pass: code === '000000' ? '111111' : '000000' })).body.code).toBe('DRIVER_PASS_WRONG');
+    await http().post(`/v1/sbg/fleet/drivers/${rescuer.did}/take-over`).set(bearer(x.token)).send({ breakdownId: id, pass: code }).expect(403);
+    const taken = await takeOver({ pass: code, lat: -1.33, lng: 36.87 }).expect(201);
+    expect(taken.body).toEqual({ breakdownId: id, fromPlate: x.plate, toPlate: rescuer.plate, moved: [load.code] });
+    await new Promise((r) => setTimeout(r, 50));
+    const inboxOf = async (token: string) => {
+      const body = (await http().get('/v1/sbg/notifications/inbox').set(bearer(token)).expect(200)).body;
+      return (body.items ?? body) as Array<{ kind: string; title: string; body: string }>;
+    };
+    expect((await inboxOf(x.office)).find((n) => n.title === `${x.plate}'s loads are on ${rescuer.plate} now`)).toBeDefined();
+    const moving = (await inboxOf(other.office)).find((n) => n.title === `Load ${load.code} is moving again`);
+    expect(moving).toBeDefined();
+    expect(moving!.body).not.toContain(x.plate);
+    expect(moving!.body).not.toContain(rescuer.plate);
+    // The shipper's own view says who carries it now.
+    expect(dispatch.requireFreightPublic(load.freightId)).toMatchObject({ claimedBy: rescuer.did, movedTo: { plate: rescuer.plate } });
+    // Nothing left for the office to move.
+    const again = await http().post(`/v1/sbg/vehicles/${x.truckId}/breakdowns/${id}/hand-over`).set(bearer(x.office)).send({ toDriverDid: rescuer.did });
+    expect(again.status).toBe(400);
+    expect(again.body.message).toBe(`Nothing of ${x.plate}'s is left to hand over`);
+    await http().post(`/v1/sbg/vehicles/${x.truckId}/breakdowns/${id}/hand-over`).set(bearer(other.office)).send({ toDriverDid: rescuer.did }).expect(403);
   });
 });

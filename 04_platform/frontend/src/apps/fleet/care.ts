@@ -50,6 +50,11 @@ export function careApi(sbg: SbgClient) {
       const [id, breakdownId] = key.split('|');
       return sbg.request((c) => c.GET('/v1/sbg/vehicles/{id}/breakdowns/{breakdownId}/photo', { params: { path: { id, breakdownId }, query: { variant: 'thumb' } }, parseAs: 'blob' } as never)) as never;
     },
+    /** Who of the fleet could take a breakdown's loads: out in another vehicle now, and the room each has. */
+    takers: (vehicleId: string, breakdownId: string): Promise<Result<BreakdownTaker[]>> =>
+      sbg.request((c) => c.GET('/v1/sbg/vehicles/{id}/breakdowns/{breakdownId}/takers', { params: { path: { id: vehicleId, breakdownId } } })) as never,
+    handOver: (vehicleId: string, breakdownId: string, toDriverDid: string): Promise<Result<VehicleCare>> =>
+      sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/breakdowns/{breakdownId}/hand-over', { params: { path: { id: vehicleId, breakdownId } }, body: { toDriverDid } })) as never,
     /** The fleet's vehicles broken down now. */
     fleetBreakdowns: (fleetDid: string): Promise<Result<VehicleBreakdown[]>> => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/breakdowns', { params: { path: { did: fleetDid } } })) as never,
   };
@@ -64,6 +69,8 @@ export type ServiceDue = components['schemas']['ServiceDueView'];
 export type CareApi = ReturnType<typeof careApi>;
 export type VehicleBreakdown = components['schemas']['VehicleBreakdown'];
 export type BreakdownCause = VehicleBreakdown['cause'];
+export type BreakdownTaker = components['schemas']['BreakdownTaker'];
+export type BreakdownHandover = components['schemas']['BreakdownHandover'];
 
 /** What broke, in the order a driver or an office meets it. */
 export const BREAKDOWN_CAUSES: BreakdownCause[] = ['engine', 'tyre', 'electrical', 'brakes', 'fuel', 'accident', 'other'];

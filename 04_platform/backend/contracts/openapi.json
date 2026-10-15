@@ -23269,6 +23269,164 @@
         }
       }
     },
+    "/v1/sbg/fleet/drivers/{did}/breakdowns": {
+      "get": {
+        "operationId": "VehicleCare.toTakeOver",
+        "summary": "",
+        "description": "The broken-down vehicles of the driver's own fleet with loads still to take over — for the driver coming for them.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BreakdownToTakeOver"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/take-over": {
+      "post": {
+        "operationId": "VehicleCare.takeOver",
+        "summary": "",
+        "description": "Taking a broken-down vehicle's loads over, at the vehicle, with the pass of the driver handing them over.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TakeOverDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TakeOverResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vehicles/{id}/breakdowns/{breakdownId}/takers": {
+      "get": {
+        "operationId": "VehicleCare.takers",
+        "summary": "",
+        "description": "Who of the fleet could take a breakdown's loads: out in another vehicle on the road now, and the room each has.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "breakdownId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BreakdownTaker"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vehicles/{id}/breakdowns/{breakdownId}/hand-over": {
+      "post": {
+        "operationId": "VehicleCare.handOver",
+        "summary": "",
+        "description": "The office moves a breakdown's loads to a driver of the fleet out in another vehicle.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "breakdownId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandOverDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleCareView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/managers/{did}/breakdowns": {
       "get": {
         "operationId": "VehicleCare.fleetBreakdowns",
@@ -35350,6 +35508,29 @@
           "driverDid"
         ]
       },
+      "FreightMovedTo": {
+        "type": "object",
+        "properties": {
+          "vehicleId": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "vehicleClass": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "vehicleId",
+          "plate",
+          "vehicleClass",
+          "at"
+        ]
+      },
       "FreightDeliveryAttempt": {
         "type": "object",
         "properties": {
@@ -36106,6 +36287,14 @@
                 "type": "string"
               }
             }
+          },
+          "movedTo": {
+            "description": "The vehicle the goods are in NOW, when they were moved to another of the carrier's vehicles after a breakdown on the\nroad. The one they were taken over in stays on `carriage`, as the consignment note says; who moved them, and on\nwhose word, is kept on the breakdown.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightMovedTo"
+              }
+            ]
           },
           "proofOfDelivery": {
             "type": "object",
@@ -46434,6 +46623,57 @@
           "shipperTold"
         ]
       },
+      "BreakdownHandover": {
+        "type": "object",
+        "properties": {
+          "loads": {
+            "description": "What moved: order codes, and what run bookings said they were.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "proof": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "office"
+            ]
+          },
+          "location": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "at": {
+            "type": "string"
+          },
+          "toDriverDid": {
+            "type": "string"
+          },
+          "toDriverName": {
+            "type": "string"
+          },
+          "toVehicleId": {
+            "type": "string"
+          },
+          "toPlate": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string",
+            "description": "Who recorded it: the driver who took them over, or the office."
+          }
+        },
+        "required": [
+          "loads",
+          "proof",
+          "at",
+          "toDriverDid",
+          "toDriverName",
+          "toVehicleId",
+          "toPlate",
+          "by"
+        ]
+      },
       "VehicleBreakdown": {
         "type": "object",
         "properties": {
@@ -46489,6 +46729,20 @@
               "type": "string"
             }
           },
+          "stillAboard": {
+            "description": "DERIVED on read: what of it is still with the driver it broke down under — what a handover would move.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "handovers": {
+            "description": "Its loads, taken over by other vehicles of the fleet.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BreakdownHandover"
+            }
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -46535,6 +46789,8 @@
           "cause",
           "aboard",
           "held",
+          "stillAboard",
+          "handovers",
           "status",
           "breakdownId",
           "vehicleId",
@@ -46825,6 +47081,171 @@
         "required": [
           "outcome",
           "note"
+        ]
+      },
+      "TakeOverLoad": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "freight",
+              "booking"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "aboard",
+              "to_collect"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "weightKg": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "kind",
+          "state",
+          "label",
+          "weightKg"
+        ]
+      },
+      "BreakdownToTakeOver": {
+        "type": "object",
+        "properties": {
+          "driverName": {
+            "type": "string",
+            "description": "Who is with it: the one whose pass hands the loads over."
+          },
+          "location": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "loads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TakeOverLoad"
+            }
+          },
+          "breakdownId": {
+            "type": "string"
+          },
+          "vehicleId": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "reportedAt": {
+            "type": "string"
+          },
+          "totalKg": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "loads",
+          "breakdownId",
+          "vehicleId",
+          "plate",
+          "reportedAt",
+          "totalKg"
+        ]
+      },
+      "TakeOverDto": {
+        "type": "object",
+        "properties": {
+          "breakdownId": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "pass": {
+            "type": "string",
+            "description": "The six digits under \"Show my badge\" on the other driver's phone — or the whole pass.",
+            "maxLength": 60
+          },
+          "lat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "lng": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          }
+        },
+        "required": [
+          "breakdownId",
+          "pass"
+        ]
+      },
+      "TakeOverResult": {
+        "type": "object",
+        "properties": {
+          "moved": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "breakdownId": {
+            "type": "string"
+          },
+          "fromPlate": {
+            "type": "string"
+          },
+          "toPlate": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "moved",
+          "breakdownId",
+          "fromPlate",
+          "toPlate"
+        ]
+      },
+      "BreakdownTaker": {
+        "type": "object",
+        "properties": {
+          "driverDid": {
+            "type": "string"
+          },
+          "driverName": {
+            "type": "string"
+          },
+          "vehicleId": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "roomKg": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "driverDid",
+          "driverName",
+          "vehicleId",
+          "plate",
+          "roomKg"
+        ]
+      },
+      "HandOverDto": {
+        "type": "object",
+        "properties": {
+          "toDriverDid": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "toDriverDid"
         ]
       },
       "CheckItemView": {

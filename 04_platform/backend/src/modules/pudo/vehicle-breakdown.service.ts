@@ -14,7 +14,7 @@ import { Vehicle } from './fleet.types';
 import { MediaService } from './media.service';
 import { dayWords } from './upkeep-words';
 import { VehicleService } from './vehicle.service';
-import { BreakdownCause, BreakdownLoad, VehicleBreakdown } from './vehicle-care.types';
+import { BreakdownCause, BreakdownHandover, BreakdownLoad, BreakdownTaker, BreakdownToTakeOver, TakeOverResult, VehicleBreakdown } from './vehicle-care.types';
 
 /** What broke, as the line every refusal, notice and screen says. */
 export const CAUSE_WORDS: Record<BreakdownCause, string> = {
@@ -54,6 +54,22 @@ export interface VehicleBrokeDown {
   when: string;
   tell: BreakdownTell[];
 }
+
+/** A breakdown's loads taken over, for the notices: the office, the two drivers, and the shippers of what moved. */
+export interface VehicleLoadsHandedOver {
+  fleetDid: string;
+  carrier: string;
+  fromPlate: string;
+  breakdownId: string;
+  /** The driver the loads were with. */
+  fromDriverDid: string;
+  fromDriverName?: string;
+  handover: BreakdownHandover;
+  tell: BreakdownTell[];
+}
+
+/** A load as a breakdown reads it: what to tell about it, and what it weighs. */
+type Load = BreakdownTell & { id: string; shipperDid?: string; weightKg: number };
 
 /** A breakdown resolved, for the notices: the driver who reported it, and the shippers of what is still aboard. */
 export interface VehicleBreakdownResolved {
@@ -130,6 +146,8 @@ export class VehicleBreakdownService {
       ...(location && locatedAt ? { locatedAt } : {}),
       aboard: loads.map((l) => ({ kind: l.kind, id: l.id, label: l.label, state: l.state, ...(l.departureId ? { departureId: l.departureId } : {}), shipperTold: Boolean(l.shipperDid) })),
       held: this.holdTodaysTrips(v, now),
+      stillAboard: [],
+      handovers: [],
       status: 'open',
     };
     // The photograph becomes the vehicle's record, as a defect's does.
@@ -147,7 +165,7 @@ export class VehicleBreakdownService {
       tell: tellsOf(loads),
     };
     void this.events.publish(GlosEvent.Pudo.VehicleBrokeDown, told, { source: 'pudo' }).catch(() => undefined);
-    return publicBreakdown(breakdown);
+    return this.view(breakdown);
   }
 
   /** Whether a breakdown can be resolved, asked before anything is written — the workshop's spell is written first. */
@@ -168,14 +186,157 @@ export class VehicleBreakdownService {
     const v = this.vehicles.get(vehicleId);
     const done: VehicleBreakdown & { photoRef?: string } = { ...b, status: 'resolved', outcome, resolvedBy: by, resolvedAt: new Date(now).toISOString(), resolutionNote: note.trim() };
     this.breakdowns.set(breakdownId, done);
-    // Still aboard: what was aboard then, and has not since been delivered, given back, or moved to another vehicle.
-    const current = b.driverDid ? this.loadsOf(v, b.driverDid) : [];
-    const was = new Set(b.aboard.map((l) => `${l.kind}:${l.id}`));
-    const still = current.filter((l) => was.has(`${l.kind}:${l.id}`));
-    const driverName = b.driverName;
-    const told: VehicleBreakdownResolved = { ...(v.managerDid ? { fleetDid: v.managerDid } : {}), carrier: this.carrierOf(v, driverName), plate: v.plate, breakdown: publicBreakdown(done), tell: tellsOf(still) };
+    const told: VehicleBreakdownResolved = { ...(v.managerDid ? { fleetDid: v.managerDid } : {}), carrier: this.carrierOf(v, b.driverName), plate: v.plate, breakdown: publicBreakdown(done), tell: tellsOf(this.stillWith(v, b)) };
     void this.events.publish(GlosEvent.Pudo.VehicleBreakdownResolved, told, { source: 'pudo' }).catch(() => undefined);
-    return publicBreakdown(done);
+    return this.view(done);
+  }
+
+  /**
+   * WHAT THE DRIVER COMING FOR THE LOADS SEES: the broken-down vehicles of their own fleet that still have loads with
+   * the driver they broke down under — never the one they are out in themselves. Nothing while they are not on a shift.
+   */
+  toTakeOver(takerDid: string): BreakdownToTakeOver[] {
+    const shift = this.fleet.activeForDriver(takerDid);
+    const mine = shift ? this.vehicles.get(shift.vehicleId) : undefined;
+    if (!mine?.managerDid) return [];
+    return this.all()
+      .filter((b) => b.vehicleId !== mine.vehicleId && b.driverDid && b.driverDid !== takerDid)
+      .map((b) => ({ b, v: this.vehicles.get(b.vehicleId) }))
+      .filter(({ v }) => v.managerDid === mine.managerDid)
+      .map(({ b, v }) => ({ b, v, loads: this.stillWith(v, b) }))
+      .filter(({ loads }) => loads.length > 0)
+      .map(({ b, v, loads }) => ({
+        breakdownId: b.breakdownId,
+        vehicleId: v.vehicleId,
+        plate: v.plate,
+        ...(b.driverName ? { driverName: b.driverName } : {}),
+        reportedAt: b.reportedAt,
+        ...(b.location ? { location: { ...b.location } } : {}),
+        loads: loads.map((l) => ({ kind: l.kind, label: l.label, state: l.state, weightKg: l.weightKg })),
+        totalKg: Math.round(loads.reduce((n, l) => n + l.weightKg, 0) * 100) / 100,
+      }));
+  }
+
+  /** The fleet's drivers out in another vehicle now that is on the road, who could take a breakdown's loads — and the room each has. */
+  takersFor(vehicleId: string, breakdownId: string): BreakdownTaker[] {
+    const b = this.find(vehicleId, breakdownId);
+    const v = this.vehicles.get(b.vehicleId);
+    if (!v.managerDid) return [];
+    return this.drivers
+      .list({ managerDid: v.managerDid })
+      .filter((d) => d.did !== b.driverDid)
+      .map((d) => ({ d, shift: this.fleet.activeForDriver(d.did) }))
+      .filter(({ shift }) => shift && shift.vehicleId !== v.vehicleId && this.vehicles.isUsable(shift.vehicleId))
+      .map(({ d, shift }) => ({ driverDid: d.did, driverName: d.displayName, vehicleId: shift!.vehicleId, plate: this.vehicles.get(shift!.vehicleId).plate, roomKg: this.dispatch.remainingCapacity(d.did) }));
+  }
+
+  /**
+   * TAKEN OVER AT THE VEHICLE: the driver who came for the loads, with the pass of the driver handing them over — the six
+   * digits under "Show my badge", which only the two of them together have. Every load still with that driver moves, or
+   * none does.
+   */
+  takeOverByPass(breakdownId: string, takerDid: string, input: { pass: string; lat?: number; lng?: number }, now: number = Date.now()): TakeOverResult {
+    const b = this.breakdowns.get(breakdownId);
+    if (!b) throw new GlosError('NOT_FOUND', 'No such breakdown');
+    if ((input.lat === undefined) !== (input.lng === undefined)) throw new GlosError('INVALID_INPUT', 'A position is a latitude and a longitude together', { field: 'lat' });
+    const plan = this.planHandover(b, takerDid, 'You are not on a shift: the loads go onto the vehicle you are out in');
+    this.assertPass(b, input.pass);
+    const location = input.lat !== undefined && input.lng !== undefined ? { lat: input.lat, lng: input.lng } : b.location;
+    return this.carryOut(b, plan, { proof: 'pass', by: plan.taker.displayName, ...(location ? { location } : {}) }, now);
+  }
+
+  /**
+   * MOVED BY THE OFFICE, to a driver of the fleet out in another vehicle — when the driver the loads are with can no
+   * longer show a pass (their shift has ended), or the office arranges it before the other truck arrives. The record
+   * says it was the office's word; the driver taking them over is told.
+   */
+  handOverByOffice(vehicleId: string, breakdownId: string, toDriverDid: string, by: string, now: number = Date.now()): TakeOverResult {
+    const b = this.find(vehicleId, breakdownId);
+    const plan = this.planHandover(b, toDriverDid, 'That driver is not on a shift: the loads go onto a vehicle somebody is out in');
+    return this.carryOut(b, plan, { proof: 'office', by, ...(b.location ? { location: b.location } : {}) }, now);
+  }
+
+  /** Everything that can say no, asked before anything moves: who, which vehicle, what is left, room and fitness for it all. */
+  private planHandover(b: VehicleBreakdown, takerDid: string, notOnShift: string): { v: Vehicle; to: Vehicle; taker: { did: string; displayName: string }; loads: Load[] } {
+    const v = this.vehicles.get(b.vehicleId);
+    if (!b.driverDid) throw new GlosError('INVALID_STATE', `Nobody was out in ${v.plate} when it broke down: there is nobody to hand over from`);
+    if (takerDid === b.driverDid) throw new GlosError('INVALID_INPUT', `The loads are already with ${b.driverName ?? 'that driver'}`);
+    const shift = this.fleet.activeForDriver(takerDid);
+    if (!shift) throw new GlosError('INVALID_STATE', notOnShift);
+    const to = this.vehicles.get(shift.vehicleId);
+    if (!v.managerDid || to.managerDid !== v.managerDid) throw new GlosError('FORBIDDEN', `${v.plate} is not one of your fleet's vehicles: its loads stay with the fleet that carries them`);
+    if (to.vehicleId === v.vehicleId) throw new GlosError('INVALID_INPUT', `${to.plate} is the vehicle that broke down`);
+    if (!this.vehicles.isUsable(to.vehicleId)) throw new GlosError('INVALID_STATE', `${to.plate} is off the road: ${this.vehicles.offRoadReasons(to.vehicleId).join('; ') || to.status}`);
+    const loads = this.stillWith(v, b);
+    if (!loads.length) throw new GlosError('INVALID_STATE', `Nothing of ${v.plate}'s is left to hand over`);
+    const taker = this.drivers.get(takerDid);
+    const bookings = loads.filter((l) => l.kind === 'booking');
+    this.dispatch.assertCanTakeLoads(loads.filter((l) => l.kind === 'freight').map((l) => l.id), takerDid, bookings.reduce((n, l) => n + l.weightKg, 0));
+    for (const departureId of new Set(bookings.map((l) => l.departureId!))) this.departures.continueOn(departureId, to.vehicleId, { did: takerDid, name: taker.displayName }, false);
+    return { v, to, taker: { did: taker.did, displayName: taker.displayName }, loads };
+  }
+
+  /** The handover itself, once nothing can say no: the loads move, it is recorded, and everybody concerned is told. */
+  private carryOut(b: VehicleBreakdown & { photoRef?: string }, plan: { v: Vehicle; to: Vehicle; taker: { did: string; displayName: string }; loads: Load[] }, how: { proof: 'pass' | 'office'; by: string; location?: { lat: number; lng: number } }, now: number): TakeOverResult {
+    const { v, to, taker, loads } = plan;
+    this.dispatch.moveLoads(loads.filter((l) => l.kind === 'freight').map((l) => l.id), taker.did, now);
+    for (const departureId of new Set(loads.filter((l) => l.kind === 'booking').map((l) => l.departureId!))) this.departures.continueOn(departureId, to.vehicleId, { did: taker.did, name: taker.displayName }, true);
+    const handover: BreakdownHandover = {
+      at: new Date(now).toISOString(),
+      toDriverDid: taker.did,
+      toDriverName: taker.displayName,
+      toVehicleId: to.vehicleId,
+      toPlate: to.plate,
+      loads: loads.map((l) => l.label),
+      proof: how.proof,
+      by: how.by,
+      ...(how.location ? { location: { lat: how.location.lat, lng: how.location.lng } } : {}),
+    };
+    this.breakdowns.set(b.breakdownId, { ...b, handovers: [...(b.handovers ?? []), handover] });
+    const told: VehicleLoadsHandedOver = {
+      fleetDid: v.managerDid!,
+      carrier: this.carrierOf(v, b.driverName),
+      fromPlate: v.plate,
+      breakdownId: b.breakdownId,
+      fromDriverDid: b.driverDid!,
+      ...(b.driverName ? { fromDriverName: b.driverName } : {}),
+      handover,
+      tell: tellsOf(loads),
+    };
+    void this.events.publish(GlosEvent.Pudo.VehicleLoadsHandedOver, told, { source: 'pudo' }).catch(() => undefined);
+    return { breakdownId: b.breakdownId, fromPlate: v.plate, toPlate: to.plate, moved: handover.loads };
+  }
+
+  /**
+   * The pass of the driver the loads are with: the six digits they read out, or the whole pass. Checked by the one door
+   * every counter uses (FleetService.badgeShown), so wrong codes are counted and the fifth replaces it.
+   */
+  private assertPass(b: VehicleBreakdown, pass: string): void {
+    const giver = this.drivers.get(b.driverDid!);
+    if (!this.fleet.activeForDriver(giver.did)) throw new GlosError('INVALID_STATE', `${giver.displayName} has ended their shift, so their pass is gone: the office can move the loads to you`);
+    const said = (pass ?? '').replace(/\s/g, '');
+    const shown = /^\d{6}$/.test(said) && giver.badgeId ? `${giver.badgeId}-${said}` : said;
+    const badge = this.fleet.badgeShown(shown);
+    if (!giver.badgeId || badge !== giver.badgeId.toUpperCase()) throw new GlosError('INVALID_INPUT', `That is not ${giver.displayName}'s code: ask them to open “Show my badge” and read you the six digits under it`, { field: 'pass' });
+  }
+
+  /** What was aboard when it broke down and is still with the driver it broke down under: what a handover moves. */
+  private stillWith(v: Vehicle, b: VehicleBreakdown): Load[] {
+    if (!b.driverDid) return [];
+    const was = new Set(b.aboard.map((l) => `${l.kind}:${l.id}`));
+    return this.loadsOf(v, b.driverDid).filter((l) => was.has(`${l.kind}:${l.id}`));
+  }
+
+  private find(vehicleId: string, breakdownId: string): VehicleBreakdown & { photoRef?: string } {
+    const b = this.breakdowns.get(breakdownId);
+    if (!b || b.vehicleId !== vehicleId) throw new GlosError('NOT_FOUND', 'No such breakdown on this vehicle');
+    return b;
+  }
+
+  /** A breakdown as its owner reads it: what is still aboard, worked out now. */
+  private view(b: VehicleBreakdown & { photoRef?: string }): VehicleBreakdown {
+    const v = this.vehicles.get(b.vehicleId);
+    return { ...publicBreakdown(b), stillAboard: this.stillWith(v, b).map((l) => l.label) };
   }
 
   /** A vehicle's breakdowns for its sheet: the open one, and those resolved in the last month, newest first. */
@@ -183,15 +344,16 @@ export class VehicleBreakdownService {
     const since = new Date(now - RESOLVED_SHOWN_DAYS * 86_400_000).toISOString();
     return this.all()
       .filter((b) => b.vehicleId === vehicleId && (b.status === 'open' || (b.resolvedAt ?? '') >= since))
-      .map(publicBreakdown);
+      .map((b) => this.view(b));
   }
 
-  /** A fleet's vehicles broken down now: for the top of its office's screen. */
+  /** A fleet's vehicles broken down now — or resolved with loads still waiting to be taken over: for the top of its office's screen. */
   openForFleet(fleetDid: string): VehicleBreakdown[] {
     const mine = new Set(this.vehicles.list({ managerDid: fleetDid }).map((v) => v.vehicleId));
     return this.all()
-      .filter((b) => b.status === 'open' && mine.has(b.vehicleId))
-      .map(publicBreakdown);
+      .filter((b) => mine.has(b.vehicleId))
+      .map((b) => this.view(b))
+      .filter((b) => b.status === 'open' || b.stillAboard.length > 0);
   }
 
   /** A breakdown's photograph, for the vehicle's owner — the upkeep routes decide who that is. */
@@ -206,13 +368,14 @@ export class VehicleBreakdownService {
    * it now, or still to be collected — and the bookings on a run of it that has left. The fleet's own bookings and its
    * own orders are told to nobody: the office is the one telling.
    */
-  private loadsOf(v: Vehicle, driverDid: string): Array<BreakdownTell & { id: string; shipperDid?: string }> {
+  private loadsOf(v: Vehicle, driverDid: string): Load[] {
     const freight = this.dispatch.loadsOnVehicle(driverDid, v.vehicleId).map((f) => ({
       kind: 'freight' as const,
       id: f.freightId,
       freightId: f.freightId,
       label: f.code,
       state: f.state,
+      weightKg: f.weightKg,
       ...(f.shipperDid ? { shipperDid: f.shipperDid } : {}),
     }));
     const bookings = this.departures.bookingsAboard(v.vehicleId).map((b) => ({
@@ -222,9 +385,10 @@ export class VehicleBreakdownService {
       state: 'aboard' as const,
       lineName: b.lineName,
       departureId: b.departureId,
+      weightKg: b.weightKg,
       ...(b.shipperDid ? { shipperDid: b.shipperDid } : {}),
     }));
-    return [...freight, ...bookings] as Array<BreakdownTell & { id: string; shipperDid?: string }>;
+    return [...freight, ...bookings] as Load[];
   }
 
   /** Today's planned orders that were waiting for this vehicle, held in the plan's own words: their codes. */
@@ -267,7 +431,7 @@ export class VehicleBreakdownService {
 }
 
 /** The parties to tell, each load once: only those somebody here can be told about. */
-function tellsOf(loads: Array<BreakdownTell & { id: string; shipperDid?: string }>): BreakdownTell[] {
+function tellsOf(loads: Load[]): BreakdownTell[] {
   return loads
     .filter((l) => l.shipperDid)
     .map((l) => ({
@@ -285,5 +449,6 @@ function tellsOf(loads: Array<BreakdownTell & { id: string; shipperDid?: string 
 function publicBreakdown(b: VehicleBreakdown & { photoRef?: string }): VehicleBreakdown {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { photoRef, ...rest } = b;
-  return { ...rest, aboard: rest.aboard.map((l: BreakdownLoad) => ({ ...l })) };
+  // A breakdown kept before handovers were recorded has none.
+  return { ...rest, aboard: rest.aboard.map((l: BreakdownLoad) => ({ ...l })), stillAboard: rest.stillAboard ?? [], handovers: (rest.handovers ?? []).map((h) => ({ ...h, loads: [...h.loads] })) };
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { AuthImage, Button, Card, ErrorNote, Pill, PlaceMap } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
 import type { Result, SbgClient } from '../../../lib/sbg';
-import { BREAKDOWN_CAUSES, CAUSE_WORD, careApi, whereWords, type BreakdownCause, type CareApi, type VehicleBreakdown, type VehicleCare } from '../care';
+import { BREAKDOWN_CAUSES, CAUSE_WORD, careApi, whereWords, type BreakdownCause, type BreakdownTaker, type CareApi, type VehicleBreakdown, type VehicleCare } from '../care';
 
 /**
  * A VEHICLE BROKEN DOWN, on its upkeep sheet: what happened, who was out in it, where (on a map), what was aboard and
@@ -11,11 +11,26 @@ import { BREAKDOWN_CAUSES, CAUSE_WORD, careApi, whereWords, type BreakdownCause,
  */
 export function OpenBreakdown({ care, api, act, busy }: { care: VehicleCare; api: CareApi; act: (call: () => Promise<Result<VehicleCare>>) => Promise<void>; busy: boolean }) {
   const t = useT();
-  const open = care.breakdowns.find((b) => b.status === 'open');
+  // Open — or resolved, with loads still waiting with the driver it broke down under.
+  const open = care.breakdowns.find((b) => b.status === 'open' || b.stillAboard.length > 0);
   const [outcome, setOutcome] = useState<'back_on_road' | 'workshop' | null>(null);
   const [note, setNote] = useState('');
   const [untilDay, setUntilDay] = useState('');
+  const [takers, setTakers] = useState<BreakdownTaker[] | null>(null);
+  const [error, setError] = useState<unknown>(null);
   if (!open) return null;
+  const findTakers = async () => {
+    setError(null);
+    const r = await api.takers(care.vehicleId, open.breakdownId);
+    if (r.error || !r.data) return setError(r.error);
+    setTakers(r.data);
+  };
+  const moveTo = (driverDid: string) =>
+    act(async () => {
+      const r = await api.handOver(care.vehicleId, open.breakdownId, driverDid);
+      if (!r.error) setTakers(null);
+      return r;
+    });
   const resolve = () =>
     act(async () => {
       const r = await api.resolveBreakdown(care.vehicleId, open.breakdownId, { outcome: outcome!, note: note.trim(), ...(outcome === 'workshop' && untilDay ? { untilDay } : {}) });
@@ -42,16 +57,62 @@ export function OpenBreakdown({ care, api, act, busy }: { care: VehicleCare; api
           <span class="row__s">{whereWords(open, t)}</span>
           <span class="row__s">{open.aboard.length ? t('fleet.brk.aboard', { n: open.aboard.length, list: open.aboard.map((l) => l.label).join(', ') }) : t('fleet.brk.nothingAboard')}</span>
           {open.held.length ? <span class="row__s row__s--warn">{t('fleet.brk.held', { n: open.held.length, codes: open.held.join(', ') })}</span> : null}
+          {open.handovers.map((h) => (
+            <span key={h.at} class="row__s">
+              {t(h.proof === 'pass' ? 'fleet.brk.handedByPass' : 'fleet.brk.handedByOffice', { who: h.toDriverName, plate: h.toPlate, when: formatDate(h.at, { dateStyle: 'medium', timeStyle: 'short' }), by: h.by, loads: h.loads.join(', ') })}
+            </span>
+          ))}
+          {open.stillAboard.length && open.handovers.length ? <span class="row__s row__s--warn">{t('fleet.brk.stillAboard', { list: open.stillAboard.join(', ') })}</span> : null}
           {open.hasPhoto ? <AuthImage mediaId={`${care.vehicleId}|${open.breakdownId}`} load={api.breakdownPhoto} alt={t('fleet.brk.photoAlt', { plate: care.plate })} class="photos__thumb photos__thumb--sm" /> : null}
         </span>
         <span class="row__end">
-          <Pill tone="danger" dot>
-            {t('fleet.brk.pill')}
+          <Pill tone={open.status === 'open' ? 'danger' : 'warn'} dot>
+            {t(open.status === 'open' ? 'fleet.brk.pill' : 'fleet.brk.pillWaiting')}
           </Pill>
         </span>
       </div>
       {open.location ? <PlaceMap pins={[{ id: open.breakdownId, label: care.plate, point: open.location, tone: 'warn' }]} label={t('fleet.brk.mapAria', { plate: care.plate })} /> : null}
-      {outcome ? (
+      {error ? <ErrorNote error={error as never} showDetail /> : null}
+      {/* ITS LOADS, to another of the fleet's vehicles: usually the drivers do it between them, with the code; the office when they cannot. */}
+      {open.stillAboard.length ? (
+        takers ? (
+          <>
+            <p class="field__label" style="margin-top:12px">
+              {t('fleet.brk.moveTitle')}
+            </p>
+            {takers.length === 0 ? <p class="hint">{t('fleet.brk.noTakers')}</p> : null}
+            <ul class="rows">
+              {takers.map((k) => (
+                <li key={k.driverDid} class="row row--static">
+                  <span class="row__body">
+                    <span class="row__t">
+                      {k.plate} · {k.driverName}
+                    </span>
+                    <span class="row__s">{t('fleet.brk.room', { kg: k.roomKg.toLocaleString() })}</span>
+                  </span>
+                  <span class="row__end">
+                    <Button variant="link" full={false} disabled={busy} onClick={() => void moveTo(k.driverDid)}>
+                      {t('fleet.brk.moveHere')}
+                    </Button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p class="hint">{t('fleet.brk.moveHint')}</p>
+            <Button variant="link" full={false} onClick={() => setTakers(null)}>
+              {t('fleet.care.cancel')}
+            </Button>
+          </>
+        ) : (
+          <>
+            <p class="hint">{t('fleet.brk.takeOverHint')}</p>
+            <Button variant="link" full={false} onClick={() => void findTakers()}>
+              {t('fleet.brk.move')}
+            </Button>
+          </>
+        )
+      ) : null}
+      {open.status !== 'open' ? null : outcome ? (
         <>
           <div class="field" style="margin-top:10px">
             <label class="field__label" for="brk-note">

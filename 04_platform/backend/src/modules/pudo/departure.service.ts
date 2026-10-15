@@ -8,6 +8,7 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { CorridorService } from './corridor.service';
 import { DriverService } from './driver.service';
 import { VehicleService } from './vehicle.service';
+import type { Vehicle } from './fleet.types';
 import { CargoService } from './cargo.service';
 import { RouteConstraintService } from './route-constraint.service';
 import type { GeoPoint } from './pudo.types';
@@ -890,13 +891,13 @@ export class DepartureService {
    * A BREAKDOWN'S QUESTION: the bookings aboard a vehicle's runs that have left, and the shipper of each where the load
    * was sold to one. The fleet's own bookings name nobody to tell: the office is the one telling.
    */
-  bookingsAboard(vehicleId: string): Array<{ departureId: string; bookingId: string; lineName: string; description: string; shipperDid?: string }> {
+  bookingsAboard(vehicleId: string): Array<{ departureId: string; bookingId: string; lineName: string; description: string; weightKg: number; shipperDid?: string }> {
     return this.list()
       .filter((d) => d.vehicleId === vehicleId && d.status === 'departed')
       .flatMap((d) =>
         d.bookings
           .filter((b) => b.status === 'booked')
-          .map((b) => ({ departureId: d.departureId, bookingId: b.bookingId, lineName: d.lineName, description: b.description, ...(b.kind === 'sold' ? { shipperDid: b.shipperDid } : {}) })),
+          .map((b) => ({ departureId: d.departureId, bookingId: b.bookingId, lineName: d.lineName, description: b.description, weightKg: b.weightKg, ...(b.kind === 'sold' ? { shipperDid: b.shipperDid } : {}) })),
       );
   }
 
@@ -1282,11 +1283,37 @@ export class DepartureService {
     if (vehicleId === departure.vehicleId) throw new GlosError('INVALID_INPUT', `${departure.plate} is already the truck on this run`);
     const vehicle = this.vehicles.get(String(vehicleId ?? ''));
     if (vehicle.managerDid !== managerDid) throw new GlosError('FORBIDDEN', `${vehicle.plate} is not one of your vehicles`);
+    this.assertTruckTakes(departure, vehicle, departure.driverDid ? { did: departure.driverDid, name: departure.driverName } : undefined);
+    this.putOnTruck(departure, vehicle);
+    return departure;
+  }
+
+  /**
+   * A RUN THAT HAS LEFT GOES ON IN ANOTHER TRUCK, after its own broke down on the road: the goods aboard were moved
+   * across, and the driver who took them over drives the rest of it. Asked first with `apply` false, so a handover that
+   * cannot move every load moves none. The checks are a swap's — what is booked fits, every kind of goods aboard can be
+   * carried, the driver is cleared to drive it — and its shippers hear of a different class of vehicle as a swap tells them.
+   */
+  continueOn(departureId: string, vehicleId: string, driver: { did: string; name: string }, apply: boolean): Departure {
+    const departure = this.require(departureId);
+    if (departure.status !== 'departed') throw new GlosError('INVALID_STATE', `That run is ${departure.status}: only a run that has left goes on in another truck this way`);
+    const vehicle = this.vehicles.get(vehicleId);
+    if (vehicle.managerDid !== departure.managerDid) throw new GlosError('FORBIDDEN', `${vehicle.plate} is not one of ${departure.company}'s vehicles`);
+    if (vehicle.vehicleId === departure.vehicleId) throw new GlosError('INVALID_INPUT', `${departure.plate} is already the truck on this run`);
+    this.assertTruckTakes(departure, vehicle, driver);
+    if (!apply) return departure;
+    departure.driverDid = driver.did;
+    departure.driverName = driver.name;
+    this.putOnTruck(departure, vehicle);
+    return departure;
+  }
+
+  /** Whether this truck can carry this run as it is booked, driven by this driver — refused by name if not. */
+  private assertTruckTakes(departure: Departure, vehicle: Vehicle, driver: { did: string; name?: string } | undefined): void {
     if (!this.vehicles.isUsable(vehicle.vehicleId)) {
       const why = this.vehicles.offRoadReasons(vehicle.vehicleId);
       throw new GlosError('CANNOT_COUPLE', why.length ? `${vehicle.plate} is off the road: ${why.join('; ')}` : `${vehicle.plate} is ${vehicle.status} — it cannot take a run`);
     }
-
     const aboard = departure.bookings.filter((b) => b.status === 'booked');
     const kg = Math.round(aboard.reduce((n, b) => n + b.weightKg, 0) * 100) / 100;
     if (kg > vehicle.capacityKg) {
@@ -1300,10 +1327,13 @@ export class DepartureService {
         throw new GlosError('VEHICLE_MISSING_CAPABILITY', `${vehicle.plate} does not carry ${said} — ${b.description} on this run needs a vehicle that does`);
       }
     }
-    if (departure.driverDid && !this.drivers.clearedFor(departure.driverDid, vehicle.vehicleClass)) {
-      throw new GlosError('CANNOT_COUPLE', `${departure.driverName ?? 'The driver on this run'} is not cleared to drive a ${vehicle.vehicleClass} — put another driver on the run first`);
+    if (driver && !this.drivers.clearedFor(driver.did, vehicle.vehicleClass)) {
+      throw new GlosError('CANNOT_COUPLE', `${driver.name ?? 'The driver on this run'} is not cleared to drive a ${vehicle.vehicleClass} — put another driver on the run first`);
     }
+  }
 
+  /** The run is on this truck now: what it offers is cut to what the truck holds, and its shippers hear of a new class. */
+  private putOnTruck(departure: Departure, vehicle: Vehicle): void {
     const before = { plate: departure.plate, vehicleClass: departure.vehicleClass };
     departure.vehicleId = vehicle.vehicleId;
     departure.plate = vehicle.plate;
@@ -1316,7 +1346,7 @@ export class DepartureService {
         GlosEvent.Pudo.DepartureVehicleChanged,
         {
           departureId: departure.departureId,
-          managerDid,
+          managerDid: departure.managerDid,
           company: departure.company,
           lineName: departure.lineName,
           fromPlate: before.plate,
@@ -1328,7 +1358,6 @@ export class DepartureService {
         { source: 'pudo' },
       )
       .catch(() => undefined);
-    return departure;
   }
 
   /** Other runs on the same route a shipper could book right now — never this one, never a full or stopped carrier's. */

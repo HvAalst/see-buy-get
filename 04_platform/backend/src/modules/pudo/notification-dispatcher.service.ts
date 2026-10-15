@@ -1,7 +1,7 @@
 import type { OrderHandedOn } from './fleet-overflow.types';
 import type { DriverRostered } from './fleet-roster.service';
 import { ITEM_WORDS, type VehicleDefectDecided, type VehicleDefectReported, type VehicleServiceDue } from './vehicle-care.service';
-import { CAUSE_WORDS, type VehicleBreakdownResolved, type VehicleBrokeDown } from './vehicle-breakdown.service';
+import { CAUSE_WORDS, type VehicleBreakdownResolved, type VehicleBrokeDown, type VehicleLoadsHandedOver } from './vehicle-breakdown.service';
 import type { DeliveryTiming, PlanLeftWhy } from './dispatch.types';
 import { UNCOLLECTED_H } from './pudo.config';
 import { runningLate } from './parcel.service';
@@ -415,6 +415,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<VehicleServiceDue>(GlosEvent.Pudo.VehicleServiceDue, (e) => this.onServiceDue(e.payload));
     this.events.subscribe<VehicleBrokeDown>(GlosEvent.Pudo.VehicleBrokeDown, (e) => this.onVehicleBrokeDown(e.payload));
     this.events.subscribe<VehicleBreakdownResolved>(GlosEvent.Pudo.VehicleBreakdownResolved, (e) => this.onBreakdownResolved(e.payload));
+    this.events.subscribe<VehicleLoadsHandedOver>(GlosEvent.Pudo.VehicleLoadsHandedOver, (e) => this.onLoadsHandedOver(e.payload));
     // FP4 (courier) — the renewed licence they sent was checked. They sent it and are waiting: either answer.
     this.events.subscribe<{ did: string; accepted: boolean; expiresAt?: string; reason?: string }>(GlosEvent.Pudo.DriverLicenceChecked, (e) => this.onLicenceChecked(e.payload));
     this.events.subscribe<LicenceSent>(GlosEvent.Pudo.DriverLicenceSent, (e) => this.onLicenceSent(e.payload));
@@ -1421,6 +1422,49 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
             : `${p.carrier} will send another vehicle to collect your goods.`,
         tag: `breakdown:${b.breakdownId}:${s.freightId ?? s.departureId ?? s.label}:end`,
         data: { breakdownId: b.breakdownId, ...(s.freightId ? { freightId: s.freightId } : {}), ...(s.departureId ? { departureId: s.departureId } : {}) },
+      });
+    }
+  }
+
+  /**
+   * A BREAKDOWN'S LOADS TAKEN OVER. The office hears when the drivers did it between them; the driver taking them hears
+   * when the office did it, and so does the driver they were with. The shippers of what moved hear their goods are
+   * moving again — never by the plate.
+   */
+  private async onLoadsHandedOver(p: VehicleLoadsHandedOver): Promise<void> {
+    const h = p.handover;
+    const what = h.loads.join(', ');
+    if (h.proof === 'pass') {
+      await this.tell(p.fleetDid, {
+        kind: 'vehicle_breakdown',
+        title: `${p.fromPlate}'s loads are on ${h.toPlate} now`,
+        body: `${h.toDriverName} took them over from ${p.fromDriverName ?? 'the driver'}, with their code: ${what}.`,
+        tag: `breakdown:${p.breakdownId}:handover`,
+        data: { breakdownId: p.breakdownId, vehicleId: h.toVehicleId },
+      });
+    } else {
+      await this.tell(h.toDriverDid, {
+        kind: 'vehicle_breakdown',
+        title: `The loads of ${p.fromPlate} are yours now`,
+        body: `${h.by} put them on ${h.toPlate}: ${what}.${h.location ? ` ${p.fromPlate} broke down at ${h.location.lat.toFixed(5)}, ${h.location.lng.toFixed(5)}.` : ''}`,
+        tag: `breakdown:${p.breakdownId}:handover`,
+        data: { breakdownId: p.breakdownId, ...(h.location ? { lat: h.location.lat, lng: h.location.lng } : {}) },
+      });
+      await this.tell(p.fromDriverDid, {
+        kind: 'vehicle_breakdown',
+        title: `Your loads went to ${h.toDriverName}`,
+        body: `${h.by} moved them from ${p.fromPlate} to ${h.toPlate}: ${what}. Hand them over when ${h.toDriverName} arrives.`,
+        tag: `breakdown:${p.breakdownId}:handover`,
+        data: { breakdownId: p.breakdownId },
+      });
+    }
+    for (const s of p.tell) {
+      await this.tell(s.shipperDid, {
+        kind: 'load_assigned',
+        title: s.kind === 'booking' ? `${s.lineName}: your goods are moving again` : `Load ${s.label} is moving again`,
+        body: `${p.carrier} moved your goods to another of its vehicles after the breakdown${s.state === 'to_collect' ? ': that one will collect them' : ''}.`,
+        tag: `breakdown:${p.breakdownId}:${s.freightId ?? s.departureId ?? s.label}:moved`,
+        data: { breakdownId: p.breakdownId, ...(s.freightId ? { freightId: s.freightId } : {}), ...(s.departureId ? { departureId: s.departureId } : {}) },
       });
     }
   }

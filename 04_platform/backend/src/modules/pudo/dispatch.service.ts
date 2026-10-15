@@ -1641,7 +1641,8 @@ export class DispatchService {
         canClaim: f.status === 'delivered' && !f.claim && (f.deliveredAt ? Date.now() - new Date(f.deliveredAt).getTime() <= FREIGHT_CLAIM_WINDOW_DAYS * 86_400_000 : true),
         // FP6 — the link to hand on, who is carrying it, and the verdict.
         ...(f.trackingKey ? { trackingKey: f.trackingKey, trackingUrl: trackingUrlOf(f.trackingKey) } : {}),
-        ...(f.carriage ? { carrier: { driverName: this.driverNameOf(f.carriage.driverDid), plate: f.carriage.plate, vehicleClass: f.carriage.vehicleClass } } : {}),
+        // Moved to another of the carrier's vehicles after a breakdown: the driver and the vehicle carrying it now.
+        ...(f.carriage ? { carrier: { driverName: this.driverNameOf(f.movedTo && f.claimedBy ? f.claimedBy : f.carriage.driverDid), plate: (f.movedTo ?? f.carriage).plate, vehicleClass: (f.movedTo ?? f.carriage).vehicleClass } } : {}),
         ...(f.rating ? { rating: { stars: f.rating.stars, issues: f.rating.issues, at: f.rating.at } } : {}),
         canRate: f.status === 'delivered' && Boolean(f.claimedBy) && (f.deliveredAt ? Date.now() - new Date(f.deliveredAt).getTime() <= FREIGHT_RATING_WINDOW_DAYS * 86_400_000 : true),
         ...(f.incoterm ? { incoterm: f.incoterm, claimant: riskBearerOf(f.incoterm) } : {}),
@@ -1729,7 +1730,7 @@ export class DispatchService {
       const window = instructionsViewOf(f)?.deliveryWindow;
       // The vehicle is frozen onto the load when the goods are taken over. Until then the truck that will collect it
       // is whichever one its driver is out in now — read live, because before pickup that is still the office's to change.
-      const plate = f.carriage?.plate ?? (f.claimedBy && f.status === 'claimed' ? this.fleet.vehicleForDriver(f.claimedBy)?.plate : undefined);
+      const plate = (f.movedTo ?? f.carriage)?.plate ?? (f.claimedBy && f.status === 'claimed' ? this.fleet.vehicleForDriver(f.claimedBy)?.plate : undefined);
       rows.push({
         freightId: f.freightId,
         code: f.code,
@@ -2054,13 +2055,45 @@ export class DispatchService {
    * A BREAKDOWN'S QUESTION: the loads a driver has taken on and not delivered — in this vehicle now, or still to be
    * collected by it — and the shipper to tell about each, where that is somebody here and not the carrier's own office.
    */
-  loadsOnVehicle(driverDid: string, vehicleId: string): Array<{ freightId: string; code: string; state: 'aboard' | 'to_collect'; shipperDid?: string }> {
+  loadsOnVehicle(driverDid: string, vehicleId: string): Array<{ freightId: string; code: string; state: 'aboard' | 'to_collect'; weightKg: number; shipperDid?: string }> {
+    const inIt = (f: Freight) => (f.movedTo ?? f.carriage)?.vehicleId;
     return [...this.freights.values()]
-      .filter((f) => f.claimedBy === driverDid && (f.status === 'claimed' || (f.status === 'in_transit' && (!f.carriage || f.carriage.vehicleId === vehicleId))))
+      .filter((f) => f.claimedBy === driverDid && (f.status === 'claimed' || (f.status === 'in_transit' && (!inIt(f) || inIt(f) === vehicleId))))
       .map((f) => {
         const shipperDid = this.shipperToTell(f);
-        return { freightId: f.freightId, code: f.code, state: f.status === 'in_transit' ? ('aboard' as const) : ('to_collect' as const), ...(shipperDid ? { shipperDid } : {}) };
+        return { freightId: f.freightId, code: f.code, state: f.status === 'in_transit' ? ('aboard' as const) : ('to_collect' as const), weightKg: f.weightKg, ...(shipperDid ? { shipperDid } : {}) };
       });
+  }
+
+  /**
+   * Could this driver's vehicle take these loads over — room for them all (and `alsoKg` more), and whatever each of
+   * them needs? Asked before anything moves, so a handover that cannot take every load takes none.
+   */
+  assertCanTakeLoads(freightIds: string[], driverDid: string, alsoKg = 0): void {
+    const vehicle = this.fleet.vehicleForDriver(driverDid);
+    if (!vehicle) throw new GlosError('NOT_COUPLED', 'That driver is not on a shift — loads go onto a vehicle somebody is out in');
+    const loads = freightIds.map((id) => this.requireFreight(id));
+    const kg = Math.round((loads.reduce((n, f) => n + f.weightKg, 0) + alsoKg) * 100) / 100;
+    const room = this.remainingCapacity(driverDid);
+    if (kg > room) throw new GlosError('CAPACITY_EXCEEDED', `${vehicle.plate} has room for ${room.toLocaleString('en-GB')} kg — the loads weigh ${kg.toLocaleString('en-GB')} kg`);
+    const cannot = loads.find((f) => !this.vehicleCanCarryFreight(vehicle, f.freightId));
+    if (cannot) throw new GlosError('VEHICLE_MISSING_CAPABILITY', `${vehicle.plate} cannot carry ${cannot.code}: it lacks what that load needs`);
+  }
+
+  /**
+   * THE LOADS GO TO ANOTHER DRIVER of the same carrier, after a breakdown: theirs to deliver, or to collect, from now.
+   * Goods already taken over are in the new driver's vehicle now (`movedTo`); the vehicle they were taken over in stays
+   * as the consignment note has it. Checked first with assertCanTakeLoads.
+   */
+  moveLoads(freightIds: string[], toDriverDid: string, now: number = Date.now()): void {
+    const vehicle = this.fleet.vehicleForDriver(toDriverDid);
+    if (!vehicle) throw new GlosError('NOT_COUPLED', 'That driver is not on a shift — loads go onto a vehicle somebody is out in');
+    for (const id of freightIds) {
+      const f = this.requireFreight(id);
+      f.claimedBy = toDriverDid;
+      if (f.status === 'in_transit') f.movedTo = { vehicleId: vehicle.vehicleId, plate: vehicle.plate, vehicleClass: vehicle.vehicleClass, at: new Date(now).toISOString() };
+      this.freights.set(f.freightId, f);
+    }
   }
 
   /** P3b — the plan tried to put this order on its truck and was refused: kept on the order, in the refusal's own words. */
