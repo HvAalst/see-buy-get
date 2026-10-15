@@ -13,7 +13,8 @@
 #               After that this script only ever FILLS IN what is empty — a secret the release needs, the registry —
 #               and never changes a value that is there. It is sent nowhere. KEEP A COPY: see DEPLOY.md.
 #   RELEASE     which release is running, and which ran before it.
-#   backups/    the data as it stood just before each release that restarted the API.
+#   backups/    the data as it stood just before each release that restarted the API: the records (db-*.sql.gz, a
+#               dump of Postgres) and the files (data-*.tgz).
 #
 # Told by the workflow, each time:
 #   IMAGE_REPO                          where the images are, e.g. ghcr.io/owner/repo
@@ -65,12 +66,20 @@ fill() {
   mv .env.tmp .env
 }
 
-# The data, as one file, taken while nothing is writing it.
+# The data, taken while nothing is writing it: the records, from Postgres, and the files, from the volume.
 snapshot() { # label
+  local stamp
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)-before-$1"
+  mkdir -p backups
+  # The records. A dump Postgres can take while it runs; --clean so that putting it back replaces what is there.
+  if [[ -n "$(docker compose ps --status running --quiet db 2>/dev/null)" ]]; then
+    docker compose exec -T db pg_dump -U glos -d glos --clean --if-exists | gzip > "backups/db-$stamp.sql.gz"
+    echo "the records as they stood: backups/db-$stamp.sql.gz"
+    ls -1t backups/db-*.sql.gz | tail -n +$((KEEP_BACKUPS + 1)) | xargs -r rm -f --
+  fi
   docker volume inspect "$DATA_VOLUME" >/dev/null 2>&1 || return 0 # a first release: there is nothing yet
   local name
-  name="data-$(date -u +%Y%m%dT%H%M%SZ)-before-$1.tgz"
-  mkdir -p backups
+  name="data-$stamp.tgz"
   docker run --rm --user 0 --entrypoint tar \
     -v "$DATA_VOLUME:/data:ro" -v "$PWD/backups:/backups" \
     "$API:current" -czf "/backups/$name" -C /data .
@@ -210,7 +219,8 @@ fill CONSOLE_ALLOW_IPS "$allow"
 fill CADDY_EDGE "$edge"
 made=()
 # GLOS_CLIENT_SECRET is the console's setup key: without it, outside a sandbox, the first staff account cannot be made.
-for name in $wanted GLOS_CLIENT_SECRET; do
+# POSTGRES_PASSWORD is the database's: hex, so it can stand in a connection address as it is.
+for name in $wanted GLOS_CLIENT_SECRET POSTGRES_PASSWORD; do
   if [[ -z "$(setting "$name")" ]]; then
     fill "$name" "$(openssl rand -hex 32)"
     made+=("$name")

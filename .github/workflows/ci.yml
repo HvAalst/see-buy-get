@@ -38,6 +38,21 @@ jobs:
     defaults:
       run:
         working-directory: 04_platform/backend
+    # A real Postgres for the store's own tests (src/**/*.postgres.spec.ts); everything else runs without one.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: glos
+          POSTGRES_PASSWORD: glos-test
+          POSTGRES_DB: glos
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U glos -d glos"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v7
       # The Node the images run (04_platform/*/Dockerfile).
@@ -64,6 +79,8 @@ jobs:
 
       - name: Unit tests
         run: npm test
+        env:
+          GLOS_TEST_DATABASE_URL: postgres://glos:glos-test@localhost:5432/glos
       - name: End-to-end tests
         run: npm run test:e2e
 

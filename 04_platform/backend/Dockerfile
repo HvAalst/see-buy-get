@@ -3,9 +3,9 @@
 #   docker build -t sbg-api 04_platform/backend
 #
 # Production by default (GLOS_ENV=production): the server will not start until every secret in
-# ../.env.cloud.example is set. docker-compose.local.yml runs it as a sandbox instead. Durable state lives in
-# /data — mount a volume there, or a redeploy loses sign-ins and prepaid balances
-# (see src/foundation/store/persistent-map.ts).
+# ../.env.cloud.example is set. docker-compose.local.yml runs it as a sandbox instead. Its records are kept in
+# Postgres when DATABASE_URL is set (the compose stack sets it), and in JSON files under /data when it is not; uploaded
+# media are files under /data either way. Mount a volume there (see src/foundation/store/persistent-map.ts).
 
 FROM node:22-alpine AS builder
 WORKDIR /app

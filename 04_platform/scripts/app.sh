@@ -196,7 +196,7 @@ case "$mode:$cmd" in
   dev:logs)       dev_logs "$@" ;;
   dev:seed)       api_up || die "the backend is not up — scripts/app.sh start dev"; npm --prefix "$ROOT/backend" run seed:demo ;;
   docker:start)   docker_start ;;
-  docker:stop)    docker_check; compose down ;;   # never -v: the api-data volume is the business
+  docker:stop)    docker_check; compose down ;;   # never -v: the db-data and api-data volumes are the business
   docker:restart) docker_check; compose restart; wait_for 120 api_healthy || true; compose ps ;;
   docker:status)  docker_check; compose ps; docker_urls ;;
   docker:logs)    docker_check; compose logs --tail 50 "$@" ;;

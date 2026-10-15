@@ -7,7 +7,8 @@
 # This file is what both share. `.env` names the one other file that makes it local or cloud (COMPOSE_FILE):
 # docker-compose.local.yml or docker-compose.cloud.yml.
 #
-# Two containers: `web` (Caddy: the static apps, and /v1 proxied on to the API) and `api` (NestJS).
+# Three containers: `web` (Caddy: the static apps, and /v1 proxied on to the API), `api` (NestJS), and `db` (Postgres,
+# where the API keeps its records — src/foundation/store/persistent-map.ts).
 
 name: seebuyget
 
@@ -20,15 +21,40 @@ services:
     env_file: .env
     environment:
       GLOS_DATA_DIR: /data
+      # Where the records are kept. The password is the stack's own (.env); the database is reachable only inside it.
+      DATABASE_URL: postgres://glos:${POSTGRES_PASSWORD:-seebuyget-local}@db:5432/glos
       # One hop: Caddy. Without it every caller looks like Caddy and the sign-in limits count everybody together.
       GLOS_TRUST_PROXY: "1"
       SBG_PUBLIC_URL: ${SBG_PUBLIC_URL:?set SBG_PUBLIC_URL in .env}
       SBG_CONSOLE_URL: ${SBG_CONSOLE_URL:?set SBG_CONSOLE_URL in .env}
     volumes:
-      # Sign-ins, wallets, prepaid balances, the identity vault and uploaded media. Lose this, lose them.
+      # Uploaded media and documents, as files. (The records are in `db`; a store that ran on files before Postgres
+      # left them here, renamed *.moved-to-postgres once they were copied in.)
       - api-data:/data
-    # Told to stop, it answers what is in hand and writes what is in memory to disk (src/main.ts). Give it the time.
+    depends_on:
+      db:
+        condition: service_healthy
+    # Told to stop, it answers what is in hand and writes what is in memory first (src/main.ts). Give it the time.
     stop_grace_period: 20s
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: glos
+      POSTGRES_DB: glos
+      # A laptop's default. A server's .env must set its own: docker-compose.cloud.yml refuses to start without one.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-seebuyget-local}
+    volumes:
+      # Every record the network keeps: sign-ins, wallets, prepaid balances, parcels, loads, the books. Lose this, lose them.
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U glos -d glos"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    # Postgres finishes what it is writing before it stops.
+    stop_grace_period: 30s
 
   web:
     build:
@@ -57,5 +83,6 @@ services:
 
 volumes:
   api-data:
+  db-data:
   caddy-data:
   caddy-config:

@@ -20,8 +20,9 @@ Stop SeeBuyGet with `04_platform/scripts/app.sh`, run from the repository root. 
 
 ## Never
 
-- Never run `docker compose down -v`, `docker volume rm` or anything else that removes a volume. `api-data` holds
-  the sign-ins, wallets and prepaid balances. `stop docker` keeps the volumes, and so must you.
+- Never run `docker compose down -v`, `docker volume rm` or anything else that removes a volume. `db-data` (Postgres)
+  holds the sign-ins, wallets, prepaid balances and every other record; `api-data` holds the uploaded files.
+  `stop docker` keeps the volumes, and so must you.
 - Never stop the stack when `04_platform/.env` is the cloud one (its `COMPOSE_FILE` names
   `docker-compose.cloud.yml`, so this machine is a live server) unless the user has said so in this request. If not,
   ask first: stopping a server takes the site down for everyone.

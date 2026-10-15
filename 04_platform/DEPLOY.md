@@ -33,14 +33,15 @@ That script also runs the plain-Node dev mode, and in Claude Code it backs `/sta
                  │   /business/   the apps (each falls back to its shell)   │
                  │   /v1/*  ─────────────────► api (NestJS) :3000           │
   SBG_CONSOLE ──►│   the operator console          │                        │
-  _URL           │                                 ▼                        │
-                 │                           volume api-data → /data        │
+  _URL           │                                 │                        │
+                 │            volume api-data ◄────┴────► db (Postgres)     │
+                 │            (uploaded files)            volume db-data    │
                  └──────────────────────────────────────────────────────────┘
 ```
 
 | File | What it is |
 |---|---|
-| [`docker-compose.yml`](docker-compose.yml) | What both share: the two services and the volumes |
+| [`docker-compose.yml`](docker-compose.yml) | What both share: the three services (web, api, db) and the volumes |
 | [`docker-compose.local.yml`](docker-compose.local.yml) / [`docker-compose.cloud.yml`](docker-compose.cloud.yml) | Ports and API mode for each place; the cloud adds log rotation |
 | [`backend/Dockerfile`](backend/Dockerfile) | The API: production unless told otherwise, runs as `node`, health-checked on `/v1/health` |
 | [`frontend/Dockerfile`](frontend/Dockerfile) | Builds every app for one address, then serves them with Caddy. Built from the repo root (it ships `help.html`) |
@@ -49,9 +50,17 @@ That script also runs the plain-Node dev mode, and in Claude Code it backs `/sta
 | [`scripts/deploy.sh`](scripts/deploy.sh) | Puts a release on the server, takes the last one back, says what is running |
 | [`../.github/workflows/`](../.github/workflows/) | `ci.yml` tests every pull request; `deploy.yml` tests, builds and releases every push to `main` |
 
-**What must not be lost:** the `api-data` volume. The API keeps sign-ins, wallets, prepaid balances, the identity
-vault and uploaded media there as files. It is a single instance by design: never run more than one `api`
-container. Told to stop, it answers what is in hand and writes what is in memory to disk first (`src/main.ts`).
+**What must not be lost:** two volumes. `db-data` is Postgres, and holds every record: sign-ins, wallets, prepaid
+balances, parcels, loads, the books. `api-data` holds uploaded media and documents as files. The API is a single
+instance by design: never run more than one `api` container. Told to stop, it answers what is in hand and writes
+what is in memory first (`src/main.ts`); a write is in Postgres before the request that made it is answered.
+
+**Postgres comes with the stack** (`db`, Postgres 16; its port is not published, so only the API reaches it). Its
+password is `POSTGRES_PASSWORD` in `.env`: on a laptop a default, on a server its own, made by `scripts/deploy.sh`
+on the first release like the other secrets. It must not change once there is data. **A store that ran on files
+moves in by itself:** the first time the API starts against an empty Postgres, each collection's file under
+`/data` is copied in, in order, and renamed `*.moved-to-postgres` (kept, never copied twice). A release from
+before Postgres cannot be rolled back to on a server that has moved: it would read the files, and they have moved.
 
 **The site's address is part of the web image.** The apps call the API at `SBG_PUBLIC_URL`/v1, and that address is
 baked in at build time. A web image built for the laptop does not work on the server, and the other way round:
@@ -178,10 +187,11 @@ docker compose up -d              # after changing .env: start again on the new 
 An older release: Actions → Deploy → Run workflow, with its full commit id. It is not built again.
 
 **Going back changes the code, not the data.** What the newer release wrote stays written. To put a copy of the
-data back (everything since is lost):
+data back (everything since is lost) — the records, then the files:
 
 ```bash
 cd /opt/seebuyget && docker compose stop api
+gunzip -c backups/db-<the file>.sql.gz | docker compose exec -T db psql -U glos -d glos -v ON_ERROR_STOP=1
 docker run --rm --user 0 --entrypoint sh -v seebuyget_api-data:/data -v "$PWD/backups:/backups:ro" \
   "$(sed -n 's/^REGISTRY=//p' .env)/api:current" -c 'rm -rf /data/* && tar -xzf /backups/<the file> -C /data && chown -R node:node /data'
 docker compose up -d
@@ -312,14 +322,17 @@ on the Droplet. On an Apple-silicon Mac, build with `DOCKER_DEFAULT_PLATFORM=lin
 
 ### Backups
 
-The volume is the business. Turn on Droplet backups (or volume snapshots), and keep a copy off the server too:
+The two volumes are the business. Turn on Droplet backups (or volume snapshots), and keep a copy off the server too —
+the records as a Postgres dump (it can be taken while everything runs), and the files:
 
 ```bash
+docker compose exec -T db pg_dump -U glos -d glos --clean --if-exists | gzip > db-$(date +%F).sql.gz
 docker run --rm -v seebuyget_api-data:/data -v "$PWD":/out alpine \
   tar czf /out/api-data-$(date +%F).tgz -C /data .
 ```
 
-Restore by stopping `api` and unpacking into the same volume. Released from GitHub, the server also keeps the data
+Restore by stopping `api`, feeding the dump to `psql` (`gunzip -c db-….sql.gz | docker compose exec -T db psql -U
+glos -d glos`), and unpacking the files into the same volume. Released from GitHub, the server also keeps the data
 as it stood before each of the last seven releases that restarted the API, in `/opt/seebuyget/backups/` — on the
 same disk, so they answer a release that went wrong, not a disk that did. None of these hold `.env`: keep that
 copy yourself (step 7).

@@ -12,6 +12,13 @@ services:
     environment:
       # The server will not start until every secret in .env is set to its own random value.
       GLOS_ENV: production
+      # The database's password must be the server's own: refused if .env has none (deploy.sh makes one).
+      DATABASE_URL: postgres://glos:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/glos
+    logging: *logging
+
+  db:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     logging: *logging
 
   web:
