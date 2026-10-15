@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SBG · Logistics flow assessment</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #17181c; --muted: #6b6f76; --line: #e3e3df;
+    --accent: #4c46e0; --ship: #1c7c54; --now: #b4690e; --gap: #a33a3a; --ask: #8a5cc0;
+    --shadow: 0 1px 2px rgba(20,20,25,.06), 0 8px 24px rgba(20,20,25,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121317; --panel: #1a1c21; --ink: #eceef2; --muted: #9aa0aa; --line: #2a2d34;
+      --accent: #8f8bff; --ship: #5cc08c; --now: #e0a44a; --gap: #e07a7a; --ask: #c9a6f0;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121317; --panel: #1a1c21; --ink: #eceef2; --muted: #9aa0aa; --line: #2a2d34;
+    --accent: #8f8bff; --ship: #5cc08c; --now: #e0a44a; --gap: #e07a7a; --ask: #c9a6f0;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 40px 24px 96px; }
+  @media (max-width: 600px) { .wrap { padding: 28px 16px 72px; } }
+  header { margin-bottom: 8px; }
+  h1 { font-size: 28px; letter-spacing: -.01em; margin: 0; text-wrap: balance; }
+  .sub { color: var(--muted); font-size: 15.5px; max-width: 72ch; margin: 10px 0 0; }
+  .stamp { color: var(--muted); font-size: 13px; margin-top: 8px; }
+  h2 { font-size: 21px; margin: 56px 0 6px; letter-spacing: -.005em; text-wrap: balance; }
+  h2 + .lead { margin-top: 0; }
+  h3 { font-size: 17px; margin: 0 0 6px; text-wrap: balance; }
+  .lead { color: var(--muted); max-width: 72ch; margin: 6px 0 22px; }
+  p { max-width: 74ch; }
+  nav.toc { margin: 26px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  nav.toc a {
+    font-size: 13.5px; color: var(--ink); text-decoration: none; padding: 6px 12px; border-radius: 999px;
+    background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow);
+  }
+  nav.toc a:hover { border-color: var(--accent); }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow);
+    padding: 18px 20px; min-width: 0;
+  }
+  .card p { margin: 6px 0 0; font-size: 15px; }
+  .card ul { margin: 8px 0 0; padding-left: 20px; font-size: 15px; }
+  .card li + li { margin-top: 4px; }
+  .tag {
+    display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600;
+    padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); margin-bottom: 10px;
+  }
+  .tag::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .t-strong { color: var(--ship); } .t-partial { color: var(--now); } .t-missing { color: var(--gap); } .t-ask { color: var(--ask); }
+
+  .area { display: grid; grid-template-columns: 1fr; gap: 14px; }
+  .area .card h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .area .card h3 .tag { margin: 0; }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 6px 22px; margin-top: 4px; }
+  .cols h4 { margin: 10px 0 0; font-size: 12.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+
+  .readings { counter-reset: r; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+  .decision { margin-top: 14px; }
+  .decision .q { font-size: 16.5px; font-weight: 600; margin: 0; }
+  .decision dl { margin: 10px 0 0; display: grid; grid-template-columns: 150px 1fr; gap: 8px 18px; font-size: 15px; }
+  .decision dt { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; padding-top: 2px; }
+  .decision dd { margin: 0; min-width: 0; }
+  .decision dd ul { margin: 0; padding-left: 18px; }
+  .decision .rec { border-left: 3px solid var(--accent); padding-left: 12px; }
+  @media (max-width: 640px) {
+    .decision dl { grid-template-columns: 1fr; gap: 2px; }
+    .decision dt { padding-top: 10px; }
+  }
+  .num { display: inline-block; min-width: 2.4em; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .group { margin-top: 34px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+
+  ol.order { padding-left: 22px; max-width: 74ch; }
+  ol.order li + li { margin-top: 8px; }
+  .note { font-size: 14px; color: var(--muted); }
+  code { font: 13.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: color-mix(in srgb, var(--line) 60%, transparent); padding: 1px 5px; border-radius: 5px; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Logistics flow coordination — where we stand</h1>
+  <p class="sub">How good SeeBuyGet is at organising deliveries, routes and inbound supply flows in real time across many places and shift patterns. What is built, what is thin, and what is missing. The longest part is about inbound supply: the decisions to make before anything is built.</p>
+  <p class="stamp">Assessed 2026-10-15 against the code on <code>main</code>. Read with <a href="progress.html">progress.html</a>, which tracks each item as it is built.</p>
+  <nav class="toc" aria-label="On this page">
+    <a href="#verdict">The short answer</a>
+    <a href="#areas">Area by area</a>
+    <a href="#inbound">Inbound supply: the decisions</a>
+    <a href="#order">The order to decide in</a>
+    <a href="#built">Built from this assessment</a>
+  </nav>
+</header>
+
+<!-- ───────────────────────────────────────────────────────────── the verdict -->
+<h2 id="verdict">The short answer</h2>
+<p class="lead">We are strong at planning a fleet's day and at tracking who holds a parcel at every handover. Real-time handling is partial. Inbound supply flows, in the warehouse sense, are close to missing. What is missing there is decisions, not code.</p>
+<div class="grid">
+  <div class="card"><span class="tag t-strong">Strong</span><h3>Planning a fleet's day</h3><p>Orders from contract shippers or a spreadsheet are planned onto trucks by weight, driver hours, delivery windows and trips chained together. What does not fit goes to partner fleets, then the open board. Shippers are told when an order is left out or running late.</p></div>
+  <div class="card"><span class="tag t-strong">Strong</span><h3>Many places, one custody record</h3><p>Shops, hubs, store docks and yards record every handover, so the network always knows who holds a parcel. Alarms fire for parcels never dropped off or never collected.</p></div>
+  <div class="card"><span class="tag t-strong">Strong</span><h3>A driver's shift</h3><p>Start and end of shift with a chosen vehicle, the 13-hour limit and 9-hour rest said in advance, a snooze for new offers, and each fleet on its own clock.</p></div>
+  <div class="card"><span class="tag t-partial">Partial</span><h3>Real time</h3><p>Positions from phones on shift, a map that updates every 45 seconds, push from a live server. Nothing re-plans during the day. A parcel's lateness was only measured after it arrived (now told as it happens, see the last section).</p></div>
+  <div class="card"><span class="tag t-partial">Partial</span><h3>Routes</h3><p>The order of stops is optimised. Distances are straight lines times 1.35 at one speed, except in a fleet's day plan, which can use real roads if the operator runs a routing server. No traffic.</p></div>
+  <div class="card"><span class="tag t-partial">Partial</span><h3>Shift patterns</h3><p>Driver shifts are handled. The day plan counted every active driver, not who works that day (now a roster, see the last section). Shops have opening hours; hubs have none, and no place has staff shifts.</p></div>
+  <div class="card"><span class="tag t-missing">Missing</span><h3>Inbound supply</h3><p>No expected-arrival notices, no receiving appointments, no counting goods in against what was expected, no storage. A store's dock is outbound only, by design.</p></div>
+  <div class="card"><span class="tag t-missing">Missing</span><h3>Coordination across the network</h3><p>Planning happens per fleet, per day. Nobody plans the parcel network as a whole: bags move when a driver chooses to claim them, and there is no timetable between hubs.</p></div>
+</div>
+
+<!-- ─────────────────────────────────────────────────────────── area by area -->
+<h2 id="areas">Area by area</h2>
+<p class="lead">Each area with what exists, what is thin, and what would move it.</p>
+<div class="area">
+
+  <div class="card">
+    <h3>Deliveries <span class="tag t-strong">Strong</span></h3>
+    <div class="cols">
+      <div><h4>What exists</h4><ul>
+        <li>Contract orders from the Business app, or a CSV or Excel sheet the fleet office uploads, with every refused line said in words.</li>
+        <li>A day plan worked out by ordinary math: weight, equipment, driver hours, delivery windows (planned late rather than refused), trips chained from the last door, orders split when heavier than any truck, how many trucks to hire.</li>
+        <li>Overflow to partner fleets first, then the open board. Trips go out one at a time as trucks become free.</li>
+        <li>Shippers told when an order is left out, planned outside its window, running late, or delivered.</li>
+      </ul></div>
+      <div><h4>What is thin</h4><ul>
+        <li>One plan per fleet per day, started at 07:00 unless the office says otherwise.</li>
+        <li>The AI adviser over the plan has never answered for real: it needs an API key on the server.</li>
+        <li>Parcels are not planned at all: a bag goes when a driver claims it.</li>
+      </ul></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Routes <span class="tag t-partial">Partial</span></h3>
+    <div class="cols">
+      <div><h4>What exists</h4><ul>
+        <li>The order of stops on each trip is optimised, and trips are chained.</li>
+        <li>A fleet's day plan can use real road distances from a routing server the operator runs (open protocol, no Google).</li>
+        <li>Drivers report road hazards (low bridges, weight limits, closures). The fleet map shows them.</li>
+        <li>Turn-by-turn is the driver's own maps app, opened from ours.</li>
+      </ul></div>
+      <div><h4>What is thin</h4><ul>
+        <li>Everywhere else, distance is a straight line times 1.35, at one speed.</li>
+        <li>No routing server is set up for production.</li>
+        <li>No traffic, by decision: it needs a paid provider.</li>
+        <li>Parcel arrival times are optimistic by decision ("ETA realism" is parked).</li>
+      </ul></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Real time <span class="tag t-partial">Partial</span></h3>
+    <div class="cols">
+      <div><h4>What exists</h4><ul>
+        <li>Positions come from drivers' phones during a shift. The fleet map updates every 45 seconds while it is open.</li>
+        <li>Push from a live server, an inbox in every app, email by link.</li>
+        <li>Drivers nudged about loads near their road as they drive.</li>
+        <li>Freight running late is told to the shipper on the carrier's own clock.</li>
+      </ul></div>
+      <div><h4>What is thin</h4><ul>
+        <li>Nothing re-plans during the day: a late truck does not reshuffle the rest of its day.</li>
+        <li>A tracking page keeps the planned hour even when the truck is late.</li>
+        <li>The app asks the server again on a timer. There is no live connection.</li>
+      </ul></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Many places <span class="tag t-strong">Strong</span> <span class="tag t-missing">Missing above one fleet</span></h3>
+    <div class="cols">
+      <div><h4>What exists</h4><ul>
+        <li>Shops, hubs, store docks, yards and container depots, each recording every handover in one custody chain.</li>
+        <li>A shop's opening hours decide when a parcel will be ready to collect.</li>
+        <li>Carriers advertise space on runs that leave anyway (departures).</li>
+      </ul></div>
+      <div><h4>What is missing</h4><ul>
+        <li>No view or plan across fleets and hubs together. The old control tower was built for an overseas forwarder and is parked.</li>
+        <li>No timetable between hubs. Hubs have no opening hours and no receiving capacity.</li>
+      </ul></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Shift patterns <span class="tag t-partial">Partial</span></h3>
+    <div class="cols">
+      <div><h4>What exists</h4><ul>
+        <li>A driver's shift: vehicle, hours on duty, the limit and the rest, told before they bite.</li>
+        <li>Each fleet's own time zone. A plan's start hour and day length set by the office.</li>
+        <li>Shops' weekly opening hours.</li>
+      </ul></div>
+      <div><h4>What is missing</h4><ul>
+        <li>Different start times within one fleet (an early and a late shift), and two drivers sharing one truck in a day. The plan has one start and one length for every truck.</li>
+        <li>Staff shifts at shops and hubs. Hub opening hours.</li>
+      </ul></div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────────────────────────────────────────────────── inbound decisions -->
+<h2 id="inbound">Inbound supply flows: the decisions before the build</h2>
+<p class="lead">"Inbound supply" means goods coming INTO a place from a supplier: what is expected, when it arrives, what is counted, what happens with what is missing or broken, and who holds it afterwards. None of that exists yet. Most of it touches rules already set (who owns goods, who pays, who is told, who may see what), so it has to be decided before it is built. Each decision below gives the question, why it matters here, the options and my recommendation. Nothing in this section is decided.</p>
+
+<h3 style="margin-top:28px">First: what "inbound" would mean for us</h3>
+<p class="note" style="margin-top:0">Four different businesses hide under one word. Each reading is a different product.</p>
+<div class="readings">
+  <div class="card"><span class="tag t-ask">Reading A</span><h3>A business receiving at its own sites</h3><p>A builder's yard expects bricks and cement from its suppliers. The goods already travel on our consignment notes; the receiver has no screen for what is coming. <b>Smallest step:</b> no new custody, money or liability.</p></div>
+  <div class="card"><span class="tag t-ask">Reading B</span><h3>A hub as a cross-dock</h3><p>A supplier sends a pallet of 200 web orders to an SBG hub; the hub breaks it down into parcels for many receivers. <b>The natural next step for the parcel network:</b> bulk in, parcels out.</p></div>
+  <div class="card"><span class="tag t-ask">Reading C</span><h3>Stock kept for a store</h3><p>A store keeps its stock at a hub, and orders are picked from it. <b>This is warehousing:</b> storage, stock records, picking, liability for goods at rest. A different company's product unless decided otherwise.</p></div>
+  <div class="card"><span class="tag t-ask">Reading D</span><h3>Gathering from the field</h3><p>Farmers deposit at a co-op until a truckload is reached. <b>Already built thinly</b> as consolidation lots; the co-op settles with its farmers off the platform.</p></div>
+</div>
+
+<p class="group">Scope — what we are</p>
+
+<div class="card decision">
+  <p class="q"><span class="num">D1</span>Which reading do we build, and in what order?</p>
+  <dl>
+    <dt>Why it matters</dt><dd>Each reading brings different custody, money and liability. Building "inbound" without choosing builds the largest one by accident.</dd>
+    <dt>Options</dt><dd><ul><li>A only — the receiver's view of what is already on our notes.</li><li>A, then B — the receiver's view, then hubs that break bulk into parcels.</li><li>A, B and C — become a warehouse operator as well.</li></ul></dd>
+    <dt>Recommendation</dt><dd class="rec">A, then B. Decide C on its own, later, as a business question (D3), not as a feature.</dd>
+  </dl>
+</div>
+
+<div class="card decision">
+  <p class="q"><span class="num">D2</span>Do we hold the commercial order (purchase orders, lines, prices)?</p>
+  <dl>
+    <dt>Why it matters</dt><dd>Our rule is quotations, never payments: we never handle businesses' payments, and a price between outside parties is theirs. A purchase order with prices on our record pulls us into their dispute when goods are short.</dd>
+    <dt>Options</dt><dd><ul><li>Hold the full purchase order.</li><li>Hold the logistics half: a reference both sides understand, the expected handling units and weights, the expected day. No prices.</li><li>Hold a reference only.</li></ul></dd>
+    <dt>Recommendation</dt><dd class="rec">The logistics half. A reference, never a price.</dd>
+  </dl>
+</div>
+
+<div class="card decision">
+  <p class="q"><span class="num">D3</span>Do we store goods, or only pass them through?</p>
+  <dl>
+    <dt>Why it matters</dt><dd>Today custody always has an end in view: a shop holds a parcel for collection with a free window and then a daily holding fee; a hub holds a bag for hours and is flagged when it holds it longer. Storage is custody with no end date, and brings liability for goods at rest (damage is reported, not judged, and a company pays only where it has stated cover), a fee per unit per day, stock records, and papers such as a warehouse licence that each company keeps itself.</dd>
+    <dt>Options</dt><dd><ul><li>Pass-through only: custody time-limited and flagged when exceeded.</li><li>Storage as a service a hub declares (its space, its price per unit per day, its terms), the way a shop declares its shelf and price.</li><li>We run the warehousing ourselves.</li></ul></dd>
+    <dt>Recommendation</dt><dd class="rec">Pass-through first. Storage only ever as something a hub declares and offers, never something the network runs.</dd>
+  </dl>
+</div>
+
+<p class="group">Records — what is written down</p>
+
+<div class="card decision">
+  <p class="q"><span class="num">D4</span>What is the record of an expected arrival?</p>
+  <dl>
+    <dt>Why it matters</dt><dd>The consignment note is the source of truth for anything we carry. A supplier who uses its own transport has no note with us. Two records stating the same facts drift apart.</dd>
+    <dt>Options</dt><dd><ul><li>Inbound is a view over loads whose destination is the receiver's site — nothing new is stored.</li><li>A new "expected arrival" record, the receiver's expectation, linked to zero or more loads (zero when the supplier delivers itself).</li><li>Both: build the view first, add the record when B needs it.</li></ul></dd>
+    <dt>Recommendation</dt><dd class="rec">Both, in that order. The expected arrival never copies what the note says; it points at it.</dd>
+  </dl>
+</div>
+
+<div class="card decision">
+  <p class="q"><span class="num">D5</span>What is counted when goods come in: handling units or item lines?</p>
+  <dl>
+    <dt>Why it matters</dt><dd>We know parcels, bags and loads (weight, packaging, pieces). We have no product data, and pallets and trolleys as things we track are an idea not yet built (the hub would declare its own carrier; capacity is derived, never typed).</dd>
+    <dt>Options</dt><dd><ul><li>Handling units: pallets, cartons, pieces, as on the note.</li><li>Item lines: product codes and quantities.</li><li>Both.</li></ul></dd>
+    <dt>Recommendation</dt><dd class="rec">Handling units. Counting items belongs to the receiver's own stock system, and needs product data we do not have and should not own.</dd>
+  </dl>
+</div>
+
+<div class="card decision">
+  <p class="q"><span class="num">D6</span>How do expected arrivals reach us?</p>
+  <dl>
+    <dt>Why it matters</dt><dd>Suppliers rarely hold our app. The fleet office already uploads orders as CSV or Excel with every refused line said in words, and store systems already sign their requests to us.</dd>
+    <dt>Options</dt><dd><ul><li>Typed by hand by the receiver.</li><li>The same sheet reader as fleet orders.</li><li>An API for systems.</li></ul></dd>
+    <dt>Recommendation</dt><dd class="rec">The sheet reader and the API first; typing by hand last. A supplier is invited, never texted.</dd>
+  </dl>
+</div>
+
+<div class="card decision">
+  <p class="q"><span class="num">D7</span>Who may see an expected arrival?</p>
+  <dl>
+    <dt>Why it matters</dt><dd>An identifier opens nothing; a tenant is not a role; staff do not read a store's records except on a report. A hub that sees a supplier's prices, or one supplier who sees another's deliveries, breaks all three.</dd>
+    <dt>Options</dt><dd><ul><li>Supplier and receiver each see their own; a hub sees what is addressed to it, without prices; staff on a report.</li><li>Wider sharing within a business group.</li></ul></dd>
+    <dt>Recommendation</dt><dd class="rec">The first. Decide groups only when a real group asks.</dd>
+  </dl>
+</div>
+
+<p class="group">The place — where goods come in</p>
+
+<div class="card decision">
+  <p class="q"><span class="num">D8</span>Who says how much a place can receive, and when?</p>
+  <dl>
+    <dt>Why it matters</dt><dd>Participants declare and the network reads: a shop declares its shelf and bag bays, a hub its zones and sort fee. A hub has no opening hours, no doors and no receiving capacity today. A country sets its own office hours; a place should set its own receiving hours.</dd>
+    <dt>Options</dt><dd><ul><li>No appointments: first come, first served.</li><li>Declared receiving hours and doors, which carriers and the day plan read (delivery windows already exist in the planner).</li><li>Bookable slots per door, with no-show rules.</li></ul></dd>
+    <dt>Recommendation</dt><dd class="rec">Declared hours and doors first. Bookable slots once a hub actually queues trucks. A no-show clock starts from the booking, never from a fixed date (a lesson paid for once already).</dd>
+  </dl>
+</div>
+
+<div class="card decision">
+  <p class="q"><span class="num">D9</span>What happens at the moment goods are received?</p>
+  <dl>
+    <dt>Why it matters</dt><dd>The delivery signature on the note is the handover. A damage claim report is frozen at handover, later findings are notes beside it, and the sender has a copy. Each signed note is frozen and hashed in the archive. A partial delivery must leave the rest still expected, and a finished one must stay finished.</dd>
+    <dt>Options</dt><dd><ul><li>Refuse the delivery when anything is wrong.</li><li>Accept with exceptions noted at the handover: short, over, damaged, wrong goods, with photos, on the same note.</li><li>Accept everything and file a claim later.</li></ul></dd>
+    <dt>Recommendation</dt><dd class="rec">Accept with exceptions noted at handover. A damage report follows the rule we already have. What is short stays expected until the receiver closes it.</dd>
+  </dl>
+</div>
+
+<div class="card decision">
+  <p class="q"><span class="num">D10</span>Whose clock decides "today" and "late" at a receiving place?</p>
+  <dl>
+    <dt>Why it matters</dt><dd>A fleet has its own time zone; a delivery window is read on the carrier's clock even where the door is in another zone. A receiving place in another country than its supplier has a third clock.</dd>
+    <dt>Recommendation</dt><dd class="rec">The receiving place's clock decides its own day and lateness. One clock per answer.</dd>
+  </dl>
+</div>
+
+<div class="card decision">
+  <p class="q"><span class="num">D11</span>What happens to pallets, crates and trolleys, and to refused goods?</p>
+  <dl>
+    <dt>Why it matters</dt><dd>A network bag is interchangeable and can stay wherever it was emptied. A bakery's trolley belongs to the bakery and must go home: a return leg with no revenue and a custody chain for something that is not a parcel. Returns of parcels are half built.</dd>
+    <dt>Recommendation</dt><dd class="rec">Decide load carriers before bookable receiving at hubs. Refused goods go back as a return with their own custody, never as a status on the original delivery.</dd>
+  </dl>
+</div>
+
+<p class="group">Money, borders and telling</p>
+
+<div class="card decision">
+  <p class="q"><span class="num">D12</span>Who pays for receiving, handling and (if ever) storage?</p>
+  <dl>
+    <dt>Why it matters</dt><dd>Fees follow custody events: whoever did the work is paid for it. Hubs declare their own sort fee. Our sister companies sell to the public; between businesses the price is a quotation between them.</dd>
+    <dt>Recommendation</dt><dd class="rec">Receiving at a hub is a fee the hub declares per handling unit, charged to whoever booked the inbound. Between two outside businesses it stays between them.</dd>
+  </dl>
+</div>
+
+<div class="card decision">
+  <p class="q"><span class="num">D13</span>What changes when goods come in from abroad?</p>
+  <dl>
+    <dt>Why it matters</dt><dd>The note already carries the Incoterm and the clearance state, and says who may claim. We never work out duty or classify goods for customs.</dd>
+    <dt>Recommendation</dt><dd class="rec">An expected arrival from abroad shows whether it has cleared, from the note. Nothing more is computed.</dd>
+  </dl>
+</div>
+
+<div class="card decision">
+  <p class="q"><span class="num">D14</span>Who is told what, and where?</p>
+  <dl>
+    <dt>Why it matters</dt><dd>Nobody is texted about goods; a business reads its bell in the app (no push for a business yet); store systems hear by webhook; documents go by link. A receiving site's staff may not be members of the business that ordered.</dd>
+    <dt>Recommendation</dt><dd class="rec">The receiver's business inbox and its systems' webhook. Decide whether a "site" can have its own people before site staff are built.</dd>
+  </dl>
+</div>
+
+<!-- ─────────────────────────────────────────────────────────── the order -->
+<h2 id="order">The order to decide in</h2>
+<p class="lead">Some answers change the questions after them.</p>
+<ol class="order">
+  <li><b>D1 and D3</b> — which reading, and whether we ever store. Everything else depends on these two.</li>
+  <li><b>D2 and D5</b> — what we write down about the goods: a reference and handling units, or more.</li>
+  <li><b>D4, D7 and D14</b> — the record, who sees it, and who is told. With these, reading A can be built: a business sees what is coming to its sites.</li>
+  <li><b>D8, D9 and D10</b> — the place: its hours and doors, the receiving moment, its clock. With these, reading B can start at one hub.</li>
+  <li><b>D11, D12 and D13</b> — empties and returns, money, borders. Needed before B runs at more than one hub.</li>
+</ol>
+<p class="note">What we would not do in any reading: handle payment between businesses, compute customs duty, classify goods for customs, or keep a supplier's prices.</p>
+
+<!-- ─────────────────────────────────────────────────────────── built -->
+<h2 id="built">Built from this assessment</h2>
+<p class="lead">The two smaller recommendations, built on 2026-10-15. Neither needed a decision above.</p>
+<div class="grid" id="built-cards">
+  <div class="card"><span class="tag t-partial">Being built</span><h3>Who drives on which day</h3><p>A fleet office says who drives on a day, and the day plan counts those drivers instead of every active one. Drivers see their own days.</p></div>
+  <div class="card"><span class="tag t-partial">Being built</span><h3>A parcel running late is told</h3><p>When a parcel the network holds passes the time it was promised to be ready, whoever follows it is told once, in the app. The tracking page says it too.</p></div>
+</div>
+
+</div>
+</body>
+</html>
