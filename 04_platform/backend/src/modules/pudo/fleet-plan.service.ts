@@ -157,8 +157,9 @@ export class FleetPlanService implements OnModuleInit {
       .sort((a, b) => b.capacityKg - a.capacityKg || a.plate.localeCompare(b.plate))
       .map((v) => {
         // Off the road for a reason of its own. Where the register gives none, it still does not go out — and says so.
-        const reasons = this.vehicles.isUsable(v.vehicleId, now) ? [] : this.vehicles.offRoadReasons(v.vehicleId, now);
-        const offRoad = this.vehicles.isUsable(v.vehicleId, now) ? [] : [...(v.status !== 'ACTIVE' ? [`Marked ${v.status.toLowerCase()}`] : []), ...reasons];
+        // Asked for the plan's own day: a truck in the workshop tomorrow is not planned for tomorrow.
+        const reasons = this.vehicles.isUsable(v.vehicleId, now, ask.day) ? [] : this.vehicles.offRoadReasons(v.vehicleId, now, ask.day);
+        const offRoad = this.vehicles.isUsable(v.vehicleId, now, ask.day) ? [] : [...(v.status !== 'ACTIVE' ? [`Marked ${v.status.toLowerCase()}`] : []), ...reasons];
         return { v, excluded: excluded.has(v.vehicleId), offRoad };
       });
     const going = fleet.filter((x) => !x.excluded && x.offRoad.length === 0);

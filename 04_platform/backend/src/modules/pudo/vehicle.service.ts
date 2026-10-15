@@ -11,6 +11,9 @@ import { FleetManagerService } from './fleet-manager.service';
 import { MediaService } from './media.service';
 import { DEFAULT_PRICE_PER_KM } from './pudo.config';
 
+/** A reason a vehicle is off the road, in words — for now, or for `day` (YYYY-MM-DD, on the owner's clock) when asked. */
+export type OffRoadSource = (vehicle: Vehicle, at: { now: number; day?: string }) => string[];
+
 interface RegisterVehicleInput {
   plate: string;
   vehicleClass: VehicleClass;
@@ -46,6 +49,7 @@ interface RegisterVehicleInput {
 export class VehicleService {
   // Durable: registered fleet vehicles (documents, verification, pricing, manager ownership).
   private readonly vehicles = new PersistentMap<string, Vehicle>('pudo-vehicles');
+  private readonly offRoadSources: OffRoadSource[] = [];
 
   constructor(
     private readonly managers: FleetManagerService,
@@ -158,7 +162,7 @@ export class VehicleService {
    */
   private scopedView(v: Vehicle, tenant: string | undefined, isOperator: boolean): Vehicle | Partial<Vehicle> {
     // FP4 — the owner sees the papers as they stand today, derived here and never written back.
-    if (isOperator || (tenant && v.managerDid === tenant)) return { ...v, papers: vehiclePapers(v), offRoad: this.offRoadReasons(v.vehicleId) };
+    if (isOperator || (tenant && v.managerDid === tenant)) return { ...v, papers: vehiclePapers(v), offRoad: this.offRoadReasons(v.vehicleId), upkeep: this.upkeepReasons(v) };
     const publicView: Partial<Vehicle> = { ...v };
     delete publicView.managerDid;
     delete publicView.documents;
@@ -190,17 +194,42 @@ export class VehicleService {
     return v;
   }
 
-  /** ACTIVE, and no paper has lapsed (FP4). Grounding by paper is derived: renew the paper and the vehicle is back. */
-  isUsable(vehicleId: string, now: number = Date.now()): boolean {
+  /**
+   * ACTIVE, and nothing keeps it off the road: no paper lapsed (FP4), and no reason any other part of the network has
+   * registered (in the workshop, a safety defect, a service overdue). Each is derived, so the vehicle is back the
+   * moment its reason ends. `day` asks about a day other than today, on the owner's clock — a plan for tomorrow.
+   */
+  isUsable(vehicleId: string, now: number = Date.now(), day?: string): boolean {
     const v = this.vehicles.get(vehicleId);
-    return v?.status === 'ACTIVE' && lapsedOf(vehiclePapers(v, now)).length === 0;
+    return v?.status === 'ACTIVE' && this.offRoadReasons(vehicleId, now, day).length === 0;
   }
 
-  /** FP4 — why this vehicle cannot start a shift, paper by paper, in words. Empty when it can. */
-  offRoadReasons(vehicleId: string, now: number = Date.now()): string[] {
+  /** Why this vehicle cannot start a shift, in words, one line per reason: its papers first. Empty when it can. */
+  offRoadReasons(vehicleId: string, now: number = Date.now(), day?: string): string[] {
     const v = this.vehicles.get(vehicleId);
     if (!v) return [];
-    return lapsedOf(vehiclePapers(v, now)).map(offRoadLine);
+    return [...lapsedOf(vehiclePapers(v, now)).map(offRoadLine), ...this.offRoadSources.flatMap((source) => source(v, { now, day }))];
+  }
+
+  /** What keeps it off the road besides its papers — in the workshop, a defect, a service overdue — for its owner's list. */
+  private upkeepReasons(v: Vehicle, now: number = Date.now()): string[] {
+    return this.offRoadSources.flatMap((source) => source(v, { now }));
+  }
+
+  /**
+   * Another reason a vehicle can be off the road, owned by the feature that knows it: the gate stays ONE place — every
+   * door that starts a shift, plans a day or books a run already asks isUsable — and the feature stays its own.
+   */
+  addOffRoadSource(source: OffRoadSource): void {
+    this.offRoadSources.push(source);
+  }
+
+  /** Back to ACTIVE, for a vehicle grounded before grounding had a way back. */
+  reinstate(vehicleId: string): Vehicle {
+    const v = this.require(vehicleId);
+    if (v.status === 'GROUNDED') v.status = 'ACTIVE';
+    this.vehicles.set(vehicleId, v);
+    return v;
   }
 
   /** Resolve a scanned dashboard sticker (the QR, or the plate / id typed as a fallback). */

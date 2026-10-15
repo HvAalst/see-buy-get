@@ -18,6 +18,7 @@ import { VehiclesScreen } from './screens/VehiclesScreen';
 import { DispatchScreen } from './screens/DispatchScreen';
 import { OrdersScreen } from './screens/OrdersScreen';
 import { useFleetApp, type FleetActions, type FleetState, type Screen } from './useFleetApp';
+import type { SbgClient } from '../../lib/sbg';
 import type { ArchiveApiState } from '../../shared/archive/useArchive';
 import '../../shared/screens.css';
 import './fleet.css';
@@ -111,7 +112,7 @@ export function App() {
         {state.screen === 'orders' ? (
           <OrdersScreen sbg={sbg} managerDid={state.manager?.did} who={state.manager?.did} onWide={setWide} />
         ) : (
-          <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} destination={destination} />
+          <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} destination={destination} sbg={sbg} />
         )}
       </main>
 
@@ -122,7 +123,7 @@ export function App() {
   );
 }
 
-function ScreenRouter({ screen, state, actions, archive, destination }: { screen: Screen; state: FleetState; actions: FleetActions; archive: ArchiveApiState; destination: DestinationApiState }) {
+function ScreenRouter({ screen, state, actions, archive, destination, sbg }: { screen: Screen; state: FleetState; actions: FleetActions; archive: ArchiveApiState; destination: DestinationApiState; sbg: SbgClient | null }) {
   switch (screen) {
     case 'notes':
       return (
@@ -131,7 +132,7 @@ function ScreenRouter({ screen, state, actions, archive, destination }: { screen
         </div>
       );
     case 'vehicles':
-      return <VehiclesScreen state={state} actions={actions} />;
+      return <VehiclesScreen state={state} actions={actions} sbg={sbg} />;
     case 'drivers':
       return <DriversScreen state={state} actions={actions} />;
     case 'sessions':

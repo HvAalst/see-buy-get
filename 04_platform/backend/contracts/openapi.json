@@ -22835,6 +22835,132 @@
         }
       }
     },
+    "/v1/sbg/vehicles/{id}/care": {
+      "get": {
+        "operationId": "VehicleCare.careOf",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleCareView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vehicles/{id}/off-road": {
+      "post": {
+        "operationId": "VehicleCare.takeOffRoad",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TakeOffRoadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleCareView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vehicles/{id}/off-road/{spellId}/end": {
+      "post": {
+        "operationId": "VehicleCare.endSpell",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "spellId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleCareView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vehicles/{id}/back-on-road": {
+      "post": {
+        "operationId": "VehicleCare.backOnTheRoad",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleCareView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/managers/{did}/partners": {
       "get": {
         "operationId": "FleetOverflow.list",
@@ -33458,7 +33584,14 @@
             }
           },
           "offRoad": {
-            "description": "FP4 — DERIVED: the papers that have lapsed, in words; non-empty means the vehicle cannot start a shift.",
+            "description": "DERIVED: every reason it cannot start a shift, in words — its papers, then its upkeep. Empty: it can.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "upkeep": {
+            "description": "DERIVED on the owner's read, never stored: the reasons besides its papers — in the workshop, a defect, a service overdue.",
             "type": "array",
             "items": {
               "type": "string"
@@ -45298,6 +45431,131 @@
         },
         "required": [
           "days"
+        ]
+      },
+      "OffRoadSpell": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "repair",
+              "service",
+              "accident",
+              "breakdown",
+              "other"
+            ]
+          },
+          "note": {
+            "type": "string"
+          },
+          "untilDay": {
+            "type": "string",
+            "description": "The last day off the road. Absent: until it is put back by hand."
+          },
+          "endedAt": {
+            "type": "string"
+          },
+          "endedBy": {
+            "type": "string"
+          },
+          "spellId": {
+            "type": "string"
+          },
+          "vehicleId": {
+            "type": "string"
+          },
+          "fromDay": {
+            "type": "string"
+          },
+          "setBy": {
+            "type": "string"
+          },
+          "setAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "spellId",
+          "vehicleId",
+          "fromDay",
+          "setBy",
+          "setAt"
+        ]
+      },
+      "VehicleCareView": {
+        "type": "object",
+        "properties": {
+          "grounded": {
+            "type": "boolean",
+            "description": "Grounded before grounding had a way back: \"back on the road\" returns it."
+          },
+          "spells": {
+            "description": "Spells now or to come, soonest first; ended ones are history and not listed.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OffRoadSpell"
+            }
+          },
+          "vehicleId": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "usable": {
+            "type": "boolean",
+            "description": "Can it start a shift now, and if not, every reason — its papers, and whatever else keeps it off the road."
+          },
+          "offRoad": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "inUse": {
+            "type": "boolean",
+            "description": "A driver is on a shift in it right now: a spell starting today leaves that shift running, and stops the next."
+          }
+        },
+        "required": [
+          "spells",
+          "vehicleId",
+          "plate",
+          "usable",
+          "offRoad",
+          "inUse"
+        ]
+      },
+      "TakeOffRoadDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "repair",
+              "service",
+              "accident",
+              "breakdown",
+              "other"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "fromDay": {
+            "type": "string",
+            "pattern": "DAY"
+          },
+          "untilDay": {
+            "type": "string",
+            "pattern": "DAY"
+          }
+        },
+        "required": [
+          "reason"
         ]
       },
       "PartnershipEnd": {

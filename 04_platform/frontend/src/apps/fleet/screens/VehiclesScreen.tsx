@@ -8,6 +8,8 @@ import { fleetConfig } from '../api';
 import { bodyPickerOptions, equipmentHelp, equipmentOptions, paperLine, paperLineClass, papersToShow, subtypeLine, vehicleMissing } from '../logic';
 import { VEHICLE_CLASSES, type VehicleRow } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
+import type { SbgClient } from '../../../lib/sbg';
+import { VehicleCareSheet } from './VehicleCare';
 
 /**
  * Capture pad (S26) — one (registration) or many (vehicle/trailer) photos. Each capture is downscaled,
@@ -84,11 +86,14 @@ function PhotoPad({
 export interface VehiclesScreenProps {
   state: FleetState;
   actions: FleetActions;
+  /** For the upkeep sheet, which reads and writes on its own. */
+  sbg?: SbgClient | null;
 }
 
 /** Fleet data: register vehicles (QR for the dashboard) and manage the open per-km rate. */
-export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
+export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenProps) {
   const t = useT();
+  const [careFor, setCareFor] = useState<VehicleRow | null>(null);
   const [priceFor, setPriceFor] = useState<VehicleRow | null>(null);
   const [qrFor, setQrFor] = useState<VehicleRow | null>(null);
   const [papersFor, setPapersFor] = useState<VehicleRow | null>(null);
@@ -365,6 +370,12 @@ export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
                       {paperLine(p, t)}
                     </span>
                   ))}
+                  {/* What keeps it off the road besides its papers: in the workshop, a defect, a service overdue. */}
+                  {(v.upkeep ?? []).map((line) => (
+                    <span key={line} class={paperLineClass('lapsed')}>
+                      {line}
+                    </span>
+                  ))}
                   {photos.length ? (
                     <span class="photos photos--sm">
                       {photos.slice(0, 4).map((id) => (
@@ -383,6 +394,9 @@ export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
                     </Button>
                     <Button variant="link" full={false} onClick={() => setPriceFor(v)}>
                       {t('fleet.vehicles.rateBtn')}
+                    </Button>
+                    <Button variant="link" full={false} onClick={() => setCareFor(v)}>
+                      {t('fleet.vehicles.careBtn')}
                     </Button>
                   </span>
                 </span>
@@ -426,6 +440,7 @@ export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
 
       <PriceSheet vehicle={priceFor} onClose={() => setPriceFor(null)} state={state} actions={actions} />
       <PapersSheet vehicle={papersFor} onClose={() => setPapersFor(null)} state={state} actions={actions} />
+      <VehicleCareSheet vehicle={careFor} sbg={sbg} onClose={() => setCareFor(null)} onChanged={actions.refresh} />
     </div>
   );
 }

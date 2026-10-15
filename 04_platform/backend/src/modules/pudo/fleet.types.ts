@@ -267,8 +267,10 @@ export class Vehicle {
   status: VehicleStatus;
   /** FP4 — DERIVED on the owner's read, never stored: each paper's state today. */
   papers?: PaperStatusView[];
-  /** FP4 — DERIVED: the papers that have lapsed, in words; non-empty means the vehicle cannot start a shift. */
+  /** DERIVED: every reason it cannot start a shift, in words — its papers, then its upkeep. Empty: it can. */
   offRoad?: string[];
+  /** DERIVED on the owner's read, never stored: the reasons besides its papers — in the workshop, a defect, a service overdue. */
+  upkeep?: string[];
   createdAt: string;
 }
 
