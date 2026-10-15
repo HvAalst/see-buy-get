@@ -102,6 +102,7 @@
     <a href="#inbound">Inbound supply: the decisions</a>
     <a href="#order">The order to decide in</a>
     <a href="#built">Built from this assessment</a>
+    <a href="#central">Centralized data</a>
   </nav>
 </header>
 
@@ -373,6 +374,77 @@
     <p>A parcel is running late when the network holds it on its way and the time it was promised to be ready is more than two hours behind it. The receiver and a person who sent it are told once, in the app; a store hears on its systems. The tracking page, the parcel's screen and the list say it too.</p>
     <ul><li>Never before it was handed in, and not once it has arrived.</li><li>The two hours is because the promise is optimistic by decision.</li></ul>
     <p class="note">Commit <code>a306058</code>.</p></div>
+</div>
+
+<!-- ─────────────────────────────────────────────────────── centralized data -->
+<h2 id="central">Centralized logistics data</h2>
+<p class="lead">Connecting warehouse, transport and accounting systems (WMS, TMS, ERP) and field data into one operational view, with no manual reconciliation. Assessed 2026-10-15. Inside SeeBuyGet the data is already one; with other companies' systems it is far.</p>
+<div class="grid">
+  <div class="card"><span class="tag t-strong">Near</span><h3>One record per thing, inside</h3><p>One server holds every parcel, load, run, fleet, driver, shop, hub and money entry, and every app reads those same records — our own apps need no reconciliation. Every company and person has one identity that ties their records together.</p></div>
+  <div class="card"><span class="tag t-strong">Near</span><h3>Field data joins as it happens</h3><p>Phone positions on shift, scans at counters and hubs, photos at drop-off and delivery, the waiting-time taps at gates, road reports and signatures on consignment notes all land on the same records the moment they happen.</p></div>
+  <div class="card"><span class="tag t-strong">Near</span><h3>Money in the same system</h3><p>Fees are booked in double-entry accounts from the handovers that earn them. Ledgers export as CSV; document bundles go to a customer's own storage (S3, WebDAV or a webhook). One tracking link answers for parcels, loads and booked space.</p></div>
+  <div class="card"><span class="tag t-missing">Far</span><h3>Other companies' systems</h3><p>Only stores have API keys and webhooks, and their webhooks fire only at the end of a journey. A fleet's or shipper's own system cannot connect: orders arrive through an app or a spreadsheet. Books leave as CSV that someone imports by hand. No standard formats, no warehouse system, no carrier feeds.</p></div>
+  <div class="card"><span class="tag t-partial">Partial</span><h3>One view, live</h3><p>The apps re-ask on a timer; there is no live connection. The console reads across everything, but there is no single control view; the digital twin built for one is fed and read by nothing. Parcels, loads, run bookings, lots and bags are separate kinds of record.</p></div>
+</div>
+
+<h3 style="margin-top:28px">Done</h3>
+<div class="grid">
+  <div class="card"><span class="tag t-strong">Done</span><h3>1. Consolidation lots survive a restart</h3><p>A cooperative's lots and its members' deposits were held in memory alone: a restart lost them. They are kept now, found by their code again after a restart, and a LOT number is never given twice.</p><p class="note">Commit <code>e82d08c</code>.</p></div>
+  <div class="card"><span class="tag t-strong">Done</span><h3>2. The records are in Postgres</h3><p>Every record is kept in Postgres (one table, a row per record, exact JSON text, in the order written), and a write is kept before the request is answered. The Docker stack runs it; a server refuses to start if it cannot reach it. A store on files moves in by itself. Releases dump it before they restart. Reporting can now query the records where they are.</p><ul><li>Checked: the whole server, with the sandbox's 19,161 records moved in, answers as the file store did, and keeps a write through a hard kill.</li><li>Not yet: a reporting copy apart from the live database, and more than one server at once.</li></ul><p class="note">Commit <code>f47c27f</code>.</p></div>
+</div>
+
+<h3 style="margin-top:28px">Priorities</h3>
+<p class="note" style="margin-top:0">In this order. Each starts with the decisions named, which are yours.</p>
+
+<div class="card decision">
+  <p class="q"><span class="num">P1</span>Signed webhooks for every party, on every handover</p>
+  <dl>
+    <dt>What</dt><dd>Today only a store's systems hear, and only five events at the end of a journey. Every party with systems of its own — a store, a business, a fleet — would subscribe to what concerns it: taken in, loaded, at a hub, delivered, a problem reported, money settled. Signed, retried, in order, and readable back as a log, so their systems keep step with ours and nobody re-keys anything.</dd>
+    <dt>Decisions</dt><dd><ul><li>Which events, and what each may carry for whom (a fleet must not learn a store's prices; a store must not learn a driver's position).</li><li>How long failed deliveries are retried, and who is told when a subscriber stays down.</li></ul></dd>
+    <dt>Builds on</dt><dd>The store webhooks and their signing (vendor callbacks); the custody chain, which already records every handover as an event.</dd>
+  </dl>
+</div>
+
+<div class="card decision">
+  <p class="q"><span class="num">P2</span>An API for businesses and fleets</p>
+  <dl>
+    <dt>What</dt><dd>A business's system posts loads and reads their status; a fleet's own transport system sends orders in and takes its day's plan out. The same keys stores already have (a key per system, revocable, sandbox and live), with what each key may do written on it.</dd>
+    <dt>Decisions</dt><dd><ul><li>Which acts a key may do without a person (post a load: yes; accept a plan, or a price: probably not).</li><li>Limits per key, and how a version of the API is retired.</li></ul></dd>
+    <dt>Builds on</dt><dd>The store API keys; the contract (756 operations, published); the order sheet reader, whose refusals in words would answer a system too.</dd>
+  </dl>
+</div>
+
+<div class="card decision">
+  <p class="q"><span class="num">P3</span>Standards where they are cheap</p>
+  <dl>
+    <dt>What</dt><dd>An accounting export an ERP imports as it is — journal lines with accounts, not a ledger to retype — and GS1 serial shipping container codes (SSCC) on pallet labels, so a receiving warehouse scans our labels into its own system.</dd>
+    <dt>Decisions</dt><dd><ul><li>Which accounting systems the first customers use, per country (that decides the format).</li><li>Pallet codes wait on the load-carrier decision (the hub declares its carrier; see D11 above).</li></ul></dd>
+    <dt>Builds on</dt><dd>The double-entry books; the label service.</dd>
+  </dl>
+</div>
+
+<div class="card decision">
+  <p class="q"><span class="num">P4</span>One live view</p>
+  <dl>
+    <dt>What</dt><dd>A live connection from the server to the console and the fleet office, instead of asking again on a timer; and the console's overview reading the digital twin, which is already fed by every parcel event and read by nothing.</dd>
+    <dt>Decisions</dt><dd><ul><li>Who needs live (the console and fleet offices) and who is fine on push (everybody on a phone).</li></ul></dd>
+  </dl>
+</div>
+
+<div class="card decision">
+  <p class="q"><span class="num">P5</span>Reporting on its own copy</p>
+  <dl>
+    <dt>What</dt><dd>Now the records are in Postgres, reports can be asked of them. Asked of the live database they compete with the counter; a read-only copy (a replica, or a nightly export) keeps them apart.</dd>
+    <dt>Decisions</dt><dd><ul><li>Who reads reports, and how fresh they must be (that decides replica or nightly).</li></ul></dd>
+  </dl>
+</div>
+
+<div class="card decision">
+  <p class="q"><span class="num">P6</span>Other carriers' feeds, and one kind of movement</p>
+  <dl>
+    <dt>What</dt><dd>A parser for carrier tracking feeds exists and nothing uses it: connect it where a load leaves our network on someone else's truck. And parcels, loads, run bookings, lots and bags read as one kind of movement for anything that looks across them ("movement unification", an old open item).</dd>
+    <dt>Decisions</dt><dd><ul><li>Which carriers, if any, before testing — probably none.</li></ul></dd>
+  </dl>
 </div>
 
 </div>
