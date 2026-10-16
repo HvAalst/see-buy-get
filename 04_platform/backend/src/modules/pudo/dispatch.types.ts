@@ -269,12 +269,28 @@ export class FreightClaim {
 
 /** A bulk/dedicated freight job (sugar/cement, or a P4+ order diverted out of the PUDO network) — trucks
  *  only, never via MDP. Same marketplace as totes. */
-/** The vehicle goods are in now, after a breakdown moved them to another of the carrier's vehicles. */
-export class FreightMovedTo {
-  vehicleId: string;
-  plate: string;
-  vehicleClass: string;
+/**
+ * A RELOAD: the goods moved to another of the carrier's vehicles after the one carrying them broke down. Written on the
+ * consignment note — box 18, the carrier's observations — and kept nowhere else (the user, 2026-10-16: "can be written
+ * on the consignment note only"). Before the goods were taken over it is only a change of the truck coming for them,
+ * and the note says nothing of it.
+ */
+export class FreightReload {
   at: string;
+  /** The goods were aboard (taken over) when they moved; otherwise the truck coming to collect them changed. */
+  aboard: boolean;
+  fromPlate: string;
+  toVehicleId: string;
+  toPlate: string;
+  toVehicleClass: string;
+  toDriverName: string;
+  /** The breakdown it followed. */
+  breakdownId: string;
+  /** The two drivers at the vehicle together, proven by the code of the one handing over — or the carrier's office's word. */
+  @ApiProperty({ enum: ['pass', 'office'] }) proof: 'pass' | 'office';
+  /** Who recorded it: the driver who took the goods over, or the office. */
+  by: string;
+  @ApiPropertyOptional({ type: GeoPoint }) location?: GeoPoint;
 }
 
 export class Freight {
@@ -375,11 +391,11 @@ export class Freight {
    */
   @ApiPropertyOptional() carriage?: { vehicleId: string; plate: string; vehicleClass: string; driverDid: string; managerDid?: string; at: string };
   /**
-   * The vehicle the goods are in NOW, when they were moved to another of the carrier's vehicles after a breakdown on the
-   * road. The one they were taken over in stays on `carriage`, as the consignment note says; who moved them, and on
-   * whose word, is kept on the breakdown.
+   * Moved to other vehicles of the carrier after a breakdown, oldest first: what the consignment note writes in box 18.
+   * The vehicle the goods are in now is the last one moved to while aboard; the one they were taken over in stays on
+   * `carriage`, as the note's carrier box says.
    */
-  @ApiPropertyOptional({ type: () => FreightMovedTo }) movedTo?: FreightMovedTo;
+  @ApiPropertyOptional({ type: () => [FreightReload] }) reloads?: FreightReload[];
   /** FP3 — proof of delivery: who took the goods in, the driver's photo of them as put down, and what the receiver
    *  said about them. This is box 24 of the consignment note; without it "delivered" is only the driver's word. */
   @ApiPropertyOptional() proofOfDelivery?: { receiverName: string; photoRef?: string; remarks?: string; at: string; by?: string };

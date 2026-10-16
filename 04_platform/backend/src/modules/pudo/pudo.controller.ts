@@ -5873,6 +5873,8 @@ export class SbgController {
     // The daily check a fleet asks for comes first: no check today, no shift — with its own code, so the app opens it.
     const unchecked = vehicleId && this.care?.checkBlocker(vehicleId);
     if (unchecked) throw new GlosError('VEHICLE_CHECK_NEEDED', unchecked);
+    // A reading is the driver's word about the vehicle: staff standing in give none (the user, 2026-10-16).
+    if (dto.odometerKm !== undefined && actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'Staff standing in give no odometer reading: the driver does, from their own phone', { field: 'odometerKm' });
     if (dto.odometerKm !== undefined && vehicleId && this.care) this.care.checkReading(vehicleId, dto.odometerKm);
     const shift = dto.vehicleId?.trim() ? this.fleet.couple(did, dto.vehicleId.trim(), undefined, dto.leg) : this.fleet.startSession(did, dto.vehicleQr!, dto.leg);
     if (dto.odometerKm !== undefined && this.care) this.care.recordReading(shift.vehicleId, dto.odometerKm, { by: this.drivers.get(did).displayName, byDid: did, source: 'shift_start' });
@@ -5975,6 +5977,8 @@ export class SbgController {
     const ended = this.fleet.endSession(did);
     // The odometer, read as the shift ends: kept if it can be, and the shift has ended either way.
     if (dto?.odometerKm === undefined || !vehicleId || !this.care) return ended;
+    // Never in the way of ending — and staff standing in give no reading: it is not kept, and the answer says so.
+    if (actor?.role === 'operator') return { ...ended, odometer: { kept: false, why: 'Staff standing in give no odometer reading: the driver does, from their own phone' } };
     return { ...ended, odometer: this.care.recordEndReading(vehicleId, dto.odometerKm, { by: this.drivers.get(did).displayName, byDid: did }) };
   }
 

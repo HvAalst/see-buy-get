@@ -5,6 +5,7 @@ import type { ArchivedNoteRow, NotePath, NoteStage, RetentionStatement } from '.
 export function stageWord(stage: NoteStage, t: Translate): string {
   const keys: Record<NoteStage, MessageKey> = {
     taken_over: 'archive.stage.takenOver',
+    reloaded: 'archive.stage.reloaded',
     delivered: 'archive.stage.delivered',
     not_delivered: 'archive.stage.notDelivered',
     claimed: 'archive.stage.claimed',

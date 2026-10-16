@@ -48,7 +48,7 @@ import { coverFor, DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
-import { BoardRow, Claimable, ClaimableKind, DeliveryTiming, FleetOrderRow, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, LeftOutOfPlan, MarketRow, MarketSeries, Offer, OutsideWindow, PlannedAbout, PostedFreightRow, RoutePlan, RunningLate, shipperWhy, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS } from './dispatch.types';
+import { BoardRow, Claimable, ClaimableKind, DeliveryTiming, FleetOrderRow, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, LeftOutOfPlan, MarketRow, MarketSeries, Offer, OutsideWindow, PlannedAbout, PostedFreightRow, RoutePlan, RunningLate, shipperWhy, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS , FreightReload } from './dispatch.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 import { buildOfferResponse, type OfferResponse } from './offer-response';
 
@@ -1641,8 +1641,8 @@ export class DispatchService {
         canClaim: f.status === 'delivered' && !f.claim && (f.deliveredAt ? Date.now() - new Date(f.deliveredAt).getTime() <= FREIGHT_CLAIM_WINDOW_DAYS * 86_400_000 : true),
         // FP6 — the link to hand on, who is carrying it, and the verdict.
         ...(f.trackingKey ? { trackingKey: f.trackingKey, trackingUrl: trackingUrlOf(f.trackingKey) } : {}),
-        // Moved to another of the carrier's vehicles after a breakdown: the driver and the vehicle carrying it now.
-        ...(f.carriage ? { carrier: { driverName: this.driverNameOf(f.movedTo && f.claimedBy ? f.claimedBy : f.carriage.driverDid), plate: (f.movedTo ?? f.carriage).plate, vehicleClass: (f.movedTo ?? f.carriage).vehicleClass } } : {}),
+        // Reloaded onto another of the carrier's vehicles after a breakdown: the driver and the vehicle carrying it now.
+        ...(f.carriage ? { carrier: carrierNow(f, this.driverNameOf(f.carriage.driverDid)) } : {}),
         ...(f.rating ? { rating: { stars: f.rating.stars, issues: f.rating.issues, at: f.rating.at } } : {}),
         canRate: f.status === 'delivered' && Boolean(f.claimedBy) && (f.deliveredAt ? Date.now() - new Date(f.deliveredAt).getTime() <= FREIGHT_RATING_WINDOW_DAYS * 86_400_000 : true),
         ...(f.incoterm ? { incoterm: f.incoterm, claimant: riskBearerOf(f.incoterm) } : {}),
@@ -1730,7 +1730,7 @@ export class DispatchService {
       const window = instructionsViewOf(f)?.deliveryWindow;
       // The vehicle is frozen onto the load when the goods are taken over. Until then the truck that will collect it
       // is whichever one its driver is out in now — read live, because before pickup that is still the office's to change.
-      const plate = (f.movedTo ?? f.carriage)?.plate ?? (f.claimedBy && f.status === 'claimed' ? this.fleet.vehicleForDriver(f.claimedBy)?.plate : undefined);
+      const plate = vehicleNow(f)?.plate ?? (f.claimedBy && f.status === 'claimed' ? this.fleet.vehicleForDriver(f.claimedBy)?.plate : undefined);
       rows.push({
         freightId: f.freightId,
         code: f.code,
@@ -2056,7 +2056,7 @@ export class DispatchService {
    * collected by it — and the shipper to tell about each, where that is somebody here and not the carrier's own office.
    */
   loadsOnVehicle(driverDid: string, vehicleId: string): Array<{ freightId: string; code: string; state: 'aboard' | 'to_collect'; weightKg: number; shipperDid?: string }> {
-    const inIt = (f: Freight) => (f.movedTo ?? f.carriage)?.vehicleId;
+    const inIt = (f: Freight) => vehicleNow(f)?.vehicleId;
     return [...this.freights.values()]
       .filter((f) => f.claimedBy === driverDid && (f.status === 'claimed' || (f.status === 'in_transit' && (!inIt(f) || inIt(f) === vehicleId))))
       .map((f) => {
@@ -2082,18 +2082,37 @@ export class DispatchService {
 
   /**
    * THE LOADS GO TO ANOTHER DRIVER of the same carrier, after a breakdown: theirs to deliver, or to collect, from now.
-   * Goods already taken over are in the new driver's vehicle now (`movedTo`); the vehicle they were taken over in stays
-   * as the consignment note has it. Checked first with assertCanTakeLoads.
+   * Each load keeps the reload, which its consignment note writes in box 18 — the one record of it. Goods already taken
+   * over are in the new driver's vehicle now; the vehicle they were taken over in stays as the note's carrier box has it.
+   * Checked first with assertCanTakeLoads.
    */
-  moveLoads(freightIds: string[], toDriverDid: string, now: number = Date.now()): void {
+  moveLoads(freightIds: string[], toDriverDid: string, reload: { fromPlate: string; toDriverName: string; breakdownId: string; proof: 'pass' | 'office'; by: string; location?: { lat: number; lng: number } }, now: number = Date.now()): void {
     const vehicle = this.fleet.vehicleForDriver(toDriverDid);
     if (!vehicle) throw new GlosError('NOT_COUPLED', 'That driver is not on a shift — loads go onto a vehicle somebody is out in');
     for (const id of freightIds) {
       const f = this.requireFreight(id);
+      const entry: FreightReload = {
+        at: new Date(now).toISOString(),
+        aboard: f.status === 'in_transit',
+        fromPlate: vehicleNow(f)?.plate ?? reload.fromPlate,
+        toVehicleId: vehicle.vehicleId,
+        toPlate: vehicle.plate,
+        toVehicleClass: vehicle.vehicleClass,
+        toDriverName: reload.toDriverName,
+        breakdownId: reload.breakdownId,
+        proof: reload.proof,
+        by: reload.by,
+        ...(reload.location ? { location: { lat: reload.location.lat, lng: reload.location.lng } } : {}),
+      };
       f.claimedBy = toDriverDid;
-      if (f.status === 'in_transit') f.movedTo = { vehicleId: vehicle.vehicleId, plate: vehicle.plate, vehicleClass: vehicle.vehicleClass, at: new Date(now).toISOString() };
+      f.reloads = [...(f.reloads ?? []), entry];
       this.freights.set(f.freightId, f);
     }
+  }
+
+  /** The reloads of a load that followed one breakdown — read back from the load, where the note reads them. */
+  reloadsAfter(freightId: string, breakdownId: string): FreightReload[] {
+    return (this.freights.get(freightId)?.reloads ?? []).filter((r) => r.breakdownId === breakdownId).map((r) => ({ ...r }));
   }
 
   /** P3b — the plan tried to put this order on its truck and was refused: kept on the order, in the refusal's own words. */
@@ -3637,3 +3656,16 @@ export const LATE_GRACE_MIN = 30;
 export const UNPLANNED_GRACE_MIN = 60;
 
 const LATE_RANK: Record<RunningLate, number> = { unplanned: 1, hour: 2, day: 3 };
+
+/** The vehicle the goods are in now: the last one they were reloaded onto while aboard, or the one they were taken over in. */
+export function vehicleNow(f: Freight): { vehicleId: string; plate: string; vehicleClass: string } | undefined {
+  const r = [...(f.reloads ?? [])].reverse().find((x) => x.aboard);
+  return r ? { vehicleId: r.toVehicleId, plate: r.toPlate, vehicleClass: r.toVehicleClass } : f.carriage;
+}
+
+/** Who is carrying it now, as the sender sees it: the driver and vehicle of the last reload, or those it was taken over by. */
+export function carrierNow(f: Freight, takenOverBy: string | undefined): { driverName?: string; plate: string; vehicleClass: string } {
+  const r = [...(f.reloads ?? [])].reverse().find((x) => x.aboard);
+  if (r) return { driverName: r.toDriverName, plate: r.toPlate, vehicleClass: r.toVehicleClass };
+  return { driverName: takenOverBy, plate: f.carriage!.plate, vehicleClass: f.carriage!.vehicleClass };
+}

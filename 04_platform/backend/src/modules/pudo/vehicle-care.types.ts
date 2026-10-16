@@ -168,9 +168,7 @@ export class BreakdownLoad {
  */
 export class BreakdownHandover {
   at: string;
-  toDriverDid: string;
   toDriverName: string;
-  toVehicleId: string;
   toPlate: string;
   /** What moved: order codes, and what run bookings said they were. */
   @ApiProperty({ type: [String] }) loads: string[];

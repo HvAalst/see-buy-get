@@ -23,7 +23,7 @@ import type { ConsignmentNote } from './consignment-note.types';
  */
 
 /** The moments that produce a copy. Each one is a party signing, or a party saying something on the note. */
-export const NOTE_STAGES = ['taken_over', 'delivered', 'not_delivered', 'claimed', 'answered', 'cancelled'] as const;
+export const NOTE_STAGES = ['taken_over', 'reloaded', 'delivered', 'not_delivered', 'claimed', 'answered', 'cancelled'] as const;
 export type NoteStage = (typeof NOTE_STAGES)[number];
 
 /** Which door the carriage came through. Both produce the same document; they differ in who priced it. */
@@ -220,6 +220,7 @@ export function runDocId(departureId: string, bookingId: string): string {
 /** The words a stage is listed by — what a reader sees against a copy, rather than the enum. */
 export const STAGE_WORDS: Record<NoteStage, string> = {
   taken_over: 'Taken over by the carrier',
+  reloaded: 'Moved to another of the carrier’s vehicles',
   delivered: 'Delivered',
   not_delivered: 'Could not be delivered',
   claimed: 'Claim raised by the sender',

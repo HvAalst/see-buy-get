@@ -1,5 +1,6 @@
 import { ClientRef } from './business-client.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { GeoPoint } from './pudo.types';
 import { CARGO_NATURES, type CargoNature } from './cargo.types';
 
 /**
@@ -496,6 +497,24 @@ export class DepartureBooking {
   waiting: WaitingRecord[];
 }
 
+/**
+ * A run going on in another of the carrier's trucks after its own broke down on the road. Written on the consignment
+ * note of every booking aboard — box 18 — and kept nowhere else.
+ */
+export class DepartureReload {
+  at: string;
+  fromPlate: string;
+  fromVehicleClass: string;
+  @ApiPropertyOptional() fromDriverName?: string;
+  toPlate: string;
+  toVehicleClass: string;
+  toDriverName: string;
+  breakdownId: string;
+  @ApiProperty({ enum: ['pass', 'office'] }) proof: 'pass' | 'office';
+  by: string;
+  @ApiPropertyOptional({ type: GeoPoint }) location?: GeoPoint;
+}
+
 export class Departure {
   departureId: string;
   /** The fleet's own published line. Only its owner may put a departure on it. */
@@ -531,6 +550,8 @@ export class Departure {
   vehicleId: string;
   /** What a shipper and a gate actually recognise. Copied at declaration, like the line name. */
   plate: string;
+  /** Went on in other trucks after breakdowns, oldest first: what its bookings' consignment notes write in box 18. */
+  @ApiPropertyOptional({ type: () => [DepartureReload] }) reloads?: DepartureReload[];
   vehicleClass: string;
   /**
    * What is for sale, which is at most what the vehicle holds.

@@ -15,6 +15,7 @@ import { SITE_KINDS, type SiteKind } from './site.service';
 import { PACKAGING, type Packaging } from './packaging';
 import { MEDIA_KINDS, MediaKind } from './media.types';
 import { CONSTRAINT_KINDS, ConstraintKind } from './route-constraint.types';
+import { NOTE_STAGES } from './note-archive.types';
 import { CARGO_LANES, CARGO_NATURES, CargoLane, CargoNature, EQUIPMENT, Equipment } from './cargo.types';
 
 import { CLEARANCE_SPECIALISMS, CONSIGNMENT_MODES, CUSTOMS_HOLD_KINDS, HOLD_STANCES } from './import.types';
@@ -1120,7 +1121,7 @@ export class VerifyNoteDto {
 export class NoteArchiveQueryDto {
   @IsOptional() @IsString() q?: string; // note number / party / plate / place / nature / status
   @IsOptional() @IsIn(['board', 'run']) path?: 'board' | 'run';
-  @IsOptional() @IsIn(['taken_over', 'delivered', 'not_delivered', 'claimed', 'answered', 'cancelled']) stage?: string;
+  @IsOptional() @IsIn(NOTE_STAGES) stage?: string;
   @IsOptional() @IsString() from?: string; // ISO or YYYY-MM-DD (inclusive)
   @IsOptional() @IsString() to?: string;
   @IsOptional() @IsString() limit?: string;

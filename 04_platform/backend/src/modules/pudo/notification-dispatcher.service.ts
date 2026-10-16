@@ -1440,10 +1440,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         title: `${p.fromPlate}'s loads are on ${h.toPlate} now`,
         body: `${h.toDriverName} took them over from ${p.fromDriverName ?? 'the driver'}, with their code: ${what}.`,
         tag: `breakdown:${p.breakdownId}:handover`,
-        data: { breakdownId: p.breakdownId, vehicleId: h.toVehicleId },
+        data: { breakdownId: p.breakdownId, vehicleId: p.toVehicleId },
       });
     } else {
-      await this.tell(h.toDriverDid, {
+      await this.tell(p.toDriverDid, {
         kind: 'vehicle_breakdown',
         title: `The loads of ${p.fromPlate} are yours now`,
         body: `${h.by} put them on ${h.toPlate}: ${what}.${h.location ? ` ${p.fromPlate} broke down at ${h.location.lat.toFixed(5)}, ${h.location.lng.toFixed(5)}.` : ''}`,

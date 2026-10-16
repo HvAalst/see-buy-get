@@ -133,6 +133,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     const reservations: string[] = [];
     if (f.reservations) reservations.push(`At taking over: ${f.reservations.note}`);
     if (f.tempBreached) reservations.push('Cold chain breached in transit — see the temperature log');
+    // A reload onto another of the carrier's vehicles after a breakdown is written here, and nowhere else.
+    for (const r of (f.reloads ?? []).filter((x) => x.aboard)) reservations.push(reloadLine(r));
     const carriage = this.carriageOf(f);
     const attempts = (f.deliveryAttempts ?? []).map((a) => `Delivery attempted ${when(a.at)}: ${a.outcome === 'absent' ? 'nobody to receive the goods' : a.outcome === 'refused' ? 'the receiver refused the goods' : 'the place could not be reached'}${a.note ? ` — ${a.note}` : ''}`);
     const claim = f.claim
@@ -200,7 +202,10 @@ export class ConsignmentNoteService implements OnModuleInit {
    * as they would meet them at the door, who signed. No phone, no money, no reasons, no proposals.
    */
   trackView(f: Freight, now: number = Date.now()): FreightTrackView {
-    const carrier = this.carrierOf(f);
+    // As they would meet them at the door: after a reload, the driver and the vehicle carrying the goods now.
+    const reload = [...(f.reloads ?? [])].reverse().find((x) => x.aboard);
+    const noted = this.carrierOf(f);
+    const carrier = noted && reload ? { ...noted, driverName: reload.toDriverName, plate: reload.toPlate, vehicleClass: reload.toVehicleClass } : noted;
     // P1 — an order under a contract starts WITH its carrier: it never waited on a board for one.
     const steps: FreightTrackView['steps'] = [{ status: f.contract ? 'ordered' : f.scheduledPickupAt ? 'scheduled' : 'available', at: f.createdAt }];
     if (f.claimedAt) steps.push({ status: 'claimed', at: f.claimedAt });
@@ -328,7 +333,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     let managerDid: string | undefined;
     let jurisdiction: string | undefined;
     try {
-      const d = this.drivers.get(f.claimedBy);
+      // Box 16 names the driver the goods were TAKEN OVER by; a later reload is box 18's.
+      const d = this.drivers.get(f.carriage?.driverDid ?? f.claimedBy);
       driverName = d.displayName;
       jurisdiction = d.jurisdiction ?? undefined;
     } catch {
@@ -539,4 +545,11 @@ function when(iso: string): string {
 
 export function escapeHtml(value: string): string {
   return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+/** A reload, as box 18 says it: when, onto what, after what — and on whose word. */
+export function reloadLine(r: { at: string; fromPlate: string; toPlate: string; toDriverName: string; proof: 'pass' | 'office'; by: string; location?: { lat: number; lng: number } }): string {
+  const where = r.location ? ` at ${r.location.lat.toFixed(5)}, ${r.location.lng.toFixed(5)}` : '';
+  const how = r.proof === 'pass' ? 'handed over at the vehicle, confirmed with the code of the driver handing over' : `moved on the carrier’s word (${r.by})`;
+  return `Reloaded ${when(r.at)} onto ${r.toPlate} (${r.toDriverName}) after ${r.fromPlate} broke down${where}: ${how}`;
 }

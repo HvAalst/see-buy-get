@@ -57,6 +57,8 @@ import { ROUTER as ROUTER_TOKEN, type Router } from './router';
 import { clockAt } from './fleet-clock';
 import { CHECKLIST, VehicleCareService } from './vehicle-care.service';
 import { VehicleBreakdownService } from './vehicle-breakdown.service';
+import { ConsignmentNoteService } from './consignment-note.service';
+import { DepartureNoteService } from './departure-note.service';
 import { requiredLoadKeys, requiredUnloadKeys } from './heavy-cargo';
 import { GlosEvent } from '../../foundation/events/glos-events';
 
@@ -76,6 +78,8 @@ describe('a vehicle’s upkeep', () => {
   let care: VehicleCareService;
   let breakdowns: VehicleBreakdownService;
   let departures: DepartureService;
+  let notes: ConsignmentNoteService;
+  let runNotes: DepartureNoteService;
   let corridors: CorridorService;
   let bus: EventBus;
   let media: MediaService;
@@ -111,6 +115,8 @@ describe('a vehicle’s upkeep', () => {
     departures = moduleRef.get(DepartureService);
     corridors = moduleRef.get(CorridorService);
     breakdowns = new VehicleBreakdownService(vehicles, managers, fleet, drivers, dispatch, departures, media, bus);
+    notes = new ConsignmentNoteService(dispatch, drivers, managers, moduleRef.get(AgentService), moduleRef.get(VendorService), bus, { papersOnNote: () => [] } as never);
+    runNotes = new DepartureNoteService(departures, notes, moduleRef.get(CargoService), moduleRef.get(AgentService), moduleRef.get(VendorService));
     care = new VehicleCareService(vehicles, managers, fleet, drivers, media, bus, breakdowns);
   });
 
@@ -640,17 +646,29 @@ describe('a vehicle’s upkeep', () => {
         const result = breakdowns.takeOverByPass(b.breakdownId, baraka.did, { pass: amosCode, lat: -1.33, lng: 36.87 });
         expect(result).toEqual({ breakdownId: b.breakdownId, fromPlate: 'KVC 986T', toPlate: 'KVC 987T', moved: expect.arrayContaining([aboard.code, toCollect.code]) });
         const goods = dispatch.requireFreightPublic(aboard.freightId);
-        expect(goods).toMatchObject({ claimedBy: baraka.did, status: 'in_transit', movedTo: { vehicleId: rescue.vehicleId, plate: 'KVC 987T' }, carriage: { vehicleId: truck.vehicleId, plate: 'KVC 986T' } });
+        // Written on the load, where its consignment note reads it — the one record of the reload.
+        expect(goods).toMatchObject({ claimedBy: baraka.did, status: 'in_transit', carriage: { vehicleId: truck.vehicleId, plate: 'KVC 986T' } });
+        expect(goods.reloads).toEqual([{ at: expect.any(String), aboard: true, fromPlate: 'KVC 986T', toVehicleId: rescue.vehicleId, toPlate: 'KVC 987T', toVehicleClass: 'truck', toDriverName: baraka.displayName, breakdownId: b.breakdownId, proof: 'pass', by: baraka.displayName, location: { lat: -1.33, lng: 36.87 } }]);
+        // THE NOTE: box 16 keeps the truck and driver the goods were taken over by; box 18 says the reload.
+        const note = notes.noteFor(aboard.freightId);
+        expect(note.carrier).toMatchObject({ plate: 'KVC 986T', driverName: amos.displayName });
+        expect(note.reservations).toEqual([expect.stringMatching(new RegExp(`^Reloaded .+ onto KVC 987T \\(${baraka.displayName}\\) after KVC 986T broke down at -1\\.33000, 36\\.87000: handed over at the vehicle, confirmed with the code of the driver handing over$`))]);
+        // The tracking link shows who comes to the door now.
+        expect(notes.trackView(dispatch.requireFreightPublic(aboard.freightId)).carrier).toMatchObject({ plate: 'KVC 987T', driverName: baraka.displayName });
         // The shipper's own list says who carries it now, and in what.
         expect(dispatch.postedBy(JENGA).find((r) => r.freightId === aboard.freightId)?.carrier).toEqual({ driverName: baraka.displayName, plate: 'KVC 987T', vehicleClass: 'truck' });
         expect(dispatch.requireFreightPublic(toCollect.freightId)).toMatchObject({ claimedBy: baraka.did, status: 'claimed' });
-        expect(dispatch.requireFreightPublic(toCollect.freightId)).not.toHaveProperty('movedTo');
+        // Not yet taken over: only the truck coming for it changed, and its note says nothing of it.
+        expect(dispatch.requireFreightPublic(toCollect.freightId).reloads).toEqual([expect.objectContaining({ aboard: false, toPlate: 'KVC 987T' })]);
+        expect(notes.noteFor(toCollect.freightId).reservations).toEqual([]);
         // If the rescuing truck breaks down in turn, what it carries is found on it.
         expect(dispatch.loadsOnVehicle(baraka.did, rescue.vehicleId).map((l) => l.code).sort()).toEqual([aboard.code, toCollect.code].sort());
         // Recorded on the breakdown; nothing left to take over.
         const kept = breakdowns.of(truck.vehicleId)[0];
         expect(kept.stillAboard).toEqual([]);
-        expect(kept.handovers).toEqual([expect.objectContaining({ toDriverDid: baraka.did, toDriverName: baraka.displayName, toPlate: 'KVC 987T', proof: 'pass', by: baraka.displayName, location: { lat: -1.33, lng: 36.87 } })]);
+        // The breakdown keeps no copy: who took what over is read back from the loads.
+        expect(kept.handovers).toEqual([{ at: expect.any(String), toDriverName: baraka.displayName, toPlate: 'KVC 987T', loads: expect.arrayContaining([aboard.code, toCollect.code]), proof: 'pass', by: baraka.displayName, location: { lat: -1.33, lng: 36.87 } }]);
+        expect(kept.handovers[0].loads).toHaveLength(2);
         expect(breakdowns.toTakeOver(baraka.did)).toEqual([]);
         expect(() => breakdowns.takeOverByPass(b.breakdownId, baraka.did, { pass: amosCode })).toThrow("Nothing of KVC 986T's is left to hand over");
         // Told: the office (in the notices), and the shippers of what moved — never by the plate.
@@ -684,7 +702,8 @@ describe('a vehicle’s upkeep', () => {
         expect(() => breakdowns.takeOverByPass(b.breakdownId, baraka.did, { pass: amosCode })).toThrow(`${amos.displayName} has ended their shift, so their pass is gone: the office can move the loads to you`);
         expect(breakdowns.takersFor(truck.vehicleId, b.breakdownId)).toEqual([{ driverDid: baraka.did, driverName: baraka.displayName, vehicleId: rescue.vehicleId, plate: 'KVC 991T', roomKg: 8000 }]);
         breakdowns.handOverByOffice(truck.vehicleId, b.breakdownId, baraka.did, 'Amina');
-        expect(dispatch.requireFreightPublic(aboard.freightId)).toMatchObject({ claimedBy: baraka.did, movedTo: { plate: 'KVC 991T' } });
+        expect(dispatch.requireFreightPublic(aboard.freightId)).toMatchObject({ claimedBy: baraka.did, reloads: [expect.objectContaining({ toPlate: 'KVC 991T', proof: 'office', by: 'Amina' })] });
+        expect(notes.noteFor(aboard.freightId).reservations).toEqual([expect.stringMatching(/onto KVC 991T .+ after KVC 990T broke down: moved on the carrier’s word \(Amina\)$/)]);
         expect(breakdowns.of(truck.vehicleId)[0].handovers[0]).toMatchObject({ proof: 'office', by: 'Amina', toPlate: 'KVC 991T' });
         expect(moved[0]).toMatchObject({ handover: { proof: 'office' } });
       });
@@ -703,6 +722,13 @@ describe('a vehicle’s upkeep', () => {
         fleet.couple(baraka.did, rescue.vehicleId);
         breakdowns.takeOverByPass(b.breakdownId, baraka.did, { pass: fleet.handoverPassFor(amos.did)! });
         expect(departures.require(run.departureId)).toMatchObject({ status: 'departed', vehicleId: rescue.vehicleId, plate: 'KVC 993T', driverDid: baraka.did, driverName: baraka.displayName });
+        expect(departures.require(run.departureId).reloads).toEqual([expect.objectContaining({ fromPlate: 'KVC 992T', toPlate: 'KVC 993T', toDriverName: baraka.displayName, breakdownId: b.breakdownId, proof: 'pass' })]);
+        // The booking's note: taken over in the truck that broke down, the reload in box 18.
+        const run2 = departures.require(run.departureId);
+        const runNote = runNotes.build(run2, run2.bookings[0]);
+        expect(runNote.carrier).toMatchObject({ plate: 'KVC 992T' });
+        expect(runNote.reservations).toEqual([expect.stringMatching(/^Reloaded .+ onto KVC 993T .+ after KVC 992T broke down: handed over at the vehicle/)]);
+        expect(breakdowns.of(truck.vehicleId)[0].handovers).toEqual([expect.objectContaining({ toPlate: 'KVC 993T', loads: ['Maize, 20 bags'] })]);
         expect(moved[0].tell).toEqual([expect.objectContaining({ shipperDid: JENGA, kind: 'booking', label: 'Maize, 20 bags' })]);
       });
     });

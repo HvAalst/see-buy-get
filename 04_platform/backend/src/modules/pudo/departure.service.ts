@@ -1291,21 +1291,43 @@ export class DepartureService {
   /**
    * A RUN THAT HAS LEFT GOES ON IN ANOTHER TRUCK, after its own broke down on the road: the goods aboard were moved
    * across, and the driver who took them over drives the rest of it. Asked first with `apply` false, so a handover that
-   * cannot move every load moves none. The checks are a swap's — what is booked fits, every kind of goods aboard can be
+   * cannot move every load moves none; with it, the reload is kept on the run, where its notes write it. The checks are a swap's — what is booked fits, every kind of goods aboard can be
    * carried, the driver is cleared to drive it — and its shippers hear of a different class of vehicle as a swap tells them.
    */
-  continueOn(departureId: string, vehicleId: string, driver: { did: string; name: string }, apply: boolean): Departure {
+  continueOn(departureId: string, vehicleId: string, driver: { did: string; name: string }, reload?: { breakdownId: string; proof: 'pass' | 'office'; by: string; location?: { lat: number; lng: number }; at: string }): Departure {
     const departure = this.require(departureId);
     if (departure.status !== 'departed') throw new GlosError('INVALID_STATE', `That run is ${departure.status}: only a run that has left goes on in another truck this way`);
     const vehicle = this.vehicles.get(vehicleId);
     if (vehicle.managerDid !== departure.managerDid) throw new GlosError('FORBIDDEN', `${vehicle.plate} is not one of ${departure.company}'s vehicles`);
     if (vehicle.vehicleId === departure.vehicleId) throw new GlosError('INVALID_INPUT', `${departure.plate} is already the truck on this run`);
     this.assertTruckTakes(departure, vehicle, driver);
-    if (!apply) return departure;
+    // Asked without the reload: only whether it can.
+    if (!reload) return departure;
+    departure.reloads = [
+      ...(departure.reloads ?? []),
+      {
+        at: reload.at,
+        fromPlate: departure.plate,
+        fromVehicleClass: departure.vehicleClass,
+        ...(departure.driverName ? { fromDriverName: departure.driverName } : {}),
+        toPlate: vehicle.plate,
+        toVehicleClass: vehicle.vehicleClass,
+        toDriverName: driver.name,
+        breakdownId: reload.breakdownId,
+        proof: reload.proof,
+        by: reload.by,
+        ...(reload.location ? { location: { lat: reload.location.lat, lng: reload.location.lng } } : {}),
+      },
+    ];
     departure.driverDid = driver.did;
     departure.driverName = driver.name;
     this.putOnTruck(departure, vehicle);
     return departure;
+  }
+
+  /** The reloads of a run that followed one breakdown — read back from the run, where its notes read them. */
+  reloadsAfter(departureId: string, breakdownId: string): Array<{ at: string; toPlate: string; toDriverName: string; proof: 'pass' | 'office'; by: string; location?: { lat: number; lng: number } }> {
+    return (this.departures.get(departureId)?.reloads ?? []).filter((r) => r.breakdownId === breakdownId).map((r) => ({ ...r }));
   }
 
   /** Whether this truck can carry this run as it is booked, driven by this driver — refused by name if not. */

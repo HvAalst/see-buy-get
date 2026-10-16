@@ -17069,6 +17069,7 @@
             "schema": {
               "enum": [
                 "taken_over",
+                "reloaded",
                 "delivered",
                 "not_delivered",
                 "claimed",
@@ -17151,6 +17152,7 @@
             "schema": {
               "enum": [
                 "taken_over",
+                "reloaded",
                 "delivered",
                 "not_delivered",
                 "claimed",
@@ -17262,6 +17264,7 @@
             "schema": {
               "enum": [
                 "taken_over",
+                "reloaded",
                 "delivered",
                 "not_delivered",
                 "claimed",
@@ -35508,27 +35511,62 @@
           "driverDid"
         ]
       },
-      "FreightMovedTo": {
+      "FreightReload": {
         "type": "object",
         "properties": {
-          "vehicleId": {
-            "type": "string"
+          "proof": {
+            "type": "string",
+            "description": "The two drivers at the vehicle together, proven by the code of the one handing over — or the carrier's office's word.",
+            "enum": [
+              "pass",
+              "office"
+            ]
           },
-          "plate": {
-            "type": "string"
-          },
-          "vehicleClass": {
-            "type": "string"
+          "location": {
+            "$ref": "#/components/schemas/GeoPoint"
           },
           "at": {
             "type": "string"
+          },
+          "aboard": {
+            "type": "boolean",
+            "description": "The goods were aboard (taken over) when they moved; otherwise the truck coming to collect them changed."
+          },
+          "fromPlate": {
+            "type": "string"
+          },
+          "toVehicleId": {
+            "type": "string"
+          },
+          "toPlate": {
+            "type": "string"
+          },
+          "toVehicleClass": {
+            "type": "string"
+          },
+          "toDriverName": {
+            "type": "string"
+          },
+          "breakdownId": {
+            "type": "string",
+            "description": "The breakdown it followed."
+          },
+          "by": {
+            "type": "string",
+            "description": "Who recorded it: the driver who took the goods over, or the office."
           }
         },
         "required": [
-          "vehicleId",
-          "plate",
-          "vehicleClass",
-          "at"
+          "proof",
+          "at",
+          "aboard",
+          "fromPlate",
+          "toVehicleId",
+          "toPlate",
+          "toVehicleClass",
+          "toDriverName",
+          "breakdownId",
+          "by"
         ]
       },
       "FreightDeliveryAttempt": {
@@ -36288,13 +36326,12 @@
               }
             }
           },
-          "movedTo": {
-            "description": "The vehicle the goods are in NOW, when they were moved to another of the carrier's vehicles after a breakdown on the\nroad. The one they were taken over in stays on `carriage`, as the consignment note says; who moved them, and on\nwhose word, is kept on the breakdown.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/FreightMovedTo"
-              }
-            ]
+          "reloads": {
+            "description": "Moved to other vehicles of the carrier after a breakdown, oldest first: what the consignment note writes in box 18.\nThe vehicle the goods are in now is the last one moved to while aboard; the one they were taken over in stays on\n`carriage`, as the note's carrier box says.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FreightReload"
+            }
           },
           "proofOfDelivery": {
             "type": "object",
@@ -38055,6 +38092,59 @@
           "amount"
         ]
       },
+      "DepartureReload": {
+        "type": "object",
+        "properties": {
+          "fromDriverName": {
+            "type": "string"
+          },
+          "proof": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "office"
+            ]
+          },
+          "location": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "at": {
+            "type": "string"
+          },
+          "fromPlate": {
+            "type": "string"
+          },
+          "fromVehicleClass": {
+            "type": "string"
+          },
+          "toPlate": {
+            "type": "string"
+          },
+          "toVehicleClass": {
+            "type": "string"
+          },
+          "toDriverName": {
+            "type": "string"
+          },
+          "breakdownId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "proof",
+          "at",
+          "fromPlate",
+          "fromVehicleClass",
+          "toPlate",
+          "toVehicleClass",
+          "toDriverName",
+          "breakdownId",
+          "by"
+        ]
+      },
       "DepartureRate": {
         "type": "object",
         "properties": {
@@ -38534,6 +38624,13 @@
       "Departure": {
         "type": "object",
         "properties": {
+          "reloads": {
+            "description": "Went on in other trucks after breakdowns, oldest first: what its bookings' consignment notes write in box 18.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DepartureReload"
+            }
+          },
           "capacityM3": {
             "type": "number",
             "description": "Cubic metres, still DECLARED rather than derived: the vehicle registry holds a weight and no volume,\nso there is nothing to read it from. Left that way rather than guessed from the class, because a\nbox body and a flatbed of the same tonnage are not the same offer."
@@ -46646,13 +46743,7 @@
           "at": {
             "type": "string"
           },
-          "toDriverDid": {
-            "type": "string"
-          },
           "toDriverName": {
-            "type": "string"
-          },
-          "toVehicleId": {
             "type": "string"
           },
           "toPlate": {
@@ -46667,9 +46758,7 @@
           "loads",
           "proof",
           "at",
-          "toDriverDid",
           "toDriverName",
-          "toVehicleId",
           "toPlate",
           "by"
         ]

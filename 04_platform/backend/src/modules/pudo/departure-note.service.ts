@@ -1,7 +1,7 @@
 import { EntityService } from '../../foundation/entity/entity.service';
 import { Injectable, Optional } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
-import { ConsignmentNoteService, agentConfirmation } from './consignment-note.service';
+import { ConsignmentNoteService, agentConfirmation, reloadLine } from './consignment-note.service';
 import { DepartureService } from './departure.service';
 import { CargoService } from './cargo.service';
 import { AgentService } from './agent.service';
@@ -132,13 +132,18 @@ export class DepartureNoteService {
       }
     }
     if (booking.pod?.remarks) reservations.push(`At delivery: ${booking.pod.remarks}`);
+    // A run that went on in another truck after a breakdown: written here, and nowhere else.
+    for (const r of departure.reloads ?? []) reservations.push(reloadLine(r));
 
+    // Box 16 names the truck and driver the goods were taken over in; a later reload is box 18's.
+    const first = departure.reloads?.[0];
+    const takenOverIn = first ? { driverName: first.fromDriverName, plate: first.fromPlate, vehicleClass: first.fromVehicleClass } : { driverName: departure.driverName, plate: departure.plate, vehicleClass: departure.vehicleClass };
     const carrier: ConsignmentNote['carrier'] = {
       name: departure.company,
       did: departure.managerDid,
-      ...(departure.driverName ? { driverName: departure.driverName } : {}),
-      plate: departure.plate,
-      vehicleClass: departure.vehicleClass,
+      ...(takenOverIn.driverName ? { driverName: takenOverIn.driverName } : {}),
+      plate: takenOverIn.plate,
+      vehicleClass: takenOverIn.vehicleClass,
     };
 
     return {
@@ -192,7 +197,7 @@ export class DepartureNoteService {
       confirmations: {
         sender: { by: agentConfirmation(booking.bookedByName, agent, sender), at: booking.at, how: 'Booked electronically on SeeBuyGet' },
         ...(booking.loadSafety
-          ? { carrier: { by: departure.driverName ?? departure.company, at: booking.loadSafety.at, how: 'Load-safety checklist confirmed electronically' } }
+          ? { carrier: { by: takenOverIn.driverName ?? departure.company, at: booking.loadSafety.at, how: 'Load-safety checklist confirmed electronically' } }
           : {}),
         ...(booking.pod
           ? {

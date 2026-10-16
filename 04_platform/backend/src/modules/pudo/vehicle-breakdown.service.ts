@@ -58,11 +58,16 @@ export interface VehicleBrokeDown {
 /** A breakdown's loads taken over, for the notices: the office, the two drivers, and the shippers of what moved. */
 export interface VehicleLoadsHandedOver {
   fleetDid: string;
+  /** Loads moved while aboard, and runs that went on: their notes are frozen with the reload on them. */
+  reloadedFreightIds: string[];
+  reloadedDepartureIds: string[];
   carrier: string;
   fromPlate: string;
   breakdownId: string;
-  /** The driver the loads were with. */
+  /** The driver the loads were with, and the driver and truck that took them. */
   fromDriverDid: string;
+  toDriverDid: string;
+  toVehicleId: string;
   fromDriverName?: string;
   handover: BreakdownHandover;
   tell: BreakdownTell[];
@@ -272,33 +277,37 @@ export class VehicleBreakdownService {
     const taker = this.drivers.get(takerDid);
     const bookings = loads.filter((l) => l.kind === 'booking');
     this.dispatch.assertCanTakeLoads(loads.filter((l) => l.kind === 'freight').map((l) => l.id), takerDid, bookings.reduce((n, l) => n + l.weightKg, 0));
-    for (const departureId of new Set(bookings.map((l) => l.departureId!))) this.departures.continueOn(departureId, to.vehicleId, { did: takerDid, name: taker.displayName }, false);
+    for (const departureId of new Set(bookings.map((l) => l.departureId!))) this.departures.continueOn(departureId, to.vehicleId, { did: takerDid, name: taker.displayName });
     return { v, to, taker: { did: taker.did, displayName: taker.displayName }, loads };
   }
 
   /** The handover itself, once nothing can say no: the loads move, it is recorded, and everybody concerned is told. */
   private carryOut(b: VehicleBreakdown & { photoRef?: string }, plan: { v: Vehicle; to: Vehicle; taker: { did: string; displayName: string }; loads: Load[] }, how: { proof: 'pass' | 'office'; by: string; location?: { lat: number; lng: number } }, now: number): TakeOverResult {
     const { v, to, taker, loads } = plan;
-    this.dispatch.moveLoads(loads.filter((l) => l.kind === 'freight').map((l) => l.id), taker.did, now);
-    for (const departureId of new Set(loads.filter((l) => l.kind === 'booking').map((l) => l.departureId!))) this.departures.continueOn(departureId, to.vehicleId, { did: taker.did, name: taker.displayName }, true);
+    const location = how.location ? { lat: how.location.lat, lng: how.location.lng } : undefined;
+    // The reload is written where the consignment notes read it — on each load, and on each run — and nowhere else.
+    this.dispatch.moveLoads(loads.filter((l) => l.kind === 'freight').map((l) => l.id), taker.did, { fromPlate: v.plate, toDriverName: taker.displayName, breakdownId: b.breakdownId, proof: how.proof, by: how.by, ...(location ? { location } : {}) }, now);
+    const runs = [...new Set(loads.filter((l) => l.kind === 'booking').map((l) => l.departureId!))];
+    for (const departureId of runs) this.departures.continueOn(departureId, to.vehicleId, { did: taker.did, name: taker.displayName }, { breakdownId: b.breakdownId, proof: how.proof, by: how.by, ...(location ? { location } : {}), at: new Date(now).toISOString() });
     const handover: BreakdownHandover = {
       at: new Date(now).toISOString(),
-      toDriverDid: taker.did,
       toDriverName: taker.displayName,
-      toVehicleId: to.vehicleId,
       toPlate: to.plate,
       loads: loads.map((l) => l.label),
       proof: how.proof,
       by: how.by,
       ...(how.location ? { location: { lat: how.location.lat, lng: how.location.lng } } : {}),
     };
-    this.breakdowns.set(b.breakdownId, { ...b, handovers: [...(b.handovers ?? []), handover] });
     const told: VehicleLoadsHandedOver = {
       fleetDid: v.managerDid!,
+      reloadedFreightIds: loads.filter((l) => l.kind === 'freight' && l.state === 'aboard').map((l) => l.id),
+      reloadedDepartureIds: runs,
       carrier: this.carrierOf(v, b.driverName),
       fromPlate: v.plate,
       breakdownId: b.breakdownId,
       fromDriverDid: b.driverDid!,
+      toDriverDid: taker.did,
+      toVehicleId: to.vehicleId,
       ...(b.driverName ? { fromDriverName: b.driverName } : {}),
       handover,
       tell: tellsOf(loads),
@@ -333,10 +342,32 @@ export class VehicleBreakdownService {
     return b;
   }
 
-  /** A breakdown as its owner reads it: what is still aboard, worked out now. */
+  /**
+   * A breakdown as its owner reads it: what is still aboard, and who took what over — both worked out now. The
+   * handovers are read back from the loads and runs that moved, where their consignment notes write them; the breakdown
+   * keeps no copy.
+   */
   private view(b: VehicleBreakdown & { photoRef?: string }): VehicleBreakdown {
     const v = this.vehicles.get(b.vehicleId);
-    return { ...publicBreakdown(b), stillAboard: this.stillWith(v, b).map((l) => l.label) };
+    return { ...publicBreakdown(b), stillAboard: this.stillWith(v, b).map((l) => l.label), handovers: this.handoversOf(b) };
+  }
+
+  /** Who took what over, grouped by the moment and the truck, from the reloads written on the loads and runs it carried. */
+  private handoversOf(b: VehicleBreakdown): BreakdownHandover[] {
+    const moves: Array<{ at: string; toPlate: string; toDriverName: string; proof: 'pass' | 'office'; by: string; location?: { lat: number; lng: number }; label: string }> = [];
+    for (const l of b.aboard.filter((x) => x.kind === 'freight')) for (const r of this.dispatch.reloadsAfter(l.id, b.breakdownId)) moves.push({ ...r, label: l.label });
+    for (const departureId of new Set(b.aboard.filter((x) => x.kind === 'booking').map((x) => x.departureId!))) {
+      const labels = b.aboard.filter((x) => x.departureId === departureId).map((x) => x.label);
+      for (const r of this.departures.reloadsAfter(departureId, b.breakdownId)) for (const label of labels) moves.push({ ...r, label });
+    }
+    const byMoment = new Map<string, BreakdownHandover>();
+    for (const m of moves.sort((x, y) => x.at.localeCompare(y.at))) {
+      const key = `${m.at}|${m.toPlate}`;
+      const h = byMoment.get(key) ?? { at: m.at, toDriverName: m.toDriverName, toPlate: m.toPlate, loads: [], proof: m.proof, by: m.by, ...(m.location ? { location: { ...m.location } } : {}) };
+      h.loads.push(m.label);
+      byMoment.set(key, h);
+    }
+    return [...byMoment.values()];
   }
 
   /** A vehicle's breakdowns for its sheet: the open one, and those resolved in the last month, newest first. */
@@ -449,6 +480,6 @@ function tellsOf(loads: Load[]): BreakdownTell[] {
 function publicBreakdown(b: VehicleBreakdown & { photoRef?: string }): VehicleBreakdown {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { photoRef, ...rest } = b;
-  // A breakdown kept before handovers were recorded has none.
-  return { ...rest, aboard: rest.aboard.map((l: BreakdownLoad) => ({ ...l })), stillAboard: rest.stillAboard ?? [], handovers: (rest.handovers ?? []).map((h) => ({ ...h, loads: [...h.loads] })) };
+  // What is still aboard and who took what over are read afresh by view(); nothing of them is kept here.
+  return { ...rest, aboard: rest.aboard.map((l: BreakdownLoad) => ({ ...l })), stillAboard: [], handovers: [] };
 }

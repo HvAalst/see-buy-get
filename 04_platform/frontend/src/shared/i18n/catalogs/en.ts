@@ -1239,6 +1239,7 @@ export const en = {
   'archive.path.board': 'Freight board',
   'archive.path.run': 'Scheduled run',
   'archive.stage.takenOver': 'Taken over by the carrier',
+  'archive.stage.reloaded': 'Moved to another of the carrier’s vehicles',
   'archive.stage.delivered': 'Delivered',
   'archive.stage.notDelivered': 'Could not be delivered',
   'archive.stage.claimed': 'Claim raised',

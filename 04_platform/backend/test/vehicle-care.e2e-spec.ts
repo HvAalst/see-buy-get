@@ -318,11 +318,58 @@ describe('a vehicle’s upkeep, over the wire', () => {
     expect(moving!.body).not.toContain(x.plate);
     expect(moving!.body).not.toContain(rescuer.plate);
     // The shipper's own view says who carries it now.
-    expect(dispatch.requireFreightPublic(load.freightId)).toMatchObject({ claimedBy: rescuer.did, movedTo: { plate: rescuer.plate } });
+    expect(dispatch.requireFreightPublic(load.freightId)).toMatchObject({ claimedBy: rescuer.did, reloads: [expect.objectContaining({ toPlate: rescuer.plate })] });
+    // THE NOTE the parties read says it — and it is the copy frozen at the reload, kept in the archive.
+    await new Promise((r) => setTimeout(r, 50));
+    const note = (await http().get(`/v1/sbg/dispatch/freight/${load.freightId}/consignment-note`).set(bearer(other.office)).expect(200)).body;
+    expect(note.carrier).toMatchObject({ plate: x.plate });
+    expect(note.reservations).toEqual([expect.stringMatching(new RegExp(`onto ${rescuer.plate} \\(Wanjiru\\) after ${x.plate} broke down at -1\\.33000, 36\\.87000: handed over at the vehicle`))]);
+    const copies = (await http().get('/v1/sbg/consignment-notes').query({ stage: 'reloaded' }).set(bearer(other.office)).expect(200)).body;
+    expect(JSON.stringify(copies)).toContain(`CMR-${load.code}`);
     // Nothing left for the office to move.
     const again = await http().post(`/v1/sbg/vehicles/${x.truckId}/breakdowns/${id}/hand-over`).set(bearer(x.office)).send({ toDriverDid: rescuer.did });
     expect(again.status).toBe(400);
     expect(again.body.message).toBe(`Nothing of ${x.plate}'s is left to hand over`);
     await http().post(`/v1/sbg/vehicles/${x.truckId}/breakdowns/${id}/hand-over`).set(bearer(other.office)).send({ toDriverDid: rescuer.did }).expect(403);
+  });
+
+  it('is staff’s to read and never to change: every upkeep write refused, and the shift doors take no reading from them', async () => {
+    const x = await aFleetDriver();
+    const staff = bearer(operator);
+    await http().get(`/v1/sbg/vehicles/${x.truckId}/care`).set(staff).expect(200);
+    await http().get(`/v1/sbg/fleet/managers/${x.fleetDid}/care-settings`).set(staff).expect(200);
+    await http().get(`/v1/sbg/fleet/managers/${x.fleetDid}/breakdowns`).set(staff).expect(200);
+    await http().get(`/v1/sbg/fleet/drivers/${x.did}/vehicle-check`).query({ vehicleId: x.truckId }).set(staff).expect(200);
+    await http().get(`/v1/sbg/fleet/drivers/${x.did}/breakdowns`).set(staff).expect(200);
+    const writes: Array<[string, Record<string, unknown>]> = [
+      [`/v1/sbg/vehicles/${x.truckId}/off-road`, { reason: 'repair' }],
+      [`/v1/sbg/vehicles/${x.truckId}/off-road/ofr_x/end`, {}],
+      [`/v1/sbg/vehicles/${x.truckId}/back-on-road`, {}],
+      [`/v1/sbg/vehicles/${x.truckId}/readings`, { km: 1000 }],
+      [`/v1/sbg/vehicles/${x.truckId}/service-plan`, { everyMonths: 3 }],
+      [`/v1/sbg/vehicles/${x.truckId}/services`, { day: '2026-10-01', what: 'service' }],
+      [`/v1/sbg/vehicles/${x.truckId}/defects`, { item: 'body', note: 'dent', safe: true }],
+      [`/v1/sbg/vehicles/${x.truckId}/defects/dft_x/decide`, { decision: 'fixed', note: 'x' }],
+      [`/v1/sbg/vehicles/${x.truckId}/breakdowns`, { cause: 'engine', note: 'x' }],
+      [`/v1/sbg/vehicles/${x.truckId}/breakdowns/brk_x/resolve`, { outcome: 'back_on_road', note: 'x' }],
+      [`/v1/sbg/vehicles/${x.truckId}/breakdowns/brk_x/hand-over`, { toDriverDid: x.did }],
+      [`/v1/sbg/fleet/managers/${x.fleetDid}/care-settings`, { requireDailyCheck: true }],
+      [`/v1/sbg/fleet/drivers/${x.did}/vehicle-check`, { vehicleId: x.truckId, answers: [] }],
+      [`/v1/sbg/fleet/drivers/${x.did}/defects`, { vehicleId: x.truckId, item: 'body', note: 'dent', safe: true }],
+      [`/v1/sbg/fleet/drivers/${x.did}/breakdown`, { cause: 'engine', note: 'x' }],
+      [`/v1/sbg/fleet/drivers/${x.did}/take-over`, { breakdownId: 'brk_x', pass: '123456' }],
+    ];
+    for (const [path, body] of writes) expect([path, (await http().post(path).set(staff).send(body)).status]).toEqual([path, 403]);
+    // And nothing changed.
+    expect((await http().get(`/v1/sbg/vehicles/${x.truckId}/care`).set(staff)).body).toMatchObject({ usable: true, spells: [], readings: [], defects: [], services: [], breakdowns: [] });
+    expect((await http().get(`/v1/sbg/fleet/managers/${x.fleetDid}/care-settings`).set(staff)).body).toEqual({ requireDailyCheck: false, serviceOverdue: 'warn' });
+    // The shift's own doors: staff standing in may start and end a driver's shift, but give no reading.
+    const refused = await http().post(`/v1/sbg/fleet/drivers/${x.did}/start-session`).set(staff).send({ vehicleId: x.truckId, odometerKm: 5000 });
+    expect(refused.status).toBe(403);
+    expect(refused.body.message).toBe('Staff standing in give no odometer reading: the driver does, from their own phone');
+    await http().post(`/v1/sbg/fleet/drivers/${x.did}/start-session`).set(staff).send({ vehicleId: x.truckId }).expect(201);
+    const ended = await http().post(`/v1/sbg/fleet/drivers/${x.did}/end-session`).set(staff).send({ odometerKm: 5000 }).expect(201);
+    expect(ended.body.odometer).toEqual({ kept: false, why: 'Staff standing in give no odometer reading: the driver does, from their own phone' });
+    expect((await http().get(`/v1/sbg/vehicles/${x.truckId}/care`).set(staff)).body.readings).toEqual([]);
   });
 });

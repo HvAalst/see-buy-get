@@ -119,6 +119,11 @@ export class NoteArchiveService implements OnModuleInit, OnModuleDestroy {
     this.events.subscribe<{ departureId: string }>(GlosEvent.Pudo.DepartureCancelled, (e) =>
       this.freezeWholeRun(e.payload.departureId, 'cancelled', 'The carrier called the run off'),
     );
+    // A reload after a breakdown is written on the note (box 18) and nowhere else, so the note is kept as it read then.
+    this.events.subscribe<{ reloadedFreightIds: string[]; reloadedDepartureIds: string[] }>(GlosEvent.Pudo.VehicleLoadsHandedOver, (e) => {
+      for (const id of e.payload.reloadedFreightIds) this.freezeFreight(id, 'reloaded', 'The goods were moved to another of the carrier’s vehicles after a breakdown');
+      for (const id of e.payload.reloadedDepartureIds) this.freezeWholeRun(id, 'reloaded', 'The run went on in another of the carrier’s vehicles after a breakdown');
+    });
 
     /*
      * THE LEDGER IS HEALED FROM THE DOCUMENTS BEFORE ANYTHING ELSE RUNS.
