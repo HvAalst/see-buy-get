@@ -12,6 +12,8 @@ import { Freight } from './dispatch.types';
 import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { FleetRosterService } from './fleet-roster.service';
+import { FleetSiteService, type SiteForPlan } from './fleet-site.service';
+import { DEFAULT_LOADING_BAYS, DEPOT_SITE } from './fleet-site.types';
 import { DEFAULT_DAY_START, DayPlanState, DayPlanView, PlanLeftView, PlanRouteView, PlanRuleView, PlanSendResult, PlanSendTruck, PlanSettings, PlannedOn } from './fleet-plan.types';
 import { ROAD_MATRIX, type RoadDistances, type RoadMatrix } from './road-matrix';
 import { ROUTER, Router } from './router';
@@ -79,6 +81,8 @@ export class FleetPlanService implements OnModuleInit {
     @Optional() @Inject(ROAD_MATRIX) private readonly roads?: RoadMatrix,
     // Who drives on the day, where the office has said. Without it a plan counts every active driver, as it always did.
     @Optional() private readonly roster?: FleetRosterService,
+    // Where each truck and driver starts from. Without it a fleet has one site, its depot, as it always had.
+    @Optional() private readonly sites?: FleetSiteService,
   ) {}
 
   /**
@@ -132,9 +136,16 @@ export class FleetPlanService implements OnModuleInit {
   /** The distances between every place of a fleet's day. Coordinates are all that is asked about. */
   private async distancesFor(fleetDid: string, day: string): Promise<RoadDistances | undefined> {
     if (!this.roads) return undefined;
-    const depot = this.managers.get(fleetDid).location;
+    const sites = this.sitesFor(fleetDid, day).map((s) => s.location);
     const places = this.dispatch.contractOrdersForDay(fleetDid, day).filter((f) => f.destLocation).flatMap((f) => [f.pickupLocation, f.destLocation!]);
-    return this.roads.between([depot, ...places]);
+    return this.roads.between([...sites, ...places]);
+  }
+
+  /** The fleet's sites for a plan of a day; without the site register, its depot alone. */
+  private sitesFor(fleetDid: string, day: string): SiteForPlan[] {
+    if (this.sites) return this.sites.forPlan(fleetDid, day);
+    const m = this.managers.get(fleetDid);
+    return [{ siteId: DEPOT_SITE, name: 'Depot', location: m.location, loadingBays: DEFAULT_LOADING_BAYS, shifts: [] }];
   }
 
   /** What a plan is asked with, checked: its settings within their limits, its day a day that has not gone — on the fleet's own clock. */
@@ -167,6 +178,13 @@ export class FleetPlanService implements OnModuleInit {
     // trucks than that — it says which it counted, so a plan for a day nobody rostered is not mistaken for one that was.
     const crew = this.roster?.driversFor(fleetDid, ask.day) ?? { source: 'everyone' as const, drivers: this.drivers.list({ managerDid: fleetDid }).filter((d) => d.status === 'ACTIVE') };
     const driverCount = crew.drivers.length;
+    // WHERE EACH STARTS: every truck from the site it works from; no more trucks leave a site than drivers start there.
+    const sites = this.sitesFor(fleetDid, ask.day);
+    const siteById = new Map(sites.map((s) => [s.siteId, s]));
+    const homeOf = (vehicleId: string) => siteById.get(this.sites?.homeOf(fleetDid, 'vehicle', vehicleId) ?? DEPOT_SITE) ?? sites[0];
+    const starts = this.roster?.startsFor(fleetDid, ask.day) ?? crew.drivers.map((driver) => ({ driver, siteId: this.sites?.homeOf(fleetDid, 'driver', driver.did) ?? DEPOT_SITE }));
+    const driversAt: Record<string, number> = {};
+    for (const s of starts) driversAt[s.siteId] = (driversAt[s.siteId] ?? 0) + 1;
 
     const rules = this.rulesOf(fleetDid, ask, orders, new Map(fleet.map((x) => [x.v.vehicleId, x.v.plate])));
     // What a rule means to the math: a vehicle this order may not go on. "Put it on that one" is every other one.
@@ -187,13 +205,14 @@ export class FleetPlanService implements OnModuleInit {
     }
     const onTheDay = (w: DayWindow) => ({ ...(w.fromMin !== undefined ? { fromMin: w.fromMin - dayStartMin } : {}), ...(w.toMin !== undefined ? { toMin: w.toMin - dayStartMin } : {}) });
     const planOrders: PlanOrder[] = pinned.map((f) => ({ id: f.freightId, kg: f.weightKg, pickup: f.pickupLocation, drop: f.destLocation!, ...(windows.has(f.freightId) ? { window: onTheDay(windows.get(f.freightId)!) } : {}) }));
-    const trucks: PlanTruck[] = going.map(({ v }) => ({ id: v.vehicleId, capacityKg: v.capacityKg, cannot: new Set(pinned.filter((f) => barred(v.vehicleId, f.freightId) || !this.dispatch.vehicleCanCarryFreight(v, f.freightId)).map((f) => f.freightId)) }));
+    const trucks: PlanTruck[] = going.map(({ v }) => ({ id: v.vehicleId, capacityKg: v.capacityKg, cannot: new Set(pinned.filter((f) => barred(v.vehicleId, f.freightId) || !this.dispatch.vehicleCanCarryFreight(v, f.freightId)).map((f) => f.freightId)), home: homeOf(v.vehicleId).location, group: homeOf(v.vehicleId).siteId }));
     const result = planDay({
       orders: planOrders,
       trucks,
-      depot: manager.location,
+      depot: sites[0]?.location ?? manager.location,
+      sites: sites.map((s) => s.location),
       km: roads ? (a, b) => roads.km(a, b) : (a, b) => this.router.roadKm(a, b),
-      params: { speedKmh: settings.speedKmh, loadMin: settings.loadMin, unloadMin: settings.unloadMin, dayMin: settings.dayHours * 60, maxTrucks: driverCount },
+      params: { speedKmh: settings.speedKmh, loadMin: settings.loadMin, unloadMin: settings.unloadMin, dayMin: settings.dayHours * 60, maxTrucks: driverCount, maxPerGroup: driversAt },
     });
 
     const byId = new Map(orders.map((f) => [f.freightId, f]));
@@ -202,9 +221,12 @@ export class FleetPlanService implements OnModuleInit {
     const clock = (min: number) => clockOf(settings.dayStart, min);
     const routes: PlanRouteView[] = result.routes.map((r) => {
       const v = vehicleOf.get(r.truckId)!;
+      const site = homeOf(v.vehicleId);
       return {
         vehicleId: v.vehicleId,
         plate: v.plate,
+        siteId: site.siteId,
+        siteName: site.name,
         vehicleClass: v.vehicleClass,
         capacityKg: v.capacityKg,
         trips: r.trips.map((t) => ({
@@ -232,7 +254,8 @@ export class FleetPlanService implements OnModuleInit {
         km: r.km,
         emptyKm: r.emptyKm,
         minutes: r.minutes,
-        home: clock(r.minutes),
+        leaves: clock(r.startMin),
+        home: clock(r.startMin + r.minutes),
         weightKg: r.kg,
         fullestPct: Math.round((Math.max(...r.trips.map((t) => t.kg)) / v.capacityKg) * 100),
       };
@@ -253,6 +276,13 @@ export class FleetPlanService implements OnModuleInit {
       madeAt: new Date(now).toISOString(),
       routes,
       unplanned,
+      sites: sites.map((s) => ({
+        siteId: s.siteId,
+        name: s.name,
+        trucksAvailable: going.filter(({ v }) => homeOf(v.vehicleId).siteId === s.siteId).length,
+        trucksUsed: routes.filter((r) => r.siteId === s.siteId).length,
+        drivers: driversAt[s.siteId] ?? 0,
+      })),
       ...(result.hire ? { hire: { trucks: result.hire.trucks, orders: result.hire.orders, weightKg: result.hire.kg, capacityKg: result.hire.capacityKg } } : {}),
       totals: {
         orders: orders.length,

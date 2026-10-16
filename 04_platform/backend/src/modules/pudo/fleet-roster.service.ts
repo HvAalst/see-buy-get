@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -6,6 +6,8 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { isDay } from './carriage-contract.service';
 import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
+import { FleetSiteService } from './fleet-site.service';
+import { DEPOT_SITE } from './fleet-site.types';
 import { FleetDriver } from './fleet.types';
 import { DriverRosterView, RosterDay, RosterView } from './fleet-roster.types';
 
@@ -32,7 +34,24 @@ export class FleetRosterService {
     private readonly drivers: DriverService,
     private readonly managers: FleetManagerService,
     private readonly events: EventBus,
+    // Optional so the specs that build this by hand keep working; a fleet without it has one site, its depot.
+    @Optional() private readonly sites?: FleetSiteService,
   ) {}
+
+  /**
+   * Each driver a plan for the day counts, and the site they start from: where the office said for the day, else their
+   * home site. A site said for the day that has since closed is their home again.
+   */
+  startsFor(fleetDid: string, day: string): Array<{ driver: FleetDriver; siteId: string }> {
+    const { drivers } = this.driversFor(fleetDid, day);
+    const said = this.days.get(keyOf(fleetDid, day))?.starts ?? {};
+    const open = new Set(this.sites?.sitesOf(fleetDid).map((s) => s.siteId) ?? [DEPOT_SITE]);
+    return drivers.map((driver) => {
+      const home = this.sites?.homeOf(fleetDid, 'driver', driver.did) ?? DEPOT_SITE;
+      const that = said[driver.did];
+      return { driver, siteId: that && open.has(that) ? that : home };
+    });
+  }
 
   /**
    * The drivers a plan for the day counts: the office's roster where it set one — of those, the ones still active in
@@ -52,11 +71,14 @@ export class FleetRosterService {
     const kept = this.days.get(keyOf(fleetDid, day));
     const { source, drivers } = this.driversFor(fleetDid, day);
     const on = new Set(drivers.map((d) => d.did));
+    const open = new Set(this.sites?.sitesOf(fleetDid).map((s) => s.siteId) ?? [DEPOT_SITE]);
+    const homeOf = (did: string) => this.sites?.homeOf(fleetDid, 'driver', did) ?? DEPOT_SITE;
+    const startOf = (did: string) => (kept?.starts?.[did] && open.has(kept.starts[did]) ? kept.starts[did] : homeOf(did));
     return {
       day,
       source,
       drivers: drivers.length,
-      list: this.activeOf(fleetDid).map((d) => ({ driverDid: d.did, name: d.displayName, rostered: on.has(d.did) })),
+      list: this.activeOf(fleetDid).map((d) => ({ driverDid: d.did, name: d.displayName, rostered: on.has(d.did), siteId: startOf(d.did), homeSiteId: homeOf(d.did) })),
       ...(kept ? { setAt: kept.setAt, setBy: kept.setBy } : {}),
     };
   }
@@ -66,7 +88,7 @@ export class FleetRosterService {
    * when the day has gone or is too far off, or a name on it is not an active driver of this fleet. Each driver whose
    * day changed is told: put on it, or taken off a day they had been told they drive.
    */
-  set(fleetDid: string, day: string, driverDids: string[], by: string, now: number = Date.now()): RosterView {
+  set(fleetDid: string, day: string, driverDids: string[], by: string, now: number = Date.now(), starts: Array<{ driverDid: string; siteId: string }> = []): RosterView {
     if (!isDay(day)) throw new GlosError('INVALID_INPUT', 'A day is YYYY-MM-DD', { field: 'day' });
     const fleet = this.managers.get(fleetDid);
     const today = this.managers.todayOf(fleetDid, now);
@@ -80,9 +102,18 @@ export class FleetRosterService {
       throw new GlosError('INVALID_INPUT', known ? `${known.displayName} is not an active driver, and cannot be put on a day` : 'A driver on this list is not in this fleet', { field: 'driverDids' });
     }
 
+    // Where each starts that day: an open site of this fleet, for a driver on the list. Only what differs from home is kept.
+    const open = new Set(this.sites?.sitesOf(fleetDid).map((s) => s.siteId) ?? [DEPOT_SITE]);
+    const away: Record<string, string> = {};
+    for (const s of starts) {
+      if (!wanted.includes(s.driverDid)) throw new GlosError('INVALID_INPUT', 'A start is given for a driver who is not on the day', { field: 'starts' });
+      if (!open.has(s.siteId)) throw new GlosError('INVALID_INPUT', 'A start names a site that is not one of this fleet’s open sites', { field: 'starts' });
+      if (s.siteId !== (this.sites?.homeOf(fleetDid, 'driver', s.driverDid) ?? DEPOT_SITE)) away[s.driverDid] = s.siteId;
+    }
+
     const key = keyOf(fleetDid, day);
     const before = new Set(this.days.get(key)?.driverDids ?? []);
-    this.days.set(key, { fleetDid, day, driverDids: wanted, setAt: new Date(now).toISOString(), setBy: by });
+    this.days.set(key, { fleetDid, day, driverDids: wanted, ...(Object.keys(away).length ? { starts: away } : {}), setAt: new Date(now).toISOString(), setBy: by });
 
     // Told only what changed for them. Somebody left off a day the office had never rostered was never told they
     // drive it, so there is nothing to take back.

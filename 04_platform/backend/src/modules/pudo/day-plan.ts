@@ -49,6 +49,19 @@ export interface PlanTruck {
   capacityKg: number;
   /** The orders this truck cannot carry whatever its room: wrong equipment, wrong body. Ids. */
   cannot?: ReadonlySet<string>;
+  /** Where its day starts and ends — the site it works from. Absent: the plan's depot. */
+  home?: PlanPoint;
+  /** When its day starts, in minutes after the plan's day starts — its shift. Absent: 0. */
+  startMin?: number;
+  /** The longest its day may be, in minutes — its shift. Absent: the plan's dayMin. */
+  dayMin?: number;
+  /** Who may drive it out: trucks of one group share that group's drivers (PlanParams.maxPerGroup). */
+  group?: string;
+  /**
+   * The vehicle itself, where one vehicle is offered as several trucks — one per shift. Two of them may both go out
+   * only when their days do not overlap: a vehicle is in one place at a time. Absent: the truck is its own vehicle.
+   */
+  physical?: string;
 }
 
 export interface PlanParams {
@@ -66,6 +79,8 @@ export interface PlanParams {
   samePickupKm: number;
   /** At most this many trucks go out (the drivers there are). Absent: every truck may. */
   maxTrucks?: number;
+  /** At most this many trucks of a group go out (the drivers who start there). A group not named here: none. Absent: no limit per group. */
+  maxPerGroup?: Readonly<Record<string, number>>;
   /** Second thoughts after the first pass (see solve). On unless a test wants the first pass alone. */
   polish?: boolean;
   /** How many orders may be given up for more (see solve), at most. Absent: as many as the work allows. */
@@ -114,12 +129,14 @@ export interface PlanTrip {
 
 export interface PlanRoute {
   truckId: string;
+  /** When its day starts (minutes after the plan's day starts), as the truck was given. */
+  startMin: number;
   trips: PlanTrip[];
   /** Everything the truck drives, the return to the depot included. */
   km: number;
   /** Of which empty: to each collection, and home. */
   emptyKm: number;
-  /** Depot to depot. */
+  /** Site to site: how long its day is. */
   minutes: number;
   kg: number;
 }
@@ -143,11 +160,19 @@ interface Draft {
 
 /* ------------------------------------------------------------ one truck's day -- */
 
+/** Where and when a truck's day starts, and how long it may be. */
+interface Start {
+  at: PlanPoint;
+  min: number;
+  dayMin: number;
+}
+
 /** A truck's day, driven: every leg, every stop, in order. The one place distance and time are worked out. */
-function drive(trips: Draft[], depot: PlanPoint, p: PlanParams, km: Km): { trips: PlanTrip[]; km: number; emptyKm: number; minutes: number; kg: number; late: number } {
+function drive(trips: Draft[], start: Start, p: PlanParams, km: Km): { trips: PlanTrip[]; km: number; emptyKm: number; minutes: number; kg: number; late: number } {
   const travel = (d: number) => (d / p.speedKmh) * 60;
+  const depot = start.at;
   let at = depot;
-  let clock = 0;
+  let clock = start.min;
   let total = 0;
   let empty = 0;
   let kgAll = 0;
@@ -187,7 +212,7 @@ function drive(trips: Draft[], depot: PlanPoint, p: PlanParams, km: Km): { trips
     total += home;
     empty += home;
   }
-  return { trips: out, km: total, emptyKm: empty, minutes: clock, kg: kgAll, late: lateAll };
+  return { trips: out, km: total, emptyKm: empty, minutes: clock - start.min, kg: kgAll, late: lateAll };
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
@@ -202,16 +227,16 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
  * could not wait — at what the fleet says such a minute is worth. So a door reached outside its window is never
  * forbidden, only dearer than one reached inside it.
  */
-function measure(trips: Draft[], depot: PlanPoint, p: PlanParams, km: Km): { minutes: number; cost: number; waiting: number } {
-  const d = drive(trips, depot, p, km);
+function measure(trips: Draft[], start: Start, p: PlanParams, km: Km): { minutes: number; cost: number; waiting: number } {
+  const d = drive(trips, start, p, km);
   return { minutes: d.minutes, cost: d.minutes + p.lateWeight * d.late, waiting: d.trips.reduce((s, t) => s + t.stops.reduce((x, stop) => x + stop.arriveMin, 0), 0) };
 }
 const EPS = 1e-6;
 
 /** Each trip's drops in a better order: reverse a stretch whenever the whole day gets shorter. Stops when nothing does. */
-function untangle(trips: Draft[], depot: PlanPoint, p: PlanParams, km: Km): Draft[] {
+function untangle(trips: Draft[], start: Start, p: PlanParams, km: Km): Draft[] {
   let best = trips;
-  let bestIs = measure(best, depot, p, km);
+  let bestIs = measure(best, start, p, km);
   let improved = true;
   while (improved) {
     improved = false;
@@ -221,10 +246,10 @@ function untangle(trips: Draft[], depot: PlanPoint, p: PlanParams, km: Km): Draf
         for (let j = i + 1; j < n; j++) {
           const orders = [...best[t].orders.slice(0, i), ...best[t].orders.slice(i, j + 1).reverse(), ...best[t].orders.slice(j + 1)];
           const next = best.map((trip, k) => (k === t ? { ...trip, orders } : trip));
-          const m = measure(next, depot, p, km);
+          const m = measure(next, start, p, km);
           // With windows a cheaper order of stops can be a LONGER day (waiting for a door instead of being late at
           // it), so the shift is asked here too: no re-ordering may take a day past what a driver may work.
-          if (m.minutes > p.dayMin + EPS && m.minutes > bestIs.minutes + EPS) continue;
+          if (m.minutes > start.dayMin + EPS && m.minutes > bestIs.minutes + EPS) continue;
           if (m.cost < bestIs.cost - EPS || (m.cost < bestIs.cost + EPS && m.waiting < bestIs.waiting - EPS)) {
             best = next;
             bestIs = m;
@@ -241,6 +266,30 @@ function untangle(trips: Draft[], depot: PlanPoint, p: PlanParams, km: Km): Draf
 
 type Days = Map<string, Draft[]>;
 type Reason = UnplannedReason;
+/** Each truck's start, by its id. */
+type Starts = (truckId: string) => Start;
+
+function startsOf(trucks: PlanTruck[], depot: PlanPoint, p: PlanParams): Starts {
+  const by = new Map(trucks.map((t) => [t.id, { at: t.home ?? depot, min: t.startMin ?? 0, dayMin: t.dayMin ?? p.dayMin }]));
+  return (id) => by.get(id)!;
+}
+
+/** May this truck go out as well as the ones already out: a driver left in its group, and its vehicle not out at the same time. */
+function mayOpen(t: PlanTruck, days: Days, trucks: PlanTruck[], start: Starts, p: PlanParams): boolean {
+  const out = trucks.filter((x) => (days.get(x.id)?.length ?? 0) > 0);
+  if (p.maxTrucks != null && out.length >= p.maxTrucks) return false;
+  if (p.maxPerGroup && t.group !== undefined && out.filter((x) => x.group === t.group).length >= (p.maxPerGroup[t.group] ?? 0)) return false;
+  if (t.physical !== undefined) {
+    const mine = start(t.id);
+    const clash = out.some((x) => {
+      if (x.physical !== t.physical || x.id === t.id) return false;
+      const other = start(x.id);
+      return mine.min < other.min + other.dayMin && other.min < mine.min + mine.dayMin;
+    });
+    if (clash) return false;
+  }
+  return true;
+}
 
 /**
  * WHERE AN ORDER GOES: the place in the whole fleet's day where it adds least. Into a trip already collecting at the
@@ -248,17 +297,17 @@ type Reason = UnplannedReason;
  * truck's day. Nothing is offered that overloads a truck or overruns its day. When nowhere will take it, the answer
  * is why.
  */
-function place(o: PlanOrder, days: Days, trucks: PlanTruck[], depot: PlanPoint, p: PlanParams, km: Km, only?: string): { truckId: string; trips: Draft[]; cost: number } | { reason: Reason } {
-  const waiting = placeAs({ ...o, noWait: false }, days, trucks, depot, p, km, only);
+function place(o: PlanOrder, days: Days, trucks: PlanTruck[], start: Starts, p: PlanParams, km: Km, only?: string): { truckId: string; trips: Draft[]; cost: number } | { reason: Reason } {
+  const waiting = placeAs({ ...o, noWait: false }, days, trucks, start, p, km, only);
   // No room in any day to WAIT for this door to open. Rather than leave it undelivered for its window, it is offered
   // the day again as an order that goes in when the truck gets there — early, and counted as that.
-  if ('reason' in waiting && wantsTime(waiting.reason) && o.window?.fromMin !== undefined) return placeAs({ ...o, noWait: true }, days, trucks, depot, p, km, only);
+  if ('reason' in waiting && wantsTime(waiting.reason) && o.window?.fromMin !== undefined) return placeAs({ ...o, noWait: true }, days, trucks, start, p, km, only);
   return waiting;
 }
 
 const wantsTime = (r: Reason) => r === 'no_time' || r === 'no_driver';
 
-function placeAs(o: Placed, days: Days, trucks: PlanTruck[], depot: PlanPoint, p: PlanParams, km: Km, only?: string): { truckId: string; trips: Draft[]; cost: number } | { reason: Reason } {
+function placeAs(o: Placed, days: Days, trucks: PlanTruck[], start: Starts, p: PlanParams, km: Km, only?: string): { truckId: string; trips: Draft[]; cost: number } | { reason: Reason } {
   if (trucks.length === 0) return { reason: 'no_trucks' };
   const able = trucks.filter((t) => !t.cannot?.has(o.id));
   if (able.length === 0) return { reason: 'no_truck_can_carry' };
@@ -266,7 +315,6 @@ function placeAs(o: Placed, days: Days, trucks: PlanTruck[], depot: PlanPoint, p
     // Heavier than every truck in the yard — or only than the ones that could handle it.
     return { reason: o.kg > Math.max(...trucks.map((t) => t.capacityKg)) ? 'too_heavy' : 'no_truck_can_carry' };
   }
-  const out = [...days.values()].filter((d) => d.length > 0).length;
   let best: { truckId: string; trips: Draft[]; cost: number; waiting: number } | null = null;
   let heldBack = false;
   for (const t of able) {
@@ -275,11 +323,12 @@ function placeAs(o: Placed, days: Days, trucks: PlanTruck[], depot: PlanPoint, p
     if (t.capacityKg < o.kg) continue;
     const day = days.get(t.id)!;
     const opening = day.length === 0;
-    if (opening && p.maxTrucks != null && out >= p.maxTrucks) {
+    if (opening && !mayOpen(t, days, trucks, start, p)) {
       heldBack = true;
       continue;
     }
-    const was = measure(day, depot, p, km);
+    const s = start(t.id);
+    const was = measure(day, s, p, km);
     const candidates: Draft[][] = [];
     day.forEach((trip, i) => {
       if (km(trip.pickup, o.pickup) > p.samePickupKm) return;
@@ -288,8 +337,8 @@ function placeAs(o: Placed, days: Days, trucks: PlanTruck[], depot: PlanPoint, p
     });
     for (let at = 0; at <= day.length; at++) candidates.push([...day.slice(0, at), { pickup: o.pickup, orders: [o] }, ...day.slice(at)]);
     for (const trips of candidates) {
-      const after = measure(trips, depot, p, km);
-      if (after.minutes > p.dayMin + EPS) continue;
+      const after = measure(trips, s, p, km);
+      if (after.minutes > s.dayMin + EPS) continue;
       const cost = after.cost - was.cost + (opening ? p.openTruckMin : 0);
       const waiting = after.waiting - was.waiting;
       // Equal cost: the one that reaches its doors sooner. Still equal: the truck named first — the same orders
@@ -307,16 +356,17 @@ function without(day: Draft[], orderId: string): Draft[] {
 
 function solve(orders: PlanOrder[], trucks: PlanTruck[], depot: PlanPoint, p: PlanParams, km: Km, polish: boolean): { days: Days; left: Array<{ order: PlanOrder; reason: Reason }> } {
   const days: Days = new Map(trucks.map((t) => [t.id, []]));
+  const start = startsOf(trucks, depot, p);
   let left: Array<{ order: PlanOrder; reason: Reason }> = [];
   // The hardest to place first: a heavy order has the fewest trucks it can go on. Then by id, so a plan is repeatable.
   const queue = [...orders].sort((a, b) => b.kg - a.kg || a.id.localeCompare(b.id));
   for (const o of queue) {
-    const at = place(o, days, trucks, depot, p, km);
+    const at = place(o, days, trucks, start, p, km);
     if ('reason' in at) left.push({ order: o, reason: at.reason });
     else days.set(at.truckId, at.trips);
   }
   const tidy = () => {
-    for (const [id, day] of days) days.set(id, untangle(day, depot, p, km));
+    for (const [id, day] of days) days.set(id, untangle(day, start(id), p, km));
   };
   tidy();
   if (!polish) return { days, left };
@@ -334,10 +384,10 @@ function solve(orders: PlanOrder[], trucks: PlanTruck[], depot: PlanPoint, p: Pl
         if (!home) continue;
         const [truckId, day] = home;
         const rest = without(day, o.id);
-        const saved = measure(day, depot, p, km).cost - measure(rest, depot, p, km).cost + (rest.length === 0 ? p.openTruckMin : 0);
+        const saved = measure(day, start(truckId), p, km).cost - measure(rest, start(truckId), p, km).cost + (rest.length === 0 ? p.openTruckMin : 0);
         const trial: Days = new Map(days);
         trial.set(truckId, rest);
-        const at = place(o, trial, trucks, depot, p, km);
+        const at = place(o, trial, trucks, start, p, km);
         if ('reason' in at || at.cost > saved - 0.01) continue;
         trial.set(at.truckId, at.trips);
         for (const [id, d] of trial) days.set(id, d);
@@ -346,7 +396,7 @@ function solve(orders: PlanOrder[], trucks: PlanTruck[], depot: PlanPoint, p: Pl
       tidy();
       const still: typeof left = [];
       for (const l of left) {
-        const at = place(l.order, days, trucks, depot, p, km);
+        const at = place(l.order, days, trucks, start, p, km);
         if ('reason' in at) still.push({ order: l.order, reason: at.reason });
         else {
           days.set(at.truckId, at.trips);
@@ -390,7 +440,7 @@ function solve(orders: PlanOrder[], trucks: PlanTruck[], depot: PlanPoint, p: Pl
       let gain = 0;
       let kg = 0;
       for (const l of left) {
-        const at = wantsRoom(l.reason) ? place(l.order, trial, trucks, depot, p, km, only) : { reason: l.reason };
+        const at = wantsRoom(l.reason) ? place(l.order, trial, trucks, start, p, km, only) : { reason: l.reason };
         // Asked of one truck only, a "no" says nothing new about why: the reason it had stands until it is asked in full.
         if ('reason' in at) still.push(only ? l : { order: l.order, reason: at.reason });
         else {
@@ -400,14 +450,14 @@ function solve(orders: PlanOrder[], trucks: PlanTruck[], depot: PlanPoint, p: Pl
         }
       }
       if (gain === 0) continue;
-      const back = place(x, trial, trucks, depot, p, km);
+      const back = place(x, trial, trucks, start, p, km);
       if ('reason' in back) {
         gain -= 1;
         kg -= x.kg;
         still.push({ order: x, reason: back.reason });
       } else trial.set(back.truckId, back.trips);
       if (gain <= 0) continue;
-      const minutes = [...trial.values()].reduce((s, day) => s + measure(day, depot, p, km).cost, 0);
+      const minutes = [...trial.entries()].reduce((s, [id, day]) => s + measure(day, start(id), p, km).cost, 0);
       if (!best || gain > best.gain || (gain === best.gain && (kg > best.kg + EPS || (kg > best.kg - EPS && minutes < best.minutes - EPS)))) best = { days: trial, left: still, gain, kg, minutes };
     }
     if (!best) return false;
@@ -427,25 +477,29 @@ const GIVE_UP_BUDGET = 40_000;
 /**
  * Plan a day. `trucks` in the order the fleet lists them: a tie between two trucks goes to the first.
  */
-export function planDay(input: { orders: PlanOrder[]; trucks: PlanTruck[]; depot: PlanPoint; km: Km; params?: Partial<PlanParams> }): PlanResult {
+export function planDay(input: { orders: PlanOrder[]; trucks: PlanTruck[]; depot: PlanPoint; km: Km; params?: Partial<PlanParams>; sites?: PlanPoint[] }): PlanResult {
   const p: PlanParams = { ...DEFAULT_PLAN_PARAMS, ...input.params };
   const { days, left } = solve(input.orders, input.trucks, input.depot, p, input.km, p.polish !== false);
+  const start = startsOf(input.trucks, input.depot, p);
   const routes: PlanRoute[] = [];
   for (const t of input.trucks) {
     const day = days.get(t.id)!;
     if (day.length === 0) continue;
-    const d = drive(day, input.depot, p, input.km);
-    routes.push({ truckId: t.id, trips: d.trips, km: round1(d.km), emptyKm: round1(d.emptyKm), minutes: Math.round(d.minutes), kg: round1(d.kg) });
+    const d = drive(day, start(t.id), p, input.km);
+    routes.push({ truckId: t.id, startMin: start(t.id).min, trips: d.trips, km: round1(d.km), emptyKm: round1(d.emptyKm), minutes: Math.round(d.minutes), kg: round1(d.kg) });
   }
   const result: PlanResult = { routes, unplanned: left.map((l) => ({ orderId: l.order.id, reason: l.reason })) };
 
   // WHAT TO HIRE. The leftovers that only wanted for time, trucks or drivers, run on copies of the fleet's largest truck — as
-  // many copies as there are leftovers, so the answer is how many the math actually uses, not how many it was given.
+  // many copies as there are leftovers, so the answer is how many the math actually uses, not how many it was given. Each
+  // copy starts from the site nearest the collection it was made for, on the plan's own day.
   const model = [...input.trucks].sort((a, b) => b.capacityKg - a.capacityKg)[0];
   const wanting = left.filter((l) => (l.reason === 'no_time' || l.reason === 'no_driver') && model && l.order.kg <= model.capacityKg && !model.cannot?.has(l.order.id)).map((l) => l.order);
   if (model && wanting.length) {
-    const hired = wanting.map((_, i): PlanTruck => ({ id: `hire-${String(i + 1).padStart(3, '0')}`, capacityKg: model.capacityKg, ...(model.cannot ? { cannot: model.cannot } : {}) }));
-    const extra = solve(wanting, hired, input.depot, { ...p, maxTrucks: undefined }, input.km, p.polish !== false);
+    const homes = input.sites?.length ? input.sites : [input.depot];
+    const nearest = (o: PlanOrder) => homes.reduce((best, h) => (input.km(h, o.pickup) < input.km(best, o.pickup) ? h : best), homes[0]);
+    const hired = wanting.map((o, i): PlanTruck => ({ id: `hire-${String(i + 1).padStart(3, '0')}`, capacityKg: model.capacityKg, home: nearest(o), ...(model.cannot ? { cannot: model.cannot } : {}) }));
+    const extra = solve(wanting, hired, input.depot, { ...p, maxTrucks: undefined, maxPerGroup: undefined }, input.km, p.polish !== false);
     const used = [...extra.days.values()].filter((d) => d.length > 0);
     const carried = used.flatMap((d) => d.flatMap((trip) => trip.orders));
     if (used.length) result.hire = { trucks: used.length, orders: carried.length, kg: round1(carried.reduce((s, o) => s + o.kg, 0)), capacityKg: model.capacityKg };

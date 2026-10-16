@@ -34,7 +34,7 @@ export class FleetRosterController {
   setDayRoster(@Param('did') did: string, @Body() dto: SetRosterDto, @Actor() actor: IntrospectionResult): RosterView {
     const fleet = this.assertFleet(did, actor);
     const by = actor?.actorName || (actor?.role === 'operator' ? auditActor(actor) : fleet.companyName);
-    return this.roster.set(did, dto.day, dto.driverDids, by);
+    return this.roster.set(did, dto.day, dto.driverDids, by, Date.now(), dto.starts ?? []);
   }
 
   /** A driver's own coming days. Theirs, their fleet office's and the network's to read — as their hours are. */

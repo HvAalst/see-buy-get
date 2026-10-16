@@ -4,7 +4,7 @@ import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { PlanAdviser } from './PlanAdviser';
 import { SplitOrder } from './SplitOrder';
 import { RosterCard } from './RosterCard';
-import { acceptTellsShippers, askOf, clockLine, rosterLine, dayWord, distanceLine, isFleetToday, mayChooseClock, handOnLine, hoursWords, keptOff, leftByReason, putOnto, ruleLine, windowLine, sendLine, weightWords, withoutRule, type DayPlan, type FleetClock, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi } from '../orders';
+import { acceptTellsShippers, askOf, clockLine, rosterLine, dayWord, distanceLine, isFleetToday, mayChooseClock, handOnLine, hoursWords, keptOff, leftByReason, putOnto, ruleLine, windowLine, sendLine, weightWords, withoutRule, type DayPlan, type FleetClock, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi, siteLine } from '../orders';
 
 const REASON: Record<PlanLeftReason, { title: MessageKey; what: MessageKey }> = {
   no_pin: { title: 'fleet.plan.left.noPin', what: 'fleet.plan.left.noPinDo' },
@@ -463,12 +463,27 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
           ))}
           </div>
 
+          {/* EACH SITE in a line, where the fleet works from more than one: its trucks out, and the drivers who start there. */}
+          {(plan.sites?.length ?? 0) > 1 ? (
+            <ul class="plan__sites">
+              {plan.sites!.map((s) => {
+                const line = siteLine(s, t);
+                return (
+                  <li key={s.siteId} class={line.tone === 'warn' ? 'plan__win plan__win--warn' : undefined}>
+                    {line.text}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+
           {/* EACH TRUCK'S DAY. Side by side where there is room; one under another on a phone. */}
           <div class="plan__grid">
             {plan.routes.map((r) => (
-              <section key={r.vehicleId} class="plan__truck" aria-label={r.plate}>
+              <section key={`${r.vehicleId}@${r.leaves ?? ''}`} class="plan__truck" aria-label={r.plate}>
                 <header class="plan__truckhead">
                   <span class="plan__plate">{r.plate}</span>
+                  {(plan.sites?.length ?? 0) > 1 && r.siteName ? <span class="plan__trucksub">{t('fleet.plan.fromSite', { site: r.siteName, leaves: r.leaves ?? '' })}</span> : null}
                   <span class="plan__trucksub">{t('fleet.plan.truckSub', { size: weightWords(r.capacityKg), full: r.fullestPct })}</span>
                   <span class="plan__trucksub">{t('fleet.plan.truckDay', { hours: hoursWords(r.minutes), home: r.home, km: Math.round(r.km), empty: Math.round(r.emptyKm) })}</span>
                 </header>

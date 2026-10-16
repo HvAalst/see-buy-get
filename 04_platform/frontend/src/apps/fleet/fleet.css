@@ -354,6 +354,16 @@
   align-items: start;
   margin-top: 14px;
 }
+/* Each site of the fleet in a line, above its trucks: a site short of drivers in the warning weight. */
+.plan__sites {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+  color: var(--tx2);
+}
 .plan__truck {
   background: var(--bg);
   border: 1px solid var(--bd);

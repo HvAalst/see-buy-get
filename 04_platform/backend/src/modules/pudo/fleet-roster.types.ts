@@ -15,6 +15,8 @@ export interface RosterDay {
   day: string;
   /** The drivers the office said drive that day. A driver who has since left the fleet, or is no longer active, is not counted. */
   driverDids: string[];
+  /** Where a driver starts that day, where it is not their home site: driver → site. */
+  starts?: Record<string, string>;
   setAt: string;
   setBy: string;
 }
@@ -23,6 +25,10 @@ export class RosterDriverView {
   driverDid: string;
   name: string;
   rostered: boolean;
+  /** The site they start from that day: their home site, unless the office said another for the day. */
+  siteId: string;
+  /** The site they work from. */
+  homeSiteId: string;
 }
 
 /** A fleet's day as the office reads its roster: who drives, and where that comes from. */

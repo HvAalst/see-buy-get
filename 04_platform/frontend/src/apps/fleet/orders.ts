@@ -90,8 +90,10 @@ export function ordersApi(sbg: SbgClient, did: string) {
     planState: (day: string): Promise<Result<DayPlanState>> => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/plan', { params: { path, query: { day } } })) as never,
     /** Who drives on a day: as it stands, and saying it — the whole list, which replaces what was said for that day. */
     roster: (day: string): Promise<Result<RosterView>> => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/roster', { params: { path, query: { day } } })) as never,
-    setRoster: (day: string, driverDids: string[]): Promise<Result<RosterView>> =>
-      sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/roster', { params: { path }, body: { day, driverDids } })) as never,
+    setRoster: (day: string, driverDids: string[], starts: Array<{ driverDid: string; siteId: string }> = []): Promise<Result<RosterView>> =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/roster', { params: { path }, body: { day, driverDids, ...(starts.length ? { starts } : {}) } })) as never,
+    /** The fleet's sites, for where a driver starts on a day. */
+    sites: (): Promise<Result<components['schemas']['FleetSitesView']>> => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/sites', { params: { path } })) as never,
     /** The fleet's own clock: which time zone its plans, its "today" and its deliveries are read on — and choosing it. */
     clock: (): Promise<Result<FleetClock>> => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/clock', { params: { path } })) as never,
     setClock: (timeZone: string): Promise<Result<FleetClock>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/clock', { params: { path }, body: { timeZone } })) as never,
@@ -225,10 +227,23 @@ export function rosterPicks(view: Pick<RosterView, 'list'>): Set<string> {
  * Whether what is ticked says something new. A day nobody has rostered is not the same as one rostered with everybody:
  * a driver who joins later is counted on the first and not on the second — so saying "everybody" is a change too.
  */
-export function rosterChanged(view: Pick<RosterView, 'list' | 'source'>, picked: ReadonlySet<string>): boolean {
+export function rosterChanged(view: Pick<RosterView, 'list' | 'source'>, picked: ReadonlySet<string>, starts: Readonly<Record<string, string>> = {}): boolean {
   if (view.source === 'everyone') return true;
   const was = rosterPicks(view);
-  return was.size !== picked.size || [...picked].some((did) => !was.has(did));
+  if (was.size !== picked.size || [...picked].some((did) => !was.has(did))) return true;
+  // Somebody on the day starting from another site than the roster has them at is a change too.
+  return view.list.some((d) => picked.has(d.driverDid) && starts[d.driverDid] !== undefined && starts[d.driverDid] !== d.siteId);
+}
+
+/** Where each driver starts on the day, as the roster has it: their own site unless the office said another. */
+export function rosterStarts(view: Pick<RosterView, 'list'>): Record<string, string> {
+  return Object.fromEntries(view.list.map((d) => [d.driverDid, d.siteId]));
+}
+
+/** PER SITE, in a line: how many of its trucks went out, and how many drivers start there — a site short of drivers says so. */
+export function siteLine(s: { name: string; trucksAvailable: number; trucksUsed: number; drivers: number }, t: Translate): { tone: 'warn' | 'idle'; text: string } {
+  const text = t('fleet.plan.siteLine', { site: s.name, used: s.trucksUsed, trucks: s.trucksAvailable, drivers: s.drivers });
+  return { tone: s.drivers < s.trucksAvailable && s.trucksUsed === s.drivers ? 'warn' : 'idle', text };
 }
 
 /** The largest workbook sent. The server holds the same line; said here so a big file is refused before it is read. */

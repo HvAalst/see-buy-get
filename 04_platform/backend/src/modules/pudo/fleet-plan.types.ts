@@ -56,13 +56,17 @@ export class PlanTripView {
 export class PlanRouteView {
   vehicleId: string;
   plate: string;
+  /** The site it starts from and comes back to. */
+  siteId: string;
+  siteName: string;
   @ApiProperty({ enum: VEHICLE_CLASSES }) vehicleClass: VehicleClass;
   capacityKg: number;
   @ApiProperty({ type: [PlanTripView] }) trips: PlanTripView[];
   km: number;
   emptyKm: number;
-  /** Depot to depot, in minutes, and when the truck is home again. */
+  /** Site to site, in minutes; when it leaves, and when it is back. */
   minutes: number;
+  leaves: string;
   home: string;
   /** Everything it carries in the day, over all its trips. */
   weightKg: number;
@@ -167,6 +171,16 @@ export class PlanDistances {
   @ApiPropertyOptional() gaps?: number;
 }
 
+/** One site of the fleet in a day's plan: the trucks there, the drivers who start there, and how many went out. */
+export class PlanSiteView {
+  siteId: string;
+  name: string;
+  trucksAvailable: number;
+  trucksUsed: number;
+  /** Drivers who start from here that day: no more trucks leave it than this. */
+  drivers: number;
+}
+
 /** WHO THE PLAN COUNTED as driving that day, and why: the office's roster for the day, or — where it set none — everybody. */
 export class PlanRoster {
   @ApiProperty({ enum: ['roster', 'everyone'] }) source: 'roster' | 'everyone';
@@ -178,6 +192,8 @@ export class DayPlanView {
   madeAt: string;
   @ApiProperty({ type: [PlanRouteView] }) routes: PlanRouteView[];
   @ApiProperty({ type: [PlanLeftView] }) unplanned: PlanLeftView[];
+  /** The fleet's sites, each with its trucks and drivers. A plan kept from before there were sites has none: it was all the depot. */
+  @ApiPropertyOptional({ type: [PlanSiteView] }) sites?: PlanSiteView[];
   @ApiPropertyOptional({ type: PlanHire }) hire?: PlanHire;
   @ApiProperty({ type: PlanTotals }) totals: PlanTotals;
   @ApiProperty({ type: PlanSettings }) settings: PlanSettings;

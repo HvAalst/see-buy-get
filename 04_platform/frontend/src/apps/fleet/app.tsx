@@ -15,6 +15,7 @@ import { RunsScreen } from './screens/RunsScreen';
 import { SessionsScreen } from './screens/SessionsScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { VehiclesScreen } from './screens/VehiclesScreen';
+import { SitesScreen } from './screens/SitesScreen';
 import { DispatchScreen } from './screens/DispatchScreen';
 import { OrdersScreen } from './screens/OrdersScreen';
 import { useFleetApp, type FleetActions, type FleetState, type Screen } from './useFleetApp';
@@ -72,6 +73,8 @@ export function App() {
     { key: 'runs', label: t('fleet.nav.runs'), icon: 'clock', badge: openRuns || undefined },
     // P1 — the orders arriving under its contracts, by the day they must arrive: what the office plans from.
     { key: 'orders', label: t('fleet.nav.orders'), icon: 'box' },
+    // Where the fleet works from: its depots and yards, and who works from each.
+    { key: 'sites', label: t('fleet.nav.sites'), icon: 'pin' },
   ];
 
   return (
@@ -133,6 +136,8 @@ function ScreenRouter({ screen, state, actions, archive, destination, sbg }: { s
       );
     case 'vehicles':
       return <VehiclesScreen state={state} actions={actions} sbg={sbg} />;
+    case 'sites':
+      return <SitesScreen state={state} sbg={sbg} />;
     case 'drivers':
       return <DriversScreen state={state} actions={actions} />;
     case 'sessions':

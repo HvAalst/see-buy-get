@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { ADVISER_HISTORY, rosterChanged, rosterLine, rosterPicks, acceptTellsShippers, base64Of, clockLine, deliveredLine, isFleetToday, mayChooseClock, distanceLine, evenLoads, historyOf, isWorkbook, keptOff, loadLine, mayRejoin, maySplit, passOnState, putOnto, ruleLine, windowLine, rulesAsk, withoutRule, type PlanRule } from './orders';
+import { ADVISER_HISTORY, rosterChanged, rosterLine, rosterPicks, rosterStarts, siteLine, acceptTellsShippers, base64Of, clockLine, deliveredLine, isFleetToday, mayChooseClock, distanceLine, evenLoads, historyOf, isWorkbook, keptOff, loadLine, mayRejoin, maySplit, passOnState, putOnto, ruleLine, windowLine, rulesAsk, withoutRule, type PlanRule } from './orders';
 import { askOf, byDay, dayOf, daySummary, dayWord, handOnLine, hoursWords, mayHandOn, importVerdictLine, leftByReason, mayWithdraw, notASheet, orderTag, sendLine, weightWords, type DayPlan, type FleetOrder, type PlanLeft, type PlanSendTruck } from './orders';
 
 const order = (over: Partial<FleetOrder> = {}): FleetOrder =>
@@ -408,8 +408,8 @@ describe('who drives on the day', () => {
 
   it('starts from whoever the day counts now, and saves only something new', () => {
     const list = [
-      { driverDid: 'did:a', name: 'Amos K.', rostered: true },
-      { driverDid: 'did:b', name: 'Grace M.', rostered: false },
+      { driverDid: 'did:a', name: 'Amos K.', rostered: true, siteId: 'depot', homeSiteId: 'depot' },
+      { driverDid: 'did:b', name: 'Grace M.', rostered: false, siteId: 'depot', homeSiteId: 'depot' },
     ];
     expect([...rosterPicks({ list })]).toEqual(['did:a']);
     expect(rosterChanged({ list, source: 'roster' }, new Set(['did:a']))).toBe(false);
@@ -418,5 +418,15 @@ describe('who drives on the day', () => {
     expect(rosterChanged({ list, source: 'roster' }, new Set())).toBe(true);
     // Saying "everybody" on a day nobody rostered is still saying something: a driver who joins later is not on it.
     expect(rosterChanged({ list: list.map((d) => ({ ...d, rostered: true })), source: 'everyone' }, new Set(['did:a', 'did:b']))).toBe(true);
+    // Where somebody on the day starts is part of the day: moving them to another site is something new.
+    expect(rosterStarts({ list })).toEqual({ 'did:a': 'depot', 'did:b': 'depot' });
+    expect(rosterChanged({ list, source: 'roster' }, new Set(['did:a']), { 'did:a': 'site_msa' })).toBe(true);
+    expect(rosterChanged({ list, source: 'roster' }, new Set(['did:a']), { 'did:a': 'depot', 'did:b': 'site_msa' })).toBe(false);
+  });
+
+  it('says each site in a line, and warns where a site has trucks standing for want of drivers', () => {
+    expect(siteLine({ name: 'Mombasa yard', trucksAvailable: 3, trucksUsed: 1, drivers: 1 }, t)).toEqual({ tone: 'warn', text: 'Mombasa yard: 1 of 3 trucks out · 1 driver starts here' });
+    expect(siteLine({ name: 'Depot', trucksAvailable: 2, trucksUsed: 1, drivers: 2 }, t)).toEqual({ tone: 'idle', text: 'Depot: 1 of 2 trucks out · 2 drivers start here' });
+    expect(siteLine({ name: 'Depot', trucksAvailable: 1, trucksUsed: 0, drivers: 0 }, t).text).toBe('Depot: 0 of 1 truck out · nobody starts here');
   });
 });
