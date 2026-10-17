@@ -14,6 +14,8 @@ export class SetRosterDto {
 export class RosterStartDto {
   @IsString() @MaxLength(200) driverDid!: string;
   @IsString() @MaxLength(40) siteId!: string;
+  /** Which shift of that site. Absent: the site's first. */
+  @IsOptional() @IsString() @MaxLength(40) shiftId?: string;
 }
 
 export class RosterDayQueryDto {

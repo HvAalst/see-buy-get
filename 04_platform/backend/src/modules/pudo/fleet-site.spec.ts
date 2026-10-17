@@ -241,6 +241,74 @@ describe('a fleet’s sites', () => {
     });
   });
 
+  describe('shifts at a site', () => {
+    /** An order collected at its own yard and taken 30 km off: a trip of its own, a couple of hours of a truck's day. */
+    function farOrder(f: { did: string; companyName: string }, day: string, i: number) {
+      seq += 1;
+      const pickup = { lat: -1.2 + i * 0.03, lng: 36.8 + i * 0.03 };
+      return dispatch.registerFreight({
+        description: `Bricks ${seq}`, pickupLocation: pickup, pickupLabel: `Yard ${i}`, destLabel: `Site ${seq}`, destLocation: { lat: pickup.lat - 0.27, lng: pickup.lng },
+        weightKg: 2000, packaging: 'palletised', postedByDid: f.did, postedByName: 'Amina', contract: contractOf(f), deliverOn: day, orderRef: `SH-${seq}`,
+      });
+    }
+    /** A fleet whose depot works an early and a late shift, one truck, and enough far orders to need both. */
+    function twoShifts(late = '13:00') {
+      const f = aFleet();
+      const v = sites.update(f.did, 'depot', { shifts: [{ name: 'Early', start: '05:00', hours: 8 }, { name: 'Late', start: late, hours: 8 }] }, 'Amina');
+      const [early, lateShift] = v.sites[0].shifts;
+      const truck = aTruck(f.did, 'KST 500T');
+      const wanjiru = aDriver(f.did);
+      const baraka = aDriver(f.did);
+      for (let i = 0; i < 6; i++) farOrder(f, dayPlus(1), i);
+      return { f, early, late: lateShift, truck, wanjiru, baraka };
+    }
+
+    it('sends one truck out on two shifts with two drivers — numbered through as one day — and says what each shift needs', () => {
+      const { f, early, late, truck, wanjiru, baraka } = twoShifts();
+      roster.set(f.did, dayPlus(1), [wanjiru.did, baraka.did], 'Amina', Date.now(), [
+        { driverDid: wanjiru.did, siteId: 'depot', shiftId: early.shiftId },
+        { driverDid: baraka.did, siteId: 'depot', shiftId: late.shiftId },
+      ]);
+      const plan = plans.propose(f.did, { day: dayPlus(1) });
+      const mine = plan.routes.filter((r) => r.vehicleId === truck.vehicleId);
+      expect(mine.map((r) => [r.shiftName, r.leaves])).toEqual([
+        ['Early', '05:00'],
+        ['Late', '13:00'],
+      ]);
+      // Never on both at once: the early day is home by the time the late one leaves.
+      expect(mine[0].home <= '13:00').toBe(true);
+      // Its trips are one queue: numbered through both shifts, in the order they are driven.
+      expect(mine.flatMap((r) => r.trips.map((t) => t.no))).toEqual(mine.flatMap((r) => r.trips).map((_, i) => i + 1));
+      expect(plan.shifts).toEqual([
+        { siteId: 'depot', siteName: 'Depot', shiftId: early.shiftId, shiftName: 'Early', start: '05:00', rostered: 1, needed: 1, trucksUsed: 1 },
+        { siteId: 'depot', siteName: 'Depot', shiftId: late.shiftId, shiftName: 'Late', start: '13:00', rostered: 1, needed: 1, trucksUsed: 1 },
+      ]);
+      expect(plan.sites![0]).toMatchObject({ trucksUsed: 1, drivers: 2 });
+    });
+
+    it('says a shift needs a driver where nobody is rostered on it, and refuses a shift that is not the site’s', () => {
+      const { f, early, wanjiru } = twoShifts();
+      // Only the early shift is driven: what the late one would carry is left for want of a driver, and it says so.
+      roster.set(f.did, dayPlus(1), [wanjiru.did], 'Amina', Date.now(), [{ driverDid: wanjiru.did, siteId: 'depot', shiftId: early.shiftId }]);
+      const plan = plans.propose(f.did, { day: dayPlus(1) });
+      expect(plan.routes.map((r) => r.shiftName)).toEqual(['Early']);
+      expect(plan.unplanned.some((u) => u.reason === 'no_driver')).toBe(true);
+      expect(plan.shifts!.find((s) => s.shiftName === 'Late')).toMatchObject({ rostered: 0, needed: 1, trucksUsed: 0 });
+      expect(roster.view(f.did, dayPlus(1)).list.find((d) => d.driverDid === wanjiru.did)).toMatchObject({ siteId: 'depot', shiftId: early.shiftId });
+      expect(() => roster.set(f.did, dayPlus(1), [wanjiru.did], 'Amina', Date.now(), [{ driverDid: wanjiru.did, siteId: 'depot', shiftId: 'shf_nope' }])).toThrow('A start names a shift that is not one of that site’s');
+    });
+
+    it('never has one vehicle out on two shifts that overlap', () => {
+      const { f, early, late, truck, wanjiru, baraka } = twoShifts('10:00');
+      roster.set(f.did, dayPlus(1), [wanjiru.did, baraka.did], 'Amina', Date.now(), [
+        { driverDid: wanjiru.did, siteId: 'depot', shiftId: early.shiftId },
+        { driverDid: baraka.did, siteId: 'depot', shiftId: late.shiftId },
+      ]);
+      const plan = plans.propose(f.did, { day: dayPlus(1) });
+      expect(plan.routes.filter((r) => r.vehicleId === truck.vehicleId)).toHaveLength(1);
+    });
+  });
+
   describe('how the vehicles were used', () => {
     it('counts, per vehicle and per site, days out, off the road and idle, hours on shift, km, loads and runs — from what was recorded', () => {
       const f = aFleet();

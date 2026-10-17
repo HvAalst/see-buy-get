@@ -45675,6 +45675,12 @@
       "PlanRouteView": {
         "type": "object",
         "properties": {
+          "shiftId": {
+            "type": "string"
+          },
+          "shiftName": {
+            "type": "string"
+          },
           "vehicleClass": {
             "type": "string",
             "enum": [
@@ -45701,7 +45707,7 @@
           },
           "siteId": {
             "type": "string",
-            "description": "The site it starts from and comes back to."
+            "description": "The site it starts from and comes back to, and the shift it goes out on where the site has shifts."
           },
           "siteName": {
             "type": "string"
@@ -45831,6 +45837,44 @@
           "trucksAvailable",
           "trucksUsed",
           "drivers"
+        ]
+      },
+      "PlanShiftView": {
+        "type": "object",
+        "properties": {
+          "shiftId": {
+            "type": "string"
+          },
+          "shiftName": {
+            "type": "string"
+          },
+          "siteId": {
+            "type": "string"
+          },
+          "siteName": {
+            "type": "string"
+          },
+          "start": {
+            "type": "string",
+            "description": "HH:MM on the fleet's clock."
+          },
+          "rostered": {
+            "type": "number"
+          },
+          "needed": {
+            "type": "number"
+          },
+          "trucksUsed": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "siteId",
+          "siteName",
+          "start",
+          "rostered",
+          "needed",
+          "trucksUsed"
         ]
       },
       "PlanHire": {
@@ -46094,6 +46138,13 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/PlanSiteView"
+            }
+          },
+          "shifts": {
+            "description": "Each shift at each site: drivers rostered, and needed. A plan kept from before there were shifts has none.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanShiftView"
             }
           },
           "hire": {
@@ -46549,6 +46600,10 @@
       "RosterDriverView": {
         "type": "object",
         "properties": {
+          "shiftId": {
+            "type": "string",
+            "description": "The shift of that site they start on: the one the office said, else the site's first. Absent: the site has no shifts."
+          },
           "driverDid": {
             "type": "string"
           },
@@ -46624,6 +46679,11 @@
           },
           "siteId": {
             "type": "string",
+            "maxLength": 40
+          },
+          "shiftId": {
+            "type": "string",
+            "description": "Which shift of that site. Absent: the site's first.",
             "maxLength": 40
           }
         },

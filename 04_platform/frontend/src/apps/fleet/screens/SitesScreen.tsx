@@ -24,6 +24,8 @@ export function SitesScreen({ state, sbg }: { state: FleetState; sbg: SbgClient 
   const [address, setAddress] = useState('');
   const [point, setPoint] = useState<{ lat: number; lng: number } | null>(null);
   const [typed, setTyped] = useState('');
+  // The site's shifts as they are being written: none, or each with a name, a start and how long.
+  const [shifts, setShifts] = useState<Array<{ shiftId?: string; name: string; start: string; hours: string }>>([]);
 
   useEffect(() => {
     if (!api) return;
@@ -48,10 +50,16 @@ export function SitesScreen({ state, sbg }: { state: FleetState; sbg: SbgClient 
     setAddress(site?.address ?? '');
     setPoint(site ? { lat: site.location.lat, lng: site.location.lng } : null);
     setTyped('');
+    setShifts((site?.shifts ?? []).map((x) => ({ shiftId: x.shiftId, name: x.name, start: x.start, hours: String(x.hours) })));
   };
   const save = async () => {
     const at = point ?? pointOf(typed);
-    const body = { name: name.trim(), address: address.trim(), ...(at ? { lat: at.lat, lng: at.lng } : {}) };
+    const body = {
+      name: name.trim(),
+      address: address.trim(),
+      ...(at ? { lat: at.lat, lng: at.lng } : {}),
+      shifts: shifts.filter((x) => x.name.trim()).map((x) => ({ ...(x.shiftId ? { shiftId: x.shiftId } : {}), name: x.name.trim(), start: x.start, hours: Number(x.hours) })),
+    };
     const done = await act(() => (editing === 'new' ? api!.add(body) : api!.update(editing!, body)));
     if (done) setEditing(null);
   };
@@ -90,6 +98,39 @@ export function SitesScreen({ state, sbg }: { state: FleetState; sbg: SbgClient 
               </label>
               <input id="site-point" class="input input--mono" value={point ? `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}` : typed} placeholder="-1.29210, 36.82190" onInput={(e) => { setPoint(null); setTyped(e.currentTarget.value); }} />
             </div>
+            {/* ITS SHIFTS: when drivers start, and how long a shift may be. None: trucks leave when the day's plan says. */}
+            <p class="field__label">{t('fleet.sites.shifts')}</p>
+            {shifts.length === 0 ? <p class="hint">{t('fleet.sites.noShifts')}</p> : null}
+            {shifts.map((x, i) => (
+              <div key={i} class="plan__tune" style="margin-bottom:6px">
+                <div class="field">
+                  <label class="field__label" for={`shift-name-${i}`}>
+                    {t('fleet.sites.shiftName')}
+                  </label>
+                  <input id={`shift-name-${i}`} class="input" maxLength={40} value={x.name} placeholder={t('fleet.sites.shiftNamePh')} onInput={(e) => { const v = e.currentTarget.value; setShifts((was) => was.map((y, k) => (k === i ? { ...y, name: v } : y))); }} />
+                </div>
+                <div class="field">
+                  <label class="field__label" for={`shift-start-${i}`}>
+                    {t('fleet.sites.shiftStart')}
+                  </label>
+                  <input id={`shift-start-${i}`} class="input" type="time" value={x.start} onInput={(e) => { const v = e.currentTarget.value; setShifts((was) => was.map((y, k) => (k === i ? { ...y, start: v } : y))); }} />
+                </div>
+                <div class="field">
+                  <label class="field__label" for={`shift-hours-${i}`}>
+                    {t('fleet.sites.shiftHours')}
+                  </label>
+                  <input id={`shift-hours-${i}`} class="input input--mono" inputMode="decimal" value={x.hours} onInput={(e) => { const v = e.currentTarget.value; setShifts((was) => was.map((y, k) => (k === i ? { ...y, hours: v } : y))); }} />
+                </div>
+                <Button variant="link" full={false} onClick={() => setShifts((was) => was.filter((_, k) => k !== i))}>
+                  {t('fleet.sites.shiftRemove')}
+                </Button>
+              </div>
+            ))}
+            {shifts.length < 6 ? (
+              <Button variant="link" full={false} onClick={() => setShifts((was) => [...was, { name: '', start: '06:00', hours: '8' }])}>
+                {t('fleet.sites.shiftAdd')}
+              </Button>
+            ) : null}
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <Button full={false} chevron={false} busy={busy} disabled={busy || !name.trim() || !(point ?? pointOf(typed))} onClick={() => void save()}>
                 {t(editing === 'new' ? 'fleet.sites.add' : 'fleet.sites.save')}
@@ -107,6 +148,7 @@ export function SitesScreen({ state, sbg }: { state: FleetState; sbg: SbgClient 
                 <span class="row__t">{s.name}</span>
                 {s.address ? <span class="row__s">{s.address}</span> : null}
                 <span class="row__s">{t('fleet.sites.counts', { vehicles: s.vehicles, drivers: s.drivers })}</span>
+                {s.shifts.length ? <span class="row__s">{t('fleet.sites.shiftsLine', { list: [...s.shifts].sort((a, b) => a.start.localeCompare(b.start)).map((x) => t('fleet.sites.shiftItem', { name: x.name, start: x.start, hours: x.hours })).join(' · ') })}</span> : null}
                 <span style="display:flex;gap:2px 16px;flex-wrap:wrap">
                   <Button variant="link" full={false} disabled={busy} onClick={() => open(s)}>
                     {t('fleet.sites.change')}

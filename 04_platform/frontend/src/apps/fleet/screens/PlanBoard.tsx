@@ -4,7 +4,7 @@ import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { PlanAdviser } from './PlanAdviser';
 import { SplitOrder } from './SplitOrder';
 import { RosterCard } from './RosterCard';
-import { acceptTellsShippers, askOf, clockLine, rosterLine, dayWord, distanceLine, isFleetToday, mayChooseClock, handOnLine, hoursWords, keptOff, leftByReason, putOnto, ruleLine, windowLine, sendLine, weightWords, withoutRule, type DayPlan, type FleetClock, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi, siteLine } from '../orders';
+import { acceptTellsShippers, askOf, clockLine, rosterLine, dayWord, distanceLine, isFleetToday, mayChooseClock, handOnLine, hoursWords, keptOff, leftByReason, putOnto, ruleLine, windowLine, sendLine, weightWords, withoutRule, type DayPlan, type FleetClock, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi, siteLine, shiftLine } from '../orders';
 
 const REASON: Record<PlanLeftReason, { title: MessageKey; what: MessageKey }> = {
   no_pin: { title: 'fleet.plan.left.noPin', what: 'fleet.plan.left.noPinDo' },
@@ -463,8 +463,21 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
           ))}
           </div>
 
+          {/* EACH SHIFT AT EACH SITE in a line, where there are shifts: drivers rostered on it, and drivers it needs. */}
+          {plan.shifts?.some((s) => s.shiftId) ? (
+            <ul class="plan__sites">
+              {plan.shifts.map((s) => {
+                const line = shiftLine(s, t);
+                return (
+                  <li key={`${s.siteId}|${s.shiftId ?? ''}`} class={line.tone === 'warn' ? 'plan__win plan__win--warn' : undefined}>
+                    {line.text}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
           {/* EACH SITE in a line, where the fleet works from more than one: its trucks out, and the drivers who start there. */}
-          {(plan.sites?.length ?? 0) > 1 ? (
+          {(plan.sites?.length ?? 0) > 1 && !plan.shifts?.some((s) => s.shiftId) ? (
             <ul class="plan__sites">
               {plan.sites!.map((s) => {
                 const line = siteLine(s, t);
@@ -483,7 +496,11 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
               <section key={`${r.vehicleId}@${r.leaves ?? ''}`} class="plan__truck" aria-label={r.plate}>
                 <header class="plan__truckhead">
                   <span class="plan__plate">{r.plate}</span>
-                  {(plan.sites?.length ?? 0) > 1 && r.siteName ? <span class="plan__trucksub">{t('fleet.plan.fromSite', { site: r.siteName, leaves: r.leaves ?? '' })}</span> : null}
+                  {r.shiftName ? (
+                    <span class="plan__trucksub">{t('fleet.plan.fromSiteShift', { site: r.siteName, shift: r.shiftName, leaves: r.leaves ?? '' })}</span>
+                  ) : (plan.sites?.length ?? 0) > 1 && r.siteName ? (
+                    <span class="plan__trucksub">{t('fleet.plan.fromSite', { site: r.siteName, leaves: r.leaves ?? '' })}</span>
+                  ) : null}
                   <span class="plan__trucksub">{t('fleet.plan.truckSub', { size: weightWords(r.capacityKg), full: r.fullestPct })}</span>
                   <span class="plan__trucksub">{t('fleet.plan.truckDay', { hours: hoursWords(r.minutes), home: r.home, km: Math.round(r.km), empty: Math.round(r.emptyKm) })}</span>
                 </header>

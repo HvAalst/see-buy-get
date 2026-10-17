@@ -5,7 +5,7 @@ import { FleetService } from './fleet.service';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { isDay } from './carriage-contract.service';
-import { DEFAULT_PLAN_PARAMS, clockOf, planDay, type PlanOrder, type PlanTruck } from './day-plan';
+import { DEFAULT_PLAN_PARAMS, clockOf, planDay, type PlanOrder, type PlanPoint, type PlanTruck } from './day-plan';
 import { windowOf, windowWords, type DayWindow } from './delivery-window';
 import { DispatchService } from './dispatch.service';
 import { Freight } from './dispatch.types';
@@ -182,9 +182,25 @@ export class FleetPlanService implements OnModuleInit {
     const sites = this.sitesFor(fleetDid, ask.day);
     const siteById = new Map(sites.map((s) => [s.siteId, s]));
     const homeOf = (vehicleId: string) => siteById.get(this.sites?.homeOf(fleetDid, 'vehicle', vehicleId) ?? DEPOT_SITE) ?? sites[0];
-    const starts = this.roster?.startsFor(fleetDid, ask.day) ?? crew.drivers.map((driver) => ({ driver, siteId: this.sites?.homeOf(fleetDid, 'driver', driver.did) ?? DEPOT_SITE }));
+    const starts: Array<{ siteId: string; shiftId?: string }> = this.roster?.startsFor(fleetDid, ask.day) ?? crew.drivers.map((driver) => ({ siteId: this.sites?.homeOf(fleetDid, 'driver', driver.did) ?? DEPOT_SITE }));
+    // THE SHIFTS a truck can go out on: each of its site's, or — where a site has none — the day as the plan was asked
+    // for it. Every time is counted from the earliest start of any of them, so an early shift is not a negative minute.
+    const [askH, askM] = settings.dayStart.split(':').map(Number);
+    const askStartMin = askH * 60 + askM;
+    const shiftsAt = (s: SiteForPlan): Array<{ shiftId?: string; name?: string; startMin: number; dayMin: number }> =>
+      s.shifts.length
+        ? [...s.shifts].sort((a, b) => a.start.localeCompare(b.start)).map((x) => ({ shiftId: x.shiftId, name: x.name, startMin: minutesOfClock(x.start), dayMin: Math.round(x.hours * 60) }))
+        : [{ startMin: askStartMin, dayMin: settings.dayHours * 60 }];
+    const originMin = Math.min(askStartMin, ...sites.flatMap((s) => shiftsAt(s).map((x) => x.startMin)));
+    const groupOf = (siteId: string, shiftId?: string) => `${siteId}|${shiftId ?? ''}`;
     const driversAt: Record<string, number> = {};
-    for (const s of starts) driversAt[s.siteId] = (driversAt[s.siteId] ?? 0) + 1;
+    const driversAtSite: Record<string, number> = {};
+    for (const s of starts) {
+      const site = siteById.get(s.siteId) ?? sites[0];
+      const shift = s.shiftId ?? shiftsAt(site)[0].shiftId;
+      driversAt[groupOf(site.siteId, shift)] = (driversAt[groupOf(site.siteId, shift)] ?? 0) + 1;
+      driversAtSite[site.siteId] = (driversAtSite[site.siteId] ?? 0) + 1;
+    }
 
     const rules = this.rulesOf(fleetDid, ask, orders, new Map(fleet.map((x) => [x.v.vehicleId, x.v.plate])));
     // What a rule means to the math: a vehicle this order may not go on. "Put it on that one" is every other one.
@@ -193,8 +209,7 @@ export class FleetPlanService implements OnModuleInit {
     // THE WINDOW each shipper asked for, read where it can be read. The math counts from when the day starts, so a
     // window on the clock is moved onto the day's own minutes. Words that are not a time are not planned to — and are
     // said to be unread, on the order, rather than planned to a guess.
-    const [startH, startM] = settings.dayStart.split(':').map(Number);
-    const dayStartMin = startH * 60 + startM;
+    const dayStartMin = originMin;
     const windows = new Map<string, DayWindow>();
     const unread = new Set<string>();
     for (const f of pinned) {
@@ -205,28 +220,55 @@ export class FleetPlanService implements OnModuleInit {
     }
     const onTheDay = (w: DayWindow) => ({ ...(w.fromMin !== undefined ? { fromMin: w.fromMin - dayStartMin } : {}), ...(w.toMin !== undefined ? { toMin: w.toMin - dayStartMin } : {}) });
     const planOrders: PlanOrder[] = pinned.map((f) => ({ id: f.freightId, kg: f.weightKg, pickup: f.pickupLocation, drop: f.destLocation!, ...(windows.has(f.freightId) ? { window: onTheDay(windows.get(f.freightId)!) } : {}) }));
-    const trucks: PlanTruck[] = going.map(({ v }) => ({ id: v.vehicleId, capacityKg: v.capacityKg, cannot: new Set(pinned.filter((f) => barred(v.vehicleId, f.freightId) || !this.dispatch.vehicleCanCarryFreight(v, f.freightId)).map((f) => f.freightId)), home: homeOf(v.vehicleId).location, group: homeOf(v.vehicleId).siteId }));
-    const result = planDay({
+    // EACH TRUCK ONCE PER SHIFT of its site — one vehicle, two drivers, an early day and a late one — never out in two
+    // shifts at once. Where its site has one shift, or none, it is the truck it always was.
+    const slots = new Map<string, { vehicleId: string; site: SiteForPlan; shiftId?: string; shiftName?: string }>();
+    const trucks: PlanTruck[] = going.flatMap(({ v }) => {
+      const site = homeOf(v.vehicleId);
+      const shifts = shiftsAt(site);
+      const cannot = new Set(pinned.filter((f) => barred(v.vehicleId, f.freightId) || !this.dispatch.vehicleCanCarryFreight(v, f.freightId)).map((f) => f.freightId));
+      return shifts.map((x): PlanTruck => {
+        const id = shifts.length > 1 ? `${v.vehicleId}~${x.shiftId}` : v.vehicleId;
+        slots.set(id, { vehicleId: v.vehicleId, site, ...(x.shiftId ? { shiftId: x.shiftId, shiftName: x.name } : {}) });
+        return { id, capacityKg: v.capacityKg, cannot, home: site.location, startMin: x.startMin - originMin, dayMin: x.dayMin, group: groupOf(site.siteId, x.shiftId), ...(shifts.length > 1 ? { physical: v.vehicleId } : {}) };
+      });
+    });
+    const planInput = {
       orders: planOrders,
       trucks,
       depot: sites[0]?.location ?? manager.location,
       sites: sites.map((s) => s.location),
-      km: roads ? (a, b) => roads.km(a, b) : (a, b) => this.router.roadKm(a, b),
-      params: { speedKmh: settings.speedKmh, loadMin: settings.loadMin, unloadMin: settings.unloadMin, dayMin: settings.dayHours * 60, maxTrucks: driverCount, maxPerGroup: driversAt },
-    });
+      km: roads ? (a: PlanPoint, b: PlanPoint) => roads.km(a, b) : (a: PlanPoint, b: PlanPoint) => this.router.roadKm(a, b),
+    };
+    const params = { speedKmh: settings.speedKmh, loadMin: settings.loadMin, unloadMin: settings.unloadMin, dayMin: settings.dayHours * 60 };
+    const result = planDay({ ...planInput, params: { ...params, maxTrucks: driverCount, maxPerGroup: driversAt } });
+    // HOW MANY DRIVERS EACH SHIFT NEEDS. Where nothing was left for want of a driver, as many as went out; otherwise
+    // the same day planned again with drivers enough, and the trucks each shift would then send out.
+    const usedIn = (routes: Array<{ truckId: string }>) => {
+      const n: Record<string, number> = {};
+      for (const r of routes) {
+        const t = trucks.find((x) => x.id === r.truckId)!;
+        n[t.group!] = (n[t.group!] ?? 0) + 1;
+      }
+      return n;
+    };
+    const used = usedIn(result.routes);
+    const needed = result.unplanned.some((u) => u.reason === 'no_driver') ? usedIn(planDay({ ...planInput, params }).routes) : used;
 
     const byId = new Map(orders.map((f) => [f.freightId, f]));
     const vehicleOf = new Map(fleet.map((x) => [x.v.vehicleId, x.v]));
     const largestKg = going.reduce((m, x) => Math.max(m, x.v.capacityKg), 0);
-    const clock = (min: number) => clockOf(settings.dayStart, min);
+    const clock = (min: number) => clockOf(clockText(originMin), min);
     const routes: PlanRouteView[] = result.routes.map((r) => {
-      const v = vehicleOf.get(r.truckId)!;
-      const site = homeOf(v.vehicleId);
+      const slot = slots.get(r.truckId)!;
+      const v = vehicleOf.get(slot.vehicleId)!;
+      const site = slot.site;
       return {
         vehicleId: v.vehicleId,
         plate: v.plate,
         siteId: site.siteId,
         siteName: site.name,
+        ...(slot.shiftId ? { shiftId: slot.shiftId, shiftName: slot.shiftName } : {}),
         vehicleClass: v.vehicleClass,
         capacityKg: v.capacityKg,
         trips: r.trips.map((t) => ({
@@ -260,6 +302,9 @@ export class FleetPlanService implements OnModuleInit {
         fullestPct: Math.round((Math.max(...r.trips.map((t) => t.kg)) / v.capacityKg) * 100),
       };
     });
+    // One vehicle out on two shifts is one vehicle's day: its trips are numbered through, in the order it drives them,
+    // so a trip is named once — the next one goes out when the last is delivered, whoever is at the wheel.
+    renumberTrips(routes);
     const unplanned: PlanLeftView[] = [
       ...orders.filter((f) => !f.destLocation).map((f) => ({ ...this.orderWords(f), reason: 'no_pin' as const })),
       ...result.unplanned.map((u) => {
@@ -280,9 +325,20 @@ export class FleetPlanService implements OnModuleInit {
         siteId: s.siteId,
         name: s.name,
         trucksAvailable: going.filter(({ v }) => homeOf(v.vehicleId).siteId === s.siteId).length,
-        trucksUsed: routes.filter((r) => r.siteId === s.siteId).length,
-        drivers: driversAt[s.siteId] ?? 0,
+        trucksUsed: new Set(routes.filter((r) => r.siteId === s.siteId).map((r) => r.vehicleId)).size,
+        drivers: driversAtSite[s.siteId] ?? 0,
       })),
+      shifts: sites.flatMap((s) =>
+        shiftsAt(s).map((x) => ({
+          siteId: s.siteId,
+          siteName: s.name,
+          ...(x.shiftId ? { shiftId: x.shiftId, shiftName: x.name } : {}),
+          start: clockText(x.startMin),
+          rostered: driversAt[groupOf(s.siteId, x.shiftId)] ?? 0,
+          needed: needed[groupOf(s.siteId, x.shiftId)] ?? 0,
+          trucksUsed: used[groupOf(s.siteId, x.shiftId)] ?? 0,
+        })),
+      ),
       ...(result.hire ? { hire: { trucks: result.hire.trucks, orders: result.hire.orders, weightKg: result.hire.kg, capacityKg: result.hire.capacityKg } } : {}),
       totals: {
         orders: orders.length,
@@ -338,7 +394,8 @@ export class FleetPlanService implements OnModuleInit {
     if (day !== today) throw new GlosError('INVALID_STATE', day > today ? 'That day has not come — its trips go out on the day itself' : 'That day has gone', { field: 'day' });
     const plan = this.accepted.get(keyOf(fleetDid, day));
     if (!plan) throw new GlosError('INVALID_STATE', 'No plan has been accepted for today');
-    return { day, trucks: plan.routes.map((r) => this.sendNext(fleetDid, day, r.vehicleId, plan, now)) };
+    // Once per vehicle: one out on two shifts has one queue of trips.
+    return { day, trucks: [...new Set(plan.routes.map((r) => r.vehicleId))].map((vehicleId) => this.sendNext(fleetDid, day, vehicleId, plan, now)) };
   }
 
   /** One truck, its next trip. Says what happened, whatever happened. */
@@ -447,3 +504,25 @@ export class FleetPlanService implements OnModuleInit {
 }
 
 const keyOf = (fleetDid: string, day: string) => `${fleetDid}|${day}`;
+
+/** "HH:MM" as minutes after midnight. */
+function minutesOfClock(hm: string): number {
+  return Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
+}
+
+/** Minutes after midnight as "HH:MM". */
+function clockText(min: number): string {
+  const m = ((Math.round(min) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
+
+/** A vehicle out on more than one shift has its trips numbered through all of them, in the order they leave. */
+function renumberTrips(routes: PlanRouteView[]): void {
+  const byVehicle = new Map<string, PlanRouteView[]>();
+  for (const r of routes) byVehicle.set(r.vehicleId, [...(byVehicle.get(r.vehicleId) ?? []), r]);
+  for (const list of byVehicle.values()) {
+    if (list.length < 2) continue;
+    let no = 0;
+    for (const r of list.sort((a, b) => a.leaves.localeCompare(b.leaves))) for (const t of r.trips) t.no = ++no;
+  }
+}

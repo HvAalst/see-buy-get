@@ -17,6 +17,8 @@ export interface RosterDay {
   driverDids: string[];
   /** Where a driver starts that day, where it is not their home site: driver → site. */
   starts?: Record<string, string>;
+  /** Which shift of that site they start on, where the office said: driver → shift. */
+  shifts?: Record<string, string>;
   setAt: string;
   setBy: string;
 }
@@ -29,6 +31,8 @@ export class RosterDriverView {
   siteId: string;
   /** The site they work from. */
   homeSiteId: string;
+  /** The shift of that site they start on: the one the office said, else the site's first. Absent: the site has no shifts. */
+  @ApiPropertyOptional() shiftId?: string;
 }
 
 /** A fleet's day as the office reads its roster: who drives, and where that comes from. */

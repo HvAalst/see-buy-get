@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { ADVISER_HISTORY, rosterChanged, rosterLine, rosterPicks, rosterStarts, siteLine, acceptTellsShippers, base64Of, clockLine, deliveredLine, isFleetToday, mayChooseClock, distanceLine, evenLoads, historyOf, isWorkbook, keptOff, loadLine, mayRejoin, maySplit, passOnState, putOnto, ruleLine, windowLine, rulesAsk, withoutRule, type PlanRule } from './orders';
+import { ADVISER_HISTORY, rosterChanged, rosterLine, rosterPicks, rosterShifts, rosterStarts, shiftLine, siteLine, acceptTellsShippers, base64Of, clockLine, deliveredLine, isFleetToday, mayChooseClock, distanceLine, evenLoads, historyOf, isWorkbook, keptOff, loadLine, mayRejoin, maySplit, passOnState, putOnto, ruleLine, windowLine, rulesAsk, withoutRule, type PlanRule } from './orders';
 import { askOf, byDay, dayOf, daySummary, dayWord, handOnLine, hoursWords, mayHandOn, importVerdictLine, leftByReason, mayWithdraw, notASheet, orderTag, sendLine, weightWords, type DayPlan, type FleetOrder, type PlanLeft, type PlanSendTruck } from './orders';
 
 const order = (over: Partial<FleetOrder> = {}): FleetOrder =>
@@ -422,6 +422,17 @@ describe('who drives on the day', () => {
     expect(rosterStarts({ list })).toEqual({ 'did:a': 'depot', 'did:b': 'depot' });
     expect(rosterChanged({ list, source: 'roster' }, new Set(['did:a']), { 'did:a': 'site_msa' })).toBe(true);
     expect(rosterChanged({ list, source: 'roster' }, new Set(['did:a']), { 'did:a': 'depot', 'did:b': 'site_msa' })).toBe(false);
+  });
+
+  it('says each shift in a line, and warns where a shift needs more drivers than are rostered on it', () => {
+    expect(shiftLine({ siteName: 'Depot', shiftName: 'Late', start: '13:00', rostered: 0, needed: 1 }, t)).toEqual({ tone: 'warn', text: 'Depot, Late from 13:00: nobody rostered · 1 needed' });
+    expect(shiftLine({ siteName: 'Depot', shiftName: 'Early', start: '05:00', rostered: 3, needed: 2 }, t)).toEqual({ tone: 'idle', text: 'Depot, Early from 05:00: 3 drivers rostered · 2 needed' });
+    expect(shiftLine({ siteName: 'Mombasa yard', start: '07:00', rostered: 1, needed: 0 }, t).text).toBe('Mombasa yard, from 07:00: 1 driver rostered · none needed');
+    // The shift a driver starts on is part of the day: moving them to another is something new.
+    const list = [{ driverDid: 'did:a', name: 'Amos K.', rostered: true, siteId: 'depot', homeSiteId: 'depot', shiftId: 'shf_e' }];
+    expect(rosterShifts({ list })).toEqual({ 'did:a': 'shf_e' });
+    expect(rosterChanged({ list, source: 'roster' }, new Set(['did:a']), {}, { 'did:a': 'shf_l' })).toBe(true);
+    expect(rosterChanged({ list, source: 'roster' }, new Set(['did:a']), {}, { 'did:a': 'shf_e' })).toBe(false);
   });
 
   it('says each site in a line, and warns where a site has trucks standing for want of drivers', () => {

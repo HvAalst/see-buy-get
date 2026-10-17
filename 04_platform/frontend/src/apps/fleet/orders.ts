@@ -227,12 +227,25 @@ export function rosterPicks(view: Pick<RosterView, 'list'>): Set<string> {
  * Whether what is ticked says something new. A day nobody has rostered is not the same as one rostered with everybody:
  * a driver who joins later is counted on the first and not on the second — so saying "everybody" is a change too.
  */
-export function rosterChanged(view: Pick<RosterView, 'list' | 'source'>, picked: ReadonlySet<string>, starts: Readonly<Record<string, string>> = {}): boolean {
+export function rosterChanged(view: Pick<RosterView, 'list' | 'source'>, picked: ReadonlySet<string>, starts: Readonly<Record<string, string>> = {}, shifts: Readonly<Record<string, string>> = {}): boolean {
   if (view.source === 'everyone') return true;
   const was = rosterPicks(view);
   if (was.size !== picked.size || [...picked].some((did) => !was.has(did))) return true;
-  // Somebody on the day starting from another site than the roster has them at is a change too.
-  return view.list.some((d) => picked.has(d.driverDid) && starts[d.driverDid] !== undefined && starts[d.driverDid] !== d.siteId);
+  // Somebody on the day starting from another site, or on another shift, than the roster has them is a change too.
+  return view.list.some(
+    (d) => picked.has(d.driverDid) && ((starts[d.driverDid] !== undefined && starts[d.driverDid] !== d.siteId) || (shifts[d.driverDid] !== undefined && shifts[d.driverDid] !== d.shiftId)),
+  );
+}
+
+/** Which shift each driver starts on, as the roster has it; nothing for a driver whose site has no shifts. */
+export function rosterShifts(view: Pick<RosterView, 'list'>): Record<string, string> {
+  return Object.fromEntries(view.list.filter((d) => d.shiftId).map((d) => [d.driverDid, d.shiftId!]));
+}
+
+/** ONE SHIFT AT ONE SITE, in a line: when it starts, the drivers rostered on it and the drivers it needs — short, it warns. */
+export function shiftLine(s: { siteName: string; shiftName?: string; start: string; rostered: number; needed: number }, t: Translate): { tone: 'warn' | 'idle'; text: string } {
+  const text = t(s.shiftName ? 'fleet.plan.shiftLine' : 'fleet.plan.dayLine', { site: s.siteName, shift: s.shiftName ?? '', start: s.start, rostered: s.rostered, needed: s.needed });
+  return { tone: s.needed > s.rostered ? 'warn' : 'idle', text };
 }
 
 /** Where each driver starts on the day, as the roster has it: their own site unless the office said another. */

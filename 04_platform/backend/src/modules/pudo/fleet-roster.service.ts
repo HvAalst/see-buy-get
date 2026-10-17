@@ -42,15 +42,25 @@ export class FleetRosterService {
    * Each driver a plan for the day counts, and the site they start from: where the office said for the day, else their
    * home site. A site said for the day that has since closed is their home again.
    */
-  startsFor(fleetDid: string, day: string): Array<{ driver: FleetDriver; siteId: string }> {
+  startsFor(fleetDid: string, day: string): Array<{ driver: FleetDriver; siteId: string; shiftId?: string }> {
     const { drivers } = this.driversFor(fleetDid, day);
-    const said = this.days.get(keyOf(fleetDid, day))?.starts ?? {};
-    const open = new Set(this.sites?.sitesOf(fleetDid).map((s) => s.siteId) ?? [DEPOT_SITE]);
-    return drivers.map((driver) => {
-      const home = this.sites?.homeOf(fleetDid, 'driver', driver.did) ?? DEPOT_SITE;
-      const that = said[driver.did];
-      return { driver, siteId: that && open.has(that) ? that : home };
-    });
+    const kept = this.days.get(keyOf(fleetDid, day));
+    return drivers.map((driver) => ({ driver, ...this.startOf(fleetDid, kept, driver.did) }));
+  }
+
+  /**
+   * Where and on which shift a driver starts on a day: the site the office said for the day while it is open, else
+   * their home; the shift it said while that site still has it, else the site's first. No shift where the site has none.
+   */
+  private startOf(fleetDid: string, kept: RosterDay | undefined, did: string): { siteId: string; shiftId?: string } {
+    const sites = this.sites?.sitesOf(fleetDid) ?? [];
+    const home = this.sites?.homeOf(fleetDid, 'driver', did) ?? DEPOT_SITE;
+    const said = kept?.starts?.[did];
+    const siteId = said && sites.some((s) => s.siteId === said) ? said : home;
+    const shifts = [...(sites.find((s) => s.siteId === siteId)?.shifts ?? [])].sort((a, b) => a.start.localeCompare(b.start));
+    if (!shifts.length) return { siteId };
+    const shift = kept?.shifts?.[did];
+    return { siteId, shiftId: shift && shifts.some((x) => x.shiftId === shift) ? shift : shifts[0].shiftId };
   }
 
   /**
@@ -71,14 +81,12 @@ export class FleetRosterService {
     const kept = this.days.get(keyOf(fleetDid, day));
     const { source, drivers } = this.driversFor(fleetDid, day);
     const on = new Set(drivers.map((d) => d.did));
-    const open = new Set(this.sites?.sitesOf(fleetDid).map((s) => s.siteId) ?? [DEPOT_SITE]);
     const homeOf = (did: string) => this.sites?.homeOf(fleetDid, 'driver', did) ?? DEPOT_SITE;
-    const startOf = (did: string) => (kept?.starts?.[did] && open.has(kept.starts[did]) ? kept.starts[did] : homeOf(did));
     return {
       day,
       source,
       drivers: drivers.length,
-      list: this.activeOf(fleetDid).map((d) => ({ driverDid: d.did, name: d.displayName, rostered: on.has(d.did), siteId: startOf(d.did), homeSiteId: homeOf(d.did) })),
+      list: this.activeOf(fleetDid).map((d) => ({ driverDid: d.did, name: d.displayName, rostered: on.has(d.did), ...this.startOf(fleetDid, kept, d.did), homeSiteId: homeOf(d.did) })),
       ...(kept ? { setAt: kept.setAt, setBy: kept.setBy } : {}),
     };
   }
@@ -88,7 +96,7 @@ export class FleetRosterService {
    * when the day has gone or is too far off, or a name on it is not an active driver of this fleet. Each driver whose
    * day changed is told: put on it, or taken off a day they had been told they drive.
    */
-  set(fleetDid: string, day: string, driverDids: string[], by: string, now: number = Date.now(), starts: Array<{ driverDid: string; siteId: string }> = []): RosterView {
+  set(fleetDid: string, day: string, driverDids: string[], by: string, now: number = Date.now(), starts: Array<{ driverDid: string; siteId: string; shiftId?: string }> = []): RosterView {
     if (!isDay(day)) throw new GlosError('INVALID_INPUT', 'A day is YYYY-MM-DD', { field: 'day' });
     const fleet = this.managers.get(fleetDid);
     const today = this.managers.todayOf(fleetDid, now);
@@ -102,18 +110,23 @@ export class FleetRosterService {
       throw new GlosError('INVALID_INPUT', known ? `${known.displayName} is not an active driver, and cannot be put on a day` : 'A driver on this list is not in this fleet', { field: 'driverDids' });
     }
 
-    // Where each starts that day: an open site of this fleet, for a driver on the list. Only what differs from home is kept.
-    const open = new Set(this.sites?.sitesOf(fleetDid).map((s) => s.siteId) ?? [DEPOT_SITE]);
+    // Where each starts that day, and on which shift: an open site of this fleet, a shift of that site, for a driver on
+    // the list. The site is kept only where it is not their home; the shift wherever it was said.
+    const sites = this.sites?.sitesOf(fleetDid) ?? [];
+    const open = new Set(sites.length ? sites.map((s) => s.siteId) : [DEPOT_SITE]);
     const away: Record<string, string> = {};
+    const shiftOf: Record<string, string> = {};
     for (const s of starts) {
       if (!wanted.includes(s.driverDid)) throw new GlosError('INVALID_INPUT', 'A start is given for a driver who is not on the day', { field: 'starts' });
       if (!open.has(s.siteId)) throw new GlosError('INVALID_INPUT', 'A start names a site that is not one of this fleet’s open sites', { field: 'starts' });
+      if (s.shiftId && !sites.find((x) => x.siteId === s.siteId)?.shifts.some((x) => x.shiftId === s.shiftId)) throw new GlosError('INVALID_INPUT', 'A start names a shift that is not one of that site’s', { field: 'starts' });
       if (s.siteId !== (this.sites?.homeOf(fleetDid, 'driver', s.driverDid) ?? DEPOT_SITE)) away[s.driverDid] = s.siteId;
+      if (s.shiftId) shiftOf[s.driverDid] = s.shiftId;
     }
 
     const key = keyOf(fleetDid, day);
     const before = new Set(this.days.get(key)?.driverDids ?? []);
-    this.days.set(key, { fleetDid, day, driverDids: wanted, ...(Object.keys(away).length ? { starts: away } : {}), setAt: new Date(now).toISOString(), setBy: by });
+    this.days.set(key, { fleetDid, day, driverDids: wanted, ...(Object.keys(away).length ? { starts: away } : {}), ...(Object.keys(shiftOf).length ? { shifts: shiftOf } : {}), setAt: new Date(now).toISOString(), setBy: by });
 
     // Told only what changed for them. Somebody left off a day the office had never rostered was never told they
     // drive it, so there is nothing to take back.

@@ -56,9 +56,11 @@ export class PlanTripView {
 export class PlanRouteView {
   vehicleId: string;
   plate: string;
-  /** The site it starts from and comes back to. */
+  /** The site it starts from and comes back to, and the shift it goes out on where the site has shifts. */
   siteId: string;
   siteName: string;
+  @ApiPropertyOptional() shiftId?: string;
+  @ApiPropertyOptional() shiftName?: string;
   @ApiProperty({ enum: VEHICLE_CLASSES }) vehicleClass: VehicleClass;
   capacityKg: number;
   @ApiProperty({ type: [PlanTripView] }) trips: PlanTripView[];
@@ -181,6 +183,23 @@ export class PlanSiteView {
   drivers: number;
 }
 
+/**
+ * ONE SHIFT AT ONE SITE in a day's plan: when it starts, the drivers rostered on it, the trucks that went out on it — and
+ * how many drivers it NEEDS: as many as went out, or, where orders were left for want of a driver, as many trucks as
+ * would go out on it with drivers enough.
+ */
+export class PlanShiftView {
+  siteId: string;
+  siteName: string;
+  @ApiPropertyOptional() shiftId?: string;
+  @ApiPropertyOptional() shiftName?: string;
+  /** HH:MM on the fleet's clock. */
+  start: string;
+  rostered: number;
+  needed: number;
+  trucksUsed: number;
+}
+
 /** WHO THE PLAN COUNTED as driving that day, and why: the office's roster for the day, or — where it set none — everybody. */
 export class PlanRoster {
   @ApiProperty({ enum: ['roster', 'everyone'] }) source: 'roster' | 'everyone';
@@ -194,6 +213,8 @@ export class DayPlanView {
   @ApiProperty({ type: [PlanLeftView] }) unplanned: PlanLeftView[];
   /** The fleet's sites, each with its trucks and drivers. A plan kept from before there were sites has none: it was all the depot. */
   @ApiPropertyOptional({ type: [PlanSiteView] }) sites?: PlanSiteView[];
+  /** Each shift at each site: drivers rostered, and needed. A plan kept from before there were shifts has none. */
+  @ApiPropertyOptional({ type: [PlanShiftView] }) shifts?: PlanShiftView[];
   @ApiPropertyOptional({ type: PlanHire }) hire?: PlanHire;
   @ApiProperty({ type: PlanTotals }) totals: PlanTotals;
   @ApiProperty({ type: PlanSettings }) settings: PlanSettings;
