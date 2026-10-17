@@ -104,6 +104,7 @@
     <a href="#built">Built from this assessment</a>
     <a href="#central">Centralized data</a>
     <a href="#fleet">Fleet and assets</a>
+    <a href="#resources">Sites and shifts</a>
   </nav>
 </header>
 
@@ -116,7 +117,7 @@
   <div class="card"><span class="tag t-strong">Strong</span><h3>A driver's shift</h3><p>Start and end of shift with a chosen vehicle, the 13-hour limit and 9-hour rest said in advance, a snooze for new offers, and each fleet on its own clock.</p></div>
   <div class="card"><span class="tag t-partial">Partial</span><h3>Real time</h3><p>Positions from phones on shift, a map that updates every 45 seconds, push from a live server. Nothing re-plans during the day. A parcel's lateness was only measured after it arrived (now told as it happens, see the last section).</p></div>
   <div class="card"><span class="tag t-partial">Partial</span><h3>Routes</h3><p>The order of stops is optimised. Distances are straight lines times 1.35 at one speed, except in a fleet's day plan, which can use real roads if the operator runs a routing server. No traffic.</p></div>
-  <div class="card"><span class="tag t-partial">Partial</span><h3>Shift patterns</h3><p>Driver shifts are handled. The day plan counted every active driver, not who works that day (now a roster, see the last section). Shops have opening hours; hubs have none, and no place has staff shifts.</p></div>
+  <div class="card"><span class="tag t-partial">Partial</span><h3>Shift patterns</h3><p>Driver shifts are handled. The day plan counted every active driver, not who works that day (now a roster). A fleet's sites now keep shift patterns, loading bays and opening hours, and the plan says how many drivers each shift needs (see “Planning across sites and shifts”). Shops have opening hours; hubs have none, and no hub or shop has staff shifts.</p></div>
   <div class="card"><span class="tag t-missing">Missing</span><h3>Inbound supply</h3><p>No expected-arrival notices, no receiving appointments, no counting goods in against what was expected, no storage. A store's dock is outbound only, by design.</p></div>
   <div class="card"><span class="tag t-missing">Missing</span><h3>Coordination across the network</h3><p>Planning happens per fleet, per day. Nobody plans the parcel network as a whole: bags move when a driver chooses to claim them, and there is no timetable between hubs.</p></div>
 </div>
@@ -484,6 +485,45 @@
   <div class="card"><span class="tag t-strong">Answered</span><h3>Staff and a fleet's upkeep</h3><p>Your words, 2026-10-16: “Staff should not be able to change upkeep records.” Built: staff read a fleet's upkeep and change none of it. No upkeep write route lets staff in, and each check refuses them in words as well. Standing in for a driver, staff may still start or end a shift, but give no odometer reading.</p><p class="note">Commit <code>5725e0d</code>.</p></div>
   <div class="card"><span class="tag t-partial">Partial</span><h3>The live map</h3><p>A broken-down vehicle is not marked on the fleet's live map; the office sees it on a map of its own at the top of Vehicles, and on the vehicle's sheet.</p></div>
   <div class="card"><span class="tag t-missing">Not built</span><h3>Other assets</h3><p>Trailers as assets of their own (papers and inspections that move between tractors), a count of bags by place and a lost bag, and the condition of hub equipment — from the list before building, not asked for this time.</p></div>
+</div>
+
+<!-- ─────────────────────────────────────────────── planning across sites and shifts -->
+<h2 id="resources">Planning across sites and shifts</h2>
+<p class="lead">Drivers, loading places and vehicles, planned for a fleet that works from more than one place. Assessed 2026-10-16, built 2026-10-16 and 17. Your words: “Logistics resource optimization / Planning workforce, dock capacity, and equipment utilization efficiently across every site and shift. This is for fleets that operate from different locations.” Before: a fleet had one depot, typed when it signed up, and every truck in the day plan started there. A shift was only a driver's own start and end, never a pattern. Nothing said how much each vehicle was used.</p>
+
+<h3 style="margin-top:28px">Built, in the order you agreed</h3>
+<div class="grid">
+  <div class="card"><span class="tag t-strong">Built</span><h3>1. A fleet's sites</h3><p>The office adds its depots and yards on a map, says which vehicles and drivers work from each, and closes a site once nobody works from it. The depot the fleet signed up with is its first site. In the day plan each truck starts from its own site, and no more trucks leave a site than drivers start there. The roster can say a driver starts at another site for a day. Staff read the sites and change none of them.</p><p class="note">Commit <code>32aac5e</code>.</p></div>
+  <div class="card"><span class="tag t-strong">Built</span><h3>2. How the vehicles were used</h3><p>A week at a time, for each vehicle, each site and the whole fleet: days out, days off the road, days standing idle, shifts and hours on shift, km driven where readings were given, loads delivered and their weight, how much of the distance ran loaded, and runs. Only from what was recorded: nothing is estimated, and nothing about how anybody drives.</p><p class="note">Commit <code>191c876</code>.</p></div>
+  <div class="card"><span class="tag t-strong">Built</span><h3>3. Shifts at a site</h3><p>A site keeps up to six shifts, each with a start time and a length. The roster says which shift each driver starts on. The plan offers each truck once per shift of its site, so one truck can go out early with one driver and late with another, but never on two shifts that overlap. Its trips are numbered through as one day. For each shift the plan says how many drivers are rostered and how many it needs.</p><p class="note">Commit <code>3a1e7df</code>.</p></div>
+  <div class="card"><span class="tag t-strong">Built</span><h3>4. Loading bays and opening hours</h3><p>A site keeps how many trucks can load there at once, and when it is open for loading, day by day. An order collected at one of the fleet's own sites loads while the site is open; a truck that comes early waits at the gate. No more trucks load at once than the site has bays: the next one waits, and its trip says how long. A truck still loading at closing time is planned all the same, and the plan says so. On a day the site is closed nothing is collected there, and the plan says why. For each site the plan says how many trucks load there, how many waited for a bay, and the longest wait.</p><p class="note">Commit <code>b567504</code>.</p></div>
+</div>
+
+<h3 style="margin-top:28px">Your four questions, answered by default while building</h3>
+<p>You asked me to build first and ask again. Each one below is what is built now; the “Open” cards say what the other answers would add.</p>
+<div class="grid">
+  <div class="card"><span class="tag t-ask">Default</span><h3>Whose loading places</h3><p>The fleet's own sites only. A shipper's yard keeps no hours or bays that the plan reads.</p></div>
+  <div class="card"><span class="tag t-ask">Default</span><h3>Where a truck starts</h3><p>From its home site. The roster can move a driver to another site for a day, never a truck.</p></div>
+  <div class="card"><span class="tag t-ask">Default</span><h3>How far workforce planning goes</h3><p>Who starts where, and on which shift. Never pay, contracts, or hours counted for pay.</p></div>
+  <div class="card"><span class="tag t-ask">Default</span><h3>What use is counted</h3><p>Only what was recorded: shifts, odometer readings, deliveries, runs, days off the road. No targets, no costs.</p></div>
+</div>
+
+<h3 style="margin-top:28px">Not as I first said it</h3>
+<ul>
+  <li>Bays are handed out after the orders are placed on trucks, in the order trucks come for them, not while placing. When a wait for a bay takes a truck past its shift, the plan says so on that truck and at the top of the plan. It does not move orders off the truck to avoid it.</li>
+  <li>A site where the office has not said how many bays it has sets no limit. At first, a site nobody had set had two.</li>
+  <li>Opening hours are for loading only. A truck may still leave a closed site, or start its shift there.</li>
+  <li>An order counts as collected at a site when its collection point is within 300 m of the site, measured in a straight line.</li>
+</ul>
+
+<h3 style="margin-top:28px">Open</h3>
+<div class="grid">
+  <div class="card"><span class="tag t-ask">Your call</span><h3>A shipper's dock</h3><p>A shipper's loading place could keep hours and bays too, so a truck is not sent to wait at a gate that is closed. Following “a company keeps its own record”, the shipper would keep them in the Business app, not the fleet office. This belongs with the inbound decisions (receiving appointments).</p></div>
+  <div class="card"><span class="tag t-ask">Your call</span><h3>A truck lent to another site for a day</h3><p>When one site is short of trucks and another has idle ones, the plan could say so, or move a truck for the day with the empty drive counted. Today a truck's site changes only on Sites.</p></div>
+  <div class="card"><span class="tag t-ask">Your call</span><h3>Staff at hubs and shops</h3><p>How many people a hub or shop has on each shift, as a planning count with no names and no pay. Not asked for this time: your words were about fleets.</p></div>
+  <div class="card"><span class="tag t-ask">Your call</span><h3>Idle vehicles flagged</h3><p>Usage is counted but never judged. A vehicle idle most of the week could be flagged to the office. Costs per km stay out.</p></div>
+  <div class="card"><span class="tag t-missing">Not built</span><h3>Trailers and equipment</h3><p>Trailers as assets of their own, and equipment at a site (a forklift that only some bays have) booked with a loading. From the list before building.</p></div>
+  <div class="card"><span class="tag t-missing">Not built</span><h3>A forecast</h3><p>How many trucks and drivers next week may need, read from past orders. The plan works only from orders already placed.</p></div>
 </div>
 
 </div>
