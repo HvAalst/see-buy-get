@@ -57,6 +57,10 @@ import { ROUTER as ROUTER_TOKEN, type Router } from './router';
 import { clockAt } from './fleet-clock';
 
 import { FleetSiteService } from './fleet-site.service';
+import { FleetUseService } from './fleet-use.service';
+import { VehicleCareService } from './vehicle-care.service';
+import { VehicleBreakdownService } from './vehicle-breakdown.service';
+import { requiredLoadKeys, requiredUnloadKeys } from './heavy-cargo';
 import { FleetRosterService } from './fleet-roster.service';
 const DAY = 86_400_000;
 
@@ -72,6 +76,9 @@ describe('a fleet’s sites', () => {
   let sites: FleetSiteService;
   let roster: FleetRosterService;
   let plans: FleetPlanService;
+  let care: VehicleCareService;
+  let breakdowns: VehicleBreakdownService;
+  let use: FleetUseService;
   let seq = 0;
 
   beforeEach(async () => {
@@ -102,6 +109,9 @@ describe('a fleet’s sites', () => {
     sites = new FleetSiteService(managers, vehicles, drivers);
     roster = new FleetRosterService(drivers, managers, bus, sites);
     plans = new FleetPlanService(dispatch, vehicles, drivers, managers, moduleRef.get<Router>(ROUTER_TOKEN), fleet, bus, undefined, roster, sites);
+    breakdowns = new VehicleBreakdownService(vehicles, managers, fleet, drivers, dispatch, moduleRef.get(DepartureService), moduleRef.get(MediaService), bus);
+    care = new VehicleCareService(vehicles, managers, fleet, drivers, moduleRef.get(MediaService), bus, breakdowns);
+    use = new FleetUseService(managers, vehicles, fleet, dispatch, moduleRef.get(DepartureService), sites, care, breakdowns);
   });
 
   const dayPlus = (n: number, from = Date.now()) => clockAt(from + n * DAY, 'Africa/Nairobi').day;
@@ -228,6 +238,53 @@ describe('a fleet’s sites', () => {
       expect(() => roster.set(f.did, dayPlus(1), [wanjiru.did], 'Amina', Date.now(), [{ driverDid: wanjiru.did, siteId: 'site_nope' }])).toThrow('A start names a site that is not one of this fleet’s open sites');
       expect(() => roster.set(f.did, dayPlus(1), [wanjiru.did], 'Amina', Date.now(), [{ driverDid: baraka.did, siteId: mombasa }])).toThrow('A start is given for a driver who is not on the day');
       expect(roster.view(f.did, dayPlus(1)).list.find((d) => d.driverDid === wanjiru.did)!.siteId).toBe(mombasa);
+    });
+  });
+
+  describe('how the vehicles were used', () => {
+    it('counts, per vehicle and per site, days out, off the road and idle, hours on shift, km, loads and runs — from what was recorded', () => {
+      const f = aFleet();
+      const mombasa = sites.add(f.did, { name: 'Mombasa yard', ...MOMBASA }, 'Amina').sites[1].siteId;
+      const out = aTruck(f.did, 'KST 400T');
+      const broken = aTruck(f.did, 'KST 401T');
+      const idle = aTruck(f.did, 'KST 402T');
+      sites.setHome(f.did, 'vehicle', broken.vehicleId, mombasa, 'Amina');
+      const amos = aDriver(f.did);
+      // Out today: a shift, two readings, one load delivered.
+      fleet.couple(amos.did, out.vehicleId);
+      care.recordReading(out.vehicleId, 10_000, { by: 'Amos', source: 'shift_start' });
+      const load = anOrder(f, dayPlus(0), NAIROBI);
+      dispatch.assign(load.freightId, amos.did, { managerDid: f.did, name: 'Amina' });
+      dispatch.pickupFreight(load.freightId, amos.did, { confirmed: requiredLoadKeys(dispatch.requireFreightPublic(load.freightId)), securementPhotoId: 'med_test' });
+      dispatch.deliverFreight(load.freightId, amos.did, { confirmed: requiredUnloadKeys(), receiverName: 'Site foreman', podPhotoId: 'med_pod' });
+      care.recordReading(out.vehicleId, 10_180, { by: 'Amos', source: 'shift_end' }, Date.now() + 1000);
+      fleet.endSession(amos.did);
+      // One reading alone says nothing about km driven.
+      care.recordReading(idle.vehicleId, 5_000, { by: 'Amina', source: 'office' });
+      // Broken down today, and not out.
+      breakdowns.report(broken.vehicleId, { by: 'Amina' }, { cause: 'engine', note: 'Will not start' });
+
+      const week = use.view(f.did, dayPlus(-6), dayPlus(0));
+      expect(week.days).toBe(7);
+      const of = (id: string) => week.vehicles.find((v) => v.vehicleId === id)!;
+      expect(of(out.vehicleId)).toMatchObject({ siteId: 'depot', daysOut: 1, daysOffRoad: 0, daysIdle: 6, shifts: 1, km: 180, loads: 1, kgDelivered: 2000, runs: 0 });
+      expect(of(out.vehicleId).loadedKm).toBeGreaterThan(0);
+      expect(of(broken.vehicleId)).toMatchObject({ siteId: mombasa, siteName: 'Mombasa yard', daysOut: 0, daysOffRoad: 1, daysIdle: 6, shifts: 0, loads: 0 });
+      expect(of(broken.vehicleId)).not.toHaveProperty('km'); // no readings: no number, never a guess
+      expect(of(idle.vehicleId)).toMatchObject({ daysOut: 0, daysOffRoad: 0, daysIdle: 7 });
+      expect(of(idle.vehicleId)).not.toHaveProperty('km');
+      // A total says km only where every vehicle has it.
+      expect(week.totals).toMatchObject({ vehicles: 3, daysOut: 1, daysOffRoad: 1, daysIdle: 19, shifts: 1, loads: 1, kgDelivered: 2000 });
+      expect(week.totals).not.toHaveProperty('km');
+      expect(week.sites).toEqual([
+        expect.objectContaining({ siteId: 'depot', vehicles: 2, daysOut: 1, daysIdle: 13 }),
+        expect.objectContaining({ siteId: mombasa, vehicles: 1, daysOffRoad: 1, daysIdle: 6 }),
+      ]);
+      expect(week.sites[0]).not.toHaveProperty('km'); // the idle truck at the depot gave no readings
+      // Days still to come are not counted; wrong days are refused.
+      expect(use.view(f.did, dayPlus(-2), dayPlus(5)).days).toBe(3);
+      expect(() => use.view(f.did, dayPlus(0), dayPlus(-1))).toThrow('The last day comes on or after the first');
+      expect(() => use.view(f.did, dayPlus(-40), dayPlus(0))).toThrow('At most 31 days at a time');
     });
   });
 });

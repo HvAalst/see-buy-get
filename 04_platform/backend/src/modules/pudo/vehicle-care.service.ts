@@ -601,6 +601,30 @@ export class VehicleCareService implements OnApplicationBootstrap, OnModuleDestr
     }
   }
 
+  /**
+   * Kilometres driven on these days, from the readings given on them: reading by reading, a new meter adding nothing on
+   * the day it is fitted. Nothing when fewer than two readings were given — never a guess.
+   */
+  drivenOn(vehicleId: string, days: ReadonlySet<string>, dayOf: (iso: string) => string): number | undefined {
+    const within = this.readingsOf(vehicleId).reverse().filter((r) => days.has(dayOf(r.at)));
+    if (within.length < 2) return undefined;
+    let km = 0;
+    for (let i = 1; i < within.length; i++) if (!within[i].newMeter) km += Math.max(0, within[i].km - within[i - 1].km);
+    return km;
+  }
+
+  /** Every spell a vehicle was taken off the road for, as days: from its first day to its last — or to the day it was ended. */
+  spellSpansOf(vehicleId: string, dayOf: (iso: string) => string): Array<{ from: string; until?: string }> {
+    return [...this.spells.values()]
+      .filter((s) => s.vehicleId === vehicleId)
+      .map((s) => {
+        const ended = s.endedAt ? dayOf(s.endedAt) : undefined;
+        const until = ended && (!s.untilDay || ended < s.untilDay) ? ended : s.untilDay;
+        return { from: s.fromDay, ...(until ? { until } : {}) };
+      })
+      .filter((s) => !s.until || s.until >= s.from);
+  }
+
   /** The latest reading of a vehicle: what service intervals count from. */
   latestReading(vehicleId: string): OdometerReading | undefined {
     return this.readingsOf(vehicleId)[0];

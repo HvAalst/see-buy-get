@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
@@ -6,8 +6,10 @@ import { actingTenant } from '../../foundation/auth/acting';
 import { GlosError } from '../../foundation/http/glos-error';
 import { FleetManagerService } from './fleet-manager.service';
 import { FleetSiteService } from './fleet-site.service';
-import { SiteDto, SiteHomeDto } from './fleet-site.dto';
+import { SiteDto, SiteHomeDto, UseQueryDto } from './fleet-site.dto';
 import { FleetSitesView } from './fleet-site.types';
+import { FleetUseService } from './fleet-use.service';
+import { FleetUseView } from './fleet-use.types';
 
 /**
  * A FLEET'S SITES, over the wire (see fleet-site.types.ts). The fleet's own record: its office reads and changes it;
@@ -18,7 +20,16 @@ export class FleetSiteController {
   constructor(
     private readonly sites: FleetSiteService,
     private readonly managers: FleetManagerService,
+    private readonly use: FleetUseService,
   ) {}
+
+  /** How the fleet's vehicles were used, from a day to a day: its office's and staff's to read. */
+  @Roles('fleet_manager', 'operator')
+  @Get('fleet/managers/:did/use')
+  used(@Param('did') did: string, @Query() q: UseQueryDto, @Actor() actor: IntrospectionResult): FleetUseView {
+    this.reads(did, actor);
+    return this.use.view(did, q.from, q.to);
+  }
 
   @Roles('fleet_manager', 'operator')
   @Get('fleet/managers/:did/sites')

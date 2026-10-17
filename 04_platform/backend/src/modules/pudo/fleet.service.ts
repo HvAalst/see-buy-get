@@ -640,6 +640,11 @@ export class FleetService {
     return active;
   }
 
+  /** Every shift started in a vehicle, running or ended: when, and who. For how it was used, never for how anybody drove. */
+  shiftsOfVehicle(vehicleId: string): Array<{ startedAt: string; endedAt?: string; driverDid: string }> {
+    return [...this.assignments.values()].filter((a) => a.vehicleId === vehicleId).map((a) => ({ startedAt: a.startedAt, ...(a.endedAt ? { endedAt: a.endedAt } : {}), driverDid: a.driverDid }));
+  }
+
   /**
    * What the driver's phone shows at a counter while their shift runs: their badge and this shift's code, as one
    * string. Only for the driver's own sign-in (the controller asks). Nothing while no shift runs: a counter hands

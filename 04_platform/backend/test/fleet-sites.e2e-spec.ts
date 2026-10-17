@@ -90,5 +90,13 @@ describe('a fleet’s sites, over the wire', () => {
       { siteId: 'depot', name: 'Depot', trucksAvailable: 0, trucksUsed: 0, drivers: 0 },
       { siteId: msa, name: 'Mombasa yard', trucksAvailable: 1, trucksUsed: 0, drivers: 1 },
     ]);
+    // How the vehicles were used: the office's and staff's to read, nobody else's.
+    const today = app.get(FleetManagerService).todayOf(kilima.did);
+    const week = { from: new Date(Date.parse(`${today}T12:00:00Z`) - 6 * 86_400_000).toISOString().slice(0, 10), to: today };
+    const used = await http().get(`/v1/sbg/fleet/managers/${kilima.did}/use`).query(week).set(bearer(kilima.token)).expect(200);
+    expect(used.body).toMatchObject({ days: 7, totals: { vehicles: 1, daysIdle: 7 }, vehicles: [{ vehicleId: truck.vehicleId, siteId: msa, siteName: 'Mombasa yard' }] });
+    await http().get(`/v1/sbg/fleet/managers/${kilima.did}/use`).query(week).set(bearer(operator)).expect(200);
+    await http().get(`/v1/sbg/fleet/managers/${kilima.did}/use`).query(week).set(bearer(pwani.token)).expect(403);
+    await http().get(`/v1/sbg/fleet/managers/${kilima.did}/use`).query({ from: today, to: 'soon' }).set(bearer(kilima.token)).expect(400);
   });
 });

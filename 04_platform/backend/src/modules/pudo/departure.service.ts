@@ -1325,6 +1325,13 @@ export class DepartureService {
     return departure;
   }
 
+  /** The runs that left in a vehicle, and the weight booked on each. */
+  runsOf(vehicleId: string): Array<{ leavesAt: string; kg: number }> {
+    return this.list()
+      .filter((d) => d.vehicleId === vehicleId && d.status === 'departed')
+      .map((d) => ({ leavesAt: d.leavesAt, kg: d.bookings.filter((b) => b.status !== 'cancelled').reduce((n, b) => n + b.weightKg, 0) }));
+  }
+
   /** The reloads of a run that followed one breakdown — read back from the run, where its notes read them. */
   reloadsAfter(departureId: string, breakdownId: string): Array<{ at: string; toPlate: string; toDriverName: string; proof: 'pass' | 'office'; by: string; location?: { lat: number; lng: number } }> {
     return (this.departures.get(departureId)?.reloads ?? []).filter((r) => r.breakdownId === breakdownId).map((r) => ({ ...r }));

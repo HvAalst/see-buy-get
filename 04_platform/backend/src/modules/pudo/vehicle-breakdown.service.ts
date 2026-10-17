@@ -387,6 +387,13 @@ export class VehicleBreakdownService {
       .filter((b) => b.status === 'open' || b.stillAboard.length > 0);
   }
 
+  /** When a vehicle was broken down: from the report to how it ended, or still. */
+  spansOf(vehicleId: string): Array<{ from: string; until?: string }> {
+    return this.all()
+      .filter((b) => b.vehicleId === vehicleId)
+      .map((b) => ({ from: b.reportedAt, ...(b.resolvedAt ? { until: b.resolvedAt } : {}) }));
+  }
+
   /** A breakdown's photograph, for the vehicle's owner — the upkeep routes decide who that is. */
   photo(vehicleId: string, breakdownId: string, variant: 'full' | 'thumb'): { bytes: Buffer; contentType: string } {
     const b = this.breakdowns.get(breakdownId);

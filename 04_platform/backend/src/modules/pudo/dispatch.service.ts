@@ -2110,6 +2110,16 @@ export class DispatchService {
     }
   }
 
+  /** The loads delivered from a vehicle — the one they were in when handed over — with their weight and the kilometres loaded and empty. */
+  deliveriesOf(vehicleId: string): Array<{ deliveredAt: string; weightKg: number; loadedKm?: number; emptyKm?: number }> {
+    return [...this.freights.values()]
+      .filter((f) => f.status === 'delivered' && f.deliveredAt && vehicleNow(f)?.vehicleId === vehicleId)
+      .map((f) => {
+        const split = distanceSplit(f.priceBreakdown);
+        return { deliveredAt: f.deliveredAt!, weightKg: f.weightKg, ...(split ? { loadedKm: split.loadedKm, emptyKm: split.deadheadKm } : {}) };
+      });
+  }
+
   /** The reloads of a load that followed one breakdown — read back from the load, where the note reads them. */
   reloadsAfter(freightId: string, breakdownId: string): FreightReload[] {
     return (this.freights.get(freightId)?.reloads ?? []).filter((r) => r.breakdownId === breakdownId).map((r) => ({ ...r }));

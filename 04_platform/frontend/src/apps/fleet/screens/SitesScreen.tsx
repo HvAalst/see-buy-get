@@ -4,6 +4,7 @@ import { useT } from '../../../shared/i18n';
 import type { Result, SbgClient } from '../../../lib/sbg';
 import type { FleetState } from '../useFleetApp';
 import { pointOf, sitesApi, type FleetSite, type FleetSites } from '../sites';
+import { UseCard } from './UseCard';
 
 /**
  * A FLEET'S SITES: the depots and yards its trucks and drivers work from, on a map; adding one, changing one, closing
@@ -131,6 +132,9 @@ export function SitesScreen({ state, sbg }: { state: FleetState; sbg: SbgClient 
           </Button>
         )}
       </Card>
+
+      {/* HOW THE VEHICLES WERE USED — a week at a time, by site. */}
+      {api ? <UseCard api={api} /> : null}
 
       {/* WHO WORKS FROM WHERE — only once there is somewhere else to work from. */}
       {many ? (

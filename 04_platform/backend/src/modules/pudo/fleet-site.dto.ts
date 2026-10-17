@@ -25,6 +25,12 @@ export class SiteDto {
   @IsOptional() @IsArray() @ArrayMaxSize(MAX_SHIFTS) @ValidateNested({ each: true }) @Type(() => SiteShiftDto) shifts?: SiteShiftDto[];
 }
 
+/** How the vehicles were used: from a day to a day, the fleet's own. */
+export class UseQueryDto {
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'A day is YYYY-MM-DD' }) from!: string;
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'A day is YYYY-MM-DD' }) to!: string;
+}
+
 /** Where a vehicle or a driver works from. */
 export class SiteHomeDto {
   @IsIn(['vehicle', 'driver']) kind!: 'vehicle' | 'driver';

@@ -22848,6 +22848,53 @@
         }
       }
     },
+    "/v1/sbg/fleet/managers/{did}/use": {
+      "get": {
+        "operationId": "FleetSite.used",
+        "summary": "",
+        "description": "How the fleet's vehicles were used, from a day to a day: its office's and staff's to read.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetUseView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/managers/{did}/sites": {
       "get": {
         "operationId": "FleetSite.list",
@@ -46642,6 +46689,277 @@
           }
         },
         "required": [
+          "days"
+        ]
+      },
+      "VehicleUse": {
+        "type": "object",
+        "properties": {
+          "km": {
+            "type": "number",
+            "description": "Driven, from its odometer readings within the days. Absent where fewer than two readings were given."
+          },
+          "vehicleClass": {
+            "type": "string",
+            "enum": [
+              "bike",
+              "motorcycle",
+              "tuktuk",
+              "car",
+              "van",
+              "bus",
+              "truck"
+            ]
+          },
+          "vehicleId": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "capacityKg": {
+            "type": "number"
+          },
+          "siteId": {
+            "type": "string"
+          },
+          "siteName": {
+            "type": "string"
+          },
+          "vehicles": {
+            "type": "number"
+          },
+          "daysOut": {
+            "type": "number",
+            "description": "Days a shift was started in it."
+          },
+          "daysOffRoad": {
+            "type": "number",
+            "description": "Days it was off the road — a spell (workshop, service, accident) or a breakdown — and not out."
+          },
+          "daysIdle": {
+            "type": "number",
+            "description": "Days it could have gone out and did not."
+          },
+          "shifts": {
+            "type": "number"
+          },
+          "hoursOnShift": {
+            "type": "number"
+          },
+          "loads": {
+            "type": "number",
+            "description": "Loads delivered from it, their weight, and the kilometres they were carried loaded and run empty to reach them."
+          },
+          "kgDelivered": {
+            "type": "number"
+          },
+          "loadedKm": {
+            "type": "number"
+          },
+          "emptyKm": {
+            "type": "number"
+          },
+          "runs": {
+            "type": "number",
+            "description": "Runs that left in it, and the weight booked on them."
+          },
+          "runKg": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "vehicleClass",
+          "vehicleId",
+          "plate",
+          "capacityKg",
+          "siteId",
+          "siteName",
+          "vehicles",
+          "daysOut",
+          "daysOffRoad",
+          "daysIdle",
+          "shifts",
+          "hoursOnShift",
+          "loads",
+          "kgDelivered",
+          "loadedKm",
+          "emptyKm",
+          "runs",
+          "runKg"
+        ]
+      },
+      "SiteUse": {
+        "type": "object",
+        "properties": {
+          "km": {
+            "type": "number",
+            "description": "Driven, from its odometer readings within the days. Absent where fewer than two readings were given."
+          },
+          "siteId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "vehicles": {
+            "type": "number"
+          },
+          "daysOut": {
+            "type": "number",
+            "description": "Days a shift was started in it."
+          },
+          "daysOffRoad": {
+            "type": "number",
+            "description": "Days it was off the road — a spell (workshop, service, accident) or a breakdown — and not out."
+          },
+          "daysIdle": {
+            "type": "number",
+            "description": "Days it could have gone out and did not."
+          },
+          "shifts": {
+            "type": "number"
+          },
+          "hoursOnShift": {
+            "type": "number"
+          },
+          "loads": {
+            "type": "number",
+            "description": "Loads delivered from it, their weight, and the kilometres they were carried loaded and run empty to reach them."
+          },
+          "kgDelivered": {
+            "type": "number"
+          },
+          "loadedKm": {
+            "type": "number"
+          },
+          "emptyKm": {
+            "type": "number"
+          },
+          "runs": {
+            "type": "number",
+            "description": "Runs that left in it, and the weight booked on them."
+          },
+          "runKg": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "siteId",
+          "name",
+          "vehicles",
+          "daysOut",
+          "daysOffRoad",
+          "daysIdle",
+          "shifts",
+          "hoursOnShift",
+          "loads",
+          "kgDelivered",
+          "loadedKm",
+          "emptyKm",
+          "runs",
+          "runKg"
+        ]
+      },
+      "UseTotals": {
+        "type": "object",
+        "properties": {
+          "km": {
+            "type": "number",
+            "description": "Driven, from its odometer readings within the days. Absent where fewer than two readings were given."
+          },
+          "vehicles": {
+            "type": "number"
+          },
+          "daysOut": {
+            "type": "number",
+            "description": "Days a shift was started in it."
+          },
+          "daysOffRoad": {
+            "type": "number",
+            "description": "Days it was off the road — a spell (workshop, service, accident) or a breakdown — and not out."
+          },
+          "daysIdle": {
+            "type": "number",
+            "description": "Days it could have gone out and did not."
+          },
+          "shifts": {
+            "type": "number"
+          },
+          "hoursOnShift": {
+            "type": "number"
+          },
+          "loads": {
+            "type": "number",
+            "description": "Loads delivered from it, their weight, and the kilometres they were carried loaded and run empty to reach them."
+          },
+          "kgDelivered": {
+            "type": "number"
+          },
+          "loadedKm": {
+            "type": "number"
+          },
+          "emptyKm": {
+            "type": "number"
+          },
+          "runs": {
+            "type": "number",
+            "description": "Runs that left in it, and the weight booked on them."
+          },
+          "runKg": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "vehicles",
+          "daysOut",
+          "daysOffRoad",
+          "daysIdle",
+          "shifts",
+          "hoursOnShift",
+          "loads",
+          "kgDelivered",
+          "loadedKm",
+          "emptyKm",
+          "runs",
+          "runKg"
+        ]
+      },
+      "FleetUseView": {
+        "type": "object",
+        "properties": {
+          "vehicles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VehicleUse"
+            }
+          },
+          "sites": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SiteUse"
+            }
+          },
+          "totals": {
+            "$ref": "#/components/schemas/UseTotals"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "days": {
+            "type": "number",
+            "description": "The days counted: from `from` to `to`, or to today where `to` has not come."
+          }
+        },
+        "required": [
+          "vehicles",
+          "sites",
+          "totals",
+          "from",
+          "to",
           "days"
         ]
       },
