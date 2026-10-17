@@ -4,7 +4,7 @@ import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { PlanAdviser } from './PlanAdviser';
 import { SplitOrder } from './SplitOrder';
 import { RosterCard } from './RosterCard';
-import { acceptTellsShippers, askOf, clockLine, rosterLine, dayWord, distanceLine, isFleetToday, mayChooseClock, handOnLine, hoursWords, keptOff, leftByReason, putOnto, ruleLine, windowLine, sendLine, weightWords, withoutRule, type DayPlan, type FleetClock, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi, siteLine, shiftLine, loadingLine, tripLoadingLines, mayPutOn, lendLine } from '../orders';
+import { acceptTellsShippers, askOf, clockLine, rosterLine, dayWord, distanceLine, isFleetToday, mayChooseClock, handOnLine, hoursWords, keptOff, leftByReason, putOnto, ruleLine, windowLine, sendLine, weightWords, withoutRule, type DayPlan, type FleetClock, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi, siteLine, shiftLine, loadingLine, tripLoadingLines, mayPutOn, lendLine, dockLine } from '../orders';
 
 const REASON: Record<PlanLeftReason, { title: MessageKey; what: MessageKey }> = {
   no_pin: { title: 'fleet.plan.left.noPin', what: 'fleet.plan.left.noPinDo' },
@@ -14,6 +14,7 @@ const REASON: Record<PlanLeftReason, { title: MessageKey; what: MessageKey }> = 
   no_driver: { title: 'fleet.plan.left.noDriver', what: 'fleet.plan.left.noDriverDo' },
   no_trucks: { title: 'fleet.plan.left.noTrucks', what: 'fleet.plan.left.noTrucksDo' },
   site_closed: { title: 'fleet.plan.left.siteClosed', what: 'fleet.plan.left.siteClosedDo' },
+  dock_closed: { title: 'fleet.plan.left.dockClosed', what: 'fleet.plan.left.dockClosedDo' },
 };
 
 /**
@@ -503,17 +504,17 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
               ))}
             </ul>
           ) : null}
-          {/* WHAT LOADS AT EACH OF THE FLEET'S OWN SITES, where anything does: its bays and hours, and who waited. */}
-          {plan.sites?.some((s) => s.loadings) ? (
+          {/* WHAT LOADS AT EACH PLACE THAT KEEPS HOURS OR BAYS — the fleet's own sites, and its shippers' — where anything
+              does: its bays and hours, and who waited. */}
+          {plan.sites?.some((s) => s.loadings) || plan.docks?.some((d) => d.loadings) ? (
             <ul class="plan__sites">
-              {plan.sites.map((s) => {
-                const line = loadingLine(s, t);
-                return line ? (
-                  <li key={`load:${s.siteId}`} class={line.tone === 'warn' ? 'plan__win plan__win--warn' : undefined}>
+              {[...(plan.sites ?? []).map((s) => ({ key: `load:${s.siteId}`, line: loadingLine(s, t) })), ...(plan.docks ?? []).map((d) => ({ key: `dock:${d.siteId}`, line: dockLine(d, t) }))].map(({ key, line }) =>
+                line ? (
+                  <li key={key} class={line.tone === 'warn' ? 'plan__win plan__win--warn' : undefined}>
                     {line.text}
                   </li>
-                ) : null;
-              })}
+                ) : null,
+              )}
             </ul>
           ) : null}
 

@@ -116,15 +116,17 @@ export class PlannedAbout {
 /**
  * WHY A PLAN LEFT AN ORDER OUT, as its shipper is told it — the carrier's own reasons, without the carrier's own
  * business: `room` the vehicles going out are full or the day is too short (a truck with no driver, or the carrier's own
- * site it is collected at closed that day, is the same thing to a shipper) · `fit` no vehicle going out can carry it as ordered · `heavy` heavier than the largest vehicle carries ·
+ * site it is collected at closed that day, is the same thing to a shipper) · `closed` the shipper's own loading place
+ * is closed that day by the hours it keeps · `fit` no vehicle going out can carry it as ordered · `heavy` heavier than the largest vehicle carries ·
  * `place` where it goes has no point on the map.
  */
-export const PLAN_LEFT_WHYS = ['room', 'fit', 'heavy', 'place'] as const;
+export const PLAN_LEFT_WHYS = ['room', 'fit', 'heavy', 'place', 'closed'] as const;
 export type PlanLeftWhy = (typeof PLAN_LEFT_WHYS)[number];
 export function shipperWhy(reason: string): PlanLeftWhy {
   if (reason === 'no_pin') return 'place';
   if (reason === 'too_heavy') return 'heavy';
   if (reason === 'no_truck_can_carry') return 'fit';
+  if (reason === 'dock_closed') return 'closed';
   return 'room';
 }
 

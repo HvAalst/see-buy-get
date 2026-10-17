@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { lendLine, loadingLine, mayPutOn, tripLoadingLines } from './orders';
+import { dockLine, lendLine, loadingLine, mayPutOn, tripLoadingLines } from './orders';
 import { ADVISER_HISTORY, rosterChanged, rosterLine, rosterPicks, rosterShifts, rosterStarts, shiftLine, siteLine, acceptTellsShippers, base64Of, clockLine, deliveredLine, isFleetToday, mayChooseClock, distanceLine, evenLoads, historyOf, isWorkbook, keptOff, loadLine, mayRejoin, maySplit, passOnState, putOnto, ruleLine, windowLine, rulesAsk, withoutRule, type PlanRule } from './orders';
 import { askOf, byDay, dayOf, daySummary, dayWord, handOnLine, hoursWords, mayHandOn, importVerdictLine, leftByReason, mayWithdraw, notASheet, orderTag, sendLine, weightWords, type DayPlan, type FleetOrder, type PlanLeft, type PlanSendTruck } from './orders';
 
@@ -462,6 +462,12 @@ describe('who drives on the day', () => {
       text: 'Depot: 3 loadings · 1 bay · open 08:00–18:00 · 2 waited for a bay, the longest 30 min',
     });
     expect(loadingLine({ ...none, loadings: 2, bays: 2, afterClose: 1 }, t)).toEqual({ tone: 'warn', text: 'Depot: 2 loadings · 2 bays · 1 still loading after it closes' });
+    // At a shipper's place: named with its shipper, and its bays counted for this fleet's trucks only.
+    expect(dockLine({ name: 'Jenga yard', shipperName: 'Jenga Bricks', loadings: 2, bays: 1, bayWaits: 1, longestBayWaitMin: 15, hours: '08:00–18:00', afterClose: 0 }, t)).toEqual({
+      tone: 'warn',
+      text: 'Jenga yard (Jenga Bricks): 2 loadings · 1 bay, counting your trucks only · open 08:00–18:00 · 1 waited for a bay, the longest 15 min',
+    });
+    expect(tripLoadingLines({ dockName: 'Jenga yard', bayWaitMin: 15 }, t)).toEqual([{ tone: 'warn', text: 'Waits 15 min at Jenga yard for a loading bay' }]);
   });
 
   it('says which idle trucks at another site would carry what a short site left, and that the office moves them', () => {
@@ -478,6 +484,7 @@ describe('who drives on the day', () => {
     const left = (reason: PlanLeft['reason']) => ({ freightId: reason, code: reason, description: '', shipperName: '', destLabel: '', weightKg: 1, reason }) as PlanLeft;
     expect(leftByReason([left('no_time'), left('site_closed'), left('no_pin')]).map((g) => g.reason)).toEqual(['no_pin', 'site_closed', 'no_time']);
     // Neither can be put on a vehicle by hand: no truck is routed to no point, and none loads at a closed site.
-    expect((['no_pin', 'site_closed', 'no_time', 'no_driver'] as const).map(mayPutOn)).toEqual([false, false, true, true]);
+    expect((['no_pin', 'site_closed', 'dock_closed', 'no_time', 'no_driver'] as const).map(mayPutOn)).toEqual([false, false, false, true, true]);
+    expect(leftByReason([left('no_time'), left('dock_closed'), left('site_closed')]).map((g) => g.reason)).toEqual(['site_closed', 'dock_closed', 'no_time']);
   });
 });

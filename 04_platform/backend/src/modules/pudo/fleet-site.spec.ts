@@ -62,6 +62,9 @@ import { VehicleCareService } from './vehicle-care.service';
 import { VehicleBreakdownService } from './vehicle-breakdown.service';
 import { requiredLoadKeys, requiredUnloadKeys } from './heavy-cargo';
 import { FleetRosterService } from './fleet-roster.service';
+import { SiteService } from './site.service';
+import { CarriageContractService } from './carriage-contract.service';
+import { shipperWhy } from './dispatch.types';
 const DAY = 86_400_000;
 
 /**
@@ -79,6 +82,9 @@ describe('a fleet’s sites', () => {
   let care: VehicleCareService;
   let breakdowns: VehicleBreakdownService;
   let use: FleetUseService;
+  let places: SiteService;
+  let contracts: CarriageContractService;
+  let entities: EntityService;
   let seq = 0;
 
   beforeEach(async () => {
@@ -108,7 +114,10 @@ describe('a fleet’s sites', () => {
     const bus = moduleRef.get(EventBus);
     sites = new FleetSiteService(managers, vehicles, drivers);
     roster = new FleetRosterService(drivers, managers, bus, sites);
-    plans = new FleetPlanService(dispatch, vehicles, drivers, managers, moduleRef.get<Router>(ROUTER_TOKEN), fleet, bus, undefined, roster, sites);
+    places = new SiteService();
+    contracts = new CarriageContractService();
+    entities = moduleRef.get(EntityService);
+    plans = new FleetPlanService(dispatch, vehicles, drivers, managers, moduleRef.get<Router>(ROUTER_TOKEN), fleet, bus, undefined, roster, sites, places, contracts, entities);
     breakdowns = new VehicleBreakdownService(vehicles, managers, fleet, drivers, dispatch, moduleRef.get(DepartureService), moduleRef.get(MediaService), bus);
     care = new VehicleCareService(vehicles, managers, fleet, drivers, moduleRef.get(MediaService), bus, breakdowns);
     use = new FleetUseService(managers, vehicles, fleet, dispatch, moduleRef.get(DepartureService), sites, care, breakdowns);
@@ -404,6 +413,85 @@ describe('a fleet’s sites', () => {
       expect(plan.unplanned.map((u) => u.reason)).toEqual(['site_closed', 'site_closed', 'site_closed']);
       expect(plan.sites![0]).toMatchObject({ closed: true, loadings: 0 });
       expect(plan.sites![0]).not.toHaveProperty('hours');
+    });
+  });
+
+  describe('loading at a shipper’s own place', () => {
+    const OPEN = { open: '08:00', close: '18:00' };
+    const EVERY_DAY = Object.fromEntries(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map((d) => [d, OPEN]));
+    const YARD = { lat: -1.33, lng: 36.87 };
+    /** A shipper's business, and its yard saved among its own places. */
+    function aShipper() {
+      seq += 1;
+      const b = entities.createBusiness({ name: `Jenga Bricks ${seq}`, jurisdiction: 'KE', profile: { activities: ['shipper'], registrationNo: `R-SD-${seq}`, createdBy: 'Achieng', createdByPersonDid: 'did:glos:achieng' } });
+      const yard = places.declare(b.entityId, { kind: 'delivery', name: 'Jenga yard', location: YARD }, 'Achieng');
+      return { b, yard };
+    }
+    /** A full truckload collected at the yard (a few steps from the pin) and taken 30 km off. */
+    function fromTheYard(postedByDid: string, contract: ContractRef, i: number) {
+      seq += 1;
+      return dispatch.registerFreight({
+        description: `Bricks ${seq}`, pickupLocation: { lat: YARD.lat + 0.001, lng: YARD.lng }, pickupLabel: 'Jenga yard', destLabel: `Site ${seq}`, destLocation: { lat: YARD.lat - 0.27, lng: YARD.lng + i * 0.05 },
+        weightKg: 7000, packaging: 'palletised', postedByDid, postedByName: 'Achieng', contract, deliverOn: dayPlus(1), orderRef: `SD-${seq}`,
+      });
+    }
+
+    it('loads where the shipper says, within the hours and bays it keeps there — the bays counting this fleet’s trucks only', () => {
+      const f = aFleet();
+      for (const plate of ['KST 701T', 'KST 702T']) aTruck(f.did, plate);
+      for (let i = 0; i < 2; i++) aDriver(f.did);
+      const { b, yard } = aShipper();
+      places.setLoading(b.entityId, yard.siteId, { hours: EVERY_DAY, bays: 1 }, 'Achieng');
+      // Placed by the business itself, on the contract.
+      for (const i of [0, 1]) fromTheYard(b.did!, contractOf(f), i);
+      const plan = plans.propose(f.did, { day: dayPlus(1), dayHours: 6 });
+      expect(plan.unplanned).toEqual([]);
+      const trips = plan.routes.map((r) => r.trips[0]).sort((a, c) => a.start.localeCompare(c.start));
+      // Not before it opens; then one at a time at its one bay.
+      expect(trips.map((t) => [t.dockName, t.start, t.bayWaitMin])).toEqual([
+        ['Jenga yard', '08:00', undefined],
+        ['Jenga yard', '08:15', 15],
+      ]);
+      expect(trips[0].openWaitMin).toBeGreaterThan(0);
+      expect(trips[0]).not.toHaveProperty('siteId');
+      expect(plan.docks).toEqual([{ siteId: yard.siteId, name: 'Jenga yard', shipperName: b.name, loadings: 2, bays: 1, bayWaits: 1, longestBayWaitMin: 15, hours: '08:00–18:00', afterClose: 0 }]);
+      // The shipper takes its hours away: any hour, any number — and the plan reads no dock there at all.
+      places.setLoading(b.entityId, yard.siteId, { hours: null, bays: null }, 'Achieng');
+      const free = plans.propose(f.did, { day: dayPlus(1), dayHours: 6 });
+      expect(free).not.toHaveProperty('docks');
+      expect(free.routes.every((r) => !r.trips[0].dockName)).toBe(true);
+    });
+
+    it('knows the shipper of an order the fleet typed in under a contract the shipper linked, and collects nothing where it says it is closed that day', () => {
+      const f = aFleet();
+      aTruck(f.did, 'KST 703T');
+      aDriver(f.did);
+      const { b, yard } = aShipper();
+      const contract = contracts.create({ did: f.did, name: f.companyName }, { shipperName: 'Jenga' }, 'Amina');
+      contracts.link({ entityId: b.entityId, name: b.name }, contracts.issueInvite(f.did, contract.contractId).code, 'Achieng');
+      const weekday = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date(`${dayPlus(1)}T12:00:00Z`).getUTCDay()];
+      places.setLoading(b.entityId, yard.siteId, { hours: { ...EVERY_DAY, [weekday]: null } }, 'Achieng');
+      fromTheYard(f.did, { contractId: contract.contractId, fleetDid: f.did, fleetName: f.companyName, shipperName: b.name }, 0);
+      const plan = plans.propose(f.did, { day: dayPlus(1) });
+      expect(plan.unplanned.map((u) => u.reason)).toEqual(['dock_closed']);
+      expect(plan.docks).toEqual([expect.objectContaining({ siteId: yard.siteId, closed: true, loadings: 0 })]);
+      // Told to its shipper as its own hours, never as the fleet's business.
+      expect(shipperWhy('dock_closed')).toBe('closed');
+    });
+
+    it('is the shipper’s own word: on its own places only, a whole number of bays, and cleared by saying nothing', () => {
+      const { b, yard } = aShipper();
+      const port = places.declare(b.entityId, { kind: 'port', name: 'Mombasa port', location: MOMBASA }, 'Achieng');
+      expect(() => places.setLoading(b.entityId, port.siteId, { bays: 2 }, 'Achieng')).toThrow('Only a place of your own keeps loading hours');
+      expect(() => places.setLoading(b.entityId, yard.siteId, { bays: 0 }, 'Achieng')).toThrow('Loading bays are a whole number from 1 to 50');
+      expect(() => places.setLoading(b.entityId, yard.siteId, { hours: { mon: { open: '18:00', close: '06:00' } } }, 'Achieng')).toThrow('On mon the site closes before it opens');
+      expect(() => places.setLoading('biz-ke-somebody-else', yard.siteId, { bays: 2 }, 'X')).toThrow('No such place on your list');
+      expect(places.setLoading(b.entityId, yard.siteId, { bays: 2 }, 'Achieng').loading).toMatchObject({ bays: 2, setBy: 'Achieng' });
+      // What is not said stays; null clears; nothing left, nothing kept.
+      expect(places.setLoading(b.entityId, yard.siteId, { hours: { mon: OPEN } }, 'Achieng').loading).toMatchObject({ bays: 2, hours: { mon: OPEN } });
+      expect(places.setLoading(b.entityId, yard.siteId, { bays: null }, 'Achieng').loading).not.toHaveProperty('bays');
+      expect(places.setLoading(b.entityId, yard.siteId, { hours: null }, 'Achieng')).not.toHaveProperty('loading');
+      expect(places.loadingPlaces(b.entityId)).toEqual([]);
     });
   });
 

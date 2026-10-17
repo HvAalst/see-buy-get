@@ -54,6 +54,18 @@ describe('a fleet’s sites, over the wire', () => {
     drivers.decideKyc(d.did, true);
     return d.did;
   }
+  /** A person through the ordinary phone door, who sets up a shipper's business: its token and its id. */
+  async function aShipper(name: string): Promise<{ token: string; entityId: string }> {
+    const n = digits();
+    const phone = `+2547${n}9`.slice(0, 13);
+    const asked = await http().post('/v1/sbg/auth/phone/request').send({ phone });
+    await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
+    const email = `dock-${n}@example.com`;
+    const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
+    const person = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token as string;
+    const made = await http().post('/v1/sbg/business').set(bearer(person)).send({ name: `${name} ${n}`, country: 'KE', registrationNo: `REG-DOK-${n}`, activities: ['shipper'], yourName: 'Achieng' }).expect(201);
+    return { token: made.body.token.access_token, entityId: made.body.business.entityId };
+  }
   const tomorrowOf = (fleetDid: string) => new Date(Date.parse(`${app.get(FleetManagerService).todayOf(fleetDid)}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
 
   it('is the fleet’s own record: its office changes it, staff read it, another fleet sees none of it — and the roster and plan carry it', async () => {
@@ -102,5 +114,34 @@ describe('a fleet’s sites, over the wire', () => {
     await http().get(`/v1/sbg/fleet/managers/${kilima.did}/use`).query(week).set(bearer(operator)).expect(200);
     await http().get(`/v1/sbg/fleet/managers/${kilima.did}/use`).query(week).set(bearer(pwani.token)).expect(403);
     await http().get(`/v1/sbg/fleet/managers/${kilima.did}/use`).query({ from: today, to: 'soon' }).set(bearer(kilima.token)).expect(400);
+  });
+
+  it('loads at a shipper’s place within the hours and bays the shipper keeps there — its own word, which nobody else changes', async () => {
+    const fleet = await aFleet('Kilima Docks');
+    app.get(VehicleService).register({ plate: `DOK ${digits().slice(-3)}T`, vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 8000, ownerName: 'X', equipment: ['TLT', 'FLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, managerDid: fleet.did } as never);
+    aDriver(fleet.did);
+    const jenga = await aShipper('Jenga Bricks');
+    const yard = (await http().post(`/v1/sbg/entities/${jenga.entityId}/sites`).set(bearer(jenga.token)).send({ kind: 'delivery', name: 'Jenga yard', location: { lat: -1.33, lng: 36.87 } }).expect(201)).body;
+    // Its hours and bays: the shipper's to say. Staff and the fleet are refused; a bay count of none is not a number.
+    const loading = `/v1/sbg/entities/${jenga.entityId}/sites/${yard.siteId}/loading`;
+    const every = Object.fromEntries(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map((d) => [d, { open: '08:00', close: '18:00' }]));
+    await http().post(loading).set(bearer(operator)).send({ bays: 1 }).expect(403);
+    await http().post(loading).set(bearer(fleet.token)).send({ bays: 1 }).expect(403);
+    await http().post(loading).set(bearer(jenga.token)).send({ bays: 0 }).expect(400);
+    const kept = await http().post(loading).set(bearer(jenga.token)).send({ hours: every, bays: 1 }).expect(201);
+    expect(kept.body.loading).toMatchObject({ bays: 1, hours: { mon: { open: '08:00', close: '18:00' } }, setBy: 'Achieng' });
+    // The fleet's contract, linked by the shipper, and an order the shipper places on it, collected at its yard.
+    const contract = (await http().post(`/v1/sbg/fleet/managers/${fleet.did}/contracts`).set(bearer(fleet.token)).send({ shipperName: 'Jenga' }).expect(201)).body;
+    const invite = (await http().post(`/v1/sbg/fleet/managers/${fleet.did}/contracts/${contract.contractId}/invite`).set(bearer(fleet.token)).expect(201)).body;
+    await http().post('/v1/sbg/business/me/contracts/link').set(bearer(jenga.token)).send({ code: invite.code }).expect(201);
+    const day = tomorrowOf(fleet.did);
+    await http()
+      .post('/v1/sbg/dispatch/freight')
+      .set(bearer(jenga.token))
+      .send({ description: 'Bricks, 10 pallets', pickupLocation: { lat: -1.3305, lng: 36.87 }, pickupLabel: 'Jenga yard', destLabel: 'Kitengela site', destLocation: { lat: -1.47, lng: 36.96 }, weightKg: 6000, packaging: 'palletised', contractId: contract.contractId, deliverOn: day, orderRef: 'JB-1' })
+      .expect(201);
+    const plan = (await http().post(`/v1/sbg/fleet/managers/${fleet.did}/plan`).set(bearer(fleet.token)).send({ day }).expect(201)).body;
+    expect(plan.routes[0].trips[0]).toMatchObject({ dockName: 'Jenga yard', start: '08:00' });
+    expect(plan.docks).toEqual([expect.objectContaining({ siteId: yard.siteId, name: 'Jenga yard', loadings: 1, bays: 1, hours: '08:00–18:00' })]);
   });
 });

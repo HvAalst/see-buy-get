@@ -6598,6 +6598,53 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/sites/{siteId}/loading": {
+      "post": {
+        "operationId": "Sbg.setSiteLoading",
+        "summary": "",
+        "description": "When goods are loaded at one of this company's places, and how many trucks at once — its own word, which the\ncarriers whose day plans collect there read. The company's alone to change: staff read it, and change none of it.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "siteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiteLoadingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/imports/{importId}/road-leg": {
       "post": {
         "operationId": "Sbg.mintImportRoadLeg",
@@ -31417,6 +31464,23 @@
           "name"
         ]
       },
+      "SiteLoadingDto": {
+        "type": "object",
+        "properties": {
+          "bays": {
+            "type": "number",
+            "nullable": true,
+            "description": "How many trucks load at once. `null` here: not counted.",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "hours": {
+            "type": "object",
+            "nullable": true,
+            "description": "Day by day ({ mon: { open: '06:00', close: '18:00' }, sun: null }). `null` here: any hour."
+          }
+        }
+      },
       "MintRoadLegDto": {
         "type": "object",
         "properties": {
@@ -40819,7 +40883,8 @@
               "room",
               "fit",
               "heavy",
-              "place"
+              "place",
+              "closed"
             ]
           },
           "day": {
@@ -45649,6 +45714,10 @@
           "siteName": {
             "type": "string"
           },
+          "dockName": {
+            "type": "string",
+            "description": "Or the shipper's place it loads at, where the shipper keeps loading hours or bays: its name."
+          },
           "openWaitMin": {
             "type": "number",
             "description": "Minutes it stands at the site before it opens; `start` is then the opening."
@@ -45795,7 +45864,8 @@
               "no_time",
               "no_driver",
               "no_trucks",
-              "site_closed"
+              "site_closed",
+              "dock_closed"
             ]
           },
           "splitInto": {
@@ -45928,6 +45998,50 @@
           "rostered",
           "needed",
           "trucksUsed"
+        ]
+      },
+      "PlanDockView": {
+        "type": "object",
+        "properties": {
+          "bays": {
+            "type": "number"
+          },
+          "longestBayWaitMin": {
+            "type": "number"
+          },
+          "hours": {
+            "type": "string",
+            "description": "Open for loading that day (\"06:00–18:00\"). Absent: any hour — or, with `closed`, not at all that day."
+          },
+          "closed": {
+            "type": "boolean"
+          },
+          "siteId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "shipperName": {
+            "type": "string"
+          },
+          "loadings": {
+            "type": "number"
+          },
+          "bayWaits": {
+            "type": "number"
+          },
+          "afterClose": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "siteId",
+          "name",
+          "shipperName",
+          "loadings",
+          "bayWaits",
+          "afterClose"
         ]
       },
       "PlanLendTruck": {
@@ -46252,6 +46366,13 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/PlanShiftView"
+            }
+          },
+          "docks": {
+            "description": "The shippers' places in this plan that keep loading hours or bays, and what loads at each.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanDockView"
             }
           },
           "lend": {

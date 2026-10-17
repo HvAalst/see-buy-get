@@ -4,6 +4,8 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'node:crypto';
 import { GeoPoint } from './pudo.types';
 import { lookupPlace } from './geo-gazetteer';
+import { weekOf } from './fleet-site.service';
+import type { SiteWeek } from './fleet-site.types';
 
 /**
  * What a site is FOR — and these three are the CHAIN a container travels, which is why there are three.
@@ -33,11 +35,26 @@ export interface Site {
   from: 'pin' | 'address';
   createdBy: string;
   createdAt: string;
+  /**
+   * WHEN GOODS ARE LOADED HERE, and how many trucks at once — the company's own word, for the carriers whose day plans
+   * collect here. A place of its own only (a delivery place): a port's hours are the port's. Absent: it said neither.
+   */
+  loading?: SiteLoading;
+}
+
+export interface SiteLoading {
+  /** Open for loading, day by day. A day left out, or null, is closed. Absent: any hour. */
+  hours?: SiteWeek;
+  /** How many trucks load at once. Absent: not counted. */
+  bays?: number;
+  setAt: string;
+  setBy: string;
 }
 
 export const SITE_BASIS =
   'Places this company has saved for itself. Nobody else can see this list, nothing here is checked by us, ' +
-  'and a point resolved from an address is the middle of a place we know rather than a gate somebody stood at.';
+  'and a point resolved from an address is the middle of a place we know rather than a gate somebody stood at. ' +
+  'The one exception: the loading hours and bays you give a place are read by the carriers whose plans collect there.';
 
 /**
  * THE PLACES A COMPANY KEEPS — the ports it collects from, and the addresses it delivers to.
@@ -125,6 +142,30 @@ export class SiteService {
     return [...this.sites.values()]
       .filter((s) => s.entityId === entityId && (!kind || s.kind === kind))
       .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /**
+   * WHEN GOODS ARE LOADED AT ONE OF THIS COMPANY'S PLACES: its hours day by day, and how many trucks at once. What is not
+   * sent stays; null clears it. The company's own word — nobody else changes it, and nothing here is checked by us.
+   */
+  setLoading(entityId: string, siteId: string, input: { hours?: Record<string, { open: string; close: string } | null> | null; bays?: number | null }, by: string, now = Date.now()): Site {
+    const site = this.require(entityId, siteId);
+    if (site.kind !== 'delivery') throw new GlosError('INVALID_STATE', 'Only a place of your own keeps loading hours — a port or a place of clearance keeps its own');
+    if (input.bays != null && !(Number.isInteger(input.bays) && input.bays >= 1 && input.bays <= 50)) throw new GlosError('VALIDATION_FAILED', 'Loading bays are a whole number from 1 to 50');
+    const hours = input.hours === null ? undefined : input.hours !== undefined ? weekOf(input.hours) : site.loading?.hours;
+    const bays = input.bays === null ? undefined : (input.bays ?? site.loading?.bays);
+    const next: Site = { ...site };
+    if (hours || bays) next.loading = { ...(hours ? { hours } : {}), ...(bays ? { bays } : {}), setAt: new Date(now).toISOString(), setBy: by };
+    else delete next.loading;
+    this.sites.set(siteId, next);
+    return next;
+  }
+
+  /** This company's places that keep loading hours or bays — what a carrier's day plan reads, and nothing else of the list. */
+  loadingPlaces(entityId: string): Array<Pick<Site, 'siteId' | 'name' | 'location'> & { loading: SiteLoading }> {
+    return this.list(entityId, 'delivery')
+      .filter((s) => s.loading)
+      .map((s) => ({ siteId: s.siteId, name: s.name, location: s.location, loading: s.loading! }));
   }
 
   /** One site, and only to the company that saved it. Anyone else is told it does not exist. */

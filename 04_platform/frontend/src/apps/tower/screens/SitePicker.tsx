@@ -11,6 +11,8 @@ export interface SiteView {
   location: GeoPoint;
   address?: string;
   from: 'pin' | 'address';
+  /** When goods are loaded there, and how many trucks at once: the company's own word, read by its carriers' plans. */
+  loading?: { hours?: Record<string, { open: string; close: string } | null>; bays?: number; setAt: string; setBy: string };
 }
 
 type Api = {

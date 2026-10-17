@@ -317,6 +317,7 @@ const WHY: Record<string, string> = {
   no_driver: 'a vehicle is free for it, but there is no driver left to send out',
   no_trucks: 'no vehicle of the fleet is going out',
   site_closed: "it is collected at one of the fleet's own sites, and that site is closed all day",
+  dock_closed: "it is collected at the shipper's place, and the shipper's loading hours say it is closed all day",
 };
 
 /**

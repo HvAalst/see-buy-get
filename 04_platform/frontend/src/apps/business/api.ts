@@ -172,7 +172,7 @@ export interface PostedLoad {
   /** About when the carrier's accepted plan has it at the door, while it is still on its way. */
   plannedAbout?: { day: string; arrive: string; window?: string };
   /** The carrier's accepted plan for its day leaves it on no vehicle, and why as a shipper is told it. */
-  leftOut?: { day: string; why: 'room' | 'fit' | 'heavy' | 'place' };
+  leftOut?: { day: string; why: 'room' | 'fit' | 'heavy' | 'place' | 'closed' };
   /** Not delivered, and wrong on its carrier's own clock: on no vehicle on its day, its planned hour passed, or its whole day. */
   runningLate?: 'unplanned' | 'hour' | 'day';
   /** Delivered: when, on the carrier's clock, and where that fell against the day and the window asked for. */

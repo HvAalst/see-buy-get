@@ -7,7 +7,7 @@ import { VEHICLE_CLASSES, VehicleClass } from './fleet.config';
  */
 
 /** Why an order is not in the plan. `no_pin` is this layer's own: an address with no point cannot be routed at all. */
-export const PLAN_LEFT_REASONS = ['no_pin', 'too_heavy', 'no_truck_can_carry', 'no_time', 'no_driver', 'no_trucks', 'site_closed'] as const;
+export const PLAN_LEFT_REASONS = ['no_pin', 'too_heavy', 'no_truck_can_carry', 'no_time', 'no_driver', 'no_trucks', 'site_closed', 'dock_closed'] as const;
 export type PlanLeftReason = (typeof PLAN_LEFT_REASONS)[number];
 
 /**
@@ -54,6 +54,8 @@ export class PlanTripView {
   /** The fleet's own site it loads at. Absent: it loads somewhere else — a shipper's yard. */
   @ApiPropertyOptional() siteId?: string;
   @ApiPropertyOptional() siteName?: string;
+  /** Or the shipper's place it loads at, where the shipper keeps loading hours or bays: its name. */
+  @ApiPropertyOptional() dockName?: string;
   /** Minutes it stands at the site before it opens; `start` is then the opening. */
   @ApiPropertyOptional() openWaitMin?: number;
   /** Minutes it waits there for a bay, every one taken by another truck. */
@@ -229,6 +231,24 @@ export class PlanRoster {
   names: string[];
 }
 
+/**
+ * A SHIPPER'S PLACE that keeps loading hours or bays, and what loads there in this plan. The bays are counted for this
+ * fleet's trucks only: other carriers loading there are not known to it.
+ */
+export class PlanDockView {
+  siteId: string;
+  name: string;
+  shipperName: string;
+  loadings: number;
+  @ApiPropertyOptional() bays?: number;
+  bayWaits: number;
+  @ApiPropertyOptional() longestBayWaitMin?: number;
+  /** Open for loading that day ("06:00–18:00"). Absent: any hour — or, with `closed`, not at all that day. */
+  @ApiPropertyOptional() hours?: string;
+  @ApiPropertyOptional() closed?: boolean;
+  afterClose: number;
+}
+
 /** A truck standing idle at one site, and the site it works from. */
 export class PlanLendTruck {
   vehicleId: string;
@@ -260,6 +280,8 @@ export class DayPlanView {
   @ApiPropertyOptional({ type: [PlanSiteView] }) sites?: PlanSiteView[];
   /** Each shift at each site: drivers rostered, and needed. A plan kept from before there were shifts has none. */
   @ApiPropertyOptional({ type: [PlanShiftView] }) shifts?: PlanShiftView[];
+  /** The shippers' places in this plan that keep loading hours or bays, and what loads at each. */
+  @ApiPropertyOptional({ type: [PlanDockView] }) docks?: PlanDockView[];
   /** Sites short of trucks, and the fleet's own idle trucks elsewhere that would carry what was left there. */
   @ApiPropertyOptional({ type: [PlanLendView] }) lend?: PlanLendView[];
   @ApiPropertyOptional({ type: PlanHire }) hire?: PlanHire;

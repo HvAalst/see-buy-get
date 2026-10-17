@@ -27,6 +27,7 @@ export type RosterView = components['schemas']['RosterView'];
 export type PlanTrip = components['schemas']['PlanTripView'];
 export type PlanSite = components['schemas']['PlanSiteView'];
 export type PlanLend = components['schemas']['PlanLendView'];
+export type PlanDockSite = components['schemas']['PlanDockView'];
 /** One order and one vehicle: what a rule on a plan names. */
 export interface PlanPair {
   freightId: string;
@@ -266,8 +267,8 @@ export function siteLine(s: { name: string; trucksAvailable: number; trucksUsed:
  * AT ONE OF THE FLEET'S OWN SITES, a trip's loading in lines: standing at the gate until the site opens, waiting for a
  * bay every other truck has, still loading when it closes. Nothing where it loads somewhere else, or loads at once.
  */
-export function tripLoadingLines(trip: Pick<PlanTrip, 'siteName' | 'openWaitMin' | 'bayWaitMin' | 'afterCloseMin'>, t: Translate): Array<{ tone: 'warn' | 'idle'; text: string }> {
-  const site = trip.siteName ?? '';
+export function tripLoadingLines(trip: Pick<PlanTrip, 'siteName' | 'dockName' | 'openWaitMin' | 'bayWaitMin' | 'afterCloseMin'>, t: Translate): Array<{ tone: 'warn' | 'idle'; text: string }> {
+  const site = trip.siteName ?? trip.dockName ?? '';
   return [
     ...(trip.openWaitMin ? [{ tone: 'idle' as const, text: t('fleet.plan.trip.opens', { by: hoursWords(trip.openWaitMin), site }) }] : []),
     ...(trip.bayWaitMin ? [{ tone: 'warn' as const, text: t('fleet.plan.trip.bay', { by: hoursWords(trip.bayWaitMin), site }) }] : []),
@@ -277,18 +278,24 @@ export function tripLoadingLines(trip: Pick<PlanTrip, 'siteName' | 'openWaitMin'
 
 /**
  * PER SITE, what loads there that day in a line: how many loadings, its bays and hours, how many waited for a bay and
- * the longest wait, any still loading at closing. Null where nothing loads there.
+ * the longest wait, any still loading at closing. Null where nothing loads there. `shared`: a shipper's place, whose
+ * bays this fleet counts for its own trucks only — the other carriers loading there are not known to it.
  */
-export function loadingLine(s: Pick<PlanSite, 'name' | 'loadings' | 'bays' | 'bayWaits' | 'longestBayWaitMin' | 'hours' | 'afterClose'>, t: Translate): { tone: 'warn' | 'idle'; text: string } | null {
+export function loadingLine(s: Pick<PlanSite, 'name' | 'loadings' | 'bays' | 'bayWaits' | 'longestBayWaitMin' | 'hours' | 'afterClose'>, t: Translate, shared = false): { tone: 'warn' | 'idle'; text: string } | null {
   if (!s.loadings) return null;
   const parts = [
     t('fleet.plan.load.line', { site: s.name, n: s.loadings }),
-    ...(s.bays ? [t('fleet.plan.load.bays', { n: s.bays })] : []),
+    ...(s.bays ? [t(shared ? 'fleet.plan.load.baysShared' : 'fleet.plan.load.bays', { n: s.bays })] : []),
     ...(s.hours ? [t('fleet.plan.load.open', { hours: s.hours })] : []),
     ...(s.bayWaits ? [t('fleet.plan.load.waits', { n: s.bayWaits, by: hoursWords(s.longestBayWaitMin ?? 0) })] : []),
     ...(s.afterClose ? [t('fleet.plan.load.afterClose', { n: s.afterClose })] : []),
   ];
   return { tone: s.bayWaits || s.afterClose ? 'warn' : 'idle', text: parts.join(' · ') };
+}
+
+/** A SHIPPER'S PLACE that keeps loading hours or bays, in a loading line: named with its shipper, its bays counted for this fleet only. */
+export function dockLine(d: Pick<PlanDockSite, 'name' | 'shipperName' | 'loadings' | 'bays' | 'bayWaits' | 'longestBayWaitMin' | 'hours' | 'afterClose'>, t: Translate): { tone: 'warn' | 'idle'; text: string } | null {
+  return loadingLine({ ...d, name: t('fleet.plan.load.dockName', { name: d.name, shipper: d.shipperName }) }, t, true);
 }
 
 /** A SITE SHORT OF TRUCKS, and the fleet's own idle trucks elsewhere that would carry what was left there: said, for the office to move. */
@@ -574,13 +581,14 @@ export function hoursWords(minutes: number): string {
  * hours (the office can change either now), then what more trucks or drivers would fix, then what no truck of this
  * fleet can take.
  */
-const LEFT_ORDER: PlanLeftReason[] = ['no_pin', 'site_closed', 'no_driver', 'no_time', 'no_trucks', 'no_truck_can_carry', 'too_heavy'];
+const LEFT_ORDER: PlanLeftReason[] = ['no_pin', 'site_closed', 'dock_closed', 'no_driver', 'no_time', 'no_trucks', 'no_truck_can_carry', 'too_heavy'];
 /**
  * May the office put an order the plan left out onto a vehicle by hand? Not one with no point on the map — no truck can
- * be routed to it — and not one collected at a site closed that day: no truck loads there, whoever it is.
+ * be routed to it — and not one collected where it is closed that day, the fleet's site or the shipper's: no truck
+ * loads there, whoever it is.
  */
 export function mayPutOn(reason: PlanLeftReason): boolean {
-  return reason !== 'no_pin' && reason !== 'site_closed';
+  return reason !== 'no_pin' && reason !== 'site_closed' && reason !== 'dock_closed';
 }
 
 export function leftByReason(left: PlanLeft[]): Array<{ reason: PlanLeftReason; orders: PlanLeft[] }> {

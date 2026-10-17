@@ -456,6 +456,10 @@ export function createOperatorApi(sbg: SbgClient) {
     sites: (entityId: string, kind?: string) =>
       sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/sites', { params: { path: { entityId }, query: kind ? { kind } : {} } } as never)),
 
+    /** When goods are loaded at one of the company's own places, and how many trucks at once. Null clears either. */
+    setSiteLoading: (entityId: string, siteId: string, body: { hours?: Record<string, { open: string; close: string } | null> | null; bays?: number | null }) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/sites/{siteId}/loading', { params: { path: { entityId, siteId } }, body: body as never } as never)),
+
     /** Save one. A dropped pin or an address to resolve — never both, because the toggle is the answer. */
     declareSite: (entityId: string, body: Record<string, unknown>) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/sites', { params: { path: { entityId } }, body: body as never })),

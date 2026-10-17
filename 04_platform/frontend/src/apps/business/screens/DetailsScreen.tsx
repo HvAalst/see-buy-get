@@ -3,7 +3,8 @@ import { useT } from '../../../shared/i18n';
 import { ContactCardPanel } from '../../tower/screens/ContactCardPanel';
 import type { SiteView } from '../../tower/screens/SitePicker';
 import type { BusinessActivity, BusinessClient, BusinessView } from '../api';
-import { ACTIVITIES, mayManage } from '../logic';
+import { ACTIVITIES, mayAct, mayManage } from '../logic';
+import { baysOf, DAY_NAME, loadsLine, WEEK, weekForm, type SiteWeek, type WeekForm } from '../../fleet/sites';
 import type { BusinessActions } from '../useBusinessApp';
 import { ACTIVITY_LABEL, ACTIVITY_SUB } from './ChooseScreen';
 
@@ -21,6 +22,14 @@ export function DetailsScreen({ business, actions, client }: { business: Busines
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sites, setSites] = useState<SiteView[] | null>(null);
+  // The place whose loading hours and bays are being written, and what is written so far.
+  const [loadingOf, setLoadingOf] = useState<string | null>(null);
+  const [bays, setBays] = useState('');
+  const [keepsHours, setKeepsHours] = useState(false);
+  const [week, setWeek] = useState<WeekForm>(weekForm(undefined));
+  const [placeBusy, setPlaceBusy] = useState(false);
+  const [placeError, setPlaceError] = useState<string | null>(null);
+  const works = mayAct(business.you.role);
 
   useEffect(() => {
     setForm({ name: business.name, registrationNo: business.registrationNo, taxNo: business.taxNo ?? '', activities: business.activities });
@@ -35,6 +44,26 @@ export function DetailsScreen({ business, actions, client }: { business: Busines
   useEffect(() => {
     void loadSites();
   }, [loadSites]);
+
+  const editLoading = (s: SiteView) => {
+    setLoadingOf(s.siteId);
+    setBays(s.loading?.bays ? String(s.loading.bays) : '');
+    setKeepsHours(Boolean(s.loading?.hours));
+    setWeek(weekForm(s.loading?.hours as SiteWeek | undefined));
+    setPlaceError(null);
+  };
+  const saveLoading = async (siteId: string) => {
+    if (!client) return;
+    setPlaceBusy(true);
+    setPlaceError(null);
+    const api = client.api as never as { setSiteLoading: (entityId: string, siteId: string, body: Record<string, unknown>) => Promise<{ data?: unknown; error?: { detail?: string; title?: string } | null }> };
+    const r = await api.setSiteLoading(business.entityId, siteId, { hours: keepsHours ? week : null, bays: baysOf(bays) });
+    setPlaceBusy(false);
+    if (r.error || !r.data) return setPlaceError(r.error?.detail || r.error?.title || null);
+    setLoadingOf(null);
+    actions.say(t('business.places.saved'));
+    void loadSites();
+  };
 
   const identityChanges = form.name.trim() !== business.name || form.registrationNo.trim() !== business.registrationNo;
   const dirty = identityChanges || form.taxNo.trim() !== (business.taxNo ?? '') || form.activities.join() !== business.activities.join();
@@ -152,7 +181,65 @@ export function DetailsScreen({ business, actions, client }: { business: Busines
                     <span class="ctag ctag--quiet">{t(s.kind === 'port' ? 'tower.settings.kindPort' : 'tower.settings.kindDelivery')}</span>
                   </span>
                   <span class="crow__sub">{s.from === 'pin' ? t('tower.sites.fromPin') : t('tower.sites.fromAddress', { address: s.address ?? '' })}</span>
+                  {/* WHEN GOODS ARE LOADED HERE: a place of its own only, and its own word — read by its carriers' plans. */}
+                  {s.kind === 'delivery' ? <span class="crow__sub">{loadsLine({ loadingBays: s.loading?.bays, hours: s.loading?.hours as SiteWeek | undefined }, t) ?? t('business.places.noLoading')}</span> : null}
+                  {loadingOf === s.siteId ? (
+                    <div style="margin-top:10px">
+                      <span class="chint">{t('business.places.loadingHint')}</span>
+                      <div class="twr-knobs__row">
+                        <label class="twr-knob cfield">
+                          <span class="cfield__label">{t('business.places.bays')}</span>
+                          <input id={`place-bays-${s.siteId}`} class="cinput" inputMode="numeric" maxLength={2} value={bays} onInput={(e) => setBays((e.target as HTMLInputElement).value)} />
+                        </label>
+                      </div>
+                      <label class="cfield cfield--check" style="margin-top:8px">
+                        <input id={`place-hours-${s.siteId}`} type="checkbox" checked={keepsHours} onChange={(e) => setKeepsHours((e.target as HTMLInputElement).checked)} />
+                        <span>{t('business.places.keepsHours')}</span>
+                      </label>
+                      {keepsHours
+                        ? WEEK.map((d) => {
+                            const day = week[d];
+                            const dayName = t(DAY_NAME[d]);
+                            const setDay = (value: { open: string; close: string } | null) => setWeek((was) => ({ ...was, [d]: value }));
+                            return (
+                              <div class="twr-knobs__row" key={d}>
+                                <label class="twr-knob cfield cfield--check">
+                                  <input id={`place-open-${d}`} type="checkbox" checked={Boolean(day)} onChange={(e) => setDay((e.target as HTMLInputElement).checked ? { open: '08:00', close: '18:00' } : null)} />
+                                  <span>{day ? dayName : t('business.places.closedOn', { day: dayName })}</span>
+                                </label>
+                                {day ? (
+                                  <>
+                                    <label class="twr-knob cfield">
+                                      <span class="cfield__label">{t('fleet.sites.opens')}</span>
+                                      <input class="cinput" type="time" aria-label={`${dayName} ${t('fleet.sites.opens')}`} value={day.open} onChange={(e) => setDay({ open: (e.target as HTMLInputElement).value, close: day.close })} />
+                                    </label>
+                                    <label class="twr-knob cfield">
+                                      <span class="cfield__label">{t('fleet.sites.closes')}</span>
+                                      <input class="cinput" type="time" aria-label={`${dayName} ${t('fleet.sites.closes')}`} value={day.close} onChange={(e) => setDay({ open: day.open, close: (e.target as HTMLInputElement).value })} />
+                                    </label>
+                                  </>
+                                ) : null}
+                              </div>
+                            );
+                          })
+                        : <span class="chint">{t('business.places.anyHour')}</span>}
+                      {placeError ? <p class="cerr">{placeError}</p> : null}
+                      <div style="display:flex;gap:8px;margin-top:10px">
+                        <button type="button" class="cbtn cbtn--primary" disabled={placeBusy} onClick={() => void saveLoading(s.siteId)}>
+                          {t('business.places.save')}
+                        </button>
+                        <button type="button" class="cbtn cbtn--ghost" disabled={placeBusy} onClick={() => setLoadingOf(null)}>
+                          {t('business.places.cancel')}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                 </span>
+                {s.kind === 'delivery' && works && loadingOf !== s.siteId ? (
+                  <button type="button" class="cbtn cbtn--ghost" onClick={() => editLoading(s)}>
+                    {t('business.places.loadingCta')}
+                  </button>
+                ) : null}
               </div>
             ))}
           </div>

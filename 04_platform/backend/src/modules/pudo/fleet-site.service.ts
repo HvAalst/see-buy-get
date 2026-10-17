@@ -190,18 +190,14 @@ export class FleetSiteService {
 
   /** A site as a plan for a day asks about it: open when, on that day's weekday. */
   forPlan(fleetDid: string, day: string): SiteForPlan[] {
-    const weekday = WEEKDAYS[(new Date(`${day}T12:00:00Z`).getUTCDay() + 6) % 7];
-    return this.sitesOf(fleetDid).map((s) => {
-      const today = s.hours ? s.hours[weekday] : undefined;
-      return {
-        siteId: s.siteId,
-        name: s.name,
-        location: s.location,
-        ...(s.loadingBays !== undefined ? { loadingBays: s.loadingBays } : {}),
-        ...(s.hours ? { open: today ? { fromMin: minutesOf(today.open), toMin: minutesOf(today.close) } : null } : {}),
-        shifts: s.shifts.map((x) => ({ ...x })),
-      };
-    });
+    return this.sitesOf(fleetDid).map((s) => ({
+      siteId: s.siteId,
+      name: s.name,
+      location: s.location,
+      ...(s.loadingBays !== undefined ? { loadingBays: s.loadingBays } : {}),
+      ...(s.hours ? { open: openOn(s.hours, day) } : {}),
+      shifts: s.shifts.map((x) => ({ ...x })),
+    }));
   }
 
   private assertNameFree(open: FleetSite[], name: string): void {
@@ -222,8 +218,14 @@ export interface SiteInput {
 
 const keyOf = (fleetDid: string, siteId: string) => `${fleetDid}|${siteId}`;
 
-/** Opening hours as the office wrote them, checked: known days, HH:MM, opening before closing. */
-function weekOf(hours: Record<string, { open: string; close: string } | null>): SiteWeek {
+/** When a week of hours is open on a day, in minutes after midnight on that day's weekday. Null: closed that day. */
+export function openOn(week: SiteWeek, day: string): { fromMin: number; toMin: number } | null {
+  const today = week[WEEKDAYS[(new Date(`${day}T12:00:00Z`).getUTCDay() + 6) % 7]];
+  return today ? { fromMin: minutesOf(today.open), toMin: minutesOf(today.close) } : null;
+}
+
+/** Opening hours as they were written, checked: known days, HH:MM, opening before closing. */
+export function weekOf(hours: Record<string, { open: string; close: string } | null>): SiteWeek {
   const week: SiteWeek = {};
   for (const [day, h] of Object.entries(hours)) {
     if (!(WEEKDAYS as readonly string[]).includes(day)) throw new GlosError('INVALID_INPUT', `${day} is not a day of the week`, { field: 'hours' });

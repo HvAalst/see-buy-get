@@ -2521,6 +2521,14 @@ export class MarketSeriesQueryDto {
   @IsOptional() @IsDateString() until?: string;
 }
 
+/** When goods are loaded at one of a company's places: what is not sent stays, and null clears it. */
+export class SiteLoadingDto {
+  /** Day by day ({ mon: { open: '06:00', close: '18:00' }, sun: null }). `null` here: any hour. */
+  @IsOptional() @IsObject() hours?: Record<string, { open: string; close: string } | null> | null;
+  /** How many trucks load at once. `null` here: not counted. */
+  @ApiPropertyOptional({ type: Number, nullable: true }) @IsOptional() @IsInt() @Min(1) @Max(50) bays?: number | null;
+}
+
 /** Save a place this company will choose again — a port it collects from, or somewhere it delivers. */
 export class DeclareSiteDto {
   @IsOptional() @IsString() entityId?: string;

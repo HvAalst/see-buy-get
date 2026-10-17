@@ -88,6 +88,7 @@ const LEFT_OUT_BECAUSE: Record<PlanLeftWhy, (day: string) => string> = {
   fit: (day) => `None of the vehicles in its plan for ${day} can carry it as it was ordered.`,
   heavy: () => 'It is heavier than its largest vehicle carries. It may bring it in several loads, and you are told if it does.',
   place: () => 'The place it goes to has no point on the map, so it could not be planned. A fuller address will help.',
+  closed: (day) => `The place it is collected from is closed on ${day} by the loading hours you keep for it. Change those hours under your places, or the day.`,
 };
 
 /**

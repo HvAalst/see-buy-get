@@ -14,6 +14,10 @@ import { FleetManagerService } from './fleet-manager.service';
 import { FleetRosterService } from './fleet-roster.service';
 import { FleetSiteService, type SiteForPlan } from './fleet-site.service';
 import { haversineKm } from './geo';
+import { openOn } from './fleet-site.service';
+import { SiteService } from './site.service';
+import { CarriageContractService } from './carriage-contract.service';
+import { EntityService } from '../../foundation/entity/entity.service';
 import { DEPOT_SITE } from './fleet-site.types';
 import { DEFAULT_DAY_START, DayPlanState, DayPlanView, PlanLeftView, PlanLendView, PlanRouteView, PlanRuleView, PlanSendResult, PlanSendTruck, PlanSettings, PlannedOn } from './fleet-plan.types';
 import { ROAD_MATRIX, type RoadDistances, type RoadMatrix } from './road-matrix';
@@ -87,6 +91,10 @@ export class FleetPlanService implements OnModuleInit {
     @Optional() private readonly roster?: FleetRosterService,
     // Where each truck and driver starts from. Without it a fleet has one site, its depot, as it always had.
     @Optional() private readonly sites?: FleetSiteService,
+    // The places a shipper keeps, and how to know the shipper of an order: where a shipper keeps loading hours or bays.
+    @Optional() private readonly places?: SiteService,
+    @Optional() private readonly contracts?: CarriageContractService,
+    @Optional() private readonly entities?: EntityService,
   ) {}
 
   /**
@@ -226,8 +234,27 @@ export class FleetPlanService implements OnModuleInit {
     // COLLECTED AT ONE OF THE FLEET'S OWN SITES: where its collection point is that site — a place, so measured straight,
     // not along a road.
     const collectedAt = (f: Freight) => sites.find((s) => haversineKm(s.location, f.pickupLocation) <= AT_SITE_KM)?.siteId;
+    // OR AT ONE OF ITS SHIPPER'S PLACES that keeps loading hours or bays — the shipper's own word, read for this plan.
+    // The shipper is the business that placed the order, or the one its contract is linked to.
+    const shipperDocks = new Map<string, { id: string; siteId: string; name: string; shipperName: string; bays?: number; open?: { fromMin: number; toMin: number } | null }>();
+    const shipperOf = (f: Freight): { entityId: string; name: string } | undefined => {
+      const poster = f.postedByDid ? this.entities?.byDid(f.postedByDid) : undefined;
+      if (poster?.kind === 'business') return { entityId: poster.entityId, name: poster.name };
+      const linked = f.contract && this.contracts?.forFleet(fleetDid).find((c) => c.contractId === f.contract!.contractId)?.shipper;
+      return linked?.entityId ? { entityId: linked.entityId, name: linked.name } : undefined;
+    };
+    const atShipper = (f: Freight): string | undefined => {
+      const shipper = this.places ? shipperOf(f) : undefined;
+      const place = shipper && this.places!.loadingPlaces(shipper.entityId).find((p) => haversineKm(p.location, f.pickupLocation) <= AT_SITE_KM);
+      if (!shipper || !place) return undefined;
+      const id = `shipper:${place.siteId}`;
+      if (!shipperDocks.has(id)) {
+        shipperDocks.set(id, { id, siteId: place.siteId, name: place.name, shipperName: shipper.name, ...(place.loading.bays ? { bays: place.loading.bays } : {}), ...(place.loading.hours ? { open: openOn(place.loading.hours, ask.day) } : {}) });
+      }
+      return id;
+    };
     const planOrders: PlanOrder[] = pinned.map((f) => {
-      const dock = collectedAt(f);
+      const dock = collectedAt(f) ?? atShipper(f);
       return { id: f.freightId, kg: f.weightKg, pickup: f.pickupLocation, drop: f.destLocation!, ...(windows.has(f.freightId) ? { window: onTheDay(windows.get(f.freightId)!) } : {}), ...(dock ? { dock } : {}) };
     });
     // EACH TRUCK ONCE PER SHIFT of its site — one vehicle, two drivers, an early day and a late one — never out in two
@@ -254,7 +281,13 @@ export class FleetPlanService implements OnModuleInit {
         id: s.siteId,
         ...(s.loadingBays !== undefined ? { bays: s.loadingBays } : {}),
         ...(s.open !== undefined ? { open: s.open && { fromMin: s.open.fromMin - originMin, toMin: s.open.toMin - originMin } } : {}),
-      })),
+      })).concat(
+        [...shipperDocks.values()].map((d): PlanDock => ({
+          id: d.id,
+          ...(d.bays !== undefined ? { bays: d.bays } : {}),
+          ...(d.open !== undefined ? { open: d.open && { fromMin: d.open.fromMin - originMin, toMin: d.open.toMin - originMin } } : {}),
+        })),
+      ),
       km: roads ? (a: PlanPoint, b: PlanPoint) => roads.km(a, b) : (a: PlanPoint, b: PlanPoint) => this.router.roadKm(a, b),
     };
     const params = { speedKmh: settings.speedKmh, loadMin: settings.loadMin, unloadMin: settings.unloadMin, dayMin: settings.dayHours * 60 };
@@ -342,7 +375,7 @@ export class FleetPlanService implements OnModuleInit {
           start: clock(t.startMin),
           end: clock(t.endMin),
           weightKg: t.kg,
-          ...(t.dock ? { siteId: t.dock, siteName: siteById.get(t.dock)?.name ?? t.dock } : {}),
+          ...(t.dock ? (shipperDocks.has(t.dock) ? { dockName: shipperDocks.get(t.dock)!.name } : { siteId: t.dock, siteName: siteById.get(t.dock)?.name ?? t.dock }) : {}),
           ...(t.openWaitMin ? { openWaitMin: t.openWaitMin } : {}),
           ...(t.bayWaitMin ? { bayWaitMin: t.bayWaitMin } : {}),
           ...(t.afterCloseMin ? { afterCloseMin: t.afterCloseMin } : {}),
@@ -380,9 +413,25 @@ export class FleetPlanService implements OnModuleInit {
         const f = byId.get(u.orderId)!;
         // Heavier than anything going out: it can still be carried, in several loads — where it is this fleet's to split.
         const split = u.reason === 'too_heavy' && largestKg > 0 && this.dispatch.maySplit(fleetDid, f) ? { splitInto: Math.ceil(f.weightKg / largestKg), loadKg: largestKg } : {};
-        return { ...this.orderWords(f), reason: u.reason, ...split };
+        // Closed all day at the shipper's own place, not the fleet's: the shipper's hours, said as theirs.
+        const reason = u.reason === 'site_closed' && shipperDocks.has(planOrders.find((o) => o.id === u.orderId)?.dock ?? '') ? ('dock_closed' as const) : u.reason;
+        return { ...this.orderWords(f), reason, ...split };
       }),
     ];
+    // What loads at a place, of any truck: how many, its bays and hours, how many waited for a bay and the longest wait,
+    // and any still loading after it closes.
+    const loadingAt = (id: string, bays: number | undefined, open: { fromMin: number; toMin: number } | null | undefined) => {
+      const loads = result.routes.flatMap((r) => r.trips.filter((t) => t.dock === id));
+      const waits = loads.filter((t) => t.bayWaitMin);
+      return {
+        loadings: loads.length,
+        ...(bays !== undefined ? { bays } : {}),
+        bayWaits: waits.length,
+        ...(waits.length ? { longestBayWaitMin: Math.max(...waits.map((t) => t.bayWaitMin!)) } : {}),
+        ...(open ? { hours: `${clockText(open.fromMin)}–${clockText(open.toMin)}` } : open === null ? { closed: true } : {}),
+        afterClose: loads.filter((t) => t.afterCloseMin).length,
+      };
+    };
     const plannedIds = routes.flatMap((r) => r.trips.flatMap((t) => t.stops.map((s) => s.freightId)));
     const sumKg = (list: Freight[]) => Math.round(list.reduce((s, f) => s + f.weightKg, 0));
     return {
@@ -390,24 +439,15 @@ export class FleetPlanService implements OnModuleInit {
       madeAt: new Date(now).toISOString(),
       routes,
       unplanned,
-      sites: sites.map((s) => {
-        // What loads here, of any truck: how many, how many waited for a bay and for how long, and any after closing.
-        const loads = result.routes.flatMap((r) => r.trips.filter((t) => t.dock === s.siteId));
-        const waits = loads.filter((t) => t.bayWaitMin);
-        return {
-          siteId: s.siteId,
-          name: s.name,
-          trucksAvailable: going.filter(({ v }) => homeOf(v.vehicleId).siteId === s.siteId).length,
-          trucksUsed: new Set(routes.filter((r) => r.siteId === s.siteId).map((r) => r.vehicleId)).size,
-          drivers: driversAtSite[s.siteId] ?? 0,
-          loadings: loads.length,
-          ...(s.loadingBays !== undefined ? { bays: s.loadingBays } : {}),
-          bayWaits: waits.length,
-          ...(waits.length ? { longestBayWaitMin: Math.max(...waits.map((t) => t.bayWaitMin!)) } : {}),
-          ...(s.open ? { hours: `${clockText(s.open.fromMin)}–${clockText(s.open.toMin)}` } : s.open === null ? { closed: true } : {}),
-          afterClose: loads.filter((t) => t.afterCloseMin).length,
-        };
-      }),
+      sites: sites.map((s) => ({
+        siteId: s.siteId,
+        name: s.name,
+        trucksAvailable: going.filter(({ v }) => homeOf(v.vehicleId).siteId === s.siteId).length,
+        trucksUsed: new Set(routes.filter((r) => r.siteId === s.siteId).map((r) => r.vehicleId)).size,
+        drivers: driversAtSite[s.siteId] ?? 0,
+        ...loadingAt(s.siteId, s.loadingBays, s.open),
+      })),
+      ...(shipperDocks.size ? { docks: [...shipperDocks.values()].map((d) => ({ siteId: d.siteId, name: d.name, shipperName: d.shipperName, ...loadingAt(d.id, d.bays, d.open) })) } : {}),
       shifts: sites.flatMap((s) =>
         shiftsAt(s).map((x) => ({
           siteId: s.siteId,

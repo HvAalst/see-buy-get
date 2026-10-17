@@ -163,6 +163,7 @@ describe('the Business app', () => {
       expect(planSays({ leftOut: { day, why: 'fit' } }, t)!.row).toBe('no vehicle in your carrier’s plan for 2026-10-07 can carry it as ordered');
       expect(planSays({ leftOut: { day, why: 'heavy' } }, t)!.row).toBe('it is heavier than your carrier’s largest vehicle carries');
       expect(planSays({ leftOut: { day, why: 'place' } }, t)!.row).toBe('the place it goes to has no point on the map, so it could not be planned');
+      expect(planSays({ leftOut: { day, why: 'closed' } }, t)!.row).toBe('the place it is collected from is closed on 2026-10-07 by the loading hours you keep for it');
       // Whatever else an older answer still carries, a load on no vehicle is not also said to be planned.
       expect(planSays({ leftOut: { day, why: 'room' }, plannedAbout: { day, arrive: '10:40' }, outsideWindow: { day, arrive: '12:40', lateMin: 40 } }, t)!.state).toBe('left');
     });
