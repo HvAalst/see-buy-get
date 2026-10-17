@@ -45642,6 +45642,25 @@
               "$ref": "#/components/schemas/PlanStopView"
             }
           },
+          "siteId": {
+            "type": "string",
+            "description": "The fleet's own site it loads at. Absent: it loads somewhere else — a shipper's yard."
+          },
+          "siteName": {
+            "type": "string"
+          },
+          "openWaitMin": {
+            "type": "number",
+            "description": "Minutes it stands at the site before it opens; `start` is then the opening."
+          },
+          "bayWaitMin": {
+            "type": "number",
+            "description": "Minutes it waits there for a bay, every one taken by another truck."
+          },
+          "afterCloseMin": {
+            "type": "number",
+            "description": "Minutes it is still loading after the site has closed. Planned all the same, and said."
+          },
           "no": {
             "type": "number"
           },
@@ -45698,6 +45717,10 @@
             "items": {
               "$ref": "#/components/schemas/PlanTripView"
             }
+          },
+          "overMin": {
+            "type": "number",
+            "description": "Minutes its day runs past its shift: waiting for a bay, which is handed out after the day is planned."
           },
           "vehicleId": {
             "type": "string"
@@ -45771,7 +45794,8 @@
               "no_truck_can_carry",
               "no_time",
               "no_driver",
-              "no_trucks"
+              "no_trucks",
+              "site_closed"
             ]
           },
           "splitInto": {
@@ -45814,6 +45838,20 @@
       "PlanSiteView": {
         "type": "object",
         "properties": {
+          "bays": {
+            "type": "number",
+            "description": "How many load at once. Absent: not said — as many as come."
+          },
+          "longestBayWaitMin": {
+            "type": "number"
+          },
+          "hours": {
+            "type": "string",
+            "description": "Open for loading that day (\"06:00–18:00\"). Absent: it never closes — or, with `closed`, not at all that day."
+          },
+          "closed": {
+            "type": "boolean"
+          },
           "siteId": {
             "type": "string"
           },
@@ -45829,6 +45867,18 @@
           "drivers": {
             "type": "number",
             "description": "Drivers who start from here that day: no more trucks leave it than this."
+          },
+          "loadings": {
+            "type": "number",
+            "description": "Trips that load here, of any truck."
+          },
+          "bayWaits": {
+            "type": "number",
+            "description": "Loadings that waited for a bay, and the longest wait."
+          },
+          "afterClose": {
+            "type": "number",
+            "description": "Loadings still going on after it closes."
           }
         },
         "required": [
@@ -45836,7 +45886,10 @@
           "name",
           "trucksAvailable",
           "trucksUsed",
-          "drivers"
+          "drivers",
+          "loadings",
+          "bayWaits",
+          "afterClose"
         ]
       },
       "PlanShiftView": {
@@ -47132,6 +47185,10 @@
           "hours": {
             "$ref": "#/components/schemas/SiteWeek"
           },
+          "loadingBays": {
+            "type": "number",
+            "description": "Absent: not said — as many load at once as come."
+          },
           "shifts": {
             "type": "array",
             "items": {
@@ -47146,9 +47203,6 @@
           },
           "location": {
             "$ref": "#/components/schemas/GeoPoint"
-          },
-          "loadingBays": {
-            "type": "number"
           },
           "main": {
             "type": "boolean",
@@ -47167,7 +47221,6 @@
           "siteId",
           "name",
           "location",
-          "loadingBays",
           "main",
           "vehicles",
           "drivers"
@@ -47252,6 +47305,13 @@
       "SiteDto": {
         "type": "object",
         "properties": {
+          "loadingBays": {
+            "type": "number",
+            "nullable": true,
+            "description": "How many trucks load there at once. `null` here: not counted — as many as come.",
+            "minimum": 1,
+            "maximum": 50
+          },
           "name": {
             "type": "string",
             "minLength": 1,
@@ -47275,11 +47335,6 @@
             "type": "object",
             "nullable": true,
             "description": "Open for loading, day by day ({ mon: { open: '06:00', close: '18:00' }, sun: null }). `null` here: it never closes."
-          },
-          "loadingBays": {
-            "type": "number",
-            "minimum": 1,
-            "maximum": 50
           },
           "shifts": {
             "description": "The whole list of shifts, replacing what was there.",

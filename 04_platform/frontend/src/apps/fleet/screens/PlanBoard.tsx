@@ -4,7 +4,7 @@ import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { PlanAdviser } from './PlanAdviser';
 import { SplitOrder } from './SplitOrder';
 import { RosterCard } from './RosterCard';
-import { acceptTellsShippers, askOf, clockLine, rosterLine, dayWord, distanceLine, isFleetToday, mayChooseClock, handOnLine, hoursWords, keptOff, leftByReason, putOnto, ruleLine, windowLine, sendLine, weightWords, withoutRule, type DayPlan, type FleetClock, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi, siteLine, shiftLine } from '../orders';
+import { acceptTellsShippers, askOf, clockLine, rosterLine, dayWord, distanceLine, isFleetToday, mayChooseClock, handOnLine, hoursWords, keptOff, leftByReason, putOnto, ruleLine, windowLine, sendLine, weightWords, withoutRule, type DayPlan, type FleetClock, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi, siteLine, shiftLine, loadingLine, tripLoadingLines, mayPutOn } from '../orders';
 
 const REASON: Record<PlanLeftReason, { title: MessageKey; what: MessageKey }> = {
   no_pin: { title: 'fleet.plan.left.noPin', what: 'fleet.plan.left.noPinDo' },
@@ -13,6 +13,7 @@ const REASON: Record<PlanLeftReason, { title: MessageKey; what: MessageKey }> = 
   no_time: { title: 'fleet.plan.left.noTime', what: 'fleet.plan.left.noTimeDo' },
   no_driver: { title: 'fleet.plan.left.noDriver', what: 'fleet.plan.left.noDriverDo' },
   no_trucks: { title: 'fleet.plan.left.noTrucks', what: 'fleet.plan.left.noTrucksDo' },
+  site_closed: { title: 'fleet.plan.left.siteClosed', what: 'fleet.plan.left.siteClosedDo' },
 };
 
 /**
@@ -164,6 +165,8 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
             ) : null}
             {/* WINDOWS the plan could not keep, or could not read. A plan kept from before windows were planned to says neither. */}
             {plan.totals.outsideWindow ? <Note tone="warn" icon="warning" title={t(plan.totals.outsideWindow === 1 ? 'fleet.plan.win.outsideOne' : 'fleet.plan.win.outside', { n: plan.totals.outsideWindow })} detail={t('fleet.plan.win.outsideDetail')} /> : null}
+            {/* A DAY PAST ITS SHIFT for a bay: the bays are handed out after the day is planned, so it is said, never hidden. */}
+            {plan.routes.some((r) => r.overMin) ? <Note tone="warn" icon="warning" title={t('fleet.plan.overShiftNote', { n: plan.routes.filter((r) => r.overMin).length })} detail={t('fleet.plan.overShiftDetail')} /> : null}
             {plan.totals.unreadWindows ? <p class="hint">{t(plan.totals.unreadWindows === 1 ? 'fleet.plan.win.unreadOne' : 'fleet.plan.win.unreadMany', { n: plan.totals.unreadWindows })}</p> : null}
             {plan.totals.drivers < plan.totals.trucksAvailable ? <p class="hint">{t('fleet.plan.driversShort', { drivers: plan.totals.drivers, trucks: plan.totals.trucksAvailable })}</p> : null}
             {/* WHO IT COUNTED AS DRIVING: the day's roster by name, or — nobody having said — everybody, said as such. */}
@@ -426,7 +429,7 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
                       </span>
                     ) : null}
                     {/* BY HAND, while the office is changing its day: this order goes on that vehicle, or on none. */}
-                    {tune && !plan.accepted && going.length > 0 && g.reason !== 'no_pin' ? (
+                    {tune && !plan.accepted && going.length > 0 && mayPutOn(g.reason) ? (
                       <span class="plan__byhand">
                               <select
                                 class="select plan__moveto"
@@ -490,6 +493,20 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
             </ul>
           ) : null}
 
+          {/* WHAT LOADS AT EACH OF THE FLEET'S OWN SITES, where anything does: its bays and hours, and who waited. */}
+          {plan.sites?.some((s) => s.loadings) ? (
+            <ul class="plan__sites">
+              {plan.sites.map((s) => {
+                const line = loadingLine(s, t);
+                return line ? (
+                  <li key={`load:${s.siteId}`} class={line.tone === 'warn' ? 'plan__win plan__win--warn' : undefined}>
+                    {line.text}
+                  </li>
+                ) : null;
+              })}
+            </ul>
+          ) : null}
+
           {/* EACH TRUCK'S DAY. Side by side where there is room; one under another on a phone. */}
           <div class="plan__grid">
             {plan.routes.map((r) => (
@@ -503,12 +520,18 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
                   ) : null}
                   <span class="plan__trucksub">{t('fleet.plan.truckSub', { size: weightWords(r.capacityKg), full: r.fullestPct })}</span>
                   <span class="plan__trucksub">{t('fleet.plan.truckDay', { hours: hoursWords(r.minutes), home: r.home, km: Math.round(r.km), empty: Math.round(r.emptyKm) })}</span>
+                  {r.overMin ? <span class="plan__trucksub plan__win plan__win--warn">{t('fleet.plan.overShift', { by: hoursWords(r.overMin) })}</span> : null}
                 </header>
                 {r.trips.map((trip) => (
                   <div key={trip.no} class="plan__trip">
                     <p class="plan__triphead">
                       <strong>{t('fleet.plan.trip', { no: trip.no, start: trip.start })}</strong>
                       <span>{t('fleet.plan.tripSub', { from: trip.pickupLabel, weight: weightWords(trip.weightKg), empty: Math.round(trip.emptyKm) })}</span>
+                      {tripLoadingLines(trip, t).map((l) => (
+                        <span key={l.text} class={`plan__win plan__win--${l.tone}`}>
+                          {l.text}
+                        </span>
+                      ))}
                     </p>
                     <ol class="plan__stops">
                       {trip.stops.map((stop) => (

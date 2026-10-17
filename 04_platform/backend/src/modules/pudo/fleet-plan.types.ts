@@ -7,7 +7,7 @@ import { VEHICLE_CLASSES, VehicleClass } from './fleet.config';
  */
 
 /** Why an order is not in the plan. `no_pin` is this layer's own: an address with no point cannot be routed at all. */
-export const PLAN_LEFT_REASONS = ['no_pin', 'too_heavy', 'no_truck_can_carry', 'no_time', 'no_driver', 'no_trucks'] as const;
+export const PLAN_LEFT_REASONS = ['no_pin', 'too_heavy', 'no_truck_can_carry', 'no_time', 'no_driver', 'no_trucks', 'site_closed'] as const;
 export type PlanLeftReason = (typeof PLAN_LEFT_REASONS)[number];
 
 /**
@@ -51,6 +51,15 @@ export class PlanTripView {
   end: string;
   weightKg: number;
   @ApiProperty({ type: [PlanStopView] }) stops: PlanStopView[];
+  /** The fleet's own site it loads at. Absent: it loads somewhere else — a shipper's yard. */
+  @ApiPropertyOptional() siteId?: string;
+  @ApiPropertyOptional() siteName?: string;
+  /** Minutes it stands at the site before it opens; `start` is then the opening. */
+  @ApiPropertyOptional() openWaitMin?: number;
+  /** Minutes it waits there for a bay, every one taken by another truck. */
+  @ApiPropertyOptional() bayWaitMin?: number;
+  /** Minutes it is still loading after the site has closed. Planned all the same, and said. */
+  @ApiPropertyOptional() afterCloseMin?: number;
 }
 
 export class PlanRouteView {
@@ -74,6 +83,8 @@ export class PlanRouteView {
   weightKg: number;
   /** Its fullest trip, as a share of what it carries at once (0–100). */
   fullestPct: number;
+  /** Minutes its day runs past its shift: waiting for a bay, which is handed out after the day is planned. */
+  @ApiPropertyOptional() overMin?: number;
 }
 
 export class PlanLeftView {
@@ -181,6 +192,18 @@ export class PlanSiteView {
   trucksUsed: number;
   /** Drivers who start from here that day: no more trucks leave it than this. */
   drivers: number;
+  /** Trips that load here, of any truck. */
+  loadings: number;
+  /** How many load at once. Absent: not said — as many as come. */
+  @ApiPropertyOptional() bays?: number;
+  /** Loadings that waited for a bay, and the longest wait. */
+  bayWaits: number;
+  @ApiPropertyOptional() longestBayWaitMin?: number;
+  /** Open for loading that day ("06:00–18:00"). Absent: it never closes — or, with `closed`, not at all that day. */
+  @ApiPropertyOptional() hours?: string;
+  @ApiPropertyOptional() closed?: boolean;
+  /** Loadings still going on after it closes. */
+  afterClose: number;
 }
 
 /**

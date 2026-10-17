@@ -156,7 +156,9 @@ describe('a fleet’s sites', () => {
     it('starts with the depot the fleet signed up with; the office adds sites, changes them, and closes one nobody works from', () => {
       const f = aFleet();
       const truck = aTruck(f.did, 'KST 100T');
-      expect(sites.view(f.did).sites).toEqual([expect.objectContaining({ siteId: 'depot', name: 'Depot', address: 'Enterprise Road, Nairobi', main: true, loadingBays: 2, shifts: [], vehicles: 1, drivers: 0 })]);
+      expect(sites.view(f.did).sites).toEqual([expect.objectContaining({ siteId: 'depot', name: 'Depot', address: 'Enterprise Road, Nairobi', main: true, shifts: [], vehicles: 1, drivers: 0 })]);
+      // How many load there at once is the office's to say: nobody said, nothing is counted.
+      expect(sites.view(f.did).sites[0]).not.toHaveProperty('loadingBays');
       // A site is a name and a point on the map.
       expect(() => sites.add(f.did, { name: 'Mombasa yard' }, 'Amina')).toThrow('Put the site on the map: a plan measures from where it is');
       expect(() => sites.add(f.did, { name: '  ', ...MOMBASA }, 'Amina')).toThrow('Name the site');
@@ -215,8 +217,8 @@ describe('a fleet’s sites', () => {
       // From its own yard: a few kilometres to the collection, not the 450 from Nairobi.
       expect(msaRoute.trips[0].emptyKm).toBeLessThan(20);
       expect(plan.sites).toEqual([
-        { siteId: 'depot', name: 'Depot', trucksAvailable: 1, trucksUsed: 1, drivers: 1 },
-        { siteId: mombasa, name: 'Mombasa yard', trucksAvailable: 1, trucksUsed: 1, drivers: 1 },
+        { siteId: 'depot', name: 'Depot', trucksAvailable: 1, trucksUsed: 1, drivers: 1, loadings: 0, bayWaits: 0, afterClose: 0 },
+        { siteId: mombasa, name: 'Mombasa yard', trucksAvailable: 1, trucksUsed: 1, drivers: 1, loadings: 0, bayWaits: 0, afterClose: 0 },
       ]);
     });
 
@@ -306,6 +308,59 @@ describe('a fleet’s sites', () => {
       ]);
       const plan = plans.propose(f.did, { day: dayPlus(1) });
       expect(plan.routes.filter((r) => r.vehicleId === truck.vehicleId)).toHaveLength(1);
+    });
+  });
+
+  describe('loading at the fleet’s own sites', () => {
+    const EVERY_DAY = Object.fromEntries(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map((d) => [d, { open: '08:00', close: '18:00' }]));
+    /** A full truckload collected at the fleet's own depot — a yard it keeps goods in — and taken 30 km off. */
+    function fromTheDepot(f: { did: string; companyName: string }, day: string, i: number) {
+      seq += 1;
+      return dispatch.registerFreight({
+        description: `Cement ${seq}`, pickupLocation: { ...NAIROBI }, pickupLabel: 'Our yard', destLabel: `Site ${seq}`, destLocation: { lat: NAIROBI.lat - 0.27, lng: NAIROBI.lng + i * 0.05 },
+        weightKg: 7000, packaging: 'palletised', postedByDid: f.did, postedByName: 'Amina', contract: contractOf(f), deliverOn: day, orderRef: `LD-${seq}`,
+      });
+    }
+    /** Three trucks and three drivers at a depot that opens at 08:00 with one bay, and a load each; a day too short for two. */
+    function oneBay() {
+      const f = aFleet();
+      sites.update(f.did, 'depot', { hours: EVERY_DAY, loadingBays: 1 }, 'Amina');
+      for (const plate of ['KST 601T', 'KST 602T', 'KST 603T']) aTruck(f.did, plate);
+      for (let i = 0; i < 3; i++) aDriver(f.did);
+      for (let i = 0; i < 3; i++) fromTheDepot(f, dayPlus(1), i);
+      return f;
+    }
+
+    it('loads when the site opens, one truck at a time at one bay — and says who waited, and how long', () => {
+      const f = oneBay();
+      const plan = plans.propose(f.did, { day: dayPlus(1), dayHours: 5 });
+      expect(plan.unplanned).toEqual([]);
+      const trips = plan.routes.map((r) => r.trips[0]).sort((a, b) => a.start.localeCompare(b.start));
+      // Out at 07:00, at the gate an hour before it opens; then one after another at the one bay, fifteen minutes each.
+      expect(trips.map((t) => [t.siteName, t.start, t.openWaitMin, t.bayWaitMin])).toEqual([
+        ['Depot', '08:00', 60, undefined],
+        ['Depot', '08:15', 60, 15],
+        ['Depot', '08:30', 60, 30],
+      ]);
+      expect(plan.sites![0]).toMatchObject({ loadings: 3, bays: 1, bayWaits: 2, longestBayWaitMin: 30, hours: '08:00–18:00', afterClose: 0 });
+      expect(plan.routes.every((r) => r.overMin === undefined)).toBe(true);
+      // Bays no longer counted: all three load at the opening.
+      sites.update(f.did, 'depot', { loadingBays: null }, 'Amina');
+      const any = plans.propose(f.did, { day: dayPlus(1), dayHours: 5 });
+      expect(any.routes.map((r) => r.trips[0].start)).toEqual(['08:00', '08:00', '08:00']);
+      expect(any.sites![0]).not.toHaveProperty('bays');
+      expect(any.sites![0].bayWaits).toBe(0);
+    });
+
+    it('collects nothing at a site on a day it is closed, and says why', () => {
+      const f = oneBay();
+      const weekday = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date(`${dayPlus(1)}T12:00:00Z`).getUTCDay()];
+      sites.update(f.did, 'depot', { hours: { ...EVERY_DAY, [weekday]: null } }, 'Amina');
+      const plan = plans.propose(f.did, { day: dayPlus(1), dayHours: 5 });
+      expect(plan.routes).toEqual([]);
+      expect(plan.unplanned.map((u) => u.reason)).toEqual(['site_closed', 'site_closed', 'site_closed']);
+      expect(plan.sites![0]).toMatchObject({ closed: true, loadings: 0 });
+      expect(plan.sites![0]).not.toHaveProperty('hours');
     });
   });
 

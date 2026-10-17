@@ -17,6 +17,9 @@
  *    day longer than a driver's. An order that fits nowhere is NOT squeezed in — it is returned with the reason.
  *  - What is left over is priced in trucks: the same math is run on copies of the fleet's largest truck, and the
  *    number it needs is how many to hire.
+ *  - At the fleet's OWN SITES a truck loads while the site is open — early, it stands at the gate — and no more load
+ *    there at once than it has bays. Orders are placed first, each truck's day on its own; the bays are handed out
+ *    after, in the order trucks come for them, and a wait that takes a day past its shift is said, never hidden.
  *
  * It is a heuristic (cheapest insertion, each trip's drops re-ordered by 2-opt, every order offered the whole day
  * again, and then each planned order given up in turn to see whether the day carries more orders without it), not a
@@ -42,6 +45,20 @@ export interface PlanOrder {
    * nothing is left undelivered because of a window.
    */
   window?: { fromMin?: number; toMin?: number };
+  /** Collected at one of the fleet's own sites (PlanDock.id). Absent: somewhere else — a shipper's yard. */
+  dock?: string;
+}
+
+/**
+ * ONE OF THE FLEET'S OWN SITES, where it loads: an order collected there loads while the site is open, and no more
+ * trucks load there at once than it has bays. (A shipper's dock is not one of these: what it keeps is the shipper's.)
+ */
+export interface PlanDock {
+  id: string;
+  /** How many trucks load there at once. Absent: as many as come. */
+  bays?: number;
+  /** Open for loading, in minutes after the day starts. Absent: always. Null: closed all that day — nothing is collected there. */
+  open?: { fromMin: number; toMin: number } | null;
 }
 
 export interface PlanTruck {
@@ -97,9 +114,10 @@ export const DEFAULT_PLAN_PARAMS: PlanParams = { speedKmh: 30, loadMin: 15, unlo
 /**
  * `too_heavy` heavier than the fleet's largest truck · `no_truck_can_carry` no truck that could handle it is big enough
  * · `no_time` it fits a truck, and every truck's day is full · `no_driver` a truck stands free for it, and nobody is
- * left to drive one · `no_trucks` the fleet has no truck to plan with.
+ * left to drive one · `no_trucks` the fleet has no truck to plan with · `site_closed` it is collected at one of the
+ * fleet's own sites, and that site is closed all day.
  */
-export type UnplannedReason = 'too_heavy' | 'no_truck_can_carry' | 'no_time' | 'no_driver' | 'no_trucks';
+export type UnplannedReason = 'too_heavy' | 'no_truck_can_carry' | 'no_time' | 'no_driver' | 'no_trucks' | 'site_closed';
 
 export interface PlanStop {
   orderId: string;
@@ -125,6 +143,14 @@ export interface PlanTrip {
   endMin: number;
   kg: number;
   stops: PlanStop[];
+  /** The fleet's own site it loads at (PlanDock.id). Absent: somewhere else — a shipper's yard. */
+  dock?: string;
+  /** Minutes the truck stands at the site before it opens. */
+  openWaitMin?: number;
+  /** Minutes it waits there for a bay, every one taken by another truck. */
+  bayWaitMin?: number;
+  /** Minutes it is still loading after the site has closed. Planned all the same, and said. */
+  afterCloseMin?: number;
 }
 
 export interface PlanRoute {
@@ -139,6 +165,8 @@ export interface PlanRoute {
   /** Site to site: how long its day is. */
   minutes: number;
   kg: number;
+  /** Minutes its day runs past its shift — only ever for waiting for a bay, which is handed out after the day is planned. */
+  overMin?: number;
 }
 
 export interface PlanResult {
@@ -150,8 +178,11 @@ export interface PlanResult {
 
 type Km = (a: PlanPoint, b: PlanPoint) => number;
 
-/** An order as it sits in a truck's day. `noWait`: the day could not hold the wait for its window, so it goes in early. */
-type Placed = PlanOrder & { noWait?: boolean };
+/**
+ * An order as it sits in a truck's day. `noWait`: the day could not hold the wait for its window, so it goes in early.
+ * `site`: the fleet's own site it is collected at, and when that is open.
+ */
+type Placed = PlanOrder & { noWait?: boolean; site?: { id: string; open?: { fromMin: number; toMin: number } } };
 
 interface Draft {
   pickup: PlanPoint;
@@ -167,8 +198,14 @@ interface Start {
   dayMin: number;
 }
 
+/**
+ * When a trip may start loading where more than the truck decides — a bay at one of the fleet's own sites (see
+ * loadInTurn): given the trip's place in the day and when the truck is ready, when it loads.
+ */
+type Gate = (tripIndex: number, readyMin: number) => number;
+
 /** A truck's day, driven: every leg, every stop, in order. The one place distance and time are worked out. */
-function drive(trips: Draft[], start: Start, p: PlanParams, km: Km): { trips: PlanTrip[]; km: number; emptyKm: number; minutes: number; kg: number; late: number } {
+function drive(trips: Draft[], start: Start, p: PlanParams, km: Km, gate?: Gate): { trips: PlanTrip[]; km: number; emptyKm: number; minutes: number; kg: number; late: number } {
   const travel = (d: number) => (d / p.speedKmh) * 60;
   const depot = start.at;
   let at = depot;
@@ -182,8 +219,20 @@ function drive(trips: Draft[], start: Start, p: PlanParams, km: Km): { trips: Pl
     clock += travel(toPickup);
     total += toPickup;
     empty += toPickup;
+    // AT ONE OF THE FLEET'S OWN SITES: not before it opens — the truck stands at the gate, and that is its day too — and,
+    // where its bays are counted, not before one is free.
+    const dock = trip.orders[0]?.site;
+    const open = dock?.open;
+    const openWait = open && clock < open.fromMin ? open.fromMin - clock : 0;
+    clock += openWait;
+    const ready = clock;
+    if (gate) clock = Math.max(clock, gate(i, ready));
+    const bayWait = clock - ready;
     const startMin = clock;
     clock += p.loadMin * trip.orders.length;
+    // Still loading when it closes: planned all the same, and counted like a door reached after its window.
+    const afterClose = open && clock > open.toMin ? clock - open.toMin : 0;
+    lateAll += afterClose;
     at = trip.pickup;
     const stops = trip.orders.map((o): PlanStop => {
       const leg = km(at, o.drop);
@@ -204,7 +253,19 @@ function drive(trips: Draft[], start: Start, p: PlanParams, km: Km): { trips: Pl
     });
     const kg = trip.orders.reduce((s, o) => s + o.kg, 0);
     kgAll += kg;
-    return { no: i + 1, pickup: trip.pickup, emptyKm: round1(toPickup), startMin: Math.round(startMin), endMin: Math.round(clock), kg: round1(kg), stops };
+    return {
+      no: i + 1,
+      pickup: trip.pickup,
+      emptyKm: round1(toPickup),
+      startMin: Math.round(startMin),
+      endMin: Math.round(clock),
+      kg: round1(kg),
+      stops,
+      ...(dock ? { dock: dock.id } : {}),
+      ...(Math.round(openWait) > 0 ? { openWaitMin: Math.round(openWait) } : {}),
+      ...(Math.round(bayWait) > 0 ? { bayWaitMin: Math.round(bayWait) } : {}),
+      ...(Math.round(afterClose) > 0 ? { afterCloseMin: Math.round(afterClose) } : {}),
+    };
   });
   if (trips.length) {
     const home = km(at, depot);
@@ -470,6 +531,69 @@ function solve(orders: PlanOrder[], trucks: PlanTruck[], depot: PlanPoint, p: Pl
   return { days, left };
 }
 
+/**
+ * THE BAYS, handed out. Orders are placed truck by truck, each day worked out on its own; a site's bays are shared, so
+ * they are given out afterwards, in the order trucks come for them — the one ready to load first, the truck listed
+ * first on a tie. A truck that finds every bay taken waits for the first to come free, and its day goes on from there.
+ * Returns when each trip of each truck loads.
+ */
+function loadInTurn(trucks: PlanTruck[], days: Days, start: Starts, p: PlanParams, km: Km, docks: PlanDock[]): Map<string, number[]> {
+  const bays = new Map(docks.filter((d) => d.bays !== undefined).map((d) => [d.id, d.bays!]));
+  const booked = new Map<string, Array<[number, number]>>();
+  const decided = new Map<string, number[]>(trucks.map((t) => [t.id, []]));
+  const going = trucks.filter((t) => days.get(t.id)!.length > 0);
+  // When a truck is next ready to load: its day driven as far as the trip it has come to, with the bays it was given.
+  const next = (t: PlanTruck): { trip: number; ready: number } | null => {
+    const day = days.get(t.id)!;
+    const given = decided.get(t.id)!;
+    const k = given.length;
+    if (k >= day.length) return null;
+    let ready = 0;
+    drive(day.slice(0, k + 1), start(t.id), p, km, (i, r) => {
+      if (i < k) return given[i];
+      ready = r;
+      return r;
+    });
+    return { trip: k, ready };
+  };
+  const waiting = new Map(going.map((t) => [t.id, next(t)]));
+  for (;;) {
+    let pick: PlanTruck | undefined;
+    for (const t of going) {
+      const w = waiting.get(t.id);
+      if (w && (!pick || w.ready < waiting.get(pick.id)!.ready - EPS)) pick = t;
+    }
+    if (!pick) break;
+    const w = waiting.get(pick.id)!;
+    const trip = days.get(pick.id)![w.trip];
+    const dock = trip.orders[0]?.site;
+    const n = dock ? bays.get(dock.id) : undefined;
+    let at = w.ready;
+    if (dock && n !== undefined) {
+      const min = p.loadMin * trip.orders.length;
+      const list = booked.get(dock.id) ?? [];
+      at = firstFree(list, n, w.ready, min);
+      list.push([at, at + min]);
+      booked.set(dock.id, list);
+    }
+    decided.get(pick.id)!.push(at);
+    waiting.set(pick.id, next(pick));
+  }
+  return decided;
+}
+
+/** The first moment from `from` that one of `n` bays is free for `min` minutes, with these loadings already booked. */
+function firstFree(booked: Array<[number, number]>, n: number, from: number, min: number): number {
+  const loading = (x: number) => booked.filter(([s, e]) => s <= x + EPS && x < e - EPS).length;
+  const candidates = [from, ...booked.map(([, e]) => e).filter((e) => e > from)].sort((a, b) => a - b);
+  for (const t of candidates) {
+    const points = [t, ...booked.map(([s]) => s).filter((s) => s > t && s < t + min - EPS)];
+    if (points.every((x) => loading(x) < n)) return t;
+  }
+  // After the last loading ends nobody is loading: unreachable, said for the type.
+  return candidates[candidates.length - 1];
+}
+
 /** How many exchanges one plan may make, and how much searching (planned orders × leftovers, summed) it may do for them. */
 const MAX_GIVE_UPS = 12;
 const GIVE_UP_BUDGET = 40_000;
@@ -477,18 +601,30 @@ const GIVE_UP_BUDGET = 40_000;
 /**
  * Plan a day. `trucks` in the order the fleet lists them: a tie between two trucks goes to the first.
  */
-export function planDay(input: { orders: PlanOrder[]; trucks: PlanTruck[]; depot: PlanPoint; km: Km; params?: Partial<PlanParams>; sites?: PlanPoint[] }): PlanResult {
+export function planDay(input: { orders: PlanOrder[]; trucks: PlanTruck[]; depot: PlanPoint; km: Km; params?: Partial<PlanParams>; sites?: PlanPoint[]; docks?: PlanDock[] }): PlanResult {
   const p: PlanParams = { ...DEFAULT_PLAN_PARAMS, ...input.params };
-  const { days, left } = solve(input.orders, input.trucks, input.depot, p, input.km, p.polish !== false);
+  // WHERE EACH ORDER LOADS: at one of the fleet's own sites, or not. One closed all day collects nothing.
+  const docks = input.docks ?? [];
+  const closed: PlanOrder[] = [];
+  const orders: Placed[] = [];
+  for (const o of input.orders) {
+    const d = o.dock !== undefined ? docks.find((x) => x.id === o.dock) : undefined;
+    if (d?.open === null) closed.push(o);
+    else orders.push(d ? { ...o, site: { id: d.id, ...(d.open ? { open: d.open } : {}) } } : o);
+  }
+  const { days, left } = solve(orders, input.trucks, input.depot, p, input.km, p.polish !== false);
   const start = startsOf(input.trucks, input.depot, p);
+  const given = docks.some((d) => d.bays !== undefined) ? loadInTurn(input.trucks, days, start, p, input.km, docks) : undefined;
   const routes: PlanRoute[] = [];
   for (const t of input.trucks) {
     const day = days.get(t.id)!;
     if (day.length === 0) continue;
-    const d = drive(day, start(t.id), p, input.km);
-    routes.push({ truckId: t.id, startMin: start(t.id).min, trips: d.trips, km: round1(d.km), emptyKm: round1(d.emptyKm), minutes: Math.round(d.minutes), kg: round1(d.kg) });
+    const s = start(t.id);
+    const d = drive(day, s, p, input.km, given ? (i, ready) => given.get(t.id)![i] ?? ready : undefined);
+    const over = Math.round(d.minutes - s.dayMin);
+    routes.push({ truckId: t.id, startMin: s.min, trips: d.trips, km: round1(d.km), emptyKm: round1(d.emptyKm), minutes: Math.round(d.minutes), kg: round1(d.kg), ...(over > 0 ? { overMin: over } : {}) });
   }
-  const result: PlanResult = { routes, unplanned: left.map((l) => ({ orderId: l.order.id, reason: l.reason })) };
+  const result: PlanResult = { routes, unplanned: [...left.map((l) => ({ orderId: l.order.id, reason: l.reason })), ...closed.map((o) => ({ orderId: o.id, reason: 'site_closed' as const }))] };
 
   // WHAT TO HIRE. The leftovers that only wanted for time, trucks or drivers, run on copies of the fleet's largest truck — as
   // many copies as there are leftovers, so the answer is how many the math actually uses, not how many it was given. Each

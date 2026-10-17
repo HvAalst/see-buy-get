@@ -75,6 +75,10 @@ describe('a fleet’s sites, over the wire', () => {
     const msa = added.body.sites.find((s: { name: string }) => s.name === 'Mombasa yard').siteId as string;
     // Staff read it.
     expect((await http().get(sites).set(bearer(operator)).expect(200)).body.sites).toHaveLength(2);
+    // How many load there at once: a number from 1, or no longer counted.
+    await http().post(`${sites}/${msa}`).set(bearer(kilima.token)).send({ loadingBays: 0 }).expect(400);
+    const uncounted = await http().post(`${sites}/${msa}`).set(bearer(kilima.token)).send({ loadingBays: null }).expect(201);
+    expect(uncounted.body.sites.find((s: { siteId: string }) => s.siteId === msa)).not.toHaveProperty('loadingBays');
     // Who works from where.
     await http().post(`/v1/sbg/fleet/managers/${kilima.did}/site-homes`).set(bearer(operator)).send({ kind: 'vehicle', id: truck.vehicleId, siteId: msa }).expect(403);
     const homed = await http().post(`/v1/sbg/fleet/managers/${kilima.did}/site-homes`).set(bearer(kilima.token)).send({ kind: 'vehicle', id: truck.vehicleId, siteId: msa }).expect(201);
@@ -87,8 +91,8 @@ describe('a fleet’s sites, over the wire', () => {
     expect(set.body.list).toEqual([expect.objectContaining({ driverDid: amos, rostered: true, siteId: msa, homeSiteId: 'depot' })]);
     const plan = await http().post(`/v1/sbg/fleet/managers/${kilima.did}/plan`).set(bearer(kilima.token)).send({ day }).expect(201);
     expect(plan.body.sites).toEqual([
-      { siteId: 'depot', name: 'Depot', trucksAvailable: 0, trucksUsed: 0, drivers: 0 },
-      { siteId: msa, name: 'Mombasa yard', trucksAvailable: 1, trucksUsed: 0, drivers: 1 },
+      { siteId: 'depot', name: 'Depot', trucksAvailable: 0, trucksUsed: 0, drivers: 0, loadings: 0, bayWaits: 0, afterClose: 0 },
+      { siteId: msa, name: 'Mombasa yard', trucksAvailable: 1, trucksUsed: 0, drivers: 1, loadings: 0, bayWaits: 0, afterClose: 0 },
     ]);
     // How the vehicles were used: the office's and staff's to read, nobody else's.
     const today = app.get(FleetManagerService).todayOf(kilima.did);

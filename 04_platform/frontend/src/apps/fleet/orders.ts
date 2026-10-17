@@ -24,6 +24,8 @@ export type PlanStop = components['schemas']['PlanStopView'];
 export type PlanAdvice = components['schemas']['PlanAdviceView'];
 export type AdviserFailure = NonNullable<PlanAdvice['failed']>;
 export type RosterView = components['schemas']['RosterView'];
+export type PlanTrip = components['schemas']['PlanTripView'];
+export type PlanSite = components['schemas']['PlanSiteView'];
 /** One order and one vehicle: what a rule on a plan names. */
 export interface PlanPair {
   freightId: string;
@@ -257,6 +259,35 @@ export function rosterStarts(view: Pick<RosterView, 'list'>): Record<string, str
 export function siteLine(s: { name: string; trucksAvailable: number; trucksUsed: number; drivers: number }, t: Translate): { tone: 'warn' | 'idle'; text: string } {
   const text = t('fleet.plan.siteLine', { site: s.name, used: s.trucksUsed, trucks: s.trucksAvailable, drivers: s.drivers });
   return { tone: s.drivers < s.trucksAvailable && s.trucksUsed === s.drivers ? 'warn' : 'idle', text };
+}
+
+/**
+ * AT ONE OF THE FLEET'S OWN SITES, a trip's loading in lines: standing at the gate until the site opens, waiting for a
+ * bay every other truck has, still loading when it closes. Nothing where it loads somewhere else, or loads at once.
+ */
+export function tripLoadingLines(trip: Pick<PlanTrip, 'siteName' | 'openWaitMin' | 'bayWaitMin' | 'afterCloseMin'>, t: Translate): Array<{ tone: 'warn' | 'idle'; text: string }> {
+  const site = trip.siteName ?? '';
+  return [
+    ...(trip.openWaitMin ? [{ tone: 'idle' as const, text: t('fleet.plan.trip.opens', { by: hoursWords(trip.openWaitMin), site }) }] : []),
+    ...(trip.bayWaitMin ? [{ tone: 'warn' as const, text: t('fleet.plan.trip.bay', { by: hoursWords(trip.bayWaitMin), site }) }] : []),
+    ...(trip.afterCloseMin ? [{ tone: 'warn' as const, text: t('fleet.plan.trip.afterClose', { by: hoursWords(trip.afterCloseMin), site }) }] : []),
+  ];
+}
+
+/**
+ * PER SITE, what loads there that day in a line: how many loadings, its bays and hours, how many waited for a bay and
+ * the longest wait, any still loading at closing. Null where nothing loads there.
+ */
+export function loadingLine(s: Pick<PlanSite, 'name' | 'loadings' | 'bays' | 'bayWaits' | 'longestBayWaitMin' | 'hours' | 'afterClose'>, t: Translate): { tone: 'warn' | 'idle'; text: string } | null {
+  if (!s.loadings) return null;
+  const parts = [
+    t('fleet.plan.load.line', { site: s.name, n: s.loadings }),
+    ...(s.bays ? [t('fleet.plan.load.bays', { n: s.bays })] : []),
+    ...(s.hours ? [t('fleet.plan.load.open', { hours: s.hours })] : []),
+    ...(s.bayWaits ? [t('fleet.plan.load.waits', { n: s.bayWaits, by: hoursWords(s.longestBayWaitMin ?? 0) })] : []),
+    ...(s.afterClose ? [t('fleet.plan.load.afterClose', { n: s.afterClose })] : []),
+  ];
+  return { tone: s.bayWaits || s.afterClose ? 'warn' : 'idle', text: parts.join(' · ') };
 }
 
 /** The largest workbook sent. The server holds the same line; said here so a big file is refused before it is read. */
@@ -532,10 +563,19 @@ export function hoursWords(minutes: number): string {
 }
 
 /**
- * P3 — what the plan left out, grouped by WHY, in the order somebody can act on it: an address to pin first (the
- * office can do that now), then what more trucks or drivers would fix, then what no truck of this fleet can take.
+ * P3 — what the plan left out, grouped by WHY, in the order somebody can act on it: an address to pin, or a site's
+ * hours (the office can change either now), then what more trucks or drivers would fix, then what no truck of this
+ * fleet can take.
  */
-const LEFT_ORDER: PlanLeftReason[] = ['no_pin', 'no_driver', 'no_time', 'no_trucks', 'no_truck_can_carry', 'too_heavy'];
+const LEFT_ORDER: PlanLeftReason[] = ['no_pin', 'site_closed', 'no_driver', 'no_time', 'no_trucks', 'no_truck_can_carry', 'too_heavy'];
+/**
+ * May the office put an order the plan left out onto a vehicle by hand? Not one with no point on the map — no truck can
+ * be routed to it — and not one collected at a site closed that day: no truck loads there, whoever it is.
+ */
+export function mayPutOn(reason: PlanLeftReason): boolean {
+  return reason !== 'no_pin' && reason !== 'site_closed';
+}
+
 export function leftByReason(left: PlanLeft[]): Array<{ reason: PlanLeftReason; orders: PlanLeft[] }> {
   return LEFT_ORDER.map((reason) => ({ reason, orders: left.filter((o) => o.reason === reason) })).filter((g) => g.orders.length > 0);
 }

@@ -1,3 +1,4 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
 import { MAX_SHIFTS } from './fleet-site.types';
@@ -20,7 +21,8 @@ export class SiteDto {
   @IsOptional() @IsString() @MaxLength(200) address?: string;
   /** Open for loading, day by day ({ mon: { open: '06:00', close: '18:00' }, sun: null }). `null` here: it never closes. */
   @IsOptional() @IsObject() hours?: Record<string, { open: string; close: string } | null> | null;
-  @IsOptional() @IsInt() @Min(1) @Max(50) loadingBays?: number;
+  /** How many trucks load there at once. `null` here: not counted — as many as come. */
+  @ApiPropertyOptional({ type: Number, nullable: true }) @IsOptional() @IsInt() @Min(1) @Max(50) loadingBays?: number | null;
   /** The whole list of shifts, replacing what was there. */
   @IsOptional() @IsArray() @ArrayMaxSize(MAX_SHIFTS) @ValidateNested({ each: true }) @Type(() => SiteShiftDto) shifts?: SiteShiftDto[];
 }

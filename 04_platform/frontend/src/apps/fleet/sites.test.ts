@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { pointOf, shiftDay, useLines, weekEnding } from './sites';
+import { baysOf, hoursLine, loadsLine, pointOf, shiftDay, useLines, weekEnding, weekForm } from './sites';
 
 const none = { vehicles: 1, daysOut: 0, daysOffRoad: 0, daysIdle: 0, shifts: 0, hoursOnShift: 0, loads: 0, kgDelivered: 0, loadedKm: 0, emptyKm: 0, runs: 0, runKg: 0 };
 
@@ -10,6 +10,24 @@ describe('a fleet’s sites, in words', () => {
     expect(pointOf('-4.0435 39.6301')).toEqual({ lat: -4.0435, lng: 39.6301 });
     expect(pointOf('Mombasa')).toBeNull();
     expect(pointOf('95, 39')).toBeNull();
+  });
+
+  it('says a site’s hours in one line, days that keep the same hours run together, a day left out closed', () => {
+    const day = { open: '06:00', close: '18:00' };
+    expect(hoursLine({ mon: day, tue: day, wed: day, thu: day, fri: day, sat: { open: '06:00', close: '12:00' }, sun: null }, t)).toBe('Mon–Fri 06:00–18:00 · Sat 06:00–12:00 · Sun closed');
+    expect(hoursLine({ mon: day, wed: day }, t)).toBe('Mon 06:00–18:00 · Tue closed · Wed 06:00–18:00 · Thu–Sun closed');
+    expect(hoursLine(undefined, t)).toBeNull();
+    expect(loadsLine({ loadingBays: 2, hours: { mon: day } }, t)).toBe('Loading: 2 bays · Mon 06:00–18:00 · Tue–Sun closed');
+    expect(loadsLine({ loadingBays: 1 }, t)).toBe('Loading: 1 bay');
+    expect(loadsLine({}, t)).toBeNull();
+  });
+
+  it('holds hours and bays as the office types them: a site with no hours starts every day open, blank bays are not counted', () => {
+    expect(weekForm(undefined).sun).toEqual({ open: '08:00', close: '18:00' });
+    const kept = weekForm({ mon: { open: '07:00', close: '15:00' }, sun: null });
+    expect([kept.mon, kept.tue, kept.sun]).toEqual([{ open: '07:00', close: '15:00' }, null, null]);
+    expect(baysOf(' 3 ')).toBe(3);
+    expect(baysOf('  ')).toBeNull();
   });
 
   it('shows a week ending on a day, and moves by days without a clock change moving it', () => {

@@ -5,7 +5,7 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { VehicleService } from './vehicle.service';
-import { DEFAULT_LOADING_BAYS, DEPOT_SITE, FleetSite, FleetSitesView, FleetSiteView, MAX_SHIFTS, MAX_SITES, SiteShift, SiteWeek, WEEKDAYS } from './fleet-site.types';
+import { DEPOT_SITE, FleetSite, FleetSitesView, FleetSiteView, MAX_SHIFTS, MAX_SITES, SiteShift, SiteWeek, WEEKDAYS } from './fleet-site.types';
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const minutesOf = (hm: string) => Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
@@ -15,7 +15,8 @@ export interface SiteForPlan {
   siteId: string;
   name: string;
   location: { lat: number; lng: number };
-  loadingBays: number;
+  /** Absent: not said — as many load at once as come. */
+  loadingBays?: number;
   /** Open for loading on that day, in minutes after midnight. Absent: it never closes. Null: closed that day. */
   open?: { fromMin: number; toMin: number } | null;
   shifts: SiteShift[];
@@ -47,7 +48,6 @@ export class FleetSiteService {
       name: 'Depot',
       location: { lat: m.location.lat, lng: m.location.lng },
       ...(m.depotAddress ? { address: m.depotAddress } : {}),
-      loadingBays: DEFAULT_LOADING_BAYS,
       shifts: [],
       createdAt: m.createdAt ?? new Date(0).toISOString(),
       createdBy: m.companyName,
@@ -89,7 +89,7 @@ export class FleetSiteService {
         location: { ...s.location },
         ...(s.address ? { address: s.address } : {}),
         ...(s.hours ? { hours: { ...s.hours } } : {}),
-        loadingBays: s.loadingBays,
+        ...(s.loadingBays !== undefined ? { loadingBays: s.loadingBays } : {}),
         shifts: s.shifts.map((x) => ({ ...x })),
         main: s.siteId === DEPOT_SITE,
         vehicles: vehicles.filter((v) => v.siteId === s.siteId).length,
@@ -118,7 +118,7 @@ export class FleetSiteService {
       location: { lat: input.lat, lng: input.lng },
       ...(input.address?.trim() ? { address: input.address.trim() } : {}),
       ...(input.hours ? { hours: weekOf(input.hours) } : {}),
-      loadingBays: input.loadingBays ?? DEFAULT_LOADING_BAYS,
+      ...(input.loadingBays ? { loadingBays: input.loadingBays } : {}),
       shifts: shiftsOf(input.shifts ?? [], []),
       createdAt: new Date(now).toISOString(),
       createdBy: by,
@@ -142,13 +142,15 @@ export class FleetSiteService {
       location: input.lat !== undefined && input.lng !== undefined ? { lat: input.lat, lng: input.lng } : was.location,
       ...(input.address !== undefined ? (input.address.trim() ? { address: input.address.trim() } : { address: undefined }) : {}),
       hours,
-      loadingBays: input.loadingBays ?? was.loadingBays,
+      // Null: no longer counted.
+      loadingBays: input.loadingBays === null ? undefined : (input.loadingBays ?? was.loadingBays),
       shifts: input.shifts !== undefined ? shiftsOf(input.shifts, was.shifts) : was.shifts,
       updatedAt: new Date(now).toISOString(),
       updatedBy: by,
     };
     if (!next.address) delete next.address;
     if (!next.hours) delete next.hours;
+    if (next.loadingBays === undefined) delete next.loadingBays;
     this.sites.set(keyOf(fleetDid, siteId), next);
     return this.view(fleetDid);
   }
@@ -195,7 +197,7 @@ export class FleetSiteService {
         siteId: s.siteId,
         name: s.name,
         location: s.location,
-        loadingBays: s.loadingBays,
+        ...(s.loadingBays !== undefined ? { loadingBays: s.loadingBays } : {}),
         ...(s.hours ? { open: today ? { fromMin: minutesOf(today.open), toMin: minutesOf(today.close) } : null } : {}),
         shifts: s.shifts.map((x) => ({ ...x })),
       };
@@ -213,7 +215,8 @@ export interface SiteInput {
   lng?: number;
   address?: string;
   hours?: Record<string, { open: string; close: string } | null> | null;
-  loadingBays?: number;
+  /** Null: no longer counted. */
+  loadingBays?: number | null;
   shifts?: Array<{ shiftId?: string; name: string; start: string; hours: number }>;
 }
 

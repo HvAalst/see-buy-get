@@ -3,7 +3,7 @@ import { Button, Card, ErrorNote, Pill, PlaceMap } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import type { Result, SbgClient } from '../../../lib/sbg';
 import type { FleetState } from '../useFleetApp';
-import { pointOf, sitesApi, type FleetSite, type FleetSites } from '../sites';
+import { baysOf, DAY_NAME, loadsLine, pointOf, sitesApi, WEEK, weekForm, type FleetSite, type FleetSites, type WeekForm } from '../sites';
 import { UseCard } from './UseCard';
 
 /**
@@ -26,6 +26,10 @@ export function SitesScreen({ state, sbg }: { state: FleetState; sbg: SbgClient 
   const [typed, setTyped] = useState('');
   // The site's shifts as they are being written: none, or each with a name, a start and how long.
   const [shifts, setShifts] = useState<Array<{ shiftId?: string; name: string; start: string; hours: string }>>([]);
+  // How many trucks load there at once (blank: not counted), and whether it keeps hours for loading, day by day.
+  const [bays, setBays] = useState('');
+  const [keepsHours, setKeepsHours] = useState(false);
+  const [week, setWeek] = useState<WeekForm>(weekForm(undefined));
 
   useEffect(() => {
     if (!api) return;
@@ -51,6 +55,9 @@ export function SitesScreen({ state, sbg }: { state: FleetState; sbg: SbgClient 
     setPoint(site ? { lat: site.location.lat, lng: site.location.lng } : null);
     setTyped('');
     setShifts((site?.shifts ?? []).map((x) => ({ shiftId: x.shiftId, name: x.name, start: x.start, hours: String(x.hours) })));
+    setBays(site?.loadingBays ? String(site.loadingBays) : '');
+    setKeepsHours(Boolean(site?.hours));
+    setWeek(weekForm(site?.hours));
   };
   const save = async () => {
     const at = point ?? pointOf(typed);
@@ -58,6 +65,8 @@ export function SitesScreen({ state, sbg }: { state: FleetState; sbg: SbgClient 
       name: name.trim(),
       address: address.trim(),
       ...(at ? { lat: at.lat, lng: at.lng } : {}),
+      loadingBays: baysOf(bays),
+      hours: keepsHours ? week : null,
       shifts: shifts.filter((x) => x.name.trim()).map((x) => ({ ...(x.shiftId ? { shiftId: x.shiftId } : {}), name: x.name.trim(), start: x.start, hours: Number(x.hours) })),
     };
     const done = await act(() => (editing === 'new' ? api!.add(body) : api!.update(editing!, body)));
@@ -98,6 +107,44 @@ export function SitesScreen({ state, sbg }: { state: FleetState; sbg: SbgClient 
               </label>
               <input id="site-point" class="input input--mono" value={point ? `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}` : typed} placeholder="-1.29210, 36.82190" onInput={(e) => { setPoint(null); setTyped(e.currentTarget.value); }} />
             </div>
+            {/* LOADING THERE: how many trucks at once, and when it is open for it. Neither said: any number, at any hour. */}
+            <div class="field">
+              <label class="field__label" for="site-bays">
+                {t('fleet.sites.bays')}
+              </label>
+              <input id="site-bays" class="input input--mono" inputMode="numeric" maxLength={2} value={bays} onInput={(e) => setBays(e.currentTarget.value)} />
+              <p class="hint">{t('fleet.sites.baysHint')}</p>
+            </div>
+            <label class="checkline">
+              <input id="site-keeps-hours" type="checkbox" checked={keepsHours} onChange={(e) => setKeepsHours(e.currentTarget.checked)} />
+              <span>{t('fleet.sites.keepsHours')}</span>
+            </label>
+            {keepsHours ? (
+              <div class="hours">
+                {WEEK.map((d) => {
+                  const day = week[d];
+                  const setDay = (value: { open: string; close: string } | null) => setWeek((was) => ({ ...was, [d]: value }));
+                  return (
+                    <div key={d} class="hoursrow">
+                      <span class="hoursrow__day">{t(DAY_NAME[d])}</span>
+                      <label class="checkline hoursrow__toggle">
+                        <input id={`site-open-${d}`} type="checkbox" checked={Boolean(day)} onChange={(e) => setDay(e.currentTarget.checked ? { open: '08:00', close: '18:00' } : null)} />
+                        <span>{t(day ? 'fleet.sites.open' : 'fleet.sites.closed')}</span>
+                      </label>
+                      {day ? (
+                        <div class="hoursrow__times">
+                          <input id={`site-opens-${d}`} class="input input--time" type="time" value={day.open} aria-label={t('fleet.sites.opens')} onInput={(e) => setDay({ open: e.currentTarget.value, close: day.close })} />
+                          <span class="hoursrow__dash">–</span>
+                          <input id={`site-closes-${d}`} class="input input--time" type="time" value={day.close} aria-label={t('fleet.sites.closes')} onInput={(e) => setDay({ open: day.open, close: e.currentTarget.value })} />
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p class="hint">{t('fleet.sites.alwaysOpen')}</p>
+            )}
             {/* ITS SHIFTS: when drivers start, and how long a shift may be. None: trucks leave when the day's plan says. */}
             <p class="field__label">{t('fleet.sites.shifts')}</p>
             {shifts.length === 0 ? <p class="hint">{t('fleet.sites.noShifts')}</p> : null}
@@ -148,6 +195,7 @@ export function SitesScreen({ state, sbg }: { state: FleetState; sbg: SbgClient 
                 <span class="row__t">{s.name}</span>
                 {s.address ? <span class="row__s">{s.address}</span> : null}
                 <span class="row__s">{t('fleet.sites.counts', { vehicles: s.vehicles, drivers: s.drivers })}</span>
+                {loadsLine(s, t) ? <span class="row__s">{loadsLine(s, t)}</span> : null}
                 {s.shifts.length ? <span class="row__s">{t('fleet.sites.shiftsLine', { list: [...s.shifts].sort((a, b) => a.start.localeCompare(b.start)).map((x) => t('fleet.sites.shiftItem', { name: x.name, start: x.start, hours: x.hours })).join(' · ') })}</span> : null}
                 <span style="display:flex;gap:2px 16px;flex-wrap:wrap">
                   <Button variant="link" full={false} disabled={busy} onClick={() => open(s)}>

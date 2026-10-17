@@ -17,8 +17,6 @@ import { DayHours, GeoPoint } from './pudo.types';
 
 /** The depot a fleet signed up with: a site from the start, under this id, until the office changes it or closes it. */
 export const DEPOT_SITE = 'depot';
-/** How many trucks load at once at a site where the office has not said. */
-export const DEFAULT_LOADING_BAYS = 2;
 export const MAX_SITES = 50;
 export const MAX_SHIFTS = 6;
 
@@ -53,7 +51,8 @@ export interface FleetSite {
   address?: string;
   /** Open for loading. Absent: it never closes. */
   hours?: SiteWeek;
-  loadingBays: number;
+  /** How many trucks load there at once. Absent: the office has not said, and a plan counts none — as many load as come. */
+  loadingBays?: number;
   shifts: SiteShift[];
   createdAt: string;
   createdBy: string;
@@ -69,7 +68,8 @@ export class FleetSiteView {
   location: GeoPoint;
   @ApiPropertyOptional() address?: string;
   @ApiPropertyOptional({ type: SiteWeek }) hours?: SiteWeek;
-  loadingBays: number;
+  /** Absent: not said — as many load at once as come. */
+  @ApiPropertyOptional() loadingBays?: number;
   @ApiProperty({ type: [SiteShift] }) shifts: SiteShift[];
   /** The depot the fleet signed up with. */
   main: boolean;

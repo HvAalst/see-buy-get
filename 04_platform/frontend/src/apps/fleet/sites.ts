@@ -1,6 +1,6 @@
 import type { Result, SbgClient } from '../../lib/sbg';
 import type { components } from '../../lib/sbg/schema';
-import type { Translate } from '../../shared/i18n';
+import type { MessageKey, Translate } from '../../shared/i18n';
 
 export type FleetSites = components['schemas']['FleetSitesView'];
 export type FleetSite = components['schemas']['FleetSiteView'];
@@ -8,6 +8,13 @@ export type SiteHome = components['schemas']['SiteHome'];
 export type FleetUse = components['schemas']['FleetUseView'];
 export type UseTotals = components['schemas']['UseTotals'];
 export type VehicleUse = components['schemas']['VehicleUse'];
+export type SiteWeek = components['schemas']['SiteWeek'];
+
+export const WEEK = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+export type Weekday = (typeof WEEK)[number];
+export type WeekForm = Record<Weekday, { open: string; close: string } | null>;
+export const DAY_NAME: Record<Weekday, MessageKey> = { mon: 'fleet.sites.dayName.mon', tue: 'fleet.sites.dayName.tue', wed: 'fleet.sites.dayName.wed', thu: 'fleet.sites.dayName.thu', fri: 'fleet.sites.dayName.fri', sat: 'fleet.sites.dayName.sat', sun: 'fleet.sites.dayName.sun' };
+const DAY_SHORT: Record<Weekday, MessageKey> = { mon: 'fleet.sites.day.mon', tue: 'fleet.sites.day.tue', wed: 'fleet.sites.day.wed', thu: 'fleet.sites.day.thu', fri: 'fleet.sites.day.fri', sat: 'fleet.sites.day.sat', sun: 'fleet.sites.day.sun' };
 
 /** What the office writes about a site: what is not sent stays as it was. */
 export interface SiteInput {
@@ -16,7 +23,8 @@ export interface SiteInput {
   lng?: number;
   address?: string;
   hours?: Record<string, { open: string; close: string } | null> | null;
-  loadingBays?: number;
+  /** Null: no longer counted. */
+  loadingBays?: number | null;
   shifts?: Array<{ shiftId?: string; name: string; start: string; hours: number }>;
 }
 
@@ -86,4 +94,43 @@ export function useLines(u: UseTotals, days: number, t: Translate): string[] {
   lines.push(carried.length ? carried.join(' · ') : t('fleet.use.nothing'));
   if (u.daysOffRoad || u.daysIdle) lines.push([u.daysOffRoad ? t('fleet.use.offRoad', { n: u.daysOffRoad }) : '', u.daysIdle ? t('fleet.use.idle', { n: u.daysIdle }) : ''].filter(Boolean).join(' · '));
   return lines;
+}
+
+/**
+ * WHEN A SITE IS OPEN FOR LOADING, in one line: days that keep the same hours run together ("Mon–Fri 06:00–18:00 · Sat
+ * 06:00–12:00 · Sun closed"). A day the hours leave out is a closed day. Null where the site keeps no hours: it never closes.
+ */
+export function hoursLine(week: SiteWeek | undefined, t: Translate): string | null {
+  if (!week) return null;
+  const runs: Array<{ from: Weekday; to: Weekday; hours: string | null }> = [];
+  for (const d of WEEK) {
+    const h = week[d];
+    const hours = h ? `${h.open}–${h.close}` : null;
+    const last = runs[runs.length - 1];
+    if (last && last.hours === hours) last.to = d;
+    else runs.push({ from: d, to: d, hours });
+  }
+  return runs
+    .map((r) => {
+      const days = r.from === r.to ? t(DAY_SHORT[r.from]) : t('fleet.sites.dayRun', { from: t(DAY_SHORT[r.from]), to: t(DAY_SHORT[r.to]) });
+      return r.hours ? t('fleet.sites.openRun', { days, hours: r.hours }) : t('fleet.sites.closedRun', { days });
+    })
+    .join(' · ');
+}
+
+/** What a site says about loading there, in a line: its bays and its hours. Null where it says neither. */
+export function loadsLine(s: Pick<FleetSite, 'loadingBays' | 'hours'>, t: Translate): string | null {
+  const parts = [s.loadingBays ? t('fleet.sites.baysCount', { n: s.loadingBays }) : null, hoursLine(s.hours, t)].filter((x): x is string => Boolean(x));
+  return parts.length ? t('fleet.sites.loadsLine', { what: parts.join(' · ') }) : null;
+}
+
+/** A site's hours as the form holds them: each day open with its times, or closed. A site that keeps none: every day 08:00–18:00, to start from. */
+export function weekForm(hours: SiteWeek | undefined): WeekForm {
+  return Object.fromEntries(WEEK.map((d) => [d, hours ? (hours[d] ? { open: hours[d]!.open, close: hours[d]!.close } : null) : { open: '08:00', close: '18:00' }])) as WeekForm;
+}
+
+/** The bays as typed: blank is "not counted". */
+export function baysOf(text: string): number | null {
+  const s = text.trim();
+  return s ? Number(s) : null;
 }

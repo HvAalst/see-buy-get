@@ -118,6 +118,46 @@
   accent-color: var(--blue);
 }
 
+/* ----------------------------------------------- opening hours, day by day -- */
+
+.hours {
+  display: flex;
+  flex-direction: column;
+}
+.hoursrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 0;
+}
+.hoursrow + .hoursrow {
+  border-top: 1px solid var(--bd-soft);
+}
+.hoursrow__day {
+  flex: 1 1 40%;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tx);
+}
+.hoursrow__toggle {
+  margin: 0;
+}
+.hoursrow__times {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 100%;
+}
+.hoursrow__dash {
+  color: var(--tx3);
+}
+.input--time {
+  width: auto;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 /* ------------------------------------------------------------- fleet map -- */
 
 /* The live-position surface: a bounded relative plot, not a tile map — the point is

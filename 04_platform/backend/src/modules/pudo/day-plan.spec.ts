@@ -1,4 +1,4 @@
-import { clockOf, planDay, type PlanOrder, type PlanParams, type PlanPoint, type PlanTruck } from './day-plan';
+import { clockOf, planDay, type PlanDock, type PlanOrder, type PlanParams, type PlanPoint, type PlanTruck } from './day-plan';
 
 /**
  * P3 — A DAY'S PLAN, WORKED OUT. On a flat sheet of paper: a "degree" is a kilometre and distance is the straight
@@ -396,6 +396,64 @@ describe('planning a day', () => {
       const seen = [...r.routes.flatMap((x) => x.trips.flatMap((t) => t.stops.map((s) => s.orderId))), ...r.unplanned.map((u) => u.orderId)].sort();
       expect(seen).toEqual(['a', 'b', 'c', 'd', 'e', 'far']);
       expect(r.unplanned.map((u) => u.orderId)).toContain('far');
+    });
+  });
+
+  describe('at the fleet’s own sites', () => {
+    // The fleet's own yard, at the depot: goods are collected there too.
+    const site = (more: Partial<PlanDock> = {}): PlanDock => ({ id: 'yard', ...more });
+    const atYard = (id: string, kg: number, drop: PlanPoint): PlanOrder => ({ ...order(id, kg, drop, DEPOT), dock: 'yard' });
+    const withDocks = (orders: PlanOrder[], trucks: PlanTruck[], docks: PlanDock[], params: Partial<PlanParams> = {}) => planDay({ orders, trucks, depot: DEPOT, km, params: { ...P, ...params }, docks });
+    // Two loads that each fill a truck, on a day too short for one truck to carry both.
+    const two = [atYard('a', 4000, at(100)), atYard('b', 4000, at(-100))];
+
+    it('loads while the site is open: early, the truck stands at the gate; still loading at closing, it is planned and said', () => {
+      const r = withDocks([atYard('a', 1000, at(20))], [truck('T1', 5000)], [site({ open: { fromMin: 30, toMin: 600 } })]);
+      expect(r.routes[0].trips[0]).toMatchObject({ dock: 'yard', openWaitMin: 30, startMin: 30 });
+      // Stood 30, loaded 10, drove 20; handed over 10, home 20.
+      expect(r.routes[0].trips[0].stops[0].arriveMin).toBe(60);
+      expect(r.routes[0].minutes).toBe(90);
+      const late = withDocks([atYard('a', 1000, at(20))], [truck('T1', 5000)], [site({ open: { fromMin: 0, toMin: 4 } })]);
+      expect(late.unplanned).toEqual([]);
+      expect(late.routes[0].trips[0]).toMatchObject({ dock: 'yard', afterCloseMin: 6 });
+      // Collected anywhere else, the site's hours are nothing to it.
+      const elsewhere = withDocks([order('b', 1000, at(20))], [truck('T1', 5000)], [site({ open: { fromMin: 300, toMin: 400 } })]);
+      expect(elsewhere.routes[0].trips[0]).not.toHaveProperty('dock');
+      expect(elsewhere.routes[0].trips[0].startMin).toBe(10);
+    });
+
+    it('collects nothing at a site closed all day, says why, and prices no hire for it', () => {
+      const r = withDocks([atYard('a', 1000, at(20)), order('b', 1000, at(20))], [truck('T1', 5000)], [site({ open: null })]);
+      expect(r.unplanned).toEqual([{ orderId: 'a', reason: 'site_closed' }]);
+      expect(r.routes[0].trips.flatMap((t) => t.stops.map((s) => s.orderId))).toEqual(['b']);
+      expect(r.hire).toBeUndefined();
+    });
+
+    it('loads no more trucks at once than the site has bays: the next waits for one to come free, and a day it takes past its shift is said', () => {
+      const trucks = [truck('T1', 5000), truck('T2', 5000)];
+      const r = withDocks(two, trucks, [site({ bays: 1 })], { dayMin: 250 });
+      expect(r.routes.map((x) => [x.truckId, x.trips[0].startMin, x.trips[0].bayWaitMin])).toEqual([
+        ['T1', 0, undefined],
+        ['T2', 10, 10],
+      ]);
+      // T2 waited 10 for the bay: loaded 10, drove 100, handed over 10, home 100.
+      expect(r.routes[1].minutes).toBe(230);
+      expect(r.routes.map((x) => x.overMin)).toEqual([undefined, undefined]);
+      // Two bays, or bays nobody counted: both load at once.
+      expect(withDocks(two, trucks, [site({ bays: 2 })], { dayMin: 250 }).routes.map((x) => x.trips[0].startMin)).toEqual([0, 0]);
+      expect(withDocks(two, trucks, [site()], { dayMin: 250 }).routes.map((x) => x.trips[0].startMin)).toEqual([0, 0]);
+      // The bays are handed out after the day is planned: where waiting takes a day past its shift, by how much.
+      expect(withDocks(two, trucks, [site({ bays: 1 })], { dayMin: 225 }).routes.map((x) => x.overMin)).toEqual([undefined, 5]);
+    });
+
+    it('gives a bay to the truck that comes for it first, not to the one listed first', () => {
+      // T1's shift starts five minutes after T2's.
+      const trucks: PlanTruck[] = [{ ...truck('T1', 5000), startMin: 5 }, truck('T2', 5000)];
+      const r = withDocks(two, trucks, [site({ bays: 1 })], { dayMin: 250 });
+      const first = Object.fromEntries(r.routes.map((x) => [x.truckId, x.trips[0]]));
+      expect(first.T2.startMin).toBe(0);
+      expect(first.T2).not.toHaveProperty('bayWaitMin');
+      expect(first.T1).toMatchObject({ startMin: 10, bayWaitMin: 5 });
     });
   });
 

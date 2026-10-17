@@ -5,7 +5,7 @@ import { FleetService } from './fleet.service';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { isDay } from './carriage-contract.service';
-import { DEFAULT_PLAN_PARAMS, clockOf, planDay, type PlanOrder, type PlanPoint, type PlanTruck } from './day-plan';
+import { DEFAULT_PLAN_PARAMS, clockOf, planDay, type PlanDock, type PlanOrder, type PlanPoint, type PlanTruck } from './day-plan';
 import { windowOf, windowWords, type DayWindow } from './delivery-window';
 import { DispatchService } from './dispatch.service';
 import { Freight } from './dispatch.types';
@@ -13,7 +13,8 @@ import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { FleetRosterService } from './fleet-roster.service';
 import { FleetSiteService, type SiteForPlan } from './fleet-site.service';
-import { DEFAULT_LOADING_BAYS, DEPOT_SITE } from './fleet-site.types';
+import { haversineKm } from './geo';
+import { DEPOT_SITE } from './fleet-site.types';
 import { DEFAULT_DAY_START, DayPlanState, DayPlanView, PlanLeftView, PlanRouteView, PlanRuleView, PlanSendResult, PlanSendTruck, PlanSettings, PlannedOn } from './fleet-plan.types';
 import { ROAD_MATRIX, type RoadDistances, type RoadMatrix } from './road-matrix';
 import { ROUTER, Router } from './router';
@@ -46,6 +47,9 @@ export interface PlanPair {
 
 /** The most rules one plan carries. A day's exceptions, not a second plan written by hand. */
 export const MAX_PLAN_RULES = 200;
+
+/** A collection point this close to one of the fleet's own sites, in a straight line, is that site: its yard, its gate. */
+export const AT_SITE_KM = 0.3;
 
 /**
  * P3 — A FLEET'S PLAN FOR A DAY: the orders it must deliver, on the trucks it has.
@@ -145,7 +149,7 @@ export class FleetPlanService implements OnModuleInit {
   private sitesFor(fleetDid: string, day: string): SiteForPlan[] {
     if (this.sites) return this.sites.forPlan(fleetDid, day);
     const m = this.managers.get(fleetDid);
-    return [{ siteId: DEPOT_SITE, name: 'Depot', location: m.location, loadingBays: DEFAULT_LOADING_BAYS, shifts: [] }];
+    return [{ siteId: DEPOT_SITE, name: 'Depot', location: m.location, shifts: [] }];
   }
 
   /** What a plan is asked with, checked: its settings within their limits, its day a day that has not gone — on the fleet's own clock. */
@@ -219,7 +223,13 @@ export class FleetPlanService implements OnModuleInit {
       else if (words?.trim()) unread.add(f.freightId);
     }
     const onTheDay = (w: DayWindow) => ({ ...(w.fromMin !== undefined ? { fromMin: w.fromMin - dayStartMin } : {}), ...(w.toMin !== undefined ? { toMin: w.toMin - dayStartMin } : {}) });
-    const planOrders: PlanOrder[] = pinned.map((f) => ({ id: f.freightId, kg: f.weightKg, pickup: f.pickupLocation, drop: f.destLocation!, ...(windows.has(f.freightId) ? { window: onTheDay(windows.get(f.freightId)!) } : {}) }));
+    // COLLECTED AT ONE OF THE FLEET'S OWN SITES: where its collection point is that site — a place, so measured straight,
+    // not along a road.
+    const collectedAt = (f: Freight) => sites.find((s) => haversineKm(s.location, f.pickupLocation) <= AT_SITE_KM)?.siteId;
+    const planOrders: PlanOrder[] = pinned.map((f) => {
+      const dock = collectedAt(f);
+      return { id: f.freightId, kg: f.weightKg, pickup: f.pickupLocation, drop: f.destLocation!, ...(windows.has(f.freightId) ? { window: onTheDay(windows.get(f.freightId)!) } : {}), ...(dock ? { dock } : {}) };
+    });
     // EACH TRUCK ONCE PER SHIFT of its site — one vehicle, two drivers, an early day and a late one — never out in two
     // shifts at once. Where its site has one shift, or none, it is the truck it always was.
     const slots = new Map<string, { vehicleId: string; site: SiteForPlan; shiftId?: string; shiftName?: string }>();
@@ -238,6 +248,12 @@ export class FleetPlanService implements OnModuleInit {
       trucks,
       depot: sites[0]?.location ?? manager.location,
       sites: sites.map((s) => s.location),
+      // THE FLEET'S OWN SITES as places goods are collected: open when that day, and how many load at once.
+      docks: sites.map((s): PlanDock => ({
+        id: s.siteId,
+        ...(s.loadingBays !== undefined ? { bays: s.loadingBays } : {}),
+        ...(s.open !== undefined ? { open: s.open && { fromMin: s.open.fromMin - originMin, toMin: s.open.toMin - originMin } } : {}),
+      })),
       km: roads ? (a: PlanPoint, b: PlanPoint) => roads.km(a, b) : (a: PlanPoint, b: PlanPoint) => this.router.roadKm(a, b),
     };
     const params = { speedKmh: settings.speedKmh, loadMin: settings.loadMin, unloadMin: settings.unloadMin, dayMin: settings.dayHours * 60 };
@@ -278,6 +294,10 @@ export class FleetPlanService implements OnModuleInit {
           start: clock(t.startMin),
           end: clock(t.endMin),
           weightKg: t.kg,
+          ...(t.dock ? { siteId: t.dock, siteName: siteById.get(t.dock)?.name ?? t.dock } : {}),
+          ...(t.openWaitMin ? { openWaitMin: t.openWaitMin } : {}),
+          ...(t.bayWaitMin ? { bayWaitMin: t.bayWaitMin } : {}),
+          ...(t.afterCloseMin ? { afterCloseMin: t.afterCloseMin } : {}),
           stops: t.stops.map((s) => {
             const f = byId.get(s.orderId)!;
             return {
@@ -300,6 +320,7 @@ export class FleetPlanService implements OnModuleInit {
         home: clock(r.startMin + r.minutes),
         weightKg: r.kg,
         fullestPct: Math.round((Math.max(...r.trips.map((t) => t.kg)) / v.capacityKg) * 100),
+        ...(r.overMin ? { overMin: r.overMin } : {}),
       };
     });
     // One vehicle out on two shifts is one vehicle's day: its trips are numbered through, in the order it drives them,
@@ -321,13 +342,24 @@ export class FleetPlanService implements OnModuleInit {
       madeAt: new Date(now).toISOString(),
       routes,
       unplanned,
-      sites: sites.map((s) => ({
-        siteId: s.siteId,
-        name: s.name,
-        trucksAvailable: going.filter(({ v }) => homeOf(v.vehicleId).siteId === s.siteId).length,
-        trucksUsed: new Set(routes.filter((r) => r.siteId === s.siteId).map((r) => r.vehicleId)).size,
-        drivers: driversAtSite[s.siteId] ?? 0,
-      })),
+      sites: sites.map((s) => {
+        // What loads here, of any truck: how many, how many waited for a bay and for how long, and any after closing.
+        const loads = result.routes.flatMap((r) => r.trips.filter((t) => t.dock === s.siteId));
+        const waits = loads.filter((t) => t.bayWaitMin);
+        return {
+          siteId: s.siteId,
+          name: s.name,
+          trucksAvailable: going.filter(({ v }) => homeOf(v.vehicleId).siteId === s.siteId).length,
+          trucksUsed: new Set(routes.filter((r) => r.siteId === s.siteId).map((r) => r.vehicleId)).size,
+          drivers: driversAtSite[s.siteId] ?? 0,
+          loadings: loads.length,
+          ...(s.loadingBays !== undefined ? { bays: s.loadingBays } : {}),
+          bayWaits: waits.length,
+          ...(waits.length ? { longestBayWaitMin: Math.max(...waits.map((t) => t.bayWaitMin!)) } : {}),
+          ...(s.open ? { hours: `${clockText(s.open.fromMin)}–${clockText(s.open.toMin)}` } : s.open === null ? { closed: true } : {}),
+          afterClose: loads.filter((t) => t.afterCloseMin).length,
+        };
+      }),
       shifts: sites.flatMap((s) =>
         shiftsAt(s).map((x) => ({
           siteId: s.siteId,
