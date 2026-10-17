@@ -306,6 +306,8 @@ describe('a vehicle’s upkeep', () => {
   });
   describe('service due dates', () => {
     const HOUR = 3_600_000;
+    // Later the SAME day on the fleet's clock: an hour on, but never past midnight in Nairobi, where it would be tomorrow's.
+    const laterToday = (ms: number) => Math.min(Date.now() + ms, Date.parse(`${dayPlus(1)}T00:00:00+03:00`) - 1);
     const words = (day: string) => {
       const d = new Date(`${day}T12:00:00Z`);
       return `${d.getUTCDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getUTCMonth()]} ${d.getUTCFullYear()}`;
@@ -364,7 +366,7 @@ describe('a vehicle’s upkeep', () => {
       expect(view.services[0]).toMatchObject({ day: today, what: 'service', km: 121_400, workshop: 'Mombasa Road Motors', note: 'Oil, filters, brake pads', by: 'Amina' });
       expect(view.services[0]).not.toHaveProperty('photoRef');
       // A repair afterwards — 50 km on, at another garage — is on the record, and the next service is due where it was.
-      const after = care.recordService(truck.vehicleId, { day: today, what: 'repair', km: 121_450, note: 'Mirror replaced' }, { by: 'Amina' }, Date.now() + HOUR);
+      const after = care.recordService(truck.vehicleId, { day: today, what: 'repair', km: 121_450, note: 'Mirror replaced' }, { by: 'Amina' }, laterToday(HOUR));
       expect(after.services.map((s) => s.what)).toEqual(['repair', 'service']);
       expect(after.service).toMatchObject({ from: 'service', fromDay: today, dueKm: 136_400, currentKm: 121_450, dueDay: view.service.dueDay });
       // A service a while ago, recorded now, with no km: the count runs from the first reading on or after that day.
@@ -416,7 +418,7 @@ describe('a vehicle’s upkeep', () => {
       expect(vehicles.isUsable(truck.vehicleId, Date.now(), shift(due, 1))).toBe(false);
       expect(vehicles.offRoadReasons(truck.vehicleId, Date.now(), shift(due, 1))).toEqual([`Service overdue: it was due by ${words(due)}`]);
       // Overdue by the km, today: off the road, said at the door a driver uses.
-      care.recordReading(truck.vehicleId, 75_000, { by: 'Amina', source: 'office' }, Date.now() + HOUR);
+      care.recordReading(truck.vehicleId, 75_000, { by: 'Amina', source: 'office' }, laterToday(HOUR));
       expect(vehicles.isUsable(truck.vehicleId)).toBe(false);
       expect(() => fleet.couple(amos.did, truck.vehicleId)).toThrow('KVC 950T is off the road: Service overdue: it was due at 75,000 km, and reads 75,000 km');
       // The row says it once — off the road, not also a note.
@@ -424,7 +426,7 @@ describe('a vehicle’s upkeep', () => {
       expect(row.offRoad).toEqual(['Service overdue: it was due at 75,000 km, and reads 75,000 km']);
       expect(row.notes).toEqual([]);
       // Serviced: back on the road.
-      care.recordService(truck.vehicleId, { day: dayPlus(0), what: 'service', km: 75_010 }, { by: 'Amina' }, Date.now() + 2 * HOUR);
+      care.recordService(truck.vehicleId, { day: dayPlus(0), what: 'service', km: 75_010 }, { by: 'Amina' }, laterToday(2 * HOUR));
       expect(vehicles.isUsable(truck.vehicleId)).toBe(true);
       expect(() => fleet.couple(amos.did, truck.vehicleId)).not.toThrow();
       // Back to warning only: a fleet's rule, changed by itself alone.
@@ -448,7 +450,7 @@ describe('a vehicle’s upkeep', () => {
       expect(late()).toEqual([]);
       expect(told.filter((n) => n.plate === 'KVC 960T').map((n) => n.state)).toEqual(['soon', 'overdue']);
       // A service recorded: a new count, told afresh when it comes due.
-      const next = care.recordService(truck.vehicleId, { day: dayPlus(0), what: 'service' }, { by: 'Amina' }, Date.now() + HOUR).service.dueDay!;
+      const next = care.recordService(truck.vehicleId, { day: dayPlus(0), what: 'service' }, { by: 'Amina' }, laterToday(HOUR)).service.dueDay!;
       expect(care.sweepServiceDue(noonOf(shift(next, -3))).filter((n) => n.plate === 'KVC 960T').map((n) => n.state)).toEqual(['soon']);
       // A courier's own vehicle tells no office.
       const own = vehicles.register({ plate: 'KVC 961M', vehicleClass: 'motorcycle', capacityKg: 50, ownerName: 'X', baseFee: 1, pricePerKm: 0.1, minMultiplier: 0.8, maxMultiplier: 1.5 } as never);
