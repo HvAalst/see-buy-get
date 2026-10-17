@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { loadingLine, mayPutOn, tripLoadingLines } from './orders';
+import { lendLine, loadingLine, mayPutOn, tripLoadingLines } from './orders';
 import { ADVISER_HISTORY, rosterChanged, rosterLine, rosterPicks, rosterShifts, rosterStarts, shiftLine, siteLine, acceptTellsShippers, base64Of, clockLine, deliveredLine, isFleetToday, mayChooseClock, distanceLine, evenLoads, historyOf, isWorkbook, keptOff, loadLine, mayRejoin, maySplit, passOnState, putOnto, ruleLine, windowLine, rulesAsk, withoutRule, type PlanRule } from './orders';
 import { askOf, byDay, dayOf, daySummary, dayWord, handOnLine, hoursWords, mayHandOn, importVerdictLine, leftByReason, mayWithdraw, notASheet, orderTag, sendLine, weightWords, type DayPlan, type FleetOrder, type PlanLeft, type PlanSendTruck } from './orders';
 
@@ -462,6 +462,16 @@ describe('who drives on the day', () => {
       text: 'Depot: 3 loadings · 1 bay · open 08:00–18:00 · 2 waited for a bay, the longest 30 min',
     });
     expect(loadingLine({ ...none, loadings: 2, bays: 2, afterClose: 1 }, t)).toEqual({ tone: 'warn', text: 'Depot: 2 loadings · 2 bays · 1 still loading after it closes' });
+  });
+
+  it('says which idle trucks at another site would carry what a short site left, and that the office moves them', () => {
+    const truck = (plate: string, fromSiteName: string) => ({ vehicleId: plate, plate, fromSiteId: fromSiteName, fromSiteName });
+    expect(lendLine({ siteName: 'Mombasa yard', orders: 1, weightKg: 7000, trucks: [truck('KST 402T', 'Depot')] }, t)).toBe(
+      `Mombasa yard is short of trucks: KST 402T, standing at Depot, would carry 1 order left here (${weightWords(7000)}). Move it here on Sites, and roster a driver to start here.`,
+    );
+    expect(lendLine({ siteName: 'Mombasa yard', orders: 3, weightKg: 20000, trucks: [truck('KST 402T', 'Depot'), truck('KST 403T', 'Depot'), truck('KST 404T', 'Voi')] }, t)).toBe(
+      `Mombasa yard is short of trucks: KST 402T, KST 403T, KST 404T, standing at Depot · Voi, would carry 3 orders left here (${weightWords(20000)}). Move them here on Sites, and roster drivers to start here.`,
+    );
   });
 
   it('puts a site closed that day next to an address to pin: the office can change either now', () => {

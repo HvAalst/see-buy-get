@@ -4,7 +4,7 @@ import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { PlanAdviser } from './PlanAdviser';
 import { SplitOrder } from './SplitOrder';
 import { RosterCard } from './RosterCard';
-import { acceptTellsShippers, askOf, clockLine, rosterLine, dayWord, distanceLine, isFleetToday, mayChooseClock, handOnLine, hoursWords, keptOff, leftByReason, putOnto, ruleLine, windowLine, sendLine, weightWords, withoutRule, type DayPlan, type FleetClock, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi, siteLine, shiftLine, loadingLine, tripLoadingLines, mayPutOn } from '../orders';
+import { acceptTellsShippers, askOf, clockLine, rosterLine, dayWord, distanceLine, isFleetToday, mayChooseClock, handOnLine, hoursWords, keptOff, leftByReason, putOnto, ruleLine, windowLine, sendLine, weightWords, withoutRule, type DayPlan, type FleetClock, type PlanAsk, type PlanLeftReason, type PlanSendResult, type ordersApi, siteLine, shiftLine, loadingLine, tripLoadingLines, mayPutOn, lendLine } from '../orders';
 
 const REASON: Record<PlanLeftReason, { title: MessageKey; what: MessageKey }> = {
   no_pin: { title: 'fleet.plan.left.noPin', what: 'fleet.plan.left.noPinDo' },
@@ -493,6 +493,16 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
             </ul>
           ) : null}
 
+          {/* A SITE SHORT OF TRUCKS while another has some standing: which would carry what was left, if moved. Said, never done. */}
+          {plan.lend?.length ? (
+            <ul class="plan__sites">
+              {plan.lend.map((l) => (
+                <li key={`lend:${l.siteId}`} class="plan__win plan__win--warn">
+                  {lendLine(l, t)}
+                </li>
+              ))}
+            </ul>
+          ) : null}
           {/* WHAT LOADS AT EACH OF THE FLEET'S OWN SITES, where anything does: its bays and hours, and who waited. */}
           {plan.sites?.some((s) => s.loadings) ? (
             <ul class="plan__sites">

@@ -229,6 +229,28 @@ export class PlanRoster {
   names: string[];
 }
 
+/** A truck standing idle at one site, and the site it works from. */
+export class PlanLendTruck {
+  vehicleId: string;
+  plate: string;
+  fromSiteId: string;
+  fromSiteName: string;
+}
+
+/**
+ * A SITE SHORT OF TRUCKS while another has trucks standing: orders near it were left with no room in any truck's day,
+ * and these idle trucks would carry some of them if they started here for the day. Said, never done — the office moves
+ * a truck on Sites, and rosters a driver here.
+ */
+export class PlanLendView {
+  siteId: string;
+  siteName: string;
+  /** How many of the orders left near this site the trucks below would carry from here, and what they weigh. */
+  orders: number;
+  weightKg: number;
+  @ApiProperty({ type: [PlanLendTruck] }) trucks: PlanLendTruck[];
+}
+
 export class DayPlanView {
   day: string;
   madeAt: string;
@@ -238,6 +260,8 @@ export class DayPlanView {
   @ApiPropertyOptional({ type: [PlanSiteView] }) sites?: PlanSiteView[];
   /** Each shift at each site: drivers rostered, and needed. A plan kept from before there were shifts has none. */
   @ApiPropertyOptional({ type: [PlanShiftView] }) shifts?: PlanShiftView[];
+  /** Sites short of trucks, and the fleet's own idle trucks elsewhere that would carry what was left there. */
+  @ApiPropertyOptional({ type: [PlanLendView] }) lend?: PlanLendView[];
   @ApiPropertyOptional({ type: PlanHire }) hire?: PlanHire;
   @ApiProperty({ type: PlanTotals }) totals: PlanTotals;
   @ApiProperty({ type: PlanSettings }) settings: PlanSettings;

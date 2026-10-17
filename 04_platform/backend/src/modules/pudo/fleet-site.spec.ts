@@ -241,6 +241,49 @@ describe('a fleet’s sites', () => {
       expect(() => roster.set(f.did, dayPlus(1), [wanjiru.did], 'Amina', Date.now(), [{ driverDid: baraka.did, siteId: mombasa }])).toThrow('A start is given for a driver who is not on the day');
       expect(roster.view(f.did, dayPlus(1)).list.find((d) => d.driverDid === wanjiru.did)!.siteId).toBe(mombasa);
     });
+
+    it('says when a site is short of trucks while another has one standing — and which would carry what was left there; the office moves it', () => {
+      const f = aFleet();
+      const mombasa = sites.add(f.did, { name: 'Mombasa yard', ...MOMBASA }, 'Amina').sites[1].siteId;
+      const msa = aTruck(f.did, 'KST 401T');
+      sites.setHome(f.did, 'vehicle', msa.vehicleId, mombasa, 'Amina');
+      // In Nairobi one truck has a short job of its own; the other stands in the depot all day.
+      const busy = aTruck(f.did, 'KST 400T');
+      const spare = aTruck(f.did, 'KST 402T');
+      const baraka = aDriver(f.did);
+      sites.setHome(f.did, 'driver', baraka.did, mombasa, 'Amina');
+      const wanjiru = aDriver(f.did);
+      const otieno = aDriver(f.did);
+      anOrder(f, dayPlus(1), NAIROBI);
+      // Two full loads collected in Mombasa, on a day too short for one truck to take both, and far too short to come from Nairobi.
+      for (const i of [0, 1]) {
+        seq += 1;
+        dispatch.registerFreight({
+          description: `Cement ${seq}`, pickupLocation: { lat: MOMBASA.lat + 0.01, lng: MOMBASA.lng }, pickupLabel: 'Port yard', destLabel: `Site ${seq}`, destLocation: { lat: MOMBASA.lat + 0.28, lng: MOMBASA.lng - i * 0.05 },
+          weightKg: 7000, packaging: 'palletised', postedByDid: f.did, postedByName: 'Amina', contract: contractOf(f), deliverOn: dayPlus(1), orderRef: `LEND-${seq}`,
+        });
+      }
+      // Nobody starts in Mombasa that day: its own truck stands for want of a driver. Short of a driver, not of a truck.
+      roster.set(f.did, dayPlus(1), [wanjiru.did, otieno.did], 'Amina');
+      let plan = plans.propose(f.did, { day: dayPlus(1), dayHours: 4 });
+      expect(plan.unplanned.map((u) => u.reason)).toEqual(['no_driver', 'no_driver']);
+      expect(plan).not.toHaveProperty('lend');
+      // Baraka starts there: one load goes, and the other has no truck in Mombasa — but one stands in Nairobi.
+      roster.set(f.did, dayPlus(1), [baraka.did, wanjiru.did], 'Amina');
+      plan = plans.propose(f.did, { day: dayPlus(1), dayHours: 4 });
+      expect(plan.routes.map((r) => r.vehicleId).sort()).toEqual([msa.vehicleId, busy.vehicleId].sort());
+      expect(plan.unplanned).toHaveLength(1);
+      // The one out on its Nairobi job is not offered: only the one standing.
+      expect(plan.lend).toEqual([{ siteId: mombasa, siteName: 'Mombasa yard', orders: 1, weightKg: 7000, trucks: [{ vehicleId: spare.vehicleId, plate: 'KST 402T', fromSiteId: 'depot', fromSiteName: 'Depot' }] }]);
+      // Said, never done: the truck still works from the depot until the office moves it.
+      expect(sites.view(f.did).vehicles.find((v) => v.id === spare.vehicleId)!.siteId).toBe('depot');
+      // The office moves it, and has Wanjiru start in Mombasa that day: both loads go, and nobody is short.
+      sites.setHome(f.did, 'vehicle', spare.vehicleId, mombasa, 'Amina');
+      roster.set(f.did, dayPlus(1), [baraka.did, wanjiru.did, otieno.did], 'Amina', Date.now(), [{ driverDid: otieno.did, siteId: mombasa }]);
+      plan = plans.propose(f.did, { day: dayPlus(1), dayHours: 4 });
+      expect(plan.unplanned).toEqual([]);
+      expect(plan).not.toHaveProperty('lend');
+    });
   });
 
   describe('shifts at a site', () => {

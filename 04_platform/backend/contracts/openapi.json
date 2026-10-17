@@ -45930,6 +45930,60 @@
           "trucksUsed"
         ]
       },
+      "PlanLendTruck": {
+        "type": "object",
+        "properties": {
+          "vehicleId": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "fromSiteId": {
+            "type": "string"
+          },
+          "fromSiteName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "vehicleId",
+          "plate",
+          "fromSiteId",
+          "fromSiteName"
+        ]
+      },
+      "PlanLendView": {
+        "type": "object",
+        "properties": {
+          "trucks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanLendTruck"
+            }
+          },
+          "siteId": {
+            "type": "string"
+          },
+          "siteName": {
+            "type": "string"
+          },
+          "orders": {
+            "type": "number",
+            "description": "How many of the orders left near this site the trucks below would carry from here, and what they weigh."
+          },
+          "weightKg": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "trucks",
+          "siteId",
+          "siteName",
+          "orders",
+          "weightKg"
+        ]
+      },
       "PlanHire": {
         "type": "object",
         "properties": {
@@ -46198,6 +46252,13 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/PlanShiftView"
+            }
+          },
+          "lend": {
+            "description": "Sites short of trucks, and the fleet's own idle trucks elsewhere that would carry what was left there.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanLendView"
             }
           },
           "hire": {

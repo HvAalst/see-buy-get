@@ -310,6 +310,7 @@ export const enFleet = {
   'fleet.plan.overShift': 'Back {by} after its shift ends: it waited for a loading bay',
   'fleet.plan.overShiftNote': '{n, plural, one {# truck is} other {# trucks are}} back after the shift ends, from waiting for a loading bay',
   'fleet.plan.overShiftDetail': 'The plan puts orders on trucks first and hands out the bays after, in the order trucks come for them. A later shift, another site or more bays on Sites gives them the time back.',
+  'fleet.plan.lend': '{site} is short of trucks: {plates}, standing at {from}, would carry {orders, plural, one {# order} other {# orders}} left here ({weight}). Move {n, plural, one {it} other {them}} here on Sites, and roster {n, plural, one {a driver} other {drivers}} to start here.',
   'fleet.plan.load.line': '{site}: {n, plural, one {# loading} other {# loadings}}',
   'fleet.plan.load.bays': '{n, plural, one {# bay} other {# bays}}',
   'fleet.plan.load.open': 'open {hours}',

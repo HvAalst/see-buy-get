@@ -15,7 +15,7 @@ import { FleetRosterService } from './fleet-roster.service';
 import { FleetSiteService, type SiteForPlan } from './fleet-site.service';
 import { haversineKm } from './geo';
 import { DEPOT_SITE } from './fleet-site.types';
-import { DEFAULT_DAY_START, DayPlanState, DayPlanView, PlanLeftView, PlanRouteView, PlanRuleView, PlanSendResult, PlanSendTruck, PlanSettings, PlannedOn } from './fleet-plan.types';
+import { DEFAULT_DAY_START, DayPlanState, DayPlanView, PlanLeftView, PlanLendView, PlanRouteView, PlanRuleView, PlanSendResult, PlanSendTruck, PlanSettings, PlannedOn } from './fleet-plan.types';
 import { ROAD_MATRIX, type RoadDistances, type RoadMatrix } from './road-matrix';
 import { ROUTER, Router } from './router';
 import { VehicleService } from './vehicle.service';
@@ -233,10 +233,11 @@ export class FleetPlanService implements OnModuleInit {
     // EACH TRUCK ONCE PER SHIFT of its site — one vehicle, two drivers, an early day and a late one — never out in two
     // shifts at once. Where its site has one shift, or none, it is the truck it always was.
     const slots = new Map<string, { vehicleId: string; site: SiteForPlan; shiftId?: string; shiftName?: string }>();
+    const cannotOf = (v: (typeof going)[number]['v']) => new Set(pinned.filter((f) => barred(v.vehicleId, f.freightId) || !this.dispatch.vehicleCanCarryFreight(v, f.freightId)).map((f) => f.freightId));
     const trucks: PlanTruck[] = going.flatMap(({ v }) => {
       const site = homeOf(v.vehicleId);
       const shifts = shiftsAt(site);
-      const cannot = new Set(pinned.filter((f) => barred(v.vehicleId, f.freightId) || !this.dispatch.vehicleCanCarryFreight(v, f.freightId)).map((f) => f.freightId));
+      const cannot = cannotOf(v);
       return shifts.map((x): PlanTruck => {
         const id = shifts.length > 1 ? `${v.vehicleId}~${x.shiftId}` : v.vehicleId;
         slots.set(id, { vehicleId: v.vehicleId, site, ...(x.shiftId ? { shiftId: x.shiftId, shiftName: x.name } : {}) });
@@ -275,6 +276,53 @@ export class FleetPlanService implements OnModuleInit {
     const vehicleOf = new Map(fleet.map((x) => [x.v.vehicleId, x.v]));
     const largestKg = going.reduce((m, x) => Math.max(m, x.v.capacityKg), 0);
     const clock = (min: number) => clockOf(clockText(originMin), min);
+
+    // A SITE SHORT OF TRUCKS while another has trucks standing. An order left near a site — no room in any day, or no
+    // driver for a truck that could not have reached it anyway — where none of that site's own trucks stands idle that
+    // could carry it: a site short of a driver is not short of a truck. Those are tried on the trucks standing elsewhere,
+    // as if they started at that site — the site with most left first, each truck offered once. Said, never done: the
+    // office moves a truck on Sites, and rosters a driver there.
+    const lend: PlanLendView[] = [];
+    if (sites.length > 1) {
+      const out = new Set(result.routes.map((r) => slots.get(r.truckId)!.vehicleId));
+      const idle = going.filter(({ v }) => !out.has(v.vehicleId));
+      const nearest = (p: PlanPoint) => sites.reduce((best, s) => (haversineKm(s.location, p) < haversineKm(best.location, p) ? s : best), sites[0]);
+      const leftAt = new Map<string, PlanOrder[]>();
+      for (const u of result.unplanned.filter((x) => x.reason === 'no_time' || x.reason === 'no_driver')) {
+        const o = planOrders.find((x) => x.id === u.orderId)!;
+        const at = nearest(o.pickup).siteId;
+        if (idle.some(({ v }) => homeOf(v.vehicleId).siteId === at && v.capacityKg >= o.kg && !cannotOf(v).has(o.id))) continue;
+        leftAt.set(at, [...(leftAt.get(at) ?? []), o]);
+      }
+      const lent = new Set<string>();
+      for (const s of [...sites].sort((a, b) => (leftAt.get(b.siteId)?.length ?? 0) - (leftAt.get(a.siteId)?.length ?? 0))) {
+        const left = leftAt.get(s.siteId) ?? [];
+        const spare = idle.filter(({ v }) => !lent.has(v.vehicleId));
+        if (!left.length || !spare.length) continue;
+        const first = shiftsAt(s)[0];
+        const trial = planDay({
+          ...planInput,
+          orders: left,
+          trucks: spare.map(({ v }): PlanTruck => ({ id: v.vehicleId, capacityKg: v.capacityKg, cannot: cannotOf(v), home: s.location, startMin: first.startMin - originMin, dayMin: first.dayMin })),
+          depot: s.location,
+          params,
+        });
+        if (!trial.routes.length) continue;
+        for (const r of trial.routes) lent.add(r.truckId);
+        const carried = trial.routes.flatMap((r) => r.trips.flatMap((t) => t.stops.map((x) => x.orderId)));
+        lend.push({
+          siteId: s.siteId,
+          siteName: s.name,
+          orders: carried.length,
+          weightKg: Math.round(carried.reduce((sum, id) => sum + byId.get(id)!.weightKg, 0)),
+          trucks: trial.routes.map((r) => {
+            const from = homeOf(r.truckId);
+            return { vehicleId: r.truckId, plate: vehicleOf.get(r.truckId)!.plate, fromSiteId: from.siteId, fromSiteName: from.name };
+          }),
+        });
+      }
+    }
+
     const routes: PlanRouteView[] = result.routes.map((r) => {
       const slot = slots.get(r.truckId)!;
       const v = vehicleOf.get(slot.vehicleId)!;
@@ -371,6 +419,7 @@ export class FleetPlanService implements OnModuleInit {
           trucksUsed: used[groupOf(s.siteId, x.shiftId)] ?? 0,
         })),
       ),
+      ...(lend.length ? { lend } : {}),
       ...(result.hire ? { hire: { trucks: result.hire.trucks, orders: result.hire.orders, weightKg: result.hire.kg, capacityKg: result.hire.capacityKg } } : {}),
       totals: {
         orders: orders.length,

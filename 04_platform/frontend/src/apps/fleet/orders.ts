@@ -26,6 +26,7 @@ export type AdviserFailure = NonNullable<PlanAdvice['failed']>;
 export type RosterView = components['schemas']['RosterView'];
 export type PlanTrip = components['schemas']['PlanTripView'];
 export type PlanSite = components['schemas']['PlanSiteView'];
+export type PlanLend = components['schemas']['PlanLendView'];
 /** One order and one vehicle: what a rule on a plan names. */
 export interface PlanPair {
   freightId: string;
@@ -288,6 +289,12 @@ export function loadingLine(s: Pick<PlanSite, 'name' | 'loadings' | 'bays' | 'ba
     ...(s.afterClose ? [t('fleet.plan.load.afterClose', { n: s.afterClose })] : []),
   ];
   return { tone: s.bayWaits || s.afterClose ? 'warn' : 'idle', text: parts.join(' · ') };
+}
+
+/** A SITE SHORT OF TRUCKS, and the fleet's own idle trucks elsewhere that would carry what was left there: said, for the office to move. */
+export function lendLine(l: Pick<PlanLend, 'siteName' | 'orders' | 'weightKg' | 'trucks'>, t: Translate): string {
+  const from = [...new Set(l.trucks.map((x) => x.fromSiteName))].join(' · ');
+  return t('fleet.plan.lend', { site: l.siteName, plates: l.trucks.map((x) => x.plate).join(', '), from, orders: l.orders, weight: weightWords(l.weightKg), n: l.trucks.length });
 }
 
 /** The largest workbook sent. The server holds the same line; said here so a big file is refused before it is read. */
