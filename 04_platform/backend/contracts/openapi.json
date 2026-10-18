@@ -32138,6 +32138,14 @@
             "type": "string",
             "description": "The rail's own reference. The thing you quote when somebody says they were not paid."
           },
+          "railRef": {
+            "type": "string",
+            "description": "Our id for the request to a live rail (M-Pesa's OriginatorConversationID): present once it was sent through one."
+          },
+          "railNote": {
+            "type": "string",
+            "description": "What the rail left unsaid: no answer we could read, a queue that timed out, a result we could not take at its word.\nSaid under the payout until it settles or fails."
+          },
           "failureReason": {
             "type": "string"
           },

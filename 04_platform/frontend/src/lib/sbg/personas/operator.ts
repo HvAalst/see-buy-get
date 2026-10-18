@@ -148,15 +148,15 @@ export function createOperatorApi(sbg: SbgClient) {
      * response says who was SKIPPED and why, which is the half that matters — a run that quietly pays
      * four of six people is how somebody finds out on Friday.
      */
-    runPayouts: (entityId: string) =>
-      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/payouts/run', { params: { path: { entityId } }, body: {} as never })),
+    runPayouts: (entityId: string, by?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/payouts/run', { params: { path: { entityId } }, body: (by ? { by } : {}) as never })),
 
     /** Move one payout along its rail: submit, settle, fail, reverse. One step, and only the honest one. */
-    movePayout: (payoutId: string, action: string, reason?: string) =>
+    movePayout: (payoutId: string, action: string, extra: { reason?: string; providerRef?: string; by?: string } = {}) =>
       sbg.request((c) =>
         c.POST(`/v1/sbg/payouts/{payoutId}/${action}` as '/v1/sbg/payouts/{payoutId}/submit', {
           params: { path: { payoutId } },
-          body: (reason ? { reason } : {}) as never,
+          body: Object.fromEntries(Object.entries(extra).filter(([, v]) => v)) as never,
         }),
       ),
 

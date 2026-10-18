@@ -320,7 +320,7 @@ export interface TowerActions {
   decideFleet(did: string, approve: boolean, reason?: string): Promise<void>;
   recordFleetBond(did: string): Promise<void>;
   runPayouts(): Promise<void>;
-  movePayout(payoutId: string, action: PayoutAction, reason?: string): Promise<void>;
+  movePayout(payoutId: string, action: PayoutAction, reason?: string, providerRef?: string): Promise<void>;
   /** Move one funding request along. the provider reference is what a confirmation cannot do without. */
   moveFunding(fundingId: string, action: FundingAction, input?: { providerRef?: string; amount?: number; reason?: string }): Promise<void>;
   /** Say whose an unattributed payment was, and credit it. A judgement — the server records the name. */
@@ -1540,7 +1540,8 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         const entityId = stateRef.current.entityId;
         if (!client || !entityId) return;
         setState((s) => ({ ...s, busyId: 'run', queueError: null, done: null }));
-        const { data, error } = await client.api.runPayouts(entityId);
+        // Named, like every act here: the run is raised by one member of staff and approved by another.
+        const { data, error } = await client.api.runPayouts(entityId, stateRef.current.who?.name);
         if (error) {
           setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
           return;
@@ -1549,12 +1550,12 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         await loadMoney(client, entityId);
       },
       /** Move one payout along the rail. Nothing here moves money; it records what the rail said. */
-      movePayout: async (payoutId: string, action: PayoutAction, reason?: string) => {
+      movePayout: async (payoutId: string, action: PayoutAction, reason?: string, providerRef?: string) => {
         const client = clientRef.current;
         const entityId = stateRef.current.entityId;
         if (!client || !entityId) return;
         setState((s) => ({ ...s, busyId: payoutId, queueError: null }));
-        const { error } = await client.api.movePayout(payoutId, action, reason);
+        const { error } = await client.api.movePayout(payoutId, action, { reason, providerRef, by: stateRef.current.who?.name });
         if (error) {
           setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
           return;

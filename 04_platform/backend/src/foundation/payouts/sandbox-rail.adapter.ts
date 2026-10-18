@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { randomBytes } from 'crypto';
-import { PayoutInstruction, PayoutRail } from './payout.types';
+import { PayoutInstruction, PayoutRail, RailOutcome } from './payout.types';
 
 /**
  * The sandbox rail — it hands back a reference and nothing else.
@@ -15,9 +15,10 @@ import { PayoutInstruction, PayoutRail } from './payout.types';
  */
 @Injectable()
 export class SandboxPayoutRail implements PayoutRail {
-  submit(instruction: PayoutInstruction): { providerRef: string } {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  submit(instruction: PayoutInstruction): RailOutcome {
     // Shaped like the references these rails actually issue, so a screen that displays one is laid out for
     // the real thing rather than for a number that will change length on cutover.
-    return { providerRef: `SBX${randomBytes(6).toString('hex').toUpperCase()}` };
+    return { taken: true, providerRef: `SBX${randomBytes(6).toString('hex').toUpperCase()}` };
   }
 }

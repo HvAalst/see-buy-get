@@ -3,7 +3,7 @@ import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { EntityPicker } from './EntityPicker';
 import { amount, money } from '../queues';
-import { FUNDING_ACTIONS, PAYOUT_ACTIONS, fundingLine, fundingTone, payoutHow, payoutTone, payoutWho, type FundingAction, type FundingRow, type UnmatchedRow } from '../settlement';
+import { FUNDING_ACTIONS, PAYOUT_ACTIONS, fundingLine, fundingTone, needsReceipt, payoutHow, payoutTone, payoutWho, waitsForRail, type FundingAction, type FundingRow, type UnmatchedRow } from '../settlement';
 import { ConsoleDetail } from '../ConsoleDetail';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
@@ -27,6 +27,9 @@ export function MoneyScreen({ state, actions }: { state: TowerState; actions: To
   const pricing = state.pricing;
   const books = state.books;
   const isOperator = state.who?.mode === 'operator';
+  // M-Pesa's receipt, asked in the row before an M-Pesa payout is said to be paid.
+  const [receiptFor, setReceiptFor] = useState<string | null>(null);
+  const [receipt, setReceipt] = useState('');
 
   return (
     <>
@@ -130,6 +133,7 @@ export function MoneyScreen({ state, actions }: { state: TowerState; actions: To
                     <span class="ctbl__lbl">{t('tower.money.col.state')}</span>
                     <span class={`ctag ctag--${payoutTone(row.status)}`}>{t(`tower.money.state.${row.status}` as never)}</span>
                     {payoutWho(row, t) ? <span class="ctbl__sub" style="display:block">{payoutWho(row, t)}</span> : null}
+                    {row.railNote ? <span class="ctbl__sub ctbl__sub--warn" style="display:block">{row.railNote}</span> : null}
                   </td>
                   <td class="ctbl__mono">
                     <span class="ctbl__lbl">{t('tower.money.col.ref')}</span>
@@ -139,7 +143,35 @@ export function MoneyScreen({ state, actions }: { state: TowerState; actions: To
                     {/* ONE action per state, because there is only ever one honest next step: a payout
                         that has been requested is submitted, a submitted one either settles or fails,
                         and a settled one can only be reversed. */}
-                    {isOperator ? (
+                    {isOperator && receiptFor === row.payoutId ? (
+                      <span class="twr-clear__act">
+                        <input
+                          class="cinput"
+                          aria-label={t('tower.money.receipt')}
+                          placeholder={t('tower.money.receipt')}
+                          value={receipt}
+                          maxLength={40}
+                          onInput={(e) => setReceipt((e.target as HTMLInputElement).value)}
+                        />
+                        <button
+                          type="button"
+                          class="cbtn cbtn--sm cbtn--primary"
+                          disabled={state.busyId === row.payoutId || receipt.trim().length < 6}
+                          onClick={async () => {
+                            await actions.movePayout(row.payoutId, 'settle', undefined, receipt.trim());
+                            setReceiptFor(null);
+                            setReceipt('');
+                          }}
+                        >
+                          {t('tower.money.receiptConfirm')}
+                        </button>
+                        <button type="button" class="cbtn cbtn--sm cbtn--ghost" onClick={() => setReceiptFor(null)}>
+                          {t('common.back')}
+                        </button>
+                      </span>
+                    ) : isOperator && waitsForRail(row) ? (
+                      <span class="ctbl__sub">{t('tower.money.waitsForMpesa')}</span>
+                    ) : isOperator ? (
                       <span class="twr-clear__act">
                         {(PAYOUT_ACTIONS[row.status] ?? []).map((act) => (
                           <button
@@ -147,7 +179,14 @@ export function MoneyScreen({ state, actions }: { state: TowerState; actions: To
                             type="button"
                             class={`cbtn cbtn--sm ${act.tone === 'danger' ? 'cbtn--danger' : 'cbtn--ghost'}`}
                             disabled={state.busyId === row.payoutId}
-                            onClick={() => void actions.movePayout(row.payoutId, act.action, act.reasonKey ? t(act.reasonKey) : undefined)}
+                            onClick={() => {
+                              if (needsReceipt(row, act.action)) {
+                                setReceiptFor(row.payoutId);
+                                setReceipt('');
+                                return;
+                              }
+                              void actions.movePayout(row.payoutId, act.action, act.reasonKey ? t(act.reasonKey) : undefined);
+                            }}
                           >
                             {t(act.labelKey)}
                           </button>

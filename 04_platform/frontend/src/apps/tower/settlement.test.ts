@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FUNDING_ACTIONS, PAYOUT_ACTIONS, fundingLine, fundingTone, payoutHow, payoutTone, payoutWho, runSummary } from './settlement';
+import { FUNDING_ACTIONS, PAYOUT_ACTIONS, fundingLine, fundingTone, needsReceipt, payoutHow, payoutTone, payoutWho, runSummary, waitsForRail } from './settlement';
 
 /**
  * Paying people.
@@ -142,5 +142,25 @@ describe('how a payout is paid', () => {
     expect(payoutHow({ way: 'mpesa', destination: { masked: '254712***678' } }, t)).toBe('tower.money.how.mpesa(number=254712***678)');
     expect(payoutHow({ way: 'by_hand' }, t)).toBe('tower.money.how.byHand');
     expect(payoutHow({}, t)).toBeNull();
+  });
+});
+
+describe('paid, for a payout that went through M-Pesa', () => {
+  it('asks for M-Pesa’s receipt only for one sent through M-Pesa itself, and only to mark it paid', () => {
+    expect(needsReceipt({ railRef: 'orig-1' }, 'settle')).toBe(true);
+    expect(needsReceipt({ railRef: 'orig-1' }, 'fail')).toBe(false);
+    expect(needsReceipt({}, 'settle')).toBe(false);
+  });
+});
+
+describe('a payout M-Pesa is working on', () => {
+  const sent = { status: 'submitted', railRef: 'orig-1', submittedAt: '2026-10-18T10:00:00Z' };
+  const at = (iso: string) => Date.parse(iso);
+  it('offers staff nothing to press for a day, unless M-Pesa said it could not tell', () => {
+    expect(waitsForRail(sent, at('2026-10-18T12:00:00Z'))).toBe(true);
+    expect(waitsForRail({ ...sent, railNote: 'M-Pesa’s queue timed out' }, at('2026-10-18T12:00:00Z'))).toBe(false);
+    expect(waitsForRail(sent, at('2026-10-19T10:30:00Z'))).toBe(false);
+    expect(waitsForRail({ status: 'submitted', submittedAt: '2026-10-18T10:00:00Z' }, at('2026-10-18T12:00:00Z'))).toBe(false);
+    expect(waitsForRail({ ...sent, status: 'settled' }, at('2026-10-18T12:00:00Z'))).toBe(false);
   });
 });

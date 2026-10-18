@@ -110,3 +110,88 @@ names the likely cause.
   operator's statement path stays open.
 - **The timestamp is East Africa Time** and the password is derived from it. A pair that disagrees is
   rejected with a message naming neither.
+
+---
+
+# Paying out — B2C, to a number the payee set
+
+**Built 2026-10-18; it has not spoken to Safaricom.** The user: *"payout differs per country turned on, remember
+that. M-Pesa does not work in many nations, so for the countries where it does work; a number they set."* Code:
+`backend/src/foundation/payouts/mpesa-payout-rail.adapter.ts` (tests `mpesa-payout-rail.spec.ts`), the ways per
+country in `payout-ways.ts`, the result door in `payout-rails.controller.ts`, the payee's number in
+`modules/pudo/payout-number.service.ts`.
+
+## How it fits
+
+- **Per country.** Kenya pays by M-Pesa; every other country is paid by hand (staff pay outside SeeBuyGet and
+  record the reference). Daraja is Safaricom Kenya's: M-Pesa in Tanzania, the DRC, Mozambique or Ethiopia is
+  another operator with another API, and is not covered by this rail.
+- **To the payee's own number.** A courier, a fleet's office or a hub sets it in Settings, confirmed by a code
+  texted to it. A change pauses payouts for 24 hours and texts the old number. Staff never set one. The payout
+  run skips a payee with no number, and a payout is never sent to a number other than the one it was raised to.
+- **Two people.** One member of staff raises the run, a different one approves each payout to the rail.
+- **Whole shillings.** The run raises the whole-shilling part; the cents stay owed to the next run.
+- **`CommandID: BusinessPayment`.** Never `SalaryPayment`: the network pays who it contracts with and employs
+  nobody.
+
+## What a deployment must do
+
+1. The same Daraja app as the inbound rail (consumer key and secret).
+2. **A B2C shortcode** with money in its utility account, and an **API initiator** created on the M-Pesa org
+   portal for it.
+3. **The security credential:** the initiator's password encrypted with Safaricom's certificate. The Daraja
+   portal generates it. It is given as is; the server never sees the password.
+4. The same public HTTPS callback base. The rail gives Safaricom `<base>/v1/rails/payouts/mpesa/result` and
+   `<base>/v1/rails/payouts/mpesa/timeout` with each request.
+
+```
+GLOS_MPESA_B2C_SHORTCODE=600999
+GLOS_MPESA_B2C_INITIATOR=sbg-api
+GLOS_MPESA_B2C_SECURITY_CREDENTIAL=…   # from the Daraja portal
+# shared with the inbound rail:
+GLOS_MPESA_CONSUMER_KEY=…  GLOS_MPESA_CONSUMER_SECRET=…  GLOS_MPESA_CALLBACK_BASE=…
+GLOS_MPESA_ENV=production  GLOS_MPESA_ALLOWED_IPS=  GLOS_MPESA_HOST=   # sandbox only
+```
+
+All of them, or no M-Pesa payouts. Without them a Kenyan payout is **refused** off a sandbox ("M-Pesa payouts are
+not set up on this server") and stood in for on one. The choice is said at boot.
+
+## Three answers, and why "unknown" is not "refused"
+
+Daraja answers the request at once and the payment later, on the result URL.
+
+- **Taken** (`ResponseCode 0`): nothing has moved. The result settles the payout, or fails it with M-Pesa's words.
+- **Refused** (a 4xx, or a code other than 0): nothing left. The payout fails and the payable stands.
+- **Unknown** (a timeout, a 5xx, a dropped line): the request may have been processed. The payout stays "with the
+  rail", with a note, until the result comes. It is **never** failed and raised again on a guess: that is how one
+  day's work is paid twice.
+
+The payout is marked as sent **before** M-Pesa is asked, so a second approval meanwhile finds nothing to send.
+
+## Which results count
+
+Unsigned, like every Daraja callback. A result counts only when:
+
+- it comes from Safaricom's addresses (the loopback only in a sandbox);
+- its `OriginatorConversationID` is one we made, kept before the request was sent;
+- its `ConversationID` is the one Daraja gave us, where it gave us one;
+- for a success, the amount is the one we sent and there is a receipt. Otherwise it is noted, not paid.
+
+A result said twice pays once. **A success after staff marked the payout failed still settles** (the money did
+leave) and says so under the payout, because a replacement may have been raised meanwhile.
+
+## What staff may do by hand
+
+- **Mark paid**: only with M-Pesa's receipt from the portal, for a payout that went through M-Pesa.
+- **Mark failed**: only once M-Pesa has said it could not tell (its queue timed out, or no readable answer), or a
+  day has passed with no answer, and the portal checked first.
+
+## Open, named
+
+1. **Safaricom's B2C charge is not booked.** It is not in the result. Custody reads high by the charges until
+   they are posted, as for the inbound rail's fee.
+2. **No Transaction Status query.** An answer that never comes is resolved by staff from the M-Pesa portal,
+   under the rules above.
+3. **The B2C request is version 3** (`/mpesa/b2c/v3/paymentrequest`, carrying our `OriginatorConversationID`).
+   Check it against the Daraja portal when the app is set up: the shapes here are from Safaricom's documentation,
+   not from a live call.

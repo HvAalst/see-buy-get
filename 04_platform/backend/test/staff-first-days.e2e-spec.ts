@@ -231,7 +231,8 @@ describe('a new installation’s first days', () => {
       expect([...new Set(marked)].sort()).toEqual(['control-tower', 'gateway', 'identity', 'identity/accounts/:accountId/wallet', 'matching', 'reputation', 'settlement', 'shipments', 'tracking']);
       // Everything else is the product's (under sbg) or the server's own front: a new controller that is neither has to
       // be put on one of these two lists by somebody who looked at it.
-      const front = ['auth', 'did', 'health', 'mail', 'rails/funding'];
+      // rails/payouts: where M-Pesa says what became of a payout (2026-10-18) — public, admitted by the rail, like funding's.
+      const front = ['auth', 'did', 'health', 'mail', 'rails/funding', 'rails/payouts'];
       expect([...new Set(others)].filter((b) => !b.startsWith('sbg') && !front.includes(b))).toEqual([]);
     });
 

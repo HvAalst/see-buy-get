@@ -1,7 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { PayoutService } from './payout.service';
 import { SandboxPayoutRail } from './sandbox-rail.adapter';
-import { PAYOUT_RAIL } from './payout.types';
+import { PAYOUT_RAIL, type PayoutInstruction, type RailOutcome } from './payout.types';
 import { BooksService } from '../books/books.service';
 import { ACCOUNT_CODES } from '../books/books.types';
 import { EntityService } from '../entity/entity.service';
@@ -346,6 +346,109 @@ describe('paying providers', () => {
       const [p] = payouts.runFor(et, Date.now(), { name: 'Amina O' }).raised;
       expect(p).toMatchObject({ payeeDid: 'did:glos:et-courier', way: 'by_hand' });
       expect(p.destination).toBeUndefined();
+    });
+  });
+
+  describe('by M-Pesa, through a live rail (Kenya’s way)', () => {
+    /** A rail whose answer the test gives when it chooses: the network is never this prompt. */
+    function liveRail() {
+      let answer!: (o: RailOutcome) => void;
+      const sent: PayoutInstruction[] = [];
+      const rail = {
+        submit: (i: PayoutInstruction) => {
+          sent.push(i);
+          return new Promise<RailOutcome>((resolve) => (answer = resolve));
+        },
+      };
+      const live = new PayoutService(books, entities, new SandboxPayoutRail(), rail as never);
+      live.registerDestinations({
+        of: () => ({ numberId: 'pn_1', masked: '254712***678' }),
+        full: (_payee, numberId) => (numberId === 'pn_1' ? '254712345678' : undefined),
+      });
+      return { live, sent, answer: (o: RailOutcome) => answer(o) };
+    }
+    const amina = { name: 'Amina O', key: 'opr_amina' };
+    const brian = { name: 'Brian K', key: 'opr_brian' };
+
+    it('raises whole shillings — the cents stay owed — and claims the payout before the rail is asked', async () => {
+      fund(1000);
+      owe('did:glos:courier-a', 40.5);
+      const { live, sent, answer } = liveRail();
+      const [p] = live.runFor(ke(), Date.now(), amina).raised;
+      expect(p.amount).toBe(40);
+      live.submit(p.payoutId, Date.now(), brian);
+      // On its way while the rail has not answered: a second approval finds nothing to send.
+      expect(live.get(p.payoutId).status).toBe('submitted');
+      expect(() => live.submit(p.payoutId, Date.now(), { name: 'Otieno', key: 'opr_otieno' })).toThrow(/only a requested payout/);
+      expect(sent).toEqual([{ payoutId: p.payoutId, payeeDid: 'did:glos:courier-a', amount: 40, currency: 'KES', msisdn: '254712345678' }]);
+      answer({ taken: true, railRef: 'orig-1', providerRef: 'AG_1' });
+      expect(await live.handedOver(p.payoutId)).toMatchObject({ status: 'submitted', railRef: 'orig-1', providerRef: 'AG_1' });
+      expect(JSON.stringify(live.get(p.payoutId))).not.toContain('254712345678');
+    });
+
+    it('fails a payout the rail refused, and keeps one it could not tell on its way, said', async () => {
+      fund(1000);
+      owe('did:glos:courier-a', 40);
+      owe('did:glos:courier-b', 30);
+      const a = liveRail();
+      const [pa, pb] = a.live.runFor(ke(), Date.now(), amina).raised;
+      a.live.submit(pa.payoutId, Date.now(), brian);
+      a.answer({ taken: false, refused: 'Bad Request - Invalid PartyB' });
+      expect(await a.live.handedOver(pa.payoutId)).toMatchObject({ status: 'failed', failureReason: 'Bad Request - Invalid PartyB' });
+      a.live.submit(pb.payoutId, Date.now(), brian);
+      a.answer({ taken: 'unknown', railRef: 'orig-2', why: 'M-Pesa did not answer. The payment may have gone.' });
+      expect(await a.live.handedOver(pb.payoutId)).toMatchObject({ status: 'submitted', railRef: 'orig-2', railNote: expect.stringMatching(/may have gone/) });
+    });
+
+    it('settles on M-Pesa’s word — even after staff marked it failed, and says so — and fails on its refusal', async () => {
+      fund(1000);
+      owe('did:glos:courier-a', 40);
+      const { live, answer } = liveRail();
+      const [p] = live.runFor(ke(), Date.now(), amina).raised;
+      live.submit(p.payoutId, Date.now(), brian);
+      answer({ taken: true, railRef: 'orig-1' });
+      await live.handedOver(p.payoutId);
+      expect(live.fromRail({ payoutId: p.payoutId, repeat: true }).status).toBe('submitted');
+      live.fromRail({ payoutId: p.payoutId, unsure: 'M-Pesa’s queue timed out on this payment.' });
+      // Staff may fail it once M-Pesa said it could not tell; then M-Pesa pays after all: the books say so.
+      live.failByHand(p.payoutId, 'portal shows nothing');
+      const late = live.fromRail({ payoutId: p.payoutId, paid: true, receipt: 'NLJ41HAY6Q' });
+      expect(late).toMatchObject({ status: 'settled', providerRef: 'NLJ41HAY6Q', railNote: expect.stringMatching(/after it was marked failed/) });
+      expect(owedTo('did:glos:courier-a')).toBe(0);
+      expect(held()).toBe(960);
+      // A refusal after it settled changes nothing.
+      expect(live.fromRail({ payoutId: p.payoutId, paid: false, reason: 'late noise' }).status).toBe('settled');
+    });
+
+    it('lets staff fail a payout M-Pesa is working on only once M-Pesa could not tell, or a day has passed — and settle it only with M-Pesa’s receipt', async () => {
+      fund(1000);
+      owe('did:glos:courier-a', 40);
+      const { live, answer } = liveRail();
+      const t0 = Date.now();
+      const [p] = live.runFor(ke(), t0, amina).raised;
+      live.submit(p.payoutId, t0, brian);
+      answer({ taken: true, railRef: 'orig-1' });
+      await live.handedOver(p.payoutId);
+      expect(() => live.failByHand(p.payoutId, 'impatient', t0 + 60_000)).toThrow(/has not answered this payment yet/);
+      expect(() => live.settleByHand(p.payoutId, '  ', t0 + 60_000)).toThrow(/M-Pesa receipt/);
+      expect(live.failByHand(p.payoutId, 'no answer for a day; portal shows nothing', t0 + 25 * 3_600_000).status).toBe('failed');
+    });
+
+    it('sends nothing to M-Pesa when it is not set up off a sandbox, and stands in for it on one', () => {
+      fund(1000);
+      owe('did:glos:courier-a', 40);
+      const plain = new PayoutService(books, entities, new SandboxPayoutRail(), null);
+      const [p] = plain.runFor(ke(), Date.now(), amina).raised;
+      const before = process.env.GLOS_ENV;
+      process.env.GLOS_ENV = 'production';
+      try {
+        expect(() => plain.submit(p.payoutId, Date.now(), brian)).toThrow(/not set up on this server/);
+        expect(plain.get(p.payoutId).status).toBe('requested');
+      } finally {
+        if (before === undefined) delete process.env.GLOS_ENV;
+        else process.env.GLOS_ENV = before;
+      }
+      expect(plain.submit(p.payoutId, Date.now(), brian)).toMatchObject({ status: 'submitted', providerRef: expect.stringMatching(/^SBX/) });
     });
   });
 });

@@ -23,6 +23,32 @@ export interface PayoutRow {
   /** How it is paid — its country's way — and, by M-Pesa, the payee's own number it was raised to, masked. */
   way?: 'mpesa' | 'by_hand';
   destination?: { masked: string };
+  /** Our id for its request to a live rail: present once it went through M-Pesa itself, not a stand-in. */
+  railRef?: string;
+  /** What the rail left unsaid: no answer, a queue that timed out, a result not taken at its word. */
+  railNote?: string;
+  submittedAt?: string;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * M-PESA IS WORKING ON IT: sent through M-Pesa itself, nothing unsaid, and less than a day ago. Its own result settles or
+ * fails it, so the row offers staff nothing to press (the server would refuse a "failed" anyway). Once M-Pesa says it could
+ * not tell, or a day passes in silence, the buttons come back — "paid" then asks for M-Pesa's receipt.
+ */
+export function waitsForRail(row: Pick<PayoutRow, 'status' | 'railRef' | 'railNote' | 'submittedAt'>, now: number = Date.now()): boolean {
+  if (row.status !== 'submitted' || !row.railRef || row.railNote) return false;
+  const at = Date.parse(row.submittedAt ?? '');
+  return Number.isFinite(at) && now - at < DAY_MS;
+}
+
+/**
+ * "PAID" ON A PAYOUT THAT WENT THROUGH M-PESA asks for M-Pesa's own receipt from its portal: a payment staff say was made
+ * and nobody can point at cannot be reconciled. By hand, or in a sandbox, it is pressed as ever.
+ */
+export function needsReceipt(row: Pick<PayoutRow, 'railRef'>, action: PayoutAction): boolean {
+  return action === 'settle' && Boolean(row.railRef);
 }
 
 /**

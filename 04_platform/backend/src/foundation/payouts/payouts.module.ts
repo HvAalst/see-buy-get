@@ -1,4 +1,6 @@
-import { Global, Module } from '@nestjs/common';
+import { Global, Logger, Module } from '@nestjs/common';
+import { MPESA_PAYOUT_RAIL, MpesaPayoutRail, mpesaPayoutConfigFromEnv } from './mpesa-payout-rail.adapter';
+import { PayoutRailsController } from './payout-rails.controller';
 import { PayoutService } from './payout.service';
 import { SandboxPayoutRail } from './sandbox-rail.adapter';
 import { PAYOUT_RAIL } from './payout.types';
@@ -12,7 +14,21 @@ import { PAYOUT_RAIL } from './payout.types';
  */
 @Global()
 @Module({
-  providers: [PayoutService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail }],
-  exports: [PayoutService, PAYOUT_RAIL],
+  controllers: [PayoutRailsController],
+  providers: [
+    PayoutService,
+    SandboxPayoutRail,
+    { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
+    // KENYA'S WAY, where the environment sets it up (mpesa_rail.md). Said at start, as the inbound rail is.
+    {
+      provide: MPESA_PAYOUT_RAIL,
+      useFactory: (): MpesaPayoutRail | null => {
+        const config = mpesaPayoutConfigFromEnv();
+        new Logger('PayoutsModule').log(config ? `M-Pesa payouts go through Daraja (${config.env}, shortcode ${config.shortcode})` : 'M-Pesa payouts are not set up: refused off a sandbox, stood in for on one');
+        return config ? new MpesaPayoutRail(config) : null;
+      },
+    },
+  ],
+  exports: [PayoutService, PAYOUT_RAIL, MPESA_PAYOUT_RAIL],
 })
 export class PayoutsModule {}

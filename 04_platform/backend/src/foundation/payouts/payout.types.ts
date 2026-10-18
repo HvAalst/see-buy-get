@@ -59,6 +59,13 @@ export class Payout {
   reversedAt?: string;
   /** The rail's own reference. The thing you quote when somebody says they were not paid. */
   providerRef?: string;
+  /** Our id for the request to a live rail (M-Pesa's OriginatorConversationID): present once it was sent through one. */
+  railRef?: string;
+  /**
+   * What the rail left unsaid: no answer we could read, a queue that timed out, a result we could not take at its word.
+   * Said under the payout until it settles or fails.
+   */
+  railNote?: string;
   failureReason?: string;
   /** The journal entry that moved the money. Present ONLY once settled — before that nothing has moved. */
   entryId?: string;
@@ -72,7 +79,20 @@ export interface PayoutInstruction {
   payeeDid: string;
   amount: number;
   currency: string;
+  /** The payee's own number, whole, where the way pays to one — read at the moment it is sent, never kept on the payout. */
+  msisdn?: string;
 }
+
+/**
+ * What a rail says when it is handed a payout. Three answers, and only one is a refusal:
+ *   taken      — it took the request; nothing has moved yet, its result settles or fails the payout;
+ *   refused    — it turned the request down; nothing left, the payout fails;
+ *   unknown    — no answer that can be read; it may have gone, so it stays in flight until the rail says.
+ */
+export type RailOutcome =
+  | { taken: true; providerRef?: string; railRef?: string }
+  | { taken: false; refused: string }
+  | { taken: 'unknown'; railRef?: string; why: string };
 
 /**
  * A payment rail.
@@ -83,8 +103,8 @@ export interface PayoutInstruction {
  * can tell the difference and nothing learns to trust a synchronous reply.
  */
 export interface PayoutRail {
-  /** Hand it over. Returns the provider's reference for the attempt, never a settlement. */
-  submit(instruction: PayoutInstruction): { providerRef: string };
+  /** Hand it over. Never a settlement: at most the rail's word that it took the request. A live rail answers later. */
+  submit(instruction: PayoutInstruction): RailOutcome | Promise<RailOutcome>;
 }
 
 export const PAYOUT_RAIL = 'PAYOUT_RAIL';

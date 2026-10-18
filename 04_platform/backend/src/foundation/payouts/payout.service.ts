@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { GlosError } from '../http/glos-error';
 import { PersistentMap } from '../store/persistent-map';
@@ -6,7 +6,9 @@ import { BooksService } from '../books/books.service';
 import { ACCOUNT_CODES } from '../books/books.types';
 import { EntityService } from '../entity/entity.service';
 import { sameSigner, type Signer } from '../entity/same-person';
-import { IN_FLIGHT, PAYOUT_RAIL, Payout, PayoutRail, PayoutStatus } from './payout.types';
+import { IN_FLIGHT, PAYOUT_RAIL, Payout, PayoutRail, PayoutStatus, RailOutcome } from './payout.types';
+import { isSandbox } from '../runtime/sandbox';
+import { MPESA_PAYOUT_RAIL, type B2cResult, type MpesaPayoutRail } from './mpesa-payout-rail.adapter';
 import { isRefusal, payoutWayOf, type PayoutDestinations } from './payout-ways';
 
 /**
@@ -18,6 +20,8 @@ import { isRefusal, payoutWayOf, type PayoutDestinations } from './payout-ways';
  * books — visibly — until the country can be paid out in.
  */
 export type PayeeGate = (payeeDid: string) => string | null;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** The day a settlement covers, in the network's own reckoning. */
 export const dayOf = (at: number): string => new Date(at).toISOString().slice(0, 10);
@@ -61,7 +65,12 @@ export class PayoutService {
     private readonly books: BooksService,
     private readonly entities: EntityService,
     @Inject(PAYOUT_RAIL) private readonly rail: PayoutRail,
+    /** Kenya's way, where it is set up (mpesa-payout-rail.adapter.ts). Absent: refused off a sandbox, stood in for on one. */
+    @Optional() @Inject(MPESA_PAYOUT_RAIL) private readonly mpesa?: MpesaPayoutRail | null,
   ) {}
+
+  /** Sends to a live rail still waiting for its first answer, by payout — so the approval's response can say what it said. */
+  private readonly handing = new Map<string, Promise<void>>();
 
   /**
    * Raise a payout for everybody this sister owes, once per payee per day.
@@ -84,7 +93,13 @@ export class PayoutService {
     // committed, so a run cannot promise the same shilling to three different people.
     let available = this.books.coverage(entityId, currency).held;
 
-    for (const { counterparty, amount } of this.books.outstanding(entityId, ACCOUNT_CODES.PAYABLE_PROVIDER, currency)) {
+    for (const { counterparty, amount: owed } of this.books.outstanding(entityId, ACCOUNT_CODES.PAYABLE_PROVIDER, currency)) {
+      // M-Pesa pays whole shillings: the cents stay owed, to the next run, rather than be rounded away or up.
+      const amount = way === 'mpesa' ? Math.floor(owed) : owed;
+      if (amount < 1 && way === 'mpesa') {
+        skipped.push({ payeeDid: counterparty, reason: 'less than one shilling owed' });
+        continue;
+      }
       // Asked first: a payee who may not be paid out is not short of cash or already paid — they are owed,
       // and the run says so by name rather than raising a payment that must never be submitted.
       const barred = this.payeeGate?.(counterparty);
@@ -148,12 +163,88 @@ export class PayoutService {
       throw new GlosError('CONFLICT', 'A second member of staff approves a payout — not the one who raised it');
     }
     this.assertSameDestination(payout, now);
-    const { providerRef } = this.rail.submit({ payoutId: payout.payoutId, payeeDid: payout.payeeDid, amount: payout.amount, currency: payout.currency });
+    const rail = this.railFor(payout);
+    const msisdn = this.numberFor(payout, rail);
+    // CLAIMED BEFORE THE RAIL IS ASKED: a second approval meanwhile finds it on its way, not still raised.
     payout.status = 'submitted';
     payout.submittedAt = new Date(now).toISOString();
     if (by) payout.approvedBy = { name: by.name, ...(by.key ? { key: by.key } : {}) };
-    payout.providerRef = providerRef;
-    return this.save(payout);
+    this.save(payout);
+    const answer = rail.submit({ payoutId: payout.payoutId, payeeDid: payout.payeeDid, amount: payout.amount, currency: payout.currency, ...(msisdn ? { msisdn } : {}) });
+    if (answer instanceof Promise) {
+      const handed = answer
+        .catch((err: Error): RailOutcome => ({ taken: 'unknown', why: `The rail failed while sending (${err.message}). The payment may have gone: wait for its result, or check with the provider.` }))
+        .then((outcome) => this.apply(payout.payoutId, outcome, now))
+        .finally(() => this.handing.delete(payout.payoutId));
+      this.handing.set(payout.payoutId, handed);
+    } else {
+      this.apply(payout.payoutId, answer, now);
+    }
+    return payout;
+  }
+
+  /** The payout once its rail has given its first answer — taken, refused or unknown. At once for a rail that answers at once. */
+  async handedOver(payoutId: string): Promise<Payout> {
+    await this.handing.get(payoutId);
+    return this.require(payoutId);
+  }
+
+  /**
+   * WHAT A LIVE RAIL SAID LATER, on its result door. Paid: the books move — even for a payout marked failed meanwhile,
+   * because the money did leave, and a book that hides it cannot be reconciled; it is said under the payout. Not paid:
+   * failed, the payable standing. Unsure: said, and left on its way for a person to resolve from the provider's portal.
+   */
+  fromRail(result: B2cResult, now: number = Date.now()): Payout {
+    const payout = this.require(result.payoutId);
+    if ('repeat' in result) return payout;
+    if ('unsure' in result) {
+      if (IN_FLIGHT.includes(payout.status)) {
+        payout.railNote = result.unsure;
+        this.save(payout);
+      }
+      return payout;
+    }
+    if (result.paid) {
+      if (payout.status === 'settled' || payout.status === 'reversed') return payout;
+      const wasFailed = payout.status === 'failed';
+      payout.status = 'submitted';
+      const settled = this.settle(payout.payoutId, result.receipt, now);
+      if (wasFailed) {
+        settled.railNote = 'Paid by M-Pesa after it was marked failed. If it was raised again since, check it was not paid twice.';
+        this.save(settled);
+      } else if (settled.railNote) {
+        delete settled.railNote;
+        this.save(settled);
+      }
+      return settled;
+    }
+    if (payout.status !== 'submitted') return payout;
+    return this.fail(payout.payoutId, result.reason, now);
+  }
+
+  /**
+   * STAFF SAY IT WAS PAID. By hand, as ever — and for a payout sent through M-Pesa, with M-Pesa's own receipt from the
+   * portal: a payment we cannot point at is one we cannot reconcile.
+   */
+  settleByHand(payoutId: string, providerRef?: string, now: number = Date.now()): Payout {
+    const payout = this.require(payoutId);
+    if (payout.railRef && !providerRef?.trim()) {
+      throw new GlosError('FIELD_REQUIRED', 'Give the M-Pesa receipt (the transaction ID on the M-Pesa portal): this payout was sent through M-Pesa', { field: 'providerRef' });
+    }
+    return this.settle(payoutId, providerRef?.trim() || undefined, now);
+  }
+
+  /**
+   * STAFF SAY IT DID NOT GO. A payout M-Pesa is still working on is not theirs to fail: failing it lets the next run raise
+   * it again, and if M-Pesa then pays both, the day is paid twice. So only once M-Pesa has said it could not tell, or a day
+   * has gone by with no answer — and the M-Pesa portal checked first.
+   */
+  failByHand(payoutId: string, reason: string, now: number = Date.now()): Payout {
+    const payout = this.require(payoutId);
+    if (payout.status === 'submitted' && payout.railRef && !payout.railNote && now - Date.parse(payout.submittedAt ?? payout.requestedAt) < DAY_MS) {
+      throw new GlosError('CONFLICT', 'M-Pesa has not answered this payment yet: its answer settles or fails it. If none comes, it can be marked failed after a day, once the M-Pesa portal shows it was not paid.');
+    }
+    return this.fail(payoutId, reason, now);
   }
 
   /**
@@ -261,6 +352,40 @@ export class PayoutService {
     if (current.numberId !== payout.destination.numberId) {
       throw new GlosError('CONFLICT', 'The payout number changed after this payout was raised. Mark it failed; the next run raises it to the new number.');
     }
+  }
+
+  /** Which rail carries this payout: its country's way. M-Pesa not set up: refused off a sandbox, stood in for on one. */
+  private railFor(payout: Payout): PayoutRail {
+    if (payout.way !== 'mpesa') return this.rail;
+    if (this.mpesa) return this.mpesa;
+    if (isSandbox()) return this.rail;
+    throw new GlosError('INVALID_STATE', 'M-Pesa payouts are not set up on this server, so nothing was sent. See mpesa_rail.md.');
+  }
+
+  /** The payee's whole number, for a live M-Pesa rail only — read now, from the number the payout was raised to. */
+  private numberFor(payout: Payout, rail: PayoutRail): string | undefined {
+    if (rail !== this.mpesa || !this.mpesa) return undefined;
+    const msisdn = payout.destination ? this.destinations?.full(payout.payeeDid, payout.destination.numberId) : undefined;
+    if (!msisdn) throw new GlosError('CONFLICT', 'Not sent: this payout has no payout number of the payee’s to go to. Mark it failed; the next run raises it again.');
+    return msisdn;
+  }
+
+  /** The rail's first answer, written on the payout it is about. */
+  private apply(payoutId: string, outcome: RailOutcome, now: number): void {
+    const payout = this.require(payoutId);
+    if (outcome.taken === true) {
+      if (outcome.providerRef) payout.providerRef = outcome.providerRef;
+      if (outcome.railRef) payout.railRef = outcome.railRef;
+      this.save(payout);
+      return;
+    }
+    if (outcome.taken === false) {
+      if (payout.status === 'submitted') this.fail(payoutId, outcome.refused, now);
+      return;
+    }
+    if (outcome.railRef) payout.railRef = outcome.railRef;
+    if (IN_FLIGHT.includes(payout.status)) payout.railNote = outcome.why;
+    this.save(payout);
   }
 
   private paidToday(entityId: string, payeeDid: string, day: string): boolean {

@@ -2455,7 +2455,8 @@ export const enTowerMoney = {
   'tower.money.title': 'Money',
   'tower.money.lede': 'What this company holds, what it owes, and paying the people it owes it to.',
   'tower.money.caveatLead': 'Nothing on this screen moves money.',
-  'tower.money.caveat': 'A run RAISES payouts, a payment rail carries them, and only the rail’s answer changes what the books say. Here that answer is somebody pressing a button; in a live deployment it is the provider’s callback — deliberately the same door, so this console can never become a place where money is declared paid because a screen said so.',
+  'tower.money.caveat': 'A run RAISES payouts, a second member of staff approves each one to its rail, and only the rail’s answer changes what the books say. By M-Pesa that answer arrives by itself; by hand it is somebody pressing a button with the reference — so this console never becomes a place where money is declared paid because a screen said so.',
+  'tower.money.waitsForMpesa': 'M-Pesa answers this one: its result marks it paid or failed.',
   'tower.money.failedTitle': 'Could not read the money',
 
   'tower.money.held': 'Cash held',
@@ -2477,6 +2478,8 @@ export const enTowerMoney = {
   'tower.money.how.mpesa': 'M-Pesa to {number}',
   'tower.money.how.mpesaNoNumber': 'M-Pesa',
   'tower.money.how.byHand': 'By hand: paid outside SeeBuyGet, the reference recorded here',
+  'tower.money.receipt': 'M-Pesa receipt, from the M-Pesa portal',
+  'tower.money.receiptConfirm': 'Mark it paid',
   'tower.money.state.requested': 'Raised',
   'tower.money.state.submitted': 'With the rail',
   'tower.money.state.settled': 'Paid',

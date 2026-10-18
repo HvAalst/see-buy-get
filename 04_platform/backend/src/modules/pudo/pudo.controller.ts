@@ -1943,7 +1943,8 @@ export class SbgController {
   @Roles('operator')
   @Post('payouts/:payoutId/submit')
   submitPayout(@Param('payoutId') payoutId: string, @Body() dto: PayoutStaffDto, @Actor() actor: IntrospectionResult) {
-    return this.payouts.submit(payoutId, Date.now(), staffOf(actor, dto?.by));
+    // Answered once the rail has said its first word — taken, refused, or that it could not tell — not before.
+    return this.payouts.handedOver(this.payouts.submit(payoutId, Date.now(), staffOf(actor, dto?.by)).payoutId);
   }
 
   /**
@@ -1956,14 +1957,14 @@ export class SbgController {
   @Roles('operator')
   @Post('payouts/:payoutId/settle')
   settlePayout(@Param('payoutId') payoutId: string, @Body() dto: PayoutSettleDto) {
-    return this.payouts.settle(payoutId, dto.providerRef);
+    return this.payouts.settleByHand(payoutId, dto.providerRef);
   }
 
   /** It did not go. The payable stands, because the money is still owed. */
   @Roles('operator')
   @Post('payouts/:payoutId/fail')
   failPayout(@Param('payoutId') payoutId: string, @Body() dto: PayoutFailureDto) {
-    return this.payouts.fail(payoutId, dto.reason);
+    return this.payouts.failByHand(payoutId, dto.reason);
   }
 
   /** It went and came back. Its own entry, never an unwinding of the first. */
