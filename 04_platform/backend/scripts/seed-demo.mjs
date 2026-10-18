@@ -317,11 +317,12 @@ const run = async () => {
    * Written once because there are three of them now, and because a seeded driver with no way to sign in
    * is not a driver in this world — the uploads a haul needs are checked against the OWNER of the photo,
    * so the fleet's token cannot stand in for the person who took it. The phone is the one in the DID's
-   * controller (`pudo-driver:<mobile>`): on a re-seed the driver already exists and nobody printed it.
+   * controller (`pudo-driver:<mobile>`): on a re-seed the driver already exists and nobody printed it. Staff read
+   * the controller on a route of their own; the public one never carries a phone number.
    */
   const DRIVER_PIN = '13570';
   const signInDriver = async (driver, label) => {
-    const phone = (need(await req('GET', `/v1/did/${encodeURIComponent(driver.did)}`), `${label} did`).controller ?? '').replace(/^pudo-driver:/, '');
+    const phone = (need(await req('GET', `/v1/did/${encodeURIComponent(driver.did)}/controller`, { token: op }), `${label} did`).controller ?? '').replace(/^pudo-driver:/, '');
     // A PIN IS LOOKED AT ONLY ON A DEVICE A CODE TO THE PHONE CONFIRMED, and this script is a device like any other:
     // it asks for the code (echoed in a sandbox), types it, and is handed the key the PIN is then asked with. That also
     // sets the demo PIN afresh each run — which is what moves a sandbox seeded with the old four-digit PINs to five.

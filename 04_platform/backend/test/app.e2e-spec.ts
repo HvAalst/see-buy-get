@@ -135,6 +135,32 @@ describe('GLOS backend (e2e)', () => {
     await request(app.getHttpServer()).get(`/v1/did/${did}`).expect(200);
   });
 
+  it('a public DID document never carries a phone number, nor a hash over one', async () => {
+    const http = app.getHttpServer();
+    const minted = await request(http).post('/v1/did').send({ controller: 'pudo:+254711000222', metadata: { role: 'pudo-agent' } }).expect(201);
+    const did = minted.body.id as string;
+    const open = (await request(http).get(`/v1/did/${did}`).expect(200)).body;
+    expect(JSON.stringify(open)).not.toContain('254711000222');
+    expect(open).toMatchObject({ id: did, controller: did, metadata: { role: 'pudo-agent' } });
+    expect(open.verificationMethod[0].controller).toBe(did);
+    expect(open).not.toHaveProperty('anchor');
+    const staff = (await request(http).post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201)).body.access_token as string;
+    // Network staff read the controller as it was registered; nobody else does, the identity itself included.
+    await request(http).get(`/v1/did/${did}/controller`).expect(401);
+    const itself = (await request(http).post('/v1/auth/token').send({ sub: did, type: 'did' }).expect(201)).body.access_token as string;
+    await request(http).get(`/v1/did/${did}/controller`).set('Authorization', `Bearer ${itself}`).expect(403);
+    expect((await request(http).get(`/v1/did/${did}/controller`).set('Authorization', `Bearer ${staff}`).expect(200)).body).toEqual({ did, controller: 'pudo:+254711000222' });
+    // Outside a sandbox nobody mints an identity by asking for one.
+    const env = process.env.GLOS_ENV;
+    process.env.GLOS_ENV = 'production';
+    try {
+      await request(http).post('/v1/did').send({ controller: 'anybody' }).expect(404);
+    } finally {
+      if (env === undefined) delete process.env.GLOS_ENV;
+      else process.env.GLOS_ENV = env;
+    }
+  });
+
   it('M1 onboarding: register → liveness → verify-identity reaches Tier 2 with a DID', async () => {
     const reg = await request(app.getHttpServer())
       .post('/v1/identity/register')

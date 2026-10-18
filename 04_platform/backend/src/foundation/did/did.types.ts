@@ -23,3 +23,23 @@ export interface DidDocument {
 }
 
 export const DID_METHOD = 'glos';
+
+/**
+ * A DID DOCUMENT AS ANYBODY MAY READ IT. The controller registered for a shop, a driver or a fleet is its mobile number
+ * (`pudo:<mobile>`), and the identities of shops are on the public map: answering with it handed every shopkeeper's
+ * number to whoever asked. So the document names itself as its controller unless the controller is another DID, and it
+ * leaves out the ledger receipt, whose hash covers the original document — phone included — and everything else in it
+ * is public, so a phone number could be found by trying them.
+ */
+export type PublicDidDocument = Omit<DidDocument, 'anchor'>;
+
+export function publicDidDocument(doc: DidDocument): PublicDidDocument {
+  const own = (c: string) => (c.startsWith('did:') ? c : doc.id);
+  return {
+    id: doc.id,
+    controller: own(doc.controller),
+    verificationMethod: doc.verificationMethod.map((v) => ({ ...v, controller: own(v.controller) })),
+    created: doc.created,
+    ...(doc.metadata ? { metadata: doc.metadata } : {}),
+  };
+}

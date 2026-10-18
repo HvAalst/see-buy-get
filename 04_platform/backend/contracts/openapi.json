@@ -5,7 +5,7 @@
       "post": {
         "operationId": "Did.generate",
         "summary": "",
-        "description": "Bootstrap a DID. Public in the sandbox so a client can obtain a DID and then a\nDID-bound token; in production this is internal to the M1 verification flow.",
+        "description": "Bootstrap a DID. In a sandbox only, so a client can obtain a DID and then a DID-bound token; outside one this is\ninternal to the M1 verification flow, and nobody mints an identity by asking.",
         "parameters": [],
         "responses": {
           "201": {
@@ -25,7 +25,7 @@
       "get": {
         "operationId": "Did.resolve",
         "summary": "",
-        "description": "Resolve a DID document (public — DIDs are designed to be resolvable).",
+        "description": "Resolve a DID document: public, because DIDs are meant to be resolvable — but never with a phone number in it.",
         "parameters": [
           {
             "name": "id",
@@ -46,6 +46,28 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/v1/did/{id}/controller": {
+      "get": {
+        "operationId": "Did.controller",
+        "summary": "",
+        "description": "The controller as it was registered — for a shop, a driver or a fleet, its mobile number. Network staff only.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
           }
         }
       }
