@@ -103,6 +103,15 @@ export class InvoiceEarlier {
   supersededAt?: string;
 }
 
+/** The shipper said its own paper invoice travels with the goods, instead of writing one here. */
+export class OwnInvoicePaper {
+  freightId: string;
+  /** Who said so, by name, for which business. */
+  by: string;
+  for: string;
+  at: string;
+}
+
 /** A load's commercial invoice, as its readers see it. */
 export class CommercialInvoiceView {
   freightId: string;
@@ -110,6 +119,13 @@ export class CommercialInvoiceView {
   crossesBorder: boolean;
   current?: CommercialInvoice;
   earlier: InvoiceEarlier[];
+  /** The shipper said its own paper invoice travels with the goods. */
+  ownPaper?: OwnInvoicePaper;
+  /**
+   * Whether a carrier may take the goods over as far as the invoice goes: not for a load a business posted that crosses
+   * a border, until the business signs its invoice here or says its own paper travels.
+   */
+  collectable: boolean;
   /** Whether the reader may write a new one: the business that posted the load, a member who may act. */
   mayWrite: boolean;
 }

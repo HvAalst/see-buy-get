@@ -149,6 +149,15 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* A load that cannot be taken over yet (no commercial invoice for a border): in the danger colour, on the card. */
+.load__warn {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--dang);
+  margin-top: 2px;
+}
+
 /* --------------------------------------------------- S33 safety gate -- */
 
 /* The interactive load-safety / unload checklist (shared/ui CheckGate). Each line is a big tap target;

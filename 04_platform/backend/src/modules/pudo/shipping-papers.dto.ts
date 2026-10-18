@@ -26,6 +26,11 @@ export class InvoiceLineDto {
   @IsString() @MaxLength(16) hsCode!: string;
 }
 
+/** Our own paper invoice travels with the goods — or no longer. */
+export class OwnInvoicePaperDto {
+  @IsBoolean() travels!: boolean;
+}
+
 /** A load's commercial invoice, written and signed by the business that posted the load. */
 export class CommercialInvoiceDto {
   /** Your own number for this invoice. */

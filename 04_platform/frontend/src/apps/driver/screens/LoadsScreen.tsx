@@ -76,6 +76,8 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   {c.assignedBy ? <span class="load__meta">{t('driver.loads.assignedBy', { name: c.assignedBy.name ?? t('driver.loads.theOffice') })}</span> : null}
                   {/* FP7 — what the sender wrote for the door, on the card so it is read before the walk to the gate. */}
                   {hasInstructions(c.instructions) ? <InstructionsBlock view={c.instructions} compact /> : null}
+                  {/* No papers, no loading: said on the card, before the drive to the gate. */}
+                  {c.invoiceMissing ? <span class="load__warn">{t('driver.loads.invoiceMissingShort')}</span> : null}
                 </span>
               </>
             );
@@ -315,6 +317,7 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
               ? t('driver.loads.gateBodyPickup', { ref: claim.code ?? claim.ref, kg: claim.weightKg, dest: claim.destLabel })
               : t('driver.loads.gateBodyDeliver', { ref: claim.code ?? claim.ref, kg: claim.weightKg, dest: claim.destLabel })}
           </p>
+          {isPickup && claim.invoiceMissing ? <Note tone="warn" icon="warning" title={t('driver.loads.invoiceMissingTitle')} detail={t('driver.loads.invoiceMissingDetail')} /> : null}
           {/* FP7 — the sender's instructions, at the gate where they are acted on. */}
           {hasInstructions(claim.instructions) ? (
             <Card title={t('common.instructions.title')} tone="soft">

@@ -989,4 +989,7 @@ export const enDriver = {
   'driver.home.pinLocked': 'Sign out from the menu, then tap “First time here, or forgot your PIN?”. A code sent to your phone lets you choose a new PIN.',
   'driver.signin.signedOutTitle': 'You were signed out',
   'driver.signin.signedOutNote': 'This happens when your driver account signs in on another phone, your PIN changes, or you change fleet. If that was not you, tap “First time here, or forgot your PIN?” and choose a new PIN. That signs the other phone out.',
+  'driver.loads.invoiceMissingShort': 'Not yet: the shipper has not signed its commercial invoice',
+  'driver.loads.invoiceMissingTitle': 'The commercial invoice is not signed',
+  'driver.loads.invoiceMissingDetail': 'These goods cross a border, and the shipper has not signed its invoice or said its own travels with them. You cannot take them over until it does: ask the shipper.',
 };

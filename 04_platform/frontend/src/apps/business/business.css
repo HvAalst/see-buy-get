@@ -213,3 +213,8 @@
   gap: 8px;
   margin-bottom: 8px;
 }
+
+/* A load the carrier cannot take over yet: said in the danger colour, because the truck will be turned away. */
+.biz-papers__held {
+  color: var(--dang);
+}

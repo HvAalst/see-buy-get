@@ -1052,6 +1052,8 @@
     "/v1/shipments/classify-dg": {
       "post": {
         "operationId": "M2.classifyDg",
+        "summary": "",
+        "description": "A declared UN number, looked up: its class, packing group and proper shipping name. Never guessed from words.",
         "parameters": [],
         "responses": {
           "201": {
@@ -21886,6 +21888,38 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/freight/{id}/commercial-invoice/own-paper": {
+      "post": {
+        "operationId": "ShippingPapers.ownPaper",
+        "summary": "",
+        "description": "The shipper says its own paper invoice travels with the goods (or takes that back): the goods may then be taken\nover without an invoice written here. The business that posted the load; staff are refused by name.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OwnInvoicePaperDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
           }
         }
       }
@@ -45376,6 +45410,30 @@
           "signedAt"
         ]
       },
+      "OwnInvoicePaper": {
+        "type": "object",
+        "properties": {
+          "freightId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string",
+            "description": "Who said so, by name, for which business."
+          },
+          "for": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "freightId",
+          "by",
+          "for",
+          "at"
+        ]
+      },
       "CommercialInvoiceView": {
         "type": "object",
         "properties": {
@@ -45395,6 +45453,18 @@
               "$ref": "#/components/schemas/InvoiceEarlier"
             }
           },
+          "ownPaper": {
+            "description": "The shipper said its own paper invoice travels with the goods.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OwnInvoicePaper"
+              }
+            ]
+          },
+          "collectable": {
+            "type": "boolean",
+            "description": "Whether a carrier may take the goods over as far as the invoice goes: not for a load a business posted that crosses\na border, until the business signs its invoice here or says its own paper travels."
+          },
           "mayWrite": {
             "type": "boolean",
             "description": "Whether the reader may write a new one: the business that posted the load, a member who may act."
@@ -45404,6 +45474,7 @@
           "freightId",
           "crossesBorder",
           "earlier",
+          "collectable",
           "mayWrite"
         ]
       },
@@ -45529,6 +45600,17 @@
           "currency",
           "lines",
           "declare"
+        ]
+      },
+      "OwnInvoicePaperDto": {
+        "type": "object",
+        "properties": {
+          "travels": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "travels"
         ]
       },
       "QuoteStatusDto": {

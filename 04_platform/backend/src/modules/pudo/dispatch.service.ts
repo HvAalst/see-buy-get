@@ -50,6 +50,7 @@ import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
 import { BoardRow, Claimable, ClaimableKind, DeliveryTiming, FleetOrderRow, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, LeftOutOfPlan, MarketRow, MarketSeries, Offer, OutsideWindow, PlannedAbout, PostedFreightRow, RoutePlan, RunningLate, shipperWhy, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS , FreightReload } from './dispatch.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
+import { CommercialInvoiceService } from './commercial-invoice.service';
 import { buildOfferResponse, type OfferResponse } from './offer-response';
 
 /**
@@ -384,6 +385,9 @@ export class DispatchService {
     // The accounts, to know whose a buyer's number certainly is. Optional for the same reason; without it an order
     // belongs to no account and is found by its number alone, as it always was.
     @Optional() private readonly persons?: PersonService,
+    // A load crossing a border is not taken over without the shipper's commercial invoice. Optional so the specs that
+    // build this by hand keep compiling; without it nothing is asked of the papers, as before.
+    @Optional() private readonly invoices?: CommercialInvoiceService,
   ) {
     this.freightSeq = [...this.freights.values()].length; // continue the human FRT-NNN sequence after a restart
     // An account moving off a number takes the orders addressed to that number with it.
@@ -2844,6 +2848,10 @@ export class DispatchService {
     // A load reserved ahead of its date can't be picked up before it — the cargo (or the consolidated lot)
     // isn't ready yet. It becomes pickable on/after the booked pickup date.
     if (f.scheduledPickupAt && now < new Date(f.scheduledPickupAt).getTime()) throw new GlosError('INVALID_STATE', `Pickup is booked for ${f.scheduledPickupAt} — it can't be collected before then`);
+    // No papers, no loading: a load a business posted that crosses a border waits for its commercial invoice (the user,
+    // 2026-10-18). Asked before anything is written, so the load stays claimed and the driver is told why.
+    const noInvoice = this.invoices?.pickupRefusal(f, this.postedByBusiness(f));
+    if (noInvoice) throw new GlosError('COMMERCIAL_INVOICE_REQUIRED', noInvoice);
     // S33 — the load-safety gate. Every dedicated freight must clear the load-safety checklist THIS cargo
     // requires (re-derived from the freight, so a client that under-reports can't bypass it) AND carry a
     // securement photo, before it leaves the pickup. The check happens BEFORE any mutation, so a failed gate
@@ -3403,10 +3411,17 @@ export class DispatchService {
     return { baseFee, ratePerKm, min, max };
   }
 
+  /** Was this load posted by a customer's business (its own form, or a road leg of its import)? */
+  postedByBusiness(f: Freight): boolean {
+    return this.entities.byDid(f.postedByDid)?.kind === 'business';
+  }
+
   private wrapFreight(f: Freight): Claimable {
     // S32: freight now carries its cargo model, so it matches vehicles on capability AND equipment like a tote.
     // S32b: status lets the driver app drive the claimed → picked-up → delivered flow in-app.
-    return { kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}) };
+    // Said on the load before the driver reaches the gate, and refused at it (pickupFreight): the same rule both times.
+    const invoiceMissing = f.status === 'claimed' && Boolean(this.invoices?.pickupRefusal(f, this.postedByBusiness(f)));
+    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}) };
   }
 
   /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */

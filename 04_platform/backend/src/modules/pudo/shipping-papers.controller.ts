@@ -6,12 +6,13 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { BusinessMemberGuard } from './business-member.guard';
 import { BusinessService } from './business.service';
 import { CommercialInvoiceService } from './commercial-invoice.service';
-import { CommercialInvoice, CommercialInvoiceView } from './commercial-invoice.types';
+import { CommercialInvoice, CommercialInvoiceView, OwnInvoicePaper } from './commercial-invoice.types';
+import { DispatchService } from './dispatch.service';
 import { ConsignmentNoteService } from './consignment-note.service';
 import { Freight } from './dispatch.types';
 import { tempBand } from './heavy-cargo';
 import { packageLabelsHtml } from './package-labels';
-import { CommercialInvoiceDto } from './shipping-papers.dto';
+import { CommercialInvoiceDto, OwnInvoicePaperDto } from './shipping-papers.dto';
 import { PackageLabelsView } from './shipping-papers.types';
 import { ShipperCodesService } from './shipper-codes.service';
 
@@ -33,6 +34,7 @@ export class ShippingPapersController {
     private readonly codes: ShipperCodesService,
     private readonly invoices: CommercialInvoiceService,
     private readonly businesses: BusinessService,
+    private readonly dispatch: DispatchService,
   ) {}
 
   /** What the labels will carry: how many, and the SSCC of each package when the shipper's GS1 prefix gave them. */
@@ -82,7 +84,7 @@ export class ShippingPapersController {
   @Get('dispatch/freight/:id/commercial-invoice')
   invoice(@Param('id') id: string, @Actor() actor: IntrospectionResult): CommercialInvoiceView {
     const f = this.notes.requireReader(id, actor);
-    return this.invoices.view(f, this.mayWrite(f, actor));
+    return this.invoices.view(f, this.mayWrite(f, actor), this.dispatch.postedByBusiness(f));
   }
 
   /**
@@ -98,6 +100,20 @@ export class ShippingPapersController {
     const acting = this.businesses.requireMember(actor);
     if (!this.invoices.isShipper(f, acting.entity)) throw new GlosError('FORBIDDEN', SHIPPER_ONLY);
     return this.invoices.issue(f, { entity: acting.entity, name: acting.member.name }, dto);
+  }
+
+  /**
+   * The shipper says its own paper invoice travels with the goods (or takes that back): the goods may then be taken
+   * over without an invoice written here. The business that posted the load; staff are refused by name.
+   */
+  @Roles('business')
+  @Post('dispatch/freight/:id/commercial-invoice/own-paper')
+  ownPaper(@Param('id') id: string, @Body() dto: OwnInvoicePaperDto, @Actor() actor: IntrospectionResult): { ownPaper: OwnInvoicePaper | null } {
+    if (actor?.role !== 'business') throw new GlosError('FORBIDDEN', SHIPPER_ONLY);
+    const f = this.notes.requireReader(id, actor);
+    const acting = this.businesses.requireMember(actor);
+    if (!this.invoices.isShipper(f, acting.entity)) throw new GlosError('FORBIDDEN', SHIPPER_ONLY);
+    return { ownPaper: this.invoices.sayOwnPaper(f, { entity: acting.entity, name: acting.member.name }, dto.travels) ?? null };
   }
 
   /** The invoice as a printable page: three copies, one a page. */

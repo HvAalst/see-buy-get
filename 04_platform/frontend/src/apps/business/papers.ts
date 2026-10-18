@@ -64,6 +64,10 @@ export interface CommercialInvoiceView {
   crossesBorder: boolean;
   current?: CommercialInvoice;
   earlier: Array<{ invoiceId: string; number: string; issuedOn: string; signedBy: string; signedAt: string; supersededAt?: string }>;
+  /** The shipper said its own paper invoice travels with the goods. */
+  ownPaper?: { by: string; for: string; at: string };
+  /** Whether a carrier may take the goods over, as far as the invoice goes. */
+  collectable: boolean;
   mayWrite: boolean;
 }
 

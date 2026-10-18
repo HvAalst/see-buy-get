@@ -40,6 +40,15 @@ export function LoadPapers({ row, client, business, act }: { row: PostedLoad; cl
     void read();
   }, [read]);
 
+  const sayOwnPaper = async (travels: boolean) => {
+    if (!client) return;
+    setError(null);
+    const r = await client.ownPaper(row.freightId, travels);
+    if (r.error) return setError(r.error.detail || r.error.title || null);
+    setSaid(t(travels ? 'business.papers.ownPaperDone' : 'business.papers.ownPaperUndone'));
+    await read();
+  };
+
   const print = async (page: () => Promise<{ data?: string | null; error?: unknown }>) => {
     setError(null);
     const r = await page();
@@ -77,8 +86,10 @@ export function LoadPapers({ row, client, business, act }: { row: PostedLoad; cl
             </span>
             {current ? (
               <span class="crow__sub">{t('business.papers.invoiceLine', { number: current.number, total: money(current.currency, current.totalValue), name: current.signed.name, day: current.signed.at.slice(0, 10) })}</span>
+            ) : invoice?.ownPaper ? (
+              <span class="crow__sub">{t('business.papers.ownPaperSaid', { name: invoice.ownPaper.by, day: invoice.ownPaper.at.slice(0, 10) })}</span>
             ) : invoice ? (
-              <span class="crow__sub">{t(invoice.crossesBorder ? 'business.papers.invoiceNeeded' : 'business.papers.invoiceDomestic')}</span>
+              <span class={invoice.collectable ? 'crow__sub' : 'crow__sub biz-papers__held'}>{t(!invoice.crossesBorder ? 'business.papers.invoiceDomestic' : invoice.collectable ? 'business.papers.invoiceNeededOpen' : 'business.papers.invoiceNeeded')}</span>
             ) : null}
             {invoice?.earlier.map((e) => (
               <span class="crow__sub" key={e.invoiceId}>
@@ -95,6 +106,12 @@ export function LoadPapers({ row, client, business, act }: { row: PostedLoad; cl
             {act && invoice?.mayWrite && !writing ? (
               <button type="button" class={`cbtn cbtn--sm ${current ? 'cbtn--ghost' : 'cbtn--primary'}`} onClick={() => setWriting(true)}>
                 {t(current ? 'business.papers.writeAgain' : 'business.papers.write')}
+              </button>
+            ) : null}
+            {/* Across a border, with no invoice here: the shipper may say its own paper travels — or take that back. */}
+            {act && invoice?.mayWrite && invoice.crossesBorder && !current && !writing ? (
+              <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void sayOwnPaper(!invoice.ownPaper)}>
+                {t(invoice.ownPaper ? 'business.papers.ownPaperUndo' : 'business.papers.ownPaperCta')}
               </button>
             ) : null}
           </span>

@@ -1272,6 +1272,8 @@ export class FreightShipmentView {
 /** A unit a driver can claim, normalised across totes and freight. */
 export class Claimable {
   kind: ClaimableKind;
+  /** Freight crossing a border whose shipper has not yet signed its commercial invoice: it cannot be taken over yet. */
+  invoiceMissing?: boolean;
   ref: string; // toteCode | freightId — the API identifier the pickup/load/deliver calls use
   /** S32b — the human-readable reference to SHOW a driver (TOTE-042 / FRT-007). For a tote this equals ref;
    *  for freight ref is the opaque frt_… id, so the readable FRT-NNN code must ride separately. */

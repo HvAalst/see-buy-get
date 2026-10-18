@@ -147,6 +147,28 @@ describe('the commercial invoice', () => {
     expect(html).toContain('.copy + .copy { break-before: page; }');
   });
 
+  it('holds a business’s load crossing a border until its invoice is signed, or its own paper is said to travel', () => {
+    const invoices = new CommercialInvoiceService();
+    expect(invoices.pickupRefusal(load(), true)).toMatch(/^This load crosses a border and the shipper has not signed its commercial invoice/);
+    // Not a business’s load, or not crossing a border: nothing is asked of the papers.
+    expect(invoices.pickupRefusal(load(), false)).toBeUndefined();
+    expect(invoices.pickupRefusal(load({ destCountry: 'KE' }), true)).toBeUndefined();
+    expect(invoices.view(load(), true).collectable).toBe(false);
+    // The shipper’s word that its own paper travels: the goods may go, and box 5 says whose paper it is.
+    const said = invoices.sayOwnPaper(load(), { entity: business(), name: 'Achieng' }, true, Date.parse('2026-10-18T09:00:00Z'))!;
+    expect(said).toMatchObject({ by: 'Achieng', for: 'Jenga Bricks Ltd' });
+    expect(invoices.pickupRefusal(load(), true)).toBeUndefined();
+    expect(invoices.view(load(), true)).toMatchObject({ collectable: true, ownPaper: { by: 'Achieng' } });
+    expect(invoices.noteLine('frt_1')).toBe("Commercial invoice: the shipper's own, travelling with the goods (said by Achieng for Jenga Bricks Ltd, 2026-10-18)");
+    // Taken back: held again — until an invoice is signed here.
+    invoices.sayOwnPaper(load(), { entity: business(), name: 'Achieng' }, false);
+    expect(invoices.pickupRefusal(load(), true)).toBeDefined();
+    invoices.issue(load(), { entity: business(), name: 'Achieng' }, input());
+    expect(invoices.pickupRefusal(load(), true)).toBeUndefined();
+    // Only the business that posted the load says so.
+    expect(() => invoices.sayOwnPaper(load({ postedByDid: 'did:glos:other' }), { entity: business(), name: 'A' }, true)).toThrow(/business that posted the load/);
+  });
+
   it('reads HS codes the way people write them, and knows a load crossing a border', () => {
     expect(cleanHsCode('8471.30.00')).toBe('84713000');
     expect(cleanHsCode('8471')).toBeUndefined();

@@ -4,6 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { isSscc } from '../src/foundation/gs1/gs1';
 import { FleetManagerService } from '../src/modules/pudo/fleet-manager.service';
+import { DispatchService } from '../src/modules/pudo/dispatch.service';
 
 /**
  * A SHIPPER'S PAPERS — through the booted application, over HTTP: its GS1 company prefix, the SSCCs its packages get,
@@ -100,9 +101,25 @@ describe('a shipper’s papers, over the wire', () => {
     await http().post(url).set(bearer(other.token)).send(invoice).expect(404);
     await http().post(url).set(bearer(jenga.token)).send({ ...invoice, lines: [{ ...invoice.lines[0], hsCode: '69' }] }).expect(400);
     await http().post(url).set(bearer(jenga.token)).send({ ...invoice, declare: false }).expect(400);
+
+    // NO PAPERS, NO LOADING. The load is claimed by a driver (put so here: the border rules that decide who may carry it
+    // are tested where they live); taking it over is refused until the shipper's invoice exists — the FIRST thing asked.
+    const dispatch = app.get(DispatchService);
+    Object.assign(dispatch.requireFreightPublic(id), { status: 'claimed', claimedBy: 'did:glos:papers-driver' });
+    const takeOver = () => { try { dispatch.pickupFreight(id, 'did:glos:papers-driver', {}); return 'taken'; } catch (e) { return (e as { code?: string }).code; } };
+    expect(takeOver()).toBe('COMMERCIAL_INVOICE_REQUIRED');
+    expect((await http().get(url).set(bearer(jenga.token)).expect(200)).body).toMatchObject({ crossesBorder: true, collectable: false });
+    // The shipper's own paper travels: staff may not say so for it; the shipper may. The next thing asked is the safety check.
+    await http().post(`${url}/own-paper`).set(bearer(operator)).send({ travels: true }).expect(403);
+    expect((await http().post(`${url}/own-paper`).set(bearer(jenga.token)).send({ travels: true }).expect(201)).body.ownPaper).toMatchObject({ by: 'Achieng' });
+    expect(takeOver()).toBe('SAFETY_CHECK_INCOMPLETE');
+    // Taken back: held again — and then the invoice, signed here, lets it go.
+    await http().post(`${url}/own-paper`).set(bearer(jenga.token)).send({ travels: false }).expect(201);
+    expect(takeOver()).toBe('COMMERCIAL_INVOICE_REQUIRED');
     const signed = (await http().post(url).set(bearer(jenga.token)).send(invoice).expect(201)).body;
     expect(signed).toMatchObject({ number: 'INV-2026-0042', totalValue: 360, packages: 3, grossKg: 1200, copies: 3, signed: { name: 'Achieng' } });
     expect(signed.lines[0]).toMatchObject({ hsCode: '690410', originCountry: 'KE', lineValue: 360 });
+    expect(takeOver()).toBe('SAFETY_CHECK_INCOMPLETE');
 
     // The shipper may write a new one; staff read it and may not.
     expect((await http().get(url).set(bearer(jenga.token)).expect(200)).body).toMatchObject({ crossesBorder: true, mayWrite: true, current: { invoiceId: signed.invoiceId } });

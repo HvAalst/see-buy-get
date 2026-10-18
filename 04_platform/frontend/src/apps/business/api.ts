@@ -310,6 +310,8 @@ export interface BusinessClient {
   invoice(freightId: string): Promise<Result<CommercialInvoiceView>>;
   writeInvoice(freightId: string, body: Record<string, unknown>): Promise<Result<CommercialInvoice>>;
   invoicePage(freightId: string): Promise<Result<string>>;
+  /** Our own paper invoice travels with the goods — or no longer. */
+  ownPaper(freightId: string, travels: boolean): Promise<Result<{ ownPaper: { by: string; at: string } | null }>>;
 }
 
 export function createBusinessClient(): BusinessClient {
@@ -351,6 +353,7 @@ export function createBusinessClient(): BusinessClient {
     invoice: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/commercial-invoice` as never, {} as never) as never),
     writeInvoice: (freightId, body) => call((c) => c.POST(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/commercial-invoice` as never, { body } as never) as never),
     invoicePage: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/commercial-invoice.html` as never, { parseAs: 'text' } as never) as never),
+    ownPaper: (freightId, travels) => call((c) => c.POST(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/commercial-invoice/own-paper` as never, { body: { travels } } as never) as never),
   };
 }
 

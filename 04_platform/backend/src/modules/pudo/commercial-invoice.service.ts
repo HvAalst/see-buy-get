@@ -5,7 +5,7 @@ import { Entity } from '../../foundation/entity/entity.types';
 import { GlosError } from '../../foundation/http/glos-error';
 import { escapeHtml } from '../../foundation/mail/mail.blocks';
 import { PersistentMap } from '../../foundation/store/persistent-map';
-import { CommercialInvoice, CommercialInvoiceView, EXPORT_REASONS, ExportReason, INVOICE_COPIES, INVOICE_DECLARATION, InvoiceLine, InvoiceParty, MAX_INVOICE_LINES } from './commercial-invoice.types';
+import { CommercialInvoice, CommercialInvoiceView, EXPORT_REASONS, ExportReason, INVOICE_COPIES, INVOICE_DECLARATION, InvoiceLine, InvoiceParty, MAX_INVOICE_LINES, OwnInvoicePaper } from './commercial-invoice.types';
 import { Freight } from './dispatch.types';
 import { canonicalJson } from './note-archive.types';
 
@@ -35,6 +35,8 @@ export interface InvoiceSigner {
 @Injectable()
 export class CommercialInvoiceService {
   private readonly invoices = new PersistentMap<string, CommercialInvoice>('commercial-invoices');
+  /** Loads whose shipper said its own paper invoice travels with the goods, by load. */
+  private readonly ownPapers = new PersistentMap<string, OwnInvoicePaper>('invoice-own-paper');
 
   /** The invoice the load travels with now, when there is one. */
   current(freightId: string): CommercialInvoice | undefined {
@@ -46,13 +48,16 @@ export class CommercialInvoiceService {
     return [...this.invoices.values()].filter((i) => i.freightId === freightId).sort((a, b) => b.signed.at.localeCompare(a.signed.at));
   }
 
-  view(f: Freight, mayWrite: boolean): CommercialInvoiceView {
+  view(f: Freight, mayWrite: boolean, postedByBusiness = true): CommercialInvoiceView {
     const all = this.all(f.freightId);
     const current = all.find((i) => !i.supersededBy);
+    const ownPaper = this.ownPapers.get(f.freightId);
     return {
       freightId: f.freightId,
       crossesBorder: crossesBorder(f),
       ...(current ? { current } : {}),
+      ...(ownPaper ? { ownPaper } : {}),
+      collectable: !this.pickupRefusal(f, postedByBusiness),
       earlier: all.filter((i) => i.supersededBy).map((i) => ({ invoiceId: i.invoiceId, number: i.number, issuedOn: i.issuedOn, signedBy: i.signed.name, signedAt: i.signed.at, ...(i.supersededAt ? { supersededAt: i.supersededAt } : {}) })),
       mayWrite,
     };
@@ -132,7 +137,40 @@ export class CommercialInvoiceService {
   /** What box 5 of the consignment note lists for it. */
   noteLine(freightId: string): string | undefined {
     const i = this.current(freightId);
-    return i ? `Commercial invoice ${i.number} of ${i.issuedOn}, ${i.copies} copies` : undefined;
+    if (i) return `Commercial invoice ${i.number} of ${i.issuedOn}, ${i.copies} copies`;
+    const own = this.ownPapers.get(freightId);
+    return own ? `Commercial invoice: the shipper's own, travelling with the goods (said by ${own.by} for ${own.for}, ${own.at.slice(0, 10)})` : undefined;
+  }
+
+  /**
+   * The shipper says its own paper invoice travels with the goods — or takes that back. Its word, by name; it lets the
+   * goods be taken over without an invoice written here. The business that posted the load, before delivery.
+   */
+  sayOwnPaper(f: Freight, signer: InvoiceSigner, travels: boolean, now: number = Date.now()): OwnInvoicePaper | undefined {
+    if (!this.isShipper(f, signer.entity)) throw new GlosError('FORBIDDEN', 'The commercial invoice is written by the business that posted the load');
+    if (f.status === 'cancelled') throw new GlosError('INVALID_STATE', 'This load was cancelled');
+    if (f.status === 'delivered') throw new GlosError('INVALID_STATE', 'These goods were delivered');
+    if (!travels) {
+      this.ownPapers.delete(f.freightId);
+      return undefined;
+    }
+    const said: OwnInvoicePaper = { freightId: f.freightId, by: text(signer.name, 80) || 'A member of the business', for: signer.entity.name, at: new Date(now).toISOString() };
+    this.ownPapers.set(f.freightId, said);
+    return said;
+  }
+
+  /**
+   * NO PAPERS, NO LOADING, for a load crossing a border that a business posted: until it signs its commercial invoice
+   * here or says its own travels with the goods, the carrier does not take them over — goods without one are held at
+   * the border, and the driver with them. The sentence the driver is refused with; nothing when the goods may go.
+   *
+   * Only a load a BUSINESS posted: it is the one whose shipper can write the invoice here. A counter booking or a
+   * store's diverted order has nobody in the app who could, and is not held to it.
+   */
+  pickupRefusal(f: Freight, postedByBusiness: boolean): string | undefined {
+    if (!postedByBusiness || !crossesBorder(f)) return undefined;
+    if (this.current(f.freightId) || this.ownPapers.has(f.freightId)) return undefined;
+    return 'This load crosses a border and the shipper has not signed its commercial invoice, nor said its own travels with the goods. Ask the shipper: the goods are not taken over without it.';
   }
 
   /* ------------------------------------------------------------------ the page -- */
