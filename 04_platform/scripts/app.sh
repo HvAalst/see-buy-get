@@ -78,6 +78,18 @@ ours() {
   ps -o command= -p "$1" | grep -qE 'node|nest|vite' && ! ps -o command= -p "$1" | grep -q docker
 }
 
+# This checkout's backend watcher (`nest start --watch`), found by its command line. Where its pid file was lost, stop
+# killed only the server listening on the port, and the watcher started another at the next change of a file
+# (2026-10-18: a planted-defect run brought the stopped backend back up on the planted code). Windows only: elsewhere
+# the pid file's tree is the whole of it.
+backend_watchers() {
+  windows || return 0
+  local dir
+  dir=$(cd "$ROOT/backend" && pwd -W 2>/dev/null) || return 0
+  dir=${dir//\//\\}
+  powershell.exe -NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Where-Object { \$_.CommandLine -like '*nest.js*start --watch*' -and \$_.CommandLine -like '*$dir*' } | ForEach-Object { \$_.ProcessId }" 2>/dev/null | tr -d '\r'
+}
+
 # wait_for <seconds> <command...> — the command is run again each second until it succeeds.
 wait_for() {
   local secs=$1 i; shift
@@ -147,6 +159,11 @@ dev_stop() {
     if [ -n "$pid" ] && ours "$pid"; then
       kill_tree "$pid"; label ":$port"; say "stopped (pid $pid)"; stopped=1
     fi
+  done
+  # …and a backend watcher whose pid file was lost: left alive, it starts the server again at the next saved file.
+  for pid in $(backend_watchers); do
+    taskkill //T //F //PID "$pid" >/dev/null 2>&1 || true
+    label watcher; say "stopped (pid $pid)"; stopped=1
   done
   [ $stopped -eq 0 ] && say "nothing was running"
   return 0
