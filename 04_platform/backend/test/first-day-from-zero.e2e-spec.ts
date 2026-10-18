@@ -10,6 +10,7 @@ import { HANDOVER_FEE, RELEASE_FEE, SHELVING_FEE, WHOLESALE } from '../src/modul
 import { WebPushSender } from '../src/modules/pudo/web-push';
 import { publicKeyOf } from '../src/modules/pudo/vapid';
 import { aDevice, openAsBrowser } from '../src/modules/pudo/push.test-util';
+import { PilotService } from '../src/modules/pudo/pilot.service';
 
 /**
  * THE FIRST DAY OF A NEW INSTALLATION, AS IT WOULD BE LIVE — from an empty server to a parcel collected.
@@ -482,7 +483,8 @@ describe('the first day of a new installation, as it would be live', () => {
     const receiver = '+254722000002';
     const sent = texts.length;
     const taken = await must(
-      http().post('/v1/sbg/parcels/accept').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, parcelId: 'QR-FIRST-0001', size: 'M', destZone: 'Westlands', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: 'dropoff.jpg' }),
+      // Timed at the counter by the shop's app: the pilot's take-in time (step 12).
+      http().post('/v1/sbg/parcels/accept').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, parcelId: 'QR-FIRST-0001', size: 'M', destZone: 'Westlands', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: 'dropoff.jpg', takeInSeconds: 24 }),
     );
     expect(taken).toMatchObject({ parcelId: 'QR-FIRST-0001', originZone: 'Nairobi CBD', destZone: 'Westlands', collectingEntityId: kenya, takeInPromise: 'ours' });
     // The code that will release it is given to the SENDER, at the counter, and to nobody else.
@@ -749,5 +751,33 @@ describe('the first day of a new installation, as it would be live', () => {
     const account = (code: string) => (books.accounts as Array<{ code: string; balance: number }>).filter((x) => x.code === code).reduce((sum, x) => sum + x.balance, 0);
     expect(account('expense.claims')).toBe(0);
     expect(account('payable.claim')).toBe(0);
+  });
+
+  it('12 · the pilot’s first week, as the day went: the four numbers the compendium judges it on — and a finished week is frozen', async () => {
+    const board = await must(http().get('/v1/sbg/pilot').set(bearer(amina)), 200);
+    const week = board.thisWeek;
+    expect(week).toMatchObject({ frozen: false, week: expect.stringMatching(/^\d{4}-W\d{2}$/) });
+    // Every parcel due onto a bus was scanned onto it.
+    expect(week.handshake).toMatchObject({ missed: 0, rate: 1 });
+    expect(week.handshake.handed).toBeGreaterThan(0);
+    // Nothing lost; the two problems reported (one at the counter, one by a receiver) count against it.
+    expect(week.loss).toMatchObject({ lost: 0, damaged: 2 });
+    expect(week.loss.rate).toBeCloseTo(2 / week.loss.takenIn, 4);
+    // The one take-in the counter timed.
+    expect(week.takeIn).toEqual({ timed: 1, medianSeconds: 24, p90Seconds: 24 });
+    // Week 1 of the pilot: both shops worked a counter, and both are working it.
+    expect(week.retention).toEqual({ pilotWeek: 1, original: 2, active: 2, rate: 1 });
+    expect(board.weeks).toEqual([]);
+    expect(board.targets).toMatchObject({ handshake: 0.95, loss: 0.01, takeInSeconds: 30, retention: 0.8, retentionAtWeek: 8 });
+    // Not a shop's to read.
+    await must(http().get('/v1/sbg/pilot').set(bearer(mamaSarah.token)), 403);
+
+    // A week later the first week is over: frozen, with its fingerprint — and never counted again, whatever lands in it after.
+    const pilot = app.get(PilotService);
+    const nextWeek = Date.parse(week.to) + 3_600_000;
+    const frozen = pilot.board(nextWeek).weeks[0];
+    expect(frozen).toMatchObject({ week: week.week, frozen: true, sha256: expect.stringMatching(/^[0-9a-f]{64}$/), takeIn: { timed: 1, medianSeconds: 24, p90Seconds: 24 } });
+    pilot.noteTakeIn('QR-LATE-TIMED', mamaSarah.did, 50, Date.parse(week.from) + 60_000);
+    expect(pilot.board(nextWeek).weeks[0]).toEqual(frozen);
   });
 });

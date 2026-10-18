@@ -153,6 +153,8 @@ class DimensionsDto {
 
 export class AcceptParcelDto {
   @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
+  /** How long this take-in took at the counter, by the app's own clock, in seconds — for the pilot's numbers. */
+  @IsOptional() @IsNumber() @Min(0) @Max(86_400) takeInSeconds?: number;
   @IsString() parcelId!: string;
   /** The redesigned counter measures the parcel: dims + weight → the tier is DERIVED (like the vendor/Send
    *  mint). `size` remains for the legacy declared-tier path; at least one of {dimensionsCm+weightKg, size}
@@ -1237,6 +1239,8 @@ export class ConsumerSendDto {
 
 export class IntakeDto {
   @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
+  /** How long this take-in took at the counter, by the app's own clock, in seconds — for the pilot's numbers. */
+  @IsOptional() @IsNumber() @Min(0) @Max(86_400) takeInSeconds?: number;
   /** PG2 — required when the scanned parcel is a person's pre-minted peer send (walk-up parity: the
    *  drop-off photo is the fraud defence, taken at the counter). Ignored for a vendor inbound. */
   @IsOptional() @IsString() dropoffPhotoRef?: string;

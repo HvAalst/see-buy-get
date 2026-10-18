@@ -41,6 +41,7 @@ import { ConsolePhoneNav, ConsoleRail } from './ConsoleNav';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { joiningWaiting } from './fleets';
 import { groupsFor } from './nav';
+import { PilotScreen } from './screens/PilotScreen';
 import { waitingLine } from './queues';
 import { useWideScreen } from '../../shared/useWideScreen';
 import { useTowerApp, type Screen } from './useTowerApp';
@@ -160,7 +161,7 @@ export function App() {
      * company administrator saw on signing in. COMPANY moved out, because their own record is theirs to
      * keep — an operator picks a company from a list, an administrator IS one.
      */
-    ...(isOperator ? (['network', 'stores', 'cases', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'borders', 'movers', 'rates', 'connections'] as Screen[]) : []),
+    ...(isOperator ? (['network', 'pilot', 'stores', 'cases', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'borders', 'movers', 'rates', 'connections'] as Screen[]) : []),
     ...(manyCompanies ? (['companies'] as Screen[]) : []),
     // Their own books and what they are owed — never the network's ledger, which is not theirs to read.
     'money',
@@ -285,6 +286,8 @@ export function App() {
             <MoneyScreen state={state} actions={actions} />
           ) : state.screen === 'network' ? (
             <NetworkScreen state={state} actions={actions} />
+          ) : state.screen === 'pilot' ? (
+            <PilotScreen actions={actions} />
           ) : state.screen === 'borders' ? (
             <BordersScreen state={state} actions={actions} />
           ) : state.screen === 'company' ? (

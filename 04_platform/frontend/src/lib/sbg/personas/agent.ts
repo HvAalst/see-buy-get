@@ -161,6 +161,8 @@ export function createAgentApi(sbg: SbgClient) {
       fragile?: boolean;
       // S30 — the commodity's primary cargo nature (default GEN server-side). Union mirrors CARGO_NATURES.
       natureCode?: 'GEN' | 'FOD' | 'FOP' | 'HAZ-CHEM' | 'HAZ-DUST' | 'HAZ-BIO' | 'HAZ-FLAM' | 'FRG' | 'ODR' | 'HUM';
+      /** How long it took at the counter, by this app's clock — for the pilot's numbers. */
+      takeInSeconds?: number;
     }) => sbg.request((c) => c.POST('/v1/sbg/parcels/accept', { body })),
 
     /** F2 — book a too-big (dedicated, P4+) walk-up as FREIGHT instead of refusing it. The agent is the
@@ -273,8 +275,8 @@ export function createAgentApi(sbg: SbgClient) {
 
     /** PG4 — take a PRE-MINTED parcel in: a peer send (collect the locked price in cash + proof photo)
      *  or a store order (prepaid, no photo). One scan surface; the parcel's record decides. */
-    intake: (id: string, dropoffPhotoRef?: string) =>
-      sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/intake', { params: { path: { id } }, body: dropoffPhotoRef ? { dropoffPhotoRef } : {} })),
+    intake: (id: string, dropoffPhotoRef?: string, takeInSeconds?: number) =>
+      sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/intake', { params: { path: { id } }, body: { ...(dropoffPhotoRef ? { dropoffPhotoRef } : {}), ...(takeInSeconds ? { takeInSeconds } : {}) } })),
 
     /**
      * Hand selected parcels to the scanned driver badge (the bus moment). The server runs the S25

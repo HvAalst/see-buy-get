@@ -163,6 +163,7 @@ import { haversineKm } from './geo';
 import { GEOCODER, Geocoder } from './geocoder';
 import { CounterLogInterceptor } from './shop-staff.controller';
 import { AtTheCounter } from '../../foundation/auth/at-the-counter';
+import { PilotService } from './pilot.service';
 
 interface ModuleInfo {
   module: string;
@@ -294,6 +295,8 @@ export class SbgController {
     @Optional() private readonly care?: VehicleCareService,
     // A shipper's own GS1 codes for the packages of the loads it posts.
     @Optional() private readonly shipperCodes?: ShipperCodesService,
+    // The pilot's own numbers: what each counter handover was due to load, how long each take-in took (pilot.types.ts).
+    @Optional() private readonly pilot?: PilotService,
   ) {}
 
   /**
@@ -2811,7 +2814,11 @@ export class SbgController {
   @Post('parcels/accept')
   @AtTheCounter()
   accept(@Body() dto: AcceptParcelDto, @Actor() actor: IntrospectionResult) {
-    return this.parcels.accept({ ...dto, agentDid: actingDid(actor, dto.agentDid) });
+    const agentDid = actingDid(actor, dto.agentDid);
+    const taken = this.parcels.accept({ ...dto, agentDid });
+    // How long it took at the counter, by the app's own clock: kept beside the parcel for the pilot, never on it.
+    this.pilot?.noteTakeIn((taken as { parcelId?: string }).parcelId ?? dto.parcelId, agentDid, dto.takeInSeconds);
+    return taken;
   }
 
   /** F2 — the counter books a too-big (dedicated, P4+) walk-up as FREIGHT instead of refusing it (the perishable
@@ -2902,7 +2909,11 @@ export class SbgController {
   @AtTheCounter()
   handover(@Body() dto: HandoverDto, @Actor() actor: IntrospectionResult) {
     const driverBadgeId = this.fleet.badgeShown(dto.driverBadgeId);
-    return this.parcels.handover({ ...dto, driverBadgeId, agentDid: actingDid(actor, dto.agentDid) });
+    const agentDid = actingDid(actor, dto.agentDid);
+    const loaded = this.parcels.handover({ ...dto, driverBadgeId, agentDid });
+    // The handshake the pilot is judged on: what was due onto the bus, and what the shop scanned onto it.
+    this.pilot?.noteHandover(agentDid, loaded);
+    return loaded;
   }
 
   @Roles('agent', 'operator')
@@ -3981,8 +3992,9 @@ export class SbgController {
   @AtTheCounter()
   intake(@Param('id') id: string, @Body() dto: IntakeDto, @Actor() actor: IntrospectionResult) {
     const did = actingDid(actor, dto.agentDid);
-    if (this.parcels.get(id).direction === 'outbound') return this.parcels.intakeConsumerSend(id, did, dto.dropoffPhotoRef);
-    return this.parcels.intakeInbound(id, did);
+    const taken = this.parcels.get(id).direction === 'outbound' ? this.parcels.intakeConsumerSend(id, did, dto.dropoffPhotoRef) : this.parcels.intakeInbound(id, did);
+    this.pilot?.noteTakeIn(id, did, dto.takeInSeconds);
+    return taken;
   }
 
   /** PG2 — what the counter must know about a scanned parcel BEFORE confirming intake: what it is, what

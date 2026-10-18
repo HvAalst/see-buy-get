@@ -36,7 +36,7 @@ export const NAV_GROUPS: NavGroup[] = [
   // operator reading it is asking the market question — which yards exist and what do they say they hold.
   // STORES sit beside the shops, hubs and fleets they are a counterpart of — and on a screen of their own,
   // because a store is the one participant somebody has to FIND: it rings, and it gives its name.
-  { key: 'overview', labelKey: 'tower.group.overview', icon: 'home', screens: ['network', 'stores', 'market', 'movers', 'depots'] },
+  { key: 'overview', labelKey: 'tower.group.overview', icon: 'home', screens: ['network', 'pilot', 'stores', 'market', 'movers', 'depots'] },
   {
     key: 'waiting',
     labelKey: 'tower.group.waiting',
@@ -58,6 +58,7 @@ export const NAV_GROUPS: NavGroup[] = [
  */
 export const SCREEN_META: Record<Screen, { labelKey: MessageKey; icon: IconName }> = {
   network: { labelKey: 'tower.nav.network', icon: 'home' },
+  pilot: { labelKey: 'tower.nav.pilot', icon: 'star' },
   stores: { labelKey: 'tower.nav.stores', icon: 'bag' },
   cases: { labelKey: 'tower.nav.cases', icon: 'warning' },
   hazards: { labelKey: 'tower.nav.hazards', icon: 'route' },

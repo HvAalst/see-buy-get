@@ -22382,6 +22382,24 @@
         }
       }
     },
+    "/v1/sbg/pilot": {
+      "get": {
+        "operationId": "Pilot.board",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PilotBoard"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/payout-number": {
       "get": {
         "operationId": "PayoutNumber.mine",
@@ -33874,6 +33892,11 @@
           "agentDid": {
             "type": "string"
           },
+          "takeInSeconds": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 86400
+          },
           "parcelId": {
             "type": "string"
           },
@@ -35921,8 +35944,14 @@
           "agentDid": {
             "type": "string"
           },
+          "takeInSeconds": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 86400
+          },
           "dropoffPhotoRef": {
-            "type": "string"
+            "type": "string",
+            "description": "PG2 — required when the scanned parcel is a person's pre-minted peer send (walk-up parity: the\n drop-off photo is the fraud defence, taken at the counter). Ignored for a vendor inbound."
           }
         }
       },
@@ -46894,6 +46923,217 @@
         },
         "required": [
           "note"
+        ]
+      },
+      "PilotRetention": {
+        "type": "object",
+        "properties": {
+          "pilotWeek": {
+            "type": "number",
+            "description": "Which week of the pilot this is: 1 is the week the first parcel was taken in."
+          },
+          "original": {
+            "type": "number",
+            "description": "Shops that worked a counter in the pilot’s first week."
+          },
+          "active": {
+            "type": "number",
+            "description": "Of those, the ones that worked a counter this week."
+          },
+          "rate": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "pilotWeek",
+          "original",
+          "active"
+        ]
+      },
+      "PilotHandshake": {
+        "type": "object",
+        "properties": {
+          "handed": {
+            "type": "number",
+            "description": "Parcels scanned onto a bus at a counter handover."
+          },
+          "missed": {
+            "type": "number",
+            "description": "Parcels due onto a bus and left behind, whatever the reason."
+          },
+          "rate": {
+            "type": "number",
+            "description": "handed ÷ (handed + missed); absent when no parcel was due."
+          }
+        },
+        "required": [
+          "handed",
+          "missed"
+        ]
+      },
+      "PilotLoss": {
+        "type": "object",
+        "properties": {
+          "lost": {
+            "type": "number",
+            "description": "Parcels declared lost this week and not found by the time the week was frozen."
+          },
+          "damaged": {
+            "type": "number",
+            "description": "Problems reported on parcels this week (a counter or a receiver)."
+          },
+          "takenIn": {
+            "type": "number",
+            "description": "Parcels taken in this week."
+          },
+          "rate": {
+            "type": "number",
+            "description": "(lost + damaged) ÷ taken in; absent when nothing was taken in."
+          }
+        },
+        "required": [
+          "lost",
+          "damaged",
+          "takenIn"
+        ]
+      },
+      "PilotTakeIn": {
+        "type": "object",
+        "properties": {
+          "timed": {
+            "type": "number",
+            "description": "Take-ins timed at the counter this week."
+          },
+          "medianSeconds": {
+            "type": "number",
+            "description": "Their median, in seconds."
+          },
+          "p90Seconds": {
+            "type": "number",
+            "description": "The slowest one in ten, in seconds."
+          }
+        },
+        "required": [
+          "timed"
+        ]
+      },
+      "PilotWeek": {
+        "type": "object",
+        "properties": {
+          "week": {
+            "type": "string",
+            "description": "ISO week, e.g. 2026-W42."
+          },
+          "frozen": {
+            "type": "boolean",
+            "description": "False for the week still running: its numbers are \"so far\" and are not kept."
+          },
+          "frozenAt": {
+            "type": "string",
+            "description": "When the week was frozen, and the fingerprint of what was frozen."
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "retention": {
+            "description": "Absent until a first parcel has been taken in anywhere.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PilotRetention"
+              }
+            ]
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "handshake": {
+            "$ref": "#/components/schemas/PilotHandshake"
+          },
+          "loss": {
+            "$ref": "#/components/schemas/PilotLoss"
+          },
+          "takeIn": {
+            "$ref": "#/components/schemas/PilotTakeIn"
+          }
+        },
+        "required": [
+          "week",
+          "frozen",
+          "from",
+          "to",
+          "handshake",
+          "loss",
+          "takeIn"
+        ]
+      },
+      "PilotTargetsView": {
+        "type": "object",
+        "properties": {
+          "handshake": {
+            "type": "number"
+          },
+          "handshakeWarn": {
+            "type": "number"
+          },
+          "loss": {
+            "type": "number"
+          },
+          "lossWarn": {
+            "type": "number"
+          },
+          "takeInSeconds": {
+            "type": "number"
+          },
+          "takeInWarnSeconds": {
+            "type": "number"
+          },
+          "retention": {
+            "type": "number"
+          },
+          "retentionAtWeek": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "handshake",
+          "handshakeWarn",
+          "loss",
+          "lossWarn",
+          "takeInSeconds",
+          "takeInWarnSeconds",
+          "retention",
+          "retentionAtWeek"
+        ]
+      },
+      "PilotBoard": {
+        "type": "object",
+        "properties": {
+          "thisWeek": {
+            "description": "The week still running, so far.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PilotWeek"
+              }
+            ]
+          },
+          "weeks": {
+            "description": "Frozen weeks, newest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PilotWeek"
+            }
+          },
+          "targets": {
+            "$ref": "#/components/schemas/PilotTargetsView"
+          }
+        },
+        "required": [
+          "thisWeek",
+          "weeks",
+          "targets"
         ]
       },
       "PayoutNumberView": {

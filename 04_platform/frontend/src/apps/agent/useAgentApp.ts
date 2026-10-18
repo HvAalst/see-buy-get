@@ -999,9 +999,21 @@ export function useAgentApp() {
 
   /* ---------------------------------------------------------------- forms */
 
+  /**
+   * THE TAKE-IN, TIMED for the pilot (the user, 2026-10-18): from the first touch on the take-in form — a scan or a
+   * keystroke — to the parcel taken in. Started by the first change, sent with the take-in, and started afresh when the
+   * form is empty again.
+   */
+  const takeInStarted = useRef<number | null>(null);
+  const takeInSeconds = (): number | undefined => (takeInStarted.current ? Math.round((Date.now() - takeInStarted.current) / 100) / 10 : undefined);
   const setAccept = useCallback((p: Partial<AcceptForm>) => {
+    takeInStarted.current ??= Date.now();
     setState((s) => ({ ...s, accept: { ...s.accept, ...p } }));
   }, []);
+  const acceptEmpty = JSON.stringify(state.accept) === JSON.stringify(EMPTY_ACCEPT);
+  useEffect(() => {
+    if (acceptEmpty) takeInStarted.current = null;
+  }, [acceptEmpty]);
 
   /* --- walk-up intake: measure + destination picker (Map | Address) --- */
 
@@ -1010,6 +1022,7 @@ export function useAgentApp() {
   const deriveEpoch = useRef(0);
   const setDims = useCallback((patch: Partial<DimsForm>) => {
     deriveEpoch.current++;
+    takeInStarted.current ??= Date.now();
     setState((s) => ({ ...s, accept: { ...s.accept, dims: { ...s.accept.dims, ...patch } }, acceptDerived: null }));
   }, []);
 
@@ -1027,14 +1040,17 @@ export function useAgentApp() {
   // Editing the text (or switching mode) drops the stale near-point/note so the list + distances can never
   // lag behind what the box says.
   const setAddress = useCallback((v: string) => {
+    takeInStarted.current ??= Date.now();
     setState((s) => ({ ...s, accept: { ...s.accept, addressText: v }, acceptNear: null, acceptGeoNote: null }));
   }, []);
 
   const setDestMode = useCallback((mode: 'map' | 'address') => {
+    takeInStarted.current ??= Date.now();
     setState((s) => ({ ...s, accept: { ...s.accept, destMode: mode }, acceptNear: null, acceptGeoNote: null }));
   }, []);
 
   const pickDest = useCallback((point: { did: string; zone: string; shopName: string }) => {
+    takeInStarted.current ??= Date.now();
     setState((s) => ({ ...s, accept: { ...s.accept, destPudoDid: point.did, destZone: point.zone, destShopName: point.shopName } }));
   }, []);
 
@@ -1468,6 +1484,7 @@ export function useAgentApp() {
         dropoffPhotoRef: f.photoRef,
         fragile: f.fragile || undefined,
         natureCode: f.natureCode,
+        takeInSeconds: takeInSeconds(),
         // Cash at this counter is OUR cash. Where no cash of ours may cross it, the take-in books nothing of
         // ours — the carrier prices and collects its own work — so it is not sent as a cash take-in.
         ...(terms && !terms.cashAccepted ? { paymentMode: 'prepaid' as const } : {}),
@@ -1798,7 +1815,7 @@ export function useAgentApp() {
     // Only ever act on a SETTLED preview — never a stale one still on screen during a re-scan's fetch.
     if (!pm || stateRef.current.preMintState !== 'ready' || (pm.kind === 'peer_send' && !photo)) return;
     await run('intake', async () => {
-      const r = await client.api.intake(pm.parcelId, pm.kind === 'peer_send' ? photo : undefined);
+      const r = await client.api.intake(pm.parcelId, pm.kind === 'peer_send' ? photo : undefined, takeInSeconds());
       if (r.error) return fail(r.error);
       buzz();
       previewEpoch.current++; // the form reset below must not race a stale preview into the cleared state
