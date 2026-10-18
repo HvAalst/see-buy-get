@@ -23,6 +23,9 @@ import { triggerDownload } from '../../shared/download';
 import { topUpTermsOf, type TopUpTerms } from '../../shared/topup-fee';
 import { bodyHintValue, bookFreightMissing, EMPTY_ACCEPT, excludedBodiesValue, handoverRoute, incotermValue, money, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, putAwayList, termsBlock, type AcceptForm, type DimsForm } from './logic';
 import type { GeoPoint } from '../../shared/geo';
+import { peopleApi } from './people';
+import { clearStaff, ownerOnlyScreen, readStaff, saveStaff, type StaffAtCounter, type StaffSession } from './staff';
+import { setOutboxActor } from '../../shared/outbox';
 import { deviceAskOf, saveShopDeviceKey, shopDeviceKey, shopDevicesApi, type DeviceAsk } from '../../shared/account/shopDevice';
 import type {
   AgentLedgerRow,
@@ -251,6 +254,11 @@ export interface AgentState {
   lateTakeIns: Array<TakenIn & { senderMobile?: string; queuedAt: string }>;
   /** A sign-in from a phone the shop has not confirmed: where the code went (and, in a sandbox, the code). */
   deviceAsk: (DeviceAsk & { email: string }) | null;
+  /**
+   * WHO IS AT THE COUNTER, when it is one of the shop's people and not the shop's own sign-in (staff.ts). The owner's
+   * rows — money, prices, hours, people, the shop's papers and account — are left out of the screens for them.
+   */
+  staff: StaffAtCounter | null;
   /** F2 — the freight the last counter booking produced: the FRT code + tracking key to print for the
    *  customer, plus the site-equipment advisory. Null until a booking succeeds / once dismissed. */
   bookedFreight: {
@@ -358,6 +366,7 @@ const INITIAL: AgentState = {
   acceptedLabel: null,
   lateTakeIns: [],
   deviceAsk: null,
+  staff: null,
   bookedFreight: null,
   preMint: null,
   preMintState: 'idle',
@@ -504,14 +513,15 @@ export function useAgentApp() {
        * is not a failure of the screen — the float and the gate above are what the day runs on — so it
        * falls back to nothing rather than taking the cockpit down with it.
        */
-      const fundingR = await client.api.funding(did);
+      // The shop's money is the owner's: a member of staff at the counter does not read it (and would be refused).
+      const fundingR = readStaff(did) ? null : await client.api.funding(did);
       if (superseded()) return;
-      const fundingState = fundingR.error ? null : narrow<{ open: FundingView | null; terms?: unknown }>(fundingR.data);
+      const fundingState = !fundingR || fundingR.error ? null : narrow<{ open: FundingView | null; terms?: unknown }>(fundingR.data);
       const funding = fundingState?.open ?? null;
       // The TERMS ride along with it: what a top-up costs has to be on the sheet before an amount is
       // committed to, not in the register afterwards. Kept from the last good read on a failure, because
       // a fee that flickers out of existence when one request fails is the worst of both answers.
-      const topUpTerms = fundingR.error ? undefined : topUpTermsOf(fundingState?.terms);
+      const topUpTerms = !fundingR || fundingR.error ? undefined : topUpTermsOf(fundingState?.terms);
 
       setState((s) => ({
         ...s,
@@ -564,9 +574,19 @@ export function useAgentApp() {
 
   useEffect(() => {
     const stored = readDid();
-    if (stored) setDid(stored);
-    else setState((s) => ({ ...s, phase: 'signin' }));
+    if (stored) {
+      setDid(stored);
+      setState((s) => ({ ...s, staff: readStaff(stored) }));
+    } else setState((s) => ({ ...s, phase: 'signin' }));
   }, []);
+
+  // WHO IS SIGNED IN ON THIS PHONE, for the outbox: an act made here without a signal goes under the sign-in that made
+  // it — the shop's own, or one of its people's — never under whoever is signed in when the signal comes back.
+  const staffKey = state.staff?.memberId;
+  const staffName = state.staff?.name;
+  useEffect(() => {
+    setOutboxActor(did ? (staffKey ? { key: `staff:${did}:${staffKey}`, name: staffName ?? '' } : { key: `shop:${did}`, name: t('agent.outbox.owner') }) : null);
+  }, [did, staffKey, staffName]);
 
   useEffect(() => {
     // Identity settled: drop every other shop's stored token — never on first render
@@ -631,6 +651,7 @@ export function useAgentApp() {
       // A fresh sign-in may be a different shop on a shared tablet: purge everything,
       // seed the new token under the new DID, then boot.
       purgeAgentTokens(null);
+      clearStaff();
       saveDid(login.did);
       saveEmail(mail);
       const next = createAgentClient(login.did);
@@ -641,9 +662,36 @@ export function useAgentApp() {
     [],
   );
 
+  /**
+   * ONE OF THE SHOP'S PEOPLE, signed in as themselves and now at this counter (staff.ts): their session acts as the shop
+   * under their name. Everything of the last sign-in on this phone is dropped first, the shop's own included.
+   */
+  const enterAsStaff = useCallback(async (session: StaffSession) => {
+    purgeAgentTokens(null);
+    saveDid(session.shopDid);
+    const who = { shopDid: session.shopDid, shopName: session.shopName, name: session.name, memberId: session.memberId };
+    saveStaff(who);
+    const next = createAgentClient(session.shopDid);
+    await next.client.seed({ access_token: session.token.access_token, expires_in: session.token.expires_in ?? 3600 });
+    setState((s) => ({ ...INITIAL, phase: 'boot', staff: who, toasts: s.toasts }));
+    setDid(session.shopDid);
+  }, []);
+
   /** The shop's own phones, in Settings: read and forgotten by the shop, with its password. */
   const shopDevices = useMemo(
     () => (client ? shopDevicesApi((path, body) => client.client.sbg.request((raw) => raw.POST(path as never, { body } as never) as never), readEmail) : undefined),
+    [client],
+  );
+
+  /** The people at the counter, for the owner: added by number, taken out at once, and who did what. */
+  const people = useMemo(
+    () =>
+      client
+        ? peopleApi(
+            (path) => client.client.sbg.request((raw) => raw.GET(path as never, {} as never) as never),
+            (path, body) => client.client.sbg.request((raw) => raw.POST(path as never, { body } as never) as never),
+          )
+        : undefined,
     [client],
   );
 
@@ -658,6 +706,7 @@ export function useAgentApp() {
   const signOut = useCallback(() => {
     client?.client.session.clear();
     purgeAgentTokens(null);
+    clearStaff();
     clearDid();
     setDid(null);
     setState(() => ({ ...INITIAL, phase: 'signin' }));
@@ -922,7 +971,9 @@ export function useAgentApp() {
   );
 
   const go = useCallback(
-    (screen: Screen) => {
+    (asked: Screen) => {
+      // A notification or an old link can point one of the shop's people at an owner's screen: the counter instead.
+      const screen: Screen = stateRef.current.staff && ownerOnlyScreen(asked) ? 'home' : asked;
       setState((s) => ({
         ...s,
         screen,
@@ -2185,7 +2236,9 @@ export function useAgentApp() {
       signIn,
       confirmDevice,
       cancelDeviceAsk,
+      enterAsStaff,
       shopDevices,
+      people,
       signOut,
       adoptToken,
       forgot,

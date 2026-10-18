@@ -59,6 +59,7 @@ import { AccountRecoveryService } from './account-recovery.service';
 import { InviteService } from './invite.service';
 import { ApiKeyService } from './api-key.service';
 import { AuthService } from '../../foundation/auth/auth.service';
+import { ShopStaffService } from './shop-staff.service';
 import {
   BAG_CAPACITY_UNITS, DIM_DIVISOR, MEDIUM_CM3, MEDIUM_KG, SIZE_LIMITS, SIZE_TRANSPORT_FACTOR, SIZE_UNITS,
   classifySize, measuredFactor,
@@ -134,6 +135,7 @@ describe('dimensional weight', () => {
         EmailCodeService, AccountRecoveryService, AccountService, OtpService, PersonService, InviteService, ApiKeyService, AuthService,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
         EntityService, EntityAdminService, OperatorAccountService, ConsignmentNoteService, DepartureNoteService, NoteArchiveService, NoteBundleService, DestinationService, PresenceService, InterestService, DepartureService, CompanyDocumentService, HandleService, HandleDirectory, BusinessService, BusinessMemberGuard, BusinessClientService, CompanyReadinessService, BorderRuleService, BooksService, FxService,
+        ShopStaffService, // the shop controller keeps its counter's record of who did what (CounterLogInterceptor)
         PayoutService, ReturnService, UnclaimedService, MerchantRatingService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
         FundingService, FundingPayerRegistrar, SandboxFundingRail, { provide: FUNDING_RAIL, useExisting: SandboxFundingRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },

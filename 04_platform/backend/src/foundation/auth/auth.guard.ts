@@ -8,6 +8,7 @@ import { hasScope } from './actor-scopes';
 import { staffNetworkAllows } from './staff-network';
 import { SETUP_KEY_KEY, isStaffAccount, setupKeyOutsideSandbox } from './setup-key';
 import { STAFF_OUTSIDE_SANDBOX_KEY } from './engine-surface';
+import { AT_THE_COUNTER_KEY, OWNER_ONLY, isShopStaff } from './at-the-counter';
 import { isSandbox } from '../runtime/sandbox';
 import { ActorRole, IntrospectionResult } from './auth.types';
 import { Tier } from '../data-firewall/data-firewall.types';
@@ -71,6 +72,10 @@ export class AuthGuard implements CanActivate {
       if (this.reflector.getAllAndOverride<boolean>(STAFF_OUTSIDE_SANDBOX_KEY, targets) === true) return true;
       throw new ForbiddenException(`${NOBODY_SAID}. It needs @Public, @Roles, @Scopes or @SignedIn.`);
     }
+
+    // THE PEOPLE AT A SHOP'S COUNTER (at-the-counter.ts) sign in as the shop: let through only a door marked for them.
+    // Read off the handler alone — a mark on a whole controller would open a route added to it later without anybody deciding.
+    if (isShopStaff(auth) && this.reflector.get<boolean>(AT_THE_COUNTER_KEY, context.getHandler()) !== true) throw new ForbiddenException(OWNER_ONLY);
 
     // Operator satisfies everything — the `*` scope is granted only to operator tokens.
     const isOperator = auth.role === 'operator' || hasScope(auth.scopes, '*');

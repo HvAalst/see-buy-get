@@ -209,7 +209,7 @@ export class AccountController {
   }
 }
 
-/** The shop a sign-in speaks for — the shop's own, never staff's, who pass every role check. */
+/** The shop a sign-in speaks for — the shop's own, never staff's, who pass every role check. A shop's own people never reach here: the guard lets them through counter doors only (at-the-counter.ts). */
 function shopOf(actor: IntrospectionResult | undefined): string {
   if (actor?.role !== 'agent' || !actor.did) throw new GlosError('FORBIDDEN', 'A shop’s phones are the shop’s own to see and forget, signed in as the shop. Staff change none.');
   return actor.did;

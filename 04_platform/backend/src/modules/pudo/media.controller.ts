@@ -6,6 +6,7 @@ import { SignedIn } from '../../foundation/auth/scopes.decorator';
 import { GlosError } from '../../foundation/http/glos-error';
 import { MediaService } from './media.service';
 import { UploadMediaDto } from './pudo.dto';
+import { AtTheCounter } from '../../foundation/auth/at-the-counter';
 
 /**
  * Media (S26) — real image upload, gated retrieval and a per-owner library. The bytes never touch the
@@ -35,6 +36,7 @@ export class MediaController {
   /** Upload one downscaled image (+ optional thumbnail). The owner is the authenticated caller. */
   @SignedIn()
   @Post()
+  @AtTheCounter()
   upload(@Body() dto: UploadMediaDto, @Actor() actor: IntrospectionResult) {
     return this.media.upload({ ownerDid: this.owner(actor), kind: dto.kind, dataUrl: dto.dataUrl, thumbDataUrl: dto.thumbDataUrl });
   }
@@ -51,6 +53,7 @@ export class MediaController {
   @Get(':id')
   @Header('Cache-Control', 'private, no-store')
   @Header('X-Content-Type-Options', 'nosniff')
+  @AtTheCounter()
   fetch(@Param('id') id: string, @Query('variant') variant: string | undefined, @Actor() actor: IntrospectionResult): StreamableFile {
     const ref = this.media.get(id);
     if (!ref) throw new GlosError('NOT_FOUND', 'No such media');

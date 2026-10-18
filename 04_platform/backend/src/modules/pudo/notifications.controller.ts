@@ -8,6 +8,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { BusinessMemberGuard } from './business-member.guard';
 import { NotificationService } from './notification.service';
 import { SubscribeDto, UnsubscribeDto } from './notification.dto';
+import { AtTheCounter } from '../../foundation/auth/at-the-counter';
 
 /**
  * The push spine (N1). Three authenticated routes let any signed-in human enrol / drop / test the
@@ -41,6 +42,7 @@ export class NotificationsController {
   /** Enrol this device (the browser's PushSubscription) for the authenticated owner. */
   @Scopes('notification:manage:self')
   @Post('subscribe')
+  @AtTheCounter()
   subscribe(@Body() dto: SubscribeDto, @Actor() actor: IntrospectionResult) {
     this.noDeviceFor(actor);
     const record = this.notifications.subscribe(actingDid(actor), actor.role ?? 'anon', {
@@ -53,6 +55,7 @@ export class NotificationsController {
   /** Drop this device (the browser unsubscribed, or the user turned notifications off). */
   @Scopes('notification:manage:self')
   @Delete('subscribe')
+  @AtTheCounter()
   unsubscribe(@Body() dto: UnsubscribeDto, @Actor() actor: IntrospectionResult) {
     this.notifications.unsubscribe(actingDid(actor), dto.endpoint);
     return { unsubscribed: true };
@@ -61,6 +64,7 @@ export class NotificationsController {
   /** Send a test push to every device the owner has enrolled — the "it works" confirmation after opt-in. */
   @Scopes('notification:manage:self')
   @Post('test')
+  @AtTheCounter()
   async test(@Actor() actor: IntrospectionResult) {
     this.noDeviceFor(actor);
     const devices = await this.notifications.pushToOwner(actingDid(actor), {
@@ -78,6 +82,7 @@ export class NotificationsController {
   /** The caller's notification inbox (newest first) + the unread count — the in-app notification centre (N2). */
   @Scopes('notification:manage:self')
   @Get('inbox')
+  @AtTheCounter()
   inbox(@Actor() actor: IntrospectionResult) {
     const did = actingDid(actor);
     return { items: this.notifications.inboxFor(did), unread: this.notifications.unreadCount(did) };
@@ -86,6 +91,7 @@ export class NotificationsController {
   /** Mark one of the caller's notifications read. Ownership-guarded in the service. */
   @Scopes('notification:manage:self')
   @Post('inbox/:id/read')
+  @AtTheCounter()
   markRead(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     this.notifications.markRead(actingDid(actor), id, readerOf(actor));
     return { ok: true };
@@ -94,6 +100,7 @@ export class NotificationsController {
   /** Mark all of the caller's notifications read (clears the bell badge). */
   @Scopes('notification:manage:self')
   @Post('inbox/read-all')
+  @AtTheCounter()
   markAllRead(@Actor() actor: IntrospectionResult) {
     this.notifications.markAllRead(actingDid(actor), readerOf(actor));
     return { ok: true };

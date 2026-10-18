@@ -22334,6 +22334,202 @@
         }
       }
     },
+    "/v1/sbg/shop/staff": {
+      "get": {
+        "operationId": "ShopStaff.list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ShopStaffView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "ShopStaff.invite",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShopStaffInviteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShopStaffView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/shop/staff/{memberId}/remove": {
+      "post": {
+        "operationId": "ShopStaff.remove",
+        "parameters": [
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShopStaffView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/shop/counter-log": {
+      "get": {
+        "operationId": "ShopStaff.counterLog",
+        "summary": "",
+        "description": "Who did what at the counter, newest first: the owner's own record, never on a parcel.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CounterAct"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/shop-invitations": {
+      "get": {
+        "operationId": "ShopStaff.mine",
+        "summary": "",
+        "description": "The shops I was added to — from my own sign-in, by phone and PIN.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ShopInvitationView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/shop-invitations/{memberId}/accept": {
+      "post": {
+        "operationId": "ShopStaff.accept",
+        "parameters": [
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShopInvitationView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/shop-invitations/{memberId}/decline": {
+      "post": {
+        "operationId": "ShopStaff.decline",
+        "parameters": [
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/shops/{shopDid}/staff-session": {
+      "post": {
+        "operationId": "ShopStaff.session",
+        "summary": "",
+        "description": "A session at this shop's counter, under my name.",
+        "parameters": [
+          {
+            "name": "shopDid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShopStaffSession"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/quotes/{quoteId}": {
       "get": {
         "operationId": "Quote.read",
@@ -46554,6 +46750,166 @@
         "required": [
           "way",
           "country"
+        ]
+      },
+      "ShopStaffView": {
+        "type": "object",
+        "properties": {
+          "memberId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "phoneEnds": {
+            "type": "string",
+            "description": "The last three digits of the number they were added by."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "invited",
+              "working",
+              "declined",
+              "removed"
+            ]
+          },
+          "invitedAt": {
+            "type": "string"
+          },
+          "joinedAt": {
+            "type": "string"
+          },
+          "removedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "memberId",
+          "name",
+          "phoneEnds",
+          "state",
+          "invitedAt"
+        ]
+      },
+      "ShopStaffInviteDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "description": "The number they sign in with."
+          },
+          "name": {
+            "type": "string",
+            "description": "What the shop calls them; every act of theirs is recorded under it."
+          }
+        },
+        "required": [
+          "phone",
+          "name"
+        ]
+      },
+      "CounterAct": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "act": {
+            "type": "string",
+            "description": "What was done: took a parcel in, handed one over, …"
+          },
+          "ref": {
+            "type": "string",
+            "description": "The parcel, bag or load it was about."
+          },
+          "by": {
+            "type": "string",
+            "description": "Who: the person’s name, or \"the owner\" for the shop’s own sign-in."
+          },
+          "staff": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "at",
+          "act",
+          "by",
+          "staff"
+        ]
+      },
+      "ShopInvitationView": {
+        "type": "object",
+        "properties": {
+          "memberId": {
+            "type": "string"
+          },
+          "shopDid": {
+            "type": "string"
+          },
+          "shopName": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "What the shop calls them."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "invited",
+              "working"
+            ]
+          },
+          "invitedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "memberId",
+          "shopDid",
+          "shopName",
+          "name",
+          "state",
+          "invitedAt"
+        ]
+      },
+      "ShopStaffSession": {
+        "type": "object",
+        "properties": {
+          "shopDid": {
+            "type": "string"
+          },
+          "shopName": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "memberId": {
+            "type": "string",
+            "description": "Their place at this counter: what the app keeps their acts made without a signal under."
+          },
+          "token": {
+            "type": "object",
+            "properties": {
+              "access_token": {
+                "required": true,
+                "type": "string"
+              },
+              "expires_in": {
+                "required": false,
+                "type": "number"
+              }
+            }
+          }
+        },
+        "required": [
+          "shopDid",
+          "shopName",
+          "name",
+          "memberId",
+          "token"
         ]
       },
       "QuoteStatusDto": {

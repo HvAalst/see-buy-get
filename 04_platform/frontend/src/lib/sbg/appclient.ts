@@ -134,11 +134,15 @@ function traceId(): string {
  * read surfaces once they are public), normalized to the same Result envelope as every
  * authenticated call, with the same timeout discipline: its own AbortController covering the
  * response BODY too, so a stalled body cannot hang the caller.
+ *
+ * `bearer`: a sign-in held for a minute and no longer — a person choosing which shop's counter to work, on the shop's
+ * phone (apps/agent/staff.ts). A signed-in client would start this page's outbox loop under that sign-in and send the
+ * counter's queued acts with it; one call with the header does not.
  */
 export async function publicRequest<T>(
   config: SbgConfig,
   path: string,
-  init?: { method?: 'GET' | 'POST'; body?: unknown; fetch?: typeof fetch },
+  init?: { method?: 'GET' | 'POST'; body?: unknown; fetch?: typeof fetch; bearer?: string },
 ): Promise<Result<T>> {
   const doFetch = init?.fetch ?? fetch;
   const ctl = new AbortController();
@@ -150,6 +154,7 @@ export async function publicRequest<T>(
         method: init?.method ?? (init?.body !== undefined ? 'POST' : 'GET'),
         headers: {
           ...(init?.body !== undefined ? { 'content-type': 'application/json' } : {}),
+          ...(init?.bearer ? { authorization: `Bearer ${init.bearer}` } : {}),
           'X-SBG-Client': config.clientId,
           'X-SBG-Trace-Id': traceId(),
         },

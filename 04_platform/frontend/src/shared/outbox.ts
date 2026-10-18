@@ -47,6 +47,66 @@ export interface OutboxItem {
   state: OutboxState;
   /** Why it is stuck, in the server's own words, once it has stopped trying. */
   error?: string;
+  /** Who did it, on a phone several people sign in on — sent only under their own sign-in (`setOutboxActor`). */
+  by?: OutboxActor;
+}
+
+/**
+ * WHO IS SIGNED IN ON THIS PHONE, for a phone several people use: a shop's counter, where the owner and the people they
+ * added each sign in as themselves (the user, 2026-10-18: "who is at the counter"). Every write queued here is stamped
+ * with who made it, and goes only under that same sign-in — never under whoever happens to be signed in when the signal
+ * comes back, which would put one person's act under another's name (or, before, under another SHOP's).
+ *
+ * The queue stays in order: it stops at the first act that is somebody else's, as it stops at a stuck one, because a
+ * parcel shelved by the owner after Wanjiru took it in cannot reach the server before her take-in does. Whoever is signed
+ * in is told whose acts are waiting, and may send them under their own name — recorded as theirs, by their choice.
+ *
+ * An app that never says who is signed in (one person to a phone) stamps nothing and sends everything, as before.
+ */
+export interface OutboxActor {
+  key: string;
+  name: string;
+}
+
+let actor: OutboxActor | null = null;
+
+export function setOutboxActor(next: OutboxActor | null): void {
+  if (actor?.key === next?.key && actor?.name === next?.name) return;
+  actor = next;
+  announce();
+}
+
+export function outboxActor(): OutboxActor | null {
+  return actor;
+}
+
+/** Whether this queued write may go under the sign-in there is now: one stamped by nobody, or by whoever is signed in. */
+export function goesNow(item: Pick<OutboxItem, 'by'>): boolean {
+  return !item.by || item.by.key === actor?.key;
+}
+
+/**
+ * The acts made here by somebody else, still waiting, in order and by who made them — what the outbox note shows.
+ */
+export function waitingForOthers(): Array<{ by: OutboxActor; items: OutboxItem[] }> {
+  const out: Array<{ by: OutboxActor; items: OutboxItem[] }> = [];
+  for (const item of read()) {
+    if (item.state === 'blocked' || goesNow(item) || !item.by) continue;
+    const group = out.find((g) => g.by.key === item.by!.key);
+    if (group) group.items.push(item);
+    else out.push({ by: item.by, items: [item] });
+  }
+  return out;
+}
+
+/** Send somebody else's waiting acts under the sign-in there is now: they are recorded as that person's, by their choice. */
+export function sendAsMine(fromKey: string): void {
+  if (!actor) return;
+  const mine = actor;
+  write(read().map((i) => (i.by?.key === fromKey && i.state !== 'blocked' ? { ...i, by: mine } : i)));
+  announce();
+  // Now, not on the next tick: the person who chose this is looking at the note.
+  if (loop) void drain(loop);
 }
 
 /**
@@ -167,7 +227,7 @@ export function enqueue(item: Omit<OutboxItem, 'attempts' | 'state'>): void {
   // A key is spent once. If this exact attempt is already queued (a double tap, a re-render), leave the
   // original in place rather than adding a twin that will replay the same name and be refused.
   if (items.some((i) => i.key === item.key)) return;
-  items.push({ ...item, attempts: 0, state: 'pending' });
+  items.push({ ...item, ...(actor && !item.by ? { by: actor } : {}), attempts: 0, state: 'pending' });
   write(items);
   announce();
 }
@@ -223,6 +283,8 @@ async function drainOnce(deps: DrainDeps): Promise<{ sent: number; blocked: numb
     const items = read();
     const next = items.find((i) => i.state !== 'blocked');
     if (!next) break;
+    // Somebody else's act, made on this phone: it waits for their sign-in, and everything after it waits with it.
+    if (!goesNow(next)) break;
 
     let token = '';
     try {
@@ -409,6 +471,8 @@ async function bodyOf(init: RequestInit | undefined, input: RequestInfo | URL): 
 /* ---------------------------------------------------------------- running -- */
 
 let stopCurrent: (() => void) | null = null;
+/** The loop that is keeping the queue moving now, for a send somebody asked for by hand. */
+let loop: DrainDeps | null = null;
 
 /**
  * Keep the queue moving, without anybody having to remember to ask.
@@ -423,6 +487,7 @@ let stopCurrent: (() => void) | null = null;
  */
 export function startOutbox(deps: DrainDeps): () => void {
   stopCurrent?.();
+  loop = deps;
   let running = false;
   const tick = async () => {
     if (running || typeof navigator !== 'undefined' && navigator.onLine === false) return;
@@ -444,7 +509,10 @@ export function startOutbox(deps: DrainDeps): () => void {
     clearInterval(timer);
     removeEventListener('online', onFocus);
     removeEventListener('focus', onFocus);
-    if (stopCurrent === stop) stopCurrent = null;
+    if (stopCurrent === stop) {
+      stopCurrent = null;
+      loop = null;
+    }
   };
   stopCurrent = stop;
   return stop;

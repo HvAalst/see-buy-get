@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { discard, onOutboxChange, outboxItems, retry, type OutboxItem } from '../outbox';
+import { discard, onOutboxChange, outboxActor, outboxItems, retry, sendAsMine, waitingForOthers, type OutboxItem } from '../outbox';
 import { useT } from '../i18n';
 import { Icon } from './Icon';
 
@@ -17,11 +17,20 @@ import { Icon } from './Icon';
 export function OutboxNote() {
   const t = useT();
   const [items, setItems] = useState<OutboxItem[]>(() => outboxItems());
-  useEffect(() => onOutboxChange(() => setItems(outboxItems())), []);
+  const [others, setOthers] = useState(() => waitingForOthers());
+  useEffect(
+    () =>
+      onOutboxChange(() => {
+        setItems(outboxItems());
+        setOthers(waitingForOthers());
+      }),
+    [],
+  );
 
   if (items.length === 0) return null;
   const blocked = items.filter((i) => i.state === 'blocked');
-  const waiting = items.length - blocked.length;
+  const theirs = others.reduce((n, g) => n + g.items.length, 0);
+  const waiting = items.length - blocked.length - theirs;
 
   return (
     <div class="outbox">
@@ -31,6 +40,24 @@ export function OutboxNote() {
           <span>{waiting === 1 ? t('common.outbox.waitingOne') : t('common.outbox.waitingMany', { count: waiting })}</span>
         </p>
       ) : null}
+
+      {/* Somebody else's acts, made on this phone (a shop's counter): they go under that person's own sign-in. Whoever
+          is signed in now may send them as their own — said plainly, because then the record says they did it. */}
+      {others.map((g) => (
+        <div key={g.by.key} class="outbox__stuck">
+          <div class="outbox__body">
+            <span class="outbox__what">{t('common.outbox.othersTitle', { name: g.by.name, count: g.items.length })}</span>
+            <span class="outbox__why">{g.items.map((i) => i.label).join(' · ')}</span>
+          </div>
+          {outboxActor() ? (
+            <div class="outbox__acts">
+              <button type="button" class="btn btn--link" onClick={() => sendAsMine(g.by.key)}>
+                {t('common.outbox.sendAsMine')}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ))}
 
       {blocked.map((item) => (
         <div key={item.id} class="outbox__stuck">

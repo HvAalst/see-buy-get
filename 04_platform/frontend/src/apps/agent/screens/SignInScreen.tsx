@@ -1,10 +1,11 @@
 import { HelpLink } from '../../../shared/guide/HelpLink';
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
-import { Button, Card, Checklist, CodeBoxes, ErrorNote, NeedsSignalNote, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, NeedsSignalNote, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import type { AgentActions, AgentState } from '../useAgentApp';
+import { StaffSignIn } from './StaffSignIn';
 
 export interface SignInScreenProps {
   actions: AgentActions;
@@ -19,8 +20,11 @@ export interface SignInScreenProps {
  * account carries money, so it gets the credential the backend actually verifies.
  */
 export function SignInScreen({ actions, error, busy, deviceAsk }: SignInScreenProps) {
+  // The shop's own sign-in, or one of its people signing in as themselves (the user, 2026-10-18: "own phone + PIN").
+  const [asStaff, setAsStaff] = useState(false);
+  if (asStaff) return <StaffSignIn onBack={() => setAsStaff(false)} onSession={actions.enterAsStaff} />;
   if (deviceAsk) return <ConfirmPhone actions={actions} error={error} busy={busy} ask={deviceAsk} />;
-  return <EmailAndPassword actions={actions} error={error} busy={busy} />;
+  return <EmailAndPassword actions={actions} error={error} busy={busy} onStaff={() => setAsStaff(true)} />;
 }
 
 /**
@@ -60,7 +64,7 @@ function ConfirmPhone({ actions, error, busy, ask }: { actions: AgentActions; er
   );
 }
 
-function EmailAndPassword({ actions, error, busy }: { actions: AgentActions; error: SbgError | null; busy: boolean }) {
+function EmailAndPassword({ actions, error, busy, onStaff }: { actions: AgentActions; error: SbgError | null; busy: boolean; onStaff: () => void }) {
   const t = useT();
   const [email, setEmail] = useState(actions.readEmail() ?? '');
   const [password, setPassword] = useState('');
@@ -119,6 +123,20 @@ function EmailAndPassword({ actions, error, busy }: { actions: AgentActions; err
           {t('agent.signin.signIn')}
         </Button>
       </div>
+
+      {/* Not the shop's password: the people at its counter sign in as themselves. */}
+      <button type="button" class="row" onClick={onStaff}>
+        <span class="row__ic">
+          <Icon name="person" size={24} />
+        </span>
+        <span class="row__body">
+          <span class="row__t">{t('agent.staff.entry')}</span>
+          <span class="row__s">{t('agent.staff.entrySub')}</span>
+        </span>
+        <span class="row__end">
+          <Icon name="chevronRight" size={22} />
+        </span>
+      </button>
 
       <Card title={t('agent.signin.safeTitle')} tone="soft">
         <Checklist

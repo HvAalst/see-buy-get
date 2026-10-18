@@ -26,7 +26,7 @@ import { BusinessMemberGuard } from './business-member.guard';
 import { BusinessService } from './business.service';
 import { boardDocId } from './note-archive.types';
 import { isSandbox } from '../../foundation/runtime/sandbox';
-import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Req, Res, StreamableFile, Optional, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Req, Res, StreamableFile, Optional, UseGuards, UseInterceptors } from '@nestjs/common';
 import { staffNetworkAllows } from '../../foundation/auth/staff-network';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
@@ -161,6 +161,8 @@ import { DockService } from './dock.service';
 import { ApiKeyService } from './api-key.service';
 import { haversineKm } from './geo';
 import { GEOCODER, Geocoder } from './geocoder';
+import { CounterLogInterceptor } from './shop-staff.controller';
+import { AtTheCounter } from '../../foundation/auth/at-the-counter';
 
 interface ModuleInfo {
   module: string;
@@ -205,6 +207,7 @@ export function awardCapOf(p: { coverLimit?: number; declaredValue?: number }): 
 // B1 — a business sign-in reaches about forty of these routes; whether that person is still in the business, and may
 // change anything, is asked live on every one of them. Every other caller passes through untouched.
 @UseGuards(BusinessMemberGuard)
+@UseInterceptors(CounterLogInterceptor)
 export class SbgController {
   constructor(
     private readonly clients: BusinessClientService,
@@ -441,6 +444,7 @@ export class SbgController {
 
   @SignedIn()
   @Get('module-info')
+  @AtTheCounter()
   info(): ModuleInfo {
     return { module: 'PUDO', name: 'PUDO Light — Pick-Up/Drop-Off network', edition: 'Light v1.0 (GLOS Phase 1, emerging markets)', status: 'active' };
   }
@@ -723,6 +727,7 @@ export class SbgController {
    */
   @SignedIn()
   @Get('presence')
+  @AtTheCounter()
   listPresence() {
     // CA3/CA7 — each country carries the companies standing (or being prepared) there, and whether each is ready.
     return {
@@ -871,6 +876,7 @@ export class SbgController {
 
   @SignedIn()
   @Get('presence/:jurisdiction')
+  @AtTheCounter()
   presenceFor(@Param('jurisdiction') jurisdiction: string) {
     return this.presence.resolve(jurisdiction);
   }
@@ -910,6 +916,7 @@ export class SbgController {
   /** CA6 — every recorded rule between two countries. Read by anybody signed in: a driver needs it as much as staff. */
   @SignedIn()
   @Get('border-rules')
+  @AtTheCounter()
   borderRuleList() {
     return { items: this.borderRules.list() };
   }
@@ -1228,6 +1235,7 @@ export class SbgController {
    */
   @Roles('operator', 'entity_admin', 'business', 'agent', 'driver', 'fleet_manager')
   @Get('field-observations/notice')
+  @AtTheCounter()
   observationNotice(@Query('country') country?: string) {
     return { country: country?.toUpperCase(), mayHoldEvidence: this.observations.mayHoldEvidence(country), ...this.observations.notice() };
   }
@@ -1240,6 +1248,7 @@ export class SbgController {
    */
   @Roles('operator', 'entity_admin', 'business', 'agent', 'driver', 'fleet_manager')
   @Post('field-observations')
+  @AtTheCounter()
   recordFieldObservation(@Body() dto: FieldObservationDto, @Actor() actor: IntrospectionResult) {
     return this.observations.record(
       {
@@ -1261,6 +1270,7 @@ export class SbgController {
   /** CL5 — what has been observed at a place, newest first by the date it HAPPENED. */
   @Roles('operator', 'entity_admin', 'business', 'agent', 'driver', 'fleet_manager')
   @Get('field-observations')
+  @AtTheCounter()
   listFieldObservations(@Query('country') country?: string, @Query('place') place?: string) {
     const items = country ? this.observations.at(country, place) : this.observations.list();
     return { items, basis: OBSERVATION_BASIS };
@@ -2474,6 +2484,7 @@ export class SbgController {
 
   @Roles('agent', 'operator')
   @Post('agents/:did/ping')
+  @AtTheCounter()
   ping(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
     this.assertAgentActs(did, actor);
     return this.agents.ping(did);
@@ -2482,6 +2493,7 @@ export class SbgController {
   /** Agent marks the shop open or temporarily closed. */
   @Roles('agent', 'operator')
   @Post('agents/:did/availability')
+  @AtTheCounter()
   setAvailability(@Param('did') did: string, @Body() dto: AvailabilityDto, @Actor() actor: IntrospectionResult) {
     this.assertAgentActs(did, actor);
     return this.agents.setAvailability(did, dto.open);
@@ -2535,6 +2547,7 @@ export class SbgController {
    */
   @Roles('agent', 'operator')
   @Get('agents/:did/bag-plan')
+  @AtTheCounter()
   bagPlan(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
     return this.bagPlans.forShop(actingDid(actor, did));
   }
@@ -2542,6 +2555,7 @@ export class SbgController {
   /** Drop a waiting parcel into the shop's bag — refuses one that is going somewhere else. */
   @Roles('agent', 'operator')
   @Post('agents/:did/totes/:code/fill')
+  @AtTheCounter()
   fillShopBag(@Param('did') did: string, @Param('code') code: string, @Body() dto: FillToteDto, @Actor() actor: IntrospectionResult) {
     return this.mdps.fillShopBag(code, actingDid(actor, did), dto.parcelId);
   }
@@ -2549,6 +2563,7 @@ export class SbgController {
   /** Seal the bag — where the completeness gate lives for a bagged hand-over (see sealShopBag). */
   @Roles('agent', 'operator')
   @Post('agents/:did/totes/:code/seal')
+  @AtTheCounter()
   sealShopBag(@Param('did') did: string, @Param('code') code: string, @Body() dto: SealBagDto, @Actor() actor: IntrospectionResult) {
     return this.mdps.sealShopBag(code, actingDid(actor, did), dto);
   }
@@ -2556,6 +2571,7 @@ export class SbgController {
   /** The shelf grid + free-slot availability for a PUDO. */
   @Roles('agent', 'operator')
   @Get('agents/:did/shelf')
+  @AtTheCounter()
   getShelf(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
     this.assertAgentOwner(did, actor);
     return { grid: this.shelf.grid(did), capacity: this.shelf.capacity(did), available: this.shelf.available(did) };
@@ -2566,6 +2582,7 @@ export class SbgController {
   /** Every shop. Network staff read the whole record; anybody else signed in gets the card the public map shows. */
   @SignedIn()
   @Get('agents')
+  @AtTheCounter()
   listAgents(@Actor() actor: IntrospectionResult): object[] {
     // THE WHOLE RECORD IS THE NETWORK'S: a shop's float, its papers and what was said about them, the tablet it is
     // bound to. This answered ANY sign-in with all of it — the driver's app asks here for the places it can route
@@ -2578,6 +2595,7 @@ export class SbgController {
 
   @Roles('agent', 'operator')
   @Get('agents/:did')
+  @AtTheCounter()
   getAgent(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
     this.assertAgentOwner(did, actor);
     const a = this.agents.get(did);
@@ -2602,6 +2620,7 @@ export class SbgController {
    */
   @Scopes('agent:read:self')
   @Get('agents/:did/take-in-terms')
+  @AtTheCounter()
   takeInTerms(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
     this.assertAgentOwner(did, actor);
     return this.parcels.takeInTerms(did);
@@ -2616,6 +2635,7 @@ export class SbgController {
    */
   @Roles('agent', 'operator')
   @Get('agents/:did/can-transact')
+  @AtTheCounter()
   canTransact(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
     this.assertAgentOwner(did, actor);
     return this.gate.canTransact(did);
@@ -2683,6 +2703,7 @@ export class SbgController {
    *  server-side searched / filtered / sorted / paginated → { items, total }. Owner-scoped. */
   @Scopes('agent:read:self')
   @Get('agents/:did/parcels')
+  @AtTheCounter()
   agentParcels(@Param('did') did: string, @Query() query: AgentParcelsQueryDto, @Actor() actor: IntrospectionResult) {
     this.assertAgentOwner(did, actor);
     return this.parcels.agentParcelsPage(did, query);
@@ -2722,6 +2743,7 @@ export class SbgController {
   /** Readable by everyone who has to work with them: the fleet app offers them, the agent app checks them. */
   @SignedIn()
   @Get('corridors')
+  @AtTheCounter()
   listCorridors(@Actor() actor: IntrospectionResult) {
     // A fleet's PROPOSED line is its plan, not yet geography: its own fleet and the operator see it.
     return this.corridors.visibleTo(actingTenant(actor), actor?.role === 'operator');
@@ -2787,6 +2809,7 @@ export class SbgController {
 
   @Roles('agent', 'operator')
   @Post('parcels/accept')
+  @AtTheCounter()
   accept(@Body() dto: AcceptParcelDto, @Actor() actor: IntrospectionResult) {
     return this.parcels.accept({ ...dto, agentDid: actingDid(actor, dto.agentDid) });
   }
@@ -2800,6 +2823,7 @@ export class SbgController {
    *  tracking code the agent prints for a phone-less customer. */
   @Roles('agent', 'operator')
   @Post('parcels/book-freight')
+  @AtTheCounter()
   bookFreight(@Body() dto: BookFreightDto, @Actor() actor: IntrospectionResult) {
     const agentDid = actingDid(actor, dto.agentDid);
     const origin = this.agents.get(agentDid); // 404 if the acting id is not an agent
@@ -2875,6 +2899,7 @@ export class SbgController {
   /** Handing parcels to a driver is the driver's act: the counter scans the pass on the driver's own phone (badgeShown). */
   @Roles('agent', 'operator')
   @Post('parcels/handover')
+  @AtTheCounter()
   handover(@Body() dto: HandoverDto, @Actor() actor: IntrospectionResult) {
     const driverBadgeId = this.fleet.badgeShown(dto.driverBadgeId);
     return this.parcels.handover({ ...dto, driverBadgeId, agentDid: actingDid(actor, dto.agentDid) });
@@ -2882,18 +2907,21 @@ export class SbgController {
 
   @Roles('agent', 'operator')
   @Post('parcels/:id/arrive')
+  @AtTheCounter()
   arrive(@Param('id') id: string, @Body() dto: ArriveDto, @Actor() actor: IntrospectionResult) {
     return this.parcels.arrive(id, actingDid(actor, dto.destAgentDid));
   }
 
   @Roles('agent', 'operator')
   @Post('parcels/:id/pickup')
+  @AtTheCounter()
   pickup(@Param('id') id: string, @Body() dto: PickupDto, @Actor() actor: IntrospectionResult) {
     return this.parcels.pickup(id, actingDid(actor, dto.agentDid), dto.otp, dto.deliveredPhotoRef);
   }
 
   @Roles('agent', 'operator')
   @Post('parcels/:id/void')
+  @AtTheCounter()
   voidParcel(@Param('id') id: string, @Body() dto: VoidDto, @Actor() actor: IntrospectionResult) {
     return this.parcels.void(id, actingDid(actor, dto.agentDid), dto.voidedPhotoRef);
   }
@@ -2910,6 +2938,7 @@ export class SbgController {
    */
   @Roles('agent', 'mdp', 'operator')
   @Get('parcels')
+  @AtTheCounter()
   listParcels(@Query('status') status?: string, @Query('agent') agent?: string, @Actor() actor?: IntrospectionResult) {
     // WHOSE LIST. A shop's is its own parcels, whatever shop the request names; a hub's is what stands at it; staff
     // name any shop, or none. The shop used to come from the request alone, so any sign-in read any shop's parcels —
@@ -2931,6 +2960,7 @@ export class SbgController {
 
   @Roles('agent', 'operator')
   @Get('parcels/:id')
+  @AtTheCounter()
   getParcel(@Param('id') id: string) {
     return this.monitor.parcelTimeline(id);
   }
@@ -2976,6 +3006,7 @@ export class SbgController {
   /** Destination PUDO receives a whole bag → shelves each parcel + frees the tote (closes the tote leg). */
   @Roles('agent', 'operator')
   @Post('agents/:did/receive-bag')
+  @AtTheCounter()
   receiveBag(@Param('did') did: string, @Body() dto: ReceiveBagDto, @Actor() actor: IntrospectionResult) {
     this.assertAgentActs(did, actor);
     return this.mdps.deliverBag(did, dto.code);
@@ -3947,6 +3978,7 @@ export class SbgController {
    *  the parcel's own record decides which intake it is. */
   @Roles('agent', 'operator')
   @Post('parcels/:id/intake')
+  @AtTheCounter()
   intake(@Param('id') id: string, @Body() dto: IntakeDto, @Actor() actor: IntrospectionResult) {
     const did = actingDid(actor, dto.agentDid);
     if (this.parcels.get(id).direction === 'outbound') return this.parcels.intakeConsumerSend(id, did, dto.dropoffPhotoRef);
@@ -3959,6 +3991,7 @@ export class SbgController {
    *  to take in". */
   @Scopes('parcel:accept')
   @Get('parcels/:id/intake-preview')
+  @AtTheCounter()
   intakePreview(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     const parcel = this.parcels.get(id);
     if (actor?.role !== 'operator' && parcel.originAgentDid !== actor?.did) {
@@ -3989,6 +4022,7 @@ export class SbgController {
   /** Destination PUDO shelves an arrived parcel → Ready_For_Pickup + buyer notified. */
   @Roles('agent', 'operator')
   @Post('parcels/:id/shelve')
+  @AtTheCounter()
   shelve(@Param('id') id: string, @Body() dto: ShelveDto, @Actor() actor: IntrospectionResult) {
     return this.parcels.shelve(id, actingDid(actor, dto.agentDid), dto.binId);
   }
@@ -3996,6 +4030,7 @@ export class SbgController {
   /** Buyer presents the collection QR → resolve the parcel + shelf slot (opens the handover screen). */
   @Roles('agent', 'operator')
   @Post('parcels/collect')
+  @AtTheCounter()
   collect(@Body() dto: CollectDto, @Actor() actor: IntrospectionResult) {
     return this.parcels.collect(dto.collectionCode, actingDid(actor, dto.agentDid));
   }
@@ -4003,6 +4038,7 @@ export class SbgController {
   /** Buyer confirms the parcel is correct → Delivered, order closed. */
   @Roles('agent', 'operator')
   @Post('parcels/:id/collect-confirm')
+  @AtTheCounter()
   collectConfirm(@Param('id') id: string, @Body() dto: CollectDto, @Actor() actor: IntrospectionResult) {
     return this.parcels.collectConfirm(id, actingDid(actor, dto.agentDid), dto.collectionCode);
   }
@@ -4068,6 +4104,7 @@ export class SbgController {
   /** Buyer reports a discrepancy at collection → Disputed, with mandatory photo proof. */
   @Roles('agent', 'operator')
   @Post('parcels/:id/dispute')
+  @AtTheCounter()
   dispute(@Param('id') id: string, @Body() dto: DisputeDto, @Actor() actor: IntrospectionResult) {
     return this.parcels.dispute(id, actingDid(actor, dto.agentDid), dto.reason, dto.photoProofRef);
   }
@@ -4075,6 +4112,7 @@ export class SbgController {
   /** Tier-1 customer rates a delivered parcel → writes the agent composite to the shared core (graduation). */
   @Roles('agent', 'operator')
   @Post('parcels/:id/rate')
+  @AtTheCounter()
   rate(@Param('id') id: string, @Body() dto: RateDto, @Actor() actor: IntrospectionResult) {
     // Recorded at the counter of a shop that HANDLED this parcel, or by staff. Any signed-in account could rate any
     // parcel — and a rating is what a shop's standing is made of.
@@ -4089,6 +4127,7 @@ export class SbgController {
 
   @SignedIn()
   @Get('agents/:did/rating')
+  @AtTheCounter()
   agentRating(@Param('did') did: string) {
     return this.ratings.agentRating(did);
   }
@@ -4101,6 +4140,7 @@ export class SbgController {
    */
   @Roles('agent', 'operator')
   @Post('drivers/:did/rate')
+  @AtTheCounter()
   rateDriver(@Param('did') did: string, @Body() dto: RateDriverDto, @Actor() actor: IntrospectionResult) {
     const agentDid = actingDid(actor, dto.agentDid);
     this.agents.get(agentDid); // the rater must be an agent (404 otherwise)
@@ -4492,6 +4532,7 @@ export class SbgController {
   /** Every hub: where it is and what it charges. The hub itself and network staff also read its number and its bag count. */
   @SignedIn()
   @Get('mdps')
+  @AtTheCounter()
   listMdps(@Actor() actor: IntrospectionResult) {
     // The number to ring, the company a hub contracts with and how many bags stand there went to any sign-in that asked.
     return this.mdps.list().map((m) => {
@@ -4524,6 +4565,7 @@ export class SbgController {
 
   @Roles('agent', 'mdp', 'driver', 'operator')
   @Get('totes/:code')
+  @AtTheCounter()
   getTote(@Param('code') code: string) {
     return this.totes.requireByCode(code);
   }
@@ -4537,6 +4579,7 @@ export class SbgController {
    */
   @Roles('agent', 'mdp', 'operator')
   @Post('totes/:code/assign')
+  @AtTheCounter()
   assignTote(@Param('code') code: string, @Body() dto: AssignToteDto) {
     return this.mdps.assignTote(code, dto.destinationNodeId, dto.destinationLabel);
   }
@@ -4544,6 +4587,7 @@ export class SbgController {
   /** Drop a parcel into a bag (capacity-checked) — connects bag ↔ parcel. */
   @Roles('agent', 'mdp', 'operator')
   @Post('totes/:code/fill')
+  @AtTheCounter()
   fillTote(@Param('code') code: string, @Body() dto: FillToteDto) {
     return this.mdps.fillTote(code, dto.parcelId);
   }
@@ -4556,6 +4600,7 @@ export class SbgController {
    */
   @Roles('agent', 'mdp', 'driver', 'operator')
   @Post('totes/:code/load')
+  @AtTheCounter()
   loadBag(@Param('code') code: string, @Body() dto: LoadBagDto, @Actor() actor: IntrospectionResult) {
     if (actor?.role === 'driver') {
       const own = actor.did ? this.drivers.get(actor.did).badgeId : undefined;
@@ -6083,6 +6128,7 @@ export class SbgController {
    */
   @Roles('agent', 'operator')
   @Post('agents/:did/totes')
+  @AtTheCounter()
   registerAgentTote(@Param('did') did: string, @Body() dto: OpenBagDto, @Actor() actor: IntrospectionResult) {
     this.assertAgentActs(did, actor);
     // Every field is optional, so a bodyless call still means "just a bare tote" — and unlike a union
@@ -6095,6 +6141,7 @@ export class SbgController {
   /** Publish a filling tote to the claim marketplace early (before it is full / 24 h). */
   @Roles('agent', 'mdp', 'operator')
   @Post('totes/:code/release')
+  @AtTheCounter()
   releaseTote(@Param('code') code: string) {
     return this.dispatch.release(code);
   }
@@ -6224,6 +6271,7 @@ export class SbgController {
   /** What is around here. Cleared constraints are gone; disputed ones are still shown, and say so. */
   @SignedIn()
   @Get('route-constraints')
+  @AtTheCounter()
   constraintsNear(@Query() q: ConstraintsNearQueryDto): ConstraintsResponse {
     const items = this.constraints.near({ lat: Number(q.lat), lng: Number(q.lng) }, q.radiusKm);
     return { items, total: items.length };
@@ -6238,6 +6286,7 @@ export class SbgController {
    */
   @SignedIn()
   @Get('route-constraints/route')
+  @AtTheCounter()
   constraintsAlongRoute(@Query() q: ConstraintsRouteQueryDto): RouteConstraintsResponse {
     const items = this.constraints.alongRoute(
       { lat: Number(q.fromLat), lng: Number(q.fromLng) },
@@ -6584,6 +6633,7 @@ export class SbgController {
    */
   @SignedIn()
   @Get('dispatch/freight/:id/consignment-note')
+  @AtTheCounter()
   consignmentNote(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     this.notes.requireReader(id, actor);
     // ONCE A COPY HAS BEEN FROZEN, THAT IS THE NOTE. A live re-render against today's facts is not the
@@ -6597,6 +6647,7 @@ export class SbgController {
   @Get('dispatch/freight/:id/consignment-note.html')
   @Header('Content-Type', 'text/html; charset=utf-8')
   @Header('Cache-Control', 'private, no-store')
+  @AtTheCounter()
   consignmentNoteHtml(@Param('id') id: string, @Actor() actor: IntrospectionResult): string {
     this.notes.requireReader(id, actor);
     return this.notes.htmlFor(this.archive.latestForFreight(id)?.note ?? this.notes.noteFor(id));
@@ -6759,6 +6810,7 @@ export class SbgController {
    *  site is the freight's pickup. A perishable commodity is refused here — it books freight directly. */
   @Roles('agent', 'operator')
   @Post('consignments')
+  @AtTheCounter()
   openConsignment(@Body() dto: OpenConsignmentDto, @Actor() actor: IntrospectionResult) {
     const ownerDid = actingDid(actor, dto.ownerDid);
     const owner = this.agents.get(ownerDid); // 404 if the acting id is not an agent
@@ -6790,6 +6842,7 @@ export class SbgController {
    *  to the lot's owner (403 for another shop). */
   @Roles('agent', 'operator')
   @Post('consignments/:code/deposit')
+  @AtTheCounter()
   depositConsignment(@Param('code') code: string, @Body() dto: ConsignmentDepositDto, @Actor() actor: IntrospectionResult) {
     const lot = this.consignments.requireByCode(code); // 404 unknown
     this.assertAgentOwner(lot.ownerDid, actor);
@@ -6801,6 +6854,7 @@ export class SbgController {
   @Get('consignments')
   @ApiQuery({ name: 'owner', required: false })
   @ApiQuery({ name: 'status', required: false })
+  @AtTheCounter()
   listConsignments(@Query('owner') owner: string, @Query('status') status: string, @Actor() actor: IntrospectionResult) {
     const ownerDid = actingDid(actor, owner);
     this.assertAgentOwner(ownerDid, actor);

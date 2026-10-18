@@ -15,6 +15,7 @@ import { packageLabelsHtml } from './package-labels';
 import { CommercialInvoiceDto, OwnInvoicePaperDto } from './shipping-papers.dto';
 import { PackageLabelsView } from './shipping-papers.types';
 import { ShipperCodesService } from './shipper-codes.service';
+import { AtTheCounter } from '../../foundation/auth/at-the-counter';
 
 /** What staff, a carrier or anybody but the shipper is told at the door that writes an invoice. */
 const SHIPPER_ONLY = 'A commercial invoice is the shipper’s own paper: the business that posted the load writes it, and staff and carriers read it';
@@ -40,6 +41,7 @@ export class ShippingPapersController {
   /** What the labels will carry: how many, and the SSCC of each package when the shipper's GS1 prefix gave them. */
   @SignedIn()
   @Get('dispatch/freight/:id/package-labels')
+  @AtTheCounter()
   labels(@Param('id') id: string, @Actor() actor: IntrospectionResult): PackageLabelsView {
     const f = this.notes.requireReader(id, actor);
     const issued = this.codes.codesFor(f.freightId);
@@ -57,6 +59,7 @@ export class ShippingPapersController {
   @Get('dispatch/freight/:id/package-labels.html')
   @Header('Content-Type', 'text/html; charset=utf-8')
   @Header('Cache-Control', 'private, no-store')
+  @AtTheCounter()
   labelsHtml(@Param('id') id: string, @Actor() actor: IntrospectionResult): string {
     const f = this.notes.requireReader(id, actor);
     const note = this.notes.noteFor(f.freightId);
@@ -82,6 +85,7 @@ export class ShippingPapersController {
   /** The load's commercial invoice: the one it travels with now, and the ones it replaced. */
   @SignedIn()
   @Get('dispatch/freight/:id/commercial-invoice')
+  @AtTheCounter()
   invoice(@Param('id') id: string, @Actor() actor: IntrospectionResult): CommercialInvoiceView {
     const f = this.notes.requireReader(id, actor);
     return this.invoices.view(f, this.mayWrite(f, actor), this.dispatch.postedByBusiness(f));
@@ -121,6 +125,7 @@ export class ShippingPapersController {
   @Get('dispatch/freight/:id/commercial-invoice.html')
   @Header('Content-Type', 'text/html; charset=utf-8')
   @Header('Cache-Control', 'private, no-store')
+  @AtTheCounter()
   invoiceHtml(@Param('id') id: string, @Actor() actor: IntrospectionResult): string {
     const f = this.notes.requireReader(id, actor);
     const current = this.invoices.current(f.freightId);

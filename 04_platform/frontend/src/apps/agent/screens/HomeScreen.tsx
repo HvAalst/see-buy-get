@@ -4,6 +4,7 @@ import { useT, type MessageKey } from '../../../shared/i18n';
 import { fromPlaceWords, toPlaceWords } from '../../../shared/placewords';
 import { canAccept, gateNotice, homeSummary, money, papersReady, papersStep } from '../logic';
 import { PhotoField } from './PhotoField';
+import { PeopleSheet } from './PeopleSheet';
 import type { AgentActions, AgentState, Screen } from '../useAgentApp';
 import type { GeoPoint } from '../../../shared/geo';
 import type { Weekday, WeeklyHours } from '../types';
@@ -15,18 +16,18 @@ export interface HomeScreenProps {
 }
 
 /** The counter jobs, in field-frequency order. Each is one row — one task per screen. */
-const JOBS: Array<{ screen: Screen; icon: IconName; titleKey: MessageKey; subKey: MessageKey; gated?: boolean }> = [
+const JOBS: Array<{ screen: Screen; icon: IconName; titleKey: MessageKey; subKey: MessageKey; gated?: boolean; owner?: boolean }> = [
   { screen: 'accept', icon: 'box', titleKey: 'agent.accept.title', subKey: 'agent.home.jobAcceptSub', gated: true },
   { screen: 'release', icon: 'person', titleKey: 'agent.counter.title', subKey: 'agent.home.jobCounterSub' },
   { screen: 'handover', icon: 'truck', titleKey: 'agent.handover.title', subKey: 'agent.home.jobHandoverSub' },
   { screen: 'bag', icon: 'bag', titleKey: 'agent.bag.title', subKey: 'agent.home.jobBagSub' },
   { screen: 'receivebag', icon: 'bag', titleKey: 'agent.receivebag.title', subKey: 'agent.home.jobReceiveBagSub' },
   { screen: 'void', icon: 'refresh', titleKey: 'agent.void.title', subKey: 'agent.home.jobVoidSub' },
-  { screen: 'rates', icon: 'scale', titleKey: 'agent.rates.title', subKey: 'agent.home.jobRatesSub' },
+  { screen: 'rates', icon: 'scale', titleKey: 'agent.rates.title', subKey: 'agent.home.jobRatesSub', owner: true },
   { screen: 'consignments', icon: 'bag', titleKey: 'agent.consignments.title', subKey: 'agent.home.jobConsignmentsSub' },
   // FB2b — answering a driver's price is occasional, not part of the daily counter loop, so it lives here
   // as a job rather than taking a fifth slot in the bottom nav. The badge above carries the urgency.
-  { screen: 'freight', icon: 'truck', titleKey: 'agent.freight.title', subKey: 'agent.home.jobFreightSub' },
+  { screen: 'freight', icon: 'truck', titleKey: 'agent.freight.title', subKey: 'agent.home.jobFreightSub', owner: true },
 ];
 
 const DAYS: Array<{ key: Weekday; labelKey: MessageKey }> = [
@@ -39,7 +40,7 @@ const DAYS: Array<{ key: Weekday; labelKey: MessageKey }> = [
   { key: 'sun', labelKey: 'agent.hours.day.sun' },
 ];
 
-type SheetKind = 'topup' | 'price' | 'close' | 'photo' | 'location' | 'hours' | null;
+type SheetKind = 'topup' | 'price' | 'close' | 'photo' | 'location' | 'hours' | 'people' | null;
 
 /**
  * The PUDO's operational cockpit (My shop). Action-first: shop identity + status at the top, the wallet the
@@ -49,13 +50,15 @@ type SheetKind = 'topup' | 'price' | 'close' | 'photo' | 'location' | 'hours' | 
  */
 export function HomeScreen({ state, actions }: HomeScreenProps) {
   const t = useT();
-  const [sheet, setSheet] = useState<SheetKind | 'password' | null>(null);
+  const [sheet, setSheet] = useState<SheetKind>(null);
   const agent = state.agent;
   const gate = gateNotice(agent, state.gate, t);
   // Papers first, money after: a shop that is not approved yet is not told to top up to take a parcel in.
   const step = papersStep(agent);
   const awaitingApproval = step?.kind === 'send' || step?.kind === 'with_staff';
   const open = agent?.openState !== 'closed';
+  // One of the shop's people at the counter: the owner's rows — money, prices, hours, people, papers — are not theirs.
+  const staff = state.staff;
 
   // Refresh the shelf occupancy each time the cockpit is shown (Home re-mounts on navigation), so a bag just
   // received or a pickup just handed over shows the new free-slot count — not a stale first-mount snapshot.
@@ -78,16 +81,20 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
       {/* Shop identity — photo + name + status. The photo taps through to its own sheet. */}
       <Card>
         <div class="shophead">
-          <button type="button" class="shophead__photo" onClick={() => setSheet('photo')} aria-label={agent?.shopfrontMediaId ? t('agent.home.changePhoto') : t('agent.home.addPhoto')}>
-            {agent?.shopfrontMediaId ? (
-              <AuthImage mediaId={agent.shopfrontMediaId} load={actions.loadMedia} alt={t('agent.home.photoAlt')} />
-            ) : (
-              <span class="shophead__placeholder">
-                <Icon name="camera" size={26} />
-                <span>{t('agent.home.addPhoto')}</span>
-              </span>
-            )}
-          </button>
+          {staff ? (
+            <div class="shophead__photo">{agent?.shopfrontMediaId ? <AuthImage mediaId={agent.shopfrontMediaId} load={actions.loadMedia} alt={t('agent.home.photoAlt')} /> : <Icon name="home" size={26} />}</div>
+          ) : (
+            <button type="button" class="shophead__photo" onClick={() => setSheet('photo')} aria-label={agent?.shopfrontMediaId ? t('agent.home.changePhoto') : t('agent.home.addPhoto')}>
+              {agent?.shopfrontMediaId ? (
+                <AuthImage mediaId={agent.shopfrontMediaId} load={actions.loadMedia} alt={t('agent.home.photoAlt')} />
+              ) : (
+                <span class="shophead__placeholder">
+                  <Icon name="camera" size={26} />
+                  <span>{t('agent.home.addPhoto')}</span>
+                </span>
+              )}
+            </button>
+          )}
           <div class="shophead__body">
             <h1 class="shophead__name">{agent?.shopName ?? '…'}</h1>
             <p class="shophead__meta">{agent ? t('agent.zone', { zone: agent.zone }) : ''}</p>
@@ -103,7 +110,7 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
 
       {/* The money the day runs on — or, where we hold none for this shop, that fact. NULL is not an empty
           float: showing 0.00 and a Top up button there invites a top-up the network would have to refuse. */}
-      {agent && agent.balance === null ? (
+      {staff ? null : agent && agent.balance === null ? (
         <GlanceNumber label={t('agent.home.noFloat')} value="—" sub={t('agent.home.noFloatSub')} />
       ) : (
         <GlanceNumber
@@ -162,12 +169,12 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
         storageKey="glos-agent-push-asked"
       />
 
-      <Papers state={state} actions={actions} />
+      {staff ? null : <Papers state={state} actions={actions} />}
       {gate ? <Note tone={gate.tone} icon={gate.tone === 'danger' ? 'lock' : 'wallet'} title={gate.title} detail={gate.detail} /> : null}
 
       {/* Quick actions — the counter jobs. */}
       <div class="rows" role="list">
-        {JOBS.map((j) => {
+        {JOBS.filter((j) => !(staff && j.owner)).map((j) => {
           const disabled = j.gated ? !canAccept(state.gate) : false;
           return (
             <button key={j.screen} type="button" class="row" disabled={disabled} onClick={() => actions.go(j.screen)}>
@@ -187,16 +194,16 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
         })}
       </div>
 
-      {/* Shop settings — each opens its own sheet (or the shelf screen). */}
-      <Card title={t('agent.home.shopSettings')}>
+      {/* Shop settings — each opens its own sheet (or the shelf screen). The owner's, all of them. */}
+      {staff ? null : <Card title={t('agent.home.shopSettings')}>
         <div class="rows">
           <SettingRow icon="pin" title={t('agent.home.locationRow')} sub={t('agent.home.locationSub')} onClick={() => setSheet('location')} />
           <SettingRow icon="clock" title={t('agent.home.hoursRow')} sub={t('agent.home.hoursSub')} onClick={() => setSheet('hours')} />
           <SettingRow icon="scale" title={t('agent.home.changePrice')} sub={t('agent.home.priceSub', { price: money(agent?.pricePerParcel, agent?.currency) })} onClick={() => setSheet('price')} />
           <SettingRow icon="grid" title={t('agent.home.shelfLink')} sub={t('agent.home.shelfSub')} onClick={() => actions.go('shelf')} />
-          <SettingRow icon="keypad" title={t('agent.home.passwordRow')} sub={t('agent.home.passwordSub')} onClick={() => setSheet('password')} />
+          <SettingRow icon="person" title={t('agent.people.row')} sub={t('agent.people.rowSub')} onClick={() => setSheet('people')} />
         </div>
-      </Card>
+      </Card>}
 
       {/* Help, "stop showing me this" and sign out moved to the account menu in the bar — they belong
           to the person, not to this screen. Read aloud stays: it reads out what is on THIS screen. */}
@@ -209,6 +216,7 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
       <PhotoSheet open={sheet === 'photo'} onClose={() => setSheet(null)} state={state} actions={actions} />
       <LocationSheet open={sheet === 'location'} onClose={() => setSheet(null)} state={state} actions={actions} />
       <HoursSheet open={sheet === 'hours'} onClose={() => setSheet(null)} state={state} actions={actions} />
+      <PeopleSheet open={sheet === 'people'} onClose={() => setSheet(null)} api={actions.people} />
 
       <Sheet open={sheet === 'close'} onClose={() => setSheet(null)} title={t('agent.home.closeSheetTitle')}>
         <p class="t-body">{t('agent.home.closeSheetBody')}</p>

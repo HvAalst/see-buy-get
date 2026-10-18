@@ -1,5 +1,5 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
-import { ConnectivityNote, BottomNav, Button, Checklist, FeedbackFlash, Icon, NotificationBell, OutboxNote, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { ConnectivityNote, BottomNav, Button, Checklist, FeedbackFlash, Icon, NotificationBell, OutboxNote, Pill, Sheet, TopBar, type NavItem } from '../../shared/ui';
 import { useState } from 'preact/hooks';
 import { AccountMenu } from '../../shared/account/AccountMenu';
 import { ChangePasswordSheet } from '../../shared/account/ChangePasswordSheet';
@@ -27,6 +27,7 @@ import { useAgentApp, type AgentActions, type AgentState, type Screen } from './
 import '../../shared/screens.css';
 import './agent.css';
 import { agentWorkLine } from './logic';
+import { ownerOnlyScreen, type StaffAtCounter } from './staff';
 
 type Tab = 'home' | 'accept' | 'release' | 'records';
 
@@ -35,7 +36,8 @@ export function App() {
   const { state, actions, notifications , sbg } = useAgentApp();
   // The person behind this account — their photo, PIN, address and page. The menu is ABSENT where the
   // sign-in is not a person at all (a store's shared secret), rather than opening onto a refusal.
-  const account = useAccount(sbg, state.phase === 'ready');
+  // One of the shop's people at the counter has no account here to show: the shop's is the owner's (staff.ts).
+  const account = useAccount(sbg, state.phase === 'ready' && !state.staff);
   // The shop's freight paperwork. Fetched only once Records is open: a counter is not waiting on a
   // year of consignment notes to serve the person in front of it.
   const archive = useArchive(sbg, state.phase === 'ready' && state.screen === 'records');
@@ -68,7 +70,8 @@ export function App() {
     { key: 'home', label: t('agent.nav.home'), icon: 'home' },
     { key: 'accept', label: t('agent.nav.accept'), icon: 'box' },
     { key: 'release', label: t('agent.nav.release'), icon: 'person' },
-    { key: 'records', label: t('agent.nav.records'), icon: 'grid' },
+    // The shop's books and papers are the owner's.
+    ...(state.staff ? [] : [{ key: 'records' as const, label: t('agent.nav.records'), icon: 'grid' as const }]),
   ];
 
   return (
@@ -97,7 +100,11 @@ export function App() {
               {open ? t('agent.open') : t('agent.closed')}
             </Pill>
             {/* Last in the bar: live state first, the place you visit last. */}
-            <AccountMenu api={account} app="agent" onSignOut={actions.signOut} onChangePassword={() => setPasswordOpen(true)} devices={actions.shopDevices} />
+            {state.staff ? (
+              <StaffChip who={state.staff} onSignOut={actions.signOut} />
+            ) : (
+              <AccountMenu api={account} app="agent" onSignOut={actions.signOut} onChangePassword={() => setPasswordOpen(true)} devices={actions.shopDevices} />
+            )}
           </>
         }
       />
@@ -123,6 +130,8 @@ export function App() {
 }
 
 function ScreenRouter({ screen, state, actions, archive, destination }: { screen: Screen; state: AgentState; actions: AgentActions; archive: ArchiveApiState; destination: DestinationApiState }) {
+  // A notification or an old link can point one of the shop's people at an owner's screen: the counter is shown instead.
+  if (state.staff && ownerOnlyScreen(screen)) return <HomeScreen state={state} actions={actions} />;
   switch (screen) {
     case 'accept':
       return <AcceptScreen state={state} actions={actions} />;
@@ -152,6 +161,31 @@ function ScreenRouter({ screen, state, actions, archive, destination }: { screen
     default:
       return <HomeScreen state={state} actions={actions} />;
   }
+}
+
+/**
+ * WHO IS AT THE COUNTER, in the bar where the shop's account menu is for the owner: their name, and signing out. There is
+ * no account of theirs to open here — the shop's is the owner's, and their own is in any SeeBuyGet app.
+ */
+function StaffChip({ who, onSignOut }: { who: StaffAtCounter; onSignOut: () => void }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" class="topbar__lead" onClick={() => setOpen(true)} aria-label={t('agent.staff.chipAria', { name: who.name })} title={who.name}>
+        <Icon name="person" size={24} />
+      </button>
+      <Sheet open={open} onClose={() => setOpen(false)} title={t('agent.staff.sheetTitle', { name: who.name })}>
+        <p class="t-body">{t('agent.staff.sheetLede', { shop: who.shopName })}</p>
+        <Button chevron={false} onClick={onSignOut}>
+          {t('agent.staff.signOut')}
+        </Button>
+        <Button variant="link" onClick={() => setOpen(false)}>
+          {t('agent.home.notNow')}
+        </Button>
+      </Sheet>
+    </>
+  );
 }
 
 function Toasts({ state, actions, noNav }: { state: AgentState; actions: AgentActions; noNav?: boolean }) {

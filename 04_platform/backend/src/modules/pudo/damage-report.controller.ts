@@ -7,6 +7,7 @@ import { Roles, SignedIn } from '../../foundation/auth/scopes.decorator';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { DamageReportService } from './damage-report.service';
 import { AddDamageReportNoteDto, DamageReportLinkList, DamageReportLinkRow, DamageReportLinkView, DamageReportList, DamageReportNote, DamageReportTokenDto, DamageReportView, MadeDamageReportLink } from './damage-report.types';
+import { AtTheCounter } from '../../foundation/auth/at-the-counter';
 
 /**
  * THE DAMAGE CLAIM REPORT, from both ends.
@@ -33,6 +34,7 @@ export class DamageReportController {
   /** The report on one parcel, for whoever it is for. */
   @SignedIn()
   @Get('parcels/:id/damage-report')
+  @AtTheCounter()
   read(@Param('id') id: string, @Actor() actor: IntrospectionResult): DamageReportView {
     return this.reports.read(id, actor);
   }
@@ -40,6 +42,7 @@ export class DamageReportController {
   /** The file: the report to read or print, the same facts for a machine, and the photographs. */
   @SignedIn()
   @Get('parcels/:id/damage-report/file')
+  @AtTheCounter()
   file(@Param('id') id: string, @Actor() actor: IntrospectionResult, @Res({ passthrough: true }) res: Response): StreamableFile {
     const file = this.reports.file(id, actor);
     res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
@@ -54,12 +57,14 @@ export class DamageReportController {
    */
   @SignedIn()
   @Post('parcels/:id/damage-report/notes')
+  @AtTheCounter()
   addNote(@Param('id') id: string, @Body() dto: AddDamageReportNoteDto, @Actor() actor: IntrospectionResult): DamageReportNote {
     return this.reports.addNote(id, actor, { text: dto.text, photoRefs: dto.photoRefs });
   }
 
   @SignedIn()
   @Get('parcels/:id/damage-report/links')
+  @AtTheCounter()
   links(@Param('id') id: string, @Actor() actor: IntrospectionResult): DamageReportLinkList {
     return { items: this.reports.linksFor(id, actor) };
   }
@@ -69,6 +74,7 @@ export class DamageReportController {
   @RateLimit(20, 15 * 60)
   @SignedIn()
   @Post('parcels/:id/damage-report/links')
+  @AtTheCounter()
   makeLink(@Param('id') id: string, @Actor() actor: IntrospectionResult): MadeDamageReportLink {
     return this.reports.makeLink(id, actor);
   }
@@ -77,6 +83,7 @@ export class DamageReportController {
   @SignedIn()
   @Post('parcels/:id/damage-report/links/:linkId/cancel')
   @HttpCode(200)
+  @AtTheCounter()
   cancelLink(@Param('id') id: string, @Param('linkId') linkId: string, @Actor() actor: IntrospectionResult): DamageReportLinkRow {
     return this.reports.cancelLink(id, linkId, actor);
   }

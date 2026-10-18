@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import specRaw from '../../../backend/contracts/openapi.json?raw';
-import { drain, enqueue, offlineFetch, onOutboxSent, outboxCount, outboxItems, queueableLabel, queueablePatterns, retry } from './outbox';
+import { drain, enqueue, offlineFetch, onOutboxSent, outboxCount, outboxItems, queueableLabel, queueablePatterns, retry, sendAsMine, setOutboxActor, waitingForOthers } from './outbox';
 
 /**
  * The outbox — the handover that happens whether or not there is a signal.
@@ -32,6 +32,7 @@ describe('the outbox', () => {
 
   beforeEach(() => {
     localStorage.clear();
+    setOutboxActor(null);
   });
 
   describe('what may be queued at all', () => {
@@ -259,6 +260,67 @@ describe('the outbox', () => {
       queue('a', '/v1/sbg/parcels/A/intake');
       queue('a', '/v1/sbg/parcels/A/intake');
       expect(outboxCount()).toBe(1);
+    });
+
+    /**
+     * A SHOP'S COUNTER IS SEVERAL PEOPLE'S PHONE (the user, 2026-10-18: "who is at the counter"). What one of them did
+     * without a signal goes under their own sign-in — never under whoever is signed in when the signal comes back.
+     */
+    describe('on a phone several people sign in on', () => {
+      const WANJIRU = { key: 'staff:did:shop:ssm_1', name: 'Wanjiru' };
+      const OWNER = { key: 'shop:did:shop', name: 'the shop’s own sign-in' };
+      const ok = (sent: string[]) =>
+        (async (url: RequestInfo | URL) => {
+          sent.push(String(url).replace(ORIGIN, ''));
+          return new Response('{}', { status: 200 });
+        }) as unknown as typeof fetch;
+
+      it('sends an act only under the sign-in that made it, and in order: the owner’s shelving waits behind her take-in', async () => {
+        setOutboxActor(WANJIRU);
+        queue('a', '/v1/sbg/parcels/A/intake');
+        setOutboxActor(OWNER);
+        queue('b', '/v1/sbg/parcels/A/shelve', 'Parcel shelved');
+        expect(outboxItems().map((i) => i.by?.name)).toEqual(['Wanjiru', 'the shop’s own sign-in']);
+
+        const sent: string[] = [];
+        expect(await drain(deps(ok(sent)))).toEqual({ sent: 0, blocked: 0 });
+        expect(sent).toEqual([]);
+        // Whoever is signed in is told whose acts are waiting — and nothing is marked stuck.
+        expect(waitingForOthers()).toEqual([{ by: WANJIRU, items: [expect.objectContaining({ id: 'a' })] }]);
+        expect(outboxItems().every((i) => i.state === 'pending' && i.attempts === 0)).toBe(true);
+
+        // She signs in again: hers goes, and the owner's behind it waits for the owner.
+        setOutboxActor(WANJIRU);
+        expect(await drain(deps(ok(sent)))).toEqual({ sent: 1, blocked: 0 });
+        setOutboxActor(OWNER);
+        expect(await drain(deps(ok(sent)))).toEqual({ sent: 1, blocked: 0 });
+        expect(sent).toEqual(['/v1/sbg/parcels/A/intake', '/v1/sbg/parcels/A/shelve']);
+      });
+
+      it('sends nothing stamped while nobody is signed in, and sends what nobody stamped as it always did', async () => {
+        setOutboxActor(WANJIRU);
+        queue('a', '/v1/sbg/parcels/A/intake');
+        setOutboxActor(null);
+        const sent: string[] = [];
+        await drain(deps(ok(sent)));
+        expect(sent).toEqual([]);
+        localStorage.clear();
+        queue('b', '/v1/sbg/parcels/B/intake'); // one person to a phone: a driver's, a hub's
+        await drain(deps(ok(sent)));
+        expect(sent).toEqual(['/v1/sbg/parcels/B/intake']);
+      });
+
+      it('lets whoever is signed in send them as their own — recorded as theirs, by their choice', async () => {
+        setOutboxActor(WANJIRU);
+        queue('a', '/v1/sbg/parcels/A/intake');
+        queue('b', '/v1/sbg/parcels/B/intake');
+        setOutboxActor(OWNER);
+        sendAsMine(WANJIRU.key);
+        expect(outboxItems().map((i) => i.by?.key)).toEqual([OWNER.key, OWNER.key]);
+        expect(waitingForOthers()).toEqual([]);
+        const sent: string[] = [];
+        expect(await drain(deps(ok(sent)))).toEqual({ sent: 2, blocked: 0 });
+      });
     });
 
     it('waits rather than failing when there is no credential yet', async () => {

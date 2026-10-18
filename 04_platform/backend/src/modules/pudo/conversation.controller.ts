@@ -17,6 +17,7 @@ import {
   ShareConversationDto,
   VoiceMessageDto,
 } from './conversation.dto';
+import { AtTheCounter } from '../../foundation/auth/at-the-counter';
 
 /**
  * CV1 — CONVERSATIONS ABOUT A LOAD (05_engineering/conversations.md).
@@ -31,6 +32,7 @@ export class ConversationController {
 
   @SignedIn()
   @Get()
+  @AtTheCounter()
   mine(@Actor() actor: IntrospectionResult) {
     return this.conversations.listFor(didOf(actor));
   }
@@ -38,6 +40,7 @@ export class ConversationController {
   /** Ask about a load — or (CV5) talk about a parcel waiting at a shop. Either returns to the thread already open. */
   @SignedIn()
   @Post()
+  @AtTheCounter()
   open(@Body() dto: OpenConversationDto, @Actor() actor: IntrospectionResult) {
     if (dto.parcelId) return this.conversations.openAboutParcel(dto.parcelId, didOf(actor));
     if (!dto.freightId) throw new GlosError('FIELD_REQUIRED', 'Say what the conversation is about: a load, or a parcel');
@@ -78,6 +81,7 @@ export class ConversationController {
   /** CV4 — send a voice message. */
   @SignedIn()
   @Post(':id/voice')
+  @AtTheCounter()
   sendVoice(@Param('id') id: string, @Body() dto: VoiceMessageDto, @Actor() actor: IntrospectionResult) {
     return this.conversations.sendVoice(id, didOf(actor), dto);
   }
@@ -87,6 +91,7 @@ export class ConversationController {
   @Get(':id/voice/:voiceId')
   @Header('Cache-Control', 'private, no-store')
   @Header('X-Content-Type-Options', 'nosniff')
+  @AtTheCounter()
   voice(@Param('id') id: string, @Param('voiceId') voiceId: string, @Actor() actor: IntrospectionResult): StreamableFile {
     const { contentType, bytes } = this.conversations.voiceFor(id, voiceId, didOf(actor));
     return new StreamableFile(bytes, { type: contentType });
@@ -102,18 +107,21 @@ export class ConversationController {
   /** CV3 — a party shares a report of the messages they choose. The other side is told in the thread. */
   @SignedIn()
   @Post(':id/dispute-reports')
+  @AtTheCounter()
   shareDisputeReport(@Param('id') id: string, @Body() dto: DisputeReportDto, @Actor() actor: IntrospectionResult) {
     return this.conversations.shareDisputeReport(id, didOf(actor), dto.seqs, dto.note);
   }
 
   @SignedIn()
   @Get(':id/messages')
+  @AtTheCounter()
   messages(@Param('id') id: string, @Query('after') after: string | undefined, @Actor() actor: IntrospectionResult) {
     return this.conversations.messagesFor(id, didOf(actor), Math.max(0, Math.floor(Number(after) || 0)));
   }
 
   @SignedIn()
   @Post(':id/messages')
+  @AtTheCounter()
   send(@Param('id') id: string, @Body() dto: SendMessageDto, @Actor() actor: IntrospectionResult) {
     return this.conversations.send(id, didOf(actor), dto);
   }
@@ -154,6 +162,7 @@ export class ConversationController {
 
   @SignedIn()
   @Post(':id/read')
+  @AtTheCounter()
   read(@Param('id') id: string, @Body() dto: ReadMarkerDto, @Actor() actor: IntrospectionResult) {
     return this.conversations.markRead(id, didOf(actor), dto.seq);
   }
@@ -172,6 +181,7 @@ export class ConversationController {
 
   @SignedIn()
   @Post(':id/messages/:seq/report')
+  @AtTheCounter()
   report(@Param('id') id: string, @Param('seq') seq: string, @Body() dto: ReportMessageDto, @Actor() actor: IntrospectionResult) {
     return this.conversations.report(id, didOf(actor), Number(seq), dto.reason);
   }
