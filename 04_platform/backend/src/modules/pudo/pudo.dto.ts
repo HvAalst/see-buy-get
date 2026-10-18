@@ -2383,6 +2383,8 @@ export class RegisterFreightDto {
   /** FB5 — how the goods are PACKED, which decides the body and what has to lift it. Omitted falls back to
    *  the DEPLOYMENT's default (sacks here, loose in a European deployment), never to a network-wide guess. */
   @IsOptional() @IsIn(PACKAGING) @ApiPropertyOptional({ enum: PACKAGING }) packaging?: Packaging;
+  /** How many packages the load is: each gets a label, and an SSCC under the shipper's GS1 prefix when it has one. */
+  @IsOptional() @IsInt() @Min(1) @Max(500) packages?: number;
   /** Bodies the SHIPPER rules out (theft risk, an insurer's wording, a customer's requirement). A stated
    *  preference, not a physical constraint, and the board presents it as one. */
   @IsOptional() @IsArray() @IsIn([...TRUCK_SUBTYPES], { each: true }) @ApiPropertyOptional({ enum: TRUCK_SUBTYPES, isArray: true }) excludedBodies?: string[];

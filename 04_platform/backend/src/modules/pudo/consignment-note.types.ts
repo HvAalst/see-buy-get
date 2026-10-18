@@ -62,6 +62,8 @@ export interface ConsignmentNote {
     packaging?: string;
     /** Number of packages, when the network knows it (an indivisible load is one). Null = not stated. */
     packages: number | null;
+    /** Box 6, marks and numbers: each package's SSCC, when the shipper's GS1 prefix gave them. */
+    marks?: string[];
     grossKg: number;
     volumeM3?: number;
     dangerous: boolean;

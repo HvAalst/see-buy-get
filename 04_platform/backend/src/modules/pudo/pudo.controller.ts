@@ -90,6 +90,7 @@ import { CONTACT_BASIS, ContactCardService } from './contact-card.service';
 import { CountryNoticeService } from './country-notice.service';
 import { JourneyPlanService } from './journey-plan.service';
 import { VehicleCareService } from './vehicle-care.service';
+import { ShipperCodesService } from './shipper-codes.service';
 import { ContactCardView, DepotListResponse, DepotRegisterView } from './depot.types';
 import { FleetManagerService } from './fleet-manager.service';
 import { AccountService } from './account.service';
@@ -288,6 +289,8 @@ export class SbgController {
     @Optional() private readonly journeyPlans?: JourneyPlanService,
     // A vehicle's upkeep: the odometer read as a shift starts and ends.
     @Optional() private readonly care?: VehicleCareService,
+    // A shipper's own GS1 codes for the packages of the loads it posts.
+    @Optional() private readonly shipperCodes?: ShipperCodesService,
   ) {}
 
   /**
@@ -6100,10 +6103,16 @@ export class SbgController {
     this.requireActiveTerm(dto.incoterm, dto.pickupCountry, dto.destCountry);
     // B2 — a business's DID is shared by everybody in it, so the person who posted is kept by name as well.
     const { forClientId, contractId, deliverOn, orderRef, ...load } = dto;
+    // GS1 — a business posting its OWN goods gives its packages SSCCs under its prefix, when it holds one. Asked before
+    // the load exists, so a load is never posted with some packages coded and others not. Not for a client's goods:
+    // those carry the client's code, not the expeditor's.
+    const coder = actor?.role === 'business' && actor.tenant && !forClientId ? actor.tenant : undefined;
+    this.shipperCodes?.assertCanIssue(coder, dto.packages);
     const posted = this.dispatch.registerFreight({ ...load, dimensionsCm, ...this.contractOrder(actor, contractId, deliverOn, orderRef), bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did, ...(actor?.role === 'business' && actor.actorName ? { postedByName: actor.actorName } : {}), ...this.onBehalfOf(actor, forClientId) });
     // …and WHICH person, kept by the business itself and never on the load, which every carrier on the board reads:
     // it is who the receipt goes to when the load is delivered.
     this.businesses?.notePosted(posted.freightId, actor);
+    this.shipperCodes?.issue(posted.freightId, coder, posted.packages);
     return posted;
   }
 

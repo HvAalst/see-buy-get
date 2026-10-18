@@ -359,6 +359,11 @@ export class Freight {
   @ApiPropertyOptional({ enum: PACKAGING })
   packaging?: Packaging;
   /**
+   * How many packages the load is (CMR box 7), when the shipper said. Each gets a label; under a shipper's GS1 company
+   * prefix, each also gets an SSCC (shipper-codes.service.ts). Absent: not stated.
+   */
+  packages?: number;
+  /**
    * DERIVED from packaging (`loose`), and kept because vehicle matching is written against it.
    *
    * It used to be the stored truth and it meant two opposite things — "loose, it tips or augers" in the body

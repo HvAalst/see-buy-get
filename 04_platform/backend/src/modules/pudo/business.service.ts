@@ -11,6 +11,7 @@ import { HandleService } from '../../foundation/handle/handle.service';
 import { MailService } from '../../foundation/mail/mail.service';
 import { hashPhone, isPlausiblePhone, normalizePhone } from '../../foundation/identity/phone';
 import { PersonService } from './person.service';
+import { ShipperCodesService } from './shipper-codes.service';
 import { isFor, waitsAt, type Addressed } from './addressed-to';
 import {
   BUSINESS_MEMBER_ROLES,
@@ -19,6 +20,7 @@ import {
   BusinessMemberView,
   BusinessMembershipView,
   BusinessStaffRow,
+  BusinessGs1View,
   BusinessView,
   LoadPoster,
   ReceiptPerson,
@@ -69,6 +71,7 @@ export class BusinessService {
     private readonly documents: CompanyDocumentService,
     private readonly handles: HandleService,
     @Optional() private readonly mail?: MailService,
+    @Optional() private readonly codes?: ShipperCodesService,
   ) {
     // An account moving off a number takes its unanswered invitations with it.
     this.persons.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
@@ -154,7 +157,23 @@ export class BusinessService {
       ...(this.handleOf(entity) ? { handle: this.handleOf(entity) } : {}),
       createdAt: entity.createdAt,
       you: memberView(you, readerPersonDid),
+      ...this.gs1Of(entity.entityId),
     };
+  }
+
+  private gs1Of(entityId: string): { gs1?: BusinessGs1View } {
+    const s = this.codes?.of(entityId);
+    return s ? { gs1: { companyPrefix: s.companyPrefix, extensionDigit: s.extensionDigit, left: this.codes!.left(entityId) ?? 0, setAt: s.setAt, setBy: s.setBy } } : {};
+  }
+
+  /**
+   * The business's GS1 company prefix, set or cleared. Owner only, like everything else the business says about itself;
+   * staff never reach this (a business sign-in only).
+   */
+  setGs1(acting: ActingMember, input: { companyPrefix: string; extensionDigit: number } | null): void {
+    this.requireOwner(acting);
+    if (!this.codes) throw new GlosError('INVALID_STATE', 'GS1 codes are not available here');
+    this.codes.set(acting.entity.entityId, input, acting.member.name);
   }
 
   /**

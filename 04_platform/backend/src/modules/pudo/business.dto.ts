@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsOptional, IsString, MaxLength, ValidateIf } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 import { BUSINESS_ACTIVITIES } from '../../foundation/entity/entity.types';
 import { BUSINESS_MEMBER_ROLES } from './business.types';
 
@@ -22,6 +22,13 @@ export class UpdateBusinessDto {
   /** Null clears it. */
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() @MaxLength(60) @ApiPropertyOptional({ nullable: true }) taxNo?: string | null;
   @IsOptional() @ApiPropertyOptional({ enum: BUSINESS_ACTIVITIES, isArray: true }) @IsArray() @ArrayMaxSize(BUSINESS_ACTIVITIES.length) @IsString({ each: true }) activities?: string[];
+}
+
+/** The business's GS1 company prefix, and the extension digit it sets aside for labels printed here. */
+export class BusinessGs1Dto {
+  /** As GS1 gave it: 6 to 12 digits; spaces and dashes are dropped. */
+  @IsString() @MaxLength(24) companyPrefix!: string;
+  @IsInt() @Min(0) @Max(9) extensionDigit!: number;
 }
 
 /** Add somebody by the phone number they sign in with. */

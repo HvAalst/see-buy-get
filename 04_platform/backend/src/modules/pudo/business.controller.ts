@@ -10,7 +10,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { isSandbox } from '../../foundation/runtime/sandbox';
 import { BusinessService } from './business.service';
 import { AnyMember, BusinessMemberGuard } from './business-member.guard';
-import { ApproveBusinessDto, ArchiveClientDto, BusinessClientDto, UpdateBusinessClientDto, CreateBusinessDto, InviteMemberDto, MemberRoleDto, RefuseBusinessDto, UpdateBusinessDto } from './business.dto';
+import { ApproveBusinessDto, ArchiveClientDto, BusinessClientDto, BusinessGs1Dto, UpdateBusinessClientDto, CreateBusinessDto, InviteMemberDto, MemberRoleDto, RefuseBusinessDto, UpdateBusinessDto } from './business.dto';
 import { BusinessMemberView, BusinessMembershipList, BusinessMembershipView, BusinessSession, BusinessStaffList, BusinessStaffRow, BusinessView } from './business.types';
 
 /**
@@ -110,6 +110,27 @@ export class BusinessController {
   @Delete('business/me/members/:memberId')
   remove(@Param('memberId') memberId: string, @Actor() actor: IntrospectionResult): BusinessMemberView {
     return this.businesses.remove(this.businesses.requireMember(actor), memberId);
+  }
+
+  /**
+   * The business's GS1 company prefix: from then on, each package of a load it posts gets an SSCC under it, printed
+   * beside our own code. Owner only; a business sign-in only, so staff never change it.
+   */
+  @Roles('business')
+  @Post('business/me/gs1')
+  setGs1(@Body() dto: BusinessGs1Dto, @Actor() actor: IntrospectionResult): BusinessView {
+    const acting = this.businesses.requireMember(actor);
+    this.businesses.setGs1(acting, { companyPrefix: dto.companyPrefix, extensionDigit: dto.extensionDigit });
+    return this.businesses.view(acting.entity.entityId, acting.member.personDid!);
+  }
+
+  /** Stop giving packages GS1 codes. The codes loads already have stay with them. */
+  @Roles('business')
+  @Delete('business/me/gs1')
+  clearGs1(@Actor() actor: IntrospectionResult): BusinessView {
+    const acting = this.businesses.requireMember(actor);
+    this.businesses.setGs1(acting, null);
+    return this.businesses.view(acting.entity.entityId, acting.member.personDid!);
   }
 
   /** Ask SeeBuyGet to check the business, once its papers are on record. */

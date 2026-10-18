@@ -1,3 +1,4 @@
+import type { CommercialInvoice, CommercialInvoiceView, Gs1View, PackageLabels } from './papers';
 import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
 import { createAgentApi, createNotificationsApi, createOperatorApi, createSeededClient, makeConfig, publicRequest, type AgentApi, type NotificationsApi, type OperatorApi, type Result, type SbgConfig, type SeededAppClient } from '../../lib/sbg';
 import type { QuoteView } from '../../shared/quote';
@@ -92,6 +93,8 @@ export interface BusinessView {
   handle?: string;
   createdAt: string;
   you: MemberRow;
+  /** Its GS1 company prefix, when it gave one: its packages then carry SSCCs beside our code. */
+  gs1?: Gs1View;
 }
 
 export interface BusinessSession {
@@ -250,6 +253,8 @@ export interface NewLoad {
   destCountry?: string;
   weightKg: number;
   packaging?: string;
+  /** How many packages: each gets a label, and an SSCC under the business's GS1 prefix. */
+  packages?: number;
   natureCode?: string;
   fragile?: boolean;
   commitMode: 'instant' | 'negotiate';
@@ -295,6 +300,16 @@ export interface BusinessClient {
   contracts(): Promise<Result<{ items: CarriageContract[] }>>;
   linkContract(code: string): Promise<Result<CarriageContract>>;
   endContract(contractId: string, reason?: string): Promise<Result<CarriageContract>>;
+  /** The business's GS1 company prefix: set (owner only), or stop giving codes. */
+  setGs1(companyPrefix: string, extensionDigit: number): Promise<Result<BusinessView>>;
+  clearGs1(): Promise<Result<BusinessView>>;
+  /** A load's package labels: what they carry, and the page to print. */
+  packageLabels(freightId: string): Promise<Result<PackageLabels>>;
+  packageLabelsPage(freightId: string): Promise<Result<string>>;
+  /** A load's commercial invoice: read, write and sign, and the page of three copies. */
+  invoice(freightId: string): Promise<Result<CommercialInvoiceView>>;
+  writeInvoice(freightId: string, body: Record<string, unknown>): Promise<Result<CommercialInvoice>>;
+  invoicePage(freightId: string): Promise<Result<string>>;
 }
 
 export function createBusinessClient(): BusinessClient {
@@ -329,6 +344,13 @@ export function createBusinessClient(): BusinessClient {
     contracts: () => call((c) => c.GET('/v1/sbg/business/me/contracts' as never, {} as never) as never),
     linkContract: (code) => call((c) => c.POST('/v1/sbg/business/me/contracts/link' as never, { body: { code } } as never) as never),
     endContract: (contractId, reason) => call((c) => c.POST(`/v1/sbg/business/me/contracts/${encodeURIComponent(contractId)}/end` as never, { body: reason ? { reason } : {} } as never) as never),
+    setGs1: (companyPrefix, extensionDigit) => call((c) => c.POST('/v1/sbg/business/me/gs1' as never, { body: { companyPrefix, extensionDigit } } as never) as never),
+    clearGs1: () => call((c) => c.DELETE('/v1/sbg/business/me/gs1' as never, {} as never) as never),
+    packageLabels: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/package-labels` as never, {} as never) as never),
+    packageLabelsPage: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/package-labels.html` as never, { parseAs: 'text' } as never) as never),
+    invoice: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/commercial-invoice` as never, {} as never) as never),
+    writeInvoice: (freightId, body) => call((c) => c.POST(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/commercial-invoice` as never, { body } as never) as never),
+    invoicePage: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/commercial-invoice.html` as never, { parseAs: 'text' } as never) as never),
   };
 }
 

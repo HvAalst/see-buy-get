@@ -5,9 +5,12 @@ import { ConsoleDetail } from '../../tower/ConsoleDetail';
 import { SitePicker, type SiteView } from '../../tower/screens/SitePicker';
 import { QuotePanel } from '../../tower/screens/QuotePanel';
 import { NATURES, PACKAGING_OPTIONS } from '../../agent/logic';
-import type { BusinessClient, BusinessView, CarriageContract, LoadProposal, PostedLoad } from '../api';
+import { businessConfig, type BusinessClient, type BusinessView, type CarriageContract, type LoadProposal, type PostedLoad } from '../api';
 import { deliverySays, loadGaps, loadStage, mayAct, nextDay, noteKept, orderableContracts, planDo, planSays, type LoadForm, type LoadStage } from '../logic';
 import { NoteFile, NoteLinksPanel } from './LoadNote';
+import { LoadPapers } from './LoadPapers';
+import { CountrySelect, useCountryAtlas } from '../../tower/screens/CountrySelect';
+import { publicRequest } from '../../../lib/sbg';
 
 /** A price on a load, in the money the load was posted in — the figure alone only where no company of ours names one. */
 const priced = (amount: number, currency?: string): string => (currency ? quoteFigure({ amount, currency }) : amount.toLocaleString());
@@ -24,8 +27,10 @@ const STAGE: Record<LoadStage, { label: MessageKey; tone: string }> = {
   cancelled: { label: 'business.loads.stage.cancelled', tone: 'quiet' },
 };
 
-type Form = LoadForm & { packaging: string; natureCode: string; fragile: boolean; commitMode: 'negotiate' | 'instant'; instructions: string; contactName: string; contactPhone: string; deliveryWindow: string; pickupOn: string; forClientId: string; contractId: string; deliverOn: string; orderRef: string };
-const EMPTY: Form = { description: '', fromSiteId: '', toSiteId: '', weightKg: '', packaging: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '' };
+const atlasApi = { countryCatalogue: () => publicRequest(businessConfig(), '/v1/sbg/country-catalogue') };
+
+type Form = LoadForm & { packaging: string; packages: string; destCountry: string; natureCode: string; fragile: boolean; commitMode: 'negotiate' | 'instant'; instructions: string; contactName: string; contactPhone: string; deliveryWindow: string; pickupOn: string; forClientId: string; contractId: string; deliverOn: string; orderRef: string };
+const EMPTY: Form = { description: '', fromSiteId: '', toSiteId: '', weightKg: '', packaging: '', packages: '', destCountry: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '' };
 
 /**
  * B2 — A BUSINESS'S OWN LOADS: post one, and follow it to the door.
@@ -146,6 +151,7 @@ export function LoadsScreen({ business, client }: { business: BusinessView; acti
       {open ? (
         <LoadDetail
           row={open}
+          business={business}
           client={client}
           act={act}
           onClose={() => setOpen(null)}
@@ -161,7 +167,10 @@ export function LoadsScreen({ business, client }: { business: BusinessView; acti
 
 function NewLoadPanel({ business, client, onCancel, onPosted }: { business: BusinessView; client: BusinessClient | null; onCancel: () => void; onPosted: (code: string, ordered?: { fleet: string; day: string }) => void | Promise<void> }) {
   const t = useT();
-  const [form, setForm] = useState<Form>({ ...EMPTY, deliverOn: nextDay() });
+  const [form, setForm] = useState<Form>({ ...EMPTY, destCountry: business.country, deliverOn: nextDay() });
+  const countries = useCountryAtlas(atlasApi);
+  const packages = Number(form.packages);
+  const counted = Number.isInteger(packages) && packages >= 1 && packages <= 500 ? packages : undefined;
   const [contracts, setContracts] = useState<CarriageContract[]>([]);
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -198,11 +207,12 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
       pickupLocation: from.location,
       destLabel: to.name,
       destLocation: to.location,
-      // A business works in its own country unless it says otherwise; the rules of a crossing are asked of a known one.
+      // A business sends from its own country; where the goods go is its choice, and a crossing is asked of a known one.
       pickupCountry: business.country,
-      destCountry: business.country,
+      destCountry: form.destCountry || business.country,
       weightKg: Number(form.weightKg),
       ...(form.packaging ? { packaging: form.packaging } : {}),
+      ...(counted ? { packages: counted } : {}),
       natureCode: form.natureCode,
       fragile: form.fragile,
       commitMode: form.commitMode,
@@ -297,6 +307,17 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
         </div>
         <div class="biz-two">
           <label class="cfield">
+            <span class="cfield__label">{t('business.loads.f.packages')}</span>
+            <input id="load-packages" class="cinput" inputMode="numeric" maxLength={3} value={form.packages} onInput={(e) => setForm((prev) => ({ ...prev, packages: (e.target as HTMLInputElement).value }))} />
+            <span class="chint">{t(business.gs1 ? 'business.loads.f.packagesHintGs1' : 'business.loads.f.packagesHint')}</span>
+          </label>
+          <div class="cfield">
+            <CountrySelect value={form.destCountry} onChange={(destCountry) => setForm((prev) => ({ ...prev, destCountry }))} label={t('business.loads.f.destCountry')} options={countries} />
+            {form.destCountry && form.destCountry !== business.country ? <span class="chint">{t('business.loads.f.crossing')}</span> : null}
+          </div>
+        </div>
+        <div class="biz-two">
+          <label class="cfield">
             <span class="cfield__label">{t('business.loads.f.nature')}</span>
             <select class="cinput" value={form.natureCode} onChange={(e) => setForm((prev) => ({ ...prev, natureCode: (e.target as HTMLSelectElement).value }))}>
               {NATURES.map((n) => (
@@ -363,7 +384,7 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
   );
 }
 
-function LoadDetail({ row, client, act, onClose, onChanged }: { row: PostedLoad; client: BusinessClient | null; act: boolean; onClose: () => void; onChanged: (message?: string) => void | Promise<void> }) {
+function LoadDetail({ row, business, client, act, onClose, onChanged }: { row: PostedLoad; business: BusinessView; client: BusinessClient | null; act: boolean; onClose: () => void; onChanged: (message?: string) => void | Promise<void> }) {
   const t = useT();
   const stage = loadStage(row);
   const says = planSays(row, t);
@@ -499,6 +520,9 @@ function LoadDetail({ row, client, act, onClose, onChanged }: { row: PostedLoad;
         </div>
         {kept === 'not_yet' ? <p class="chint">{t('business.note.notYet')}</p> : null}
       </section>
+
+      {/* The labels for its packages and, across a border, its commercial invoice — the business's own papers. */}
+      {stage !== 'cancelled' ? <LoadPapers row={row} client={client} business={business} act={act} /> : null}
 
       {proposals && proposals.some((p) => p.status === 'open') ? (
         <section class="cons__panel">

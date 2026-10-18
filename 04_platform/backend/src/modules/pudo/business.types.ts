@@ -102,6 +102,16 @@ export class BusinessCheckView {
   @ApiProperty({ type: [String] }) missing: string[];
 }
 
+/** The business's GS1 company prefix and the extension digit it sets aside for labels printed here. */
+export class BusinessGs1View {
+  @ApiProperty() companyPrefix: string;
+  @ApiProperty() extensionDigit: number;
+  /** How many codes are left under that prefix and digit. */
+  @ApiProperty() left: number;
+  @ApiProperty() setAt: string;
+  @ApiProperty() setBy: string;
+}
+
 export class BusinessView {
   @ApiProperty() entityId: string;
   @ApiProperty() name: string;
@@ -115,6 +125,8 @@ export class BusinessView {
   @ApiProperty() createdAt: string;
   /** The reader's own place in it. */
   @ApiProperty({ type: BusinessMemberView }) you: BusinessMemberView;
+  /** Its GS1 company prefix, when it gave one: its packages then carry SSCCs beside our code. */
+  @ApiPropertyOptional({ type: BusinessGs1View }) gs1?: BusinessGs1View;
 }
 
 /** One line of "your businesses": the ones you are in, and the ones you are invited to. */

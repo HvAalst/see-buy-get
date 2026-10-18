@@ -193,3 +193,23 @@
 .biz-link__make {
   margin-top: 12px;
 }
+
+/* A commercial invoice being written: each line of goods in a box of its own, so six fields read as one line. */
+.biz-invoice {
+  margin-top: 14px;
+  border-top: 1px solid var(--bd-soft);
+  padding-top: 14px;
+}
+.biz-invoice__line {
+  border: 1px solid var(--bd-soft);
+  border-radius: 8px;
+  padding: 10px 12px 2px;
+  margin-bottom: 10px;
+}
+.biz-invoice__linehead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}

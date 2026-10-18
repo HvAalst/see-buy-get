@@ -21,6 +21,8 @@ import { NETWORK_CURRENCY } from './pudo.config';
 import { VendorService } from './vendor.service';
 import { BusinessService } from './business.service';
 import { ConsignmentNote, NoteParty } from './consignment-note.types';
+import { CommercialInvoiceService } from './commercial-invoice.service';
+import { ShipperCodesService } from './shipper-codes.service';
 import { noteFingerprint } from './note-archive.types';
 import { retentionFor, retentionWords } from './retention';
 
@@ -59,6 +61,9 @@ export class ConsignmentNoteService implements OnModuleInit {
     @Optional() private readonly entities?: EntityService,
     // A business has no account email of its own: its receipt goes to its people, and it says which.
     @Optional() private readonly businesses?: BusinessService,
+    // The papers the shipper adds to a load: its commercial invoice (box 5) and its packages' GS1 codes (box 6).
+    @Optional() private readonly invoices?: CommercialInvoiceService,
+    @Optional() private readonly codes?: ShipperCodesService,
   ) {}
 
   onModuleInit(): void {
@@ -115,6 +120,9 @@ export class ConsignmentNoteService implements OnModuleInit {
      * gathers rather than a fifth place somebody has to type it.
      */
     if (f.externalOrderId) documents.push(...this.imports.papersOnNote(f.externalOrderId));
+    const invoiceLine = this.invoices?.noteLine(f.freightId);
+    if (invoiceLine) documents.push(invoiceLine);
+    const marks = this.codes?.codesFor(f.freightId)?.codes.map((c) => `SSCC ${c}`);
     if (f.loadSafety?.securementPhotoRef) documents.push(`Photo of the secured load (${f.loadSafety.securementPhotoRef})`);
     if (f.tempReadings?.length) documents.push(`Temperature log, ${f.tempReadings.length} reading(s)`);
     if (f.unloadReport) documents.push(`Unload report, ${f.unloadReport.confirmed.length} item(s) confirmed`);
@@ -166,7 +174,8 @@ export class ConsignmentNoteService implements OnModuleInit {
         nature: f.natureCode ?? 'GEN',
         cargoClass: f.cargoClass,
         ...(f.packaging ? { packaging: f.packaging } : {}),
-        packages: f.indivisible ? 1 : null,
+        packages: f.packages ?? (f.indivisible ? 1 : null),
+        ...(marks?.length ? { marks } : {}),
         grossKg: f.weightKg,
         ...(volume ? { volumeM3: volume } : {}),
         dangerous: (f.requiredCapabilities ?? []).includes('hazmat'),
@@ -509,7 +518,7 @@ export class ConsignmentNoteService implements OnModuleInit {
   ${box(19, 'Special agreements', n.kind === 'cmr' ? '<span class="empty">None</span>' : 'Carried under the network’s terms; this note stands as the consignment note where no national form applies.')}
   ${box(5, 'Documents attached', list(n.documents))}
   ${box(20, 'To be paid by', `${n.carriage.amount != null ? `<b>${e(String(n.carriage.amount))} ${e(n.carriage.currency ?? '')}</b><br>` : ''}${e(n.carriage.note)}`)}
-  ${box('6–12', 'Goods', `<table class="goods"><tr><th>Marks / description</th><th>Packages</th><th>Method of packing</th><th>Nature of the goods</th><th>Gross weight</th><th>Volume</th></tr><tr><td>${e(g.description)}${g.fragile ? '<br><i>Fragile</i>' : ''}${g.dangerous ? '<br><b>Dangerous goods</b>' : ''}</td><td>${g.packages == null ? '<span class="empty">Not stated</span>' : g.packages}</td><td>${g.packaging ? e(g.packaging) : '<span class="empty">—</span>'}</td><td>${e(g.nature)} · ${e(g.cargoClass)}${g.temperatureBand ? `<br>${e(g.temperatureBand)}` : ''}</td><td>${e(String(g.grossKg))} kg</td><td>${g.volumeM3 != null ? `${e(String(g.volumeM3))} m³` : '<span class="empty">—</span>'}</td></tr></table>`, 'wide')}
+  ${box('6–12', 'Goods', `<table class="goods"><tr><th>Marks / description</th><th>Packages</th><th>Method of packing</th><th>Nature of the goods</th><th>Gross weight</th><th>Volume</th></tr><tr><td>${e(g.description)}${g.marks?.length ? `<br><span class="did">${g.marks.map((m) => e(m)).join('<br>')}</span>` : ''}${g.fragile ? '<br><i>Fragile</i>' : ''}${g.dangerous ? '<br><b>Dangerous goods</b>' : ''}</td><td>${g.packages == null ? '<span class="empty">Not stated</span>' : g.packages}</td><td>${g.packaging ? e(g.packaging) : '<span class="empty">—</span>'}</td><td>${e(g.nature)} · ${e(g.cargoClass)}${g.temperatureBand ? `<br>${e(g.temperatureBand)}` : ''}</td><td>${e(String(g.grossKg))} kg</td><td>${g.volumeM3 != null ? `${e(String(g.volumeM3))} m³` : '<span class="empty">—</span>'}</td></tr></table>`, 'wide')}
   ${box(13, 'Sender’s instructions', list(n.instructions))}
   ${box(14, 'Instructions as to payment for carriage', e(n.carriage.paidBy === 'sender' ? 'Carriage paid' : n.carriage.paidBy === 'between-parties' ? 'Carriage settled between the parties' : 'Not yet agreed'))}
   ${box(21, 'Established in / on', `<b>${e(n.established.place)}</b><br>${e(when(n.established.at))}`)}

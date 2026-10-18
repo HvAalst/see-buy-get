@@ -7,6 +7,7 @@ import { ACTIVITIES, mayAct, mayManage } from '../logic';
 import { baysOf, DAY_NAME, loadsLine, WEEK, weekForm, type SiteWeek, type WeekForm } from '../../fleet/sites';
 import type { BusinessActions } from '../useBusinessApp';
 import { ACTIVITY_LABEL, ACTIVITY_SUB } from './ChooseScreen';
+import { Gs1Panel } from './Gs1Panel';
 
 /**
  * WHAT THE BUSINESS SAYS ABOUT ITSELF — its name and numbers, what it does, how to reach it, the places it uses.
@@ -160,6 +161,9 @@ export function DetailsScreen({ business, actions, client }: { business: Busines
 
       {/* How anybody reaches them, published on their page and in every directory — once they are checked. */}
       <ContactCardPanel entityId={business.entityId} who={business.you.name} client={client as never} />
+
+      {/* The global barcode on its packages, beside ours: a GS1 company prefix is the business's own to give. */}
+      <Gs1Panel business={business} actions={actions} client={client} owner={owner} />
 
       <section class="cons__panel">
         <div class="cons__panelhead">

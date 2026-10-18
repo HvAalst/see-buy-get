@@ -1,0 +1,138 @@
+import { Test } from '@nestjs/testing';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
+import request from 'supertest';
+import { AppModule } from '../src/app.module';
+import { isSscc } from '../src/foundation/gs1/gs1';
+import { FleetManagerService } from '../src/modules/pudo/fleet-manager.service';
+
+/**
+ * A SHIPPER'S PAPERS — through the booted application, over HTTP: its GS1 company prefix, the SSCCs its packages get,
+ * the labels carrying them beside our code, and the commercial invoice it writes and signs, printed in three copies.
+ * The shipper's own record: staff and the carrier read it and change none of it.
+ */
+describe('a shipper’s papers, over the wire', () => {
+  let app: INestApplication;
+  let http: () => ReturnType<typeof request>;
+  const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
+  const digits = () => String(Math.floor(Math.random() * 9_000_000) + 1_000_000);
+  let operator = '';
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    app = moduleRef.createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    app.setGlobalPrefix('v1');
+    await app.init();
+    http = () => request(app.getHttpServer());
+    operator = (await http().post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201)).body.access_token;
+  });
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  async function aShipper(name: string): Promise<{ token: string; entityId: string }> {
+    const n = digits();
+    const phone = `+2547${n}7`.slice(0, 13);
+    const asked = await http().post('/v1/sbg/auth/phone/request').send({ phone });
+    await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
+    const email = `papers-${n}@example.com`;
+    const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
+    const person = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token as string;
+    const made = await http().post('/v1/sbg/business').set(bearer(person)).send({ name: `${name} ${n}`, country: 'KE', registrationNo: `REG-PAP-${n}`, activities: ['shipper'], yourName: 'Achieng' }).expect(201);
+    return { token: made.body.token.access_token, entityId: made.body.business.entityId };
+  }
+
+  async function aFleet(): Promise<string> {
+    const managers = app.get(FleetManagerService);
+    const n = digits();
+    const m = managers.register({
+      companyName: `Pap Fleet ${n}`, contactPhone: `+2548${n}1`, ownerFullName: 'O O', ownerNationalId: `MGR-PAP-${n}`, location: { lat: -1.2, lng: 36.8 },
+      requirements: { businessRegistrationNo: `BRN-PAP-${n}`, transportOperatorLicence: `TOL-PAP-${n}`, taxId: `TAX-PAP-${n}` },
+    });
+    return (await http().post('/v1/auth/token').send({ role: 'fleet_manager', did: m.did, tenant: m.did, type: 'client_credentials' }).expect(201)).body.access_token as string;
+  }
+
+  it('gives a shipper’s packages its own GS1 codes, prints them beside ours, and carries its signed commercial invoice in three copies', async () => {
+    const jenga = await aShipper('Jenga Bricks');
+    const other = await aShipper('Other Goods');
+    const fleet = await aFleet();
+
+    // The GS1 company prefix is the business's to give: staff are refused, a prefix that is not one is refused.
+    await http().post('/v1/sbg/business/me/gs1').set(bearer(operator)).send({ companyPrefix: '6161234', extensionDigit: 3 }).expect(403);
+    await http().post('/v1/sbg/business/me/gs1').set(bearer(jenga.token)).send({ companyPrefix: '616', extensionDigit: 3 }).expect(400);
+    const set = await http().post('/v1/sbg/business/me/gs1').set(bearer(jenga.token)).send({ companyPrefix: '616 1234', extensionDigit: 3 }).expect(201);
+    expect(set.body.gs1).toMatchObject({ companyPrefix: '6161234', extensionDigit: 3, left: 1_000_000_000, setBy: 'Achieng' });
+
+    // A load of three packages, Kenya to Uganda: each package gets its SSCC, under the shipper's prefix.
+    const posted = await http()
+      .post('/v1/sbg/dispatch/freight')
+      .set(bearer(jenga.token))
+      .send({ description: 'Clay bricks, 3 pallets', pickupLocation: { lat: -1.33, lng: 36.87 }, pickupLabel: 'Jenga yard', destLabel: 'Kampala depot', destLocation: { lat: 0.31, lng: 32.58 }, weightKg: 1200, packaging: 'palletised', packages: 3, pickupCountry: 'KE', destCountry: 'UG' })
+      .expect(201);
+    const id = posted.body.freightId as string;
+    expect(posted.body.packages).toBe(3);
+    const labels = (await http().get(`/v1/sbg/dispatch/freight/${id}/package-labels`).set(bearer(jenga.token)).expect(200)).body;
+    expect(labels).toMatchObject({ labels: 3, packages: 3, companyPrefix: '6161234' });
+    expect(labels.codes).toHaveLength(3);
+    for (const c of labels.codes) {
+      expect(isSscc(c)).toBe(true);
+      expect(c.slice(0, 8)).toBe('36161234');
+    }
+    // Another business reads nothing of it.
+    await http().get(`/v1/sbg/dispatch/freight/${id}/package-labels`).set(bearer(other.token)).expect(404);
+    // More packages than can be labelled one by one: refused before the load exists.
+    await http().post('/v1/sbg/dispatch/freight').set(bearer(jenga.token)).send({ description: 'Too many', pickupLocation: { lat: -1.33, lng: 36.87 }, pickupLabel: 'Jenga yard', destLabel: 'Kampala depot', weightKg: 1200, packages: 501 }).expect(400);
+
+    // The commercial invoice: the shipper's to write. Staff and a fleet are refused in words; a line customs would stop is refused.
+    const invoice = {
+      number: 'INV-2026-0042',
+      importer: { name: 'Kampala Build Co', address: 'Plot 4, Industrial Area', country: 'UG' },
+      currency: 'USD',
+      reason: 'sale',
+      lines: [{ description: 'Clay bricks, fired', quantity: 3000, netKg: 1050, unitValue: 0.12, originCountry: 'KE', hsCode: '6904.10' }],
+      declare: true,
+    };
+    const url = `/v1/sbg/dispatch/freight/${id}/commercial-invoice`;
+    const staff = await http().post(url).set(bearer(operator)).send(invoice).expect(403);
+    expect(staff.body.detail).toMatch(/shipper’s own paper/);
+    await http().post(url).set(bearer(fleet)).send(invoice).expect(403);
+    await http().post(url).set(bearer(other.token)).send(invoice).expect(404);
+    await http().post(url).set(bearer(jenga.token)).send({ ...invoice, lines: [{ ...invoice.lines[0], hsCode: '69' }] }).expect(400);
+    await http().post(url).set(bearer(jenga.token)).send({ ...invoice, declare: false }).expect(400);
+    const signed = (await http().post(url).set(bearer(jenga.token)).send(invoice).expect(201)).body;
+    expect(signed).toMatchObject({ number: 'INV-2026-0042', totalValue: 360, packages: 3, grossKg: 1200, copies: 3, signed: { name: 'Achieng' } });
+    expect(signed.lines[0]).toMatchObject({ hsCode: '690410', originCountry: 'KE', lineValue: 360 });
+
+    // The shipper may write a new one; staff read it and may not.
+    expect((await http().get(url).set(bearer(jenga.token)).expect(200)).body).toMatchObject({ crossesBorder: true, mayWrite: true, current: { invoiceId: signed.invoiceId } });
+    expect((await http().get(url).set(bearer(operator)).expect(200)).body).toMatchObject({ mayWrite: false, current: { invoiceId: signed.invoiceId } });
+
+    // Printed: three copies; the labels name the papers in the pouch and carry each SSCC in its GS1-128 form.
+    const copies = (await http().get(`${url}.html`).set(bearer(jenga.token)).expect(200)).text;
+    expect((copies.match(/<section class="copy">/g) ?? []).length).toBe(3);
+    expect(copies).toContain('6904.10');
+    const page = (await http().get(`/v1/sbg/dispatch/freight/${id}/package-labels.html`).set(bearer(jenga.token)).expect(200)).text;
+    expect((page.match(/<svg class="label"/g) ?? []).length).toBe(3);
+    for (const c of labels.codes) expect(page).toContain(`(00) ${c}`);
+    expect(page).toContain('In the pouch: commercial invoice INV-2026-0042, 3 copies');
+
+    // The consignment note: box 5 lists the invoice, box 6 the SSCCs, box 7 the number of packages.
+    const note = (await http().get(`/v1/sbg/dispatch/freight/${id}/consignment-note`).set(bearer(jenga.token)).expect(200)).body;
+    expect(note.kind).toBe('cmr');
+    expect(note.documents).toContain('Commercial invoice INV-2026-0042 of ' + signed.issuedOn + ', 3 copies');
+    expect(note.goods).toMatchObject({ packages: 3, marks: labels.codes.map((c: string) => `SSCC ${c}`) });
+
+    // A client's goods, sent by the business as their expeditor: they carry the client's code, never the expeditor's.
+    await http().patch('/v1/sbg/business/me').set(bearer(jenga.token)).send({ activities: ['shipper', 'expeditor'] }).expect(200);
+    const client = (await http().post('/v1/sbg/business/me/clients').set(bearer(jenga.token)).send({ name: 'Kitui Clay Co' }).expect(201)).body;
+    const forClient = await http().post('/v1/sbg/dispatch/freight').set(bearer(jenga.token)).send({ description: 'Their pots', pickupLocation: { lat: -1.33, lng: 36.87 }, pickupLabel: 'Jenga yard', destLabel: 'Kampala depot', weightKg: 300, packages: 2, forClientId: client.clientId }).expect(201);
+    expect((await http().get(`/v1/sbg/dispatch/freight/${forClient.body.freightId}/package-labels`).set(bearer(jenga.token)).expect(200)).body).toMatchObject({ labels: 2, codes: [] });
+
+    // Cleared, the prefix gives no more codes; the load keeps the ones it has.
+    await http().delete('/v1/sbg/business/me/gs1').set(bearer(jenga.token)).expect(200);
+    const later = await http().post('/v1/sbg/dispatch/freight').set(bearer(jenga.token)).send({ description: 'Tiles', pickupLocation: { lat: -1.33, lng: 36.87 }, pickupLabel: 'Jenga yard', destLabel: 'Kampala depot', weightKg: 500, packages: 2 }).expect(201);
+    expect((await http().get(`/v1/sbg/dispatch/freight/${later.body.freightId}/package-labels`).set(bearer(jenga.token)).expect(200)).body).toMatchObject({ labels: 2, codes: [] });
+    expect((await http().get(`/v1/sbg/dispatch/freight/${id}/package-labels`).set(bearer(jenga.token)).expect(200)).body.codes).toEqual(labels.codes);
+  });
+});

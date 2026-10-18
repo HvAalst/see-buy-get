@@ -21460,6 +21460,54 @@
         }
       }
     },
+    "/v1/sbg/business/me/gs1": {
+      "post": {
+        "operationId": "Business.setGs1",
+        "summary": "",
+        "description": "The business's GS1 company prefix: from then on, each package of a load it posts gets an SSCC under it, printed\nbeside our own code. Owner only; a business sign-in only, so staff never change it.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BusinessGs1Dto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "Business.clearGs1",
+        "summary": "",
+        "description": "Stop giving packages GS1 codes. The codes loads already have stay with them.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/business/me/check": {
       "post": {
         "operationId": "Business.askForCheck",
@@ -21716,6 +21764,159 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BusinessStaffRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/freight/{id}/package-labels": {
+      "get": {
+        "operationId": "ShippingPapers.labels",
+        "summary": "",
+        "description": "What the labels will carry: how many, and the SSCC of each package when the shipper's GS1 prefix gave them.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackageLabelsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/freight/{id}/package-labels.html": {
+      "get": {
+        "operationId": "ShippingPapers.labelsHtml",
+        "summary": "",
+        "description": "The labels as a printable page: one 100 × 150 mm label a package.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/freight/{id}/commercial-invoice": {
+      "get": {
+        "operationId": "ShippingPapers.invoice",
+        "summary": "",
+        "description": "The load's commercial invoice: the one it travels with now, and the ones it replaced.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommercialInvoiceView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "ShippingPapers.writeInvoice",
+        "summary": "",
+        "description": "Write and sign the load's commercial invoice — or a new one in place of the last, which stays on the record. The\nbusiness that posted the load, by a member who may act; staff are refused by name, because a staff sign-in passes\nevery role check.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommercialInvoiceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommercialInvoice"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/freight/{id}/commercial-invoice.html": {
+      "get": {
+        "operationId": "ShippingPapers.invoiceHtml",
+        "summary": "",
+        "description": "The invoice as a printable page: three copies, one a page.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -37019,6 +37220,10 @@
           "fragile": {
             "type": "boolean"
           },
+          "packages": {
+            "type": "number",
+            "description": "How many packages the load is (CMR box 7), when the shipper said. Each gets a label; under a shipper's GS1 company\nprefix, each also gets an SSCC (shipper-codes.service.ts). Absent: not stated."
+          },
           "bulk": {
             "type": "boolean",
             "description": "DERIVED from packaging (`loose`), and kept because vehicle matching is written against it.\n\nIt used to be the stored truth and it meant two opposite things — \"loose, it tips or augers\" in the body\nderivation, \"sugar/cement bags\" in the vehicle spec. It now has exactly one meaning, the loose one, which\nis what `Vehicle.carriesBulk` and the board's NO_BULK_BODY blocker already assumed."
@@ -39793,6 +39998,12 @@
               "kooiaap",
               "tail_lift"
             ]
+          },
+          "packages": {
+            "type": "number",
+            "description": "How many packages the load is: each gets a label, and an SSCC under the shipper's GS1 prefix when it has one.",
+            "minimum": 1,
+            "maximum": 500
           },
           "fragile": {
             "type": "boolean"
@@ -44378,6 +44589,34 @@
           "you"
         ]
       },
+      "BusinessGs1View": {
+        "type": "object",
+        "properties": {
+          "companyPrefix": {
+            "type": "string"
+          },
+          "extensionDigit": {
+            "type": "number"
+          },
+          "left": {
+            "type": "number",
+            "description": "How many codes are left under that prefix and digit."
+          },
+          "setAt": {
+            "type": "string"
+          },
+          "setBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "companyPrefix",
+          "extensionDigit",
+          "left",
+          "setAt",
+          "setBy"
+        ]
+      },
       "BusinessView": {
         "type": "object",
         "properties": {
@@ -44424,6 +44663,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/BusinessMemberView"
+              }
+            ]
+          },
+          "gs1": {
+            "description": "Its GS1 company prefix, when it gave one: its packages then carry SSCCs beside our code.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BusinessGs1View"
               }
             ]
           }
@@ -44598,6 +44845,25 @@
         },
         "required": [
           "role"
+        ]
+      },
+      "BusinessGs1Dto": {
+        "type": "object",
+        "properties": {
+          "companyPrefix": {
+            "type": "string",
+            "description": "As GS1 gave it: 6 to 12 digits; spaces and dashes are dropped.",
+            "maxLength": 24
+          },
+          "extensionDigit": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 9
+          }
+        },
+        "required": [
+          "companyPrefix",
+          "extensionDigit"
         ]
       },
       "BusinessClientDto": {
@@ -44858,6 +45124,416 @@
         },
         "required": [
           "reason"
+        ]
+      },
+      "PackageLabelsView": {
+        "type": "object",
+        "properties": {
+          "freightId": {
+            "type": "string"
+          },
+          "labels": {
+            "type": "number",
+            "description": "How many labels print: one a package, or one for the load when the number of packages was not given."
+          },
+          "packages": {
+            "type": "number",
+            "description": "The number of packages, when the shipper gave it."
+          },
+          "codes": {
+            "description": "One SSCC a package, in package order, when the shipper's GS1 company prefix gave them; empty otherwise.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "companyPrefix": {
+            "type": "string",
+            "description": "The prefix they were given under."
+          }
+        },
+        "required": [
+          "freightId",
+          "labels",
+          "codes"
+        ]
+      },
+      "InvoiceParty": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string",
+            "description": "ISO 3166 alpha-2."
+          },
+          "taxNo": {
+            "type": "string",
+            "description": "Their tax or VAT number, where they gave one."
+          }
+        },
+        "required": [
+          "name",
+          "country"
+        ]
+      },
+      "InvoiceLine": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "netKg": {
+            "type": "number",
+            "description": "The line's net weight, in kg."
+          },
+          "unitValue": {
+            "type": "number",
+            "description": "The value of ONE item, in the invoice's currency."
+          },
+          "lineValue": {
+            "type": "number",
+            "description": "quantity × unitValue, rounded to the cent."
+          },
+          "originCountry": {
+            "type": "string",
+            "description": "ISO 3166 alpha-2: where the goods were made."
+          },
+          "hsCode": {
+            "type": "string",
+            "description": "The HS code as the shipper declared it, digits only (6 to 10). Never one of ours."
+          }
+        },
+        "required": [
+          "description",
+          "quantity",
+          "netKg",
+          "unitValue",
+          "lineValue",
+          "originCountry",
+          "hsCode"
+        ]
+      },
+      "InvoiceSignature": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The person who signed, by name."
+          },
+          "for": {
+            "type": "string",
+            "description": "For which business."
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "for",
+          "at"
+        ]
+      },
+      "CommercialInvoice": {
+        "type": "object",
+        "properties": {
+          "invoiceId": {
+            "type": "string"
+          },
+          "number": {
+            "type": "string",
+            "description": "The shipper's own invoice number."
+          },
+          "issuedOn": {
+            "type": "string",
+            "description": "YYYY-MM-DD."
+          },
+          "freightId": {
+            "type": "string"
+          },
+          "loadCode": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string",
+            "description": "The business that wrote it."
+          },
+          "exporter": {
+            "$ref": "#/components/schemas/InvoiceParty"
+          },
+          "importer": {
+            "$ref": "#/components/schemas/InvoiceParty"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceLine"
+            }
+          },
+          "currency": {
+            "type": "string",
+            "description": "ISO 4217."
+          },
+          "totalValue": {
+            "type": "number"
+          },
+          "totalNetKg": {
+            "type": "number"
+          },
+          "grossKg": {
+            "type": "number",
+            "description": "The load's gross weight, from the load."
+          },
+          "packages": {
+            "type": "number",
+            "description": "The number of packages, from the load, when it was given."
+          },
+          "incoterm": {
+            "type": "string"
+          },
+          "namedPlace": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "object"
+          },
+          "declaration": {
+            "type": "string"
+          },
+          "signed": {
+            "$ref": "#/components/schemas/InvoiceSignature"
+          },
+          "fingerprint": {
+            "type": "string",
+            "description": "sha256 of everything above: printed on every copy, so a copy can be checked against ours."
+          },
+          "copies": {
+            "type": "number"
+          },
+          "supersedes": {
+            "type": "string",
+            "description": "The invoice this one replaced."
+          },
+          "supersededBy": {
+            "type": "string",
+            "description": "Replaced by a later one: kept, and said."
+          },
+          "supersededAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "invoiceId",
+          "number",
+          "issuedOn",
+          "freightId",
+          "loadCode",
+          "entityId",
+          "exporter",
+          "importer",
+          "lines",
+          "currency",
+          "totalValue",
+          "totalNetKg",
+          "grossKg",
+          "reason",
+          "declaration",
+          "signed",
+          "fingerprint",
+          "copies"
+        ]
+      },
+      "InvoiceEarlier": {
+        "type": "object",
+        "properties": {
+          "invoiceId": {
+            "type": "string"
+          },
+          "number": {
+            "type": "string"
+          },
+          "issuedOn": {
+            "type": "string"
+          },
+          "signedBy": {
+            "type": "string"
+          },
+          "signedAt": {
+            "type": "string"
+          },
+          "supersededAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "invoiceId",
+          "number",
+          "issuedOn",
+          "signedBy",
+          "signedAt"
+        ]
+      },
+      "CommercialInvoiceView": {
+        "type": "object",
+        "properties": {
+          "freightId": {
+            "type": "string"
+          },
+          "crossesBorder": {
+            "type": "boolean",
+            "description": "The load crosses a border (its two countries are known and differ): customs will ask for the invoice."
+          },
+          "current": {
+            "$ref": "#/components/schemas/CommercialInvoice"
+          },
+          "earlier": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceEarlier"
+            }
+          },
+          "mayWrite": {
+            "type": "boolean",
+            "description": "Whether the reader may write a new one: the business that posted the load, a member who may act."
+          }
+        },
+        "required": [
+          "freightId",
+          "crossesBorder",
+          "earlier",
+          "mayWrite"
+        ]
+      },
+      "InvoiceImporterDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "country": {
+            "type": "string",
+            "description": "ISO 3166 alpha-2.",
+            "maxLength": 2
+          },
+          "taxNo": {
+            "type": "string",
+            "maxLength": 60
+          }
+        },
+        "required": [
+          "name",
+          "country"
+        ]
+      },
+      "InvoiceLineDto": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "quantity": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1000000
+          },
+          "netKg": {
+            "type": "number",
+            "description": "The line's net weight, in kg.",
+            "minimum": 0
+          },
+          "unitValue": {
+            "type": "number",
+            "description": "The value of ONE item, in the invoice's currency.",
+            "minimum": 0
+          },
+          "originCountry": {
+            "type": "string",
+            "description": "ISO 3166 alpha-2: where the goods were made.",
+            "maxLength": 2
+          },
+          "hsCode": {
+            "type": "string",
+            "description": "As you or your customs agent classify the goods: 6 to 10 digits, dots allowed. SeeBuyGet suggests none.",
+            "maxLength": 16
+          }
+        },
+        "required": [
+          "description",
+          "quantity",
+          "netKg",
+          "unitValue",
+          "originCountry",
+          "hsCode"
+        ]
+      },
+      "CommercialInvoiceDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "sale",
+              "sample",
+              "gift",
+              "repair",
+              "return",
+              "other"
+            ]
+          },
+          "number": {
+            "type": "string",
+            "description": "Your own number for this invoice.",
+            "maxLength": 40
+          },
+          "issuedOn": {
+            "type": "string",
+            "description": "YYYY-MM-DD; today when not given.",
+            "maxLength": 10
+          },
+          "exporterAddress": {
+            "type": "string",
+            "description": "Where the goods leave from, as the invoice should say it; the load's pickup place when not given.",
+            "maxLength": 200
+          },
+          "importer": {
+            "$ref": "#/components/schemas/InvoiceImporterDto"
+          },
+          "currency": {
+            "type": "string",
+            "description": "ISO 4217, like KES or USD.",
+            "maxLength": 3
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceLineDto"
+            }
+          },
+          "declare": {
+            "type": "boolean",
+            "description": "I declare that the information on this invoice is true and correct: this is the signature."
+          }
+        },
+        "required": [
+          "number",
+          "importer",
+          "currency",
+          "lines",
+          "declare"
         ]
       },
       "QuoteStatusDto": {
