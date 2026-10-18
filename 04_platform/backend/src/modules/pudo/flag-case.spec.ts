@@ -1,5 +1,6 @@
 import { FlagCaseService } from './flag-case.service';
 import type { MonitorService, PudoFlag } from './monitor.service';
+import type { PilotService } from './pilot.service';
 
 /**
  * FLAGS AS CASES. A flag opens a case somebody takes, notes and closes with a reason; one nobody takes is escalated in
@@ -160,6 +161,25 @@ describe('flags as cases', () => {
     const taken = cases.board('taken', undefined, T0 + 2 * H);
     expect(taken.items.map((c) => [c.caseId, c.owner?.name])).toEqual([[bus.caseId, 'Amina O']]);
     expect([taken.total, taken.waiting]).toEqual([1, 250]);
+  });
+
+  it('closes a pilot number for good — a frozen week does not change — while an ordinary flag comes back after its rest', () => {
+    const cases = make();
+    const offTarget: PudoFlag = { type: 'Pilot_Off_Target', subject: '2026-W42:handshake', detail: 'Handshake 91% in 2026-W42, target 95%' };
+    cases.sync(T0, [offTarget, ghost]);
+    const live = cases.list('live', T0);
+    expect(live.find((c) => c.kind === 'Pilot_Off_Target')).toMatchObject({ severity: 'high', state: 'open' });
+    for (const c of live) cases.done(c.caseId, amina, 'Spoke to the shop about scanning every parcel', 1, T0);
+    // Two hours on, both flags are still there: the bus is still unaccounted for, the week's number is still 91%.
+    cases.sync(T0 + 2 * H, [offTarget, ghost]);
+    expect(cases.list('live', T0 + 2 * H).map((c) => c.kind)).toEqual(['Ghost_Bus']);
+  });
+
+  it('takes the pilot’s numbers off target into its own sweep, beside the monitor’s flags', () => {
+    const offTarget: PudoFlag = { type: 'Pilot_Off_Target', subject: '2026-W42:loss', detail: 'Lost or damaged 2% in 2026-W42, target under 1%' };
+    const svc = new FlagCaseService({ flags: () => [ghost] } as unknown as MonitorService, { offTarget: () => [offTarget] } as unknown as PilotService);
+    svc.sync(T0);
+    expect(svc.list('live', T0).map((c) => c.kind).sort()).toEqual(['Ghost_Bus', 'Pilot_Off_Target']);
   });
 
   it('opens one case for a flag said twice in one sweep', () => {

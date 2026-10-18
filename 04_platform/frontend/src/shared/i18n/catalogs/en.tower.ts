@@ -2434,6 +2434,7 @@ export const enTowerNetwork = {
   'tower.network.flag.Short_Shipped': 'Left behind at handover',
   'tower.network.flag.Temp_Breach': 'Cold chain broken',
   'tower.network.flag.Not_Seen': 'Not seen for a week',
+  'tower.network.flag.Pilot_Off_Target': 'Pilot number off target',
 
   'tower.network.shopsTitle': 'The shops',
   'tower.network.mapLabel': 'Where the shops are',
@@ -3072,6 +3073,7 @@ export const enTowerBusinesses = {
   'tower.cases.kind.Short_Shipped': 'A parcel left behind at a handover',
   'tower.cases.kind.Temp_Breach': 'A cold chain broken',
   'tower.cases.kind.Not_Seen': 'A parcel not seen for a week',
+  'tower.cases.kind.Pilot_Off_Target': 'A pilot number off target',
   'tower.lost.declareCta': 'Declare it lost',
   'tower.lost.declareLede': 'Declare it lost only once you have looked: at the shop, on the bus and at the hub it last passed. The sender and the receiver are told in the app, and the damage claim report is theirs to pass on. If it turns up, mark it found under Declared lost.',
   'tower.lost.reasonLabel': 'Where you looked, and what you found',

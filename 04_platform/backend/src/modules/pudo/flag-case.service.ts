@@ -1,10 +1,11 @@
-import { Injectable, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap, OnModuleDestroy, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { sameSigner, type Signer } from '../../foundation/entity/same-person';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
-import { CASE_SEVERITIES, CASE_SEVERITY, CaseAct, CaseList, ESCALATE_AFTER_H, FlagCase, FlagCaseKindCount, FlagCaseList, FlagCaseView, FlagKind, MAX_RECHECK_H } from './flag-case.types';
+import { CASE_SEVERITIES, CASE_SEVERITY, CLOSED_FOR_GOOD, CaseAct, CaseList, ESCALATE_AFTER_H, FlagCase, FlagCaseKindCount, FlagCaseList, FlagCaseView, FlagKind, MAX_RECHECK_H } from './flag-case.types';
 import { MonitorService, PudoFlag } from './monitor.service';
+import { PilotService } from './pilot.service';
 
 /** How often the cases are checked against the flags, without anybody having to open the console. */
 const SWEEP_MS = 5 * 60_000;
@@ -26,7 +27,11 @@ export class FlagCaseService implements OnApplicationBootstrap, OnModuleDestroy 
   private readonly cases = new PersistentMap<string, FlagCase>('flag-cases');
   private sweeper?: NodeJS.Timeout;
 
-  constructor(private readonly monitor: MonitorService) {}
+  constructor(
+    private readonly monitor: MonitorService,
+    // The Monday review: each pilot number off target in the week just frozen is a case too (pilot.service.ts).
+    @Optional() private readonly pilot?: PilotService,
+  ) {}
 
   onApplicationBootstrap(): void {
     this.sweeper = setInterval(() => {
@@ -48,7 +53,7 @@ export class FlagCaseService implements OnApplicationBootstrap, OnModuleDestroy 
    * close one whose flag is gone, escalate one nobody has taken in time, and open a following case for a flag that was
    * put to rest and is still there after its time.
    */
-  sync(now: number = Date.now(), flags: PudoFlag[] = this.monitor.flags()): void {
+  sync(now: number = Date.now(), flags: PudoFlag[] = [...this.monitor.flags(), ...(this.pilot?.offTarget(now) ?? [])]): void {
     const at = new Date(now).toISOString();
     // One pass to know, for every flag, its live case and its latest one — a network has thousands of flags.
     const live = new Map<string, FlagCase>();
@@ -82,6 +87,8 @@ export class FlagCaseService implements OnApplicationBootstrap, OnModuleDestroy 
       // Put to rest with a reason: nothing new until its time is up.
       const rested = latest.get(key);
       if (rested?.state === 'done' && rested.quietUntil && Date.parse(rested.quietUntil) > now) continue;
+      // Closed by a person, about something that cannot change: closed for good.
+      if (rested?.state === 'done' && CLOSED_FOR_GOOD.has(kind)) continue;
       const c: FlagCase = {
         caseId: `case_${randomBytes(6).toString('hex')}`,
         key,

@@ -4,6 +4,7 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { ParcelService } from './parcel.service';
 import { HandoverRecord, PILOT_TARGETS, PilotBoard, PilotWeek, TAKE_IN_MAX_S, TakeInRecord } from './pilot.types';
 import { Parcel } from './pudo.types';
+import type { PudoFlag } from './monitor.service';
 
 const DAY = 24 * 3_600_000;
 const WEEK = 7 * DAY;
@@ -102,6 +103,31 @@ export class PilotService implements OnApplicationBootstrap, OnModuleDestroy {
         retentionAtWeek: PILOT_TARGETS.retention.atWeek,
       },
     };
+  }
+
+  /**
+   * THE MONDAY REVIEW (the user, 2026-10-18: "a case per number"). The Playbook: "Run these every Monday morning. Anything
+   * off-target gets a name attached to it before lunch." For the week that ended last, each number off its target is a
+   * flag — so a case in Cases, high severity (escalated when nobody has it in four hours) — for the seven days after it
+   * ended. Off target is past the target, not only past the warning line. Retention is judged from its week on.
+   */
+  offTarget(now: number = Date.now()): PudoFlag[] {
+    this.freeze(now);
+    const last = this.weeks.get(isoWeek(weekStart(now) - WEEK));
+    if (!last) return [];
+    const flags: PudoFlag[] = [];
+    const say = (metric: string, detail: string) => flags.push({ type: 'Pilot_Off_Target', subject: `${last.week}:${metric}`, detail, ageHours: Math.max(0, Math.round((now - Date.parse(last.to)) / 3_600_000)) });
+    const pct = (r: number) => `${Math.round(r * 1000) / 10}%`;
+    const tg = PILOT_TARGETS;
+    const h = last.handshake;
+    if (h.rate !== undefined && h.rate < tg.handshake.target) say('handshake', `Handshake ${pct(h.rate)} in ${last.week}, target ${pct(tg.handshake.target)}: ${h.handed} scanned onto a bus, ${h.missed} left behind`);
+    const l = last.loss;
+    if (l.rate !== undefined && l.rate >= tg.loss.target) say('loss', `Lost or damaged ${pct(l.rate)} in ${last.week}, target under ${pct(tg.loss.target)}: ${l.lost} lost, ${l.damaged} damaged, of ${l.takenIn} taken in`);
+    const ti = last.takeIn;
+    if (ti.medianSeconds !== undefined && ti.medianSeconds >= tg.takeInSeconds.target) say('take-in', `Take-in time ${ti.medianSeconds} s in ${last.week}, target under ${tg.takeInSeconds.target} s: the median of ${ti.timed} timed`);
+    const r = last.retention;
+    if (r && r.rate !== undefined && r.pilotWeek >= tg.retention.atWeek && r.rate < tg.retention.target) say('retention', `Original shops working ${pct(r.rate)} in ${last.week} (week ${r.pilotWeek} of the pilot), target ${pct(tg.retention.target)}: ${r.active} of ${r.original}`);
+    return flags;
   }
 
   /** Every week that has ended since the pilot's first, frozen if it was not. A frozen week is never counted again. */

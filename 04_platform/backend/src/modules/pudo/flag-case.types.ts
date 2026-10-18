@@ -8,7 +8,7 @@
  * says so. Its history is kept, never rewritten.
  */
 
-export const FLAG_KINDS = ['Stagnant_Inventory', 'Ghost_Bus', 'Stuck_At_MDP', 'Uncollected', 'Never_Dropped_Off', 'Connectivity_Loss', 'Blocked_Corridor', 'Buyer_Dispute', 'Short_Shipped', 'Temp_Breach', 'Not_Seen'] as const;
+export const FLAG_KINDS = ['Stagnant_Inventory', 'Ghost_Bus', 'Stuck_At_MDP', 'Uncollected', 'Never_Dropped_Off', 'Connectivity_Loss', 'Blocked_Corridor', 'Buyer_Dispute', 'Short_Shipped', 'Temp_Breach', 'Not_Seen', 'Pilot_Off_Target'] as const;
 export type FlagKind = (typeof FLAG_KINDS)[number];
 
 export const CASE_SEVERITIES = ['critical', 'high', 'medium', 'low'] as const;
@@ -25,6 +25,8 @@ export const CASE_SEVERITY: Record<FlagKind, CaseSeverity> = {
   Short_Shipped: 'high',
   // A week with no scan: the search before a parcel is declared lost.
   Not_Seen: 'high',
+  // A pilot number off target in the week just ended: "a name attached to it before lunch" — high escalates in 4 h.
+  Pilot_Off_Target: 'high',
   Stuck_At_MDP: 'high',
   Blocked_Corridor: 'high',
   Buyer_Dispute: 'medium',
@@ -33,6 +35,12 @@ export const CASE_SEVERITY: Record<FlagKind, CaseSeverity> = {
   Uncollected: 'low',
   Never_Dropped_Off: 'low',
 };
+
+/**
+ * Kinds whose case, once a person has closed it, never opens again for the same thing: what it is about cannot change.
+ * A pilot number of a frozen week is that week's for ever; the next week's has a case of its own.
+ */
+export const CLOSED_FOR_GOOD: ReadonlySet<FlagKind> = new Set<FlagKind>(['Pilot_Off_Target']);
 
 /** How long a case may wait for somebody to take it before it is escalated, by severity (hours). */
 export const ESCALATE_AFTER_H: Record<CaseSeverity, number> = { critical: 1, high: 4, medium: 24, low: 72 };

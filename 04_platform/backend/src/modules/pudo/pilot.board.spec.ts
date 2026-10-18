@@ -49,6 +49,44 @@ describe('the pilot’s numbers, counted', () => {
     expect(pilot.board(MON + 100 * 3_600_000).thisWeek.loss).toEqual({ lost: 1, damaged: 1, takenIn: 4, rate: 0.5 });
   });
 
+  it('raises the week just ended for its Monday review: each number past its target, and retention only from week 8', () => {
+    const shop = 'did:shop:a';
+    // Week 1: four parcels taken in, one lost, one damaged; a handover leaves one of four behind; a take-in takes 41 s.
+    parcels = [
+      { parcelId: 'L', originAgentDid: shop, scans: [scan('CREATED', shop, 1)], lost: { declaredAt: at(30), reason: 'x', fromStatus: 'At_PUDO', lastSeenAt: at(1) } },
+      { parcelId: 'D', originAgentDid: shop, scans: [scan('CREATED', shop, 2)], dispute: { raisedAt: at(20) } },
+      { parcelId: 'F1', originAgentDid: shop, scans: [scan('CREATED', shop, 3)] },
+      { parcelId: 'F2', originAgentDid: shop, scans: [scan('CREATED', shop, 4)] },
+    ] as unknown as Parcel[];
+    pilot.noteHandover(shop, { manifestId: 'm1', expected: ['A', 'B', 'C', 'D'], handed: ['A', 'B', 'C'], missed: ['D'] }, MON + 5 * 3_600_000);
+    pilot.noteTakeIn('F1', shop, 41, MON + 6 * 3_600_000);
+    // Monday of week 2: the review.
+    const monday = MON + 7 * 24 * 3_600_000 + 9 * 3_600_000;
+    const flags = pilot.offTarget(monday);
+    expect(flags.map((f) => f.subject)).toEqual(['2026-W42:handshake', '2026-W42:loss', '2026-W42:take-in']);
+    expect(flags.every((f) => f.type === 'Pilot_Off_Target')).toBe(true);
+    expect(flags[0].detail).toBe('Handshake 75% in 2026-W42, target 95%: 3 scanned onto a bus, 1 left behind');
+    // A week later still, that week is no longer the one under review.
+    expect(pilot.offTarget(monday + 7 * 24 * 3_600_000).map((f) => f.subject).filter((s) => s.startsWith('2026-W42'))).toEqual([]);
+  });
+
+  it('raises nothing for a week on target, and judges the original shops only from week 8', () => {
+    const a = 'did:shop:a';
+    const b = 'did:shop:b';
+    const WEEK_H = 7 * 24;
+    // Two shops start in week 1; from week 2 on only one of them works its counter, every parcel scanned onto its bus.
+    parcels = [
+      { parcelId: 'A1', originAgentDid: a, scans: [scan('CREATED', a, 1)] },
+      { parcelId: 'B1', originAgentDid: b, scans: [scan('CREATED', b, 2)] },
+      ...Array.from({ length: 9 }, (_, w) => ({ parcelId: `A${w + 2}`, originAgentDid: a, scans: [scan('CREATED', a, (w + 1) * WEEK_H + 1)] })),
+    ] as unknown as Parcel[];
+    for (let w = 0; w < 10; w++) pilot.noteHandover(a, { manifestId: `m${w}`, expected: ['X'], handed: ['X'], missed: [] }, MON + (w * WEEK_H + 3) * 3_600_000);
+    // Monday of week 3: week 2 under review — half the original shops working, and nothing else off. Week 2 of the pilot.
+    expect(pilot.offTarget(MON + (2 * WEEK_H + 9) * 3_600_000)).toEqual([]);
+    // Monday of week 9: week 8 under review — still half: now it is judged.
+    expect(pilot.offTarget(MON + (8 * WEEK_H + 9) * 3_600_000).map((f) => f.subject)).toEqual(['2026-W49:retention']);
+  });
+
   it('counts a shop as working only by the scans it signed — not a hub’s, a driver’s or the network’s', () => {
     const a = 'did:shop:a';
     const b = 'did:shop:b';
