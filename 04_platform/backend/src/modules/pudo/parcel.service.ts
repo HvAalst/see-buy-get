@@ -1431,16 +1431,19 @@ export class ParcelService implements OnApplicationBootstrap {
     const missed = expected.filter((id) => !handedSet.has(id) && this.parcels.get(id)?.status === 'At_PUDO');
     if (missed.length) {
       const at = new Date().toISOString();
-      for (const parcelId of missed) {
-        const parcel = this.parcels.get(parcelId)!; // guaranteed At_PUDO by the filter above
-        parcel.shortShippedAt = at;
-        // The vehicle's concrete rejection reason wins; otherwise the agent's acknowledged reason.
-        parcel.shortShipReason = rejectionReason.get(parcelId) ?? operatorReason;
-        // The scan note stays GENERIC: the reason lives on shortShipReason (control-tower only), never in the
-        // timeline that BOTH the sender and receiver twins can read via toConsumerView (mirrors buyerDispute, S23).
-        this.scan(parcel, 'At_PUDO', badgeId, `short-ship · left behind at manifest ${manifestId}`);
-        void this.events.publish(GlosEvent.Pudo.ParcelShortShipped, { parcelId, driverBadgeId: badgeId, corridorId, manifestId, reason: parcel.shortShipReason }, { source: 'pudo' }).catch(() => undefined);
-      }
+      // Written together: every parcel left behind in one write, not one rewrite of the whole store each (writeTogether).
+      this.writeTogether(() => {
+        for (const parcelId of missed) {
+          const parcel = this.parcels.get(parcelId)!; // guaranteed At_PUDO by the filter above
+          parcel.shortShippedAt = at;
+          // The vehicle's concrete rejection reason wins; otherwise the agent's acknowledged reason.
+          parcel.shortShipReason = rejectionReason.get(parcelId) ?? operatorReason;
+          // The scan note stays GENERIC: the reason lives on shortShipReason (control-tower only), never in the
+          // timeline that BOTH the sender and receiver twins can read via toConsumerView (mirrors buyerDispute, S23).
+          this.scan(parcel, 'At_PUDO', badgeId, `short-ship · left behind at manifest ${manifestId}`);
+          void this.events.publish(GlosEvent.Pudo.ParcelShortShipped, { parcelId, driverBadgeId: badgeId, corridorId, manifestId, reason: parcel.shortShipReason }, { source: 'pudo' }).catch(() => undefined);
+        }
+      });
     }
 
     // Pay the agent the handover fee once for the batch.
@@ -2678,7 +2681,32 @@ export class ParcelService implements OnApplicationBootstrap {
 
   /** Re-store the (in-place-mutated) parcel so the snapshot store flushes it to disk. */
   private persist(parcel: Parcel): void {
+    if (this.batch) {
+      this.batch.set(parcel.parcelId, parcel);
+      return;
+    }
     this.parcels.set(parcel.parcelId, parcel);
+  }
+
+  /** The parcels a `writeTogether` is collecting, or null outside one. */
+  private batch: Map<string, Parcel> | null = null;
+
+  /**
+   * MANY PARCELS, ONE WRITE. Kept on files (a laptop, a sandbox), every write rewrites the whole parcel store: a bus
+   * handover that left 600 parcels behind rewrote 40 MB 600 times and held the server for many minutes (found
+   * 2026-10-18, seeding). Inside `fn` the parcels it changes are collected and written once, together, before this
+   * returns — so nothing is answered before it is kept. On Postgres it is one transaction.
+   */
+  private writeTogether(fn: () => void): void {
+    if (this.batch) return fn();
+    this.batch = new Map();
+    try {
+      fn();
+    } finally {
+      const changed = this.batch;
+      this.batch = null;
+      if (changed.size) this.parcels.setMany(changed.entries());
+    }
   }
 
   private require(parcelId: string): Parcel {
