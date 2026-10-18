@@ -155,7 +155,9 @@ export class MerchantRatingService {
 
     const sold = all.length;
     const neverDropped = all.filter((p) => p.status === 'Created' || (p.status === 'Voided' && this.handoverHours(p) == null)).length;
-    const upheld = all.filter((p) => p.dispute?.state === 'resolved' && p.dispute.decision && p.dispute.decision !== 'rejected').length;
+    // A claim DECIDED upheld, in whole or in part. A report that closed itself (report_only) was judged by nobody: counting
+    // it as upheld put a verdict on the store that no company ever reached (damage is reported, not judged).
+    const upheld = all.filter((p) => p.dispute?.state === 'resolved' && (p.dispute.decision === 'upheld' || p.dispute.decision === 'partly_upheld')).length;
 
     const mine = [...this.ratings.values()].filter((r) => r.vendorId === vendorId);
     const counts = new Map<MerchantTag, number>();

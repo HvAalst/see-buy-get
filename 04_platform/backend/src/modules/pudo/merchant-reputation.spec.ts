@@ -202,6 +202,18 @@ describe('what a store earns by shipping', () => {
       expect(card.neverDroppedRate).toBeCloseTo(0.5, 2);
     });
 
+    it('counts a claim as upheld only when it was decided so — never a report that closed itself, judged by nobody', () => {
+      const s = store('Reported Threads');
+      const reported = shipment(s, { handoverH: 4 });
+      const decided = shipment(s, { handoverH: 4 });
+      shipment(s, { handoverH: 4 });
+      shipment(s, { handoverH: 4 });
+      reported.dispute = { state: 'resolved', decision: 'report_only' } as never;
+      expect(merchants.scorecard(s.vendor.vendorId).upheldDisputeRate).toBe(0);
+      decided.dispute = { state: 'resolved', decision: 'partly_upheld' } as never;
+      expect(merchants.scorecard(s.vendor.vendorId).upheldDisputeRate).toBe(0.25);
+    });
+
     it('says nothing rather than something flattering when there is nothing to measure', () => {
       // A zero rate would read as "never late" for a store that has shipped nothing at all.
       const card = merchants.scorecard(store('Silent Threads').vendor.vendorId);
