@@ -105,6 +105,7 @@
     <a href="#central">Centralized data</a>
     <a href="#fleet">Fleet and assets</a>
     <a href="#resources">Sites and shifts</a>
+    <a href="#compendium">Against the compendium</a>
   </nav>
 </header>
 
@@ -527,6 +528,18 @@
   <div class="card"><span class="tag t-missing">Not built</span><h3>A forecast</h3><p>How many trucks and drivers next week may need, read from past orders. The plan works only from orders already placed.</p></div>
 </div>
 
+
+<!-- ───────────────────────────────────────────────────────────── the compendium -->
+<h2 id="compendium">Against the compendium</h2>
+<p class="lead">The GLOS PUDO Unified Compendium (June 2026) checked requirement by requirement against the code, 2026-10-18. In full, with every row and where it was found, on <a href="compendium-gaps.html">compendium-gaps.html</a>.</p>
+<div class="grid">
+  <div class="card"><span class="tag t-strong">Close</span><h3>The light edition</h3><p>PUDO Light (chapters 12–17) is close to fully built, and the product goes well beyond it for freight, fleets and papers that cross a border. Of 572 requirements: 175 built, 261 partly, 78 missing, 35 declined by your decisions, 23 not applicable.</p></div>
+  <div class="card"><span class="tag t-partial">Two copies</span><h3>The mother OS</h3><p>M1–M7, SSE and the gateway each have an engine built early that keeps its state in memory, is closed to all but staff outside a sandbox, and is called by no app. The product built its own where it needed to. Most “partly” rows are that.</p></div>
+  <div class="card"><span class="tag t-strong">Built</span><h3>The two gaps you noticed</h3><p>The global barcode beside ours (a shipper's own GS1 SSCC on each package label, under its GS1 company prefix) and the commercial invoice (written and signed by the shipper, three copies for the pouch). Commit <code>349349d</code>.</p></div>
+  <div class="card"><span class="tag t-strong">Fixed</span><h3>Three things that were wrong</h3><p>Shopkeepers' and drivers' phone numbers were readable on a public route (<code>70194c5</code>); shop and driver ratings were lost at every restart (<code>49b4563</code>); the public store page counted unjudged damage reports as upheld claims (<code>0aea927</code>).</p></div>
+  <div class="card"><span class="tag t-ask">Yours</span><h3>Wrong, and yours to decide</h3><p>The old M2 engine suggests HS codes and guesses UN numbers; parcel declarations say “DDU”, not an Incoterms 2020 term; the shop sign-up form answers the franchise requirements for the applicant; one person runs a company's payouts.</p></div>
+  <div class="card"><span class="tag t-missing">Missing</span><h3>What matters most</h3><p>The counter without signal; flags that are not cases; paying people out by mobile money; binding a shop to its devices; the pilot's own metrics and a Lost status; scanning parcels at the bus handover. In order, with what I recommend, on the full page.</p></div>
+</div>
 </div>
 </body>
 </html>
