@@ -625,6 +625,26 @@ describe('PUDO Light', () => {
     for (let i = 1; i < 6; i++) expect(parcels.get(`QR-BUSY-${i}`)).toMatchObject({ status: 'At_PUDO', shortShipReason: 'one parcel this bus', shortShippedAt: expect.any(String) });
   });
 
+  it('lists for a bus the parcels waiting here for where it goes — and nothing for anywhere else (the user, 2026-10-18)', () => {
+    const origin = onboardAgent('List PUDO', 'ListTown', 50);
+    const corridor = corridors.addCorridor({ name: 'List Line', originZone: 'ListTown', destZone: 'NearTown' });
+    const driver = corridors.addDriver({ driverDid: 'did:glos:list-driver', name: 'Wanjiku', corridorId: corridor.corridorId });
+    for (const [id, zone] of [['QR-LIST-1', 'NearTown'], ['QR-LIST-2', 'NearTown'], ['QR-LIST-3', 'OtherTown']]) {
+      parcels.accept({ agentDid: origin.did, parcelId: id, size: 'S', destZone: zone, senderMobile: '+254700', receiverMobile: '+254711', dropoffPhotoRef: 'p.jpg' });
+    }
+    const list = parcels.handoverManifest(origin.did, driver.badgeId);
+    expect(list).toMatchObject({ corridorId: corridor.corridorId, destZone: 'NearTown' });
+    expect(list.parcels.map((p) => p.parcelId).sort()).toEqual(['QR-LIST-1', 'QR-LIST-2']);
+    // The list the shop scans against is the list the handover holds it to: one of the two left, it is named.
+    let refused: unknown;
+    try {
+      parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-LIST-1'] });
+    } catch (e) {
+      refused = e;
+    }
+    expect((refused as { params?: { missed?: string[] } })?.params?.missed).toEqual(['QR-LIST-2']);
+  });
+
   it('runs the steel thread: accept → handover → arrive → pickup, all anchored', () => {
     const origin = onboardAgent('North PUDO', 'NorthTown', 50);
     const dest = onboardAgent('South PUDO', 'SouthTown', 50);

@@ -491,9 +491,14 @@ describe('the first day of a new installation, as it would be live', () => {
     const code = taken.otp as string;
     expect(code).toMatch(/^\d{4,8}$/);
 
-    // Amos shows the badge on his own phone: its number alone hands over nothing.
+    // Amos shows the badge on his own phone: its number alone hands over nothing — and shows nobody what is due.
     const bare = await http().post('/v1/sbg/parcels/handover').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, driverBadgeId: amos.badgeId, parcelIds: ['QR-FIRST-0001'] });
     expect([bare.status, bare.body.code]).toEqual([403, 'DRIVER_PASS_NEEDED']);
+    const peek = await http().post('/v1/sbg/parcels/handover/manifest').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, driverBadgeId: amos.badgeId });
+    expect([peek.status, peek.body.code]).toEqual([403, 'DRIVER_PASS_NEEDED']);
+    // With the pass, the bus's list: what this shop must scan onto it — the parcel taken in for where the bus goes.
+    const list = await must(http().post('/v1/sbg/parcels/handover/manifest').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, driverBadgeId: await passOf(amos) }));
+    expect(list).toMatchObject({ destZone: 'Westlands', driverDid: amos.did, parcels: [expect.objectContaining({ parcelId: 'QR-FIRST-0001', size: 'M', destZone: 'Westlands' })] });
     const handed = await must(http().post('/v1/sbg/parcels/handover').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, driverBadgeId: await passOf(amos), parcelIds: ['QR-FIRST-0001'] }));
     expect(handed).toMatchObject({ driverDid: amos.did, handed: ['QR-FIRST-0001'], rejected: [], shortShipped: false });
     expect(await must(http().post('/v1/sbg/parcels/QR-FIRST-0001/arrive').set(bearer(riverside.token)).send({ destAgentDid: riverside.did }))).toMatchObject({ status: 'Ready_For_Pickup', binSlot: expect.any(String) });

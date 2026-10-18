@@ -384,8 +384,8 @@ describe('speaking', () => {
     const said = handoverSummary(3, 1, 2, t);
     expect(said).toContain('2 for this bus are still waiting');
     expect(said).toContain('leave them behind');
-    // No missed → the plain "finish the handover" prompt, never the short-ship wording.
-    expect(handoverSummary(3, 3, 0, t)).toContain('finish the handover');
+    // No missed → the plain "scan each parcel, then hand over" prompt, never the short-ship wording.
+    expect(handoverSummary(3, 3, 0, t)).toContain('Scan each parcel on the list onto the bus');
     expect(handoverSummary(3, 3, 0, t)).not.toContain('still waiting');
   });
 });

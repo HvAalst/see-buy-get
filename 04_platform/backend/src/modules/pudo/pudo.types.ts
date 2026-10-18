@@ -267,6 +267,26 @@ export type DisputeDecision = 'upheld' | 'partly_upheld' | 'rejected' | 'report_
  *  dispute after they have been handed over. Resolving must not teleport a parcel between the two. */
 export type DisputeOrigin = 'counter' | 'buyer';
 
+/** One parcel on a bus's list: what the shop scans, and where on its shelf to find it. */
+export class HandoverManifestParcel {
+  parcelId: string;
+  size: ParcelSize;
+  destZone: string;
+  binSlot?: string;
+  fragile?: boolean;
+  /** Left behind at an earlier handover: it is due on this one. */
+  leftBehindBefore?: string;
+}
+
+/** The bus's list, read after the driver's pass: what this shop must scan onto it. */
+export class HandoverManifest {
+  corridorId: string;
+  /** Where this bus goes: every parcel listed is bound there. */
+  destZone: string;
+  driverDid?: string;
+  parcels: HandoverManifestParcel[];
+}
+
 export class DisputeCase {
   /** Open until an operator decides. This is the field that makes `Disputed` a queue rather than a grave. */
   state: 'open' | 'resolved';

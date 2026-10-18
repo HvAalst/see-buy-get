@@ -283,6 +283,9 @@ export function createAgentApi(sbg: SbgClient) {
      * completeness gate: a short load is refused (INCOMPLETE_MANIFEST, with the missed ids in params)
      * unless `acknowledgeShortShip` is passed to knowingly leave those parcels behind (with a reason).
      */
+    /** The bus's list, read with the driver's pass: what this shop must scan onto this bus. Nothing changes by reading it. */
+    busList: (agentDid: string, driverBadgeId: string) => sbg.request((c) => c.POST('/v1/sbg/parcels/handover/manifest', { body: { agentDid, driverBadgeId } })),
+
     handover: (
       agentDid: string,
       driverBadgeId: string,

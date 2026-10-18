@@ -173,6 +173,12 @@ export class AcceptParcelDto {
   @IsOptional() @IsIn(CARGO_NATURES) natureCode?: CargoNature;
 }
 
+/** The driver's pass, shown: the bus's list is read with it (the handover itself checks it again). */
+export class HandoverManifestDto {
+  @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
+  @IsString() driverBadgeId!: string;
+}
+
 export class HandoverDto {
   @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
   @IsString() driverBadgeId!: string;

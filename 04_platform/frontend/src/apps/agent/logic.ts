@@ -696,9 +696,42 @@ export function homeSummary(agent: AgentView | null, gate: GateView | null, t: T
   return bits.join(' ');
 }
 
+/* ----------------------------------------------------------- the bus's list -- */
+
+/** One parcel on the bus's list, as the server sends it (backend pudo.types.ts HandoverManifest). */
+export interface BusListParcel {
+  parcelId: string;
+  size: string;
+  destZone: string;
+  binSlot?: string;
+  fragile?: boolean;
+  leftBehindBefore?: string;
+}
+
+export interface BusList {
+  destZone: string;
+  driverDid?: string;
+  parcels: BusListParcel[];
+}
+
+/** What a scan at the handover means: on the bus's list, scanned already, waiting here for another bus, or not here at all. */
+export type BusScan = { kind: 'added' } | { kind: 'again' } | { kind: 'otherBus'; zone: string } | { kind: 'notHere' };
+
+/**
+ * A parcel scanned at the bus (the user, 2026-10-18: "scan at the bus handover"): onto it only when it is on this bus's
+ * list. One waiting here for somewhere else is refused at the moment it is in the shopkeeper's hand — the misload the
+ * handover exists to stop — and one the shop does not hold is said as that.
+ */
+export function busScan(list: BusList, scanned: string[], waitingHere: Array<{ parcelId: string; destZone: string }>, id: string): BusScan {
+  if (list.parcels.some((p) => p.parcelId === id)) return scanned.includes(id) ? { kind: 'again' } : { kind: 'added' };
+  const here = waitingHere.find((p) => p.parcelId === id);
+  return here ? { kind: 'otherBus', zone: here.destZone } : { kind: 'notHere' };
+}
+
 export function handoverSummary(count: number, selected: number, missed: number, t: Translate): string {
   if (count === 0) return t('agent.logic.handoverNone');
   const base = t('agent.logic.handoverBase', { count, selected });
+  // (count is the bus's list once the driver's pass has been shown: what this bus takes from here.)
   // S25: after the gate refuses a short load, speak the number still owed to this bus.
   if (missed > 0) return `${base} ${t('agent.logic.handoverMissed', { missed })}`;
   return `${base} ${t('agent.logic.handoverScan')}`;

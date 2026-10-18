@@ -21,7 +21,7 @@ import { agentConfig, clearDid, createAgentClient, purgeAgentTokens, readDid, re
 import { signal } from '../../shared/feedback';
 import { triggerDownload } from '../../shared/download';
 import { topUpTermsOf, type TopUpTerms } from '../../shared/topup-fee';
-import { bodyHintValue, bookFreightMissing, EMPTY_ACCEPT, excludedBodiesValue, handoverRoute, incotermValue, money, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, putAwayList, termsBlock, type AcceptForm, type DimsForm } from './logic';
+import { bodyHintValue, bookFreightMissing, busScan, EMPTY_ACCEPT, type BusList, excludedBodiesValue, handoverRoute, incotermValue, money, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, putAwayList, termsBlock, type AcceptForm, type DimsForm } from './logic';
 import type { GeoPoint } from '../../shared/geo';
 import { peopleApi } from './people';
 import { clearStaff, ownerOnlyScreen, readStaff, saveStaff, type StaffAtCounter, type StaffSession } from './staff';
@@ -296,7 +296,11 @@ export interface AgentState {
   /** The shopkeeper ticked that the customer was TOLD the carrier answers (the carrier's promise only). */
   termsTold: boolean;
   /** `missed` is the last server verdict of parcels for this bus still waiting (the S25 gate). */
-  handover: { badge: string; selected: string[]; missed: string[] };
+  /**
+   * The bus at the counter: the driver's pass, then the bus's list from the server, and the parcels scanned onto it
+   * (`selected`, in the order they were scanned). `missed` is the server's answer when some on the list were not.
+   */
+  handover: { badge: string; selected: string[]; missed: string[]; list: BusList | null; listState: 'idle' | 'loading' | 'ready'; scan: string; lastScanned: string | null };
   release: { stickerId: string; parcel: ParcelView | null; otp: string; stars: number; photoRef: string };
   collect: { code: string; found: CollectView | null; disputing: boolean; reason: string; photoRef: string };
   /** `putAway`: a bag was just received, and these are the slots its parcels go in — shown until the shop says they are in. */
@@ -307,7 +311,7 @@ export interface AgentState {
   driverRating: { driverDid: string; profile: ReputationProfileView | null } | null;
 }
 
-const EMPTY_HANDOVER = { badge: '', selected: [] as string[], missed: [] as string[] };
+const EMPTY_HANDOVER = { badge: '', selected: [] as string[], missed: [] as string[], list: null as BusList | null, listState: 'idle' as 'idle' | 'loading' | 'ready', scan: '', lastScanned: null as string | null };
 const EMPTY_RELEASE = { stickerId: '', parcel: null, otp: '', stars: 0, photoRef: '' };
 const EMPTY_COLLECT = { code: '', found: null, disputing: false, reason: '', photoRef: '' };
 
@@ -1089,7 +1093,8 @@ export function useAgentApp() {
     setState((s) => ({ ...s, acceptGeoBusy: false, acceptNear: g.location, acceptGeoNote: note }));
   }, [client, geocodePlace]);
   const setHandover = useCallback((p: Partial<AgentState['handover']>) => {
-    setState((s) => ({ ...s, handover: { ...s.handover, ...p } }));
+    // Another pass is another bus: its list, and what was scanned onto the last one, are not this one's.
+    setState((s) => ({ ...s, handover: { ...s.handover, ...p, ...(p.badge !== undefined && p.badge !== s.handover.badge ? { list: null, listState: 'idle' as const, selected: [], missed: [], lastScanned: null } : {}) } }));
   }, []);
   const toggleHandover = useCallback((parcelId: string) => {
     setState((s) => {
@@ -1990,6 +1995,53 @@ export function useAgentApp() {
   /** Put the bag away and start fresh (after the driver has taken it). */
   const clearBag = closeBagView;
 
+  /**
+   * THE BUS'S LIST (the user, 2026-10-18: "scan at the bus handover"): read with the driver's pass, the parcels this shop
+   * must scan onto this bus — the same ones the server will hold the handover to.
+   */
+  const readBusList = useCallback(async (passOverride?: string) => {
+    if (!client || !did) return;
+    const pass = (passOverride ?? stateRef.current.handover.badge).trim().toUpperCase();
+    if (!pass) return;
+    setState((s) => ({ ...s, error: null, handover: { ...s.handover, badge: pass, listState: 'loading' } }));
+    const r = await client.api.busList(did, pass);
+    if (r.error) {
+      signal('error');
+      setState((s) => ({ ...s, handover: { ...s.handover, listState: 'idle', list: null } }));
+      return fail(r.error);
+    }
+    const list = narrow<BusList>(r.data);
+    setState((s) => ({ ...s, handover: { ...s.handover, list, listState: 'ready', selected: [], missed: [], scan: '', lastScanned: null } }));
+    void loadShopParcels();
+  }, [client, did, fail, loadShopParcels]);
+
+  const setBusScan = useCallback((scan: string) => setState((s) => ({ ...s, handover: { ...s.handover, scan } })), []);
+
+  /**
+   * A parcel scanned at the bus — or tapped, where its sticker will not read. The green beep is the confirmation, the red
+   * one stops a parcel for another bus from going on, at the moment it is in the shopkeeper's hand (busScan).
+   */
+  const scanForBus = useCallback(
+    (override?: string) => {
+      const h = stateRef.current.handover;
+      if (!h.list) return;
+      const id = (override ?? h.scan).trim().toUpperCase();
+      if (!id) return;
+      const said = busScan(h.list, h.selected, stateRef.current.shopParcels, id);
+      if (said.kind === 'added') {
+        signal('ok');
+        setState((s) => ({ ...s, handover: { ...s.handover, selected: [...s.handover.selected, id], missed: s.handover.missed.filter((m) => m !== id), scan: '', lastScanned: id } }));
+        return;
+      }
+      signal(said.kind === 'again' ? 'warn' : 'error');
+      setState((s) => ({ ...s, handover: { ...s.handover, scan: '' } }));
+      if (said.kind === 'again') pushToast({ tone: 'info', icon: 'truck', title: t('agent.handover.alreadyScanned', { id }) });
+      else if (said.kind === 'otherBus') pushToast({ tone: 'warn', icon: 'warning', title: t('agent.handover.notThisBus', { id, zone: said.zone }), detail: t('agent.handover.notThisBusDetail') });
+      else pushToast({ tone: 'warn', icon: 'warning', title: t('agent.handover.notWaitingHere', { id }) });
+    },
+    [pushToast],
+  );
+
   const submitHandover = useCallback(async (shortShipReason?: string) => {
     if (!client || !did) return;
     const f = stateRef.current.handover;
@@ -2277,6 +2329,9 @@ export function useAgentApp() {
       geocodePlace,
       setHandover,
       toggleHandover,
+      readBusList,
+      setBusScan,
+      scanForBus,
       setRelease,
       setCollect,
       setReceiveBag,

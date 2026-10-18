@@ -9309,6 +9309,36 @@
         }
       }
     },
+    "/v1/sbg/parcels/handover/manifest": {
+      "post": {
+        "operationId": "Sbg.handoverManifest",
+        "summary": "",
+        "description": "THE BUS'S LIST, after the driver's pass (the user, 2026-10-18: \"scan at the bus handover\"): what this shop must scan\nonto this bus. Read with the same pass the handover asks for — its number alone shows nobody what is due.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandoverManifestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HandoverManifest"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/parcels/handover": {
       "post": {
         "operationId": "Sbg.handover",
@@ -34868,6 +34898,75 @@
           "weightKg",
           "destPudoDid",
           "budgetCap"
+        ]
+      },
+      "HandoverManifestDto": {
+        "type": "object",
+        "properties": {
+          "agentDid": {
+            "type": "string"
+          },
+          "driverBadgeId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "driverBadgeId"
+        ]
+      },
+      "HandoverManifestParcel": {
+        "type": "object",
+        "properties": {
+          "parcelId": {
+            "type": "string"
+          },
+          "size": {
+            "type": "object"
+          },
+          "destZone": {
+            "type": "string"
+          },
+          "binSlot": {
+            "type": "string"
+          },
+          "fragile": {
+            "type": "boolean"
+          },
+          "leftBehindBefore": {
+            "type": "string",
+            "description": "Left behind at an earlier handover: it is due on this one."
+          }
+        },
+        "required": [
+          "parcelId",
+          "size",
+          "destZone"
+        ]
+      },
+      "HandoverManifest": {
+        "type": "object",
+        "properties": {
+          "corridorId": {
+            "type": "string"
+          },
+          "destZone": {
+            "type": "string",
+            "description": "Where this bus goes: every parcel listed is bound there."
+          },
+          "driverDid": {
+            "type": "string"
+          },
+          "parcels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HandoverManifestParcel"
+            }
+          }
+        },
+        "required": [
+          "corridorId",
+          "destZone",
+          "parcels"
         ]
       },
       "HandoverDto": {

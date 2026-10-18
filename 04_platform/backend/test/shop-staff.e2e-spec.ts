@@ -166,7 +166,7 @@ describe('the people at a shop’s counter, over the wire', () => {
         // parcels at the counter
         'POST sbg/parcels/accept', 'POST sbg/parcels/:id/intake', 'GET sbg/parcels/:id/intake-preview', 'POST sbg/parcels/:id/arrive', 'POST sbg/parcels/:id/shelve',
         'POST sbg/parcels/:id/pickup', 'POST sbg/parcels/collect', 'POST sbg/parcels/:id/collect-confirm', 'POST sbg/parcels/:id/void', 'POST sbg/parcels/:id/dispute',
-        'POST sbg/parcels/handover', 'POST sbg/parcels/:id/rate', 'POST sbg/drivers/:did/rate', 'POST sbg/parcels/book-freight',
+        'POST sbg/parcels/handover', 'POST sbg/parcels/handover/manifest', 'POST sbg/parcels/:id/rate', 'POST sbg/drivers/:did/rate', 'POST sbg/parcels/book-freight',
         'GET sbg/parcels/:id', 'GET sbg/parcels', 'GET sbg/agents/:did/parcels',
         // the shop as the counter sees it, and open or closed now
         'GET sbg/agents/:did', 'GET sbg/agents/:did/shelf', 'GET sbg/agents/:did/bag-plan', 'GET sbg/agents/:did/can-transact', 'GET sbg/agents/:did/take-in-terms',

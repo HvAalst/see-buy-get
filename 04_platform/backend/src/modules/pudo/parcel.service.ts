@@ -17,7 +17,7 @@ import type { Amounts } from './amounts';
 import { DEFAULT_TAX_LABEL, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, NOT_SEEN_H, OTP_MAX_ATTEMPTS, PARCEL_LATE_GRACE_H, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, UNCOLLECTED_H, VOID_WINDOW_MS, WHOLESALE, classifySize, coverFor, holdingFeeFor, taxOn, withPlatformFee } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import type { ResolvedTax } from '../../foundation/entity/entity.types';
-import { Birthplace, ConsumerParcelView, RunningLate, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, LOSABLE_STATUSES, isCollectable } from './pudo.types';
+import { Birthplace, HandoverManifest, ConsumerParcelView, RunningLate, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, LOSABLE_STATUSES, isCollectable } from './pudo.types';
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
 import { MediaService } from './media.service';
@@ -1330,36 +1330,14 @@ export class ParcelService implements OnApplicationBootstrap {
     acknowledgeShortShip?: boolean;
     shortShipReason?: string;
   }): HandoverResult {
-    const fleet = this.fleet.resolveBadge(input.driverBadgeId);
-    let badgeId: string;
-    let corridorId: string;
-    let corridorDestZone: string;
-    let vehicleType: 'bus' | 'truck';
-    if (fleet) {
-      if (!fleet.corridorId) throw new GlosError('INVALID_STATE', 'Driver is not assigned to a corridor — assign one before handover');
-      const corridor = this.corridors.requireCorridor(fleet.corridorId);
-      badgeId = fleet.badgeId;
-      corridorId = corridor.corridorId;
-      corridorDestZone = corridor.destZone;
-      vehicleType = fleet.vehicleType;
-    } else {
-      const driver = this.corridors.driverByBadge(input.driverBadgeId);
-      if (!driver) throw new GlosError('INVALID_INPUT', 'Unknown driver badge — not a registered fleet driver or on the corridor whitelist');
-      const corridor = this.corridors.requireCorridor(driver.corridorId);
-      badgeId = driver.badgeId;
-      corridorId = corridor.corridorId;
-      corridorDestZone = corridor.destZone;
-      vehicleType = driver.vehicleType;
-    }
+    const { fleet, badgeId, corridorId, corridorDestZone, vehicleType } = this.busFor(input.driverBadgeId);
 
     // The expected manifest: every parcel waiting at THIS shop bound for the corridor's destination. The
     // agent app's accept picker only offers destZones served by a corridor from here, and an inbound stamps
     // the final dest zone, so in the direct-corridor model these are exactly the parcels this bus carries.
     // (Conservative for a future multi-hop leg: a parcel routed onward via an MDP has a different destZone
     // and simply isn't demanded here — the gate never blocks on a parcel it can't prove belongs on the bus.)
-    const expected = this.list({ status: 'At_PUDO', agentDid: input.agentDid })
-      .filter((p) => p.originAgentDid === input.agentDid && p.destZone === corridorDestZone)
-      .map((p) => p.parcelId);
+    const expected = this.dueOnto(input.agentDid, corridorDestZone).map((p) => p.parcelId);
     const scanned = new Set(input.parcelIds);
     const unscanned = expected.filter((id) => !scanned.has(id));
 
@@ -1456,6 +1434,47 @@ export class ParcelService implements OnApplicationBootstrap {
     // REP2 — surface the DID of the fleet driver who took the batch, so the shop can rate them for this leg
     // (a legacy corridor-whitelist driver has no registry DID and isn't rateable → undefined).
     return { manifestId, driverBadgeId: badgeId, driverDid: fleet ? fleet.driverDid : undefined, corridorId, vehicle: fleet ? vehicleType : this.corridors.chooseVehicle(loadKg), handed, rejected, expected, missed, shortShipped: missed.length > 0 };
+  }
+
+  /**
+   * THE BUS'S LIST (the user, 2026-10-18: "scan at the bus handover"). After the driver's pass, what this shop must scan
+   * onto this bus — the same parcels the handover's completeness gate will ask for, from the same calculation, so the
+   * list the shop scans against and the list the server holds it to cannot differ. Nothing is changed by reading it.
+   */
+  handoverManifest(agentDid: string, driverBadgeId: string): HandoverManifest {
+    const bus = this.busFor(driverBadgeId);
+    return {
+      corridorId: bus.corridorId,
+      destZone: bus.corridorDestZone,
+      ...(bus.fleet ? { driverDid: bus.fleet.driverDid } : {}),
+      parcels: this.dueOnto(agentDid, bus.corridorDestZone).map((p) => ({
+        parcelId: p.parcelId,
+        size: p.size,
+        destZone: p.destZone,
+        ...(p.binSlot ? { binSlot: p.binSlot } : {}),
+        ...(p.fragile ? { fragile: true } : {}),
+        ...(p.shortShippedAt ? { leftBehindBefore: p.shortShippedAt } : {}),
+      })),
+    };
+  }
+
+  /** The bus a driver's badge is on: a registered fleet driver's corridor, with its vehicle's rules — or a legacy corridor driver's. */
+  private busFor(driverBadgeId: string) {
+    const fleet = this.fleet.resolveBadge(driverBadgeId);
+    if (fleet) {
+      if (!fleet.corridorId) throw new GlosError('INVALID_STATE', 'Driver is not assigned to a corridor — assign one before handover');
+      const corridor = this.corridors.requireCorridor(fleet.corridorId);
+      return { fleet, badgeId: fleet.badgeId, corridorId: corridor.corridorId, corridorDestZone: corridor.destZone, vehicleType: fleet.vehicleType };
+    }
+    const driver = this.corridors.driverByBadge(driverBadgeId);
+    if (!driver) throw new GlosError('INVALID_INPUT', 'Unknown driver badge — not a registered fleet driver or on the corridor whitelist');
+    const corridor = this.corridors.requireCorridor(driver.corridorId);
+    return { fleet, badgeId: driver.badgeId, corridorId: corridor.corridorId, corridorDestZone: corridor.destZone, vehicleType: driver.vehicleType };
+  }
+
+  /** What is due onto a bus at this shop: every parcel waiting here bound for the corridor's destination. */
+  private dueOnto(agentDid: string, destZone: string): Parcel[] {
+    return this.list({ status: 'At_PUDO', agentDid }).filter((p) => p.originAgentDid === agentDid && p.destZone === destZone);
   }
 
   /**
