@@ -40712,6 +40712,10 @@
           "photoRef": {
             "type": "string",
             "description": "A media id of the thing itself — the bridge, the washout, the sign.\n\nOPTIONAL, and that is the design rather than laziness: a driver at a washout at night who cannot\nsafely stop must still be able to warn everybody, and a photograph as a gate would suppress reports\nexactly where they matter most. A report with no photo warns identically; the picture is what an\nOPERATOR later clears or keeps the hazard on."
+          },
+          "observedAt": {
+            "type": "string",
+            "description": "When the person made this report, by their phone's clock. Sent by the apps every time: a report made with no signal\nwaits on the phone and arrives later, and is dated by this (never in the future, at most a week back)."
           }
         },
         "required": [
@@ -40722,6 +40726,10 @@
       "ConstraintAccountView": {
         "type": "object",
         "properties": {
+          "receivedAt": {
+            "type": "string",
+            "description": "When it reached SeeBuyGet, where that was later than it was said: from a phone with no signal."
+          },
           "stance": {
             "type": "string",
             "enum": [
@@ -40826,6 +40834,10 @@
           },
           "photoRef": {
             "type": "string"
+          },
+          "observedAt": {
+            "type": "string",
+            "description": "When the person made this report, by their phone's clock. Sent by the apps every time: a report made with no signal\nwaits on the phone and arrives later, and is dated by this (never in the future, at most a week back)."
           }
         }
       },
@@ -40839,6 +40851,10 @@
           "photoRef": {
             "type": "string",
             "description": "A photo of the road now clear — the strongest thing anybody can offer for the dangerous direction."
+          },
+          "observedAt": {
+            "type": "string",
+            "description": "When the person made this report, by their phone's clock. Sent by the apps every time: a report made with no signal\nwaits on the phone and arrives later, and is dated by this (never in the future, at most a week back)."
           }
         }
       },
@@ -49482,6 +49498,10 @@
           "driverName": {
             "type": "string"
           },
+          "receivedAt": {
+            "type": "string",
+            "description": "When it reached SeeBuyGet, where that was later than it was reported: sent from a phone with no signal."
+          },
           "location": {
             "$ref": "#/components/schemas/GeoPoint"
           },
@@ -49832,6 +49852,10 @@
             "type": "number",
             "minimum": -180,
             "maximum": 180
+          },
+          "observedAt": {
+            "type": "string",
+            "description": "When the person made this report, by their phone's clock. Sent by the apps every time: a report made with no signal\nwaits on the phone and arrives later, and is dated by this (never in the future, at most a week back)."
           }
         },
         "required": [

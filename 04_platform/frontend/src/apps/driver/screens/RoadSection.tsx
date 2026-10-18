@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { AuthImage, Button, Icon, Note, PhotoField, Pill, Sheet, type IconName } from '../../../shared/ui';
 import { useT, type Translate } from '../../../shared/i18n';
 import { haversineKm } from '../../../shared/geo';
-import { ROAD_KINDS, roadBlocks, roadMeasure, roadSummary, roadTone, roadValueLabel, type RoadKind } from '../logic';
+import { ROAD_KINDS, roadBlocks, roadMeasure, roadSummary, roadTone, roadValue, roadValueLabel, type RoadKind } from '../logic';
 import type { DriverActions, DriverState } from '../useDriverApp';
 import type { RoadAccount, RoadConstraint } from '../types';
 
@@ -352,8 +352,8 @@ function ReportSheet({
   };
 
   const num = Number(value);
-  // Tonnes on screen, kilograms on the wire — no weight sign anywhere is posted in kilograms.
-  const wire = measure === 'weight_kg' ? num * 1000 : num;
+  // Tonnes on screen, kilograms on the wire — and nothing at all for a kind with nothing to measure (logic.ts roadValue).
+  const wire = kind ? roadValue(kind, value) : undefined;
   const ready = measure == null || (Number.isFinite(num) && num > 0);
 
   return (

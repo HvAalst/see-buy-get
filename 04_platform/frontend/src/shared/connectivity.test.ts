@@ -1,9 +1,23 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { connectivity, isOfflineNow, markOffline, markOnline, onConnectivityChange, resetConnectivity } from './connectivity';
+import { browserCameOnline, browserWentOffline, connectivity, isOfflineNow, markOffline, markOnline, onConnectivityChange, resetConnectivity } from './connectivity';
 
 /** One store for "do we have a signal", and the memory of the last spell without one. */
 describe('connectivity', () => {
   beforeEach(() => resetConnectivity());
+
+  it('ends a spell the browser began when the browser says the radio is back — and one a request began only on an answer', () => {
+    const t0 = Date.parse('2026-10-18T14:50:00Z');
+    browserWentOffline(t0);
+    expect(connectivity().online).toBe(false);
+    browserCameOnline(t0 + 60_000);
+    expect(connectivity()).toMatchObject({ online: true, offlineSince: null, lastDarkSpell: { from: '2026-10-18T14:50:00.000Z', to: '2026-10-18T14:51:00.000Z' } });
+    // A request that could not leave the phone: the radio's "back" is not proof that anything gets through.
+    markOffline(t0 + 120_000);
+    browserCameOnline(t0 + 180_000);
+    expect(connectivity().online).toBe(false);
+    markOnline(t0 + 240_000);
+    expect(connectivity().online).toBe(true);
+  });
 
   it('goes dark on a failed request and comes back on a real answer, dating what we last knew', () => {
     const t0 = Date.parse('2026-09-14T14:10:00Z');

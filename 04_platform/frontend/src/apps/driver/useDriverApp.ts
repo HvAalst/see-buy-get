@@ -1,4 +1,5 @@
-import { drain, outboxItems } from '../../shared/outbox';
+import { drain, onOutboxSent, outboxItems } from '../../shared/outbox';
+import { holdPhoto, mayHold } from '../../shared/heldPhotos';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { asksForEmail, isPinReset } from '../../shared/account/recovery';
 import type { SbgError } from '../../lib/sbg';
@@ -1312,11 +1313,13 @@ export function useDriverApp() {
 
   /** Broken down on the road: the office hears at once, with where the phone is. Answers what was kept, or why not. */
   const sendBreakdown = useCallback(
-    async (body: { cause: string; note: string; photoRef?: string; lat?: number; lng?: number }): Promise<{ data?: BreakdownView; error?: SbgError }> => {
+    async (body: { cause: string; note: string; photoRef?: string; lat?: number; lng?: number }): Promise<{ data?: BreakdownView; queued?: boolean; error?: SbgError }> => {
       if (!client || !did) return {};
-      const r = await client.api.reportBreakdown(did, body);
+      // Dated now, whenever it reaches the office: with no signal it waits on this phone (shared/outbox.ts).
+      const r = await client.api.reportBreakdown(did, { ...body, observedAt: new Date().toISOString() });
       if (r.error) return { error: r.error };
       buzz();
+      if (r.status === 202) return { queued: true };
       return { data: narrow<BreakdownView>(r.data) ?? undefined };
     },
     [client, did],
@@ -1635,6 +1638,12 @@ export function useDriverApp() {
         const { dataUrl, thumbDataUrl } = await downscaleImage(file);
         const r = await client.api.uploadMedia(kind, dataUrl, thumbDataUrl);
         if (r.error) {
+          // No signal, and the photo of a report that waits on this phone: it waits too, and goes first (shared/heldPhotos.ts).
+          const held = isOffline(r.error) && mayHold(kind) ? holdPhoto(kind, dataUrl, thumbDataUrl) : null;
+          if (held) {
+            pushToast({ tone: 'info', icon: 'camera', title: t('driver.toast.photoHeld'), detail: t('driver.toast.photoHeldDetail') });
+            return held;
+          }
           pushToast({ tone: 'danger', icon: 'camera', title: t('driver.toast.photoFailed'), detail: t('driver.toast.photoFailedDetail') });
           return null;
         }
@@ -1784,9 +1793,11 @@ export function useDriverApp() {
           pushToast({ tone: 'warn', icon: 'pin', title: t('driver.toast.noLocation'), detail: t('driver.toast.noLocationDetail') });
           return;
         }
-        const r = await client.api.reportRoad({ kind, at, ...(value != null ? { value } : {}), ...(note?.trim() ? { note: note.trim() } : {}), ...(photoRef ? { photoRef } : {}) });
+        const r = await client.api.reportRoad({ kind, at, ...(value != null ? { value } : {}), ...(note?.trim() ? { note: note.trim() } : {}), ...(photoRef ? { photoRef } : {}), observedAt: new Date().toISOString() });
         if (r.error) return fail(r.error);
         buzz();
+        // Kept on this phone: other drivers see it once it reaches SeeBuyGet, dated now. Said so, not "they will see it".
+        if (r.status === 202) return pushToast({ tone: 'ok', icon: 'offline', title: t('driver.toast.roadQueued'), detail: t('driver.toast.roadQueuedDetail') });
         pushToast({ tone: 'ok', icon: 'check', title: t('driver.toast.roadReported'), detail: t('driver.toast.roadReportedDetail') });
         await loadRoad();
       });
@@ -1805,10 +1816,11 @@ export function useDriverApp() {
     async (constraintId: string, stillThere: boolean, note?: string, photoRef?: string) => {
       if (!client) return;
       await run(`road:${constraintId}`, async () => {
-        const body = { ...(note?.trim() ? { note: note.trim() } : {}), ...(photoRef ? { photoRef } : {}) };
+        const body = { ...(note?.trim() ? { note: note.trim() } : {}), ...(photoRef ? { photoRef } : {}), observedAt: new Date().toISOString() };
         const r = stillThere ? await client.api.confirmRoad(constraintId, body) : await client.api.refuteRoad(constraintId, body);
         if (r.error) return fail(r.error);
         buzz();
+        if (r.status === 202) return pushToast({ tone: 'ok', icon: 'offline', title: t('driver.toast.roadQueued'), detail: t('driver.toast.roadAnswerQueuedDetail') });
         pushToast(
           stillThere
             ? { tone: 'ok', icon: 'check', title: t('driver.toast.roadConfirmed') }
@@ -1818,6 +1830,21 @@ export function useDriverApp() {
       });
     },
     [client, run, fail, pushToast, loadRoad],
+  );
+
+  // A REPORT KEPT ON THIS PHONE HAS ARRIVED. The breakdown is said, because the driver was told to phone the office in case
+  // it did not; a hazard's list is read again, so what other drivers now see is what this one sees.
+  useEffect(
+    () =>
+      onOutboxSent((item) => {
+        if (/\/breakdown$/.test(item.path)) {
+          pushToast({ tone: 'ok', icon: 'check', title: t('driver.toast.breakdownArrived'), detail: t('driver.toast.breakdownArrivedDetail') });
+          void refresh();
+        } else if (item.path.startsWith('/v1/sbg/route-constraints')) {
+          void loadRoad();
+        }
+      }),
+    [pushToast, refresh, loadRoad],
   );
   return {
     state,

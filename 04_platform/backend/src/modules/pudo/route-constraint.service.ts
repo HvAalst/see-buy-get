@@ -7,6 +7,7 @@ import { GeoPoint } from './pudo.types';
 import { BoardBlocker } from './dispatch.types';
 import { CONSTRAINT_EFFECT, ConstraintAccount, ConstraintKind, ConstraintStance, ConstraintView, RouteConstraint } from './route-constraint.types';
 import { MediaService } from './media.service';
+import { whenSeen, type Seen } from './observed-at';
 
 /** How near a point has to be to count as "on this road" — the corridor is a straight line, so this is
  *  generous on purpose. A warning about a bridge 4 km off your line is a nuisance; missing one is not. */
@@ -57,7 +58,9 @@ export class RouteConstraintService {
    * three drivers reporting the same bridge should make the network more sure of one bridge, not draw
    * three bridges on the map.
    */
-  report(input: { kind: ConstraintKind; at: GeoPoint; value?: number; note?: string; photoRef?: string; by: string }): ConstraintView {
+  report(input: { kind: ConstraintKind; at: GeoPoint; value?: number; note?: string; photoRef?: string; by: string; observedAt?: string }, now: number = Date.now()): ConstraintView {
+    // Dated when it was seen, not when the phone found a signal (observed-at.ts).
+    const seen = whenSeen(input.observedAt, now);
     const effect = CONSTRAINT_EFFECT[input.kind];
     if (!effect) throw new GlosError('VALIDATION_FAILED', `Unknown constraint kind: ${input.kind}`);
     if (!Number.isFinite(input.at?.lat) || !Number.isFinite(input.at?.lng)) {
@@ -70,6 +73,7 @@ export class RouteConstraintService {
     }
 
     const existing = this.sameSpot(input.kind, input.at);
+    if (existing && this.saidLater(existing, input.by, seen)) return constraintView(existing);
     if (existing) {
       // A second sighting of a known obstacle. It confirms rather than duplicates — and a report from
       // somebody who has already spoken about this one does not count twice.
@@ -83,7 +87,7 @@ export class RouteConstraintService {
       }
       // A second sighting is an ACCOUNT in its own right: its own words, its own photograph, its own date.
       // This is the whole reason the report of a known hazard is worth more than a bumped counter.
-      this.account(existing, input.by, 'there', input.note, input.photoRef);
+      this.account(existing, input.by, 'there', input.note, input.photoRef, seen);
       this.constraints.set(existing.constraintId, existing);
       return constraintView(existing);
     }
@@ -95,14 +99,14 @@ export class RouteConstraintService {
       ...(effect.measure !== 'none' ? { value: input.value } : {}),
       ...(input.note?.trim() ? { note: input.note.trim() } : {}),
       reportedBy: input.by,
-      reportedAt: new Date().toISOString(),
+      reportedAt: new Date(seen.at).toISOString(),
       confirmedBy: [],
       refutedBy: [],
       accounts: [],
       // ACTIVE from one report. This is the cheap half of the asymmetry, and it is deliberate.
       status: 'active',
     };
-    this.account(constraint, input.by, 'there', input.note, input.photoRef);
+    this.account(constraint, input.by, 'there', input.note, input.photoRef, seen);
     this.constraints.set(constraint.constraintId, constraint);
     return constraintView(constraint);
   }
@@ -115,7 +119,7 @@ export class RouteConstraintService {
    * the DID lists drop them from the other side — the record must never cite one driver on both sides of
    * the same question.
    */
-  private account(c: RouteConstraint, by: string, stance: ConstraintStance, note?: string, photoRef?: string): void {
+  private account(c: RouteConstraint, by: string, stance: ConstraintStance, note?: string, photoRef?: string, seen: Seen = whenSeen(undefined)): void {
     if (!c.accounts) c.accounts = [];
     const said = note?.trim();
     // ADOPTED BEFORE IT IS CITED, and both halves of that matter.
@@ -130,15 +134,17 @@ export class RouteConstraintService {
     // record instead of onto a screen. Adoption is also what stops the retention sweep reclaiming a real
     // photo as an abandoned upload. No expiry is set here — that waits for an operator to clear it.
     const kept = photoRef ? this.media.adopt(photoRef, by, { type: 'constraint', id: c.constraintId }, 'hazard') : false;
-    const entry: ConstraintAccount = { by, at: new Date().toISOString(), stance, ...(said ? { note: said } : {}), ...(kept ? { photoRef } : {}) };
+    const entry: ConstraintAccount = { by, at: new Date(seen.at).toISOString(), stance, ...(said ? { note: said } : {}), ...(kept ? { photoRef } : {}), ...(seen.receivedAt ? { receivedAt: seen.receivedAt } : {}) };
     const mine = c.accounts.findIndex((a) => a.by === by);
     if (mine >= 0) c.accounts[mine] = entry;
     else c.accounts.push(entry);
   }
 
   /** A later passer-by agrees. One vote each; the original reporter's is already counted. */
-  confirm(constraintId: string, by: string, note?: string, photoRef?: string): ConstraintView {
+  confirm(constraintId: string, by: string, note?: string, photoRef?: string, observedAt?: string, now: number = Date.now()): ConstraintView {
     const c = this.require(constraintId);
+    const seen = whenSeen(observedAt, now);
+    if (this.saidLater(c, by, seen)) return constraintView(c);
     if (c.reportedBy !== by && !c.confirmedBy.includes(by)) c.confirmedBy.push(by);
     c.refutedBy = c.refutedBy.filter((d) => d !== by);
     if (c.status === 'disputed' && c.confirmedBy.length > c.refutedBy.length) {
@@ -147,9 +153,18 @@ export class RouteConstraintService {
     }
     // Agreement is an account too, and a photograph from somebody who saw it standing this morning is
     // what settles a dispute in the safe direction.
-    this.account(c, by, 'there', note, photoRef);
+    this.account(c, by, 'there', note, photoRef, seen);
     this.constraints.set(c.constraintId, c);
     return constraintView(c);
+  }
+
+  /**
+   * WHAT SOMEBODY SAW LATER STANDS. A word kept on a phone with no signal can arrive after the same person has already said
+   * something newer about this hazard; the older word is then out of date and changes nothing.
+   */
+  private saidLater(c: RouteConstraint, by: string, seen: Seen): boolean {
+    const mine = (c.accounts ?? []).find((a) => a.by === by);
+    return Boolean(mine && Date.parse(mine.at) > seen.at);
   }
 
   /**
@@ -160,19 +175,21 @@ export class RouteConstraintService {
    * front of an operator. Letting the crowd delete a hazard would mean one mistaken tap, or one driver
    * who wanted a shorter route, could remove a low bridge from everybody's map.
    */
-  refute(constraintId: string, by: string, note?: string, photoRef?: string): ConstraintView {
+  refute(constraintId: string, by: string, note?: string, photoRef?: string, observedAt?: string, now: number = Date.now()): ConstraintView {
     const c = this.require(constraintId);
     if (c.status === 'cleared') return constraintView(c);
+    const seen = whenSeen(observedAt, now);
+    if (this.saidLater(c, by, seen)) return constraintView(c);
     if (!c.refutedBy.includes(by)) c.refutedBy.push(by);
     c.confirmedBy = c.confirmedBy.filter((d) => d !== by);
     // The FIRST dispute starts the clock and later ones do not restart it: a hazard nobody has looked at
     // for a fortnight must not be pushed back down the queue by a second driver reporting the same thing.
-    if (c.status !== 'disputed') c.disputedAt = new Date().toISOString();
+    if (c.status !== 'disputed') c.disputedAt = new Date(seen.at).toISOString();
     c.status = 'disputed';
     // THE REFUTER'S WORDS ARE THEIR OWN. This used to be `c.note = c.note + ' · ' + note`, which handed
     // the operator's queue a single sentence built out of both sides of the argument it existed to settle.
     // A photograph of a clear road is the strongest thing anybody can offer here, and it had nowhere to go.
-    this.account(c, by, 'gone', note, photoRef);
+    this.account(c, by, 'gone', note, photoRef, seen);
     this.constraints.set(c.constraintId, c);
     return constraintView(c);
   }
@@ -319,6 +336,7 @@ export function constraintView(c: RouteConstraint): ConstraintView {
     // one thing they must never carry is who said it.
     accounts: (c.accounts ?? []).map((a) => ({
       at: a.at,
+      ...(a.receivedAt ? { receivedAt: a.receivedAt } : {}),
       stance: a.stance,
       ...(a.note ? { note: a.note } : {}),
       ...(a.photoRef ? { photoRef: a.photoRef } : {}),

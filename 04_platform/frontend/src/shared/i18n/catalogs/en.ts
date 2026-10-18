@@ -999,6 +999,8 @@ export const en = {
   'account.settings.emailBounced.how': 'To keep the same address, enter it here, send the code, and type in the code you receive: that proves it works again. Or enter another address.',
   'account.settings.phone': 'Phone number',
   'account.settings.phoneSub': 'Move your account to a new number',
+  'common.needsSignal.signInTitle': 'Signing in needs a signal',
+  'common.needsSignal.signInDetail': 'SeeBuyGet checks who is signing in, so it waits for a signal. What was kept on this phone before still goes when there is one.',
   'account.payout.title': 'Payout number',
   'account.payout.subNone': 'Not set — nothing is paid until it is',
   'account.payout.subHeld': '{number} · paused until {when}',

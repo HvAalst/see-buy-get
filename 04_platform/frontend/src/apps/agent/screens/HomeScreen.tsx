@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { AuthImage, Button, Card, ErrorNote, GlanceNumber, Icon, Note, Pill, PlaceMap, PushPrompt, ReadAloud, Sheet, TopUpCostNote, type IconName } from '../../../shared/ui';
+import { AuthImage, Button, Card, ErrorNote, GlanceNumber, Icon, NeedsSignalNote, Note, Pill, PlaceMap, PushPrompt, ReadAloud, Sheet, TopUpCostNote, type IconName } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { fromPlaceWords, toPlaceWords } from '../../../shared/placewords';
 import { canAccept, gateNotice, homeSummary, money, papersReady, papersStep } from '../logic';
@@ -7,6 +7,7 @@ import { PhotoField } from './PhotoField';
 import type { AgentActions, AgentState, Screen } from '../useAgentApp';
 import type { GeoPoint } from '../../../shared/geo';
 import type { Weekday, WeeklyHours } from '../types';
+import { useConnectivity } from '../../../shared/connectivity';
 
 export interface HomeScreenProps {
   state: AgentState;
@@ -258,6 +259,8 @@ function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose:
   const [amount, setAmount] = useState('50');
   const [phone, setPhone] = useState('');
   const value = Number(amount);
+  // Asked of M-Pesa through SeeBuyGet: with no signal it is said here, and the button waits, rather than an error behind the sheet.
+  const { online } = useConnectivity();
   // A float is paid into in the shop's company's money: the box says which, and so does the button.
   const currency = state.agent?.currency;
   const waiting = state.funding?.status === 'awaiting' ? state.funding : null;
@@ -339,10 +342,11 @@ function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose:
         />
         <p class="hint">{t('agent.home.topUpPhoneHint')}</p>
       </div>
+      <NeedsSignalNote title={t('agent.home.topUpNeedsSignalTitle')} detail={t('agent.home.topUpNeedsSignalDetail')} />
       <Button
         chevron={false}
         busy={state.busy === 'topup'}
-        disabled={!(value > 0)}
+        disabled={!(value > 0) || !online}
         onClick={() => void actions.topUp(value, phone.trim() || undefined)}
       >
         {value > 0 ? t(phone.trim() ? 'agent.home.askAmountPush' : 'agent.home.askAmount', { amount: money(value, currency) }) : t('agent.home.addMoney')}

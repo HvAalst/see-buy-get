@@ -502,6 +502,16 @@ describe('a vehicle’s upkeep', () => {
       if (pickUp) dispatch.pickupFreight(freightId, driverDid, { confirmed: requiredLoadKeys(dispatch.requireFreightPublic(freightId)), securementPhotoId: 'med_test' });
     };
 
+    it('is dated when it happened when it was kept on a phone with no signal — and says when the office heard', () => {
+      const { truck, who } = outOnTheRoad('KVC 981T');
+      const now = Date.now();
+      const b = breakdowns.report(truck.vehicleId, who, { cause: 'tyre', note: 'Two tyres gone', lat: -1.31, lng: 36.84, observedAt: new Date(now - 2 * 3_600_000).toISOString() }, now);
+      expect(b.reportedAt).toBe(new Date(now - 2 * 3_600_000).toISOString());
+      expect(b.locatedAt).toBe(b.reportedAt);
+      expect(b.receivedAt).toBe(new Date(now).toISOString());
+      expect(broke.at(-1)?.breakdown).toMatchObject({ reportedAt: b.reportedAt });
+    });
+
     it('is reported by the driver with where the phone is: off the road at once, and the office and the shippers told — never by the plate', () => {
       const { f, truck, amos, who } = outOnTheRoad('KVC 980T');
       const aboard = anOrder(f, dayPlus(0), JENGA);

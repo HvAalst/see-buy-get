@@ -71,6 +71,13 @@ const QUEUEABLE: Array<{ method: string; test: RegExp; label: string }> = [
   { method: 'POST', test: /^\/v1\/sbg\/dispatch\/freight\/[^/]+\/temperature$/, label: 'Temperature logged' },
   // The vehicle is parked and the driver can see it. Ending twice is a no-op, so a replay costs nothing.
   { method: 'POST', test: /^\/v1\/sbg\/fleet\/drivers\/[^/]+\/end-session$/, label: 'Shift ended' },
+  // WHAT THE DRIVER SEES ON THE ROAD (the user, 2026-10-18: "queue reports, rest online"). A breakdown and a road hazard
+  // are said where the signal is worst, and both report what is in front of the driver rather than ask for a decision.
+  // Each carries the moment it was made (`observedAt`), so it is dated then, not when the signal came back. A second
+  // breakdown is refused by the server and a driver's word on a hazard is one word, so a replay costs nothing.
+  { method: 'POST', test: /^\/v1\/sbg\/fleet\/drivers\/[^/]+\/breakdown$/, label: 'Breakdown reported' },
+  { method: 'POST', test: /^\/v1\/sbg\/route-constraints$/, label: 'Road hazard reported' },
+  { method: 'POST', test: /^\/v1\/sbg\/route-constraints\/[^/]+\/(confirm|refute)$/, label: 'Road hazard answered' },
 ];
 
 /**
@@ -192,8 +199,23 @@ export interface DrainDeps {
  * and pushing later ones past a stuck earlier one would ask the server to shelve a parcel it has never
  * been told arrived. It would fail in a way nobody could read, and the queue would look like it was
  * working. Head-of-line blocking is the correct behaviour here, not a limitation.
+ *
+ * ONE RUN AT A TIME, for the page. A second call while one is running joins it rather than reading the same items and
+ * sending them again: the server's idempotency key would make the second send harmless, but every listener would be told
+ * twice that it arrived (a late take-in's label shown twice). The driver app drains by itself before starting a shift,
+ * which can meet the loop's own timed run.
  */
-export async function drain(deps: DrainDeps): Promise<{ sent: number; blocked: number }> {
+export function drain(deps: DrainDeps): Promise<{ sent: number; blocked: number }> {
+  if (draining) return draining;
+  draining = drainOnce(deps).finally(() => {
+    draining = null;
+  });
+  return draining;
+}
+
+let draining: Promise<{ sent: number; blocked: number }> | null = null;
+
+async function drainOnce(deps: DrainDeps): Promise<{ sent: number; blocked: number }> {
   const send = deps.fetch ?? fetch;
   let sent = 0;
 

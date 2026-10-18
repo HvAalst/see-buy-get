@@ -195,6 +195,8 @@ export class VehicleBreakdown {
   @ApiPropertyOptional() driverDid?: string;
   @ApiPropertyOptional() driverName?: string;
   reportedAt: string;
+  /** When it reached SeeBuyGet, where that was later than it was reported: sent from a phone with no signal. */
+  @ApiPropertyOptional() receivedAt?: string;
   @ApiPropertyOptional({ type: GeoPoint }) location?: GeoPoint;
   @ApiPropertyOptional() locatedAt?: string;
   /** Where the position came from: the phone as it was reported, or the shift's last known. */

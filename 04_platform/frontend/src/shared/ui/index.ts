@@ -20,6 +20,7 @@ export { TopBar, type TopBarProps } from './TopBar';
 export { BrandMark, type BrandMarkProps } from './BrandMark';
 export { OutboxNote } from './OutboxNote';
 export { ConnectivityNote } from './ConnectivityNote';
+export { NeedsSignalNote } from './NeedsSignalNote';
 export { BottomNav, type BottomNavProps, type NavItem } from './BottomNav';
 export { ReadAloud, speak, stopSpeaking, isSpeechSupported, type ReadAloudProps } from './ReadAloud';
 export { LanguageSwitcher } from './LanguageSwitcher';

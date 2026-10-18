@@ -37,6 +37,7 @@ export function BreakdownSheet({ open, actions, onClose }: { open: boolean; acti
   const [error, setError] = useState<SbgError | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<BreakdownView | null>(null);
+  const [queued, setQueued] = useState(false);
 
   // Where the phone is now, asked once as the sheet opens.
   useEffect(() => {
@@ -60,6 +61,7 @@ export function BreakdownSheet({ open, actions, onClose }: { open: boolean; acti
     setPhoto('');
     setError(null);
     setDone(null);
+    setQueued(false);
     onClose();
   };
   const send = async () => {
@@ -69,13 +71,22 @@ export function BreakdownSheet({ open, actions, onClose }: { open: boolean; acti
     const r = await actions.sendBreakdown({ cause, note: note.trim(), ...(photo ? { photoRef: photo } : {}), ...(where ? { lat: where.lat, lng: where.lng } : {}) });
     setBusy(false);
     if (r.error) return setError(r.error);
+    // With no signal it waits on this phone: there is nothing back yet to say who was told.
+    if (r.queued) return setQueued(true);
     setDone(r.data ?? null);
   };
   const told = done ? done.aboard.filter((l) => l.shipperTold).length : 0;
 
   return (
     <Sheet open={open} onClose={close} title={t('driver.brk.title')}>
-      {done ? (
+      {queued ? (
+        <>
+          <Note tone="warn" icon="offline" title={t('driver.brk.queuedTitle')} detail={t('driver.brk.queuedDetail')} />
+          <Button chevron={false} onClick={close}>
+            {t('driver.close')}
+          </Button>
+        </>
+      ) : done ? (
         <>
           <Note tone="warn" icon="warning" title={t('driver.brk.toldTitle')} detail={t('driver.brk.toldDetail')} />
           {told ? <p class="t-body">{t('driver.brk.shippersTold', { n: told })}</p> : null}

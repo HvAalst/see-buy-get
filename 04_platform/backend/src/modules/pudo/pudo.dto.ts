@@ -2671,6 +2671,11 @@ export class ReportConstraintDto {
    * OPERATOR later clears or keeps the hazard on.
    */
   @IsOptional() @IsString() photoRef?: string;
+  /**
+   * When the person made this report, by their phone's clock. Sent by the apps every time: a report made with no signal
+   * waits on the phone and arrives later, and is dated by this (never in the future, at most a week back).
+   */
+  @IsOptional() @IsDateString() observedAt?: string;
 }
 
 /** A later passer-by saying it is not there any more, with their own words and their own photograph. */
@@ -2678,12 +2683,22 @@ export class RefuteConstraintDto {
   @IsOptional() @IsString() @MaxLength(200) note?: string;
   /** A photo of the road now clear — the strongest thing anybody can offer for the dangerous direction. */
   @IsOptional() @IsString() photoRef?: string;
+  /**
+   * When the person made this report, by their phone's clock. Sent by the apps every time: a report made with no signal
+   * waits on the phone and arrives later, and is dated by this (never in the future, at most a week back).
+   */
+  @IsOptional() @IsDateString() observedAt?: string;
 }
 
 /** A later passer-by saying it IS still there. Same shape: agreement is evidence too. */
 export class ConfirmConstraintDto {
   @IsOptional() @IsString() @MaxLength(200) note?: string;
   @IsOptional() @IsString() photoRef?: string;
+  /**
+   * When the person made this report, by their phone's clock. Sent by the apps every time: a report made with no signal
+   * waits on the phone and arrives later, and is dated by this (never in the future, at most a week back).
+   */
+  @IsOptional() @IsDateString() observedAt?: string;
 }
 
 /**

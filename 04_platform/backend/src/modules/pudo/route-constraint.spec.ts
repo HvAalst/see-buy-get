@@ -105,6 +105,31 @@ describe('route constraints — the road as its drivers report it', () => {
     });
   });
 
+  describe('said with no signal (2026-10-18): dated when it was seen, and never over a later word', () => {
+    const T = Date.parse('2026-10-18T12:00:00Z');
+    it('dates a report kept on the phone by when the driver made it, and says when it arrived', () => {
+      const s = svc();
+      const c = s.report({ kind: 'WASHOUT', at: ON_THE_ROAD, by: 'did:driver:a', observedAt: '2026-10-18T09:30:00Z' }, T);
+      expect(c.reportedAt).toBe('2026-10-18T09:30:00.000Z');
+      expect(c.accounts?.[0]).toMatchObject({ at: '2026-10-18T09:30:00.000Z', receivedAt: '2026-10-18T12:00:00.000Z' });
+      // A clock running ahead is read as now; a fresh word is not "late".
+      const ahead = s.report({ kind: 'LOW_BRIDGE', at: { lat: ON_THE_ROAD.lat + 0.05, lng: ON_THE_ROAD.lng }, value: 4, by: 'did:driver:b', observedAt: '2026-10-18T12:30:00Z' }, T);
+      expect(ahead.reportedAt).toBe('2026-10-18T12:00:00.000Z');
+      expect(ahead.accounts?.[0].receivedAt).toBeUndefined();
+    });
+
+    it('leaves a newer word standing when an older one arrives after it', () => {
+      const s = svc();
+      const c = s.report({ kind: 'WASHOUT', at: ON_THE_ROAD, by: 'did:driver:a' }, T - 6 * 3_600_000);
+      // Driver b says "gone" with a signal at 11:00; their "still there" from 10:00, kept on the phone, arrives at 12:00.
+      s.refute(c.constraintId, 'did:driver:b', 'clear now', undefined, '2026-10-18T11:00:00Z', T - 3_600_000);
+      const after = s.confirm(c.constraintId, 'did:driver:b', 'water over the road', undefined, '2026-10-18T10:00:00Z', T);
+      expect(after.status).toBe('disputed');
+      expect(after.accounts?.filter((a) => a.stance === 'gone')).toHaveLength(1);
+      expect(after.accounts?.some((a) => a.note === 'water over the road')).toBe(false);
+    });
+  });
+
   describe('THE ASYMMETRY: a refutation disputes, and never clears', () => {
     it('a refuted constraint KEEPS WARNING — this is the whole safety argument', () => {
       // Wrongly believing a low bridge is gone kills somebody. So one driver — mistaken, or wanting a

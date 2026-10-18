@@ -15,6 +15,7 @@ import { MediaService } from './media.service';
 import { dayWords } from './upkeep-words';
 import { VehicleService } from './vehicle.service';
 import { BreakdownCause, BreakdownHandover, BreakdownLoad, BreakdownTaker, BreakdownToTakeOver, TakeOverResult, VehicleBreakdown } from './vehicle-care.types';
+import { whenSeen } from './observed-at';
 
 /** What broke, as the line every refusal, notice and screen says. */
 export const CAUSE_WORDS: Record<BreakdownCause, string> = {
@@ -120,7 +121,9 @@ export class VehicleBreakdownService {
    * from the phone now, or else the shift's last known position. Refused before anything is kept when it says nothing,
    * it is already reported broken down, a position is half a position, or a photograph is not the reporter's own.
    */
-  report(vehicleId: string, who: { by: string; byDid?: string }, input: { cause: BreakdownCause; note: string; photoRef?: string; lat?: number; lng?: number }, now: number = Date.now()): VehicleBreakdown {
+  report(vehicleId: string, who: { by: string; byDid?: string }, input: { cause: BreakdownCause; note: string; photoRef?: string; lat?: number; lng?: number; observedAt?: string }, now: number = Date.now()): VehicleBreakdown {
+    // Dated when it happened, not when the phone found a signal (observed-at.ts).
+    const seen = whenSeen(input.observedAt, now);
     const v = this.vehicles.get(vehicleId);
     if (v.status === 'RETIRED') throw new GlosError('INVALID_STATE', `${v.plate} is retired: it is not on the road`);
     const note = input.note?.trim();
@@ -134,7 +137,7 @@ export class VehicleBreakdownService {
     const driver = shift ? this.drivers.get(shift.driverDid) : undefined;
     const fromPhone = input.lat !== undefined && input.lng !== undefined;
     const location = fromPhone ? { lat: input.lat!, lng: input.lng! } : shift?.location;
-    const locatedAt = fromPhone ? new Date(now).toISOString() : shift?.lastLocatedAt;
+    const locatedAt = fromPhone ? new Date(seen.at).toISOString() : shift?.lastLocatedAt;
     const loads = shift ? this.loadsOf(v, shift.driverDid) : [];
     const breakdown: VehicleBreakdown & { photoRef?: string } = {
       breakdownId: `brk_${randomBytes(6).toString('hex')}`,
@@ -146,11 +149,12 @@ export class VehicleBreakdownService {
       ...(who.byDid ? { reportedByDid: who.byDid } : {}),
       ...(shift ? { driverDid: shift.driverDid } : {}),
       ...(driver ? { driverName: driver.displayName } : {}),
-      reportedAt: new Date(now).toISOString(),
+      reportedAt: new Date(seen.at).toISOString(),
+      ...(seen.receivedAt ? { receivedAt: seen.receivedAt } : {}),
       ...(location ? { location: { lat: location.lat, lng: location.lng }, locationFrom: fromPhone ? 'phone' : 'last_known' } : {}),
       ...(location && locatedAt ? { locatedAt } : {}),
       aboard: loads.map((l) => ({ kind: l.kind, id: l.id, label: l.label, state: l.state, ...(l.departureId ? { departureId: l.departureId } : {}), shipperTold: Boolean(l.shipperDid) })),
-      held: this.holdTodaysTrips(v, now),
+      held: this.holdTodaysTrips(v, seen.at),
       stillAboard: [],
       handovers: [],
       status: 'open',

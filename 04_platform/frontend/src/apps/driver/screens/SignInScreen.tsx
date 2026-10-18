@@ -1,7 +1,7 @@
 import { HelpLink } from '../../../shared/guide/HelpLink';
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
-import { Button, Card, Checklist, CodeBoxes, ErrorNote, Note, ReadAloud, RefusalNote } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeBoxes, ErrorNote, NeedsSignalNote, Note, ReadAloud, RefusalNote } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import { EmailStep } from '../../../shared/account/EmailStep';
@@ -125,6 +125,7 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
       <h1 class="scr__title">{step === 'pin' ? t('driver.signin.title') : step === 'email' ? t(reset ? 'account.safety.resetTitle' : 'account.safety.signupTitle') : t('driver.signin.codeTitle')}</h1>
       <p class="scr__lede">{step === 'pin' ? t('driver.signin.lede') : step === 'email' ? t(reset ? 'account.safety.resetLede' : 'account.safety.signupLede') : t('driver.signin.codeLede')}</p>
 
+      <NeedsSignalNote title={t('common.needsSignal.signInTitle')} detail={t('common.needsSignal.signInDetail')} />
       {/* The PIN was right but this phone drives for nobody: the generic "you cannot open that" would send a driver
           looking for a problem with their PIN, when the fix is the number their fleet registered. */}
       {error?.code === 'ROLE_NOT_HELD' ? (

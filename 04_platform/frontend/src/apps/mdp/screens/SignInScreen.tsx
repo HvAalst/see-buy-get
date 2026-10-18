@@ -1,7 +1,7 @@
 import { HelpLink } from '../../../shared/guide/HelpLink';
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
-import { Button, Card, Checklist, ErrorNote, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, NeedsSignalNote, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import type { MdpActions } from '../useMdpApp';
@@ -29,6 +29,7 @@ export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
       <h1 class="scr__title">{t('mdp.signin.title')}</h1>
       <p class="scr__lede">{t('mdp.signin.lede')}</p>
 
+      <NeedsSignalNote title={t('common.needsSignal.signInTitle')} detail={t('common.needsSignal.signInDetail')} />
       {error ? <ErrorNote error={error} /> : null}
 
       <Card>

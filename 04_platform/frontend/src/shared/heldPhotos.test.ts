@@ -25,8 +25,11 @@ const takeIn = (photoRef: string) =>
 describe('a take-in photo held for a signal', () => {
   beforeEach(() => localStorage.clear());
 
-  it('is held only for the take-in, under a reference the server would never accept as a photo', () => {
+  it('is held only for the acts the outbox carries, under a reference the server would never accept as a photo', () => {
     expect(mayHold('dropoff')).toBe(true);
+    // …and the photographs of the reports a driver makes with no signal: the breakdown's, the road hazard's.
+    expect(mayHold('defect')).toBe(true);
+    expect(mayHold('hazard')).toBe(true);
     expect(mayHold('avatar')).toBe(false);
     const ref = holdPhoto('dropoff', 'data:image/jpeg;base64,AAAA', 'data:image/jpeg;base64,BB')!;
     expect(isHeld(ref)).toBe(true);

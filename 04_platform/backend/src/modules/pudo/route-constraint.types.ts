@@ -106,6 +106,8 @@ export interface ConstraintAccount {
   /** A media id. Optional BY DESIGN: a driver at a washout at night who cannot safely stop must still be
    *  able to warn, and requiring a photograph would suppress reports exactly where they matter most. */
   photoRef?: string;
+  /** When it reached SeeBuyGet, where that was later than `at`: said from a phone with no signal. */
+  receivedAt?: string;
 }
 
 export interface RouteConstraint {
@@ -144,6 +146,9 @@ export interface RouteConstraint {
  */
 export class ConstraintAccountView {
   at: string;
+  /** When it reached SeeBuyGet, where that was later than it was said: from a phone with no signal. */
+  @ApiPropertyOptional()
+  receivedAt?: string;
   @ApiProperty({ enum: CONSTRAINT_STANCES })
   stance: ConstraintStance;
   @ApiPropertyOptional()

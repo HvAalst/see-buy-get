@@ -286,7 +286,10 @@ describe('a vehicle’s upkeep, over the wire', () => {
     } as never);
     dispatch.assign(load.freightId, x.did, { managerDid: x.fleetDid, name: 'Office' });
     dispatch.pickupFreight(load.freightId, x.did, { confirmed: requiredLoadKeys(dispatch.requireFreightPublic(load.freightId)), securementPhotoId: 'med_test' });
-    const broke = await http().post(`/v1/sbg/fleet/drivers/${x.did}/breakdown`).set(bearer(x.token)).send({ cause: 'engine', note: 'Head gasket' }).expect(201);
+    // Made with no signal twenty minutes ago and sent now: dated when it happened, the arrival kept beside it.
+    const seen = new Date(Date.now() - 20 * 60_000).toISOString();
+    const broke = await http().post(`/v1/sbg/fleet/drivers/${x.did}/breakdown`).set(bearer(x.token)).send({ cause: 'engine', note: 'Head gasket', observedAt: seen }).expect(201);
+    expect(broke.body).toMatchObject({ reportedAt: seen, receivedAt: expect.any(String) });
     const id = broke.body.breakdownId as string;
     // A second driver of the same fleet, out in a second truck.
     const rescuer = await aDriverIn(x.fleetDid);

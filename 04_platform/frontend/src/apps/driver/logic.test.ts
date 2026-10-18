@@ -8,6 +8,7 @@ import {
   blockerTone,
   roadBlocks,
   roadMeasure,
+  roadValue,
   roadSummary,
   roadTone,
   roadValueLabel,
@@ -522,6 +523,12 @@ describe('the road, as drivers report it', () => {
     for (const kind of ['NO_HAZMAT', 'WASHOUT', 'FERRY', 'WEIGHBRIDGE', 'CHECKPOINT']) {
       expect(roadMeasure(kind)).toBeNull();
     }
+  });
+
+  it('carries a number only for a kind that has one — never 0 for a washout', () => {
+    expect(roadValue('LOW_BRIDGE', '4.2')).toBe(4.2);
+    expect(roadValue('WEIGHT_LIMIT', '10')).toBe(10_000); // tonnes typed, kilograms sent
+    for (const kind of ['WASHOUT', 'ROAD_CLOSED', 'CHECKPOINT', 'FERRY', 'NO_HAZMAT']) expect(roadValue(kind, '')).toBeUndefined();
   });
 
   it('keeps blockers and advisories apart', () => {

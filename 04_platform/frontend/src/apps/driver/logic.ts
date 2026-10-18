@@ -645,6 +645,19 @@ export function roadMeasure(kind: string): 'height_m' | 'weight_kg' | null {
 }
 
 /**
+ * The number a report carries: metres for a height, kilograms for a limit (tonnes on the screen) — and NOTHING for a
+ * kind with nothing to measure. It once sent 0 for those (the empty box, read as a number), which the server refuses
+ * (at least 0.01): a washout, a closed road or a checkpoint could not be reported at all. Found 2026-10-18, walking a
+ * report kept on a phone with no signal.
+ */
+export function roadValue(kind: string, typed: string): number | undefined {
+  const measure = roadMeasure(kind);
+  if (measure == null) return undefined;
+  const num = Number(typed);
+  return measure === 'weight_kg' ? num * 1000 : num;
+}
+
+/**
  * Does meeting this stop a vehicle, or only cost it time?
  *
  * The distinction the whole list lives on. A ferry and a weighbridge are things a haulier wants to know

@@ -6164,14 +6164,14 @@ export class SbgController {
   @Roles('driver')
   @Post('route-constraints')
   reportConstraint(@Body() dto: ReportConstraintDto, @Actor() actor: IntrospectionResult): ConstraintView {
-    return this.constraints.report({ kind: dto.kind, at: dto.at, value: dto.value, note: dto.note, photoRef: dto.photoRef, by: this.driverOnTheRoad(actor) });
+    return this.constraints.report({ kind: dto.kind, at: dto.at, value: dto.value, note: dto.note, photoRef: dto.photoRef, by: this.driverOnTheRoad(actor), observedAt: dto.observedAt });
   }
 
   /** A later passer-by agrees it is there. One vote each, and never the original reporter's own. */
   @Roles('driver')
   @Post('route-constraints/:id/confirm')
   confirmConstraint(@Param('id') id: string, @Body() dto: ConfirmConstraintDto, @Actor() actor: IntrospectionResult): ConstraintView {
-    return this.constraints.confirm(id, this.driverOnTheRoad(actor), dto?.note, dto?.photoRef);
+    return this.constraints.confirm(id, this.driverOnTheRoad(actor), dto?.note, dto?.photoRef, dto?.observedAt);
   }
 
   /**
@@ -6185,7 +6185,7 @@ export class SbgController {
   @Roles('driver')
   @Post('route-constraints/:id/refute')
   refuteConstraint(@Param('id') id: string, @Body() dto: RefuteConstraintDto, @Actor() actor: IntrospectionResult): ConstraintView {
-    return this.constraints.refute(id, this.driverOnTheRoad(actor), dto.note, dto.photoRef);
+    return this.constraints.refute(id, this.driverOnTheRoad(actor), dto.note, dto.photoRef, dto.observedAt);
   }
 
   /**

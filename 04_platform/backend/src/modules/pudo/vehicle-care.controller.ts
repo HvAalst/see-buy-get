@@ -104,8 +104,8 @@ export class VehicleCareController {
     this.driverActs(did, actor);
     const vehicleId = this.fleet.activeForDriver(did)?.vehicleId;
     if (!vehicleId) throw new GlosError('INVALID_STATE', 'You are not on a shift: a breakdown is reported from the vehicle you are out in');
-    const { cause, note, photoRef, lat, lng } = dto;
-    return this.breakdowns.report(vehicleId, { by: this.drivers.get(did).displayName, byDid: did }, { cause, note, photoRef, lat, lng });
+    const { cause, note, photoRef, lat, lng, observedAt } = dto;
+    return this.breakdowns.report(vehicleId, { by: this.drivers.get(did).displayName, byDid: did }, { cause, note, photoRef, lat, lng, observedAt });
   }
 
   /** A breakdown the office heard of by telephone — or an owner-driver's own vehicle. */

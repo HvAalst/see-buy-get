@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import specRaw from '../../../backend/contracts/openapi.json?raw';
-import { drain, enqueue, offlineFetch, outboxCount, outboxItems, queueableLabel, queueablePatterns, retry } from './outbox';
+import { drain, enqueue, offlineFetch, onOutboxSent, outboxCount, outboxItems, queueableLabel, queueablePatterns, retry } from './outbox';
 
 /**
  * The outbox — the handover that happens whether or not there is a signal.
@@ -39,6 +39,16 @@ describe('the outbox', () => {
       expect(queueableLabel('POST', '/v1/sbg/parcels/PUD-1/intake')).toBe('Parcel taken in');
       expect(queueableLabel('POST', '/v1/sbg/parcels/handover')).toBe('Handed to the bus');
       expect(queueableLabel('POST', '/v1/sbg/parcels/PUD-1/shelve')).toBe('Parcel shelved');
+    });
+
+    it('accepts what a driver sees on the road: a breakdown, a road hazard, a word on one (2026-10-18)', () => {
+      expect(queueableLabel('POST', '/v1/sbg/fleet/drivers/did:glos:d1/breakdown')).toBe('Breakdown reported');
+      expect(queueableLabel('POST', '/v1/sbg/route-constraints')).toBe('Road hazard reported');
+      expect(queueableLabel('POST', '/v1/sbg/route-constraints/rc_1/confirm')).toBe('Road hazard answered');
+      expect(queueableLabel('POST', '/v1/sbg/route-constraints/rc_1/refute')).toBe('Road hazard answered');
+      // An operator clearing one is a decision, and the office's breakdown typed from a phone call is a desk's: neither waits.
+      expect(queueableLabel('POST', '/v1/sbg/route-constraints/rc_1/clear')).toBeNull();
+      expect(queueableLabel('POST', '/v1/sbg/vehicles/veh_1/breakdowns')).toBeNull();
     });
 
     it('refuses everything whose answer the person is WAITING to read', () => {
@@ -158,6 +168,21 @@ describe('the outbox', () => {
       expect(await drain(deps(ok))).toEqual({ sent: 2, blocked: 0 });
       expect(order).toEqual([`${ORIGIN}/v1/sbg/parcels/A/intake`, `${ORIGIN}/v1/sbg/parcels/B/intake`]);
       expect(outboxCount()).toBe(0);
+    });
+
+    it('runs once at a time: a second drain joins the first, so each item is sent — and told — once', async () => {
+      queue('a', '/v1/sbg/parcels/A/intake');
+      let sends = 0;
+      const told: string[] = [];
+      const stop = onOutboxSent((item) => told.push(item.id));
+      const slow = (async () => {
+        sends += 1;
+        await new Promise((r) => setTimeout(r, 20));
+        return new Response('{}', { status: 200 });
+      }) as unknown as typeof fetch;
+      const [one, two] = await Promise.all([drain(deps(slow)), drain(deps(slow))]);
+      stop();
+      expect([sends, told, one, two]).toEqual([1, ['a'], { sent: 1, blocked: 0 }, { sent: 1, blocked: 0 }]);
     });
 
     it('replays under the SAME name it was first sent with', async () => {

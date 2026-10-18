@@ -17,7 +17,7 @@ const STORE_KEY = 'sbg.held-photos.v1';
 export const HELD_PREFIX = 'local:';
 
 /** The photo kinds that may wait: the ones whose act the outbox carries. */
-export const HELD_KINDS = ['dropoff'] as const;
+export const HELD_KINDS = ['dropoff', 'defect', 'hazard'] as const;
 export type HeldKind = (typeof HELD_KINDS)[number];
 
 export interface HeldPhoto {
