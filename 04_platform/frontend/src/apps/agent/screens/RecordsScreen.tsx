@@ -8,6 +8,8 @@ import type { AgentLedgerRow, AgentParcelRow, ParcelStatus } from '../types';
 import { ArchiveSection } from '../../../shared/archive/ArchiveSection';
 import type { ArchiveApiState } from '../../../shared/archive/useArchive';
 import type { DestinationApiState } from '../../../shared/archive/useDestination';
+import { TaxInvoicesCard } from '../../../shared/TaxInvoicesCard';
+import type { FiscalApi } from '../../../lib/sbg/personas/fiscal';
 
 export interface RecordsScreenProps {
   state: AgentState;
@@ -19,6 +21,8 @@ export interface RecordsScreenOuterProps extends RecordsScreenProps {
   archive: ArchiveApiState;
   /** Where those notes go besides here. */
   destination: DestinationApiState;
+  /** Its tax invoices (KRA eTIMS, Kenya only): none anywhere else, and then nothing is shown. */
+  fiscal?: FiscalApi | null;
 }
 
 type View = 'parcels' | 'earnings' | 'notes';
@@ -28,7 +32,7 @@ type View = 'parcels' | 'earnings' | 'notes';
  * it earned — each searchable / filterable / paged / exportable, the persona-appropriate mirror of the
  * vendor's registers (an agent looks things up and exports; the vendor's bulk multi-select is not surfaced).
  */
-export function RecordsScreen({ state, actions, archive, destination }: RecordsScreenOuterProps) {
+export function RecordsScreen({ state, actions, archive, destination, fiscal }: RecordsScreenOuterProps) {
   const t = useT();
   const [view, setView] = useState<View>('parcels');
 
@@ -55,6 +59,8 @@ export function RecordsScreen({ state, actions, archive, destination }: RecordsS
       </div>
 
       {view === 'notes' ? <ArchiveSection archive={archive} destination={destination} /> : view === 'parcels' ? <ParcelHistory state={state} actions={actions} /> : <Earnings state={state} actions={actions} />}
+      {/* What the shop bought from the network, as KRA has it: what it claims its VAT back with. */}
+      {view === 'earnings' && fiscal ? <TaxInvoicesCard load={fiscal.myFiscalInvoices} page={fiscal.fiscalInvoicePage} /> : null}
     </div>
   );
 }

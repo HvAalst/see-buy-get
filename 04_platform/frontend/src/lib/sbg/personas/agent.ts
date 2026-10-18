@@ -1,5 +1,6 @@
 import type { SbgClient } from '../client';
 import { createMediaApi } from './media';
+import { createFiscalApi } from './fiscal';
 
 /** The agent parcel-history register query (all optional). */
 export interface AgentParcelsQuery {
@@ -38,6 +39,8 @@ export function createAgentApi(sbg: SbgClient) {
   return {
     // S26: real image upload/fetch (drop-off proof, delivered proof, dispute evidence).
     ...createMediaApi(sbg),
+    // Its tax invoices (KRA eTIMS, Kenya only).
+    ...createFiscalApi(sbg),
 
     /** The shop's own record (status, open state, price, zone, balance, rating). */
     me: (did: string) => sbg.request((c) => c.GET('/v1/sbg/agents/{did}', { params: { path: { did } } })),

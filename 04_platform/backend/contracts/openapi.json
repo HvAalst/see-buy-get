@@ -22448,6 +22448,208 @@
         }
       }
     },
+    "/v1/sbg/fiscal-invoices": {
+      "get": {
+        "operationId": "FiscalInvoice.list",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 40,
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "waiting",
+                "recorded",
+                "refused",
+                "needs_check",
+                "not_sendable"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 200,
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FiscalInvoiceList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fiscal-invoices/mine": {
+      "get": {
+        "operationId": "FiscalInvoice.mine",
+        "summary": "",
+        "description": "A shop's or a store's own tax invoices, the newest first: what it claims its VAT back with.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FiscalInvoice"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fiscal-invoices/{invoiceId}": {
+      "get": {
+        "operationId": "FiscalInvoice.one",
+        "parameters": [
+          {
+            "name": "invoiceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FiscalInvoice"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fiscal-invoices/{invoiceId}/invoice.html": {
+      "get": {
+        "operationId": "FiscalInvoice.page",
+        "summary": "",
+        "description": "The invoice as a page to print or keep, once KRA has signed it: the buyer's first opening is the original, every\nother a copy (KRA's rules for a till).",
+        "parameters": [
+          {
+            "name": "invoiceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/parcels/{id}/fiscal-invoices": {
+      "get": {
+        "operationId": "FiscalInvoice.forParcel",
+        "summary": "",
+        "description": "The invoices for one parcel or load that the caller may read: none, rather than a refusal that says it exists.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FiscalInvoice"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fiscal-invoices/{invoiceId}/retry": {
+      "post": {
+        "operationId": "FiscalInvoice.retry",
+        "summary": "",
+        "description": "Send one again — one KRA refused, once what it refused is fixed; then the ones held behind it go too. The company's act.",
+        "parameters": [
+          {
+            "name": "invoiceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FiscalInvoice"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/payout-number": {
       "get": {
         "operationId": "PayoutNumber.mine",
@@ -47321,6 +47523,289 @@
         },
         "required": [
           "store"
+        ]
+      },
+      "FiscalBuyer": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "shop",
+              "store",
+              "person"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "description": "The shop's DID, the store's vendor id, or the person's DID: who may read it."
+          },
+          "pin": {
+            "type": "string",
+            "description": "Their KRA PIN, where we hold one: what lets them claim the VAT back."
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "name"
+        ]
+      },
+      "FiscalLine": {
+        "type": "object",
+        "properties": {
+          "band": {
+            "type": "string",
+            "description": "Absent where the rate charged has no band in eTIMS: then the invoice is not sendable, and says why.",
+            "enum": [
+              "A",
+              "B",
+              "C",
+              "D",
+              "E"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "net": {
+            "type": "number",
+            "description": "The price without the tax, the tax, and the two together."
+          },
+          "tax": {
+            "type": "number"
+          },
+          "gross": {
+            "type": "number"
+          },
+          "ratePct": {
+            "type": "number",
+            "description": "The rate, as a percentage (16 for 16%)."
+          }
+        },
+        "required": [
+          "description",
+          "net",
+          "tax",
+          "gross",
+          "ratePct"
+        ]
+      },
+      "EtimsReceipt": {
+        "type": "object",
+        "properties": {
+          "tin": {
+            "type": "string",
+            "description": "The company's KRA PIN and branch it was recorded under, and on which of KRA's systems — what the QR code checks it with."
+          },
+          "bhfId": {
+            "type": "string"
+          },
+          "env": {
+            "type": "string",
+            "enum": [
+              "sandbox",
+              "production"
+            ],
+            "description": "KRA’s test system, or KRA itself."
+          },
+          "sandbox": {
+            "type": "boolean",
+            "description": "Answered by the stand-in on a laptop: nothing was sent to KRA."
+          },
+          "curRcptNo": {
+            "type": "number"
+          },
+          "totRcptNo": {
+            "type": "number"
+          },
+          "intrlData": {
+            "type": "string"
+          },
+          "rcptSign": {
+            "type": "string"
+          },
+          "sdcDateTime": {
+            "type": "string",
+            "description": "KRA's date and time of the record, yyyyMMddhhmmss."
+          },
+          "sdcId": {
+            "type": "string"
+          },
+          "mrcNo": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "curRcptNo",
+          "totRcptNo",
+          "intrlData",
+          "rcptSign",
+          "sdcDateTime",
+          "sdcId",
+          "mrcNo"
+        ]
+      },
+      "EtimsStatus": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "waiting",
+              "recorded",
+              "refused",
+              "needs_check",
+              "not_sendable"
+            ]
+          },
+          "lastTriedAt": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string",
+            "description": "Why it is not recorded: KRA’s own words, or why it cannot be sent."
+          },
+          "receipt": {
+            "$ref": "#/components/schemas/EtimsReceipt"
+          },
+          "tries": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "state",
+          "tries"
+        ]
+      },
+      "FiscalInvoice": {
+        "type": "object",
+        "properties": {
+          "sellerPin": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "sale",
+              "credit"
+            ]
+          },
+          "originalNumber": {
+            "type": "number",
+            "description": "A credit note's: the number of the sale it gives back."
+          },
+          "paidBy": {
+            "type": "string",
+            "enum": [
+              "cash",
+              "prepaid"
+            ]
+          },
+          "invoiceId": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "seller": {
+            "type": "string",
+            "description": "The company's own name and its KRA PIN, as they were when the invoice was made."
+          },
+          "country": {
+            "type": "string"
+          },
+          "number": {
+            "type": "number",
+            "description": "The company's own number for it: one unbroken series per company, sales and credit notes together. 0 for one that\ncannot be sent (a rate eTIMS has no band for): a number given to it would be a gap in what KRA receives."
+          },
+          "entryId": {
+            "type": "string",
+            "description": "The books entry it was made from, and what it was for: a parcel, a load, a top-up."
+          },
+          "ref": {
+            "type": "string"
+          },
+          "buyer": {
+            "$ref": "#/components/schemas/FiscalBuyer"
+          },
+          "line": {
+            "$ref": "#/components/schemas/FiscalLine"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "etims": {
+            "$ref": "#/components/schemas/EtimsStatus"
+          }
+        },
+        "required": [
+          "kind",
+          "paidBy",
+          "invoiceId",
+          "entityId",
+          "seller",
+          "country",
+          "number",
+          "entryId",
+          "buyer",
+          "line",
+          "currency",
+          "at",
+          "etims"
+        ]
+      },
+      "FiscalInvoiceList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FiscalInvoice"
+            }
+          },
+          "counts": {
+            "type": "object",
+            "description": "How many in each state."
+          },
+          "rail": {
+            "type": "string",
+            "enum": [
+              "kra",
+              "stand_in",
+              "not_set_up"
+            ],
+            "description": "Whether invoices go to KRA, to the laptop stand-in, or wait."
+          },
+          "env": {
+            "type": "string",
+            "enum": [
+              "sandbox",
+              "production"
+            ],
+            "description": "Where they go to KRA: its test system, or KRA itself."
+          },
+          "way": {
+            "type": "string",
+            "enum": [
+              "etims"
+            ],
+            "description": "How the company asked about tells its tax authority of a sale: eTIMS for Kenya’s, absent for every other."
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "counts",
+          "rail",
+          "total"
         ]
       },
       "PayoutNumberView": {

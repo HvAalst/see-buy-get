@@ -32,6 +32,13 @@ export function createOperatorApi(sbg: SbgClient) {
     evidence: () => sbg.request((c) => c.GET('/v1/sbg/evidence' as never, {} as never) as never),
     /** The pilot, week by week: the week so far, every frozen week, and the compendium's targets. */
     pilot: () => sbg.request((c) => c.GET('/v1/sbg/pilot' as never, {} as never) as never),
+    /** A company's tax invoices (KRA eTIMS, Kenya only): the newest first, in one state or all, and where they go. */
+    fiscalInvoices: (entityId: string, state?: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/fiscal-invoices' as never, { params: { query: { entityId, limit: 50, ...(state ? { state } : {}) } } } as never) as never),
+    /** One as a page to print: KRA's block and QR, marked COPY — staff never hold the buyer's original. */
+    fiscalInvoicePage: (invoiceId: string) => sbg.request((c) => c.GET(`/v1/sbg/fiscal-invoices/${encodeURIComponent(invoiceId)}/invoice.html` as never, { parseAs: 'text' } as never) as never),
+    /** Send one again: refused by KRA (once what it refused is fixed), or one KRA said it already held. */
+    retryFiscalInvoice: (invoiceId: string) => sbg.request((c) => c.POST(`/v1/sbg/fiscal-invoices/${encodeURIComponent(invoiceId)}/retry` as never, {} as never) as never),
     /** Parcels declared lost, and those found again in the last thirty days. */
     lostParcels: () => sbg.request((c) => c.GET('/v1/sbg/lost-parcels' as never, {} as never) as never),
     /** Declare one lost after a search — refused before a week without a scan — or mark it found. */

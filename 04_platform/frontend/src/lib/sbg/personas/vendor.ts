@@ -1,4 +1,5 @@
 import type { SbgClient } from '../client';
+import { createFiscalApi } from './fiscal';
 
 /**
  * A parcel actually measured — three sides in centimetres and a weight in kilos.
@@ -41,6 +42,8 @@ export interface LedgerQuery {
  */
 export function createVendorApi(sbg: SbgClient) {
   return {
+    // Its tax invoices (KRA eTIMS, Kenya only).
+    ...createFiscalApi(sbg),
     /** The store's public record (never re-exposes the secret). */
     me: (vendorId: string) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}', { params: { path: { id: vendorId } } })),
 

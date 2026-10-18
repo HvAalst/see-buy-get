@@ -132,7 +132,7 @@ function ScreenRouter({ screen, state, actions, archive, destination, client }: 
     case 'mint':
       return <MintScreen state={state} actions={actions} />;
     case 'books':
-      return <BooksScreen state={state} actions={actions} />;
+      return <BooksScreen state={state} actions={actions} client={client} />;
     case 'dock':
       return <DockScreen state={state} actions={actions} />;
     case 'store':

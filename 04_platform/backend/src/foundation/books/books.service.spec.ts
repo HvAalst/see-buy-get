@@ -111,6 +111,21 @@ describe('books (double entry)', () => {
     expect(books.journal({ entityId: KE })).toHaveLength(3);
   });
 
+  it('tells a listener of each entry once written — and one that throws neither refuses nor undoes it', () => {
+    const told: string[] = [];
+    const stop = books.onPosted((e) => told.push(e.entryId));
+    books.onPosted(() => {
+      throw new Error('a listener broke');
+    });
+    const entry = books.post({ entityId: KE, kind: 'shipping', lines: [{ code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: 'did:agent:1', amount: 10 }, { code: ACCOUNT_CODES.REVENUE, amount: -10 }] });
+    expect(told).toEqual([entry.entryId]);
+    expect(books.entry(entry.entryId)).toBeDefined();
+    expect(books.accountById(`${KE}:revenue:KES`)).toMatchObject({ code: ACCOUNT_CODES.REVENUE });
+    stop();
+    books.post({ entityId: KE, kind: 'shipping', lines: [{ code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: 'did:agent:1', amount: 10 }, { code: ACCOUNT_CODES.REVENUE, amount: -10 }] });
+    expect(told).toHaveLength(1);
+  });
+
   it('reads coverage as a human would: money held against money owed', () => {
     books.post({ entityId: KE, kind: 'top-up', lines: [{ code: ACCOUNT_CODES.CASH_CUSTODY, amount: 985 }, { code: ACCOUNT_CODES.EXPENSE_PAYMENT_FEES, amount: 15 }, { code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: 'did:agent:1', amount: -1000 }] });
 

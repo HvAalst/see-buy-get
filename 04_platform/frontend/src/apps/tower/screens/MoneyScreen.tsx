@@ -5,6 +5,7 @@ import { EntityPicker } from './EntityPicker';
 import { amount, money } from '../queues';
 import { FUNDING_ACTIONS, PAYOUT_ACTIONS, fundingLine, fundingTone, needsReceipt, payoutHow, payoutTone, payoutWho, waitsForRail, type FundingAction, type FundingRow, type UnmatchedRow } from '../settlement';
 import { ConsoleDetail } from '../ConsoleDetail';
+import { TaxInvoicesPanel } from './TaxInvoicesPanel';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
 /**
@@ -205,6 +206,9 @@ export function MoneyScreen({ state, actions }: { state: TowerState; actions: To
           believed at all. Placed after the payouts because a company reads "can I pay everybody" first
           and "who still owes us a top-up" second. */}
       <MoneyIn state={state} actions={actions} />
+
+      {/* Its tax invoices, where its country's tax authority keeps them: Kenya's eTIMS, and nowhere else. */}
+      <TaxInvoicesPanel state={state} actions={actions} />
 
       {/* The network's own ledger. Operator-only, and network-wide rather than per company — which is
           why the float is stated per currency: two sisters settle in different money, and a total across

@@ -2,7 +2,9 @@ import type { ChatThread } from '../../../shared/conversation/logic';
 import { ConversationSheet } from '../../../shared/conversation/Conversations';
 import { narrow, type SbgClient } from '../../../lib/sbg';
 import { DamageReportCard } from '../../../shared/damage/DamageReportCard';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
+import { createFiscalApi } from '../../../lib/sbg/personas/fiscal';
+import { TaxInvoicesCard } from '../../../shared/TaxInvoicesCard';
 import { errorSentence, Button, Card, Checklist, CodeCard, ErrorNote, Icon, Note, Pill, PushPrompt, ReadAloud, Sheet } from '../../../shared/ui';
 import { formatMoney, useT } from '../../../shared/i18n';
 import { PhotoField } from './PhotoField';
@@ -162,6 +164,7 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
 
   // S23: the receiver's delivered-state actions live on a Delivered parcel that is theirs.
   const canAct = parcel.relation === 'received' && parcel.status === 'Delivered';
+  const fiscal = useMemo(() => (client ? createFiscalApi(client) : null), [client]);
   // Local, uncontrolled-by-the-app text. The name of somebody you trust is not application state, and
   // routing every keystroke through the reducer is how this app has re-rendered a whole screen per letter.
   const [proxyName, setProxyName] = useState('');
@@ -369,6 +372,10 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
       ) : parcel.lost?.foundAt ? (
         <Note tone="info" icon="check" title={t('send.parcels.foundTitle')} detail={t('send.parcels.foundDetail', { note: parcel.lost.foundNote ?? '', when: new Date(parcel.lost.foundAt).toLocaleDateString() })} />
       ) : null}
+
+      {/* What the sender paid, as KRA has it: the tax invoice for their own send (Kenya only — none anywhere else, and
+          then nothing shows). Keyed by the parcel, so opening another parcel reads its own. */}
+      {fiscal && parcel.relation === 'sent' ? <TaxInvoicesCard key={parcel.parcelId} title={t('fiscal.title')} load={() => fiscal.parcelFiscalInvoices(parcel.parcelId)} page={fiscal.fiscalInvoicePage} /> : null}
 
       {/* HOW IT ENDED — for the receiver who reported it and for the sender who paid. The decision, the reason as
           it was written, and where an award went. Until this the answer was recorded and shown to neither. */}

@@ -11,6 +11,7 @@ export const MERCHANT_TAGS = ['WELL_PACKED', 'AS_DESCRIBED', 'SHIPPED_FAST', 'PO
 export type MerchantTag = (typeof MERCHANT_TAGS)[number];
 export const POSITIVE_TAGS: ReadonlySet<string> = new Set(['WELL_PACKED', 'AS_DESCRIBED', 'SHIPPED_FAST']);
 import { createMediaApi } from './media';
+import { createFiscalApi } from './fiscal';
 
 /** The person-facing roles a consumer may hold and switch into (mirrors backend PersonRole). */
 export type PersonRole = 'consumer' | 'driver' | 'agent' | 'mdp' | 'fleet_manager' | 'vendor';
@@ -27,6 +28,8 @@ export function createConsumerApi(sbg: SbgClient) {
   return {
     // S26: real image upload/fetch (the receiver's own PoD + dispute evidence).
     ...createMediaApi(sbg),
+    // The tax invoice for a parcel they sent themselves (KRA eTIMS, Kenya only).
+    ...createFiscalApi(sbg),
 
     /** The signed-in person + every role they hold (drives the role switcher). */
     me: () => sbg.request((c) => c.GET('/v1/sbg/identity/me')),

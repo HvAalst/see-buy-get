@@ -916,6 +916,12 @@ export class ParcelService implements OnApplicationBootstrap {
     return this.receiverParcel(id, readerOf(reader));
   }
 
+  /** Whether this reader sent it: what lets a person read the tax invoice for their own send. */
+  sentBy(id: string, reader: Reader | string): boolean {
+    const p = this.parcels.get(id);
+    return Boolean(p) && isFor(this.senderOf(p!), readerOf(reader));
+  }
+
   /** The parcel a RECEIVER may act on (PoD / dispute) — receiver-scoped, or 404 (existence not confirmed). */
   private receiverParcel(id: string, who: Reader): Parcel {
     const p = this.parcels.get(id);

@@ -1540,6 +1540,25 @@ export const en = {
   'archive.filterFrom': 'From',
   'archive.filterTo': 'To',
   'archive.applyFilters': 'Show them',
+
+  // Tax invoices (KRA eTIMS, Kenya only): the same words for the company in the console and each buyer in their app.
+  'fiscal.title': 'Tax invoice',
+  'fiscal.mine': 'Tax invoices',
+  'fiscal.invoiceNo': 'Tax invoice no. {number}',
+  'fiscal.creditNo': 'Credit note no. {number}',
+  'fiscal.givesBack': 'gives back no. {number}',
+  'fiscal.state.waiting': 'Waiting to be recorded with KRA',
+  'fiscal.state.recorded': 'Recorded with KRA',
+  'fiscal.state.refused': 'KRA refused it',
+  'fiscal.state.needs_check': 'To be checked with KRA',
+  'fiscal.state.not_sendable': 'Not sent to KRA',
+  'fiscal.sandbox': 'SANDBOX: answered by a stand-in on this laptop, not by KRA',
+  'fiscal.standIn': 'Stand-in, not KRA',
+  'fiscal.showAll': 'Show all {n}',
+  'fiscal.print': 'Print',
+  'fiscal.notYet': 'It can be printed once KRA has recorded it.',
+  'fiscal.original': 'The first time you open it is the original. Every time after, it is marked COPY.',
+  'fiscal.gone': 'The invoice could not be opened. Try again.',
 };
 
 export type Messages = typeof en;

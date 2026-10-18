@@ -1,6 +1,7 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { ConnectivityNote, BottomNav, Button, Checklist, FeedbackFlash, Icon, NotificationBell, OutboxNote, Pill, Sheet, TopBar, type NavItem } from '../../shared/ui';
-import { useState } from 'preact/hooks';
+import { useMemo, useState } from 'preact/hooks';
+import { createFiscalApi, type FiscalApi } from '../../lib/sbg/personas/fiscal';
 import { AccountMenu } from '../../shared/account/AccountMenu';
 import { ChangePasswordSheet } from '../../shared/account/ChangePasswordSheet';
 import { agentConfig } from './api';
@@ -42,6 +43,8 @@ export function App() {
   // year of consignment notes to serve the person in front of it.
   const archive = useArchive(sbg, state.phase === 'ready' && state.screen === 'records');
   const destination = useDestination(sbg, state.phase === 'ready' && state.screen === 'records');
+  // The shop's tax invoices (KRA eTIMS, Kenya only), under Earnings.
+  const fiscal = useMemo(() => (sbg ? createFiscalApi(sbg) : null), [sbg]);
   // A shop signs in with an email and a password, not a PIN — so the menu offers THAT credential, and
   // the sheet lives here beside the row that opens it rather than at the foot of one screen.
   const [passwordOpen, setPasswordOpen] = useState(false);
@@ -112,7 +115,7 @@ export function App() {
       <main class="app__scroll">
         <ConnectivityNote stale={state.stale} />
         <OutboxNote />
-        <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} destination={destination} />
+        <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} destination={destination} fiscal={fiscal} />
       </main>
 
       <BottomNav<Tab> items={tabs} active={tab} onSelect={(key) => actions.go(key as Screen)} labels={false} />
@@ -129,7 +132,7 @@ export function App() {
   );
 }
 
-function ScreenRouter({ screen, state, actions, archive, destination }: { screen: Screen; state: AgentState; actions: AgentActions; archive: ArchiveApiState; destination: DestinationApiState }) {
+function ScreenRouter({ screen, state, actions, archive, destination, fiscal }: { screen: Screen; state: AgentState; actions: AgentActions; archive: ArchiveApiState; destination: DestinationApiState; fiscal: FiscalApi | null }) {
   // A notification or an old link can point one of the shop's people at an owner's screen: the counter is shown instead.
   if (state.staff && ownerOnlyScreen(screen)) return <HomeScreen state={state} actions={actions} />;
   switch (screen) {
@@ -153,7 +156,7 @@ function ScreenRouter({ screen, state, actions, archive, destination }: { screen
     case 'consignments':
       return <ConsignmentsScreen state={state} actions={actions} />;
     case 'records':
-      return <RecordsScreen state={state} actions={actions} archive={archive} destination={destination} />;
+      return <RecordsScreen state={state} actions={actions} archive={archive} destination={destination} fiscal={fiscal} />;
     case 'shelf':
       return <ShelfScreen state={state} actions={actions} />;
     case 'freight':

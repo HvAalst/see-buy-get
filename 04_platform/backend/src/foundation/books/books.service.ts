@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { GlosError } from '../http/glos-error';
 import { PersistentMap } from '../store/persistent-map';
@@ -41,8 +41,23 @@ export class BooksService {
   // Durable: these are the books. Losing them on restart would be losing the money.
   private readonly accounts = new PersistentMap<string, Account>('books-accounts');
   private readonly entries = new PersistentMap<string, JournalEntry>('books-entries');
+  private readonly listeners = new Set<(entry: JournalEntry) => void>();
 
   constructor(private readonly entities: EntityService) {}
+
+  /**
+   * Told of every entry once it is written — what a tax invoice is made from, so no path that charges can forget one.
+   * A listener cannot undo or refuse the entry: the money moved, and what it throws is logged, never passed up.
+   */
+  onPosted(listener: (entry: JournalEntry) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  /** One account, by its id — what an entry's line points at. */
+  accountById(accountId: string): Account | undefined {
+    return this.accounts.get(accountId);
+  }
 
   /** The id an account is filed under: entity, code, currency, and the counterparty where one applies. */
   accountIdFor(entityId: string, code: AccountCode, currency: string, counterparty?: string): string {
@@ -102,6 +117,13 @@ export class BooksService {
       at: new Date().toISOString(),
     };
     this.entries.set(entry.entryId, entry);
+    for (const listener of this.listeners) {
+      try {
+        listener(entry);
+      } catch (err) {
+        new Logger(BooksService.name).error(`A listener failed on entry ${entry.entryId} (${entry.kind}): ${(err as Error).message}`);
+      }
+    }
     return entry;
   }
 

@@ -1,4 +1,7 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
+import type { SbgClient } from '../../../lib/sbg';
+import { createFiscalApi } from '../../../lib/sbg/personas/fiscal';
+import { TaxInvoicesCard } from '../../../shared/TaxInvoicesCard';
 import { Button, Card, Checkbox, Chip, ErrorNote, GlanceNumber, Icon, Pager, ReadAloud, SearchInput, SelectionBar, Sheet } from '../../../shared/ui';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { triggerDownload } from '../../../shared/download';
@@ -11,6 +14,8 @@ import type { LedgerSummary, SettlementRow } from '../types';
 export interface BooksScreenProps {
   state: VendorState;
   actions: VendorActions;
+  /** The signed-in client: the store’s tax invoices are read with it. */
+  client?: SbgClient | null;
 }
 
 const TYPE_OPTIONS: Array<'TOP_UP' | 'BILLING' | 'REBATE'> = ['TOP_UP', 'BILLING', 'REBATE'];
@@ -27,8 +32,10 @@ const LEDGER_SORT_OPTIONS: Array<{ value: LedgerQuery['sort']; labelKey: Message
  * and exportable, exactly like the shipment register. The balance is always the whole store; the in/out/net
  * follow the filter.
  */
-export function BooksScreen({ state, actions }: BooksScreenProps) {
+export function BooksScreen({ state, actions, client }: BooksScreenProps) {
   const t = useT();
+  // What the store bought from the network, as KRA has it (eTIMS, Kenya only): what it claims its VAT back with.
+  const fiscal = useMemo(() => (client ? createFiscalApi(client) : null), [client]);
   const [filterOpen, setFilterOpen] = useState(false);
   const [searchText, setSearchText] = useState(state.ledgerQuery.q);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
@@ -159,6 +166,8 @@ export function BooksScreen({ state, actions }: BooksScreenProps) {
           {t('vendor.export')}
         </Button>
       </SelectionBar>
+
+      {fiscal ? <TaxInvoicesCard load={fiscal.myFiscalInvoices} page={fiscal.fiscalInvoicePage} /> : null}
 
       <LedgerFilterSheet
         open={filterOpen}
