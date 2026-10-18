@@ -6716,6 +6716,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayoutStaffDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": ""
@@ -6727,7 +6737,7 @@
       "post": {
         "operationId": "Sbg.submitPayout",
         "summary": "",
-        "description": "Hand a raised payout to the rail. Still not a payment — an attempt, with a reference.",
+        "description": "Hand a raised payout to the rail. Still not a payment — an attempt, with a reference. Approved by a different member\nof staff from the one who raised it.",
         "parameters": [
           {
             "name": "payoutId",
@@ -6738,6 +6748,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayoutStaffDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "",
@@ -31751,6 +31771,15 @@
           "weightKg"
         ]
       },
+      "PayoutStaffDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "maxLength": 80
+          }
+        }
+      },
       "Payout": {
         "type": "object",
         "properties": {
@@ -31780,6 +31809,32 @@
           },
           "requestedAt": {
             "type": "string"
+          },
+          "requestedBy": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "required": true,
+                "type": "string"
+              },
+              "key": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "approvedBy": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "required": true,
+                "type": "string"
+              },
+              "key": {
+                "required": false,
+                "type": "string"
+              }
+            }
           },
           "submittedAt": {
             "type": "string"
@@ -31817,7 +31872,9 @@
           "currency",
           "status",
           "day",
-          "requestedAt"
+          "requestedAt",
+          "requestedBy",
+          "approvedBy"
         ]
       },
       "PayoutSettleDto": {

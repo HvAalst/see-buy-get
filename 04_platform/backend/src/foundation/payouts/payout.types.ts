@@ -41,6 +41,9 @@ export class Payout {
    */
   day: string;
   requestedAt: string;
+  /** Who raised it, and who approved it to the rail: never the same person (the user, 2026-10-18). */
+  requestedBy?: { name: string; key?: string };
+  approvedBy?: { name: string; key?: string };
   submittedAt?: string;
   settledAt?: string;
   failedAt?: string;

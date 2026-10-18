@@ -3,7 +3,7 @@ import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { EntityPicker } from './EntityPicker';
 import { amount, money } from '../queues';
-import { FUNDING_ACTIONS, PAYOUT_ACTIONS, fundingLine, fundingTone, payoutTone, type FundingAction, type FundingRow, type UnmatchedRow } from '../settlement';
+import { FUNDING_ACTIONS, PAYOUT_ACTIONS, fundingLine, fundingTone, payoutTone, payoutWho, type FundingAction, type FundingRow, type UnmatchedRow } from '../settlement';
 import { ConsoleDetail } from '../ConsoleDetail';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
@@ -126,6 +126,7 @@ export function MoneyScreen({ state, actions }: { state: TowerState; actions: To
                   <td>
                     <span class="ctbl__lbl">{t('tower.money.col.state')}</span>
                     <span class={`ctag ctag--${payoutTone(row.status)}`}>{t(`tower.money.state.${row.status}` as never)}</span>
+                    {payoutWho(row, t) ? <span class="ctbl__sub" style="display:block">{payoutWho(row, t)}</span> : null}
                   </td>
                   <td class="ctbl__mono">
                     <span class="ctbl__lbl">{t('tower.money.col.ref')}</span>

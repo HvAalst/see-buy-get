@@ -5,6 +5,7 @@ import { PersistentMap } from '../store/persistent-map';
 import { BooksService } from '../books/books.service';
 import { ACCOUNT_CODES } from '../books/books.types';
 import { EntityService } from '../entity/entity.service';
+import { sameSigner, type Signer } from '../entity/same-person';
 import { IN_FLIGHT, PAYOUT_RAIL, Payout, PayoutRail, PayoutStatus } from './payout.types';
 
 /**
@@ -65,7 +66,7 @@ export class PayoutService {
    * It raises requests; it does not pay. `submit` hands them to the rail and the rail's answer settles
    * them, which is the only order in which the books can stay honest.
    */
-  runFor(entityId: string, now: number = Date.now()): { day: string; raised: Payout[]; skipped: { payeeDid: string; reason: string }[] } {
+  runFor(entityId: string, now: number = Date.now(), by?: Signer): { day: string; raised: Payout[]; skipped: { payeeDid: string; reason: string }[] } {
     const entity = this.entities.get(entityId);
     const currency = entity.currency ?? '';
     const day = dayOf(now);
@@ -108,6 +109,7 @@ export class PayoutService {
         status: 'requested',
         day,
         requestedAt: new Date(now).toISOString(),
+        ...(by ? { requestedBy: { name: by.name, ...(by.key ? { key: by.key } : {}) } } : {}),
       };
       this.payouts.set(payout.payoutId, payout);
       available = Math.round((available - amount) * 100) / 100;
@@ -116,13 +118,22 @@ export class PayoutService {
     return { day, raised, skipped };
   }
 
-  /** Hand a requested payout to the rail. Still not a payment — it is a payment ATTEMPT with a reference. */
-  submit(payoutId: string, now: number = Date.now()): Payout {
+  /**
+   * Hand a requested payout to the rail. Still not a payment — it is a payment ATTEMPT with a reference.
+   *
+   * TWO PEOPLE (the user, 2026-10-18): it is approved by a different member of staff from the one who raised it, the
+   * same rule as every other act of staff on money or identity. Refused before anything moves.
+   */
+  submit(payoutId: string, now: number = Date.now(), by?: Signer): Payout {
     const payout = this.require(payoutId);
     if (payout.status !== 'requested') throw new GlosError('INVALID_STATE', `Payout is ${payout.status} — only a requested payout can be submitted`);
+    if (by && payout.requestedBy && sameSigner(payout.requestedBy, by)) {
+      throw new GlosError('CONFLICT', 'A second member of staff approves a payout — not the one who raised it');
+    }
     const { providerRef } = this.rail.submit({ payoutId: payout.payoutId, payeeDid: payout.payeeDid, amount: payout.amount, currency: payout.currency });
     payout.status = 'submitted';
     payout.submittedAt = new Date(now).toISOString();
+    if (by) payout.approvedBy = { name: by.name, ...(by.key ? { key: by.key } : {}) };
     payout.providerRef = providerRef;
     return this.save(payout);
   }

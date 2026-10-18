@@ -18,6 +18,19 @@ export interface PayoutRow {
   day?: string;
   status: string;
   providerRef?: string;
+  requestedBy?: { name: string };
+  approvedBy?: { name: string };
+}
+
+/**
+ * WHO, under a payout's state: who raised it and, once it went to the rail, who approved it — two different members of
+ * staff. A raised one says plainly that somebody else approves it, so the person who raised it is not left wondering
+ * why the button refuses them.
+ */
+export function payoutWho(row: Pick<PayoutRow, 'status' | 'requestedBy' | 'approvedBy'>, t: Translate): string | null {
+  if (row.approvedBy) return t('tower.money.who.approved', { raised: row.requestedBy?.name ?? '—', approved: row.approvedBy.name });
+  if (row.status === 'requested' && row.requestedBy) return t('tower.money.who.raised', { name: row.requestedBy.name });
+  return null;
 }
 
 export type PayoutAction = 'submit' | 'settle' | 'fail' | 'reverse';

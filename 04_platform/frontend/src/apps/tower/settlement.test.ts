@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FUNDING_ACTIONS, PAYOUT_ACTIONS, fundingLine, fundingTone, payoutTone, runSummary } from './settlement';
+import { FUNDING_ACTIONS, PAYOUT_ACTIONS, fundingLine, fundingTone, payoutTone, payoutWho, runSummary } from './settlement';
 
 /**
  * Paying people.
@@ -126,5 +126,13 @@ describe('money coming in', () => {
 
   it('says nothing about a shortfall when the full amount arrived', () => {
     expect(fundingLine({ fundingId: 'f1', status: 'confirmed', amount: 5000, confirmedAmount: 5000, currency: 'KES' }, t)).not.toContain('tower.money.in.short');
+  });
+});
+
+describe('who raised a payout, and who approved it', () => {
+  it('says a raised payout waits for somebody else, and names both once it went to the rail', () => {
+    expect(payoutWho({ status: 'requested', requestedBy: { name: 'Amina' } }, t)).toBe('tower.money.who.raised(name=Amina)');
+    expect(payoutWho({ status: 'submitted', requestedBy: { name: 'Amina' }, approvedBy: { name: 'Otieno' } }, t)).toBe('tower.money.who.approved(raised=Amina,approved=Otieno)');
+    expect(payoutWho({ status: 'requested' }, t)).toBeNull();
   });
 });

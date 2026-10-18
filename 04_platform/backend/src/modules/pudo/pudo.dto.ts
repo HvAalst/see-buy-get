@@ -2268,6 +2268,11 @@ export class PayoutFailureDto {
 }
 
 /** The rail's confirmation. Its reference, when it gives a better one than the submit call did. */
+/** Who is acting, typed: on a laptop's shared staff key only, where a name is all there is to tell two people apart. */
+export class PayoutStaffDto {
+  @IsOptional() @IsString() @MaxLength(80) by?: string;
+}
+
 export class PayoutSettleDto {
   @IsOptional() @IsString() providerRef?: string;
 }

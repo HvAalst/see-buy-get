@@ -81,6 +81,31 @@ describe('paying providers', () => {
   const owedTo = (payeeDid: string) => -books.balance(ke(), ACCOUNT_CODES.PAYABLE_PROVIDER, undefined, payeeDid) || 0;
   const held = () => books.coverage(ke()).held;
 
+  describe('two people', () => {
+    it('is approved to the rail by a different member of staff from the one who raised it', () => {
+      fund(1000);
+      owe('did:glos:courier-a', 40);
+      const amina = { name: 'Amina O', key: 'opr_amina' };
+      const [p] = payouts.runFor(ke(), Date.now(), amina).raised;
+      expect(p.requestedBy).toEqual({ name: 'Amina O', key: 'opr_amina' });
+      // The one who raised it cannot send it — refused before anything moves.
+      expect(() => payouts.submit(p.payoutId, Date.now(), amina)).toThrow(/second member of staff/);
+      expect(payouts.get(p.payoutId).status).toBe('requested');
+      // Two accounts are two people whatever they are called; one account is one person whatever it is called.
+      expect(() => payouts.submit(p.payoutId, Date.now(), { name: 'Amina (desk 2)', key: 'opr_amina' })).toThrow(/second member of staff/);
+      const sent = payouts.submit(p.payoutId, Date.now(), { name: 'Amina O', key: 'opr_other_amina' });
+      expect(sent).toMatchObject({ status: 'submitted', approvedBy: { name: 'Amina O', key: 'opr_other_amina' } });
+    });
+
+    it('tells two typed names apart only by the name, case and spacing aside, where there is no account to go by', () => {
+      fund(1000);
+      owe('did:glos:courier-a', 40);
+      const [p] = payouts.runFor(ke(), Date.now(), { name: 'Otieno', key: 'typed:Otieno' }).raised;
+      expect(() => payouts.submit(p.payoutId, Date.now(), { name: ' otieno ', key: 'typed: otieno ' })).toThrow(/second member of staff/);
+      expect(payouts.submit(p.payoutId, Date.now(), { name: 'Wanjiru', key: 'typed:Wanjiru' }).approvedBy?.name).toBe('Wanjiru');
+    });
+  });
+
   describe('the run', () => {
     it('raises one payout for everybody owed', () => {
       fund(1000);

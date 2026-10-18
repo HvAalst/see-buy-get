@@ -2479,7 +2479,7 @@ export const enTowerMoney = {
   'tower.money.state.settled': 'Paid',
   'tower.money.state.failed': 'Failed',
   'tower.money.state.reversed': 'Came back',
-  'tower.money.act.submit': 'Hand to the rail',
+  'tower.money.act.submit': 'Approve and send',
   'tower.money.act.settle': 'The rail paid it',
   'tower.money.act.fail': 'The rail refused it',
   'tower.money.act.reverse': 'It came back',
@@ -2984,4 +2984,6 @@ export const enTowerBusinesses = {
   'tower.approvals.hoursNone': 'no hours given',
   'tower.approvals.recordDeclared': 'clean record declared',
   'tower.approvals.recordNot': 'no clean record declared',
+  'tower.money.who.raised': 'Raised by {name}: another member of staff approves it',
+  'tower.money.who.approved': 'Raised by {raised}, approved by {approved}',
 };
