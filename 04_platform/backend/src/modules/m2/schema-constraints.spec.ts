@@ -44,9 +44,15 @@ describe('M2 schema + constraints (M2-020..033)', () => {
     expect(() => shipments.create({ ...base, goods: { incoterms: 'ZZZ' } })).toThrow(BadRequestException);
   });
 
-  it('auto-suggests an HS code and rejects a malformed one (M2-024)', () => {
-    expect(shipments.create({ ...base, goods: { description: 'Roasted coffee beans' } }).ewaybill.goods.hsCode).toBe('090111');
+  it('never fills in an HS code from a description, and rejects a malformed one typed (M2-024)', () => {
+    expect(shipments.create({ ...base, goods: { description: 'Roasted coffee beans' } }).ewaybill.goods.hsCode).toBeUndefined();
+    expect(shipments.create({ ...base, goods: { description: 'Roasted coffee beans', hsCode: '090121' } }).ewaybill.goods.hsCode).toBe('090121');
     expect(() => shipments.create({ ...base, goods: { hsCode: 'abc' } })).toThrow(BadRequestException);
+  });
+
+  it('never guesses a UN number from a description: dangerous goods are what the shipper declares (M2-033)', () => {
+    const s = shipments.create({ ...base, handlingCodes: ['DG_CLASS_3'], goods: { description: 'petrol in drums' } });
+    expect(s.ewaybill.customs?.dangerousGoods).toBeUndefined();
   });
 
   it('auto-tags handling codes from the commodity (M2-031)', () => {

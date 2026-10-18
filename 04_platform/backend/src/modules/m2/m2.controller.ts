@@ -68,13 +68,9 @@ export class M2Controller {
     return HANDLING_CODES;
   }
 
-  @Get('hs-code/suggest')
-  suggestHs(@Query('q') q: string) {
-    return this.hsCode.suggest(q ?? '') ?? { code: null };
-  }
-
+  /** A declared UN number, looked up: its class, packing group and proper shipping name. Never guessed from words. */
   @Post('classify-dg')
-  classifyDg(@Body() body: { unNumber?: string; description?: string }) {
+  classifyDg(@Body() body: { unNumber?: string }) {
     return this.dangerousGoods.classify(body ?? {}) ?? { classification: null };
   }
 

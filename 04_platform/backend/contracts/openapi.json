@@ -1049,33 +1049,6 @@
         }
       }
     },
-    "/v1/shipments/hs-code/suggest": {
-      "get": {
-        "operationId": "M2.suggestHs",
-        "parameters": [
-          {
-            "name": "q",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/v1/shipments/classify-dg": {
       "post": {
         "operationId": "M2.classifyDg",

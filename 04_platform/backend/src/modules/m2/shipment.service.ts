@@ -78,16 +78,13 @@ export class ShipmentService {
     const glosShipmentId = `GLOS-${randomBytes(8).toString('hex').toUpperCase()}`;
     const packages = this.buildPackages(input);
 
-    // Goods: HS code auto-suggest from the description (M2-024).
+    // Goods as declared: an HS code is the shipper's to give, never filled in from the description (M2-024).
     const goods = { ...(input.goods ?? {}) };
-    if (!goods.hsCode && goods.description) {
-      const hit = this.hsCode.suggest(goods.description);
-      if (hit) goods.hsCode = hit.code;
-    }
 
-    // Dangerous goods classification + DGR validation (M2-033).
+    // Dangerous goods as DECLARED, by UN number, then checked against the DGR ceiling (M2-033). Never guessed from the
+    // words of a description: a UN number is the shipper's declaration, and a guess would be ours.
     const customs: Record<string, unknown> = {};
-    const dgInput = input.dangerousGoods ?? (codes.some((c) => c.startsWith('DG_CLASS_')) ? { description: input.goods?.description } : undefined);
+    const dgInput = input.dangerousGoods?.unNumber ? { unNumber: input.dangerousGoods.unNumber } : undefined;
     if (dgInput) {
       const classification = this.dangerousGoods.classify(dgInput);
       if (classification) {

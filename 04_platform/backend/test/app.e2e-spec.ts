@@ -292,8 +292,8 @@ describe('GLOS backend (e2e)', () => {
     const dg = await request(app.getHttpServer()).post('/v1/shipments/classify-dg').set(auth).send({ unNumber: 'UN1203' }).expect(201);
     expect(dg.body.class).toBe('3');
 
-    const hs = await request(app.getHttpServer()).get('/v1/shipments/hs-code/suggest').query({ q: 'roasted coffee' }).set(auth).expect(200);
-    expect(hs.body.code).toBe('090111');
+    // No HS code is suggested: classifying goods is the shipper's or its agent's, never ours.
+    await request(app.getHttpServer()).get('/v1/shipments/hs-code/suggest').query({ q: 'roasted coffee' }).set(auth).expect(404);
 
     // Invalid Incoterm is rejected by the schema validator.
     await request(app.getHttpServer()).post('/v1/shipments').set(auth)
