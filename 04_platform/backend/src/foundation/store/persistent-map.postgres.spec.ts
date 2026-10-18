@@ -91,6 +91,18 @@ maybe('PersistentMap on Postgres', () => {
     expect(JSON.parse(rowsOf(name)[0].value)).toEqual({ status: 'On_Bus' });
   });
 
+  it('keeps several values written together before setMany() returns', () => {
+    const name = fresh('batch');
+    const m = open<{ n: number }>(name);
+    m.set('a', { n: 1 });
+    m.setMany([['b', { n: 2 }], ['a', { n: 9 }]]);
+    expect(rowsOf(name).map((r) => [r.key, JSON.parse(r.value)])).toEqual([
+      ['a', { n: 9 }],
+      ['b', { n: 2 }],
+    ]);
+    m.stop();
+  });
+
   it('writes only what changed', () => {
     const name = fresh('many');
     const m = open<{ n: number }>(name);

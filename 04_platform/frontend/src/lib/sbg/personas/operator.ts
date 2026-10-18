@@ -22,6 +22,13 @@ export function createOperatorApi(sbg: SbgClient) {
      */
     disputedConstraints: () => sbg.request((c) => c.GET('/v1/sbg/route-constraints/disputed', {})),
 
+    /** The automatic flags as cases: the live ones (or the closed ones), the most pressing first. */
+    flagCases: (which: 'live' | 'taken' | 'closed' = 'live', kind?: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/flag-cases' as never, { params: { query: { which, ...(kind ? { kind } : {}) } } } as never) as never),
+    /** Take a case, let it go, note it, or close it with a reason. */
+    caseAct: (caseId: string, act: 'take' | 'let-go' | 'note' | 'done', body: Record<string, unknown> = {}) =>
+      sbg.request((c) => c.POST(`/v1/sbg/flag-cases/${encodeURIComponent(caseId)}/${act}` as never, { body } as never) as never),
+
     /**
      * Clear one — the ONLY way a reported hazard stops warning.
      *

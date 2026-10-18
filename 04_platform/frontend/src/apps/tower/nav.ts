@@ -43,7 +43,7 @@ export const NAV_GROUPS: NavGroup[] = [
     icon: 'clock',
     // `support` belongs here rather than in a group of its own: somebody looking a parcel up is doing it
     // because a person is waiting on the other end of a phone.
-    screens: ['hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'imports', 'reports', 'support'],
+    screens: ['cases', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'imports', 'reports', 'support'],
   },
   { key: 'money', labelKey: 'tower.group.money', icon: 'wallet', screens: ['money'] },
   { key: 'setup', labelKey: 'tower.group.setup', icon: 'edit', screens: ['settings', 'companies', 'company', 'rates', 'corridors', 'borders', 'presence', 'pictures', 'connections'] },
@@ -59,6 +59,7 @@ export const NAV_GROUPS: NavGroup[] = [
 export const SCREEN_META: Record<Screen, { labelKey: MessageKey; icon: IconName }> = {
   network: { labelKey: 'tower.nav.network', icon: 'home' },
   stores: { labelKey: 'tower.nav.stores', icon: 'bag' },
+  cases: { labelKey: 'tower.nav.cases', icon: 'warning' },
   hazards: { labelKey: 'tower.nav.hazards', icon: 'route' },
   claims: { labelKey: 'tower.nav.claims', icon: 'warning' },
   disposal: { labelKey: 'tower.nav.disposal', icon: 'box' },

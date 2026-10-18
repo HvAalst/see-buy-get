@@ -173,6 +173,22 @@ export class PersistentMap<K extends string, V> implements Map<K, V> {
     return this;
   }
 
+  /**
+   * Several values, written together: one file write, or one Postgres transaction. For a sweep that opens or changes
+   * thousands of records at once, where a set() each would write the whole file thousands of times.
+   */
+  setMany(entries: Iterable<readonly [K, V]>): this {
+    const keys: K[] = [];
+    for (const [key, value] of entries) {
+      this.cache.set(key, value);
+      keys.push(key);
+    }
+    if (!keys.length) return this;
+    if (this.db) this.writeRows(keys, []);
+    else this.flush();
+    return this;
+  }
+
   delete(key: K): boolean {
     const existed = this.cache.delete(key);
     if (existed) {

@@ -21973,6 +21973,189 @@
         }
       }
     },
+    "/v1/sbg/flag-cases": {
+      "get": {
+        "operationId": "FlagCase.list",
+        "parameters": [
+          {
+            "name": "which",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FlagCaseList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/flag-cases/{caseId}/take": {
+      "post": {
+        "operationId": "FlagCase.take",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseStaffDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FlagCase"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/flag-cases/{caseId}/let-go": {
+      "post": {
+        "operationId": "FlagCase.letGo",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseStaffDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FlagCase"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/flag-cases/{caseId}/note": {
+      "post": {
+        "operationId": "FlagCase.note",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseNoteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FlagCase"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/flag-cases/{caseId}/done": {
+      "post": {
+        "operationId": "FlagCase.done",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseDoneDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FlagCase"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/quotes/{quoteId}": {
       "get": {
         "operationId": "Quote.read",
@@ -45671,6 +45854,297 @@
         },
         "required": [
           "travels"
+        ]
+      },
+      "CaseEvent": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "act": {
+            "type": "object"
+          },
+          "by": {
+            "type": "string",
+            "description": "Who, by name; absent for what the network did by itself (opened, escalated, cleared)."
+          },
+          "text": {
+            "type": "string",
+            "description": "The words: a note, the reason a case was put to rest, or what the flag said."
+          }
+        },
+        "required": [
+          "at",
+          "act"
+        ]
+      },
+      "FlagCaseView": {
+        "type": "object",
+        "properties": {
+          "openHours": {
+            "type": "number",
+            "description": "Hours since it opened."
+          },
+          "caseId": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string",
+            "description": "`kind:subject` — one live case per flag."
+          },
+          "kind": {
+            "type": "object"
+          },
+          "subject": {
+            "type": "string",
+            "description": "What the flag is about: a parcel, a shop, a corridor, a load."
+          },
+          "detail": {
+            "type": "string",
+            "description": "What the flag says now, kept up to date while the case is live."
+          },
+          "severity": {
+            "type": "object"
+          },
+          "state": {
+            "type": "object"
+          },
+          "openedAt": {
+            "type": "string"
+          },
+          "ageHours": {
+            "type": "number"
+          },
+          "owner": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "required": true,
+                "type": "string"
+              },
+              "key": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "escalatedAt": {
+            "type": "string"
+          },
+          "quietUntil": {
+            "type": "string",
+            "description": "Put to rest with a reason until then: no new case for this flag before it, whatever the flag says."
+          },
+          "closedAt": {
+            "type": "string"
+          },
+          "follows": {
+            "type": "string",
+            "description": "The case this one follows, when a flag that was put to rest was still there afterwards."
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CaseEvent"
+            }
+          }
+        },
+        "required": [
+          "openHours",
+          "caseId",
+          "key",
+          "kind",
+          "subject",
+          "detail",
+          "severity",
+          "state",
+          "openedAt",
+          "owner",
+          "history"
+        ]
+      },
+      "FlagCaseKindCount": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "object"
+          },
+          "severity": {
+            "type": "object"
+          },
+          "count": {
+            "type": "number"
+          },
+          "waiting": {
+            "type": "number"
+          },
+          "escalated": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "kind",
+          "severity",
+          "count",
+          "waiting",
+          "escalated"
+        ]
+      },
+      "FlagCaseList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FlagCaseView"
+            }
+          },
+          "total": {
+            "type": "number",
+            "description": "How many there are of what was asked for; more than items when the list was cut."
+          },
+          "waiting": {
+            "type": "number"
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FlagCaseKindCount"
+            }
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "waiting",
+          "kinds"
+        ]
+      },
+      "CaseStaffDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "maxLength": 80
+          }
+        }
+      },
+      "FlagCase": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string",
+            "description": "`kind:subject` — one live case per flag."
+          },
+          "kind": {
+            "type": "object"
+          },
+          "subject": {
+            "type": "string",
+            "description": "What the flag is about: a parcel, a shop, a corridor, a load."
+          },
+          "detail": {
+            "type": "string",
+            "description": "What the flag says now, kept up to date while the case is live."
+          },
+          "severity": {
+            "type": "object"
+          },
+          "state": {
+            "type": "object"
+          },
+          "openedAt": {
+            "type": "string"
+          },
+          "ageHours": {
+            "type": "number"
+          },
+          "owner": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "required": true,
+                "type": "string"
+              },
+              "key": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "escalatedAt": {
+            "type": "string"
+          },
+          "quietUntil": {
+            "type": "string",
+            "description": "Put to rest with a reason until then: no new case for this flag before it, whatever the flag says."
+          },
+          "closedAt": {
+            "type": "string"
+          },
+          "follows": {
+            "type": "string",
+            "description": "The case this one follows, when a flag that was put to rest was still there afterwards."
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CaseEvent"
+            }
+          }
+        },
+        "required": [
+          "caseId",
+          "key",
+          "kind",
+          "subject",
+          "detail",
+          "severity",
+          "state",
+          "openedAt",
+          "owner",
+          "history"
+        ]
+      },
+      "CaseNoteDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "CaseDoneDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "recheckHours": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 168
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "reason"
         ]
       },
       "QuoteStatusDto": {

@@ -1,4 +1,5 @@
 import { FLEET_PAPERS, fleetBody, type FleetForm, type FleetPaperKey, type FleetSetupRow } from './fleets';
+import type { CaseBoard, CaseKindCount, CaseListName, FlagCaseRow } from './cases';
 import type { MoveRow } from './accountMoves';
 import type { PaperCase } from './paperReports';
 import type { DisputeRow } from './idDisputes';
@@ -26,7 +27,7 @@ import { staffListOf } from './staff';
 import { resolveBaseUrl } from '../../lib/sbg';
 
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
-export type Screen = 'network' | 'stores' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'businesses' | 'accountmoves' | 'iddisputes' | 'paperreports' | 'papers' | 'imports' | 'market' | 'movers' | 'reports' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'company' | 'corridors' | 'borders' | 'presence' | 'depots' | 'settings' | 'connections';
+export type Screen = 'network' | 'stores' | 'cases' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'businesses' | 'accountmoves' | 'iddisputes' | 'paperreports' | 'papers' | 'imports' | 'market' | 'movers' | 'reports' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'company' | 'corridors' | 'borders' | 'presence' | 'depots' | 'settings' | 'connections';
 
 export interface TowerState {
   phase: Phase;
@@ -37,6 +38,18 @@ export interface TowerState {
   who: { mode: 'operator' | 'company'; name: string; entityId?: string; /** The name came from an account, not from a field beside the shared key. */ named?: boolean; /** The setup key, on a server where it only sets staff up: the console shows that one screen. */ setupOnly?: boolean } | null;
   /** The disputed queue, longest wait first — the server's order, kept as it arrives. */
   hazards: ConstraintView[] | null;
+  /** The automatic flags as cases, the most pressing first; how many nobody has taken. Null while unread. */
+  cases: FlagCaseRow[] | null;
+  casesWaiting: number | null;
+  /** How many there are of what is shown (more than `cases` when the list was cut), and how many of each kind. */
+  casesTotal: number | null;
+  caseKinds: CaseKindCount[] | null;
+  /** What the list shows: the live cases or the closed ones, of every kind or of one. */
+  caseWhich: CaseListName;
+  caseKind: string | null;
+  /** The case an act is being done on, and what the server said when it refused. */
+  caseBusy: string | null;
+  caseError: string | null;
   /** CV1 — messages a party reported in a conversation. Null while unread. */
   reports: ReportRow[] | null;
   /** CV3 — dispute reports a party shared. Null while unread. */
@@ -260,6 +273,10 @@ export interface TowerActions {
   revokeAdmin(entityId: string, adminId: string): Promise<void>;
   signOut(): void;
   go(screen: Screen): void;
+  /** Take a case, let it go, note it, or close it with a reason. True when the server took it. */
+  caseAct(caseId: string, act: 'take' | 'let-go' | 'note' | 'done', body?: Record<string, unknown>): Promise<FlagCaseRow | null>;
+  /** Show the live cases or the closed ones, of every kind (null) or of one. */
+  caseFilter(which: CaseListName, kind: string | null): void;
   setPresenceForm(patch: Partial<{ level: PresenceLevel; note: string; incoterms: { origin: string[]; destination: string[] } }>): void;
   setCountryForm(patch: Partial<NewCountryForm>): void;
   recordCountry(): Promise<void>;
@@ -341,6 +358,14 @@ const INITIAL: TowerState = {
   creds: null,
   who: null,
   hazards: null,
+  cases: null,
+  casesWaiting: null,
+  casesTotal: null,
+  caseKinds: null,
+  caseWhich: 'live',
+  caseKind: null,
+  caseBusy: null,
+  caseError: null,
   reports: null,
   disputeReports: null,
   loading: false,
@@ -437,6 +462,26 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     }
     const items = narrow<{ items: ConstraintView[]; total: number }>(data)?.items ?? [];
     setState((s) => ({ ...s, loading: false, error: null, hazards: items, readAt: Date.now() }));
+  }, []);
+
+  /** The flags as cases: read fresh, because a case escalates whether or not anybody is looking. */
+  const loadCases = useCallback(async (client: TowerClient, which?: CaseListName, kind?: string | null) => {
+    const w = which ?? stateRef.current.caseWhich;
+    const k = kind === undefined ? stateRef.current.caseKind : kind;
+    const { data, error } = await client.api.flagCases(w, k ?? undefined);
+    if (error) {
+      setState((s) => ({ ...s, caseError: error.detail || error.title }));
+      return;
+    }
+    const list = narrow<CaseBoard>(data);
+    setState((s) => ({
+      ...s,
+      cases: list?.items ?? [],
+      casesWaiting: list?.waiting ?? 0,
+      casesTotal: list?.total ?? 0,
+      caseKinds: list?.kinds ?? [],
+      caseError: null,
+    }));
   }, []);
 
   /** FP4 — read fresh every time: a licence that lapsed since sign-in is exactly the row this screen is for. */
@@ -778,6 +823,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: creds.name, setupOnly } }));
         if (setupOnly) return;
         void loadHazards(client);
+        void loadCases(client);
         void loadQueues(client);
         void loadPapers(client);
         void loadNetwork(client);
@@ -795,6 +841,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         }
         setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: data.name, named: true }, staffTwoStep: Boolean(data.twoStep) }));
         void loadHazards(client);
+        void loadCases(client);
         void loadQueues(client);
         void loadPapers(client);
         void loadNetwork(client);
@@ -988,13 +1035,14 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     else if (state.screen === 'papers') await loadPapers(client);
     else if (state.screen === 'businesses' || state.screen === 'accountmoves' || state.screen === 'iddisputes' || state.screen === 'paperreports') await loadQueues(client);
     else if (state.screen === 'movers') await loadMovers(client);
+    else if (state.screen === 'cases') await loadCases(client);
     else if (state.screen === 'support') {
       // Refreshing the support screen means re-reading the parcel somebody is on the phone about, not
       // reloading a list — there is no list here.
       if (state.lookup) await lookupParcel(state.lookup.parcelId);
     }
     else await loadHazards(client);
-  }, [loadHazards, loadQueues, loadNetwork, loadMoney, loadHelp, loadCorridors, loadReports, loadPresence, lookupParcel, loadPricing, loadPapers, state.screen, state.entityId, state.lookup, state.helpTopic]);
+  }, [loadHazards, loadCases, loadQueues, loadNetwork, loadMoney, loadHelp, loadCorridors, loadReports, loadPresence, lookupParcel, loadPricing, loadPapers, state.screen, state.entityId, state.lookup, state.helpTopic]);
 
   const open = useCallback((constraintId: string | null) => {
     setState((s) => ({ ...s, openId: constraintId, clearError: null }));
@@ -1081,8 +1129,26 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         if ((screen === 'businesses' || screen === 'accountmoves' || screen === 'iddisputes' || screen === 'paperreports') && client) void loadQueues(client);
         // Read fresh every time: a hand-back that happened this morning is the reason somebody opened it.
         if (screen === 'movers' && client) void loadMovers(client);
+        if (screen === 'cases' && client) void loadCases(client);
       },
       refresh,
+      caseAct: async (caseId, act, body) => {
+        const client = clientRef.current;
+        if (!client) return null;
+        setState((s) => ({ ...s, caseBusy: caseId, caseError: null }));
+        // Named, like every act here: the setup key cannot say who is at the keyboard, the name typed at sign-in does.
+        const by = stateRef.current.who?.name;
+        const { data, error } = await client.api.caseAct(caseId, act, { ...(body ?? {}), ...(by ? { by } : {}) });
+        setState((s) => ({ ...s, caseBusy: null, ...(error ? { caseError: error.detail || error.title } : {}) }));
+        await loadCases(client);
+        // The case as it now is: a case somebody took may have left the page it was opened from.
+        return error ? null : (narrow<FlagCaseRow>(data) ?? null);
+      },
+      caseFilter: (which, kind) => {
+        const client = clientRef.current;
+        setState((s) => ({ ...s, caseWhich: which, caseKind: kind, cases: null, casesTotal: null }));
+        if (client) void loadCases(client, which, kind);
+      },
       downloadDamageReport,
       open,
       clear,

@@ -38,6 +38,16 @@ describe('PersistentMap', () => {
     expect(m.size).toBe(1);
   });
 
+  it('writes several values at once, and a second instance reads them all back', () => {
+    const file = join(dir, 'many.json');
+    const first = new PersistentMap<string, number>('many', { file });
+    first.set('a', 1);
+    first.setMany([['b', 2], ['c', 3], ['a', 9]]);
+    expect([...first.entries()]).toEqual([['a', 9], ['b', 2], ['c', 3]]);
+    const second = new PersistentMap<string, number>('many', { file });
+    expect([...second.entries()]).toEqual([['a', 9], ['b', 2], ['c', 3]]);
+  });
+
   it('survives a "restart" — a second instance over the same file reloads the data', () => {
     const file = join(dir, 'accounts.json');
     const first = new PersistentMap<string, { balance: number }>('accounts', { file });

@@ -9,6 +9,7 @@ import { CorridorsScreen } from './screens/CorridorsScreen';
 import { PresenceScreen } from './screens/PresenceScreen';
 import { ConnectionsScreen } from './screens/ConnectionsScreen';
 import { HazardsScreen } from './screens/HazardsScreen';
+import { CasesScreen } from './screens/CasesScreen';
 import { PapersScreen } from './screens/PapersScreen';
 import { waitingCount } from './papers';
 import { papersWaiting } from './company';
@@ -159,7 +160,7 @@ export function App() {
      * company administrator saw on signing in. COMPANY moved out, because their own record is theirs to
      * keep — an operator picks a company from a list, an administrator IS one.
      */
-    ...(isOperator ? (['network', 'stores', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'borders', 'movers', 'rates', 'connections'] as Screen[]) : []),
+    ...(isOperator ? (['network', 'stores', 'cases', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'borders', 'movers', 'rates', 'connections'] as Screen[]) : []),
     ...(manyCompanies ? (['companies'] as Screen[]) : []),
     // Their own books and what they are owed — never the network's ledger, which is not theirs to read.
     'money',
@@ -183,6 +184,7 @@ export function App() {
    * claim from "we have not looked yet".
    */
   const counts: Partial<Record<Screen, number | null>> = {
+    cases: state.casesWaiting,
     hazards: state.hazards?.length ?? null,
     claims: state.claims == null && state.freightClaims == null ? null : (state.claims?.length ?? 0) + (state.freightClaims?.length ?? 0),
     disposal: state.disposal?.length ?? null,
@@ -319,6 +321,8 @@ export function App() {
             <ApprovalsScreen state={state} actions={actions} />
           ) : state.screen === 'papers' ? (
             <PapersScreen state={state} actions={actions} />
+          ) : state.screen === 'cases' ? (
+            <CasesScreen state={state} actions={actions} />
           ) : (
             <HazardsScreen state={state} actions={actions} />
           )}
