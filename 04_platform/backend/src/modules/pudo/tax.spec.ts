@@ -223,6 +223,30 @@ describe('tax', () => {
       expect(books.balances(ke()).balanced).toBe(true);
     });
 
+    it('collects the price WITH tax for a person’s own send, as the app showed it — and owes exactly that tax', () => {
+      // Found 2026-10-18: a person's send was stamped with the price BEFORE tax, while the counter's charge takes the tax
+      // out of whatever is stamped — so the sender paid the tax short, and the company owed tax it never collected.
+      const { from, to } = route();
+      for (const s of [from, to]) {
+        agents.submitKyc(s.did, { idCopyRef: 'id.jpg', tradingLicenceRef: 'licence.pdf', shopPhotoRefs: ['shop-1.jpg'] });
+        agents.decideKyc(s.did, true);
+      }
+      gate.topUp(from.did, 500, 'bank-send');
+      chargeVat();
+      const quote = routing.quoteShipment(from.did, to.did);
+      const { parcel } = parcels.createConsumerSend({ senderPersonDid: 'did:person:s', senderPhoneHash: 'h-s', receiverMobile: '+254700555', originAgentDid: from.did, destAgentDid: to.did, dimensionsCm: { l: 10, w: 10, h: 10 }, weightKg: 1, quote });
+      // The price the Send app showed the sender, to the cent: the locked leg's gross.
+      expect(parcel.shipmentCost).toBe(quote.locked.gross);
+      expect(parcel.shipmentTax).toBe(quote.locked.tax);
+      expect(quote.locked.tax).toBeGreaterThan(0);
+      const floatBefore = agents.balance(from.did) ?? 0;
+      parcels.intakeConsumerSend(parcel.parcelId, from.did, 'dropoff.jpg');
+      // The shop remitted the whole cash it took; the company owes the authority exactly the tax inside it.
+      expect(Math.round((floatBefore - (agents.balance(from.did) ?? 0) + (parcel.intakeLabour ?? 0)) * 100) / 100).toBe(quote.locked.gross);
+      expect(owedToTheAuthority()).toBe(quote.locked.tax);
+      expect(books.balances(ke()).balanced).toBe(true);
+    });
+
     it('books nothing to the tax account when nobody is charging tax', () => {
       const { from, to, store } = route();
       mint(store, from, to);

@@ -1906,7 +1906,10 @@ export class ParcelService implements OnApplicationBootstrap {
       currency: quote.currency, // the cash the shop will take at the counter is in a named money
       fx: quote.fx,
       sellerEntityId: quote.sellerEntityId,
-      shipmentCost: chosen.total,
+      // GROSS — the price the sender was shown (the Send app shows `locked.gross`) and the cash the counter collects.
+      // It was `total`, the price BEFORE tax, while the charge below takes the tax out of it: with a rate set, the sender
+      // paid the tax short and the company owed the authority money it never collected (found 2026-10-18, building eTIMS).
+      shipmentCost: chosen.gross,
       ceilingCost: quote.flexible.gross, // the money HELD, so gross — the rebate gives back the same kind
       ceilingTax: quote.flexible.tax,
       ceilingProvision: quote.flexible.provision, // …and the tax within it, so the rebate can un-owe exactly what was owed
