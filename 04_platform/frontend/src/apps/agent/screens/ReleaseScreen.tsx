@@ -4,6 +4,7 @@ import { narrow } from '../../../lib/sbg';
 import { useState } from 'preact/hooks';
 import { errorSentence, Button, Card, Checklist, CodeBoxes, ErrorNote, Note, ReadAloud, ScanField } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
+import { useConnectivity } from '../../../shared/connectivity';
 import { handoverRoute, otpValid, releaseBlockedDetail, releaseStage } from '../logic';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { CollectBody } from './CollectScreen';
@@ -35,12 +36,17 @@ export function ReleaseScreen({ state, actions }: ReleaseScreenProps) {
   const stage = p ? releaseStage(p.status) : null;
   const route = handoverRoute(state.collect.code);
   const found = state.collect.found;
+  // HANDING OVER STAYS A SERVER CHECK (the user, 2026-10-18): a 4-digit code the phone could check is a code someone at
+  // the counter could try all 10,000 of. So with no signal this screen says it first, in words, rather than failing at
+  // the button — and says what still works.
+  const signal = useConnectivity().online;
 
   return (
     <div class="scr">
       <h1 class="scr__title">{t('agent.counter.title')}</h1>
       <p class="scr__lede">{t('agent.counter.lede')}</p>
 
+      {!signal ? <Note tone="warn" icon="warning" title={t('agent.counter.noSignalTitle')} detail={t('agent.counter.noSignalDetail')} /> : null}
       {state.error ? <ErrorNote error={state.error} showDetail={state.error.code === 'SHELF_FULL'} /> : null}
 
       {/* The one question the customer can always answer. */}

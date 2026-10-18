@@ -1161,4 +1161,6 @@ export const enAgent = {
   'agent.accept.lateCall': 'If the sender has gone, phone them on {phone}.',
   'agent.accept.lateNext': 'Done. {n, plural, one {# more is} other {# more are}} ready',
   'agent.accept.lateDone': 'Done',
+  'agent.counter.noSignalTitle': 'Handing over needs a signal',
+  'agent.counter.noSignalDetail': 'The pickup code is checked by SeeBuyGet, so a parcel is handed over only when there is a signal. Taking parcels in, giving them to a driver and shelving still work: they wait on this phone.',
 };
