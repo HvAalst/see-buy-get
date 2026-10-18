@@ -17,8 +17,8 @@ import { DATA_DIR, persistenceEnabled, storeDatabase, storeEngine } from './pers
  * So the first one claims the store and a second one does not start, saying which process holds it. On Postgres the
  * claim is a session advisory lock on the store's own connection, checked again every half minute: a connection that
  * dropped and came back has lost its lock, takes it again if it is free, and stops the server if somebody else has it
- * — continuing would be two writers. On files it is a lock file in the data directory naming the process; one whose
- * process is gone is taken over.
+ * — continuing would be two writers. On files it is a lock file in the data directory naming the process, read back a
+ * moment after it is written and again every half minute; one whose process is gone is taken over (claimFiles).
  */
 
 /** The advisory lock's two keys: "GLOS" and the store. */
@@ -29,6 +29,8 @@ const RECHECK_MS = 30_000;
  * the new server as the old one is stopping) is two processes for a moment, not two writers.
  */
 const WAIT_MS = 15_000;
+/** How long a lock file just written is left before it is read back. */
+const SETTLE_MS = 300;
 
 /** Wait without leaving this function: the claim is made before anything else in the process starts. */
 function pause(ms: number): void {
@@ -124,48 +126,76 @@ function alive(pid: number): boolean {
   }
 }
 
-export function claimFiles(dir: string, pid: number, waitMs = WAIT_MS): StoreClaim {
+/**
+ * On files. Two servers starting in the same instant (the dev server's watch starts two at once on some machines) must
+ * not both come away holding it, and they did (2026-10-18): one read the other's lock while it was being written, found
+ * it empty, took it for a lock nobody held, and removed it. So an empty lock is one being written — waited for, and taken
+ * over only once the wait has run out (a server that died mid-write); a lock just taken is read back a moment later, in
+ * case another took it over in that moment; and, as on Postgres, it is read again every half minute: a server whose lock
+ * now names another stops.
+ */
+export function claimFiles(dir: string, pid: number, waitMs = WAIT_MS, stop: () => void = () => process.exit(1), recheckMs = RECHECK_MS, settleMs = SETTLE_MS): StoreClaim {
+  const logger = new Logger('OneWriter');
   const file = join(dir, LOCK_FILE);
   const mine = JSON.stringify({ pid, host: hostname(), since: new Date().toISOString() });
   const until = Date.now() + waitMs;
-  for (let attempt = 0; ; attempt++) {
+  /** Who the lock names. Null: no lock, or one still being written. */
+  const holder = (): { pid?: number; host?: string; since?: string } | null => {
+    try {
+      return JSON.parse(readFileSync(file, 'utf8'));
+    } catch {
+      return null;
+    }
+  };
+  let takeovers = 0;
+  for (;;) {
     try {
       writeFileSync(file, mine, { flag: 'wx' });
-      return {
-        engine: 'files',
-        release: () => {
-          try {
-            if ((JSON.parse(readFileSync(file, 'utf8')) as { pid?: number }).pid === pid) unlinkSync(file);
-          } catch {
-            /* gone already */
-          }
-        },
-      };
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
-      let other: { pid?: number; host?: string; since?: string } = {};
-      try {
-        other = JSON.parse(readFileSync(file, 'utf8'));
-      } catch {
-        /* unreadable: treated as a lock nobody holds */
-      }
-      if (other.pid === pid) return { engine: 'files', release: () => undefined };
-      if (other.pid && other.host === hostname() && alive(other.pid)) {
+      const other = holder();
+      if (other?.pid === pid) break;
+      const live = Boolean(other?.pid && other.host === hostname() && alive(other.pid));
+      if (live || !other) {
         if (Date.now() < until) {
           pause(250);
           continue;
         }
-        throw new Error(
-          `Another server is already writing to ${dir} (process ${other.pid}, since ${other.since ?? 'an earlier start'}). Two would write over each other's wallets and books. Stop it first (/stop), then start this one. If no server is running, remove ${file}.`,
-        );
+        if (live) {
+          throw new Error(
+            `Another server is already writing to ${dir} (process ${other!.pid}, since ${other!.since ?? 'an earlier start'}). Two would write over each other's wallets and books. Stop it first (/stop), then start this one. If no server is running, remove ${file}.`,
+          );
+        }
       }
-      if (attempt > 3) throw new Error(`Could not claim ${file}`);
-      // A lock whose process has gone: a server that died. Taken over.
+      if (++takeovers > 3) throw new Error(`Could not claim ${file}`);
+      // A lock whose process has gone — a server that died, or one that died writing it: taken over.
       try {
         unlinkSync(file);
       } catch {
         /* somebody else took it over first: the next attempt says so */
       }
+      continue;
     }
+    // Read back a moment later: two taking over a dead server's lock at once can each have written theirs.
+    pause(settleMs);
+    if (holder()?.pid === pid) break;
   }
+  const timer = setInterval(() => {
+    const now = holder();
+    if (now?.pid === pid) return;
+    logger.error(`The store's lock now names ${now?.pid ? `process ${now.pid}` : 'nobody'}: this server stops, rather than be a second writer.`);
+    stop();
+  }, recheckMs);
+  timer.unref?.();
+  return {
+    engine: 'files',
+    release: () => {
+      clearInterval(timer);
+      try {
+        if (holder()?.pid === pid) unlinkSync(file);
+      } catch {
+        /* gone already */
+      }
+    },
+  };
 }
