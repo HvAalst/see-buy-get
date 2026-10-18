@@ -22,6 +22,8 @@
  *    arrived would fail in a way nobody could read. Order is part of the meaning.
  */
 
+import { forgetHeld, heldPhoto, heldRefsIn, withRefs } from './heldPhotos';
+
 /** Where the queue lives. Versioned: a shape change must not try to replay yesterday's records. */
 const STORE_KEY = 'sbg.outbox.v1';
 
@@ -123,6 +125,16 @@ function announce(): void {
   for (const l of listeners) l();
 }
 
+const sentListeners = new Set<(item: OutboxItem, answer: unknown) => void>();
+/**
+ * Be told when a queued write reaches the server, with the server's answer. A take-in made without a signal has things
+ * only the server makes — its label, its release code — and this is when they exist.
+ */
+export function onOutboxSent(fn: (item: OutboxItem, answer: unknown) => void): () => void {
+  sentListeners.add(fn);
+  return () => sentListeners.delete(fn);
+}
+
 /** Re-render when the queue changes. Returns its own unsubscribe. */
 export function onOutboxChange(fn: () => void): () => void {
   listeners.add(fn);
@@ -197,6 +209,12 @@ export async function drain(deps: DrainDeps): Promise<{ sent: number; blocked: n
       break; // no credential yet — this is not the item's fault, so nothing is marked blocked
     }
 
+    // A photo held on this phone for this write (heldPhotos.ts) goes first, and the real one takes its place.
+    const photos = await sendHeldPhotos(next, deps.baseUrl, token, send);
+    if (photos === 'offline') break;
+    if (photos === 'blocked') continue;
+    const body = read().find((i) => i.id === next.id)?.body ?? next.body;
+
     let response: Response;
     try {
       response = await send(`${deps.baseUrl}${next.path}`, {
@@ -208,7 +226,7 @@ export async function drain(deps: DrainDeps): Promise<{ sent: number; blocked: n
           // second parcel, a second charge, or a second handover.
           'idempotency-key': next.key,
         },
-        body: next.body === undefined ? undefined : JSON.stringify(next.body),
+        body: body === undefined ? undefined : JSON.stringify(body),
       });
     } catch {
       // Still no network. Leave everything exactly as it is and try again on the next trigger — a
@@ -219,6 +237,14 @@ export async function drain(deps: DrainDeps): Promise<{ sent: number; blocked: n
     if (response.ok) {
       discard(next.id);
       sent += 1;
+      const answer = await response.clone().json().catch(() => undefined);
+      for (const l of sentListeners) {
+        try {
+          l(next, answer);
+        } catch {
+          /* a listener's trouble is not the queue's */
+        }
+      }
       continue;
     }
 
@@ -235,6 +261,48 @@ export async function drain(deps: DrainDeps): Promise<{ sent: number; blocked: n
   }
 
   return { sent, blocked: read().filter((i) => i.state === 'blocked').length };
+}
+
+/**
+ * Upload the photos a queued write holds on this phone, one at a time, writing each real reference into the item the
+ * moment it exists — so an answer lost after an upload never uploads the same photo twice. 'offline' leaves everything
+ * as it was for the next trigger; 'blocked' means the item was marked for a person to look at.
+ */
+async function sendHeldPhotos(item: OutboxItem, baseUrl: string, token: string, send: typeof fetch): Promise<'ok' | 'offline' | 'blocked'> {
+  for (const ref of heldRefsIn(item.body)) {
+    const photo = heldPhoto(ref);
+    const block = (error: string, attempts = item.attempts) => {
+      write(read().map((i) => (i.id === item.id ? { ...i, attempts, state: 'blocked', error } : i)));
+      announce();
+      return 'blocked' as const;
+    };
+    if (!photo) return block('The photo kept on this phone for it is gone. Take it again and do this once more.');
+    let up: Response;
+    try {
+      up = await send(`${baseUrl}/v1/sbg/media`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({ kind: photo.kind, dataUrl: photo.dataUrl, ...(photo.thumbDataUrl ? { thumbDataUrl: photo.thumbDataUrl } : {}) }),
+      });
+    } catch {
+      return 'offline';
+    }
+    if (!up.ok) {
+      const attempts = item.attempts + 1;
+      const transient = up.status >= 500 || up.status === 429;
+      if (transient && attempts < MAX_ATTEMPTS) {
+        write(read().map((i) => (i.id === item.id ? { ...i, attempts } : i)));
+        announce();
+        return 'offline';
+      }
+      return block(await problemDetail(up), attempts);
+    }
+    const mediaId = ((await up.json().catch(() => ({}))) as { mediaId?: string }).mediaId;
+    if (!mediaId) return block('The photo was not taken by the server. Take it again and do this once more.');
+    write(read().map((i) => (i.id === item.id ? { ...i, body: withRefs(i.body, { [ref]: mediaId }) } : i)));
+    forgetHeld(ref);
+  }
+  return 'ok';
 }
 
 /** The server's own explanation, from an RFC 9457 problem document, or a plain status when it has none. */

@@ -13,6 +13,7 @@ import { BagScreen } from './screens/BagScreen';
 import { HandoverScreen } from './screens/HandoverScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { RateDriverSheet } from './screens/RateDriverSheet';
+import { LateTakeInSheet } from './screens/TakenInLabel';
 import { RatesScreen } from './screens/RatesScreen';
 import { RecordsScreen } from './screens/RecordsScreen';
 import { useArchive, type ArchiveApiState } from '../../shared/archive/useArchive';
@@ -111,6 +112,8 @@ export function App() {
 
       {/* REP2 — the "rate the driver" prompt (after a handover / bag-receipt); keyed so the form resets per driver. */}
       <RateDriverSheet key={state.driverRating?.driverDid ?? 'none'} state={state} actions={actions} />
+      {/* A take-in made without a signal has reached SeeBuyGet: its label and code, once, wherever the shop is. */}
+      <LateTakeInSheet state={state} actions={actions} />
 
       <Toasts state={state} actions={actions} />
       <ChangePasswordSheet open={passwordOpen} onClose={() => setPasswordOpen(false)} config={agentConfig()} email={actions.readEmail()} onChanged={actions.adoptToken} />

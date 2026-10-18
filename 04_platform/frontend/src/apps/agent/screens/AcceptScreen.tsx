@@ -1,23 +1,17 @@
 const INCOTERM_OPTIONS = ['EXW', 'FCA', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP', 'FAS', 'FOB', 'CFR', 'CIF'];
 
-import { Button, Card, Chip, CodeCard, ErrorNote, Explainer, GlanceNumber, Icon, Note, OptionPicker, Pill, PlaceMap, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { Button, Card, Chip, ErrorNote, Explainer, GlanceNumber, Icon, Note, OptionPicker, Pill, PlaceMap, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { agentConfig } from '../api';
 import { useT, type Translate } from '../../../shared/i18n';
 import { BODY_HINTS, EXCLUDABLE_BODIES, NATURES, PACKAGING_HELP, acceptMissing, bookFreightMissing, chooseBodyHint, money, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, takeInTermsNotice, termsBlock, termsNeedTelling, toggleExcludedBody, type BodyHint, type PackagingChoice } from '../logic';
 import type { NetworkPoint, TakeInTerms } from '../types';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
+import { TakenInLabel } from './TakenInLabel';
 
 export interface AcceptScreenProps {
   state: AgentState;
   actions: AgentActions;
-}
-
-/** DT — open the label SVG in a new tab so the agent can print it and stick it on the parcel. */
-function openLabel(svg: string) {
-  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
-  window.open(url, '_blank', 'noopener');
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 /** F2 — a human day/time for the freight receipt (the booking confirmation, not a data surface). */
@@ -316,33 +310,13 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
       </Sheet>
 
       {/* DT — the parcel is born with a printable label; show it so the agent prints + sticks it on the parcel. */}
-      <Sheet open={Boolean(state.acceptedLabel)} onClose={actions.dismissAcceptedLabel} title={t('agent.accept.labelReadyTitle')}>
+      <Sheet open={Boolean(state.acceptedLabel)} onClose={actions.dismissAcceptedLabel} title={t(state.acceptedLabel?.queued ? 'agent.accept.queuedTitle' : 'agent.accept.labelReadyTitle')}>
         {state.acceptedLabel ? (
           <>
-            <p class="t-body">{t('agent.accept.labelBody', { parcel: state.acceptedLabel.parcelId })}</p>
-            {state.acceptedLabel.svg ? (
-              <>
-                {/* Trusted markup: the SVG comes from OUR backend label builder, nothing user-authored. */}
-                <div class="labelbox" dangerouslySetInnerHTML={{ __html: state.acceptedLabel.svg }} />
-                <Button chevron={false} onClick={() => state.acceptedLabel?.svg && openLabel(state.acceptedLabel.svg)}>
-                  {t('agent.accept.openLabel')}
-                </Button>
-              </>
-            ) : null}
-            {state.acceptedLabel.trackingKey ? <p class="hint" style="margin-top:8px">{t('agent.accept.trackingKey', { key: state.acceptedLabel.trackingKey })}</p> : null}
-            {/* The pickup code, given to the SENDER who is standing right here — they pass it to the person
-                collecting. It is deliberately not printed on the parcel and the receiving shop never sees
-                it, so this is the moment it has to be handed over. */}
-            {state.acceptedLabel.releaseCode ? (
-              <>
-                <CodeCard label={t('agent.accept.pickupCodeLabel')} code={state.acceptedLabel.releaseCode} />
-                <p class="hint">{t('agent.accept.pickupCodeHint')}</p>
-                <ReadAloud
-                  text={() => t('agent.accept.pickupCodeAloud', { digits: state.acceptedLabel!.releaseCode!.split('').join(', ') })}
-                  label={t('agent.accept.pickupCodeSay')}
-                />
-              </>
-            ) : null}
+            <p class="t-body">{t(state.acceptedLabel.queued ? 'agent.accept.queuedBody' : 'agent.accept.labelBody', { parcel: state.acceptedLabel.parcelId })}</p>
+            {/* The label, the tracking key and the pickup code for the SENDER standing here — or, taken in without a
+                signal, nothing yet: they are made when it reaches SeeBuyGet, and shown then. */}
+            <TakenInLabel label={state.acceptedLabel} />
             <Button variant="link" onClick={actions.dismissAcceptedLabel}>
               {t('agent.accept.doneAnother')}
             </Button>

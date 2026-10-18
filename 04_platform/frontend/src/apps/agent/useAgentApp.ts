@@ -11,6 +11,8 @@ import {
 } from '../../lib/sbg';
 import type { MediaKind } from '../../lib/sbg/personas/media';
 import { downscaleImage } from '../../shared/media';
+import { holdPhoto, mayHold } from '../../shared/heldPhotos';
+import { onOutboxSent } from '../../shared/outbox';
 import { t } from '../../shared/i18n'; // plain t(): toasts/notes are built at action time in the shop's active locale
 import { errorSentence } from '../../shared/ui';
 import type { IconName } from '../../shared/ui/Icon';
@@ -242,7 +244,9 @@ export interface AgentState {
   /** DT — the label the last accept produced, shown to print + stick on the parcel (null once dismissed).
    *  `releaseCode` is the pickup code, handed to the SENDER at the counter: it is not on the parcel and the
    *  collecting shop never learns it, so this sheet is where it reaches a human. */
-  acceptedLabel: { parcelId: string; trackingKey?: string; svg?: string; releaseCode?: string } | null;
+  acceptedLabel: (TakenIn & { queued?: boolean }) | null;
+  /** Take-ins made without a signal that have since reached SeeBuyGet: their label and code, shown once each, in order. */
+  lateTakeIns: Array<TakenIn & { senderMobile?: string; queuedAt: string }>;
   /** F2 — the freight the last counter booking produced: the FRT code + tracking key to print for the
    *  customer, plus the site-equipment advisory. Null until a booking succeeds / once dismissed. */
   bookedFreight: {
@@ -348,6 +352,7 @@ const INITIAL: AgentState = {
   acceptGeoBusy: false,
   acceptGeoNote: null,
   acceptedLabel: null,
+  lateTakeIns: [],
   bookedFreight: null,
   preMint: null,
   preMintState: 'idle',
@@ -365,6 +370,14 @@ const INITIAL: AgentState = {
   void: { parcelId: null, photoRef: '' },
   driverRating: null,
 };
+
+/** What a take-in hands the counter: the label to stick on, the tracking key, and the release code for the sender. */
+export interface TakenIn {
+  parcelId: string;
+  trackingKey?: string;
+  svg?: string;
+  releaseCode?: string;
+}
 
 const isOffline = (e: SbgError) => e.code === 'NETWORK' || e.code === 'OFFLINE' || e.code === 'TIMEOUT';
 
@@ -638,6 +651,12 @@ export function useAgentApp() {
         const { dataUrl, thumbDataUrl } = await downscaleImage(file);
         const r = await client.api.uploadMedia(kind, dataUrl, thumbDataUrl);
         if (r.error) {
+          // No signal, and a take-in photo: it waits on this phone and goes with the take-in (shared/heldPhotos.ts).
+          const held = isOffline(r.error) && mayHold(kind) ? holdPhoto(kind, dataUrl, thumbDataUrl) : null;
+          if (held) {
+            pushToast({ tone: 'info', icon: 'camera', title: t('agent.toast.photoHeld'), detail: t('agent.toast.photoHeldDetail') });
+            return held;
+          }
           pushToast({ tone: 'danger', icon: 'camera', title: t('agent.toast.photoUploadFail'), detail: errorSentence(r.error) });
           return null;
         }
@@ -1365,6 +1384,13 @@ export function useAgentApp() {
       });
       if (r.error) return fail(r.error);
       buzz();
+      // Taken in without a signal: it is in the outbox, and says so. Its label and release code are made when it
+      // reaches SeeBuyGet, and shown then (lateTakeIns).
+      if (narrow<{ queued?: boolean }>(r.data)?.queued) {
+        setState((s) => ({ ...s, accept: { ...EMPTY_ACCEPT }, acceptDerived: null, acceptNear: null, acceptGeoNote: null, acceptedLabel: { parcelId: f.parcelId.trim().toUpperCase(), queued: true } }));
+        pushToast({ tone: 'info', icon: 'box', title: t('agent.toast.parcelQueued'), detail: t('agent.toast.parcelQueuedDetail') });
+        return;
+      }
       // DT — capture the label the parcel was born with so the agent can print it and stick it on the parcel
       // (peer-send parcels never had one). Clearing the form but staying on the accept screen; a Sheet shows it.
       const p = narrow<{ parcelId: string; trackingKey?: string; otp?: string; label?: { svg?: string } }>(r.data);
@@ -1376,6 +1402,24 @@ export function useAgentApp() {
 
   /** DT — dismiss the printed-label sheet and return to the shop home. */
   const dismissAcceptedLabel = useCallback(() => setState((s) => ({ ...s, acceptedLabel: null, screen: 'home' })), []);
+
+  /** The late take-in shown has been dealt with: show the next, if more reached SeeBuyGet. Nothing of it is kept. */
+  const dismissLateTakeIn = useCallback(() => setState((s) => ({ ...s, lateTakeIns: s.lateTakeIns.slice(1) })), []);
+
+  // A take-in made without a signal reaches SeeBuyGet: its label and release code exist now, and are shown now.
+  useEffect(
+    () =>
+      onOutboxSent((item, answer) => {
+        if (item.path !== '/v1/sbg/parcels/accept') return;
+        const p = narrow<{ parcelId?: string; trackingKey?: string; otp?: string; label?: { svg?: string } }>(answer);
+        if (!p?.parcelId) return;
+        const sender = (item.body as { senderMobile?: string } | undefined)?.senderMobile;
+        const late = { parcelId: p.parcelId, trackingKey: p.trackingKey, svg: p.label?.svg, releaseCode: p.otp, ...(sender && sender !== 'n/a' ? { senderMobile: sender } : {}), queuedAt: item.at };
+        setState((s) => ({ ...s, lateTakeIns: [...s.lateTakeIns, late] }));
+        pushToast({ tone: 'info', icon: 'box', title: t('agent.toast.lateTakeIn', { parcel: p.parcelId }), detail: t('agent.toast.lateTakeInDetail') });
+      }),
+    [pushToast],
+  );
 
   /**
    * F2 — book a too-big (dedicated/P4+) walk-up as FREIGHT. Only fires for a dedicated load with a valid
@@ -2141,6 +2185,7 @@ export function useAgentApp() {
       setTermsTold,
       retryTerms,
       dismissAcceptedLabel,
+      dismissLateTakeIn,
       submitBookFreight,
       dismissBookedFreight,
       loadPosted,
