@@ -26,6 +26,8 @@ export const ERROR_CODES = {
   VALIDATION_FAILED: { status: 400, title: 'Some fields are invalid' },
   INVALID_INPUT: { status: 400, title: 'Invalid input' },
   AMOUNT_INVALID: { status: 400, title: 'Amount is not valid' },
+  // One nation's requirement asked of somebody in another (a KRA PIN outside Kenya): it does not apply there.
+  NOT_IN_THIS_COUNTRY: { status: 400, title: 'Not asked in this country' },
   EMAIL_INVALID: { status: 400, title: 'A valid email is required' },
   // Somebody asking to be told when a country opens, about one that is already open. Not a failure on
   // their part: the right answer is a link to the sign-up, which is what the caller turns this into.

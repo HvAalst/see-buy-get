@@ -167,7 +167,7 @@ export function BooksScreen({ state, actions, client }: BooksScreenProps) {
         </Button>
       </SelectionBar>
 
-      {fiscal ? <TaxInvoicesCard load={fiscal.myFiscalInvoices} page={fiscal.fiscalInvoicePage} /> : null}
+      {fiscal ? <TaxInvoicesCard load={fiscal.myFiscalInvoices} page={fiscal.fiscalInvoicePage} taxNumber={{ load: fiscal.myTaxNumber, save: fiscal.setMyTaxNumber }} /> : null}
 
       <LedgerFilterSheet
         open={filterOpen}

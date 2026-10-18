@@ -1,13 +1,13 @@
-import { Controller, Get, Header, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Post, Put, Query } from '@nestjs/common';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles, SignedIn } from '../../foundation/auth/scopes.decorator';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { fiscalWayOf } from '../../foundation/fiscal/fiscal-ways';
 import { GlosError } from '../../foundation/http/glos-error';
-import { FiscalInvoiceQueryDto } from './fiscal-invoice.dto';
+import { BuyerTaxNumberDto, FiscalInvoiceQueryDto } from './fiscal-invoice.dto';
 import { FiscalInvoiceService } from './fiscal-invoice.service';
-import { FiscalInvoice, FiscalInvoiceList } from './fiscal-invoice.types';
+import { BuyerTaxNumberView, FiscalInvoice, FiscalInvoiceList } from './fiscal-invoice.types';
 import { ParcelService } from './parcel.service';
 import { PersonService } from './person.service';
 import { VendorService } from './vendor.service';
@@ -42,10 +42,26 @@ export class FiscalInvoiceController {
   @SignedIn()
   @Get('fiscal-invoices/mine')
   mine(@Actor() actor: IntrospectionResult): FiscalInvoice[] {
-    if (!actor?.did) return [];
-    if (actor.role === 'agent') return this.invoices.forBuyer('shop', actor.did);
-    const store = this.vendors.byDid(actor.did);
-    return store ? this.invoices.forBuyer('store', store.vendorId) : [];
+    const buyer = this.invoices.signedInBuyer(actor);
+    return buyer ? this.invoices.forBuyer(buyer.kind, buyer.id) : [];
+  }
+
+  /**
+   * A shop's or a store's own tax number, where its country has one (Kenya: the KRA PIN) — `applies: false` and
+   * nothing else everywhere else (the user, 2026-10-18: one nation's rules never interfere with another's).
+   */
+  @SignedIn()
+  @Get('fiscal-invoices/my-tax-number')
+  myTaxNumber(@Actor() actor: IntrospectionResult): BuyerTaxNumberView {
+    return this.invoices.taxNumberOf(this.invoices.signedInBuyer(actor));
+  }
+
+  /** Give it or take it away. The shop's owner or the store itself: staff are refused by name, as a staff sign-in passes every role check. */
+  @SignedIn()
+  @Put('fiscal-invoices/my-tax-number')
+  setMyTaxNumber(@Body() dto: BuyerTaxNumberDto, @Actor() actor: IntrospectionResult): BuyerTaxNumberView {
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A shop’s or a store’s tax number is its own to give, from its own sign-in');
+    return this.invoices.setTaxNumber(this.invoices.signedInBuyer(actor), dto.number);
   }
 
   @SignedIn()

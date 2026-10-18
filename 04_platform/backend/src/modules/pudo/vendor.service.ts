@@ -359,13 +359,15 @@ export class VendorService {
     // is earned until a parcel moves — we charge for service, not for balance.
     // What this sister charges for moving the money in — the store's half of the shop's rule. Credited
     // GROSS and charged separately, never netted: see TopUpFeeRule, and the shop's topUp for the same lines.
-    const ourFee = this.entities.topUpFeeFor(this.entityIdOf(vendor), amount).fee;
+    // With the company's own tax on it, the same as its carriage: owed to the authority, never revenue.
+    const { fee: ourFee, feeTax } = this.entities.topUpFeeFor(this.entityIdOf(vendor), amount);
     const entryId = this.post(vendor, 'top-up', ref ?? vendorId, [
       { code: ACCOUNT_CODES.CASH_CUSTODY, amount: Math.round((amount - cost) * 100) / 100 },
       ...(cost > 0 ? [{ code: ACCOUNT_CODES.EXPENSE_PAYMENT_FEES, amount: cost }] : []),
       { code: ACCOUNT_CODES.DEPOSIT_VENDOR, counterparty: vendorId, amount: -amount },
       ...(ourFee > 0 ? [{ code: ACCOUNT_CODES.DEPOSIT_VENDOR, counterparty: vendorId, amount: ourFee }] : []),
-      ...(ourFee > 0 ? [{ code: ACCOUNT_CODES.REVENUE, amount: -ourFee }] : []),
+      ...(ourFee > 0 ? [{ code: ACCOUNT_CODES.REVENUE, amount: -(Math.round((ourFee - feeTax) * 100) / 100) }] : []),
+      ...(feeTax > 0 ? [{ code: ACCOUNT_CODES.PAYABLE_TAX, amount: -feeTax }] : []),
     ]);
     this.book(vendor, 'TOP_UP', '+', amount, undefined, 'prepay', entryId);
     if (ourFee > 0) this.book(vendor, 'TOP_UP_FEE', '-', ourFee, undefined, 'top-up fee', entryId);

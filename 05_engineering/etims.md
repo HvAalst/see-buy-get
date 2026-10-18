@@ -120,14 +120,21 @@ A half set-up server (a serial without an item) says what is missing at start an
    before the device was set up?
 5. **Sending order**: the stand-in refuses a number out of order. Confirm whether KRA does.
 
-## For the user to decide
+## Decided since
 
-- **Buyers' KRA PINs are not collected** — not a shop's, not a store's. Their invoices carry none, so a VAT-registered
-  shop or store cannot claim the VAT back from them.
-- **The top-up fee carries no VAT** today, even where carriage does (it is posted without tax, so it goes as band D).
-  If the company charges VAT, that fee is a VAT-able service too.
-- **Everything goes under the head office (branch 00).** eTIMS knows branches; our shops are not our branches, so this
-  is believed right.
+- **A shop’s or a store’s KRA PIN** (the user: "kra pin is kenya specific, build things in a way that they do not
+  interfere with other nations regulations"). A Kenyan shop or store may give its KRA PIN on its Tax invoices card
+  (shop: Records → Earnings; store: Books), checked for KRA’s shape (A or P, nine digits, a letter); invoices made from
+  then on carry it as the buyer’s PIN (`custTin`). Decided per country (`buyerTaxNumberOf`): every other country’s
+  shop or store sees nothing about it, and giving one is refused (`NOT_IN_THIS_COUNTRY`). A person is never asked.
+- **The top-up fee carries the company’s own VAT** (the user: "Same VAT as carriage"). The fee set in the console is
+  the price before tax; the payer is told and charged it with the company’s own rate on top, the tax is owed (never
+  revenue), and the invoice is in the VAT band. Each country’s company sets its own rate; until it does, nothing is
+  added.
+
+## Believed right, say if not
+
+- **Everything goes under the head office (branch 00).** eTIMS knows branches; our shops are not our branches.
 
 ## Not built
 

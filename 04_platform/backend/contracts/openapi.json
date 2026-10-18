@@ -22533,6 +22533,54 @@
         }
       }
     },
+    "/v1/sbg/fiscal-invoices/my-tax-number": {
+      "get": {
+        "operationId": "FiscalInvoice.myTaxNumber",
+        "summary": "",
+        "description": "A shop's or a store's own tax number, where its country has one (Kenya: the KRA PIN) — `applies: false` and\nnothing else everywhere else (the user, 2026-10-18: one nation's rules never interfere with another's).",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuyerTaxNumberView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "FiscalInvoice.setMyTaxNumber",
+        "summary": "",
+        "description": "Give it or take it away. The shop's owner or the store itself: staff are refused by name, as a staff sign-in passes every role check.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuyerTaxNumberDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuyerTaxNumberView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fiscal-invoices/{invoiceId}": {
       "get": {
         "operationId": "FiscalInvoice.one",
@@ -47806,6 +47854,41 @@
           "counts",
           "rail",
           "total"
+        ]
+      },
+      "BuyerTaxNumberView": {
+        "type": "object",
+        "properties": {
+          "applies": {
+            "type": "boolean",
+            "description": "Whether this country asks for one at all. False: nothing to show."
+          },
+          "name": {
+            "type": "string",
+            "description": "Its name there (\"KRA PIN\"), and what one looks like."
+          },
+          "example": {
+            "type": "string"
+          },
+          "number": {
+            "type": "string",
+            "description": "The one this shop or store gave; its invoices carry it from then on."
+          }
+        },
+        "required": [
+          "applies"
+        ]
+      },
+      "BuyerTaxNumberDto": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "string",
+            "maxLength": 20
+          }
+        },
+        "required": [
+          "number"
         ]
       },
       "PayoutNumberView": {

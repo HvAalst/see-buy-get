@@ -330,6 +330,31 @@ describe('a shop’s float rests on a confirmed payment', () => {
         expect(change).toMatchObject({ by: 'a test', from: 'none', to: '20 below 2000' });
       });
 
+      it('carries the company’s own VAT, the same as its carriage: said before, charged as said, and owed rather than earned', async () => {
+        // The user, 2026-10-18: "Same VAT as carriage". The rule is the price before tax; the payer pays it with the tax.
+        entities.setTax(ke(), { ratePct: 0.16, label: 'VAT', registration: 'P051234567X' }, 'a test');
+        charging(2000, 20);
+        expect(entities.topUpFeeFor(ke(), 0)).toMatchObject({ charge: 23.2, fee: 0, taxLabel: 'VAT' });
+        const a = shop();
+        const request = await funding.open({ payerKind: 'agent', payerDid: a.did, amount: 500 });
+        await railConfirms(request.reference, 500);
+        expect(agents.balance(a.did)).toBe(476.8);
+        expect(books.balance(ke(), ACCOUNT_CODES.REVENUE)).toBe(-20);
+        expect(books.balance(ke(), ACCOUNT_CODES.PAYABLE_TAX)).toBe(-3.2);
+        expect(books.balances(ke()).balanced).toBe(true);
+        expect(gate.entries({ did: a.did }).find((r) => r.type === 'TOP_UP_FEE')).toMatchObject({ sign: '-', amount: 23.2 });
+        // A store pays it the same way.
+        const store = vendors.register({ name: 'Soko Online', country: 'KE', location: { lat: -1.3, lng: 36.8 } });
+        const asked = await funding.open({ payerKind: 'vendor', payerDid: store.vendorId, amount: 500 });
+        await railConfirms(asked.reference, 500);
+        expect(vendors.balanceOf(store.vendorId)).toBe(476.8);
+        expect(books.balance(ke(), ACCOUNT_CODES.PAYABLE_TAX)).toBe(-6.4);
+        // And with no tax set, nothing is added: the company's own rule, nobody else's.
+        entities.setTax(ke(), { ratePct: 0 }, 'a test');
+        expect(entities.topUpFeeFor(ke(), 0)).toMatchObject({ charge: 20 });
+        expect(entities.topUpFeeFor(ke(), 0).taxLabel).toBeUndefined();
+      });
+
       it('goes back to charging nothing when the rule is cleared', async () => {
         charging(2000, 20);
         entities.setTopUpFee(ke(), null, 'a test');

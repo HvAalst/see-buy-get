@@ -33,6 +33,11 @@ class RecordingRail implements EtimsRail {
 }
 
 const SHOP = 'did:glos:shop-1';
+const SHOP_ET = 'did:glos:shop-addis';
+const SHOPS: Record<string, { did: string; shopName: string; country: string }> = {
+  [SHOP]: { did: SHOP, shopName: 'Mama Sarah Shop', country: 'KE' },
+  [SHOP_ET]: { did: SHOP_ET, shopName: 'Merkato Kiosk', country: 'ET' },
+};
 const PARCELS: Record<string, unknown> = {
   'PUD-APP': { parcelId: 'PUD-APP', paymentMode: 'cash', senderMobile: 'app' },
   'PUD-WALK': { parcelId: 'PUD-WALK', paymentMode: 'cash', senderMobile: '+254700000001' },
@@ -57,8 +62,8 @@ describe('tax invoices — KRA eTIMS, Kenya only', () => {
         FiscalInvoiceService,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         { provide: ETIMS_RAIL, useValue: withRail },
-        { provide: AgentService, useValue: { find: (did: string) => (did === SHOP ? { did, shopName: 'Mama Sarah Shop' } : undefined) } },
-        { provide: VendorService, useValue: { get: (id: string) => ({ vendorId: id, did: `did:glos:${id}`, name: 'Duka la Mama' }) } },
+        { provide: AgentService, useValue: { find: (did: string) => SHOPS[did], countryOf: (a: { country: string }) => a.country } },
+        { provide: VendorService, useValue: { get: (id: string) => ({ vendorId: id, did: `did:glos:${id}`, name: 'Duka la Mama', country: 'KE' }), byDid: (did: string) => (did === 'did:glos:vnd_1' ? { vendorId: 'vnd_1', did, name: 'Duka la Mama', country: 'KE' } : undefined) } },
         {
           provide: ParcelService,
           useValue: {
@@ -258,6 +263,49 @@ describe('tax invoices — KRA eTIMS, Kenya only', () => {
     expect(original).toContain('KRACU0100000001/');
     expect(invoices.pageFor(kra, true)).toContain('<div class="mark">COPY</div>');
     expect(invoices.pageFor(kra, true)).toContain('THIS IS NOT AN OFFICIAL RECEIPT');
+  });
+
+  it('a Kenyan shop gives its KRA PIN in KRA’s shape, and what it buys after carries it; an Ethiopian shop is asked for none (the user, 2026-10-18)', async () => {
+    await boot();
+    const kenyan = invoices.signedInBuyer({ role: 'agent', did: SHOP });
+    expect(invoices.taxNumberOf(kenyan)).toEqual({ applies: true, name: 'KRA PIN', example: 'P051234567X' });
+    expect(() => invoices.setTaxNumber(kenyan, 'P12345')).toThrow(/A KRA PIN is a letter, nine digits and a letter/);
+    expect(invoices.setTaxNumber(kenyan, ' p051234567x ')).toMatchObject({ applies: true, number: 'P051234567X' });
+    shopSale('PUD-1');
+    await invoices.settled();
+    expect(invoices.forRef('PUD-1')[0].buyer.pin).toBe('P051234567X');
+    expect(rail!.sent[0].body).toMatchObject({ custTin: 'P051234567X' });
+    // Taken away: the next one carries none, and the one already made keeps what it was made with.
+    invoices.setTaxNumber(kenyan, '');
+    shopSale('PUD-2');
+    await invoices.settled();
+    expect(invoices.forRef('PUD-2')[0].buyer.pin).toBeUndefined();
+    expect(invoices.forRef('PUD-1')[0].buyer.pin).toBe('P051234567X');
+    // Another country's shop: nothing to show, and nothing it can give.
+    const ethiopian = invoices.signedInBuyer({ role: 'agent', did: SHOP_ET });
+    expect(invoices.taxNumberOf(ethiopian)).toEqual({ applies: false });
+    expect(() => invoices.setTaxNumber(ethiopian, 'P051234567X')).toThrow(expect.objectContaining({ code: 'NOT_IN_THIS_COUNTRY' }));
+    // A store gives its own the same way; somebody who is neither cannot.
+    expect(invoices.setTaxNumber(invoices.signedInBuyer({ role: 'genesis', did: 'did:glos:vnd_1' }), 'P000111222Q')).toMatchObject({ number: 'P000111222Q' });
+    expect(() => invoices.setTaxNumber(invoices.signedInBuyer({ role: 'consumer', did: 'did:glos:person' }), 'P000111222Q')).toThrow(/Only a shop or a store/);
+  });
+
+  it('a top-up fee charged with the company’s VAT is invoiced in the VAT band', async () => {
+    await boot();
+    books.post({
+      entityId: 'sbg-ke',
+      kind: 'top-up',
+      ref: 'MPESA-9',
+      lines: [
+        { code: ACCOUNT_CODES.CASH_CUSTODY, amount: 1000 },
+        { code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: SHOP, amount: -1000 },
+        { code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: SHOP, amount: 23.2 },
+        { code: ACCOUNT_CODES.REVENUE, amount: -20 },
+        { code: ACCOUNT_CODES.PAYABLE_TAX, amount: -3.2 },
+      ],
+    });
+    await invoices.settled();
+    expect(invoices.forRef('MPESA-9')[0].line).toMatchObject({ description: 'Top-up service fee', net: 20, tax: 3.2, gross: 23.2, band: 'B', ratePct: 16 });
   });
 
   it('a stop between the invoice and its counter never gives a number twice', async () => {

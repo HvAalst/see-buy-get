@@ -1,6 +1,11 @@
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
+/** A shop's or a store's own tax number (Kenya: the KRA PIN). Empty takes it away. */
+export class BuyerTaxNumberDto {
+  @IsString() @MaxLength(20) number!: string;
+}
+
 /** The Kenyan company's tax invoices: one company's, in one state, a page at a time. */
 export class FiscalInvoiceQueryDto {
   @IsOptional() @IsString() @MaxLength(40) entityId?: string;

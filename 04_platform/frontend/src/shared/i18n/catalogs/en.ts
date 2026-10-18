@@ -132,6 +132,7 @@ export const en = {
      line, so nothing is taken out of the payment on the way in. */
   'common.topUpFee.terms': 'Top-ups under {freeAbove} cost {charge}. {freeAbove} or more is free.',
   'common.topUpFee.charged': 'Top-up fee',
+  'common.topUpFee.taxIncluded': '{label} included',
   // The nudge says what to do, not only what it costs — a threshold nobody is shown cannot change
   // anybody's mind, and making the cheaper habit worth choosing is the whole reason this fee has a shape.
   'common.topUpFee.nudge': 'Add {more} more and this one is free — {freeAbove} or more is never charged.',
@@ -1555,6 +1556,17 @@ export const en = {
   'fiscal.sandbox': 'SANDBOX: answered by a stand-in on this laptop, not by KRA',
   'fiscal.standIn': 'Stand-in, not KRA',
   'fiscal.showAll': 'Show all {n}',
+  'fiscal.noneYet': 'No tax invoices yet.',
+  // A business's own tax number, by the name its country gives it ("KRA PIN"). Shown only where the country has one.
+  'fiscal.number.yours': 'Your {name}',
+  'fiscal.number.none': 'Not given',
+  'fiscal.number.why': 'Give your {name} and your tax invoices carry it, so you can claim their VAT back.',
+  'fiscal.number.carried': 'Your tax invoices carry your {name} from the day you gave it.',
+  'fiscal.number.add': 'Give your {name}',
+  'fiscal.number.change': 'Change your {name}',
+  'fiscal.number.emptyRemoves': 'Leave it empty to take it away.',
+  'fiscal.number.save': 'Save',
+  'fiscal.number.cancel': 'Cancel',
   'fiscal.print': 'Print',
   'fiscal.notYet': 'It can be printed once KRA has recorded it.',
   'fiscal.original': 'The first time you open it is the original. Every time after, it is marked COPY.',

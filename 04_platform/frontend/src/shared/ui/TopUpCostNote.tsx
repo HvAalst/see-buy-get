@@ -32,9 +32,11 @@ export function TopUpCostNote({ terms, amount, risesBy }: { terms: TopUpTerms | 
 
   // In the money the terms are set in: the company's that holds this float.
   const n = (v: number) => cash(v, terms.currency);
+  // The charge is what is paid, the company's own tax inside it — said, so nobody finds it on the invoice first.
+  const withTax = (v: number) => (terms.taxLabel ? `${n(v)} (${t('common.topUpFee.taxIncluded', { label: terms.taxLabel })})` : n(v));
   const cost = topUpCost(terms, amount);
 
-  if (!cost) return <p class="hint">{t('common.topUpFee.terms', { charge: n(terms.charge), freeAbove: n(terms.freeAbove) })}</p>;
+  if (!cost) return <p class="hint">{t('common.topUpFee.terms', { charge: withTax(terms.charge), freeAbove: n(terms.freeAbove) })}</p>;
   if (cost.free) return <p class="hint">{t('common.topUpFee.free', { freeAbove: n(terms.freeAbove) })}</p>;
 
   return (
@@ -43,7 +45,7 @@ export function TopUpCostNote({ terms, amount, risesBy }: { terms: TopUpTerms | 
           being charged. The figure that is not a breakdown of anything is the one below it. */}
       <div class="kv kv--quiet">
         <span>{t('common.topUpFee.charged')}</span>
-        <b>{n(cost.fee)}</b>
+        <b>{withTax(cost.fee)}</b>
       </div>
       <div class="kv">
         <span>{risesBy}</span>

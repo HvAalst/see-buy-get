@@ -89,6 +89,16 @@ export class FiscalInvoice {
   etims: EtimsStatus;
 }
 
+/** A shop's or a store's own tax number, where its country has one (Kenya: the KRA PIN). Absent everywhere else. */
+export class BuyerTaxNumberView {
+  @ApiProperty({ description: 'Whether this country asks for one at all. False: nothing to show.' }) applies: boolean;
+  /** Its name there ("KRA PIN"), and what one looks like. */
+  @ApiPropertyOptional() name?: string;
+  @ApiPropertyOptional() example?: string;
+  /** The one this shop or store gave; its invoices carry it from then on. */
+  @ApiPropertyOptional() number?: string;
+}
+
 /** The console's list: the invoices, and how the Kenyan company stands with eTIMS on this server. */
 export class FiscalInvoiceList {
   @ApiProperty({ type: [FiscalInvoice] }) items: FiscalInvoice[];

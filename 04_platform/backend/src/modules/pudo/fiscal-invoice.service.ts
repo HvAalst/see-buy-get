@@ -3,7 +3,7 @@ import { randomBytes } from 'crypto';
 import { BooksService } from '../../foundation/books/books.service';
 import { ACCOUNT_CODES, type AccountCode, type JournalEntry } from '../../foundation/books/books.types';
 import { EntityService } from '../../foundation/entity/entity.service';
-import { fiscalWayOf } from '../../foundation/fiscal/fiscal-ways';
+import { buyerTaxNumberOf, fiscalWayOf } from '../../foundation/fiscal/fiscal-ways';
 import { GlosError } from '../../foundation/http/glos-error';
 import { escapeHtml } from '../../foundation/mail/mail.blocks';
 import { qrSvgGroup } from '../../foundation/label/qr';
@@ -11,7 +11,7 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { AgentService } from './agent.service';
 import { BAND_RATES, bandFor, cuInvoiceNo, dashed, kenyaStamp, saleRequest, verifyUrl } from './etims';
 import { ETIMS_RAIL, type EtimsRail } from './etims-rail.adapter';
-import type { EtimsReceipt, EtimsState, EtimsStatus, FiscalBuyer, FiscalInvoice, FiscalInvoiceList } from './fiscal-invoice.types';
+import type { BuyerTaxNumberView, EtimsReceipt, EtimsState, EtimsStatus, FiscalBuyer, FiscalInvoice, FiscalInvoiceList } from './fiscal-invoice.types';
 import { ParcelService } from './parcel.service';
 import type { Parcel } from './pudo.types';
 import { VendorService } from './vendor.service';
@@ -55,6 +55,8 @@ export class FiscalInvoiceService implements OnModuleInit, OnApplicationBootstra
   private readonly requests = new PersistentMap<string, Record<string, unknown>>('fiscal-etims-requests');
   /** When each invoice's one original was handed to its buyer: every opening after it is a copy. */
   private readonly originals = new PersistentMap<string, { at: string }>('fiscal-originals');
+  /** Each shop's and store's own tax number, where its country has one, as it gave it: `shop:<did>`, `store:<vendorId>`. */
+  private readonly buyerNumbers = new PersistentMap<string, { number: string; country: string; at: string }>('fiscal-buyer-numbers');
   private readonly byEntry = new Map<string, string>();
   /** The last number each company gave, as numbering reads it — the counters' own copy, ahead of a batch's write. */
   private readonly last = new Map<string, number>();
@@ -153,6 +155,9 @@ export class FiscalInvoiceService implements OnModuleInit, OnApplicationBootstra
     const net = (grossMinor - taxAbs) / 100;
     const parcel = entry.kind !== 'top-up' && entry.ref ? this.parcelOrNone(entry.ref) : undefined;
     const { buyer, paidBy } = this.buyerOf(payer, parcel);
+    // Its tax number, where it gave one in this company's own country: what lets it claim the tax back.
+    const given = buyer.id && buyer.kind !== 'person' ? this.buyerNumbers.get(`${buyer.kind}:${buyer.id}`) : undefined;
+    if (given && given.country === entity.jurisdiction?.toUpperCase()) buyer.pin = given.number;
     const original = kind === 'credit' ? this.saleFor(entity.entityId, entry.ref, buyer) : undefined;
     const band = bandFor(net, tax);
     const ratePct = band ? BAND_RATES[band] : net > 0 ? Math.round((tax / net) * 10_000) / 100 : 0;
@@ -378,6 +383,47 @@ export class FiscalInvoiceService implements OnModuleInit, OnApplicationBootstra
     const offset = Math.max(0, q.offset ?? 0);
     const limit = Math.min(Math.max(1, q.limit ?? 50), 200);
     return { items: shown.slice(offset, offset + limit), total: shown.length, counts, ...this.railOf() };
+  }
+
+  /* ------------------------------------------------- the buyer's own number -- */
+
+  /** The shop or the store this sign-in is, and the country it stands in. Nobody else buys from us under a number. */
+  signedInBuyer(actor: { role?: string; did?: string } | undefined): { kind: 'shop' | 'store'; id: string; country: string } | undefined {
+    if (!actor?.did) return undefined;
+    if (actor.role === 'agent') {
+      const shop = this.agents.find(actor.did);
+      return shop ? { kind: 'shop', id: shop.did, country: this.agents.countryOf(shop).toUpperCase() } : undefined;
+    }
+    const store = this.vendors.byDid(actor.did);
+    return store ? { kind: 'store', id: store.vendorId, country: store.country.toUpperCase() } : undefined;
+  }
+
+  /** Its tax number, where its country asks for one — and `applies: false`, with nothing else, where it does not. */
+  taxNumberOf(buyer: { kind: 'shop' | 'store'; id: string; country: string } | undefined): BuyerTaxNumberView {
+    const spec = buyerTaxNumberOf(buyer?.country);
+    if (!buyer || !spec) return { applies: false };
+    const given = this.buyerNumbers.get(`${buyer.kind}:${buyer.id}`);
+    return { applies: true, name: spec.name, example: spec.example, ...(given && given.country === buyer.country ? { number: given.number } : {}) };
+  }
+
+  /**
+   * Give it, or take it away (empty). Only where its own country asks for one, in that country's shape; refused by
+   * name anywhere else — one nation's number is never asked of a business in another. Invoices made from then on
+   * carry it; one already made keeps what it was made with.
+   */
+  setTaxNumber(buyer: { kind: 'shop' | 'store'; id: string; country: string } | undefined, raw: string): BuyerTaxNumberView {
+    if (!buyer) throw new GlosError('FORBIDDEN', 'Only a shop or a store gives its own tax number, from its own sign-in');
+    const spec = buyerTaxNumberOf(buyer.country);
+    if (!spec) throw new GlosError('NOT_IN_THIS_COUNTRY', 'No tax number is asked of a business in your country');
+    const number = String(raw ?? '').replace(/\s+/g, '').toUpperCase();
+    const key = `${buyer.kind}:${buyer.id}`;
+    if (!number) {
+      this.buyerNumbers.delete(key);
+      return this.taxNumberOf(buyer);
+    }
+    if (!spec.pattern.test(number)) throw new GlosError('INVALID_INPUT', `A ${spec.name} is a letter, nine digits and a letter, like ${spec.example}`, { field: 'number' });
+    this.buyerNumbers.set(key, { number, country: buyer.country, at: new Date().toISOString() });
+    return this.taxNumberOf(buyer);
   }
 
   /** One shop's or store's, the newest first: its last two hundred. */

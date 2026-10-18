@@ -26,6 +26,13 @@ describe('topUpTermsOf', () => {
   it('drops a blank currency rather than rendering an empty unit next to a number', () => {
     expect(topUpTermsOf({ charge: 20, freeAbove: 2000, currency: '  ' })?.currency).toBeUndefined();
   });
+
+  it('keeps the name of the tax inside the charge, where the company charges one — and none where it does not', () => {
+    // The charge is what is paid, the company's own VAT inside it (the user, 2026-10-18: "Same VAT as carriage").
+    expect(topUpTermsOf({ charge: 23.2, freeAbove: 2000, currency: 'KES', taxLabel: 'VAT' })).toEqual({ charge: 23.2, freeAbove: 2000, currency: 'KES', taxLabel: 'VAT' });
+    expect(topUpTermsOf({ charge: 20, freeAbove: 2000, currency: 'KES' })).not.toHaveProperty('taxLabel');
+    expect(topUpCost(topUpTermsOf({ charge: 23.2, freeAbove: 2000, taxLabel: 'VAT' }), 500)).toMatchObject({ fee: 23.2, lands: 476.8 });
+  });
 });
 
 describe('topUpCost', () => {

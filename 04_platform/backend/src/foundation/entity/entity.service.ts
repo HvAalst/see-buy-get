@@ -318,17 +318,34 @@ export class EntityService implements OnApplicationBootstrap {
     return entity;
   }
 
-  topUpFeeFor(entityId: string, amount: number): { fee: number; charge: number; freeAbove: number; currency?: string } {
+  topUpFeeFor(entityId: string, amount: number): { fee: number; feeTax: number; charge: number; freeAbove: number; currency?: string; taxLabel?: string } {
     const entity = this.get(entityId);
     const rule = entity.topUpFee;
     const freeAbove = Math.max(0, Number(rule?.freeAbove) || 0);
-    const charge = Math.max(0, Number(rule?.amount) || 0);
+    const net = Math.round(Math.max(0, Number(rule?.amount) || 0) * 100) / 100;
     const paid = Math.max(0, Number(amount) || 0);
+    /*
+     * WITH THE COMPANY'S OWN TAX, the same as its carriage (the user, 2026-10-18: "Same VAT as carriage"). The rule
+     * set in the console is the price before tax; what the payer is told and charged is that price and the tax on it,
+     * at the rate this company charges — its own country's, set by itself, and nothing anywhere until it sets one.
+     * Company-wide, not a lane's: a top-up is no lane of work. Both returned, so the books owe the tax and the tax
+     * invoice names it.
+     */
+    const tax = EntityService.resolveTax(entity);
+    const chargeTax = Math.round(net * tax.ratePct * 100) / 100;
+    const gross = Math.round((net + chargeTax) * 100) / 100;
     // No rule, no charge, or nothing to charge it on — all three are "free", and none of them is an error.
-    const fee = freeAbove > 0 && charge > 0 && paid > 0 && paid < freeAbove ? Math.round(charge * 100) / 100 : 0;
+    const due = freeAbove > 0 && net > 0 && paid > 0 && paid < freeAbove;
     // `charge` and `freeAbove` are the TERMS and stand whatever this particular amount is, so a screen can
     // say "we charge 20 below 2,000" before anybody has typed a figure. `fee` answers for this amount only.
-    return { fee, charge: freeAbove > 0 ? Math.round(charge * 100) / 100 : 0, freeAbove, currency: entity.currency };
+    return {
+      fee: due ? gross : 0,
+      feeTax: due ? chargeTax : 0,
+      charge: freeAbove > 0 ? gross : 0,
+      freeAbove,
+      currency: entity.currency,
+      ...(chargeTax > 0 ? { taxLabel: tax.label } : {}),
+    };
   }
 
   /**

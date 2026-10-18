@@ -59,12 +59,17 @@ describe('Kenyan tax invoices, over the wire', () => {
   it('a Kenyan shop’s charge is invoiced and recorded, read by that shop and the company — by nobody else', async () => {
     const shop = await aShop({ lat: -1.2, lng: 36.8 }, `+2547${digits()}1`);
     const other = await aShop({ lat: -1.21, lng: 36.81 }, `+2547${digits()}2`);
+    // Its KRA PIN, given in KRA's shape, rides on what it buys from then on. Staff do not give it for the shop.
+    expect((await http().get('/v1/sbg/fiscal-invoices/my-tax-number').set(shop.owner).expect(200)).body).toMatchObject({ applies: true, name: 'KRA PIN' });
+    await http().put('/v1/sbg/fiscal-invoices/my-tax-number').set(shop.owner).send({ number: 'P05' }).expect(400);
+    await http().put('/v1/sbg/fiscal-invoices/my-tax-number').set(operator).send({ number: 'P051234567X' }).expect(403);
+    expect((await http().put('/v1/sbg/fiscal-invoices/my-tax-number').set(shop.owner).send({ number: 'p051234567x' }).expect(200)).body).toMatchObject({ number: 'P051234567X' });
     const parcelId = await aParcelTakenIn(shop, `+2547${digits()}3`, `+2547${digits()}4`);
     await app.get(FiscalInvoiceService).settled();
 
     const mine = (await http().get(`/v1/sbg/parcels/${parcelId}/fiscal-invoices`).set(shop.owner).expect(200)).body as Array<Record<string, any>>;
     expect(mine).toHaveLength(1);
-    expect(mine[0]).toMatchObject({ entityId: 'sbg-ke', country: 'KE', kind: 'sale', ref: parcelId, buyer: { kind: 'shop', id: shop.did }, paidBy: 'prepaid', etims: { state: 'recorded', tries: 1 } });
+    expect(mine[0]).toMatchObject({ entityId: 'sbg-ke', country: 'KE', kind: 'sale', ref: parcelId, buyer: { kind: 'shop', id: shop.did, pin: 'P051234567X' }, paidBy: 'prepaid', etims: { state: 'recorded', tries: 1 } });
     expect(mine[0].number).toBeGreaterThan(0);
     expect(mine[0].etims.receipt).toMatchObject({ sdcId: 'SANDBOX', sandbox: true });
     // Staff look first: theirs is a copy, and the buyer's original is still the buyer's.
@@ -102,6 +107,9 @@ describe('Kenyan tax invoices, over the wire', () => {
 
   it('an Ethiopian shop’s charge is booked, and never invoiced for KRA', async () => {
     const shop = await aShop({ lat: 9.03, lng: 38.74 }, `+2519${digits()}1`, 'ET');
+    // Kenya's number is not Ethiopia's to ask for: nothing shown, nothing it can give.
+    expect((await http().get('/v1/sbg/fiscal-invoices/my-tax-number').set(shop.owner).expect(200)).body).toEqual({ applies: false });
+    expect((await http().put('/v1/sbg/fiscal-invoices/my-tax-number').set(shop.owner).send({ number: 'P051234567X' }).expect(400)).body.code).toBe('NOT_IN_THIS_COUNTRY');
     const parcelId = await aParcelTakenIn(shop, `+2519${digits()}3`, `+2519${digits()}4`);
     await app.get(FiscalInvoiceService).settled();
     // It was charged, by the Ethiopian company…

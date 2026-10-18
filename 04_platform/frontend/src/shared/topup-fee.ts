@@ -20,6 +20,8 @@ export interface TopUpTerms {
   /** Top up this much or more and it costs nothing. */
   freeAbove: number;
   currency?: string;
+  /** The tax inside the charge, by its name, where the company charges one (its own, set by itself): said beside the figure. */
+  taxLabel?: string;
 }
 
 /** What one particular amount will cost, and what will actually land. */
@@ -51,7 +53,8 @@ export function topUpTermsOf(raw: unknown): TopUpTerms | null {
   const freeAbove = Number(t?.freeAbove) || 0;
   if (!(charge > 0) || !(freeAbove > 0)) return null;
   const currency = typeof t?.currency === 'string' && t.currency.trim() ? t.currency.trim() : undefined;
-  return { charge: round2(charge), freeAbove: round2(freeAbove), currency };
+  const taxLabel = typeof t?.taxLabel === 'string' && t.taxLabel.trim() ? t.taxLabel.trim() : undefined;
+  return { charge: round2(charge), freeAbove: round2(freeAbove), currency, ...(taxLabel ? { taxLabel } : {}) };
 }
 
 /**

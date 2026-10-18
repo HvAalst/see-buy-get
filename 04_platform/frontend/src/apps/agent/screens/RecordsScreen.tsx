@@ -60,7 +60,7 @@ export function RecordsScreen({ state, actions, archive, destination, fiscal }: 
 
       {view === 'notes' ? <ArchiveSection archive={archive} destination={destination} /> : view === 'parcels' ? <ParcelHistory state={state} actions={actions} /> : <Earnings state={state} actions={actions} />}
       {/* What the shop bought from the network, as KRA has it: what it claims its VAT back with. */}
-      {view === 'earnings' && fiscal ? <TaxInvoicesCard load={fiscal.myFiscalInvoices} page={fiscal.fiscalInvoicePage} /> : null}
+      {view === 'earnings' && fiscal ? <TaxInvoicesCard load={fiscal.myFiscalInvoices} page={fiscal.fiscalInvoicePage} taxNumber={{ load: fiscal.myTaxNumber, save: fiscal.setMyTaxNumber }} /> : null}
     </div>
   );
 }

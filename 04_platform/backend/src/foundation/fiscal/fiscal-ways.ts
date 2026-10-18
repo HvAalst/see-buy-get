@@ -14,3 +14,24 @@ const BY_COUNTRY: Readonly<Record<string, FiscalWay>> = { KE: 'etims' };
 export function fiscalWayOf(country: string | undefined): FiscalWay | undefined {
   return country ? BY_COUNTRY[country.toUpperCase()] : undefined;
 }
+
+/**
+ * THE NUMBER A BUSINESS GIVES SO ITS TAX INVOICES CARRY IT — what lets a VAT-registered shop or store claim the tax
+ * back. Each country's own, or none (the user, 2026-10-18: "kra pin is kenya specific, build things in a way that they
+ * do not interfere with other nations regulations"). Kenya: the KRA PIN — a letter (A a person, P a business), nine
+ * digits, a letter. Every other country: nothing is asked, nothing is shown, and setting one is refused.
+ */
+export interface BuyerTaxNumber {
+  /** Its name in that country, said as it is said there. */
+  name: string;
+  pattern: RegExp;
+  example: string;
+}
+
+const BUYER_NUMBER: Readonly<Record<string, BuyerTaxNumber>> = {
+  KE: { name: 'KRA PIN', pattern: /^[AP]\d{9}[A-Z]$/, example: 'P051234567X' },
+};
+
+export function buyerTaxNumberOf(country: string | undefined): BuyerTaxNumber | undefined {
+  return country ? BUYER_NUMBER[country.toUpperCase()] : undefined;
+}

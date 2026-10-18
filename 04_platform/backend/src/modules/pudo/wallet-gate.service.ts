@@ -258,7 +258,8 @@ export class WalletGateService {
      * Charged on what ARRIVED, because that is what it cost us to carry. A shop that asks for 2,000 and
      * pays 400 is charged on the 400.
      */
-    const ourFee = this.entities.topUpFeeFor(this.agents.entityIdOf(this.agents.get(did)), amount).fee;
+    // With the company's own tax on it, the same as its carriage: owed to the authority, never revenue.
+    const { fee: ourFee, feeTax } = this.entities.topUpFeeFor(this.agents.entityIdOf(this.agents.get(did)), amount);
     const entryId = this.postAgent(did, 'top-up', bankRef, [
       // What we actually hold is what the payer sent LESS what the rail took on the way.
       { code: ACCOUNT_CODES.CASH_CUSTODY, amount: Math.round((amount - cost) * 100) / 100 },
@@ -267,7 +268,8 @@ export class WalletGateService {
       ...(toDeposit > 0 ? [{ code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: did, amount: -toDeposit }] : []),
       // One entry, so the credit and its charge either both land or neither does.
       ...(ourFee > 0 ? [{ code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: did, amount: ourFee }] : []),
-      ...(ourFee > 0 ? [{ code: ACCOUNT_CODES.REVENUE, amount: -ourFee }] : []),
+      ...(ourFee > 0 ? [{ code: ACCOUNT_CODES.REVENUE, amount: -(Math.round((ourFee - feeTax) * 100) / 100) }] : []),
+      ...(feeTax > 0 ? [{ code: ACCOUNT_CODES.PAYABLE_TAX, amount: -feeTax }] : []),
     ]);
     const entry = this.record('TOP_UP', '+', amount, did, bankRef, 'bank', entryId);
     // Two register rows off one journal entry: the register is a projection, and the shop is owed both
