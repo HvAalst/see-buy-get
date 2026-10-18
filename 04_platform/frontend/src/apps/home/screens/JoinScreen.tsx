@@ -7,7 +7,7 @@ import { IdDisputeOpen } from '../../../shared/account/IdDisputeOpen';
 import { recoveryApi } from '../../../shared/account/recovery';
 import { homeConfig } from '../api';
 
-import { DRIVER_CLASSES, joinSpoken, needsLicence, pickedClasses, pickedVehicle, roleMeta, stepBlocker, stepsFor, vehicleClassFor } from '../logic';
+import { ANDROID_CHOICES, DRIVER_CLASSES, joinSpoken, needsLicence, pickedClasses, pickedVehicle, roleMeta, stepBlocker, stepsFor, vehicleClassFor } from '../logic';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE, leaveInterest, type OperatingCountry } from '../api';
 import type { HomeActions, HomeState } from '../useHomeApp';
 
@@ -414,6 +414,68 @@ function AboutStep({ state, actions }: JoinScreenProps) {
           </>
         ) : null}
       </Card>
+
+      {/* A SHOP'S ANSWERS to the franchise requirements: the applicant's own, never filled in for them. */}
+      {role.id === 'pudo' ? (
+        <Card title={t('home.join.shop.title')}>
+          <p class="card__note">{t('home.join.shop.lede')}</p>
+          <div class="field" style="margin-top:12px">
+            <label class="field__label" for="shop-android">
+              {t('home.join.shop.android')}
+            </label>
+            <select id="shop-android" class="input" value={f.androidVersion} onChange={(e) => actions.setForm({ androidVersion: e.currentTarget.value })}>
+              <option value="">{t('home.join.shop.androidChoose')}</option>
+              {ANDROID_CHOICES.map((v) => (
+                <option key={v} value={v}>
+                  {v === 'older' ? t('home.join.shop.androidOlder') : v === 'none' ? t('home.join.shop.androidNone') : t('home.join.shop.androidVersion', { version: v })}
+                </option>
+              ))}
+            </select>
+            <p class="card__note">{t('home.join.shop.androidHint')}</p>
+          </div>
+          <div class="field" style="margin-top:12px">
+            <span class="field__label" id="shop-power-label">
+              {t('home.join.shop.power')}
+            </span>
+            <div class="chips" role="group" aria-labelledby="shop-power-label">
+              {(['yes', 'no'] as const).map((v) => (
+                <button key={v} type="button" id={`shop-power-${v}`} class={`chip chip--tap${f.reliablePower === v ? ' chip--on' : ''}`} aria-pressed={f.reliablePower === v} onClick={() => actions.setForm({ reliablePower: v })}>
+                  {t(v === 'yes' ? 'home.join.shop.powerYes' : 'home.join.shop.powerNo')}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div class="field" style="margin-top:12px">
+            <label class="field__label" for="shop-licence">
+              {t('home.join.shop.licence')}
+            </label>
+            <input id="shop-licence" class="input" value={f.tradingLicence} onInput={(e) => actions.setForm({ tradingLicence: e.currentTarget.value })} spellcheck={false} />
+            <p class="card__note">{t('home.join.shop.licenceHint')}</p>
+          </div>
+          <div class="field" style="margin-top:12px">
+            <span class="field__label">{t('home.join.shop.hours')}</span>
+            <div style="display:flex;gap:12px">
+              <div class="field" style="flex:1">
+                <label class="field__label" for="shop-opens">
+                  {t('home.join.shop.opens')}
+                </label>
+                <input id="shop-opens" class="input" type="time" value={f.openFrom} onInput={(e) => actions.setForm({ openFrom: e.currentTarget.value })} />
+              </div>
+              <div class="field" style="flex:1">
+                <label class="field__label" for="shop-closes">
+                  {t('home.join.shop.closes')}
+                </label>
+                <input id="shop-closes" class="input" type="time" value={f.openTo} onInput={(e) => actions.setForm({ openTo: e.currentTarget.value })} />
+              </div>
+            </div>
+            <p class="card__note">{t('home.join.shop.hoursHint')}</p>
+          </div>
+          <label class="checkline" style="margin-top:12px">
+            <input id="shop-record" type="checkbox" checked={f.recordClear} onChange={(e) => actions.setForm({ recordClear: e.currentTarget.checked })} />
+            <span>{t('home.join.shop.record')}</span>
+          </label>
+        </Card>
+      ) : null}
 
       {/* `title`, not `label`: "What do you drive?" was the section's aria-label and rendered nothing, so
           the form showed a row of bare chips and never asked the question out loud. */}

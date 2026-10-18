@@ -31,6 +31,7 @@ import {
   type FreightClaimRow,
   type StalledRow,
   type DriverApplication,
+  answersLine,
 } from '../queues';
 import { countryNameOf } from '../presence';
 import type { TowerActions, TowerState } from '../useTowerApp';
@@ -803,8 +804,8 @@ function ApprovalRowView({ row, state, actions }: { row: ApprovalRow; state: Tow
       </td>
       <td class="ctbl__num"><span class="ctbl__lbl">{t('tower.approvals.col.shelf')}</span>{t('tower.approvals.slots', { n: shelfSlots(row) })}</td>
       <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.approvals.col.kit')}</span>
-        {t('tower.approvals.android', { version: row.requirements?.androidVersion ?? '—' })} ·{' '}
-        {t('tower.approvals.licence', { licence: row.requirements?.tradingLicence ?? '—' })}
+        {/* The applicant's OWN answers — the form no longer fills them in for them. */}
+        {answersLine(row, t)}
       </td>
       <td class="ctbl__mono"><span class="ctbl__lbl">{t('tower.approvals.col.docs')}</span>
         {/* An application with NO documents is a different decision from one with three, and the screen

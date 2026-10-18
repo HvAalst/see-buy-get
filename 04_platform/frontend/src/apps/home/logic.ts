@@ -189,6 +189,31 @@ export interface JoinForm {
   vehiclePlate: string;
   vehicleClass: string;
   truckSubtype: string;
+  /*
+   * A SHOP'S ANSWERS TO THE FRANCHISE REQUIREMENTS (compendium 18.1). The form used to send them FOR the applicant —
+   * Android 13, reliable power, a licence number made from the ID, a clean record — so the checks behind them always
+   * passed. The user, 2026-10-18: ask the applicant. Staff see the answers when they review.
+   */
+  /** The phone's Android version: '10'…'15', 'older' (below 10), 'none' (not an Android phone), '' unanswered. */
+  androidVersion: string;
+  /** Power at the shop all day — mains, solar or a backup: 'yes' | 'no' | '' unanswered. */
+  reliablePower: string;
+  tradingLicence: string;
+  /** The shop's usual hours, every day; each day can be changed in the app afterwards. */
+  openFrom: string;
+  openTo: string;
+  /** The applicant declares a clean criminal record, and that SeeBuyGet may check it. */
+  recordClear: boolean;
+}
+
+/** The Android versions a shop is asked to choose from. */
+export const ANDROID_CHOICES = ['15', '14', '13', '12', '11', '10', 'older', 'none'] as const;
+
+/** Hours open a day, from the two clock times; 0 when either is missing or close is not after open. */
+export function openHoursOf(from: string, to: string): number {
+  const m = (s: string) => (/^\d{2}:\d{2}$/.test(s) ? Number(s.slice(0, 2)) * 60 + Number(s.slice(3)) : NaN);
+  const span = m(to) - m(from);
+  return Number.isFinite(span) && span > 0 ? span / 60 : 0;
 }
 
 export const EMPTY_JOIN: JoinForm = {
@@ -209,6 +234,12 @@ export const EMPTY_JOIN: JoinForm = {
   vehiclePlate: '',
   vehicleClass: '',
   truckSubtype: '',
+  androidVersion: '',
+  reliablePower: '',
+  tradingLicence: '',
+  openFrom: '08:00',
+  openTo: '18:00',
+  recordClear: false,
 };
 
 /**
@@ -248,6 +279,17 @@ export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Tran
       if (!f.displayName.trim()) return role.id === 'pudo' ? t('home.block.nameShop') : role.id === 'mdp' ? t('home.block.nameHub') : t('home.block.nameGeneric');
       if (role.id !== 'mdp' && !f.fullName.trim()) return t('home.block.fullName');
       if (role.id !== 'mdp' && !f.nationalId.trim()) return t('home.block.idNumber');
+      // A shop's answers to the requirements, asked here — and a requirement it does not meet said here, in words,
+      // rather than refused by the server at the end of the sign-up.
+      if (role.id === 'pudo') {
+        if (!f.androidVersion) return t('home.block.android');
+        if (f.androidVersion === 'older' || f.androidVersion === 'none') return t('home.block.androidOld');
+        if (!f.reliablePower) return t('home.block.power');
+        if (f.reliablePower === 'no') return t('home.block.powerNo');
+        if (!f.tradingLicence.trim()) return t('home.block.tradingLicence');
+        if (openHoursOf(f.openFrom, f.openTo) < 10) return t('home.block.hours');
+        if (!f.recordClear) return t('home.block.record');
+      }
       if (role.id === 'driver' && f.licenceClasses.length === 0) return t('home.block.drive');
       if (role.id === 'driver' && needsLicence(f.licenceClasses)) {
         if (!f.licenceNumber.trim()) return t('home.block.licenceNumber');
@@ -285,19 +327,16 @@ export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Tran
 
 /* ------------------------------------------------------------- signup body -- */
 
-const HOURS = Object.fromEntries(
-  ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map((d) => [d, { open: '08:00', close: '18:00' }]),
-);
+/** The same hours every day: what the applicant said; each day can be changed in the app afterwards. */
+const everyDay = (open: string, close: string) => Object.fromEntries(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map((d) => [d, { open, close }]));
 
 /**
  * The signup payload for each role.
  *
- * Two decisions worth stating: the shop's opening hours and shelf grid get workable
- * DEFAULTS rather than wizard steps (the compendium's filter asks for ≥10 h/day and a
- * chaos shelf — both are editable in the app afterwards, and neither is a thing a person
- * standing in their shop wants to key in to join). And `deviceImei` carries a browser-
- * generated marker: the compendium binds an agent to one device, which a PWA cannot do
- * honestly — see the note in api.ts.
+ * A shop's answers to the franchise requirements are the applicant's own (asked on the 'about' step). Its shelf grid
+ * gets a workable DEFAULT rather than a wizard step: editable in the app afterwards, and not a thing a person standing
+ * in their shop wants to key in to join. And `deviceImei` carries a browser-generated marker: the compendium binds an
+ * agent to one device, which a PWA cannot do honestly — see the note in api.ts.
  */
 export function signupBody(role: RoleSpec, f: JoinForm, deviceMarker: string): Record<string, unknown> {
   const phone = normalizePhone(f.phone);
@@ -319,12 +358,12 @@ export function signupBody(role: RoleSpec, f: JoinForm, deviceMarker: string): R
           location: f.location,
           pricePerParcel: 1.5,
           shelf: { rows: 4, cols: 5 },
-          openingHours: HOURS,
+          openingHours: everyDay(f.openFrom, f.openTo),
           requirements: {
-            androidVersion: 13,
-            reliablePower: true,
-            tradingLicence: `SELF-${f.nationalId.trim()}`,
-            criminalRecordClear: true,
+            androidVersion: /^\d+$/.test(f.androidVersion) ? Number(f.androidVersion) : 0,
+            reliablePower: f.reliablePower === 'yes',
+            tradingLicence: f.tradingLicence.trim(),
+            criminalRecordClear: f.recordClear,
           },
         },
       },

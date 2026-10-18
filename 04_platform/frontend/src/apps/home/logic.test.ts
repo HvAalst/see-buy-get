@@ -46,6 +46,12 @@ const filled = (over: Partial<JoinForm> = {}): JoinForm => ({
   location: { lat: -1.28, lng: 36.82 },
   zone: 'Z-A',
   country: 'KE',
+  androidVersion: '13',
+  reliablePower: 'yes',
+  tradingLicence: 'TL-2026-0042',
+  openFrom: '07:30',
+  openTo: '19:00',
+  recordClear: true,
   ...over,
 });
 
@@ -103,6 +109,16 @@ describe('stepBlocker', () => {
     expect(stepBlocker(shop, 'phone', filled(), t)).toBeNull();
     expect(stepBlocker(shop, 'about', { ...filled(), displayName: '' }, t)).toContain('shop');
     expect(stepBlocker(shop, 'about', { ...filled(), fullName: '' }, t)).toContain('full name');
+    // The requirements: asked, and a requirement not met said on the step, not refused at the end.
+    expect(stepBlocker(shop, 'about', filled(), t)).toBeNull();
+    expect(stepBlocker(shop, 'about', { ...filled(), androidVersion: '' }, t)).toBe(t('home.block.android'));
+    expect(stepBlocker(shop, 'about', { ...filled(), androidVersion: 'older' }, t)).toBe(t('home.block.androidOld'));
+    expect(stepBlocker(shop, 'about', { ...filled(), reliablePower: 'no' }, t)).toBe(t('home.block.powerNo'));
+    expect(stepBlocker(shop, 'about', { ...filled(), tradingLicence: ' ' }, t)).toBe(t('home.block.tradingLicence'));
+    expect(stepBlocker(shop, 'about', { ...filled(), openFrom: '09:00', openTo: '18:00' }, t)).toBe(t('home.block.hours'));
+    expect(stepBlocker(shop, 'about', { ...filled(), recordClear: false }, t)).toBe(t('home.block.record'));
+    // Only a shop is asked: a driver's form is not held to a shop's requirements.
+    expect(stepBlocker(role('driver'), 'about', { ...filled(), androidVersion: '', vehicleClass: 'bike', vehiclePlate: 'KMA 1' }, t)).toBeNull();
     // The country comes first on this step: it decides which company contracts them, and it narrows the
     // areas offered below it. A wizard that never asked is how a shop in Addis ended up billed by Nairobi.
     expect(stepBlocker(shop, 'where', { ...filled(), country: '' }, t)).toContain('country');
@@ -272,7 +288,9 @@ describe('signupBody', () => {
     expect(a.location).toEqual({ lat: -1.28, lng: 36.82 });
     expect(a.shelf).toEqual({ rows: 4, cols: 5 });
     expect(Object.keys(a.openingHours as object)).toHaveLength(7);
-    expect((a.requirements as { criminalRecordClear: boolean }).criminalRecordClear).toBe(true);
+    expect((a.openingHours as Record<string, unknown>).sun).toEqual({ open: '07:30', close: '19:00' });
+    // The applicant's own answers — never filled in for them.
+    expect(a.requirements).toEqual({ androidVersion: 13, reliablePower: true, tradingLicence: 'TL-2026-0042', criminalRecordClear: true });
     expect(a.country).toBe('KE'); // which company contracts this shop — never inferred from the pin
   });
 

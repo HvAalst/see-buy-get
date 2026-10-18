@@ -167,8 +167,27 @@ export interface ApprovalRow {
   shopName?: string;
   zone?: string;
   shelf?: { rows?: number; cols?: number };
-  requirements?: { androidVersion?: string; tradingLicence?: string };
+  requirements?: { androidVersion?: string | number; tradingLicence?: string; reliablePower?: boolean; criminalRecordClear?: boolean };
+  openingHours?: Record<string, { open: string; close: string } | null | undefined>;
   kyc?: { idCopyRef?: string; tradingLicenceRef?: string; shopPhotoRefs?: string[] };
+}
+
+/**
+ * The applicant's own answers to the franchise requirements, in one line for the reviewer: the phone, the power, the
+ * hours and the declared record. Read beside the photographs, which are what staff actually check.
+ */
+export function answersLine(row: Pick<ApprovalRow, 'requirements' | 'openingHours'>, t: Translate): string {
+  const r = row.requirements ?? {};
+  const days = Object.values(row.openingHours ?? {}).filter((d): d is { open: string; close: string } => Boolean(d));
+  const same = days.length > 0 && days.every((d) => d.open === days[0].open && d.close === days[0].close);
+  const hours = !days.length ? t('tower.approvals.hoursNone') : same ? t('tower.approvals.hours', { from: days[0].open, to: days[0].close }) : t('tower.approvals.hoursVary');
+  return [
+    t('tower.approvals.android', { version: r.androidVersion ?? '—' }),
+    t(r.reliablePower ? 'tower.approvals.powerYes' : 'tower.approvals.powerNo'),
+    hours,
+    t('tower.approvals.licence', { licence: r.tradingLicence || '—' }),
+    t(r.criminalRecordClear ? 'tower.approvals.recordDeclared' : 'tower.approvals.recordNot'),
+  ].join(' · ');
 }
 
 /** How much shelf this shop is offering — the capacity the network is actually buying. */

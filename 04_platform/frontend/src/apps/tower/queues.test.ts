@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  answersLine,
   applicationPapers,
   needsRecordTick,
   carrierBearsLine,
@@ -259,5 +260,12 @@ describe('an ask to ride for themselves, on the driver applications row', () => 
     expect(needsRecordTick({ criminalRecordClear: true, courierAsk: ask })).toBe(true);
     expect(needsRecordTick({ criminalRecordClear: true })).toBe(false);
     expect(needsRecordTick({ criminalRecordClear: false })).toBe(true);
+  });
+
+  it('puts a shop applicant\'s own answers to the requirements in one line for the reviewer', () => {
+    const every = Object.fromEntries(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map((d) => [d, { open: '07:30', close: '19:00' }]));
+    expect(answersLine({ requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-42', criminalRecordClear: true }, openingHours: every }, t)).toBe('tower.approvals.android(version=13) · tower.approvals.powerYes · tower.approvals.hours(from=07:30,to=19:00) · tower.approvals.licence(licence=TL-42) · tower.approvals.recordDeclared');
+    expect(answersLine({ requirements: {}, openingHours: { ...every, sun: null } }, t)).toBe('tower.approvals.android(version=—) · tower.approvals.powerNo · tower.approvals.hours(from=07:30,to=19:00) · tower.approvals.licence(licence=—) · tower.approvals.recordNot');
+    expect(answersLine({ requirements: { androidVersion: 12 }, openingHours: { ...every, sat: { open: '09:00', close: '13:00' } } }, t)).toContain('tower.approvals.hoursVary');
   });
 });

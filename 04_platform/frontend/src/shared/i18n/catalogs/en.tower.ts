@@ -2977,4 +2977,11 @@ export const enTowerBusinesses = {
   'tower.biz.refuseWhy': 'Or refuse, and say why',
   'tower.biz.refuseHint': 'The business reads this in its app and by email. Say what to put right.',
   'tower.biz.refuse': 'Refuse',
+  'tower.approvals.powerYes': 'power all day',
+  'tower.approvals.powerNo': 'no power all day',
+  'tower.approvals.hours': 'open {from}–{to}',
+  'tower.approvals.hoursVary': 'hours vary by day',
+  'tower.approvals.hoursNone': 'no hours given',
+  'tower.approvals.recordDeclared': 'clean record declared',
+  'tower.approvals.recordNot': 'no clean record declared',
 };
