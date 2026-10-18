@@ -604,6 +604,25 @@ describe('PUDO Light', () => {
     expect(vault.reveal(profile.vaultRef!, { purpose: 'test', requesterDid: 'did:test' }).fullName).toBe('Vault Shop owner');
   });
 
+  it('writes the parcels a handover leaves behind together — once, not one rewrite of the whole store each', () => {
+    // Found 2026-10-18, seeding: kept on files, each left-behind parcel rewrote a 40 MB store and held the server minutes.
+    const origin = onboardAgent('Busy PUDO', 'BusyTown', 50);
+    const corridor = corridors.addCorridor({ name: 'Busy Line', originZone: 'BusyTown', destZone: 'FarTown' });
+    const driver = corridors.addDriver({ driverDid: 'did:glos:busy-driver', name: 'Otieno', corridorId: corridor.corridorId });
+    for (let i = 0; i < 6; i++) parcels.accept({ agentDid: origin.did, parcelId: `QR-BUSY-${i}`, size: 'S', destZone: 'FarTown', senderMobile: '+254700', receiverMobile: '+254711', dropoffPhotoRef: 'p.jpg' });
+    const store = (parcels as unknown as { parcels: { setMany: (e: Iterable<unknown>) => unknown } }).parcels;
+    const real = store.setMany.bind(store);
+    const batches: number[] = [];
+    jest.spyOn(store, 'setMany').mockImplementation((e: Iterable<unknown>) => {
+      const list = [...e];
+      batches.push(list.length);
+      return real(list as never);
+    });
+    parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-BUSY-0'], acknowledgeShortShip: true, shortShipReason: 'one parcel this bus' });
+    expect(batches).toEqual([5]);
+    for (let i = 1; i < 6; i++) expect(parcels.get(`QR-BUSY-${i}`)).toMatchObject({ status: 'At_PUDO', shortShipReason: 'one parcel this bus', shortShippedAt: expect.any(String) });
+  });
+
   it('runs the steel thread: accept → handover → arrive → pickup, all anchored', () => {
     const origin = onboardAgent('North PUDO', 'NorthTown', 50);
     const dest = onboardAgent('South PUDO', 'SouthTown', 50);
@@ -4966,7 +4985,7 @@ describe('PUDO Light', () => {
     expect(totes.requireByCode(bag.code).status).toBe('in_transit');
   });
 
-  it('requires a verified phone, then signs a PUDO participant up; signs in; resets the password', () => {
+  it('requires a verified phone, then signs a PUDO participant up; signs in; resets the password', async () => {
     const phone = '+254700555';
     const agentProfile = { shopName: 'Signup Shop', zone: 'NorthTown', location: { lat: -1.2, lng: 36.8 }, landmark: 'x', openingHours: uniformHours(), shelf: defaultShelf, fullName: 'Owner', nationalId: 'ID-SU1', mobile: phone, deviceImei: 'IMEI-SU1', requirements: eligibleReqs() };
     // unverified phone is rejected
@@ -4981,9 +5000,27 @@ describe('PUDO Light', () => {
     expect(res.did).toMatch(/^did:glos:/);
     expect(agents.get(res.did).status).toBe('KYC_PENDING'); // wizard submitted KYC → awaiting vetting
 
-    // login
-    expect(accounts.login('SHOP@store.test', 'mkate-na-chai-1').did).toBe(res.did); // case-insensitive email
-    expect(() => accounts.login('shop@store.test', 'wrong')).toThrow(/Wrong email or password/);
+    // login — on the phone it signed up on, which is the shop's first (the user, 2026-10-18: "who is at the counter")
+    expect(res.device).toMatch(/^dvc_/);
+    expect((await accounts.login('SHOP@store.test', 'mkate-na-chai-1', res.device)).did).toBe(res.did); // case-insensitive email
+    await expect(accounts.login('shop@store.test', 'wrong', res.device)).rejects.toThrow(/Wrong email or password/);
+    // The right password on a browser the shop never confirmed opens nothing: a code goes to the shop's number.
+    await expect(accounts.login('shop@store.test', 'mkate-na-chai-1')).rejects.toMatchObject({ code: 'DEVICE_NOT_KNOWN' });
+    // Off a sandbox the code goes to the shop's number and NEVER back in the answer — or the check would mean nothing.
+    const texted: string[] = [];
+    (accounts as unknown as { sms: unknown }).sms = { sends: () => true, mayGoTo: () => true, sendCode: async (to: string, code: string) => void texted.push(`${to} ${code}`) };
+    const env = process.env.GLOS_ENV;
+    process.env.GLOS_ENV = 'production';
+    try {
+      const refused = (await accounts.login('shop@store.test', 'mkate-na-chai-1', undefined, Date.now() + 120_000).catch((e: { getResponse: () => unknown }) => e.getResponse())) as { params?: Record<string, unknown> };
+      expect(refused.params).toMatchObject({ challenge: expect.any(String), sentTo: expect.stringMatching(/^•••\d{3}$/) });
+      expect(refused.params).not.toHaveProperty('code');
+      expect(texted).toHaveLength(1);
+    } finally {
+      if (env === undefined) delete process.env.GLOS_ENV;
+      else process.env.GLOS_ENV = env;
+      (accounts as unknown as { sms: unknown }).sms = undefined;
+    }
     const p2 = '+254700556'; otp.verify(p2, otp.request(p2).code);
     expect(() => accounts.signup({ role: 'pudo', email: 'shop@store.test', password: 'mkate-na-chai-1', phone: p2, profile: { agent: agentProfile } })).toThrow(/already exists/);
 
@@ -4994,8 +5031,8 @@ describe('PUDO Light', () => {
     expect(() => accounts.reset(resetToken!, 'secret2')).toThrow(/at least 8 characters/);
     expect(() => accounts.reset(resetToken!, 'Welcome2026!')).toThrow(/too easy to guess/);
     accounts.reset(resetToken!.toLowerCase(), 'sukari-na-maziwa-2');
-    expect(() => accounts.login('shop@store.test', 'mkate-na-chai-1')).toThrow();
-    expect(accounts.login('shop@store.test', 'sukari-na-maziwa-2').did).toBe(res.did);
+    await expect(accounts.login('shop@store.test', 'mkate-na-chai-1', res.device)).rejects.toThrow();
+    expect((await accounts.login('shop@store.test', 'sukari-na-maziwa-2', res.device)).did).toBe(res.did);
   });
 
   it('signs up a self-employed driver (own vehicle); a fleet takes one on by offering a place, never by its code', () => {
@@ -6375,7 +6412,7 @@ describe('PUDO Light', () => {
   });
 
   describe('credentials anybody can change — and a fleet code that is nobody else’s business', () => {
-    it('changes a hub password only with the current one, and signs out every session holding the old one', () => {
+    it('changes a hub password only with the current one, and signs out every session holding the old one', async () => {
       const email = 'rotate-hub@sbg.test';
       otp.verify('+254700111222', otp.request('+254700111222').code); // sign-up asks for a verified phone, as a person would
       const hub = accounts.signup({ role: 'mdp', email, password: 'first-pass', phone: '+254700111222', profile: { mdp: { name: 'Rotate Hub', zones: ['RZ'], country: 'KE', location: { lat: -1.2, lng: 36.8 } } } });
@@ -6389,8 +6426,8 @@ describe('PUDO Light', () => {
       const changed = controller.changeAccountPassword({ email, password: 'first-pass', newPassword: 'second-pass-1' });
       expect(auth.introspect(old).active).toBe(false); // every other device holding the old sign-in is out
       expect(auth.introspect(changed.token.access_token).active).toBe(true); // the one that changed it stays in
-      expect(() => accounts.login(email, 'first-pass')).toThrow(/Wrong email or password/);
-      expect(accounts.login(email, 'second-pass-1').did).toBe(hub.did);
+      await expect(accounts.login(email, 'first-pass')).rejects.toThrow(/Wrong email or password/);
+      expect((await accounts.login(email, 'second-pass-1')).did).toBe(hub.did);
     });
 
     it('changes a PIN only with the current one, and a wrong current PIN counts toward the lockout', () => {

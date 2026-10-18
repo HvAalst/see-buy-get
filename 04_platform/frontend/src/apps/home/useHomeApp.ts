@@ -32,6 +32,7 @@ import { currentPath, townSlugFromPath } from './prerendered';
 import { readLinkKey } from '../../shared/archive/documentLink';
 import { readReportKey } from '../../shared/damage/damageReport';
 import { EMPTY_JOIN, nextStep, readDeepLink, normalizePhone, onlyJoinable, prevStep, roleById, signupBody, stepBlocker, type JoinForm, type JoinStep, type RoleSpec } from './logic';
+import { saveShopDeviceKey } from '../../shared/account/shopDevice';
 
 export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents' | 'verify' | 'document' | 'report' | 'town';
 
@@ -504,8 +505,10 @@ export function useHomeApp() {
         return;
       }
       const account = r.data!;
-      // Same-origin handoff: the role's app finds its identity already stored.
+      // Same-origin handoff: the role's app finds its identity already stored — and a shop, the phone it signed up on,
+      // which is its first (its sign-in works only on its own phones).
       handOff(account.role, account.did, account.email);
+      saveShopDeviceKey(account.email, account.device);
       setState((s) => ({ ...s, account, step: 'done' }));
     });
   }, [run]);

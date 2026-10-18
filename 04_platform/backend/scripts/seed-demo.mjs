@@ -98,6 +98,10 @@ async function verifiedPhone() {
 async function ensureAccount(email, role, profile) {
   const login = await req('POST', '/v1/sbg/auth/login', { body: { email, password: PASSWORD } });
   if (login.ok) return login.data;
+  // A shop's sign-in works only on its own phones (2026-10-18): this machine is confirmed by the code the sandbox hands back.
+  if (login.status === 403 && login.data?.code === 'DEVICE_NOT_KNOWN' && login.data?.params?.code) {
+    return need(await req('POST', '/v1/sbg/auth/device', { body: { challenge: login.data.params.challenge, code: login.data.params.code } }), `confirm this machine for ${email}`);
+  }
   // An account an earlier run made with the old demo password: it changes it, as its holder would.
   const moved = await req('POST', '/v1/sbg/auth/password', { body: { email, password: OLD_PASSWORD, newPassword: PASSWORD } });
   if (moved.ok) {

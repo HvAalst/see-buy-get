@@ -2,7 +2,10 @@ import type { MailApp } from '../../foundation/mail/mail.templates';
 import { MailService } from '../../foundation/mail/mail.service';
 import { Injectable, Logger, OnApplicationBootstrap, Optional } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
-import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
+import { randomBytes, randomInt, scryptSync, timingSafeEqual } from 'crypto';
+import { isSandbox } from '../../foundation/runtime/sandbox';
+import { SmsService } from '../../foundation/sms/sms.service';
+import { DEVICE_UNUSED_DAYS, DeviceBook, type DeviceSeen, type KnownDevice } from './person-devices';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { AuthService } from '../../foundation/auth/auth.service';
 import { PASSWORD_WORDS, PasswordTries, keptLocks, spendTime } from '../../foundation/auth/password-tries';
@@ -43,6 +46,27 @@ interface Account {
 
 const RESET_TTL_MS = 30 * 60 * 1000;
 
+/**
+ * THE ACCOUNTS WHOSE SIGN-IN WORKS ONLY ON A PHONE OR BROWSER THEY CONFIRMED (the user, 2026-10-18: "who is at the
+ * counter"). A shop's email and password, typed on a browser it has never used, open nothing until a code texted to the
+ * shop's registered number is typed on it — so a password passed round, or read off a note, does not take parcels in
+ * from somewhere else. The hub and the store are not bound yet: said here, not assumed.
+ */
+export const DEVICE_BOUND_ROLES: readonly AccountRole[] = ['pudo'];
+const DEVICE_CODE_TTL_MS = 10 * 60 * 1000;
+const DEVICE_CODE_TRIES = 5;
+const DEVICE_CODE_COOLDOWN_MS = 60 * 1000;
+
+/** What a sign-in answers. `device` comes back once, when this phone or browser was just confirmed. */
+export interface AccountSignIn {
+  accountId: string;
+  role: AccountRole;
+  did: string;
+  email: string;
+  token: AccessToken;
+  device?: string;
+}
+
 /** Which app an account signs in to — where its emails send people. */
 const ACCOUNT_APP: Record<AccountRole, MailApp> = { pudo: 'agent', mdp: 'mdp', driver: 'driver', vendor: 'vendor' };
 const WELCOME_ROLE = { pudo: 'shop', mdp: 'hub', driver: 'driver', vendor: 'store' } as const;
@@ -62,6 +86,10 @@ export class AccountService implements OnApplicationBootstrap {
   private readonly accounts = new PersistentMap<string, Account>('pudo-accounts');
   /** Wrong passwords, counted against the address that was typed. One count for every door these accounts have. */
   private readonly tries = new PasswordTries(PASSWORD_WORDS, keptLocks('accounts'));
+  /** The phones and browsers each bound account confirmed, by the hash of their key. Durable, as a person's are. */
+  private readonly devices = new DeviceBook(new PersistentMap<string, KnownDevice>('account-devices'));
+  /** A code texted for a browser asking to be confirmed: ten minutes, five tries. In memory, like every code here. */
+  private readonly deviceCodes = new Map<string, { email: string; code: string; sentAt: number; expires: number; attempts: number }>();
 
   constructor(
     private readonly agents: AgentService,
@@ -74,6 +102,7 @@ export class AccountService implements OnApplicationBootstrap {
     private readonly persons: PersonService,
     private readonly dids: DidService,
     @Optional() private readonly mail?: MailService,
+    @Optional() private readonly sms?: SmsService,
   ) {}
 
   /**
@@ -114,7 +143,7 @@ export class AccountService implements OnApplicationBootstrap {
   }
 
   /** Create a participant account + its domain entity from the sign-up wizard. Requires a verified phone. */
-  signup(input: { role: AccountRole; email: string; password: string; phone: string; profile: Record<string, unknown> }): { accountId: string; role: AccountRole; did: string; email: string; entityStatus?: string; token: AccessToken } {
+  signup(input: { role: AccountRole; email: string; password: string; phone: string; profile: Record<string, unknown> }): { accountId: string; role: AccountRole; did: string; email: string; entityStatus?: string; token: AccessToken; device?: string } {
     const email = (input.email || '').trim().toLowerCase();
     if (!email.includes('@')) throw new GlosError('EMAIL_INVALID', 'A valid email is required');
     assertPassword(input.password, [email, welcomeName(input.role, input.profile)]);
@@ -147,7 +176,9 @@ export class AccountService implements OnApplicationBootstrap {
     const account: Account = { accountId: `acc_${randomBytes(8).toString('hex')}`, email, role: input.role, salt, hash: this.hash(input.password, salt), did, tenant, phoneHash: hashPhone(input.phone), createdAt: new Date().toISOString() };
     this.accounts.set(email, account);
     void this.mail?.send('welcome', { address: email }, { name: welcomeName(input.role, input.profile), email, role: WELCOME_ROLE[input.role] });
-    return { accountId: account.accountId, role: account.role, did, email, entityStatus, token: this.mint(account) };
+    // The phone that signs up is the first one the account works on: the number was proven by a code on it moments ago.
+    const device = this.isBound(account) ? this.devices.add(account.accountId) : undefined;
+    return { accountId: account.accountId, role: account.role, did, email, entityStatus, token: this.mint(account), ...(device ? { device } : {}) };
   }
 
   /**
@@ -188,14 +219,114 @@ export class AccountService implements OnApplicationBootstrap {
   }
 
   /** Verify credentials → an actor-scoped token (S2). Replaces the old ?<role>=<did> URL "session". */
-  login(email: string, password: string): { accountId: string; role: AccountRole; did: string; email: string; token: AccessToken } {
+  async login(email: string, password: string, device?: string, now: number = Date.now()): Promise<AccountSignIn> {
+    const account = this.passwordRight(email, password);
+    // The password was right, and is not enough on a phone or browser this shop never confirmed: a code goes to its number.
+    if (this.isBound(account) && !this.devices.knows(account.accountId, device, now)) throw await this.deviceUnknown(account, now);
+    if (device) this.devices.used(account.accountId, device, now);
+    return { accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account) };
+  }
+
+  /** The password checked, wrong ones counted and locked — the first half of every door that takes one. */
+  private passwordRight(email: string, password: string): Account {
     const key = (email || '').trim().toLowerCase();
     // A locked sign-in answers nobody — asked before the password is looked at, so the right one learns nothing either.
     this.tries.check(key);
     const account = this.accounts.get(key);
     if (!account || !this.verify(password, account)) throw this.wrongPassword(key, account, password);
     this.tries.forget(key);
-    return { accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account) };
+    return account;
+  }
+
+  private isBound(account: Account): boolean {
+    return DEVICE_BOUND_ROLES.includes(account.role);
+  }
+
+  /**
+   * A NEW PHONE OR BROWSER: a code to the shop's registered number, and the answer that says where it went. Asked again
+   * within a minute, the code already sent stands rather than a second text. In a sandbox the code comes back, as every
+   * sandbox code does; nothing is texted there.
+   */
+  private async deviceUnknown(account: Account, now: number): Promise<GlosError> {
+    const phone = this.phoneForDid(account.did);
+    if (!phone) return new GlosError('DEVICE_NOT_KNOWN', 'This phone or browser has not signed in to this account before, and the account has no number to send a code to. SeeBuyGet staff can help.');
+    const ending = phone.replace(/\D/g, '').slice(-3);
+    const waiting = [...this.deviceCodes.entries()].find(([, c]) => c.email === account.email && c.expires > now && now - c.sentAt < DEVICE_CODE_COOLDOWN_MS);
+    let challenge = waiting?.[0];
+    let code = waiting?.[1].code;
+    if (!challenge || !code) {
+      const texts = this.sms?.sends() ?? false;
+      if (!texts && !isSandbox()) return new GlosError('SMS_NOT_SENT', 'This phone or browser has to be confirmed by a code to the shop’s number, and codes cannot be texted from this server yet.');
+      if (texts && !this.sms?.mayGoTo(phone)) return new GlosError('PHONE_NOT_SERVED', 'Codes are not texted to the shop’s number in that country.');
+      challenge = `dc_${randomBytes(12).toString('hex')}`;
+      code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+      this.deviceCodes.set(challenge, { email: account.email, code, sentAt: now, expires: now + DEVICE_CODE_TTL_MS, attempts: 0 });
+      try {
+        await this.sms?.sendCode(phone, code, DEVICE_CODE_TTL_MS / 60_000);
+      } catch {
+        this.deviceCodes.delete(challenge);
+        return new GlosError('SMS_NOT_SENT', 'The code to the shop’s number could not be texted. Try again in a minute.');
+      }
+    }
+    return new GlosError('DEVICE_NOT_KNOWN', `This phone or browser has not signed in to this shop before. A code went to the shop’s number ending ${ending}: type it here.`, {
+      challenge,
+      sentTo: `•••${ending}`,
+      ...(isSandbox() ? { code } : {}),
+    });
+  }
+
+  /** The code from the shop's number, typed on the new phone or browser: it is one of the shop's now, and signed in. */
+  confirmDevice(challenge: string, code: string, now: number = Date.now()): AccountSignIn {
+    const asked = this.deviceCodes.get(challenge);
+    if (!asked || asked.expires < now) {
+      this.deviceCodes.delete(challenge);
+      throw new GlosError('OTP_INVALID', 'Wrong or expired code');
+    }
+    if (!safeEqualText(asked.code, String(code ?? '').trim())) {
+      asked.attempts += 1;
+      if (asked.attempts >= DEVICE_CODE_TRIES) {
+        this.deviceCodes.delete(challenge);
+        throw new GlosError('OTP_LOCKED', 'Too many wrong codes. Sign in again for a new one.');
+      }
+      throw new GlosError('OTP_INVALID', 'Wrong or expired code');
+    }
+    this.deviceCodes.delete(challenge);
+    const account = this.accounts.get(asked.email);
+    if (!account) throw new GlosError('OTP_INVALID', 'Wrong or expired code');
+    const device = this.devices.add(account.accountId, now);
+    return { accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account), device };
+  }
+
+  /** The phones and browsers this shop works on, and which one is asking. Read by the shop itself. */
+  devicesOf(did: string, device?: string, now: number = Date.now()): { count: number; here: boolean; unusedDays: number; devices: DeviceSeen[] } {
+    const account = this.boundAccountOf(did);
+    const devices = this.devices.list(account.accountId, device, now);
+    return { count: devices.length, here: devices.some((d) => d.here), unusedDays: DEVICE_UNUSED_DAYS, devices };
+  }
+
+  /**
+   * Every other phone and browser forgotten, with the password: each must be confirmed by a code again, and every
+   * sign-in on them ends now. This one stays, signed in afresh.
+   */
+  forgetOtherDevices(did: string, password: string, device: string, now: number = Date.now()): AccountSignIn & { forgotten: number; kept: boolean } {
+    const account = this.boundAccountOf(did);
+    this.passwordRight(account.email, password);
+    if (!this.devices.knows(account.accountId, device, now)) throw new GlosError('DEVICE_NOT_KNOWN', 'This phone or browser is not one of the shop’s: sign in on it first.');
+    const forgotten = this.devices.forgetAll(account.accountId, device);
+    this.auth.revokeAll(account.did);
+    return { accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account), forgotten, kept: true };
+  }
+
+  /** This phone or browser forgotten: signing in on it asks for a code again. */
+  forgetThisDevice(did: string, device: string): { forgotten: boolean; which: number } {
+    const account = this.boundAccountOf(did);
+    return { forgotten: this.devices.forget(account.accountId, device), which: 0 };
+  }
+
+  private boundAccountOf(did: string): Account {
+    const account = [...this.accounts.values()].find((a) => a.did === did);
+    if (!account || !this.isBound(account)) throw new GlosError('NOT_FOUND', 'No account of this kind signs in here');
+    return account;
   }
 
   /**
@@ -331,13 +462,18 @@ export class AccountService implements OnApplicationBootstrap {
    * counter is not proof that the person at it holds the account. Every other session is signed out, and the
    * device that made the change is handed a fresh sign-in.
    */
-  changePassword(email: string, current: string, next: string): { accountId: string; role: AccountRole; did: string; email: string; token: AccessToken } {
+  changePassword(email: string, current: string, next: string, device?: string): { accountId: string; role: AccountRole; did: string; email: string; token: AccessToken } {
     const key = (email || '').trim().toLowerCase();
     // This route proves itself with the current password, so it is a place to guess it: the same count as the sign-in.
     this.tries.check(key);
     const account = this.accounts.get(key);
     if (!account || !this.verify(current, account)) throw this.wrongPassword(key, account, current);
     this.tries.forget(key);
+    // It hands back a sign-in, so for a bound account it is a door like any other: only on a phone the shop confirmed.
+    // Asked AFTER the password, as the sign-in asks it — before, a shop's address answered differently from anybody's.
+    if (this.isBound(account) && !this.devices.knows(account.accountId, device)) {
+      throw new GlosError('DEVICE_NOT_KNOWN', 'Change the password from a phone or browser the shop has signed in on.');
+    }
     assertPassword(next, [account.email]);
     if (this.verify(next, account)) throw new GlosError('VALIDATION_FAILED', 'Choose a password different from the current one');
     account.salt = randomBytes(16).toString('hex');
@@ -469,4 +605,11 @@ function welcomeName(role: AccountRole, profile: Record<string, unknown>): strin
   };
   const name = role === 'pudo' ? pick('agent', 'shopName') : role === 'mdp' ? pick('mdp', 'name') : pick('driver', 'displayName', 'fullName');
   return name ?? 'there';
+}
+
+/** Two codes compared in constant time. */
+function safeEqualText(a: string, b: string): boolean {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && timingSafeEqual(x, y);
 }

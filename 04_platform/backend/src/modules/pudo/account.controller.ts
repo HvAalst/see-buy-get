@@ -2,10 +2,12 @@ import { Body, Controller, Get, Patch, Post } from '@nestjs/common';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { actingPerson } from '../../foundation/auth/acting';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
-import { SignedIn } from '../../foundation/auth/scopes.decorator';
+import { Roles, SignedIn } from '../../foundation/auth/scopes.decorator';
+import { GlosError } from '../../foundation/http/glos-error';
 import { PersonService } from './person.service';
 import { HandleService } from '../../foundation/handle/handle.service';
-import { AccountProfileDto, AccountPinDto, AccountEmailDto, BlockOldNumberDto, ChangeNumberDto, ForgetOtherDevicesDto, PinDevicesDto } from './pudo.dto';
+import { AccountProfileDto, AccountPinDto, AccountEmailDto, BlockOldNumberDto, ChangeNumberDto, ForgetOtherDevicesDto, PinDevicesDto, ShopDevicesDto, ShopForgetOthersDto } from './pudo.dto';
+import { AccountService } from './account.service';
 import { AccountMoveService } from './account-move.service';
 import { IdDisputeService } from './id-dispute.service';
 import { AccountRecoveryService } from './account-recovery.service';
@@ -44,6 +46,7 @@ export class AccountController {
     private readonly recovery: AccountRecoveryService,
     private readonly moves: AccountMoveService,
     private readonly idDisputes: IdDisputeService,
+    private readonly accounts: AccountService,
   ) {}
 
   /**
@@ -128,6 +131,32 @@ export class AccountController {
   }
 
   /**
+   * THE SHOP'S OWN PHONES AND BROWSERS — the ones its email and password work on (the user, 2026-10-18: "who is at the
+   * counter"). Read and forgotten by the shop itself, signed in as the shop; staff pass every role check and are refused
+   * by name. A POST for the same reason as the PIN's: the key travels in the body.
+   */
+  @Roles('agent')
+  @Post('shop-devices')
+  shopDevices(@Body() dto: ShopDevicesDto, @Actor() actor: IntrospectionResult) {
+    return this.accounts.devicesOf(shopOf(actor), dto.device);
+  }
+
+  /** Every other phone forgotten, with the password: each needs the code to the shop's number again, its sign-in ended. */
+  @Roles('agent')
+  @Post('shop-devices/forget-others')
+  forgetOtherShopDevices(@Body() dto: ShopForgetOthersDto, @Actor() actor: IntrospectionResult) {
+    return { ...this.accounts.forgetOtherDevices(shopOf(actor), dto.password, dto.device), signedOutEverywhere: true };
+  }
+
+  /** This phone forgotten — a phone the shop lent, or sold. Signing in on it asks for the code again. */
+  @Roles('agent')
+  @Post('shop-devices/forget-this')
+  forgetThisShopDevice(@Body() dto: ShopDevicesDto, @Actor() actor: IntrospectionResult) {
+    if (!dto.device) throw new GlosError('FIELD_REQUIRED', 'Which phone: this one’s key', { field: 'device' });
+    return this.accounts.forgetThisDevice(shopOf(actor), dto.device);
+  }
+
+  /**
    * FORGET THIS ONE, AND SIGN OUT — for a computer that is not theirs. From then on the PIN does not work on it
    * until a code to the number is typed there again.
    */
@@ -178,4 +207,10 @@ export class AccountController {
   blockOldNumber(@Body() dto: BlockOldNumberDto, @Actor() actor: IntrospectionResult) {
     return this.persons.view(this.recovery.blockOldNumber(actingPerson(actor), dto.pin));
   }
+}
+
+/** The shop a sign-in speaks for — the shop's own, never staff's, who pass every role check. */
+function shopOf(actor: IntrospectionResult | undefined): string {
+  if (actor?.role !== 'agent' || !actor.did) throw new GlosError('FORBIDDEN', 'A shop’s phones are the shop’s own to see and forget, signed in as the shop. Staff change none.');
+  return actor.did;
 }

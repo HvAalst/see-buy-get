@@ -83,6 +83,8 @@ export interface SignupView {
   email: string;
   entityStatus?: string;
   token: { access_token: string; expires_in?: number };
+  /** A shop's first phone: the key of the one it signed up on. */
+  device?: string;
 }
 
 export function signup(body: Record<string, unknown>): Promise<Result<SignupView>> {

@@ -54,7 +54,7 @@ describe('every password door counts its tries, over the wire', () => {
     phone,
     profile: { agent: { shopName: `Duka Imara ${u}`, zone: `Z${u}`, location: { lat: -1.2, lng: 36.8 }, landmark: 'x', shelf: { rows: 3, cols: 3 }, openingHours: { mon: HOURS, tue: HOURS, wed: HOURS, thu: HOURS, fri: HOURS, sat: HOURS, sun: null }, fullName: 'Mama Imara', nationalId: `ID-${u}`, mobile: phone, deviceImei: `IMEI-${u}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true } } },
   });
-  const login = (email: string, password: string) => http().post('/v1/sbg/auth/login').send({ email, password });
+  const login = (email: string, password: string, device?: string) => http().post('/v1/sbg/auth/login').send({ email, password, ...(device ? { device } : {}) });
   const lockedMails = (email: string) => app.get(OutboxMailSender).recent(email).filter((m) => m.template === 'password-locked');
   /** Type the wrong password `n` times and say what each was answered with. */
   const guess = async (door: (password: string) => request.Test, n: number) => {
@@ -81,8 +81,9 @@ describe('every password door counts its tries, over the wire', () => {
       expect([easy, refused.status, refused.body.code]).toEqual([easy, 400, 'PASSWORD_GUESSABLE']);
     }
     // None of those used the phone's verification up: the shop signs up with a password that passes.
-    await signup(password).expect(201);
-    await login(email, password).expect(201);
+    // The phone it signed up on is the shop's first: its sign-in works there (the user, 2026-10-18: "who is at the counter").
+    const device = (await signup(password).expect(201)).body.device as string;
+    await login(email, password, device).expect(201);
 
     /* ---- five wrong passwords ---- */
     expect(await guess((pw) => login(email, pw), 5)).toEqual(FOUR_WRONG_THEN_LOCKED);
@@ -115,18 +116,18 @@ describe('every password door counts its tries, over the wire', () => {
     expect((await http().post('/v1/sbg/auth/reset').send({ token: 'RST-000000000000', password: 'kachumbari-na-nyama' })).body.code).toBe('WINDOW_EXPIRED');
     await http().post('/v1/sbg/auth/reset').send({ token: forgot.resetToken.toLowerCase(), password: 'kachumbari-na-nyama' }).expect(201);
     // Open at once — and the old password is gone with the lock.
-    await login(email, 'kachumbari-na-nyama').expect(201);
+    await login(email, 'kachumbari-na-nyama', device).expect(201);
     expect((await login(email, password)).body.code).toBe('AUTH_FAILED');
 
     /* ---- a slip is not a lock: four wrong, the right one, four wrong again ---- */
     expect(await guess((pw) => login(email, pw), 3)).toEqual(['401 AUTH_FAILED', '401 AUTH_FAILED', '401 AUTH_FAILED']);
-    await login(email, 'kachumbari-na-nyama').expect(201);
+    await login(email, 'kachumbari-na-nyama', device).expect(201);
     expect(await guess((pw) => login(email, pw), 4)).toEqual(['401 AUTH_FAILED', '401 AUTH_FAILED', '401 AUTH_FAILED', '401 AUTH_FAILED']);
-    await login(email, 'kachumbari-na-nyama').expect(201);
+    await login(email, 'kachumbari-na-nyama', device).expect(201);
     expect(lockedMails(email)).toHaveLength(1);
 
     /* ---- a new password must pass the same rules ---- */
-    const change = (newPassword: string) => http().post('/v1/sbg/auth/password').send({ email, password: 'kachumbari-na-nyama', newPassword });
+    const change = (newPassword: string) => http().post('/v1/sbg/auth/password').send({ email, password: 'kachumbari-na-nyama', newPassword, device });
     expect((await change('Arsenal2026')).body.code).toBe('PASSWORD_GUESSABLE');
     expect((await change(`imara.${u}`)).body.code).toBe('PASSWORD_GUESSABLE');
     await change('mchele-na-maharagwe').expect(201);

@@ -494,7 +494,7 @@ describe('a driver changing fleet', () => {
       expect(auth.introspect(consumer.access_token).active).toBe(true);
     });
 
-    it('mints the next email sign-in with the new fleet', () => {
+    it('mints the next email sign-in with the new fleet', async () => {
       const pwani = aFleet('Pwani Haulage');
       const otp = moduleOtp();
       const phone = '+254781999002';
@@ -504,7 +504,7 @@ describe('a driver changing fleet', () => {
       const o = offers.offer(pwani.did, phone);
       offers.accept(o.offerId, opened.did);
       expect(auth.introspect(opened.token.access_token).active).toBe(false);
-      const again = accounts().login('rider@sbg.test', 'mkate-na-chai-1');
+      const again = await accounts().login('rider@sbg.test', 'mkate-na-chai-1');
       expect(auth.introspect(again.token.access_token)).toMatchObject({ active: true, tenant: pwani.did });
     });
   });

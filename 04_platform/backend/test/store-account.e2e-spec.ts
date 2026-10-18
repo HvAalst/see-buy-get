@@ -209,12 +209,12 @@ describe('a store has an account of its own, over the wire', () => {
     const HOURS = { open: '08:00', close: '18:00' };
     const email = `mama.${u}@shop.example`;
     const password = 'duka-langu-2026';
-    await http()
+    const made = await http()
       .post('/v1/sbg/auth/signup')
       .send({ role: 'pudo', email, password, phone, profile: { agent: { shopName: `Mama ${u}`, zone: `Z${u}`, location: { lat: -1.2, lng: 36.8 }, landmark: 'x', shelf: { rows: 3, cols: 3 }, openingHours: { mon: HOURS, tue: HOURS, wed: HOURS, thu: HOURS, fri: HOURS, sat: HOURS, sun: null }, fullName: 'Mama Shop', nationalId: `ID-${u}`, mobile: phone, deviceImei: `IMEI-${u}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true } } } })
       .expect(201);
     // Her account is real, and signs her in to the Shop app.
-    await http().post('/v1/sbg/auth/login').send({ email, password }).expect(201);
+    await http().post('/v1/sbg/auth/login').send({ email, password, device: made.body.device }).expect(201);
     // At the store's door it is "wrong email or password": it does not say that the address is somebody's.
     const refused = await session(email, password);
     expect(refused.body).toMatchObject({ code: 'AUTH_FAILED', detail: 'Wrong email or password' });

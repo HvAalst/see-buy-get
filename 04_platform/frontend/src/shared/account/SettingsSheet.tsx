@@ -7,7 +7,7 @@ import type { SbgError } from '../../lib/sbg';
 import { ContractCompany } from './ContractCompany';
 import { hasContract } from './contract';
 import { CredentialAge } from './CredentialAge';
-import { canForgetOthers, deviceLine, devicesLede, type PinDevices } from './devices';
+import { canForgetOthers, deviceLine, devicesLede, type PinDevices, type PinDevicesApi } from './devices';
 import { EmailStep } from './EmailStep';
 import { IdDisputeCase } from './IdDisputeCase';
 import { settingsIdSays } from './idDispute';
@@ -32,11 +32,16 @@ export interface SettingsSheetProps {
    * server). Everywhere else the change goes through the account and the person signs back in.
    */
   pin?: { change: (current: string, next: string) => Promise<boolean>; busy: boolean; error: SbgError | null };
+  /**
+   * THE PHONES THIS SIGN-IN WORKS ON, for an app whose sign-in is not a PIN: a shop's own phones (the user, 2026-10-18:
+   * "who is at the counter"), forgotten with the password. Omitted, the PIN's list shows where there is a PIN.
+   */
+  devices?: PinDevicesApi;
 }
 
 /** True when there is anything to put in Settings for this person — the row that opens it is omitted otherwise. */
-export function hasSettings(api: AccountApi, onChangePassword?: () => void): boolean {
-  return Boolean(api.account?.hasPin || onChangePassword || api.account?.idDispute || hasContract(api.contract) || hasPayoutNumber(api.payout));
+export function hasSettings(api: AccountApi, onChangePassword?: () => void, devices?: PinDevicesApi): boolean {
+  return Boolean(api.account?.hasPin || onChangePassword || devices || api.account?.idDispute || hasContract(api.contract) || hasPayoutNumber(api.payout));
 }
 
 /**
@@ -53,7 +58,7 @@ export function hasSettings(api: AccountApi, onChangePassword?: () => void): boo
  * holding a signed-in phone is its owner. Somebody who signs in with a password only has no PIN and is not shown
  * rows that could do nothing for them but refuse.
  */
-export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword, pin }: SettingsSheetProps) {
+export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword, pin, devices }: SettingsSheetProps) {
   const t = useT();
   const [view, setView] = useState<View>('list');
   const [saved, setSaved] = useState(false);
@@ -141,7 +146,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
             {me?.hasPin ? <Row icon="mail" label={t('account.settings.email')} sub={recoveryEmailSays(me, t as never).sub} onClick={() => setView('email')} /> : null}
             {me?.hasPin ? <Row icon="phone" label={t('account.settings.phone')} sub={t('account.settings.phoneSub')} onClick={() => setView('phone')} /> : null}
             {/* WHERE THE PIN WORKS: every phone and browser a code to the number was typed on. Seen, and forgotten, here. */}
-            {me?.hasPin ? <Row icon="lock" label={t('account.devices.title')} sub={t('account.devices.sub')} onClick={() => setView('devices')} /> : null}
+            {devices ? <Row icon="lock" label={t('account.devices.title')} sub={t('account.shopDevices.sub')} onClick={() => setView('devices')} /> : me?.hasPin ? <Row icon="lock" label={t('account.devices.title')} sub={t('account.devices.sub')} onClick={() => setView('devices')} /> : null}
             {/* WHERE THEY ARE PAID, where their country pays to a number of their own (the user, 2026-10-18). */}
             {hasPayoutNumber(api.payout) && api.payout ? <Row icon="wallet" label={t('account.payout.title')} sub={payoutNumberSub(api.payout, t as never, when)} onClick={() => setView('payout')} /> : null}
             {/* WHO THEY CONTRACT WITH, and the papers it trades on. Omitted where no company of ours contracts with them. */}
@@ -182,7 +187,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
       {view === 'phone' ? <PhoneForm api={api} onDone={() => setView('phone-done')} /> : null}
       {view === 'contract' ? <ContractCompany api={api} /> : null}
       {view === 'payout' ? <PayoutForm api={api} onDone={(saved) => { setPayoutSaved(saved); setView('list'); }} /> : null}
-      {view === 'devices' ? <DevicesForm api={api} onSignedOut={() => { onClose(); onSignOut(); }} /> : null}
+      {view === 'devices' ? <DevicesForm devices={devices ?? api.devices} onSignedOut={() => { onClose(); onSignOut(); }} /> : null}
       {view === 'old-number' ? <OldNumberForm api={api} onDone={() => { setBlocked(true); setView('list'); }} /> : null}
       {view === 'id' && idRef ? <IdDisputeCase api={api.idDispute} reference={idRef} ownId={api.ownId} onChanged={() => void api.reload()} /> : null}
       {view === 'phone-done' ? (
@@ -271,8 +276,9 @@ function PinForm({ api, own, onDone }: { api: AccountApi; own?: SettingsSheetPro
  * the person signed out: forget all the others (the PIN again — a phone left unlocked is not its owner), or sign out
  * of this one and forget it (no PIN: it only takes something away from whoever is holding it).
  */
-function DevicesForm({ api, onSignedOut }: { api: AccountApi; onSignedOut: () => void }) {
+function DevicesForm({ devices, onSignedOut }: { devices: PinDevicesApi; onSignedOut: () => void }) {
   const t = useT();
+  const byPassword = devices.secret === 'password';
   const [seen, setSeen] = useState<PinDevices | null>(null);
   const [step, setStep] = useState<'list' | 'others' | 'this'>('list');
   const [pin, setPin] = useState('');
@@ -282,7 +288,7 @@ function DevicesForm({ api, onSignedOut }: { api: AccountApi; onSignedOut: () =>
 
   useEffect(() => {
     void (async () => {
-      const r = await api.devices.read();
+      const r = await devices.read();
       if (r.error || !r.data) return setUnread(true);
       setSeen(r.data);
     })();
@@ -304,13 +310,22 @@ function DevicesForm({ api, onSignedOut }: { api: AccountApi; onSignedOut: () =>
   if (step === 'others') {
     return (
       <>
-        <p class="t-body">{t('account.devices.forgetOthersBody')}</p>
-        <div class="field">
-          <span class="field__label">{t('account.settings.pinToConfirm')}</span>
-          <CodeBoxes id="acct-devices-pin" label={t('account.settings.pinToConfirm')} length={PIN_LENGTH} value={pin} onInput={(v) => { setPin(v); setError(null); }} disabled={busy} mask />
-        </div>
+        <p class="t-body">{t(byPassword ? 'account.shopDevices.forgetOthersBody' : 'account.devices.forgetOthersBody')}</p>
+        {byPassword ? (
+          <div class="field">
+            <label class="field__label" for="acct-devices-password">
+              {t('account.shopDevices.passwordToConfirm')}
+            </label>
+            <input id="acct-devices-password" class="input" type="password" autocomplete="current-password" value={pin} disabled={busy} onInput={(e) => { setPin(e.currentTarget.value); setError(null); }} />
+          </div>
+        ) : (
+          <div class="field">
+            <span class="field__label">{t('account.settings.pinToConfirm')}</span>
+            <CodeBoxes id="acct-devices-pin" label={t('account.settings.pinToConfirm')} length={PIN_LENGTH} value={pin} onInput={(v) => { setPin(v); setError(null); }} disabled={busy} mask />
+          </div>
+        )}
         <Refused error={error} />
-        <Button chevron={false} busy={busy} disabled={pin.length !== PIN_LENGTH} onClick={() => void done(api.devices.forgetOthers(pin))}>
+        <Button chevron={false} busy={busy} disabled={byPassword ? !pin : pin.length !== PIN_LENGTH} onClick={() => void done(devices.forgetOthers(pin))}>
           {t('account.devices.forgetOthersSave')}
         </Button>
         <Button variant="link" full={false} onClick={() => { setStep('list'); setPin(''); setError(null); }}>
@@ -323,9 +338,9 @@ function DevicesForm({ api, onSignedOut }: { api: AccountApi; onSignedOut: () =>
   if (step === 'this') {
     return (
       <>
-        <p class="t-body">{t('account.devices.forgetThisBody')}</p>
+        <p class="t-body">{t(byPassword ? 'account.shopDevices.forgetThisBody' : 'account.devices.forgetThisBody')}</p>
         <Refused error={error} />
-        <Button chevron={false} busy={busy} onClick={() => void done(api.devices.forgetThis())}>
+        <Button chevron={false} busy={busy} onClick={() => void done(devices.forgetThis())}>
           {t('account.devices.forgetThisSave')}
         </Button>
         <Button variant="link" full={false} onClick={() => { setStep('list'); setError(null); }}>
@@ -337,7 +352,7 @@ function DevicesForm({ api, onSignedOut }: { api: AccountApi; onSignedOut: () =>
 
   return (
     <>
-      <p class="t-body">{devicesLede(seen, t as never)}</p>
+      <p class="t-body">{devicesLede(seen, t as never, byPassword ? 'shop' : 'pin')}</p>
       {seen.devices.length ? (
         <div class="rows" role="list">
           {seen.devices.map((d, i) => {

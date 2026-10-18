@@ -225,18 +225,26 @@ export interface LoginView {
   email: string;
   entityStatus?: string;
   token: { access_token: string; expires_in?: number };
+  /** This phone's key, once — when it was just confirmed as one of a shop's phones. */
+  device?: string;
 }
 
-export function sbgLogin(config: SbgConfig, email: string, password: string, f?: typeof fetch): Promise<Result<LoginView>> {
-  return publicRequest<LoginView>(config, '/v1/sbg/auth/login', { body: { email, password }, fetch: f });
+/** Email + password; for a shop, this phone's key with it (a shop's sign-in works only on its own phones). */
+export function sbgLogin(config: SbgConfig, email: string, password: string, f?: typeof fetch, device?: string): Promise<Result<LoginView>> {
+  return publicRequest<LoginView>(config, '/v1/sbg/auth/login', { body: { email, password, ...(device ? { device } : {}) }, fetch: f });
+}
+
+/** The code texted to the shop's number, typed on this phone: it is one of the shop's from now, and signed in. */
+export function sbgConfirmDevice(config: SbgConfig, challenge: string, code: string, f?: typeof fetch): Promise<Result<LoginView>> {
+  return publicRequest<LoginView>(config, '/v1/sbg/auth/device', { body: { challenge, code }, fetch: f });
 }
 
 /**
  * Change your own password, proven with the CURRENT one. Every other session holding the old password is signed
  * out; the answer carries a fresh sign-in for this device, which the caller seeds so it stays in.
  */
-export function sbgChangePassword(config: SbgConfig, email: string, password: string, newPassword: string, f?: typeof fetch): Promise<Result<LoginView>> {
-  return publicRequest<LoginView>(config, '/v1/sbg/auth/password', { body: { email, password, newPassword }, fetch: f });
+export function sbgChangePassword(config: SbgConfig, email: string, password: string, newPassword: string, f?: typeof fetch, device?: string): Promise<Result<LoginView>> {
+  return publicRequest<LoginView>(config, '/v1/sbg/auth/password', { body: { email, password, newPassword, ...(device ? { device } : {}) }, fetch: f });
 }
 
 export function sbgForgot(config: SbgConfig, email: string, f?: typeof fetch): Promise<Result<{ sent: boolean; resetToken?: string }>> {

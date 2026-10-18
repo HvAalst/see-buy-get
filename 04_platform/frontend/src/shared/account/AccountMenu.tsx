@@ -9,6 +9,7 @@ import { ExplainerReset } from '../ui/Explainer';
 import { HelpLink } from '../guide/HelpLink';
 import type { GuideApp } from '../guide/articles';
 import { SettingsSheet, hasSettings } from './SettingsSheet';
+import type { PinDevicesApi } from './devices';
 import { useT } from '../i18n';
 import { publicPageUrl } from '../../lib/sbg/config';
 import type { AccountApi } from './useAccount';
@@ -37,6 +38,8 @@ export interface AccountMenuProps {
    * passes this to put its own change-password sheet in the same place — Settings, where both now live.
    */
   onChangePassword?: () => void;
+  /** The phones an app's own sign-in works on — a shop's (shown in Settings, forgotten with the password). */
+  devices?: PinDevicesApi;
   /** Anything the app wants at the foot of the menu — a read-aloud control, a shift-specific link. */
   extra?: ComponentChildren;
   /**
@@ -62,7 +65,7 @@ export interface AccountMenuProps {
  * them — not a greyed one. An app with no invite flow shows no invite row. A disabled row is a promise
  * the product is not keeping, and a menu of them reads as a list of things you are not allowed to do.
  */
-export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onChangePassword, extra, rows }: AccountMenuProps) {
+export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onChangePassword, extra, rows, devices }: AccountMenuProps) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [sheet, setSheet] = useState<'profile' | 'settings' | 'address' | null>(null);
@@ -147,7 +150,7 @@ export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onCha
           {/* SETTINGS: the PIN, the password, the recovery email and the phone number — how a person signs in and
               gets back in — live behind one row, in every app. Omitted when there is nothing in it: a store's
               counter credential has no PIN and no password of its own. */}
-          {hasSettings(api, onChangePassword) ? (
+          {hasSettings(api, onChangePassword, devices) ? (
             <MenuRow icon="settings" label={t('account.settings.title')} sub={t(onChangePassword ? 'account.settings.subPassword' : 'account.settings.sub')} onClick={() => { setOpen(false); setSheet('settings'); }} />
           ) : null}
           {/*
@@ -183,7 +186,7 @@ export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onCha
 
       <ProfileSheet open={sheet === 'profile'} onClose={() => setSheet(null)} api={api} />
       <AddressSheet open={sheet === 'address'} onClose={() => setSheet(null)} api={api} />
-      <SettingsSheet open={sheet === 'settings'} onClose={() => setSheet(null)} api={api} onSignOut={onSignOut} onChangePassword={onChangePassword} />
+      <SettingsSheet open={sheet === 'settings'} onClose={() => setSheet(null)} api={api} onSignOut={onSignOut} onChangePassword={onChangePassword} devices={devices} />
     </div>
   );
 }

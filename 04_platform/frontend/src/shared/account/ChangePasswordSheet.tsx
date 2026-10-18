@@ -3,6 +3,7 @@ import { Button, ErrorNote, Sheet } from '../ui';
 import { useT } from '../i18n';
 import { sbgChangePassword, type SbgConfig, type SbgError } from '../../lib/sbg';
 import { passwordChangeBlocker } from './password';
+import { shopDeviceKey } from './shopDevice';
 
 /**
  * Change the password this shop, hub or courier account signs in with.
@@ -48,7 +49,8 @@ export function ChangePasswordSheet({
   const submit = async () => {
     setBusy(true);
     setError(null);
-    const r = await sbgChangePassword(config, mail.trim().toLowerCase(), current, next);
+    // A shop changes its password only on one of its own phones: this one's key goes with it.
+    const r = await sbgChangePassword(config, mail.trim().toLowerCase(), current, next, undefined, shopDeviceKey(mail));
     if (r.error || !r.data) {
       setBusy(false);
       setError(r.error ?? null);

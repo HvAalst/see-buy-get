@@ -3988,7 +3988,44 @@
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/auth/device": {
+      "post": {
+        "operationId": "Sbg.confirmAccountDevice",
+        "summary": "",
+        "description": "A NEW PHONE OR BROWSER FOR A SHOP, confirmed: the code the sign-in texted to the shop's number, typed here. It is one\nof the shop's phones from now, and signed in. Counted per caller, as the PIN's own door is; five wrong codes burn it.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountDeviceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -19011,6 +19048,75 @@
         }
       }
     },
+    "/v1/sbg/account/shop-devices": {
+      "post": {
+        "operationId": "Account.shopDevices",
+        "summary": "",
+        "description": "THE SHOP'S OWN PHONES AND BROWSERS — the ones its email and password work on (the user, 2026-10-18: \"who is at the\ncounter\"). Read and forgotten by the shop itself, signed in as the shop; staff pass every role check and are refused\nby name. A POST for the same reason as the PIN's: the key travels in the body.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShopDevicesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/shop-devices/forget-others": {
+      "post": {
+        "operationId": "Account.forgetOtherShopDevices",
+        "summary": "",
+        "description": "Every other phone forgotten, with the password: each needs the code to the shop's number again, its sign-in ended.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShopForgetOthersDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/shop-devices/forget-this": {
+      "post": {
+        "operationId": "Account.forgetThisShopDevice",
+        "summary": "",
+        "description": "This phone forgotten — a phone the shop lent, or sold. Signing in on it asks for the code again.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShopDevicesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/account/pin-devices/forget-this": {
       "post": {
         "operationId": "Account.forgetThisDevice",
@@ -27327,11 +27433,33 @@
           },
           "password": {
             "type": "string"
+          },
+          "device": {
+            "type": "string",
+            "description": "The key this phone or browser was given when it was confirmed — a shop's sign-in works only on those.",
+            "maxLength": 80
           }
         },
         "required": [
           "email",
           "password"
+        ]
+      },
+      "AccountDeviceDto": {
+        "type": "object",
+        "properties": {
+          "challenge": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 10
+          }
+        },
+        "required": [
+          "challenge",
+          "code"
         ]
       },
       "ForgotDto": {
@@ -27374,6 +27502,11 @@
           "newPassword": {
             "type": "string",
             "maxLength": 200
+          },
+          "device": {
+            "type": "string",
+            "description": "A shop changes its password only from a phone or browser it confirmed: this one's key.",
+            "maxLength": 80
           }
         },
         "required": [
@@ -42933,6 +43066,32 @@
         },
         "required": [
           "pin"
+        ]
+      },
+      "ShopDevicesDto": {
+        "type": "object",
+        "properties": {
+          "device": {
+            "type": "string",
+            "maxLength": 80
+          }
+        }
+      },
+      "ShopForgetOthersDto": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "device": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "password",
+          "device"
         ]
       },
       "AccountEmailDto": {

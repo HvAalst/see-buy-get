@@ -1163,6 +1163,11 @@ export const enAgent = {
   'agent.accept.lateDone': 'Done',
   'agent.home.topUpNeedsSignalTitle': 'Topping up needs a signal',
   'agent.home.topUpNeedsSignalDetail': 'The money is asked of M-Pesa through SeeBuyGet, so it waits for a signal. Nothing is taken from anybody until then.',
+  'agent.signin.deviceTitle': 'Confirm this phone',
+  'agent.signin.deviceLede': 'This phone has not signed in to the shop before. A code went to the shop’s number ending {sentTo}.',
+  'agent.signin.deviceCode': 'The 6-digit code from the text message',
+  'agent.signin.deviceWhy': 'The shop’s sign-in works only on the shop’s own phones, so a password that is passed round does not open the counter anywhere else.',
+  'agent.signin.deviceConfirm': 'Confirm this phone',
   'agent.counter.noSignalTitle': 'Handing over needs a signal',
   'agent.counter.noSignalDetail': 'The pickup code is checked by SeeBuyGet, so a parcel is handed over only when there is a signal. Taking parcels in, giving them to a driver and shelving still work: they wait on this phone.',
 };

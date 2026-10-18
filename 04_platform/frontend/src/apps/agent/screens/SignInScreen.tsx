@@ -1,22 +1,66 @@
 import { HelpLink } from '../../../shared/guide/HelpLink';
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
-import { Button, Card, Checklist, ErrorNote, NeedsSignalNote, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeBoxes, ErrorNote, NeedsSignalNote, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
-import type { AgentActions } from '../useAgentApp';
+import type { AgentActions, AgentState } from '../useAgentApp';
 
 export interface SignInScreenProps {
   actions: AgentActions;
   error: SbgError | null;
   busy: boolean;
+  /** This phone is new to the shop: the code step, in place of the email and password. */
+  deviceAsk?: AgentState['deviceAsk'];
 }
 
 /**
  * The real S2 sign-in (email + password → an actor token), not a pasted DID: a shop's
  * account carries money, so it gets the credential the backend actually verifies.
  */
-export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
+export function SignInScreen({ actions, error, busy, deviceAsk }: SignInScreenProps) {
+  if (deviceAsk) return <ConfirmPhone actions={actions} error={error} busy={busy} ask={deviceAsk} />;
+  return <EmailAndPassword actions={actions} error={error} busy={busy} />;
+}
+
+/**
+ * A NEW PHONE FOR THE SHOP (the user, 2026-10-18: "who is at the counter"). The password was right; the shop's sign-in
+ * works only on its own phones, so a code went to the shop's number. Typed here, this phone is one of the shop's.
+ */
+function ConfirmPhone({ actions, error, busy, ask }: { actions: AgentActions; error: SbgError | null; busy: boolean; ask: NonNullable<AgentState['deviceAsk']> }) {
+  const t = useT();
+  const [code, setCode] = useState('');
+  return (
+    <form
+      class="scr"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void actions.confirmDevice(code);
+      }}
+    >
+      <h1 class="scr__title">{t('agent.signin.deviceTitle')}</h1>
+      <p class="scr__lede">{t('agent.signin.deviceLede', { sentTo: ask.sentTo })}</p>
+      <NeedsSignalNote title={t('common.needsSignal.signInTitle')} detail={t('common.needsSignal.signInDetail')} />
+      {error ? <ErrorNote error={error} /> : null}
+      <Card>
+        <div class="field">
+          <span class="field__label">{t('agent.signin.deviceCode')}</span>
+          <CodeBoxes id="shop-device-code" label={t('agent.signin.deviceCode')} length={6} value={code} onInput={setCode} disabled={busy} />
+          {ask.code ? <p class="hint">{t('account.safety.testCode', { code: ask.code })}</p> : null}
+        </div>
+      </Card>
+      <p class="hint">{t('agent.signin.deviceWhy')}</p>
+      <Button type="submit" chevron={false} busy={busy} disabled={busy || code.length !== 6}>
+        {t('agent.signin.deviceConfirm')}
+      </Button>
+      <Button variant="link" onClick={() => actions.cancelDeviceAsk()}>
+        {t('common.back')}
+      </Button>
+    </form>
+  );
+}
+
+function EmailAndPassword({ actions, error, busy }: { actions: AgentActions; error: SbgError | null; busy: boolean }) {
   const t = useT();
   const [email, setEmail] = useState(actions.readEmail() ?? '');
   const [password, setPassword] = useState('');

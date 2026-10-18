@@ -68,6 +68,7 @@ describe('every door anybody can knock on', () => {
    */
   const SECRET_DOORS: Record<string, number> = {
     'sbg/auth/login': 60, // a shop, a hub, a courier by email
+    'sbg/auth/device': 20, // a shop's new phone: the code texted to the shop's number (2026-10-18)
     'sbg/auth/password': 20,
     'sbg/auth/forgot': 20,
     'sbg/auth/reset': 20,

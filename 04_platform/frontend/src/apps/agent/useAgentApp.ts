@@ -4,6 +4,7 @@ import {
   isMintSourced,
   isSignInRequired,
   narrow,
+  sbgConfirmDevice,
   sbgForgot,
   sbgLogin,
   sbgReset,
@@ -22,6 +23,7 @@ import { triggerDownload } from '../../shared/download';
 import { topUpTermsOf, type TopUpTerms } from '../../shared/topup-fee';
 import { bodyHintValue, bookFreightMissing, EMPTY_ACCEPT, excludedBodiesValue, handoverRoute, incotermValue, money, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, putAwayList, termsBlock, type AcceptForm, type DimsForm } from './logic';
 import type { GeoPoint } from '../../shared/geo';
+import { deviceAskOf, saveShopDeviceKey, shopDeviceKey, shopDevicesApi, type DeviceAsk } from '../../shared/account/shopDevice';
 import type {
   AgentLedgerRow,
   AgentParcelRow,
@@ -247,6 +249,8 @@ export interface AgentState {
   acceptedLabel: (TakenIn & { queued?: boolean }) | null;
   /** Take-ins made without a signal that have since reached SeeBuyGet: their label and code, shown once each, in order. */
   lateTakeIns: Array<TakenIn & { senderMobile?: string; queuedAt: string }>;
+  /** A sign-in from a phone the shop has not confirmed: where the code went (and, in a sandbox, the code). */
+  deviceAsk: (DeviceAsk & { email: string }) | null;
   /** F2 — the freight the last counter booking produced: the FRT code + tracking key to print for the
    *  customer, plus the site-equipment advisory. Null until a booking succeeds / once dismissed. */
   bookedFreight: {
@@ -353,6 +357,7 @@ const INITIAL: AgentState = {
   acceptGeoNote: null,
   acceptedLabel: null,
   lateTakeIns: [],
+  deviceAsk: null,
   bookedFreight: null,
   preMint: null,
   preMintState: 'idle',
@@ -575,12 +580,40 @@ export function useAgentApp() {
       const mail = email.trim().toLowerCase();
       if (!mail || !password) return;
       setState((s) => ({ ...s, busy: 'signin', error: null }));
-      const r = await sbgLogin(agentConfig(), mail, password);
+      // A shop's sign-in works only on its own phones: this one's key goes with it, when it has one.
+      const r = await sbgLogin(agentConfig(), mail, password, undefined, shopDeviceKey(mail));
       if (r.error) {
+        // The password was right and this phone is new to the shop: a code went to the shop's number.
+        const ask = deviceAskOf(r.error);
+        if (ask) return setState((s) => ({ ...s, busy: null, error: null, deviceAsk: { ...ask, email: mail } }));
         setState((s) => ({ ...s, busy: null, error: r.error }));
         return;
       }
-      const login = r.data!;
+      await enter(r.data!, mail);
+    },
+    [],
+  );
+
+  /** The code from the shop's number, typed on this phone: it is one of the shop's from now, and signed in. */
+  const confirmDevice = useCallback(async (code: string) => {
+    const ask = stateRef.current.deviceAsk;
+    if (!ask) return;
+    setState((s) => ({ ...s, busy: 'signin', error: null }));
+    const r = await sbgConfirmDevice(agentConfig(), ask.challenge, code.trim());
+    if (r.error || !r.data) {
+      setState((s) => ({ ...s, busy: null, error: r.error ?? null }));
+      return;
+    }
+    saveShopDeviceKey(ask.email, r.data.device);
+    await enter(r.data, ask.email);
+  }, []);
+
+  /** Back to the email and password: another shop, or another try. */
+  const cancelDeviceAsk = useCallback(() => setState((s) => ({ ...s, deviceAsk: null, error: null })), []);
+
+  /** Signed in: the shop's role checked, everything of another shop's purged, this one's token seeded. */
+  const enter = useCallback(
+    async (login: { role: string; did: string; token: { access_token: string; expires_in?: number } }, mail: string) => {
       if (login.role !== 'pudo') {
         setState((s) => ({
           ...s,
@@ -606,6 +639,12 @@ export function useAgentApp() {
       setDid(login.did);
     },
     [],
+  );
+
+  /** The shop's own phones, in Settings: read and forgotten by the shop, with its password. */
+  const shopDevices = useMemo(
+    () => (client ? shopDevicesApi((path, body) => client.client.sbg.request((raw) => raw.POST(path as never, { body } as never) as never), readEmail) : undefined),
+    [client],
   );
 
   /** After a password change: the server signed every session out and handed this device a fresh sign-in. */
@@ -2144,6 +2183,9 @@ export function useAgentApp() {
       notifications: client?.notifications ?? null,
       refresh,
       signIn,
+      confirmDevice,
+      cancelDeviceAsk,
+      shopDevices,
       signOut,
       adoptToken,
       forgot,

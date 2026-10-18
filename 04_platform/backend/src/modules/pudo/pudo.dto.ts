@@ -1918,6 +1918,8 @@ export class ChangePasswordDto {
   @IsString() @MaxLength(120) email!: string;
   @IsString() @MaxLength(200) password!: string;
   @IsString() @MaxLength(200) newPassword!: string;
+  /** A shop changes its password only from a phone or browser it confirmed: this one's key. */
+  @IsOptional() @IsString() @MaxLength(80) device?: string;
 }
 
 /** Change your own PIN, proven with the current one. */
@@ -1942,6 +1944,25 @@ export class RotateSecretDto {
 export class LoginDto {
   @IsString() email!: string;
   @IsString() password!: string;
+  /** The key this phone or browser was given when it was confirmed — a shop's sign-in works only on those. */
+  @IsOptional() @IsString() @MaxLength(80) device?: string;
+}
+
+/** The code texted to the shop's number, typed on the phone or browser asking to be confirmed. */
+export class AccountDeviceDto {
+  @IsString() @MaxLength(40) challenge!: string;
+  @IsString() @MaxLength(10) code!: string;
+}
+
+/** This phone or browser's key, for the shop's own list of its phones. */
+export class ShopDevicesDto {
+  @IsOptional() @IsString() @MaxLength(80) device?: string;
+}
+
+/** Every other phone forgotten: the password again, and this one's key so it stays. */
+export class ShopForgetOthersDto {
+  @IsString() @MaxLength(200) password!: string;
+  @IsString() @MaxLength(80) device!: string;
 }
 
 export class ForgotDto {

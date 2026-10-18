@@ -54,7 +54,7 @@ export function App() {
       <div class="app">
         <TopBar title={t('agent.appTitle')} subtitle={t('agent.signInSubtitle')} />
         <main class="app__scroll app__scroll--nonav">
-          <SignInScreen actions={actions} error={state.error} busy={state.busy === 'signin'} />
+          <SignInScreen actions={actions} error={state.error} busy={state.busy === 'signin'} deviceAsk={state.deviceAsk} />
         </main>
         <Toasts state={state} actions={actions} noNav />
       </div>
@@ -97,7 +97,7 @@ export function App() {
               {open ? t('agent.open') : t('agent.closed')}
             </Pill>
             {/* Last in the bar: live state first, the place you visit last. */}
-            <AccountMenu api={account} app="agent" onSignOut={actions.signOut} onChangePassword={() => setPasswordOpen(true)} />
+            <AccountMenu api={account} app="agent" onSignOut={actions.signOut} onChangePassword={() => setPasswordOpen(true)} devices={actions.shopDevices} />
           </>
         }
       />
