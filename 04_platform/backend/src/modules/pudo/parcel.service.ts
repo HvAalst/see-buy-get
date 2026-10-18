@@ -14,10 +14,10 @@ import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
 import { FleetService } from './fleet.service';
 import type { Amounts } from './amounts';
-import { DEFAULT_TAX_LABEL, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, OTP_MAX_ATTEMPTS, PARCEL_LATE_GRACE_H, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, UNCOLLECTED_H, VOID_WINDOW_MS, WHOLESALE, classifySize, coverFor, holdingFeeFor, taxOn, withPlatformFee } from './pudo.config';
+import { DEFAULT_TAX_LABEL, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, NOT_SEEN_H, OTP_MAX_ATTEMPTS, PARCEL_LATE_GRACE_H, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, UNCOLLECTED_H, VOID_WINDOW_MS, WHOLESALE, classifySize, coverFor, holdingFeeFor, taxOn, withPlatformFee } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import type { ResolvedTax } from '../../foundation/entity/entity.types';
-import { Birthplace, ConsumerParcelView, RunningLate, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, isCollectable } from './pudo.types';
+import { Birthplace, ConsumerParcelView, RunningLate, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, LOSABLE_STATUSES, isCollectable } from './pudo.types';
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
 import { MediaService } from './media.service';
@@ -256,7 +256,7 @@ export function vendorOrderDetailOf(p: Parcel): VendorOrderDetail {
     declaredValue: p.declaredValue,
     coverLimit: p.coverLimit,
     shipmentPremium: p.shipmentPremium,
-    ...(p.dispute ? { damageReport: { number: `DCR-${p.parcelId}` } } : {}),
+    ...(p.dispute || p.lost ? { damageReport: { number: `DCR-${p.parcelId}` } } : {}),
   };
 }
 
@@ -1022,7 +1022,9 @@ export class ParcelService implements OnApplicationBootstrap {
       disputeReason: relation === 'received' && p.status === 'Disputed' ? (p.buyerDisputeReason ?? p.disputeReason) : undefined,
       ...(disputeOutcomeOf(p) ? { disputeOutcome: disputeOutcomeOf(p) } : {}),
       // The receiver's to open and pass on — and the sender's to read and keep a copy of (the user, 2026-10-15).
-      ...(p.dispute ? { damageReport: { number: `DCR-${p.parcelId}` } } : {}),
+      ...(p.dispute || p.lost ? { damageReport: { number: `DCR-${p.parcelId}` } } : {}),
+      // Declared lost by staff after a search, and found again: when, and in the words staff wrote — never who.
+      ...(p.lost ? { lost: { declaredAt: p.lost.declaredAt, reason: p.lost.reason, ...(p.lost.foundAt ? { foundAt: p.lost.foundAt, foundNote: p.lost.foundNote } : {}) } } : {}),
       // The closed-window facts, receiver-only — see ConsumerParcelView. The owed figure is DERIVED here
       // rather than left to the app, so the number somebody reads on their phone and the number the
       // counter asks for cannot come from two different pieces of arithmetic.
@@ -1385,6 +1387,8 @@ export class ParcelService implements OnApplicationBootstrap {
       const parcel = this.parcels.get(parcelId);
       if (!parcel) { rejected.push({ parcelId, reason: 'unknown' }); continue; }
       if (parcel.originAgentDid !== input.agentDid) { rejected.push({ parcelId, reason: 'not_at_this_pudo' }); continue; }
+      // Declared lost and now in the shop's hands: it does not leave until SeeBuyGet marks it found.
+      if (parcel.status === 'Lost') { rejected.push({ parcelId, reason: 'declared_lost' }); continue; }
       if (parcel.status !== 'At_PUDO') { rejected.push({ parcelId, reason: `status_${parcel.status}` }); continue; }
       const nature: CargoNature = parcel.natureCode ?? 'GEN';
       // S30 cargo compatibility (applies to ANY driver — it is parcel-vs-parcel, not vehicle-specific): this
@@ -1465,6 +1469,7 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   arrive(parcelId: string, destAgentDid: string): { parcelId: string; status: string; binSlot: string } {
     const parcel = this.require(parcelId);
+    this.refuseIfLost(parcel);
     if (parcel.status !== 'On_Bus') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected On_Bus`);
     // A SLOT FIRST, and nothing else until there is one. The record was marked ready to collect and THEN asked for
     // a slot: on a full shelf the ask was refused, and the parcel stayed marked ready, in no slot, with nobody told
@@ -1495,6 +1500,7 @@ export class ParcelService implements OnApplicationBootstrap {
   /** Screen 3 — Customer Pickup (release) with the code the CUSTOMER brings. */
   pickup(parcelId: string, agentDid: string, otp: string, deliveredPhotoRef?: string): Parcel {
     const parcel = this.require(parcelId);
+    this.refuseIfLost(parcel);
     // Unclaimed releases exactly like Ready_For_Pickup. The window closing changes what is OWED, never
     // whether the person standing at the counter with the right code may have their parcel.
     if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
@@ -2089,6 +2095,54 @@ export class ParcelService implements OnApplicationBootstrap {
     return parcel;
   }
 
+  /**
+   * DECLARED LOST, by network staff after a search — never by a clock (pudo.types.ts ParcelLoss; the user, 2026-10-18).
+   * Refused before a week without a scan (NOT_SEEN_H, the same window the search case opens on): until then the parcel
+   * is late and the search is what is open. Who held it is not changed: the custody chain still says whose hands it was
+   * last in, which is what the sender's damage claim report has to show. The report is made here, in the same act.
+   */
+  declareLost(parcelId: string, reason: string, now: number = Date.now()): Parcel {
+    const parcel = this.require(parcelId);
+    if (parcel.status === 'Lost') throw new GlosError('INVALID_STATE', 'This parcel is already declared lost');
+    if (!LOSABLE_STATUSES.has(parcel.status)) throw new GlosError('INVALID_STATE', `A parcel that is ${parcel.status} is not in the network’s hands, so it cannot be declared lost`);
+    const words = String(reason ?? '').trim().slice(0, 500);
+    if (words.length < 10) throw new GlosError('FIELD_REQUIRED', 'Say where you looked and what you found: the sender reads it', { field: 'reason' });
+    const lastSeenAt = parcel.scans[parcel.scans.length - 1]?.at ?? parcel.acceptedAt;
+    const canFrom = new Date(lastSeenAt).getTime() + NOT_SEEN_H * 3_600_000;
+    if (now < canFrom) {
+      throw new GlosError('INVALID_STATE', `Last scanned ${lastSeenAt.slice(0, 10)}. A parcel is declared lost only after ${NOT_SEEN_H / 24} days without a scan; until then it is late, so keep looking.`, { lastSeenAt, from: new Date(canFrom).toISOString() });
+    }
+    parcel.lost = { declaredAt: new Date(now).toISOString(), reason: words, fromStatus: parcel.status, lastSeenAt };
+    parcel.status = 'Lost';
+    this.scan(parcel, 'Lost', 'SeeBuyGet', `declared lost after a search: ${words}`);
+    this.makeReport(parcel);
+    void this.events.publish(GlosEvent.Pudo.ParcelLost, { parcelId: parcel.parcelId, reason: words, vendorId: parcel.vendorId, externalOrderId: parcel.externalOrderId }, { source: 'pudo' }).catch(() => undefined);
+    return parcel;
+  }
+
+  /** Found again, as staff were told: it carries on from the step it was lost at, and the sender is told. */
+  foundAgain(parcelId: string, note: string): Parcel {
+    const parcel = this.require(parcelId);
+    if (parcel.status !== 'Lost' || !parcel.lost) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, not lost`);
+    const words = String(note ?? '').trim().slice(0, 300);
+    if (words.length < 3) throw new GlosError('FIELD_REQUIRED', 'Say where it turned up and in whose hands', { field: 'note' });
+    this.markFound(parcel, words);
+    return parcel;
+  }
+
+  private markFound(parcel: Parcel, note: string): void {
+    parcel.lost = { ...parcel.lost!, foundAt: new Date().toISOString(), foundNote: note };
+    parcel.status = parcel.lost.fromStatus;
+    this.scan(parcel, parcel.status, 'SeeBuyGet', `found again: ${note}`);
+    void this.events.publish(GlosEvent.Pudo.ParcelFound, { parcelId: parcel.parcelId, note, vendorId: parcel.vendorId, externalOrderId: parcel.externalOrderId }, { source: 'pudo' }).catch(() => undefined);
+  }
+
+  /** A lost parcel scanned at a counter has turned up: said plainly, and kept where it is until staff mark it found. */
+  private refuseIfLost(parcel: Parcel): void {
+    if (parcel.status !== 'Lost') return;
+    throw new GlosError('PARCEL_LOST', `This parcel was declared lost on ${parcel.lost?.declaredAt.slice(0, 10) ?? 'an earlier day'}. Keep it safe and tell SeeBuyGet you have it: once they mark it found, scan it again.`, { declaredAt: parcel.lost?.declaredAt });
+  }
+
   closeAsReturned(parcelId: string, returnParcelId: string): Parcel {
     const parcel = this.require(parcelId);
     // Unclaimed is the ordinary input: a store is only asked about a return once the window has closed.
@@ -2103,6 +2157,7 @@ export class ParcelService implements OnApplicationBootstrap {
   /** Destination PUDO shelves an arrived parcel in a chaos-shelf slot → Ready_For_Pickup + buyer notified. */
   shelve(parcelId: string, agentDid: string, binId?: string): { parcelId: string; binSlot: string; status: string } {
     const parcel = this.require(parcelId);
+    this.refuseIfLost(parcel);
     if (parcel.status !== 'On_Bus') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected On_Bus`);
     if (parcel.destAgentDid && parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Shelve only at the buyer-selected destination PUDO');
     // The slot before anything is written, as in arrive(): a full shelf leaves the record exactly as it was.
@@ -2153,6 +2208,7 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   collectConfirm(parcelId: string, agentDid: string, collectionCode: string): Parcel {
     const parcel = this.require(parcelId);
+    this.refuseIfLost(parcel);
     if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
     if (parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Release only at the destination PUDO');
     if (parcel.otpLockedAt) throw new GlosError('CODE_LOCKED', 'Too many wrong codes — ask the control tower to reissue');
@@ -2331,6 +2387,7 @@ export class ParcelService implements OnApplicationBootstrap {
   /** Buyer reports a discrepancy at collection → Disputed, with mandatory photo proof. */
   dispute(parcelId: string, agentDid: string, reason: string, photoProofRef: string): Parcel {
     const parcel = this.require(parcelId);
+    this.refuseIfLost(parcel);
     if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
     if (parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Dispute is raised at the destination PUDO');
     if (parcel.dispute) throw new GlosError('INVALID_STATE', ALREADY_REPORTED); // one report to a parcel — see buyerDispute()
@@ -2514,6 +2571,8 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   setTransit(parcelId: string, status: Extract<Parcel['status'], 'At_MDP' | 'On_Bus'>, by: string, note: string, toteId?: string): Parcel {
     const parcel = this.require(parcelId);
+    // Not refused: the bag is in somebody's hands with the parcel in it, and refusing would stop the whole bag. Found.
+    if (parcel.status === 'Lost' && parcel.lost) this.markFound(parcel, `scanned in a bag (${status === 'On_Bus' ? 'onto a bus' : 'at a hub'})`);
     parcel.status = status;
     parcel.toteId = toteId;
     // On an On_Bus leg `by` is the carrying driver's badge (the bag/tote path — dropBag's At_MDP `by` is the hub

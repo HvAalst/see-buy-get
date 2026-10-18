@@ -15,7 +15,11 @@ export type ParcelStatus =
   | 'Unclaimed'
   | 'Delivered'
   | 'Disputed'
-  | 'Voided';
+  | 'Voided'
+  // Uncollected and on its way back to whoever sent it (the return is a parcel of its own).
+  | 'Returned'
+  // Declared lost by SeeBuyGet's staff after a search; it can be found again and carry on.
+  | 'Lost';
 
 export interface ShippingPolicy {
   mode: 'full' | 'capped';

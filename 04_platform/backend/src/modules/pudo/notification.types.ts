@@ -148,6 +148,12 @@ export const NOTIFICATION_KINDS = [
    * receiver and to a person who sent it; a store hears on its webhook.
    */
   'parcel_late',
+  /**
+   * Declared lost by staff after a search, or found again (the user, 2026-10-18). To the receiver and to a person who
+   * sent it, in the app — never a text; a store hears on its webhook. Lost says the damage claim report is theirs.
+   */
+  'parcel_lost',
+  'parcel_found',
   /** A fleet offered this driver a place, or took the offer back. Only the driver can answer it, so only they are told. */
   'fleet_offer',
   /**

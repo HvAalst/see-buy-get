@@ -155,7 +155,7 @@ export function ageLabel(hours: number, t: Translate): string {
  * of nothing. Statuses this build has never heard of are appended rather than dropped — a parcel in a
  * state we cannot name is exactly the one worth seeing.
  */
-export const STATUS_ORDER = ['Created', 'At_PUDO', 'On_Bus', 'At_MDP', 'Ready_For_Pickup', 'Delivered', 'Unclaimed', 'Disputed', 'Voided'];
+export const STATUS_ORDER = ['Created', 'At_PUDO', 'On_Bus', 'At_MDP', 'Ready_For_Pickup', 'Delivered', 'Unclaimed', 'Disputed', 'Voided', 'Returned', 'Lost'];
 
 export function statusMixRows(mix: Record<string, number> | undefined): Array<{ status: string; count: number; share: number }> {
   const entries = Object.entries(mix ?? {});

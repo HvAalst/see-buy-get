@@ -17,7 +17,11 @@ export type ParcelStatus =
   | 'Unclaimed'
   | 'Delivered'
   | 'Disputed'
-  | 'Voided';
+  | 'Voided'
+  // Uncollected and on its way back to whoever sent it (the return is a parcel of its own).
+  | 'Returned'
+  // Declared lost by SeeBuyGet's staff after a search; it can be found again and carry on.
+  | 'Lost';
 
 /** One row of the public network directory — the sanitized slice a sender may see. */
 export interface NetworkPoint {
@@ -264,6 +268,8 @@ export interface ConsumerParcelView {
   disputeOutcome?: DisputeOutcome;
   /** The damage claim report made when a problem was reported. The receiver's only: it holds what they wrote and photographed. */
   damageReport?: { number: string };
+  /** Declared lost by staff after a search, in their words — and, once it turned up, found again. */
+  lost?: { declaredAt: string; reason: string; foundAt?: string; foundNote?: string };
   /** The closed-window facts — RECEIVER ONLY. A sender owns the shipment, not the goods, so whether the
    *  person at the other end has come and what that is costing them is not the sender's business. */
   unclaimedAt?: string;

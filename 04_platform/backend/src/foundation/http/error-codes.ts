@@ -183,6 +183,9 @@ export const ERROR_CODES = {
   CONFLICT: { status: 409, title: 'Conflict with existing data' },
   DUPLICATE: { status: 409, title: 'Already registered' },
   INCOMPLETE_MANIFEST: { status: 409, title: 'Some waiting parcels were not loaded' },
+  // A parcel staff declared lost, scanned at a counter: it turned up. Kept safe and told to SeeBuyGet, who mark it
+  // found; then the ordinary step works.
+  PARCEL_LOST: { status: 409, title: 'This parcel was declared lost' },
   INVITE_LIMIT: { status: 409, title: 'Too many open invites' },
   IDEMPOTENCY_REUSED: { status: 409, title: 'That idempotency key was used for a different request' },
   QUOTE_SPENT: { status: 409, title: 'That quote has already been used' },

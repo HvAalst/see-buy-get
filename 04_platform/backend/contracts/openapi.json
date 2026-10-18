@@ -22262,6 +22262,126 @@
         }
       }
     },
+    "/v1/sbg/lost-parcels": {
+      "get": {
+        "operationId": "LostParcel.list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LostParcelView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/parcels/{id}/lost": {
+      "get": {
+        "operationId": "LostParcel.view",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LostParcelView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "LostParcel.declare",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeclareLostDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LostParcelView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/parcels/{id}/found": {
+      "post": {
+        "operationId": "LostParcel.found",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FoundAgainDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LostParcelView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/payout-number": {
       "get": {
         "operationId": "PayoutNumber.mine",
@@ -34043,6 +34163,39 @@
           "paidTo"
         ]
       },
+      "ParcelLoss": {
+        "type": "object",
+        "properties": {
+          "declaredAt": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Where staff looked, and what they found — the sender reads it, and it is the problem on the damage claim report."
+          },
+          "fromStatus": {
+            "type": "object",
+            "description": "The status it held, restored when it is found: the next ordinary step then works as it would have."
+          },
+          "lastSeenAt": {
+            "type": "string",
+            "description": "Its last scan before it was declared lost."
+          },
+          "foundAt": {
+            "type": "string"
+          },
+          "foundNote": {
+            "type": "string",
+            "description": "Where it turned up and in whose hands, as staff were told."
+          }
+        },
+        "required": [
+          "declaredAt",
+          "reason",
+          "fromStatus",
+          "lastSeenAt"
+        ]
+      },
       "Birthplace": {
         "type": "object",
         "properties": {
@@ -34395,6 +34548,14 @@
           },
           "dispute": {
             "$ref": "#/components/schemas/DisputeCase"
+          },
+          "lost": {
+            "description": "Declared lost by staff after a search (ParcelLoss above); kept once it is found, with when and where.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ParcelLoss"
+              }
+            ]
           },
           "shortShippedAt": {
             "type": "string"
@@ -46629,6 +46790,112 @@
           "reason"
         ]
       },
+      "LostParcelAct": {
+        "type": "object",
+        "properties": {
+          "act": {
+            "type": "string",
+            "enum": [
+              "declared",
+              "found"
+            ]
+          },
+          "by": {
+            "type": "string",
+            "description": "The member of staff, by name."
+          },
+          "at": {
+            "type": "string"
+          },
+          "words": {
+            "type": "string",
+            "description": "Where they looked (declared), or where it turned up (found)."
+          }
+        },
+        "required": [
+          "act",
+          "by",
+          "at",
+          "words"
+        ]
+      },
+      "LostParcelView": {
+        "type": "object",
+        "properties": {
+          "declaredAt": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "lastSeenAt": {
+            "type": "string"
+          },
+          "foundAt": {
+            "type": "string"
+          },
+          "foundNote": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "acts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LostParcelAct"
+            }
+          },
+          "parcelId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "acts",
+          "parcelId",
+          "status"
+        ]
+      },
+      "DeclareLostDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Where you looked and what you found. The sender reads it; it is the problem on the damage claim report.",
+            "maxLength": 500
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "FoundAgainDto": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "description": "Where it turned up, and in whose hands.",
+            "maxLength": 300
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "note"
+        ]
+      },
       "PayoutNumberView": {
         "type": "object",
         "properties": {
@@ -51701,7 +51968,8 @@
             "type": "string",
             "enum": [
               "counter",
-              "buyer"
+              "buyer",
+              "lost"
             ]
           },
           "store": {
@@ -51887,7 +52155,8 @@
             "type": "string",
             "enum": [
               "counter",
-              "buyer"
+              "buyer",
+              "lost"
             ]
           },
           "heldBy": {

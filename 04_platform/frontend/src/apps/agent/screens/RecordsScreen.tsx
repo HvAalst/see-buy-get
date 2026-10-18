@@ -61,7 +61,7 @@ export function RecordsScreen({ state, actions, archive, destination }: RecordsS
 
 /* ------------------------------------------------------------------ parcels -- */
 
-const STATUS_OPTIONS: ParcelStatus[] = ['Created', 'At_PUDO', 'On_Bus', 'At_MDP', 'Ready_For_Pickup', 'Unclaimed', 'Delivered', 'Disputed', 'Voided'];
+const STATUS_OPTIONS: ParcelStatus[] = ['Created', 'At_PUDO', 'On_Bus', 'At_MDP', 'Ready_For_Pickup', 'Unclaimed', 'Delivered', 'Disputed', 'Voided', 'Returned', 'Lost'];
 
 function ParcelHistory({ state, actions }: RecordsScreenProps) {
   const t = useT();

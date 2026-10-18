@@ -114,6 +114,10 @@ export const GlosEvent = {
     /** A dispute on a parcel was decided — upheld, in part, or rejected — with the reason the people concerned are shown. */
     ParcelDisputeDecided: 'pudo.parcel_dispute_decided',
     ParcelVoided: 'pudo.parcel_voided',
+    /** Declared lost by staff after a search; the sender is told, and holds a damage claim report. */
+    ParcelLost: 'pudo.parcel_lost',
+    /** A lost parcel turned up, and carries on from where it was lost. */
+    ParcelFound: 'pudo.parcel_found',
     BagLoaded: 'pudo.bag_loaded', // a tote (with its parcels) scanned onto a bus
     BagArrivedAtMdp: 'pudo.bag_arrived_at_mdp', // bus drops a bag; MDP empties it
     BagDelivered: 'pudo.bag_delivered', // a tote unloaded at the destination PUDO (parcels shelved/arrived)

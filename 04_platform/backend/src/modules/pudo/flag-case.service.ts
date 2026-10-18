@@ -227,6 +227,15 @@ export class FlagCaseService implements OnApplicationBootstrap, OnModuleDestroy 
     return this.save(c);
   }
 
+  /**
+   * Closed by the act it was opened for, done elsewhere — a parcel declared lost from its search case. Under the same
+   * name and words, so the case says how it ended; nothing when no live case is open for it.
+   */
+  closeFor(kind: FlagKind, subject: string, staff: Signer, reason: string, now: number = Date.now()): FlagCase | undefined {
+    const live = [...this.cases.values()].find((c) => c.key === `${kind}:${subject}` && (c.state === 'open' || c.state === 'taken'));
+    return live ? this.done(live.caseId, staff, reason, MAX_RECHECK_H, now) : undefined;
+  }
+
   get(caseId: string): FlagCase {
     const c = this.cases.get(caseId);
     if (!c) throw new GlosError('NOT_FOUND', 'No such case');

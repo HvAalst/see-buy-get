@@ -31,7 +31,7 @@ import { MediaService } from './media.service';
 import { canonicalJson } from './note-archive.types';
 import { custodyAt, parcelCurrency, ParcelService } from './parcel.service';
 import { PersonService } from './person.service';
-import { CustodyKind, Parcel } from './pudo.types';
+import { CustodyKind, DisputeOrigin, Parcel, ParcelStatus } from './pudo.types';
 import { VendorService } from './vendor.service';
 
 const DAY_MS = 86_400_000;
@@ -113,9 +113,11 @@ export class DamageReportService implements OnModuleInit {
     } catch {
       return undefined;
     }
-    if (!parcel.dispute) return undefined;
+    // A problem reported on it, or the network declaring it lost: either way somebody is owed the record.
+    const madeAt = parcel.dispute?.raisedAt ?? parcel.lost?.declaredAt;
+    if (!madeAt) return undefined;
     const body = this.bodyOf(parcel);
-    const report: DamageReportView = { parcelId, madeAt: parcel.dispute.raisedAt, sha256: fingerprintOf(body), body };
+    const report: DamageReportView = { parcelId, madeAt, sha256: fingerprintOf(body), body };
     this.reports.set(parcelId, report);
     void this.handToInsurer(report, parcel);
     return report;
@@ -178,7 +180,7 @@ export class DamageReportService implements OnModuleInit {
   list(now: number = Date.now(), vendorId?: string): DamageReportRow[] {
     const rows: DamageReportRow[] = [];
     for (const parcel of this.parcels.list()) {
-      if (!parcel.dispute || (vendorId !== undefined && parcel.vendorId !== vendorId)) continue;
+      if ((!parcel.dispute && !parcel.lost) || (vendorId !== undefined && parcel.vendorId !== vendorId)) continue;
       const report = this.ensure(parcel.parcelId);
       if (!report) continue;
       const links = [...this.links.values()].filter((l) => l.parcelId === parcel.parcelId);
@@ -365,7 +367,15 @@ export class DamageReportService implements OnModuleInit {
   /* ------------------------------------------------------------------ what it says -- */
 
   private bodyOf(p: Parcel): DamageReportBody {
-    const case_ = p.dispute!;
+    // A LOST PARCEL'S REPORT (the user, 2026-10-18): the problem is the network's own declaration, in the words staff
+    // wrote of where they looked; the parcel was where its last step left it, in the hands the chain says.
+    const case_: { origin: DisputeOrigin | 'lost'; raisedAt: string; fromStatus: ParcelStatus; reason?: string; raisedBy: string } = p.dispute ?? {
+      origin: 'lost',
+      raisedAt: p.lost!.declaredAt,
+      fromStatus: p.lost!.fromStatus,
+      reason: p.lost!.reason,
+      raisedBy: 'SeeBuyGet',
+    };
     const at = case_.raisedAt;
     // Once it is handed over it is in nobody's hands that the network answers for — said as that, never worked out
     // from two times that may be the same instant.
@@ -383,10 +393,10 @@ export class DamageReportService implements OnModuleInit {
     const events: DamageReportBody['events'] = [];
     for (const scan of p.scans) {
       events.push({ at: scan.at, status: scan.status, note: scan.note ?? '', ...(scan.anchorTxId ? { fingerprint: scan.anchorTxId } : {}) });
-      if (scan.status === 'Disputed' && scan.at >= at) break;
+      if ((scan.status === 'Disputed' || scan.status === 'Lost') && scan.at >= at) break;
     }
 
-    const problemPhoto = case_.origin === 'buyer' ? p.buyerDisputePhotoRef : p.disputePhotoRef;
+    const problemPhoto = case_.origin === 'buyer' ? p.buyerDisputePhotoRef : case_.origin === 'lost' ? undefined : p.disputePhotoRef;
     // A parcel reported while it was still on the shelf had not been handed over: a photograph of the hand-over, or
     // one the receiver took afterwards, is later than the report — as is any picture dated after it.
     const handedOver = case_.fromStatus === 'Delivered';
@@ -427,7 +437,7 @@ export class DamageReportService implements OnModuleInit {
         origin: case_.origin,
         reportedAt: at,
         reason: (case_.origin === 'buyer' ? (p.buyerDisputeReason ?? case_.reason) : case_.reason) ?? '',
-        parcelWas: case_.fromStatus === 'Delivered' ? 'handed over to the receiver' : case_.fromStatus === 'Ready_For_Pickup' ? 'on the shelf of the collection shop, not yet handed over' : case_.fromStatus,
+        parcelWas: case_.origin === 'lost' ? `not found: ${LOST_FROM[case_.fromStatus] ?? case_.fromStatus} when it was last scanned, ${p.lost!.lastSeenAt.slice(0, 10)}` : case_.fromStatus === 'Delivered' ? 'handed over to the receiver' : case_.fromStatus === 'Ready_For_Pickup' ? 'on the shelf of the collection shop, not yet handed over' : case_.fromStatus,
         ...(held ? { heldBy: this.holder(held.holderKind, held.holderId, p) } : {}),
         ...(case_.origin === 'counter' ? { shop: this.agents.find(case_.raisedBy)?.shopName ?? 'The collection shop' } : {}),
       },
@@ -606,6 +616,15 @@ export function unsignedNote(n: DamageReportNote): Omit<DamageReportNote, 'sha25
 function handedOver(p: Parcel): boolean {
   return p.status === 'Delivered' || p.dispute?.fromStatus === 'Delivered' || Boolean(p.custody?.some((leg) => leg.holderKind === 'receiver'));
 }
+
+/** Where a lost parcel was when it was last scanned, in words a sender and an insurer read. */
+const LOST_FROM: Partial<Record<ParcelStatus, string>> = {
+  At_PUDO: 'at the shop it was handed in at',
+  On_Bus: 'on a vehicle between shops',
+  At_MDP: 'at a sorting hub',
+  Ready_For_Pickup: 'on the shelf of the collection shop',
+  Unclaimed: 'on the shelf of the collection shop',
+};
 
 const PHOTO_WORDS: Record<string, string> = {
   note: 'What the receiver found after it was handed over',

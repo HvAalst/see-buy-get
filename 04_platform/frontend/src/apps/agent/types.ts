@@ -23,7 +23,11 @@ export type ParcelStatus =
   | 'Unclaimed'
   | 'Delivered'
   | 'Disputed'
-  | 'Voided';
+  | 'Voided'
+  // Uncollected and on its way back to whoever sent it (the return is a parcel of its own).
+  | 'Returned'
+  // Declared lost by SeeBuyGet's staff after a search; it can be found again and carry on.
+  | 'Lost';
 
 /** One bag's worth of work: the waiting parcels that share a NEXT HOP, and the open bag for it if any. */
 export interface BagGroup {

@@ -110,6 +110,8 @@ export const enVendor = {
   'vendor.status.delivered': 'Collected',
   'vendor.status.disputed': 'Problem reported',
   'vendor.status.voided': 'Cancelled',
+  'vendor.status.returned': 'Going back',
+  'vendor.status.lost': 'Declared lost',
 
   // Paid / unpaid word (paidWord).
   'vendor.paid.paid': 'Paid',

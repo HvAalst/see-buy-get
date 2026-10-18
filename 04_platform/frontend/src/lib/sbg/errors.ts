@@ -15,7 +15,7 @@ export type SbgErrorCode =
   | 'ADDRESS_REQUIRED' | 'FIELD_REQUIRED' | 'INVALID_RATING' | 'ZONES_REQUIRED' | 'LICENCE_REQUIRED'
   | 'LICENCE_EXPIRED' | 'INVALID_VEHICLE_CLASS' | 'INVALID_TRUCK_SUBTYPE' | 'UNKNOWN_ROLE' | 'DISPUTE_INCOMPLETE'
   | 'REQUIREMENTS_NOT_MET' | 'KYC_INCOMPLETE' | 'APPROVAL_BLOCKED' | 'INVALID_STATE' | 'WINDOW_EXPIRED'
-  | 'NOT_INBOUND' | 'PARCEL_EXISTS' | 'SHIPMENT_NOT_PAID' | 'CODE_MISMATCH' | 'CODE_LOCKED' | 'WRONG_DESTINATION' | 'NOT_COUPLED' | 'ALREADY_COUPLED'
+  | 'NOT_INBOUND' | 'PARCEL_EXISTS' | 'PARCEL_LOST' | 'SHIPMENT_NOT_PAID' | 'CODE_MISMATCH' | 'CODE_LOCKED' | 'WRONG_DESTINATION' | 'NOT_COUPLED' | 'ALREADY_COUPLED'
   | 'CANNOT_COUPLE' | 'HOURS_EXCEEDED' | 'CAPACITY_EXCEEDED' | 'NO_ROOM' | 'CARRIER_NOT_TRADING' | 'REASON_REQUIRED' | 'SAFETY_CHECK_INCOMPLETE' | 'RECEIVER_REQUIRED' | 'DELIVERY_PHOTO_REQUIRED' | 'FRAGILE_NOT_ALLOWED' | 'BAG_FULL' | 'BAG_EMPTY' | 'BAG_RESERVED'
   | 'BAG_MISADDRESSED' | 'ALREADY_IN_BAG' | 'STAGING_FULL' | 'SHELF_FULL' | 'NO_CAPACITY_AVAILABLE' | 'OTP_INVALID' | 'OTP_LOCKED' | 'PIN_INVALID' | 'UNAUTHORIZED'
   | 'AUTH_FAILED' | 'AUTH_CODE_INVALID' | 'AUTH_NOT_ACTIVE' | 'PAYMENT_REQUIRED' | 'WALLET_INSUFFICIENT'
@@ -158,6 +158,8 @@ const PRESENTATION: Partial<Record<SbgErrorCode, ErrorPresentation>> = {
   SHELF_FULL: { icon: 'box', tone: 'warn', say: 'error.shelf_full' },
   // S25 handover completeness gate — a short load the agent must resolve (load the rest, or short-ship).
   INCOMPLETE_MANIFEST: { icon: 'box', tone: 'warn', say: 'error.manifest_incomplete' },
+  // A parcel staff declared lost, scanned at a counter: it turned up. Kept safe and told to SeeBuyGet.
+  PARCEL_LOST: { icon: 'warning', tone: 'danger', say: 'error.parcel_lost' },
   // S26 media upload + retention.
   MEDIA_TOO_LARGE: { icon: 'camera', tone: 'warn', say: 'error.photo_too_large' },
   UNSUPPORTED_MEDIA: { icon: 'camera', tone: 'warn', say: 'error.photo_type' },

@@ -4,10 +4,10 @@ import { ParcelService } from './parcel.service';
 import { CorridorService } from './corridor.service';
 import { WalletGateService } from './wallet-gate.service';
 import { DispatchService } from './dispatch.service';
-import { AGENT_ONLINE_H, CONNECTIVITY_LOSS_H, GHOST_BUS_H, MDP_DWELL_H, NETWORK_CURRENCY, STAGNANT_INVENTORY_H , NEVER_DROPPED_H, UNCOLLECTED_H} from './pudo.config';
+import { AGENT_ONLINE_H, CONNECTIVITY_LOSS_H, GHOST_BUS_H, MDP_DWELL_H, NETWORK_CURRENCY, NOT_SEEN_H, STAGNANT_INVENTORY_H , NEVER_DROPPED_H, UNCOLLECTED_H} from './pudo.config';
 
 export interface PudoFlag {
-  type: 'Stagnant_Inventory' | 'Ghost_Bus' | 'Stuck_At_MDP' | 'Uncollected' | 'Never_Dropped_Off' | 'Connectivity_Loss' | 'Blocked_Corridor' | 'Buyer_Dispute' | 'Short_Shipped' | 'Temp_Breach';
+  type: 'Stagnant_Inventory' | 'Ghost_Bus' | 'Stuck_At_MDP' | 'Uncollected' | 'Never_Dropped_Off' | 'Connectivity_Loss' | 'Blocked_Corridor' | 'Buyer_Dispute' | 'Short_Shipped' | 'Temp_Breach' | 'Not_Seen';
   subject: string;
   detail: string;
   ageHours?: number;
@@ -44,6 +44,23 @@ export class MonitorService {
     for (const p of this.parcels.list({ status: 'On_Bus' })) {
       const age = hoursSince(p.handedToBusAt);
       if (age > GHOST_BUS_H) flags.push({ type: 'Ghost_Bus', subject: p.parcelId, detail: `On_Bus ${Math.round(age)}h`, ageHours: Math.round(age) });
+    }
+    /**
+     * NOT SEEN FOR A WEEK (the user, 2026-10-18): a parcel on its way — at a shop, on a bus, at a hub — with no scan for
+     * `NOT_SEEN_H`. The case is the search; staff declare it lost from it, or note where it is. Read from the LAST SCAN,
+     * whatever the status: the windows above are each one state's, and a parcel can pass between states and then stop.
+     * A parcel on a collection shelf is not here: it is where the shop put it, waiting for its owner (Uncollected).
+     */
+    for (const status of ['At_PUDO', 'On_Bus', 'At_MDP'] as const) {
+      for (const p of this.parcels.list({ status })) {
+        const last = p.scans[p.scans.length - 1];
+        const age = hoursSince(last?.at ?? p.acceptedAt);
+        if (age <= NOT_SEEN_H) continue;
+        // Where it was last seen, in words: a shop by its name, a hub by its own (its scans carry it); never a DID.
+        const by = last?.by?.startsWith('did:') ? this.agents.find(last.by)?.shopName : last?.by;
+        const step = !last || last.status === 'CREATED' ? 'taken in' : last.status;
+        flags.push({ type: 'Not_Seen', subject: p.parcelId, detail: `no scan for ${Math.floor(age / 24)} days · last ${step}${by ? ` at ${by}` : ''}`, ageHours: Math.round(age) });
+      }
     }
     /**
      * The state nothing watched.

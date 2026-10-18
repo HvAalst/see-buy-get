@@ -1,5 +1,6 @@
 import { FLEET_PAPERS, fleetBody, type FleetForm, type FleetPaperKey, type FleetSetupRow } from './fleets';
 import type { CaseBoard, CaseKindCount, CaseListName, FlagCaseRow } from './cases';
+import type { LostParcelRow } from './lost';
 import type { MoveRow } from './accountMoves';
 import type { PaperCase } from './paperReports';
 import type { DisputeRow } from './idDisputes';
@@ -50,6 +51,8 @@ export interface TowerState {
   /** The case an act is being done on, and what the server said when it refused. */
   caseBusy: string | null;
   caseError: string | null;
+  /** Parcels declared lost, and found again in the last thirty days (lost.ts). Null while unread. */
+  lostParcels: LostParcelRow[] | null;
   /** CV1 — messages a party reported in a conversation. Null while unread. */
   reports: ReportRow[] | null;
   /** CV3 — dispute reports a party shared. Null while unread. */
@@ -277,6 +280,8 @@ export interface TowerActions {
   caseAct(caseId: string, act: 'take' | 'let-go' | 'note' | 'done', body?: Record<string, unknown>): Promise<FlagCaseRow | null>;
   /** Show the live cases or the closed ones, of every kind (null) or of one. */
   caseFilter(which: CaseListName, kind: string | null): void;
+  /** Declare a parcel lost after a search, or mark a lost one found. True when the server took it. */
+  lostAct(parcelId: string, act: 'lost' | 'found', words: string): Promise<boolean>;
   setPresenceForm(patch: Partial<{ level: PresenceLevel; note: string; incoterms: { origin: string[]; destination: string[] } }>): void;
   setCountryForm(patch: Partial<NewCountryForm>): void;
   recordCountry(): Promise<void>;
@@ -359,6 +364,7 @@ const INITIAL: TowerState = {
   who: null,
   hazards: null,
   cases: null,
+  lostParcels: null,
   casesWaiting: null,
   casesTotal: null,
   caseKinds: null,
@@ -474,6 +480,8 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       return;
     }
     const list = narrow<CaseBoard>(data);
+    // Read with the cases: a parcel declared lost from one leaves the list, and lands here.
+    const lost = await client.api.lostParcels();
     setState((s) => ({
       ...s,
       cases: list?.items ?? [],
@@ -481,6 +489,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       casesTotal: list?.total ?? 0,
       caseKinds: list?.kinds ?? [],
       caseError: null,
+      lostParcels: lost.error ? s.lostParcels : (narrow<LostParcelRow[]>(lost.data) ?? []),
     }));
   }, []);
 
@@ -1143,6 +1152,16 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         await loadCases(client);
         // The case as it now is: a case somebody took may have left the page it was opened from.
         return error ? null : (narrow<FlagCaseRow>(data) ?? null);
+      },
+      lostAct: async (parcelId, act, words) => {
+        const client = clientRef.current;
+        if (!client) return false;
+        setState((s) => ({ ...s, caseBusy: parcelId, caseError: null }));
+        const by = stateRef.current.who?.name;
+        const { error } = act === 'lost' ? await client.api.declareLost(parcelId, { reason: words, ...(by ? { by } : {}) }) : await client.api.foundAgain(parcelId, { note: words, ...(by ? { by } : {}) });
+        setState((s) => ({ ...s, caseBusy: null, ...(error ? { caseError: error.detail || error.title } : {}) }));
+        await loadCases(client);
+        return !error;
       },
       caseFilter: (which, kind) => {
         const client = clientRef.current;

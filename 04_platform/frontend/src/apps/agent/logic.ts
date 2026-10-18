@@ -764,6 +764,10 @@ export function parcelStatusWord(status: ParcelStatus, t: Translate): string {
       return t('agent.status.disputed');
     case 'Voided':
       return t('agent.status.voided');
+    case 'Returned':
+      return t('agent.status.returned');
+    case 'Lost':
+      return t('agent.status.lost');
   }
 }
 

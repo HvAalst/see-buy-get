@@ -230,6 +230,10 @@ export function statusPresentation(status: ParcelStatus, t: Translate): StatusPr
       return { word: t('send.status.disputed'), icon: 'warning', tone: 'danger' };
     case 'Voided':
       return { word: t('send.status.voided'), icon: 'block', tone: 'danger' };
+    case 'Returned':
+      return { word: t('send.status.returned'), icon: 'repeat', tone: 'info' };
+    case 'Lost':
+      return { word: t('send.status.lost'), icon: 'warning', tone: 'danger' };
   }
 }
 

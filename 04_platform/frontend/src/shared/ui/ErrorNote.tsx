@@ -71,6 +71,7 @@ const SAY: Record<string, string> = {
   'error.staging_full': 'There is no room for another bag. Give one to a driver, or make room for more in your shelf setup.',
   'error.shelf_full': 'There is not enough room on the shelf.',
   'error.manifest_incomplete': 'Some parcels for this bus are still waiting. Load them, or leave them behind.',
+  'error.parcel_lost': 'This parcel was declared lost. Keep it safe and tell SeeBuyGet you have it.',
   // S26 media upload + retention.
   'error.photo_too_large': 'That photo is too big. Try taking it again.',
   'error.photo_type': 'That file is not a photo. Use the camera.',
@@ -103,7 +104,7 @@ const OVERRIDE: Record<string, string> = {
  * Refusals whose one useful fact only the server has — how long a lock has left to run. Its sentence was written
  * for the person reading it and IS the message; the shared line could only say "for now".
  */
-const SERVER_SAYS = new Set<string>(['PASSWORD_LOCKED']);
+const SERVER_SAYS = new Set<string>(['PASSWORD_LOCKED', 'PARCEL_LOST']);
 
 export function errorSentence(error: SbgError): string {
   if (SERVER_SAYS.has(error.code) && error.detail?.trim()) return error.detail.trim();

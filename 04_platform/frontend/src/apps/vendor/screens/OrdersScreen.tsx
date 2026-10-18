@@ -25,7 +25,7 @@ export interface OrdersScreenProps {
  * checkouts waiting to ship — each one starts the mint), and every order with its status
  * in merchant words. Tapping an order opens the drill-down sheet.
  */
-const STATUS_OPTIONS: string[] = ['Created', 'At_PUDO', 'On_Bus', 'At_MDP', 'Ready_For_Pickup', 'Unclaimed', 'Delivered', 'Disputed', 'Voided'];
+const STATUS_OPTIONS: string[] = ['Created', 'At_PUDO', 'On_Bus', 'At_MDP', 'Ready_For_Pickup', 'Unclaimed', 'Delivered', 'Disputed', 'Voided', 'Returned', 'Lost'];
 const SORT_OPTIONS: Array<{ value: OrderQuery['sort']; labelKey: MessageKey }> = [
   { value: 'newest', labelKey: 'vendor.sort.newest' },
   { value: 'oldest', labelKey: 'vendor.sort.oldest' },

@@ -388,6 +388,12 @@ export const en = {
   'send.status.delivered': 'Delivered',
   'send.status.disputed': 'Problem reported',
   'send.status.voided': 'Cancelled',
+  'send.status.returned': 'Going back',
+  'send.status.lost': 'Lost',
+  'send.parcels.lostTitle': 'We could not find this parcel',
+  'send.parcels.lostDetail': 'SeeBuyGet looked for it and declared it lost on {when}: {reason} The damage claim report below is yours, to pass to whoever covers it. If it turns up, you are told.',
+  'send.parcels.foundTitle': 'It was lost, and found again',
+  'send.parcels.foundDetail': 'Found on {when}: {note} It carries on from where it was.',
 
   // The derived size tiers (label + hint).
   'send.size.s.label': 'Small',

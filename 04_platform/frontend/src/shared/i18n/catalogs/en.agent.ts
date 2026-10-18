@@ -62,6 +62,8 @@ export const enAgent = {
   'agent.status.delivered': 'Collected',
   'agent.status.disputed': 'Problem reported',
   'agent.status.voided': 'Cancelled',
+  'agent.status.returned': 'Returned',
+  'agent.status.lost': 'Declared lost',
 
   // The derived size tiers (label + hint).
   'agent.size.s.label': 'Small',

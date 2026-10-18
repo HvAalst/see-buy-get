@@ -88,8 +88,11 @@ export class DamageReportTerms {
   currency: string;
 }
 
+/** Who reported it: a shop at its counter, the receiver, or — for a parcel nobody could find — the network itself. */
+export type ReportOrigin = DisputeOrigin | 'lost';
+
 export class DamageReportProblem {
-  @ApiProperty({ enum: ['counter', 'buyer'] }) origin: DisputeOrigin;
+  @ApiProperty({ enum: ['counter', 'buyer', 'lost'] }) origin: ReportOrigin;
   reportedAt: string;
   /** In the words of whoever reported it. */
   reason: string;
@@ -171,7 +174,7 @@ export class DamageReportRow {
   parcelId: string;
   number: string;
   madeAt: string;
-  @ApiProperty({ enum: ['counter', 'buyer'] }) origin: DisputeOrigin;
+  @ApiProperty({ enum: ['counter', 'buyer', 'lost'] }) origin: ReportOrigin;
   reason: string;
   from: string;
   to: string;

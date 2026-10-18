@@ -169,7 +169,33 @@ export class CustomsDeclaration {
 }
 
 export type ParcelSize = 'S' | 'M' | 'L' | 'HEAVY';
-export type ParcelStatus = 'Created' | 'At_PUDO' | 'On_Bus' | 'At_MDP' | 'Ready_For_Pickup' | 'Unclaimed' | 'Delivered' | 'Disputed' | 'Voided' | 'Returned';
+export type ParcelStatus = 'Created' | 'At_PUDO' | 'On_Bus' | 'At_MDP' | 'Ready_For_Pickup' | 'Unclaimed' | 'Delivered' | 'Disputed' | 'Voided' | 'Returned' | 'Lost';
+
+/**
+ * LOST: declared by network staff after a search, never by a clock (the user, 2026-10-18: "staff declare it"). A parcel
+ * in the network's hands with no scan for `NOT_SEEN_H` opens a case; staff look for it, then declare it lost with where
+ * they looked. The sender is told and holds a damage claim report; the network does not judge what it was worth
+ * (rule-damage-is-reported-not-judged). Not a grave: a lost parcel that turns up is found again and carries on from the
+ * step it was lost at.
+ *
+ * Which statuses a parcel can be lost FROM: the ones in which the network holds it. Not Created (nobody has handed it
+ * over yet), not a finished one, not one under a reported problem.
+ */
+export const LOSABLE_STATUSES: ReadonlySet<ParcelStatus> = new Set<ParcelStatus>(['At_PUDO', 'On_Bus', 'At_MDP', 'Ready_For_Pickup', 'Unclaimed']);
+
+/** A parcel declared lost: when, where they looked, and the step it carries on from when it is found. Nobody's name. */
+export class ParcelLoss {
+  declaredAt: string;
+  /** Where staff looked, and what they found — the sender reads it, and it is the problem on the damage claim report. */
+  reason: string;
+  /** The status it held, restored when it is found: the next ordinary step then works as it would have. */
+  fromStatus: ParcelStatus;
+  /** Its last scan before it was declared lost. */
+  lastSeenAt: string;
+  foundAt?: string;
+  /** Where it turned up and in whose hands, as staff were told. */
+  foundNote?: string;
+}
 
 /**
  * The two states in which a parcel is sitting on a destination shelf waiting for its owner.
@@ -722,6 +748,8 @@ export interface ConsumerParcelView {
    * `GET parcels/:id/damage-report`.
    */
   damageReport?: { number: string };
+  /** Declared lost by staff after a search — and, once it turned up, found again. Never who declared it. */
+  lost?: { declaredAt: string; reason: string; foundAt?: string; foundNote?: string };
   /**
    * The in-app collection token (S22) — present ONLY on the single-parcel detail, only for the RECEIVER,
    * and only while the parcel is Ready_For_Pickup. The QR is what the PUDO scans; the code is the typed
@@ -979,6 +1007,8 @@ export class Parcel {
    * those keep their `disputeReason` / `buyerDisputeReason` and read as open cases with no case file.
    */
   dispute?: DisputeCase;
+  /** Declared lost by staff after a search (ParcelLoss above); kept once it is found, with when and where. */
+  lost?: ParcelLoss;
   // S25 — handover completeness gate. Set when a waiting parcel was KNOWINGLY left behind at handover
   // (an acknowledged short-ship), so the control tower sees it immediately instead of waiting for the
   // 48 h stagnant window. Cleared the moment the parcel is finally loaded onto a bus.

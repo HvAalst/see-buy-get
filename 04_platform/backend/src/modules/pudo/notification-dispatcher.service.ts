@@ -421,6 +421,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ did: string; accepted: boolean; expiresAt?: string; reason?: string }>(GlosEvent.Pudo.DriverLicenceChecked, (e) => this.onLicenceChecked(e.payload));
     this.events.subscribe<LicenceSent>(GlosEvent.Pudo.DriverLicenceSent, (e) => this.onLicenceSent(e.payload));
     this.events.subscribe<DisputeDecided>(GlosEvent.Pudo.ParcelDisputeDecided, (e) => this.onParcelDisputeDecided(e.payload));
+    this.events.subscribe<{ parcelId: string; reason: string }>(GlosEvent.Pudo.ParcelLost, (e) => this.onParcelLost(e.payload.parcelId, 'lost', e.payload.reason));
+    this.events.subscribe<{ parcelId: string; note: string }>(GlosEvent.Pudo.ParcelFound, (e) => this.onParcelLost(e.payload.parcelId, 'found', e.payload.note));
     this.events.subscribe<{ parcelId: string; number: string; at: string }>(GlosEvent.Pudo.DamageReportNoted, (e) => this.onDamageReportNoted(e.payload));
 
     // Retention: the parties hear about it a month before the document goes, not afterwards.
@@ -514,6 +516,39 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       const slot = parcel.binSlot ? ` It is on your shelf at ${parcel.binSlot}, to be handed over as any parcel.` : '';
       await this.tell(p.raisedBy, { kind: 'claim_decided', title: `The dispute on parcel ${p.parcelId} was decided`, body: `It was ${outcome}. ${p.note}${slot}`, tag, data: { parcelId: p.parcelId } });
     }
+  }
+
+  /**
+   * LOST, AND FOUND AGAIN (the user, 2026-10-18: staff declare it after a search). Said to the receiver and to a person
+   * who sent it — in the app, never a text — and to a store on its webhook. Lost says what staff found and that the
+   * damage claim report is theirs to pass on; the network does not judge what the parcel was worth.
+   */
+  private async onParcelLost(parcelId: string, what: 'lost' | 'found', words: string): Promise<void> {
+    let parcel: ReturnType<ParcelService['get']>;
+    try {
+      parcel = this.parcels.get(parcelId);
+    } catch {
+      return;
+    }
+    const sides = parcel.vendorId ? [['receiver', this.parcels.receiverOf(parcel)] as const] : ([['receiver', this.parcels.receiverOf(parcel)], ['sender', this.parcels.senderOf(parcel)]] as const);
+    const seen = new Set<string>();
+    for (const [side, who] of sides) {
+      const person = accountFor(who, this.persons);
+      if (!person || seen.has(person.personDid)) continue;
+      seen.add(person.personDid);
+      const yours = side === 'receiver' ? 'Your parcel' : 'A parcel you sent';
+      const said = /[.!?]$/.test(words) ? words : `${words}.`;
+      const say =
+        what === 'lost'
+          ? { kind: 'parcel_lost' as const, title: `${yours} ${parcelId} could not be found`, body: `SeeBuyGet looked for it and declared it lost: ${said} Its damage claim report is yours, to pass to whoever covers it. If it turns up, you are told.` }
+          : { kind: 'parcel_found' as const, title: `${yours} ${parcelId} was found`, body: `It had been declared lost, and turned up: ${said} It carries on from where it was.` };
+      try {
+        await this.notifications.notify(person.personDid, { ...say, link: `/?parcel=${parcelId}`, tag: `parcel-lost:${parcelId}`, data: { parcelId } });
+      } catch (err) {
+        this.logger.warn(`parcel-${what} notice failed for ${parcelId}: ${(err as Error).message}`);
+      }
+    }
+    if (parcel.vendorId) this.vendors.notify(parcel.vendorId, what === 'lost' ? 'parcel.lost' : 'parcel.found', { parcelId, externalOrderId: parcel.externalOrderId, status: parcel.status, ...(what === 'lost' ? { reason: words } : { note: words }) });
   }
 
   /**

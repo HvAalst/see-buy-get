@@ -174,7 +174,7 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
   const [thread, setThread] = useState<ChatThread | null>(null);
   const [chatBusy, setChatBusy] = useState(false);
   const [chatFailed, setChatFailed] = useState<string | null>(null);
-  const canMessageShop = parcel.relation === 'received' && !['Voided', 'Returned'].includes(parcel.status as string) && Boolean(actions.chatApi);
+  const canMessageShop = parcel.relation === 'received' && !['Voided', 'Returned', 'Lost'].includes(parcel.status as string) && Boolean(actions.chatApi);
   const messageShop = async () => {
     if (!actions.chatApi) return;
     setChatBusy(true);
@@ -360,6 +360,14 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
           title={t('send.parcels.problemTitle')}
           detail={parcel.disputeReason ? t('send.parcels.problemYou', { reason: parcel.disputeReason }) : t('send.parcels.problemTold')}
         />
+      ) : null}
+
+      {/* LOST (the user, 2026-10-18): declared by SeeBuyGet's staff after a search, in the words they wrote. The damage
+          claim report below is the person's to pass on; nobody here judges what the parcel was worth. Found again: said. */}
+      {parcel.lost && parcel.status === 'Lost' ? (
+        <Note tone="danger" icon="warning" title={t('send.parcels.lostTitle')} detail={t('send.parcels.lostDetail', { reason: parcel.lost.reason, when: new Date(parcel.lost.declaredAt).toLocaleDateString() })} />
+      ) : parcel.lost?.foundAt ? (
+        <Note tone="info" icon="check" title={t('send.parcels.foundTitle')} detail={t('send.parcels.foundDetail', { note: parcel.lost.foundNote ?? '', when: new Date(parcel.lost.foundAt).toLocaleDateString() })} />
       ) : null}
 
       {/* HOW IT ENDED — for the receiver who reported it and for the sender who paid. The decision, the reason as

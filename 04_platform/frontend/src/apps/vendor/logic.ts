@@ -101,6 +101,10 @@ export function orderStatus(status: ParcelStatus, t: Translate): StatusPresentat
       return { word: t('vendor.status.disputed'), icon: 'warning', tone: 'danger' };
     case 'Voided':
       return { word: t('vendor.status.voided'), icon: 'block', tone: 'danger' };
+    case 'Returned':
+      return { word: t('vendor.status.returned'), icon: 'repeat', tone: 'info' };
+    case 'Lost':
+      return { word: t('vendor.status.lost'), icon: 'warning', tone: 'danger' };
   }
 }
 

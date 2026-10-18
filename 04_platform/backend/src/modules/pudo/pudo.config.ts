@@ -446,6 +446,9 @@ export const DISPATCH_MAX_PICKUP_MIN = 30; // and at most this many minutes from
 
 // Auto-flag time windows (Ch 14).
 export const STAGNANT_INVENTORY_H = 48; // At_PUDO too long
+// Not seen: a parcel in the network's hands with no scan for a week opens a search case, and only then may staff
+// declare it lost (the user, 2026-10-18). Read by the flag and by the declaration, so the two cannot disagree.
+export const NOT_SEEN_H = 168;
 export const GHOST_BUS_H = 6; // On_Bus too long
 export const MDP_DWELL_H = 12; // At_MDP (awaiting sort/load) too long
 export const CONNECTIVITY_LOSS_H = 2; // agent no-ping

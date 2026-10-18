@@ -4,6 +4,7 @@ import { useT, type MessageKey } from '../../../shared/i18n';
 import { ConsoleDetail } from '../ConsoleDetail';
 import { ConsolePick } from '../ConsolePick';
 import { closedLine, doneBlocker, eventLine, kindCountLine, kindWords, openFor, ownerLine, RECHECK_CHOICES, severityTone, type CaseListName, type FlagCaseRow } from '../cases';
+import { lostLine, lostReasonBlocker, SEARCH_KIND, type LostParcelRow } from '../lost';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
 /**
@@ -128,8 +129,75 @@ export function CasesScreen({ state, actions }: { state: TowerState; actions: To
         )}
       </section>
 
+      {state.lostParcels && state.lostParcels.length ? <LostPanel rows={state.lostParcels} state={state} actions={actions} /> : null}
+
       {open ? <CaseDetail row={open} state={state} actions={actions} onActed={(r) => setHeld({ ...open, ...r })} onClose={() => setHeld(null)} /> : null}
     </>
+  );
+}
+
+/**
+ * DECLARED LOST (the user, 2026-10-18): the parcels lost now, and those found again in the last thirty days. One that
+ * turns up is marked found here, with where it was and in whose hands — and carries on from where it was lost.
+ */
+function LostPanel({ rows, state, actions }: { rows: LostParcelRow[]; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const [finding, setFinding] = useState<string | null>(null);
+  const [note, setNote] = useState('');
+  const day = (iso: string) => new Date(iso).toLocaleDateString();
+  return (
+    <section class="cons__panel">
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t('tower.lost.title', { n: rows.filter((r) => r.status === 'Lost').length })}</span>
+      </div>
+      <p class="chint">{t('tower.lost.lede')}</p>
+      <div class="crows">
+        {rows.map((r) => (
+          <div class="crow" key={r.parcelId}>
+            <span class="crow__body">
+              <span class="crow__top">
+                <span class={`ctag ctag--${r.status === 'Lost' ? 'danger' : 'ok'}`}>{t(r.status === 'Lost' ? 'tower.lost.isLost' : 'tower.lost.isFound')}</span>
+                <span class="ctbl__mono">{r.parcelId}</span>
+                {r.from || r.to ? <span class="ctbl__sub">{[r.from, r.to].filter(Boolean).join(' → ')}</span> : null}
+              </span>
+              <span class="crow__sub">{lostLine(r, t, day)}</span>
+              <span class="crow__sub">{r.status === 'Lost' ? r.reason : r.foundNote}</span>
+              {finding === r.parcelId ? (
+                <span class="crow__sub" style="display:block;margin-top:8px">
+                  <label class="cfield">
+                    <span class="cfield__label">{t('tower.lost.foundLabel')}</span>
+                    <textarea class="cinput" rows={2} maxLength={300} value={note} onInput={(e) => setNote((e.target as HTMLTextAreaElement).value)} />
+                  </label>
+                  <span class="twr-panelend">
+                    <button
+                      type="button"
+                      class="cbtn cbtn--primary cbtn--sm"
+                      disabled={state.caseBusy === r.parcelId || note.trim().length < 3}
+                      onClick={async () => {
+                        if (await actions.lostAct(r.parcelId, 'found', note.trim())) {
+                          setFinding(null);
+                          setNote('');
+                        }
+                      }}
+                    >
+                      {t('tower.lost.foundConfirm')}
+                    </button>
+                    <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setFinding(null)}>
+                      {t('tower.lost.notNow')}
+                    </button>
+                  </span>
+                </span>
+              ) : null}
+            </span>
+            {r.status === 'Lost' && finding !== r.parcelId ? (
+              <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => { setFinding(r.parcelId); setNote(''); }}>
+                {t('tower.lost.foundCta')}
+              </button>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -140,7 +208,11 @@ function CaseDetail({ row, state, actions, onActed, onClose }: { row: FlagCaseRo
   const [reason, setReason] = useState('');
   const [recheck, setRecheck] = useState<number>(24);
   const [closing, setClosing] = useState(false);
-  const busy = state.caseBusy === row.caseId;
+  // The search case: what was found decides between closing it and declaring the parcel lost.
+  const [declaring, setDeclaring] = useState(false);
+  const [looked, setLooked] = useState('');
+  const search = row.kind === SEARCH_KIND;
+  const busy = state.caseBusy === row.caseId || state.caseBusy === row.subject;
   const blocker = doneBlocker(reason, recheck, t);
   const live = row.state === 'open' || row.state === 'taken';
   // Every act answers with the case as it now is; that is what stays open here.
@@ -180,9 +252,37 @@ function CaseDetail({ row, state, actions, onActed, onClose }: { row: FlagCaseRo
             <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => setClosing((x) => !x)}>
               {t('tower.cases.closeCta')}
             </button>
+            {search ? (
+              <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => setDeclaring((x) => !x)}>
+                {t('tower.lost.declareCta')}
+              </button>
+            ) : null}
           </div>
         ) : null}
       </section>
+
+      {live && search && declaring ? (
+        <section class="cons__panel">
+          <p class="chint">{t('tower.lost.declareLede')}</p>
+          <label class="cfield">
+            <span class="cfield__label">{t('tower.lost.reasonLabel')}</span>
+            <textarea class="cinput" rows={3} maxLength={500} value={looked} onInput={(e) => setLooked((e.target as HTMLTextAreaElement).value)} />
+          </label>
+          {looked && lostReasonBlocker(looked, t) ? <p class="cerr">{lostReasonBlocker(looked, t)}</p> : null}
+          <div class="twr-panelend">
+            <button
+              type="button"
+              class="cbtn cbtn--danger cbtn--sm"
+              disabled={busy || Boolean(lostReasonBlocker(looked, t))}
+              onClick={async () => {
+                if (await actions.lostAct(row.subject, 'lost', looked.trim())) onClose();
+              }}
+            >
+              {t('tower.lost.declareConfirm')}
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       {live ? (
         <section class="cons__panel">
