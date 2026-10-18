@@ -59,6 +59,8 @@ export interface VendorCallback {
   deliveredAt?: string;
   /** Our words for the last failure. Never the store's own response body. */
   lastError?: string;
+  /** How many times the store sent it again itself. */
+  resent?: number;
 }
 
 /* ------------------------------------------------------------- bookkeeping register (R3) -- */
@@ -731,5 +733,45 @@ export class VendorService {
 
   recordCallback(callback: VendorCallback): void {
     this.outbox.set(callback.id, callback);
+  }
+
+  /** One message to this store's system — and nobody else's: 404 for another store's id. */
+  callbackOf(vendorId: string, callbackId: string): VendorCallback {
+    const callback = this.outbox.get(callbackId);
+    if (!callback || callback.vendorId !== vendorId) throw new GlosError('NOT_FOUND', 'No such message');
+    return callback;
+  }
+
+  /**
+   * SEND ONE AGAIN — given up on, already arrived, or still waiting: the store's own act (a store could see what was
+   * sent and not whether it arrived, nor send it again; compendium check, the user's round 9).
+   *
+   * The SAME message: its id (`x-sbg-delivery`, so a handler that already took it skips it), its body byte for byte.
+   * To the address the store has NOW, and signed with the secret it has now: one given up on a wrong address goes to
+   * the one it was put right to, and one signed before the secret was turned still verifies. A fresh round of tries.
+   */
+  resendCallback(vendorId: string, callbackId: string, now: number = Date.now()): VendorCallback {
+    const callback = this.callbackOf(vendorId, callbackId);
+    const vendor = this.get(vendorId);
+    if (!vendor.callbackUrl) throw new GlosError('INVALID_STATE', 'Your store has no address for its system: add one first');
+    const again: VendorCallback = {
+      ...callback,
+      url: vendor.callbackUrl,
+      signature: createHmac('sha256', vendor.secret).update(callback.body).digest('hex'),
+      state: 'pending',
+      attempts: 0,
+      nextTryAt: new Date(now).toISOString(),
+      resent: (callback.resent ?? 0) + 1,
+    };
+    delete again.lastError;
+    this.outbox.set(again.id, again);
+    return again;
+  }
+
+  /** A message that says only that it is a test: what a store sends itself to see its system take and verify ours. */
+  testCallback(vendorId: string): VendorCallback {
+    const sent = this.notify(vendorId, 'test', { message: 'A test message from SeeBuyGet. Verify its signature the way the guide says; then your system can read ours.' });
+    if (!sent) throw new GlosError('INVALID_STATE', 'Your store has no address for its system: add one first');
+    return sent;
   }
 }

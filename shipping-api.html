@@ -559,6 +559,11 @@ if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(received))) retur
       deliberate: a late delivery has to verify exactly as the first one would have.</li>
     <li>So <b>be idempotent</b>, on <code>x-sbg-delivery</code> or on <code>parcelId</code> +
       <code>event</code>. You can be sent the same event twice.</li>
+    <li>In the Store app, under My store, every message says whether it <b>arrived</b>, is still being
+      tried (and when next, and why not), or was given up. <b>Send again</b> sends that same message —
+      same <code>x-sbg-delivery</code>, same body — to the address you have now, signed with the secret
+      you have now, with a fresh round of tries. <b>Send a test message</b> sends one with
+      <code>event: "test"</code>, to check your endpoint takes and verifies ours.</li>
   </ul>
   <p>Answer fast and do your work afterwards. We are not waiting on your order pipeline, and an endpoint
   that takes thirty seconds to reply is an endpoint we will treat as down.</p>

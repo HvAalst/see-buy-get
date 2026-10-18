@@ -221,6 +221,15 @@ export interface CallbackRow {
   event: string;
   url: string;
   at: string;
+  /** Arrived, still being tried, or given up on after the last of its tries. */
+  state?: 'pending' | 'delivered' | 'failed';
+  attempts?: number;
+  nextTryAt?: string;
+  deliveredAt?: string;
+  /** Our words for what went wrong last. */
+  lastError?: string;
+  /** How many times the store sent it again itself. */
+  resent?: number;
 }
 
 /** The public directory row (same shape the Send app reads). */

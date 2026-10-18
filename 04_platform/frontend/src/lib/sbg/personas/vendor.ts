@@ -179,6 +179,10 @@ export function createVendorApi(sbg: SbgClient) {
 
     /** The HMAC-signed status-callback outbox. */
     callbacks: (vendorId: string) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/callbacks', { params: { path: { id: vendorId } } })),
+    /** A test to the store’s own system, answered once the first try is made. */
+    testCallback: (vendorId: string) => sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/callbacks/test', { params: { path: { id: vendorId } } })),
+    /** One sent again: the same message, to the address and with the secret the store has now. */
+    resendCallback: (vendorId: string, callbackId: string) => sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/callbacks/{callbackId}/resend', { params: { path: { id: vendorId, callbackId } } })),
 
     /* --- the store's own dock: a driver collects HERE, and the goods are handled once ---------------
        Outbound only, and deliberately not a PUDO: no shelf, no release, never a destination, and no

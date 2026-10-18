@@ -9,7 +9,7 @@ import type { MessageKey, Translate } from '../../shared/i18n';
 import { cash } from '../../shared/money';
 import type { IconName } from '../../shared/ui/Icon';
 import type { Measure } from '../../lib/sbg/personas/vendor';
-import type { CheckoutRow, NetworkPoint, OrderRow, OriginOption, ParcelStatus, QuoteLegPrice, QuoteView, SettlementRow, ShippingPolicy } from './types';
+import type { CallbackRow, CheckoutRow, NetworkPoint, OrderRow, OriginOption, ParcelStatus, QuoteLegPrice, QuoteView, SettlementRow, ShippingPolicy } from './types';
 
 /* ------------------------------------------------------------------ money -- */
 
@@ -367,4 +367,18 @@ export function accountBlocker(email: string, password: string): MessageKey | nu
  */
 export function needsAccount(vendor: { hasAccount?: boolean } | null | undefined): boolean {
   return vendor?.hasAccount === false;
+}
+
+/**
+ * WHAT BECAME OF ONE MESSAGE TO THE STORE'S OWN SYSTEM, in words (round 9: a store could see what was sent, not whether
+ * it arrived). Arrived; still being tried, how often and when next; or given up on — each with our words for what went
+ * wrong, never the store's own answer.
+ */
+export function callbackLine(c: CallbackRow, t: Translate): { text: string; warn: boolean } {
+  const when = (iso?: string) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '');
+  const why = c.lastError ? ` ${t('vendor.store.msg.why', { why: c.lastError })}` : '';
+  if (c.state === 'delivered') return { text: t('vendor.store.msg.arrived', { when: when(c.deliveredAt) }), warn: false };
+  if (c.state === 'failed') return { text: t('vendor.store.msg.gaveUp', { count: c.attempts ?? 0 }) + why, warn: true };
+  if (!c.attempts) return { text: t('vendor.store.msg.sending'), warn: false };
+  return { text: t('vendor.store.msg.retrying', { count: c.attempts, next: when(c.nextTryAt) }) + why, warn: true };
 }

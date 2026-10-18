@@ -3,6 +3,7 @@ import { t } from '../../shared/i18n'; // English is the base catalog, so the re
 import {
   EMPTY_MINT,
   accountBlocker,
+  callbackLine,
   needsAccount,
   ORDER_CSV_HEADERS,
   dimsComplete,
@@ -280,5 +281,18 @@ describe('a store’s own account', () => {
     expect(needsAccount({})).toBe(false);
     expect(needsAccount(null)).toBe(false);
     expect(needsAccount(undefined)).toBe(false);
+  });
+});
+
+describe('what became of a message to the store’s own system', () => {
+  const base = { id: 'cb_1', event: 'collected', url: 'https://store.example/hook', at: '2026-10-18T07:00:00.000Z' };
+
+  it('says it arrived, that it is being sent, that it is tried again and when, or that it was given up — and why, in our words', () => {
+    expect(callbackLine({ ...base, state: 'delivered', attempts: 1, deliveredAt: '2026-10-18T07:00:05.000Z' }, t)).toMatchObject({ warn: false, text: expect.stringMatching(/^Arrived /) });
+    expect(callbackLine({ ...base, state: 'pending', attempts: 0 }, t)).toEqual({ warn: false, text: 'Being sent.' });
+    const retrying = callbackLine({ ...base, state: 'pending', attempts: 2, nextTryAt: '2026-10-18T07:20:00.000Z', lastError: 'Your system answered 503' }, t);
+    expect(retrying.warn).toBe(true);
+    expect(retrying.text).toMatch(/^Not arrived yet: tried 2 times, tried again by itself .+\. Last time: Your system answered 503\.$/);
+    expect(callbackLine({ ...base, state: 'failed', attempts: 8, lastError: 'No answer in time' }, t)).toEqual({ warn: true, text: 'Not arrived: given up after 8 tries. Put your system right, then send it again. Last time: No answer in time.' });
   });
 });

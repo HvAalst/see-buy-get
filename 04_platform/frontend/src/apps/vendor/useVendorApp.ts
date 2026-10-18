@@ -1080,6 +1080,29 @@ export function useVendorApp() {
   );
 
   /**
+   * A message to the store's own system SENT AGAIN, or a test sent — and what became of it, said at once (the server answers
+   * once the first try is made). Arrived, or not and why: a store that pressed a button deserves to know which.
+   */
+  const sendCallback = useCallback(
+    async (callbackId?: string) => {
+      if (!client || !creds) return;
+      await run(callbackId ? `callback-resend:${callbackId}` : 'callback-test', async () => {
+        const r = callbackId ? await client.api.resendCallback(creds.vendorId, callbackId) : await client.api.testCallback(creds.vendorId);
+        if (r.error) return fail(r.error);
+        const sent = r.data as unknown as CallbackRow;
+        pushToast(
+          sent.state === 'delivered'
+            ? { tone: 'ok', icon: 'check', title: t('vendor.toast.callbackArrived') }
+            : { tone: 'warn', icon: 'warning', title: t('vendor.toast.callbackNotArrived'), ...(sent.lastError ? { detail: sent.lastError } : {}) },
+        );
+        // The list it was pressed from is the store screen's: read again, so it says what became of it.
+        await loadStore();
+      });
+    },
+    [client, creds, run, fail, pushToast, loadStore, t],
+  );
+
+  /**
    * Mint a key and put the secret on screen — once.
    *
    * It is held in state rather than pushed through a toast because the merchant has to be able to READ it,
@@ -1193,6 +1216,7 @@ export function useVendorApp() {
       savePolicy,
       answerReturn,
       saveCallback,
+      sendCallback,
       setCallbackCode,
       loadPoints,
       loadDock,

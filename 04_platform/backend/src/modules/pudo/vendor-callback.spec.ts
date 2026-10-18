@@ -188,6 +188,50 @@ describe('status callbacks to a store', () => {
       expect(vendors.outboxFor(v.vendorId)[0].lastError).toBeTruthy();
     });
 
+    it('is sent AGAIN by the store — the same message, to the address it has now, signed with the secret it has now', async () => {
+      // The compendium check: a store could see what was sent, not whether it arrived, nor send it again.
+      const { vendors, callbacks } = setUp();
+      const v = store(vendors, `${origin}/wrong-path`);
+      const first = vendors.notify(v.vendorId, 'collected', { parcelId: 'PUD-8' })!;
+      answer = 500;
+      let at = Date.now();
+      for (let i = 0; i < MAX_CALLBACK_ATTEMPTS; i++) {
+        await callbacks.drain(at);
+        at += 2 * 24 * 60 * 60 * 1000;
+      }
+      expect(vendors.callbackOf(v.vendorId, first.id)).toMatchObject({ state: 'failed' });
+      // The store puts its address right and turns its secret; then sends it again itself.
+      answer = 200;
+      landed = [];
+      vendors.updateProfile(v.vendorId, { callbackUrl: `${origin}/hooks/sbg` });
+      // Its secret turned since the message was signed (rotateSecret also signs every session out, which this harness has no core for).
+      vendors.get(v.vendorId).secret = 'whsec_turned_since';
+      expect(vendors.resendCallback(v.vendorId, first.id)).toMatchObject({ state: 'pending', attempts: 0, resent: 1, url: `${origin}/hooks/sbg` });
+      await callbacks.drain();
+      expect(landed).toHaveLength(1);
+      expect(landed[0].headers['x-sbg-delivery']).toBe(first.id);
+      expect(landed[0].raw.toString()).toBe(first.body);
+      const expected = createHmac('sha256', 'whsec_turned_since').update(landed[0].raw).digest('hex');
+      expect(timingSafeEqual(Buffer.from(expected), Buffer.from(landed[0].headers['x-sbg-signature']))).toBe(true);
+      expect(vendors.callbackOf(v.vendorId, first.id)).toMatchObject({ state: 'delivered', attempts: 1 });
+      expect(vendors.callbackOf(v.vendorId, first.id).lastError).toBeUndefined();
+    });
+
+    it('sends a test message that says it is one, and only to the store that asks; another store’s message is nobody else’s', async () => {
+      const { vendors, callbacks } = setUp();
+      const v = store(vendors, `${origin}/hooks/sbg`);
+      const test = vendors.testCallback(v.vendorId);
+      await callbacks.drain();
+      expect(landed[0].headers['x-sbg-event']).toBe('test');
+      expect(JSON.parse(landed[0].raw.toString())).toMatchObject({ event: 'test', data: { message: expect.stringContaining('test message') } });
+      const other = store(vendors, `${origin}/other`);
+      expect(() => vendors.callbackOf(other.vendorId, test.id)).toThrow(/No such message/);
+      expect(() => vendors.resendCallback(other.vendorId, test.id)).toThrow(/No such message/);
+      // A store with no address has nothing to send to, and is told so.
+      const none = store(vendors);
+      expect(() => vendors.testCallback(none.vendorId)).toThrow(/no address for its system/);
+    });
+
     it('never puts the store’s own response body in the outbox', async () => {
       // An error that quoted the far end would make the outbox a reader for whatever it can reach.
       const { vendors, callbacks } = setUp();

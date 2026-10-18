@@ -22698,6 +22698,72 @@
         }
       }
     },
+    "/v1/sbg/vendors/{id}/callbacks/test": {
+      "post": {
+        "operationId": "StoreMessages.test",
+        "summary": "",
+        "description": "A message that says only that it is a test, to the address the store has: does its system take and verify ours?",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/callbacks/{callbackId}/resend": {
+      "post": {
+        "operationId": "StoreMessages.resend",
+        "summary": "",
+        "description": "One sent again: the same message, to the address and with the secret the store has now, with a fresh round of tries.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "callbackId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/payout-number": {
       "get": {
         "operationId": "PayoutNumber.mine",

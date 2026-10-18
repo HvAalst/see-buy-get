@@ -1,12 +1,12 @@
 import { HelpLink } from '../../../shared/guide/HelpLink';
 import { CredentialAge } from '../../../shared/account/CredentialAge';
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, ErrorNote, PlaceMap, ReadAloud, Sheet, ShopDetailSheet } from '../../../shared/ui';
+import { Button, Card, ErrorNote, Note, PlaceMap, ReadAloud, Sheet, ShopDetailSheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { toPlaceWords } from '../../../shared/placewords';
 import type { GeoPoint } from '../../../shared/geo';
 import type { SbgError } from '../../../lib/sbg';
-import { insurerLine, ledgerTypeWord, money, policyLine } from '../logic';
+import { callbackLine, insurerLine, ledgerTypeWord, money, policyLine } from '../logic';
 import type { VendorActions, VendorState } from '../useVendorApp';
 
 export interface StoreScreenProps {
@@ -23,6 +23,7 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
   const shownUrl = url ?? v?.callbackUrl ?? '';
   // The code tick box answers at once and settles on what the server says once the store record reloads.
   const [codeOn, setCodeOn] = useState<boolean | null>(null);
+  const [allMessages, setAllMessages] = useState(false);
   useEffect(() => setCodeOn(null), [v?.callbackCarriesCode]);
 
   return (
@@ -70,14 +71,38 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
           <span>{t('vendor.store.callbackCode')}</span>
         </label>
         <p class="hint">{t('vendor.store.callbackCodeNote')}</p>
+        {v?.callbackUrl ? (
+          <div style="margin-top:12px">
+            <Button variant="outline" chevron={false} full={false} busy={state.busy === 'callback-test'} onClick={() => void actions.sendCallback()}>
+              {t('vendor.store.sendTest')}
+            </Button>
+          </div>
+        ) : null}
         {state.callbacks.length ? (
           <div style="margin-top:8px">
-            {state.callbacks.slice(0, 6).map((c) => (
-              <div key={c.id} class="kv">
-                <span>{c.event}</span>
-                <b>{new Date(c.at).toLocaleString()}</b>
-              </div>
-            ))}
+            {/* Whether each one ARRIVED, and if not why — the store could see what was sent and not what became of it. */}
+            {(allMessages ? state.callbacks : state.callbacks.slice(0, 6)).map((c) => {
+              const line = callbackLine(c, t);
+              return (
+                <div key={c.id} style="margin-top:10px">
+                  <div class="kv">
+                    <span>{c.event}</span>
+                    <b>{new Date(c.at).toLocaleString()}</b>
+                  </div>
+                  {line.warn ? <Note tone="warn" icon="warning" title={line.text} /> : <p class="hint">{line.text}</p>}
+                  {v?.callbackUrl ? (
+                    <Button variant="link" full={false} busy={state.busy === `callback-resend:${c.id}`} onClick={() => void actions.sendCallback(c.id)}>
+                      {t('vendor.store.sendAgain')}
+                    </Button>
+                  ) : null}
+                </div>
+              );
+            })}
+            {!allMessages && state.callbacks.length > 6 ? (
+              <Button variant="link" full={false} onClick={() => setAllMessages(true)}>
+                {t('vendor.store.showAllMessages', { n: state.callbacks.length })}
+              </Button>
+            ) : null}
           </div>
         ) : (
           <p class="hint" style="margin-top:8px">
