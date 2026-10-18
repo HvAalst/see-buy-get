@@ -39,15 +39,43 @@ app_path() {
   case "$1" in home|tower) echo / ;; genesis) echo /send/ ;; *) echo "/$1/" ;; esac
 }
 
-listening() { lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null | head -1 || true; }
+# WINDOWS (Git Bash) has neither lsof nor pgrep, so `start` saw no app come up and `stop` found nothing to stop. There,
+# Windows' own netstat, taskkill and tasklist stand in. Nothing changes where lsof exists (a Mac, the server).
+windows() { ! command -v lsof >/dev/null 2>&1 && command -v netstat >/dev/null 2>&1 && command -v taskkill >/dev/null 2>&1; }
+
+listening() {
+  if windows; then
+    # The process listening on this port: a TCP row whose local address ends in the port and whose foreign address is
+    # empty (0.0.0.0:0 or [::]:0). Read by the addresses, not the state column, which Windows translates.
+    netstat -ano 2>/dev/null | tr -d '\r' | awk -v p=":$1" '$1 == "TCP" && substr($2, length($2) - length(p) + 1) == p && $3 ~ /^(0\.0\.0\.0|\[::\]):0$/ { print $NF; exit }'
+    return 0
+  fi
+  lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null | head -1 || true
+}
 port_up() { [ -n "$(listening "$1")" ]; }
 api_up() { curl -sf -o /dev/null "http://localhost:$API_PORT/v1/health"; }
 
 # Kill a process and everything it started (npm → sh → nest/vite), children first.
 kill_tree() {
-  local pid=$1 child
+  local pid=$1 child win
+  if windows; then
+    # A pid this script wrote ($!) is Git Bash's own; Windows knows the process by another number, kept in /proc.
+    win=$(cat "/proc/$pid/winpid" 2>/dev/null || echo "$pid")
+    taskkill //T //F //PID "$win" >/dev/null 2>&1 || true
+    kill -TERM "$pid" 2>/dev/null || true
+    return 0
+  fi
   for child in $(pgrep -P "$pid" 2>/dev/null || true); do kill_tree "$child"; done
   kill -TERM "$pid" 2>/dev/null || true
+}
+
+# Is the process holding one of our ports ours (node: nest, vite) rather than Docker's?
+ours() {
+  if windows; then
+    tasklist //FI "PID eq $1" //FO CSV //NH 2>/dev/null | grep -qi '"node.exe"'
+    return
+  fi
+  ps -o command= -p "$1" | grep -qE 'node|nest|vite' && ! ps -o command= -p "$1" | grep -q docker
 }
 
 # wait_for <seconds> <command...> — the command is run again each second until it succeeds.
@@ -116,7 +144,7 @@ dev_stop() {
   # Anything still holding our ports that is ours (started by hand, or its pid file lost) — never Docker's.
   for port in $API_PORT 5173 5175 5176 5177 5178 5179 5180 5181 5182; do
     pid=$(listening "$port")
-    if [ -n "$pid" ] && ps -o command= -p "$pid" | grep -qE 'node|nest|vite' && ! ps -o command= -p "$pid" | grep -q docker; then
+    if [ -n "$pid" ] && ours "$pid"; then
       kill_tree "$pid"; label ":$port"; say "stopped (pid $pid)"; stopped=1
     fi
   done
