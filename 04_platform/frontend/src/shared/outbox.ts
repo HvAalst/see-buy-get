@@ -278,6 +278,10 @@ export function offlineFetch(base: typeof fetch, apiOrigin: () => string): typeo
 
     // Named before the first attempt — see the note at the top of this file.
     const key = mintKey();
+    // …and its body read before it too. The generated client hands fetch a Request, and fetch spends a Request's body
+    // whether or not the network answers: read afterwards, the copy throws, and a write with no signal was answered
+    // "you are offline" instead of being queued.
+    const body = await bodyOf(init, input);
     const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
     headers.set('idempotency-key', key);
 
@@ -286,7 +290,6 @@ export function offlineFetch(base: typeof fetch, apiOrigin: () => string): typeo
     } catch (err) {
       // Only a genuine failure to reach the network queues. A refusal that arrived is an answer, and an
       // answer — even a bad one — must reach the caller rather than being quietly written to disk.
-      const body = await bodyOf(init, input);
       enqueue({ id: `ob_${key}`, key, method, path, body, label, at: new Date().toISOString() });
       return new Response(JSON.stringify({ queued: true, id: `ob_${key}`, label }), {
         status: 202,

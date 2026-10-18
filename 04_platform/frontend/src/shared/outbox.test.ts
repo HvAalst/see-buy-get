@@ -115,6 +115,21 @@ describe('the outbox', () => {
       expect(item.key).toBeTruthy();
     });
 
+    it('queues a write sent as a Request, whose body the failed fetch has already spent — as the app sends every write', async () => {
+      // The generated client hands fetch a Request object. Calling fetch with it spends its body, signal or no signal,
+      // so the body must be read BEFORE the attempt: read after it, the copy throws, and a take-in at a counter with no
+      // signal was answered "you are offline" instead of being queued.
+      const base = (async (input: RequestInfo | URL) => {
+        if (input instanceof Request) await input.text(); // what fetch does to a Request before the network fails
+        throw new TypeError('Failed to fetch');
+      }) as unknown as typeof fetch;
+
+      const req = new Request(`${ORIGIN}/v1/sbg/parcels/accept`, { method: 'POST', body: JSON.stringify({ parcelId: 'PUD-7' }), headers: { 'content-type': 'application/json' } });
+      const res = await wrap(base)(req);
+      expect(res.status).toBe(202);
+      expect(outboxItems()[0]).toMatchObject({ path: '/v1/sbg/parcels/accept', body: { parcelId: 'PUD-7' } });
+    });
+
     it('does NOT queue a refusal that actually arrived', async () => {
       // An answer — even a bad one — must reach the caller rather than being quietly written to disk.
       const base = (async () => new Response(JSON.stringify({ detail: 'no' }), { status: 409 })) as unknown as typeof fetch;
