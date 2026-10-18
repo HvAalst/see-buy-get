@@ -3,7 +3,7 @@ import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { EntityPicker } from './EntityPicker';
 import { amount, money } from '../queues';
-import { FUNDING_ACTIONS, PAYOUT_ACTIONS, fundingLine, fundingTone, payoutTone, payoutWho, type FundingAction, type FundingRow, type UnmatchedRow } from '../settlement';
+import { FUNDING_ACTIONS, PAYOUT_ACTIONS, fundingLine, fundingTone, payoutHow, payoutTone, payoutWho, type FundingAction, type FundingRow, type UnmatchedRow } from '../settlement';
 import { ConsoleDetail } from '../ConsoleDetail';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
@@ -114,7 +114,10 @@ export function MoneyScreen({ state, actions }: { state: TowerState; actions: To
             <tbody>
               {state.payouts.map((row) => (
                 <tr key={row.payoutId}>
-                  <td class="ctbl__mono">{row.payeeDid?.slice(0, 22) ?? '—'}…</td>
+                  <td>
+                    <span class="ctbl__mono">{row.payeeDid?.slice(0, 22) ?? '—'}…</span>
+                    {payoutHow(row, t) ? <span class="ctbl__sub" style="display:block">{payoutHow(row, t)}</span> : null}
+                  </td>
                   <td class="ctbl__num ctbl__strong">
                     <span class="ctbl__lbl">{t('tower.money.col.amount')}</span>
                     {amount(row.amount, row.currency ?? books?.coverage.currency)}

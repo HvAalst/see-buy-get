@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FUNDING_ACTIONS, PAYOUT_ACTIONS, fundingLine, fundingTone, payoutTone, payoutWho, runSummary } from './settlement';
+import { FUNDING_ACTIONS, PAYOUT_ACTIONS, fundingLine, fundingTone, payoutHow, payoutTone, payoutWho, runSummary } from './settlement';
 
 /**
  * Paying people.
@@ -134,5 +134,13 @@ describe('who raised a payout, and who approved it', () => {
     expect(payoutWho({ status: 'requested', requestedBy: { name: 'Amina' } }, t)).toBe('tower.money.who.raised(name=Amina)');
     expect(payoutWho({ status: 'submitted', requestedBy: { name: 'Amina' }, approvedBy: { name: 'Otieno' } }, t)).toBe('tower.money.who.approved(raised=Amina,approved=Otieno)');
     expect(payoutWho({ status: 'requested' }, t)).toBeNull();
+  });
+});
+
+describe('how a payout is paid', () => {
+  it('says M-Pesa to the payee’s own number, masked, or by hand — and nothing for one raised before there were ways', () => {
+    expect(payoutHow({ way: 'mpesa', destination: { masked: '254712***678' } }, t)).toBe('tower.money.how.mpesa(number=254712***678)');
+    expect(payoutHow({ way: 'by_hand' }, t)).toBe('tower.money.how.byHand');
+    expect(payoutHow({}, t)).toBeNull();
   });
 });

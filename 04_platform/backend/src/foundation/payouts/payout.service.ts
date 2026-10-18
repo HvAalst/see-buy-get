@@ -7,6 +7,7 @@ import { ACCOUNT_CODES } from '../books/books.types';
 import { EntityService } from '../entity/entity.service';
 import { sameSigner, type Signer } from '../entity/same-person';
 import { IN_FLIGHT, PAYOUT_RAIL, Payout, PayoutRail, PayoutStatus } from './payout.types';
+import { isRefusal, payoutWayOf, type PayoutDestinations } from './payout-ways';
 
 /**
  * Why a payee may NOT be paid out right now — or null when they may.
@@ -41,6 +42,7 @@ export const dayOf = (at: number): string => new Date(at).toISOString().slice(0,
 export class PayoutService {
   private readonly payouts = new PersistentMap<string, Payout>('payouts');
   private payeeGate: PayeeGate | null = null;
+  private destinations: PayoutDestinations | null = null;
 
   /**
    * Say who may not be paid out. One registration at boot rather than a parameter on `runFor`: an optional
@@ -48,6 +50,11 @@ export class PayoutService {
    */
   registerPayeeGate(gate: PayeeGate): void {
     this.payeeGate = gate;
+  }
+
+  /** Say where payees are paid, in a country whose way needs a number of theirs (payout-ways.ts). Registered at boot. */
+  registerDestinations(destinations: PayoutDestinations): void {
+    this.destinations = destinations;
   }
 
   constructor(
@@ -69,6 +76,7 @@ export class PayoutService {
   runFor(entityId: string, now: number = Date.now(), by?: Signer): { day: string; raised: Payout[]; skipped: { payeeDid: string; reason: string }[] } {
     const entity = this.entities.get(entityId);
     const currency = entity.currency ?? '';
+    const way = payoutWayOf(entity.jurisdiction);
     const day = dayOf(now);
     const raised: Payout[] = [];
     const skipped: { payeeDid: string; reason: string }[] = [];
@@ -94,6 +102,13 @@ export class PayoutService {
         skipped.push({ payeeDid: counterparty, reason: 'a payment is already on its way' });
         continue;
       }
+      // Where it goes, asked before any cash is set aside for it: a payee with no number of its own, or one changed
+      // less than a day ago, is owed — and the run says why it is not paid today.
+      const destination = way === 'mpesa' ? this.destinations?.of(counterparty, way, now) : undefined;
+      if (destination && isRefusal(destination)) {
+        skipped.push({ payeeDid: counterparty, reason: destination.reason });
+        continue;
+      }
       if (amount > available) {
         // Stated, not silently trimmed. A part-payment nobody asked for is worse than a clear "not today":
         // it looks like the amount was wrong rather than like the money was short.
@@ -107,6 +122,8 @@ export class PayoutService {
         amount,
         currency,
         status: 'requested',
+        way,
+        ...(destination ? { destination } : {}),
         day,
         requestedAt: new Date(now).toISOString(),
         ...(by ? { requestedBy: { name: by.name, ...(by.key ? { key: by.key } : {}) } } : {}),
@@ -130,6 +147,7 @@ export class PayoutService {
     if (by && payout.requestedBy && sameSigner(payout.requestedBy, by)) {
       throw new GlosError('CONFLICT', 'A second member of staff approves a payout — not the one who raised it');
     }
+    this.assertSameDestination(payout, now);
     const { providerRef } = this.rail.submit({ payoutId: payout.payoutId, payeeDid: payout.payeeDid, amount: payout.amount, currency: payout.currency });
     payout.status = 'submitted';
     payout.submittedAt = new Date(now).toISOString();
@@ -230,6 +248,19 @@ export class PayoutService {
       inFlight: sum(mine.filter((p) => IN_FLIGHT.includes(p.status))),
       currency: mine[0]?.currency,
     };
+  }
+
+  /**
+   * Sent only to the number it was raised to. A number changed in between (or paused after a change) refuses the send:
+   * the payout is failed and the next run raises it to the number as it is now — never quietly redirected.
+   */
+  private assertSameDestination(payout: Payout, now: number): void {
+    if (!payout.destination || !this.destinations) return;
+    const current = this.destinations.of(payout.payeeDid, payout.way ?? 'mpesa', now);
+    if (isRefusal(current)) throw new GlosError('CONFLICT', `Not sent: ${current.reason}`);
+    if (current.numberId !== payout.destination.numberId) {
+      throw new GlosError('CONFLICT', 'The payout number changed after this payout was raised. Mark it failed; the next run raises it to the new number.');
+    }
   }
 
   private paidToday(entityId: string, payeeDid: string, day: string): boolean {

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 import { narrow, type Result, type SbgClient, type SbgError } from '../../lib/sbg';
 import type { ContractView } from './contract';
 import { idDisputeApi, type DisputeAgainstMe, type IdDisputeApi } from './idDispute';
+import type { PayoutNumberSaved, PayoutNumberView } from './payoutNumber';
 
 /**
  * THE ACCOUNT, THE SAME IN EVERY APP.
@@ -101,6 +102,15 @@ export interface AccountApi {
   ownId: (nationalId: string) => Promise<Result<{ saved: boolean }>>;
   /** The phones and browsers this person's PIN works on: read them, forget the others, forget this one. */
   devices: PinDevicesApi;
+  /**
+   * WHERE THIS PAYEE IS PAID (the user, 2026-10-18): in a country that pays by M-Pesa, a number the payee set and
+   * confirmed with a code. Null until read, and for a sign-in that is not paid out at all.
+   */
+  payout: PayoutNumberView | null;
+  /** Text a code to the number to be paid to. */
+  sendPayoutCode: (phone: string) => Promise<Result<Sent & { masked: string }>>;
+  /** The code back: that number is the payout number from now. A change pauses payouts for a day. */
+  savePayoutNumber: (code: string) => Promise<Result<PayoutNumberSaved>>;
 }
 
 const NO_CLIENT = { data: null, error: null } as unknown as Result<never>;
@@ -128,6 +138,9 @@ const IDLE: AccountApi = {
   idDispute: idDisputeApi(async () => NO_CLIENT),
   ownId: async () => NO_CLIENT,
   devices: pinDevicesApi(async () => NO_CLIENT),
+  payout: null,
+  sendPayoutCode: async () => NO_CLIENT,
+  savePayoutNumber: async () => NO_CLIENT,
 };
 
 export function useAccount(client: SbgClient | null, enabled = true): AccountApi {
@@ -164,6 +177,18 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
   useEffect(() => {
     if (enabled && client) void loadContract();
   }, [enabled, client, loadContract]);
+
+  // WHERE THIS PAYEE IS PAID — read apart from the account, as the contract is: a sign-in that is not paid out is
+  // refused, and that must take nothing else off the screen.
+  const [payout, setPayout] = useState<PayoutNumberView | null>(null);
+  const loadPayout = useCallback(async () => {
+    if (!client) return;
+    const r: Result<unknown> = await client.request((raw) => raw.GET('/v1/sbg/payout-number' as never, {} as never) as never);
+    setPayout(r.error || !r.data ? null : narrow<PayoutNumberView>(r.data));
+  }, [client]);
+  useEffect(() => {
+    if (enabled && client) void loadPayout();
+  }, [enabled, client, loadPayout]);
 
   const save = useCallback(
     async (patch: { displayName?: string; avatarMediaId?: string; address?: string }) => {
@@ -301,7 +326,17 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
   const idDispute = useMemo(() => idDisputeApi(post), [post]);
   const ownId = useCallback((nationalId: string) => post<{ saved: boolean }>('/v1/sbg/account/id-disputes/own-id', { nationalId }), [post]);
   const devices = useMemo(() => pinDevicesApi(post), [post]);
+  const sendPayoutCode = useCallback((phone: string) => post<Sent & { masked: string }>('/v1/sbg/payout-number/code', { phone }), [post]);
+  const savePayoutNumber = useCallback(
+    async (code: string) => {
+      const r = await post<PayoutNumberSaved>('/v1/sbg/payout-number', { code });
+      // What the server stored, not what was typed: the row redraws from it.
+      if (!r.error && r.data) setPayout(narrow<PayoutNumberSaved>(r.data));
+      return r;
+    },
+    [post],
+  );
 
   if (!client) return IDLE;
-  return { account, contract, reportContractPaper, loading, error, busy, reload, save, changePin, saveAvatar, loadMedia, sendEmailCode, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, idDispute, ownId, devices };
+  return { account, contract, reportContractPaper, loading, error, busy, reload, save, changePin, saveAvatar, loadMedia, sendEmailCode, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, idDispute, ownId, devices, payout, sendPayoutCode, savePayoutNumber };
 }

@@ -13,10 +13,11 @@ import { IdDisputeCase } from './IdDisputeCase';
 import { settingsIdSays } from './idDispute';
 import { pinChangeBlocker } from './password';
 import { PIN_LENGTH } from './pin';
+import { hasPayoutNumber, payoutNumberSub, payoutSavedSays, type PayoutNumberSaved } from './payoutNumber';
 import { oldNumberSays, recoveryEmailSays } from './recovery';
 import type { AccountApi } from './useAccount';
 
-type View = 'list' | 'pin' | 'email' | 'phone' | 'phone-done' | 'old-number' | 'id' | 'contract' | 'devices';
+type View = 'list' | 'pin' | 'email' | 'phone' | 'phone-done' | 'old-number' | 'id' | 'contract' | 'devices' | 'payout';
 
 export interface SettingsSheetProps {
   open: boolean;
@@ -35,7 +36,7 @@ export interface SettingsSheetProps {
 
 /** True when there is anything to put in Settings for this person — the row that opens it is omitted otherwise. */
 export function hasSettings(api: AccountApi, onChangePassword?: () => void): boolean {
-  return Boolean(api.account?.hasPin || onChangePassword || api.account?.idDispute || hasContract(api.contract));
+  return Boolean(api.account?.hasPin || onChangePassword || api.account?.idDispute || hasContract(api.contract) || hasPayoutNumber(api.payout));
 }
 
 /**
@@ -62,6 +63,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
   const [blocked, setBlocked] = useState(false);
   // Kept from the moment it is opened: once it is settled the account stops saying it, and the sheet must not go blank under the reader.
   const [idRef, setIdRef] = useState<string | null>(null);
+  const [payoutSaved, setPayoutSaved] = useState<PayoutNumberSaved | null>(null);
   useEffect(() => {
     if (open) {
       setView('list');
@@ -69,6 +71,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
       setStopped(false);
       setStopError(null);
       setBlocked(false);
+      setPayoutSaved(null);
     }
   }, [open]);
   const stopMove = async () => {
@@ -82,7 +85,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
   const me = api.account;
   // Once the number has moved the token is dead: every way out of the sheet is the sign-in screen.
   const close = view === 'phone-done' ? () => { onClose(); onSignOut(); } : onClose;
-  const title = view === 'devices' ? t('account.devices.title') : view === 'contract' ? t('account.contract.title') : view === 'old-number' ? t('account.settings.oldNumber.title') : view === 'id' ? t('account.settings.id.viewTitle') : view === 'pin' ? t('account.menu.pin') : view === 'email' ? t('account.settings.email') : view === 'phone' || view === 'phone-done' ? t('account.settings.phone') : t('account.settings.title');
+  const title = view === 'payout' ? t('account.payout.title') : view === 'devices' ? t('account.devices.title') : view === 'contract' ? t('account.contract.title') : view === 'old-number' ? t('account.settings.oldNumber.title') : view === 'id' ? t('account.settings.id.viewTitle') : view === 'pin' ? t('account.menu.pin') : view === 'email' ? t('account.settings.email') : view === 'phone' || view === 'phone-done' ? t('account.settings.phone') : t('account.settings.title');
   const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   const old = oldNumberSays(me, t as never, when);
 
@@ -139,6 +142,8 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
             {me?.hasPin ? <Row icon="phone" label={t('account.settings.phone')} sub={t('account.settings.phoneSub')} onClick={() => setView('phone')} /> : null}
             {/* WHERE THE PIN WORKS: every phone and browser a code to the number was typed on. Seen, and forgotten, here. */}
             {me?.hasPin ? <Row icon="lock" label={t('account.devices.title')} sub={t('account.devices.sub')} onClick={() => setView('devices')} /> : null}
+            {/* WHERE THEY ARE PAID, where their country pays to a number of their own (the user, 2026-10-18). */}
+            {hasPayoutNumber(api.payout) && api.payout ? <Row icon="wallet" label={t('account.payout.title')} sub={payoutNumberSub(api.payout, t as never, when)} onClick={() => setView('payout')} /> : null}
             {/* WHO THEY CONTRACT WITH, and the papers it trades on. Omitted where no company of ours contracts with them. */}
             {hasContract(api.contract) ? <Row icon="badge" label={t('account.contract.title')} sub={api.contract?.company?.name} onClick={() => setView('contract')} /> : null}
           </div>
@@ -157,6 +162,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
             </>
           ) : null}
           {blocked ? <Note tone="ok" icon="check" title={t('account.settings.oldNumber.blockedTitle')} detail={t('account.settings.oldNumber.blocked')} /> : null}
+          {payoutSaved ? <Note tone="ok" icon="check" {...payoutSavedSays(payoutSaved, t as never, when)} /> : null}
         </>
       ) : null}
 
@@ -175,6 +181,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
       {view === 'email' ? <EmailForm api={api} onDone={() => { setSaved(true); setView('list'); }} /> : null}
       {view === 'phone' ? <PhoneForm api={api} onDone={() => setView('phone-done')} /> : null}
       {view === 'contract' ? <ContractCompany api={api} /> : null}
+      {view === 'payout' ? <PayoutForm api={api} onDone={(saved) => { setPayoutSaved(saved); setView('list'); }} /> : null}
       {view === 'devices' ? <DevicesForm api={api} onSignedOut={() => { onClose(); onSignOut(); }} /> : null}
       {view === 'old-number' ? <OldNumberForm api={api} onDone={() => { setBlocked(true); setView('list'); }} /> : null}
       {view === 'id' && idRef ? <IdDisputeCase api={api.idDispute} reference={idRef} ownId={api.ownId} onChanged={() => void api.reload()} /> : null}
@@ -432,6 +439,74 @@ function OldNumberForm({ api, onDone }: { api: AccountApi; onDone: () => void })
       <Refused error={error} />
       <Button chevron={false} busy={busy} disabled={pin.length !== PIN_LENGTH} onClick={() => void block()}>
         {t('account.settings.oldNumber.blockSave')}
+      </Button>
+    </>
+  );
+}
+
+/** The number payouts go to: a code texted to it, then saved. A change pauses payouts for a day (said before it is made). */
+function PayoutForm({ api, onDone }: { api: AccountApi; onDone: (saved: PayoutNumberSaved) => void }) {
+  const t = useT();
+  const [phone, setPhone] = useState('');
+  const [code, setCode] = useState('');
+  const [testCode, setTestCode] = useState('');
+  const [sentTo, setSentTo] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<SbgError | null>(null);
+
+  const send = async () => {
+    setBusy(true);
+    const r = await api.sendPayoutCode(phone.trim());
+    setBusy(false);
+    setError(r.error ?? null);
+    if (r.error) return;
+    setSentTo(r.data?.masked ?? '');
+    setCode('');
+    setTestCode(r.data?.code ?? '');
+  };
+  const save = async () => {
+    setBusy(true);
+    const r = await api.savePayoutNumber(code);
+    setBusy(false);
+    if (r.error || !r.data) return setError(r.error ?? null);
+    onDone(r.data);
+  };
+
+  return (
+    <>
+      <p class="t-body">{t('account.payout.body')}</p>
+      {api.payout?.masked ? <p class="t-body">{t('account.payout.change')}</p> : null}
+      <div class="field">
+        <label class="field__label" for="acct-payout-phone">
+          {t('account.payout.numberLabel')}
+        </label>
+        <input
+          id="acct-payout-phone"
+          class="input"
+          type="tel"
+          inputMode="tel"
+          value={phone}
+          disabled={busy}
+          placeholder="07XX XXX XXX"
+          onInput={(e) => {
+            setPhone(e.currentTarget.value);
+            setSentTo('');
+          }}
+        />
+      </div>
+      <Button variant="outline" chevron={false} disabled={busy || !phone.trim()} onClick={() => void send()}>
+        {t(sentTo ? 'account.safety.sendAgain' : 'account.safety.sendPhoneCode')}
+      </Button>
+      {sentTo ? (
+        <div class="field">
+          <span class="field__label">{t('account.safety.phoneCodeLabel')}</span>
+          <CodeBoxes id="acct-payout-code" label={t('account.safety.phoneCodeLabel')} length={6} value={code} onInput={(v) => { setCode(v); setError(null); }} disabled={busy} />
+          {testCode ? <p class="hint">{t('account.safety.testCode', { code: testCode })}</p> : null}
+        </div>
+      ) : null}
+      <Refused error={error} />
+      <Button chevron={false} busy={busy} disabled={!sentTo || code.length !== 6} onClick={() => void save()}>
+        {t('account.payout.save')}
       </Button>
     </>
   );

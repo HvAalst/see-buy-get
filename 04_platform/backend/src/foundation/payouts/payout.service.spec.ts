@@ -296,4 +296,56 @@ describe('paying providers', () => {
       expect(payouts.forPayee('did:glos:courier-a')).toMatchObject({ settled: 40, inFlight: 15 });
     });
   });
+
+  describe('where it goes (the user, 2026-10-18: a number the payee set, where the country pays by M-Pesa)', () => {
+    /** Payees' numbers as a payee's own Settings would have them: one each, a fresh id per change, held after a change. */
+    function numbers() {
+      const kept = new Map<string, { numberId: string; masked: string; heldUntil?: number }>();
+      payouts.registerDestinations({
+        of: (payeeId, _way, now) => {
+          const n = kept.get(payeeId);
+          if (!n) return { reason: 'no payout number yet: the payee sets it in Settings' };
+          if (n.heldUntil && n.heldUntil > now) return { reason: 'the payout number was changed' };
+          return { numberId: n.numberId, masked: n.masked };
+        },
+        full: () => undefined,
+      });
+      return kept;
+    }
+
+    it('skips a payee with no number, and raises the rest to the number each set', () => {
+      fund(1000);
+      owe('did:glos:courier-a', 40);
+      owe('did:glos:courier-b', 30);
+      numbers().set('did:glos:courier-b', { numberId: 'pn_b1', masked: '254712***678' });
+      const run = payouts.runFor(ke(), Date.now(), { name: 'Amina O' });
+      expect(run.skipped).toEqual([{ payeeDid: 'did:glos:courier-a', reason: 'no payout number yet: the payee sets it in Settings' }]);
+      expect(run.raised.map((p) => [p.payeeDid, p.way, p.destination])).toEqual([['did:glos:courier-b', 'mpesa', { numberId: 'pn_b1', masked: '254712***678' }]]);
+      // Nothing set aside for the payee who could not be paid: the cash stays for whoever can.
+      expect(held()).toBe(1000);
+    });
+
+    it('never sends a payout to a number other than the one it was raised to, nor to one paused after a change', () => {
+      fund(1000);
+      owe('did:glos:courier-b', 30);
+      const kept = numbers();
+      kept.set('did:glos:courier-b', { numberId: 'pn_b1', masked: '254712***678' });
+      const [p] = payouts.runFor(ke(), Date.now(), { name: 'Amina O' }).raised;
+      kept.set('did:glos:courier-b', { numberId: 'pn_b2', masked: '254799***111', heldUntil: Date.now() + 86_400_000 });
+      expect(() => payouts.submit(p.payoutId, Date.now(), { name: 'Brian K' })).toThrow(/Not sent: the payout number was changed/);
+      kept.set('did:glos:courier-b', { numberId: 'pn_b2', masked: '254799***111' });
+      expect(() => payouts.submit(p.payoutId, Date.now(), { name: 'Brian K' })).toThrow(/changed after this payout was raised/);
+      expect(payouts.get(p.payoutId).status).toBe('requested');
+    });
+
+    it('asks no number of a payee in a country that pays by hand', () => {
+      const et = entities.requireForJurisdiction('ET').entityId;
+      numbers();
+      books.post({ entityId: et, kind: 'top-up', ref: 'funding', lines: [{ code: ACCOUNT_CODES.CASH_CUSTODY, amount: 500 }, { code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: 'did:glos:shop', amount: -500 }] });
+      books.post({ entityId: et, kind: 'driver-payout', ref: 'x', lines: [{ code: ACCOUNT_CODES.EXPENSE_PROVIDER_FEES, amount: 20 }, { code: ACCOUNT_CODES.PAYABLE_PROVIDER, counterparty: 'did:glos:et-courier', amount: -20 }] });
+      const [p] = payouts.runFor(et, Date.now(), { name: 'Amina O' }).raised;
+      expect(p).toMatchObject({ payeeDid: 'did:glos:et-courier', way: 'by_hand' });
+      expect(p.destination).toBeUndefined();
+    });
+  });
 });

@@ -278,6 +278,19 @@ const run = async () => {
   }
   say(`fleet Kilima Logistics   company code ${fleetCode} · manager ${mgr.contactPhone} PIN ${MGR_PIN}`);
 
+  // WHERE THEY ARE PAID (the user, 2026-10-18): in Kenya, an M-Pesa number the payee set and confirmed with a code.
+  // Set once for the demo's payees as each would in Settings (a sandbox hands the code back); a number that is there stays.
+  const ensurePayoutNumber = async (token, number, label) => {
+    const now = await req('GET', '/v1/sbg/payout-number', { token });
+    if (!now.ok || now.data?.way !== 'mpesa' || now.data?.masked) return;
+    const sent = await req('POST', '/v1/sbg/payout-number/code', { token, body: { phone: number } });
+    if (!sent.ok || !sent.data?.code) return say(`  (no payout number for ${label}: ${sent.data?.detail ?? sent.status})`);
+    need(await req('POST', '/v1/sbg/payout-number', { token, body: { code: sent.data.code } }), `payout number ${label}`);
+    say(`payout number ${label}: ${sent.data.masked}`);
+  };
+  await ensurePayoutNumber(fm, '0700 000 101', 'Kilima Logistics');
+  await ensurePayoutNumber(tokHub, '0700 000 102', 'Central Sort');
+
   const vehicles = need(await req('GET', '/v1/sbg/vehicles?status=&class=', { token: fm }), 'vehicles');
   const ensureVehicle = async (plate, vehicleClass, pricePerKm) => {
     const have = vehicles.find((v) => v.plate === plate);

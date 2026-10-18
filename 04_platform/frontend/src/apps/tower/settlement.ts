@@ -20,6 +20,19 @@ export interface PayoutRow {
   providerRef?: string;
   requestedBy?: { name: string };
   approvedBy?: { name: string };
+  /** How it is paid — its country's way — and, by M-Pesa, the payee's own number it was raised to, masked. */
+  way?: 'mpesa' | 'by_hand';
+  destination?: { masked: string };
+}
+
+/**
+ * HOW, under the payee: by M-Pesa to the number the payee set (masked), or by hand — staff pay it outside SeeBuyGet and
+ * record the reference. Nothing for a payout raised before there were ways.
+ */
+export function payoutHow(row: Pick<PayoutRow, 'way' | 'destination'>, t: Translate): string | null {
+  if (row.way === 'mpesa') return row.destination ? t('tower.money.how.mpesa', { number: row.destination.masked }) : t('tower.money.how.mpesaNoNumber');
+  if (row.way === 'by_hand') return t('tower.money.how.byHand');
+  return null;
 }
 
 /**

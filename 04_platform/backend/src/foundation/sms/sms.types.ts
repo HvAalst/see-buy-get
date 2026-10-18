@@ -3,8 +3,9 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 /**
  * SMS — the seam between "this phone must be sent its code" and the service that texts it.
  *
- * One thing is texted: the code that proves somebody holds a phone. Off a sandbox it goes through Twilio (the user,
- * 2026-10-11); what switches that on is the environment:
+ * Two things are texted, both in fixed words: the code that proves somebody holds a phone, and the notice to an OLD payout
+ * number that it was replaced (`payoutNumberChangedText`). Nothing about a parcel, ever. Off a sandbox it goes through
+ * Twilio (the user, 2026-10-11); what switches that on is the environment:
  *
  *   - `TWILIO_ACCOUNT_SID` — the account. It is part of the address a text is posted to;
  *   - a credential: `TWILIO_API_KEY_SID` + `TWILIO_API_KEY_SECRET` (what Twilio recommends: a key can be revoked

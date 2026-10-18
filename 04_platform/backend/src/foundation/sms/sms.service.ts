@@ -39,6 +39,15 @@ export function codeText(code: string, minutes: number, env: Env = process.env):
 }
 
 /**
+ * The one text that is not a code (the user, 2026-10-18): to the OLD payout number, when a payee's payout number is
+ * changed. The old number is the one person who can tell a change they made from somebody who took their account, so
+ * it is told — in fixed words, one segment, with nothing anybody typed in it.
+ */
+export function payoutNumberChangedText(newMasked: string): string {
+  return `SeeBuyGet: your payout number was changed to ${newMasked}. Payouts pause for 24 hours. Not you? Sign in and change it back.`;
+}
+
+/**
  * TEXT MESSAGES, AND WHAT THE SENDER THIS SERVER STARTED WITH DOES WITH THEM.
  *
  * `sendCode` resolves only when the provider took the text. The door that asked (`auth/phone/request`) tells the
@@ -117,6 +126,21 @@ export class SmsService {
       this.failed += 1;
       this.last = { at: new Date().toISOString(), ok: false, failed: why.kind, ...(why.code ? { code: why.code } : {}) };
       this.logger.error(`A code could not be texted: ${why.message}`);
+      throw why;
+    }
+  }
+
+  /** Tell the old payout number it was replaced. Throws an `SmsSendError` when it was not taken. `phone` is E.164. */
+  async sendPayoutNumberChanged(phone: string, newMasked: string): Promise<void> {
+    this.written += 1;
+    try {
+      await this.sender.send({ to: phone, body: payoutNumberChangedText(newMasked) });
+      this.last = { at: new Date().toISOString(), ok: true };
+    } catch (err) {
+      const why = err instanceof SmsSendError ? err : new SmsSendError('failed', 'the SMS provider answered with a fault');
+      this.failed += 1;
+      this.last = { at: new Date().toISOString(), ok: false, failed: why.kind, ...(why.code ? { code: why.code } : {}) };
+      this.logger.error(`A payout-number notice could not be texted: ${why.message}`);
       throw why;
     }
   }

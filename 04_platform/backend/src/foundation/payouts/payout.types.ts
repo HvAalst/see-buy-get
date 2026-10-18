@@ -1,3 +1,6 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { PAYOUT_WAYS, PayoutDestination, type PayoutWay } from './payout-ways';
+
 /**
  * Paying providers — the other end of the money model, and the half that never existed.
  *
@@ -32,6 +35,12 @@ export class Payout {
   amount: number;
   currency: string;
   status: PayoutStatus;
+  /** How it is paid: the way of the paying sister's country (payout-ways.ts). Absent on payouts raised before there were ways. */
+  @ApiPropertyOptional({ enum: PAYOUT_WAYS })
+  way?: PayoutWay;
+  /** Where it goes, where the way needs a number of the payee's: the masked number it was raised to, and which one. */
+  @ApiPropertyOptional({ type: PayoutDestination })
+  destination?: PayoutDestination;
   /**
    * The settlement day this covers, `YYYY-MM-DD`.
    *

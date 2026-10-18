@@ -22156,6 +22156,78 @@
         }
       }
     },
+    "/v1/sbg/payout-number": {
+      "get": {
+        "operationId": "PayoutNumber.mine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayoutNumberView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "PayoutNumber.confirm",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayoutNumberConfirmDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayoutNumberSaved"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/payout-number/code": {
+      "post": {
+        "operationId": "PayoutNumber.code",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayoutNumberCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayoutCodeSent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/quotes/{quoteId}": {
       "get": {
         "operationId": "Quote.read",
@@ -31963,9 +32035,40 @@
           }
         }
       },
+      "PayoutDestination": {
+        "type": "object",
+        "properties": {
+          "numberId": {
+            "type": "string"
+          },
+          "masked": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "numberId",
+          "masked"
+        ]
+      },
       "Payout": {
         "type": "object",
         "properties": {
+          "way": {
+            "type": "string",
+            "description": "How it is paid: the way of the paying sister's country (payout-ways.ts). Absent on payouts raised before there were ways.",
+            "enum": [
+              "mpesa",
+              "by_hand"
+            ]
+          },
+          "destination": {
+            "description": "Where it goes, where the way needs a number of the payee's: the masked number it was raised to, and which one.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PayoutDestination"
+              }
+            ]
+          },
           "payoutId": {
             "type": "string"
           },
@@ -46145,6 +46248,129 @@
         },
         "required": [
           "reason"
+        ]
+      },
+      "PayoutNumberView": {
+        "type": "object",
+        "properties": {
+          "way": {
+            "type": "string",
+            "enum": [
+              "mpesa",
+              "by_hand"
+            ],
+            "description": "How payees in this country are paid."
+          },
+          "country": {
+            "type": "string"
+          },
+          "notPayee": {
+            "type": "string",
+            "description": "Why this account has no payout number of its own (a fleet driver, a shop)."
+          },
+          "masked": {
+            "type": "string"
+          },
+          "confirmedAt": {
+            "type": "string"
+          },
+          "heldUntil": {
+            "type": "string",
+            "description": "Paused after a change: nothing is paid to it before this."
+          }
+        },
+        "required": [
+          "way",
+          "country"
+        ]
+      },
+      "PayoutNumberCodeDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "description": "The M-Pesa number to be paid to, as the payee writes it: 07XX XXX XXX."
+          }
+        },
+        "required": [
+          "phone"
+        ]
+      },
+      "PayoutCodeSent": {
+        "type": "object",
+        "properties": {
+          "sent": {
+            "type": "boolean"
+          },
+          "masked": {
+            "type": "string"
+          },
+          "minutes": {
+            "type": "number"
+          },
+          "code": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sent",
+          "masked",
+          "minutes"
+        ]
+      },
+      "PayoutNumberConfirmDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "The code texted to that number."
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "PayoutNumberSaved": {
+        "type": "object",
+        "properties": {
+          "way": {
+            "type": "string",
+            "enum": [
+              "mpesa",
+              "by_hand"
+            ],
+            "description": "How payees in this country are paid."
+          },
+          "country": {
+            "type": "string"
+          },
+          "notPayee": {
+            "type": "string",
+            "description": "Why this account has no payout number of its own (a fleet driver, a shop)."
+          },
+          "masked": {
+            "type": "string"
+          },
+          "confirmedAt": {
+            "type": "string"
+          },
+          "heldUntil": {
+            "type": "string",
+            "description": "Paused after a change: nothing is paid to it before this."
+          },
+          "oldNumber": {
+            "type": "string",
+            "enum": [
+              "texted",
+              "kept",
+              "not_sent"
+            ],
+            "description": "The old number, told it was replaced: texted · kept (a sandbox texts nobody) · not_sent."
+          }
+        },
+        "required": [
+          "way",
+          "country"
         ]
       },
       "QuoteStatusDto": {
