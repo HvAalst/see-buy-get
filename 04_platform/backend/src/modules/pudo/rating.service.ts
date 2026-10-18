@@ -7,6 +7,7 @@ import { GlosEvent } from '../../foundation/events/glos-events';
 import { AgentService } from './agent.service';
 import { ParcelService } from './parcel.service';
 import { hashPhone } from '../../foundation/identity/phone';
+import { PersistentMap } from '../../foundation/store/persistent-map';
 
 /** REP1 — below this rating count a public reputation reads as "New" rather than a headline average: a
  *  mean of one review is noise, and a lone 1-star (or 5-star) must not brand a provider. Mirrors the
@@ -68,10 +69,15 @@ export interface DriverRatingRecord {
  */
 @Injectable()
 export class RatingService {
-  private readonly ratings: RatingRecord[] = [];
+  /*
+   * EVERY RATING IS KEPT. They were held in memory alone while their average was written to the core: a restart wiped
+   * them, reset each count, and lifted the bar that keeps a driver rated below the floor off freight. The tallies are
+   * worked out from the kept ratings when the service starts, and kept in step as ratings come in.
+   */
+  private readonly ratings = new PersistentMap<string, RatingRecord>('pudo-ratings');
   private readonly tally = new Map<string, { sum: number; count: number }>(); // agentDid → stars
   // REP2 — driver reputation lives in its own store (rated BY agents, not by phone), aggregated the same way.
-  private readonly driverRatings: DriverRatingRecord[] = [];
+  private readonly driverRatings = new PersistentMap<string, DriverRatingRecord>('pudo-driver-ratings');
   private readonly driverTally = new Map<string, { sum: number; count: number }>(); // driverDid → stars
 
   constructor(
@@ -79,7 +85,14 @@ export class RatingService {
     private readonly agents: AgentService,
     private readonly core: OperationalStore,
     private readonly events: EventBus,
-  ) {}
+  ) {
+    const add = (tally: Map<string, { sum: number; count: number }>, did: string, stars: number) => {
+      const t = tally.get(did) ?? { sum: 0, count: 0 };
+      tally.set(did, { sum: t.sum + stars, count: t.count + 1 });
+    };
+    for (const r of this.ratings.values()) add(this.tally, r.agentDid, r.stars);
+    for (const r of this.driverRatings.values()) add(this.driverTally, r.driverDid, r.stars);
+  }
 
   /** Rate a delivered parcel (1–5 stars). Updates the agent composite + writes it to the core. */
   rate(input: { parcelId: string; stars: number; raterMobile: string }): { rating: RatingRecord; agentComposite: number } {
@@ -98,7 +111,7 @@ export class RatingService {
     // REP1 — one rating per parcel: a re-rating REPLACES the earlier one (last-wins), it never adds a second
     // vote. Without this a buyer (or a script) could POST the same parcel's rating repeatedly and inflate both
     // the count and the average. The tally is adjusted by the delta, not re-incremented.
-    const existing = this.ratings.find((r) => r.parcelId === input.parcelId);
+    const existing = [...this.ratings.values()].find((r) => r.parcelId === input.parcelId);
     let record: RatingRecord;
     const t = this.tally.get(agentDid) ?? { sum: 0, count: 0 };
     if (existing) {
@@ -109,10 +122,10 @@ export class RatingService {
       record = existing;
     } else {
       record = { id: `rat_${randomBytes(6).toString('hex')}`, parcelId: input.parcelId, agentDid, stars: input.stars, raterHash, at: now };
-      this.ratings.push(record);
       t.sum += input.stars;
       t.count += 1;
     }
+    this.ratings.set(record.id, record);
     this.tally.set(agentDid, t);
     const composite = Math.round((t.sum / t.count) * 100) / 100;
 
@@ -174,7 +187,7 @@ export class RatingService {
     const issues = [...new Set((input.issues ?? []).filter((i) => DRIVER_ISSUES.includes(i)))];
     const now = new Date().toISOString();
 
-    const existing = this.driverRatings.find((r) => r.driverDid === input.driverDid && r.byAgentDid === input.byAgentDid);
+    const existing = [...this.driverRatings.values()].find((r) => r.driverDid === input.driverDid && r.byAgentDid === input.byAgentDid);
     let record: DriverRatingRecord;
     const t = this.driverTally.get(input.driverDid) ?? { sum: 0, count: 0 };
     if (existing) {
@@ -185,10 +198,10 @@ export class RatingService {
       record = existing;
     } else {
       record = { id: `drt_${randomBytes(6).toString('hex')}`, driverDid: input.driverDid, byAgentDid: input.byAgentDid, stars: input.stars, issues, at: now };
-      this.driverRatings.push(record);
       t.sum += input.stars;
       t.count += 1;
     }
+    this.driverRatings.set(record.id, record);
     this.driverTally.set(input.driverDid, t);
     const composite = Math.round((t.sum / t.count) * 100) / 100;
 
@@ -209,7 +222,7 @@ export class RatingService {
     if (!(input.stars >= 1 && input.stars <= 5)) throw new GlosError('INVALID_RATING', 'Stars must be 1–5');
     const issues = [...new Set((input.issues ?? []).filter((i) => DRIVER_ISSUES.includes(i)))];
     const now = new Date().toISOString();
-    const existing = this.driverRatings.find((r) => r.freightId === input.freightId);
+    const existing = [...this.driverRatings.values()].find((r) => r.freightId === input.freightId);
     let record: DriverRatingRecord;
     const t = this.driverTally.get(input.driverDid) ?? { sum: 0, count: 0 };
     if (existing) {
@@ -220,10 +233,10 @@ export class RatingService {
       record = existing;
     } else {
       record = { id: `drt_${randomBytes(6).toString('hex')}`, driverDid: input.driverDid, byAgentDid: input.byDid, stars: input.stars, issues, at: now, freightId: input.freightId };
-      this.driverRatings.push(record);
       t.sum += input.stars;
       t.count += 1;
     }
+    this.driverRatings.set(record.id, record);
     this.driverTally.set(input.driverDid, t);
     const composite = Math.round((t.sum / t.count) * 100) / 100;
     this.core.updateReputation(input.driverDid, composite);
@@ -234,7 +247,7 @@ export class RatingService {
 
   /** REP2 — the ratings a driver has received (operator/analytics; PII-free — by-agent + issue tags, no phone). */
   driverRatingsFor(driverDid: string): DriverRatingRecord[] {
-    return this.driverRatings.filter((r) => r.driverDid === driverDid).reverse();
+    return [...this.driverRatings.values()].filter((r) => r.driverDid === driverDid).reverse();
   }
 
   /** Network agent-retention metric: share of onboarded agents still ACTIVE (steel-thread KPI). */
@@ -245,6 +258,6 @@ export class RatingService {
   }
 
   list(): RatingRecord[] {
-    return [...this.ratings].reverse();
+    return [...this.ratings.values()].reverse();
   }
 }
