@@ -119,6 +119,13 @@ function databaseAt(url: string): SyncPostgres {
   return db;
 }
 
+/** The store's own Postgres connection — the one its writes go through, on which one-writer.ts claims the store. */
+export function storeDatabase(): SyncPostgres {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error('DATABASE_URL is not set: the store is on files');
+  return databaseAt(url);
+}
+
 const UPSERT = 'INSERT INTO glos_store (collection, key, value) VALUES ($1, $2, $3::json) ON CONFLICT (collection, key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()';
 const REMOVE = 'DELETE FROM glos_store WHERE collection = $1 AND key = $2';
 

@@ -350,3 +350,8 @@ copy yourself (step 7).
   refresh them now, run the Deploy workflow by hand with the release left empty.
 - **Nothing watches the site.** DigitalOcean's monitoring can alert on the Droplet; an uptime check on `/v1/health`
   is the first thing to add.
+- **One API server per database, always.** Each server holds the wallets and the books in memory and writes them
+  through; two against the same database would write over each other's money. So the first claims the database (a
+  Postgres advisory lock) and a second one waits 15 seconds for it to stop, then refuses to start and names the
+  session that holds it. A server that loses its lock to another stops. Do not scale the `api` service past one. The
+  console shows which process holds it under At a glance → The record, with whether every fingerprint is still whole.

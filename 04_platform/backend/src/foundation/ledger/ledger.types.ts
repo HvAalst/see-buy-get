@@ -24,6 +24,16 @@ export interface NetworkInfo {
   chaincode?: string;
 }
 
+/** What a walk over every anchor found: whole, or the first block where the chain breaks and why. */
+export interface LedgerCheck {
+  anchors: number;
+  whole: boolean;
+  brokenAt?: number;
+  reason?: string;
+  first?: string;
+  last?: string;
+}
+
 export interface LedgerAdapter {
   /** Append a hash to the ledger, returning its tx id + block height. */
   append(hash: string): LedgerAppendResult;
@@ -33,6 +43,8 @@ export interface LedgerAdapter {
   get(hash: string): LedgerAppendResult | undefined;
   /** Optional: describe the underlying permissioned network. */
   networkInfo?(): NetworkInfo;
+  /** Optional: walk every anchor and say whether the chain is whole (an adapter that keeps its anchors). */
+  check?(): LedgerCheck;
 }
 
 export const LEDGER_ADAPTER = 'LEDGER_ADAPTER';

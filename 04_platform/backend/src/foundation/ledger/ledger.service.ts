@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { createHash } from 'crypto';
-import { AnchorReceipt, LedgerAdapter, LEDGER_ADAPTER, NetworkInfo } from './ledger.types';
+import { AnchorReceipt, LedgerAdapter, LedgerCheck, LEDGER_ADAPTER, NetworkInfo } from './ledger.types';
 
 /**
  * LedgerService — the shared anchoring primitive (T-004).
@@ -27,6 +27,11 @@ export class LedgerService {
   /** Describe the underlying permissioned network (e.g. Hyperledger Fabric). */
   networkInfo(): NetworkInfo {
     return this.adapter.networkInfo?.() ?? { network: 'in-memory' };
+  }
+
+  /** Every anchor walked: whole, or where the chain breaks. An adapter that keeps nothing has nothing to say. */
+  check(): LedgerCheck | undefined {
+    return this.adapter.check?.();
   }
 
   /** Verify a payload is anchored; if a txId is supplied it must match. */

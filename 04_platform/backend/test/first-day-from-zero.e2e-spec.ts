@@ -785,4 +785,14 @@ describe('the first day of a new installation, as it would be live', () => {
     pilot.noteTakeIn('QR-LATE-TIMED', mamaSarah.did, 50, Date.parse(week.from) + 60_000);
     expect(pilot.board(nextWeek).weeks[0]).toEqual(frozen);
   });
+
+  it('13 · evidence that lasts: every fingerprint the day handed out is kept, chained to the one before it — and a shop does not read it', async () => {
+    const evidence = await must(http().get('/v1/sbg/evidence').set(bearer(amina)), 200);
+    // A day of take-ins, handovers, arrivals, hand-outs and two reports: each a fingerprint, each kept.
+    expect(evidence.ledger).toMatchObject({ whole: true });
+    expect(evidence.ledger.anchors).toBeGreaterThan(10);
+    // Nothing is kept on disk under a test, so there is no store to claim: said, not hidden.
+    expect(evidence.store).toEqual({ engine: 'files', claimed: false });
+    await must(http().get('/v1/sbg/evidence').set(bearer(mamaSarah.token)), 403);
+  });
 });

@@ -301,7 +301,80 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
           </div>
         )}
       </ConsoleFold>
+
+      <RecordPanel actions={actions} />
     </>
+  );
+}
+
+interface EvidenceView {
+  ledger?: { anchors: number; whole: boolean; brokenAt?: number; reason?: string; first?: string; last?: string };
+  store: { engine: 'postgres' | 'files'; claimed: boolean; pid?: number; since?: string };
+}
+
+/**
+ * THE RECORD (the user, 2026-10-18: "evidence that lasts"): whether every fingerprint the network has handed out — on a
+ * scan, a signature, a damage claim report — can still be checked, and which one server writes the store. A chain that
+ * breaks opens the fold and says so at the top, where it cannot be missed.
+ */
+function RecordPanel({ actions }: { actions: TowerActions }) {
+  const t = useT();
+  const client = actions.client();
+  const [view, setView] = useState<EvidenceView | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!client) return;
+    const r = await client.api.evidence();
+    if (r.error) return setError(r.error.detail || r.error.title);
+    setError(null);
+    setView(r.data as unknown as EvidenceView);
+  }, [client]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const l = view?.ledger;
+  const day = (iso?: string) => (iso ? new Date(iso).toLocaleString() : '—');
+  return (
+    <ConsoleFold
+      title={t('tower.record.title')}
+      hint={!view ? t('tower.queues.loading') : !l ? t('tower.record.noLedger') : l.whole ? t('tower.record.whole', { n: l.anchors }) : t('tower.record.broken', { block: l.brokenAt ?? 0 })}
+      defaultOpen={Boolean(l && !l.whole)}
+    >
+      {error ? <p class="cerr">{error}</p> : null}
+      {view ? (
+        <div class="crows">
+          {l ? (
+            <div class="crow">
+              <span class="crow__body">
+                <span class="crow__top">
+                  <span class={`ctag ctag--${l.whole ? 'ok' : 'danger'}`}>{t(l.whole ? 'tower.record.wholeTag' : 'tower.record.brokenTag')}</span>
+                  <span class="crow__name">{t('tower.record.fingerprints', { n: l.anchors })}</span>
+                </span>
+                <span class="crow__sub">{l.whole ? t('tower.record.wholeSub', { first: day(l.first), last: day(l.last) }) : t('tower.record.brokenSub', { block: l.brokenAt ?? 0, reason: l.reason ?? '' })}</span>
+              </span>
+            </div>
+          ) : null}
+          <div class="crow">
+            <span class="crow__body">
+              <span class="crow__top">
+                <span class={`ctag ctag--${view.store.claimed ? 'ok' : 'warn'}`}>{t(view.store.engine === 'postgres' ? 'tower.record.postgres' : 'tower.record.files')}</span>
+                <span class="crow__name">{view.store.claimed ? t('tower.record.oneWriter', { pid: view.store.pid ?? 0 }) : t('tower.record.notKept')}</span>
+              </span>
+              <span class="crow__sub">{view.store.claimed ? t('tower.record.oneWriterSub', { since: day(view.store.since) }) : t('tower.record.notKeptSub')}</span>
+            </span>
+          </div>
+        </div>
+      ) : null}
+      <div class="twr-panelend">
+        <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void load()}>
+          <Icon name="refresh" size={16} />
+          {t('tower.record.checkAgain')}
+        </button>
+      </div>
+    </ConsoleFold>
   );
 }
 

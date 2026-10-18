@@ -22430,6 +22430,24 @@
         }
       }
     },
+    "/v1/sbg/evidence": {
+      "get": {
+        "operationId": "Evidence.evidence",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/payout-number": {
       "get": {
         "operationId": "PayoutNumber.mine",
@@ -47233,6 +47251,76 @@
           "thisWeek",
           "weeks",
           "targets"
+        ]
+      },
+      "EvidenceLedger": {
+        "type": "object",
+        "properties": {
+          "anchors": {
+            "type": "number",
+            "description": "Fingerprints kept: one per scan, signature and document anchored."
+          },
+          "whole": {
+            "type": "boolean",
+            "description": "Every anchor follows the one before it, and its id matches what it holds."
+          },
+          "brokenAt": {
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "first": {
+            "type": "string"
+          },
+          "last": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "anchors",
+          "whole"
+        ]
+      },
+      "EvidenceStore": {
+        "type": "object",
+        "properties": {
+          "engine": {
+            "type": "string",
+            "enum": [
+              "postgres",
+              "files"
+            ]
+          },
+          "claimed": {
+            "type": "boolean",
+            "description": "False where nothing is kept (a test, GLOS_PERSIST=off): no writer to claim."
+          },
+          "pid": {
+            "type": "number",
+            "description": "The server process that holds the store, and since when."
+          },
+          "since": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "engine",
+          "claimed"
+        ]
+      },
+      "EvidenceView": {
+        "type": "object",
+        "properties": {
+          "ledger": {
+            "$ref": "#/components/schemas/EvidenceLedger"
+          },
+          "store": {
+            "$ref": "#/components/schemas/EvidenceStore"
+          }
+        },
+        "required": [
+          "store"
         ]
       },
       "PayoutNumberView": {

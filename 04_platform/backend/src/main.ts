@@ -6,8 +6,19 @@ import { isSandbox } from './foundation/runtime/sandbox';
 import { applyEdge } from './edge';
 import { readProviderEventsRaw } from './foundation/mail/provider-events.raw';
 import { flushPersistentMaps } from './foundation/store/persistent-map';
+import { claimTheStore, type StoreClaim } from './foundation/store/one-writer';
 
 async function bootstrap() {
+  // ONE SERVER WRITES THE STORE (one-writer.ts): claimed before a single record is loaded, or this one does not start.
+  let claim: StoreClaim | undefined;
+  try {
+    claim = claimTheStore();
+  } catch (err) {
+    Logger.error((err as Error).message, 'Bootstrap');
+    process.exit(1);
+  }
+  process.once('exit', () => claim?.release());
+
   const app = await NestFactory.create(AppModule);
 
   /*
@@ -62,6 +73,7 @@ async function bootstrap() {
     Logger.log(`${signal}: answering what is in hand, then writing what is in memory to disk`, 'Bootstrap');
     const written = () => {
       flushPersistentMaps();
+      claim?.release();
       process.exit(0);
     };
     setTimeout(written, 8000).unref();

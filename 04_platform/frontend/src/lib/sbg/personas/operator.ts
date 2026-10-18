@@ -28,6 +28,8 @@ export function createOperatorApi(sbg: SbgClient) {
     /** Take a case, let it go, note it, or close it with a reason. */
     caseAct: (caseId: string, act: 'take' | 'let-go' | 'note' | 'done', body: Record<string, unknown> = {}) =>
       sbg.request((c) => c.POST(`/v1/sbg/flag-cases/${encodeURIComponent(caseId)}/${act}` as never, { body } as never) as never),
+    /** Evidence that lasts: the fingerprints kept and whether their chain is whole; which server writes the store. */
+    evidence: () => sbg.request((c) => c.GET('/v1/sbg/evidence' as never, {} as never) as never),
     /** The pilot, week by week: the week so far, every frozen week, and the compendium's targets. */
     pilot: () => sbg.request((c) => c.GET('/v1/sbg/pilot' as never, {} as never) as never),
     /** Parcels declared lost, and those found again in the last thirty days. */
