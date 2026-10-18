@@ -767,10 +767,21 @@ describe('crossing a border', () => {
         declaredValue: 3400, // what the GOODS are worth — never the shipping price
         currency: 'KES',
         exporterId: p.store.vendorId,
-        incoterm: 'DDU', // the importer settles duty; none of it moves through our books
+        incoterm: 'DAP', // delivered at the collection shop; the importer settles duty, none of it through our books
+        namedPlace: expect.stringContaining(', '),
       });
       expect(parcel.customs!.crossings).toEqual(p.quote.crossings);
       expect(parcel.customs!.importerRef).not.toContain('+254'); // the receiver is referenced, never named
+    });
+
+    it('gives the goods one value: the one the store declares, for customs and for cover alike', () => {
+      const p = crossBorderPair();
+      const { parcel } = mint(p, { items: [{ name: 'Ankara shirt', qty: 2 }], subtotal: 3400, declaredValue: 5000 });
+      expect(parcel.customs!.declaredValue).toBe(5000);
+      expect(parcel.declaredValue).toBe(5000);
+      // Without a declared figure, what the buyer paid for the goods is their value, on both.
+      const { parcel: plain } = mint(crossBorderPair(), { items: [{ name: 'Kitenge scarf', qty: 1 }], subtotal: 3400 });
+      expect(plain.customs!.declaredValue).toBe(3400);
     });
 
     it('asks a domestic parcel for none of it', () => {

@@ -14,8 +14,9 @@ import { CustomsDeclaration, LineItem } from './pudo.types';
  *  - **We are not a customs broker.** The declaration says what is in the box and what it is worth; it is
  *    not a filing, and nobody here computes a tariff code. It is the honest input to whoever does.
  *  - **Duty is the IMPORTER'S.** The receiver settles it at the border or on collection; no duty or import
- *    tax moves through our books, exactly as no fiat does. That is what `incoterm: 'DDU'` records — one
- *    value today, present so the field exists the day a store wants to prepay duty for its buyer.
+ *    tax moves through our books, exactly as no fiat does. That is what `incoterm: 'DAP'` records — Delivered
+ *    At Place, at the shop it is collected from: the seller delivers there, the buyer clears import and pays
+ *    duty. It was 'DDU', which Incoterms dropped in 2010 and which is not one of the eleven in our own catalogue.
  *  - **The importer is referenced, not named.** We hold a hashed phone, not a name and address, and a real
  *    filing needs both. Recorded as a gap rather than faked with a half-identity.
  */
@@ -49,6 +50,8 @@ export function declareFor(input: {
   currency: string;
   exporterId: string;
   importerRef?: string;
+  /** DAP's named place: where the goods are delivered — the shop they are collected from. */
+  namedPlace?: string;
   at: string;
   context: string; // what to tell the caller they are missing it FOR
 }): CustomsDeclaration {
@@ -69,7 +72,8 @@ export function declareFor(input: {
     currency: input.currency,
     exporterId: input.exporterId,
     importerRef: input.importerRef,
-    incoterm: 'DDU', // duties are the importer's; nothing about them moves through our books
+    incoterm: 'DAP', // delivered at the collection shop; duties are the importer's, and none of it moves through our books
+    ...(input.namedPlace ? { namedPlace: input.namedPlace } : {}),
     declaredAt: input.at,
   };
 }

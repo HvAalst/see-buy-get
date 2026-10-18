@@ -162,7 +162,9 @@ export class CustomsDeclaration {
   currency: string;
   exporterId: string; // the store or person sending it
   importerRef?: string; // the receiver, by the hash we hold — a real filing needs a name and address
-  incoterm: 'DDU'; // delivered duty unpaid: the importer settles duty, and none of it moves through us
+  incoterm: 'DAP'; // delivered at place (Incoterms 2020): the importer clears and settles duty, none of it through us
+  /** DAP's named place: the shop the parcel is collected from. */
+  namedPlace?: string;
   declaredAt: string;
 }
 

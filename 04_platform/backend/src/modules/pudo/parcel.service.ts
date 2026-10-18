@@ -1647,14 +1647,18 @@ export class ParcelService implements OnApplicationBootstrap {
     // is spent, because a shipment that cannot legally travel should leave no trace of having been started.
     // A store selling across a border already types both of these at checkout; one that does not cannot
     // ship there, and is told which part it is missing.
+    // ONE VALUE FOR THE GOODS: what the store declares when it gives a figure, else what the buyer paid for them. Customs
+    // read the order's subtotal while the cover read the declared value, so one parcel was worth two amounts on paper.
+    const goodsValue = input.declaredValue ?? input.subtotal;
     const customs = quote.crossesBorder
       ? declareFor({
           crossings: quote.crossings,
           items: input.items,
-          declaredValue: input.subtotal,
+          declaredValue: goodsValue,
           currency: quote.currency,
           exporterId: input.vendorId,
           importerRef: hashPhone(input.buyerMobile) || undefined,
+          namedPlace: `${dest.shopName}, ${dest.zone}`,
           at: now,
           context: 'This shipment',
         })
@@ -1674,7 +1678,7 @@ export class ParcelService implements OnApplicationBootstrap {
     // THE COVER. A merchant order already says what the goods are worth — the buyer paid that at
     // checkout — so the subtotal IS the declaration and nobody is asked a question they have already
     // answered. `declaredValue` overrides it for a store that insures at a different figure.
-    const cover = coverFor({ declaredValue: input.declaredValue ?? input.subtotal, ...quote.insurance });
+    const cover = coverFor({ declaredValue: goodsValue, ...quote.insurance });
     // GROSS — what actually leaves the store's float. `chosen.total` is the sister's own price and stays
     // the basis of every margin figure; what a customer is billed is that, plus the tax on it, plus the
     // premium for cover they chose to buy. The premium is its OWN line and never hides inside the fee.
