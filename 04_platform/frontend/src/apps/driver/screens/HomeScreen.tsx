@@ -651,6 +651,10 @@ function WorkCard({ state, actions }: HomeScreenProps) {
       </Button>
       {/* FP8 — the shift clock, where the shift is. A limit nobody can see coming is a refusal nobody understands. */}
       {state.session.hours ? <p class={state.session.hours.over ? 'card__note row__s--danger' : 'card__note'}>{hoursWords(state.session.hours, t)}</p> : null}
+      {/* Round 11 — their fleet's own system is told where they are. The fleet's choice; said to the driver for as long as it applies. */}
+      {state.session.positionsToFleetSystem ? (
+        <p class="card__note">{t('driver.home.positionsToFleet', { fleet: state.session.positionsToFleetSystem.fleetName, n: state.session.positionsToFleetSystem.everyMin })}</p>
+      ) : null}
       {/* The standing floor, and — the half that makes it safe to be standing — what it kept quiet today.
           A silencer nobody can see working is how somebody hears nothing for a week and blames us, so the
           setting and its effect are one line, never a number buried in a settings screen. */}

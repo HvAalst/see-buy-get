@@ -172,7 +172,7 @@ export class FleetOverflowService {
 }
 
 /** What a batch is, in the three figures a carrier decides on: how many, how heavy, for which day(s). */
-function summaryOf(orders: Freight[]): Pick<OrderHandedOn, 'count' | 'weightKg' | 'days' | 'code'> {
+function summaryOf(orders: Freight[]): Pick<OrderHandedOn, 'count' | 'weightKg' | 'days' | 'code' | 'freightIds'> {
   const days = [...new Set(orders.map((f) => f.deliverOn ?? ''))].filter(Boolean).sort();
-  return { count: orders.length, weightKg: Math.round(orders.reduce((s, f) => s + f.weightKg, 0)), days, ...(orders.length === 1 ? { code: orders[0].code } : {}) };
+  return { count: orders.length, weightKg: Math.round(orders.reduce((s, f) => s + f.weightKg, 0)), days, ...(orders.length === 1 ? { code: orders[0].code } : {}), freightIds: orders.map((f) => f.freightId) };
 }

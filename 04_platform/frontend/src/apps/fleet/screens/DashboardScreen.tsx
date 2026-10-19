@@ -1,9 +1,10 @@
 import { CredentialAge } from '../../../shared/account/CredentialAge';
 import { pinChangeBlocker } from '../../../shared/account/password';
 import { useState, useEffect } from 'preact/hooks';
-import { Button, Card, ErrorNote, ExplainerReset, Icon, PhotoField, PlaceMap, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, ErrorNote, ExplainerReset, Icon, Note, PhotoField, PlaceMap, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
-import type { SbgError } from '../../../lib/sbg';
+import type { SbgClient, SbgError } from '../../../lib/sbg';
+import { systemApi, systemSummary, type SystemView } from '../system';
 import { ageWords, signalState, dashboardSummary, fleetMap, hazardWords, hoursLabel, paperDay, paperKindLabel, paperLine, paperLineClass, papersAloud, stopDetail, vehicleDetail } from '../logic';
 import { vehicleWord } from '../../driver/vehicle-words';
 import type { PapersReport } from '../types';
@@ -12,10 +13,11 @@ import type { FleetActions, FleetState, OwnPaperKind, OwnPapers } from '../useFl
 export interface DashboardScreenProps {
   state: FleetState;
   actions: FleetActions;
+  sbg?: SbgClient | null;
 }
 
 /** The live fleet: counts, GPS positions, working hours and cargo in motion. */
-export function DashboardScreen({ state, actions }: DashboardScreenProps) {
+export function DashboardScreen({ state, actions, sbg }: DashboardScreenProps) {
   const t = useT();
   const [bigMap, setBigMap] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
@@ -62,6 +64,9 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
       <Card title={t('fleet.earn.cardTitle')} aside={<Button variant="link" full={false} onClick={() => actions.go('earnings')}>{t('fleet.earn.cardOpen')}</Button>}>
         <p class="card__note">{t('fleet.earn.cardBody')}</p>
       </Card>
+
+      {/* Round 11 — its own transport system, told of its work: whether it is set up, and whether messages are arriving. */}
+      <SystemCard sbg={sbg ?? null} did={state.manager?.did} onOpen={() => actions.go('system')} />
 
 {/* A REAL map, and one that renders whether or not anything is on it.
 
@@ -536,6 +541,24 @@ function FleetCodeCard({ actions }: DashboardScreenProps) {
         </Button>
       </Sheet>
     </>
+  );
+}
+
+/** Its own system, in one line: not set up, where it goes, or how many messages have not arrived. Opens the screen. */
+function SystemCard({ sbg, did, onOpen }: { sbg: SbgClient | null; did?: string; onOpen: () => void }) {
+  const t = useT();
+  const [view, setView] = useState<SystemView | null>(null);
+  useEffect(() => {
+    if (!sbg || !did) return;
+    void systemApi(sbg, did)
+      .view()
+      .then((r) => setView(r.data ?? null));
+  }, [sbg, did]);
+  const line = systemSummary(view, t);
+  return (
+    <Card title={t('fleet.system.cardTitle')} aside={<Button variant="link" full={false} onClick={onOpen}>{t('fleet.system.cardOpen')}</Button>}>
+      {line.warn ? <Note tone="warn" icon="warning" title={line.text} /> : <p class="card__note">{line.text}</p>}
+    </Card>
   );
 }
 

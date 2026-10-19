@@ -149,6 +149,9 @@ export const GlosEvent = {
     OrderLeftOut: 'pudo.order_left_out', // a carrier's accepted plan leaves an order on no vehicle (or has it on one after all): its shipper is told
     OrderWindowPlanned: 'pudo.order_window_planned', // a carrier's accepted plan has an order outside the window asked for (or inside it again): its shipper is told
     OrderHandedOn: 'pudo.order_handed_on', // P4 — orders moved between a fleet and its partners; the other office is told
+    OrderPlaced: 'pudo.order_placed', // an order came in under a fleet's contract — from its shipper, or a sheet the office uploaded
+    OrderChanged: 'pudo.order_changed', // the office changed an order in a way nothing else says: pinned where it goes, took it back off the board
+    DayPlanAccepted: 'pudo.day_plan_accepted', // a fleet office accepted its plan for a day
     DepartureBookingCancelled: 'pudo.departure_booking_cancelled', // a shipper gave the space back; it is for sale again
     DepartureDeparted: 'pudo.departure_departed', // the truck has gone — the last moment anything could change
     /** A different truck was put on a run before it left. Shippers see a vehicle's CLASS, never its plate, so they are told only when the class changed. */

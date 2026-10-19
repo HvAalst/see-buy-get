@@ -24,6 +24,7 @@ import { InterestService } from '../../foundation/interest/interest.service';
 import { DepartureService } from './departure.service';
 import { BusinessMemberGuard } from './business-member.guard';
 import { BusinessService } from './business.service';
+import { FleetHookService } from './fleet-hooks.service';
 import { boardDocId } from './note-archive.types';
 import { isSandbox } from '../../foundation/runtime/sandbox';
 import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Req, Res, StreamableFile, Optional, UseGuards, UseInterceptors } from '@nestjs/common';
@@ -298,6 +299,8 @@ export class SbgController {
     @Optional() private readonly shipperCodes?: ShipperCodesService,
     // The pilot's own numbers: what each counter handover was due to load, how long each take-in took (pilot.types.ts).
     @Optional() private readonly pilot?: PilotService,
+    // A fleet's own system: staff read its counts; a driver on a shift is told when it hears where they are.
+    @Optional() private readonly fleetHooks?: FleetHookService,
   ) {}
 
   /**
@@ -4676,7 +4679,10 @@ export class SbgController {
   @SignedIn()
   @Get('fleet/managers')
   listManagers(@Actor() actor: IntrospectionResult) {
-    return this.managers.listScoped(this.officeOf(actor), actor?.role === 'operator');
+    const rows = this.managers.listScoped(this.officeOf(actor), actor?.role === 'operator');
+    // Staff read how each fleet's own system stands, counted (round 11); they send nothing in its name.
+    const hooks = this.fleetHooks;
+    return actor?.role === 'operator' && hooks ? rows.map((m) => (m.did ? { ...m, system: hooks.counts(m.did) } : m)) : rows;
   }
 
   /**
@@ -6117,7 +6123,9 @@ export class SbgController {
     // this same session: what only the driver can do needs something only the driver holds.
     const handoverPass = actor?.role === 'driver' && actor.did === did ? this.fleet.handoverPassFor(did) : undefined;
     // FP8 — the shift clock rides with the session: the home screen reads it without a second call.
-    return { ...this.fleet.sessionFor(did), quiet: this.dispatch.quietReport(did), hours: this.fleet.hoursFor(did), ...(currency ? { currency } : {}), ...(handoverPass ? { handoverPass } : {}) };
+    // Round 11 — and whether their fleet's own system is told where they are: the fleet's choice, and the driver knows it.
+    const positionsTo = this.fleetHooks?.positionsTo(did);
+    return { ...this.fleet.sessionFor(did), quiet: this.dispatch.quietReport(did), hours: this.fleet.hoursFor(did), ...(currency ? { currency } : {}), ...(handoverPass ? { handoverPass } : {}), ...(positionsTo ? { positionsToFleetSystem: positionsTo } : {}) };
   }
 
   @Roles('driver', 'fleet_manager', 'operator')

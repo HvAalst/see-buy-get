@@ -178,6 +178,8 @@ export interface SessionView {
   /** What a counter scans to hand this driver parcels: their badge and this shift's code. Sent to the driver's own
    *  sign-in only, and only on shift — see `badgeToShow`. */
   handoverPass?: string;
+  /** Round 11 — their fleet's own system is told where they are while on this shift, at most this often. Absent otherwise. */
+  positionsToFleetSystem?: { fleetName: string; everyMin: number };
   assignment?: AssignmentView;
   vehicle?: VehicleView;
   /**

@@ -21,6 +21,7 @@ import {
   statusMixRows,
 } from '../network';
 import { money } from '../queues';
+import { fleetSystemWords, type FleetSystemCounts } from '../fleets';
 import { linkWords, opensItself, staffAddWay, staffFoldHint, staffListOf, waitingActions, waitingLine, type StaffWaiting } from '../staff';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
@@ -396,7 +397,7 @@ function Kpi({ label, value, risk }: { label: string; value: string; risk?: bool
 function FleetsPanel({ actions }: { actions: TowerActions }) {
   const t = useT();
   const client = actions.client();
-  const [rows, setRows] = useState<Array<{ did: string; companyName: string; status: string; loginCode?: string; codeRotatedAt?: string; createdAt?: string }> | null>(null);
+  const [rows, setRows] = useState<Array<{ did: string; companyName: string; status: string; loginCode?: string; codeRotatedAt?: string; createdAt?: string; system?: FleetSystemCounts }> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -405,7 +406,7 @@ function FleetsPanel({ actions }: { actions: TowerActions }) {
     if (!client) return;
     const r = await client.api.fleets();
     if (r.error) setError(r.error.detail || r.error.title);
-    else setRows(((r.data as unknown as Array<{ did: string; companyName: string; status: string; loginCode?: string; codeRotatedAt?: string; createdAt?: string }>) ?? []).sort((a, b) => a.companyName.localeCompare(b.companyName)));
+    else setRows(((r.data as unknown as Array<{ did: string; companyName: string; status: string; loginCode?: string; codeRotatedAt?: string; createdAt?: string; system?: FleetSystemCounts }>) ?? []).sort((a, b) => a.companyName.localeCompare(b.companyName)));
   }, [client]);
 
   useEffect(() => {
@@ -435,7 +436,11 @@ function FleetsPanel({ actions }: { actions: TowerActions }) {
           <tbody>
             {rows.map((f) => (
               <tr key={f.did}>
-                <td class="ctbl__strong">{f.companyName}</td>
+                <td class="ctbl__strong">
+                  {f.companyName}
+                  {/* Round 11 — its own system, counted. Staff read it; they send nothing in the fleet's name. */}
+                  {f.system ? <div class="ctbl__sub">{fleetSystemWords(f.system, t)}</div> : null}
+                </td>
                 <td><span class="ctbl__lbl">{t('tower.network.fleets.status')}</span>
                   <span class={`ctag ${f.status === 'ACTIVE' ? 'ctag--ok' : 'ctag--quiet'}`}>{f.status}</span>
                 </td>

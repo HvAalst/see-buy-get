@@ -1,3 +1,5 @@
+import type { Translate } from '../../shared/i18n';
+
 /**
  * A FLEET IS SET UP BY STAFF — the console's side of it.
  *
@@ -119,4 +121,21 @@ export function fleetBody(form: FleetForm) {
  */
 export function fleetCountries(catalogue: Array<{ code: string; name: string; level: string }> | null): Array<{ code: string; name: string }> {
   return (catalogue ?? []).filter((c) => c.level !== 'observed').map((c) => ({ code: c.code, name: c.name }));
+}
+
+/** Round 11 — a fleet's own system, counted for staff. They read it; they send nothing in the fleet's name. */
+export interface FleetSystemCounts {
+  hasAddress: boolean;
+  delivered: number;
+  waiting: number;
+  givenUp: number;
+  /** Whether it sends where its vehicles are. */
+  positions: boolean;
+}
+
+/** "No system set up", or what became of its messages — and whether it is sent where its vehicles are. */
+export function fleetSystemWords(s: FleetSystemCounts, t: Translate): string {
+  if (!s.hasAddress) return t('tower.network.fleets.systemNone');
+  const counts = t('tower.network.fleets.systemCounts', { delivered: s.delivered, waiting: s.waiting, givenUp: s.givenUp });
+  return s.positions ? `${counts} ${t('tower.network.fleets.systemPositions')}` : counts;
 }

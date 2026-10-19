@@ -613,6 +613,8 @@ export class DispatchService {
         .publish(GlosEvent.Pudo.FreightPosted, { freightId: freight.freightId, code: freight.code, pickupLocation: freight.pickupLocation, destLabel: freight.destLabel, weightKg: freight.weightKg, cargoClass: freight.cargoClass }, { source: 'pudo' })
         .catch(() => undefined);
     }
+    // It is for the fleet the contract names, and for its own system: an order came in.
+    if (contract) void this.events.publish(GlosEvent.Pudo.OrderPlaced, { freightId: freight.freightId, code: freight.code, fleetDid: contract.fleetDid }, { source: 'pudo' }).catch(() => undefined);
     return freight;
   }
 
@@ -1821,6 +1823,7 @@ export class DispatchService {
     if (!Number.isFinite(location?.lat) || !Number.isFinite(location?.lng) || Math.abs(location.lat) > 90 || Math.abs(location.lng) > 180) throw new GlosError('INVALID_INPUT', 'A point is a latitude and a longitude');
     f.destLocation = { lat: location.lat, lng: location.lng };
     this.freights.set(f.freightId, f);
+    void this.events.publish(GlosEvent.Pudo.OrderChanged, { freightId: f.freightId, code: f.code }, { source: 'pudo' }).catch(() => undefined);
     return f;
   }
 
@@ -2136,6 +2139,7 @@ export class DispatchService {
   holdPlanned(freightId: string, why: string | undefined, now: number = Date.now()): void {
     const f = this.freights.get(freightId);
     if (!f?.planned) return;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { held: _was, ...rest } = f.planned;
     // No reason means it went on after all: the old refusal comes off.
     f.planned = why ? { ...rest, held: { why: why.slice(0, 280), at: new Date(now).toISOString() } } : rest;
@@ -2367,6 +2371,7 @@ export class DispatchService {
     const held = this.freights.get(freightId);
     if (held?.handOn?.state === 'partner' && held.handOn.partner?.fleetDid === fleetDid) {
       if (!held.handOn.onward) throw new GlosError('INVALID_STATE', 'This order is not on offer');
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { onward: _taken, ...rest } = held.handOn;
       held.handOn = rest;
       this.freights.set(held.freightId, held);
@@ -2395,6 +2400,7 @@ export class DispatchService {
       // shipper chose — so the offering fleet's leave is asked HERE, not only when the offer was made: it may have
       // been withdrawn since. With no answer, the answer is no.
       const holder = f.handOn!.partner!;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { onward: _open, ...held } = f.handOn!;
       if (take) {
         if (!mayPassOn(f.contract!.fleetDid, holder.fleetDid)) throw new GlosError('INVALID_STATE', `${f.contract!.fleetName} does not let ${holder.fleetName} pass its orders on — this offer has lapsed`);
@@ -2467,6 +2473,7 @@ export class DispatchService {
     delete f.handOn;
     this.freights.set(f.freightId, f);
     for (const o of this.offers.values()) if (o.ref === f.freightId && o.status === 'pending') o.status = 'expired';
+    void this.events.publish(GlosEvent.Pudo.OrderChanged, { freightId: f.freightId, code: f.code }, { source: 'pudo' }).catch(() => undefined);
     return f;
   }
 

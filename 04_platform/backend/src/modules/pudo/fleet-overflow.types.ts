@@ -41,5 +41,7 @@ export interface OrderHandedOn {
   days: string[];
   /** The order's code, when it is one order. */
   code?: string;
+  /** Which orders: what a fleet's own system is told about each, one by one (fleet-hooks.service.ts). */
+  freightIds: string[];
   reason?: string;
 }

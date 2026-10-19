@@ -502,6 +502,8 @@ export class FleetPlanService implements OnModuleInit {
     this.dispatch.stampPlan(fleetDid, plan.day, stamps, now, new Map(plan.unplanned.map((u) => [u.freightId, u.reason])));
     const kept: DayPlanView = { ...plan, accepted: { at, by } };
     this.accepted.set(keyOf(fleetDid, plan.day), kept);
+    // For the fleet's own system: the day's plan, as accepted.
+    void this.events.publish(GlosEvent.Pudo.DayPlanAccepted, { fleetDid, day: plan.day, by }, { source: 'pudo' }).catch(() => undefined);
     return kept;
   }
 

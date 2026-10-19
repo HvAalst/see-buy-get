@@ -661,3 +661,14 @@
 .handon .field {
   width: 100%;
 }
+
+/* Round 11 — its own system: an address and a secret are one long word each, and a phone is narrow. */
+.system__word {
+  margin: 4px 0 8px;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--navy);
+  overflow-wrap: anywhere;
+  hyphens: none;
+  user-select: all;
+}

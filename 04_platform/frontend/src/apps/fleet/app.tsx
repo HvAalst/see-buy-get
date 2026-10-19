@@ -18,6 +18,7 @@ import { VehiclesScreen } from './screens/VehiclesScreen';
 import { SitesScreen } from './screens/SitesScreen';
 import { DispatchScreen } from './screens/DispatchScreen';
 import { OrdersScreen } from './screens/OrdersScreen';
+import { SystemScreen } from './screens/SystemScreen';
 import { useFleetApp, type FleetActions, type FleetState, type Screen } from './useFleetApp';
 import type { SbgClient } from '../../lib/sbg';
 import type { ArchiveApiState } from '../../shared/archive/useArchive';
@@ -150,8 +151,11 @@ function ScreenRouter({ screen, state, actions, archive, destination, sbg }: { s
       return <EarningsScreen state={state} actions={actions} />;
     case 'dispatch':
       return <DispatchScreen state={state} actions={actions} />;
+    // Round 11 — its own transport system, told of its work. Reached from the dashboard, never a tab of its own.
+    case 'system':
+      return <SystemScreen sbg={sbg} managerDid={state.manager?.did} />;
     default:
-      return <DashboardScreen state={state} actions={actions} />;
+      return <DashboardScreen state={state} actions={actions} sbg={sbg} />;
   }
 }
 

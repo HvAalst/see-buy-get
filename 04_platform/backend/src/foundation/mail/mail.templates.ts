@@ -122,6 +122,8 @@ export interface MailParams {
   'business-checked': { business: string; outcome: 'verified' | 'refused'; reason?: string; when: string };
   /** Round 10 — a business's own system has not taken our messages about its loads. To its owners, at most once a day. */
   'business-system-down': { business: string; count: number; since: string };
+  /** Messages to a fleet's own system were given up after two days of tries (round 11). At most once a day, to its contact email. */
+  'fleet-system-down': { fleet: string; count: number; since: string };
   /**
    * A problem was reported on one of a store's shipments, and the store names an insurer on its shipping policy: the
    * damage claim report, by a link. Sent the moment the report is made. `by`: who reported the problem.
@@ -319,6 +321,27 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
         { kind: 'button', label: `Open the ${APP_NAMES.business}`, href: appUrl('business') },
       ],
       reason: 'You are getting this email because you are an owner of this business on SeeBuyGet. It is sent at most once a day.',
+    }),
+  },
+
+  'fleet-system-down': {
+    title: 'Your system is not taking our messages',
+    sentWhen: 'Messages to a fleet’s own system about its work were given up after two days of tries. At most once a day, to the fleet’s contact email.',
+    wired: true,
+    // A day late it is still true, and still the only way an office hears it without opening the app.
+    sendLater: 24,
+    sample: { fleet: 'Pwani Hauliers Ltd', count: 3, since: '2026-10-18T06:40:00Z' },
+    build: (p) => ({
+      subject: `${p.fleet}: your system is not taking our messages`,
+      preheader: `${p.count === 1 ? 'A message' : `${p.count} messages`} about your work could not be delivered.`,
+      blocks: [
+        { kind: 'heading', text: 'Your system is not taking our messages' },
+        { kind: 'paragraph', text: `Since ${formatWhen(p.since)}, ${p.count === 1 ? 'a message' : `${p.count} messages`} about your orders, loads, vehicles or runs could not be delivered to your system, and we stopped trying after two days. Your work is not affected: it is in the ${APP_NAMES.fleet} as always.` },
+        { kind: 'paragraph', text: `Put your system right, then open Your system in the ${APP_NAMES.fleet}: it says what went wrong with each, and any manager sends ${p.count === 1 ? 'it' : 'them'} again.` },
+        { kind: 'facts', rows: [['Fleet', p.fleet], ['Messages given up', String(p.count)], ['Since', formatWhen(p.since)]] },
+        { kind: 'button', label: `Open the ${APP_NAMES.fleet}`, href: appUrl('fleet') },
+      ],
+      reason: 'You are getting this email because it is the contact email of this fleet on SeeBuyGet. It is sent at most once a day.',
     }),
   },
 

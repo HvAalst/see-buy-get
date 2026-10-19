@@ -382,6 +382,12 @@ export class VehicleBreakdownService {
       .map((b) => this.view(b));
   }
 
+  /** One breakdown as its owner reads it, whenever it was: what a fleet's own system is told (fleet-hooks.service.ts). */
+  viewOf(breakdownId: string): VehicleBreakdown | undefined {
+    const b = this.breakdowns.get(breakdownId);
+    return b ? this.view(b) : undefined;
+  }
+
   /** A fleet's vehicles broken down now — or resolved with loads still waiting to be taken over: for the top of its office's screen. */
   openForFleet(fleetDid: string): VehicleBreakdown[] {
     const mine = new Set(this.vehicles.list({ managerDid: fleetDid }).map((v) => v.vehicleId));

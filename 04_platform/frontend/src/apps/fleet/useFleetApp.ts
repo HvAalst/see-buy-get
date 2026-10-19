@@ -48,7 +48,7 @@ export interface OwnPapers {
 
 export type OwnPaperKind = 'operator_licence' | 'carrier_insurance';
 
-export type Screen = 'dash' | 'vehicles' | 'drivers' | 'sessions' | 'lines' | 'runs' | 'orders' | 'sites' | 'earnings' | 'dispatch' | 'notes';
+export type Screen = 'dash' | 'vehicles' | 'drivers' | 'sessions' | 'lines' | 'runs' | 'orders' | 'sites' | 'earnings' | 'dispatch' | 'notes' | 'system';
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
 
 export interface Toast {

@@ -22875,6 +22875,200 @@
         }
       }
     },
+    "/v1/sbg/fleet/managers/{did}/system": {
+      "get": {
+        "operationId": "FleetSystem.view",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetSystemView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "FleetSystem.setAddress",
+        "summary": "",
+        "description": "Where its system is told. The first address makes the signing secret, shown in this answer only. Empty stops the messages.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FleetSystemDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetSystemView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/system/secret": {
+      "post": {
+        "operationId": "FleetSystem.turnSecret",
+        "summary": "",
+        "description": "A new signing secret, shown in this answer only.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetSystemView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/system/positions": {
+      "put": {
+        "operationId": "FleetSystem.setPositions",
+        "summary": "",
+        "description": "Where its vehicles are, sent to its system: 0 for off, or at most every 1, 5 or 15 minutes a vehicle. The fleet's choice.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FleetPositionsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetSystemView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/system/test": {
+      "post": {
+        "operationId": "FleetSystem.test",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetHookMessageView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/system/messages/{messageId}/resend": {
+      "post": {
+        "operationId": "FleetSystem.resend",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "messageId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetHookMessageView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/payout-number": {
       "get": {
         "operationId": "PayoutNumber.mine",
@@ -48202,6 +48396,186 @@
         },
         "required": [
           "url"
+        ]
+      },
+      "FleetPositionsView": {
+        "type": "object",
+        "properties": {
+          "everyMin": {
+            "type": "number",
+            "enum": [
+              1,
+              5,
+              15
+            ]
+          },
+          "lastDeliveredAt": {
+            "type": "string"
+          },
+          "lastError": {
+            "type": "string"
+          },
+          "lastErrorAt": {
+            "type": "string"
+          },
+          "setAt": {
+            "type": "string"
+          },
+          "setBy": {
+            "type": "string",
+            "description": "The manager who turned it on, or last changed how often."
+          },
+          "delivered": {
+            "type": "number",
+            "description": "Since it was turned on: positions that arrived, and ones that did not (each is tried once, then the next replaces it)."
+          },
+          "notDelivered": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "everyMin",
+          "setAt",
+          "setBy",
+          "delivered",
+          "notDelivered"
+        ]
+      },
+      "FleetHookMessageView": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "description": "One of the events, or \"test\"."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "delivered",
+              "failed"
+            ]
+          },
+          "deliveredAt": {
+            "type": "string"
+          },
+          "lastError": {
+            "type": "string",
+            "description": "Our words for what went wrong last. Never the system’s own answer."
+          },
+          "resent": {
+            "type": "number"
+          },
+          "id": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "attempts": {
+            "type": "number"
+          },
+          "nextTryAt": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string",
+            "description": "The exact body that was signed and sent."
+          }
+        },
+        "required": [
+          "event",
+          "state",
+          "id",
+          "at",
+          "attempts",
+          "nextTryAt",
+          "body"
+        ]
+      },
+      "FleetSystemView": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Where its system is told; absent while it has given none, and nothing is sent."
+          },
+          "setAt": {
+            "type": "string"
+          },
+          "setBy": {
+            "type": "string",
+            "description": "The manager who gave the address, or last changed it."
+          },
+          "secretTurnedAt": {
+            "type": "string"
+          },
+          "secretTurnedBy": {
+            "type": "string"
+          },
+          "secret": {
+            "type": "string",
+            "description": "Only in the answer that made it: copy it now, it is not shown again."
+          },
+          "events": {
+            "description": "What its system hears.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "positions": {
+            "description": "Absent while positions are off: nothing about where its vehicles are is sent.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FleetPositionsView"
+              }
+            ]
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FleetHookMessageView"
+            }
+          },
+          "hasSecret": {
+            "type": "boolean",
+            "description": "Whether it has a signing secret, and when and by whom it was last made. The secret itself is shown once, when made."
+          }
+        },
+        "required": [
+          "events",
+          "messages",
+          "hasSecret"
+        ]
+      },
+      "FleetSystemDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "url"
+        ]
+      },
+      "FleetPositionsDto": {
+        "type": "object",
+        "properties": {
+          "everyMin": {
+            "type": "number",
+            "enum": [
+              0,
+              1,
+              5,
+              15
+            ]
+          }
+        },
+        "required": [
+          "everyMin"
         ]
       },
       "PayoutNumberView": {

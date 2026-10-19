@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY_FLEET_FORM, FLEET_PAPERS, fleetBody, fleetCountries, fleetFormBlocker, fleetStep, fleetsWaitingOnMe, joiningWaiting, papersOf, type FleetForm, type FleetSetupRow } from './fleets';
+import { t } from '../../shared/i18n';
+import { EMPTY_FLEET_FORM, FLEET_PAPERS, fleetBody, fleetCountries, fleetFormBlocker, fleetStep, fleetSystemWords, fleetsWaitingOnMe, joiningWaiting, papersOf, type FleetForm, type FleetSetupRow } from './fleets';
 
 const papers = (enteredByMe: boolean) => ({ businessRegCertRef: 'med_reg', operatorLicenceRef: 'med_lic', ownerIdRef: 'med_id', proofOfAddressRef: 'med_addr', submittedAt: '2026-10-11T10:00:00.000Z', enteredBy: 'Amina Otieno', enteredByMe });
 const row = (over: Partial<FleetSetupRow>): FleetSetupRow => ({
@@ -74,6 +75,14 @@ describe('the form a fleet is registered with', () => {
       depotAddress: 'Enterprise Road',
       requirements: { businessRegistrationNo: 'BR-1', transportOperatorLicence: 'TOL-1', taxId: 'TAX-1' },
     });
+  });
+});
+
+describe('fleetSystemWords — a fleet’s own system, counted for staff', () => {
+  it('says it is not set up, or what became of its messages, and whether it sends where its vehicles are', () => {
+    expect(fleetSystemWords({ hasAddress: false, delivered: 0, waiting: 0, givenUp: 0, positions: false }, t)).toBe('No system of its own set up.');
+    expect(fleetSystemWords({ hasAddress: true, delivered: 40, waiting: 2, givenUp: 1, positions: false }, t)).toBe('Its system: 40 arrived · 2 waiting · 1 given up.');
+    expect(fleetSystemWords({ hasAddress: true, delivered: 40, waiting: 0, givenUp: 0, positions: true }, t)).toBe('Its system: 40 arrived · 0 waiting · 0 given up. Sends where its vehicles are.');
   });
 });
 
