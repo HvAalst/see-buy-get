@@ -207,3 +207,10 @@
   /* The page already has its side gutters: this lines up with the cards under it. */
   padding-top: 16px;
 }
+
+/* Round 13 — a crossing shipment's papers: one item of its commercial invoice, set apart from the next. */
+.papers__line {
+  border-top: 1px solid var(--line, rgba(0, 0, 0, 0.1));
+  padding-top: 10px;
+  margin-top: 10px;
+}

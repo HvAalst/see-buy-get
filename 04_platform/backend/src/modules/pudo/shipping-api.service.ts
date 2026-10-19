@@ -1,5 +1,7 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
+import { ParcelInvoiceService, type ParcelInvoiceContext } from './parcel-invoice.service';
+import type { ParcelInvoice, ParcelInvoiceDto, ParcelInvoiceLine, ParcelInvoiceView } from './parcel-invoice.types';
 import { AgentService } from './agent.service';
 import { ShelfService } from './shelf.service';
 import { RoutingService, type ShipmentQuote } from './routing.service';
@@ -131,6 +133,8 @@ export interface MintInput {
   items?: Array<{ name: string; qty: number }>;
   subtotal?: number;
   routeMode?: 'flexible' | 'locked';
+  /** Round 13 — the commercial invoice, for a shipment that crosses a border. */
+  invoice?: ParcelInvoiceDto;
 }
 
 /**
@@ -173,6 +177,8 @@ export interface MintedShipment {
   collect: QuotedPoint;
   eta: { readyAt: string };
   route: { crossesBorder: boolean; crossings: BorderCrossing[] };
+  /** Round 13 — its commercial invoice, for a shipment that crosses a border: print the copies with the label. */
+  papers?: { number: string; copies: number; currency: string; totalValue: number };
   /** The printable label, once the shipment is paid for. Absent while it is not. */
   label?: unknown;
   mode: 'test' | 'live';
@@ -191,6 +197,8 @@ export class ShippingApiService {
     private readonly quotes: QuoteBookService,
     @Inject(GEOCODER) private readonly geocoder: Geocoder,
     @Inject(ROUTER) private readonly router: Router,
+    // A store parcel's papers abroad (round 13): its commercial invoice, checked with the declaration and kept with the parcel.
+    @Optional() private readonly invoices?: ParcelInvoiceService,
   ) {}
 
   quote(input: { from: QuoteEndpoint; to: QuoteEndpoint; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; size?: ParcelSize }, caller: Caller = ANONYMOUS): PublicQuote {
@@ -319,12 +327,19 @@ export class ShippingApiService {
     // sailed past a border it could never have crossed. A sandbox that validates less than production
     // teaches a merchant to build something that fails on the day it matters. The declaration built here
     // is deliberately thrown away: one place writes it, and this is not that place.
+    // A STORE PARCEL'S PAPERS ABROAD (round 13): crossing a border, it carries its commercial invoice — item by item, its
+    // value, weight and origin, and the buyer it goes to — checked here, in both modes, before anything exists.
+    if (input.invoice && !quoted.route.crossesBorder) throw new GlosError('INVALID_INPUT', 'This shipment does not cross a border, so it needs no commercial invoice', { field: 'invoice' });
+    if (quoted.route.crossesBorder && !input.invoice) {
+      throw new GlosError('CUSTOMS_INCOMPLETE', 'This shipment crosses a border, so it needs its commercial invoice: each item with its value, weight and country of origin, and the buyer it goes to', { missing: ['invoice'], crossings: quoted.route.crossings.map((c) => `${c.fromCountry}→${c.toCountry}`) });
+    }
+    const papers = input.invoice ? this.papersChecked(input.invoice, vendor, quoted, dest, input.weightKg) : undefined;
     if (quoted.route.crossesBorder) {
       declareFor({
         crossings: quoted.route.crossings,
-        items: input.items,
-        declaredValue: input.subtotal,
-        currency: quoted.price.currency,
+        items: papers ? itemsOf(papers.lines) : input.items,
+        declaredValue: papers ? papers.totalValue : input.subtotal,
+        currency: papers ? papers.currency : quoted.price.currency,
         exporterId: vendor.vendorId,
         at: new Date().toISOString(),
         context: 'This shipment',
@@ -345,6 +360,8 @@ export class ShippingApiService {
           status: 'Created',
           paid: false,
           externalOrderId: input.externalOrderId,
+          // Its papers as they would be: every check made, nothing kept.
+          ...(papers ? { papers: papersSummary(papers) } : {}),
         },
         quoted,
         'test',
@@ -362,8 +379,9 @@ export class ShippingApiService {
       dimensionsCm: input.dimensionsCm,
       weightKg: input.weightKg,
       contentPhotoRef: input.contentPhotoRef.trim(),
-      items: input.items,
+      items: papers ? itemsOf(papers.lines) : input.items,
       subtotal: input.subtotal,
+      ...(papers ? { declaredValue: papers.totalValue, customsCurrency: papers.currency } : {}),
       shippingPolicy: vendor.shippingPolicy,
       routeMode: input.routeMode,
       // THE HELD PRICE, when there is one. This line is the promise: the parcel is billed at the figure
@@ -374,6 +392,8 @@ export class ShippingApiService {
     // merchant can fix what was wrong and redeem the same promise rather than go back to the buyer with a
     // different number.
     if (held) this.quotes.markRedeemed(held.quoteId, parcel.parcelId);
+    // Its papers, signed and kept with it: what the store prints with the label.
+    if (input.invoice && this.invoices) this.invoices.issue(input.invoice, { ...this.papersContext(vendor, quoted, dest, input.weightKg), parcelId: parcel.parcelId });
     return this.shipmentView(
       {
         shipmentId: parcel.parcelId,
@@ -385,6 +405,7 @@ export class ShippingApiService {
         // A label is a claim on the network, so it issues only once the shipment is paid for.
         label: paid ? (label ?? undefined) : undefined,
         amount: parcel.shipmentCost,
+        ...(papers ? { papers: papersSummary(papers) } : {}),
       },
       quoted,
       'live',
@@ -465,6 +486,71 @@ export class ShippingApiService {
   }
 
   /** The caller's own shipment, or nothing they can distinguish from one that never existed. */
+  /* ---------------------------------------------- a store parcel's papers abroad (round 13) -- */
+
+  /** Its commercial invoice, read back by the store that created the shipment: the current one, and any it replaced. */
+  papers(shipmentId: string, caller: Caller): ParcelInvoiceView {
+    const parcel = this.papersParcel(shipmentId, caller);
+    return this.invoices!.view(parcel.parcelId, parcel.status === 'Created');
+  }
+
+  /** The three copies, one a page, for the store to print with the label and put in the pouch. */
+  papersPage(shipmentId: string, caller: Caller): string {
+    const parcel = this.papersParcel(shipmentId, caller);
+    const current = this.invoices!.current(parcel.parcelId);
+    if (!current) throw new GlosError('NOT_FOUND', 'This shipment has no commercial invoice yet');
+    return this.invoices!.htmlFor(current);
+  }
+
+  /**
+   * Correct the invoice, until the parcel is handed in: a new one, signed, that replaces it — the one replaced stays on
+   * the record. Once the parcel is in a shop's hands its papers travel as they are.
+   */
+  correctPapers(shipmentId: string, input: ParcelInvoiceDto, caller: Caller): ParcelInvoice {
+    const parcel = this.papersParcel(shipmentId, caller);
+    if (parcel.status !== 'Created') throw new GlosError('INVALID_STATE', `This parcel is ${parcel.status}: once it is handed in, its papers travel as they are`);
+    const crossings = parcel.customs!.crossings;
+    const dest = this.agents.get(parcel.destAgentDid!);
+    const before = this.invoices!.current(parcel.parcelId);
+    return this.invoices!.issue(input, {
+      store: storeOf(this.vendors.get(caller.vendorId!)),
+      fromCountry: crossings[0].fromCountry,
+      toCountry: crossings[crossings.length - 1].toCountry,
+      shop: shopOf(dest),
+      ...(before?.statedGrossKg != null ? { grossKg: before.statedGrossKg } : {}),
+      signer: SYSTEM_SIGNER,
+      parcelId: parcel.parcelId,
+    });
+  }
+
+  /** A shipment of this store's that crosses a border, read with a secret key: its papers name the buyer. */
+  private papersParcel(shipmentId: string, caller: Caller) {
+    if (!ApiKeyService.canMint(caller) || !caller.vendorId) throw new GlosError('FORBIDDEN', 'A shipment’s papers name its buyer: they are read with a secret key (sk_…)');
+    if (!this.invoices) throw new GlosError('INVALID_STATE', 'Commercial invoices are not running in this deployment');
+    if (shipmentId.startsWith('test_')) throw new GlosError('NOT_FOUND', 'That is a simulated shipment from a test key — nothing was created, so it has no papers');
+    const parcel = this.ownedParcel(shipmentId, caller.vendorId);
+    if (!parcel.customs) throw new GlosError('NOT_FOUND', 'This shipment does not cross a border: it has no commercial invoice');
+    return parcel;
+  }
+
+  /** What the invoice knows that the store does not send: the store, the border, the shop, the weight it stated. */
+  private papersContext(vendor: { vendorId: string; name: string; address?: string }, quoted: PublicQuote, dest: Agent, weightKg?: number): ParcelInvoiceContext {
+    const crossings = quoted.route.crossings;
+    return {
+      store: storeOf(vendor),
+      fromCountry: crossings[0]?.fromCountry ?? '',
+      toCountry: crossings[crossings.length - 1]?.toCountry ?? '',
+      shop: shopOf(dest),
+      ...(weightKg != null ? { grossKg: weightKg } : {}),
+      signer: SYSTEM_SIGNER,
+    };
+  }
+
+  private papersChecked(input: ParcelInvoiceDto, vendor: { vendorId: string; name: string; address?: string }, quoted: PublicQuote, dest: Agent, weightKg?: number) {
+    if (!this.invoices) throw new GlosError('INVALID_STATE', 'Commercial invoices are not running in this deployment');
+    return this.invoices.check(input, this.papersContext(vendor, quoted, dest, weightKg));
+  }
+
   private ownedParcel(shipmentId: string, vendorId: string) {
     let parcel;
     try {
@@ -499,7 +585,7 @@ export class ShippingApiService {
   }
 
   private shipmentView(
-    made: { shipmentId: string; did?: string; trackingKey?: string; externalOrderId?: string; status: string; paid: boolean; label?: unknown; amount?: number },
+    made: { shipmentId: string; did?: string; trackingKey?: string; externalOrderId?: string; status: string; paid: boolean; label?: unknown; amount?: number; papers?: MintedShipment['papers'] },
     quoted: PublicQuote,
     mode: 'test' | 'live',
     simulated: boolean,
@@ -517,6 +603,7 @@ export class ShippingApiService {
       eta: { readyAt: quoted.eta.readyAt },
       route: { crossesBorder: quoted.route.crossesBorder, crossings: quoted.route.crossings },
       ...(made.label ? { label: made.label } : {}),
+      ...(made.papers ? { papers: made.papers } : {}),
       mode,
       simulated,
     };
@@ -629,4 +716,27 @@ export class ShippingApiService {
       ...(resolved.matchedPlace ? { matchedPlace: resolved.matchedPlace } : {}),
     };
   }
+}
+
+/** Who signs a store parcel's papers sent with its key: its own system, for the store. */
+const SYSTEM_SIGNER = 'The store’s shipping system';
+
+/** The store as its papers name it. */
+function storeOf(vendor: { vendorId: string; name: string; address?: string }): ParcelInvoiceContext['store'] {
+  return { vendorId: vendor.vendorId, name: vendor.name, ...(vendor.address ? { address: vendor.address } : {}) };
+}
+
+/** The shop the parcel is collected from, as its papers name it when the buyer gave no address. */
+function shopOf(dest: Agent): ParcelInvoiceContext['shop'] {
+  return { name: dest.shopName, zone: dest.zone, ...(dest.landmark ? { landmark: dest.landmark } : {}), ...(dest.physicalAddress ? { address: dest.physicalAddress } : {}) };
+}
+
+/** The declaration's contents, from the invoice's lines: what a border officer reads first. */
+function itemsOf(lines: ParcelInvoiceLine[]): Array<{ name: string; qty: number }> {
+  return lines.map((l) => ({ name: l.description, qty: l.quantity }));
+}
+
+/** What the store is told of its papers when it creates the shipment. */
+function papersSummary(p: { number: string; copies: number; currency: string; totalValue: number }): NonNullable<MintedShipment['papers']> {
+  return { number: p.number, copies: p.copies, currency: p.currency, totalValue: p.totalValue };
 }

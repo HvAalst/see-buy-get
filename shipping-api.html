@@ -655,8 +655,9 @@ if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(received))) retur
       buyer carries it. We do not profit from exchange rates: what the buffer absorbs is booked as an FX
       difference, not as margin.</li>
     <li><b>A crossing needs paperwork.</b> <code>requires</code> contains <code>customs_declaration</code>.
-      When you mint the shipment you must send a contents list and a declared value, or it is refused.
-      Duties are the importer's — DDU — and none of it moves through us.</li>
+      When you mint the shipment you send its <b>commercial invoice</b>, or it is refused
+      (<code>CUSTOMS_INCOMPLETE</code>) — see <i>Its papers abroad</i> below. Duties are the importer's — DDU — and none
+      of it moves through us.</li>
     <li><b>A border post costs time</b>, and it is in the ETA rather than hidden in the driving.</li>
   </ul>
 
@@ -665,6 +666,36 @@ if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(received))) retur
     You get <code>FX_REQUIRED</code> rather than a plausible wrong number. Adding one currency to another is
     not arithmetic, and a quote that pretends otherwise is worse than one that refuses.
   </div>
+
+  <h3>Its papers abroad</h3>
+  <p>A shipment that crosses a border goes with its <b>commercial invoice</b>: what customs reads, item by item. Send
+  it as <code>invoice</code> on the mint; a test key checks it in full and keeps nothing. A shipment that stays inside a
+  country needs none, and is told so if you send one.</p>
+<pre><code>"invoice": {
+  "number": "INV-1043", "currency": "KES",
+  "importer": { "name": "Abebe Kebede", "address": "Bole Road, House 12\nAddis Ababa" },
+  "lines": [
+    { "description": "Ankara shirt", "quantity": 2, "netKg": 0.6, "unitValue": 1700, "originCountry": "KE", "hsCode": "6205.20" }
+  ],
+  "declare": true
+}</code></pre>
+  <ul class="plain">
+    <li><b>Each item</b>: what it is, how many, its net weight, the value of one, and the country it was made in. An HS code
+      only where you have one — your own, never suggested by us.</li>
+    <li><b>The buyer</b>, by name, and the address you and the buyer settled on: it is <b>carried exactly as you send
+      it</b>, line breaks and all, up to 300 characters — longer is refused, never cut. Leave the address out and the
+      papers name the shop the buyer collects from.</li>
+    <li><b>The declaration</b>: <code>"declare": true</code> is your signature. The invoice is fingerprinted, kept as signed,
+      and never changed: a correction is a new one that replaces it, and the one replaced stays on the record.</li>
+    <li><b>Print three copies with the label</b> and put them in the pouch on the outside of the parcel. The label says
+      the papers are there, and the shop that takes the parcel in looks for them first: without them it does not take
+      the parcel in.</li>
+  </ul>
+  <p><span class="endpoint"><span class="verb get">GET</span>/sbg/shipping/shipments/{id}/invoice</span>
+  &nbsp;<span class="endpoint"><span class="verb get">GET</span>/sbg/shipping/shipments/{id}/invoice.html</span>
+  &nbsp;<span class="endpoint"><span class="verb">PUT</span>/sbg/shipping/shipments/{id}/invoice</span></p>
+  <p>Read it back, open the three copies to print, or correct it until the parcel is handed in — all with your secret
+  key: the papers name your buyer.</p>
 </section>
 
 <section id="errors">

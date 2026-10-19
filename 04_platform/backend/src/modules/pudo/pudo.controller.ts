@@ -23,6 +23,8 @@ import { BusinessMemberGuard } from './business-member.guard';
 import { BusinessService } from './business.service';
 import { FleetHookService } from './fleet-hooks.service';
 import { LoadPostingService } from './load-posting.service';
+import { INVOICE_COPIES } from './commercial-invoice.types';
+import { ParcelInvoiceService } from './parcel-invoice.service';
 import { boardDocId } from './note-archive.types';
 import { isSandbox } from '../../foundation/runtime/sandbox';
 import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Req, Res, StreamableFile, Optional, UseGuards, UseInterceptors } from '@nestjs/common';
@@ -299,6 +301,8 @@ export class SbgController {
     @Optional() private readonly fleetHooks?: FleetHookService,
     // Posting a load: the same checks whether a person posts it here or a business's own system does, with its key.
     @Optional() private readonly loadPosting?: LoadPostingService,
+    // A store parcel's papers abroad (round 13): the invoice a crossing shipment made in the Store app goes with.
+    @Optional() private readonly parcelInvoices?: ParcelInvoiceService,
   ) {}
 
   /**
@@ -3911,6 +3915,23 @@ export class SbgController {
           measured,
         )
       : this.routing.quoteShipment(dto.originPudoDid!, destPudoDid, size, measured);
+    // ROUND 13 — the same rule as the shipping API: a parcel crossing a border goes with its commercial invoice, checked
+    // before the parcel exists; one staying inside a country needs none and is told so.
+    if (dto.invoice && !quote.crossesBorder) throw new GlosError('INVALID_INPUT', 'This shipment does not cross a border, so it needs no commercial invoice', { field: 'invoice' });
+    if (quote.crossesBorder && !dto.invoice) {
+      throw new GlosError('CUSTOMS_INCOMPLETE', 'This shipment crosses a border, so it needs its commercial invoice: each item with its value, weight and country of origin, and the buyer it goes to', { missing: ['invoice'], crossings: quote.crossings.map((c) => `${c.fromCountry}→${c.toCountry}`) });
+    }
+    const papersContext = quote.crossesBorder
+      ? {
+          store: { vendorId: vendor.vendorId, name: vendor.name, ...(vendor.address ? { address: vendor.address } : {}) },
+          fromCountry: quote.crossings[0].fromCountry,
+          toCountry: quote.crossings[quote.crossings.length - 1].toCountry,
+          shop: (({ shopName, zone, landmark, physicalAddress }) => ({ name: shopName, zone, ...(landmark ? { landmark } : {}), ...(physicalAddress ? { address: physicalAddress } : {}) }))(this.agents.get(destPudoDid)),
+          ...(dto.weightKg != null ? { grossKg: dto.weightKg } : {}),
+          signer: actor?.actorName?.trim() || vendor.name,
+        }
+      : undefined;
+    const papers = dto.invoice && papersContext ? this.parcelInvoices!.check(dto.invoice, papersContext) : undefined;
     const result = this.parcels.createInbound({
       vendorId: dto.vendorId,
       externalOrderId: dto.externalOrderId ?? handoff?.externalOrderId,
@@ -3925,13 +3946,16 @@ export class SbgController {
       contentPhotoRef: dto.contentPhotoRef,
       fragile: dto.fragile,
       natureCode: dto.natureCode,
-      items: dto.items ?? handoff?.items,
+      items: papers ? papers.lines.map((l) => ({ name: l.description, qty: l.quantity })) : (dto.items ?? handoff?.items),
       subtotal: dto.subtotal ?? handoff?.subtotal,
+      ...(papers ? { declaredValue: papers.totalValue, customsCurrency: papers.currency } : {}),
       shippingPolicy: vendor.shippingPolicy,
       routeMode: dto.routeMode,
       quote,
     });
     if (handoff) this.vendors.consumeCheckout(handoff.id, result.parcel.parcelId);
+    // Its papers, signed and kept with it: what the store prints with the label.
+    if (dto.invoice && papersContext) this.parcelInvoices!.issue(dto.invoice, { ...papersContext, parcelId: result.parcel.parcelId });
     return result;
   }
 
@@ -3943,7 +3967,7 @@ export class SbgController {
   @AtTheCounter()
   intake(@Param('id') id: string, @Body() dto: IntakeDto, @Actor() actor: IntrospectionResult) {
     const did = actingDid(actor, dto.agentDid);
-    const taken = this.parcels.get(id).direction === 'outbound' ? this.parcels.intakeConsumerSend(id, did, dto.dropoffPhotoRef) : this.parcels.intakeInbound(id, did);
+    const taken = this.parcels.get(id).direction === 'outbound' ? this.parcels.intakeConsumerSend(id, did, dto.dropoffPhotoRef) : this.parcels.intakeInbound(id, did, dto.papersInPouch === true);
     this.pilot?.noteTakeIn(id, did, dto.takeInSeconds);
     return taken;
   }
@@ -3979,6 +4003,8 @@ export class SbgController {
       currency: parcelCurrency(parcel),
       // P3 — said in the same breath as the price: whose promise, who answers, and this parcel's own cover.
       ...(parcel.originAgentDid ? { terms: this.parcels.intakeTermsFor(parcel) } : {}),
+      // Round 13 — a store's parcel crossing a border carries its papers: the shop looks for them before taking it in.
+      ...(parcel.direction === 'inbound' && parcel.customs ? { papers: { copies: INVOICE_COPIES, crossing: parcel.customs.crossings.map((c) => `${c.fromCountry}→${c.toCountry}`).join(', ') } } : {}),
     };
   }
 

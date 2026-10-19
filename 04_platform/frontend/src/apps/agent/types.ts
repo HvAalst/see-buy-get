@@ -254,6 +254,8 @@ export interface IntakePreview {
   currency?: string;
   /** P3 — whose promise, who answers, and this parcel's own cover. */
   terms?: TakeInTerms;
+  /** Round 13 — a store's parcel crossing a border: its commercial invoice travels in the pouch, and the shop looks first. */
+  papers?: { copies: number; crossing: string };
 }
 
 /**

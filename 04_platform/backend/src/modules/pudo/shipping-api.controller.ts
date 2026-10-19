@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Headers, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Headers, Param, Post, Put, UseGuards } from '@nestjs/common';
+import { ParcelInvoice, ParcelInvoiceDto, ParcelInvoiceView } from './parcel-invoice.types';
 import { IdempotencyService } from '../../foundation/http/idempotency.service';
 import { OwnIdempotency } from '../../foundation/http/idempotency.interceptor';
 import { Public } from '../../foundation/auth/public.decorator';
@@ -116,5 +117,31 @@ export class ShippingApiController {
   @Post('shipments/:shipmentId/cancel')
   cancelShipment(@Param('shipmentId') shipmentId: string, @Body() dto: CancelShipmentDto, @CallerKey() caller: Caller) {
     return this.shipping.cancelShipment(shipmentId, caller, dto.reason);
+  }
+
+  /* -- round 13: a store parcel's papers abroad — its commercial invoice, read, printed and corrected with a secret key -- */
+
+  @Public()
+  @RateLimit(120, 60)
+  @Get('shipments/:shipmentId/invoice')
+  invoice(@Param('shipmentId') shipmentId: string, @CallerKey() caller: Caller): ParcelInvoiceView {
+    return this.shipping.papers(shipmentId, caller);
+  }
+
+  /** The three copies, one a page: printed by the store with the label, and put in the pouch. */
+  @Public()
+  @RateLimit(120, 60)
+  @Get('shipments/:shipmentId/invoice.html')
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  invoicePage(@Param('shipmentId') shipmentId: string, @CallerKey() caller: Caller): string {
+    return this.shipping.papersPage(shipmentId, caller);
+  }
+
+  /** Correct it, until the parcel is handed in: a new invoice replaces it, and the old one stays on the record. */
+  @Public()
+  @RateLimit(30, 60)
+  @Put('shipments/:shipmentId/invoice')
+  correctInvoice(@Param('shipmentId') shipmentId: string, @Body() dto: ParcelInvoiceDto, @CallerKey() caller: Caller): ParcelInvoice {
+    return this.shipping.correctPapers(shipmentId, dto, caller);
   }
 }

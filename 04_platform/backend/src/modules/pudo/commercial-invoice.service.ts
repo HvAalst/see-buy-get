@@ -96,7 +96,7 @@ export class CommercialInvoiceService {
 
     if (!Array.isArray(input.lines) || !input.lines.length) throw new GlosError('FIELD_REQUIRED', 'List what is in the shipment, at least one line', { field: 'lines' });
     if (input.lines.length > MAX_INVOICE_LINES) throw new GlosError('VALIDATION_FAILED', `Up to ${MAX_INVOICE_LINES} lines on one invoice`, { field: 'lines' });
-    const lines: InvoiceLine[] = input.lines.map((l, i) => line(l, i + 1));
+    const lines: InvoiceLine[] = input.lines.map((l, i) => invoiceLine(l, i + 1, true) as InvoiceLine);
     const totalNetKg = round(lines.reduce((s, l) => s + l.netKg, 0), 3);
     // Customs adds the weights up: goods weighing more net than the whole load does gross is a paper that gets stopped.
     if (totalNetKg > f.weightKg) {
@@ -112,8 +112,8 @@ export class CommercialInvoiceService {
       freightId: f.freightId,
       loadCode: f.code,
       entityId: signer.entity.entityId,
-      exporter: party({ name: signer.entity.name, address: text(input.exporterAddress, 200) || f.pickupLabel, country: exporterCountry, taxNo: signer.entity.business?.taxNo }),
-      importer: party({ name: importerName, address: text(input.importer.address, 200), country: importerCountry, taxNo: text(input.importer.taxNo, 60) }),
+      exporter: invoiceParty({ name: signer.entity.name, address: text(input.exporterAddress, 200) || f.pickupLabel, country: exporterCountry, taxNo: signer.entity.business?.taxNo }),
+      importer: invoiceParty({ name: importerName, address: text(input.importer.address, 200), country: importerCountry, taxNo: text(input.importer.taxNo, 60) }),
       lines,
       currency,
       totalValue: round(lines.reduce((s, l) => s + l.lineValue, 0), 2),
@@ -177,64 +177,93 @@ export class CommercialInvoiceService {
 
   /** The invoice as a printable page: the same invoice three times, one copy a page, each saying which copy it is. */
   htmlFor(i: CommercialInvoice): string {
-    const e = escapeHtml;
-    const money = (n: number) => n.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const kg = (n: number) => n.toLocaleString('en', { maximumFractionDigits: 3 });
-    const partyBox = (title: string, p: InvoiceParty) =>
-      `<div class="box"><div class="h">${e(title)}</div><b>${e(p.name)}</b>${p.address ? `<br>${e(p.address)}` : ''}<br>${e(countryName(p.country))}${p.taxNo ? `<br>Tax no. ${e(p.taxNo)}` : ''}</div>`;
-    const rows = i.lines
-      .map((l, n) => `<tr><td>${n + 1}</td><td>${e(l.description)}</td><td class="r">${l.quantity.toLocaleString('en')}</td><td class="r">${kg(l.netKg)}</td><td class="r">${money(l.unitValue)}</td><td class="r">${money(l.lineValue)}</td><td>${e(countryName(l.originCountry))}</td><td class="mono">${e(hsDisplay(l.hsCode))}</td></tr>`)
-      .join('');
-    const term = i.incoterm ? `${e(i.incoterm)}${i.namedPlace ? ` ${e(i.namedPlace)}` : ''}` : 'Not stated';
-    const copy = (n: number) => `<section class="copy">
-  <header><div><h1>Commercial invoice</h1><div class="sub">No. <b>${e(i.number)}</b> · ${e(i.issuedOn)} · Load ${e(i.loadCode)}</div></div><div class="copyno">Copy ${n} of ${i.copies}${n === 1 ? '<br><span>original</span>' : ''}</div></header>
-  <div class="grid">${partyBox('Exporter (seller)', i.exporter)}${partyBox('Importer (buyer)', i.importer)}</div>
-  <div class="grid4"><div class="box"><div class="h">Reason for export</div>${e(REASON_WORDS[i.reason])}</div><div class="box"><div class="h">Trade term</div>${term}</div><div class="box"><div class="h">Packages</div>${i.packages ?? 'Not stated'}</div><div class="box"><div class="h">Gross weight</div>${kg(i.grossKg)} kg</div></div>
-  <table><thead><tr><th>#</th><th>Description of the goods</th><th class="r">Quantity</th><th class="r">Net kg</th><th class="r">Value per item (${e(i.currency)})</th><th class="r">Value (${e(i.currency)})</th><th>Country of origin</th><th>HS code</th></tr></thead>
-  <tbody>${rows}</tbody>
-  <tfoot><tr><td></td><td>Total</td><td class="r">${i.lines.reduce((s, l) => s + l.quantity, 0).toLocaleString('en')}</td><td class="r">${kg(i.totalNetKg)}</td><td></td><td class="r"><b>${e(i.currency)} ${money(i.totalValue)}</b></td><td colspan="2"></td></tr></tfoot></table>
-  <p class="fine">HS codes and values are as the exporter declared them. SeeBuyGet does not classify goods.</p>
-  <div class="decl"><p>${e(i.declaration)}</p>
-    <div class="sign"><div><b>Signed electronically</b> by ${e(i.signed.name)} for ${e(i.signed.for)}, ${e(when(i.signed.at))}.<br><span class="mono">Fingerprint ${e(i.fingerprint.slice(0, 16))}…</span></div>
-    <div class="hand">Signature <span class="line"></span><br>Name <span class="line"></span> Date <span class="line short"></span></div></div></div>
-  <p class="pouch">All ${i.copies} copies go in a clear pouch on the outside of package 1, with the load's consignment note.</p>
+    return invoicePage(i, { ref: `Load ${i.loadCode}`, code: i.loadCode, pouch: `All ${i.copies} copies go in a clear pouch on the outside of package 1, with the load's consignment note.` });
+  }
+}
+
+/** What a printable commercial invoice needs, whether it is a load's or a store parcel's. */
+export interface PrintableInvoice {
+  number: string;
+  issuedOn: string;
+  exporter: InvoiceParty;
+  importer: InvoiceParty;
+  lines: PrintableLine[];
+  currency: string;
+  totalValue: number;
+  totalNetKg: number;
+  grossKg: number;
+  packages?: number;
+  incoterm?: string;
+  namedPlace?: string;
+  reason: ExportReason;
+  declaration: string;
+  signed: { name: string; for: string; at: string };
+  fingerprint: string;
+  copies: number;
+}
+
+/**
+ * THE PRINTABLE PAGE: the same invoice `copies` times, one copy a page, each saying which copy it is — told what it is
+ * about (a load, a parcel) and where its copies travel.
+ */
+export function invoicePage(i: PrintableInvoice, where: { ref: string; code: string; pouch: string }): string {
+  const e = escapeHtml;
+  const money = (n: number) => n.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const kg = (n: number) => n.toLocaleString('en', { maximumFractionDigits: 3 });
+  const partyBox = (title: string, p: InvoiceParty) =>
+    `<div class="box"><div class="h">${e(title)}</div><b>${e(p.name)}</b>${p.address ? `<br>${e(p.address).replace(/\r?\n/g, '<br>')}` : ''}<br>${e(countryName(p.country))}${p.taxNo ? `<br>Tax no. ${e(p.taxNo)}` : ''}</div>`;
+  const rows = i.lines
+    .map((l, n) => `<tr><td>${n + 1}</td><td>${e(l.description)}</td><td class="r">${l.quantity.toLocaleString('en')}</td><td class="r">${kg(l.netKg)}</td><td class="r">${money(l.unitValue)}</td><td class="r">${money(l.lineValue)}</td><td>${e(countryName(l.originCountry))}</td><td class="mono">${l.hsCode ? e(hsDisplay(l.hsCode)) : '—'}</td></tr>`)
+    .join('');
+  const term = i.incoterm ? `${e(i.incoterm)}${i.namedPlace ? ` ${e(i.namedPlace)}` : ''}` : 'Not stated';
+  const copy = (n: number) => `<section class="copy">
+<header><div><h1>Commercial invoice</h1><div class="sub">No. <b>${e(i.number)}</b> · ${e(i.issuedOn)} · ${e(where.ref)}</div></div><div class="copyno">Copy ${n} of ${i.copies}${n === 1 ? '<br><span>original</span>' : ''}</div></header>
+<div class="grid">${partyBox('Exporter (seller)', i.exporter)}${partyBox('Importer (buyer)', i.importer)}</div>
+<div class="grid4"><div class="box"><div class="h">Reason for export</div>${e(REASON_WORDS[i.reason])}</div><div class="box"><div class="h">Trade term</div>${term}</div><div class="box"><div class="h">Packages</div>${i.packages ?? 'Not stated'}</div><div class="box"><div class="h">Gross weight</div>${kg(i.grossKg)} kg</div></div>
+<table><thead><tr><th>#</th><th>Description of the goods</th><th class="r">Quantity</th><th class="r">Net kg</th><th class="r">Value per item (${e(i.currency)})</th><th class="r">Value (${e(i.currency)})</th><th>Country of origin</th><th>HS code</th></tr></thead>
+<tbody>${rows}</tbody>
+<tfoot><tr><td></td><td>Total</td><td class="r">${i.lines.reduce((s, l) => s + l.quantity, 0).toLocaleString('en')}</td><td class="r">${kg(i.totalNetKg)}</td><td></td><td class="r"><b>${e(i.currency)} ${money(i.totalValue)}</b></td><td colspan="2"></td></tr></tfoot></table>
+<p class="fine">HS codes and values are as the exporter declared them. SeeBuyGet does not classify goods.</p>
+<div class="decl"><p>${e(i.declaration)}</p>
+  <div class="sign"><div><b>Signed electronically</b> by ${e(i.signed.name)} for ${e(i.signed.for)}, ${e(when(i.signed.at))}.<br><span class="mono">Fingerprint ${e(i.fingerprint.slice(0, 16))}…</span></div>
+  <div class="hand">Signature <span class="line"></span><br>Name <span class="line"></span> Date <span class="line short"></span></div></div></div>
+<p class="pouch">${e(where.pouch)}</p>
 </section>`;
-    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Commercial invoice ${e(i.number)} — ${e(i.loadCode)}</title>
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Commercial invoice ${e(i.number)} — ${e(where.code)}</title>
 <style>
-  @page { size: A4; margin: 12mm; }
-  * { box-sizing: border-box; }
-  body { margin: 0; padding: 16px; font: 12px/1.45 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #111; background: #fff; }
-  .copy { max-width: 800px; margin: 0 auto 32px; }
-  .copy + .copy { break-before: page; }
-  header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #111; padding-bottom: 8px; margin-bottom: 10px; }
-  h1 { font-size: 20px; margin: 0; text-transform: uppercase; letter-spacing: .04em; }
-  .sub { margin-top: 2px; }
-  .copyno { border: 2px solid #111; padding: 4px 10px; font-weight: 700; text-align: center; }
-  .copyno span { font-weight: 400; font-size: 11px; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
-  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
-  .box { border: 1px solid #555; padding: 6px 8px; min-height: 44px; }
-  .h { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #444; margin-bottom: 2px; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { border: 1px solid #555; padding: 4px 6px; vertical-align: top; text-align: left; }
-  th { font-size: 10px; text-transform: uppercase; letter-spacing: .03em; background: #f1f1f1; }
-  .r { text-align: right; }
-  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
-  tfoot td { font-weight: 600; }
-  .fine { font-size: 10px; color: #444; margin: 4px 0 10px; }
-  .decl { border: 1px solid #555; padding: 8px; }
-  .decl p { margin: 0 0 8px; }
-  .sign { display: flex; justify-content: space-between; gap: 16px; align-items: flex-end; }
-  .hand { line-height: 2.2; white-space: nowrap; }
-  .line { display: inline-block; width: 150px; border-bottom: 1px solid #111; }
-  .line.short { width: 80px; }
-  .pouch { margin-top: 10px; font-weight: 600; }
-  @media (max-width: 640px) { .grid, .grid4 { grid-template-columns: 1fr; } .sign { flex-direction: column; align-items: flex-start; } }
+@page { size: A4; margin: 12mm; }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 16px; font: 12px/1.45 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #111; background: #fff; }
+.copy { max-width: 800px; margin: 0 auto 32px; }
+.copy + .copy { break-before: page; }
+header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #111; padding-bottom: 8px; margin-bottom: 10px; }
+h1 { font-size: 20px; margin: 0; text-transform: uppercase; letter-spacing: .04em; }
+.sub { margin-top: 2px; }
+.copyno { border: 2px solid #111; padding: 4px 10px; font-weight: 700; text-align: center; }
+.copyno span { font-weight: 400; font-size: 11px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
+.box { border: 1px solid #555; padding: 6px 8px; min-height: 44px; }
+.h { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #444; margin-bottom: 2px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { border: 1px solid #555; padding: 4px 6px; vertical-align: top; text-align: left; }
+th { font-size: 10px; text-transform: uppercase; letter-spacing: .03em; background: #f1f1f1; }
+.r { text-align: right; }
+.mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+tfoot td { font-weight: 600; }
+.fine { font-size: 10px; color: #444; margin: 4px 0 10px; }
+.decl { border: 1px solid #555; padding: 8px; }
+.decl p { margin: 0 0 8px; }
+.sign { display: flex; justify-content: space-between; gap: 16px; align-items: flex-end; }
+.hand { line-height: 2.2; white-space: nowrap; }
+.line { display: inline-block; width: 150px; border-bottom: 1px solid #111; }
+.line.short { width: 80px; }
+.pouch { margin-top: 10px; font-weight: 600; }
+@media (max-width: 640px) { .grid, .grid4 { grid-template-columns: 1fr; } .sign { flex-direction: column; align-items: flex-start; } }
 </style></head><body>
 ${Array.from({ length: i.copies }, (_, n) => copy(n + 1)).join('\n')}
 </body></html>`;
-  }
 }
 
 /** The load crosses a border: both countries known, and different. */
@@ -255,7 +284,19 @@ export function hsDisplay(digits: string): string {
 
 const REASON_WORDS: Record<ExportReason, string> = { sale: 'Sale', sample: 'Sample', gift: 'Gift', repair: 'Repair', return: 'Return', other: 'Other' };
 
-function line(l: InvoiceInput['lines'][number], n: number): InvoiceLine {
+/** The lines both papers carry: the HS code required on a load's, the store's own where it has one on a parcel's (round 13). */
+export interface PrintableLine {
+  description: string;
+  quantity: number;
+  netKg: number;
+  unitValue: number;
+  lineValue: number;
+  originCountry: string;
+  hsCode?: string;
+}
+
+/** One line checked, in words naming the line. */
+export function invoiceLine(l: { description: string; quantity: number; netKg: number; unitValue: number; originCountry: string; hsCode?: string }, n: number, hsRequired: boolean): PrintableLine {
   const where = { field: `lines.${n - 1}` };
   const description = text(l?.description, 200);
   if (!description) throw new GlosError('FIELD_REQUIRED', `Line ${n}: say what the goods are`, where);
@@ -268,19 +309,19 @@ function line(l: InvoiceInput['lines'][number], n: number): InvoiceLine {
   const originCountry = country(l.originCountry);
   if (!originCountry) throw new GlosError('VALIDATION_FAILED', `Line ${n}: choose the country the goods were made in`, where);
   const hsCode = cleanHsCode(l.hsCode);
-  if (!hsCode) throw new GlosError('VALIDATION_FAILED', `Line ${n}: the HS code is 6 to 10 digits, as you or your customs agent classify the goods`, where);
-  return { description, quantity, netKg: round(netKg, 3), unitValue: round(unitValue, 2), lineValue: round(quantity * unitValue, 2), originCountry, hsCode };
+  if (!hsCode && (hsRequired || String(l.hsCode ?? '').trim())) throw new GlosError('VALIDATION_FAILED', `Line ${n}: the HS code is 6 to 10 digits, as you or your customs agent classify the goods`, where);
+  return { description, quantity, netKg: round(netKg, 3), unitValue: round(unitValue, 2), lineValue: round(quantity * unitValue, 2), originCountry, ...(hsCode ? { hsCode } : {}) };
 }
 
-function party(p: InvoiceParty): InvoiceParty {
+export function invoiceParty(p: InvoiceParty): InvoiceParty {
   return { name: p.name, ...(p.address ? { address: p.address } : {}), country: p.country, ...(p.taxNo ? { taxNo: p.taxNo } : {}) };
 }
 
-function text(raw: string | undefined, max: number): string {
+export function text(raw: string | undefined, max: number): string {
   return String(raw ?? '').trim().slice(0, max);
 }
 
-function country(raw: string | undefined): string | undefined {
+export function country(raw: string | undefined): string | undefined {
   return catalogueEntry(raw)?.code;
 }
 
@@ -288,7 +329,7 @@ function countryName(code: string): string {
   return catalogueEntry(code)?.name ?? code;
 }
 
-function round(n: number, places: number): number {
+export function round(n: number, places: number): number {
   const f = 10 ** places;
   return Math.round(n * f) / f;
 }

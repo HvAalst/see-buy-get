@@ -158,60 +158,6 @@
   margin-top: 2px;
 }
 
-/* --------------------------------------------------- S33 safety gate -- */
-
-/* The interactive load-safety / unload checklist (shared/ui CheckGate). Each line is a big tap target;
-   a ticked item fills emerald so a driver can see at a glance what is still outstanding. */
-.checkgate {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 4px 0 2px;
-}
-
-.checkgate__item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-height: var(--tap);
-  padding: 10px 12px;
-  text-align: left;
-  border: 1.5px solid var(--bd-soft);
-  border-radius: var(--r-ctl);
-  background: var(--card);
-  color: var(--tx2);
-  font-size: 15px;
-  line-height: 1.35;
-}
-
-.checkgate__item.is-on {
-  border-color: var(--ok);
-  background: var(--ok-light);
-  color: var(--navy);
-}
-
-.checkgate__box {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  border: 2px solid var(--bd);
-  color: var(--ok);
-}
-
-.checkgate__item.is-on .checkgate__box {
-  border-color: var(--ok);
-  background: #fff;
-}
-
-.checkgate__label {
-  flex: 1;
-}
-
 /* The securement photo capture (shared/ui PhotoField). */
 .photo__input {
   position: absolute;

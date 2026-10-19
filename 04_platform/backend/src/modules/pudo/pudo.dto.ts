@@ -1,3 +1,4 @@
+import { ParcelInvoiceDto } from './parcel-invoice.types';
 import { DESTINATION_KINDS } from './destination.types';
 import { PaperCaseView } from '../../foundation/entity/company-paper-reports.service';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
@@ -1044,6 +1045,8 @@ export class MintShipmentDto {
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => LineItemDto) items?: LineItemDto[];
   @IsOptional() @IsNumber() @Min(0) subtotal?: number;
   @IsOptional() @IsIn(['flexible', 'locked']) routeMode?: 'flexible' | 'locked';
+  /** Round 13 — the commercial invoice, for a shipment that crosses a border: what customs reads, item by item. */
+  @IsOptional() @ValidateNested() @Type(() => ParcelInvoiceDto) invoice?: ParcelInvoiceDto;
 }
 
 /** Push one currency's standing against the base — from a feed, or by hand when the feed is down. */
@@ -1222,6 +1225,8 @@ export class InboundOrderDto {
   /** S30 — the commodity's primary cargo nature (default GEN). Drives the compatibility matrix. */
   @IsOptional() @IsIn(CARGO_NATURES) natureCode?: CargoNature;
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => OrderItemDto) items?: OrderItemDto[];
+  /** Round 13 — the commercial invoice, for a shipment that crosses a border: what customs reads, item by item. */
+  @IsOptional() @ValidateNested() @Type(() => ParcelInvoiceDto) invoice?: ParcelInvoiceDto;
 }
 
 /** PG1 — a signed-in person's in-app peer-send mint (the Send app's parcel genesis). The sender's identity
@@ -1247,6 +1252,8 @@ export class IntakeDto {
   @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
   /** How long this take-in took at the counter, by the app's own clock, in seconds — for the pilot's numbers. */
   @IsOptional() @IsNumber() @Min(0) @Max(86_400) takeInSeconds?: number;
+  /** Round 13 — for a parcel crossing a border: the shop saw its commercial invoice's copies in the pouch. */
+  @IsOptional() @IsBoolean() papersInPouch?: boolean;
   /** PG2 — required when the scanned parcel is a person's pre-minted peer send (walk-up parity: the
    *  drop-off photo is the fraud defence, taken at the counter). Ignored for a vendor inbound. */
   @IsOptional() @IsString() dropoffPhotoRef?: string;

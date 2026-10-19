@@ -140,7 +140,13 @@ export function createVendorApi(sbg: SbgClient) {
       /** FP8 — box 13 when the order ships as freight. */
       instructions?: string;
       deliveryWindow?: string;
-    }) => sbg.request((c) => c.POST('/v1/sbg/inbound/orders', { body })),
+      /** Round 13 — the commercial invoice, for a shipment that crosses a border. */
+      invoice?: Record<string, unknown>;
+    }) => sbg.request((c) => c.POST('/v1/sbg/inbound/orders', { body: body as never })),
+
+    /** Round 13 — a crossing parcel's commercial invoice, three copies a page each: printed with the label. */
+    papersPage: (vendorId: string, parcelId: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/parcels/{parcelId}/invoice.html', { params: { path: { id: vendorId, parcelId } }, parseAs: 'text' })) as Promise<{ data?: string; error?: unknown }>,
 
     /** Derive the size tier from dimensions + weight — the live preview for the mint form. */
     classify: (l: number, w: number, h: number, kg: number) =>

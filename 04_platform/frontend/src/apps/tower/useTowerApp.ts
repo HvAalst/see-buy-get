@@ -214,6 +214,9 @@ export interface ParcelView {
    *  ladder existed, which is a real state: nobody asked the question then. */
   takeInPromise?: 'ours' | 'theirs';
   releaseLockedAt?: string;
+  /** Only on a parcel that crosses a border: whether the shop that took it in saw its papers in the pouch. */
+  crossesBorder?: boolean;
+  papersSeen?: { at: string; by: string };
   contentPhotoRef?: string;
   dropoffPhotoRef?: string;
   deliveredPhotoRef?: string;

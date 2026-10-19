@@ -1,6 +1,7 @@
 const INCOTERM_OPTIONS = ['EXW', 'FCA', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP', 'FAS', 'FOB', 'CFR', 'CIF'];
 
-import { Button, Card, Chip, ErrorNote, Explainer, GlanceNumber, Icon, Note, OptionPicker, Pill, PlaceMap, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { useState } from 'preact/hooks';
+import { Button, Card, CheckGate, Chip, ErrorNote, Explainer, GlanceNumber, Icon, Note, OptionPicker, Pill, PlaceMap, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { agentConfig } from '../api';
 import { useT, type Translate } from '../../../shared/i18n';
 import { BODY_HINTS, EXCLUDABLE_BODIES, NATURES, PACKAGING_HELP, acceptMissing, bookFreightMissing, chooseBodyHint, money, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, takeInTermsNotice, termsBlock, termsNeedTelling, toggleExcludedBody, type BodyHint, type PackagingChoice } from '../logic';
@@ -55,6 +56,8 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
   const freightBlock = bookFreightMissing(f, Date.now(), t);
   // Only a SETTLED preview drives the confirm card — never a stale one still resolving under a new scan.
   const pm = state.preMintState === 'ready' ? state.preMint : null;
+  // Round 13 — which parcel's papers the counter saw in the pouch: a tick belongs to one parcel, never the next one scanned.
+  const [papersSeen, setPapersSeen] = useState<string | null>(null);
   const booked = pm && (pm.kind === 'peer_send' || pm.kind === 'vendor_order');
   // The walk-up form applies to a FRESH sticker (idle) or when a preview blipped (error, so a plain
   // walk-up is never blocked by a network hiccup). While a code is resolving, neither shows.
@@ -115,6 +118,14 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
             </div>
           </Card>
 
+          {/* Round 13 — a store's parcel crossing a border goes with its papers: the shop looks for them before taking it in. */}
+          {pm.papers ? (
+            <Card label={t('agent.accept.papersLabel')}>
+              <p class="card__note">{t('agent.accept.papersNote', { crossing: pm.papers.crossing })}</p>
+              <CheckGate items={[{ key: 'papers', label: t('agent.accept.papersItem', { n: pm.papers.copies }) }]} checked={papersSeen === pm.parcelId ? ['papers'] : []} onChange={(keys) => setPapersSeen(keys.length ? pm.parcelId : null)} />
+            </Card>
+          ) : null}
+
           {pm.kind === 'peer_send' ? (
             <Card label={t('agent.accept.proofPhoto')}>
               <PhotoField id="intake-photo" value={state.intakePhotoRef} label={t('agent.accept.takePhoto')} upload={(file) => actions.uploadPhoto('dropoff', file)} onCapture={actions.setIntakePhoto} />
@@ -124,13 +135,14 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
 
           <div class="scr__cta">
             <Button
-              onClick={() => void actions.submitIntake()}
-              disabled={(pm.kind === 'peer_send' && !state.intakePhotoRef) || pm.terms?.promise === 'none'}
+              onClick={() => void actions.submitIntake(papersSeen === pm.parcelId)}
+              disabled={(pm.kind === 'peer_send' && !state.intakePhotoRef) || pm.terms?.promise === 'none' || (pm.papers ? papersSeen !== pm.parcelId : false)}
               busy={state.busy === 'intake'}
             >
               {pm.kind === 'peer_send' ? t('agent.accept.collectAndTakeIn', { amount: money(pm.cashDue, pm.currency) }) : t('agent.accept.takeIn')}
             </Button>
             {pm.kind === 'peer_send' && !state.intakePhotoRef ? <p class="hint" style="margin-top:8px">{t('agent.accept.photoFirst')}</p> : null}
+            {pm.papers && papersSeen !== pm.parcelId ? <p class="hint" style="margin-top:8px">{t('agent.accept.papersFirst')}</p> : null}
           </div>
 
           <div class="scr__foot">

@@ -20703,6 +20703,99 @@
         }
       }
     },
+    "/v1/sbg/shipping/shipments/{shipmentId}/invoice": {
+      "get": {
+        "operationId": "ShippingApi.invoice",
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParcelInvoiceView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "ShippingApi.correctInvoice",
+        "summary": "",
+        "description": "Correct it, until the parcel is handed in: a new invoice replaces it, and the old one stays on the record.",
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParcelInvoiceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParcelInvoice"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/shipping/shipments/{shipmentId}/invoice.html": {
+      "get": {
+        "operationId": "ShippingApi.invoicePage",
+        "summary": "",
+        "description": "The three copies, one a page: printed by the store with the label, and put in the pouch.",
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/conversations": {
       "get": {
         "operationId": "Conversation.mine",
@@ -23520,6 +23613,78 @@
               "application/json": {
                 "schema": {
                   "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/parcels/{parcelId}/invoice": {
+      "get": {
+        "operationId": "StorePapers.view",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParcelInvoiceView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/parcels/{parcelId}/invoice.html": {
+      "get": {
+        "operationId": "StorePapers.page",
+        "summary": "",
+        "description": "The three copies, one a page: printed with the label, and put in the pouch.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -35641,6 +35806,19 @@
               }
             ]
           },
+          "papersSeen": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
           "sellerEntityId": {
             "type": "string",
             "description": "The sister that SOLD this shipment: it collected the price and carries the cost of every leg, so a\n shop in another country that handles this parcel recharges its own sister's outlay to this one, at\n cost. Absent on records written before a parcel named its seller — then nobody recharges anybody,\n which is exactly right for a single-sister world."
@@ -35804,6 +35982,7 @@
           "paymentMode",
           "status",
           "rateStack",
+          "papersSeen",
           "acceptedAt",
           "scans"
         ]
@@ -37017,6 +37196,122 @@
           "createdAt"
         ]
       },
+      "ParcelInvoiceImporterDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The buyer, by name, as the store has it.",
+            "maxLength": 120
+          },
+          "address": {
+            "type": "string",
+            "description": "The address the store and the buyer settled on, carried exactly as entered. Absent: the shop the parcel is collected from.",
+            "maxLength": 300
+          },
+          "taxNo": {
+            "type": "string",
+            "maxLength": 60
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "ParcelInvoiceLineDto": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "quantity": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1000000
+          },
+          "netKg": {
+            "type": "number",
+            "minimum": 0.001
+          },
+          "unitValue": {
+            "type": "number",
+            "minimum": 0
+          },
+          "originCountry": {
+            "type": "string",
+            "description": "ISO 3166 alpha-2: where the goods were made.",
+            "maxLength": 2
+          },
+          "hsCode": {
+            "type": "string",
+            "description": "The store's own HS code, where it has one. Never suggested by us.",
+            "maxLength": 16
+          }
+        },
+        "required": [
+          "description",
+          "quantity",
+          "netKg",
+          "unitValue",
+          "originCountry"
+        ]
+      },
+      "ParcelInvoiceDto": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "string",
+            "description": "The store's own number for the invoice.",
+            "maxLength": 40
+          },
+          "issuedOn": {
+            "type": "string",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/"
+          },
+          "currency": {
+            "type": "string",
+            "description": "ISO 4217: the money the goods were sold in.",
+            "pattern": "/^[A-Za-z]{3}$/"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "sale",
+              "sample",
+              "gift",
+              "repair",
+              "return",
+              "other"
+            ]
+          },
+          "exporterAddress": {
+            "type": "string",
+            "description": "The store's address as the exporter, where it differs from the one on record.",
+            "maxLength": 300
+          },
+          "importer": {
+            "$ref": "#/components/schemas/ParcelInvoiceImporterDto"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParcelInvoiceLineDto"
+            }
+          },
+          "declare": {
+            "type": "boolean",
+            "description": "The store agrees to the declaration: this is its signature."
+          }
+        },
+        "required": [
+          "number",
+          "currency",
+          "importer",
+          "lines",
+          "declare"
+        ]
+      },
       "InboundOrderDto": {
         "type": "object",
         "properties": {
@@ -37125,6 +37420,14 @@
             "items": {
               "$ref": "#/components/schemas/OrderItemDto"
             }
+          },
+          "invoice": {
+            "description": "Round 13 — the commercial invoice, for a shipment that crosses a border: what customs reads, item by item.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ParcelInvoiceDto"
+              }
+            ]
           }
         },
         "required": [
@@ -37144,6 +37447,10 @@
             "type": "number",
             "minimum": 0,
             "maximum": 86400
+          },
+          "papersInPouch": {
+            "type": "boolean",
+            "description": "Round 13 — for a parcel crossing a border: the shop saw its commercial invoice's copies in the pouch."
           },
           "dropoffPhotoRef": {
             "type": "string",
@@ -46374,6 +46681,14 @@
               "flexible",
               "locked"
             ]
+          },
+          "invoice": {
+            "description": "Round 13 — the commercial invoice, for a shipment that crosses a border: what customs reads, item by item.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ParcelInvoiceDto"
+              }
+            ]
           }
         },
         "required": [
@@ -46389,6 +46704,212 @@
             "maxLength": 200
           }
         }
+      },
+      "ParcelInvoiceLine": {
+        "type": "object",
+        "properties": {
+          "hsCode": {
+            "type": "string",
+            "description": "The store's own HS code, where it has one: digits only (6 to 10). Never one of ours."
+          },
+          "description": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "netKg": {
+            "type": "number"
+          },
+          "unitValue": {
+            "type": "number"
+          },
+          "lineValue": {
+            "type": "number"
+          },
+          "originCountry": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "description",
+          "quantity",
+          "netKg",
+          "unitValue",
+          "lineValue",
+          "originCountry"
+        ]
+      },
+      "InvoiceParty": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string",
+            "description": "ISO 3166 alpha-2."
+          },
+          "taxNo": {
+            "type": "string",
+            "description": "Their tax or VAT number, where they gave one."
+          }
+        },
+        "required": [
+          "name",
+          "country"
+        ]
+      },
+      "ParcelInvoice": {
+        "type": "object",
+        "properties": {
+          "importerAddressFrom": {
+            "type": "string",
+            "enum": [
+              "entered",
+              "shop"
+            ]
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParcelInvoiceLine"
+            }
+          },
+          "statedGrossKg": {
+            "type": "number",
+            "description": "The parcel's weight as the store stated it when it created the shipment: what a correction is checked against."
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "sale",
+              "sample",
+              "gift",
+              "repair",
+              "return",
+              "other"
+            ]
+          },
+          "supersedes": {
+            "type": "string"
+          },
+          "supersededBy": {
+            "type": "string"
+          },
+          "supersededAt": {
+            "type": "string"
+          },
+          "invoiceId": {
+            "type": "string"
+          },
+          "number": {
+            "type": "string"
+          },
+          "issuedOn": {
+            "type": "string"
+          },
+          "parcelId": {
+            "type": "string"
+          },
+          "vendorId": {
+            "type": "string"
+          },
+          "exporter": {
+            "$ref": "#/components/schemas/InvoiceParty"
+          },
+          "importer": {
+            "$ref": "#/components/schemas/InvoiceParty"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "totalValue": {
+            "type": "number"
+          },
+          "totalNetKg": {
+            "type": "number"
+          },
+          "grossKg": {
+            "type": "number"
+          },
+          "declaration": {
+            "type": "string"
+          },
+          "signed": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "required": true,
+                "type": "string"
+              },
+              "for": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "fingerprint": {
+            "type": "string",
+            "description": "sha256 of everything above: printed on every copy, so a copy can be checked against ours."
+          },
+          "copies": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "importerAddressFrom",
+          "lines",
+          "reason",
+          "invoiceId",
+          "number",
+          "issuedOn",
+          "parcelId",
+          "vendorId",
+          "exporter",
+          "importer",
+          "currency",
+          "totalValue",
+          "totalNetKg",
+          "grossKg",
+          "declaration",
+          "signed",
+          "fingerprint",
+          "copies"
+        ]
+      },
+      "ParcelInvoiceView": {
+        "type": "object",
+        "properties": {
+          "current": {
+            "$ref": "#/components/schemas/ParcelInvoice"
+          },
+          "earlier": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParcelInvoice"
+            }
+          },
+          "parcelId": {
+            "type": "string"
+          },
+          "correctable": {
+            "type": "boolean",
+            "description": "Whether it may still be corrected: until the parcel is handed in."
+          }
+        },
+        "required": [
+          "earlier",
+          "parcelId",
+          "correctable"
+        ]
       },
       "OpenConversationDto": {
         "type": "object",
@@ -47341,29 +47862,6 @@
           "freightId",
           "labels",
           "codes"
-        ]
-      },
-      "InvoiceParty": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "address": {
-            "type": "string"
-          },
-          "country": {
-            "type": "string",
-            "description": "ISO 3166 alpha-2."
-          },
-          "taxNo": {
-            "type": "string",
-            "description": "Their tax or VAT number, where they gave one."
-          }
-        },
-        "required": [
-          "name",
-          "country"
         ]
       },
       "InvoiceLine": {

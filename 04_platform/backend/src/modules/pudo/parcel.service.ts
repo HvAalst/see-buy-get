@@ -1653,7 +1653,7 @@ export class ParcelService implements OnApplicationBootstrap {
    * Generates the handover collection code AND a public tracking key, persists the label, and books the
    * split/contribution settlement (buyer's capped share + the vendor's share).
    */
-  createInbound(input: { vendorId: string; externalOrderId?: string; originAgentDid?: string; originZone?: string; destAgentDid: string; buyerMobile: string; buyerEmail?: string; size?: ParcelSize; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; contentPhotoRef: string; fragile?: boolean; natureCode?: CargoNature; items?: Array<{ name: string; qty: number }>; subtotal?: number; declaredValue?: number; shippingPolicy: ShippingPolicy; routeMode?: 'flexible' | 'locked'; quote: ShipmentQuote }): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
+  createInbound(input: { vendorId: string; externalOrderId?: string; originAgentDid?: string; originZone?: string; destAgentDid: string; buyerMobile: string; buyerEmail?: string; size?: ParcelSize; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; contentPhotoRef: string; fragile?: boolean; natureCode?: CargoNature; items?: Array<{ name: string; qty: number }>; subtotal?: number; declaredValue?: number; customsCurrency?: string; shippingPolicy: ShippingPolicy; routeMode?: 'flexible' | 'locked'; quote: ShipmentQuote }): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
     const dest = this.agents.get(input.destAgentDid);
     this.requireSellable(input.quote, [input.originAgentDid, input.destAgentDid]);
     const vendor = this.vendors.get(input.vendorId); // the store IS the birthplace — read it, don't infer it
@@ -1689,7 +1689,8 @@ export class ParcelService implements OnApplicationBootstrap {
           crossings: quote.crossings,
           items: input.items,
           declaredValue: goodsValue,
-          currency: quote.currency,
+          // The money the goods were sold in, where the store's commercial invoice says it (round 13); else the shipment's.
+          currency: input.customsCurrency ?? quote.currency,
           exporterId: input.vendorId,
           importerRef: hashPhone(input.buyerMobile) || undefined,
           namedPlace: `${dest.shopName}, ${dest.zone}`,
@@ -2036,12 +2037,18 @@ export class ParcelService implements OnApplicationBootstrap {
   }
 
   /** Origin PUDO scans the vendor's parcel in (Created → At_PUDO). Pre-paid: labour fee, no gate. */
-  intakeInbound(parcelId: string, agentDid: string): Parcel {
+  intakeInbound(parcelId: string, agentDid: string, papersInPouch = false): Parcel {
     const parcel = this.require(parcelId);
     if (parcel.direction !== 'inbound') throw new GlosError('NOT_INBOUND', 'Not an inbound parcel');
     if (parcel.status !== 'Created') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Created`);
     if (parcel.paidStatus !== 'ParcelPaid') throw new GlosError('SHIPMENT_NOT_PAID', 'Shipment is not paid — the vendor must prepay before the PUDO accepts it');
     if (parcel.originAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Intake only at the vendor-selected origin PUDO');
+    // ROUND 13 — A PARCEL CROSSING A BORDER GOES WITH ITS PAPERS: the store prints the commercial invoice with the label, and
+    // the shop looks for the copies in the pouch before it takes the parcel in. Without them it is held at the border.
+    if (parcel.customs && !papersInPouch) {
+      throw new GlosError('FIELD_REQUIRED', 'This parcel crosses a border: look for its commercial invoice — three copies in the pouch on the outside — before you take it in. No papers, ask the store to print them.', { field: 'papersInPouch' });
+    }
+    if (parcel.customs) parcel.papersSeen = { at: new Date().toISOString(), by: agentDid };
     this.admitBooked(parcel, agentDid);
     parcel.status = 'At_PUDO';
     parcel.acceptedAt = new Date().toISOString();
@@ -2654,6 +2661,8 @@ export class ParcelService implements OnApplicationBootstrap {
       // The age of the parcel, readable in a blink: a box dated a week ago and still on the shelf is a
       // question the shopkeeper can ask without scanning anything.
       `<text x="120" y="110" font-family="Arial" font-size="9" fill="#6E7684">Created ${labelDate(parcel.acceptedAt)}</text>`,
+      // A parcel crossing a border carries its papers: said where the counter and the border post both look first (round 13).
+      ...(parcel.customs ? [`<text x="120" y="122" font-family="Arial" font-size="9" font-weight="bold" fill="#B42318">Customs papers in the pouch</text>`] : []),
       `<text x="12" y="130" font-family="Arial" font-size="10" fill="#4A5261">Track this parcel:</text>`,
       `<text x="12" y="152" font-family="monospace" font-size="15" font-weight="bold" fill="#0B1F5C">${esc(parcel.trackingKey ?? '')}</text>`,
       `<text x="12" y="171" font-family="Arial" font-size="8" fill="#6E7684">${parcel.direction === 'inbound' ? 'Pre-paid · ' : ''}${esc(qrPayload)}</text>`,

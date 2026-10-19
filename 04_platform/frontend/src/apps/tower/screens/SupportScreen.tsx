@@ -72,6 +72,13 @@ export function SupportScreen({ state, actions }: { state: TowerState; actions: 
                     is ours to answer for or a carrier's — it decides what they may offer the person on
                     the line. Absent on parcels taken in before the question was asked. */}
                 {p.takeInPromise ? <span class={p.takeInPromise === 'ours' ? 'ctag ctag--ok' : 'ctag ctag--warn'}>{t(p.takeInPromise === 'ours' ? 'tower.support.promiseOurs' : 'tower.support.promiseTheirs')}</span> : null}
+                {/* A parcel held at a border: the first question is whether its papers were in the pouch
+                    when the shop took it in. */}
+                {p.crossesBorder ? (
+                  <span class={p.papersSeen ? 'ctag ctag--ok' : 'ctag ctag--warn'}>
+                    {p.papersSeen ? t('tower.support.papersSeen', { at: new Date(p.papersSeen.at).toLocaleString() }) : t('tower.support.papersNotSeen')}
+                  </span>
+                ) : null}
               </span>
             </div>
 

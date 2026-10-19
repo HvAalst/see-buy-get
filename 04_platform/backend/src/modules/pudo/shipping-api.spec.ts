@@ -7,6 +7,7 @@ import { RoutingService } from './routing.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
 import { ShippingApiService } from './shipping-api.service';
+import { ParcelInvoiceService } from './parcel-invoice.service';
 import { QuoteBookService } from './quote-book.service';
 import { TRADE_CREDIT_LIMIT } from './pudo.config';
 import { ANONYMOUS, ApiKeyService, type Caller } from './api-key.service';
@@ -80,7 +81,7 @@ describe('the public shipping quote', () => {
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
         GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService,
-        BagPlanService, ForthcomingService, DockService, ShippingApiService, ToteService, ConsignmentService,
+        BagPlanService, ForthcomingService, DockService, ShippingApiService, ParcelInvoiceService, ToteService, ConsignmentService,
         VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService,
         FleetManagerService, MediaService, CargoService, DigitalTwinService, TrackingService,
         TrackingContextService, NormalizationService, ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
@@ -442,10 +443,88 @@ describe('the public shipping quote', () => {
       corridors.addCorridor({ name: 'Nairobi–Addis', originZone: 'Nairobi', destZone: 'AddisAbaba' });
       const abroad = order({ to: { country: 'ET', area: 'AddisAbaba' } });
 
-      expect(() => shipping.mint(abroad, merchant('test').caller)).toThrow(/what is in the parcel/);
-      const made = shipping.mint({ ...abroad, items: [{ name: 'Ankara shirt', qty: 2 }], subtotal: 3400 }, merchant('live').caller);
+      // Round 13 — a parcel crossing a border goes with its commercial invoice, in either mode.
+      expect(() => shipping.mint(abroad, merchant('test').caller)).toThrow(/needs its commercial invoice/);
+      expect(() => shipping.mint({ ...abroad, items: [{ name: 'Ankara shirt', qty: 2 }], subtotal: 3400 }, merchant('live').caller)).toThrow(/needs its commercial invoice/);
+      const invoice = { number: 'INV-77', currency: 'KES', importer: { name: 'Abebe Kebede' }, lines: [{ description: 'Ankara shirt', quantity: 2, netKg: 0.6, unitValue: 1700, originCountry: 'KE' }], declare: true };
+      const made = shipping.mint({ ...abroad, invoice } as never, merchant('live').caller);
       expect(made.route.crossesBorder).toBe(true);
-      expect(parcels.get(made.shipmentId).customs?.declaredValue).toBe(3400);
+      expect(made.papers).toEqual({ number: 'INV-77', copies: 3, currency: 'KES', totalValue: 3400 });
+      // The declaration a border officer reads is the invoice's: its lines and its total.
+      expect(parcels.get(made.shipmentId).customs).toMatchObject({ declaredValue: 3400, currency: 'KES', contents: expect.stringContaining('Ankara shirt') });
+      // A shipment staying inside a country needs no invoice, and is told so rather than having one quietly dropped.
+      shop('Kisumu Duka', 'Kisumu', KISUMU);
+      corridors.addCorridor({ name: 'Nairobi–Kisumu', originZone: 'Nairobi', destZone: 'Kisumu' });
+      expect(() => shipping.mint(order({ invoice }) as never, merchant('live').caller)).toThrow(/does not cross a border/);
+    });
+
+    it('a parcel crossing a border goes with its papers: the buyer’s address as entered, read back, printed, corrected until it is handed in — and the shop looks for them first', () => {
+      const from = shop('Nairobi CBD', 'Nairobi', NAIROBI);
+      const to = shop("Bambi's Super Market", 'AddisAbaba', ADDIS, 'ET');
+      corridors.addCorridor({ name: 'Nairobi–Addis', originZone: 'Nairobi', destZone: 'AddisAbaba' });
+      const abroad = order({ to: { country: 'ET', area: 'AddisAbaba' }, weightKg: 2 });
+      const lines = [
+        { description: 'Ankara shirt', quantity: 2, netKg: 0.6, unitValue: 1700, originCountry: 'KE', hsCode: '6205.20' },
+        { description: 'Kitenge scarf', quantity: 1, netKg: 0.2, unitValue: 900, originCountry: 'KE' },
+      ];
+      // The address the store and the buyer settled on, on three lines: carried exactly so.
+      const home = 'Bole Road, House 12\nNear the Edna Mall\nAddis Ababa';
+      const papersOf = (over: Record<string, unknown> = {}) => ({ number: 'INV-1', currency: 'KES', importer: { name: 'Abebe Kebede', address: home }, lines, declare: true, ...over });
+      const { store, caller } = merchant('live');
+
+      // A test key: every check, and its papers as they would be — nothing kept.
+      expect(shipping.mint({ ...abroad, invoice: papersOf({ number: 'T-1' }) } as never, merchant('test').caller).papers).toEqual({ number: 'T-1', copies: 3, currency: 'KES', totalValue: 4300 });
+      // Refused before anything exists, in words naming what is wrong.
+      expect(() => shipping.mint({ ...abroad, invoice: papersOf({ declare: false }) } as never, caller)).toThrow(/Confirm the declaration/);
+      expect(() => shipping.mint({ ...abroad, invoice: papersOf({ importer: { name: 'Abebe', address: 'x'.repeat(301) } }) } as never, caller)).toThrow(/whole or not at all/);
+      expect(() => shipping.mint({ ...abroad, invoice: papersOf({ lines: [{ ...lines[0], hsCode: '62' }] }) } as never, caller)).toThrow(/HS code is 6 to 10 digits/);
+      expect(() => shipping.mint({ ...abroad, invoice: papersOf({ lines: [{ ...lines[0], netKg: 5 }] }) } as never, caller)).toThrow(/more than the parcel's 2 kg/);
+      expect(parcels.list({}).filter((p) => p.vendorId === store.vendorId)).toHaveLength(0);
+
+      const made = shipping.mint({ ...abroad, invoice: papersOf() } as never, caller);
+      const read = shipping.papers(made.shipmentId, caller);
+      expect(read.current).toMatchObject({
+        number: 'INV-1',
+        exporter: { name: store.name, country: 'KE' },
+        importer: { name: 'Abebe Kebede', address: home, country: 'ET' },
+        importerAddressFrom: 'entered',
+        totalValue: 4300,
+        totalNetKg: 0.8,
+        grossKg: 2,
+        statedGrossKg: 2,
+        copies: 3,
+        signed: { for: store.name },
+      });
+      // The store's own HS code where it gave one; none of ours where it gave none.
+      expect(read.current!.lines[0].hsCode).toBe('620520');
+      expect(read.current!.lines[1]).not.toHaveProperty('hsCode');
+      expect(read.current!.fingerprint).toMatch(/^[0-9a-f]{64}$/);
+      // Three copies, one a page, the address on its own three lines.
+      const page = shipping.papersPage(made.shipmentId, caller);
+      expect(page.match(/<section class="copy">/g)).toHaveLength(3);
+      expect(page).toContain('Bole Road, House 12<br>Near the Edna Mall<br>Addis Ababa');
+      expect(page).toContain(`Parcel ${made.shipmentId}`);
+      expect(page).toContain('outside of the parcel, with its label');
+      // Papers name the buyer: never with a publishable key, never another store's.
+      const publishable = apiKeys.resolve(apiKeys.issue(store.vendorId, 'publishable', 'live').secret);
+      expect(() => shipping.papers(made.shipmentId, publishable)).toThrow(/secret key/);
+      expect(() => shipping.papers(made.shipmentId, merchant('live').caller)).toThrow(/No shipment/);
+
+      // Corrected before it is handed in — the buyer chose to collect at the shop: a new invoice, the old one kept.
+      const fixed = shipping.correctPapers(made.shipmentId, papersOf({ number: 'INV-1b', importer: { name: 'Abebe Kebede' } }) as never, caller);
+      expect(fixed).toMatchObject({ number: 'INV-1b', importerAddressFrom: 'shop', supersedes: read.current!.invoiceId, statedGrossKg: 2 });
+      expect(fixed.importer.address).toContain(`c/o ${to.shopName}`);
+      expect(shipping.papers(made.shipmentId, caller)).toMatchObject({ current: { number: 'INV-1b' }, earlier: [{ number: 'INV-1', supersededBy: fixed.invoiceId }], correctable: true });
+
+      // The label says where the papers are; the shop looks for them before it takes the parcel in.
+      expect(parcels.labelFor(made.shipmentId).svg).toContain('Customs papers in the pouch');
+      expect(() => parcels.intakeInbound(made.shipmentId, from.did)).toThrow(/look for its commercial invoice/);
+      expect(parcels.get(made.shipmentId).status).toBe('Created');
+      parcels.intakeInbound(made.shipmentId, from.did, true);
+      expect(parcels.get(made.shipmentId)).toMatchObject({ status: 'At_PUDO', papersSeen: { by: from.did } });
+      // In a shop's hands, its papers travel as they are.
+      expect(() => shipping.correctPapers(made.shipmentId, papersOf({ number: 'INV-1c' }) as never, caller)).toThrow(/travel as they are/);
+      expect(shipping.papers(made.shipmentId, caller).correctable).toBe(false);
     });
 
     it('spends an idempotency key at most once, through the endpoint', async () => {

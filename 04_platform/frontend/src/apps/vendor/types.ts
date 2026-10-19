@@ -130,6 +130,8 @@ export interface OrderDetail extends OrderRow {
   damageReport?: { number: string };
   destAgentDid?: string;
   originAgentDid?: string;
+  /** Round 13 — it crosses a border: its commercial invoice travels in the pouch. */
+  customs?: { crossings: Array<{ fromCountry: string; toCountry: string }> };
   buyerMobile?: string;
   contentPhotoRef?: string;
   items?: Array<{ name: string; qty: number }>;
@@ -304,6 +306,9 @@ export interface QuoteView {
   locked: QuoteLegPrice;
   /** The money every figure of the quote is in: the selling company’s. */
   currency?: string;
+  /** Round 13 — the route crosses a border: the shipment goes with its commercial invoice. */
+  crossesBorder?: boolean;
+  crossings?: Array<{ fromCountry: string; toCountry: string }>;
 }
 
 /** quote/options → one price per drop-off candidate (or the reason there is none). */

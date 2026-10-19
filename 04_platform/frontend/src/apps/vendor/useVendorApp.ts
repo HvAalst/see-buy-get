@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { isMintSourced, isSignInRequired, narrow, type SbgError } from '../../lib/sbg';
 import { t } from '../../shared/i18n'; // plain t(): toasts/notes are built at action time in the store's active locale
+import { openPage } from '../../shared/openPage';
+import { papersBody } from './papers';
 import { triggerDownload } from '../../shared/download';
 import { topUpTermsOf, type TopUpTerms } from '../../shared/topup-fee';
 import type { IconName } from '../../shared/ui/Icon';
@@ -702,6 +704,20 @@ export function useVendorApp() {
     setState((s) => ({ ...s, form: { ...s.form, ...p } }));
   }, []);
 
+  /** Round 13 — a crossing parcel's papers: three copies, opened to print with the label. */
+  const printPapers = useCallback(
+    async (parcelId: string) => {
+      if (!client || !creds) return;
+      await run(`papers:${parcelId}`, async () => {
+        const r = await client.api.papersPage(creds.vendorId, parcelId);
+        if (r.error || !r.data) return fail(r.error as never);
+        openPage(r.data);
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [client, creds],
+  );
+
   /** Derive the size tier live once all four measurements are in. */
   const classify = useCallback(async () => {
     if (!client) return;
@@ -859,6 +875,8 @@ export function useVendorApp() {
         // FP8 — box 13, for the freight lane. The server ignores them on a parcel-sized order.
         ...(f.instructions.trim() ? { instructions: f.instructions.trim() } : {}),
         ...(f.deliveryWindow.trim() ? { deliveryWindow: f.deliveryWindow.trim() } : {}),
+        // Round 13 — crossing a border, its commercial invoice goes with it.
+        ...(stateRef.current.quote?.crossesBorder ? { invoice: papersBody(f.papers) } : {}),
       });
       if (r.error) return fail(r.error);
       // S32: a heavy/oversized order (cargo class P4+) is DIVERTED into the dedicated-freight lane — the
@@ -1202,6 +1220,7 @@ export function useVendorApp() {
       go,
       startMint,
       setForm,
+      printPapers,
       classify,
       toStep,
       pickDest,

@@ -212,6 +212,8 @@ export class MonitorService {
       dropoffPhotoRef: p.dropoffPhotoRef,
       deliveredPhotoRef: p.deliveredPhotoRef,
       releaseLockedAt: p.otpLockedAt,
+      // A parcel held at a border: did the shop that took it in see its papers in the pouch, and when.
+      ...(p.customs ? { crossesBorder: true, papersSeen: p.papersSeen } : {}),
       scans: p.scans,
     };
   }

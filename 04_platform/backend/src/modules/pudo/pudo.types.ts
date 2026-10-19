@@ -982,6 +982,8 @@ export class Parcel {
   /** The paperwork this parcel crosses a border with. Absent on a domestic shipment, which needs none —
    *  and never absent on one that crosses, because the mint refuses to sell that shipment without it. */
   customs?: CustomsDeclaration;
+  /** Round 13 — the shop that took it in saw its commercial invoice in the pouch: when, and which shop. */
+  papersSeen?: { at: string; by: string };
   /** The sister that SOLD this shipment: it collected the price and carries the cost of every leg, so a
    *  shop in another country that handles this parcel recharges its own sister's outlay to this one, at
    *  cost. Absent on records written before a parcel named its seller — then nobody recharges anybody,

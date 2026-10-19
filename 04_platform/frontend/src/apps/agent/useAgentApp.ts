@@ -1813,14 +1813,15 @@ export function useAgentApp() {
   const retryPreview = useCallback(() => setState((s) => ({ ...s, previewNonce: s.previewNonce + 1 })), []);
 
   /** Take in a pre-minted parcel: cash (peer send, photo required) or prepaid (store order). */
-  const submitIntake = useCallback(async () => {
+  /** `papersInPouch` — a crossing parcel's commercial invoice was seen in the pouch (round 13). */
+  const submitIntake = useCallback(async (papersInPouch = false) => {
     if (!client || !did) return;
     const pm = stateRef.current.preMint;
     const photo = stateRef.current.intakePhotoRef;
     // Only ever act on a SETTLED preview — never a stale one still on screen during a re-scan's fetch.
-    if (!pm || stateRef.current.preMintState !== 'ready' || (pm.kind === 'peer_send' && !photo)) return;
+    if (!pm || stateRef.current.preMintState !== 'ready' || (pm.kind === 'peer_send' && !photo) || (pm.papers && !papersInPouch)) return;
     await run('intake', async () => {
-      const r = await client.api.intake(pm.parcelId, pm.kind === 'peer_send' ? photo : undefined, takeInSeconds());
+      const r = await client.api.intake(pm.parcelId, pm.kind === 'peer_send' ? photo : undefined, takeInSeconds(), pm.papers ? papersInPouch : undefined);
       if (r.error) return fail(r.error);
       buzz();
       previewEpoch.current++; // the form reset below must not race a stale preview into the cleared state

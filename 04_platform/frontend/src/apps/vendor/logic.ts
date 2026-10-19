@@ -4,6 +4,7 @@
  * what a merchant is told their shipment costs and where it stands.
  */
 
+import { EMPTY_PAPERS, type PapersForm } from './papers';
 import { toCsv } from '../../shared/csv';
 import type { MessageKey, Translate } from '../../shared/i18n';
 import { cash } from '../../shared/money';
@@ -133,6 +134,8 @@ export interface MintForm {
   /** FP8 — box 13 for an order that ships as freight: what the driver needs at the door, and when. Ignored for a parcel. */
   instructions: string;
   deliveryWindow: string;
+  /** Round 13 — the commercial invoice a shipment crossing a border goes with. Sent only when the quote crosses one. */
+  papers: PapersForm;
 }
 
 export const EMPTY_MINT: MintForm = {
@@ -153,6 +156,7 @@ export const EMPTY_MINT: MintForm = {
   externalOrderId: '',
   instructions: '',
   deliveryWindow: '',
+  papers: EMPTY_PAPERS,
 };
 
 /** All four measurements present and positive — the classify call's gate. */

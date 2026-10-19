@@ -278,8 +278,8 @@ export function createAgentApi(sbg: SbgClient) {
 
     /** PG4 — take a PRE-MINTED parcel in: a peer send (collect the locked price in cash + proof photo)
      *  or a store order (prepaid, no photo). One scan surface; the parcel's record decides. */
-    intake: (id: string, dropoffPhotoRef?: string, takeInSeconds?: number) =>
-      sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/intake', { params: { path: { id } }, body: { ...(dropoffPhotoRef ? { dropoffPhotoRef } : {}), ...(takeInSeconds ? { takeInSeconds } : {}) } })),
+    intake: (id: string, dropoffPhotoRef?: string, takeInSeconds?: number, papersInPouch?: boolean) =>
+      sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/intake', { params: { path: { id } }, body: { ...(dropoffPhotoRef ? { dropoffPhotoRef } : {}), ...(takeInSeconds ? { takeInSeconds } : {}), ...(papersInPouch ? { papersInPouch } : {}) } })),
 
     /**
      * Hand selected parcels to the scanned driver badge (the bus moment). The server runs the S25

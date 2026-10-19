@@ -4,6 +4,8 @@ import { useT, type Translate } from '../../../shared/i18n';
 import { fromPlaceWords } from '../../../shared/placewords';
 import { distanceLabel, haversineKm } from '../../../shared/geo';
 import { PhotoField } from './PhotoField';
+import { PapersCard } from './PapersCard';
+import { papersGaps } from '../papers';
 import { chargeOf, dimsComplete, feeLines, handoffLine, money, originRows, priceCards } from '../logic';
 import type { NetworkPoint } from '../types';
 import type { VendorActions, VendorState } from '../useVendorApp';
@@ -458,6 +460,9 @@ function PriceStep({ state, actions }: MintScreenProps) {
             </p>
           ))}
 
+          {/* Round 13 — crossing a border, the shipment goes with its commercial invoice: asked for here, printed with the label. */}
+          {q.crossesBorder ? <PapersCard quote={q} papers={f.papers} onChange={(papers) => actions.setForm({ papers })} /> : null}
+
           <Card title={t('vendor.mint.whatHappensTitle')} tone="soft">
             <Checklist
               items={[
@@ -469,7 +474,7 @@ function PriceStep({ state, actions }: MintScreenProps) {
           </Card>
 
           <div class="scr__cta">
-            <Button onClick={() => void actions.submitMint()} busy={state.busy === 'mint'}>
+            <Button onClick={() => void actions.submitMint()} busy={state.busy === 'mint'} disabled={Boolean(q.crossesBorder) && papersGaps(f.papers).length > 0}>
               {t('vendor.mint.mintCta')}
             </Button>
           </div>
@@ -515,6 +520,16 @@ function LabelStep({ state, actions }: MintScreenProps) {
             <Button onClick={openLabel}>{t('vendor.mint.openPrint')}</Button>
           </div>
         </>
+      ) : null}
+
+      {/* Round 13 — its papers abroad: three copies, printed with the label and put in the pouch. */}
+      {m.parcel.customs ? (
+        <Card label={t('vendor.papers.title')}>
+          <p class="card__note">{t('vendor.papers.printNote')}</p>
+          <Button variant="outline" busy={state.busy === `papers:${m.parcel.parcelId}`} onClick={() => void actions.printPapers(m.parcel.parcelId)}>
+            {t('vendor.papers.print')}
+          </Button>
+        </Card>
       ) : null}
 
       {!m.paid ? (

@@ -2653,6 +2653,8 @@ export const enTowerSupport = {
   'tower.support.live': 'Release code is live',
   'tower.support.promiseOurs': 'ours to answer for',
   'tower.support.promiseTheirs': 'the carrier answers for this',
+  'tower.support.papersSeen': 'crosses a border · papers seen at the counter {at}',
+  'tower.support.papersNotSeen': 'crosses a border · papers not looked for yet',
   'tower.support.reissue': 'Reissue the release code',
   'tower.support.reissueHint': 'The only way back from a code guessed to death. A parcel never carries its own release key and the shop handing it over never learns it — so nobody can read the old one out, and this replaces it rather than revealing it.',
   'tower.support.sentTitle': 'A new code is on its way',
