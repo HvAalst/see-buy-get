@@ -16,6 +16,7 @@ import {
   type LoadPassageForDriver,
   type LoadPassageView,
   type PassageKind,
+  type PassageSeals,
 } from './load-passage.types';
 import { whenSeen } from './observed-at';
 import { BORDER_DWELL_H, VEHICLE_SPEED_KMH } from './pudo.config';
@@ -67,7 +68,15 @@ export class LoadPassageService {
    * A tap sent twice — the phone did not hear the answer and sent it again — is the same step, not a second one: the
    * same as the last step said, at the same place, is answered as it was.
    */
-  record(f: Freight, driverDid: string, input: { kind: PassageKind; post?: string; hub?: string; location?: GeoPoint; observedAt?: string }, now: number = Date.now()): { passage: LoadPassage; replayed: boolean } {
+  record(
+    f: Freight,
+    driverDid: string,
+    input: { kind: PassageKind; post?: string; hub?: string; location?: GeoPoint; observedAt?: string },
+    now: number = Date.now(),
+    // The last word before the step is kept: anything else that must hold (the seals, round 15) is asked here, after every
+    // check of the step and before it is written — so a refusal there keeps nothing, and a tap sent twice asks it nothing.
+    vet?: () => PassageSeals | undefined,
+  ): { passage: LoadPassage; replayed: boolean } {
     if (f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}: a border or a hub is said while it is on the road`);
     if (!PASSAGE_KINDS.includes(input.kind)) throw new GlosError('INVALID_INPUT', 'Say what it is: at the border, cleared the border, or at a hub');
@@ -108,6 +117,7 @@ export class LoadPassageService {
     const seen = whenSeen(input.observedAt, now);
     const floor = Math.max(Date.parse(f.pickedUpAt ?? '') || 0, last ? Date.parse(last.at) : 0);
     const atMs = Math.max(seen.at, floor);
+    const seals = vet?.();
     const passage: LoadPassage = {
       passageId: `lp_${randomBytes(8).toString('hex')}`,
       freightId: f.freightId,
@@ -118,6 +128,7 @@ export class LoadPassageService {
       by: driverDid,
       ...(location ? { location } : {}),
       ...(input.kind === 'cleared_border' && open ? { waitedMin: Math.max(0, Math.round((atMs - Date.parse(open.at)) / 60_000)) } : {}),
+      ...(seals ? { seals } : {}),
     };
     this.passages.set(passage.passageId, passage);
     this.remember(passage);
@@ -275,7 +286,7 @@ function openCrossing(steps: LoadPassage[]): LoadPassage | undefined {
 }
 
 export function viewOf(p: LoadPassage): LoadPassageView {
-  return { kind: p.kind, ...(p.post ? { post: p.post } : {}), ...(p.hub ? { hub: p.hub } : {}), at: p.at, ...(p.waitedMin != null ? { waitedMin: p.waitedMin } : {}) };
+  return { kind: p.kind, ...(p.post ? { post: p.post } : {}), ...(p.hub ? { hub: p.hub } : {}), at: p.at, ...(p.waitedMin != null ? { waitedMin: p.waitedMin } : {}), ...(p.seals ? { seals: p.seals } : {}) };
 }
 
 function placeName(raw: string | undefined): string | undefined {

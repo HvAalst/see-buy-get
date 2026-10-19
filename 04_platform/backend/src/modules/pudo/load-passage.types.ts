@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsDateString, IsIn, IsNumber, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
+import { SealsAtPostDto } from './load-seal.types';
 import type { GeoPoint } from './pudo.types';
 
 /**
@@ -53,6 +54,14 @@ export interface LoadPassage {
   location?: GeoPoint;
   /** On clearing a border: how long the load was at the post, from its arrival to this. */
   waitedMin?: number;
+  /** On clearing a border with seals on (round 15): as they were, or the ones customs took off and put on. */
+  seals?: PassageSeals;
+}
+
+/** What the driver said of the seals on clearing a border: as they were, or which customs replaced (and the officer). */
+export class PassageSeals {
+  @ApiPropertyOptional() asTheyWere?: boolean;
+  @ApiPropertyOptional() resealed?: Array<{ from: string; to: string; officer?: string }>;
 }
 
 /** One step, as the shipper, its system, the fleet's system and the tracking page read it: no driver, no position. */
@@ -63,6 +72,7 @@ export class LoadPassageView {
   at: string;
   /** On clearing a border: minutes the load was at the post. */
   @ApiPropertyOptional() waitedMin?: number;
+  @ApiPropertyOptional({ type: PassageSeals }) seals?: PassageSeals;
 }
 
 /**
@@ -149,6 +159,8 @@ export class RecordPassageDto {
   @IsOptional() @ValidateNested() @Type(() => PassageLocationDto) location?: PassageLocationDto;
   /** When the driver said it, by their phone: a tap made with no signal is sent later and dated by this. */
   @IsOptional() @IsDateString() observedAt?: string;
+  /** Round 15 — clearing a border with seals on: as they were, or which customs replaced. */
+  @IsOptional() @ValidateNested() @Type(() => SealsAtPostDto) seals?: SealsAtPostDto;
 }
 
 /** What saying a step answers with: the step, and the crossing as it now stands. */

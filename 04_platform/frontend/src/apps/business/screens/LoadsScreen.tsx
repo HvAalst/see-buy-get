@@ -13,6 +13,7 @@ import { passageWords } from '../../../shared/passages';
 const onRoad = (iso: string) => new Date(iso).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 import { NoteFile, NoteLinksPanel } from './LoadNote';
 import { LoadPapers } from './LoadPapers';
+import { LoadSeals } from './LoadSeals';
 import { CountrySelect, useCountryAtlas } from '../../tower/screens/CountrySelect';
 import { publicRequest } from '../../../lib/sbg';
 
@@ -133,7 +134,7 @@ export function LoadsScreen({ business, client }: { business: BusinessView; acti
                     {/* What a row must not lose to an ellipsis: which load of an order this is, and what its carrier's
                         plan says of it — on no vehicle, outside its window, or (with no tag: it needs nobody) about
                         when. The line above gives way to the width; this one wraps. */}
-                    {r.partOf || says || handed || road ? (
+                    {r.partOf || says || handed || road || r.seals?.some((s) => s.state === 'broken') ? (
                       <span class="biz-loads__flags">
                         {r.partOf ? <span class="ctag ctag--quiet">{t('business.loads.loadOf', { no: r.partOf.no, of: r.partOf.of, order: r.partOf.rootCode })}</span> : null}
                         {says?.state === 'late' ? <span class="ctag ctag--danger">{t('business.loads.late.tag')}</span> : null}
@@ -143,6 +144,8 @@ export function LoadsScreen({ business, client }: { business: BusinessView; acti
                         {/* Delivered: when, and where that fell against what was asked — in colour only where it missed. */}
                         {handed?.tag ? <span class="ctag ctag--warn">{handed.tag}</span> : null}
                         {handed ? <span>{handed.row}</span> : null}
+                        {/* Round 15 — a seal found broken on the road: in colour, on the row, until delivery and after. */}
+                        {r.seals?.some((s) => s.state === 'broken') ? <span class="ctag ctag--danger">{t('business.loads.sealBroken')}</span> : null}
                         {/* Round 14 — on the road: where its driver said it is, and when it is expected. */}
                         {road ? <span>{road.expected ? `${road.row} · ${road.expected}` : road.row}</span> : null}
                       </span>
@@ -551,6 +554,8 @@ function LoadDetail({ row, business, client, act, onClose, onChanged }: { row: P
 
       {/* The labels for its packages and, across a border, its commercial invoice — the business's own papers. */}
       {stage !== 'cancelled' ? <LoadPapers row={row} client={client} business={business} act={act} /> : null}
+      {/* Round 15 — the seals on the load: written before pickup, and what became of each after. */}
+      {stage !== 'cancelled' ? <LoadSeals row={row} client={client} act={act} /> : null}
 
       {proposals && proposals.some((p) => p.status === 'open') ? (
         <section class="cons__panel">

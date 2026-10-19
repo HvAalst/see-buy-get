@@ -139,6 +139,10 @@ export class FleetHookService implements OnModuleInit, OnModuleDestroy {
       const passage = e.payload?.passage;
       if (passage?.kind && PASSAGE_HOOK_EVENTS[passage.kind] && e.payload?.freightId) this.relayLoad(PASSAGE_HOOK_EVENTS[passage.kind], String(e.payload.freightId), { passage });
     });
+    // Round 15 — a seal on a load it carries found broken on the road: the seal goes with the load.
+    this.events.subscribe<{ freightId?: string; seal?: Record<string, unknown> }>(GlosEvent.Pudo.FreightSealBroken, (e) => {
+      if (e.payload?.freightId) this.relayLoad('load.seal_broken', String(e.payload.freightId), { seal: e.payload.seal });
+    });
     const orders =(ids: unknown) => this.syncOrders((Array.isArray(ids) ? ids : [ids]).filter((x): x is string => typeof x === 'string' && Boolean(x)));
     this.events.subscribe<{ freightId: string }>(GlosEvent.Pudo.OrderPlaced, (e) => orders(e.payload?.freightId));
     this.events.subscribe<{ freightId: string }>(GlosEvent.Pudo.OrderChanged, (e) => orders(e.payload?.freightId));
@@ -189,7 +193,8 @@ export class FleetHookService implements OnModuleInit, OnModuleDestroy {
           : undefined;
       if (!order && !load && !handBack) continue;
       const passage = payload.passage && typeof payload.passage === 'object' ? payload.passage : undefined;
-      this.enqueue(fleetDid, event === 'load.cancelled' && order ? 'order.cancelled' : event, { ...(order ? { order } : {}), ...(load ? { load } : {}), ...(handBack ? { handBack } : {}), ...(passage ? { passage } : {}) });
+      const seal = payload.seal && typeof payload.seal === 'object' ? payload.seal : undefined;
+      this.enqueue(fleetDid, event === 'load.cancelled' && order ? 'order.cancelled' : event, { ...(order ? { order } : {}), ...(load ? { load } : {}), ...(handBack ? { handBack } : {}), ...(passage ? { passage } : {}), ...(seal ? { seal } : {}) });
       if (order) this.remember(freightId, fleetDid, order);
     }
   }

@@ -16,8 +16,13 @@
 const STORE_KEY = 'sbg.held-photos.v1';
 export const HELD_PREFIX = 'local:';
 
-/** The photo kinds that may wait: the ones whose act the outbox carries. */
-export const HELD_KINDS = ['dropoff', 'defect', 'hazard'] as const;
+/**
+ * The photo kinds that may wait: the ones whose act the outbox carries. Round 15 adds the load's own (the user: built to
+ * survive conditions like East Africa's): the securement photo at pickup and the proof at delivery — acts the outbox
+ * always carried, which stopped at the photo with no signal — and a seal's, read at pickup, replaced at a border post,
+ * found broken on the road, where the signal is worst.
+ */
+export const HELD_KINDS = ['dropoff', 'defect', 'hazard', 'securement', 'pod', 'seal'] as const;
 export type HeldKind = (typeof HELD_KINDS)[number];
 
 export interface HeldPhoto {

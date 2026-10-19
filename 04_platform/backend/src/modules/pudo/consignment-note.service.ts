@@ -12,6 +12,7 @@ import { AccountService } from './account.service';
 import { AgentService } from './agent.service';
 import { DispatchService } from './dispatch.service';
 import { Freight, FreightTrackView } from './dispatch.types';
+import type { LoadPassageView } from './load-passage.types';
 import { DriverService } from './driver.service';
 import { ImportService } from './import.service';
 import { FleetManagerService } from './fleet-manager.service';
@@ -143,6 +144,9 @@ export class ConsignmentNoteService implements OnModuleInit {
     if (f.tempBreached) reservations.push('Cold chain breached in transit — see the temperature log');
     // A reload onto another of the carrier's vehicles after a breakdown is written here, and nowhere else.
     for (const r of (f.reloads ?? []).filter((x) => x.aboard)) reservations.push(reloadLine(r));
+    // Round 15 — the seals: each with what became of it; a broken one, or one not as written at the door, observed in box 18.
+    const seals = this.dispatch.sealsOnNote?.(f.freightId) ?? { lines: [], observations: [] };
+    reservations.push(...seals.observations);
     const carriage = this.carriageOf(f);
     const attempts = (f.deliveryAttempts ?? []).map((a) => `Delivery attempted ${when(a.at)}: ${a.outcome === 'absent' ? 'nobody to receive the goods' : a.outcome === 'refused' ? 'the receiver refused the goods' : 'the place could not be reached'}${a.note ? ` — ${a.note}` : ''}`);
     const claim = f.claim
@@ -187,6 +191,7 @@ export class ConsignmentNoteService implements OnModuleInit {
       ...(carrier ? { carrier } : {}),
       // A door the carrier stood at and could not hand over at is the carrier's observation: box 18, for good.
       reservations: [...reservations, ...attempts],
+      ...(seals.lines.length ? { seals: seals.lines } : {}),
       attempts,
       ...(claim ? { claim } : {}),
       established: { place: f.pickupLabel, at: f.createdAt },
@@ -254,8 +259,17 @@ export class ConsignmentNoteService implements OnModuleInit {
       ...(f.deliveryAttempts?.length ? { attempts: f.deliveryAttempts.map((a) => ({ outcome: a.outcome, at: a.at })) } : {}),
       ...(f.proofOfDelivery?.receiverName ? { receiverName: f.proofOfDelivery.receiverName } : {}),
       ...(f.cancellation ? { cancelled: { at: f.cancellation.at, by: f.cancellation.role === 'operator' ? 'network' : f.contract && f.cancellation.by === f.contract.fleetDid ? 'carrier' : 'sender' } } : {}),
-      // Round 14 — at a border post, cleared it, at a hub, as its driver said; crossing a border, when it is expected.
-      ...this.dispatch.passageFacts(f, now),
+      // Round 14 — at a border post, cleared it, at a hub, as its driver said; crossing a border, when it is expected. Never
+      // what a step said of the seals (an officer's name): this page is read by whoever holds the link.
+      ...(() => {
+        const facts = this.dispatch.passageFacts(f, now);
+        return facts.passages ? { ...facts, passages: facts.passages.map(withoutSeals) } : facts;
+      })(),
+      // Round 15 — the seal numbers, for whoever receives it to look at the door; and whether each is still on.
+      ...(() => {
+        const seals = this.dispatch.sealsOf?.(f) ?? [];
+        return seals.length ? { seals: seals.map((s) => ({ number: s.number, state: s.state })) } : {};
+      })(),
     };
   }
 
@@ -521,6 +535,7 @@ export class ConsignmentNoteService implements OnModuleInit {
   ${box(5, 'Documents attached', list(n.documents))}
   ${box(20, 'To be paid by', `${n.carriage.amount != null ? `<b>${e(String(n.carriage.amount))} ${e(n.carriage.currency ?? '')}</b><br>` : ''}${e(n.carriage.note)}`)}
   ${box('6–12', 'Goods', `<table class="goods"><tr><th>Marks / description</th><th>Packages</th><th>Method of packing</th><th>Nature of the goods</th><th>Gross weight</th><th>Volume</th></tr><tr><td>${e(g.description)}${g.marks?.length ? `<br><span class="did">${g.marks.map((m) => e(m)).join('<br>')}</span>` : ''}${g.fragile ? '<br><i>Fragile</i>' : ''}${g.dangerous ? '<br><b>Dangerous goods</b>' : ''}</td><td>${g.packages == null ? '<span class="empty">Not stated</span>' : g.packages}</td><td>${g.packaging ? e(g.packaging) : '<span class="empty">—</span>'}</td><td>${e(g.nature)} · ${e(g.cargoClass)}${g.temperatureBand ? `<br>${e(g.temperatureBand)}` : ''}</td><td>${e(String(g.grossKg))} kg</td><td>${g.volumeM3 != null ? `${e(String(g.volumeM3))} m³` : '<span class="empty">—</span>'}</td></tr></table>`, 'wide')}
+  ${n.seals?.length ? box(6, 'Seals — their numbers and what became of each', list(n.seals), 'wide') : ''}
   ${box(13, 'Sender’s instructions', list(n.instructions))}
   ${box(14, 'Instructions as to payment for carriage', e(n.carriage.paidBy === 'sender' ? 'Carriage paid' : n.carriage.paidBy === 'between-parties' ? 'Carriage settled between the parties' : 'Not yet agreed'))}
   ${box(21, 'Established in / on', `<b>${e(n.established.place)}</b><br>${e(when(n.established.at))}`)}
@@ -541,6 +556,12 @@ export class ConsignmentNoteService implements OnModuleInit {
 export function agentConfirmation(person: string | undefined, agent: NoteParty | undefined, sender: NoteParty): string {
   if (agent) return `${person ? `${person}, for ` : ''}${agent.name}, as agent for ${sender.name}`;
   return person ? `${person}, for ${sender.name}` : sender.name;
+}
+
+/** A step as the tracking page shows it: what was said of the seals there (an officer's name) stays with the note's parties. */
+function withoutSeals(p: LoadPassageView): LoadPassageView {
+  const { seals, ...rest } = p;
+  return seals ? rest : p;
 }
 
 function countryName(code: string | undefined): string | undefined {

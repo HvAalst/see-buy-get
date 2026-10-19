@@ -1676,7 +1676,7 @@ export function useDriverApp() {
   /** S32b/S33 — pick up a claimed dedicated-freight job (claimed → in_transit), through the load-safety gate:
    *  the confirmed checklist keys + the securement photo mediaId. */
   const pickupFreight = useCallback(
-    async (ref: string, check: { confirmed: string[]; securementPhotoId: string; reservations?: string }) => {
+    async (ref: string, check: { confirmed: string[]; securementPhotoId: string; reservations?: string; seals?: Array<{ sealId: string; number: string; photoRef: string }> }) => {
       const did = stateRef.current.driver?.did;
       if (!client || !did) return;
       await run(`freight:${ref}`, async () => {
@@ -1699,7 +1699,7 @@ export function useDriverApp() {
   /** S32b/S33 — deliver an in-transit dedicated-freight job (in_transit → delivered), with the confirmed
    *  unload-checklist keys. */
   const deliverFreight = useCallback(
-    async (ref: string, check: { confirmed: string[]; receiverName: string; podPhotoId: string; remarks?: string }) => {
+    async (ref: string, check: { confirmed: string[]; receiverName: string; podPhotoId: string; remarks?: string; sealsAtDelivery?: "as_on_the_note" | "not_as_on_the_note" }) => {
       const did = stateRef.current.driver?.did;
       if (!client || !did) return;
       await run(`freight:${ref}`, async () => {
@@ -1787,13 +1787,13 @@ export function useDriverApp() {
    * signal it waits on this phone, and the screen shows it as said so the next step can follow.
    */
   const sayPassage = useCallback(
-    async (ref: string, kind: SaidPassage['kind'], place?: string) => {
+    async (ref: string, kind: SaidPassage['kind'], place?: string, seals?: { asTheyWere?: boolean; replaced?: Array<{ sealId: string; newNumber: string; photoRef: string; officer?: string }> }) => {
       if (!client) return;
       await run(`passage:${ref}`, async () => {
         const name = place?.trim().replace(/\s+/g, ' ');
         const location = await currentPosition(5_000);
         const at = new Date().toISOString();
-        const r = await client.api.recordPassage(ref, { kind, ...(kind === 'at_border' && name ? { post: name } : {}), ...(kind === 'at_hub' && name ? { hub: name } : {}), ...(location ? { location } : {}), observedAt: at });
+        const r = await client.api.recordPassage(ref, { kind, ...(kind === 'at_border' && name ? { post: name } : {}), ...(kind === 'at_hub' && name ? { hub: name } : {}), ...(kind === 'cleared_border' && seals ? { seals } : {}), ...(location ? { location } : {}), observedAt: at });
         if (r.error) {
           if (!isOffline(r.error)) await refresh();
           return fail(r.error);
@@ -1803,6 +1803,29 @@ export function useDriverApp() {
         setState((s) => ({ ...s, said: { ...s.said, [ref]: { kind, at, ...(post ? { post } : {}), ...(kind === 'at_hub' && name ? { hub: name } : {}) } } }));
         if (r.status === 202) return pushToast({ tone: 'ok', icon: 'offline', title: t('driver.toast.passageQueued'), detail: t('driver.toast.passageQueuedDetail') });
         pushToast({ tone: 'ok', icon: 'check', title: t(kind === 'at_border' ? 'driver.toast.atBorder' : kind === 'cleared_border' ? 'driver.toast.borderCleared' : 'driver.toast.atHub'), detail: t('driver.toast.passageToldDetail') });
+        await refresh();
+      });
+    },
+    [client, run, fail, pushToast, refresh],
+  );
+
+  /**
+   * Round 15 — a seal on the load found broken on the road: what broke it, its photographs and any official paper. Its
+   * shipper is told at once. With no signal it waits on this phone, photographs and all, dated now.
+   */
+  const reportBrokenSeal = useCallback(
+    async (ref: string, sealId: string, input: { cause: string; note?: string; photoRefs: string[]; paperRef?: string }) => {
+      if (!client) return;
+      await run(`seal:${ref}`, async () => {
+        const location = await currentPosition(5_000);
+        const r = await client.api.reportBrokenSeal(ref, sealId, { ...input, ...(location ? { location } : {}), observedAt: new Date().toISOString() });
+        if (r.error) {
+          if (!isOffline(r.error)) await refresh();
+          return fail(r.error);
+        }
+        buzz();
+        if (r.status === 202) return pushToast({ tone: 'ok', icon: 'offline', title: t('driver.toast.sealQueued'), detail: t('driver.toast.sealQueuedDetail') });
+        pushToast({ tone: 'warn', icon: 'warning', title: t('driver.toast.sealReported'), detail: t('driver.toast.sealReportedDetail') });
         await refresh();
       });
     },
@@ -1954,6 +1977,7 @@ export function useDriverApp() {
       handBack,
       logTemp,
       sayPassage,
+      reportBrokenSeal,
       pushToast,
       dismissToast,
     },

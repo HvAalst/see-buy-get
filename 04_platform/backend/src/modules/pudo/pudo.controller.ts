@@ -6475,14 +6475,14 @@ export class SbgController {
   @Roles('driver', 'operator')
   @Post('dispatch/freight/:id/pickup')
   freightPickup(@Param('id') id: string, @Body() dto: FreightActionDto, @Actor() actor: IntrospectionResult) {
-    return this.dispatch.pickupFreight(id, actingDid(actor, dto.driverDid), { confirmed: dto.confirmed, securementPhotoId: dto.securementPhotoId, reservations: dto.reservations });
+    return this.dispatch.pickupFreight(id, actingDid(actor, dto.driverDid), { confirmed: dto.confirmed, securementPhotoId: dto.securementPhotoId, reservations: dto.reservations, seals: dto.seals });
   }
 
   /** Bulk freight delivery (in_transit → delivered; releases the driver's reserved capacity). */
   @Roles('driver', 'operator')
   @Post('dispatch/freight/:id/deliver')
   freightDeliver(@Param('id') id: string, @Body() dto: FreightActionDto, @Actor() actor: IntrospectionResult) {
-    return this.dispatch.deliverFreight(id, actingDid(actor, dto.driverDid), { confirmed: dto.confirmed, receiverName: dto.receiverName, podPhotoId: dto.podPhotoId, remarks: dto.remarks });
+    return this.dispatch.deliverFreight(id, actingDid(actor, dto.driverDid), { confirmed: dto.confirmed, receiverName: dto.receiverName, podPhotoId: dto.podPhotoId, remarks: dto.remarks, sealsAtDelivery: dto.sealsAtDelivery });
   }
 
   /**

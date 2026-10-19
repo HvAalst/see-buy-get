@@ -267,6 +267,42 @@
   gap: 0 12px;
 }
 
+/* Round 15 — the seals in the gates: one block a seal, its number in the type read off a bolt, the check said beneath. */
+.seal-steps {
+  margin-top: 14px;
+}
+
+.seal-steps__one {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-ctl);
+  background: var(--panel);
+}
+
+.seal-steps__what {
+  margin: 0 0 6px;
+  font-weight: 600;
+  color: var(--tx);
+}
+
+.seal-steps__num {
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+
+.seal-steps__ok {
+  margin: 6px 0 0;
+  color: var(--ok);
+  font-weight: 600;
+}
+
+.seal-steps__no {
+  margin: 6px 0 0;
+  color: var(--dang);
+  font-weight: 600;
+}
+
 /* ------------------------------------------------------------------ FB2: the open board -- */
 /* The market a haulier SHOPS, as against the deck the network pushes. A list, not a card deck: an
    operator comparing eight loads needs them side by side, and a swipe-one-at-a-time deck is the wrong

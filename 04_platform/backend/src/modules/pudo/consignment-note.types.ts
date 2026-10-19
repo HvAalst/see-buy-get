@@ -78,6 +78,8 @@ export interface ConsignmentNote {
   carrier?: NoteParty & { driverName?: string; plate?: string; vehicleClass?: string };
   /** Box 18 — carrier's reservations and observations. */
   reservations: string[];
+  /** Round 15 — the seals on the load, one line each: number, ISO 17712 class, maker, who closed it, what became of it. */
+  seals?: string[];
   /** Box 21 — established in / on. */
   established: { place: string; at: string };
   /** Boxes 22–24 — the three confirmations, in the order the goods travel. */

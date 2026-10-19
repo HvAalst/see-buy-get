@@ -50,6 +50,18 @@ export function FreightTrack({ view }: { view: FreightTrackView }) {
         </Card>
       ) : null}
 
+      {/* Round 15 — the seals: the numbers to look for on the door, and whether each is still on. */}
+      {view.seals?.length ? (
+        <Card label={t('send.freight.sealsLabel')}>
+          <p class="card__note">{t('send.freight.sealsLede')}</p>
+          {view.seals.map((s) => (
+            <p key={s.number} class="card__note">
+              <b class="track-seal">{s.number}</b> · {t(s.state === 'on' ? 'send.freight.sealOn' : s.state === 'replaced' ? 'send.freight.sealReplaced' : 'send.freight.sealBroken')}
+            </p>
+          ))}
+        </Card>
+      ) : null}
+
       {carrier ? (
         <div class="row row--static" role="group" aria-label={t('send.freight.carrierLabel')}>
           <span class="row__ic">

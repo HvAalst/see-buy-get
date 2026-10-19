@@ -1,5 +1,6 @@
 import type { BorderAdviceView } from './border';
 import type { PassageForDriver } from './passage';
+import type { SealToFind } from '../../shared/seals';
 /**
  * Local view types for the driver app.
  *
@@ -233,6 +234,8 @@ export interface Claimable {
   invoiceMissing?: boolean;
   /** Round 14 — on the road: what the driver may say of it (at a border post, cleared it, at a hub). */
   passage?: PassageForDriver;
+  /** Round 15 — the seals to read off the door: what each is, never its number; a fingerprint to check a reading on the phone. */
+  seals?: SealToFind[];
   ref: string; // the API id used for pickup/load/deliver
   code?: string; // S32b — the human reference to show (TOTE-042 / FRT-007); ref for freight is an opaque id
   pickupLocation?: { lat: number; lng: number };

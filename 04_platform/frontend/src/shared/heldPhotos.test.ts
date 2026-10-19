@@ -30,6 +30,10 @@ describe('a take-in photo held for a signal', () => {
     // …and the photographs of the reports a driver makes with no signal: the breakdown's, the road hazard's.
     expect(mayHold('defect')).toBe(true);
     expect(mayHold('hazard')).toBe(true);
+    // …and a load's (round 15): the securement photo at pickup, the proof at delivery, a seal's on the road.
+    expect(mayHold('securement')).toBe(true);
+    expect(mayHold('pod')).toBe(true);
+    expect(mayHold('seal')).toBe(true);
     expect(mayHold('avatar')).toBe(false);
     const ref = holdPhoto('dropoff', 'data:image/jpeg;base64,AAAA', 'data:image/jpeg;base64,BB')!;
     expect(isHeld(ref)).toBe(true);

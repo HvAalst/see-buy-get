@@ -7,7 +7,9 @@ import { canLoadBag, capacitySubLine, cash, claimControl, isFull, loadsSummary, 
 import { vehicleWord } from '../vehicle-words';
 import { RunSection } from './RunSection';
 import { PassageSheet, PassageStrip } from './PassageStrip';
+import { BrokenSealSheet, DeliverySeals, PickupSeals, pickupSealsReady, type SealRead } from './SealSteps';
 import type { PassageKind } from '../../../shared/passages';
+import type { SealsAtDelivery } from '../../../shared/seals';
 import type { Claimable } from '../types';
 import type { DriverActions, DriverState } from '../useDriverApp';
 
@@ -22,6 +24,7 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
   const [gate, setGate] = useState<Claimable | null>(null); // S33 — the freight in the load/unload safety gate
   const [tempFor, setTempFor] = useState<Claimable | null>(null); // S33b — the freight whose temperature we're logging
   const [passage, setPassage] = useState<{ claim: Claimable; kind: PassageKind } | null>(null); // round 14 — a border or a hub being said
+  const [brokenFor, setBrokenFor] = useState<Claimable | null>(null); // round 15 — a seal found broken on the road
   const v = state.vehicle;
   const hasBadge = canLoadBag(state.driver?.badgeId);
 
@@ -139,7 +142,7 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   {/* S33b — an in-transit cold-chain load: show the safe band + last reading + a log control. */}
                   {control === 'deliver' && c.tempBand ? <TempStrip claim={c} onLog={() => setTempFor(c)} /> : null}
                   {/* Round 14 — on the road: at a border post, cleared it, at a hub. */}
-                  {control === 'deliver' && c.passage ? <PassageStrip claim={c} state={state} onSay={(kind) => setPassage({ claim: c, kind })} /> : null}
+                  {control === 'deliver' && c.passage ? <PassageStrip claim={c} state={state} onSay={(kind) => setPassage({ claim: c, kind })} onBroken={() => setBrokenFor(c)} /> : null}
                   {/* FP2 — the consignment note travels with the load; the driver can show it at any gate. */}
                   <div class="load__nav">
                     <DocumentButton label={t('common.cmr.open')} title={t('common.cmr.title')} fetch={() => actions.freightNote(c.ref)} />
@@ -202,6 +205,7 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
       <FreightGate claim={gate} state={state} actions={actions} onClose={() => setGate(null)} />
       <TempSheet claim={tempFor} state={state} actions={actions} onClose={() => setTempFor(null)} />
       <PassageSheet claim={passage?.claim ?? null} kind={passage?.kind ?? null} state={state} actions={actions} onClose={() => setPassage(null)} />
+      <BrokenSealSheet claim={brokenFor} state={state} actions={actions} onClose={() => setBrokenFor(null)} />
     </div>
   );
 }
@@ -292,7 +296,12 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
   // FP8 — the way out before pickup: hand the load back, with a reason.
   const [handing, setHanding] = useState(false);
   const [handReason, setHandReason] = useState('');
+  // Round 15 — the seals: each read off the door at pickup; looked at with the receiver at delivery.
+  const [sealReads, setSealReads] = useState<Record<string, SealRead>>({});
+  const [sealsAtDoor, setSealsAtDoor] = useState<SealsAtDelivery | null>(null);
   useEffect(() => {
+    setSealReads({});
+    setSealsAtDoor(null);
     setHanding(false);
     setHandReason('');
     setChecked([]);
@@ -312,6 +321,7 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
   const photoOk = !isPickup || photoId.length > 0;
   const receiverOk = isPickup || receiver.trim().length >= 2;
   const podOk = isPickup || podId.length > 0;
+  const sealsOk = !claim ? true : isPickup ? pickupSealsReady(claim, sealReads) : !claim.seals?.length || sealsAtDoor !== null;
   const busy = claim ? state.busy === `freight:${claim.ref}` : false;
 
   return (
@@ -344,6 +354,7 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
                   disabled={busy}
                 />
               </div>
+              <PickupSeals claim={claim} actions={actions} busy={busy} reads={sealReads} setReads={setSealReads} />
               {/* FP3 — the carrier's reservations (CMR box 18). Optional, and the driver's protection: a sack torn
                   BEFORE taking over is on the note as such, not as damage in transit. */}
               <div class="field" style="margin-top:14px">
@@ -376,6 +387,7 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
                   disabled={busy}
                 />
               </div>
+              <DeliverySeals claim={claim} value={sealsAtDoor} onChange={setSealsAtDoor} busy={busy} />
               <div class="field" style="margin-top:14px">
                 <label class="field__label" for={`rem-${claim.ref}`}>
                   {t('driver.loads.remarksLabel')}
@@ -389,11 +401,15 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
             <Button
               chevron={false}
               busy={busy}
-              disabled={!allChecked || !photoOk || !receiverOk || !podOk}
+              disabled={!allChecked || !photoOk || !receiverOk || !podOk || !sealsOk}
               onClick={() => {
                 const ref = claim.ref;
-                if (isPickup) void actions.pickupFreight(ref, { confirmed: checked, securementPhotoId: photoId, ...(reservations.trim() ? { reservations: reservations.trim() } : {}) });
-                else void actions.deliverFreight(ref, { confirmed: checked, receiverName: receiver.trim(), podPhotoId: podId, ...(remarks.trim() ? { remarks: remarks.trim() } : {}) });
+                if (isPickup) {
+                  // Each seal as read off the door: only at pickup — at the door the receiver looks, nothing is read again.
+                  const seals = (claim.seals ?? []).filter((s) => s.state === 'on').map((s) => ({ sealId: s.sealId, number: sealReads[s.sealId]?.number.trim() ?? '', photoRef: sealReads[s.sealId]?.photoRef ?? '' }));
+                  void actions.pickupFreight(ref, { confirmed: checked, securementPhotoId: photoId, ...(reservations.trim() ? { reservations: reservations.trim() } : {}), ...(seals.length ? { seals } : {}) });
+                } else
+                  void actions.deliverFreight(ref, { confirmed: checked, receiverName: receiver.trim(), podPhotoId: podId, ...(remarks.trim() ? { remarks: remarks.trim() } : {}), ...(sealsAtDoor ? { sealsAtDelivery: sealsAtDoor } : {}) });
                 onClose();
               }}
             >
@@ -407,6 +423,8 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
               <p class="hint" style="margin-top:8px">{t('driver.loads.addReceiver')}</p>
             ) : !podOk ? (
               <p class="hint" style="margin-top:8px">{t('driver.loads.addPodPhoto')}</p>
+            ) : !sealsOk ? (
+              <p class="hint" style="margin-top:8px">{t(isPickup ? 'driver.seal.readAll' : 'driver.seal.doorAsk')}</p>
             ) : null}
           </div>
           {/* FP8 — the other half of dispatch: a load can be put on a driver, so a driver can say no — and a driver

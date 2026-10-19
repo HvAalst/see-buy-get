@@ -17201,6 +17201,7 @@
               "enum": [
                 "taken_over",
                 "reloaded",
+                "seal_changed",
                 "delivered",
                 "not_delivered",
                 "claimed",
@@ -17284,6 +17285,7 @@
               "enum": [
                 "taken_over",
                 "reloaded",
+                "seal_changed",
                 "delivered",
                 "not_delivered",
                 "claimed",
@@ -17396,6 +17398,7 @@
               "enum": [
                 "taken_over",
                 "reloaded",
+                "seal_changed",
                 "delivered",
                 "not_delivered",
                 "claimed",
@@ -23747,6 +23750,147 @@
                   "items": {
                     "$ref": "#/components/schemas/BorderWaitRow"
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/freight/{id}/seals": {
+      "get": {
+        "operationId": "LoadSeal.read",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadSealsView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "LoadSeal.write",
+        "summary": "",
+        "description": "The shipper writes a seal on its load: before pickup, a member who may act, with the three photographs.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WriteSealDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadSealView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/freight/{id}/seals/{sealId}": {
+      "delete": {
+        "operationId": "LoadSeal.remove",
+        "summary": "",
+        "description": "The shipper takes a seal off its load again, before pickup.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sealId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/freight/{id}/seals/{sealId}/broken": {
+      "post": {
+        "operationId": "LoadSeal.broken",
+        "summary": "",
+        "description": "A seal found broken on the road — said by the driver carrying the load, and nobody else: staff are refused by name.\nDated when the driver saw it; with no signal it waits on the phone.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sealId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportBrokenSealDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadSealView"
                 }
               }
             }
@@ -43616,6 +43760,20 @@
           }
         }
       },
+      "PassageSeals": {
+        "type": "object",
+        "properties": {
+          "asTheyWere": {
+            "type": "boolean"
+          },
+          "resealed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "LoadPassageView": {
         "type": "object",
         "properties": {
@@ -43636,6 +43794,9 @@
           "waitedMin": {
             "type": "number",
             "description": "On clearing a border: minutes the load was at the post."
+          },
+          "seals": {
+            "$ref": "#/components/schemas/PassageSeals"
           },
           "at": {
             "type": "string"
@@ -43732,6 +43893,115 @@
           "wait",
           "from",
           "to"
+        ]
+      },
+      "LoadSealView": {
+        "type": "object",
+        "properties": {
+          "sealClass": {
+            "type": "string",
+            "enum": [
+              "I",
+              "S",
+              "H"
+            ]
+          },
+          "maker": {
+            "type": "string"
+          },
+          "appliedBy": {
+            "type": "string",
+            "enum": [
+              "sender",
+              "customs"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "on",
+              "replaced",
+              "broken"
+            ]
+          },
+          "matchedAt": {
+            "type": "string",
+            "description": "Found on the door at pickup, as written."
+          },
+          "replaces": {
+            "type": "string",
+            "description": "In place of this number, after customs opened the load."
+          },
+          "replaced": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "post": {
+                "required": false,
+                "type": "string"
+              },
+              "officer": {
+                "required": false,
+                "type": "string"
+              },
+              "by": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "broken": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "cause": {
+                "required": true,
+                "type": "object"
+              },
+              "note": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "atDelivery": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "result": {
+                "required": true,
+                "type": "object"
+              }
+            }
+          },
+          "sealId": {
+            "type": "string"
+          },
+          "number": {
+            "type": "string"
+          },
+          "writtenAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "appliedBy",
+          "state",
+          "replaced",
+          "broken",
+          "atDelivery",
+          "sealId",
+          "number",
+          "writtenAt"
         ]
       },
       "PostedFreightRow": {
@@ -43938,6 +44208,13 @@
               }
             ]
           },
+          "seals": {
+            "description": "Round 15 — its seals: as written, found on the door at pickup, replaced by customs at a post, found broken, at delivery.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoadSealView"
+            }
+          },
           "freightId": {
             "type": "string"
           },
@@ -44138,6 +44415,26 @@
           }
         }
       },
+      "SealReadDto": {
+        "type": "object",
+        "properties": {
+          "sealId": {
+            "type": "string"
+          },
+          "number": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "photoRef": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sealId",
+          "number",
+          "photoRef"
+        ]
+      },
       "FreightActionDto": {
         "type": "object",
         "properties": {
@@ -44169,6 +44466,21 @@
           "remarks": {
             "type": "string",
             "maxLength": 500
+          },
+          "seals": {
+            "description": "Round 15 — at pickup: each seal's number as read off the door, with its close-up.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SealReadDto"
+            }
+          },
+          "sealsAtDelivery": {
+            "type": "string",
+            "description": "Round 15 — at delivery, with the receiver: the seals as the note says, or not.",
+            "enum": [
+              "as_on_the_note",
+              "not_as_on_the_note"
+            ]
           }
         }
       },
@@ -46659,6 +46971,7 @@
               "shop",
               "avatar",
               "securement",
+              "seal",
               "hazard",
               "interchange",
               "field_evidence",
@@ -50825,6 +51138,44 @@
           "lng"
         ]
       },
+      "SealReplacedDto": {
+        "type": "object",
+        "properties": {
+          "sealId": {
+            "type": "string"
+          },
+          "newNumber": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "photoRef": {
+            "type": "string"
+          },
+          "officer": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "sealId",
+          "newNumber",
+          "photoRef"
+        ]
+      },
+      "SealsAtPostDto": {
+        "type": "object",
+        "properties": {
+          "asTheyWere": {
+            "type": "boolean"
+          },
+          "replaced": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SealReplacedDto"
+            }
+          }
+        }
+      },
       "RecordPassageDto": {
         "type": "object",
         "properties": {
@@ -50857,6 +51208,14 @@
           "observedAt": {
             "type": "string",
             "description": "When the driver said it, by their phone: a tap made with no signal is sent later and dated by this."
+          },
+          "seals": {
+            "description": "Round 15 — clearing a border with seals on: as they were, or which customs replaced.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SealsAtPostDto"
+              }
+            ]
           }
         },
         "required": [
@@ -50922,6 +51281,138 @@
           "measured",
           "longestHours",
           "lastClearedAt"
+        ]
+      },
+      "LoadSealsView": {
+        "type": "object",
+        "properties": {
+          "seals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoadSealView"
+            }
+          },
+          "freightId": {
+            "type": "string"
+          },
+          "editable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "seals",
+          "freightId",
+          "editable"
+        ]
+      },
+      "SealPhotosDto": {
+        "type": "object",
+        "properties": {
+          "loadedOpen": {
+            "type": "string"
+          },
+          "closedWithSeal": {
+            "type": "string"
+          },
+          "sealCloseUp": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "loadedOpen",
+          "closedWithSeal",
+          "sealCloseUp"
+        ]
+      },
+      "WriteSealDto": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "sealClass": {
+            "type": "string",
+            "enum": [
+              "I",
+              "S",
+              "H"
+            ]
+          },
+          "maker": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "appliedBy": {
+            "type": "string",
+            "enum": [
+              "sender",
+              "customs"
+            ]
+          },
+          "photos": {
+            "$ref": "#/components/schemas/SealPhotosDto"
+          }
+        },
+        "required": [
+          "number",
+          "sealClass",
+          "appliedBy",
+          "photos"
+        ]
+      },
+      "BreakLocationDto": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "lat",
+          "lng"
+        ]
+      },
+      "ReportBrokenSealDto": {
+        "type": "object",
+        "properties": {
+          "cause": {
+            "type": "string",
+            "enum": [
+              "police",
+              "customs",
+              "repair",
+              "found_broken",
+              "other"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "photoRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "paperRef": {
+            "type": "string",
+            "description": "A photograph of any official paper about it: a police statement, a customs note."
+          },
+          "location": {
+            "$ref": "#/components/schemas/BreakLocationDto"
+          },
+          "observedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "cause",
+          "photoRefs"
         ]
       },
       "PayoutNumberView": {

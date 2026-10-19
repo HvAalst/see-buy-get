@@ -259,6 +259,12 @@
       that rests on (<code>basis</code> <code>measured</code> over so many crossings at that post in the last 90 days, or
       <code>standard</code>), and <code>expectedAt</code>. A step said with no signal is dated by the driver's phone and
       arrives when the signal does.</li>
+    <li><b>Both: a seal</b> — <code>load.seal_broken</code> — when the driver carrying a load reports a seal on it found
+      broken on the road; it carries the <code>seal</code> (its number, ISO 17712 class, what broke it). A business's
+      load carries <code>seals</code>: each with its number, class, maker, who closed it, and what became of it — found on
+      the door at pickup, replaced by customs at a post (on <code>load.border_cleared</code> the step's
+      <code>seals.resealed</code> names the old and new numbers), broken, and how it looked at delivery. Seals are written
+      in the Business app with their photographs; your key does not write them yet.</li>
     <li><b>Where a fleet's vehicles are</b> — <code>vehicle.position</code> — only once a manager turns it on, every 1, 5
       or 15 minutes a vehicle, only while a driver is on a shift in it. Each driver is told so in their app. A position
       is tried once; the next takes its place.</li>

@@ -89,6 +89,12 @@ export class NoteArchiveService implements OnModuleInit, OnModuleDestroy {
     for (const [type, stage, event] of board) {
       this.events.subscribe<{ freightId: string }>(type, (e) => this.freezeFreight(e.payload.freightId, stage, event));
     }
+    // Round 15 — a seal changed on the road: found broken, or replaced by customs at a post. A copy is frozen then, with
+    // the seal's story and its photographs on it: the record any claim on the goods is reported from.
+    this.events.subscribe<{ freightId: string }>(GlosEvent.Pudo.FreightSealBroken, (e) => this.freezeFreight(e.payload.freightId, 'seal_changed', 'A seal on the load was found broken on the road'));
+    this.events.subscribe<{ freightId: string; passage?: { post?: string; seals?: { resealed?: unknown[] } } }>(GlosEvent.Pudo.FreightPassed, (e) => {
+      if (e.payload?.passage?.seals?.resealed?.length) this.freezeFreight(e.payload.freightId, 'seal_changed', `Customs opened the load${e.payload.passage.post ? ` at ${e.payload.passage.post}` : ''} and sealed it again`);
+    });
     // The copy that answers a claim: a decision, where a company that stated cover made one — or, where nothing of
     // ours pays, the damage claim report itself: the note frozen with the claim on it, for the sender to hand on.
     this.events.subscribe<{ freightId: string; decision?: string }>(GlosEvent.Pudo.FreightClaimDecided, (e) =>
@@ -162,7 +168,8 @@ export class NoteArchiveService implements OnModuleInit, OnModuleDestroy {
           path: 'board',
           freightId,
           parties: this.notes.partiesOf(f),
-          mediaRefs: [f.loadSafety?.securementPhotoRef, f.proofOfDelivery?.photoRef, f.claim?.photoRef],
+          // Round 15 — and every photograph of its seals: as the shipper sealed it, at pickup, a re-seal, a break.
+          mediaRefs: [f.loadSafety?.securementPhotoRef, f.proofOfDelivery?.photoRef, f.claim?.photoRef, ...(this.dispatch.sealPhotosOf?.(freightId) ?? [])],
           country: f.destCountry ?? f.pickupCountry,
           from: f.pickupLabel,
           to: f.destLabel,

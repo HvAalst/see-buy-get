@@ -1,4 +1,5 @@
 import { ParcelInvoiceDto } from './parcel-invoice.types';
+import { MAX_SEALS, SEALS_AT_DELIVERY, SealReadDto, type SealsAtDelivery } from './load-seal.types';
 import { DESTINATION_KINDS } from './destination.types';
 import { PaperCaseView } from '../../foundation/entity/company-paper-reports.service';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
@@ -2635,6 +2636,10 @@ export class FreightActionDto {
   @IsOptional() @IsString() @MaxLength(120) receiverName?: string;
   @IsOptional() @IsString() podPhotoId?: string;
   @IsOptional() @IsString() @MaxLength(500) remarks?: string;
+  /** Round 15 — at pickup: each seal's number as read off the door, with its close-up. */
+  @IsOptional() @IsArray() @ArrayMaxSize(MAX_SEALS) @ValidateNested({ each: true }) @Type(() => SealReadDto) seals?: SealReadDto[];
+  /** Round 15 — at delivery, with the receiver: the seals as the note says, or not. */
+  @IsOptional() @IsIn(SEALS_AT_DELIVERY) sealsAtDelivery?: SealsAtDelivery;
 }
 
 /** FP3b — the driver stood at the door and could not hand over. */

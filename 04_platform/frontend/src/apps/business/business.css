@@ -137,6 +137,21 @@
 .biz-loads__new {
   margin-bottom: 14px;
 }
+/* Round 15 — a seal: its number in the type a person reads off a bolt; the form's fields side by side where there is room. */
+.biz-seal__num {
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+.biz-seal__form {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bd-soft);
+}
+.biz-seal__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0 14px;
+}
 /* Round 14 — on the road: each step its driver said, one to a line, then the allowance and when it is expected. */
 .biz-road__line {
   display: block;

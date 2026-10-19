@@ -128,6 +128,8 @@ export interface FreightTrackView {
   passages?: PassageView[];
   /** Round 14 — across a border, on the road: where it has got to, the allowance and on what, when it is expected. */
   crossing?: CrossingView;
+  /** Round 15 — the seal numbers, to look at the door; and whether each is still on. */
+  seals?: Array<{ number: string; state: 'on' | 'replaced' | 'broken' }>;
 }
 
 export type AnyTrackView = TrackView | FreightTrackView;

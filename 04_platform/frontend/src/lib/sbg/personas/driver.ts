@@ -347,12 +347,12 @@ export function createDriverApi(sbg: SbgClient) {
     /** S32b/S33 — pick up a claimed dedicated-freight job (claimed → in_transit). Sends the driver's own DID
      *  (only the claimer may advance a job) plus the S33 load-safety gate: the confirmed checklist keys + the
      *  securement photo mediaId. */
-    pickupFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[]; securementPhotoId?: string; reservations?: string }) =>
+    pickupFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[]; securementPhotoId?: string; reservations?: string; seals?: Array<{ sealId: string; number: string; photoRef: string }> }) =>
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/pickup', { params: { path: { id: freightId } }, body: { driverDid, ...check } })),
 
     /** S32b/S33 — deliver an in-transit dedicated-freight job (in_transit → delivered; capacity released),
      *  with the confirmed unload-checklist keys. */
-    deliverFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string }) =>
+    deliverFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string; sealsAtDelivery?: "as_on_the_note" | "not_as_on_the_note" }) =>
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/deliver', { params: { path: { id: freightId } }, body: { driverDid, ...check } })),
 
     /** FP3b — the driver stood at the door and could not hand over. The load stays on the van; the sender is told. */
@@ -368,8 +368,21 @@ export function createDriverApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/temperature', { params: { path: { id: freightId } }, body: { driverDid, celsius } })),
 
     /** Round 14 — the load is at a border post, has cleared it, or is at a hub. Who says it comes from the sign-in. */
-    recordPassage: (freightId: string, body: { kind: 'at_border' | 'cleared_border' | 'at_hub'; post?: string; hub?: string; location?: { lat: number; lng: number }; observedAt?: string }) =>
-      sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/passages', { params: { path: { id: freightId } }, body })),
+    recordPassage: (
+      freightId: string,
+      body: {
+        kind: 'at_border' | 'cleared_border' | 'at_hub';
+        post?: string;
+        hub?: string;
+        location?: { lat: number; lng: number };
+        observedAt?: string;
+        seals?: { asTheyWere?: boolean; replaced?: Array<{ sealId: string; newNumber: string; photoRef: string; officer?: string }> };
+      },
+    ) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/passages', { params: { path: { id: freightId } }, body })),
+
+    /** Round 15 — a seal on the load found broken on the road. Who says it comes from the sign-in. */
+    reportBrokenSeal: (freightId: string, sealId: string, body: { cause: string; note?: string; photoRefs: string[]; paperRef?: string; location?: { lat: number; lng: number }; observedAt?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/seals/{sealId}/broken', { params: { path: { id: freightId, sealId } }, body: body as never })),
   };
 }
 

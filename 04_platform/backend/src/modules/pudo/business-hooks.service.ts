@@ -94,6 +94,10 @@ export class BusinessHookService implements OnModuleInit, OnModuleDestroy {
       const kind = e.payload?.passage?.kind;
       if (kind && PASSAGE_HOOK_EVENTS[kind] && e.payload?.freightId) this.relay(PASSAGE_HOOK_EVENTS[kind], String(e.payload.freightId), { passage: e.payload.passage });
     });
+    // Round 15 — a seal on its load found broken on the road: told at once, with the seal.
+    this.events.subscribe<{ freightId?: string; seal?: unknown }>(GlosEvent.Pudo.FreightSealBroken, (e) => {
+      if (e.payload?.freightId) this.relay('load.seal_broken', String(e.payload.freightId), { seal: e.payload.seal });
+    });
     this.timer = setInterval(() => void this.drain(), DRAIN_MS);
     this.timer.unref?.();
   }

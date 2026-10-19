@@ -92,6 +92,9 @@ export const ERROR_CODES = {
   PRICE_CHANGED: { status: 409, title: 'The price changed — please review the new price' },
   SAFETY_CHECK_INCOMPLETE: { status: 400, title: 'The safety checklist is not complete' },
   SECUREMENT_PHOTO_REQUIRED: { status: 400, title: 'A photo of the secured load is required' },
+  // Round 15 — a seal on a load, read off the door at pickup.
+  SEAL_CHECK_INCOMPLETE: { status: 400, title: 'Every seal is to be read and photographed' },
+  SEAL_MISMATCH: { status: 409, title: 'The seal on the door is not the one written' },
   COMMERCIAL_INVOICE_REQUIRED: { status: 409, title: 'The commercial invoice is not signed' },
   RECEIVER_REQUIRED: { status: 400, title: 'Record who received the goods' },
   DELIVERY_PHOTO_REQUIRED: { status: 400, title: 'A photo of the goods as delivered is required' },

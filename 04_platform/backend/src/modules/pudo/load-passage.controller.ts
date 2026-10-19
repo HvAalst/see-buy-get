@@ -29,7 +29,7 @@ export class LoadPassageController {
   record(@Param('id') id: string, @Body() dto: RecordPassageDto, @Actor() actor: IntrospectionResult): PassageRecorded {
     if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A border or a hub is said by the driver carrying the load');
     if (!actor?.did) throw new GlosError('UNAUTHORIZED', 'Sign in as the driver carrying this load');
-    return this.dispatch.recordPassage(id, actor.did, { kind: dto.kind, post: dto.post, hub: dto.hub, location: dto.location, observedAt: dto.observedAt });
+    return this.dispatch.recordPassage(id, actor.did, { kind: dto.kind, post: dto.post, hub: dto.hub, location: dto.location, observedAt: dto.observedAt, seals: dto.seals });
   }
 
   /** Every post's measured wait over the last ninety days, with how many crossings each rests on. */

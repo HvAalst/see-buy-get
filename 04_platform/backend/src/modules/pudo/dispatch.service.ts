@@ -53,6 +53,8 @@ import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 import { CommercialInvoiceService } from './commercial-invoice.service';
 import { LoadPassageService, viewOf as passageView } from './load-passage.service';
 import type { LoadCrossing, LoadPassageView, PassageKind, PassageRecorded } from './load-passage.types';
+import { LoadSealService } from './load-seal.service';
+import type { LoadSealView, SealBreakCause, SealsAtDelivery } from './load-seal.types';
 import { buildOfferResponse, type OfferResponse } from './offer-response';
 
 /**
@@ -393,6 +395,8 @@ export class DispatchService {
     // Round 14 — a load at a border or a hub, said by its driver. Optional so the specs that build this by hand keep
     // compiling; without it nothing is said between pickup and delivery, as before.
     @Optional() private readonly passages?: LoadPassageService,
+    // Round 15 — the seals on a load. Optional for the same reason; without it a load carries none, as before.
+    @Optional() private readonly seals?: LoadSealService,
   ) {
     this.freightSeq = [...this.freights.values()].length; // continue the human FRT-NNN sequence after a restart
     // An account moving off a number takes the orders addressed to that number with it.
@@ -1670,6 +1674,8 @@ export class DispatchService {
         instructionsMode: f.status === 'scheduled' || f.status === 'available' || f.status === 'claimed' ? 'edit' : f.status === 'in_transit' ? 'amend' : 'none',
         // Round 14 — at a border post, cleared it, at a hub; crossing a border, when it is expected.
         ...this.passageFacts(f, now),
+        // Round 15 — its seals, and what became of each.
+        ...(this.seals?.of(f.freightId).length ? { seals: this.seals.views(f.freightId) } : {}),
       }));
   }
 
@@ -2858,7 +2864,7 @@ export class DispatchService {
   /** Freight is picked up (claimed → in_transit) then delivered (→ delivered, capacity released). S32b: when
    *  a driver DID is given (the authenticated driver-app path), only the driver who CLAIMED it may advance it —
    *  a claimed freight is that driver's obligation, not a free-for-all. */
-  pickupFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; securementPhotoId?: string; reservations?: string }, now: number = Date.now()): Freight {
+  pickupFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; securementPhotoId?: string; reservations?: string; seals?: Array<{ sealId: string; number: string; photoRef: string }> }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'claimed') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected claimed`);
@@ -2878,8 +2884,12 @@ export class DispatchService {
     if (missing.length) throw new GlosError('SAFETY_CHECK_INCOMPLETE', `Complete the load-safety checklist before pickup — ${missing.length} item(s) left`);
     const securementPhotoId = check?.securementPhotoId;
     if (!securementPhotoId) throw new GlosError('SECUREMENT_PHOTO_REQUIRED', 'Attach a photo of the secured load before pickup');
+    // Round 15 — each seal the shipper wrote, read off the door: a number that is not the one written and the load does
+    // not leave. Asked before anything changes; kept once the goods are taken over.
+    const keepSeals = this.seals?.checkAtPickup(f, driverDid ?? '', check?.seals);
     f.status = 'in_transit';
     f.pickedUpAt = new Date().toISOString();
+    keepSeals?.(f.pickedUpAt);
     f.loadSafety = { confirmed: [...new Set(check?.confirmed ?? [])], securementPhotoRef: securementPhotoId, at: f.pickedUpAt, by: driverDid };
     // FP3 — box 18: what the carrier saw when the goods were handed over. Optional, and only ever the driver's words.
     const reservations = check?.reservations?.trim();
@@ -2908,7 +2918,7 @@ export class DispatchService {
     void this.events.publish(GlosEvent.Pudo.FreightPickedUp, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy }, { source: 'pudo' }).catch(() => undefined);
     return f;
   }
-  deliverFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string }, now: number = Date.now()): Freight {
+  deliverFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string; sealsAtDelivery?: SealsAtDelivery }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected in_transit`);
@@ -2922,8 +2932,11 @@ export class DispatchService {
     if (receiverName.length < 2) throw new GlosError('RECEIVER_REQUIRED', 'Record who received the goods before marking the load delivered');
     const podPhotoId = check?.podPhotoId;
     if (!podPhotoId) throw new GlosError('DELIVERY_PHOTO_REQUIRED', 'Attach a photo of the goods as delivered');
+    // Round 15 — a load that has had a seal: the receiver looks at the door with the driver.
+    const keepAtDoor = this.seals?.checkAtDelivery(f, driverDid ?? '', check?.sealsAtDelivery);
     f.status = 'delivered'; // no longer counts against the driver's remaining capacity
     f.deliveredAt = new Date(now).toISOString();
+    keepAtDoor?.(f.deliveredAt);
     // Read against the day and the window asked for NOW, on the carrier's clock, and kept with the delivery.
     const timing = this.deliveryTimingOf(f, now);
     if (timing) f.deliveryTiming = timing;
@@ -3258,16 +3271,60 @@ export class DispatchService {
    * it). Its shipper's system and its fleet's are told; its shipper reads it on its Loads screen and anybody holding its
    * tracking link on the page. A tap sent twice is answered as it was and tells nobody again.
    */
-  recordPassage(freightId: string, driverDid: string, input: { kind: PassageKind; post?: string; hub?: string; location?: GeoPoint; observedAt?: string }, now: number = Date.now()): PassageRecorded {
+  recordPassage(
+    freightId: string,
+    driverDid: string,
+    input: { kind: PassageKind; post?: string; hub?: string; location?: GeoPoint; observedAt?: string; seals?: { asTheyWere?: boolean; replaced?: Array<{ sealId: string; newNumber: string; photoRef: string; officer?: string }> } },
+    now: number = Date.now(),
+  ): PassageRecorded {
     if (!this.passages) throw new GlosError('INVALID_STATE', 'Borders and hubs are not recorded in this deployment');
     const f = this.requireFreight(freightId);
-    const { passage, replayed } = this.passages.record(f, driverDid, input, now);
+    // Round 15 — clearing a border with seals on, the driver says what became of them; asked after every check of the
+    // step and before it is kept, and kept only once the step is.
+    let atPost: ReturnType<LoadSealService['checkAtPost']>;
+    const { passage, replayed } = this.passages.record(f, driverDid, input, now, () => {
+      if (input.kind !== 'cleared_border' || !this.seals) return undefined;
+      atPost = this.seals.checkAtPost(f, driverDid, input.seals);
+      return atPost?.says;
+    });
+    if (!replayed) atPost?.keep(passage.at, passage.post);
     const view = passageView(passage);
     if (!replayed) {
       void this.events.publish(GlosEvent.Pudo.FreightPassed, { freightId: f.freightId, code: f.code, driverDid, posterDid: f.postedByDid ?? f.shipperDid, passage: view }, { source: 'pudo' }).catch(() => undefined);
     }
     const crossing = this.passages.crossingOf(f, now);
     return { passage: view, ...(crossing ? { crossing } : {}), replayed };
+  }
+
+  /**
+   * ROUND 15 — A SEAL FOUND BROKEN ON THE ROAD, reported by the driver carrying the load (load-seal.service.ts judges it).
+   * Its shipper is told at once — in its bell and its own system — and so is the fleet's system; a copy of the note is
+   * frozen with it, the record any claim on the goods is reported from.
+   */
+  reportBrokenSeal(freightId: string, driverDid: string, sealId: string, input: { cause: SealBreakCause; note?: string; photoRefs: string[]; paperRef?: string; location?: GeoPoint; observedAt?: string }, now: number = Date.now()): LoadSealView {
+    if (!this.seals) throw new GlosError('INVALID_STATE', 'Seals are not recorded in this deployment');
+    const f = this.requireFreight(freightId);
+    const broken = this.seals.reportBroken(f, driverDid, sealId, input, now);
+    const view = this.seals.views(f.freightId).find((s) => s.sealId === broken.sealId)!;
+    void this.events
+      .publish(GlosEvent.Pudo.FreightSealBroken, { freightId: f.freightId, code: f.code, driverDid, posterDid: f.postedByDid ?? f.shipperDid, seal: view }, { source: 'pudo' })
+      .catch(() => undefined);
+    return view;
+  }
+
+  /** The seals of a load as its shipper and the note's other readers see them. */
+  sealsOf(f: Freight): LoadSealView[] {
+    return this.seals?.views(f.freightId) ?? [];
+  }
+
+  /** The seals' photographs: the note's copies carry them. */
+  sealPhotosOf(freightId: string): string[] {
+    return this.seals?.photosOf(freightId) ?? [];
+  }
+
+  /** The seals as the consignment note says them, and what box 18 must observe of them. */
+  sealsOnNote(freightId: string): { lines: string[]; observations: string[] } {
+    return { lines: this.seals?.noteLines(freightId) ?? [], observations: this.seals?.noteObservations(freightId) ?? [] };
   }
 
   /** What its driver said on the road, and — crossing a border — where it has got to: for the shipper, its system, the page. */
@@ -3467,7 +3524,9 @@ export class DispatchService {
     const invoiceMissing = f.status === 'claimed' && Boolean(this.invoices?.pickupRefusal(f, this.postedByBusiness(f)));
     // Round 14 — on the road: what the driver needs to say a border or a hub.
     const passage = f.status === 'in_transit' && this.passages ? this.passages.forDriver(f) : undefined;
-    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(passage ? { passage } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}) };
+    // Round 15 — the seals to find on the door: what each is, never its number.
+    const sealsToFind = (f.status === 'claimed' || f.status === 'in_transit') && this.seals?.of(f.freightId).length ? this.seals.toFind(f.freightId) : undefined;
+    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}) };
   }
 
   /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */

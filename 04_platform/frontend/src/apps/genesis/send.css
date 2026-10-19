@@ -170,6 +170,12 @@
   margin-top: 2px;
 }
 
+/* Round 15 — a seal number on the tracking page, in the type it is read off a bolt in. */
+.track-seal {
+  font-family: var(--font-mono);
+  letter-spacing: 0.03em;
+}
+
 /* ---------------------------------------------------------------- ladder -- */
 
 .ladder {

@@ -8,6 +8,7 @@ import { PlannedOn } from './fleet-plan.types';
 import { OrderHandOn } from './fleet-partner.types';
 import { BorderAdvice } from './border-rules.types';
 import { LoadCrossing, LoadPassageForDriver, LoadPassageView } from './load-passage.types';
+import { LoadSealView, SEAL_STATES, SealToFind, type SealState } from './load-seal.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { GeoPoint } from './pudo.types';
 import { CARGO_CLASS_CODES, CARGO_NATURES, CargoClass, CargoNature, EQUIPMENT, Equipment, VEHICLE_CAPABILITIES, VehicleCapability } from './cargo.types';
@@ -1193,6 +1194,8 @@ export class PostedFreightRow {
   @ApiPropertyOptional({ type: [LoadPassageView] }) passages?: LoadPassageView[];
   /** Round 14 — a load that crosses a border: where it has got to, the wait it is promised, and when it is expected. */
   @ApiPropertyOptional({ type: LoadCrossing }) crossing?: LoadCrossing;
+  /** Round 15 — its seals: as written, found on the door at pickup, replaced by customs at a post, found broken, at delivery. */
+  @ApiPropertyOptional({ type: [LoadSealView] }) seals?: LoadSealView[];
 }
 
 /** FP3b — what the sender gets back for opening a claim. */
@@ -1281,6 +1284,8 @@ export class Claimable {
   invoiceMissing?: boolean;
   /** Round 14 — a load on the road: what the driver needs to say it is at a border, has cleared it, or is at a hub. */
   @ApiPropertyOptional({ type: LoadPassageForDriver }) passage?: LoadPassageForDriver;
+  /** Round 15 — the seals to read off the door at pickup (and look at with the receiver): what each is, never its number. */
+  @ApiPropertyOptional({ type: [SealToFind] }) seals?: SealToFind[];
   ref: string; // toteCode | freightId — the API identifier the pickup/load/deliver calls use
   /** S32b — the human-readable reference to SHOW a driver (TOTE-042 / FRT-007). For a tote this equals ref;
    *  for freight ref is the opaque frt_… id, so the readable FRT-NNN code must ride separately. */
@@ -1418,6 +1423,12 @@ export class Offer {
 
 /* ------------------------------------------------------ FP6: the public tracking view of a load -- */
 
+/** Round 15 — a seal as the tracking page shows it: its number and whether it is still on. Nothing about who or why. */
+export class TrackSeal {
+  number: string;
+  @ApiProperty({ enum: SEAL_STATES }) state: SealState;
+}
+
 /** One rung of a load's journey, as the public tracking page draws it. */
 export class FreightTrackStep {
   @ApiProperty({ enum: FREIGHT_STATUSES })
@@ -1481,4 +1492,6 @@ export class FreightTrackView {
   @ApiPropertyOptional({ type: [LoadPassageView] }) passages?: LoadPassageView[];
   /** Round 14 — crossing a border: where it has got to, the wait it is promised and what that rests on, when it is expected. */
   @ApiPropertyOptional({ type: LoadCrossing }) crossing?: LoadCrossing;
+  /** Round 15 — the seal numbers, so whoever receives it can look at the door; and whether each is on, replaced or broken. */
+  @ApiPropertyOptional({ type: [TrackSeal] }) seals?: TrackSeal[];
 }

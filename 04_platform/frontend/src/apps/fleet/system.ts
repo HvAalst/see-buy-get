@@ -81,6 +81,7 @@ const EVENT_WORDS: Record<string, MessageKey> = {
   'load.at_border': 'fleet.system.event.atBorder',
   'load.border_cleared': 'fleet.system.event.borderCleared',
   'load.at_hub': 'fleet.system.event.atHub',
+  'load.seal_broken': 'fleet.system.event.sealBroken',
   'load.delivery_failed': 'fleet.system.event.deliveryFailed',
   'load.delivered': 'fleet.system.event.delivered',
   'load.cancelled': 'fleet.system.event.loadCancelled',

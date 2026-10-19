@@ -5,6 +5,9 @@ import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
 import { createAgentApi, createNotificationsApi, createOperatorApi, createSeededClient, makeConfig, publicRequest, type AgentApi, type NotificationsApi, type OperatorApi, type Result, type SbgConfig, type SeededAppClient } from '../../lib/sbg';
 import type { QuoteView } from '../../shared/quote';
 import type { CrossingView, PassageView } from '../../shared/passages';
+import type { SealView } from '../../shared/seals';
+import { downscaleImage } from '../../shared/media';
+import type { SealsView } from './seals';
 
 const APP_VERSION = '1.0.0';
 
@@ -214,6 +217,8 @@ export interface PostedLoad {
   passages?: PassageView[];
   /** Round 14 — on the road across a border: where it has got to, the wait it is allowed and on what, when it is expected. */
   crossing?: CrossingView;
+  /** Round 15 — its seals, and what became of each. */
+  seals?: SealView[];
 }
 
 /** P1 — the copy of a contract an order carries. */
@@ -329,6 +334,12 @@ export interface BusinessClient {
   invoicePage(freightId: string): Promise<Result<string>>;
   /** Our own paper invoice travels with the goods — or no longer. */
   ownPaper(freightId: string, travels: boolean): Promise<Result<{ ownPaper: { by: string; at: string } | null }>>;
+  /** Round 15 — a load's seals: read by everybody in the business; written and taken off by a member who may act, before pickup. */
+  seals(freightId: string): Promise<Result<SealsView>>;
+  writeSeal(freightId: string, body: Record<string, unknown>): Promise<Result<SealView>>;
+  removeSeal(freightId: string, sealId: string): Promise<Result<{ removed: true }>>;
+  /** A photograph for a seal, taken here: its id, or null when it could not be sent. */
+  sealPhoto(file: File): Promise<string | null>;
 }
 
 export function createBusinessClient(): BusinessClient {
@@ -379,6 +390,18 @@ export function createBusinessClient(): BusinessClient {
     writeInvoice: (freightId, body) => call((c) => c.POST(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/commercial-invoice` as never, { body } as never) as never),
     invoicePage: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/commercial-invoice.html` as never, { parseAs: 'text' } as never) as never),
     ownPaper: (freightId, travels) => call((c) => c.POST(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/commercial-invoice/own-paper` as never, { body: { travels } } as never) as never),
+    seals: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/seals` as never, {} as never) as never),
+    writeSeal: (freightId, body) => call((c) => c.POST(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/seals` as never, { body } as never) as never),
+    removeSeal: (freightId, sealId) => call((c) => c.DELETE(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/seals/${encodeURIComponent(sealId)}` as never, {} as never) as never),
+    sealPhoto: async (file) => {
+      try {
+        const { dataUrl, thumbDataUrl } = await downscaleImage(file);
+        const r = await createOperatorApi(client.sbg).uploadMedia('seal', dataUrl, thumbDataUrl);
+        return r.error ? null : ((r.data as { mediaId?: string } | undefined)?.mediaId ?? null);
+      } catch {
+        return null;
+      }
+    },
   };
 }
 

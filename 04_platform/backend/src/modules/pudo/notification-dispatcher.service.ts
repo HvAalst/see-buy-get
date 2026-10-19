@@ -400,6 +400,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<FleetPaperChecked>(GlosEvent.Pudo.FleetPaperChecked, (e) => this.onFleetPaperChecked(e.payload));
     // FP3b (sender) — the driver is at the door and cannot hand over: the sender is the one who can fix it.
     this.events.subscribe<{ freightId: string; code: string; posterDid?: string; outcome: string; note?: string; destLabel?: string; attempts: number }>(GlosEvent.Pudo.FreightDeliveryFailed, (e) => this.onFreightDeliveryFailed(e.payload));
+    // Round 15 — a seal on its load found broken on the road: the shipper is told at once.
+    this.events.subscribe<{ freightId: string; code: string; posterDid?: string; seal?: { number?: string; broken?: { cause?: string; note?: string } } }>(GlosEvent.Pudo.FreightSealBroken, (e) => this.onFreightSealBroken(e.payload));
     // FP3b (claimant) — their claim was decided; they are shown the reason.
     this.events.subscribe<{ freightId: string; code: string; decision: string; award: number; note: string; posterDid?: string; claimantDid?: string }>(GlosEvent.Pudo.FreightClaimDecided, (e) => this.onFreightClaimDecided(e.payload));
     // ONBOARDING (applicant) — they finished the form and are not finished. Told now, while they are still
@@ -640,6 +642,24 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       });
     } catch (err) {
       this.logger.warn(`freight-delivery-failed notify failed for ${payload.freightId}: ${(err as Error).message}`);
+    }
+  }
+
+  private async onFreightSealBroken(payload: { freightId: string; code: string; posterDid?: string; seal?: { number?: string; broken?: { cause?: string; note?: string } } }): Promise<void> {
+    if (!payload.posterDid) return;
+    const cause = payload.seal?.broken?.cause;
+    const how = cause === 'police' ? 'by the police' : cause === 'customs' ? 'by customs' : cause === 'repair' ? 'for a repair on the road' : cause === 'found_broken' ? 'found so by the driver' : 'on the road';
+    try {
+      await this.notifications.notify(payload.posterDid, {
+        kind: 'freight_problem',
+        title: `A seal on load ${payload.code} was broken`,
+        body: `Seal ${payload.seal?.number ?? ''} was broken ${how}${payload.seal?.broken?.note ? ` — "${payload.seal.broken.note}"` : ''}. The driver photographed it, and any official paper. A copy of the consignment note is kept with it: if anything is missing at delivery, that is what a damage claim report is made from.`,
+        link: '/',
+        tag: `freight:${payload.freightId}:seal:${payload.seal?.number ?? ''}`,
+        data: { freightId: payload.freightId },
+      });
+    } catch (err) {
+      this.logger.warn(`seal-broken notify failed for ${payload.freightId}: ${(err as Error).message}`);
     }
   }
 

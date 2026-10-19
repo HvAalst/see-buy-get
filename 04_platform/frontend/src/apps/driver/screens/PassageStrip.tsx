@@ -3,6 +3,7 @@ import { Button, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { passageWords, waitWords, type PassageKind } from '../../../shared/passages';
 import { nextSteps, passageNow, placeOk } from '../passage';
+import { atPostBody, atPostReady, ClearedSeals, EMPTY_AT_POST, type SealsAtPost } from './SealSteps';
 import type { Claimable } from '../types';
 import type { DriverActions, DriverState } from '../useDriverApp';
 
@@ -19,7 +20,7 @@ const SAY: Record<PassageKind, 'driver.passage.say.at_border' | 'driver.passage.
  * cleared it, at a hub. At a post it says how long the crossing is allowed and what that rests on, so the driver reads
  * the same promise the shipper does.
  */
-export function PassageStrip({ claim, state, onSay }: { claim: Claimable; state: DriverState; onSay: (kind: PassageKind) => void }) {
+export function PassageStrip({ claim, state, onSay, onBroken }: { claim: Claimable; state: DriverState; onSay: (kind: PassageKind) => void; onBroken?: () => void }) {
   const t = useT();
   const p = passageNow(claim.passage, state.said[claim.ref]);
   const steps = nextSteps(p);
@@ -42,6 +43,12 @@ export function PassageStrip({ claim, state, onSay }: { claim: Claimable; state:
             {t(SAY[k])}
           </Button>
         ))}
+        {/* Round 15 — a seal on it found broken on the road. */}
+        {onBroken && claim.seals?.some((s) => s.state === 'on') ? (
+          <Button variant="link" full={false} disabled={state.busy === `seal:${claim.ref}`} onClick={onBroken}>
+            {t('driver.seal.brokenOpen')}
+          </Button>
+        ) : null}
       </span>
     </div>
   );
@@ -51,14 +58,20 @@ export function PassageStrip({ claim, state, onSay }: { claim: Claimable; state:
 export function PassageSheet({ claim, kind, state, actions, onClose }: { claim: Claimable | null; kind: PassageKind | null; state: DriverState; actions: DriverActions; onClose: () => void }) {
   const t = useT();
   const [place, setPlace] = useState('');
+  // Round 15 — clearing with seals on: as they were, or which customs replaced.
+  const [atPost, setAtPost] = useState<SealsAtPost>(EMPTY_AT_POST);
   const p = claim ? passageNow(claim.passage, state.said[claim.ref]) : undefined;
   const posts = p?.posts ?? [];
-  useEffect(() => setPlace(kind === 'at_border' && posts.length === 1 ? posts[0] : ''), [claim?.ref, kind]);
+  useEffect(() => {
+    setPlace(kind === 'at_border' && posts.length === 1 ? posts[0] : '');
+    setAtPost(EMPTY_AT_POST);
+  }, [claim?.ref, kind]);
   const open = Boolean(claim && kind);
   const ref = claim?.code ?? claim?.ref ?? '';
+  const sealsReady = !claim || kind !== 'cleared_border' || atPostReady(claim, atPost);
   const say = () => {
     if (!claim || !kind) return;
-    void actions.sayPassage(claim.ref, kind, kind === 'cleared_border' ? undefined : place);
+    void actions.sayPassage(claim.ref, kind, kind === 'cleared_border' ? undefined : place, kind === 'cleared_border' ? atPostBody(claim, atPost) : undefined);
     onClose();
   };
   const title = kind === 'at_border' ? t('driver.passage.borderTitle') : kind === 'cleared_border' ? t('driver.passage.clearedTitle') : t('driver.passage.hubTitle');
@@ -85,6 +98,7 @@ export function PassageSheet({ claim, kind, state, actions, onClose }: { claim: 
         </>
       ) : null}
       {open && kind === 'cleared_border' ? <p class="t-body">{t('driver.passage.clearedBody', { ref, post: p?.atPost?.post ?? '' })}</p> : null}
+      {open && kind === 'cleared_border' && claim ? <ClearedSeals claim={claim} actions={actions} value={atPost} onChange={setAtPost} busy={state.busy === `passage:${claim.ref}`} /> : null}
       {open && kind === 'at_hub' ? (
         <>
           <p class="t-body">{t('driver.passage.hubBody', { ref })}</p>
@@ -100,7 +114,7 @@ export function PassageSheet({ claim, kind, state, actions, onClose }: { claim: 
         <>
           <p class="hint">{t('driver.passage.whoIsTold')}</p>
           <div style="margin-top:14px">
-            <Button chevron={false} busy={claim ? state.busy === `passage:${claim.ref}` : false} disabled={kind !== 'cleared_border' && !placeOk(place)} onClick={say}>
+            <Button chevron={false} busy={claim ? state.busy === `passage:${claim.ref}` : false} disabled={(kind !== 'cleared_border' && !placeOk(place)) || !sealsReady} onClick={say}>
               {kind === 'at_border' ? t('driver.passage.sayAt', { place: placeOk(place) ? place.trim() : t('driver.passage.thePost') }) : kind === 'cleared_border' ? t('driver.passage.sayCleared') : t('driver.passage.sayHere')}
             </Button>
           </div>

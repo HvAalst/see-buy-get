@@ -6,6 +6,7 @@ export function stageWord(stage: NoteStage, t: Translate): string {
   const keys: Record<NoteStage, MessageKey> = {
     taken_over: 'archive.stage.takenOver',
     reloaded: 'archive.stage.reloaded',
+    seal_changed: 'archive.stage.sealChanged',
     delivered: 'archive.stage.delivered',
     not_delivered: 'archive.stage.notDelivered',
     claimed: 'archive.stage.claimed',
