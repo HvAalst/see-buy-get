@@ -129,6 +129,10 @@ const QUEUEABLE: Array<{ method: string; test: RegExp; label: string }> = [
   // the record breaks the chain as surely as a breach does. It reports a measurement rather than asking
   // for a decision, so it is safe to complete without an answer.
   { method: 'POST', test: /^\/v1\/sbg\/dispatch\/freight\/[^/]+\/temperature$/, label: 'Temperature logged' },
+  // A border post is where a phone loses its signal (round 14: "The driver, by a tap"). At the border, cleared it, at a
+  // hub: each says where the load is, dated by the phone (`observedAt`), and asks nothing of anybody. The same step sent
+  // twice is answered as it was, so a replay costs nothing.
+  { method: 'POST', test: /^\/v1\/sbg\/dispatch\/freight\/[^/]+\/passages$/, label: 'Border or hub said' },
   // The vehicle is parked and the driver can see it. Ending twice is a no-op, so a replay costs nothing.
   { method: 'POST', test: /^\/v1\/sbg\/fleet\/drivers\/[^/]+\/end-session$/, label: 'Shift ended' },
   // WHAT THE DRIVER SEES ON THE ROAD (the user, 2026-10-18: "queue reports, rest online"). A breakdown and a road hazard

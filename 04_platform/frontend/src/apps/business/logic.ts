@@ -1,5 +1,6 @@
 import type { BusinessActivity, BusinessView, CarriageContract, CheckState, Membership, MemberRole, NewBusiness, PostedLoad } from './api';
 import type { MessageKey, Translate } from '../../shared/i18n';
+import { crossingWords, passageWords, type When } from '../../shared/passages';
 
 /** Where somebody is in the Business app. */
 export type Section = 'home' | 'loads' | 'runs' | 'contracts' | 'clients' | 'imports' | 'yard' | 'people' | 'details';
@@ -227,6 +228,29 @@ export function deliverySays(l: Pick<PostedLoad, 'deliveryTiming' | 'deliverOn'>
   if (d.window && d.earlyMin) return { tone: 'warn', tag: t('business.loads.done.tagBefore'), row: t('business.loads.done.before', { at: d.at, by: spanWords(d.earlyMin) }), full: t('business.loads.done.beforeFull', { at: d.at, by: spanWords(d.earlyMin), window: d.window }) };
   if (d.window) return { tone: 'quiet', row: t('business.loads.done.inside', { at: d.at }), full: t('business.loads.done.insideFull', { at: d.at, window: d.window }) };
   return { tone: 'quiet', row: t('business.loads.done.at', { at: d.at }), full: t('business.loads.done.atFull', { at: d.at }) };
+}
+
+/**
+ * ROUND 14 — WHERE IT IS ON THE ROAD, as its driver said it: crossing a border, where it has got to and when it is
+ * expected; otherwise the last place said (a hub). Nothing while it is not on the road: delivered, its steps are in the
+ * detail, not the row.
+ */
+export interface RoadSays {
+  row: string;
+  /** The wait it is allowed at the border and what that rests on, while there is still one to wait. */
+  wait?: string;
+  expected?: string;
+}
+export function roadSays(l: Pick<PostedLoad, 'status' | 'passages' | 'crossing'>, t: Translate, when: When): RoadSays | null {
+  if (l.status !== 'in_transit') return null;
+  const last = l.passages?.[l.passages.length - 1];
+  if (l.crossing) {
+    const c = crossingWords(l.crossing, t, when);
+    // Across, a step said after the clearing (a hub on the far side) is where it is now.
+    const later = l.crossing.state === 'cleared' && last && last.kind !== 'cleared_border' && l.crossing.clearedAt && last.at >= l.crossing.clearedAt;
+    return { row: later ? passageWords(last, t, when) : c.where, ...(c.wait ? { wait: c.wait } : {}), ...(c.expected ? { expected: c.expected } : {}) };
+  }
+  return last ? { row: passageWords(last, t, when) } : null;
 }
 
 /** P1 — the day after `now`, as YYYY-MM-DD in the reader's own calendar: next-day delivery is the ordinary order. */

@@ -25,6 +25,10 @@ export const FLEET_HOOK_EVENTS = [
   'load.taken',
   'load.handed_back',
   'load.picked_up',
+  // Its driver said it is at a border post, has cleared it, or is at a hub (round 14).
+  'load.at_border',
+  'load.border_cleared',
+  'load.at_hub',
   'load.delivery_failed',
   'load.delivered',
   'load.cancelled',

@@ -1,4 +1,5 @@
 import type { BorderAdviceView } from './border';
+import type { PassageForDriver } from './passage';
 /**
  * Local view types for the driver app.
  *
@@ -230,6 +231,8 @@ export interface Claimable {
   kind: ClaimKind;
   /** Freight crossing a border whose shipper has not signed its commercial invoice: not to be taken over yet. */
   invoiceMissing?: boolean;
+  /** Round 14 — on the road: what the driver may say of it (at a border post, cleared it, at a hub). */
+  passage?: PassageForDriver;
   ref: string; // the API id used for pickup/load/deliver
   code?: string; // S32b — the human reference to show (TOTE-042 / FRT-007); ref for freight is an opaque id
   pickupLocation?: { lat: number; lng: number };

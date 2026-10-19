@@ -250,6 +250,15 @@
       load put on a driver, taken, given back, picked up, not handed over, delivered, withdrawn, a problem reported and
       decided; a vehicle broke down, how it ended, its loads moved; space booked on a run, given back, the run called
       off; the day's plan accepted. A load carries its earning only where SeeBuyGet pays you.</li>
+    <li><b>Both: on the road</b> — <code>load.at_border</code>, <code>load.border_cleared</code>,
+      <code>load.at_hub</code> — when the driver carrying a load says it is at a border post, has cleared it, or is at a
+      hub. Each carries the step as <code>passage</code> (<code>kind</code>, <code>post</code> or <code>hub</code>,
+      <code>at</code>, and on clearing the minutes it waited, <code>waitedMin</code>) beside the load; never the driver,
+      never where their phone was. A business's load also carries <code>passages</code>, every step in order, and — while
+      it is on the road across a border — <code>crossing</code>: where it has got to, the wait it is allowed and what
+      that rests on (<code>basis</code> <code>measured</code> over so many crossings at that post in the last 90 days, or
+      <code>standard</code>), and <code>expectedAt</code>. A step said with no signal is dated by the driver's phone and
+      arrives when the signal does.</li>
     <li><b>Where a fleet's vehicles are</b> — <code>vehicle.position</code> — only once a manager turns it on, every 1, 5
       or 15 minutes a vehicle, only while a driver is on a shift in it. Each driver is told so in their app. A position
       is tried once; the next takes its place.</li>

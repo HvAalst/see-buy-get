@@ -1,3 +1,5 @@
+import type { CrossingView, PassageView } from '../../shared/passages';
+
 /**
  * Local view types for the Send app. All four surfaces this app touches are @Public
  * (S13): the network directory, the two quote endpoints and track-and-trace. Field names
@@ -122,6 +124,10 @@ export interface FreightTrackView {
   late?: 'hour' | 'day';
   /** `run` — space booked on a carrier's scheduled run, which leaves at `scheduledPickupAt`. Absent: a load off the board. */
   on?: 'board' | 'run';
+  /** Round 14 — what its driver said on the road: at a border post, cleared it, at a hub. Never who, never where the phone was. */
+  passages?: PassageView[];
+  /** Round 14 — across a border, on the road: where it has got to, the allowance and on what, when it is expected. */
+  crossing?: CrossingView;
 }
 
 export type AnyTrackView = TrackView | FreightTrackView;

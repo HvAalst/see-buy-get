@@ -16,6 +16,7 @@ import { CompanyKeyService } from './company-key.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { FleetPlanService } from './fleet-plan.service';
 import { FleetService } from './fleet.service';
+import { PASSAGE_HOOK_EVENTS, type LoadPassageView } from './load-passage.types';
 import { NotificationService } from './notification.service';
 import { VehicleBreakdownService } from './vehicle-breakdown.service';
 import { VehicleService } from './vehicle.service';
@@ -133,7 +134,12 @@ export class FleetHookService implements OnModuleInit, OnModuleDestroy {
         if (freightId) this.relayLoad(event, freightId, e.payload ?? {});
       });
     }
-    const orders = (ids: unknown) => this.syncOrders((Array.isArray(ids) ? ids : [ids]).filter((x): x is string => typeof x === 'string' && Boolean(x)));
+    // Round 14 — its driver said the load is at a border post, cleared it, or at a hub: the step goes with the load.
+    this.events.subscribe<{ freightId?: string; passage?: LoadPassageView }>(GlosEvent.Pudo.FreightPassed, (e) => {
+      const passage = e.payload?.passage;
+      if (passage?.kind && PASSAGE_HOOK_EVENTS[passage.kind] && e.payload?.freightId) this.relayLoad(PASSAGE_HOOK_EVENTS[passage.kind], String(e.payload.freightId), { passage });
+    });
+    const orders =(ids: unknown) => this.syncOrders((Array.isArray(ids) ? ids : [ids]).filter((x): x is string => typeof x === 'string' && Boolean(x)));
     this.events.subscribe<{ freightId: string }>(GlosEvent.Pudo.OrderPlaced, (e) => orders(e.payload?.freightId));
     this.events.subscribe<{ freightId: string }>(GlosEvent.Pudo.OrderChanged, (e) => orders(e.payload?.freightId));
     this.events.subscribe<{ freightId: string }>(GlosEvent.Pudo.FreightInstructed, (e) => orders(e.payload?.freightId));
@@ -182,7 +188,8 @@ export class FleetHookService implements OnModuleInit, OnModuleDestroy {
           ? { freightId, code: f.code, driverDid: backFor.driverDid, ...(typeof payload.driverName === 'string' ? { driverName: payload.driverName } : {}), reason: backFor.reason, at: backFor.at }
           : undefined;
       if (!order && !load && !handBack) continue;
-      this.enqueue(fleetDid, event === 'load.cancelled' && order ? 'order.cancelled' : event, { ...(order ? { order } : {}), ...(load ? { load } : {}), ...(handBack ? { handBack } : {}) });
+      const passage = payload.passage && typeof payload.passage === 'object' ? payload.passage : undefined;
+      this.enqueue(fleetDid, event === 'load.cancelled' && order ? 'order.cancelled' : event, { ...(order ? { order } : {}), ...(load ? { load } : {}), ...(handBack ? { handBack } : {}), ...(passage ? { passage } : {}) });
       if (order) this.remember(freightId, fleetDid, order);
     }
   }

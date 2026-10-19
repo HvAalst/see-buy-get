@@ -366,6 +366,10 @@ export function createDriverApi(sbg: SbgClient) {
     /** S33b — log a temperature reading for a cold-chain freight in transit (a breach flags it for the tower). */
     recordTemp: (freightId: string, driverDid: string, celsius: number) =>
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/temperature', { params: { path: { id: freightId } }, body: { driverDid, celsius } })),
+
+    /** Round 14 — the load is at a border post, has cleared it, or is at a hub. Who says it comes from the sign-in. */
+    recordPassage: (freightId: string, body: { kind: 'at_border' | 'cleared_border' | 'at_hub'; post?: string; hub?: string; location?: { lat: number; lng: number }; observedAt?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/passages', { params: { path: { id: freightId } }, body })),
   };
 }
 

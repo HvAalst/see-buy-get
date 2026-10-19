@@ -11,6 +11,7 @@ import { BUSINESS_HOOK_EVENTS, type BusinessHookEvent, type BusinessSystemCounts
 import { BusinessService, type ActingMember } from './business.service';
 import { CompanyKeyService } from './company-key.service';
 import { DispatchService } from './dispatch.service';
+import { PASSAGE_HOOK_EVENTS, type PassageKind } from './load-passage.types';
 import { NotificationService } from './notification.service';
 
 /** How often waiting messages are sent. A system waiting on "picked up" wants seconds, not minutes. */
@@ -51,7 +52,7 @@ interface BusinessHookMessage extends HookMessage {
  *
  * WHAT IT HEARS: a carrier took its load, gave it back, picked it up, could not hand it over, delivered it; it was
  * cancelled; a claim was opened on it, and decided. Nothing about money: a business's payments are between the parties
- * (rule-quotations-not-payments). A load at a border or a hub is not said: nothing records that yet.
+ * (rule-quotations-not-payments). Round 14: its driver said it is at a border post, has cleared it, or is at a hub.
  *
  * WHAT A MESSAGE CARRIES: the load exactly as the business's own Loads screen reads it (DispatchService.postedBy), and
  * nothing more — never a fleet's own price, never where a driver is.
@@ -88,6 +89,11 @@ export class BusinessHookService implements OnModuleInit, OnModuleDestroy {
         if (freightId) this.relay(event, freightId);
       });
     }
+    // Round 14 — at a border post, cleared it, at a hub: one of ours, three of its events, by what was said.
+    this.events.subscribe<{ freightId?: string; passage?: { kind?: PassageKind } }>(GlosEvent.Pudo.FreightPassed, (e) => {
+      const kind = e.payload?.passage?.kind;
+      if (kind && PASSAGE_HOOK_EVENTS[kind] && e.payload?.freightId) this.relay(PASSAGE_HOOK_EVENTS[kind], String(e.payload.freightId), { passage: e.payload.passage });
+    });
     this.timer = setInterval(() => void this.drain(), DRAIN_MS);
     this.timer.unref?.();
   }
@@ -99,7 +105,7 @@ export class BusinessHookService implements OnModuleInit, OnModuleDestroy {
   /* ---------------------------------------------------------- what is sent -- */
 
   /** One event on one load, to each business whose load it is and that gave its system's address. */
-  relay(event: BusinessHookEvent, freightId: string): void {
+  relay(event: BusinessHookEvent, freightId: string, also: Record<string, unknown> = {}): void {
     let f;
     try {
       f = this.dispatch.requireFreightPublic(freightId);
@@ -111,7 +117,7 @@ export class BusinessHookService implements OnModuleInit, OnModuleDestroy {
       if (!entity?.business) continue;
       // Exactly what its own Loads screen reads about this load.
       const load = this.dispatch.postedBy(did).find((r) => r.freightId === freightId);
-      if (load) this.enqueue(entity.entityId, event, { load });
+      if (load) this.enqueue(entity.entityId, event, { load, ...also });
     }
   }
 

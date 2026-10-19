@@ -4,6 +4,7 @@ import type { CommercialInvoice, CommercialInvoiceView, Gs1View, PackageLabels }
 import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
 import { createAgentApi, createNotificationsApi, createOperatorApi, createSeededClient, makeConfig, publicRequest, type AgentApi, type NotificationsApi, type OperatorApi, type Result, type SbgConfig, type SeededAppClient } from '../../lib/sbg';
 import type { QuoteView } from '../../shared/quote';
+import type { CrossingView, PassageView } from '../../shared/passages';
 
 const APP_VERSION = '1.0.0';
 
@@ -209,6 +210,10 @@ export interface PostedLoad {
   contract?: ContractRef;
   deliverOn?: string;
   orderRef?: string;
+  /** Round 14 — what its driver said on the road: at a border post, cleared it, at a hub. In order; never who, never where. */
+  passages?: PassageView[];
+  /** Round 14 — on the road across a border: where it has got to, the wait it is allowed and on what, when it is expected. */
+  crossing?: CrossingView;
 }
 
 /** P1 — the copy of a contract an order carries. */

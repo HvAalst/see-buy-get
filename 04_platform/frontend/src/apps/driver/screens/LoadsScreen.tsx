@@ -6,6 +6,8 @@ import { useT } from '../../../shared/i18n';
 import { canLoadBag, capacitySubLine, cash, claimControl, isFull, loadsSummary, usedPercent } from '../logic';
 import { vehicleWord } from '../vehicle-words';
 import { RunSection } from './RunSection';
+import { PassageSheet, PassageStrip } from './PassageStrip';
+import type { PassageKind } from '../../../shared/passages';
 import type { Claimable } from '../types';
 import type { DriverActions, DriverState } from '../useDriverApp';
 
@@ -19,6 +21,7 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
   const [pick, setPick] = useState<Claimable | null>(null);
   const [gate, setGate] = useState<Claimable | null>(null); // S33 — the freight in the load/unload safety gate
   const [tempFor, setTempFor] = useState<Claimable | null>(null); // S33b — the freight whose temperature we're logging
+  const [passage, setPassage] = useState<{ claim: Claimable; kind: PassageKind } | null>(null); // round 14 — a border or a hub being said
   const v = state.vehicle;
   const hasBadge = canLoadBag(state.driver?.badgeId);
 
@@ -135,6 +138,8 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   ) : null}
                   {/* S33b — an in-transit cold-chain load: show the safe band + last reading + a log control. */}
                   {control === 'deliver' && c.tempBand ? <TempStrip claim={c} onLog={() => setTempFor(c)} /> : null}
+                  {/* Round 14 — on the road: at a border post, cleared it, at a hub. */}
+                  {control === 'deliver' && c.passage ? <PassageStrip claim={c} state={state} onSay={(kind) => setPassage({ claim: c, kind })} /> : null}
                   {/* FP2 — the consignment note travels with the load; the driver can show it at any gate. */}
                   <div class="load__nav">
                     <DocumentButton label={t('common.cmr.open')} title={t('common.cmr.title')} fetch={() => actions.freightNote(c.ref)} />
@@ -196,6 +201,7 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
 
       <FreightGate claim={gate} state={state} actions={actions} onClose={() => setGate(null)} />
       <TempSheet claim={tempFor} state={state} actions={actions} onClose={() => setTempFor(null)} />
+      <PassageSheet claim={passage?.claim ?? null} kind={passage?.kind ?? null} state={state} actions={actions} onClose={() => setPassage(null)} />
     </div>
   );
 }

@@ -772,6 +772,8 @@ export function createOperatorApi(sbg: SbgClient) {
 
     /** CA6 — the rules of crossing a border, one direction at a time. */
     borderRules: () => sbg.request((c) => c.GET('/v1/sbg/border-rules', {})),
+    /** Round 14 — every post's measured wait over the last ninety days, from the loads its drivers said cleared it. */
+    borderWaits: () => sbg.request((c) => c.GET('/v1/sbg/border-waits', {})),
 
     setBorderRule: (body: Record<string, unknown>) => sbg.request((c) => c.POST('/v1/sbg/border-rules', { body: body as never })),
 

@@ -6,7 +6,11 @@ import { SitePicker, type SiteView } from '../../tower/screens/SitePicker';
 import { QuotePanel } from '../../tower/screens/QuotePanel';
 import { NATURES, PACKAGING_OPTIONS } from '../../agent/logic';
 import { businessConfig, type BusinessClient, type BusinessView, type CarriageContract, type LoadProposal, type PostedLoad } from '../api';
-import { deliverySays, loadGaps, loadStage, mayAct, nextDay, noteKept, orderableContracts, planDo, planSays, type LoadForm, type LoadStage } from '../logic';
+import { deliverySays, loadGaps, loadStage, mayAct, nextDay, noteKept, orderableContracts, planDo, planSays, roadSays, type LoadForm, type LoadStage } from '../logic';
+import { passageWords } from '../../../shared/passages';
+
+/** A time on the road, as the shipper reads it: its day and hour. */
+const onRoad = (iso: string) => new Date(iso).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 import { NoteFile, NoteLinksPanel } from './LoadNote';
 import { LoadPapers } from './LoadPapers';
 import { CountrySelect, useCountryAtlas } from '../../tower/screens/CountrySelect';
@@ -110,6 +114,7 @@ export function LoadsScreen({ business, client }: { business: BusinessView; acti
               const stage = loadStage(r);
               const says = planSays(r, t);
               const handed = deliverySays(r, t);
+              const road = roadSays(r, t, onRoad);
               return (
                 <button type="button" class="crow" key={r.freightId} onClick={() => setOpen(r)}>
                   <span class="crow__body">
@@ -128,7 +133,7 @@ export function LoadsScreen({ business, client }: { business: BusinessView; acti
                     {/* What a row must not lose to an ellipsis: which load of an order this is, and what its carrier's
                         plan says of it — on no vehicle, outside its window, or (with no tag: it needs nobody) about
                         when. The line above gives way to the width; this one wraps. */}
-                    {r.partOf || says || handed ? (
+                    {r.partOf || says || handed || road ? (
                       <span class="biz-loads__flags">
                         {r.partOf ? <span class="ctag ctag--quiet">{t('business.loads.loadOf', { no: r.partOf.no, of: r.partOf.of, order: r.partOf.rootCode })}</span> : null}
                         {says?.state === 'late' ? <span class="ctag ctag--danger">{t('business.loads.late.tag')}</span> : null}
@@ -138,6 +143,8 @@ export function LoadsScreen({ business, client }: { business: BusinessView; acti
                         {/* Delivered: when, and where that fell against what was asked — in colour only where it missed. */}
                         {handed?.tag ? <span class="ctag ctag--warn">{handed.tag}</span> : null}
                         {handed ? <span>{handed.row}</span> : null}
+                        {/* Round 14 — on the road: where its driver said it is, and when it is expected. */}
+                        {road ? <span>{road.expected ? `${road.row} · ${road.expected}` : road.row}</span> : null}
                       </span>
                     ) : null}
                   </span>
@@ -389,6 +396,7 @@ function LoadDetail({ row, business, client, act, onClose, onChanged }: { row: P
   const stage = loadStage(row);
   const says = planSays(row, t);
   const handed = deliverySays(row, t);
+  const road = roadSays(row, t, onRoad);
   const kept = noteKept(row, stage);
   const [proposals, setProposals] = useState<LoadProposal[] | null>(null);
   const [quote, setQuote] = useState<QuoteView | null | undefined>(undefined);
@@ -480,6 +488,26 @@ function LoadDetail({ row, business, client, act, onClose, onChanged }: { row: P
               <dd class="cons__factv">
                 {row.carrier.driverName}
                 {row.carrier.plate ? ` · ${row.carrier.plate}` : ''}
+              </dd>
+            </div>
+          ) : null}
+          {/* Round 14 — what its driver said on the road, in order; across a border, the allowance and when it is expected. */}
+          {row.passages?.length || road ? (
+            <div class="cons__fact">
+              <dt class="cons__factk">{t('business.loads.fact.road')}</dt>
+              <dd class="cons__factv">
+                {(row.passages ?? []).map((p) => (
+                  <span key={`${p.kind}-${p.at}`} class="biz-road__line">
+                    {passageWords(p, t, onRoad)}
+                  </span>
+                ))}
+                {road && !row.passages?.length ? <span class="biz-road__line">{road.row}</span> : null}
+                {road?.wait ? <span class="biz-road__line chint">{road.wait}</span> : null}
+                {road?.expected ? (
+                  <span class="biz-road__line">
+                    <b>{road.expected}</b>
+                  </span>
+                ) : null}
               </dd>
             </div>
           ) : null}

@@ -254,6 +254,8 @@ export class ConsignmentNoteService implements OnModuleInit {
       ...(f.deliveryAttempts?.length ? { attempts: f.deliveryAttempts.map((a) => ({ outcome: a.outcome, at: a.at })) } : {}),
       ...(f.proofOfDelivery?.receiverName ? { receiverName: f.proofOfDelivery.receiverName } : {}),
       ...(f.cancellation ? { cancelled: { at: f.cancellation.at, by: f.cancellation.role === 'operator' ? 'network' : f.contract && f.cancellation.by === f.contract.fleetDid ? 'carrier' : 'sender' } } : {}),
+      // Round 14 — at a border post, cleared it, at a hub, as its driver said; crossing a border, when it is expected.
+      ...this.dispatch.passageFacts(f, now),
     };
   }
 

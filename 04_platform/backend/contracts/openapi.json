@@ -23692,6 +23692,68 @@
         }
       }
     },
+    "/v1/sbg/dispatch/freight/{id}/passages": {
+      "post": {
+        "operationId": "LoadPassage.record",
+        "summary": "",
+        "description": "At a border post, cleared it, at a hub — said by the driver carrying the load, and nobody else: it is their word\nabout where they are. Staff pass every role check, so they are refused here by name rather than allowed to say it\nin a driver's place.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordPassageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PassageRecorded"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/border-waits": {
+      "get": {
+        "operationId": "LoadPassage.waits",
+        "summary": "",
+        "description": "Every post's measured wait over the last ninety days, with how many crossings each rests on.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BorderWaitRow"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/payout-number": {
       "get": {
         "operationId": "PayoutNumber.mine",
@@ -43554,6 +43616,124 @@
           }
         }
       },
+      "LoadPassageView": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "at_border",
+              "cleared_border",
+              "at_hub"
+            ]
+          },
+          "post": {
+            "type": "string"
+          },
+          "hub": {
+            "type": "string"
+          },
+          "waitedMin": {
+            "type": "number",
+            "description": "On clearing a border: minutes the load was at the post."
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "at"
+        ]
+      },
+      "BorderWait": {
+        "type": "object",
+        "properties": {
+          "post": {
+            "type": "string",
+            "description": "The post it is for. Absent: the crossing as a whole, before the load is at one of its posts."
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "measured",
+              "standard"
+            ]
+          },
+          "crossings": {
+            "type": "number",
+            "description": "Measured: over how many crossings."
+          },
+          "posts": {
+            "description": "Measured for the crossing as a whole: the posts the crossings were at.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "hours": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "basis",
+          "from",
+          "to",
+          "hours"
+        ]
+      },
+      "LoadCrossing": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "ahead",
+              "at_post",
+              "cleared"
+            ]
+          },
+          "post": {
+            "type": "string"
+          },
+          "since": {
+            "type": "string",
+            "description": "At a post: since when."
+          },
+          "clearedAt": {
+            "type": "string",
+            "description": "Across: when, and after how long at the post."
+          },
+          "waitedMin": {
+            "type": "number"
+          },
+          "wait": {
+            "$ref": "#/components/schemas/BorderWait"
+          },
+          "expectedAt": {
+            "type": "string",
+            "description": "About when it is at its destination. Absent once delivered, or where its destination has no place on the map."
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "wait",
+          "from",
+          "to"
+        ]
+      },
       "PostedFreightRow": {
         "type": "object",
         "properties": {
@@ -43741,6 +43921,21 @@
               "edit",
               "amend",
               "none"
+            ]
+          },
+          "passages": {
+            "description": "Round 14 — what the driver said on the road: at a border post, cleared it, at a hub. In order; no driver, no position.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoadPassageView"
+            }
+          },
+          "crossing": {
+            "description": "Round 14 — a load that crosses a border: where it has got to, the wait it is promised, and when it is expected.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoadCrossing"
+              }
             ]
           },
           "freightId": {
@@ -50613,6 +50808,120 @@
         },
         "required": [
           "driverDid"
+        ]
+      },
+      "PassageLocationDto": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "lat",
+          "lng"
+        ]
+      },
+      "RecordPassageDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "at_border",
+              "cleared_border",
+              "at_hub"
+            ]
+          },
+          "post": {
+            "type": "string",
+            "description": "At the border: the post.",
+            "maxLength": 80
+          },
+          "hub": {
+            "type": "string",
+            "description": "At a hub: the hub.",
+            "maxLength": 80
+          },
+          "location": {
+            "description": "Where the phone was, when it knows.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PassageLocationDto"
+              }
+            ]
+          },
+          "observedAt": {
+            "type": "string",
+            "description": "When the driver said it, by their phone: a tap made with no signal is sent later and dated by this."
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "PassageRecorded": {
+        "type": "object",
+        "properties": {
+          "passage": {
+            "$ref": "#/components/schemas/LoadPassageView"
+          },
+          "crossing": {
+            "$ref": "#/components/schemas/LoadCrossing"
+          },
+          "replayed": {
+            "type": "boolean",
+            "description": "The same step said again (a tap sent twice): nothing new was kept."
+          }
+        },
+        "required": [
+          "passage",
+          "replayed"
+        ]
+      },
+      "BorderWaitRow": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "post": {
+            "type": "string"
+          },
+          "hours": {
+            "type": "number",
+            "description": "The median, in hours, of the loads that cleared it in the window."
+          },
+          "crossings": {
+            "type": "number"
+          },
+          "measured": {
+            "type": "boolean",
+            "description": "Whether that is enough for the post's own promise."
+          },
+          "longestHours": {
+            "type": "number",
+            "description": "The longest of them, so a median is not read as the worst case."
+          },
+          "lastClearedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "post",
+          "hours",
+          "crossings",
+          "measured",
+          "longestHours",
+          "lastClearedAt"
         ]
       },
       "PayoutNumberView": {

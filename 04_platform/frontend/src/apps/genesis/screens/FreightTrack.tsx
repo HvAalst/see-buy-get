@@ -2,6 +2,7 @@ import { Card, Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { carrierLine, expectedLine, freightLadder, freightLadderIndex, freightStatusPresentation, freightWithdrawnLine, stepTime } from '../logic';
 import type { FreightTrackView } from '../types';
+import { crossingWords, passageWords } from '../../../shared/passages';
 
 /**
  * FP6 — a LOAD on the tracking page. The same ladder a parcel climbs, in the same plain words: where it is
@@ -16,6 +17,9 @@ export function FreightTrack({ view }: { view: FreightTrackView }) {
   const at = freightLadderIndex(view.status, ladder);
   const carrier = carrierLine(view.carrier, t);
   const expected = expectedLine(view, t);
+  // Round 14 — what its driver said on the road; across a border, where it has got to, the allowance and when it is expected.
+  const crossing = view.status === 'in_transit' && view.crossing ? crossingWords(view.crossing, t, stepTime) : null;
+  const said = view.passages ?? [];
   return (
     <>
       <section class={'now now--' + p.tone} aria-live="polite">
@@ -28,6 +32,23 @@ export function FreightTrack({ view }: { view: FreightTrackView }) {
 
       {/* WHEN — the first thing somebody waiting at a door wants. The day always; the hour once it is on the road. */}
       {expected ? <p class="scr__lede">{expected}</p> : null}
+
+      {said.length || crossing ? (
+        <Card label={t('send.freight.roadLabel')}>
+          {said.map((s) => (
+            <p key={`${s.kind}-${s.at}`} class="card__note">
+              {passageWords(s, t, stepTime)}
+            </p>
+          ))}
+          {crossing && !said.length ? <p class="card__note">{crossing.where}</p> : null}
+          {crossing?.wait ? <p class="card__note">{crossing.wait}</p> : null}
+          {crossing?.expected ? (
+            <p class="card__note">
+              <b>{crossing.expected}</b>
+            </p>
+          ) : null}
+        </Card>
+      ) : null}
 
       {carrier ? (
         <div class="row row--static" role="group" aria-label={t('send.freight.carrierLabel')}>

@@ -232,6 +232,41 @@
   color: var(--dang);
 }
 
+/* Round 14 — under a load on the road: where it is as last said, and the next step to say (a border, a hub). The
+   allowance line can be long ("allowed 9 h at this post: …"), so the strip wraps and its buttons go under it. */
+.passage-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 10px;
+  margin: 6px 0 2px;
+  padding: 8px 12px;
+  border-radius: var(--r-ctl);
+  background: var(--panel);
+  border: 1px solid var(--bd-soft);
+  font-size: 14px;
+  color: var(--tx2);
+}
+
+.passage-strip__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 200px;
+}
+
+.passage-strip__info b {
+  color: var(--tx);
+}
+
+.passage-strip__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 12px;
+}
+
 /* ------------------------------------------------------------------ FB2: the open board -- */
 /* The market a haulier SHOPS, as against the deck the network pushes. A list, not a card deck: an
    operator comparing eight loads needs them side by side, and a swipe-one-at-a-time deck is the wrong

@@ -110,3 +110,21 @@ export function formFromRule(rule: BorderRuleRow): BorderForm {
 export function crossingLine(crossing: BorderCrossingPoint): string {
   return [crossing.name, crossing.hours].filter(Boolean).join(' · ');
 }
+
+/** Round 14 — one post's measured wait, from the loads its drivers said cleared it in the last ninety days. */
+export interface BorderWaitRow {
+  from: string;
+  to: string;
+  post: string;
+  hours: number;
+  crossings: number;
+  /** Enough crossings for the post's own promise; else loads through it are promised the standard figure. */
+  measured: boolean;
+  longestHours: number;
+  lastClearedAt: string;
+}
+
+/** The waits in the order staff read them: a crossing's posts together, the busiest first. */
+export function waitsInOrder(rows: BorderWaitRow[]): BorderWaitRow[] {
+  return [...rows].sort((a, b) => `${a.from}${a.to}`.localeCompare(`${b.from}${b.to}`) || b.crossings - a.crossings || a.post.localeCompare(b.post));
+}

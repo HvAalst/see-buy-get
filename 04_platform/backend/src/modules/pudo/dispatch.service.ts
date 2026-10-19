@@ -51,6 +51,8 @@ import { Vehicle } from './fleet.types';
 import { BoardRow, Claimable, ClaimableKind, DeliveryTiming, FleetOrderRow, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, LeftOutOfPlan, MarketRow, MarketSeries, Offer, OutsideWindow, PlannedAbout, PostedFreightRow, RoutePlan, RunningLate, shipperWhy, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS , FreightReload } from './dispatch.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 import { CommercialInvoiceService } from './commercial-invoice.service';
+import { LoadPassageService, viewOf as passageView } from './load-passage.service';
+import type { LoadCrossing, LoadPassageView, PassageKind, PassageRecorded } from './load-passage.types';
 import { buildOfferResponse, type OfferResponse } from './offer-response';
 
 /**
@@ -388,6 +390,9 @@ export class DispatchService {
     // A load crossing a border is not taken over without the shipper's commercial invoice. Optional so the specs that
     // build this by hand keep compiling; without it nothing is asked of the papers, as before.
     @Optional() private readonly invoices?: CommercialInvoiceService,
+    // Round 14 — a load at a border or a hub, said by its driver. Optional so the specs that build this by hand keep
+    // compiling; without it nothing is said between pickup and delivery, as before.
+    @Optional() private readonly passages?: LoadPassageService,
   ) {
     this.freightSeq = [...this.freights.values()].length; // continue the human FRT-NNN sequence after a restart
     // An account moving off a number takes the orders addressed to that number with it.
@@ -1663,6 +1668,8 @@ export class DispatchService {
         // FP7 — box 13, and whether it is still the sender's to rewrite or only to add to.
         ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}),
         instructionsMode: f.status === 'scheduled' || f.status === 'available' || f.status === 'claimed' ? 'edit' : f.status === 'in_transit' ? 'amend' : 'none',
+        // Round 14 — at a border post, cleared it, at a hub; crossing a border, when it is expected.
+        ...this.passageFacts(f, now),
       }));
   }
 
@@ -3246,6 +3253,33 @@ export class DispatchService {
     return f;
   }
 
+  /**
+   * ROUND 14 — THE DRIVER SAYS WHERE THE LOAD IS: at a border post, cleared it, at a hub (load-passage.service.ts judges
+   * it). Its shipper's system and its fleet's are told; its shipper reads it on its Loads screen and anybody holding its
+   * tracking link on the page. A tap sent twice is answered as it was and tells nobody again.
+   */
+  recordPassage(freightId: string, driverDid: string, input: { kind: PassageKind; post?: string; hub?: string; location?: GeoPoint; observedAt?: string }, now: number = Date.now()): PassageRecorded {
+    if (!this.passages) throw new GlosError('INVALID_STATE', 'Borders and hubs are not recorded in this deployment');
+    const f = this.requireFreight(freightId);
+    const { passage, replayed } = this.passages.record(f, driverDid, input, now);
+    const view = passageView(passage);
+    if (!replayed) {
+      void this.events.publish(GlosEvent.Pudo.FreightPassed, { freightId: f.freightId, code: f.code, driverDid, posterDid: f.postedByDid ?? f.shipperDid, passage: view }, { source: 'pudo' }).catch(() => undefined);
+    }
+    const crossing = this.passages.crossingOf(f, now);
+    return { passage: view, ...(crossing ? { crossing } : {}), replayed };
+  }
+
+  /** What its driver said on the road, and — crossing a border — where it has got to: for the shipper, its system, the page. */
+  passageFacts(f: Freight, now: number = Date.now()): { passages?: LoadPassageView[]; crossing?: LoadCrossing } {
+    if (!this.passages) return {};
+    const passages = this.passages.views(f.freightId);
+    // Where it has got to is said while it is on the road. Delivered, its steps tell how it went — a driver who never said
+    // "cleared" must not leave a delivered load reading as still at the border.
+    const crossing = f.status === 'in_transit' ? this.passages.crossingOf(f, now) : undefined;
+    return { ...(passages.length ? { passages } : {}), ...(crossing ? { crossing } : {}) };
+  }
+
   listFreight(filter: { status?: Freight['status'] } = {}): Freight[] {
     return [...this.freights.values()].filter((f) => !filter.status || f.status === filter.status);
   }
@@ -3431,7 +3465,9 @@ export class DispatchService {
     // S32b: status lets the driver app drive the claimed → picked-up → delivered flow in-app.
     // Said on the load before the driver reaches the gate, and refused at it (pickupFreight): the same rule both times.
     const invoiceMissing = f.status === 'claimed' && Boolean(this.invoices?.pickupRefusal(f, this.postedByBusiness(f)));
-    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}) };
+    // Round 14 — on the road: what the driver needs to say a border or a hub.
+    const passage = f.status === 'in_transit' && this.passages ? this.passages.forDriver(f) : undefined;
+    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(passage ? { passage } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}) };
   }
 
   /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */

@@ -32,6 +32,7 @@ import type {
   VehicleView,
 } from './types';
 import type { DepartureView } from './types';
+import type { SaidPassage } from './passage';
 import { boardOriginPin, cardReader, cardWords, DEFAULT_WORK_RADIUS_KM, defaultWorkMode, lastReadingBreached, leftDetail, minEarnFilter, nodeOptions, originReady } from './logic';
 import { pinAfterRename, type GeoPoint, type PinSource } from '../../shared/geo';
 import { currentPosition, watchPosition } from '../../shared/position';
@@ -148,6 +149,8 @@ export interface DriverState {
   observations: Array<{ observationId: string; subject: string; place: string; happenedOn: string; tier: 'told' | 'evidenced' }>;
   /** Where that list was read from. Null until the phone gives a fix — the distances need one. */
   roadAt: { lat: number; lng: number } | null;
+  /** Round 14 — the last border or hub step said on this phone, per load: shown at once, with or without a signal. */
+  said: Record<string, SaidPassage>;
   /** Screen-level failure — rendered as an ErrorNote, never as a raw string. */
   error: SbgError | null;
   toasts: Toast[];
@@ -235,6 +238,7 @@ const INITIAL: DriverState = {
   observationNotice: null,
   observations: [],
   roadAt: null,
+  said: {},
   error: null,
   toasts: [],
   busy: null,
@@ -1778,6 +1782,34 @@ export function useDriverApp() {
   );
 
   /**
+   * Round 14 — the load is at a border post, has cleared it, or is at a hub. Where the phone is goes with it when the
+   * phone knows (the rest of the drive is worked out from there); without a fix the step is said all the same. With no
+   * signal it waits on this phone, and the screen shows it as said so the next step can follow.
+   */
+  const sayPassage = useCallback(
+    async (ref: string, kind: SaidPassage['kind'], place?: string) => {
+      if (!client) return;
+      await run(`passage:${ref}`, async () => {
+        const name = place?.trim().replace(/\s+/g, ' ');
+        const location = await currentPosition(5_000);
+        const at = new Date().toISOString();
+        const r = await client.api.recordPassage(ref, { kind, ...(kind === 'at_border' && name ? { post: name } : {}), ...(kind === 'at_hub' && name ? { hub: name } : {}), ...(location ? { location } : {}), observedAt: at });
+        if (r.error) {
+          if (!isOffline(r.error)) await refresh();
+          return fail(r.error);
+        }
+        buzz();
+        const post = kind === 'cleared_border' ? (stateRef.current.claims.find((c) => c.ref === ref)?.passage?.atPost?.post ?? stateRef.current.said[ref]?.post) : kind === 'at_border' ? name : undefined;
+        setState((s) => ({ ...s, said: { ...s.said, [ref]: { kind, at, ...(post ? { post } : {}), ...(kind === 'at_hub' && name ? { hub: name } : {}) } } }));
+        if (r.status === 202) return pushToast({ tone: 'ok', icon: 'offline', title: t('driver.toast.passageQueued'), detail: t('driver.toast.passageQueuedDetail') });
+        pushToast({ tone: 'ok', icon: 'check', title: t(kind === 'at_border' ? 'driver.toast.atBorder' : kind === 'cleared_border' ? 'driver.toast.borderCleared' : 'driver.toast.atHub'), detail: t('driver.toast.passageToldDetail') });
+        await refresh();
+      });
+    },
+    [client, run, fail, pushToast, refresh],
+  );
+
+  /**
    * One tap from the cab.
    *
    * The position comes from the phone, never from a form — the whole premise is that nobody fills in a
@@ -1921,6 +1953,7 @@ export function useDriverApp() {
       failDelivery,
       handBack,
       logTemp,
+      sayPassage,
       pushToast,
       dismissToast,
     },

@@ -35,7 +35,8 @@ describe('the consignment note', () => {
     }) as Freight;
 
   const service = new ConsignmentNoteService(
-    { requireFreightPublic: (id: string) => freights[id] ?? (() => { throw new Error('not found'); })() } as never,
+    // Nothing said on the road yet (round 14): no border, no hub.
+    { requireFreightPublic: (id: string) => freights[id] ?? (() => { throw new Error('not found'); })(), passageFacts: () => ({}) } as never,
     { get: (did: string) => ({ displayName: 'Amos K.', managerDid: did === 'did:drv:amos' ? 'did:fleet:kilima' : undefined, jurisdiction: 'KE' }) } as never,
     { get: () => ({ companyName: 'Kilima Logistics', depotAddress: '1 Depot Rd', jurisdiction: 'KE', did: 'did:fleet:kilima' }) } as never,
     { get: (did: string) => ({ shopName: did === 'did:shop:a1' ? 'Mama Sarah Shop' : 'Riverside Corner', landmark: 'Next to the market', country: 'KE', did }) } as never,

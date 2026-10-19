@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
-import { EMPTY_BORDER_FORM, borderFormBlocker, crossingLine, formFromRule, toBorderBody, type BorderForm, type BorderRuleRow } from '../borders';
+import { EMPTY_BORDER_FORM, borderFormBlocker, crossingLine, formFromRule, toBorderBody, waitsInOrder, type BorderForm, type BorderRuleRow, type BorderWaitRow } from '../borders';
+import { hoursWords } from '../../../shared/passages';
 import { countryNameOf, type CatalogueCountry } from '../presence';
 import type { TowerActions, TowerState } from '../useTowerApp';
 import { FieldObservationsPanel } from './FieldObservationsPanel';
@@ -19,6 +20,7 @@ export function BordersScreen({ state, actions }: { state: TowerState; actions: 
   const client = actions.client();
   const who = state.who?.name;
   const [rules, setRules] = useState<BorderRuleRow[] | null>(null);
+  const [waits, setWaits] = useState<BorderWaitRow[] | null>(null);
   const [catalogue, setCatalogue] = useState<CatalogueCountry[]>(state.catalogue ?? []);
   const [form, setForm] = useState<BorderForm>({ ...EMPTY_BORDER_FORM });
   const [busy, setBusy] = useState(false);
@@ -27,9 +29,10 @@ export function BordersScreen({ state, actions }: { state: TowerState; actions: 
 
   const load = useCallback(async () => {
     if (!client) return;
-    const [list, countries] = await Promise.all([client.api.borderRules(), catalogue.length ? Promise.resolve(null) : client.api.countryCatalogue()]);
+    const [list, countries, measured] = await Promise.all([client.api.borderRules(), catalogue.length ? Promise.resolve(null) : client.api.countryCatalogue(), client.api.borderWaits()]);
     if (list.error) setError(list.error.detail || list.error.title);
     else setRules(((list.data as unknown as { items?: BorderRuleRow[] })?.items ?? []) as BorderRuleRow[]);
+    setWaits(measured.error ? [] : waitsInOrder((measured.data ?? []) as unknown as BorderWaitRow[]));
     if (countries && !countries.error) setCatalogue(((countries.data as unknown as { items?: CatalogueCountry[] })?.items ?? []) as CatalogueCountry[]);
   }, [client, catalogue.length]);
 
@@ -118,6 +121,52 @@ export function BordersScreen({ state, actions }: { state: TowerState; actions: 
                     <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setForm(formFromRule(rule))}>
                       {t('tower.borders.edit')}
                     </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      {/* Round 14 — how long each post takes, from the loads its drivers said reached and cleared it. A post with enough
+          crossings is what a load through it is promised; until then the standard figure is, and the column says which. */}
+      <section class="cons__panel" style="margin-top:18px">
+        <div class="cons__panelhead">
+          <span class="cons__panelt">{t('tower.borders.waits.title')}</span>
+          <span class="chint">{t('tower.borders.waits.hint')}</span>
+        </div>
+        {waits === null ? (
+          <p class="cons__empty">{t('tower.queues.loading')}</p>
+        ) : waits.length === 0 ? (
+          <p class="cons__empty">{t('tower.borders.waits.none')}</p>
+        ) : (
+          <table class="ctbl ctbl--stack">
+            <thead>
+              <tr>
+                <th>{t('tower.borders.col.direction')}</th>
+                <th>{t('tower.borders.waits.col.post')}</th>
+                <th>{t('tower.borders.waits.col.wait')}</th>
+                <th>{t('tower.borders.waits.col.promise')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {waits.map((w) => (
+                <tr key={`${w.from}>${w.to}>${w.post}`}>
+                  <td class="ctbl__strong">
+                    {name(w.from)} → {name(w.to)}
+                  </td>
+                  <td>
+                    <span class="ctbl__lbl">{t('tower.borders.waits.col.post')}</span>
+                    {w.post}
+                  </td>
+                  <td class="ctbl__sub">
+                    <span class="ctbl__lbl">{t('tower.borders.waits.col.wait')}</span>
+                    {t('tower.borders.waits.median', { hours: hoursWords(w.hours), n: w.crossings, longest: hoursWords(w.longestHours) })}
+                  </td>
+                  <td>
+                    <span class="ctbl__lbl">{t('tower.borders.waits.col.promise')}</span>
+                    <span class={`ctag ${w.measured ? 'ctag--ok' : 'ctag--quiet'}`}>{w.measured ? t('tower.borders.waits.promised', { hours: hoursWords(w.hours) }) : t('tower.borders.waits.notYet')}</span>
                   </td>
                 </tr>
               ))}

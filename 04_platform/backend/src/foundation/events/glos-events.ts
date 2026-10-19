@@ -139,6 +139,7 @@ export const GlosEvent = {
     FreightDelivered: 'pudo.freight_delivered', // FP2 — the consignment closes: the sender is sent its receipt // a dedicated-freight load registered → ping drivers near its pickup
     FreightCancelled: 'pudo.freight_cancelled', // FP3 — the sender (or the network) withdrew a load before it was taken over; a driver who had claimed it is told
     FreightDeliveryFailed: 'pudo.freight_delivery_failed', // FP3b — the driver was at the door and could not hand over; the load stays on the van, the sender is told
+    FreightPassed: 'pudo.freight_passed', // round 14 — the driver said the load is at a border post, cleared it, or is at a hub; its shipper's and its fleet's systems are told
     FreightClaimOpened: 'pudo.freight_claim_opened', // FP3b — the sender says the goods arrived damaged, short, or not at all
     FreightClaimDecided: 'pudo.freight_claim_decided', // FP3b — an operator decided it, with a reason the claimant is shown
     LoadClaimed: 'pudo.load_claimed', // a driver claimed a tote/freight along their route
