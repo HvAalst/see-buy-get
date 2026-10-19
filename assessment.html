@@ -412,7 +412,7 @@
   <p class="q"><span class="num">P2</span>An API for businesses and fleets</p>
   <dl>
     <dt>What</dt><dd>A business's system posts loads and reads their status; a fleet's own transport system sends orders in and takes its day's plan out. The same keys stores already have (a key per system, revocable, sandbox and live), with what each key may do written on it.</dd>
-    <dt>Decisions</dt><dd><ul><li>Which acts a key may do without a person (post a load: yes; accept a plan, or a price: probably not).</li><li>Limits per key, and how a version of the API is retired.</li></ul></dd>
+    <dt>Decisions</dt><dd><ul><li>Which acts a key may do without a person (post a load: yes; accept a plan, or a price: probably not). <b>Your answer, round 11:</b> a fleet's own system may take a load at its price without a person.</li><li>Limits per key, and how a version of the API is retired.</li></ul></dd>
     <dt>Builds on</dt><dd>The store API keys; the contract (756 operations, published); the order sheet reader, whose refusals in words would answer a system too.</dd>
   </dl>
 </div>
@@ -547,7 +547,8 @@
   <div class="card"><span class="tag t-strong">Answered</span><h3>Your eighth answers, built</h3><p>KRA eTIMS invoices, for Kenya only: every sale and every sale given back is a tax invoice, built to KRA's interface and tested, and not sent to KRA until the company is registered (<code>77dec19</code>). Found on the way: two servers starting in the same instant could both claim the store; now they cannot (<code>deb7659</code>).</p></div>
   <div class="card"><span class="tag t-strong">Answered</span><h3>Your ninth answers, built</h3><p>A Kenyan shop's or store's KRA PIN on its tax invoices, asked in no other country, and the top-up fee with the company's own VAT (<code>3b9dcfd</code>). Webhooks for every party, the store first: it sees whether each message arrived and sends one again (<code>5d8df21b</code>).</p></div>
   <div class="card"><span class="tag t-strong">Answered</span><h3>Your tenth answers, built</h3><p>A business's own system is told each step of its loads — only what it sees in its app, signed, read back, sent again — and its owners are told once a day when it stays down (<code>170f4831</code>).</p></div>
-  <div class="card"><span class="tag t-missing">Missing</span><h3>What matters most</h3><p>A fleet's own system; an API for businesses and fleets; a store parcel's papers abroad. In order, with what I recommend, on the full page.</p></div>
+  <div class="card"><span class="tag t-strong">Answered</span><h3>Your eleventh answers, built</h3><p>A fleet's own system is told each step of its orders, loads, vehicles, runs and plan, as its own screens show them; a load's money only where we pay the fleet; where its vehicles are only when the fleet turns it on, and the driver is told (<code>64e2c10</code>).</p></div>
+  <div class="card"><span class="tag t-missing">Missing</span><h3>What matters most</h3><p>An API for businesses and fleets (one answer in already: a fleet's system may take a load at its price); a store parcel's papers abroad. In order, with what I recommend, on the full page.</p></div>
 </div>
 </div>
 </body>
