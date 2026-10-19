@@ -124,6 +124,8 @@ export interface MailParams {
   'business-system-down': { business: string; count: number; since: string };
   /** Messages to a fleet's own system were given up after two days of tries (round 11). At most once a day, to its contact email. */
   'fleet-system-down': { fleet: string; count: number; since: string };
+  /** A version of the API a company's key calls stops, announced a year ahead and said again a month before (round 12). */
+  'api-version-retiring': { company: string; version: string; retiresAt: string; stage: 'announced' | 'month'; app: 'business' | 'fleet' };
   /**
    * A problem was reported on one of a store's shipments, and the store names an insurer on its shipping policy: the
    * damage claim report, by a link. Sent the moment the report is made. `by`: who reported the problem.
@@ -342,6 +344,27 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
         { kind: 'button', label: `Open the ${APP_NAMES.fleet}`, href: appUrl('fleet') },
       ],
       reason: 'You are getting this email because it is the contact email of this fleet on SeeBuyGet. It is sent at most once a day.',
+    }),
+  },
+
+  'api-version-retiring': {
+    title: 'A version of the API your system uses is stopping',
+    sentWhen: 'A version of the API is announced as stopping (at least a year ahead), and again a month before it stops. To every company holding a live key: a business’s owners, a fleet’s contact email.',
+    wired: true,
+    // Late it is still true, and a year's notice has room for a day's delay.
+    sendLater: 72,
+    sample: { company: 'Pwani Hauliers Ltd', version: '1', retiresAt: '2027-11-01T00:00:00Z', stage: 'announced', app: 'fleet' },
+    build: (p) => ({
+      subject: p.stage === 'month' ? `${p.company}: version ${p.version} of the API stops in a month` : `${p.company}: version ${p.version} of the API will stop on ${formatWhen(p.retiresAt)}`,
+      preheader: `Your system's key calls version ${p.version}. It keeps working until ${formatWhen(p.retiresAt)}.`,
+      blocks: [
+        { kind: 'heading', text: p.stage === 'month' ? `Version ${p.version} of the API stops in a month` : `Version ${p.version} of the API will stop` },
+        { kind: 'paragraph', text: `Your company holds a live key for its own system, and the API it calls is version ${p.version}. It keeps working until ${formatWhen(p.retiresAt)}; after that, a call to it is refused. A newer version is out, and the developer guide says what changed.` },
+        { kind: 'paragraph', text: p.stage === 'month' ? 'This is the second and last notice: please move your system to the newer version in the coming weeks.' : 'Nothing needs doing today. We will write once more, a month before it stops.' },
+        { kind: 'facts', rows: [['Company', p.company], ['Version', p.version], ['Stops on', formatWhen(p.retiresAt)]] },
+        { kind: 'button', label: `Open the ${APP_NAMES[p.app]}`, href: appUrl(p.app) },
+      ],
+      reason: `You are getting this email because your company holds a live key for the SeeBuyGet API. Every company holding one is told a year ahead and a month ahead.`,
     }),
   },
 

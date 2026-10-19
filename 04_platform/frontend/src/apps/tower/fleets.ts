@@ -131,11 +131,14 @@ export interface FleetSystemCounts {
   givenUp: number;
   /** Whether it sends where its vehicles are. */
   positions: boolean;
+  /** Round 12 — its keys that work, by mode. */
+  keys?: { live: number; test: number };
 }
 
-/** "No system set up", or what became of its messages — and whether it is sent where its vehicles are. */
+/** "No system set up", or what became of its messages — whether it is sent where its vehicles are — and its keys. */
 export function fleetSystemWords(s: FleetSystemCounts, t: Translate): string {
-  if (!s.hasAddress) return t('tower.network.fleets.systemNone');
+  const keys = s.keys && s.keys.live + s.keys.test > 0 ? ` ${t('tower.keys.counts', { live: s.keys.live, test: s.keys.test })}` : '';
+  if (!s.hasAddress) return t('tower.network.fleets.systemNone') + keys;
   const counts = t('tower.network.fleets.systemCounts', { delivered: s.delivered, waiting: s.waiting, givenUp: s.givenUp });
-  return s.positions ? `${counts} ${t('tower.network.fleets.systemPositions')}` : counts;
+  return (s.positions ? `${counts} ${t('tower.network.fleets.systemPositions')}` : counts) + keys;
 }

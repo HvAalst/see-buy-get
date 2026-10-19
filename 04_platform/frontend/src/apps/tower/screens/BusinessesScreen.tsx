@@ -172,6 +172,13 @@ function BusinessDetail({ row, state, actions, onClose }: { row: BusinessRow; st
               <dd class="cons__factv">{row.system.hasAddress ? t('tower.biz.fact.systemCounts', { delivered: row.system.delivered, waiting: row.system.waiting, givenUp: row.system.givenUp }) : t('tower.biz.fact.systemNone')}</dd>
             </div>
           ) : null}
+          {/* Round 12 — its keys for its own systems, counted. Staff read them; they make and take away none. */}
+          {row.system?.keys ? (
+            <div class="cons__fact">
+              <dt class="cons__factk">{t('tower.biz.fact.keys')}</dt>
+              <dd class="cons__factv">{t('tower.keys.counts', { live: row.system.keys.live, test: row.system.keys.test })}</dd>
+            </div>
+          ) : null}
           {row.askedAt ? (
             <div class="cons__fact">
               <dt class="cons__factk">{t('tower.biz.fact.asked')}</dt>

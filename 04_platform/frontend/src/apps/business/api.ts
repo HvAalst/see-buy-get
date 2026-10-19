@@ -1,4 +1,5 @@
 import type { SystemMessage, SystemView } from './system';
+import type { CompanyKey, CompanyKeyIssued } from '../../shared/companyKeys';
 import type { CommercialInvoice, CommercialInvoiceView, Gs1View, PackageLabels } from './papers';
 import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
 import { createAgentApi, createNotificationsApi, createOperatorApi, createSeededClient, makeConfig, publicRequest, type AgentApi, type NotificationsApi, type OperatorApi, type Result, type SbgConfig, type SeededAppClient } from '../../lib/sbg';
@@ -310,6 +311,10 @@ export interface BusinessClient {
   turnSystemSecret(): Promise<Result<SystemView>>;
   testSystem(): Promise<Result<SystemMessage>>;
   resendSystemMessage(messageId: string): Promise<Result<SystemMessage>>;
+  /** Round 12 — its keys, for its own systems: read by everybody, made and taken away by an owner. */
+  keys(): Promise<Result<{ items: CompanyKey[] }>>;
+  issueKey(mode: 'live' | 'test', label?: string): Promise<Result<CompanyKeyIssued>>;
+  revokeKey(keyId: string): Promise<Result<CompanyKey>>;
   /** A load's package labels: what they carry, and the page to print. */
   packageLabels(freightId: string): Promise<Result<PackageLabels>>;
   packageLabelsPage(freightId: string): Promise<Result<string>>;
@@ -360,6 +365,9 @@ export function createBusinessClient(): BusinessClient {
     turnSystemSecret: () => call((c) => c.POST('/v1/sbg/business/me/system/secret' as never, {} as never) as never),
     testSystem: () => call((c) => c.POST('/v1/sbg/business/me/system/test' as never, {} as never) as never),
     resendSystemMessage: (messageId) => call((c) => c.POST(`/v1/sbg/business/me/system/messages/${encodeURIComponent(messageId)}/resend` as never, {} as never) as never),
+    keys: () => call((c) => c.GET('/v1/sbg/business/me/keys' as never, {} as never) as never),
+    issueKey: (mode, label) => call((c) => c.POST('/v1/sbg/business/me/keys' as never, { body: { mode, ...(label ? { label } : {}) } } as never) as never),
+    revokeKey: (keyId) => call((c) => c.POST(`/v1/sbg/business/me/keys/${encodeURIComponent(keyId)}/revoke` as never, {} as never) as never),
     packageLabels: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/package-labels` as never, {} as never) as never),
     packageLabelsPage: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/package-labels.html` as never, { parseAs: 'text' } as never) as never),
     invoice: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/commercial-invoice` as never, {} as never) as never),

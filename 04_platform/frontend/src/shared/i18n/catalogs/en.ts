@@ -255,6 +255,13 @@ export const en = {
   'common.chat.dispute.sharedLine': 'Shared a report with SeeBuyGet (messages chosen: {n}).',
   'common.retry': 'Try again',
   'common.cancel': 'Cancel',
+  // Round 12 — a company's keys for its own systems, said the same way in the Business app and the Fleet app.
+  'companyKeys.live': 'Live key',
+  'companyKeys.test': 'Test key',
+  'companyKeys.made': 'Made by {name}, {when}.',
+  'companyKeys.used': 'Last used {when}.',
+  'companyKeys.unused': 'Not used yet.',
+  'companyKeys.revoked': 'Taken away by {name}, {when}. It no longer works.',
   'common.close': 'Close',
   'common.back': 'Back',
   'common.done': 'Done',

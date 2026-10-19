@@ -30,7 +30,7 @@ export interface BusinessRow {
   missing: string[];
   handle?: string;
   /** Round 10 — the messages to its own system, counted. Staff read it; they send nothing in its name. */
-  system?: { hasAddress: boolean; delivered: number; waiting: number; givenUp: number };
+  system?: { hasAddress: boolean; delivered: number; waiting: number; givenUp: number; keys?: { live: number; test: number } };
 }
 
 /** Waiting on a person here: asked and not yet looked at, or approved once and waiting for a second. */

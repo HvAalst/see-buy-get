@@ -103,6 +103,8 @@ export class FleetSystemCounts {
   givenUp: number;
   /** Whether it sends where its vehicles are to its system. */
   positions: boolean;
+  /** Round 12 — its keys that work, by mode. */
+  keys?: { live: number; test: number };
 }
 
 /** For a driver on a shift: their fleet's own system is told where they are, and how often. */

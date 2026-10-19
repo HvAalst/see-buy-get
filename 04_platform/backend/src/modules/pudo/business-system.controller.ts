@@ -7,6 +7,8 @@ import { BusinessHookMessageView, BusinessSystemView } from './business-hook.typ
 import { BusinessHookService } from './business-hooks.service';
 import { BusinessService } from './business.service';
 import { BusinessMemberGuard } from './business-member.guard';
+import { CompanyKeyService } from './company-key.service';
+import { CompanyKeyIssued, CompanyKeyList, CompanyKeyView, IssueCompanyKeyDto } from './company-key.types';
 
 /**
  * A BUSINESS'S OWN SYSTEM, TOLD OF ITS LOADS (round 10). Read by anybody in the business; its address and signing secret
@@ -19,6 +21,7 @@ export class BusinessSystemController {
   constructor(
     private readonly businesses: BusinessService,
     private readonly hooks: BusinessHookService,
+    private readonly keyring: CompanyKeyService,
   ) {}
 
   @Roles('business')
@@ -51,5 +54,32 @@ export class BusinessSystemController {
   @Post('business/me/system/messages/:messageId/resend')
   resend(@Param('messageId') messageId: string, @Actor() actor: IntrospectionResult): Promise<BusinessHookMessageView> {
     return this.hooks.resend(this.businesses.requireMember(actor), messageId);
+  }
+
+  /* -- round 12: its keys, for its own systems to post and read its loads (company-api.controller.ts) -- */
+
+  /** Every key it holds or held — any member reads them; never a key itself. */
+  @Roles('business')
+  @Get('business/me/keys')
+  keys(@Actor() actor: IntrospectionResult): CompanyKeyList {
+    return { items: this.keyring.list({ kind: 'business', id: this.businesses.requireMember(actor).entity.entityId }) };
+  }
+
+  /** A new key — an owner's act, under their name. The key itself is in this answer only. */
+  @Roles('business')
+  @Post('business/me/keys')
+  issueKey(@Body() dto: IssueCompanyKeyDto, @Actor() actor: IntrospectionResult): CompanyKeyIssued {
+    const acting = this.businesses.requireMember(actor);
+    this.businesses.requireOwner(acting);
+    return this.keyring.issue({ kind: 'business', id: acting.entity.entityId }, dto.mode, dto.label, acting.member.name);
+  }
+
+  /** Take a key away, now — an owner's act, under their name. */
+  @Roles('business')
+  @Post('business/me/keys/:keyId/revoke')
+  revokeKey(@Param('keyId') keyId: string, @Actor() actor: IntrospectionResult): CompanyKeyView {
+    const acting = this.businesses.requireMember(actor);
+    this.businesses.requireOwner(acting);
+    return this.keyring.revoke({ kind: 'business', id: acting.entity.entityId }, keyId, acting.member.name);
   }
 }

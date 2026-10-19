@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SBG API for businesses and fleets</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #17181c; --muted: #6b6f76; --line: #e3e3df;
+    --accent: #4c46e0; --ship: #1c7c54; --now: #b4690e; --next: #3f6ea8; --gap: #a33a3a;
+    --code-bg: #f2f2ef;
+    --shadow: 0 1px 2px rgba(20,20,25,.06), 0 8px 24px rgba(20,20,25,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121317; --panel: #1a1c21; --ink: #eceef2; --muted: #9aa0aa; --line: #2a2d34;
+      --accent: #8f8bff; --ship: #5cc08c; --now: #e0a44a; --next: #7fb0e8; --gap: #e07a7a;
+      --code-bg: #14161a;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121317; --panel: #1a1c21; --ink: #eceef2; --muted: #9aa0aa; --line: #2a2d34;
+    --accent: #8f8bff; --ship: #5cc08c; --now: #e0a44a; --next: #7fb0e8; --gap: #e07a7a;
+    --code-bg: #14161a;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 40px 24px 96px; }
+  .cols { display: grid; grid-template-columns: 1fr; gap: 32px; }
+  @media (min-width: 960px) { .cols { grid-template-columns: 200px 1fr; gap: 48px; align-items: start; } nav.toc { position: sticky; top: 32px; } }
+
+  header.page { margin-bottom: 8px; }
+  h1 { font-size: 26px; letter-spacing: -.01em; margin: 0; text-wrap: balance; }
+  .sub { color: var(--muted); font-size: 15px; max-width: 68ch; margin: 10px 0 0; }
+  .base { margin: 20px 0 36px; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--muted); }
+  .base b { color: var(--ink); font-weight: 600; }
+
+  nav.toc ol { list-style: none; margin: 0; padding: 0; font-size: 14px; }
+  nav.toc li { margin-bottom: 9px; }
+  nav.toc a { color: var(--muted); text-decoration: none; }
+  nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); text-decoration: underline; }
+
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 24px; margin-bottom: 24px; }
+  section > h2 { margin: 0 0 6px; font-size: 19px; letter-spacing: -.01em; }
+  section > h2 + p { margin-top: 0; color: var(--muted); font-size: 14px; }
+  h3 { font-size: 15px; margin: 26px 0 8px; }
+  p { max-width: 72ch; }
+  p.lede { margin-top: 0; }
+
+  .endpoint { display: inline-flex; align-items: center; gap: 10px; font: 13px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin-bottom: 4px; }
+  .verb { font-weight: 700; color: var(--ship); letter-spacing: .04em; }
+  .verb.get { color: var(--next); }
+
+  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px; padding: 16px; overflow-x: auto; margin: 12px 0 0; }
+  pre code { background: none; padding: 0; font-size: 13px; line-height: 1.6; }
+  code { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: color-mix(in srgb, var(--ink) 7%, transparent); padding: 1px 5px; border-radius: 5px; }
+
+  .scroll { overflow-x: auto; margin-top: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 520px; }
+  th, td { text-align: left; padding: 9px 14px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  td:first-child { white-space: nowrap; font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  td.desc { color: var(--muted); }
+  .req { color: var(--gap); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; font-weight: 700; }
+
+  .note { border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); border-radius: 0 8px 8px 0; padding: 14px 16px; margin: 18px 0 0; font-size: 14px; }
+  .note b { display: block; margin-bottom: 3px; }
+  .note.warn { border-left-color: var(--now); background: color-mix(in srgb, var(--now) 8%, transparent); }
+
+  ul.plain { margin: 12px 0 0; padding-left: 18px; }
+  ul.plain li { margin-bottom: 8px; color: var(--muted); }
+  ul.plain li b { color: var(--ink); font-weight: 600; }
+  footer { color: var(--muted); font-size: 13px; }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="page">
+  <h1>SBG API for businesses and fleets</h1>
+  <p class="sub">
+    Your own system — an ERP, a warehouse system, a transport management system — posts loads, sends orders in,
+    reads your plan and takes loads off the board, and is told every step back. Through the same checks as the
+    Business app and the Fleet app: a key can do nothing the app would refuse.
+  </p>
+  <p class="base">Base URL &nbsp;<b>http://localhost:3000/v1</b> &nbsp;· &nbsp;sandbox &nbsp;· &nbsp;version <b>1</b></p>
+</header>
+
+<div class="cols">
+
+<nav class="toc" aria-label="Contents">
+  <ol>
+    <li><a href="#quickstart">Quickstart</a></li>
+    <li><a href="#keys">Keys and modes</a></li>
+    <li><a href="#business">For a business</a></li>
+    <li><a href="#fleet">For a fleet</a></li>
+    <li><a href="#never">What a key never does</a></li>
+    <li><a href="#messages">Messages to your system</a></li>
+    <li><a href="#retry">Retrying safely</a></li>
+    <li><a href="#errors">Errors</a></li>
+    <li><a href="#limits">Limits</a></li>
+    <li><a href="#versions">Versions and notice</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<section id="quickstart">
+  <h2>Quickstart</h2>
+  <p>Make a key in the app, put it in the <code>x-sbg-key</code> header, call.</p>
+  <ul class="plain">
+    <li><b>A business:</b> Business app → Business details → <i>Keys for your own systems</i>. An owner makes it.</li>
+    <li><b>A fleet:</b> Fleet app → Dashboard → <i>Your own system</i> → <i>Keys for your own system</i>. Any manager makes it.</li>
+  </ul>
+<pre><code>curl -s http://localhost:3000/v1/sbg/api/business/loads \
+  -H 'x-sbg-key: bk_test_…'</code></pre>
+  <p>Start with a <b>test key</b>: it runs every check a live one does and keeps nothing, so you can send the same
+  load or the same orders as often as it takes.</p>
+</section>
+
+<section id="keys">
+  <h2>Keys and modes</h2>
+  <p>One key per system that holds it. Shown once, kept by us only as a hash, taken away at any time.</p>
+  <h3>Whose it is</h3>
+  <p>A key starts with whose it is and which world it points at: <code>bk_live_…</code> and <code>bk_test_…</code> are
+  a business's, <code>fk_live_…</code> and <code>fk_test_…</code> a fleet's. The company is in the key's record on our
+  side, never in what you send: a key cannot act for anybody else.</p>
+  <h3>Live and test</h3>
+  <p>A <b>live</b> key acts. A <b>test</b> key runs every check — the fields, the trade term, the contract, the
+  driver's vehicle — and keeps nothing: no load is posted, no order placed, nothing taken. Every answer says which:
+  <code>"test": true</code> or <code>false</code>.</p>
+  <h3>Who makes them</h3>
+  <p>A business's <b>owners</b> make and take away its keys; a fleet's keys, <b>any manager</b>. Each act is recorded
+  under the person's name, and the app lists every key: who made it, when it was last used, who took it away. What a
+  key does is recorded under the key's own name — its label and last four characters — so the people in your company
+  can tell your system's acts from their own.</p>
+  <p>Lost a key? Make a new one and take the old one away. There is nothing to recover: we never kept it.</p>
+</section>
+
+<section id="business">
+  <h2>For a business</h2>
+  <p>Read your loads, post a load, withdraw one nobody has taken yet.</p>
+
+  <h3>Your loads</h3>
+  <p><span class="endpoint"><span class="verb get">GET</span>/sbg/api/business/loads</span>
+  &nbsp;<span class="endpoint"><span class="verb get">GET</span>/sbg/api/business/loads/{freightId}</span></p>
+  <p>Exactly as your Loads screen reads them: status, carrier, delivery, a problem reported. A load another business
+  posted is not found.</p>
+
+  <h3>Post a load</h3>
+  <p><span class="endpoint"><span class="verb">POST</span>/sbg/api/business/loads</span></p>
+  <p>The same fields the Business app sends, checked the same way.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Field</th><th>What it is</th></tr></thead>
+    <tbody>
+      <tr><td>description <span class="req">required</span></td><td class="desc">What the goods are, as a carrier reads it.</td></tr>
+      <tr><td>weightKg <span class="req">required</span></td><td class="desc">The whole load, in kilograms.</td></tr>
+      <tr><td>pickupLabel, pickupLocation <span class="req">required</span></td><td class="desc">Where it is collected: a name, and <code>{ "lat", "lng" }</code>.</td></tr>
+      <tr><td>destLabel <span class="req">required</span>, destLocation</td><td class="desc">Where it goes.</td></tr>
+      <tr><td>packaging</td><td class="desc"><code>palletised</code>, <code>bagged</code>, <code>loose</code> and the rest the app offers. Decides the body it needs and whether anything has to lift it.</td></tr>
+      <tr><td>pickupCountry, destCountry</td><td class="desc">ISO codes. Needed with a trade term.</td></tr>
+      <tr><td>incoterm, namedPlace</td><td class="desc">A trade term, where it is switched on for both countries.</td></tr>
+      <tr><td>scheduledPickupAt</td><td class="desc">A later pickup; absent ships now.</td></tr>
+      <tr><td>instructions, contactName, contactPhone, deliveryWindow</td><td class="desc">What the driver needs at the door.</td></tr>
+      <tr><td>contractId, deliverOn, orderRef</td><td class="desc">An order under a contract you linked with a fleet: the day it must arrive, your own order number (used once).</td></tr>
+      <tr><td>forClientId</td><td class="desc">An expeditor sending for one of its own clients.</td></tr>
+      <tr><td>packages</td><td class="desc">How many; coded with your GS1 prefix where you hold one.</td></tr>
+      <tr><td>commitMode</td><td class="desc"><code>negotiate</code> to agree a price before anyone commits — agreed by a person, in the app.</td></tr>
+    </tbody>
+  </table></div>
+<pre><code>{ "test": false, "replayed": false, "load": { "freightId": "frt_…", "code": "FRT-412", "status": "available", … } }</code></pre>
+  <p>With a test key, <code>load</code> is what the load would be — its class, the body it needs, the equipment that
+  must lift it — with the code <code>FRT-TEST</code>.</p>
+
+  <h3>Withdraw a load</h3>
+  <p><span class="endpoint"><span class="verb">POST</span>/sbg/api/business/loads/{freightId}/withdraw</span>
+  &nbsp;<code>{ "reason": "The buyer cancelled" }</code></p>
+  <p>Only while nobody has taken it. Once a carrier has it, a person withdraws it in the Business app, where the
+  carrier is told.</p>
+</section>
+
+<section id="fleet">
+  <h2>For a fleet</h2>
+  <p>Read your orders and your day's plan, send orders in, read the board for a driver, take a load at its price.</p>
+
+  <h3>Your orders and your plan</h3>
+  <p><span class="endpoint"><span class="verb get">GET</span>/sbg/api/fleet/orders?from=&amp;to=</span>
+  &nbsp;<span class="endpoint"><span class="verb get">GET</span>/sbg/api/fleet/plan?day=YYYY-MM-DD</span></p>
+  <p>Exactly as your Orders screen and your plan board read them. Accepting a plan is a person's, in the app.</p>
+
+  <h3>Send orders in</h3>
+  <p><span class="endpoint"><span class="verb">POST</span>/sbg/api/fleet/orders</span></p>
+  <p>Up to 500 orders under one of your contracts, each read exactly as a line of an uploaded order sheet: the same
+  columns, the same checks, every refusal said in words, order by order. One order's problem does not stop the
+  others.</p>
+<pre><code>{
+  "contractId": "ctr_…",
+  "pickupLabel": "Industrial Area yard", "pickupLat": -1.31, "pickupLng": 36.85,
+  "orders": [
+    { "reference": "WS-10432", "goods": "Bricks, 4 pallets", "weightKg": 4000,
+      "deliverTo": "Plot 12, Kitengela", "lat": -1.478, "lng": 36.962,
+      "deliverOn": "2026-10-21", "window": "8-12", "contact": "J. Mwangi",
+      "phone": "+254700000000", "packaging": "palletised", "instructions": "Crane offload" }
+  ]
+}</code></pre>
+  <p>The answer: <code>imported</code>, how many were <code>ok</code>, <code>duplicates</code> and
+  <code>problems</code>, and a row per order with its <code>verdict</code> and its <code>problems</code> in words. A
+  test key answers the same and places nothing (<code>imported: false</code>).</p>
+
+  <h3>The board, for one of your drivers</h3>
+  <p><span class="endpoint"><span class="verb get">GET</span>/sbg/api/fleet/board?driverDid=</span></p>
+  <p>Your drivers on a shift, and for the one you name, every load on the open board: what that driver would earn on
+  it, whether they can take it, and every reason why not. Where your drivers are is in the answer only when your fleet
+  sends that to its own system (see <a href="#messages">Messages</a>).</p>
+
+  <h3>Take a load at its price</h3>
+  <p><span class="endpoint"><span class="verb">POST</span>/sbg/api/fleet/loads/{freightId}/take</span>
+  &nbsp;<code>{ "driverDid": "did:glos:…" }</code></p>
+  <p>For one of your drivers on a shift, with every check the app makes when your office puts a load on a driver. The
+  answer is the load as your Earnings screen reads it, with its earning. Not an order under a contract (those are put
+  on a truck in the Fleet app) and not a load posted for a price to be agreed. A test key answers whether the driver
+  could take it, why not, and what it would pay — and takes nothing.</p>
+</section>
+
+<section id="never">
+  <h2>What a key never does</h2>
+  <ul class="plain">
+    <li><b>Agree a price.</b> A load posted to negotiate is agreed by a person.</li>
+    <li><b>Accept a plan.</b> Your plan for the day is accepted in the Fleet app.</li>
+    <li><b>Anything about money.</b> No payout, no balance, no bank detail.</li>
+    <li><b>Anything about people.</b> Who drives for you, who is on the roster, who joins your business.</li>
+  </ul>
+</section>
+
+<section id="messages">
+  <h2>Messages to your system</h2>
+  <p>Give your system's address in the app and it is told each step, signed with your own secret.</p>
+  <ul class="plain">
+    <li><b>A business</b> (Business details → <i>Your system</i>): a carrier took a load, gave it back, picked it up,
+      could not hand it over, delivered it; it was cancelled; a problem reported, and decided. Each carries the load as
+      your Loads screen shows it. Nothing about money.</li>
+    <li><b>A fleet</b> (Dashboard → <i>Your own system</i>): an order came in, changed, left your Orders, was cancelled; a
+      load put on a driver, taken, given back, picked up, not handed over, delivered, withdrawn, a problem reported and
+      decided; a vehicle broke down, how it ended, its loads moved; space booked on a run, given back, the run called
+      off; the day's plan accepted. A load carries its earning only where SeeBuyGet pays you.</li>
+    <li><b>Where a fleet's vehicles are</b> — <code>vehicle.position</code> — only once a manager turns it on, every 1, 5
+      or 15 minutes a vehicle, only while a driver is on a shift in it. Each driver is told so in their app. A position
+      is tried once; the next takes its place.</li>
+  </ul>
+  <h3>Checking it came from us</h3>
+  <p>HMAC-SHA256 over the exact body, with your secret, hex-encoded, in <code>x-sbg-signature</code>. The event is in
+  <code>x-sbg-event</code>; <code>x-sbg-delivery</code> is the same on every try — be idempotent on it.</p>
+<pre><code>const expected = crypto.createHmac('sha256', SECRET).update(rawBody).digest('hex');
+if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(received))) return res.sendStatus(401);</code></pre>
+  <h3>Tries, and giving up</h3>
+  <p>Answer <b>2xx</b> within thirty seconds. Otherwise we try again after five minutes, fifteen, an hour, three,
+  six, twelve and twenty-four: <b>eight tries over about two days</b>, then the message is given up and your company
+  is told in its bell and by email, at most once a day. In the app every message says whether it arrived, and
+  <i>Send again</i> sends the same one — same id, same body — to the address and with the secret you have now.</p>
+</section>
+
+<section id="retry">
+  <h2>Retrying safely</h2>
+  <p>Send an <code>Idempotency-Key</code> header with any write — posting a load, withdrawing one, sending orders,
+  taking a load — and a retry with the same name and the same body gets the first answer back, with
+  <code>"replayed": true</code>, instead of doing it twice. A name belongs to the key that used it: two systems choosing
+  the same one cannot collide.</p>
+</section>
+
+<section id="errors">
+  <h2>Errors</h2>
+  <p>A refusal is a problem document, with a code to branch on and a sentence to show a person:</p>
+<pre><code>{ "type": "https://glos.dev/problems/INVALID_STATE", "title": "Not allowed in the current state",
+  "status": 400, "code": "INVALID_STATE",
+  "detail": "A carrier has this load (claimed) — withdraw it in the Business app, where the carrier is told" }</code></pre>
+  <div class="scroll"><table>
+    <thead><tr><th>Code</th><th>When</th></tr></thead>
+    <tbody>
+      <tr><td>UNAUTHORIZED · 401</td><td class="desc">No key, a key that is not ours, or one taken away.</td></tr>
+      <tr><td>FORBIDDEN · 403</td><td class="desc">A business's key at a fleet's door, or the other way; an order under a contract a key may not take.</td></tr>
+      <tr><td>NOT_FOUND · 404</td><td class="desc">Not yours: a load, an order, a driver.</td></tr>
+      <tr><td>INVALID_INPUT · 400</td><td class="desc">A field, in words, with <code>field</code> naming it.</td></tr>
+      <tr><td>INVALID_STATE · 400</td><td class="desc">Not now: already withdrawn, a carrier has it.</td></tr>
+      <tr><td>TERM_NOT_ACTIVE · 400</td><td class="desc">A trade term not switched on for that country and direction.</td></tr>
+      <tr><td>NEGOTIATION_REQUIRED · 400</td><td class="desc">A load whose price is to be agreed, by a person.</td></tr>
+      <tr><td>RATE_LIMITED · 429</td><td class="desc">Over this key's limit; <code>retryAfterSec</code> says when.</td></tr>
+      <tr><td>API_VERSION_RETIRED · 410</td><td class="desc">A version that has stopped; see <a href="#versions">Versions</a>.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="limits">
+  <h2>Limits</h2>
+  <p>Each key has its own limit, counted per minute and per call: <b>120</b> reads, <b>60</b> reads of the board,
+  <b>30</b> writes. Two systems with two keys never share one.</p>
+</section>
+
+<section id="versions">
+  <h2>Versions and notice</h2>
+  <p>Every answer says which version gave it: <code>x-sbg-api-version: 1</code>. A version that would change what a
+  call means is a new one beside the old, never the old one changed.</p>
+  <ul class="plain">
+    <li><b>A year's notice.</b> A version keeps working at least twelve months after it is announced as stopping.</li>
+    <li><b>Told twice.</b> Every company holding a live key is emailed — a business's owners, a fleet's contact email —
+      and told in its bell when it is announced, and again a month before it stops.</li>
+    <li><b>Said on every answer.</b> Once a version is set to stop, its answers carry <code>Deprecation</code> and
+      <code>Sunset</code>, so a system that reads no email still finds out.</li>
+    <li><b>After it stops,</b> a call to it is refused with <code>API_VERSION_RETIRED</code>.</li>
+  </ul>
+</section>
+
+<footer>
+  <p>The stores' API — quotes and shipments for a web shop — is <a href="shipping-api.html">its own guide</a>.</p>
+</footer>
+
+</main>
+</div>
+</div>
+</body>
+</html>

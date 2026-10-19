@@ -9,6 +9,7 @@ import type { BusinessActions } from '../useBusinessApp';
 import { ACTIVITY_LABEL, ACTIVITY_SUB } from './ChooseScreen';
 import { Gs1Panel } from './Gs1Panel';
 import { SystemPanel } from './SystemPanel';
+import { KeysPanel } from './KeysPanel';
 
 /**
  * WHAT THE BUSINESS SAYS ABOUT ITSELF — its name and numbers, what it does, how to reach it, the places it uses.
@@ -168,6 +169,9 @@ export function DetailsScreen({ business, actions, client }: { business: Busines
 
       {/* Its own system, told each step of its loads (round 10): the address and secret an owner’s, the messages everybody’s to read. */}
       <SystemPanel actions={actions} client={client} owner={owner} works={works} />
+
+      {/* Its keys, for its own systems to post and read its loads (round 12): an owner's to make and take away. */}
+      <KeysPanel client={client} owner={owner} />
 
       <section class="cons__panel">
         <div class="cons__panelhead">

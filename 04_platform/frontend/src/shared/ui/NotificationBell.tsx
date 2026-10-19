@@ -65,6 +65,8 @@ const KIND_ICON: Record<string, IconName> = {
   freight_delivered: 'check',
   // A business's own system stopped taking our messages about its loads.
   system_down: 'warning',
+  // A version of the API its own system calls is stopping, with a year's notice and again a month before.
+  api_version: 'clock',
   // Somebody joined or left a fleet's roster — whoever did not do it is told.
   roster_changed: 'person',
   // A fleet offered this driver a place (or took the offer back): theirs alone to answer.

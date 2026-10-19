@@ -12,6 +12,7 @@ import { DispatchService, fleetJobRowOf, type FleetJobRow } from './dispatch.ser
 import type { FleetOrderRow, Freight } from './dispatch.types';
 import { DriverService } from './driver.service';
 import { FLEET_HOOK_EVENTS, FLEET_POSITION_EVENT, FLEET_POSITION_EVERY, type FleetHookEvent, type FleetPositionEvery, type FleetSystemCounts, type FleetSystemView, type PositionsToFleetSystem } from './fleet-hook.types';
+import { CompanyKeyService } from './company-key.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { FleetPlanService } from './fleet-plan.service';
 import { FleetService } from './fleet.service';
@@ -122,6 +123,7 @@ export class FleetHookService implements OnModuleInit, OnModuleDestroy {
     private readonly plans: FleetPlanService,
     @Optional() private readonly notifications?: NotificationService,
     @Optional() private readonly mail?: MailService,
+    @Optional() private readonly keyring?: CompanyKeyService,
   ) {}
 
   onModuleInit(): void {
@@ -471,6 +473,7 @@ export class FleetHookService implements OnModuleInit, OnModuleDestroy {
       waiting: mine.filter((m) => m.state === 'pending').length,
       givenUp: mine.filter((m) => m.state === 'failed').length,
       positions: Boolean(s?.url && s.positions),
+      ...(this.keyring ? { keys: this.keyring.counts({ kind: 'fleet', id: fleetDid }) } : {}),
     };
   }
 
@@ -511,14 +514,13 @@ export class FleetHookService implements OnModuleInit, OnModuleDestroy {
    */
   private loadOf(fleetDid: string, f: Freight): Partial<FleetJobRow> | undefined {
     if (!f.claimedBy || this.dispatch.carrierOf(f) !== fleetDid) return undefined;
-    const row: Partial<FleetJobRow> = fleetJobRowOf(f, (did) => this.driver(did)?.displayName ?? '');
-    if (row.direct) {
-      delete row.earning;
-      delete row.currency;
-      delete row.paid;
-      delete row.clawback;
-    }
-    return row;
+    return earningsRowFor(f, (did) => this.driver(did)?.displayName ?? '');
+  }
+
+  /** Whether the fleet sends where its vehicles are to its own system: its choice, and so what its key may read of them too. */
+  positionsOn(fleetDid: string): boolean {
+    const s = this.settings.get(fleetDid);
+    return Boolean(s?.url && s.positions);
   }
 
   /** Every load of the order this one belongs to, and any load of it put back together that a fleet's system was told of. */
@@ -578,6 +580,21 @@ export class FleetHookService implements OnModuleInit, OnModuleDestroy {
     if (!found) throw new GlosError('NOT_FOUND', 'No such message');
     return found;
   }
+}
+
+/**
+ * A load as the fleet's Earnings screen reads it, with the money only where we pay the fleet: on a load settled between the
+ * shipper and the fleet it is left out (round 11). What its system is told, and what its key reads back (round 12).
+ */
+export function earningsRowFor(f: Freight, nameOf: (did: string) => string): Partial<FleetJobRow> {
+  const row: Partial<FleetJobRow> = fleetJobRowOf(f, nameOf);
+  if (row.direct) {
+    delete row.earning;
+    delete row.currency;
+    delete row.paid;
+    delete row.clawback;
+  }
+  return row;
 }
 
 /** A run as its Runs screen reads it, without the money: the price is the fleet's own, between it and the shipper. */

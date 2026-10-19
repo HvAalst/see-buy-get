@@ -194,6 +194,7 @@ export const ERROR_CODES = {
 
   // --- 410 / 413 / 415: media upload + retention -----------------------------------------------
   MEDIA_EXPIRED: { status: 410, title: 'This media has passed its retention window' },
+  API_VERSION_RETIRED: { status: 410, title: 'This version of the API has stopped' },
   MEDIA_TOO_LARGE: { status: 413, title: 'The image is too large' },
   UNSUPPORTED_MEDIA: { status: 415, title: 'Unsupported image type' },
 

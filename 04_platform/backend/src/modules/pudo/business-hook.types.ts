@@ -42,4 +42,6 @@ export class BusinessSystemCounts {
   delivered: number;
   waiting: number;
   givenUp: number;
+  /** Round 12 — its keys that work, by mode. */
+  keys?: { live: number; test: number };
 }

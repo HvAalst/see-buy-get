@@ -1,5 +1,6 @@
 import type { Result, SbgClient } from '../../lib/sbg';
 import type { MessageKey, Translate } from '../../shared/i18n';
+import type { CompanyKey, CompanyKeyIssued } from '../../shared/companyKeys';
 
 /*
  * A FLEET'S OWN SYSTEM, TOLD OF ITS WORK (backend fleet-hook.types.ts; the user, round 11: the events recommended; the
@@ -60,6 +61,11 @@ export function systemApi(sbg: SbgClient, did: string) {
     test: (): Promise<Result<SystemMessage>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/system/test', { params: { path } })) as never,
     resend: (messageId: string): Promise<Result<SystemMessage>> =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/system/messages/{messageId}/resend', { params: { path: { did, messageId } } })) as never,
+    // Round 12 — its keys, for its own system to send orders in, read its plan and take loads: any manager's.
+    keys: (): Promise<Result<{ items: CompanyKey[] }>> => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/keys', { params: { path } })) as never,
+    issueKey: (mode: 'live' | 'test', label?: string): Promise<Result<CompanyKeyIssued>> =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/keys', { params: { path }, body: { mode, ...(label ? { label } : {}) } })) as never,
+    revokeKey: (keyId: string): Promise<Result<CompanyKey>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/keys/{keyId}/revoke', { params: { path: { did, keyId } } })) as never,
   };
 }
 

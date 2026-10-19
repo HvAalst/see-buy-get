@@ -83,6 +83,9 @@ describe('fleetSystemWords — a fleet’s own system, counted for staff', () =>
     expect(fleetSystemWords({ hasAddress: false, delivered: 0, waiting: 0, givenUp: 0, positions: false }, t)).toBe('No system of its own set up.');
     expect(fleetSystemWords({ hasAddress: true, delivered: 40, waiting: 2, givenUp: 1, positions: false }, t)).toBe('Its system: 40 arrived · 2 waiting · 1 given up.');
     expect(fleetSystemWords({ hasAddress: true, delivered: 40, waiting: 0, givenUp: 0, positions: true }, t)).toBe('Its system: 40 arrived · 0 waiting · 0 given up. Sends where its vehicles are.');
+    // Round 12 — its keys, when it holds any that work; a fleet with keys and no address still shows them.
+    expect(fleetSystemWords({ hasAddress: false, delivered: 0, waiting: 0, givenUp: 0, positions: false, keys: { live: 1, test: 2 } }, t)).toBe('No system of its own set up. Keys: 1 live, 2 test.');
+    expect(fleetSystemWords({ hasAddress: true, delivered: 3, waiting: 0, givenUp: 0, positions: false, keys: { live: 0, test: 0 } }, t)).toBe('Its system: 3 arrived · 0 waiting · 0 given up.');
   });
 });
 

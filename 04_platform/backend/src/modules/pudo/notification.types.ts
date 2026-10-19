@@ -183,6 +183,11 @@ export const NOTIFICATION_KINDS = [
    * most once a day, with where to send them again (round 10: "the company, once a day"). Its owners are emailed too.
    */
   'system_down',
+  /**
+   * A version of the API a company's key calls is announced as stopping, or stops in a month (round 12: "A year, with
+   * notice"). To every company holding a live key; its owners, or its contact email, are emailed too.
+   */
+  'api_version',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

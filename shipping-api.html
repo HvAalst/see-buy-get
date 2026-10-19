@@ -552,8 +552,8 @@ if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(received))) retur
   <ul>
     <li>Answer <b>2xx</b> and we are done. Anything else, or no answer within thirty seconds, is a
       failure.</li>
-    <li>We retry with a backoff — about a minute, then five, fifteen, an hour, and on up to a day —
-      <b>eight attempts</b> in all, after which we stop and mark it failed in your outbox with the
+    <li>We retry with a backoff — five minutes, then fifteen, an hour, three, six, twelve and twenty-four —
+      <b>eight attempts</b> over about two days, after which we stop and mark it failed in your outbox with the
       reason.</li>
     <li>A retry carries the <b>identical body, signature and <code>x-sbg-delivery</code></b>. That is
       deliberate: a late delivery has to verify exactly as the first one would have.</li>

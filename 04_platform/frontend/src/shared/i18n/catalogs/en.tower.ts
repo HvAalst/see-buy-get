@@ -2504,6 +2504,8 @@ export const enTowerMoney = {
   'tower.money.tax.title': 'Tax invoices (KRA eTIMS)',
   // Round 10 — a business's own system, told of its loads: counts for staff, who send nothing in its name.
   'tower.biz.fact.system': 'Its own system',
+  'tower.biz.fact.keys': 'Its keys',
+  'tower.keys.counts': 'Keys: {live} live, {test} test.',
   'tower.biz.fact.systemNone': 'No address given: nothing is sent',
   'tower.biz.fact.systemCounts': '{delivered} arrived · {waiting} waiting · {givenUp} given up',
   'tower.money.tax.all': 'All · {n}',

@@ -1,7 +1,4 @@
-﻿import { CarriageContractService, isDay } from './carriage-contract.service';
-import type { ContractRef } from './carriage-contract.types';
-import { BusinessClientService } from './business-client.service';
-import { clientRefOf, type ClientRef } from './business-client.types';
+﻿import { CarriageContractService } from './carriage-contract.service';
 import { driverPapers, lapsedOf, offRoadLine } from './papers';
 import { PapersWatchService } from './papers-watch.service';
 import type { FleetDriver, FleetSetupRow } from './fleet.types';
@@ -25,6 +22,7 @@ import { DepartureService } from './departure.service';
 import { BusinessMemberGuard } from './business-member.guard';
 import { BusinessService } from './business.service';
 import { FleetHookService } from './fleet-hooks.service';
+import { LoadPostingService } from './load-posting.service';
 import { boardDocId } from './note-archive.types';
 import { isSandbox } from '../../foundation/runtime/sandbox';
 import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Req, Res, StreamableFile, Optional, UseGuards, UseInterceptors } from '@nestjs/common';
@@ -139,7 +137,6 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyDocumentDto,
   DocumentDecisionDto,
   StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, SuggestVehicleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto } from './pudo.dto';
-import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
@@ -213,7 +210,6 @@ export function awardCapOf(p: { coverLimit?: number; declaredValue?: number }): 
 @UseInterceptors(CounterLogInterceptor)
 export class SbgController {
   constructor(
-    private readonly clients: BusinessClientService,
     private readonly agents: AgentService,
     private readonly gate: WalletGateService,
     private readonly corridors: CorridorService,
@@ -301,6 +297,8 @@ export class SbgController {
     @Optional() private readonly pilot?: PilotService,
     // A fleet's own system: staff read its counts; a driver on a shift is told when it hears where they are.
     @Optional() private readonly fleetHooks?: FleetHookService,
+    // Posting a load: the same checks whether a person posts it here or a business's own system does, with its key.
+    @Optional() private readonly loadPosting?: LoadPostingService,
   ) {}
 
   /**
@@ -683,38 +681,6 @@ export class SbgController {
     return this.entities.get(typed).entityId;
   }
 
-  /**
-   * B4 — WHO A LOAD OR A BOOKING IS FOR, when an expeditor sends it for a client. The client must be in THIS business's
-   * own book; nobody else may name one, because only a business keeps clients.
-   */
-/**
-   * P1 — AN ORDER UNDER A STANDING CONTRACT: only the business that linked the contract places one, only while it
-   * stands, and only for a day that has not gone by. What comes back is the copy the load carries.
-   */
-  private contractOrder(actor: IntrospectionResult, contractId: string | undefined, deliverOn: string | undefined, orderRef?: string): { contract?: ContractRef; deliverOn?: string; orderRef?: string } {
-    if (!contractId) {
-      if (deliverOn) throw new GlosError('INVALID_INPUT', 'A delivery day belongs to an order under a contract — name the contract', { field: 'contractId' });
-      return {};
-    }
-    if (actor?.role !== 'business' || !actor.tenant) throw new GlosError('FORBIDDEN', 'Only the business that linked a contract orders under it');
-    if (!this.contracts) throw new GlosError('INVALID_STATE', 'Contracts are not running in this deployment');
-    if (!deliverOn || !isDay(deliverOn)) throw new GlosError('FIELD_REQUIRED', 'Say which day it must arrive', { field: 'deliverOn' });
-    // "Today" is the carrier's: an order is for a day on the clock of the fleet that must bring it.
-    const linked = this.contracts.requireForShipper(actor.tenant, contractId);
-    if (deliverOn < this.dispatch.fleetDay(linked.fleetDid)) throw new GlosError('INVALID_INPUT', 'That day has gone — an order is for today or later', { field: 'deliverOn' });
-    const contract = this.contracts.orderable(linked, deliverOn);
-    const ref = orderRef?.trim();
-    // The shipper's own number is used once under a contract — the same rule a sheet is held to.
-    if (ref && this.dispatch.contractOrderByRef(contractId, ref)) throw new GlosError('CONFLICT', `Order ${ref} is already with ${contract.fleetName}`, { field: 'orderRef' });
-    return { contract, deliverOn, ...(ref ? { orderRef: ref } : {}) };
-  }
-
-  private onBehalfOf(actor: IntrospectionResult, clientId: string | undefined): { onBehalfOf?: ClientRef } {
-    if (!clientId) return {};
-    if (actor?.role !== 'business' || !actor.tenant) throw new GlosError('FORBIDDEN', 'Only a business sends for a client of its own');
-    return { onBehalfOf: clientRefOf(this.clients.require(actor.tenant, clientId)) };
-  }
-
   private requireReach(actor: IntrospectionResult, entityId: string): void {
     if (actor?.role === 'operator') return;
     if (actor?.role === 'entity_admin' && this.entities.mayAdminister(actor.tenant, entityId)) return;
@@ -752,37 +718,6 @@ export class SbgController {
    * CA1 — a country is switched on only from the catalogue, and only once the network can price in its money:
    * "refuse until mapped", asked of the person deciding instead of discovered at the first price.
    */
-  /**
-   * CL1 — a trade term may only be used where it has been switched ON, in the right direction.
-   *
-   * Modelled on requirePriceableSwitchOn below: refused where the person is DECIDING, in words naming the
-   * term and the country, rather than discovered later by whoever is standing at a counter.
-   *
-   * A term names a border, so a load carrying one must say which countries it runs between. Both ends are
-   * asked because the terms are not symmetric: EXW burdens the buyer with export clearance where the goods
-   * START, DDP burdens the seller with import clearance where they END.
-   */
-  private requireActiveTerm(incoterm: string | undefined, pickupCountry?: string, destCountry?: string): void {
-    const term = incotermEntry(incoterm);
-    if (!term) return;
-    if (!pickupCountry?.trim() || !destCountry?.trim()) {
-      throw new GlosError('TERM_NOT_ACTIVE', 'A trade term names a border, so say which countries this load runs between before agreeing ' + term.code + '.');
-    }
-    const ends: Array<{ country: string; direction: 'origin' | 'destination' }> = [
-      { country: pickupCountry.trim(), direction: 'origin' },
-      { country: destCountry.trim(), direction: 'destination' },
-    ];
-    for (const end of ends) {
-      const allowed = this.presence.resolve(end.country).incoterms[end.direction];
-      if (!allowed.includes(term.code)) {
-        throw new GlosError(
-          'TERM_NOT_ACTIVE',
-          term.code + ' is not switched on for ' + end.country.toUpperCase() + ' as ' + end.direction + '. Network staff activate a term per country, per direction, and two of them are needed to switch one on.',
-        );
-      }
-    }
-  }
-
   private requirePriceableSwitchOn(jurisdiction: string, level: string): void {
     const country = catalogueEntry(jurisdiction);
     if (!country) throw new GlosError('INVALID_INPUT', `${jurisdiction.toUpperCase()} is not a country in the catalogue`);
@@ -5687,7 +5622,7 @@ export class SbgController {
     if (!shipperDid) throw new GlosError('FORBIDDEN', 'Sign in as the party whose goods these are');
     // B2 — a business books as itself; the person who did it is kept by name.
     const { forClientId, ...load } = dto;
-    const { booking } = this.departures.book(departureId, { shipperDid, ...load, ...(actor?.role === 'business' && actor.actorName ? { bookedByName: actor.actorName } : {}), ...this.onBehalfOf(actor, forClientId) });
+    const { booking } = this.departures.book(departureId, { shipperDid, ...load, ...(actor?.role === 'business' && actor.actorName ? { bookedByName: actor.actorName } : {}), ...(forClientId ? this.loadPosting!.onBehalfOf(actor, forClientId) : {}) });
     return booking;
   }
 
@@ -6190,26 +6125,8 @@ export class SbgController {
   @SignedIn()
   @Post('dispatch/freight')
   registerFreight(@Body() dto: RegisterFreightDto, @Actor() actor: IntrospectionResult) {
-    // FB0b — the DTO carries dimensions as {l,w,h} (the shape every other measured route uses); the service
-    // takes the orientation-free tuple. Convert here, as createInbound/accept already do.
-    const dimensionsCm: [number, number, number] | undefined = dto.dimensionsCm ? [dto.dimensionsCm.l, dto.dimensionsCm.w, dto.dimensionsCm.h] : undefined;
-    // FB0c — whoever posted it is who negotiates for it. Read straight off the actor rather than through
-    // actingDid: a bulletin freight posted with no identity legitimately has no owner, and must not 403 here.
-    // CL1 — refuse a term this country has not switched on, before the load exists rather than after.
-    this.requireActiveTerm(dto.incoterm, dto.pickupCountry, dto.destCountry);
-    // B2 — a business's DID is shared by everybody in it, so the person who posted is kept by name as well.
-    const { forClientId, contractId, deliverOn, orderRef, ...load } = dto;
-    // GS1 — a business posting its OWN goods gives its packages SSCCs under its prefix, when it holds one. Asked before
-    // the load exists, so a load is never posted with some packages coded and others not. Not for a client's goods:
-    // those carry the client's code, not the expeditor's.
-    const coder = actor?.role === 'business' && actor.tenant && !forClientId ? actor.tenant : undefined;
-    this.shipperCodes?.assertCanIssue(coder, dto.packages);
-    const posted = this.dispatch.registerFreight({ ...load, dimensionsCm, ...this.contractOrder(actor, contractId, deliverOn, orderRef), bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did, ...(actor?.role === 'business' && actor.actorName ? { postedByName: actor.actorName } : {}), ...this.onBehalfOf(actor, forClientId) });
-    // …and WHICH person, kept by the business itself and never on the load, which every carrier on the board reads:
-    // it is who the receipt goes to when the load is delivered.
-    this.businesses?.notePosted(posted.freightId, actor);
-    this.shipperCodes?.issue(posted.freightId, coder, posted.packages);
-    return posted;
+    // One way to post a load, whoever posts it: a person here, or a business's own system with its key (LoadPostingService).
+    return this.loadPosting!.post(dto, actor);
   }
 
   @Roles('operator')

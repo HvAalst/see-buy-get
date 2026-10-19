@@ -3,6 +3,7 @@ import type { SbgClient } from '../../../lib/sbg';
 import { Button, Card, Chip, ErrorNote, Note } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { POSITION_EVERY, eventWords, messageLine, positionsLines, subjectOf, systemApi, type SystemView } from '../system';
+import { keyLine, keysInOrder, keyTitle, type CompanyKey } from '../../../shared/companyKeys';
 
 /**
  * YOUR OWN SYSTEM (the user, round 11: the events recommended; a load's money only where we pay the fleet; where its
@@ -224,6 +225,113 @@ export function SystemScreen({ sbg, managerDid }: { sbg: SbgClient | null; manag
           </Button>
         ) : null}
       </Card>
+
+      {api ? <KeysCard api={api} /> : null}
     </div>
+  );
+}
+
+/**
+ * KEYS FOR YOUR OWN SYSTEM (round 12: "Post, send in, take at its price"; "Same as the system"). Any manager makes a key —
+ * live, or a test key that runs every check and keeps nothing — and sees it once; any manager takes one away; each act
+ * under their name. Never the key itself after the answer that made it.
+ */
+function KeysCard({ api }: { api: ReturnType<typeof systemApi> }) {
+  const t = useT();
+  const [keys, setKeys] = useState<CompanyKey[] | null>(null);
+  const [label, setLabel] = useState('');
+  const [secret, setSecret] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+
+  const load = useCallback(async () => {
+    const r = await api.keys();
+    if (r.error || !r.data) return setError(r.error);
+    setKeys(r.data.items);
+  }, [api]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  if (!keys) return null;
+
+  const make = async (mode: 'live' | 'test') => {
+    setBusy(mode);
+    setError(null);
+    const r = await api.issueKey(mode, label.trim() || undefined);
+    setBusy(null);
+    if (r.error || !r.data) return setError(r.error);
+    setSecret(r.data.secret);
+    setLabel('');
+    await load();
+  };
+  const revoke = async (keyId: string) => {
+    setBusy(keyId);
+    setError(null);
+    const r = await api.revokeKey(keyId);
+    setBusy(null);
+    setConfirm(null);
+    if (r.error) return setError(r.error);
+    await load();
+  };
+
+  return (
+    <Card title={t('fleet.keys.title')}>
+      <p class="card__note">{t('fleet.keys.lede')}</p>
+      {/* The key, the one time it is shown. */}
+      {secret ? (
+        <>
+          <Note tone="warn" icon="key" title={t('fleet.keys.secretOnce')} />
+          <p class="system__word">{secret}</p>
+        </>
+      ) : null}
+      <div class="field">
+        <label class="field__label" for="key-label">
+          {t('fleet.keys.label')}
+        </label>
+        <input id="key-label" class="input" value={label} maxLength={60} onInput={(e) => setLabel(e.currentTarget.value)} />
+        <p class="hint">{t('fleet.keys.labelHint')}</p>
+      </div>
+      <div class="btnrow">
+        <Button full={false} busy={busy === 'live'} disabled={busy !== null} onClick={() => void make('live')}>
+          {t('fleet.keys.makeLive')}
+        </Button>
+        <Button variant="link" full={false} busy={busy === 'test'} disabled={busy !== null} onClick={() => void make('test')}>
+          {t('fleet.keys.makeTest')}
+        </Button>
+      </div>
+      {error ? <ErrorNote error={error as never} showDetail /> : null}
+      {keys.length === 0 ? <p class="hint">{t('fleet.keys.none')}</p> : null}
+      {keysInOrder(keys).map((k) => (
+        <div key={k.keyId} style="margin-top:10px">
+          <p class={k.revokedAt ? 'hint' : 'card__note'} style="margin-bottom:0">
+            <b>{keyTitle(k, t)}</b>
+          </p>
+          <p class="hint">{keyLine(k, t)}</p>
+          {!k.revokedAt ? (
+            confirm === k.keyId ? (
+              <>
+                <p class="card__note">{t('fleet.keys.revokeWarn')}</p>
+                <div class="btnrow">
+                  <Button full={false} busy={busy === k.keyId} disabled={busy !== null} onClick={() => void revoke(k.keyId)}>
+                    {t('fleet.keys.revokeConfirm')}
+                  </Button>
+                  <Button variant="link" full={false} onClick={() => setConfirm(null)}>
+                    {t('common.cancel')}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <Button variant="link" full={false} disabled={busy !== null} onClick={() => setConfirm(k.keyId)}>
+                {t('fleet.keys.revoke')}
+              </Button>
+            )
+          ) : null}
+        </div>
+      ))}
+      <p class="hint">{t('fleet.keys.anyManager')}</p>
+    </Card>
   );
 }

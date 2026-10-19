@@ -9,6 +9,7 @@ import { tryDelivery, type HookMessage } from '../../foundation/outbound/hook-de
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { BUSINESS_HOOK_EVENTS, type BusinessHookEvent, type BusinessSystemCounts, type BusinessSystemView } from './business-hook.types';
 import { BusinessService, type ActingMember } from './business.service';
+import { CompanyKeyService } from './company-key.service';
 import { DispatchService } from './dispatch.service';
 import { NotificationService } from './notification.service';
 
@@ -77,6 +78,7 @@ export class BusinessHookService implements OnModuleInit, OnModuleDestroy {
     private readonly businesses: BusinessService,
     @Optional() private readonly notifications?: NotificationService,
     @Optional() private readonly mail?: MailService,
+    @Optional() private readonly keyring?: CompanyKeyService,
   ) {}
 
   onModuleInit(): void {
@@ -289,6 +291,7 @@ export class BusinessHookService implements OnModuleInit, OnModuleDestroy {
       delivered: mine.filter((m) => m.state === 'delivered').length,
       waiting: mine.filter((m) => m.state === 'pending').length,
       givenUp: mine.filter((m) => m.state === 'failed').length,
+      ...(this.keyring ? { keys: this.keyring.counts({ kind: 'business', id: entityId }) } : {}),
     };
   }
 

@@ -22875,6 +22875,81 @@
         }
       }
     },
+    "/v1/sbg/business/me/keys": {
+      "get": {
+        "operationId": "BusinessSystem.keys",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyKeyList"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "BusinessSystem.issueKey",
+        "summary": "",
+        "description": "A new key — an owner's act, under their name. The key itself is in this answer only.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueCompanyKeyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyKeyIssued"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/keys/{keyId}/revoke": {
+      "post": {
+        "operationId": "BusinessSystem.revokeKey",
+        "summary": "",
+        "description": "Take a key away, now — an owner's act, under their name.",
+        "parameters": [
+          {
+            "name": "keyId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyKeyView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/managers/{did}/system": {
       "get": {
         "operationId": "FleetSystem.view",
@@ -23062,6 +23137,389 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FleetHookMessageView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/keys": {
+      "get": {
+        "operationId": "FleetSystem.keys",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyKeyList"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "FleetSystem.issueKey",
+        "summary": "",
+        "description": "A new key — any manager's act, under their name. The key itself is in this answer only.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueCompanyKeyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyKeyIssued"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/keys/{keyId}/revoke": {
+      "post": {
+        "operationId": "FleetSystem.revokeKey",
+        "summary": "",
+        "description": "Take a key away, now — any manager's act, under their name.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "keyId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyKeyView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/api/business/loads": {
+      "get": {
+        "operationId": "CompanyApi.loads",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "CompanyApi.postLoad",
+        "summary": "",
+        "description": "Post a load, as a person in the Business app does: the same fields, the same checks. With a test key every check runs\nand the load is worked out — its class, the body it needs — and nothing is posted.",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterFreightDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/api/business/loads/{freightId}": {
+      "get": {
+        "operationId": "CompanyApi.load",
+        "parameters": [
+          {
+            "name": "freightId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostedFreightRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/api/business/loads/{freightId}/withdraw": {
+      "post": {
+        "operationId": "CompanyApi.withdrawLoad",
+        "summary": "",
+        "description": "Withdraw one of its loads that nobody has taken yet. Once a carrier has it, a person withdraws it in the app, where the carrier is told.",
+        "parameters": [
+          {
+            "name": "freightId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WithdrawLoadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/api/fleet/orders": {
+      "get": {
+        "operationId": "CompanyApi.orders",
+        "parameters": [
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "pattern": "DAY",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "pattern": "DAY",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "CompanyApi.sendOrders",
+        "summary": "",
+        "description": "Send orders in under one of its contracts, read exactly as a line of an uploaded sheet: every refusal said in words,\norder by order. With a test key nothing is placed.",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendOrdersDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/api/fleet/plan": {
+      "get": {
+        "operationId": "CompanyApi.plan",
+        "summary": "",
+        "description": "Its plan for a day, as accepted, and what has changed under it since. Accepting a plan is a person's, in the app.",
+        "parameters": [
+          {
+            "name": "day",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "pattern": "DAY",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayPlanState"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/api/fleet/board": {
+      "get": {
+        "operationId": "CompanyApi.board",
+        "summary": "",
+        "description": "The board for one of its drivers on a shift, as its Dispatch screen reads it: every load, what the driver would earn\non it, and every reason why not. Where its drivers are only when the fleet sends that to its own system (round 11).",
+        "parameters": [
+          {
+            "name": "driverDid",
+            "required": false,
+            "in": "query",
+            "description": "One of the fleet's drivers on a shift: the board is read for that driver's vehicle.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/api/fleet/loads/{freightId}/take": {
+      "post": {
+        "operationId": "CompanyApi.takeLoad",
+        "summary": "",
+        "description": "Take a load off the open board for one of its drivers on a shift, at its price — every check the app makes when its\noffice puts a load on a driver. Never an order under a contract (planned in the app) and never a load posted for a\nprice to be agreed. With a test key: whether this driver could take it, why not, and what it would pay; nothing taken.",
+        "parameters": [
+          {
+            "name": "freightId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TakeLoadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }
@@ -46684,13 +47142,27 @@
           },
           "givenUp": {
             "type": "number"
+          },
+          "keys": {
+            "type": "object",
+            "properties": {
+              "live": {
+                "required": true,
+                "type": "number"
+              },
+              "test": {
+                "required": true,
+                "type": "number"
+              }
+            }
           }
         },
         "required": [
           "hasAddress",
           "delivered",
           "waiting",
-          "givenUp"
+          "givenUp",
+          "keys"
         ]
       },
       "BusinessStaffRow": {
@@ -48398,6 +48870,99 @@
           "url"
         ]
       },
+      "CompanyKeyView": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "test",
+              "live"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "lastUsedAt": {
+            "type": "string"
+          },
+          "revokedAt": {
+            "type": "string"
+          },
+          "revokedBy": {
+            "type": "string"
+          },
+          "keyId": {
+            "type": "string"
+          },
+          "hint": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "keyId",
+          "hint",
+          "createdAt",
+          "createdBy"
+        ]
+      },
+      "CompanyKeyList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompanyKeyView"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "IssueCompanyKeyDto": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "test",
+              "live"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "description": "What the company calls the system that holds it: \"ERP\", \"the warehouse system\".",
+            "maxLength": 60
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
+      "CompanyKeyIssued": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/CompanyKeyView"
+          },
+          "secret": {
+            "type": "string",
+            "description": "Copy it now: it is not shown again."
+          }
+        },
+        "required": [
+          "key",
+          "secret"
+        ]
+      },
       "FleetPositionsView": {
         "type": "object",
         "properties": {
@@ -48576,6 +49141,980 @@
         },
         "required": [
           "everyMin"
+        ]
+      },
+      "WithdrawLoadDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "PlanStopView": {
+        "type": "object",
+        "properties": {
+          "orderRef": {
+            "type": "string"
+          },
+          "deliveryWindow": {
+            "type": "string",
+            "description": "The window in the shipper's own words."
+          },
+          "window": {
+            "type": "string",
+            "description": "The window as the plan READ those words (\"08:00–12:00\", \"before 14:00\") — what it planned to. Absent: no window, or words it could not read as one."
+          },
+          "windowUnread": {
+            "type": "boolean",
+            "description": "The shipper wrote something about when, and the plan could not read it as a time: it is shown, and was not planned to."
+          },
+          "lateMin": {
+            "type": "number",
+            "description": "Minutes after its window closed that the door is reached. Planned all the same, and said."
+          },
+          "earlyMin": {
+            "type": "number",
+            "description": "Minutes before its window opens that the goods are handed over: the day had no room to wait."
+          },
+          "waitMin": {
+            "type": "number",
+            "description": "Minutes the truck stands at the door before its window opens; `arrive` is then the opening."
+          },
+          "freightId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "shipperName": {
+            "type": "string"
+          },
+          "destLabel": {
+            "type": "string"
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "km": {
+            "type": "number",
+            "description": "Kilometres from the collection, or from the stop before."
+          },
+          "arrive": {
+            "type": "string",
+            "description": "When the goods are handed over at this door, on the clock (HH:MM). An estimate from distance and the day's settings."
+          }
+        },
+        "required": [
+          "freightId",
+          "code",
+          "description",
+          "shipperName",
+          "destLabel",
+          "weightKg",
+          "km",
+          "arrive"
+        ]
+      },
+      "PlanTripView": {
+        "type": "object",
+        "properties": {
+          "stops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanStopView"
+            }
+          },
+          "siteId": {
+            "type": "string",
+            "description": "The fleet's own site it loads at. Absent: it loads somewhere else — a shipper's yard."
+          },
+          "siteName": {
+            "type": "string"
+          },
+          "dockName": {
+            "type": "string",
+            "description": "Or the shipper's place it loads at, where the shipper keeps loading hours or bays: its name."
+          },
+          "openWaitMin": {
+            "type": "number",
+            "description": "Minutes it stands at the site before it opens; `start` is then the opening."
+          },
+          "bayWaitMin": {
+            "type": "number",
+            "description": "Minutes it waits there for a bay, every one taken by another truck."
+          },
+          "afterCloseMin": {
+            "type": "number",
+            "description": "Minutes it is still loading after the site has closed. Planned all the same, and said."
+          },
+          "no": {
+            "type": "number"
+          },
+          "pickupLabel": {
+            "type": "string"
+          },
+          "emptyKm": {
+            "type": "number",
+            "description": "Empty running to reach the collection: from the depot, or from where the last trip ended."
+          },
+          "start": {
+            "type": "string"
+          },
+          "end": {
+            "type": "string"
+          },
+          "weightKg": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "stops",
+          "no",
+          "pickupLabel",
+          "emptyKm",
+          "start",
+          "end",
+          "weightKg"
+        ]
+      },
+      "PlanRouteView": {
+        "type": "object",
+        "properties": {
+          "shiftId": {
+            "type": "string"
+          },
+          "shiftName": {
+            "type": "string"
+          },
+          "vehicleClass": {
+            "type": "string",
+            "enum": [
+              "bike",
+              "motorcycle",
+              "tuktuk",
+              "car",
+              "van",
+              "bus",
+              "truck"
+            ]
+          },
+          "trips": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanTripView"
+            }
+          },
+          "overMin": {
+            "type": "number",
+            "description": "Minutes its day runs past its shift: waiting for a bay, which is handed out after the day is planned."
+          },
+          "vehicleId": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "siteId": {
+            "type": "string",
+            "description": "The site it starts from and comes back to, and the shift it goes out on where the site has shifts."
+          },
+          "siteName": {
+            "type": "string"
+          },
+          "capacityKg": {
+            "type": "number"
+          },
+          "km": {
+            "type": "number"
+          },
+          "emptyKm": {
+            "type": "number"
+          },
+          "minutes": {
+            "type": "number",
+            "description": "Site to site, in minutes; when it leaves, and when it is back."
+          },
+          "leaves": {
+            "type": "string"
+          },
+          "home": {
+            "type": "string"
+          },
+          "weightKg": {
+            "type": "number",
+            "description": "Everything it carries in the day, over all its trips."
+          },
+          "fullestPct": {
+            "type": "number",
+            "description": "Its fullest trip, as a share of what it carries at once (0–100)."
+          }
+        },
+        "required": [
+          "vehicleClass",
+          "trips",
+          "vehicleId",
+          "plate",
+          "siteId",
+          "siteName",
+          "capacityKg",
+          "km",
+          "emptyKm",
+          "minutes",
+          "leaves",
+          "home",
+          "weightKg",
+          "fullestPct"
+        ]
+      },
+      "PlanLeftView": {
+        "type": "object",
+        "properties": {
+          "orderRef": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "no_pin",
+              "too_heavy",
+              "no_truck_can_carry",
+              "no_time",
+              "no_driver",
+              "no_trucks",
+              "site_closed",
+              "dock_closed"
+            ]
+          },
+          "splitInto": {
+            "type": "number",
+            "description": "For an order heavier than the fleet's largest vehicle that the office MAY split: how many loads of that vehicle\nit would make. A suggestion — the office decides, and the shipper is told."
+          },
+          "loadKg": {
+            "type": "number",
+            "description": "What that largest vehicle carries."
+          },
+          "freightId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "shipperName": {
+            "type": "string"
+          },
+          "destLabel": {
+            "type": "string"
+          },
+          "weightKg": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "reason",
+          "freightId",
+          "code",
+          "description",
+          "shipperName",
+          "destLabel",
+          "weightKg"
+        ]
+      },
+      "PlanSiteView": {
+        "type": "object",
+        "properties": {
+          "bays": {
+            "type": "number",
+            "description": "How many load at once. Absent: not said — as many as come."
+          },
+          "longestBayWaitMin": {
+            "type": "number"
+          },
+          "hours": {
+            "type": "string",
+            "description": "Open for loading that day (\"06:00–18:00\"). Absent: it never closes — or, with `closed`, not at all that day."
+          },
+          "closed": {
+            "type": "boolean"
+          },
+          "siteId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "trucksAvailable": {
+            "type": "number"
+          },
+          "trucksUsed": {
+            "type": "number"
+          },
+          "drivers": {
+            "type": "number",
+            "description": "Drivers who start from here that day: no more trucks leave it than this."
+          },
+          "loadings": {
+            "type": "number",
+            "description": "Trips that load here, of any truck."
+          },
+          "bayWaits": {
+            "type": "number",
+            "description": "Loadings that waited for a bay, and the longest wait."
+          },
+          "afterClose": {
+            "type": "number",
+            "description": "Loadings still going on after it closes."
+          }
+        },
+        "required": [
+          "siteId",
+          "name",
+          "trucksAvailable",
+          "trucksUsed",
+          "drivers",
+          "loadings",
+          "bayWaits",
+          "afterClose"
+        ]
+      },
+      "PlanShiftView": {
+        "type": "object",
+        "properties": {
+          "shiftId": {
+            "type": "string"
+          },
+          "shiftName": {
+            "type": "string"
+          },
+          "siteId": {
+            "type": "string"
+          },
+          "siteName": {
+            "type": "string"
+          },
+          "start": {
+            "type": "string",
+            "description": "HH:MM on the fleet's clock."
+          },
+          "rostered": {
+            "type": "number"
+          },
+          "needed": {
+            "type": "number"
+          },
+          "trucksUsed": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "siteId",
+          "siteName",
+          "start",
+          "rostered",
+          "needed",
+          "trucksUsed"
+        ]
+      },
+      "PlanDockView": {
+        "type": "object",
+        "properties": {
+          "bays": {
+            "type": "number"
+          },
+          "longestBayWaitMin": {
+            "type": "number"
+          },
+          "hours": {
+            "type": "string",
+            "description": "Open for loading that day (\"06:00–18:00\"). Absent: any hour — or, with `closed`, not at all that day."
+          },
+          "closed": {
+            "type": "boolean"
+          },
+          "siteId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "shipperName": {
+            "type": "string"
+          },
+          "loadings": {
+            "type": "number"
+          },
+          "bayWaits": {
+            "type": "number"
+          },
+          "afterClose": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "siteId",
+          "name",
+          "shipperName",
+          "loadings",
+          "bayWaits",
+          "afterClose"
+        ]
+      },
+      "PlanLendTruck": {
+        "type": "object",
+        "properties": {
+          "vehicleId": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "fromSiteId": {
+            "type": "string"
+          },
+          "fromSiteName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "vehicleId",
+          "plate",
+          "fromSiteId",
+          "fromSiteName"
+        ]
+      },
+      "PlanLendView": {
+        "type": "object",
+        "properties": {
+          "trucks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanLendTruck"
+            }
+          },
+          "siteId": {
+            "type": "string"
+          },
+          "siteName": {
+            "type": "string"
+          },
+          "orders": {
+            "type": "number",
+            "description": "How many of the orders left near this site the trucks below would carry from here, and what they weigh."
+          },
+          "weightKg": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "trucks",
+          "siteId",
+          "siteName",
+          "orders",
+          "weightKg"
+        ]
+      },
+      "PlanHire": {
+        "type": "object",
+        "properties": {
+          "trucks": {
+            "type": "number",
+            "description": "How many more trucks like the fleet's largest the leftover orders would take."
+          },
+          "orders": {
+            "type": "number"
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "capacityKg": {
+            "type": "number",
+            "description": "What one of those trucks carries."
+          }
+        },
+        "required": [
+          "trucks",
+          "orders",
+          "weightKg",
+          "capacityKg"
+        ]
+      },
+      "PlanTotals": {
+        "type": "object",
+        "properties": {
+          "orders": {
+            "type": "number",
+            "description": "Orders for the day still without a truck when the plan was made, and how many of them it placed."
+          },
+          "planned": {
+            "type": "number"
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "plannedKg": {
+            "type": "number"
+          },
+          "km": {
+            "type": "number"
+          },
+          "emptyKm": {
+            "type": "number"
+          },
+          "trucksUsed": {
+            "type": "number"
+          },
+          "trucksAvailable": {
+            "type": "number"
+          },
+          "drivers": {
+            "type": "number",
+            "description": "Drivers the fleet has to send out — on the day's roster, or every active driver where there is none: the plan uses no more trucks than this."
+          },
+          "outsideWindow": {
+            "type": "number",
+            "description": "Planned orders that reach their door outside the window their shipper asked for — late, or early. Each is marked."
+          },
+          "unreadWindows": {
+            "type": "number",
+            "description": "Orders whose window is in words the plan could not read as a time. They are planned, to the day only."
+          }
+        },
+        "required": [
+          "orders",
+          "planned",
+          "weightKg",
+          "plannedKg",
+          "km",
+          "emptyKm",
+          "trucksUsed",
+          "trucksAvailable",
+          "drivers",
+          "outsideWindow",
+          "unreadWindows"
+        ]
+      },
+      "PlanSettings": {
+        "type": "object",
+        "properties": {
+          "dayStart": {
+            "type": "string",
+            "description": "When the trucks leave the depot (HH:MM), and the longest a truck's day may be, in hours."
+          },
+          "dayHours": {
+            "type": "number"
+          },
+          "speedKmh": {
+            "type": "number"
+          },
+          "loadMin": {
+            "type": "number"
+          },
+          "unloadMin": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "dayStart",
+          "dayHours",
+          "speedKmh",
+          "loadMin",
+          "unloadMin"
+        ]
+      },
+      "PlanVehicle": {
+        "type": "object",
+        "properties": {
+          "vehicleClass": {
+            "type": "string",
+            "enum": [
+              "bike",
+              "motorcycle",
+              "tuktuk",
+              "car",
+              "van",
+              "bus",
+              "truck"
+            ]
+          },
+          "offRoad": {
+            "description": "Off the road for a reason of its own (papers, status): never planned, and said why.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "vehicleId": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "capacityKg": {
+            "type": "number"
+          },
+          "excluded": {
+            "type": "boolean",
+            "description": "Left out of this plan by the office."
+          }
+        },
+        "required": [
+          "vehicleClass",
+          "vehicleId",
+          "plate",
+          "capacityKg",
+          "excluded"
+        ]
+      },
+      "PlanRuleView": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "keep_off",
+              "put_on"
+            ]
+          },
+          "freightId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "vehicleId": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "freightId",
+          "code",
+          "vehicleId",
+          "plate"
+        ]
+      },
+      "PlanRoster": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "roster",
+              "everyone"
+            ]
+          },
+          "names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "source",
+          "names"
+        ]
+      },
+      "PlanDistances": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "roads",
+              "estimate"
+            ]
+          },
+          "why": {
+            "type": "string"
+          },
+          "gaps": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "source"
+        ]
+      },
+      "PlanAccepted": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "by"
+        ]
+      },
+      "DayPlanView": {
+        "type": "object",
+        "properties": {
+          "routes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanRouteView"
+            }
+          },
+          "unplanned": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanLeftView"
+            }
+          },
+          "sites": {
+            "description": "The fleet's sites, each with its trucks and drivers. A plan kept from before there were sites has none: it was all the depot.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanSiteView"
+            }
+          },
+          "shifts": {
+            "description": "Each shift at each site: drivers rostered, and needed. A plan kept from before there were shifts has none.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanShiftView"
+            }
+          },
+          "docks": {
+            "description": "The shippers' places in this plan that keep loading hours or bays, and what loads at each.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanDockView"
+            }
+          },
+          "lend": {
+            "description": "Sites short of trucks, and the fleet's own idle trucks elsewhere that would carry what was left there.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanLendView"
+            }
+          },
+          "hire": {
+            "$ref": "#/components/schemas/PlanHire"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/PlanTotals"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/PlanSettings"
+          },
+          "vehicles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanVehicle"
+            }
+          },
+          "rules": {
+            "description": "The rules this plan was made under. Empty when there are none.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanRuleView"
+            }
+          },
+          "roster": {
+            "description": "Who it counted as driving. A plan kept from before there were rosters has none: it counted everybody.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PlanRoster"
+              }
+            ]
+          },
+          "distances": {
+            "description": "What its distances are. A plan kept from before there was a routing server to ask has none: it was an estimate.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PlanDistances"
+              }
+            ]
+          },
+          "timeZone": {
+            "type": "string",
+            "description": "The clock its times are on: the fleet's own time zone when the plan was made. Absent: the fleet had none."
+          },
+          "accepted": {
+            "description": "Set on the plan the office accepted for this day. A proposal has none.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PlanAccepted"
+              }
+            ]
+          },
+          "day": {
+            "type": "string"
+          },
+          "madeAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "routes",
+          "unplanned",
+          "totals",
+          "settings",
+          "vehicles",
+          "rules",
+          "day",
+          "madeAt"
+        ]
+      },
+      "DayPlanState": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "description": "The plan as it was accepted — a record, not recomputed. Absent: no plan accepted for this day.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DayPlanView"
+              }
+            ]
+          },
+          "day": {
+            "type": "string"
+          },
+          "leftOut": {
+            "type": "number",
+            "description": "Orders the accepted plan could not place, still waiting: known about, and somebody's to hire for or pin."
+          },
+          "newSince": {
+            "type": "number",
+            "description": "Orders for the day that ARRIVED after the plan was accepted: the plan has never seen them."
+          },
+          "withdrawnSince": {
+            "type": "number",
+            "description": "Orders in the accepted plan that have since been withdrawn."
+          }
+        },
+        "required": [
+          "day",
+          "leftOut",
+          "newSince",
+          "withdrawnSince"
+        ]
+      },
+      "ApiOrderDto": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string",
+            "description": "The shipper's own order number: used once under a contract.",
+            "maxLength": 60
+          },
+          "goods": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "weightKg": {
+            "type": "number",
+            "minimum": 0.1
+          },
+          "deliverTo": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "lat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "lng": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "deliverOn": {
+            "type": "string",
+            "pattern": "DAY"
+          },
+          "window": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "contact": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "packaging": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "instructions": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "reference",
+          "goods",
+          "weightKg",
+          "deliverTo",
+          "deliverOn"
+        ]
+      },
+      "SendOrdersDto": {
+        "type": "object",
+        "properties": {
+          "contractId": {
+            "type": "string"
+          },
+          "pickupLabel": {
+            "type": "string",
+            "description": "Where the goods are collected, for every order that does not say otherwise. Both, or neither.",
+            "maxLength": 160
+          },
+          "pickupLat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "pickupLng": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "orders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiOrderDto"
+            }
+          }
+        },
+        "required": [
+          "contractId",
+          "orders"
+        ]
+      },
+      "TakeLoadDto": {
+        "type": "object",
+        "properties": {
+          "driverDid": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "driverDid"
         ]
       },
       "PayoutNumberView": {
@@ -49631,826 +51170,6 @@
           "day"
         ]
       },
-      "PlanStopView": {
-        "type": "object",
-        "properties": {
-          "orderRef": {
-            "type": "string"
-          },
-          "deliveryWindow": {
-            "type": "string",
-            "description": "The window in the shipper's own words."
-          },
-          "window": {
-            "type": "string",
-            "description": "The window as the plan READ those words (\"08:00–12:00\", \"before 14:00\") — what it planned to. Absent: no window, or words it could not read as one."
-          },
-          "windowUnread": {
-            "type": "boolean",
-            "description": "The shipper wrote something about when, and the plan could not read it as a time: it is shown, and was not planned to."
-          },
-          "lateMin": {
-            "type": "number",
-            "description": "Minutes after its window closed that the door is reached. Planned all the same, and said."
-          },
-          "earlyMin": {
-            "type": "number",
-            "description": "Minutes before its window opens that the goods are handed over: the day had no room to wait."
-          },
-          "waitMin": {
-            "type": "number",
-            "description": "Minutes the truck stands at the door before its window opens; `arrive` is then the opening."
-          },
-          "freightId": {
-            "type": "string"
-          },
-          "code": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "shipperName": {
-            "type": "string"
-          },
-          "destLabel": {
-            "type": "string"
-          },
-          "weightKg": {
-            "type": "number"
-          },
-          "km": {
-            "type": "number",
-            "description": "Kilometres from the collection, or from the stop before."
-          },
-          "arrive": {
-            "type": "string",
-            "description": "When the goods are handed over at this door, on the clock (HH:MM). An estimate from distance and the day's settings."
-          }
-        },
-        "required": [
-          "freightId",
-          "code",
-          "description",
-          "shipperName",
-          "destLabel",
-          "weightKg",
-          "km",
-          "arrive"
-        ]
-      },
-      "PlanTripView": {
-        "type": "object",
-        "properties": {
-          "stops": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PlanStopView"
-            }
-          },
-          "siteId": {
-            "type": "string",
-            "description": "The fleet's own site it loads at. Absent: it loads somewhere else — a shipper's yard."
-          },
-          "siteName": {
-            "type": "string"
-          },
-          "dockName": {
-            "type": "string",
-            "description": "Or the shipper's place it loads at, where the shipper keeps loading hours or bays: its name."
-          },
-          "openWaitMin": {
-            "type": "number",
-            "description": "Minutes it stands at the site before it opens; `start` is then the opening."
-          },
-          "bayWaitMin": {
-            "type": "number",
-            "description": "Minutes it waits there for a bay, every one taken by another truck."
-          },
-          "afterCloseMin": {
-            "type": "number",
-            "description": "Minutes it is still loading after the site has closed. Planned all the same, and said."
-          },
-          "no": {
-            "type": "number"
-          },
-          "pickupLabel": {
-            "type": "string"
-          },
-          "emptyKm": {
-            "type": "number",
-            "description": "Empty running to reach the collection: from the depot, or from where the last trip ended."
-          },
-          "start": {
-            "type": "string"
-          },
-          "end": {
-            "type": "string"
-          },
-          "weightKg": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "stops",
-          "no",
-          "pickupLabel",
-          "emptyKm",
-          "start",
-          "end",
-          "weightKg"
-        ]
-      },
-      "PlanRouteView": {
-        "type": "object",
-        "properties": {
-          "shiftId": {
-            "type": "string"
-          },
-          "shiftName": {
-            "type": "string"
-          },
-          "vehicleClass": {
-            "type": "string",
-            "enum": [
-              "bike",
-              "motorcycle",
-              "tuktuk",
-              "car",
-              "van",
-              "bus",
-              "truck"
-            ]
-          },
-          "trips": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PlanTripView"
-            }
-          },
-          "overMin": {
-            "type": "number",
-            "description": "Minutes its day runs past its shift: waiting for a bay, which is handed out after the day is planned."
-          },
-          "vehicleId": {
-            "type": "string"
-          },
-          "plate": {
-            "type": "string"
-          },
-          "siteId": {
-            "type": "string",
-            "description": "The site it starts from and comes back to, and the shift it goes out on where the site has shifts."
-          },
-          "siteName": {
-            "type": "string"
-          },
-          "capacityKg": {
-            "type": "number"
-          },
-          "km": {
-            "type": "number"
-          },
-          "emptyKm": {
-            "type": "number"
-          },
-          "minutes": {
-            "type": "number",
-            "description": "Site to site, in minutes; when it leaves, and when it is back."
-          },
-          "leaves": {
-            "type": "string"
-          },
-          "home": {
-            "type": "string"
-          },
-          "weightKg": {
-            "type": "number",
-            "description": "Everything it carries in the day, over all its trips."
-          },
-          "fullestPct": {
-            "type": "number",
-            "description": "Its fullest trip, as a share of what it carries at once (0–100)."
-          }
-        },
-        "required": [
-          "vehicleClass",
-          "trips",
-          "vehicleId",
-          "plate",
-          "siteId",
-          "siteName",
-          "capacityKg",
-          "km",
-          "emptyKm",
-          "minutes",
-          "leaves",
-          "home",
-          "weightKg",
-          "fullestPct"
-        ]
-      },
-      "PlanLeftView": {
-        "type": "object",
-        "properties": {
-          "orderRef": {
-            "type": "string"
-          },
-          "reason": {
-            "type": "string",
-            "enum": [
-              "no_pin",
-              "too_heavy",
-              "no_truck_can_carry",
-              "no_time",
-              "no_driver",
-              "no_trucks",
-              "site_closed",
-              "dock_closed"
-            ]
-          },
-          "splitInto": {
-            "type": "number",
-            "description": "For an order heavier than the fleet's largest vehicle that the office MAY split: how many loads of that vehicle\nit would make. A suggestion — the office decides, and the shipper is told."
-          },
-          "loadKg": {
-            "type": "number",
-            "description": "What that largest vehicle carries."
-          },
-          "freightId": {
-            "type": "string"
-          },
-          "code": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "shipperName": {
-            "type": "string"
-          },
-          "destLabel": {
-            "type": "string"
-          },
-          "weightKg": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "reason",
-          "freightId",
-          "code",
-          "description",
-          "shipperName",
-          "destLabel",
-          "weightKg"
-        ]
-      },
-      "PlanSiteView": {
-        "type": "object",
-        "properties": {
-          "bays": {
-            "type": "number",
-            "description": "How many load at once. Absent: not said — as many as come."
-          },
-          "longestBayWaitMin": {
-            "type": "number"
-          },
-          "hours": {
-            "type": "string",
-            "description": "Open for loading that day (\"06:00–18:00\"). Absent: it never closes — or, with `closed`, not at all that day."
-          },
-          "closed": {
-            "type": "boolean"
-          },
-          "siteId": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "trucksAvailable": {
-            "type": "number"
-          },
-          "trucksUsed": {
-            "type": "number"
-          },
-          "drivers": {
-            "type": "number",
-            "description": "Drivers who start from here that day: no more trucks leave it than this."
-          },
-          "loadings": {
-            "type": "number",
-            "description": "Trips that load here, of any truck."
-          },
-          "bayWaits": {
-            "type": "number",
-            "description": "Loadings that waited for a bay, and the longest wait."
-          },
-          "afterClose": {
-            "type": "number",
-            "description": "Loadings still going on after it closes."
-          }
-        },
-        "required": [
-          "siteId",
-          "name",
-          "trucksAvailable",
-          "trucksUsed",
-          "drivers",
-          "loadings",
-          "bayWaits",
-          "afterClose"
-        ]
-      },
-      "PlanShiftView": {
-        "type": "object",
-        "properties": {
-          "shiftId": {
-            "type": "string"
-          },
-          "shiftName": {
-            "type": "string"
-          },
-          "siteId": {
-            "type": "string"
-          },
-          "siteName": {
-            "type": "string"
-          },
-          "start": {
-            "type": "string",
-            "description": "HH:MM on the fleet's clock."
-          },
-          "rostered": {
-            "type": "number"
-          },
-          "needed": {
-            "type": "number"
-          },
-          "trucksUsed": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "siteId",
-          "siteName",
-          "start",
-          "rostered",
-          "needed",
-          "trucksUsed"
-        ]
-      },
-      "PlanDockView": {
-        "type": "object",
-        "properties": {
-          "bays": {
-            "type": "number"
-          },
-          "longestBayWaitMin": {
-            "type": "number"
-          },
-          "hours": {
-            "type": "string",
-            "description": "Open for loading that day (\"06:00–18:00\"). Absent: any hour — or, with `closed`, not at all that day."
-          },
-          "closed": {
-            "type": "boolean"
-          },
-          "siteId": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "shipperName": {
-            "type": "string"
-          },
-          "loadings": {
-            "type": "number"
-          },
-          "bayWaits": {
-            "type": "number"
-          },
-          "afterClose": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "siteId",
-          "name",
-          "shipperName",
-          "loadings",
-          "bayWaits",
-          "afterClose"
-        ]
-      },
-      "PlanLendTruck": {
-        "type": "object",
-        "properties": {
-          "vehicleId": {
-            "type": "string"
-          },
-          "plate": {
-            "type": "string"
-          },
-          "fromSiteId": {
-            "type": "string"
-          },
-          "fromSiteName": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "vehicleId",
-          "plate",
-          "fromSiteId",
-          "fromSiteName"
-        ]
-      },
-      "PlanLendView": {
-        "type": "object",
-        "properties": {
-          "trucks": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PlanLendTruck"
-            }
-          },
-          "siteId": {
-            "type": "string"
-          },
-          "siteName": {
-            "type": "string"
-          },
-          "orders": {
-            "type": "number",
-            "description": "How many of the orders left near this site the trucks below would carry from here, and what they weigh."
-          },
-          "weightKg": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "trucks",
-          "siteId",
-          "siteName",
-          "orders",
-          "weightKg"
-        ]
-      },
-      "PlanHire": {
-        "type": "object",
-        "properties": {
-          "trucks": {
-            "type": "number",
-            "description": "How many more trucks like the fleet's largest the leftover orders would take."
-          },
-          "orders": {
-            "type": "number"
-          },
-          "weightKg": {
-            "type": "number"
-          },
-          "capacityKg": {
-            "type": "number",
-            "description": "What one of those trucks carries."
-          }
-        },
-        "required": [
-          "trucks",
-          "orders",
-          "weightKg",
-          "capacityKg"
-        ]
-      },
-      "PlanTotals": {
-        "type": "object",
-        "properties": {
-          "orders": {
-            "type": "number",
-            "description": "Orders for the day still without a truck when the plan was made, and how many of them it placed."
-          },
-          "planned": {
-            "type": "number"
-          },
-          "weightKg": {
-            "type": "number"
-          },
-          "plannedKg": {
-            "type": "number"
-          },
-          "km": {
-            "type": "number"
-          },
-          "emptyKm": {
-            "type": "number"
-          },
-          "trucksUsed": {
-            "type": "number"
-          },
-          "trucksAvailable": {
-            "type": "number"
-          },
-          "drivers": {
-            "type": "number",
-            "description": "Drivers the fleet has to send out — on the day's roster, or every active driver where there is none: the plan uses no more trucks than this."
-          },
-          "outsideWindow": {
-            "type": "number",
-            "description": "Planned orders that reach their door outside the window their shipper asked for — late, or early. Each is marked."
-          },
-          "unreadWindows": {
-            "type": "number",
-            "description": "Orders whose window is in words the plan could not read as a time. They are planned, to the day only."
-          }
-        },
-        "required": [
-          "orders",
-          "planned",
-          "weightKg",
-          "plannedKg",
-          "km",
-          "emptyKm",
-          "trucksUsed",
-          "trucksAvailable",
-          "drivers",
-          "outsideWindow",
-          "unreadWindows"
-        ]
-      },
-      "PlanSettings": {
-        "type": "object",
-        "properties": {
-          "dayStart": {
-            "type": "string",
-            "description": "When the trucks leave the depot (HH:MM), and the longest a truck's day may be, in hours."
-          },
-          "dayHours": {
-            "type": "number"
-          },
-          "speedKmh": {
-            "type": "number"
-          },
-          "loadMin": {
-            "type": "number"
-          },
-          "unloadMin": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "dayStart",
-          "dayHours",
-          "speedKmh",
-          "loadMin",
-          "unloadMin"
-        ]
-      },
-      "PlanVehicle": {
-        "type": "object",
-        "properties": {
-          "vehicleClass": {
-            "type": "string",
-            "enum": [
-              "bike",
-              "motorcycle",
-              "tuktuk",
-              "car",
-              "van",
-              "bus",
-              "truck"
-            ]
-          },
-          "offRoad": {
-            "description": "Off the road for a reason of its own (papers, status): never planned, and said why.",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "vehicleId": {
-            "type": "string"
-          },
-          "plate": {
-            "type": "string"
-          },
-          "capacityKg": {
-            "type": "number"
-          },
-          "excluded": {
-            "type": "boolean",
-            "description": "Left out of this plan by the office."
-          }
-        },
-        "required": [
-          "vehicleClass",
-          "vehicleId",
-          "plate",
-          "capacityKg",
-          "excluded"
-        ]
-      },
-      "PlanRuleView": {
-        "type": "object",
-        "properties": {
-          "kind": {
-            "type": "string",
-            "enum": [
-              "keep_off",
-              "put_on"
-            ]
-          },
-          "freightId": {
-            "type": "string"
-          },
-          "code": {
-            "type": "string"
-          },
-          "vehicleId": {
-            "type": "string"
-          },
-          "plate": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "kind",
-          "freightId",
-          "code",
-          "vehicleId",
-          "plate"
-        ]
-      },
-      "PlanRoster": {
-        "type": "object",
-        "properties": {
-          "source": {
-            "type": "string",
-            "enum": [
-              "roster",
-              "everyone"
-            ]
-          },
-          "names": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "source",
-          "names"
-        ]
-      },
-      "PlanDistances": {
-        "type": "object",
-        "properties": {
-          "source": {
-            "type": "string",
-            "enum": [
-              "roads",
-              "estimate"
-            ]
-          },
-          "why": {
-            "type": "string"
-          },
-          "gaps": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "source"
-        ]
-      },
-      "PlanAccepted": {
-        "type": "object",
-        "properties": {
-          "at": {
-            "type": "string"
-          },
-          "by": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "at",
-          "by"
-        ]
-      },
-      "DayPlanView": {
-        "type": "object",
-        "properties": {
-          "routes": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PlanRouteView"
-            }
-          },
-          "unplanned": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PlanLeftView"
-            }
-          },
-          "sites": {
-            "description": "The fleet's sites, each with its trucks and drivers. A plan kept from before there were sites has none: it was all the depot.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PlanSiteView"
-            }
-          },
-          "shifts": {
-            "description": "Each shift at each site: drivers rostered, and needed. A plan kept from before there were shifts has none.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PlanShiftView"
-            }
-          },
-          "docks": {
-            "description": "The shippers' places in this plan that keep loading hours or bays, and what loads at each.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PlanDockView"
-            }
-          },
-          "lend": {
-            "description": "Sites short of trucks, and the fleet's own idle trucks elsewhere that would carry what was left there.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PlanLendView"
-            }
-          },
-          "hire": {
-            "$ref": "#/components/schemas/PlanHire"
-          },
-          "totals": {
-            "$ref": "#/components/schemas/PlanTotals"
-          },
-          "settings": {
-            "$ref": "#/components/schemas/PlanSettings"
-          },
-          "vehicles": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PlanVehicle"
-            }
-          },
-          "rules": {
-            "description": "The rules this plan was made under. Empty when there are none.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PlanRuleView"
-            }
-          },
-          "roster": {
-            "description": "Who it counted as driving. A plan kept from before there were rosters has none: it counted everybody.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/PlanRoster"
-              }
-            ]
-          },
-          "distances": {
-            "description": "What its distances are. A plan kept from before there was a routing server to ask has none: it was an estimate.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/PlanDistances"
-              }
-            ]
-          },
-          "timeZone": {
-            "type": "string",
-            "description": "The clock its times are on: the fleet's own time zone when the plan was made. Absent: the fleet had none."
-          },
-          "accepted": {
-            "description": "Set on the plan the office accepted for this day. A proposal has none.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/PlanAccepted"
-              }
-            ]
-          },
-          "day": {
-            "type": "string"
-          },
-          "madeAt": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "routes",
-          "unplanned",
-          "totals",
-          "settings",
-          "vehicles",
-          "rules",
-          "day",
-          "madeAt"
-        ]
-      },
       "PlanStateQueryDto": {
         "type": "object",
         "properties": {
@@ -50542,40 +51261,6 @@
         "required": [
           "trucks",
           "day"
-        ]
-      },
-      "DayPlanState": {
-        "type": "object",
-        "properties": {
-          "plan": {
-            "description": "The plan as it was accepted — a record, not recomputed. Absent: no plan accepted for this day.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/DayPlanView"
-              }
-            ]
-          },
-          "day": {
-            "type": "string"
-          },
-          "leftOut": {
-            "type": "number",
-            "description": "Orders the accepted plan could not place, still waiting: known about, and somebody's to hire for or pin."
-          },
-          "newSince": {
-            "type": "number",
-            "description": "Orders for the day that ARRIVED after the plan was accepted: the plan has never seen them."
-          },
-          "withdrawnSince": {
-            "type": "number",
-            "description": "Orders in the accepted plan that have since been withdrawn."
-          }
-        },
-        "required": [
-          "day",
-          "leftOut",
-          "newSince",
-          "withdrawnSince"
         ]
       },
       "FleetClockChoice": {
