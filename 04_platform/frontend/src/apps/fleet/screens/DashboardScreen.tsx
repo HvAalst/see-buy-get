@@ -5,6 +5,7 @@ import { Button, Card, ErrorNote, ExplainerReset, Icon, Note, PhotoField, PlaceM
 import { formatDate, useT } from '../../../shared/i18n';
 import type { SbgClient, SbgError } from '../../../lib/sbg';
 import { systemApi, systemSummary, type SystemView } from '../system';
+import { StandstillCard } from './StandstillCard';
 import { ageWords, signalState, dashboardSummary, fleetMap, hazardWords, hoursLabel, paperDay, paperKindLabel, paperLine, paperLineClass, papersAloud, stopDetail, vehicleDetail } from '../logic';
 import { vehicleWord } from '../../driver/vehicle-words';
 import type { PapersReport } from '../types';
@@ -44,6 +45,9 @@ export function DashboardScreen({ state, actions, sbg }: DashboardScreenProps) {
         <Tile value={`${d?.cargo.count ?? 0}·${d?.cargo.totalKg ?? 0}kg`} label={t('fleet.dash.tileCargo')} />
         <Tile value={hoursLabel(d?.sessions.todayHours)} label={t('fleet.dash.tileHours')} />
       </div>
+
+      {/* Round 16 — a vehicle standing still longer than the fleet allows, away from any reason to: read first. */}
+      <StandstillCard sbg={sbg ?? null} did={state.manager?.did} />
 
       {/* FP4 — what is off the road and what is running out. Read from the same rules the six-hourly sweep
           enforces, so this card and the email the fleet gets cannot disagree. Absent entirely (not empty) when the

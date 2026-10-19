@@ -182,6 +182,8 @@ export interface SessionView {
   handoverPass?: string;
   /** Round 11 — their fleet's own system is told where they are while on this shift, at most this often. Absent otherwise. */
   positionsToFleetSystem?: { fleetName: string; everyMin: number };
+  /** Round 16 — their fleet's office is told if the vehicle stands in one place longer than this, away from any reason to. Absent when the fleet has it off. */
+  standstillWatchMin?: number;
   assignment?: AssignmentView;
   vehicle?: VehicleView;
   /**

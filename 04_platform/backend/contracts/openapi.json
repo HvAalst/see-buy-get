@@ -23898,6 +23898,115 @@
         }
       }
     },
+    "/v1/sbg/fleet/managers/{did}/standstill": {
+      "get": {
+        "operationId": "VehicleStandstill.read",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandstillView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/standstill/settings": {
+      "put": {
+        "operationId": "VehicleStandstill.set",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StandstillSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandstillSettingsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/standstill/{caseId}/answer": {
+      "post": {
+        "operationId": "VehicleStandstill.answer",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerStandstillDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandstillCaseView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/payout-number": {
       "get": {
         "operationId": "PayoutNumber.mine",
@@ -51413,6 +51522,171 @@
         "required": [
           "cause",
           "photoRefs"
+        ]
+      },
+      "StandstillSettingsView": {
+        "type": "object",
+        "properties": {
+          "setAt": {
+            "type": "string"
+          },
+          "setBy": {
+            "type": "string"
+          },
+          "on": {
+            "type": "boolean"
+          },
+          "afterMin": {
+            "type": "number"
+          },
+          "asStarted": {
+            "type": "boolean",
+            "description": "True while the fleet has not set it: what every fleet starts with."
+          }
+        },
+        "required": [
+          "on",
+          "afterMin",
+          "asStarted"
+        ]
+      },
+      "StandstillCaseView": {
+        "type": "object",
+        "properties": {
+          "driverName": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "answered",
+              "over"
+            ]
+          },
+          "answer": {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "required": true,
+                "type": "object"
+              },
+              "note": {
+                "required": false,
+                "type": "string"
+              },
+              "by": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "over": {
+            "type": "object",
+            "properties": {
+              "why": {
+                "required": true,
+                "type": "object"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "caseId": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "since": {
+            "type": "string"
+          },
+          "openedAt": {
+            "type": "string"
+          },
+          "minutes": {
+            "type": "number",
+            "description": "Minutes it stood: so far while it stands, in all once it is over."
+          },
+          "afterMin": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "state",
+          "answer",
+          "over",
+          "caseId",
+          "plate",
+          "location",
+          "since",
+          "openedAt",
+          "minutes",
+          "afterMin"
+        ]
+      },
+      "StandstillView": {
+        "type": "object",
+        "properties": {
+          "settings": {
+            "$ref": "#/components/schemas/StandstillSettingsView"
+          },
+          "cases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StandstillCaseView"
+            }
+          }
+        },
+        "required": [
+          "settings",
+          "cases"
+        ]
+      },
+      "StandstillSettingsDto": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean"
+          },
+          "afterMin": {
+            "type": "number",
+            "minimum": 15,
+            "maximum": 240
+          }
+        },
+        "required": [
+          "on",
+          "afterMin"
+        ]
+      },
+      "AnswerStandstillDto": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "all_well",
+              "no_answer",
+              "problem"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "outcome"
         ]
       },
       "PayoutNumberView": {

@@ -655,6 +655,8 @@ function WorkCard({ state, actions }: HomeScreenProps) {
       {state.session.positionsToFleetSystem ? (
         <p class="card__note">{t('driver.home.positionsToFleet', { fleet: state.session.positionsToFleetSystem.fleetName, n: state.session.positionsToFleetSystem.everyMin })}</p>
       ) : null}
+      {/* Round 16 — the fleet's watch on a vehicle standing still: said to the one it watches, while it watches. */}
+      {state.session.active && state.session.standstillWatchMin ? <p class="card__note">{t('driver.home.standstillWatch', { n: state.session.standstillWatchMin })}</p> : null}
       {/* The standing floor, and — the half that makes it safe to be standing — what it kept quiet today.
           A silencer nobody can see working is how somebody hears nothing for a week and blames us, so the
           setting and its effect are one line, never a number buried in a settings screen. */}

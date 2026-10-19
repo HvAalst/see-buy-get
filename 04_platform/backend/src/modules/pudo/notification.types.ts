@@ -174,6 +174,11 @@ export const NOTIFICATION_KINDS = [
    */
   'vehicle_breakdown',
   /**
+   * Round 16 — a vehicle on a shift standing still longer than its fleet allows, away from anywhere it had reason to stop:
+   * to its fleet's office, to call the driver. Never to a shipper: where a fleet's vehicles are is the fleet's.
+   */
+  'vehicle_standstill',
+  /**
    * Something happened to the way somebody signs in that they did not do — five wrong PINs locked it. Said to the
    * person, because the one who typed them may know their number, and the owner is the only one who can act.
    */

@@ -268,6 +268,13 @@
     <li><b>Where a fleet's vehicles are</b> — <code>vehicle.position</code> — only once a manager turns it on, every 1, 5
       or 15 minutes a vehicle, only while a driver is on a shift in it. Each driver is told so in their app. A position
       is tried once; the next takes its place.</li>
+    <li><b>A fleet: a vehicle standing still</b> — <code>vehicle.standing_still</code> — when a vehicle on a shift has
+      stood in one place longer than the fleet allows (45 minutes to start; each fleet sets its own, or turns it off) with
+      no reason to: away from its loads' stops, the fleet's sites, the network's hubs and shops, not at a border or hub
+      its driver has said it is at, and not reported broken down. It carries the <code>case</code>: its
+      <code>caseId</code>, <code>plate</code>, <code>driverName</code>, <code>location</code>, <code>since</code>,
+      <code>minutes</code> and <code>afterMin</code>. Sent once a stop; a phone that has gone silent is not a vehicle
+      standing still. Its office says how it was in the Fleet app.</li>
   </ul>
   <h3>Checking it came from us</h3>
   <p>HMAC-SHA256 over the exact body, with your secret, hex-encoded, in <code>x-sbg-signature</code>. The event is in

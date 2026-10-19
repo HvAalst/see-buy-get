@@ -35,7 +35,7 @@ import type { DepartureView } from './types';
 import type { SaidPassage } from './passage';
 import { boardOriginPin, cardReader, cardWords, DEFAULT_WORK_RADIUS_KM, defaultWorkMode, lastReadingBreached, leftDetail, minEarnFilter, nodeOptions, originReady } from './logic';
 import { pinAfterRename, type GeoPoint, type PinSource } from '../../shared/geo';
-import { currentPosition, watchPosition } from '../../shared/position';
+import { askEvery, currentPosition, watchPosition } from '../../shared/position';
 import { t } from '../../shared/i18n';
 import { downscaleImage } from '../../shared/media';
 import { triggerDownload } from '../../shared/download';
@@ -187,6 +187,9 @@ export interface CustomPlace {
 
 /** The sentinel `fromId`/`toId` take when the end is not a network place. */
 export const CUSTOM_PLACE = '__custom';
+
+/** Round 16 — how often a phone on a shift is asked where it is, moving or not. */
+const ASK_EVERY_MS = 4 * 60_000;
 
 const EMPTY_PLACE: CustomPlace = { label: '', pin: null, from: null };
 const EMPTY_FORM = {
@@ -526,7 +529,12 @@ export function useDriverApp() {
     const stop = watchPosition((p) => {
       void client.api.locate(did, p);
     });
-    return stop;
+    // Round 16 — a parked phone may never call the watch; asked every few minutes, a vehicle standing still is heard standing there.
+    const stopAsking = askEvery((p) => void client.api.locate(did, p), ASK_EVERY_MS);
+    return () => {
+      stop();
+      stopAsking();
+    };
   }, [client, did, state.session.active]);
 
   /**

@@ -3317,6 +3317,28 @@ export class DispatchService {
     return this.seals?.views(f.freightId) ?? [];
   }
 
+  /**
+   * ROUND 16 — WHERE A DRIVER HAS REASON TO STAND: its loads' next stops, where it picked up or delivered in the last two
+   * hours (a truck is still at the customer's gate after the goods are off), a hub its driver said a load is at — and
+   * whether a load it carries is waiting at a border post its driver said it is at, which has no place on the map.
+   */
+  reasonsToStand(driverDid: string, now: number = Date.now()): { places: GeoPoint[]; atBorder: boolean } {
+    const next = this.activeCargo(new Set([driverDid])).items.map((i) => i.nextStop?.location).filter((p): p is GeoPoint => Boolean(p));
+    const since = now - 2 * 3_600_000;
+    const mine = [...this.freights.values()].filter((f) => f.claimedBy === driverDid);
+    const recent = mine.flatMap((f) => [...(f.pickedUpAt && Date.parse(f.pickedUpAt) >= since ? [f.pickupLocation] : []), ...(f.deliveredAt && Date.parse(f.deliveredAt) >= since && f.destLocation ? [f.destLocation] : [])]);
+    const onRoad = mine.filter((f) => f.status === 'in_transit');
+    const atBorder = Boolean(this.passages) && onRoad.some((f) => Boolean(this.passages!.forDriver(f, now).atPost));
+    const hubs = this.passages
+      ? onRoad.flatMap((f) => {
+          const steps = this.passages!.of(f.freightId);
+          const last = steps[steps.length - 1];
+          return last?.kind === 'at_hub' && last.location ? [last.location] : [];
+        })
+      : [];
+    return { places: [...next, ...recent, ...hubs], atBorder };
+  }
+
   /** The seals' photographs: the note's copies carry them. */
   sealPhotosOf(freightId: string): string[] {
     return this.seals?.photosOf(freightId) ?? [];

@@ -48,6 +48,8 @@ const KIND_ICON: Record<string, IconName> = {
   vehicle_defect: 'warning',
   vehicle_service: 'warning',
   vehicle_breakdown: 'warning',
+  // A vehicle on a shift standing still longer than its fleet allows, away from any reason to.
+  vehicle_standstill: 'clock',
   // A driver sent their fleet's office the renewed licence: a card to read.
   papers_sent: 'badge',
   /** A payment the shop made was confirmed by the provider — or came back. */

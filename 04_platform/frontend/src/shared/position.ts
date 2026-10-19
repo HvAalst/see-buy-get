@@ -44,6 +44,26 @@ export function shouldReport(
   return nowMs - last.ms >= minMs || haversineKm(last.at, next) >= minKm;
 }
 
+/**
+ * A phone standing still may say nothing at all: many devices only call a watch when the fix changes. So ask once
+ * every so often as well, and a vehicle parked for an hour is confirmed as parked THERE (round 16: its fleet is told
+ * when it stands too long). A phone that cannot answer stays silent — which the server reads as a phone gone dark,
+ * never as a vehicle standing still. Returns a stop function, like the watch.
+ */
+export function askEvery(onFix: (p: GeoPoint) => void, everyMs: number, ask: () => Promise<GeoPoint | null> = () => currentPosition()): StopWatch {
+  const id = setInterval(() => {
+    void ask().then((p) => {
+      if (!p) return;
+      try {
+        onFix(p);
+      } catch {
+        /* a bad handler must not stop the asking */
+      }
+    });
+  }, everyMs);
+  return () => clearInterval(id);
+}
+
 /** Is a position available at all on this device/browser? */
 export function canLocate(): boolean {
   return typeof navigator !== 'undefined' && 'geolocation' in navigator;

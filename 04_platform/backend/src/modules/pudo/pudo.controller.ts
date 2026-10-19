@@ -25,6 +25,7 @@ import { FleetHookService } from './fleet-hooks.service';
 import { LoadPostingService } from './load-posting.service';
 import { INVOICE_COPIES } from './commercial-invoice.types';
 import { ParcelInvoiceService } from './parcel-invoice.service';
+import { VehicleStandstillService } from './vehicle-standstill.service';
 import { boardDocId } from './note-archive.types';
 import { isSandbox } from '../../foundation/runtime/sandbox';
 import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Req, Res, StreamableFile, Optional, UseGuards, UseInterceptors } from '@nestjs/common';
@@ -303,6 +304,8 @@ export class SbgController {
     @Optional() private readonly loadPosting?: LoadPostingService,
     // A store parcel's papers abroad (round 13): the invoice a crossing shipment made in the Store app goes with.
     @Optional() private readonly parcelInvoices?: ParcelInvoiceService,
+    // Round 16 — the watch on vehicles standing still: the driver's session says whether their fleet is told.
+    @Optional() private readonly standstill?: VehicleStandstillService,
   ) {}
 
   /**
@@ -6086,7 +6089,9 @@ export class SbgController {
     // FP8 — the shift clock rides with the session: the home screen reads it without a second call.
     // Round 11 — and whether their fleet's own system is told where they are: the fleet's choice, and the driver knows it.
     const positionsTo = this.fleetHooks?.positionsTo(did);
-    return { ...this.fleet.sessionFor(did), quiet: this.dispatch.quietReport(did), hours: this.fleet.hoursFor(did), ...(currency ? { currency } : {}), ...(handoverPass ? { handoverPass } : {}), ...(positionsTo ? { positionsToFleetSystem: positionsTo } : {}) };
+    // Round 16 — and how long the vehicle may stand still away from a stop before their fleet is told: the driver knows it.
+    const standstillMin = this.standstill?.watchedFor(did);
+    return { ...this.fleet.sessionFor(did), quiet: this.dispatch.quietReport(did), hours: this.fleet.hoursFor(did), ...(currency ? { currency } : {}), ...(handoverPass ? { handoverPass } : {}), ...(positionsTo ? { positionsToFleetSystem: positionsTo } : {}), ...(standstillMin ? { standstillWatchMin: standstillMin } : {}) };
   }
 
   @Roles('driver', 'fleet_manager', 'operator')

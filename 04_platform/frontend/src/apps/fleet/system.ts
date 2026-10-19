@@ -91,6 +91,7 @@ const EVENT_WORDS: Record<string, MessageKey> = {
   'vehicle.breakdown_ended': 'fleet.system.event.breakdownEnded',
   'vehicle.loads_moved': 'fleet.system.event.loadsMoved',
   'vehicle.position': 'fleet.system.event.position',
+  'vehicle.standing_still': 'fleet.system.event.standingStill',
   'run.booked': 'fleet.system.event.runBooked',
   'run.booking_cancelled': 'fleet.system.event.bookingCancelled',
   'run.cancelled': 'fleet.system.event.runCancelled',
@@ -112,7 +113,7 @@ export function subjectOf(m: SystemMessage): string | undefined {
     return undefined;
   }
   const said = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
-  return said(data?.order?.code) ?? said(data?.load?.code) ?? said(data?.handBack?.code) ?? said(data?.breakdown?.plate) ?? said(data?.run?.lineName) ?? said(data?.plan?.day);
+  return said(data?.order?.code) ?? said(data?.load?.code) ?? said(data?.handBack?.code) ?? said(data?.breakdown?.plate) ?? said(data?.case?.plate) ?? said(data?.run?.lineName) ?? said(data?.plan?.day);
 }
 
 /** What became of it, in words: arrived; being sent; tried again by itself, how often and when; given up — and why. */

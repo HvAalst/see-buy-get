@@ -417,6 +417,18 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<VehicleDefectDecided>(GlosEvent.Pudo.VehicleDefectDecided, (e) => this.onDefectDecided(e.payload));
     this.events.subscribe<VehicleServiceDue>(GlosEvent.Pudo.VehicleServiceDue, (e) => this.onServiceDue(e.payload));
     this.events.subscribe<VehicleBrokeDown>(GlosEvent.Pudo.VehicleBrokeDown, (e) => this.onVehicleBrokeDown(e.payload));
+    // Round 16 — a vehicle standing still away from any stop: its fleet's office is told, to call the driver.
+    this.events.subscribe<{ fleetDid?: string; case?: { caseId: string; plate: string; driverName?: string; minutes: number; location: { lat: number; lng: number } } }>(GlosEvent.Pudo.VehicleStandingStill, (e) => {
+      const c = e.payload?.case;
+      if (!e.payload?.fleetDid || !c) return;
+      void this.tell(e.payload.fleetDid, {
+        kind: 'vehicle_standstill',
+        title: `${c.plate} has stood still for ${c.minutes} minutes${c.driverName ? ` — ${c.driverName}` : ''}`,
+        body: `Away from any of its stops, your sites or the network’s hubs, at ${c.location.lat.toFixed(5)}, ${c.location.lng.toFixed(5)}. Call the driver, and say how it was on the dashboard.`,
+        tag: `standstill:${c.caseId}`,
+        data: { caseId: c.caseId, lat: c.location.lat, lng: c.location.lng },
+      });
+    });
     this.events.subscribe<VehicleBreakdownResolved>(GlosEvent.Pudo.VehicleBreakdownResolved, (e) => this.onBreakdownResolved(e.payload));
     this.events.subscribe<VehicleLoadsHandedOver>(GlosEvent.Pudo.VehicleLoadsHandedOver, (e) => this.onLoadsHandedOver(e.payload));
     // FP4 (courier) — the renewed licence they sent was checked. They sent it and are waiting: either answer.
