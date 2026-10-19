@@ -178,6 +178,11 @@ export const NOTIFICATION_KINDS = [
    * person, because the one who typed them may know their number, and the owner is the only one who can act.
    */
   'security',
+  /**
+   * A business's own system has not taken our messages about its loads: given up after two days of tries. To the business, at
+   * most once a day, with where to send them again (round 10: "the company, once a day"). Its owners are emailed too.
+   */
+  'system_down',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

@@ -120,6 +120,8 @@ export interface MailParams {
   'country-open': { country: string; settles: boolean; company?: string; joinUrl: string };
   /** B1 — SeeBuyGet checked a business, or refused to, with the reason. Sent to its owners by the decision itself. */
   'business-checked': { business: string; outcome: 'verified' | 'refused'; reason?: string; when: string };
+  /** Round 10 — a business's own system has not taken our messages about its loads. To its owners, at most once a day. */
+  'business-system-down': { business: string; count: number; since: string };
   /**
    * A problem was reported on one of a store's shipments, and the store names an insurer on its shipping policy: the
    * damage claim report, by a link. Sent the moment the report is made. `by`: who reported the problem.
@@ -297,6 +299,27 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
             ],
             reason: 'You are getting this email because you are an owner of this business on SeeBuyGet.',
           },
+  },
+
+  'business-system-down': {
+    title: 'Your system is not taking our messages',
+    sentWhen: 'Messages to a business’s own system about its loads were given up after two days of tries. At most once a day, to its owners.',
+    wired: true,
+    // A day late it is still true, and still the only way an owner hears it without opening the app.
+    sendLater: 24,
+    sample: { business: 'Abebe Import & Export PLC', count: 3, since: '2026-10-18T06:40:00Z' },
+    build: (p) => ({
+      subject: `${p.business}: your system is not taking our messages`,
+      preheader: `${p.count === 1 ? 'A message' : `${p.count} messages`} about your loads could not be delivered.`,
+      blocks: [
+        { kind: 'heading', text: 'Your system is not taking our messages' },
+        { kind: 'paragraph', text: `Since ${formatWhen(p.since)}, ${p.count === 1 ? 'a message' : `${p.count} messages`} about your loads could not be delivered to your system, and we stopped trying after two days. Your loads are not affected: they are in the ${APP_NAMES.business} as always.` },
+        { kind: 'paragraph', text: `Put your system right, then open Your system in the ${APP_NAMES.business}: it says what went wrong with each, and sends ${p.count === 1 ? 'it' : 'them'} again.` },
+        { kind: 'facts', rows: [['Business', p.business], ['Messages given up', String(p.count)], ['Since', formatWhen(p.since)]] },
+        { kind: 'button', label: `Open the ${APP_NAMES.business}`, href: appUrl('business') },
+      ],
+      reason: 'You are getting this email because you are an owner of this business on SeeBuyGet. It is sent at most once a day.',
+    }),
   },
 
   'account-safety': {

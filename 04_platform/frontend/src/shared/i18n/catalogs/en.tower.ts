@@ -2499,6 +2499,10 @@ export const enTowerMoney = {
   'tower.money.lede': 'What this company holds, what it owes, and paying the people it owes it to.',
   // Tax invoices (KRA eTIMS): Kenya's company only, as the server says.
   'tower.money.tax.title': 'Tax invoices (KRA eTIMS)',
+  // Round 10 — a business's own system, told of its loads: counts for staff, who send nothing in its name.
+  'tower.biz.fact.system': 'Its own system',
+  'tower.biz.fact.systemNone': 'No address given: nothing is sent',
+  'tower.biz.fact.systemCounts': '{delivered} arrived · {waiting} waiting · {givenUp} given up',
   'tower.money.tax.all': 'All · {n}',
   'tower.money.tax.only.waiting': 'Waiting · {n}',
   'tower.money.tax.only.refused': 'Refused · {n}',

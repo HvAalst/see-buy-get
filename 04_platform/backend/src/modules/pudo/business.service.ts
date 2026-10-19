@@ -492,6 +492,17 @@ export class BusinessService {
     return this.entities.updateBusiness(entityId, { profile: { verification } }, by, 'verification');
   }
 
+  /** Its owners who can be emailed, at their recovery address: who hears about the business itself. */
+  ownerAddresses(entityId: string): Array<{ address: string; name: string }> {
+    return this.liveMembers(entityId)
+      .filter((m) => m.role === 'owner' && m.joinedAt && m.personDid)
+      .flatMap((m) => {
+        const person = this.persons.findByDid(m.personDid!);
+        const address = person ? this.persons.emailOf(person) : undefined;
+        return address ? [{ address, name: m.name }] : [];
+      });
+  }
+
   /** The owners are told what was decided, at their recovery email. Best effort: the app shows it either way. */
   private tellOwners(entity: Entity, outcome: 'verified' | 'refused'): void {
     if (!this.mail) return;
@@ -541,7 +552,7 @@ export class BusinessService {
     return member;
   }
 
-  private requireOwner(acting: ActingMember): void {
+  requireOwner(acting: ActingMember): void {
     if (acting.member.role !== 'owner') throw new GlosError('FORBIDDEN', 'Only an owner of the business can do that');
   }
 

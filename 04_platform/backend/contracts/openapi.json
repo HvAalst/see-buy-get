@@ -22764,6 +22764,117 @@
         }
       }
     },
+    "/v1/sbg/business/me/system": {
+      "get": {
+        "operationId": "BusinessSystem.view",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessSystemView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "BusinessSystem.setAddress",
+        "summary": "",
+        "description": "Where its system is told. The first address makes the signing secret, shown in this answer only. Empty stops the messages.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BusinessSystemDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessSystemView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/system/secret": {
+      "post": {
+        "operationId": "BusinessSystem.turnSecret",
+        "summary": "",
+        "description": "A new signing secret, shown in this answer only.",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessSystemView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/system/test": {
+      "post": {
+        "operationId": "BusinessSystem.test",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessHookMessageView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/system/messages/{messageId}/resend": {
+      "post": {
+        "operationId": "BusinessSystem.resend",
+        "parameters": [
+          {
+            "name": "messageId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessHookMessageView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/payout-number": {
       "get": {
         "operationId": "PayoutNumber.mine",
@@ -46365,6 +46476,29 @@
           "archived"
         ]
       },
+      "BusinessSystemCounts": {
+        "type": "object",
+        "properties": {
+          "hasAddress": {
+            "type": "boolean"
+          },
+          "delivered": {
+            "type": "number"
+          },
+          "waiting": {
+            "type": "number"
+          },
+          "givenUp": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "hasAddress",
+          "delivered",
+          "waiting",
+          "givenUp"
+        ]
+      },
       "BusinessStaffRow": {
         "type": "object",
         "properties": {
@@ -46450,6 +46584,14 @@
           },
           "handle": {
             "type": "string"
+          },
+          "system": {
+            "description": "Round 10 — how the messages to its own system stand, counted. Staff read it; they send nothing in its name.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BusinessSystemCounts"
+              }
+            ]
           }
         },
         "required": [
@@ -47955,6 +48097,111 @@
         },
         "required": [
           "number"
+        ]
+      },
+      "BusinessHookMessageView": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "description": "One of the load events, or \"test\"."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "delivered",
+              "failed"
+            ]
+          },
+          "deliveredAt": {
+            "type": "string"
+          },
+          "lastError": {
+            "type": "string",
+            "description": "Our words for what went wrong last. Never the system’s own answer."
+          },
+          "resent": {
+            "type": "number"
+          },
+          "id": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "attempts": {
+            "type": "number"
+          },
+          "nextTryAt": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string",
+            "description": "The exact body that was signed and sent: the business's own."
+          }
+        },
+        "required": [
+          "event",
+          "state",
+          "id",
+          "at",
+          "attempts",
+          "nextTryAt",
+          "body"
+        ]
+      },
+      "BusinessSystemView": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Where its system is told; absent while it has given none, and nothing is sent."
+          },
+          "setAt": {
+            "type": "string"
+          },
+          "secretTurnedAt": {
+            "type": "string"
+          },
+          "secret": {
+            "type": "string",
+            "description": "Only in the answer that made it: copy it now, it is not shown again."
+          },
+          "events": {
+            "description": "What its system hears about each load.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BusinessHookMessageView"
+            }
+          },
+          "hasSecret": {
+            "type": "boolean",
+            "description": "Whether it has a signing secret, and when it was last turned. The secret itself is shown once, when made."
+          }
+        },
+        "required": [
+          "events",
+          "messages",
+          "hasSecret"
+        ]
+      },
+      "BusinessSystemDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "url"
         ]
       },
       "PayoutNumberView": {

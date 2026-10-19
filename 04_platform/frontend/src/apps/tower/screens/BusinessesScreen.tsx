@@ -166,6 +166,12 @@ function BusinessDetail({ row, state, actions, onClose }: { row: BusinessRow; st
             <dt class="cons__factk">{t('tower.biz.fact.setUp')}</dt>
             <dd class="cons__factv">{t('tower.biz.fact.setUpBy', { who: row.createdBy, when: row.createdAt.slice(0, 10), n: row.members })}</dd>
           </div>
+          {row.system ? (
+            <div class="cons__fact">
+              <dt class="cons__factk">{t('tower.biz.fact.system')}</dt>
+              <dd class="cons__factv">{row.system.hasAddress ? t('tower.biz.fact.systemCounts', { delivered: row.system.delivered, waiting: row.system.waiting, givenUp: row.system.givenUp }) : t('tower.biz.fact.systemNone')}</dd>
+            </div>
+          ) : null}
           {row.askedAt ? (
             <div class="cons__fact">
               <dt class="cons__factk">{t('tower.biz.fact.asked')}</dt>

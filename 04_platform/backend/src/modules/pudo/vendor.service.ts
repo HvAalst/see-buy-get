@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
+import type { HookMessage } from '../../foundation/outbound/hook-delivery';
 import { PasswordTries, keptLocks } from '../../foundation/auth/password-tries';
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { PersistentMap } from '../../foundation/store/persistent-map';
@@ -43,24 +44,9 @@ export type CallbackState = (typeof CALLBACK_STATES)[number];
  * record was built, signed, pushed to an in-memory array and left there. A merchant reading their outbox
  * saw a perfect list of events that had never left the building.
  */
-export interface VendorCallback {
-  id: string;
+export interface VendorCallback extends HookMessage {
   vendorId: string;
-  url: string;
-  event: string;
-  signature: string; // HMAC-SHA256 of the body
-  body: string;
-  at: string;
-  /* --- the half that was missing --- */
   state: CallbackState;
-  attempts: number;
-  /** When the next attempt is due; backs off so a dead endpoint is not hammered. */
-  nextTryAt: string;
-  deliveredAt?: string;
-  /** Our words for the last failure. Never the store's own response body. */
-  lastError?: string;
-  /** How many times the store sent it again itself. */
-  resent?: number;
 }
 
 /* ------------------------------------------------------------- bookkeeping register (R3) -- */

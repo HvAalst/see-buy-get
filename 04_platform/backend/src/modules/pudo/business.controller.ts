@@ -1,13 +1,12 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Optional, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { BusinessHookService } from './business-hooks.service';
 import { BusinessClientService } from './business-client.service';
 import { BusinessClient } from './business-client.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { staffOf } from './staff-of';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
-import { auditActor } from '../../foundation/auth/acting';
 import { GlosError } from '../../foundation/http/glos-error';
-import { isSandbox } from '../../foundation/runtime/sandbox';
 import { BusinessService } from './business.service';
 import { AnyMember, BusinessMemberGuard } from './business-member.guard';
 import { ApproveBusinessDto, ArchiveClientDto, BusinessClientDto, BusinessGs1Dto, UpdateBusinessClientDto, CreateBusinessDto, InviteMemberDto, MemberRoleDto, RefuseBusinessDto, UpdateBusinessDto } from './business.dto';
@@ -30,6 +29,7 @@ export class BusinessController {
   constructor(
     private readonly businesses: BusinessService,
     private readonly clients: BusinessClientService,
+    @Optional() private readonly hooks?: BusinessHookService,
   ) {}
 
   /* --------------------------------------------------- a person, as themselves -- */
@@ -178,13 +178,16 @@ export class BusinessController {
   @Roles('operator')
   @Get('businesses')
   staffList(): BusinessStaffList {
-    return { items: this.businesses.staffList() };
+    // With how the messages to each one's own system stand — counts only (round 10).
+    return { items: this.businesses.staffList().map((row) => (this.hooks ? { ...row, system: this.hooks.counts(row.entityId) } : row)) };
   }
 
   @Roles('operator')
   @Get('businesses/:entityId')
   staffRow(@Param('entityId') entityId: string): BusinessStaffRow {
-    return this.businesses.staffRow(entityId);
+    const row = this.businesses.staffRow(entityId);
+    // How the messages to its own system stand — counts only (round 10).
+    return this.hooks ? { ...row, system: this.hooks.counts(entityId) } : row;
   }
 
   /** Approve — the first of two, or the second. Never twice by the same member of staff. */

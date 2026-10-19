@@ -376,7 +376,7 @@ export function needsAccount(vendor: { hasAccount?: boolean } | null | undefined
  */
 export function callbackLine(c: CallbackRow, t: Translate): { text: string; warn: boolean } {
   const when = (iso?: string) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '');
-  const why = c.lastError ? ` ${t('vendor.store.msg.why', { why: c.lastError })}` : '';
+  const why = c.lastError ? ` ${t('vendor.store.msg.why', { why: c.lastError.replace(/\.+$/, '') })}` : '';
   if (c.state === 'delivered') return { text: t('vendor.store.msg.arrived', { when: when(c.deliveredAt) }), warn: false };
   if (c.state === 'failed') return { text: t('vendor.store.msg.gaveUp', { count: c.attempts ?? 0 }) + why, warn: true };
   if (!c.attempts) return { text: t('vendor.store.msg.sending'), warn: false };

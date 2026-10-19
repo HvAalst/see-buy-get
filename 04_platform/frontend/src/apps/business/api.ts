@@ -1,3 +1,4 @@
+import type { SystemMessage, SystemView } from './system';
 import type { CommercialInvoice, CommercialInvoiceView, Gs1View, PackageLabels } from './papers';
 import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
 import { createAgentApi, createNotificationsApi, createOperatorApi, createSeededClient, makeConfig, publicRequest, type AgentApi, type NotificationsApi, type OperatorApi, type Result, type SbgConfig, type SeededAppClient } from '../../lib/sbg';
@@ -303,6 +304,12 @@ export interface BusinessClient {
   /** The business's GS1 company prefix: set (owner only), or stop giving codes. */
   setGs1(companyPrefix: string, extensionDigit: number): Promise<Result<BusinessView>>;
   clearGs1(): Promise<Result<BusinessView>>;
+  /** Round 10 — its own system, told of its loads: what it hears, and what became of each message. */
+  system(): Promise<Result<SystemView>>;
+  setSystemAddress(url: string): Promise<Result<SystemView>>;
+  turnSystemSecret(): Promise<Result<SystemView>>;
+  testSystem(): Promise<Result<SystemMessage>>;
+  resendSystemMessage(messageId: string): Promise<Result<SystemMessage>>;
   /** A load's package labels: what they carry, and the page to print. */
   packageLabels(freightId: string): Promise<Result<PackageLabels>>;
   packageLabelsPage(freightId: string): Promise<Result<string>>;
@@ -348,6 +355,11 @@ export function createBusinessClient(): BusinessClient {
     endContract: (contractId, reason) => call((c) => c.POST(`/v1/sbg/business/me/contracts/${encodeURIComponent(contractId)}/end` as never, { body: reason ? { reason } : {} } as never) as never),
     setGs1: (companyPrefix, extensionDigit) => call((c) => c.POST('/v1/sbg/business/me/gs1' as never, { body: { companyPrefix, extensionDigit } } as never) as never),
     clearGs1: () => call((c) => c.DELETE('/v1/sbg/business/me/gs1' as never, {} as never) as never),
+    system: () => call((c) => c.GET('/v1/sbg/business/me/system' as never, {} as never) as never),
+    setSystemAddress: (url) => call((c) => c.PUT('/v1/sbg/business/me/system' as never, { body: { url } } as never) as never),
+    turnSystemSecret: () => call((c) => c.POST('/v1/sbg/business/me/system/secret' as never, {} as never) as never),
+    testSystem: () => call((c) => c.POST('/v1/sbg/business/me/system/test' as never, {} as never) as never),
+    resendSystemMessage: (messageId) => call((c) => c.POST(`/v1/sbg/business/me/system/messages/${encodeURIComponent(messageId)}/resend` as never, {} as never) as never),
     packageLabels: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/package-labels` as never, {} as never) as never),
     packageLabelsPage: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/package-labels.html` as never, { parseAs: 'text' } as never) as never),
     invoice: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/commercial-invoice` as never, {} as never) as never),

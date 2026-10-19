@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
-import { postSigned } from '../../foundation/outbound/send';
+import { MAX_HOOK_ATTEMPTS, tryDelivery } from '../../foundation/outbound/hook-delivery';
 import { ParcelService } from './parcel.service';
 import { VendorService } from './vendor.service';
 
@@ -9,12 +9,7 @@ import { VendorService } from './vendor.service';
 const DRAIN_MS = Number(process.env.GLOS_CALLBACK_DRAIN_MS ?? 15_000);
 
 /** Give up after this many tries — about a day of backoff — and say so in the outbox. */
-export const MAX_CALLBACK_ATTEMPTS = 8;
-
-/** A minute, five, a quarter hour, then hours. */
-function backoffMinutes(attempt: number): number {
-  return [1, 5, 15, 60, 180, 360, 720, 1440][Math.min(attempt, 7)];
-}
+export const MAX_CALLBACK_ATTEMPTS = MAX_HOOK_ATTEMPTS;
 
 const EVENT_STATUS: Record<string, string> = {
   [GlosEvent.Pudo.ParcelPaid]: 'parcel_paid', // vendor prepaid → drop-off PUDO confirmation, label unblocked
@@ -34,7 +29,7 @@ const EVENT_STATUS: Record<string, string> = {
  * integration; GLOS orchestrates logistics and reports status, but never touches the money.
  */
 @Injectable()
-export class VendorCallbackService implements OnModuleInit {
+export class VendorCallbackService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(VendorCallbackService.name);
   private timer?: NodeJS.Timeout;
   private draining = false;
@@ -74,35 +69,11 @@ export class VendorCallbackService implements OnModuleInit {
     let failed = 0;
     try {
       for (const callback of this.vendors.callbacksDue(now)) {
-        /*
-         * The EXACT body that was signed, byte for byte. Re-serialising here would change the
-         * whitespace and every merchant verifying the signature the way the docs tell them to would
-         * reject it — which would be worse than not sending at all.
-         */
-        const result = await postSigned(callback.url, Buffer.from(callback.body, 'utf8'), {
-          'content-type': 'application/json',
-          'x-sbg-signature': callback.signature,
-          'x-sbg-event': callback.event,
-          // Stable across retries, so a handler can be idempotent on it — which the documentation has
-          // been telling merchants to prepare for since before anything was ever delivered.
-          'x-sbg-delivery': callback.id,
-        });
-
-        callback.attempts += 1;
-        if (result.ok) {
-          callback.state = 'delivered';
-          callback.deliveredAt = new Date(now).toISOString();
-          delete callback.lastError;
-          sent += 1;
-        } else if (callback.attempts >= MAX_CALLBACK_ATTEMPTS) {
-          callback.state = 'failed';
-          callback.lastError = result.detail;
-          failed += 1;
-        } else {
-          callback.nextTryAt = new Date(now + backoffMinutes(callback.attempts) * 60_000).toISOString();
-          callback.lastError = result.detail;
-        }
-        this.vendors.recordCallback(callback);
+        // The exact signed body, the same delivery id, backed off and given up as every hook is (hook-delivery.ts).
+        const after = await tryDelivery(callback, now);
+        if (after.state === 'delivered') sent += 1;
+        else if (after.state === 'failed') failed += 1;
+        this.vendors.recordCallback(after);
       }
     } catch (err) {
       this.logger.warn(`callback drain failed: ${(err as Error).message}`);

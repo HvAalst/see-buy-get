@@ -39,7 +39,7 @@ function refusal(voice: Voice, status: number): string {
     return status === 401 || status === 403
       ? 'Your endpoint refused it. Check that it accepts our POST and is not rejecting the signature.'
       : status === 404
-        ? 'Your endpoint answered "not found". Check the callback address on your store record.'
+        ? 'Your endpoint answered "not found". Check the address we send to.'
         : status === 413
           ? 'Your endpoint refused it for being too large.'
           : status >= 500

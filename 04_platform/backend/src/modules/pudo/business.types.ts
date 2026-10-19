@@ -1,3 +1,4 @@
+import { BusinessSystemCounts } from './business-hook.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BUSINESS_ACTIVITIES, VERIFICATION_STATES, type BusinessActivity, type VerificationState } from '../../foundation/entity/entity.types';
 
@@ -181,6 +182,8 @@ export class BusinessStaffRow {
   @ApiProperty() members: number;
   @ApiProperty({ type: [String] }) missing: string[];
   @ApiPropertyOptional() handle?: string;
+  /** Round 10 — how the messages to its own system stand, counted. Staff read it; they send nothing in its name. */
+  @ApiPropertyOptional({ type: BusinessSystemCounts }) system?: BusinessSystemCounts;
 }
 
 export class BusinessStaffList {

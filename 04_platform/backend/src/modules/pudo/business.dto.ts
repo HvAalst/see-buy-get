@@ -16,6 +16,11 @@ export class CreateBusinessDto {
 }
 
 /** Change what the business says about itself. Each field sent replaces the one on record. */
+/** Round 10 — where a business's own system is told of its loads. Empty stops the messages. */
+export class BusinessSystemDto {
+  @IsString() @MaxLength(500) url!: string;
+}
+
 export class UpdateBusinessDto {
   @IsOptional() @IsString() @MaxLength(120) name?: string;
   @IsOptional() @IsString() @MaxLength(60) registrationNo?: string;
