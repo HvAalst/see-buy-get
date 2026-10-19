@@ -657,6 +657,8 @@ function WorkCard({ state, actions }: HomeScreenProps) {
       ) : null}
       {/* Round 16 — the fleet's watch on a vehicle standing still: said to the one it watches, while it watches. */}
       {state.session.active && state.session.standstillWatchMin ? <p class="card__note">{t('driver.home.standstillWatch', { n: state.session.standstillWatchMin })}</p> : null}
+      {/* Round 17 — and its watch on a phone gone silent: the driver learns the app must stay open to be heard. */}
+      {state.session.active && state.session.silentWatchMin ? <p class="card__note">{t('driver.home.silentWatch', { n: state.session.silentWatchMin })}</p> : null}
       {/* The standing floor, and — the half that makes it safe to be standing — what it kept quiet today.
           A silencer nobody can see working is how somebody hears nothing for a week and blames us, so the
           setting and its effect are one line, never a number buried in a settings screen. */}

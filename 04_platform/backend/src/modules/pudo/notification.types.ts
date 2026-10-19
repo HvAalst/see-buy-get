@@ -178,6 +178,8 @@ export const NOTIFICATION_KINDS = [
    * to its fleet's office, to call the driver. Never to a shipper: where a fleet's vehicles are is the fleet's.
    */
   'vehicle_standstill',
+  /** Round 17 — the phone on a shift has said nothing longer than its fleet allows: to its office, with where it was last heard. */
+  'vehicle_silent',
   /**
    * Something happened to the way somebody signs in that they did not do — five wrong PINs locked it. Said to the
    * person, because the one who typed them may know their number, and the owner is the only one who can act.

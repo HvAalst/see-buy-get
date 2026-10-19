@@ -286,6 +286,7 @@ export const enDriver = {
   'driver.home.minEarnUnset': 'You are woken for any job near you.',
   'driver.home.positionsToFleet': '{fleet}’s own system is told where you are while you are on this shift, at most every {n, plural, one {minute} other {# minutes}}. Your fleet decided this.',
   'driver.home.standstillWatch': 'If your vehicle stands in one place more than {n, plural, one {a minute} other {# minutes}} where it has no reason to — away from your stops, your fleet’s sites and the network’s hubs and shops — your fleet’s office is told and may call you. Your fleet decided this.',
+  'driver.home.silentWatch': 'If this phone says nothing for more than {n, plural, one {a minute} other {# minutes}} while you are on a shift, your fleet’s office is told where it was last heard and may call you. It says nothing while this app is closed, or the phone is off or out of signal. Your fleet decided this.',
   'driver.home.minEarnSet': 'You are only woken for jobs paying {amount} or more.',
   // A key PAIR, because t() does no pluralising of its own — and the singular really does happen on a
   // quiet morning, which is exactly when a driver is most likely to be wondering why it is quiet.

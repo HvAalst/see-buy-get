@@ -429,6 +429,18 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         data: { caseId: c.caseId, lat: c.location.lat, lng: c.location.lng },
       });
     });
+    // Round 17 — the phone on a shift gone silent: its office is told where it was last heard, to call the driver.
+    this.events.subscribe<{ fleetDid?: string; case?: { caseId: string; plate: string; driverName?: string; minutes: number; since: string; location: { lat: number; lng: number } } }>(GlosEvent.Pudo.VehicleGoneSilent, (e) => {
+      const c = e.payload?.case;
+      if (!e.payload?.fleetDid || !c) return;
+      void this.tell(e.payload.fleetDid, {
+        kind: 'vehicle_silent',
+        title: `${c.plate}: its phone has said nothing for ${c.minutes} minutes${c.driverName ? ` — ${c.driverName}` : ''}`,
+        body: `Last heard at ${c.location.lat.toFixed(5)}, ${c.location.lng.toFixed(5)}, away from any of its stops, your sites or the network’s hubs. The app may be closed, or the phone off or out of signal. Call the driver, and say how it was on the dashboard.`,
+        tag: `silent:${c.caseId}`,
+        data: { caseId: c.caseId, lat: c.location.lat, lng: c.location.lng },
+      });
+    });
     this.events.subscribe<VehicleBreakdownResolved>(GlosEvent.Pudo.VehicleBreakdownResolved, (e) => this.onBreakdownResolved(e.payload));
     this.events.subscribe<VehicleLoadsHandedOver>(GlosEvent.Pudo.VehicleLoadsHandedOver, (e) => this.onLoadsHandedOver(e.payload));
     // FP4 (courier) — the renewed licence they sent was checked. They sent it and are waiting: either answer.

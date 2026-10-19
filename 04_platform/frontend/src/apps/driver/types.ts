@@ -184,6 +184,8 @@ export interface SessionView {
   positionsToFleetSystem?: { fleetName: string; everyMin: number };
   /** Round 16 — their fleet's office is told if the vehicle stands in one place longer than this, away from any reason to. Absent when the fleet has it off. */
   standstillWatchMin?: number;
+  /** Round 17 — their fleet's office is told if this phone says nothing on a shift longer than this. Absent when the fleet has it off. */
+  silentWatchMin?: number;
   assignment?: AssignmentView;
   vehicle?: VehicleView;
   /**

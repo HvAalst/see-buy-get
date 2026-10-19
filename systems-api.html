@@ -272,9 +272,16 @@
       stood in one place longer than the fleet allows (45 minutes to start; each fleet sets its own, or turns it off) with
       no reason to: away from its loads' stops, the fleet's sites, the network's hubs and shops, not at a border or hub
       its driver has said it is at, and not reported broken down. It carries the <code>case</code>: its
-      <code>caseId</code>, <code>plate</code>, <code>driverName</code>, <code>location</code>, <code>since</code>,
-      <code>minutes</code> and <code>afterMin</code>. Sent once a stop; a phone that has gone silent is not a vehicle
-      standing still. Its office says how it was in the Fleet app.</li>
+      <code>caseId</code>, <code>kind</code> (<code>standing</code>), <code>plate</code>, <code>driverName</code>,
+      <code>location</code>, <code>since</code>, <code>minutes</code> and <code>afterMin</code>. Sent once a stop; a phone
+      that has gone silent is not a vehicle standing still. Its office says how it was in the Fleet app.</li>
+    <li><b>A fleet: a phone gone silent</b> — <code>vehicle.gone_silent</code> — when the phone in a vehicle on a shift,
+      heard on that shift, has said nothing longer than the fleet allows (an hour to start; each fleet sets its own, or
+      turns it off), last heard away from its loads' stops, the fleet's sites and the network's hubs and shops, not at a
+      border or hub its driver had said it was at, and not reported broken down. The same <code>case</code>, with
+      <code>kind</code> <code>silent</code>: <code>location</code> is where it was last heard and <code>since</code>
+      when. Sent once a silence. The case ends by itself the moment the phone is heard again; the office reads that, and
+      where, in the Fleet app.</li>
   </ul>
   <h3>Checking it came from us</h3>
   <p>HMAC-SHA256 over the exact body, with your secret, hex-encoded, in <code>x-sbg-signature</code>. The event is in

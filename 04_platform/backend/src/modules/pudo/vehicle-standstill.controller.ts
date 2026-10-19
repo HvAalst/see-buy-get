@@ -11,8 +11,8 @@ import { AnswerStandstillDto, StandstillCaseView, StandstillSettingsDto, Standst
 const STAFF_READ_ONLY = 'Staff read a fleet’s watch on its vehicles and change none of it: its own office keeps it';
 
 /**
- * A VEHICLE STANDING STILL (round 16). The fleet's own office reads its cases and its setting, sets how long is too long
- * (or turns the watch off), and says how it was when it called the driver. Staff read and change none of it. Nobody else:
+ * A VEHICLE STANDING STILL (round 16), AND A PHONE GONE SILENT (round 17). The fleet's own office reads its cases and its
+ * settings, sets how long is too long for each (or turns it off), and says how it was when it called the driver. Staff read and change none of it. Nobody else:
  * where a fleet's vehicles are is the fleet's.
  */
 @Controller('sbg')
@@ -34,6 +34,14 @@ export class VehicleStandstillController {
   set(@Param('did') did: string, @Body() dto: StandstillSettingsDto, @Actor() actor: IntrospectionResult): StandstillSettingsView {
     const by = this.officeOf(did, actor);
     return this.standstill.setSettings(did, { on: dto.on, afterMin: dto.afterMin }, by);
+  }
+
+  /** Round 17 — how long a phone on a shift may say nothing before the office is told, or off. */
+  @Roles('fleet_manager')
+  @Put('fleet/managers/:did/standstill/silence')
+  setSilence(@Param('did') did: string, @Body() dto: StandstillSettingsDto, @Actor() actor: IntrospectionResult): StandstillSettingsView {
+    const by = this.officeOf(did, actor);
+    return this.standstill.setSilence(did, { on: dto.on, afterMin: dto.afterMin }, by);
   }
 
   @Roles('fleet_manager')

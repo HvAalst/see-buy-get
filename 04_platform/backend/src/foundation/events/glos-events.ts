@@ -76,6 +76,7 @@ export const GlosEvent = {
     VehicleServiceDue: 'pudo.vehicle_service_due',
     // A vehicle broke down on the road (its office and the shippers of what is aboard are told), and how it ended.
     VehicleBrokeDown: 'pudo.vehicle_broke_down',
+    VehicleGoneSilent: 'pudo.vehicle_gone_silent', // round 17 — the phone on a shift said nothing longer than its fleet allows, last heard away from any stop; its fleet's managers are told
     VehicleStandingStill: 'pudo.vehicle_standing_still', // round 16 — a vehicle on a shift stood still longer than its fleet allows, away from any stop; its fleet's managers are told
     VehicleBreakdownResolved: 'pudo.vehicle_breakdown_resolved',
     // A broken-down vehicle's loads were taken over by another of the fleet's vehicles.

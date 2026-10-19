@@ -16,6 +16,7 @@ import { VehicleBreakdownService } from './vehicle-breakdown.service';
 import { VehicleService } from './vehicle.service';
 import {
   DARK_AFTER_MIN,
+  SILENT_DEFAULT_MIN,
   STANDSTILL_DEFAULT_MIN,
   STANDSTILL_KEEP_HOURS,
   STANDSTILL_MAX_MIN,
@@ -23,30 +24,37 @@ import {
   STANDSTILL_OUTCOMES,
   STILL_RADIUS_KM,
   STOP_RADIUS_KM,
+  type SilenceSettingsView,
   type StandstillAnchor,
   type StandstillCase,
   type StandstillCaseView,
+  type StandstillKind,
   type StandstillOutcome,
+  type StandstillOverWhy,
   type StandstillSettings,
   type StandstillSettingsView,
 } from './vehicle-standstill.types';
 
-/** How often vehicles standing still are looked at. */
+/** How often vehicles standing still, and phones gone silent, are looked at. */
 const SWEEP_MS = Number(process.env.GLOS_STANDSTILL_SWEEP_MS ?? 60_000);
 const MIN = 60_000;
 
 /**
- * A VEHICLE STANDING STILL (vehicle-standstill.types.ts; round 16).
+ * A VEHICLE STANDING STILL, AND A PHONE GONE SILENT (vehicle-standstill.types.ts; rounds 16 and 17).
  *
  * Every fix a phone on a shift sends (DriverMoved) is held against where the vehicle last stopped: within a few hundred
- * metres it is still standing there; further, it has moved on — and any case about the stop is over. Once a minute the
- * stops are looked at: one longer than its fleet allows, with the phone still heard from, not at any place the vehicle
- * had reason to be, not waiting at a border post its driver said it is at, and with no breakdown already reported, opens
- * a case — once per stop — and its fleet's managers are told.
+ * metres it is still standing there; further, it has moved on — and any case about the stop is over. A fix also ends any
+ * case about the phone's silence: it is heard again, and where. Once a minute the shifts are looked at:
+ *  - a stop longer than its fleet allows, with the phone still heard from, not at any place the vehicle had reason to be,
+ *    not waiting at a border post its driver said it is at, and with no breakdown already reported, opens a case;
+ *  - a phone that has said nothing for longer than its fleet allows, last heard away from any such place and with no
+ *    breakdown reported, opens a case with where it was last heard.
+ * Each once per stop, or per silence, and its fleet's managers are told.
  */
 @Injectable()
 export class VehicleStandstillService implements OnModuleInit, OnModuleDestroy {
   private readonly settings = new PersistentMap<string, StandstillSettings>('fleet-standstill-settings');
+  private readonly silences = new PersistentMap<string, StandstillSettings>('fleet-silence-settings');
   private readonly anchors = new PersistentMap<string, StandstillAnchor>('vehicle-standstill-anchors');
   private readonly cases = new PersistentMap<string, StandstillCase>('vehicle-standstill-cases');
   private timer?: ReturnType<typeof setInterval>;
@@ -86,15 +94,20 @@ export class VehicleStandstillService implements OnModuleInit, OnModuleDestroy {
 
   settingsOf(fleetDid: string): StandstillSettingsView {
     const s = this.settings.get(fleetDid);
-    return s ? { on: s.on, afterMin: s.afterMin, asStarted: false, setAt: s.setAt, setBy: s.setBy } : { on: true, afterMin: STANDSTILL_DEFAULT_MIN, asStarted: true };
+    const q = this.silences.get(fleetDid);
+    const silent: SilenceSettingsView = q ? { on: q.on, afterMin: q.afterMin, asStarted: false, setAt: q.setAt, setBy: q.setBy } : { on: true, afterMin: SILENT_DEFAULT_MIN, asStarted: true };
+    return s ? { on: s.on, afterMin: s.afterMin, asStarted: false, setAt: s.setAt, setBy: s.setBy, silent } : { on: true, afterMin: STANDSTILL_DEFAULT_MIN, asStarted: true, silent };
   }
 
+  /** The standing minutes. */
   setSettings(fleetDid: string, input: { on: boolean; afterMin: number }, by: string, now: number = Date.now()): StandstillSettingsView {
-    if (typeof input.on !== 'boolean') throw new GlosError('FIELD_REQUIRED', 'Say whether the watch is on', { field: 'on' });
-    if (!Number.isInteger(input.afterMin) || input.afterMin < STANDSTILL_MIN_MIN || input.afterMin > STANDSTILL_MAX_MIN) {
-      throw new GlosError('VALIDATION_FAILED', `Between ${STANDSTILL_MIN_MIN} minutes and ${STANDSTILL_MAX_MIN / 60} hours`, { field: 'afterMin' });
-    }
-    this.settings.set(fleetDid, { fleetDid, on: input.on, afterMin: input.afterMin, setAt: new Date(now).toISOString(), setBy: by });
+    this.settings.set(fleetDid, minutesOf(fleetDid, input, by, now));
+    return this.settingsOf(fleetDid);
+  }
+
+  /** The silent minutes, kept apart from the standing ones: setting one never touches the other. */
+  setSilence(fleetDid: string, input: { on: boolean; afterMin: number }, by: string, now: number = Date.now()): StandstillSettingsView {
+    this.silences.set(fleetDid, minutesOf(fleetDid, input, by, now));
     return this.settingsOf(fleetDid);
   }
 
@@ -106,23 +119,32 @@ export class VehicleStandstillService implements OnModuleInit, OnModuleDestroy {
     return s.on ? s.afterMin : undefined;
   }
 
+  /** What the driver is told: their fleet hears when their phone says nothing this long on a shift. */
+  silenceFor(driverDid: string): number | undefined {
+    const fleetDid = this.fleetOf(driverDid);
+    if (!fleetDid) return undefined;
+    const s = this.settingsOf(fleetDid).silent;
+    return s.on ? s.afterMin : undefined;
+  }
+
   /* ---------------------------------------------------------------------------- the watch -- */
 
-  /** A fix from a phone on a shift: still where it stopped, or moved on (and any case about the stop is over). */
+  /** A fix from a phone on a shift: heard again; still where it stopped, or moved on (and any case about the stop is over). */
   track(driverDid: string, location: GeoPoint, now: number = Date.now()): void {
     const shift = this.fleet.activeForDriver(driverDid);
     if (!shift) return;
+    this.endCases((c) => c.kind === 'silent' && c.assignmentId === shift.assignmentId, 'heard', now, location);
     const at = new Date(now).toISOString();
     const anchor = this.anchors.get(shift.assignmentId);
     if (anchor && haversineKm(anchor.location, location) <= STILL_RADIUS_KM) {
-      this.anchors.set(shift.assignmentId, { ...anchor, lastFixAt: at });
+      this.anchors.set(shift.assignmentId, { ...anchor, lastFixAt: at, lastLocation: location });
       return;
     }
-    if (anchor) this.endCases((c) => c.assignmentId === shift.assignmentId && c.since === anchor.since, 'moved', now);
-    this.anchors.set(shift.assignmentId, { assignmentId: shift.assignmentId, driverDid, vehicleId: shift.vehicleId, location, since: at, lastFixAt: at });
+    if (anchor) this.endCases((c) => kindOf(c) === 'standing' && c.assignmentId === shift.assignmentId && c.since === anchor.since, 'moved', now);
+    this.anchors.set(shift.assignmentId, { assignmentId: shift.assignmentId, driverDid, vehicleId: shift.vehicleId, location, since: at, lastFixAt: at, lastLocation: location });
   }
 
-  /** Once a minute: every stop longer than its fleet allows, away from any reason to be there, opens its case. */
+  /** Once a minute: every stop, and every silence, longer than its fleet allows and away from any reason opens its case. */
   sweep(now: number = Date.now()): StandstillCase[] {
     const opened: StandstillCase[] = [];
     for (const anchor of [...this.anchors.values()]) {
@@ -134,22 +156,17 @@ export class VehicleStandstillService implements OnModuleInit, OnModuleDestroy {
       const fleetDid = this.fleetOf(anchor.driverDid);
       if (!fleetDid) continue;
       const settings = this.settingsOf(fleetDid);
-      if (!settings.on) continue;
-      if (now - Date.parse(anchor.since) < settings.afterMin * MIN) continue;
-      // A phone not heard from is dark, not standing still: the fleet's map says that apart.
-      if (now - Date.parse(anchor.lastFixAt) > DARK_AFTER_MIN * MIN) continue;
-      if (this.caseFor(anchor)) continue;
-      if (this.hasReasonToStand(fleetDid, anchor, now)) continue;
-      if (this.breakdowns?.openForFleet(fleetDid).some((b) => b.vehicleId === anchor.vehicleId && b.status === 'open')) continue;
-      const c = this.open(fleetDid, anchor, settings.afterMin, now);
-      opened.push(c);
+      const standing = this.standingCase(fleetDid, anchor, settings, now);
+      if (standing) opened.push(standing);
+      const silent = this.silentCase(fleetDid, anchor, settings, now);
+      if (silent) opened.push(silent);
     }
     return opened;
   }
 
   /* ---------------------------------------------------------------------------- the cases -- */
 
-  /** The fleet's cases: those still standing or answered, and those over in the last day. */
+  /** The fleet's cases: those still open or answered, and those over in the last day. */
   casesFor(fleetDid: string, now: number = Date.now()): StandstillCaseView[] {
     const keepFrom = now - STANDSTILL_KEEP_HOURS * 3_600_000;
     return [...this.cases.values()]
@@ -172,7 +189,32 @@ export class VehicleStandstillService implements OnModuleInit, OnModuleDestroy {
 
   /* ------------------------------------------------------------------------------ inside -- */
 
-  private open(fleetDid: string, anchor: StandstillAnchor, afterMin: number, now: number): StandstillCase {
+  /** A stop longer than the fleet allows, the phone still heard, with no reason to stand there. */
+  private standingCase(fleetDid: string, anchor: StandstillAnchor, settings: StandstillSettingsView, now: number): StandstillCase | undefined {
+    if (!settings.on) return undefined;
+    if (now - Date.parse(anchor.since) < settings.afterMin * MIN) return undefined;
+    // A phone not heard from is not a vehicle standing still: its silence is its own case.
+    if (now - Date.parse(anchor.lastFixAt) > DARK_AFTER_MIN * MIN) return undefined;
+    if (this.caseFor(anchor.assignmentId, 'standing', anchor.since)) return undefined;
+    if (this.hasReasonToStand(fleetDid, anchor.driverDid, anchor.location, now)) return undefined;
+    if (this.brokenDown(fleetDid, anchor.vehicleId)) return undefined;
+    return this.open('standing', fleetDid, anchor, anchor.location, anchor.since, settings.afterMin, now);
+  }
+
+  /** A phone that has said nothing longer than the fleet allows, last heard where it had no reason to be. */
+  private silentCase(fleetDid: string, anchor: StandstillAnchor, settings: StandstillSettingsView, now: number): StandstillCase | undefined {
+    if (!settings.silent.on) return undefined;
+    const heard = Date.parse(anchor.lastFixAt);
+    if (now - heard < settings.silent.afterMin * MIN) return undefined;
+    if (this.caseFor(anchor.assignmentId, 'silent', anchor.lastFixAt)) return undefined;
+    const where = anchor.lastLocation ?? anchor.location;
+    // Its reasons as they were when it was last heard: a delivery made just before the phone was put away is one.
+    if (this.hasReasonToStand(fleetDid, anchor.driverDid, where, heard)) return undefined;
+    if (this.brokenDown(fleetDid, anchor.vehicleId)) return undefined;
+    return this.open('silent', fleetDid, anchor, where, anchor.lastFixAt, settings.silent.afterMin, now);
+  }
+
+  private open(kind: StandstillKind, fleetDid: string, anchor: StandstillAnchor, location: GeoPoint, since: string, afterMin: number, now: number): StandstillCase {
     let plate = '';
     try {
       plate = this.vehicles.get(anchor.vehicleId).plate;
@@ -187,26 +229,28 @@ export class VehicleStandstillService implements OnModuleInit, OnModuleDestroy {
     }
     const c: StandstillCase = {
       caseId: `still_${randomBytes(6).toString('hex')}`,
+      kind,
       fleetDid,
       driverDid: anchor.driverDid,
       vehicleId: anchor.vehicleId,
       plate,
       ...(driverName ? { driverName } : {}),
       assignmentId: anchor.assignmentId,
-      location: anchor.location,
-      since: anchor.since,
+      location,
+      since,
       openedAt: new Date(now).toISOString(),
       afterMin,
     };
     this.cases.set(c.caseId, c);
-    void this.events.publish(GlosEvent.Pudo.VehicleStandingStill, { fleetDid, case: viewOf(c, now) }, { source: 'pudo' }).catch(() => undefined);
+    const topic = kind === 'silent' ? GlosEvent.Pudo.VehicleGoneSilent : GlosEvent.Pudo.VehicleStandingStill;
+    void this.events.publish(topic, { fleetDid, case: viewOf(c, now) }, { source: 'pudo' }).catch(() => undefined);
     return c;
   }
 
   /** A place it had reason to be: its loads' stops, the fleet's own sites, the network's hubs and shops — or a border post. */
-  private hasReasonToStand(fleetDid: string, anchor: StandstillAnchor, now: number): boolean {
-    const near = (p: GeoPoint | undefined) => Boolean(p) && haversineKm(p!, anchor.location) <= STOP_RADIUS_KM;
-    const reasons = this.dispatch.reasonsToStand(anchor.driverDid, now);
+  private hasReasonToStand(fleetDid: string, driverDid: string, point: GeoPoint, now: number): boolean {
+    const near = (p: GeoPoint | undefined) => Boolean(p) && haversineKm(p!, point) <= STOP_RADIUS_KM;
+    const reasons = this.dispatch.reasonsToStand(driverDid, now);
     if (reasons.atBorder) return true;
     if (reasons.places.some(near)) return true;
     if (this.sites.sitesOf(fleetDid).some((s) => near(s.location))) return true;
@@ -214,8 +258,12 @@ export class VehicleStandstillService implements OnModuleInit, OnModuleDestroy {
     return this.agents.list().some((a) => near(a.location));
   }
 
-  private caseFor(anchor: StandstillAnchor): StandstillCase | undefined {
-    return [...this.cases.values()].find((c) => c.assignmentId === anchor.assignmentId && c.since === anchor.since);
+  private brokenDown(fleetDid: string, vehicleId: string): boolean {
+    return Boolean(this.breakdowns?.openForFleet(fleetDid).some((b) => b.vehicleId === vehicleId && b.status === 'open'));
+  }
+
+  private caseFor(assignmentId: string, kind: StandstillKind, since: string): StandstillCase | undefined {
+    return [...this.cases.values()].find((c) => c.assignmentId === assignmentId && kindOf(c) === kind && c.since === since);
   }
 
   private shiftEnded(assignmentId: string, now: number = Date.now()): void {
@@ -223,10 +271,10 @@ export class VehicleStandstillService implements OnModuleInit, OnModuleDestroy {
     this.endCases((c) => c.assignmentId === assignmentId, 'shift_ended', now);
   }
 
-  private endCases(which: (c: StandstillCase) => boolean, why: 'moved' | 'shift_ended' | 'breakdown', now: number = Date.now()): void {
+  private endCases(which: (c: StandstillCase) => boolean, why: StandstillOverWhy, now: number = Date.now(), location?: GeoPoint): void {
     for (const c of this.cases.values()) {
       if (c.over || !which(c)) continue;
-      this.cases.set(c.caseId, { ...c, over: { why, at: new Date(now).toISOString() } });
+      this.cases.set(c.caseId, { ...c, over: { why, at: new Date(now).toISOString(), ...(location ? { location } : {}) } });
     }
   }
 
@@ -238,12 +286,27 @@ export class VehicleStandstillService implements OnModuleInit, OnModuleDestroy {
       return undefined;
     }
   }
+
+}
+
+/** On or off, and minutes within what a fleet may set. */
+function minutesOf(fleetDid: string, input: { on: boolean; afterMin: number }, by: string, now: number): StandstillSettings {
+  if (typeof input.on !== 'boolean') throw new GlosError('FIELD_REQUIRED', 'Say whether the watch is on', { field: 'on' });
+  if (!Number.isInteger(input.afterMin) || input.afterMin < STANDSTILL_MIN_MIN || input.afterMin > STANDSTILL_MAX_MIN) {
+    throw new GlosError('VALIDATION_FAILED', `Between ${STANDSTILL_MIN_MIN} minutes and ${STANDSTILL_MAX_MIN / 60} hours`, { field: 'afterMin' });
+  }
+  return { fleetDid, on: input.on, afterMin: input.afterMin, setAt: new Date(now).toISOString(), setBy: by };
+}
+
+function kindOf(c: StandstillCase): StandstillKind {
+  return c.kind ?? 'standing';
 }
 
 function viewOf(c: StandstillCase, now: number): StandstillCaseView {
   const until = c.over ? Date.parse(c.over.at) : now;
   return {
     caseId: c.caseId,
+    kind: kindOf(c),
     plate: c.plate,
     ...(c.driverName ? { driverName: c.driverName } : {}),
     location: c.location,

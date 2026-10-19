@@ -92,6 +92,7 @@ const EVENT_WORDS: Record<string, MessageKey> = {
   'vehicle.loads_moved': 'fleet.system.event.loadsMoved',
   'vehicle.position': 'fleet.system.event.position',
   'vehicle.standing_still': 'fleet.system.event.standingStill',
+  'vehicle.gone_silent': 'fleet.system.event.goneSilent',
   'run.booked': 'fleet.system.event.runBooked',
   'run.booking_cancelled': 'fleet.system.event.bookingCancelled',
   'run.cancelled': 'fleet.system.event.runCancelled',

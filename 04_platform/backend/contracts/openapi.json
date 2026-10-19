@@ -23962,6 +23962,45 @@
         }
       }
     },
+    "/v1/sbg/fleet/managers/{did}/standstill/silence": {
+      "put": {
+        "operationId": "VehicleStandstill.setSilence",
+        "summary": "",
+        "description": "Round 17 — how long a phone on a shift may say nothing before the office is told, or off.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StandstillSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandstillSettingsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/managers/{did}/standstill/{caseId}/answer": {
       "post": {
         "operationId": "VehicleStandstill.answer",
@@ -51524,7 +51563,7 @@
           "photoRefs"
         ]
       },
-      "StandstillSettingsView": {
+      "SilenceSettingsView": {
         "type": "object",
         "properties": {
           "setAt": {
@@ -51550,9 +51589,51 @@
           "asStarted"
         ]
       },
+      "StandstillSettingsView": {
+        "type": "object",
+        "properties": {
+          "setAt": {
+            "type": "string"
+          },
+          "setBy": {
+            "type": "string"
+          },
+          "silent": {
+            "description": "Round 17 — a phone gone silent: its own minutes.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SilenceSettingsView"
+              }
+            ]
+          },
+          "on": {
+            "type": "boolean"
+          },
+          "afterMin": {
+            "type": "number"
+          },
+          "asStarted": {
+            "type": "boolean",
+            "description": "True while the fleet has not set it: what every fleet starts with."
+          }
+        },
+        "required": [
+          "silent",
+          "on",
+          "afterMin",
+          "asStarted"
+        ]
+      },
       "StandstillCaseView": {
         "type": "object",
         "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "standing",
+              "silent"
+            ]
+          },
           "driverName": {
             "type": "string"
           },
@@ -51595,6 +51676,10 @@
               "at": {
                 "required": true,
                 "type": "string"
+              },
+              "location": {
+                "required": false,
+                "$ref": "#/components/schemas/GeoPoint"
               }
             }
           },
@@ -51615,13 +51700,14 @@
           },
           "minutes": {
             "type": "number",
-            "description": "Minutes it stood: so far while it stands, in all once it is over."
+            "description": "Minutes it stood, or its phone said nothing: so far while it lasts, in all once it is over."
           },
           "afterMin": {
             "type": "number"
           }
         },
         "required": [
+          "kind",
           "state",
           "answer",
           "over",

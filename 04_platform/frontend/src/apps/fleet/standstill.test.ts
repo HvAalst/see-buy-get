@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { caseLine, casesInOrder, minutesWords, watchLine, type StandstillCase } from './standstill';
+import { caseLine, casesInOrder, minutesWords, silenceLine, watchLine, type StandstillCase } from './standstill';
 
 const t = (key: string, vars?: Record<string, unknown>) => `${key}${vars ? ` ${JSON.stringify(vars)}` : ''}`;
 const when = (iso: string) => `@${iso.slice(11, 16)}`;
-const base: StandstillCase = { caseId: 'c1', plate: 'KDA 123T', location: { lat: -0.3, lng: 36.08 }, since: '2026-10-19T08:00:00.000Z', openedAt: '2026-10-19T08:46:00.000Z', minutes: 52, afterMin: 45, state: 'open' };
+const base: StandstillCase = { caseId: 'c1', kind: 'standing', plate: 'KDA 123T', location: { lat: -0.3, lng: 36.08 }, since: '2026-10-19T08:00:00.000Z', openedAt: '2026-10-19T08:46:00.000Z', minutes: 52, afterMin: 45, state: 'open' };
 
 describe('a vehicle standing still, as the fleet office reads it (round 16)', () => {
   it('says minutes as people say them, and what the watch is set to', () => {
@@ -27,5 +27,12 @@ describe('a vehicle standing still, as the fleet office reads it (round 16)', ()
       { ...base, caseId: 'new', openedAt: '2026-10-19T09:00:00.000Z' },
     ];
     expect(casesInOrder(cases).map((c) => c.caseId)).toEqual(['new', 'old', 'answered', 'over']);
+  });
+  it('says a phone gone silent apart from a vehicle standing still — and that it was heard again (round 17)', () => {
+    const silent = { ...base, kind: 'silent' as const, minutes: 64, afterMin: 60 };
+    expect(caseLine(silent, t as never, when)).toBe('fleet.still.lineSilent {"minutes":"1 h 4 min","since":"@08:00"}');
+    expect(caseLine({ ...silent, state: 'over', minutes: 82, over: { why: 'heard', at: '2026-10-19T09:22:00.000Z', location: { lat: -0.28, lng: 36.08 } } }, t as never, when)).toBe('fleet.still.lineSilentOver {"minutes":"1 h 22 min","since":"@08:00","how":"fleet.still.over.heard"}');
+    expect(silenceLine({ on: true, afterMin: 60, asStarted: true }, t as never)).toBe('fleet.still.silenceOn {"minutes":"1 h"}');
+    expect(silenceLine({ on: false, afterMin: 60, asStarted: false }, t as never)).toBe('fleet.still.silenceOff');
   });
 });

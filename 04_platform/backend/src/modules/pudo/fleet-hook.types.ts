@@ -42,6 +42,8 @@ export const FLEET_HOOK_EVENTS = [
   'vehicle.loads_moved',
   // Round 16 — one of its vehicles stood still on a shift longer than it allows, away from any stop.
   'vehicle.standing_still',
+  // Round 17 — the phone on one of its vehicles said nothing on a shift longer than it allows; where it was last heard.
+  'vehicle.gone_silent',
   // Its runs: space booked by a shipper, given back, the run called off.
   'run.booked',
   'run.booking_cancelled',

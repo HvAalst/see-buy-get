@@ -98,7 +98,7 @@ describe('a vehicle standing still, over the wire', () => {
     const driver = await onShiftIn(fleet.did, fleet.name);
 
     // Every fleet starts with the watch on at 45 minutes; the driver's app is told.
-    expect((await http().get(`${own}/standstill`).set(bearer(fleet.office)).expect(200)).body).toEqual({ settings: { on: true, afterMin: 45, asStarted: true }, cases: [] });
+    expect((await http().get(`${own}/standstill`).set(bearer(fleet.office)).expect(200)).body).toEqual({ settings: { on: true, afterMin: 45, asStarted: true, silent: { on: true, afterMin: 60, asStarted: true } }, cases: [] });
     expect((await http().get(`/v1/sbg/fleet/drivers/${driver.did}/session`).set(bearer(driver.token)).expect(200)).body.standstillWatchMin).toBe(45);
 
     // The phone says where it is, through the driver app's own door — out on the Nakuru road, nowhere it has reason to be.
@@ -171,7 +171,8 @@ describe('a vehicle standing still, over the wire', () => {
     // Waiting at the yard for the load: its pickup is its next stop.
     const t0 = Date.now();
     for (let m = 0; m <= 52; m += 4) watch.track(driver.did, { lat: pickup.lat + 0.001, lng: pickup.lng }, t0 + m * 60_000);
-    expect(watch.sweep(t0 + 52 * 60_000)).toEqual([]);
+    const mine = (cases: Array<{ plate: string }>) => cases.filter((c) => c.plate === driver.plate);
+    expect(mine(watch.sweep(t0 + 52 * 60_000))).toEqual([]);
 
     // Picked up hours ago and now at Malaba, said so by its driver: a queue at a border post is a reason to stand.
     const pickedUpAt = new Date(t0 - 10 * 3_600_000).toISOString();
@@ -179,7 +180,51 @@ describe('a vehicle standing still, over the wire', () => {
     await http().post(`/v1/sbg/dispatch/freight/${freightId}/passages`).set(bearer(driver.token)).send({ kind: 'at_border', post: 'Malaba' }).expect(201);
     const malaba = { lat: 0.635, lng: 34.28 };
     for (let m = 60; m <= 120; m += 4) watch.track(driver.did, malaba, t0 + m * 60_000);
-    expect(watch.sweep(t0 + 120 * 60_000)).toEqual([]);
+    expect(mine(watch.sweep(t0 + 120 * 60_000))).toEqual([]);
     expect((await http().get(`${own}/standstill`).set(bearer(fleet.office)).expect(200)).body.cases).toEqual([]);
+  });
+  it('a phone that goes silent on a shift opens a case for its office with where it was last heard: told, answered, set — over when heard again', async () => {
+    const fleet = await aFleet('Kilima Logistics');
+    const rival = await aFleet('Rival Hauliers');
+    const own = `/v1/sbg/fleet/managers/${encodeURIComponent(fleet.did)}`;
+    await http().put(`${own}/system`).set(bearer(fleet.office)).send({ url: `${origin}/s` }).expect(200);
+    const driver = await onShiftIn(fleet.did, fleet.name);
+    expect((await http().get(`/v1/sbg/fleet/drivers/${driver.did}/session`).set(bearer(driver.token)).expect(200)).body.silentWatchMin).toBe(60);
+
+    // Heard on the Kisumu road, then nothing.
+    const road = { lat: -0.1022, lng: 34.7617 };
+    await http().post(`/v1/sbg/fleet/drivers/${driver.did}/locate`).set(bearer(driver.token)).send(road).expect(201);
+    const watch = app.get(VehicleStandstillService);
+    const t0 = Date.now();
+    // The app is shared: earlier tests' drivers, still on a shift, are silent too — this test reads its own truck.
+    const mine = (cases: Array<{ plate: string; kind?: string }>) => cases.filter((c) => c.plate === driver.plate && c.kind === 'silent');
+    expect(mine(watch.sweep(t0 + 59 * 60_000))).toEqual([]);
+    const [silent] = mine(watch.sweep(t0 + 61 * 60_000)) as unknown as Array<{ caseId: string }>;
+    expect(silent).toMatchObject({ plate: driver.plate, location: road });
+
+    // Its office reads it, its bell rings, its own system is told — and nobody else.
+    expect((await http().get(`${own}/standstill`).set(bearer(fleet.office)).expect(200)).body.cases).toEqual([expect.objectContaining({ caseId: silent.caseId, kind: 'silent', state: 'open', afterMin: 60, location: road })]);
+    expect(JSON.stringify((await http().get('/v1/sbg/notifications/inbox').set(bearer(fleet.office)).expect(200)).body)).toContain(`${driver.plate}: its phone has said nothing`);
+    await app.get(FleetHookService).drain();
+    const told = landed.filter((l) => l.event === 'vehicle.gone_silent').map((l) => JSON.parse(l.raw).data.case as { plate: string }).find((c) => c.plate === driver.plate);
+    expect(told).toMatchObject({ caseId: silent.caseId, kind: 'silent', plate: driver.plate });
+    await http().get(`${own}/standstill`).set(bearer(rival.office)).expect(403);
+
+    // The office called: no answer.
+    expect((await http().post(`${own}/standstill/${silent.caseId}/answer`).set(bearer(fleet.office)).send({ outcome: 'no_answer' }).expect(201)).body).toMatchObject({ state: 'answered', answer: { outcome: 'no_answer' } });
+
+    // Heard again, further on: over, and where.
+    const on = { lat: -0.0917, lng: 34.768 };
+    watch.track(driver.did, on, t0 + 80 * 60_000);
+    expect((await http().get(`${own}/standstill`).set(bearer(fleet.office)).expect(200)).body.cases[0]).toMatchObject({ kind: 'silent', state: 'over', over: { why: 'heard', location: on } });
+
+    // Its own minutes: the office sets them; staff change none of it; the standing minutes stay as they were.
+    expect((await http().put(`${own}/standstill/silence`).set(bearer(operator)).send({ on: true, afterMin: 30 }).expect(403)).body.detail).toMatch(/change none of it/);
+    await http().put(`${own}/standstill/silence`).set(bearer(rival.office)).send({ on: true, afterMin: 30 }).expect(403);
+    await http().put(`${own}/standstill/silence`).set(bearer(fleet.office)).send({ on: true, afterMin: 300 }).expect(400);
+    expect((await http().put(`${own}/standstill/silence`).set(bearer(fleet.office)).send({ on: true, afterMin: 120 }).expect(200)).body).toMatchObject({ on: true, afterMin: 45, asStarted: true, silent: { on: true, afterMin: 120, asStarted: false, setBy: fleet.name } });
+    expect((await http().get(`/v1/sbg/fleet/drivers/${driver.did}/session`).set(bearer(driver.token)).expect(200)).body).toMatchObject({ standstillWatchMin: 45, silentWatchMin: 120 });
+    await http().put(`${own}/standstill/silence`).set(bearer(fleet.office)).send({ on: false, afterMin: 120 }).expect(200);
+    expect((await http().get(`/v1/sbg/fleet/drivers/${driver.did}/session`).set(bearer(driver.token)).expect(200)).body.silentWatchMin).toBeUndefined();
   });
 });

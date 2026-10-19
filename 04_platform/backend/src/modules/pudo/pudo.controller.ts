@@ -6091,7 +6091,9 @@ export class SbgController {
     const positionsTo = this.fleetHooks?.positionsTo(did);
     // Round 16 — and how long the vehicle may stand still away from a stop before their fleet is told: the driver knows it.
     const standstillMin = this.standstill?.watchedFor(did);
-    return { ...this.fleet.sessionFor(did), quiet: this.dispatch.quietReport(did), hours: this.fleet.hoursFor(did), ...(currency ? { currency } : {}), ...(handoverPass ? { handoverPass } : {}), ...(positionsTo ? { positionsToFleetSystem: positionsTo } : {}), ...(standstillMin ? { standstillWatchMin: standstillMin } : {}) };
+    // Round 17 — and how long their phone may say nothing on a shift before their fleet is told.
+    const silentMin = this.standstill?.silenceFor(did);
+    return { ...this.fleet.sessionFor(did), quiet: this.dispatch.quietReport(did), hours: this.fleet.hoursFor(did), ...(currency ? { currency } : {}), ...(handoverPass ? { handoverPass } : {}), ...(positionsTo ? { positionsToFleetSystem: positionsTo } : {}), ...(standstillMin ? { standstillWatchMin: standstillMin } : {}), ...(silentMin ? { silentWatchMin: silentMin } : {}) };
   }
 
   @Roles('driver', 'fleet_manager', 'operator')
