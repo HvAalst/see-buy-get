@@ -30,6 +30,7 @@ import { StoresScreen } from './screens/StoresScreen';
 import { movesWaiting } from './accountMoves';
 import { disputesWaiting } from './idDisputes';
 import { waitingOnStaff } from './businesses';
+import { businessesWaiting } from './gs1Disputes';
 import { MarketScreen } from './screens/MarketScreen';
 import { DepotsScreen } from './screens/DepotsScreen';
 import { MoversScreen } from './screens/MoversScreen';
@@ -190,7 +191,8 @@ export function App() {
     claims: state.claims == null && state.freightClaims == null ? null : (state.claims?.length ?? 0) + (state.freightClaims?.length ?? 0),
     disposal: state.disposal?.length ?? null,
     approvals: joiningWaiting(state.approvals, state.driverApplications, state.fleets),
-    businesses: waitingOnStaff(state.businesses),
+    // A business waiting for its check, and — round 18 — a GS1 prefix two businesses say is theirs, waiting to be decided.
+    businesses: businessesWaiting(waitingOnStaff(state.businesses), state.gs1Disputes),
     // Every one that is still open waits on one of us: a first look, or a second person's approval.
     accountmoves: movesWaiting(state.accountMoves),
     // Waiting on us: to be decided, to be approved, or an appointment whose day has come.

@@ -4,6 +4,7 @@ import type { LostParcelRow } from './lost';
 import type { MoveRow } from './accountMoves';
 import type { PaperCase } from './paperReports';
 import type { DisputeRow } from './idDisputes';
+import type { Gs1DisputeRow } from './gs1Disputes';
 import type { BusinessRow } from './businesses';
 import type { CourierContact, PapersNetworkView } from './papers';
 import type { MoversView } from './movers';
@@ -110,6 +111,8 @@ export interface TowerState {
   accountMoves: MoveRow[] | null;
   /** Two people say one national ID is theirs. Null while unread. */
   idDisputes: DisputeRow[] | null;
+  /** Round 18 — a GS1 prefix two businesses say is theirs: read with the queues, counted on the Businesses badge. */
+  gs1Disputes: Gs1DisputeRow[] | null;
   /** A company's paper somebody reported as not right. One of us dismisses; two strike. Null while unread. */
   paperReports: PaperCase[] | null;
   /** Shops that started signing up and stopped — read beside the applications, counted with none of
@@ -406,6 +409,7 @@ const INITIAL: TowerState = {
   businesses: null,
   accountMoves: null,
   idDisputes: null,
+  gs1Disputes: null,
   paperReports: null,
   stalled: null,
   driverApplications: null,
@@ -708,7 +712,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
    */
   const loadQueues = useCallback(async (client: TowerClient) => {
     setState((s) => ({ ...s, loading: true }));
-    const [claims, freightClaims, disposal, approvals, stalled, driverApplications, businesses, accountMoves, idDisputes, paperReports, fleets, damageReports] = await Promise.all([
+    const [claims, freightClaims, disposal, approvals, stalled, driverApplications, businesses, accountMoves, idDisputes, paperReports, fleets, damageReports, gs1Disputes] = await Promise.all([
       client.api.disputes(),
       client.api.freightClaims(),
       client.api.disposalQueue(),
@@ -729,6 +733,8 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       client.api.fleetsSettingUp(),
       // Not a queue — nobody waits on us for these — but read beside the claims, because it is where a reported problem now goes.
       client.api.damageReports(),
+      // Two businesses say one GS1 prefix is theirs: two of us decide, on the Businesses screen.
+      client.api.gs1Disputes(),
     ]);
     setState((s) => ({
       ...s,
@@ -743,6 +749,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       businesses: businesses.error ? null : (narrow<{ items: BusinessRow[] }>(businesses.data)?.items ?? []),
       accountMoves: accountMoves.error ? null : (narrow<{ items: MoveRow[] }>(accountMoves.data)?.items ?? []),
       idDisputes: idDisputes.error ? null : (narrow<{ items: DisputeRow[] }>(idDisputes.data)?.items ?? []),
+      gs1Disputes: gs1Disputes.error ? null : (narrow<{ items: Gs1DisputeRow[] }>(gs1Disputes.data)?.items ?? []),
       paperReports: paperReports.error ? null : (narrow<{ items: PaperCase[] }>(paperReports.data)?.items ?? []),
       fleets: fleets.error ? null : (narrow<{ items: FleetSetupRow[] }>(fleets.data)?.items ?? []),
       readAt: Date.now(),

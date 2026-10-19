@@ -1,4 +1,5 @@
 import type { SystemMessage, SystemView } from './system';
+import type { Gs1DisputeView } from './gs1Dispute';
 import type { CompanyKey, CompanyKeyIssued } from '../../shared/companyKeys';
 import type { CommercialInvoice, CommercialInvoiceView, Gs1View, PackageLabels } from './papers';
 import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
@@ -315,6 +316,13 @@ export interface BusinessClient {
   /** The business's GS1 company prefix: set (owner only), or stop giving codes. */
   setGs1(companyPrefix: string, extensionDigit: number): Promise<Result<BusinessView>>;
   clearGs1(): Promise<Result<BusinessView>>;
+  /** Round 18 — the disputes over a GS1 prefix this business is in; open one with its licence, send its own, take it back. */
+  gs1Disputes(): Promise<Result<{ items: Gs1DisputeView[] }>>;
+  openGs1Dispute(body: { companyPrefix: string; extensionDigit: number; licenceRef: string; note?: string }): Promise<Result<Gs1DisputeView>>;
+  sendGs1Licence(disputeId: string, licenceRef: string, note?: string): Promise<Result<Gs1DisputeView>>;
+  withdrawGs1Dispute(disputeId: string): Promise<Result<Gs1DisputeView>>;
+  /** A photograph or screenshot of its GS1 licence, uploaded: the media id, or null when it did not go. */
+  licencePhoto(file: File): Promise<string | null>;
   /** Round 10 — its own system, told of its loads: what it hears, and what became of each message. */
   system(): Promise<Result<SystemView>>;
   setSystemAddress(url: string): Promise<Result<SystemView>>;
@@ -376,6 +384,20 @@ export function createBusinessClient(): BusinessClient {
     endContract: (contractId, reason) => call((c) => c.POST(`/v1/sbg/business/me/contracts/${encodeURIComponent(contractId)}/end` as never, { body: reason ? { reason } : {} } as never) as never),
     setGs1: (companyPrefix, extensionDigit) => call((c) => c.POST('/v1/sbg/business/me/gs1' as never, { body: { companyPrefix, extensionDigit } } as never) as never),
     clearGs1: () => call((c) => c.DELETE('/v1/sbg/business/me/gs1' as never, {} as never) as never),
+    gs1Disputes: () => call((c) => c.GET('/v1/sbg/business/me/gs1/disputes' as never, {} as never) as never),
+    openGs1Dispute: (body) => call((c) => c.POST('/v1/sbg/business/me/gs1/disputes' as never, { body } as never) as never),
+    sendGs1Licence: (disputeId, licenceRef, note) =>
+      call((c) => c.POST(`/v1/sbg/business/me/gs1/disputes/${encodeURIComponent(disputeId)}/licence` as never, { body: { licenceRef, ...(note?.trim() ? { note: note.trim() } : {}) } } as never) as never),
+    withdrawGs1Dispute: (disputeId) => call((c) => c.POST(`/v1/sbg/business/me/gs1/disputes/${encodeURIComponent(disputeId)}/withdraw` as never, {} as never) as never),
+    licencePhoto: async (file) => {
+      try {
+        const { dataUrl, thumbDataUrl } = await downscaleImage(file);
+        const r = await createOperatorApi(client.sbg).uploadMedia('gs1_licence', dataUrl, thumbDataUrl);
+        return r.error ? null : ((r.data as { mediaId?: string } | undefined)?.mediaId ?? null);
+      } catch {
+        return null;
+      }
+    },
     system: () => call((c) => c.GET('/v1/sbg/business/me/system' as never, {} as never) as never),
     setSystemAddress: (url) => call((c) => c.PUT('/v1/sbg/business/me/system' as never, { body: { url } } as never) as never),
     turnSystemSecret: () => call((c) => c.POST('/v1/sbg/business/me/system/secret' as never, {} as never) as never),

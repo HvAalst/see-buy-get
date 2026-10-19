@@ -3,6 +3,7 @@ import { useT, type MessageKey } from '../../../shared/i18n';
 import { ConsoleDetail } from '../ConsoleDetail';
 import { DOCUMENT_LABEL, type CompanyDocument } from '../company';
 import { approveBlock, stateTone, type BusinessRow } from '../businesses';
+import { Gs1DisputesPanel } from './Gs1DisputesPanel';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
 const STATE_LABEL: Record<BusinessRow['state'], MessageKey> = {
@@ -54,6 +55,9 @@ export function BusinessesScreen({ state, actions }: { state: TowerState; action
         </div>
         {rows === null ? <p class="cons__empty">{t('tower.imports.loading')}</p> : waiting.length === 0 ? <p class="cons__empty">{t('tower.biz.waitingNone')}</p> : <Rows rows={waiting} onOpen={setOpen} />}
       </section>
+
+      {/* Round 18 — a GS1 prefix two businesses say is theirs: shown while there is one to read. */}
+      <Gs1DisputesPanel state={state} actions={actions} />
 
       {rest.length ? (
         <section class="cons__panel">

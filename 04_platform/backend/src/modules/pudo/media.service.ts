@@ -227,6 +227,11 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
     this.anchorLink('freight', freightId, 'shipment-proof', at);
   }
 
+  /** Round 18 — a dispute over a GS1 prefix was decided or withdrawn: its licences start the dispute clock. Idempotent. */
+  anchorGs1Dispute(disputeId: string, at: Date = new Date()): void {
+    this.anchorLink('gs1-dispute', disputeId, 'dispute-evidence', at);
+  }
+
   /**
    * A dispute was filed against a terminal parcel: put ALL its evidence — the delivery proof AND the
    * dispute photo — on ONE dispute-evidence clock, OVERRIDING any shorter shipment-proof window so the

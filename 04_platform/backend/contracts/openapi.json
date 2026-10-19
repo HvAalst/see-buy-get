@@ -19932,6 +19932,239 @@
         }
       }
     },
+    "/v1/sbg/business/me/gs1/disputes": {
+      "get": {
+        "operationId": "Gs1Dispute.mine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "Gs1Dispute.open",
+        "summary": "",
+        "description": "\"This prefix is ours\": opened with the business's GS1 licence. Owner only.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenGs1DisputeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gs1DisputeView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/gs1/disputes/{disputeId}/licence": {
+      "post": {
+        "operationId": "Gs1Dispute.licence",
+        "summary": "",
+        "description": "The business using the prefix sends its own licence. Owner only.",
+        "parameters": [
+          {
+            "name": "disputeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendGs1LicenceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gs1DisputeView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/gs1/disputes/{disputeId}/withdraw": {
+      "post": {
+        "operationId": "Gs1Dispute.withdraw",
+        "summary": "",
+        "description": "The business that opened it takes it back. Owner only.",
+        "parameters": [
+          {
+            "name": "disputeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gs1DisputeView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/gs1-disputes": {
+      "get": {
+        "operationId": "Gs1Dispute.list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/gs1-disputes/{disputeId}/propose": {
+      "post": {
+        "operationId": "Gs1Dispute.propose",
+        "summary": "",
+        "description": "The first member of staff says whose it is, what was checked and why. Changes nothing.",
+        "parameters": [
+          {
+            "name": "disputeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeGs1Dto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gs1DisputeRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/gs1-disputes/{disputeId}/approve": {
+      "post": {
+        "operationId": "Gs1Dispute.approve",
+        "summary": "",
+        "description": "The second, different member of staff approves — and it is done.",
+        "parameters": [
+          {
+            "name": "disputeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveGs1Dto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gs1DisputeRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/gs1-disputes/{disputeId}/send-back": {
+      "post": {
+        "operationId": "Gs1Dispute.sendBack",
+        "parameters": [
+          {
+            "name": "disputeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendBackGs1Dto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gs1DisputeRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/documents/{documentId}/report": {
       "post": {
         "operationId": "CompanyPaperReport.report",
@@ -46814,6 +47047,349 @@
           "why"
         ]
       },
+      "OpenGs1DisputeDto": {
+        "type": "object",
+        "properties": {
+          "companyPrefix": {
+            "type": "string",
+            "maxLength": 24
+          },
+          "extensionDigit": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 9
+          },
+          "licenceRef": {
+            "type": "string",
+            "description": "The photograph or screenshot of the business's GS1 licence, uploaded as media kind `gs1_licence`.",
+            "maxLength": 80
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "companyPrefix",
+          "extensionDigit",
+          "licenceRef"
+        ]
+      },
+      "Gs1DisputeView": {
+        "type": "object",
+        "properties": {
+          "side": {
+            "type": "string",
+            "enum": [
+              "claimant",
+              "holder"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "proposed",
+              "decided",
+              "withdrawn"
+            ]
+          },
+          "decided": {
+            "type": "object",
+            "properties": {
+              "mine": {
+                "required": true,
+                "type": "boolean"
+              },
+              "reason": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "withdrawnAt": {
+            "type": "string"
+          },
+          "disputeId": {
+            "type": "string"
+          },
+          "companyPrefix": {
+            "type": "string"
+          },
+          "extensionDigit": {
+            "type": "number"
+          },
+          "openedAt": {
+            "type": "string"
+          },
+          "answerBy": {
+            "type": "string",
+            "description": "Until when the businesses using the prefix may send their licence before staff decide without it."
+          },
+          "claimantName": {
+            "type": "string"
+          },
+          "holderNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "licenceSent": {
+            "type": "boolean",
+            "description": "Whether this business has sent its licence."
+          }
+        },
+        "required": [
+          "side",
+          "state",
+          "decided",
+          "disputeId",
+          "companyPrefix",
+          "extensionDigit",
+          "openedAt",
+          "answerBy",
+          "claimantName",
+          "holderNames",
+          "licenceSent"
+        ]
+      },
+      "SendGs1LicenceDto": {
+        "type": "object",
+        "properties": {
+          "licenceRef": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "licenceRef"
+        ]
+      },
+      "ProposeGs1Dto": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string",
+            "enum": [
+              "claimant",
+              "holders"
+            ]
+          },
+          "what": {
+            "type": "string",
+            "description": "What was checked, and how — the second member of staff approves on the strength of it.",
+            "maxLength": 500
+          },
+          "reason": {
+            "type": "string",
+            "description": "Written for the businesses: both read it.",
+            "maxLength": 500
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "to",
+          "what",
+          "reason"
+        ]
+      },
+      "Gs1PartyRow": {
+        "type": "object",
+        "properties": {
+          "licenceRef": {
+            "type": "string"
+          },
+          "earlier": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "note": {
+            "type": "string"
+          },
+          "sentAt": {
+            "type": "string"
+          },
+          "digitNow": {
+            "type": "number",
+            "description": "The digit it prints under now, when it uses the prefix."
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "entityId",
+          "name"
+        ]
+      },
+      "Gs1DisputeRow": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "proposed",
+              "decided",
+              "withdrawn"
+            ]
+          },
+          "claimant": {
+            "$ref": "#/components/schemas/Gs1PartyRow"
+          },
+          "holders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Gs1PartyRow"
+            }
+          },
+          "proposal": {
+            "type": "object",
+            "properties": {
+              "to": {
+                "required": true,
+                "type": "object"
+              },
+              "what": {
+                "required": true,
+                "type": "string"
+              },
+              "reason": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "sentBack": {
+            "type": "object",
+            "properties": {
+              "by": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "why": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "decided": {
+            "type": "object",
+            "properties": {
+              "to": {
+                "required": true,
+                "type": "object"
+              },
+              "reason": {
+                "required": true,
+                "type": "string"
+              },
+              "proposedBy": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "withdrawnAt": {
+            "type": "string"
+          },
+          "disputeId": {
+            "type": "string"
+          },
+          "companyPrefix": {
+            "type": "string"
+          },
+          "extensionDigit": {
+            "type": "number"
+          },
+          "openedAt": {
+            "type": "string"
+          },
+          "answerBy": {
+            "type": "string"
+          },
+          "mayDecide": {
+            "type": "boolean",
+            "description": "Whether staff may say whose it is now: every business using it has sent its licence, or the week is over."
+          }
+        },
+        "required": [
+          "state",
+          "claimant",
+          "holders",
+          "proposal",
+          "sentBack",
+          "decided",
+          "disputeId",
+          "companyPrefix",
+          "extensionDigit",
+          "openedAt",
+          "answerBy",
+          "mayDecide"
+        ]
+      },
+      "ApproveGs1Dto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "maxLength": 80
+          }
+        }
+      },
+      "SendBackGs1Dto": {
+        "type": "object",
+        "properties": {
+          "why": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "why"
+        ]
+      },
       "ReportPaperDto": {
         "type": "object",
         "properties": {
@@ -47125,7 +47701,8 @@
               "field_evidence",
               "id_check",
               "defect",
-              "job_card"
+              "job_card",
+              "gs1_licence"
             ]
           },
           "dataUrl": {

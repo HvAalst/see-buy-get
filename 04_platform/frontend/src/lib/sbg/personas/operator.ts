@@ -868,6 +868,13 @@ export function createOperatorApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/id-disputes/{disputeId}/approve', { params: { path: { disputeId } }, body: { ...(by ? { by } : {}) } })),
     sendBackIdDispute: (disputeId: string, why: string, by?: string) =>
       sbg.request((c) => c.POST('/v1/sbg/id-disputes/{disputeId}/send-back', { params: { path: { disputeId } }, body: { why, ...(by ? { by } : {}) } })),
+    /** Round 18 — two businesses say one GS1 company prefix is theirs: one member of staff proposes whose, another approves. */
+    gs1Disputes: () => sbg.request((c) => c.GET('/v1/sbg/gs1-disputes', {})),
+    proposeGs1: (disputeId: string, input: { to: 'claimant' | 'holders'; what: string; reason: string }, by?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/gs1-disputes/{disputeId}/propose', { params: { path: { disputeId } }, body: { ...input, ...(by ? { by } : {}) } })),
+    approveGs1: (disputeId: string, by?: string) => sbg.request((c) => c.POST('/v1/sbg/gs1-disputes/{disputeId}/approve', { params: { path: { disputeId } }, body: { ...(by ? { by } : {}) } })),
+    sendBackGs1: (disputeId: string, why: string, by?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/gs1-disputes/{disputeId}/send-back', { params: { path: { disputeId } }, body: { why, ...(by ? { by } : {}) } })),
     /**
      * What this server is connected to for the fleets' planning — the routing server and the adviser: set up or not,
      * and what the last ask met. Staff only. `checkRouter` asks the routing server one question now.

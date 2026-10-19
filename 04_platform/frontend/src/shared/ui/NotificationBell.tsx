@@ -52,6 +52,8 @@ const KIND_ICON: Record<string, IconName> = {
   vehicle_standstill: 'clock',
   // A phone on a shift that has said nothing longer than its fleet allows.
   vehicle_silent: 'offline',
+  // Two businesses say one GS1 prefix is theirs: to the one using it, and both when staff decide.
+  gs1_dispute: 'warning',
   // A driver sent their fleet's office the renewed licence: a card to read.
   papers_sent: 'badge',
   /** A payment the shop made was confirmed by the provider — or came back. */

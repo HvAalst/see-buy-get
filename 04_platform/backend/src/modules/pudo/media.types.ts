@@ -56,6 +56,11 @@ export const MEDIA_KINDS = [
   'defect',
   /** The workshop's job card for a service or repair: the vehicle's record, like a defect's photo. */
   'job_card',
+  /**
+   * Round 18 — a business's GS1 LICENCE, photographed or a screenshot, sent when two businesses say one company prefix
+   * is theirs (gs1-dispute.service.ts). Seen by the business that sent it and by staff; on the dispute clock.
+   */
+  'gs1_licence',
 ] as const;
 
 export type MediaKind = (typeof MEDIA_KINDS)[number];
@@ -69,7 +74,7 @@ export type MediaStatus = 'active' | 'expired';
 /** What a media item is attached to — drives who may see it and when its retention clock starts. */
 export interface MediaLink {
   /** `fleet` — a fleet OPERATOR's own papers (its transport licence, its cover), sent from the fleet app. */
-  type: 'parcel' | 'vehicle' | 'agent' | 'driver' | 'person' | 'freight' | 'constraint' | 'box' | 'fleet' | 'id-dispute';
+  type: 'parcel' | 'vehicle' | 'agent' | 'driver' | 'person' | 'freight' | 'constraint' | 'box' | 'fleet' | 'id-dispute' | 'gs1-dispute';
   id: string;
 }
 
@@ -165,6 +170,7 @@ export const KIND_RETENTION: Record<MediaKind, RetentionClass> = {
   id_check: 'identity-check',
   defect: 'vehicle-record',
   job_card: 'vehicle-record',
+  gs1_licence: 'dispute-evidence',
 };
 
 /** Only real raster image types — no SVG (it can carry script), no arbitrary bytes. */
