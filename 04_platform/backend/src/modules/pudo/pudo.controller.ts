@@ -2935,11 +2935,22 @@ export class SbgController {
     return staff ? rows : rows.map(operationalParcelView);
   }
 
+  /**
+   * A parcel's history, to a counter. NEED TO KNOW (the ISO 28000 check): it answered any shop with every scan and photo
+   * id, so knowing a parcel's number opened its history. A shop reads the whole of it for a parcel of its own — taken in
+   * there (the shop it is committed to, from the moment it is booked) or addressed there — and, for one coming off a bus,
+   * only what it needs to take it in.
+   */
   @Roles('agent', 'operator')
   @Get('parcels/:id')
   @AtTheCounter()
-  getParcel(@Param('id') id: string) {
-    return this.monitor.parcelTimeline(id);
+  getParcel(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    if (actor?.role === 'operator') return this.monitor.parcelTimeline(id);
+    const shop = actingDid(actor);
+    const p = this.parcels.get(id);
+    if (p.originAgentDid === shop || p.destAgentDid === shop) return this.monitor.parcelTimeline(id);
+    if (p.status === 'On_Bus') return { parcelId: p.parcelId, status: p.status, size: p.size, origin: p.originZone, destination: p.destZone };
+    throw new GlosError('NOT_FOUND', 'No parcel of this shop has that number');
   }
 
   /** The planned route for a parcel (origin PUDO → MDP(s) → dest PUDO), once a destination is known. */
