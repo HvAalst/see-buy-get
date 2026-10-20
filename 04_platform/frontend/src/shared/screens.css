@@ -585,3 +585,14 @@
   user-select: all;
   -webkit-user-select: all;
 }
+
+/* Round 36 — a bag's seal (shared/BagSealFields.tsx): room between the choices when they wrap, and around the row, so a
+   thumb lands on the one it means and the fields below do not crowd it. */
+.bag-seal .chips {
+  gap: 12px;
+  margin: 12px 0 18px;
+}
+.bag-seal .field + .field,
+.bag-seal .chips + .field {
+  margin-top: 14px;
+}
