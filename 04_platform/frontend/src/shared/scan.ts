@@ -117,6 +117,14 @@ export function isLoadLabel(raw: string | null | undefined): boolean {
   return /^T-[0-9A-F]{6,}$/i.test(fromUrl ?? text) || /^FRT-\d+$/i.test(text);
 }
 
+/**
+ * Round 32 — the SSCC a parcel's box should look its PARCEL up by first: a store parcel carries its own GS1-128 barcode,
+ * so in a box that expects a parcel an SSCC may name the parcel itself rather than a load's package. Elsewhere, none.
+ */
+export function parcelSsccOf(raw: string, expect: ScanKind): string | null {
+  return expect === 'parcel' ? ssccOfScan(raw) : null;
+}
+
 /** What a box should look a load up by: an SSCC in any box; a load's label too in a box that looks for loads. */
 export function loadLookupOf(raw: string, loads: boolean): string | null {
   if (ssccOfScan(raw)) return raw.trim();

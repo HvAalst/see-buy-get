@@ -871,6 +871,24 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "scan-a-parcel",
+    apps: [
+      "agent",
+      "mdp"
+    ],
+    title: "Scanning a parcel: our QR, or a store’s barcode",
+    summary: "A parcel’s box at the counter or the hub takes our QR — or, on a store’s parcel, the GS1-128 barcode under SSCC on its label. Either finds the same parcel.",
+    steps: [
+      "Shop app: in Take in, Hand over, Bag and Hand out, scan our QR on the label as always — or the barcode under SSCC on a store’s parcel. The parcel’s code fills the box, and the screen goes on as with the QR.",
+      "Hub app: at the sort, the same — either code on the label finds the parcel standing at the hub.",
+      "A barcode that names no parcel this shop or hub is handling says so: scan our QR on the label instead.",
+      "A load’s package barcode finds its load, where this app opens loads."
+    ],
+    notes: [
+      "A store’s barcode finds only parcels this shop is taking in or handing out, or that stand at this hub: to anyone else it names nothing, so it is never a way to look through a store’s parcels."
+    ]
+  },
+  {
     id: "gs1-codes",
     apps: [
       "vendor",
@@ -886,7 +904,7 @@ export const ARTICLES: GuideArticle[] = [
     ],
     notes: [
       "We never make a prefix up: only GS1 gives one. No code is ever given twice, and a parcel or a load keeps the codes it was given if you change the prefix or stop.",
-      "Our shops and hubs scan our QR; the SSCC is for the warehouse that receives the goods."
+      "At our shops and hubs a store parcel’s barcode finds its parcel, as our QR does; it is also what the warehouse receiving the goods scans into its own system."
     ]
   },
   {

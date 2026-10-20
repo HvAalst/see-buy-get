@@ -224,6 +224,12 @@ export class ShipperCodesService {
     return this.packageOf(sscc)?.freightId;
   }
 
+  /** Round 32 — the store parcel an SSCC was given to, if it was a store parcel's: never a load's package. */
+  parcelOfSscc(sscc: string): string | undefined {
+    for (const p of this.issued.values()) if (p.parcel && p.codes[0] === sscc) return p.freightId; // a parcel's codes are kept under its parcel id
+    return undefined;
+  }
+
   /** Round 19 — which load, and which of its packages: the SSCC is package `no` of `of`. */
   packageOf(sscc: string): { freightId: string; no: number; of: number } | undefined {
     for (const p of this.issued.values()) {

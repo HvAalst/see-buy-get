@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isLoadLabel, kindLabel, loadLookupOf, parseScan, ssccOfScan } from './scan';
+import { isLoadLabel, kindLabel, loadLookupOf, parcelSsccOf, parseScan, ssccOfScan } from './scan';
 
 /** Built the way the backend prints them (foundation/gs1 ssccOf): 4 + 6161234 + serial 7 + check digit. */
 const SSCC = '461612340000000074';
@@ -29,5 +29,14 @@ describe('a load’s codes, met in any scan box (round 19)', () => {
     expect(parseScan('sbg:parcel:PUD-1')).toMatchObject({ kind: 'parcel', value: 'PUD-1' });
     expect(parseScan('sbg:load:FRT-12')).toMatchObject({ kind: 'load', value: 'FRT-12' });
     expect(kindLabel('load')).toBe('load label');
+  });
+});
+
+describe('a store parcel’s SSCC, met in a parcel’s box (round 32)', () => {
+  it('is asked about as a parcel first in a box that expects a parcel — in every form a scanner hands it over — and nowhere else', () => {
+    for (const raw of [SSCC, `00${SSCC}`, `(00) ${SSCC}`, `]C100${SSCC}`]) expect(parcelSsccOf(raw, 'parcel')).toBe(SSCC);
+    for (const box of ['tote', 'vehicle', 'badge', 'collect', 'track', 'load'] as const) expect(parcelSsccOf(SSCC, box)).toBeNull();
+    // Our own parcel code, a bag, a wrong check digit: not a GS1 barcode at all.
+    for (const raw of ['PUD-123456', 'sbg:parcel:PUD-1', 'TOTE-042', `${SSCC.slice(0, 17)}5`]) expect(parcelSsccOf(raw, 'parcel')).toBeNull();
   });
 });

@@ -20501,6 +20501,35 @@
         }
       }
     },
+    "/v1/sbg/scan/parcel": {
+      "get": {
+        "operationId": "LoadFinder.findParcel",
+        "summary": "",
+        "description": "Round 32 — the store parcel a scanned SSCC belongs to: every parcel box at a shop and a hub asks here before it\ntreats the barcode as a load's. Answered only to whoever handles that parcel now.",
+        "parameters": [
+          {
+            "name": "scanned",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParcelFoundView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/documents/{documentId}/report": {
       "post": {
         "operationId": "CompanyPaperReport.report",
@@ -48104,6 +48133,25 @@
             "type": "string"
           }
         }
+      },
+      "ParcelFoundView": {
+        "type": "object",
+        "properties": {
+          "parcelId": {
+            "type": "string"
+          },
+          "sscc": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "parcelId",
+          "sscc",
+          "status"
+        ]
       },
       "ReportPaperDto": {
         "type": "object",

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useT } from '../i18n';
 import { useLoadFinder, type LoadFound } from '../loadFinder';
-import { loadLookupOf, type ScanKind } from '../scan';
+import { loadLookupOf, parcelSsccOf, type ScanKind } from '../scan';
+import { useParcelFinder } from '../parcelFinder';
 import { primeAudio } from '../feedback';
 import { Button } from './Button';
 import { Note } from './ErrorNote';
@@ -30,7 +31,16 @@ export interface ScanFieldProps {
 /** A keyboard-wedge scanner types the whole code in a burst: wait this long after the last key before reading it whole. */
 const SETTLE_MS = 250;
 
-type Looked = { state: 'looking' } | { state: 'found'; load: LoadFound } | { state: 'none' } | { state: 'here' } | { state: 'error'; detail: string };
+type Looked =
+  | { state: 'looking' }
+  | { state: 'found'; load: LoadFound }
+  | { state: 'none' }
+  | { state: 'here' }
+  | { state: 'error'; detail: string }
+  // Round 32 — in a parcel's box: a store parcel found by its SSCC, or no parcel and no load this person handles here.
+  | { state: 'looking-parcel' }
+  | { state: 'parcel'; parcelId: string }
+  | { state: 'nothing' };
 
 /**
  * A code field that can be SCANNED or typed — the WS-UX "show, don't type" default with the
@@ -45,6 +55,7 @@ type Looked = { state: 'looking' } | { state: 'found'; load: LoadFound } | { sta
 export function ScanField({ id, label, value, onValue, expect, placeholder, onScan, upper, enterKeyHint, autocomplete = 'off', loads = false }: ScanFieldProps) {
   const t = useT();
   const finder = useLoadFinder();
+  const parcels = useParcelFinder();
   const [scanning, setScanning] = useState(false);
   const [looked, setLooked] = useState<Looked | null>(null);
   const settle = useRef<number | null>(null);
@@ -54,14 +65,31 @@ export function ScanField({ id, label, value, onValue, expect, placeholder, onSc
     if (settle.current) window.clearTimeout(settle.current);
   }, []);
 
-  /** A load's code: out of the box, and its load looked up — or said, where this app opens no loads. */
+  /**
+   * A load's code: out of the box, and its load looked up — or said, where this app opens no loads. Round 32 — in a
+   * parcel's box an SSCC is asked about as a store parcel's first: found, the box goes on with the parcel as if our QR had
+   * been read; not one this person handles, it is looked up as a load's package as before.
+   */
   const lookUp = async (scanned: string) => {
     onValue('');
-    if (!finder) return setLooked({ state: 'here' });
+    const asParcel = parcels ? parcelSsccOf(scanned, expect) : null;
+    if (asParcel && parcels) {
+      setLooked({ state: 'looking-parcel' });
+      const p = await parcels.find(scanned);
+      if (p.data) {
+        const id = norm(p.data.parcelId);
+        setLooked({ state: 'parcel', parcelId: id });
+        onValue(id);
+        onScan?.(id);
+        return;
+      }
+      if (p.error?.code !== 'NOT_FOUND') return setLooked({ state: 'error', detail: p.error?.detail || p.error?.title || t('common.ssccScan.failed') });
+    }
+    if (!finder) return setLooked({ state: asParcel ? 'nothing' : 'here' });
     setLooked({ state: 'looking' });
     const r = await finder.find(scanned);
     if (r.data) return setLooked({ state: 'found', load: r.data });
-    setLooked(r.error?.code === 'NOT_FOUND' ? { state: 'none' } : { state: 'error', detail: r.error?.detail || r.error?.title || t('common.loadScan.failed') });
+    setLooked(r.error?.code === 'NOT_FOUND' ? { state: asParcel ? 'nothing' : 'none' } : { state: 'error', detail: r.error?.detail || r.error?.title || t('common.loadScan.failed') });
   };
   const asLoad = (v: string) => loadLookupOf(v, loads);
 
@@ -134,6 +162,9 @@ export function ScanField({ id, label, value, onValue, expect, placeholder, onSc
 function LoadNote({ looked, onOpen, canOpen }: { looked: Looked; onOpen?: (found: LoadFound) => void; canOpen?: (found: LoadFound) => boolean }) {
   const t = useT();
   if (looked.state === 'looking') return <p class="hint">{t('common.loadScan.looking')}</p>;
+  if (looked.state === 'looking-parcel') return <p class="hint">{t('common.ssccScan.looking')}</p>;
+  if (looked.state === 'parcel') return <Note tone="ok" icon="box" title={t('common.ssccScan.parcel', { parcelId: looked.parcelId })} />;
+  if (looked.state === 'nothing') return <Note tone="warn" icon="box" title={t('common.ssccScan.title')} detail={t('common.ssccScan.nothing')} />;
   if (looked.state === 'here') return <Note tone="info" icon="box" title={t('common.loadScan.isPackage')} detail={t('common.loadScan.notHere')} />;
   if (looked.state === 'none') return <Note tone="warn" icon="box" title={t('common.loadScan.isPackage')} detail={t('common.loadScan.none')} />;
   if (looked.state === 'error') return <Note tone="warn" icon="warning" title={looked.detail} />;

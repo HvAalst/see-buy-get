@@ -29,6 +29,7 @@ import '../../shared/screens.css';
 import './agent.css';
 import { agentWorkLine } from './logic';
 import { LoadFinderContext, loadFinderFor } from '../../shared/loadFinder';
+import { ParcelFinderContext, parcelFinderFor } from '../../shared/parcelFinder';
 import { ownerOnlyScreen, type StaffAtCounter } from './staff';
 
 type Tab = 'home' | 'accept' | 'release' | 'records';
@@ -57,6 +58,8 @@ export function App() {
         : null,
     [sbg],
   );
+  // Round 32 — a store parcel's GS1 barcode scanned into a parcel's box finds the parcel, for this shop's parcels.
+  const parcelFinder = useMemo(() => (sbg ? parcelFinderFor(sbg) : null), [sbg]);
   // A shop signs in with an email and a password, not a PIN — so the menu offers THAT credential, and
   // the sheet lives here beside the row that opens it rather than at the foot of one screen.
   const [passwordOpen, setPasswordOpen] = useState(false);
@@ -91,6 +94,7 @@ export function App() {
 
   return (
     <LoadFinderContext.Provider value={loadFinder}>
+    <ParcelFinderContext.Provider value={parcelFinder}>
     <div class="app">
       <TopBar
         title={t('agent.appTitle')}
@@ -142,6 +146,7 @@ export function App() {
       <ChangePasswordSheet open={passwordOpen} onClose={() => setPasswordOpen(false)} config={agentConfig()} email={actions.readEmail()} onChanged={actions.adoptToken} />
       <FeedbackFlash />
     </div>
+    </ParcelFinderContext.Provider>
     </LoadFinderContext.Provider>
   );
 }

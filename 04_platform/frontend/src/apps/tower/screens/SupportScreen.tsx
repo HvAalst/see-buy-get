@@ -36,9 +36,14 @@ export function SupportScreen({ state, actions }: { state: TowerState; actions: 
     if (ssccOfScan(text) || isLoadLabel(text)) {
       const client = actions.client();
       if (!client) return;
+      // Round 32 — a GS1 barcode may be a store parcel's own: its parcel opens, as by its id.
+      if (ssccOfScan(text)) {
+        const parcel = await client.api.findParcelBySscc(text);
+        if (parcel.data) return void actions.lookupParcel(parcel.data.parcelId);
+      }
       const r = await client.api.findLoad(text);
       if (r.data) return setLoad(r.data as unknown as LoadFound);
-      return setLoadError(r.error?.code === 'NOT_FOUND' ? t('common.loadScan.none') : r.error?.detail || r.error?.title || t('common.loadScan.failed'));
+      return setLoadError(r.error?.code === 'NOT_FOUND' ? t(ssccOfScan(text) ? 'common.ssccScan.nothing' : 'common.loadScan.none') : r.error?.detail || r.error?.title || t('common.loadScan.failed'));
     }
     void actions.lookupParcel(text);
   };

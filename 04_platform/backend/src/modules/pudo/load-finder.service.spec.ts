@@ -3,7 +3,9 @@ import { ssccOf } from '../../foundation/gs1/gs1';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import type { ConsignmentNoteService } from './consignment-note.service';
 import type { DispatchService } from './dispatch.service';
-import { LoadFinderService, NO_LOAD_YOU_CAN_OPEN, loadRefOf } from './load-finder.service';
+import { LoadFinderService, NO_LOAD_YOU_CAN_OPEN, NO_PARCEL_YOU_HANDLE, loadRefOf } from './load-finder.service';
+import type { ParcelService } from './parcel.service';
+import type { MdpService } from './mdp.service';
 import type { ShipperCodesService } from './shipper-codes.service';
 
 const SSCC = ssccOf('6161234', 4, 7);
@@ -48,5 +50,37 @@ describe('a load found by what was scanned (round 19)', () => {
     expect(() => f.find(ssccOf('6161234', 4, 99), as('did:biz'))).toThrow(NO_LOAD_YOU_CAN_OPEN);
     expect(() => f.find('T-FFFFFFFFFF', as('did:biz'))).toThrow(NO_LOAD_YOU_CAN_OPEN);
     expect(() => f.find('PUD-123456', as('did:biz'))).toThrow(/not a load’s code/);
+  });
+});
+
+describe('a store parcel found by its SSCC (round 32)', () => {
+  const PARCEL_SSCC = ssccOf('6169876', 2, 0);
+  const parcel = { parcelId: 'PUD-AB12', status: 'At_MDP', originAgentDid: 'did:shop:north', destAgentDid: 'did:shop:south', atMdpId: 'mdp_1' };
+  const finder = () => {
+    const codes = { parcelOfSscc: (s: string) => (s === PARCEL_SSCC ? parcel.parcelId : undefined), packageOf: () => undefined } as unknown as ShipperCodesService;
+    const parcels = {
+      get: (id: string) => {
+        if (id === parcel.parcelId) return parcel;
+        throw new GlosError('NOT_FOUND', 'No such parcel');
+      },
+    } as unknown as ParcelService;
+    const mdps = { list: () => [{ mdpId: 'mdp_1', did: 'did:hub:1' }, { mdpId: 'mdp_2', did: 'did:hub:2' }] } as unknown as MdpService;
+    return new LoadFinderService(codes, {} as DispatchService, {} as ConsignmentNoteService, parcels, mdps);
+  };
+
+  it('finds the parcel, in any form a scanner hands it over, for the shops it goes between, the hub it stands at, and staff', () => {
+    const found = { parcelId: 'PUD-AB12', sscc: PARCEL_SSCC, status: 'At_MDP' };
+    for (const raw of [PARCEL_SSCC, `00${PARCEL_SSCC}`, `(00) ${PARCEL_SSCC}`, `]C100${PARCEL_SSCC}`]) expect(finder().findParcel(raw, as('did:shop:north', 'agent'))).toEqual(found);
+    expect(finder().findParcel(PARCEL_SSCC, as('did:shop:south', 'agent'))).toEqual(found);
+    expect(finder().findParcel(PARCEL_SSCC, as('did:hub:1', 'mdp'))).toEqual(found);
+    expect(finder().findParcel(PARCEL_SSCC, as('did:ops', 'operator'))).toEqual(found);
+  });
+
+  it('reads the same to anybody else as a parcel that does not exist — serials run in order, so it is never a way to walk them', () => {
+    for (const who of [as('did:shop:other', 'agent'), as('did:hub:2', 'mdp'), as('did:biz', 'business'), as('did:driver', 'driver'), undefined]) {
+      expect(() => finder().findParcel(PARCEL_SSCC, who)).toThrow(NO_PARCEL_YOU_HANDLE);
+    }
+    expect(() => finder().findParcel(ssccOf('6169876', 2, 1), as('did:shop:north', 'agent'))).toThrow(NO_PARCEL_YOU_HANDLE);
+    expect(() => finder().findParcel('PUD-AB12', as('did:shop:north', 'agent'))).toThrow(/not a GS1 barcode/);
   });
 });

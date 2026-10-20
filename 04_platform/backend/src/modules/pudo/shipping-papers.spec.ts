@@ -109,6 +109,9 @@ describe('a shipper’s own GS1 codes', () => {
     expect(codes.packageOf(one)).toBeUndefined();
     const load = codes.issue('frt_1', 'biz', 1)!;
     expect(codes.packageOf(load.codes[0])).toEqual({ freightId: 'frt_1', no: 1, of: 1 });
+    // Round 32 — and the other way round: a parcel's code names its parcel; a load's package names no parcel.
+    expect(codes.parcelOfSscc(one)).toBe('prc_1');
+    expect(codes.parcelOfSscc(load.codes[0])).toBeUndefined();
   });
 });
 

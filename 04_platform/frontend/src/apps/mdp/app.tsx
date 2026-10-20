@@ -1,6 +1,7 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { OutboxNote, ConnectivityNote, BottomNav, Button, Checklist, FeedbackFlash, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
-import { useState } from 'preact/hooks';
+import { useMemo, useState } from 'preact/hooks';
+import { ParcelFinderContext, parcelFinderFor } from '../../shared/parcelFinder';
 import { AccountMenu } from '../../shared/account/AccountMenu';
 import { ChangePasswordSheet } from '../../shared/account/ChangePasswordSheet';
 import { mdpConfig } from './api';
@@ -26,6 +27,8 @@ export function App() {
   // The person behind this account — their photo, PIN, address and page. The menu is ABSENT where the
   // sign-in is not a person at all (a store's shared secret), rather than opening onto a refusal.
   const account = useAccount(sbg, state.phase === 'ready');
+  // Round 32 — a store parcel's GS1 barcode scanned at the sort finds the parcel, for what stands at this hub.
+  const parcelFinder = useMemo(() => (sbg ? parcelFinderFor(sbg) : null), [sbg]);
   // A hub signs in with an email and a password, not a PIN — the menu offers that credential instead.
   const [passwordOpen, setPasswordOpen] = useState(false);
   const sw = useRegisterSW();
@@ -56,6 +59,7 @@ export function App() {
   ];
 
   return (
+    <ParcelFinderContext.Provider value={parcelFinder}>
     <div class="app">
       <TopBar
         title={t('mdp.appTitle')}
@@ -99,6 +103,7 @@ export function App() {
       <Toasts state={state} actions={actions} />
       <FeedbackFlash />
     </div>
+    </ParcelFinderContext.Provider>
   );
 }
 
