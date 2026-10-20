@@ -76,7 +76,7 @@
 <header>
   <h1>Against ISO 28000/28001</h1>
   <p class="sub">The comment you received on supply-chain security, its five pillars and its advice on getting there, checked point by point against what is built: what the network does today, what it does only in part, and what is missing. Physical and organisational steps that no software can take are said separately.</p>
-  <p class="stamp">Checked 2026-10-20 against the code on <code>main</code> after round 33. Read with <a href="compendium-gaps.html">compendium-gaps.html</a>.</p>
+  <p class="stamp">Checked 2026-10-20 against the code on <code>main</code> after round 33; the two holes closed the same day (<code>80bb1a4</code>, your first answer on this page). Read with <a href="compendium-gaps.html">compendium-gaps.html</a>.</p>
   <nav class="toc" aria-label="On this page">
     <a href="#verdict">The short answer</a>
     <a href="#defects">Wrong, not just missing</a>
@@ -95,13 +95,13 @@
 </div>
 
 <h2 id="defects">Wrong, not just missing</h2>
-<p class="lead">Found while checking, and confirmed in the code. The first two are holes in controls that look shipped.</p>
+<p class="lead">Found while checking, and confirmed in the code. The first two were holes in controls that looked shipped; your answer: "Fix both now". Both are fixed.</p>
 <div class="grid">
-  <div class="card"><span class="tag t-missing">Hole</span><h3>The driver can read the seal numbers before pickup</h3><p>The driver's app is never told a seal's number — the point of reading it off the door — but the driver who claimed the load is a party to it, and a party reads <code>GET dispatch/freight/:id/seals</code> and the consignment note, both carrying the numbers. The blind check is bypassed by anyone who looks.</p></div>
-  <div class="card"><span class="tag t-missing">Bug</span><h3>A closed road or border does not stop a load</h3><p><code>ROAD_CLOSED</code> and <code>BORDER_CLOSED</code> are declared as blocking, but the route check has no branch for them, so a load on a road reported closed is offered on the board as if nothing were there. Heights, weights, hazmat bans and washouts do block.</p></div>
+  <div class="card"><span class="tag t-strong">Fixed</span><h3>The driver could read the seal numbers before pickup</h3><p>The driver who claimed the load is a party to it, and a party read <code>GET dispatch/freight/:id/seals</code> and the consignment note, both carrying the numbers; the tracking page, whose key is on the load's labels, said them too. <b>Now</b>, until the goods are taken over, the carrier reads which seals and what they are, never their numbers; the note says "its number is read off the door at taking over"; the tracking page says no seals. The shipper that wrote them, and staff, read them always.</p></div>
+  <div class="card"><span class="tag t-strong">Fixed</span><h3>A closed road or border did not stop a load</h3><p><code>ROAD_CLOSED</code> and <code>BORDER_CLOSED</code> were declared as blocking with no branch in the route check, so a load on a road reported closed was offered as if nothing were there. <b>Now</b> both block, a report somebody disputes still blocks and says so, and any blocking kind without a sentence of its own blocks too, so none is dropped in silence again.</p></div>
   <div class="card"><span class="tag t-partial">Need to know</span><h3>The commercial invoice is open to the carrier</h3><p>The invoice — line values, the total, exporter and importer — is read by every party to the load, the claiming driver and their fleet included; the consignment note gives the driver the goods' description and the carriage amount. The load card itself shows neither.</p></div>
   <div class="card"><span class="tag t-partial">Need to know</span><h3>Any shop can read any parcel's history</h3><p><code>GET parcels/:id</code> answers any shop with the scans and photo ids. Parcel ids are random, so it takes knowing one; round 32 already kept the sequential SSCCs from becoming a way in.</p></div>
-  <div class="card"><span class="tag t-quiet">Limit</span><h3>The offline seal check can be worked backwards</h3><p>So the phone can check a reading without signal, it holds a fingerprint of load and number. A seal number is short, so a phone can try them all. It does not matter once the number is no longer readable elsewhere, but it is not a secret on its own.</p></div>
+  <div class="card"><span class="tag t-quiet">Limit</span><h3>The offline seal check can be worked backwards</h3><p>So the phone can check a reading without signal, it holds a fingerprint of load and number. A seal number is short, so a phone can try them all. With the numbers no longer readable elsewhere before pickup, this is the one way left, and it takes deliberate work; it is not a secret on its own.</p></div>
 </div>
 
 <h2 id="points">Point by point</h2>
@@ -117,7 +117,7 @@
     <tr><td>III · Security declarations</td><td><span class="tag t-missing">Missing</span></td><td>A shipper's "I declare" on the invoice; a shop's self-declared clean record.</td><td>A signed, versioned security declaration from shops, hubs, fleets and drivers.</td></tr>
     <tr><td>III · Vetting</td><td><span class="tag t-partial">Partly</span></td><td>Fleets and businesses checked by two people from papers; shops and heavy-vehicle drivers by one; papers that lapse end a shift.</td><td>Hubs not vetted; light-vehicle couriers start at once; no real background or sanctions check; shop papers do not expire.</td></tr>
     <tr><td>III · Compensatory controls</td><td><span class="tag t-partial">Partly</span></td><td>A scan and a code at every hand-over; photos at intake and at load pickup and delivery; a shop's trade credit caps money.</td><td>A custody cap by value or count for new partners; photos at bus, hub and bag hand-overs; community guarantees.</td></tr>
-    <tr><td>IV · Need-to-know manifesting</td><td><span class="tag t-partial">Partly</span></td><td>The load card and the counters' lists show no values, items or buyer; seals as "which to find".</td><td>See the defects: invoice values and seal numbers open to the carrier.</td></tr>
+    <tr><td>IV · Need-to-know manifesting</td><td><span class="tag t-partial">Partly</span></td><td>The load card and the counters' lists show no values, items or buyer; seals as "which to find".</td><td>See the defects: invoice values open to the carrier. (Seal numbers: fixed.)</td></tr>
     <tr><td>IV · Immutable audit trail</td><td><span class="tag t-partial">Partly</span></td><td>Every parcel scan anchored in a hash chain; the note frozen and fingerprinted at each signature; damage reports fingerprinted; evidence photos locked.</td><td>Custody legs, load pickup and delivery, seals and those fingerprints anchored too; an anchor outside our own database.</td></tr>
     <tr><td>IV · Access to data</td><td><span class="tag t-partial">Partly</span></td><td>A role on every route, default deny; staff read companies and change nothing; two people for money and identity.</td><td>Staff roles narrower than "everything"; a log of what staff opened.</td></tr>
     <tr><td>V · Tamper protocol</td><td><span class="tag t-partial">Partly</span></td><td>A wrong seal stops the pickup; a broken seal is told and frozen on the note.</td><td>Quarantine — a held state; the event logged against the unit and its SSCC; operations told before custody is taken; the refused mismatch itself recorded.</td></tr>
@@ -132,8 +132,8 @@
 
 <h2 id="order">What I would take first</h2>
 <ol class="order">
-  <li><b>Close the two holes.</b> Seal numbers withheld from the carrier until the goods are taken over; a closed road or border blocks a load. <span class="rec">Small, and both are controls that look shipped.</span></li>
-  <li><b>The tamper protocol.</b> A seal not as written, a broken seal or a cut wrap holds the unit, logs the exception against it and its SSCC, and tells operations before custody is taken. <span class="rec">The pillar auditors test by trying it.</span></li>
+  <li><b>Close the two holes.</b> Seal numbers withheld from the carrier until the goods are taken over; a closed road or border blocks a load. <span class="rec">Done: <code>80bb1a4</code>.</span></li>
+  <li><b>The tamper protocol.</b> A seal not as written, a broken seal or a cut wrap holds the unit, logs the exception against it and its SSCC, and tells operations before custody is taken. <span class="rec">Your answer: next. Being built.</span></li>
   <li><b>Receiving at hubs and shops.</b> Our own bags sealed with a real number; "Receive" asks for the number, a photo and the scan. <span class="rec">The comment's own example, and the hand-over with the least behind it today.</span></li>
   <li><b>Need-to-know.</b> The carrier sees what to carry and where, not what it is worth. <span class="rec">A decision first: the invoice travels with the goods for customs.</span></li>
   <li><b>A risk register.</b> Each hub, shop and corridor rated, with its countermeasures, fed by incidents. <span class="rec">The foundation pillar; larger, and some of it is yours to judge.</span></li>
