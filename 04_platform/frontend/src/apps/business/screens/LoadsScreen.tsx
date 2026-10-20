@@ -511,6 +511,7 @@ function LoadDetail({ row, business, client, act, onClose, onChanged }: { row: P
                     <b>{road.expected}</b>
                   </span>
                 ) : null}
+                {road?.drive ? <span class="biz-road__line chint">{road.drive}</span> : null}
               </dd>
             </div>
           ) : null}

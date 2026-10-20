@@ -44,6 +44,7 @@ import { MediaService } from './media.service';
 import { MarketPulseStore } from './market-pulse.store';
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, toteCapacityOf, VEHICLE_SPEC } from './fleet.config';
 import { Router, ROUTER } from './router';
+import { groupOf, laneDrive, lanesOf, tripKmh, type LaneDrive, type LaneTrip } from './lane-times';
 import { coverFor, DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MARKET_MIN_DEMAND, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, taxOn, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
@@ -3297,7 +3298,7 @@ export class DispatchService {
     if (!replayed) {
       void this.events.publish(GlosEvent.Pudo.FreightPassed, { freightId: f.freightId, code: f.code, driverDid, posterDid: f.postedByDid ?? f.shipperDid, passage: view }, { source: 'pudo' }).catch(() => undefined);
     }
-    const crossing = this.passages.crossingOf(f, now);
+    const crossing = this.passages.crossingOf(f, now, this.laneDriveFor(f, now));
     return { passage: view, ...(crossing ? { crossing } : {}), replayed };
   }
 
@@ -3360,8 +3361,22 @@ export class DispatchService {
     const passages = this.passages.views(f.freightId);
     // Where it has got to is said while it is on the road. Delivered, its steps tell how it went — a driver who never said
     // "cleared" must not leave a delivered load reading as still at the border.
-    const crossing = f.status === 'in_transit' ? this.passages.crossingOf(f, now) : undefined;
+    const crossing = f.status === 'in_transit' ? this.passages.crossingOf(f, now, this.laneDriveFor(f, now)) : undefined;
     return { ...(passages.length ? { passages } : {}), ...(crossing ? { crossing } : {}) };
+  }
+
+  /**
+   * Round 21 — the pace a load's lane is promised at (lane-times.ts): its finished trips', once five were measured in
+   * ninety days, else the standard for its kind of vehicle. Read fresh: a load delivered a minute ago counts at once.
+   */
+  laneDriveFor(f: Freight, now: number = Date.now()): LaneDrive {
+    const trips: LaneTrip[] = [];
+    for (const g of this.freights.values()) {
+      if (g.status !== 'delivered' || !g.deliveredAt || !g.destLocation) continue;
+      const kmh = tripKmh(g, this.passages?.waitedMinOf(g.freightId) ?? 0, this.router.roadKm(g.pickupLocation, g.destLocation));
+      if (kmh !== undefined) trips.push({ group: groupOf(g), ...lanesOf(g), kmh, deliveredAt: g.deliveredAt });
+    }
+    return laneDrive(f, trips, VEHICLE_SPEED_KMH[groupOf(f) === 'truck' ? 'truck' : 'bus'], now);
   }
 
   listFreight(filter: { status?: Freight['status'] } = {}): Freight[] {

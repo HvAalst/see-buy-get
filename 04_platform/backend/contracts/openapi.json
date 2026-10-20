@@ -44323,6 +44323,39 @@
           "hours"
         ]
       },
+      "LaneDriveView": {
+        "type": "object",
+        "properties": {
+          "basis": {
+            "type": "string",
+            "enum": [
+              "measured",
+              "standard"
+            ]
+          },
+          "trips": {
+            "type": "number"
+          },
+          "lane": {
+            "type": "string",
+            "description": "Measured: the lane — `Nairobi → Kisumu`, or `KE → UG` where a town is not named."
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "towns",
+              "countries"
+            ]
+          },
+          "kmh": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "basis",
+          "kmh"
+        ]
+      },
       "LoadCrossing": {
         "type": "object",
         "properties": {
@@ -44354,6 +44387,14 @@
           "expectedAt": {
             "type": "string",
             "description": "About when it is at its destination. Absent once delivered, or where its destination has no place on the map."
+          },
+          "drive": {
+            "description": "Round 21 — with it, the pace its drive is promised at and what that rests on.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LaneDriveView"
+              }
+            ]
           },
           "from": {
             "type": "string"
@@ -47328,6 +47369,10 @@
           "digitNow": {
             "type": "number",
             "description": "The digit it prints under now, when it uses the prefix."
+          },
+          "forwarder": {
+            "type": "string",
+            "description": "Round 20 — a forwarder's client: the forwarder that keeps its record and answers for it."
           },
           "entityId": {
             "type": "string"

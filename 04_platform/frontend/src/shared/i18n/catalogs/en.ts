@@ -320,6 +320,8 @@ export const en = {
   'common.passage.waitMeasuredCrossing': 'Allowed {hours} at this border ({posts}): the middle of the last {n} crossings measured',
   'common.passage.waitStandard': 'Allowed {hours}, our standard for a border: not enough crossings measured here yet',
   'common.passage.expected': 'Expected about {when}',
+  'common.passage.driveMeasured': 'Driven at the pace of the last {n} trips on {lane}: about {kmh} km/h door to door, rests and queues included',
+  'common.passage.driveStandard': 'Driven at our standard {kmh} km/h: not enough trips measured on this road yet',
   // Round 15 — a seal on a load (shared/seals.ts).
   'common.seal.class': 'class {c}',
   'common.seal.bySender': 'the sender’s seal',

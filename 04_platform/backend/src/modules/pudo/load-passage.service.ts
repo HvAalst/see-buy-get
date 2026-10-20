@@ -20,6 +20,7 @@ import {
 } from './load-passage.types';
 import { whenSeen } from './observed-at';
 import { BORDER_DWELL_H, VEHICLE_SPEED_KMH } from './pudo.config';
+import type { LaneDrive } from './lane-times';
 import type { GeoPoint } from './pudo.types';
 import { ROUTER, type Router } from './router';
 
@@ -161,7 +162,7 @@ export class LoadPassageService {
    * the driver said (or the pickup): from there, the drive to its destination and whatever of the wait is still ahead.
    * Where the phone's position was not given, the last place known stands in — it can only make the drive longer.
    */
-  crossingOf(f: Freight, now: number = Date.now()): LoadCrossing | undefined {
+  crossingOf(f: Freight, now: number = Date.now(), drive?: LaneDrive): LoadCrossing | undefined {
     const countries = crossingCountries(f);
     if (!countries) return undefined;
     const steps = this.of(f.freightId);
@@ -171,12 +172,14 @@ export class LoadPassageService {
     const wait = this.waitFor(countries.from, countries.to, open?.post ?? cleared?.post, now);
 
     let expectedAt: string | undefined;
+    let pace: LaneDrive | undefined;
     if (f.status === 'in_transit' && f.destLocation && f.pickedUpAt) {
       const last = steps[steps.length - 1];
       const fromMs = last ? Date.parse(last.at) : Date.parse(f.pickedUpAt);
       const place = [...steps].reverse().find((p) => p.location)?.location ?? f.pickupLocation;
-      const speed = VEHICLE_SPEED_KMH[f.carriage?.vehicleClass === 'truck' ? 'truck' : 'bus'];
-      const driveMs = (this.router.roadKm(place, f.destLocation) / speed) * HOUR_MS;
+      // Round 21 — at the pace its lane's own trips kept, where enough were measured; else the standard, as before.
+      pace = drive ?? { kmh: VEHICLE_SPEED_KMH[f.carriage?.vehicleClass === 'truck' ? 'truck' : 'bus'], basis: 'standard' };
+      const driveMs = (this.router.roadKm(place, f.destLocation) / pace.kmh) * HOUR_MS;
       const waitMs = wait.hours * HOUR_MS;
       const waitAheadMs = state === 'ahead' ? waitMs : state === 'at_post' ? Math.max(0, waitMs - (fromMs - Date.parse(open!.at))) : 0;
       if (Number.isFinite(fromMs) && Number.isFinite(driveMs)) expectedAt = new Date(fromMs + driveMs + waitAheadMs).toISOString();
@@ -187,8 +190,13 @@ export class LoadPassageService {
       to: countries.to,
       ...(open ? { post: open.post, since: open.at } : cleared ? { post: cleared.post, clearedAt: cleared.at, ...(cleared.waitedMin != null ? { waitedMin: cleared.waitedMin } : {}) } : wait.post ? { post: wait.post } : {}),
       wait,
-      ...(expectedAt ? { expectedAt } : {}),
+      ...(expectedAt ? { expectedAt, ...(pace ? { drive: pace } : {}) } : {}),
     };
+  }
+
+  /** Round 21 — the minutes a load's driver said it waited at border posts: taken out of the trip's pace. */
+  waitedMinOf(freightId: string): number {
+    return this.of(freightId).reduce((sum, p) => sum + (p.kind === 'cleared_border' ? (p.waitedMin ?? 0) : 0), 0);
   }
 
   /** What the driver's app needs to say the next step on a load it carries. */

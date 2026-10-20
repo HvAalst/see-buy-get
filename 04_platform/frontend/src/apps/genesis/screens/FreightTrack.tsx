@@ -47,6 +47,7 @@ export function FreightTrack({ view }: { view: FreightTrackView }) {
               <b>{crossing.expected}</b>
             </p>
           ) : null}
+          {crossing?.drive ? <p class="hint">{crossing.drive}</p> : null}
         </Card>
       ) : null}
 

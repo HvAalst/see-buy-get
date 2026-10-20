@@ -240,6 +240,8 @@ export interface RoadSays {
   /** The wait it is allowed at the border and what that rests on, while there is still one to wait. */
   wait?: string;
   expected?: string;
+  /** Round 21 — the pace the expectation rests on. */
+  drive?: string;
 }
 export function roadSays(l: Pick<PostedLoad, 'status' | 'passages' | 'crossing'>, t: Translate, when: When): RoadSays | null {
   if (l.status !== 'in_transit') return null;
@@ -248,7 +250,7 @@ export function roadSays(l: Pick<PostedLoad, 'status' | 'passages' | 'crossing'>
     const c = crossingWords(l.crossing, t, when);
     // Across, a step said after the clearing (a hub on the far side) is where it is now.
     const later = l.crossing.state === 'cleared' && last && last.kind !== 'cleared_border' && l.crossing.clearedAt && last.at >= l.crossing.clearedAt;
-    return { row: later ? passageWords(last, t, when) : c.where, ...(c.wait ? { wait: c.wait } : {}), ...(c.expected ? { expected: c.expected } : {}) };
+    return { row: later ? passageWords(last, t, when) : c.where, ...(c.wait ? { wait: c.wait } : {}), ...(c.expected ? { expected: c.expected } : {}), ...(c.drive ? { drive: c.drive } : {}) };
   }
   return last ? { row: passageWords(last, t, when) } : null;
 }

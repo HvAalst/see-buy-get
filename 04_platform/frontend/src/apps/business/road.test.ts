@@ -27,6 +27,12 @@ describe('the Business app — a load on the road, as its driver said it (round 
     });
   });
 
+  it('says the pace its expected time rests on — in the reader’s own words (round 21)', () => {
+    const crossing = { state: 'ahead' as const, from: 'KE', to: 'UG', wait, expectedAt: '2026-10-20T06:10:00.000Z', drive: { kmh: 32, basis: 'measured' as const, trips: 7, lane: 'KE → UG', level: 'countries' as const } };
+    expect(roadSays({ status: 'in_transit', crossing }, t, when)?.drive).toBe('Driven at the pace of the last 7 trips on KE → UG: about 32 km/h door to door, rests and queues included');
+    expect(roadSays({ status: 'in_transit', crossing: { ...crossing, drive: { kmh: 55, basis: 'standard' as const } } }, t, when)?.drive).toBe('Driven at our standard 55 km/h: not enough trips measured on this road yet');
+  });
+
   it('a load in one country says the last hub it was at; nothing while it is not on the road', () => {
     expect(roadSays({ status: 'in_transit', passages: [{ kind: 'at_hub', hub: 'Naivasha ICD', at: '2026-10-19T09:00:00.000Z' }] }, t, when)).toEqual({ row: 'At Naivasha ICD — 09:00' });
     expect(roadSays({ status: 'in_transit' }, t, when)).toBeNull();

@@ -40,4 +40,13 @@ describe('a load at a border or a hub, as everybody reads it (round 14)', () => 
     // No expectation said where the server gave none.
     expect(crossingWords({ ...ahead, expectedAt: undefined }, t as never, when).expected).toBeUndefined();
   });
+
+  it('says the pace the expectation rests on: its own lane’s trips, or the standard while too few are measured (round 21)', () => {
+    const wait = { from: 'KE', to: 'UG', hours: 4, basis: 'standard' as const };
+    const c: CrossingView = { state: 'ahead', from: 'KE', to: 'UG', wait, expectedAt: '2026-10-20T04:00:00.000Z', drive: { kmh: 32, basis: 'measured', trips: 5, lane: 'KE → UG', level: 'countries' } };
+    expect(crossingWords(c, t as never, when).drive).toBe('common.passage.driveMeasured {"n":5,"lane":"KE → UG","kmh":32}');
+    expect(crossingWords({ ...c, drive: { kmh: 55, basis: 'standard' } }, t as never, when).drive).toBe('common.passage.driveStandard {"kmh":55}');
+    // No promise, no pace.
+    expect(crossingWords({ ...c, expectedAt: undefined }, t as never, when).drive).toBeUndefined();
+  });
 });

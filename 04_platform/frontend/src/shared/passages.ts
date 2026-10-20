@@ -40,6 +40,17 @@ export interface CrossingView {
   waitedMin?: number;
   wait: BorderWaitView;
   expectedAt?: string;
+  /** Round 21 — the pace its drive is promised at, and what that rests on. */
+  drive?: LaneDriveView;
+}
+
+/** Round 21 — measured: the middle of its lane's last ninety days' trips (a town pair, else a country pair); standard: too few yet. */
+export interface LaneDriveView {
+  kmh: number;
+  basis: 'measured' | 'standard';
+  trips?: number;
+  lane?: string;
+  level?: 'towns' | 'countries';
 }
 
 /** How a time reads in the app at hand (each app has its own clock words). */
@@ -78,8 +89,13 @@ export function passageWords(p: PassageView, t: Translate, when: When): string {
   return t('common.passage.atHub', { hub: p.hub ?? '', when: when(p.at) });
 }
 
-/** A load crossing a border: where it has got to, the wait and what it rests on, and when it is expected. */
-export function crossingWords(c: CrossingView, t: Translate, when: When): { where: string; wait?: string; expected?: string } {
+/** Round 21 — the pace the drive is promised at, and what it rests on: its own lane's trips, or the standard. */
+export function driveWords(d: LaneDriveView, t: Translate): string {
+  return d.basis === 'measured' ? t('common.passage.driveMeasured', { n: d.trips ?? 0, lane: d.lane ?? '', kmh: d.kmh }) : t('common.passage.driveStandard', { kmh: d.kmh });
+}
+
+/** A load crossing a border: where it has got to, the wait and what it rests on, and when it is expected — at what pace. */
+export function crossingWords(c: CrossingView, t: Translate, when: When): { where: string; wait?: string; expected?: string; drive?: string } {
   const where =
     c.state === 'at_post'
       ? t('common.passage.nowAt', { post: c.post ?? '', when: when(c.since ?? '') })
@@ -94,6 +110,6 @@ export function crossingWords(c: CrossingView, t: Translate, when: When): { wher
     where,
     // Across, the wait is history; before and at the post it is what the expectation rests on.
     ...(c.state === 'cleared' ? {} : { wait: waitWords(c.wait, t) }),
-    ...(c.expectedAt ? { expected: t('common.passage.expected', { when: when(c.expectedAt) }) } : {}),
+    ...(c.expectedAt ? { expected: t('common.passage.expected', { when: when(c.expectedAt) }), ...(c.drive ? { drive: driveWords(c.drive, t) } : {}) } : {}),
   };
 }

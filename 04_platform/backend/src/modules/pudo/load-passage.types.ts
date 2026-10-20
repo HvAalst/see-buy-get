@@ -94,6 +94,20 @@ export class BorderWait {
 }
 
 /**
+ * Round 21 — the pace the drive to the destination is promised at: `measured` — the middle of the last ninety days'
+ * finished trips on its lane (a town pair, else a country pair), door to door with the border waits taken out, and how
+ * many; `standard` — too few trips measured yet, so the one speed every road used before (pudo.config VEHICLE_SPEED_KMH).
+ */
+export class LaneDriveView {
+  kmh: number;
+  @ApiProperty({ enum: ['measured', 'standard'] }) basis: 'measured' | 'standard';
+  @ApiPropertyOptional() trips?: number;
+  /** Measured: the lane — `Nairobi → Kisumu`, or `KE → UG` where a town is not named. */
+  @ApiPropertyOptional() lane?: string;
+  @ApiPropertyOptional({ enum: ['towns', 'countries'] }) level?: 'towns' | 'countries';
+}
+
+/**
  * A LOAD THAT CROSSES A BORDER, where it has got to: `ahead` — not at the border yet · `at_post` — at a post, since when
  * · `cleared` — across. With the wait it is promised and, while it is on the road, when it is expected at its
  * destination: from the last step the driver said, the drive from there and the wait still ahead. It moves only when the
@@ -112,6 +126,8 @@ export class LoadCrossing {
   @ApiProperty({ type: BorderWait }) wait: BorderWait;
   /** About when it is at its destination. Absent once delivered, or where its destination has no place on the map. */
   @ApiPropertyOptional() expectedAt?: string;
+  /** Round 21 — with it, the pace its drive is promised at and what that rests on. */
+  @ApiPropertyOptional({ type: LaneDriveView }) drive?: LaneDriveView;
 }
 
 /** What the driver's app needs to say a step on a load it carries. */
