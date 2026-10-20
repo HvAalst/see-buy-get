@@ -1,4 +1,4 @@
-import type { CrossingView, PassageView } from '../../shared/passages';
+import type { ArrivalView, CrossingView, PassageView } from '../../shared/passages';
 
 /**
  * Local view types for the Send app. All four surfaces this app touches are @Public
@@ -128,6 +128,8 @@ export interface FreightTrackView {
   passages?: PassageView[];
   /** Round 14 — across a border, on the road: where it has got to, the allowance and on what, when it is expected. */
   crossing?: CrossingView;
+  /** Round 26 — in one country, on the road: when it is expected, and at what pace. Absent where the carrier's plan says the hour. */
+  arrival?: ArrivalView;
   /** Round 15 — the seal numbers, to look at the door; and whether each is still on. */
   seals?: Array<{ number: string; state: 'on' | 'replaced' | 'broken' }>;
 }

@@ -7,7 +7,7 @@ import { ContractRef } from './carriage-contract.types';
 import { PlannedOn } from './fleet-plan.types';
 import { OrderHandOn } from './fleet-partner.types';
 import { BorderAdvice } from './border-rules.types';
-import { LoadCrossing, LoadPassageForDriver, LoadPassageView } from './load-passage.types';
+import { LoadArrival, LoadCrossing, LoadPassageForDriver, LoadPassageView } from './load-passage.types';
 import { LoadSealView, SEAL_STATES, SealToFind, type SealState } from './load-seal.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { GeoPoint } from './pudo.types';
@@ -1217,6 +1217,8 @@ export class PostedFreightRow {
   @ApiPropertyOptional({ type: [LoadSealView] }) seals?: LoadSealView[];
   /** Round 25 — its cold chain broken on the road: the reading that broke it, and when. Absent on a load that never broke it. */
   @ApiPropertyOptional({ type: ColdChainBreachView }) coldChainBroken?: ColdChainBreachView;
+  /** Round 26 — in one country, on the road: when it is expected, and the pace that rests on. Absent where its carrier's plan has the hour. */
+  @ApiPropertyOptional({ type: LoadArrival }) arrival?: LoadArrival;
 }
 
 /** FP3b — what the sender gets back for opening a claim. */
@@ -1513,6 +1515,8 @@ export class FreightTrackView {
   @ApiPropertyOptional({ type: [LoadPassageView] }) passages?: LoadPassageView[];
   /** Round 14 — crossing a border: where it has got to, the wait it is promised and what that rests on, when it is expected. */
   @ApiPropertyOptional({ type: LoadCrossing }) crossing?: LoadCrossing;
+  /** Round 26 — in one country, on the road: when it is expected, and the pace that rests on. Absent where `expectedAbout` says the hour. */
+  @ApiPropertyOptional({ type: LoadArrival }) arrival?: LoadArrival;
   /** Round 15 — the seal numbers, so whoever receives it can look at the door; and whether each is on, replaced or broken. */
   @ApiPropertyOptional({ type: [TrackSeal] }) seals?: TrackSeal[];
 }

@@ -38,4 +38,20 @@ describe('the Business app — a load on the road, as its driver said it (round 
     expect(roadSays({ status: 'in_transit' }, t, when)).toBeNull();
     expect(roadSays({ status: 'delivered', passages: [{ kind: 'at_hub', hub: 'Naivasha ICD', at: '2026-10-19T09:00:00.000Z' }] }, t, when)).toBeNull();
   });
+
+  it('a load in one country is expected — at the standard pace with the door, said as such, or its lane’s own (round 26)', () => {
+    const standard = { expectedAt: '2026-10-20T14:40:00.000Z', drive: { kmh: 55, basis: 'standard' as const }, doorMin: 30 };
+    expect(roadSays({ status: 'in_transit', arrival: standard }, t, when)).toEqual({
+      row: '',
+      expected: 'Expected about 14:40',
+      drive: 'Driven at our standard 55 km/h, with 30 minutes at the door: not enough trips measured on this road yet',
+    });
+    const measured = { expectedAt: '2026-10-20T15:10:00.000Z', drive: { kmh: 32, basis: 'measured' as const, trips: 5, lane: 'Nairobi → Nakuru', level: 'towns' as const } };
+    expect(roadSays({ status: 'in_transit', passages: [{ kind: 'at_hub', hub: 'Naivasha depot', at: '2026-10-20T12:00:00.000Z' }], arrival: measured }, t, when)).toEqual({
+      row: 'At Naivasha depot — 12:00',
+      expected: 'Expected about 15:10',
+      drive: 'Driven at the pace of the last 5 trips on Nairobi → Nakuru: about 32 km/h door to door, rests and queues included',
+    });
+    expect(roadSays({ status: 'delivered', arrival: measured }, t, when)).toBeNull();
+  });
 });

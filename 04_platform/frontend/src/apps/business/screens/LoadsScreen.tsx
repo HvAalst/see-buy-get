@@ -147,7 +147,7 @@ export function LoadsScreen({ business, client }: { business: BusinessView; acti
                         {/* Round 15 — a seal found broken on the road: in colour, on the row, until delivery and after. */}
                         {r.seals?.some((s) => s.state === 'broken') ? <span class="ctag ctag--danger">{t('business.loads.sealBroken')}</span> : null}
                         {/* Round 14 — on the road: where its driver said it is, and when it is expected. */}
-                        {road ? <span>{road.expected ? `${road.row} · ${road.expected}` : road.row}</span> : null}
+                        {road ? <span>{[road.row, road.expected].filter(Boolean).join(' · ')}</span> : null}
                       </span>
                     ) : null}
                   </span>
@@ -504,7 +504,7 @@ function LoadDetail({ row, business, client, act, onClose, onChanged }: { row: P
                     {passageWords(p, t, onRoad)}
                   </span>
                 ))}
-                {road && !row.passages?.length ? <span class="biz-road__line">{road.row}</span> : null}
+                {road?.row && !row.passages?.length ? <span class="biz-road__line">{road.row}</span> : null}
                 {road?.wait ? <span class="biz-road__line chint">{road.wait}</span> : null}
                 {road?.expected ? (
                   <span class="biz-road__line">

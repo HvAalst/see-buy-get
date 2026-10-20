@@ -53,6 +53,13 @@ export interface LaneDriveView {
   level?: 'towns' | 'countries';
 }
 
+/** Round 26 — a load in one country, on the road: when it is expected, the pace, and the minutes at the door a standard pace adds. */
+export interface ArrivalView {
+  expectedAt: string;
+  drive: LaneDriveView;
+  doorMin?: number;
+}
+
 /** How a time reads in the app at hand (each app has its own clock words). */
 export type When = (iso: string) => string;
 
@@ -112,4 +119,13 @@ export function crossingWords(c: CrossingView, t: Translate, when: When): { wher
     ...(c.state === 'cleared' ? {} : { wait: waitWords(c.wait, t) }),
     ...(c.expectedAt ? { expected: t('common.passage.expected', { when: when(c.expectedAt) }), ...(c.drive ? { drive: driveWords(c.drive, t) } : {}) } : {}),
   };
+}
+
+/**
+ * Round 26 — a load in one country, when it is expected, and at what pace: the lane's own, or the standard said as such —
+ * with the minutes at the door it adds, which a measured pace already holds.
+ */
+export function arrivalWords(a: ArrivalView, t: Translate, when: When): { expected: string; drive: string } {
+  const drive = a.drive.basis === 'standard' && a.doorMin ? t('common.passage.driveStandardDoor', { kmh: a.drive.kmh, min: a.doorMin }) : driveWords(a.drive, t);
+  return { expected: t('common.passage.expected', { when: when(a.expectedAt) }), drive };
 }

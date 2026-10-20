@@ -130,6 +130,20 @@ export class LoadCrossing {
   @ApiPropertyOptional({ type: LaneDriveView }) drive?: LaneDriveView;
 }
 
+/**
+ * Round 26 — A LOAD IN ONE COUNTRY, when it is expected at its destination (the user: "A promise for a load in one
+ * country"; "The standard pace, said as standard"). From the last step its driver said (a hub), or the pickup: the drive
+ * from there at its lane's pace, once five trips in ninety days were measured — door to door, so nothing is added — else
+ * at the standard pace with the half hour at the door (`doorMin`). Like a crossing's, it moves only when the driver says
+ * something new, never with the clock.
+ */
+export class LoadArrival {
+  expectedAt: string;
+  @ApiProperty({ type: LaneDriveView }) drive: LaneDriveView;
+  /** The minutes at the door added to a standard drive; absent on a measured one, whose trips already include them. */
+  @ApiPropertyOptional() doorMin?: number;
+}
+
 /** What the driver's app needs to say a step on a load it carries. */
 export class LoadPassageForDriver {
   /** Whether this load crosses a border: only then may the driver say it is at one. */

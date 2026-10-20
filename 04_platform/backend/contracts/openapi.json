@@ -44605,6 +44605,25 @@
           "maxC"
         ]
       },
+      "LoadArrival": {
+        "type": "object",
+        "properties": {
+          "drive": {
+            "$ref": "#/components/schemas/LaneDriveView"
+          },
+          "doorMin": {
+            "type": "number",
+            "description": "The minutes at the door added to a standard drive; absent on a measured one, whose trips already include them."
+          },
+          "expectedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "drive",
+          "expectedAt"
+        ]
+      },
       "PostedFreightRow": {
         "type": "object",
         "properties": {
@@ -44821,6 +44840,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/ColdChainBreachView"
+              }
+            ]
+          },
+          "arrival": {
+            "description": "Round 26 — in one country, on the road: when it is expected, and the pace that rests on. Absent where its carrier's plan has the hour.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoadArrival"
               }
             ]
           },

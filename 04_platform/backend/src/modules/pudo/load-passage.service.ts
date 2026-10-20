@@ -11,6 +11,7 @@ import {
   WAIT_WINDOW_DAYS,
   type BorderWait,
   type BorderWaitRow,
+  type LoadArrival,
   type LoadCrossing,
   type LoadPassage,
   type LoadPassageForDriver,
@@ -19,7 +20,7 @@ import {
   type PassageSeals,
 } from './load-passage.types';
 import { whenSeen } from './observed-at';
-import { BORDER_DWELL_H, VEHICLE_SPEED_KMH } from './pudo.config';
+import { BORDER_DWELL_H, HANDOVER_BUFFER_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import type { LaneDrive } from './lane-times';
 import type { GeoPoint } from './pudo.types';
 import { ROUTER, type Router } from './router';
@@ -192,6 +193,26 @@ export class LoadPassageService {
       wait,
       ...(expectedAt ? { expectedAt, ...(pace ? { drive: pace } : {}) } : {}),
     };
+  }
+
+  /**
+   * ROUND 26 — A LOAD IN ONE COUNTRY, when it is expected (load-passage.types LoadArrival). The same start as a crossing's
+   * — the last step its driver said, or the pickup, from the last place known — and the same pace; with no border to wait
+   * at, and the half hour at the door added where the pace is the standard, which counts the road alone. Nothing for a
+   * load that crosses a border (crossingOf promises it), nor after a door nobody answered: that drive is behind it, and
+   * the next try is the carrier's to say.
+   */
+  arrivalOf(f: Freight, drive?: LaneDrive): LoadArrival | undefined {
+    if (crossingCountries(f) || f.status !== 'in_transit' || !f.destLocation || !f.pickedUpAt || f.deliveryAttempts?.length) return undefined;
+    const steps = this.of(f.freightId);
+    const last = steps[steps.length - 1];
+    const fromMs = last ? Date.parse(last.at) : Date.parse(f.pickedUpAt);
+    const place = [...steps].reverse().find((p) => p.location)?.location ?? f.pickupLocation;
+    const pace = drive ?? { kmh: VEHICLE_SPEED_KMH[f.carriage?.vehicleClass === 'truck' ? 'truck' : 'bus'], basis: 'standard' as const };
+    const doorMin = pace.basis === 'standard' ? Math.round(HANDOVER_BUFFER_H * 60) : 0;
+    const at = fromMs + (this.router.roadKm(place, f.destLocation) / pace.kmh) * HOUR_MS + doorMin * 60_000;
+    if (!Number.isFinite(at)) return undefined;
+    return { expectedAt: new Date(at).toISOString(), drive: pace, ...(doorMin ? { doorMin } : {}) };
   }
 
   /** Round 21 — the minutes a load's driver said it waited at border posts: taken out of the trip's pace. */

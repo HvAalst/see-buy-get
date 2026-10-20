@@ -1,6 +1,6 @@
 import type { BusinessActivity, BusinessView, CarriageContract, CheckState, Membership, MemberRole, NewBusiness, PostedLoad } from './api';
 import type { MessageKey, Translate } from '../../shared/i18n';
-import { crossingWords, passageWords, type When } from '../../shared/passages';
+import { arrivalWords, crossingWords, passageWords, type When } from '../../shared/passages';
 
 /** Where somebody is in the Business app. */
 export type Section = 'home' | 'loads' | 'runs' | 'contracts' | 'clients' | 'imports' | 'yard' | 'people' | 'details';
@@ -243,7 +243,7 @@ export interface RoadSays {
   /** Round 21 — the pace the expectation rests on. */
   drive?: string;
 }
-export function roadSays(l: Pick<PostedLoad, 'status' | 'passages' | 'crossing'>, t: Translate, when: When): RoadSays | null {
+export function roadSays(l: Pick<PostedLoad, 'status' | 'passages' | 'crossing' | 'arrival'>, t: Translate, when: When): RoadSays | null {
   if (l.status !== 'in_transit') return null;
   const last = l.passages?.[l.passages.length - 1];
   if (l.crossing) {
@@ -251,6 +251,11 @@ export function roadSays(l: Pick<PostedLoad, 'status' | 'passages' | 'crossing'>
     // Across, a step said after the clearing (a hub on the far side) is where it is now.
     const later = l.crossing.state === 'cleared' && last && last.kind !== 'cleared_border' && l.crossing.clearedAt && last.at >= l.crossing.clearedAt;
     return { row: later ? passageWords(last, t, when) : c.where, ...(c.wait ? { wait: c.wait } : {}), ...(c.expected ? { expected: c.expected } : {}), ...(c.drive ? { drive: c.drive } : {}) };
+  }
+  // Round 26 — in one country: where its driver last said it is, if anywhere, and when it is expected.
+  if (l.arrival) {
+    const a = arrivalWords(l.arrival, t, when);
+    return { row: last ? passageWords(last, t, when) : '', expected: a.expected, drive: a.drive };
   }
   return last ? { row: passageWords(last, t, when) } : null;
 }

@@ -54,7 +54,7 @@ import { BoardRow, Claimable, ClaimableKind, DeliveryTiming, FleetOrderRow, Frei
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 import { CommercialInvoiceService } from './commercial-invoice.service';
 import { LoadPassageService, viewOf as passageView } from './load-passage.service';
-import type { LoadCrossing, LoadPassageView, PassageKind, PassageRecorded } from './load-passage.types';
+import type { LoadArrival, LoadCrossing, LoadPassageView, PassageKind, PassageRecorded } from './load-passage.types';
 import { LoadSealService } from './load-seal.service';
 import type { LoadSealView, SealBreakCause, SealsAtDelivery } from './load-seal.types';
 import { buildOfferResponse, type OfferResponse } from './offer-response';
@@ -3378,13 +3378,16 @@ export class DispatchService {
   }
 
   /** What its driver said on the road, and — crossing a border — where it has got to: for the shipper, its system, the page. */
-  passageFacts(f: Freight, now: number = Date.now()): { passages?: LoadPassageView[]; crossing?: LoadCrossing } {
+  passageFacts(f: Freight, now: number = Date.now()): { passages?: LoadPassageView[]; crossing?: LoadCrossing; arrival?: LoadArrival } {
     if (!this.passages) return {};
     const passages = this.passages.views(f.freightId);
     // Where it has got to is said while it is on the road. Delivered, its steps tell how it went — a driver who never said
     // "cleared" must not leave a delivered load reading as still at the border.
     const crossing = f.status === 'in_transit' ? this.passages.crossingOf(f, now, this.laneDriveFor(f, now)) : undefined;
-    return { ...(passages.length ? { passages } : {}), ...(crossing ? { crossing } : {}) };
+    // Round 26 — in one country, when it is expected (never for a crossing: arrivalOf): unless its carrier's own plan has
+    // the hour (planHourOf), which is the carrier's word and is said instead — one load is never promised at two times.
+    const arrival = f.status === 'in_transit' && !planHourOf(f) ? this.passages.arrivalOf(f, this.laneDriveFor(f, now)) : undefined;
+    return { ...(passages.length ? { passages } : {}), ...(crossing ? { crossing } : {}), ...(arrival ? { arrival } : {}) };
   }
 
   /**
@@ -3876,4 +3879,13 @@ export function coldChainBreachOf(f: Freight): ColdChainBreachView | undefined {
   const band = tempBand(f.natureCode);
   if (!r || !band) return undefined;
   return { celsius: r.celsius, at: r.at, minC: band.minC, maxC: band.maxC, ...(r.receivedAt ? { receivedAt: r.receivedAt } : {}) };
+}
+
+/**
+ * The hour its carrier's own plan has a load at the door: only once the goods are on the road, on the day it was ordered
+ * for, on a plan that still holds it — and not after a door nobody answered, when that hour has passed. The carrier's
+ * word: where there is one, nobody else promises an hour (round 26).
+ */
+export function planHourOf(f: Pick<Freight, 'status' | 'deliverOn' | 'planned' | 'deliveryAttempts'>): string | undefined {
+  return f.status === 'in_transit' && f.deliverOn && f.planned && !f.planned.held && f.planned.day === f.deliverOn && !f.deliveryAttempts?.length ? f.planned.arrive : undefined;
 }

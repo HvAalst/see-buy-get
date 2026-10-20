@@ -322,6 +322,7 @@ export const en = {
   'common.passage.expected': 'Expected about {when}',
   'common.passage.driveMeasured': 'Driven at the pace of the last {n} trips on {lane}: about {kmh} km/h door to door, rests and queues included',
   'common.passage.driveStandard': 'Driven at our standard {kmh} km/h: not enough trips measured on this road yet',
+  'common.passage.driveStandardDoor': 'Driven at our standard {kmh} km/h, with {min, plural, one {# minute} other {# minutes}} at the door: not enough trips measured on this road yet',
   // Round 15 — a seal on a load (shared/seals.ts).
   'common.seal.class': 'class {c}',
   'common.seal.bySender': 'the sender’s seal',

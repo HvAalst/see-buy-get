@@ -10,7 +10,7 @@ import { appUrl } from '../../foundation/mail/mail.templates';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { AccountService } from './account.service';
 import { AgentService } from './agent.service';
-import { DispatchService } from './dispatch.service';
+import { DispatchService, planHourOf } from './dispatch.service';
 import { Freight, FreightTrackView } from './dispatch.types';
 import type { LoadPassageView } from './load-passage.types';
 import { DriverService } from './driver.service';
@@ -230,7 +230,7 @@ export class ConsignmentNoteService implements OnModuleInit {
     // the plan it went out on — and not after a door nobody answered, when that hour has passed.
     const coming = f.status === 'ordered' || f.status === 'available' || f.status === 'claimed' || f.status === 'in_transit';
     const expectedOn = coming ? f.deliverOn : undefined;
-    const expectedAbout = expectedOn && f.status === 'in_transit' && f.planned && !f.planned.held && f.planned.day === expectedOn && !f.deliveryAttempts?.length ? f.planned.arrive : undefined;
+    const expectedAbout = planHourOf(f);
     // …and whether that has passed, on the carrier's own clock. The hour only where the hour is on the page.
     const late = expectedOn ? this.dispatch.lateOf(f, now) : undefined;
     return {

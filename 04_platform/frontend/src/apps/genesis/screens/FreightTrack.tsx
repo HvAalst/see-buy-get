@@ -2,7 +2,7 @@ import { Card, Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { carrierLine, expectedLine, freightLadder, freightLadderIndex, freightStatusPresentation, freightWithdrawnLine, stepTime } from '../logic';
 import type { FreightTrackView } from '../types';
-import { crossingWords, passageWords } from '../../../shared/passages';
+import { arrivalWords, crossingWords, passageWords } from '../../../shared/passages';
 
 /**
  * FP6 — a LOAD on the tracking page. The same ladder a parcel climbs, in the same plain words: where it is
@@ -19,6 +19,8 @@ export function FreightTrack({ view }: { view: FreightTrackView }) {
   const expected = expectedLine(view, t);
   // Round 14 — what its driver said on the road; across a border, where it has got to, the allowance and when it is expected.
   const crossing = view.status === 'in_transit' && view.crossing ? crossingWords(view.crossing, t, stepTime) : null;
+  // Round 26 — in one country, when it is expected and at what pace (none where the carrier's plan says the hour).
+  const arrival = view.status === 'in_transit' && !crossing && view.arrival ? arrivalWords(view.arrival, t, stepTime) : null;
   const said = view.passages ?? [];
   return (
     <>
@@ -33,7 +35,7 @@ export function FreightTrack({ view }: { view: FreightTrackView }) {
       {/* WHEN — the first thing somebody waiting at a door wants. The day always; the hour once it is on the road. */}
       {expected ? <p class="scr__lede">{expected}</p> : null}
 
-      {said.length || crossing ? (
+      {said.length || crossing || arrival ? (
         <Card label={t('send.freight.roadLabel')}>
           {said.map((s) => (
             <p key={`${s.kind}-${s.at}`} class="card__note">
@@ -48,6 +50,12 @@ export function FreightTrack({ view }: { view: FreightTrackView }) {
             </p>
           ) : null}
           {crossing?.drive ? <p class="hint">{crossing.drive}</p> : null}
+          {arrival ? (
+            <p class="card__note">
+              <b>{arrival.expected}</b>
+            </p>
+          ) : null}
+          {arrival ? <p class="hint">{arrival.drive}</p> : null}
         </Card>
       ) : null}
 
