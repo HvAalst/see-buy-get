@@ -59,6 +59,14 @@ export class MdpService {
     private readonly closures: BagClosureService,
   ) {}
 
+  /** The kilos left on a driver's vehicle, everything they hold counted (DispatchService.remainingCapacity). */
+  private roomOf?: (driverDid: string) => number | undefined;
+
+  /** Registered rather than injected: dispatch reads the hub. Without it a bag is weighed against an empty vehicle. */
+  registerRoom(fn: (driverDid: string) => number | undefined): void {
+    this.roomOf = fn;
+  }
+
   /** The country this hub stands in — declared at registration, this deployment's home for older records. */
   countryOf(mdp: Mdp): string {
     return countryOfSite(mdp);
@@ -437,6 +445,15 @@ export class MdpService {
         if (!fleet.vehicle[cap]) throw new GlosError('VEHICLE_MISSING_CAPABILITY', `A ${fleet.vehicle.vehicleClass} lacks ${cap} that bag ${code}'s cargo requires`);
       }
       if (kg > fleet.capacityKg) throw new GlosError('CAPACITY_EXCEEDED', `Bag ${code} (${kg}kg) exceeds this ${fleet.vehicle.vehicleClass}'s ${fleet.capacityKg}kg capacity`);
+      // …and against what is aboard already: a counter loading by the driver's pass loads onto a vehicle that may be half
+      // full, and a bag weighed against an empty one could overload it. A bag this driver already holds is counted in what
+      // they hold, so it is given back before it is weighed.
+      const left = this.roomOf?.(fleet.driverDid);
+      const heldKg = pending.claimedBy === fleet.driverDid || pending.carriedBy === fleet.driverDid ? pending.weightKg : 0;
+      if (left !== undefined && kg > left + heldKg) {
+        const aboard = Math.round((fleet.capacityKg - left - heldKg) * 100) / 100;
+        throw new GlosError('CAPACITY_EXCEEDED', `This ${fleet.vehicle.vehicleClass} is carrying ${aboard} kg of its ${fleet.capacityKg} kg: bag ${code} (${kg} kg) does not fit — drop something before loading it`);
+      }
     }
     // And room in the hold for one more BAG. This is the moment the bag physically goes in, so it is the last
     // honest place to refuse it: a bus whose boot is full is full whatever the scales say. Counted over what

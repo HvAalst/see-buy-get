@@ -233,6 +233,8 @@ describe('a bag closed on our own seal, and received by it, over the wire', () =
     expect(mine?.bagSeal).toEqual({ closedWith: 'seal', taken: false, check: createHash('sha256').update(`${two}|${SEAL_TWO.replace(' ', '')}`).digest('hex') });
     expect(JSON.stringify(mine)).not.toContain(SEAL_TWO.slice(3));
     expect((await claimOf(amina, two))).toBeUndefined();
+    // Never claimed, and on the motorcycle all the same: the space left says so (a medium parcel's bag counts 5 kg of 50).
+    expect((await http().get(`/v1/sbg/fleet/drivers/${baraka.did}/claims`).set(baraka.token).expect(200)).body).toMatchObject({ remainingCapacityKg: 45 });
     const take = (who: { authorization: string }, body: Record<string, unknown>) => http().post(`/v1/sbg/totes/${two}/take`).set(who).send(body);
     await take(operator, { photoRef: 'x', asClosed: true }).expect(403);
     expect((await take(amina.token, { photoRef: await photo(amina.token, 'seal'), sealNumber: SEAL_TWO, asClosed: true }).expect(404)).body.detail).toBe('No bag you carry has that code');

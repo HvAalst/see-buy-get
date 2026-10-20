@@ -9057,6 +9057,40 @@ describe('PUDO Light', () => {
     expect(mdps.loadBag(bags[0].code, badge).moved).toEqual(['LET-A']);
   });
 
+  it('a bag a counter loads onto a driver counts against their vehicle — in bag spaces and in kilos', () => {
+    // A counter loads by the pass on the driver's phone: the driver never claimed it, and it is on their vehicle all the same.
+    const origin = onboardAgent('Counterload Origin', 'NorthTown', 200);
+    const dest = onboardAgent('Counterload Dest', 'SouthTown', 200);
+    const d = drivers.register({ displayName: 'Minibus', fullName: 'M B', nationalId: 'ID-bus-counter', mobile: '+254900cnt', licenceClasses: ['bus'], licenceNumber: 'L-cnt', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const bus = vehicles.register({ plate: 'BUS-CNT', vehicleClass: 'bus', capacityKg: 20, toteCapacity: 3, ownerName: 'Owner' });
+    fleet.couple(d.did, bus.vehicleId);
+    corridors.addCorridor({ name: 'counterload', originZone: 'NorthTown', destZone: 'SouthTown' });
+    agents.setBagBays(origin.did, 9);
+    const bags = (['L', 'M', 'S'] as const).map((size, i) => {
+      parcels.accept({ agentDid: origin.did, parcelId: `CNT-${i}`, size, destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
+      const bag = mdps.openShopBag(origin.did, 'SouthTown');
+      mdps.fillShopBag(bag.code, origin.did, `CNT-${i}`);
+      mdps.sealShopBag(bag.code, origin.did, { closure: closedBy(origin.did), acknowledgeShortShip: true, shortShipReason: 'one per bag for the test' });
+      return bag;
+    });
+    const badge = drivers.get(d.did).badgeId!;
+    // The 15 kg bag, claimed: its kilos are held for it, and loading it does not count them twice.
+    const offer = dispatch.suggest(d.did, { from: origin.location, to: dest.location }).find((o) => o.ref === bags[0].code)!;
+    dispatch.claim(offer.offerId);
+    expect(dispatch.remainingCapacity(d.did)).toBe(5);
+    expect(mdps.loadBag(bags[0].code, badge).moved).toEqual(['CNT-0']);
+    // The 5 kg bag, loaded at the counter by the pass, never claimed: it counts all the same — in kilos and a bag space.
+    expect(mdps.loadBag(bags[1].code, badge).moved).toEqual(['CNT-1']);
+    expect(totes.requireByCode(bags[1].code).claimedBy).toBeUndefined();
+    expect(dispatch.remainingCapacity(d.did)).toBe(0); // 20 − 15 − 5 aboard
+    expect(dispatch.remainingTotes(d.did)).toBe(1);
+    // And the next bag is weighed against what is aboard, not against an empty vehicle: 1 kg into nothing left.
+    expect(() => mdps.loadBag(bags[2].code, badge)).toThrow(/carrying 20 kg of its 20 kg/);
+    expect(totes.requireByCode(bags[2].code).status).not.toBe('in_transit');
+  });
+
   it('offers the vehicles this driver has driven before — the day starts at a coffee table, not at the bus', () => {
     const d = coupleTipper('picker', { min: 0.8, max: 1.5 });
     const mine = drivers.get(d.did).assignedVehicleId!;

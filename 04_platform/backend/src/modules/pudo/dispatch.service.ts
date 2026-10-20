@@ -414,6 +414,8 @@ export class DispatchService {
     this.freightSeq = [...this.freights.values()].length; // continue the human FRT-NNN sequence after a restart
     // An account moving off a number takes the orders addressed to that number with it.
     this.persons?.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
+    // The hub weighs a bag against what is aboard: the kilos left, when the driver has a vehicle to leave them on.
+    this.mdps.registerRoom((did) => (this.fleet.vehicleForDriver(did) ? this.remainingCapacity(did) : undefined));
   }
 
   /** An account is moving off a number: every order still addressed to that number and to no account is theirs. */
@@ -2728,7 +2730,7 @@ export class DispatchService {
   remainingCapacity(driverDid: string): number {
     const vehicle = this.fleet.vehicleForDriver(driverDid);
     if (!vehicle) return 0;
-    const toteKg = this.totes.list().filter((t) => t.claimedBy === driverDid && (t.status === 'claimed' || t.status === 'in_transit')).reduce((s, t) => s + t.weightKg, 0);
+    const toteKg = this.bagsHeldBy(driverDid).reduce((s, t) => s + t.weightKg, 0);
     const freightKg = [...this.freights.values()].filter((f) => f.claimedBy === driverDid && (f.status === 'claimed' || f.status === 'in_transit')).reduce((s, f) => s + f.weightKg, 0);
     return Math.round((vehicle.capacityKg - toteKg - freightKg) * 100) / 100;
   }
@@ -2822,8 +2824,16 @@ export class DispatchService {
   remainingTotes(driverDid: string): number {
     const vehicle = this.fleet.vehicleForDriver(driverDid);
     if (!vehicle) return 0;
-    const held = this.totes.list().filter((t) => t.claimedBy === driverDid && (t.status === 'claimed' || t.status === 'in_transit')).length;
+    const held = this.bagsHeldBy(driverDid).length;
     return Math.max(0, this.toteCapacityOf(vehicle) - held);
+  }
+
+  /**
+   * The bags a driver holds: claimed for them, or on their vehicle. A bag a counter loads by the pass on their phone is
+   * never claimed, and it takes a bag space and its kilos all the same.
+   */
+  private bagsHeldBy(driverDid: string): Tote[] {
+    return this.totes.list().filter((t) => (t.claimedBy === driverDid && (t.status === 'claimed' || t.status === 'in_transit')) || (t.carriedBy === driverDid && t.status === 'in_transit'));
   }
 
   /**
@@ -2879,9 +2889,7 @@ export class DispatchService {
   claimsFor(driverDid: string): Claimable[] {
     // Round 37 — and a bag a hub or shop loaded onto them by their pass without their claiming it: it is on their vehicle,
     // and they read its seal from here.
-    const totes = this.totes
-      .list()
-      .filter((t) => (t.claimedBy === driverDid && (t.status === 'claimed' || t.status === 'in_transit')) || (t.carriedBy === driverDid && t.status === 'in_transit'))
+    const totes = this.bagsHeldBy(driverDid)
       .map((t) => this.wrapTote(t.code, driverDid))
       .filter((c): c is Claimable => c != null);
     const freight = [...this.freights.values()].filter((f) => f.claimedBy === driverDid && (f.status === 'claimed' || f.status === 'in_transit')).map((f) => this.wrapFreight(f));
