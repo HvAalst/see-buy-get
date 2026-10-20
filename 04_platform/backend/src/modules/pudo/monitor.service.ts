@@ -4,10 +4,11 @@ import { ParcelService } from './parcel.service';
 import { CorridorService } from './corridor.service';
 import { WalletGateService } from './wallet-gate.service';
 import { DispatchService } from './dispatch.service';
+import { FINDING_WORDS } from './tamper.types';
 import { AGENT_ONLINE_H, CONNECTIVITY_LOSS_H, GHOST_BUS_H, MDP_DWELL_H, NETWORK_CURRENCY, NOT_SEEN_H, STAGNANT_INVENTORY_H , NEVER_DROPPED_H, UNCOLLECTED_H} from './pudo.config';
 
 export interface PudoFlag {
-  type: 'Stagnant_Inventory' | 'Ghost_Bus' | 'Stuck_At_MDP' | 'Uncollected' | 'Never_Dropped_Off' | 'Connectivity_Loss' | 'Blocked_Corridor' | 'Buyer_Dispute' | 'Short_Shipped' | 'Temp_Breach' | 'Not_Seen' | 'Pilot_Off_Target';
+  type: 'Stagnant_Inventory' | 'Ghost_Bus' | 'Stuck_At_MDP' | 'Uncollected' | 'Never_Dropped_Off' | 'Connectivity_Loss' | 'Blocked_Corridor' | 'Buyer_Dispute' | 'Short_Shipped' | 'Temp_Breach' | 'Not_Seen' | 'Pilot_Off_Target' | 'Tamper_Hold';
   subject: string;
   detail: string;
   ageHours?: number;
@@ -129,6 +130,14 @@ export class MonitorService {
     // cargo suspect. Surfaced while it is still moving so an operator can act (reroute, alert the shipper).
     for (const f of this.dispatch.listFreight({ status: 'in_transit' })) {
       if (f.tempBreached) flags.push({ type: 'Temp_Breach', subject: f.code, detail: `cold-chain freight to ${f.destLabel} broke its temperature band${breachWords(f.tempReadings?.find((r) => r.breach))}` });
+    }
+    // Round 35 — a unit held under the tamper protocol: operations is told before anybody takes custody of it, and the
+    // case stays until operations releases it (TamperService.release closes it with the reason).
+    for (const f of this.dispatch.listFreight()) {
+      if (f.held) flags.push({ type: 'Tamper_Hold', subject: f.code, detail: `load to ${f.destLabel} · ${FINDING_WORDS[f.held.finding]} · ${f.held.where}`, ageHours: Math.round(hoursSince(f.held.since)) });
+    }
+    for (const p of this.parcels.list()) {
+      if (p.held) flags.push({ type: 'Tamper_Hold', subject: p.parcelId, detail: `parcel${p.sscc ? ` ${p.sscc}` : ''} · ${FINDING_WORDS[p.held.finding]} · ${p.held.where}`, ageHours: Math.round(hoursSince(p.held.since)) });
     }
     return flags;
   }

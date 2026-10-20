@@ -50,6 +50,7 @@ export class BagPlanService {
 
     for (const parcel of this.parcels.list({ status: 'At_PUDO', agentDid })) {
       if (parcel.originAgentDid !== agentDid) continue;
+      if (parcel.held) continue; // round 35 — set apart under the tamper protocol: bagged once operations releases it
       const hop = this.nextHopFor(parcel);
       const group = byKey.get(hop.key) ?? { ...hop, parcelIds: [] };
       group.parcelIds.push(parcel.parcelId);

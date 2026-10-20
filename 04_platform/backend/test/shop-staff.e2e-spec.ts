@@ -186,6 +186,8 @@ describe('the people at a shop’s counter, over the wire', () => {
         'GET sbg/dispatch/find-load',
         // round 32 — a store parcel's GS1 barcode scanned into a parcel's box: the parcel, if this shop handles it
         'GET sbg/scan/parcel',
+        // round 35 — a parcel in the shop's hands found with its wrap cut: held, and operations told (the tamper protocol)
+        'POST sbg/parcels/:id/tamper',
         // photographs, a parcel's damage report, a word with the receiver, the shop's inbox
         'POST sbg/media//', 'GET sbg/media/:id',
         'GET sbg/parcels/:id/damage-report', 'GET sbg/parcels/:id/damage-report/file', 'GET sbg/parcels/:id/damage-report/links', 'POST sbg/parcels/:id/damage-report/links',

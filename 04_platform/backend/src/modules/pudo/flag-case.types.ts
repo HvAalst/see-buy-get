@@ -8,7 +8,7 @@
  * says so. Its history is kept, never rewritten.
  */
 
-export const FLAG_KINDS = ['Stagnant_Inventory', 'Ghost_Bus', 'Stuck_At_MDP', 'Uncollected', 'Never_Dropped_Off', 'Connectivity_Loss', 'Blocked_Corridor', 'Buyer_Dispute', 'Short_Shipped', 'Temp_Breach', 'Not_Seen', 'Pilot_Off_Target'] as const;
+export const FLAG_KINDS = ['Stagnant_Inventory', 'Ghost_Bus', 'Stuck_At_MDP', 'Uncollected', 'Never_Dropped_Off', 'Connectivity_Loss', 'Blocked_Corridor', 'Buyer_Dispute', 'Short_Shipped', 'Temp_Breach', 'Not_Seen', 'Pilot_Off_Target', 'Tamper_Hold'] as const;
 export type FlagKind = (typeof FLAG_KINDS)[number];
 
 export const CASE_SEVERITIES = ['critical', 'high', 'medium', 'low'] as const;
@@ -21,6 +21,8 @@ export type CaseSeverity = (typeof CASE_SEVERITIES)[number];
  */
 export const CASE_SEVERITY: Record<FlagKind, CaseSeverity> = {
   Temp_Breach: 'critical',
+  // Round 35 — a unit held under the tamper protocol: nobody takes it over until operations has looked. Escalates in 1 h.
+  Tamper_Hold: 'critical',
   Ghost_Bus: 'critical',
   Short_Shipped: 'high',
   // A week with no scan: the search before a parcel is declared lost.
@@ -41,6 +43,12 @@ export const CASE_SEVERITY: Record<FlagKind, CaseSeverity> = {
  * A pilot number of a frozen week is that week's for ever; the next week's has a case of its own.
  */
 export const CLOSED_FOR_GOOD: ReadonlySet<FlagKind> = new Set<FlagKind>(['Pilot_Off_Target']);
+
+/**
+ * Round 35 — kinds whose case closes only by the act it was opened for, done from it (a hold released, with its reason):
+ * never put to rest while what it is about still stands, and never quieted afterwards — a new hold is a new case at once.
+ */
+export const CLOSED_BY_ITS_ACT: ReadonlySet<FlagKind> = new Set<FlagKind>(['Tamper_Hold']);
 
 /** How long a case may wait for somebody to take it before it is escalated, by severity (hours). */
 export const ESCALATE_AFTER_H: Record<CaseSeverity, number> = { critical: 1, high: 4, medium: 24, low: 72 };

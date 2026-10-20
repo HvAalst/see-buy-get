@@ -87,6 +87,18 @@ describe('a seal on a load (round 15)', () => {
     expect(keyOf('ke 123-4567')).toBe('KE1234567');
   });
 
+  it('a seal said not to be the one written (the tamper protocol): which seal, and the number read — never the number written (round 35)', () => {
+    const { media, photo } = mediaStub();
+    const svc = new LoadSealService(media);
+    const f = load();
+    const a = svc.write(f, { did: shipper, name: 'Wanjiku' }, { number: 'KE 1234-567', sealClass: 'H', appliedBy: 'sender', photos: three(photo) }, t0);
+    const b = svc.write(f, { did: shipper, name: 'Wanjiku' }, { number: 'KE 7654321', sealClass: 'H', appliedBy: 'sender', photos: three(photo) }, t0);
+    expect(() => svc.notAsWritten(f, 'seal_nope', 'KE 1')).toThrow(/which seal/);
+    expect(() => svc.notAsWritten(f, a.sealId, '  ')).toThrow(/as you read it/);
+    expect(() => svc.notAsWritten(f, a.sealId, 'ke-1234 567')).toThrow(/That is the number written/);
+    expect(svc.notAsWritten(f, b.sealId, '  KE  7654329 ')).toEqual({ sealId: b.sealId, no: 2, numberRead: 'KE 7654329' });
+  });
+
   it('at a post, cleared asks what became of the seals: as they were, or which customs replaced — the new number, its photograph, the officer', () => {
     const { media, photo } = mediaStub();
     const svc = new LoadSealService(media);

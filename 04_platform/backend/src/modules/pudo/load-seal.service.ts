@@ -164,6 +164,20 @@ export class LoadSealService {
     };
   }
 
+  /**
+   * Round 35 — A SEAL THAT IS NOT THE ONE WRITTEN, said by the driver who read it again (the tamper protocol): which seal,
+   * and the number on the door. Refused when it is the number written: then the seal is as written, and nothing is held.
+   */
+  notAsWritten(f: Freight, sealId: string | undefined, raw: string | undefined): { sealId: string; no: number; numberRead: string } {
+    const all = this.of(f.freightId);
+    const seal = this.on(f.freightId).find((s) => s.sealId === sealId);
+    if (!seal) throw new GlosError('FIELD_REQUIRED', 'Say which seal is not the one written', { field: 'sealId' });
+    const read = sealNumber(raw);
+    if (!read) throw new GlosError('FIELD_REQUIRED', 'Write the number on the door as you read it', { field: 'numberRead' });
+    if (keyOf(read) === seal.key) throw new GlosError('VALIDATION_FAILED', 'That is the number written: this seal is as written', { field: 'numberRead' });
+    return { sealId: seal.sealId, no: all.indexOf(seal) + 1, numberRead: read };
+  }
+
   /* -------------------------------------------------------- at a border post -- */
 
   /**
@@ -362,8 +376,8 @@ export function keyOf(number: string): string {
 /**
  * WHAT THE DRIVER'S APP CHECKS A READING AGAINST, with no signal: the load and the folded number, hashed. A pickup made
  * where there is no signal waits on the phone, so the server's refusal would come after the truck has left; the app says
- * "not the number written" on the spot instead. It is not a secret kept from the driver — the note they carry names the
- * seals — it only makes the gate ask them to read the door rather than the screen.
+ * "not the number written" on the spot instead. Since round 35 the numbers are kept from the carrier until the goods are
+ * taken over, so this is the one way left to them: a short number can be tried until it fits, which takes deliberate work.
  */
 export function sealCheck(freightId: string, key: string): string {
   return createHash('sha256').update(`${freightId}|${key}`).digest('hex');

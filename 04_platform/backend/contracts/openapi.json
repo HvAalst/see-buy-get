@@ -24773,6 +24773,226 @@
         }
       }
     },
+    "/v1/sbg/dispatch/freight/{id}/tamper": {
+      "post": {
+        "operationId": "Tamper.reportOnLoad",
+        "summary": "",
+        "description": "The driver taking over or carrying the load: a seal not the one written, the seals not as the note says, a cut wrap.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportLoadTamperDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TamperUnitView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "Tamper.forLoad",
+        "summary": "",
+        "description": "A load's exceptions: whoever reads its consignment note — the shipper, the carrier — and staff, with names.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TamperUnitView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/parcels/{id}/tamper": {
+      "post": {
+        "operationId": "Tamper.reportAtCounter",
+        "summary": "",
+        "description": "The shop, at its counter: a parcel it holds, its wrap or packaging cut or opened.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportParcelTamperDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TamperUnitView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/mdps/{id}/parcels/{parcelId}/tamper": {
+      "post": {
+        "operationId": "Tamper.reportAtHub",
+        "summary": "",
+        "description": "The hub, from its own sign-in: a parcel standing at it, its wrap or packaging cut or opened.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportParcelTamperDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TamperUnitView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/ops/tamper/{ref}": {
+      "get": {
+        "operationId": "Tamper.forStaff",
+        "summary": "",
+        "description": "Staff: a held unit by its code or number — every exception on it, who found it, the photographs.",
+        "parameters": [
+          {
+            "name": "ref",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TamperUnitView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/ops/tamper/{ref}/release": {
+      "post": {
+        "operationId": "Tamper.release",
+        "summary": "",
+        "description": "Staff: released, with what was found and done. The case closes under the same words.",
+        "parameters": [
+          {
+            "name": "ref",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseHoldDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TamperUnitView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/managers/{did}/standstill": {
       "get": {
         "operationId": "VehicleStandstill.read",
@@ -36752,6 +36972,47 @@
           "lastSeenAt"
         ]
       },
+      "UnitHold": {
+        "type": "object",
+        "properties": {
+          "since": {
+            "type": "string"
+          },
+          "finding": {
+            "type": "string",
+            "enum": [
+              "seal_not_as_written",
+              "seal_not_as_on_the_note",
+              "seal_broken",
+              "wrap_cut"
+            ]
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "pickup",
+              "road",
+              "delivery",
+              "counter",
+              "hub"
+            ]
+          },
+          "exceptionId": {
+            "type": "string"
+          },
+          "where": {
+            "type": "string",
+            "description": "Where it is held, in words: \"at pickup\", \"at Kisumu hub\", \"at Mama Njeri's\"."
+          }
+        },
+        "required": [
+          "since",
+          "finding",
+          "stage",
+          "exceptionId",
+          "where"
+        ]
+      },
       "Birthplace": {
         "type": "object",
         "properties": {
@@ -37134,6 +37395,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/ParcelLoss"
+              }
+            ]
+          },
+          "held": {
+            "description": "Round 35 — held under the tamper protocol: it changes hands with nobody until operations releases it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UnitHold"
               }
             ]
           },
@@ -41228,6 +41497,14 @@
           },
           "tempBreached": {
             "type": "boolean"
+          },
+          "held": {
+            "description": "Round 35 — held under the tamper protocol: pickup and delivery refuse until operations releases it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UnitHold"
+              }
+            ]
           },
           "scheduledPickupAt": {
             "type": "string"
@@ -45335,6 +45612,14 @@
       "PostedFreightRow": {
         "type": "object",
         "properties": {
+          "held": {
+            "description": "Round 35 — held under the tamper protocol: what was found, where, since when.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UnitHold"
+              }
+            ]
+          },
           "partOf": {
             "description": "One load of an order its carrier split into several.",
             "allOf": [
@@ -48587,7 +48872,8 @@
               "id_check",
               "defect",
               "job_card",
-              "gs1_licence"
+              "gs1_licence",
+              "tamper"
             ]
           },
           "dataUrl": {
@@ -53044,6 +53330,244 @@
         "required": [
           "cause",
           "photoRefs"
+        ]
+      },
+      "TamperPointDto": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "lat",
+          "lng"
+        ]
+      },
+      "ReportLoadTamperDto": {
+        "type": "object",
+        "properties": {
+          "finding": {
+            "type": "string",
+            "enum": [
+              "seal_not_as_written",
+              "seal_not_as_on_the_note",
+              "wrap_cut"
+            ]
+          },
+          "sealId": {
+            "type": "string",
+            "description": "Which seal, where one is not the one written."
+          },
+          "numberRead": {
+            "type": "string",
+            "description": "The number on the door, as read, where it is not the one written.",
+            "maxLength": 64
+          },
+          "photoRefs": {
+            "description": "Asked for by the service, which says what to photograph when there is none.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "atDelivery": {
+            "type": "boolean",
+            "description": "On the road, at the receiver's door: a cut wrap found at delivery."
+          },
+          "observedAt": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/TamperPointDto"
+          }
+        },
+        "required": [
+          "finding"
+        ]
+      },
+      "TamperRelease": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "by",
+          "reason"
+        ]
+      },
+      "TamperExceptionView": {
+        "type": "object",
+        "properties": {
+          "exceptionId": {
+            "type": "string"
+          },
+          "ssccs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "finding": {
+            "type": "string",
+            "enum": [
+              "seal_not_as_written",
+              "seal_not_as_on_the_note",
+              "seal_broken",
+              "wrap_cut"
+            ]
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "pickup",
+              "road",
+              "delivery",
+              "counter",
+              "hub"
+            ]
+          },
+          "at": {
+            "type": "string"
+          },
+          "receivedAt": {
+            "type": "string"
+          },
+          "byAs": {
+            "type": "string",
+            "enum": [
+              "driver",
+              "shop",
+              "hub"
+            ]
+          },
+          "byName": {
+            "type": "string",
+            "description": "Staff only: the person who found it."
+          },
+          "where": {
+            "type": "string"
+          },
+          "photoRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "note": {
+            "type": "string"
+          },
+          "sealNo": {
+            "type": "number"
+          },
+          "numberRead": {
+            "type": "string"
+          },
+          "cause": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string",
+            "description": "sha256 of the exception as reported. Never named `hash` on the wire: a response field of that name is stripped."
+          },
+          "release": {
+            "$ref": "#/components/schemas/TamperRelease"
+          }
+        },
+        "required": [
+          "exceptionId",
+          "ssccs",
+          "finding",
+          "stage",
+          "at",
+          "byAs",
+          "where",
+          "photoRefs",
+          "fingerprint"
+        ]
+      },
+      "TamperUnitView": {
+        "type": "object",
+        "properties": {
+          "unitType": {
+            "type": "string",
+            "enum": [
+              "load",
+              "parcel"
+            ]
+          },
+          "unitId": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "held": {
+            "$ref": "#/components/schemas/UnitHold"
+          },
+          "exceptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TamperExceptionView"
+            }
+          }
+        },
+        "required": [
+          "unitType",
+          "unitId",
+          "ref",
+          "exceptions"
+        ]
+      },
+      "ReportParcelTamperDto": {
+        "type": "object",
+        "properties": {
+          "photoRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "observedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "ReleaseHoldDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "by": {
+            "type": "string",
+            "description": "A name typed beside the shared staff key; ignored for a member of staff signed in as themselves.",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "reason"
         ]
       },
       "SilenceSettingsView": {

@@ -20,6 +20,9 @@ const EVENT_STATUS: Record<string, string> = {
   [GlosEvent.Pudo.ParcelReleaseCodeReissued]: 'ready_for_pickup',
   [GlosEvent.Pudo.ParcelDelivered]: 'collected',
   [GlosEvent.Pudo.ParcelDisputed]: 'disputed',
+  // Round 35 — held under the tamper protocol, and released: the store whose goods they are is told both.
+  [GlosEvent.Pudo.UnitHeld]: 'held',
+  [GlosEvent.Pudo.UnitReleased]: 'released',
 };
 
 /**
@@ -101,6 +104,7 @@ export class VendorCallbackService implements OnModuleInit, OnModuleDestroy {
       ...(carriesCode ? { collectionCode: parcel.collectionCode } : {}),
       binSlot: parcel.binSlot,
       disputeReason: parcel.disputeReason,
+      ...(parcel.held ? { held: { finding: parcel.held.finding, where: parcel.held.where, since: parcel.held.since } } : {}),
     });
   }
 }

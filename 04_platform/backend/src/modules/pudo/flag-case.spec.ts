@@ -182,6 +182,21 @@ describe('flags as cases', () => {
     expect(svc.list('live', T0).map((c) => c.kind).sort()).toEqual(['Ghost_Bus', 'Pilot_Off_Target']);
   });
 
+  it('closes a tamper hold only by its release, and a new hold on the same unit opens at once — never quieted (round 35)', () => {
+    const cases = make();
+    const hold: PudoFlag = { type: 'Tamper_Hold', subject: 'FRT-9', detail: 'load to Nakuru · a seal on the door is not the one written · at pickup' };
+    cases.sync(T0, [hold]);
+    const [c] = cases.list('live', T0);
+    expect(c).toMatchObject({ kind: 'Tamper_Hold', severity: 'critical' });
+    expect(() => cases.done(c.caseId, amina, 'Looked into it', 24, T0)).toThrow(/closes when the unit is released/);
+    expect(cases.list('live', T0)).toHaveLength(1);
+    expect(cases.closeFor('Tamper_Hold', 'FRT-9', amina, 'Released: the shipper sealed it again', T0 + H)).toMatchObject({ state: 'done' });
+    cases.sync(T0 + H, []);
+    // The same load held again an hour later: a case at once, not after the rest a closed case is otherwise given.
+    cases.sync(T0 + 2 * H, [hold]);
+    expect(cases.list('live', T0 + 2 * H)).toEqual([expect.objectContaining({ kind: 'Tamper_Hold', follows: c.caseId, history: [expect.objectContaining({ act: 'opened_again' })] })]);
+  });
+
   it('opens one case for a flag said twice in one sweep', () => {
     const cases = make();
     cases.sync(T0, [stagnant(), stagnant()]);

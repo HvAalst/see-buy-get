@@ -56,7 +56,8 @@ import { CommercialInvoiceService } from './commercial-invoice.service';
 import { LoadPassageService, viewOf as passageView } from './load-passage.service';
 import type { LoadArrival, LoadCrossing, LoadPassageView, PassageKind, PassageRecorded } from './load-passage.types';
 import { LoadSealService } from './load-seal.service';
-import type { LoadSealView, SealBreakCause, SealsAtDelivery } from './load-seal.types';
+import type { LoadSeal, LoadSealView, SealBreakCause, SealsAtDelivery } from './load-seal.types';
+import { FINDING_WORDS, type TamperStage, type UnitHold } from './tamper.types';
 import { buildOfferResponse, type OfferResponse } from './offer-response';
 
 /**
@@ -335,6 +336,13 @@ export function driverJobsToCsv(rows: Freight[]): string {
  */
 /** Written on a freight claim that closed itself with the report. Never shown as somebody's reasoning: nobody reasoned. */
 export const FREIGHT_REPORT_ONLY_NOTE = 'No company of the network decides a claim on this load or pays one. The consignment note, frozen with the claim on it, is the damage claim report.';
+
+/** What the tamper protocol (tamper.service.ts) answers for a load's own acts. */
+export interface TamperHooks {
+  sealBroken(f: Freight, driverDid: string, seal: LoadSeal, now: number): void;
+  reportedAt(freightId: string, stage: TamperStage): boolean;
+  noteLines(freightId: string): string[];
+}
 
 @Injectable()
 export class DispatchService {
@@ -1635,6 +1643,7 @@ export class DispatchService {
       .map((f) => ({
         freightId: f.freightId,
         code: f.code,
+        ...(f.held ? { held: f.held } : {}),
         description: f.description,
         destLabel: f.destLabel,
         weightKg: f.weightKg,
@@ -2877,6 +2886,8 @@ export class DispatchService {
     const f = this.requireFreight(freightId);
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'claimed') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected claimed`);
+    // Round 35 — held under the tamper protocol: not taken over until operations releases it.
+    this.refuseIfHeld(f);
     // A load reserved ahead of its date can't be picked up before it — the cargo (or the consolidated lot)
     // isn't ready yet. It becomes pickable on/after the booked pickup date.
     if (f.scheduledPickupAt && now < new Date(f.scheduledPickupAt).getTime()) throw new GlosError('INVALID_STATE', `Pickup is booked for ${f.scheduledPickupAt} — it can't be collected before then`);
@@ -2938,6 +2949,8 @@ export class DispatchService {
     const f = this.requireFreight(freightId);
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected in_transit`);
+    // Round 35 — held under the tamper protocol: not handed to the receiver until operations releases it.
+    this.refuseIfHeld(f);
     // S33 — the unload gate: the unload checklist must be complete before the freight is marked delivered.
     const missing = missingKeys(requiredUnloadKeys(), check?.confirmed);
     if (missing.length) throw new GlosError('SAFETY_CHECK_INCOMPLETE', `Complete the unload checklist before delivery — ${missing.length} item(s) left`);
@@ -2949,6 +2962,11 @@ export class DispatchService {
     const podPhotoId = check?.podPhotoId;
     if (!podPhotoId) throw new GlosError('DELIVERY_PHOTO_REQUIRED', 'Attach a photo of the goods as delivered');
     this.media.requireHeld(podPhotoId, driverDid, { type: 'freight', id: f.freightId }, 'podPhotoId'); // round 31
+    // Round 35 — seals not as the note says: operations is told before the receiver takes the goods, so it is reported
+    // first (with its photograph), and the load is held until operations releases it.
+    if (check?.sealsAtDelivery === 'not_as_on_the_note' && !this.tamper?.reportedAt(f.freightId, 'delivery')) {
+      throw new GlosError('TAMPER_REPORT_FIRST', 'The seals are not as the note says: report it first, with a photograph. Operations is told before the receiver takes the goods.', { field: 'sealsAtDelivery' });
+    }
     // Round 15 — a load that has had a seal: the receiver looks at the door with the driver.
     const keepAtDoor = this.seals?.checkAtDelivery(f, driverDid ?? '', check?.sealsAtDelivery);
     // Round 22 — dated when the goods were handed over, by the phone, within limits — never before the pickup, a step
@@ -3338,10 +3356,52 @@ export class DispatchService {
     const f = this.requireFreight(freightId);
     const broken = this.seals.reportBroken(f, driverDid, sealId, input, now);
     const view = this.seals.views(f.freightId).find((s) => s.sealId === broken.sealId)!;
+    // Round 35 — an exception under the tamper protocol: the load held until operations releases it, operations told now.
+    this.tamper?.sealBroken(f, driverDid, broken, now);
     void this.events
       .publish(GlosEvent.Pudo.FreightSealBroken, { freightId: f.freightId, code: f.code, driverDid, posterDid: f.postedByDid ?? f.shipperDid, seal: view }, { source: 'pudo' })
       .catch(() => undefined);
     return view;
+  }
+
+  /* ------------------------------------------------------------- the tamper hold -- */
+
+  private tamper?: TamperHooks;
+
+  /**
+   * Round 35 — THE TAMPER PROTOCOL (tamper.service.ts) registers itself here: a broken seal is an exception too, made
+   * inside the report; delivery asks whether the seals were reported not as the note says; the note says each exception.
+   * Registered rather than injected: it reads the load.
+   */
+  registerTamper(hooks: TamperHooks): void {
+    this.tamper = hooks;
+  }
+
+  /** Held under the tamper protocol: kept on the load, so pickup and delivery refuse by reading the load itself. */
+  holdFreight(freightId: string, hold: UnitHold): Freight {
+    const f = this.requireFreight(freightId);
+    f.held = hold;
+    this.freights.set(f.freightId, f);
+    return f;
+  }
+
+  /** Released by operations: the load may change hands again. The exception stays on its record. */
+  unholdFreight(freightId: string): Freight {
+    const f = this.requireFreight(freightId);
+    delete f.held;
+    this.freights.set(f.freightId, f);
+    return f;
+  }
+
+  /** Box 18: each exception on the load, and its release. */
+  tamperOnNote(freightId: string): string[] {
+    return this.tamper?.noteLines(freightId) ?? [];
+  }
+
+  /** A held load changes hands with nobody: not taken over, not handed to the receiver, until operations releases it. */
+  private refuseIfHeld(f: Freight): void {
+    if (!f.held) return;
+    throw new GlosError('UNIT_HELD', `This load is held: ${FINDING_WORDS[f.held.finding]} (${f.held.where}, ${f.held.since.slice(0, 10)} ${f.held.since.slice(11, 16)} UTC). Keep it closed and where it is: operations has been told and releases it.`, { exceptionId: f.held.exceptionId });
   }
 
   /** The seals of a load as its shipper and the note's other readers see them. */
@@ -3597,7 +3657,7 @@ export class DispatchService {
     const passage = f.status === 'in_transit' && this.passages ? this.passages.forDriver(f) : undefined;
     // Round 15 — the seals to find on the door: what each is, never its number.
     const sealsToFind = (f.status === 'claimed' || f.status === 'in_transit') && this.seals?.of(f.freightId).length ? this.seals.toFind(f.freightId) : undefined;
-    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}) };
+    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}) };
   }
 
   /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */

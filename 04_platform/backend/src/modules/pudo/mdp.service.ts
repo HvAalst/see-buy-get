@@ -238,6 +238,7 @@ export class MdpService {
     if (parcel.originAgentDid !== agentDid || parcel.status !== 'At_PUDO') {
       throw new GlosError('INVALID_STATE', `Parcel ${parcelId} is not waiting at this shop`);
     }
+    this.parcels.refuseIfHeld(parcel); // round 35 — set apart: into no bag
     if (parcel.destZone !== bag.destinationNodeId) {
       throw new GlosError(
         'WRONG_DESTINATION',
@@ -291,7 +292,7 @@ export class MdpService {
     const inBag = new Set(bag.parcels);
     const expected = this.parcels
       .list({ status: 'At_PUDO', agentDid })
-      .filter((p) => p.originAgentDid === agentDid && p.destZone === bag.destinationNodeId)
+      .filter((p) => p.originAgentDid === agentDid && p.destZone === bag.destinationNodeId && !p.held) // round 35 — a held parcel is not missed
       .map((p) => p.parcelId);
     const missed = expected.filter((id) => !inBag.has(id));
 
@@ -326,6 +327,7 @@ export class MdpService {
   /** Pack a parcel into a bag bound for a destination (used at the origin PUDO and after sorting). */
   fillTote(code: string, parcelId: string, observedAt?: string): { tote: Tote; fillPct: number } {
     const parcel = this.parcels.get(parcelId);
+    this.parcels.refuseIfHeld(parcel); // round 35 — set apart: into no bag
     // S31: this worker chose a specific bag — refuse to drop in a parcel whose cargo is incompatible with the
     // bag's current contents (cement dust into a fresh-produce bag). The bag stays internally compatible, so
     // loadBag can trust it later. sortParcel auto-routes around this; here the bag is explicit, so we throw.
@@ -344,6 +346,8 @@ export class MdpService {
    * (a bike/motorcycle feeder takes ≤ its capacity and no fragile items). Unknown badges pass through. */
   loadBag(code: string, driverBadgeId: string, observedAt?: string): { tote: Tote; moved: string[] } {
     const pending = this.totes.requireByCode(code);
+    // Round 35 — a bag moves whole: one held parcel in it and it does not move, refused before anything is written.
+    for (const id of pending.parcels) this.parcels.refuseIfHeld(this.parcels.get(id));
     const fleet = this.fleet.resolveBadge(driverBadgeId);
     // A claimed bag may only be loaded by the driver who claimed it.
     if (pending.claimedBy && (!fleet || fleet.driverDid !== pending.claimedBy)) throw new GlosError('BAG_RESERVED', `Bag ${code} is reserved for another driver`);
@@ -411,6 +415,7 @@ export class MdpService {
     const mdp = this.require(mdpId);
     const before = this.totes.requireByCode(code);
     if (!before.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is already empty`);
+    for (const id of before.parcels) this.parcels.refuseIfHeld(this.parcels.get(id)); // round 35 — the bag moves whole
     const carrier = before.claimedBy; // captured before empty() clears it, as deliverBag does
     const { parcels } = this.totes.empty(code, mdpId);
     this.payHaul(before, carrier);
@@ -440,6 +445,7 @@ export class MdpService {
     const agent = this.agents.get(agentDid);
     const tote = this.totes.requireByCode(code);
     if (!tote.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is empty`);
+    for (const id of tote.parcels) this.parcels.refuseIfHeld(this.parcels.get(id)); // round 35 — the bag moves whole
     const driverDid = tote.claimedBy; // REP2 — the driver who carried the bag here, captured before empty() clears it
     if (tote.destinationNodeId && tote.destinationNodeId !== agentDid) throw new GlosError('BAG_MISADDRESSED', `Bag ${code} is addressed to ${tote.destinationLabel || tote.destinationNodeId}, not ${agent.shopName}`);
     if (!this.parcels.shelfTakes(agentDid, tote.parcels)) {
@@ -487,6 +493,7 @@ export class MdpService {
     const mdp = this.require(mdpId);
     const parcel = this.parcels.get(parcelId);
     if (parcel.status !== 'At_MDP') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, must be At_MDP to sort`);
+    this.parcels.refuseIfHeld(parcel); // round 35 — set apart: not sorted on
     if (!parcel.destAgentDid) throw new GlosError('INVALID_STATE', 'Parcel has no destination PUDO to sort toward');
 
     const next = this.nextHop(mdp, parcel.destZone, parcel.destAgentDid);

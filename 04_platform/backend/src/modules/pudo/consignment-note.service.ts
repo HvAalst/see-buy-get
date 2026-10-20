@@ -165,6 +165,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     // Round 15 — the seals: each with what became of it; a broken one, or one not as written at the door, observed in box 18.
     const seals = this.dispatch.sealsOnNote?.(f.freightId, opts.sealNumbers ?? Boolean(f.pickedUpAt)) ?? { lines: [], observations: [] };
     reservations.push(...seals.observations);
+    // Round 35 — each exception under the tamper protocol, where and when, and its release by operations.
+    reservations.push(...(this.dispatch.tamperOnNote?.(f.freightId) ?? []));
     const carriage = this.carriageOf(f);
     const attempts = (f.deliveryAttempts ?? []).map((a) => `Delivery attempted ${when(a.at)}: ${a.outcome === 'absent' ? 'nobody to receive the goods' : a.outcome === 'refused' ? 'the receiver refused the goods' : 'the place could not be reached'}${a.note ? ` — ${a.note}` : ''}`);
     const claim = f.claim

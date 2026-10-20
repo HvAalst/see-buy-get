@@ -168,6 +168,11 @@ describe('a seal on a load, over the wire', () => {
 
     // AT THE DOOR: the receiver looks with the driver.
     const deliver = async (extra: Record<string, unknown>) => ({ confirmed: claim.unloadChecklist.map((x: { key: string }) => x.key), receiverName: 'Mukasa at the depot', podPhotoId: await photo(driver.token, 'pod'), ...extra });
+    // Round 35 — the broken seal held the load (the tamper protocol): the receiver does not take it until operations has
+    // looked and released it, with a reason.
+    expect((await http().post(`/v1/sbg/dispatch/freight/${freightId}/deliver`).set(bearer(driver.token)).send(await deliver({ sealsAtDelivery: 'as_on_the_note' })).expect(409)).body.code).toBe('UNIT_HELD');
+    const code = store.get(freightId).code as string;
+    await http().post(`/v1/sbg/ops/tamper/${code}/release`).set(bearer(setupKey)).send({ reason: 'Police statement photographed: opened at a roadblock inspection, goods counted', by: 'Halima at operations' }).expect(201);
     expect((await http().post(`/v1/sbg/dispatch/freight/${freightId}/deliver`).set(bearer(driver.token)).send(await deliver({})).expect(400)).body.detail).toMatch(/Look at the seals with the receiver/);
     await http().post(`/v1/sbg/dispatch/freight/${freightId}/deliver`).set(bearer(driver.token)).send(await deliver({ sealsAtDelivery: 'as_on_the_note' })).expect(201);
     seals = (await http().get(`/v1/sbg/dispatch/freight/${freightId}/seals`).set(bearer(biz)).expect(200)).body.seals;

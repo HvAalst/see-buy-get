@@ -29,6 +29,7 @@ import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 import { PersonService } from './person.service';
 import { isFor, readerOf, waitsAt, type Addressed, type Reader } from './addressed-to';
 import { handedAt, type Step } from './observed-at';
+import { FINDING_WORDS, type UnitHold } from './tamper.types';
 import { parcelLabelZpl } from './parcel-label';
 import { ShipperCodesService, vendorCoder } from './shipper-codes.service';
 
@@ -1400,6 +1401,8 @@ export class ParcelService implements OnApplicationBootstrap {
       if (parcel.originAgentDid !== input.agentDid) { rejected.push({ parcelId, reason: 'not_at_this_pudo' }); continue; }
       // Declared lost and now in the shop's hands: it does not leave until SeeBuyGet marks it found.
       if (parcel.status === 'Lost') { rejected.push({ parcelId, reason: 'declared_lost' }); continue; }
+      // Round 35 — held under the tamper protocol: set apart, and not on the bus until operations releases it.
+      if (parcel.held) { rejected.push({ parcelId, reason: 'held' }); continue; }
       if (parcel.status !== 'At_PUDO') { rejected.push({ parcelId, reason: `status_${parcel.status}` }); continue; }
       const nature: CargoNature = parcel.natureCode ?? 'GEN';
       // S30 cargo compatibility (applies to ANY driver — it is parcel-vs-parcel, not vehicle-specific): this
@@ -1509,7 +1512,8 @@ export class ParcelService implements OnApplicationBootstrap {
 
   /** What is due onto a bus at this shop: every parcel waiting here bound for the corridor's destination. */
   private dueOnto(agentDid: string, destZone: string): Parcel[] {
-    return this.list({ status: 'At_PUDO', agentDid }).filter((p) => p.originAgentDid === agentDid && p.destZone === destZone);
+    // A parcel held under the tamper protocol is not due onto anything: it is set apart until operations releases it.
+    return this.list({ status: 'At_PUDO', agentDid }).filter((p) => p.originAgentDid === agentDid && p.destZone === destZone && !p.held);
   }
 
   /**
@@ -1524,6 +1528,7 @@ export class ParcelService implements OnApplicationBootstrap {
   arrive(parcelId: string, destAgentDid: string, observedAt?: string): { parcelId: string; status: string; binSlot: string } {
     const parcel = this.require(parcelId);
     this.refuseIfLost(parcel);
+    this.refuseIfHeld(parcel);
     if (parcel.status !== 'On_Bus') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected On_Bus`);
     const step = this.stepAt(parcel, observedAt);
     // A SLOT FIRST, and nothing else until there is one. The record was marked ready to collect and THEN asked for
@@ -1556,6 +1561,7 @@ export class ParcelService implements OnApplicationBootstrap {
   pickup(parcelId: string, agentDid: string, otp: string, deliveredPhotoRef?: string): Parcel {
     const parcel = this.require(parcelId);
     this.refuseIfLost(parcel);
+    this.refuseIfHeld(parcel);
     // Unclaimed releases exactly like Ready_For_Pickup. The window closing changes what is OWED, never
     // whether the person standing at the counter with the right code may have their parcel.
     if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
@@ -1600,6 +1606,7 @@ export class ParcelService implements OnApplicationBootstrap {
   void(parcelId: string, agentDid: string, voidedPhotoRef: string): Parcel {
     const parcel = this.require(parcelId);
     if (parcel.originAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Only the accepting PUDO can void');
+    this.refuseIfHeld(parcel);
     if (parcel.status !== 'At_PUDO') throw new GlosError('INVALID_STATE', 'Only an At_PUDO parcel can be voided');
     if (Date.now() - new Date(parcel.acceptedAt).getTime() > VOID_WINDOW_MS) throw new GlosError('WINDOW_EXPIRED', 'Void window has expired');
     if (!voidedPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'A photo of the voided label is required');
@@ -2224,6 +2231,33 @@ export class ParcelService implements OnApplicationBootstrap {
     void this.events.publish(GlosEvent.Pudo.ParcelFound, { parcelId: parcel.parcelId, note, vendorId: parcel.vendorId, externalOrderId: parcel.externalOrderId }, { source: 'pudo' }).catch(() => undefined);
   }
 
+  /**
+   * Round 35 — HELD UNDER THE TAMPER PROTOCOL (tamper.service.ts): it changes hands with nobody — not bagged, sorted,
+   * handed to a driver, received, handed out, voided or sent back — until operations releases it. Said with what was
+   * found and where, and what to do meanwhile.
+   */
+  refuseIfHeld(parcel: Parcel): void {
+    if (!parcel.held) return;
+    throw new GlosError('UNIT_HELD', `Parcel ${parcel.parcelId} is held: ${FINDING_WORDS[parcel.held.finding]} (${parcel.held.where}, ${parcel.held.since.slice(0, 10)}). Keep it apart and do not open it further: operations has been told and releases it.`, { exceptionId: parcel.held.exceptionId, parcelId: parcel.parcelId });
+  }
+
+  /** Held where it is, with a line on its record: it was set apart, and operations told. */
+  hold(parcelId: string, hold: UnitHold, by: string): Parcel {
+    const parcel = this.require(parcelId);
+    parcel.held = hold;
+    parcel.toteId = undefined;
+    this.scan(parcel, parcel.status, by, `held · ${FINDING_WORDS[hold.finding]} · operations told`);
+    return parcel;
+  }
+
+  /** Released by operations, with the reason on its record: it may change hands again. */
+  unhold(parcelId: string, by: string, reason: string): Parcel {
+    const parcel = this.require(parcelId);
+    delete parcel.held;
+    this.scan(parcel, parcel.status, by, `released by operations · ${reason}`);
+    return parcel;
+  }
+
   /** A lost parcel scanned at a counter has turned up: said plainly, and kept where it is until staff mark it found. */
   private refuseIfLost(parcel: Parcel): void {
     if (parcel.status !== 'Lost') return;
@@ -2232,6 +2266,7 @@ export class ParcelService implements OnApplicationBootstrap {
 
   closeAsReturned(parcelId: string, returnParcelId: string): Parcel {
     const parcel = this.require(parcelId);
+    this.refuseIfHeld(parcel);
     // Unclaimed is the ordinary input: a store is only asked about a return once the window has closed.
     if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
     parcel.status = 'Returned';
@@ -2245,6 +2280,7 @@ export class ParcelService implements OnApplicationBootstrap {
   shelve(parcelId: string, agentDid: string, binId?: string): { parcelId: string; binSlot: string; status: string } {
     const parcel = this.require(parcelId);
     this.refuseIfLost(parcel);
+    this.refuseIfHeld(parcel);
     if (parcel.status !== 'On_Bus') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected On_Bus`);
     if (parcel.destAgentDid && parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Shelve only at the buyer-selected destination PUDO');
     // The slot before anything is written, as in arrive(): a full shelf leaves the record exactly as it was.
@@ -2275,6 +2311,8 @@ export class ParcelService implements OnApplicationBootstrap {
       (p) => (p.collectionCode === collectionCode || p.collectProxy?.code === collectionCode) && p.destAgentDid === agentDid && isCollectable(p.status),
     );
     if (!parcel) throw new GlosError('NOT_FOUND', 'No parcel awaiting collection for that code at this PUDO');
+    // Said at the lookup, before the customer is handed anything.
+    this.refuseIfHeld(parcel);
     if (parcel.otpLockedAt) throw new GlosError('CODE_LOCKED', 'Too many wrong codes — ask the control tower to reissue');
     // What is owed comes back with the LOOKUP, not with the release. A shopkeeper who discovers a charge
     // only after the customer has the box in their hands has to ask for money back, which is the one
@@ -2296,6 +2334,7 @@ export class ParcelService implements OnApplicationBootstrap {
   collectConfirm(parcelId: string, agentDid: string, collectionCode: string): Parcel {
     const parcel = this.require(parcelId);
     this.refuseIfLost(parcel);
+    this.refuseIfHeld(parcel);
     if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
     if (parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Release only at the destination PUDO');
     if (parcel.otpLockedAt) throw new GlosError('CODE_LOCKED', 'Too many wrong codes — ask the control tower to reissue');
@@ -2659,6 +2698,8 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   setTransit(parcelId: string, status: Extract<Parcel['status'], 'At_MDP' | 'On_Bus'>, by: string, note: string, toteId?: string, act: { observedAt?: string; after?: Array<string | undefined> } = {}): Parcel {
     const parcel = this.require(parcelId);
+    // Round 35 — a held parcel never moves by a bag: the bag's own acts check every parcel in it before writing anything.
+    this.refuseIfHeld(parcel);
     // Before markFound writes its own line: the step is dated against the parcel's record as it was when it was done.
     const step = this.stepAt(parcel, act.observedAt, act.after);
     // Not refused: the bag is in somebody's hands with the parcel in it, and refusing would stop the whole bag. Found.

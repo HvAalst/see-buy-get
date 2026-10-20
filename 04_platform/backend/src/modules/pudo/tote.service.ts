@@ -90,6 +90,24 @@ export class ToteService {
     return this.save(tote);
   }
 
+  /**
+   * Round 35 — set apart under the tamper protocol: out of a bag that has not left, so the bag goes on without it and
+   * nobody loads it by mistake. Its room and weight come back; a bag it leaves empty is as it was before its first parcel.
+   */
+  takeOut(code: string, parcelId: string, size: ParcelSize): Tote {
+    const tote = this.requireByCode(code);
+    if (tote.status === 'in_transit') throw new GlosError('INVALID_STATE', `Bag ${code} has left: it is opened where it arrives`);
+    if (!tote.parcels.includes(parcelId)) return tote;
+    tote.parcels = tote.parcels.filter((id) => id !== parcelId);
+    tote.unitsUsed = Math.max(0, Math.round((tote.unitsUsed - SIZE_UNITS[size]) * 1000) / 1000);
+    tote.weightKg = Math.max(0, Math.round((tote.weightKg - SIZE_WEIGHT_KG[size]) * 100) / 100);
+    if (!tote.parcels.length) {
+      delete tote.filledAt;
+      delete tote.filledReceivedAt;
+    }
+    return this.save(tote);
+  }
+
   /** Truly full — cannot take even a small parcel (drives the auto-publish for claim). */
   isFull(tote: Tote): boolean {
     return !this.fits(tote, 'S');

@@ -4,6 +4,7 @@
 import { CargoClass, CargoNature, Equipment } from './cargo.types';
 import { FxRate } from '../../foundation/money/fx.service';
 import { BorderCrossing } from './country';
+import { UnitHold } from './tamper.types';
 
 /** A map pin. Named (not an inline literal) so it is one reusable schema in the contract. */
 export class GeoPoint {
@@ -1041,6 +1042,8 @@ export class Parcel {
   dispute?: DisputeCase;
   /** Declared lost by staff after a search (ParcelLoss above); kept once it is found, with when and where. */
   lost?: ParcelLoss;
+  /** Round 35 — held under the tamper protocol: it changes hands with nobody until operations releases it. */
+  held?: UnitHold;
   // S25 — handover completeness gate. Set when a waiting parcel was KNOWINGLY left behind at handover
   // (an acknowledged short-ship), so the control tower sees it immediately instead of waiting for the
   // 48 h stagnant window. Cleared the moment the parcel is finally loaded onto a bus.

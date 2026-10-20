@@ -9,6 +9,7 @@ import { OrderHandOn } from './fleet-partner.types';
 import { BorderAdvice } from './border-rules.types';
 import { LoadArrival, LoadCrossing, LoadPassageForDriver, LoadPassageView } from './load-passage.types';
 import { LoadSealView, SEAL_STATES, SealToFind, type SealState } from './load-seal.types';
+import { UnitHold } from './tamper.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { GeoPoint } from './pudo.types';
 import { CARGO_CLASS_CODES, CARGO_NATURES, CargoClass, CargoNature, EQUIPMENT, Equipment, VEHICLE_CAPABILITIES, VehicleCapability } from './cargo.types';
@@ -583,6 +584,8 @@ export class Freight {
   // Only meaningful for a temperature-controlled cargo (tempBand(natureCode) != null).
   tempReadings?: TempReading[];
   tempBreached?: boolean;
+  /** Round 35 — held under the tamper protocol: pickup and delivery refuse until operations releases it. */
+  held?: UnitHold;
   // A future pickup date (canonical UTC ISO). Set → the load is booked for later. Pickup is gated to on/after
   // this time regardless of when it is claimed.
   scheduledPickupAt?: string;
@@ -1139,6 +1142,8 @@ export class ColdChainBreachView {
 export class PostedFreightRow {
   freightId: string;
   code: string;
+  /** Round 35 — held under the tamper protocol: what was found, where, since when. */
+  @ApiPropertyOptional({ type: UnitHold }) held?: UnitHold;
   /** One load of an order its carrier split into several. */
   @ApiPropertyOptional({ type: LoadOf }) partOf?: LoadOf;
   /** The carrier's accepted plan has it outside the window asked for. Absent when it is inside it, or not planned. */
@@ -1309,6 +1314,8 @@ export class Claimable {
   @ApiPropertyOptional({ type: LoadPassageForDriver }) passage?: LoadPassageForDriver;
   /** Round 15 — the seals to read off the door at pickup (and look at with the receiver): what each is, never its number. */
   @ApiPropertyOptional({ type: [SealToFind] }) seals?: SealToFind[];
+  /** Round 35 — held under the tamper protocol: it does not change hands until operations releases it. */
+  @ApiPropertyOptional({ type: UnitHold }) held?: UnitHold;
   ref: string; // toteCode | freightId — the API identifier the pickup/load/deliver calls use
   /** S32b — the human-readable reference to SHOW a driver (TOTE-042 / FRT-007). For a tote this equals ref;
    *  for freight ref is the opaque frt_… id, so the readable FRT-NNN code must ride separately. */

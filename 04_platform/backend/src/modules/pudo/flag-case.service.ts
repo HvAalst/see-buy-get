@@ -3,7 +3,7 @@ import { randomBytes } from 'crypto';
 import { sameSigner, type Signer } from '../../foundation/entity/same-person';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
-import { CASE_SEVERITIES, CASE_SEVERITY, CLOSED_FOR_GOOD, CaseAct, CaseList, ESCALATE_AFTER_H, FlagCase, FlagCaseKindCount, FlagCaseList, FlagCaseView, FlagKind, MAX_RECHECK_H } from './flag-case.types';
+import { CASE_SEVERITIES, CASE_SEVERITY, CLOSED_BY_ITS_ACT, CLOSED_FOR_GOOD, CaseAct, CaseList, ESCALATE_AFTER_H, FlagCase, FlagCaseKindCount, FlagCaseList, FlagCaseView, FlagKind, MAX_RECHECK_H } from './flag-case.types';
 import { MonitorService, PudoFlag } from './monitor.service';
 import { PilotService } from './pilot.service';
 
@@ -86,7 +86,7 @@ export class FlagCaseService implements OnApplicationBootstrap, OnModuleDestroy 
       }
       // Put to rest with a reason: nothing new until its time is up.
       const rested = latest.get(key);
-      if (rested?.state === 'done' && rested.quietUntil && Date.parse(rested.quietUntil) > now) continue;
+      if (rested?.state === 'done' && rested.quietUntil && Date.parse(rested.quietUntil) > now && !CLOSED_BY_ITS_ACT.has(kind)) continue;
       // Closed by a person, about something that cannot change: closed for good.
       if (rested?.state === 'done' && CLOSED_FOR_GOOD.has(kind)) continue;
       const c: FlagCase = {
@@ -221,6 +221,11 @@ export class FlagCaseService implements OnApplicationBootstrap, OnModuleDestroy 
    */
   done(caseId: string, staff: Signer, reason: string, recheckHours = 24, now: number = Date.now()): FlagCase {
     const c = this.requireLive(caseId);
+    if (CLOSED_BY_ITS_ACT.has(c.kind)) throw new GlosError('INVALID_STATE', 'This case closes when the unit is released: release it from the case, with what was found and done');
+    return this.close(c, staff, reason, recheckHours, now);
+  }
+
+  private close(c: FlagCase, staff: Signer, reason: string, recheckHours: number, now: number): FlagCase {
     const words = String(reason ?? '').trim().slice(0, 500);
     if (words.length < 3) throw new GlosError('FIELD_REQUIRED', 'Say what was done: a case is closed with a reason', { field: 'reason' });
     const hours = Number(recheckHours);
@@ -240,7 +245,7 @@ export class FlagCaseService implements OnApplicationBootstrap, OnModuleDestroy 
    */
   closeFor(kind: FlagKind, subject: string, staff: Signer, reason: string, now: number = Date.now()): FlagCase | undefined {
     const live = [...this.cases.values()].find((c) => c.key === `${kind}:${subject}` && (c.state === 'open' || c.state === 'taken'));
-    return live ? this.done(live.caseId, staff, reason, MAX_RECHECK_H, now) : undefined;
+    return live ? this.close(live, staff, reason, MAX_RECHECK_H, now) : undefined;
   }
 
   get(caseId: string): FlagCase {

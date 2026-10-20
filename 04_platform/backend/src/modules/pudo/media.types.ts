@@ -61,6 +61,8 @@ export const MEDIA_KINDS = [
    * is theirs (gs1-dispute.service.ts). Seen by the business that sent it and by staff; on the dispute clock.
    */
   'gs1_licence',
+  /** Round 35 — what was found under the tamper protocol: the seal as it is, the cut wrap. On the unit's clock. */
+  'tamper',
 ] as const;
 
 export type MediaKind = (typeof MEDIA_KINDS)[number];
@@ -171,6 +173,7 @@ export const KIND_RETENTION: Record<MediaKind, RetentionClass> = {
   defect: 'vehicle-record',
   job_card: 'vehicle-record',
   gs1_licence: 'dispute-evidence',
+  tamper: 'shipment-proof', // round 35 — what was found under the tamper protocol, kept with the unit's other proof
 };
 
 /** Only real raster image types — no SVG (it can carry script), no arbitrary bytes. */

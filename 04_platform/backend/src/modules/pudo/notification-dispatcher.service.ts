@@ -23,6 +23,7 @@ import { haversineKm } from './geo';
 import { paperDay } from './papers';
 import { GeoPoint } from './pudo.types';
 import type { NotificationKind } from './notification.types';
+import { FINDING_WORDS, type TamperFinding } from './tamper.types';
 import { ROUTE_REASONS, RUN_REASON_SENTENCE, type GiveBackReason, type RunCancelReason } from './departure.types';
 
 /* The payloads the run's events carry, as published in DepartureService and FleetManagerService. */
@@ -136,6 +137,9 @@ const GIVE_BACK_WORDS: Record<string, string> = {
 } satisfies Record<GiveBackReason, string>;
 interface RunClaimOpened { departureId: string; bookingId: string; managerDid: string; shipperDid: string; company: string; lineName: string; load: string; kind: string; description: string; amount?: number; currency: string }
 interface RunClaimAnswered { departureId: string; bookingId: string; shipperDid: string; managerDid: string; company: string; load: string; answer: 'accepted' | 'refused'; note?: string }
+/** Round 35 — held under the tamper protocol, and released (tamper.service.ts). */
+interface UnitHeldPayload { unitType: 'load' | 'parcel'; unitId: string; ref: string; finding: TamperFinding; where: string; posterDid?: string }
+interface UnitReleasedPayload { unitType: 'load' | 'parcel'; unitId: string; ref: string; code?: string; reason: string; posterDid?: string }
 interface FleetPaperChecked { did: string; kind: 'operator_licence' | 'carrier_insurance'; accepted: boolean; expiresAt?: string; reason?: string }
 interface LicenceSent { did: string; displayName: string; expiresAt: string; managerDid?: string }
 interface DisputeDecided { parcelId: string; decision: 'upheld' | 'partly_upheld' | 'rejected' | 'report_only'; award: number; currency?: string; note: string; origin: 'counter' | 'buyer'; raisedBy: string }
@@ -417,6 +421,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ freightId: string; code: string; posterDid?: string; outcome: string; note?: string; destLabel?: string; attempts: number }>(GlosEvent.Pudo.FreightDeliveryFailed, (e) => this.onFreightDeliveryFailed(e.payload));
     // Round 15 — a seal on its load found broken on the road: the shipper is told at once.
     this.events.subscribe<{ freightId: string; code: string; posterDid?: string; seal?: { number?: string; broken?: { cause?: string; note?: string } } }>(GlosEvent.Pudo.FreightSealBroken, (e) => this.onFreightSealBroken(e.payload));
+    // Round 35 — its load held under the tamper protocol, and released: the shipper whose goods they are is told both.
+    this.events.subscribe<UnitHeldPayload>(GlosEvent.Pudo.UnitHeld, (e) => this.onLoadHeld(e.payload));
+    this.events.subscribe<UnitReleasedPayload>(GlosEvent.Pudo.UnitReleased, (e) => this.onLoadReleased(e.payload));
     // Round 25 — its cold chain broken on the road: the shipper and the office of the fleet carrying it are told at once.
     this.events.subscribe<ColdChainBroken>(GlosEvent.Pudo.FreightTempBreach, (e) => this.onColdChainBroken(e.payload));
     // FP3b (claimant) — their claim was decided; they are shown the reason.
@@ -683,6 +690,42 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       });
     } catch (err) {
       this.logger.warn(`freight-delivery-failed notify failed for ${payload.freightId}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * ROUND 35 — A LOAD HELD UNDER THE TAMPER PROTOCOL. The shipper owns the goods: what was found, where, and that nobody
+   * takes them over or receives them until operations has looked. Never by text, never the name of who found it.
+   */
+  private async onLoadHeld(payload: UnitHeldPayload): Promise<void> {
+    if (payload.unitType !== 'load' || !payload.posterDid) return;
+    try {
+      await this.notifications.notify(payload.posterDid, {
+        kind: 'freight_problem',
+        title: `Load ${payload.ref} is held`,
+        body: `Found ${payload.where}: ${FINDING_WORDS[payload.finding]}. It was photographed and SeeBuyGet operations has been told; the load does not change hands until operations releases it. What was found is on the consignment note.`,
+        link: '/',
+        tag: `freight:${payload.unitId}:held`,
+        data: { freightId: payload.unitId },
+      });
+    } catch (err) {
+      this.logger.warn(`load-held notify failed for ${payload.unitId}: ${(err as Error).message}`);
+    }
+  }
+
+  private async onLoadReleased(payload: UnitReleasedPayload): Promise<void> {
+    if (payload.unitType !== 'load' || !payload.posterDid) return;
+    try {
+      await this.notifications.notify(payload.posterDid, {
+        kind: 'freight_problem',
+        title: `Load ${payload.code ?? payload.ref} is released`,
+        body: `SeeBuyGet operations released it: "${payload.reason}". It may change hands again; what was found stays on its consignment note.`,
+        link: '/',
+        tag: `freight:${payload.unitId}:held`,
+        data: { freightId: payload.unitId },
+      });
+    } catch (err) {
+      this.logger.warn(`load-released notify failed for ${payload.unitId}: ${(err as Error).message}`);
     }
   }
 
