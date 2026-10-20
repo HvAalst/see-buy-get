@@ -17202,6 +17202,7 @@
                 "taken_over",
                 "reloaded",
                 "seal_changed",
+                "cold_chain_broken",
                 "delivered",
                 "not_delivered",
                 "claimed",
@@ -17286,6 +17287,7 @@
                 "taken_over",
                 "reloaded",
                 "seal_changed",
+                "cold_chain_broken",
                 "delivered",
                 "not_delivered",
                 "claimed",
@@ -17399,6 +17401,7 @@
                 "taken_over",
                 "reloaded",
                 "seal_changed",
+                "cold_chain_broken",
                 "delivered",
                 "not_delivered",
                 "claimed",
@@ -44576,6 +44579,32 @@
           "writtenAt"
         ]
       },
+      "ColdChainBreachView": {
+        "type": "object",
+        "properties": {
+          "receivedAt": {
+            "type": "string"
+          },
+          "celsius": {
+            "type": "number"
+          },
+          "at": {
+            "type": "string"
+          },
+          "minC": {
+            "type": "number"
+          },
+          "maxC": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "celsius",
+          "at",
+          "minC",
+          "maxC"
+        ]
+      },
       "PostedFreightRow": {
         "type": "object",
         "properties": {
@@ -44786,6 +44815,14 @@
             "items": {
               "$ref": "#/components/schemas/LoadSealView"
             }
+          },
+          "coldChainBroken": {
+            "description": "Round 25 — its cold chain broken on the road: the reading that broke it, and when. Absent on a load that never broke it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ColdChainBreachView"
+              }
+            ]
           },
           "freightId": {
             "type": "string"

@@ -42,5 +42,8 @@ export function handedAt(observedAt: string | undefined, now: number, before: Ar
   const floor = Math.max(0, ...before.map((x) => (x ? Date.parse(x) : 0)).filter((x) => Number.isFinite(x)));
   // whenSeen never says later than now, and every step before it is a time already on record: no later than now either.
   const at = Math.max(seen.at, floor);
-  return { at: new Date(at).toISOString(), ...(seen.receivedAt && at < now ? { receivedAt: seen.receivedAt } : {}) };
+  // Late only as whenSeen counts late: a step the one before it lifts to within the clocks' allowance of now arrived as it
+  // was done (round 25: a reading lifted to a moment after the one before said "read with no signal, reached us" — the
+  // same minute).
+  return { at: new Date(at).toISOString(), ...(seen.receivedAt && now - at > CLOCK_SKEW_MS ? { receivedAt: seen.receivedAt } : {}) };
 }

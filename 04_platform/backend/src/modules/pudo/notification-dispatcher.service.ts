@@ -40,6 +40,21 @@ function offerDay(iso: string): string {
   return Number.isNaN(d.getTime()) ? iso : `${d.getUTCDate()} ${OFFER_MONTHS[d.getUTCMonth()]}`;
 }
 
+/** "on 20 Oct at 07:56 UTC" — a moment on the road, said so that nobody needs to know where the reader is. */
+function utcWords(iso: string): string {
+  return `on ${offerDay(iso)} at ${iso.slice(11, 16)} UTC`;
+}
+
+/** Round 25 — a cold chain broken on the road, as dispatch publishes it (FreightTempBreach). */
+interface ColdChainBroken {
+  freightId: string;
+  code: string;
+  driverDid?: string;
+  posterDid?: string;
+  carrierDid?: string;
+  reading?: { celsius: number; at: string; receivedAt?: string; band: { minC: number; maxC: number } };
+}
+
 /** Why a fleet took a driver off, in the words the driver is shown — the fleet's own words when it chose to give them. */
 function removalSentence(p: Pick<DriverLeftFleet, 'reason' | 'note'>): string {
   if (p.reason === 'left') return 'They say you no longer work for them.';
@@ -402,6 +417,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ freightId: string; code: string; posterDid?: string; outcome: string; note?: string; destLabel?: string; attempts: number }>(GlosEvent.Pudo.FreightDeliveryFailed, (e) => this.onFreightDeliveryFailed(e.payload));
     // Round 15 — a seal on its load found broken on the road: the shipper is told at once.
     this.events.subscribe<{ freightId: string; code: string; posterDid?: string; seal?: { number?: string; broken?: { cause?: string; note?: string } } }>(GlosEvent.Pudo.FreightSealBroken, (e) => this.onFreightSealBroken(e.payload));
+    // Round 25 — its cold chain broken on the road: the shipper and the office of the fleet carrying it are told at once.
+    this.events.subscribe<ColdChainBroken>(GlosEvent.Pudo.FreightTempBreach, (e) => this.onColdChainBroken(e.payload));
     // FP3b (claimant) — their claim was decided; they are shown the reason.
     this.events.subscribe<{ freightId: string; code: string; decision: string; award: number; note: string; posterDid?: string; claimantDid?: string }>(GlosEvent.Pudo.FreightClaimDecided, (e) => this.onFreightClaimDecided(e.payload));
     // ONBOARDING (applicant) — they finished the form and are not finished. Told now, while they are still
@@ -684,6 +701,28 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       });
     } catch (err) {
       this.logger.warn(`seal-broken notify failed for ${payload.freightId}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * ROUND 25 — A COLD CHAIN BROKEN IS TOLD (the user: "A breach is told"; "The shipper and the fleet"). Until now the
+   * breach was a flag in the control tower and a line on the note, and nobody who could act heard of it. The shipper owns
+   * the goods and decides whether to take them; the fleet's office can act on the road. Each hears the reading, when it
+   * was read — and, read with no signal, that it reached us later and may not be how the load is now. Never by text. An
+   * owner-driver is their own carrier and read it themselves: nobody else to tell on that side.
+   */
+  private async onColdChainBroken(p: ColdChainBroken): Promise<void> {
+    const r = p.reading;
+    if (!r) return;
+    const read = `${r.celsius} °C was read ${utcWords(r.at)}, outside the ${r.band.minC}–${r.band.maxC} °C it must be kept in.`;
+    const late = r.receivedAt ? ` The driver read it with no signal, and it reached us ${utcWords(r.receivedAt)}: it may be different now.` : '';
+    const title = `The cold chain on load ${p.code} was broken`;
+    const tag = `freight:${p.freightId}:cold_chain`;
+    if (p.posterDid) {
+      await this.tell(p.posterDid, { kind: 'freight_problem', title, body: `${read}${late} The consignment note says so, and a copy of it is kept as it stands now: if the goods cannot be taken at delivery, that is what a damage claim report is made from.`, tag, data: { freightId: p.freightId } });
+    }
+    if (p.carrierDid && p.carrierDid !== p.driverDid && p.carrierDid !== p.posterDid) {
+      await this.tell(p.carrierDid, { kind: 'freight_problem', title, body: `${read}${late} The shipper has been told. Call the driver to check the cooling unit.`, tag, data: { freightId: p.freightId } });
     }
   }
 

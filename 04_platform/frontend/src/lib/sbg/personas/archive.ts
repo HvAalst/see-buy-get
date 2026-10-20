@@ -1,7 +1,7 @@
 import type { SbgClient } from '../client';
 
 /** The moments that produce a copy of a consignment note. Mirrors the backend's NOTE_STAGES. */
-export type NoteStage = 'taken_over' | 'reloaded' | 'seal_changed' | 'delivered' | 'not_delivered' | 'claimed' | 'answered' | 'cancelled';
+export type NoteStage = 'taken_over' | 'reloaded' | 'seal_changed' | 'cold_chain_broken' | 'delivered' | 'not_delivered' | 'claimed' | 'answered' | 'cancelled';
 
 /** Which door the carriage came through. Both produce the same document. */
 export type NotePath = 'board' | 'run';

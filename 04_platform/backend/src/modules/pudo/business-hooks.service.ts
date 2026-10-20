@@ -98,6 +98,10 @@ export class BusinessHookService implements OnModuleInit, OnModuleDestroy {
     this.events.subscribe<{ freightId?: string; seal?: unknown }>(GlosEvent.Pudo.FreightSealBroken, (e) => {
       if (e.payload?.freightId) this.relay('load.seal_broken', String(e.payload.freightId), { seal: e.payload.seal });
     });
+    // Round 25 — its cold chain broken on the road: told at once, with the reading that broke it and when it was read.
+    this.events.subscribe<{ freightId?: string; reading?: unknown }>(GlosEvent.Pudo.FreightTempBreach, (e) => {
+      if (e.payload?.freightId) this.relay('load.cold_chain_broken', String(e.payload.freightId), { reading: e.payload.reading });
+    });
     this.timer = setInterval(() => void this.drain(), DRAIN_MS);
     this.timer.unref?.();
   }

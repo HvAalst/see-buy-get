@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { hostname } from 'os';
 import { join } from 'path';
-import { readFileSync, unlinkSync, writeFileSync } from 'fs';
+import { readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs';
 import { DATA_DIR, persistenceEnabled, storeDatabase, storeEngine } from './persistent-map';
 
 /**
@@ -133,19 +133,39 @@ function alive(pid: number): boolean {
  * over only once the wait has run out (a server that died mid-write); a lock just taken is read back a moment later, in
  * case another took it over in that moment; and, as on Postgres, it is read again every half minute: a server whose lock
  * now names another stops.
+ *
+ * HELD ONLY BY A SERVER THAT IS STILL ONE (the user, 2026-10-20: "a start counts a lock as held only while that process is
+ * still a SeeBuyGet server"). A process number is not a server: Windows hands the number of a server killed outright to
+ * the next program it starts, and a lock naming it read as held — so the next start was refused, with nothing running.
+ * So the holder writes the time into its lock at every half-minute check (`beat`), and a lock counts as held only while
+ * its process is alive AND its beat is fresh. Two servers on one store stay refused: a running one keeps beating.
  */
 export function claimFiles(dir: string, pid: number, waitMs = WAIT_MS, stop: () => void = () => process.exit(1), recheckMs = RECHECK_MS, settleMs = SETTLE_MS): StoreClaim {
   const logger = new Logger('OneWriter');
   const file = join(dir, LOCK_FILE);
-  const mine = JSON.stringify({ pid, host: hostname(), since: new Date().toISOString() });
+  const since = new Date().toISOString();
+  const mine = JSON.stringify({ pid, host: hostname(), since, beat: since });
   const until = Date.now() + waitMs;
+  /** A beat older than three checks is a process that is no longer this store's server (or a machine that slept). */
+  const staleAfterMs = 3 * recheckMs;
   /** Who the lock names. Null: no lock, or one still being written. */
-  const holder = (): { pid?: number; host?: string; since?: string } | null => {
+  const holder = (): { pid?: number; host?: string; since?: string; beat?: string } | null => {
     try {
       return JSON.parse(readFileSync(file, 'utf8'));
     } catch {
       return null;
     }
+  };
+  /** Still beating — or a lock from before beats were written, which only its process being alive can speak for. */
+  const beating = (h: { beat?: string }): boolean => {
+    const at = h.beat ? Date.parse(h.beat) : NaN;
+    return !Number.isFinite(at) || Date.now() - at <= staleAfterMs;
+  };
+  /** The beat, written whole: to a file beside it, then put in its place, so a reader never meets half a lock. */
+  const beat = (): void => {
+    const next = `${file}.${pid}`;
+    writeFileSync(next, JSON.stringify({ pid, host: hostname(), since, beat: new Date().toISOString() }));
+    renameSync(next, file);
   };
   let takeovers = 0;
   for (;;) {
@@ -155,7 +175,7 @@ export function claimFiles(dir: string, pid: number, waitMs = WAIT_MS, stop: () 
       if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
       const other = holder();
       if (other?.pid === pid) break;
-      const live = Boolean(other?.pid && other.host === hostname() && alive(other.pid));
+      const live = Boolean(other?.pid && other.host === hostname() && alive(other.pid) && beating(other));
       if (live || !other) {
         if (Date.now() < until) {
           pause(250);
@@ -182,7 +202,15 @@ export function claimFiles(dir: string, pid: number, waitMs = WAIT_MS, stop: () 
   }
   const timer = setInterval(() => {
     const now = holder();
-    if (now?.pid === pid) return;
+    if (now?.pid === pid) {
+      try {
+        beat();
+      } catch (err) {
+        // A beat that could not be written is a lock that will read as stale: said, and tried again at the next check.
+        logger.warn(`Could not write the store's lock: ${(err as Error).message}`);
+      }
+      return;
+    }
     logger.error(`The store's lock now names ${now?.pid ? `process ${now.pid}` : 'nobody'}: this server stops, rather than be a second writer.`);
     stop();
   }, recheckMs);

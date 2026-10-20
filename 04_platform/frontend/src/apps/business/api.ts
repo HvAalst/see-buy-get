@@ -222,6 +222,8 @@ export interface PostedLoad {
   crossing?: CrossingView;
   /** Round 15 — its seals, and what became of each. */
   seals?: SealView[];
+  /** Round 25 — its cold chain broken on the road: the reading that broke it, the band, when — and when it reached us, if later. */
+  coldChainBroken?: { celsius: number; at: string; minC: number; maxC: number; receivedAt?: string };
 }
 
 /** P1 — the copy of a contract an order carries. */

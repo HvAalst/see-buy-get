@@ -41,6 +41,35 @@ describe('one server writes the store', () => {
       claim.release();
     });
 
+    /**
+     * The user, 2026-10-20: "a start counts a lock as held only while that process is still a SeeBuyGet server". Found:
+     * a server killed outright on Windows left its lock, the number went to another program, and every start refused.
+     */
+    it('takes over a lock whose process number is alive but no longer beats — a number handed to another program', () => {
+      writeFileSync(lock(), JSON.stringify({ pid: process.ppid, host: hostname(), since: '2026-10-20T07:46:30Z', beat: new Date(Date.now() - 10 * 60_000).toISOString() }));
+      const claim = claimFiles(dir, process.pid, 0, stop);
+      expect(JSON.parse(readFileSync(lock(), 'utf8')).pid).toBe(process.pid);
+      claim.release();
+    });
+
+    it('still refuses while the holder beats — two servers on one store stay refused', () => {
+      writeFileSync(lock(), JSON.stringify({ pid: process.ppid, host: hostname(), since: '2026-10-20T07:46:30Z', beat: new Date(Date.now() - 20_000).toISOString() }));
+      expect(() => claimFiles(dir, process.pid, 0, stop)).toThrow(new RegExp(`Another server is already writing to .* \\(process ${process.ppid}, since 2026-10-20T07:46:30Z\\)`));
+      expect(JSON.parse(readFileSync(lock(), 'utf8')).pid).toBe(process.ppid);
+    });
+
+    it('beats while it holds the store: its lock says it is still there at every check', async () => {
+      const claim = claimFiles(dir, process.pid, 0, stop, 50, 0);
+      const first = JSON.parse(readFileSync(lock(), 'utf8'));
+      await new Promise((r) => setTimeout(r, 160));
+      const later = JSON.parse(readFileSync(lock(), 'utf8'));
+      expect(later).toMatchObject({ pid: process.pid, since: first.since });
+      expect(Date.parse(later.beat)).toBeGreaterThan(Date.parse(first.beat));
+      expect(stop).not.toHaveBeenCalled();
+      claim.release();
+      expect(existsSync(lock())).toBe(false);
+    });
+
     it('waits for a lock still being written, rather than taking it for one nobody holds', () => {
       // What two servers starting in the same instant see: the other's lock, created and not yet written.
       writeFileSync(lock(), '');

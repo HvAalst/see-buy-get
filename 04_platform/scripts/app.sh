@@ -165,8 +165,28 @@ dev_stop() {
     taskkill //T //F //PID "$pid" >/dev/null 2>&1 || true
     label watcher; say "stopped (pid $pid)"; stopped=1
   done
+  # …and the store's lock it can no longer release itself.
+  if release_store_lock; then label lock; say "released"; stopped=1; fi
   [ $stopped -eq 0 ] && say "nothing was running"
   return 0
+}
+
+# THE STORE'S LOCK (backend one-writer.ts; the user, 2026-10-20: "a stop removes the lock"). A backend stopped outright —
+# taskkill //F on Windows — never runs its own release, and leaves a lock naming a process number Windows soon hands to
+# another program; the next start read that as a server still running and refused. Removed once the process it names is
+# no longer one of ours; a lock naming a server of ours still running is left where it is, or that server would stop.
+release_store_lock() {
+  local lock="$ROOT/backend/data/.writer.lock" pid
+  [ -f "$lock" ] || return 1
+  pid=$(tr -d '\r' < "$lock" | sed -n 's/.*"pid":\([0-9][0-9]*\).*/\1/p')
+  # A process just killed can take a moment to leave the list.
+  local i
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    { [ -n "$pid" ] && ours "$pid"; } || break
+    sleep 0.3
+  done
+  if [ -n "$pid" ] && ours "$pid"; then return 1; fi
+  rm -f "$lock"
 }
 
 dev_status() {

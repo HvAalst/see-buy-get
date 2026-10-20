@@ -1527,6 +1527,7 @@ export const enFleet = {
   'fleet.system.event.borderCleared': 'Cleared the border',
   'fleet.system.event.atHub': 'At a hub',
   'fleet.system.event.sealBroken': 'A seal broken',
+  'fleet.system.event.coldChainBroken': 'The cold chain broken',
   'fleet.system.event.deliveryFailed': 'Could not be handed over',
   'fleet.system.event.delivered': 'Delivered',
   'fleet.system.event.loadCancelled': 'A load was withdrawn',

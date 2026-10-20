@@ -180,7 +180,7 @@ export const GlosEvent = {
     DepartureCancelled: 'pudo.departure_cancelled', // the run is not happening, and everybody aboard has to be told
     DepartureClaimOpened: 'pudo.departure_claim_opened', // the shipper says something went wrong; the carrier is told, and nobody adjudicates
     DepartureClaimAnswered: 'pudo.departure_claim_answered', // the carrier's own words about their own liability, back to the shipper
-    FreightTempBreach: 'pudo.freight_temp_breach', // S33b — a cold-chain freight logged an out-of-band temperature
+    FreightTempBreach: 'pudo.freight_temp_breach', // S33b — a cold-chain freight logged an out-of-band temperature; round 25 — the shipper and the carrying fleet told (bell + system), the note frozen
     FleetManagerActivated: 'pudo.fleet_manager_activated', // operator vetted + bonded → may build a fleet
   },
   Orchestration: {

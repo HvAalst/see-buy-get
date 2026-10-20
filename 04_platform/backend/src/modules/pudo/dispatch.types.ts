@@ -1118,6 +1118,18 @@ export class FreightProposalsResponse {
 }
 
 /**
+ * Round 25 — a cold chain broken on the road, as the shipper reads it: the reading that broke the band, the band, when it
+ * was read — and, where the driver read it with no signal, when it reached SeeBuyGet, so nobody takes it for now.
+ */
+export class ColdChainBreachView {
+  celsius: number;
+  at: string;
+  minC: number;
+  maxC: number;
+  @ApiPropertyOptional() receivedAt?: string;
+}
+
+/**
  * FB2b — one of MY posted loads, as the shop that posted it sees it.
  *
  * A projection, not the raw Freight: the poster needs to decide, not to inspect. It deliberately carries no
@@ -1203,6 +1215,8 @@ export class PostedFreightRow {
   @ApiPropertyOptional({ type: LoadCrossing }) crossing?: LoadCrossing;
   /** Round 15 — its seals: as written, found on the door at pickup, replaced by customs at a post, found broken, at delivery. */
   @ApiPropertyOptional({ type: [LoadSealView] }) seals?: LoadSealView[];
+  /** Round 25 — its cold chain broken on the road: the reading that broke it, and when. Absent on a load that never broke it. */
+  @ApiPropertyOptional({ type: ColdChainBreachView }) coldChainBroken?: ColdChainBreachView;
 }
 
 /** FP3b — what the sender gets back for opening a claim. */

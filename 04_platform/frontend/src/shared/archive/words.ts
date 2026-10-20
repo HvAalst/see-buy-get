@@ -7,6 +7,7 @@ export function stageWord(stage: NoteStage, t: Translate): string {
     taken_over: 'archive.stage.takenOver',
     reloaded: 'archive.stage.reloaded',
     seal_changed: 'archive.stage.sealChanged',
+    cold_chain_broken: 'archive.stage.coldChainBroken',
     delivered: 'archive.stage.delivered',
     not_delivered: 'archive.stage.notDelivered',
     claimed: 'archive.stage.claimed',

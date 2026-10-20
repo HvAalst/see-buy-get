@@ -515,6 +515,16 @@ function LoadDetail({ row, business, client, act, onClose, onChanged }: { row: P
               </dd>
             </div>
           ) : null}
+          {/* Round 25 — its cold chain broken on the road: the reading that broke it, when, and whether it reached us late. */}
+          {row.coldChainBroken ? (
+            <div class="cons__fact">
+              <dt class="cons__factk">{t('business.loads.fact.coldChain')}</dt>
+              <dd class="cons__factv">
+                <b>{t('business.loads.coldChainBroken', { temp: row.coldChainBroken.celsius, when: onRoad(row.coldChainBroken.at), min: row.coldChainBroken.minC, max: row.coldChainBroken.maxC })}</b>
+                {row.coldChainBroken.receivedAt ? <span class="biz-road__line chint">{t('business.loads.coldChainLate', { when: onRoad(row.coldChainBroken.receivedAt) })}</span> : null}
+              </dd>
+            </div>
+          ) : null}
           {row.agreedPrice != null ? (
             <div class="cons__fact">
               <dt class="cons__factk">{t('business.loads.fact.agreed')}</dt>

@@ -92,6 +92,9 @@ export class NoteArchiveService implements OnModuleInit, OnModuleDestroy {
     // Round 15 — a seal changed on the road: found broken, or replaced by customs at a post. A copy is frozen then, with
     // the seal's story and its photographs on it: the record any claim on the goods is reported from.
     this.events.subscribe<{ freightId: string }>(GlosEvent.Pudo.FreightSealBroken, (e) => this.freezeFreight(e.payload.freightId, 'seal_changed', 'A seal on the load was found broken on the road'));
+    // Round 25 — the cold chain broken on the road: a copy is frozen then, with the reading on it — so the copy the shipper
+    // opens says what it was told, and a claim on spoiled goods is reported from the copy that said it first.
+    this.events.subscribe<{ freightId: string }>(GlosEvent.Pudo.FreightTempBreach, (e) => this.freezeFreight(e.payload.freightId, 'cold_chain_broken', 'The cold chain was found broken on the road'));
     this.events.subscribe<{ freightId: string; passage?: { post?: string; seals?: { resealed?: unknown[] } } }>(GlosEvent.Pudo.FreightPassed, (e) => {
       if (e.payload?.passage?.seals?.resealed?.length) this.freezeFreight(e.payload.freightId, 'seal_changed', `Customs opened the load${e.payload.passage.post ? ` at ${e.payload.passage.post}` : ''} and sealed it again`);
     });

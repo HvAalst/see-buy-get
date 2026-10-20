@@ -31,6 +31,8 @@ export const FLEET_HOOK_EVENTS = [
   'load.at_hub',
   // A seal on it found broken on the road (round 15).
   'load.seal_broken',
+  // Its cold chain broken on the road: the reading that broke it, and when (round 25).
+  'load.cold_chain_broken',
   'load.delivery_failed',
   'load.delivered',
   'load.cancelled',

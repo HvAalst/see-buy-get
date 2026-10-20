@@ -50,7 +50,7 @@ import { coverFor, DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
-import { BoardRow, Claimable, ClaimableKind, DeliveryTiming, FleetOrderRow, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, LeftOutOfPlan, MarketRow, MarketSeries, Offer, OutsideWindow, PlannedAbout, PostedFreightRow, RoutePlan, RunningLate, shipperWhy, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS , FreightReload } from './dispatch.types';
+import { BoardRow, Claimable, ClaimableKind, DeliveryTiming, FleetOrderRow, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, LeftOutOfPlan, MarketRow, MarketSeries, Offer, OutsideWindow, PlannedAbout, PostedFreightRow, RoutePlan, RunningLate, shipperWhy, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS , FreightReload, ColdChainBreachView } from './dispatch.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 import { CommercialInvoiceService } from './commercial-invoice.service';
 import { LoadPassageService, viewOf as passageView } from './load-passage.service';
@@ -1678,6 +1678,8 @@ export class DispatchService {
         ...this.passageFacts(f, now),
         // Round 15 — its seals, and what became of each.
         ...(this.seals?.of(f.freightId).length ? { seals: this.seals.views(f.freightId) } : {}),
+        // Round 25 — its cold chain broken on the road: the reading that broke it, when, and whether we heard of it late.
+        ...(coldChainBreachOf(f) ? { coldChainBroken: coldChainBreachOf(f) } : {}),
       }));
   }
 
@@ -3282,7 +3284,11 @@ export class DispatchService {
     f.tempReadings = [...(f.tempReadings ?? []), { celsius: c, at: read.at, by: driverDid, breach, ...(read.receivedAt ? { receivedAt: read.receivedAt } : {}) }];
     if (breach && !f.tempBreached) {
       f.tempBreached = true; // sticky
-      void this.events.publish(GlosEvent.Pudo.FreightTempBreach, { freightId: f.freightId, code: f.code, celsius: c, band, driverDid, readAt: read.at, ...(read.receivedAt ? { receivedAt: read.receivedAt } : {}) }, { source: 'pudo' }).catch(() => undefined);
+      // Round 25 — told to whoever can act on it: the shipper, and the office of the fleet carrying it (see the listeners).
+      const reading = { celsius: c, at: read.at, band, ...(read.receivedAt ? { receivedAt: read.receivedAt } : {}) };
+      void this.events
+        .publish(GlosEvent.Pudo.FreightTempBreach, { freightId: f.freightId, code: f.code, celsius: c, band, driverDid, readAt: read.at, ...(read.receivedAt ? { receivedAt: read.receivedAt } : {}), reading, posterDid: f.postedByDid ?? f.shipperDid, carrierDid: this.carrierOf(f) }, { source: 'pudo' })
+        .catch(() => undefined);
     }
     this.freights.set(f.freightId, f);
     return f;
@@ -3859,4 +3865,15 @@ export function carrierNow(f: Freight, takenOverBy: string | undefined): { drive
   const r = [...(f.reloads ?? [])].reverse().find((x) => x.aboard);
   if (r) return { driverName: r.toDriverName, plate: r.toPlate, vehicleClass: r.toVehicleClass };
   return { driverName: takenOverBy, plate: f.carriage!.plate, vehicleClass: f.carriage!.vehicleClass };
+}
+
+/**
+ * Round 25 — THE COLD CHAIN BROKEN, as the shipper reads it: the reading that broke the band, the band, when it was read,
+ * and — read with no signal — when it reached us. Nothing on a load that never broke it.
+ */
+export function coldChainBreachOf(f: Freight): ColdChainBreachView | undefined {
+  const r = f.tempBreached ? f.tempReadings?.find((x) => x.breach) : undefined;
+  const band = tempBand(f.natureCode);
+  if (!r || !band) return undefined;
+  return { celsius: r.celsius, at: r.at, minC: band.minC, maxC: band.maxC, ...(r.receivedAt ? { receivedAt: r.receivedAt } : {}) };
 }

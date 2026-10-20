@@ -1327,6 +1327,7 @@ export const en = {
   'archive.stage.takenOver': 'Taken over by the carrier',
   'archive.stage.reloaded': 'Moved to another of the carrier’s vehicles',
   'archive.stage.sealChanged': 'A seal changed on the road',
+  'archive.stage.coldChainBroken': 'The cold chain broke on the road',
   'archive.stage.delivered': 'Delivered',
   'archive.stage.notDelivered': 'Could not be delivered',
   'archive.stage.claimed': 'Claim raised',

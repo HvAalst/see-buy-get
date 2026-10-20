@@ -11,7 +11,7 @@ import { DestinationCard } from './DestinationCard';
 import type { DestinationApiState } from './useDestination';
 import type { ArchiveQuery, ArchivedNoteRow, NoteStage } from '../../lib/sbg/personas/archive';
 
-const STAGES: NoteStage[] = ['taken_over', 'reloaded', 'seal_changed', 'delivered', 'not_delivered', 'claimed', 'answered', 'cancelled'];
+const STAGES: NoteStage[] = ['taken_over', 'reloaded', 'seal_changed', 'cold_chain_broken', 'delivered', 'not_delivered', 'claimed', 'answered', 'cancelled'];
 
 /**
  * THE SHIPMENT ARCHIVE — every consignment note this account was a party to.
