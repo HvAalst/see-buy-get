@@ -348,12 +348,14 @@ export function createDriverApi(sbg: SbgClient) {
      *  (only the claimer may advance a job) plus the S33 load-safety gate: the confirmed checklist keys + the
      *  securement photo mediaId. */
     pickupFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[]; securementPhotoId?: string; reservations?: string; seals?: Array<{ sealId: string; number: string; photoRef: string }> }) =>
-      sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/pickup', { params: { path: { id: freightId } }, body: { driverDid, ...check } })),
+      // Round 22 — dated NOW, when the driver taps: a pickup kept on the phone with no signal keeps the moment it was done.
+      sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/pickup', { params: { path: { id: freightId } }, body: { driverDid, ...check, observedAt: new Date().toISOString() } })),
 
     /** S32b/S33 — deliver an in-transit dedicated-freight job (in_transit → delivered; capacity released),
      *  with the confirmed unload-checklist keys. */
     deliverFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string; sealsAtDelivery?: "as_on_the_note" | "not_as_on_the_note" }) =>
-      sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/deliver', { params: { path: { id: freightId } }, body: { driverDid, ...check } })),
+      // Round 22 — dated when the goods were handed over, not when a signal was found.
+      sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/deliver', { params: { path: { id: freightId } }, body: { driverDid, ...check, observedAt: new Date().toISOString() } })),
 
     /** FP3b — the driver stood at the door and could not hand over. The load stays on the van; the sender is told. */
     failDelivery: (freightId: string, driverDid: string, body: { outcome: 'absent' | 'refused' | 'unreachable'; note?: string }) =>

@@ -2640,6 +2640,8 @@ export class FreightActionDto {
   @IsOptional() @IsArray() @ArrayMaxSize(MAX_SEALS) @ValidateNested({ each: true }) @Type(() => SealReadDto) seals?: SealReadDto[];
   /** Round 15 — at delivery, with the receiver: the seals as the note says, or not. */
   @IsOptional() @IsIn(SEALS_AT_DELIVERY) sealsAtDelivery?: SealsAtDelivery;
+  /** Round 22 — when the driver did it, by the phone's clock: a pickup or delivery kept on the phone with no signal. */
+  @IsOptional() @IsDateString() observedAt?: string;
 }
 
 /** FP3b — the driver stood at the door and could not hand over. */

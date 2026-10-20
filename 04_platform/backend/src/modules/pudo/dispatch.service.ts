@@ -45,6 +45,7 @@ import { MarketPulseStore } from './market-pulse.store';
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, toteCapacityOf, VEHICLE_SPEC } from './fleet.config';
 import { Router, ROUTER } from './router';
 import { groupOf, laneDrive, lanesOf, tripKmh, type LaneDrive, type LaneTrip } from './lane-times';
+import { whenSeen } from './observed-at';
 import { coverFor, DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MARKET_MIN_DEMAND, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, taxOn, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
@@ -2870,7 +2871,7 @@ export class DispatchService {
   /** Freight is picked up (claimed → in_transit) then delivered (→ delivered, capacity released). S32b: when
    *  a driver DID is given (the authenticated driver-app path), only the driver who CLAIMED it may advance it —
    *  a claimed freight is that driver's obligation, not a free-for-all. */
-  pickupFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; securementPhotoId?: string; reservations?: string; seals?: Array<{ sealId: string; number: string; photoRef: string }> }, now: number = Date.now()): Freight {
+  pickupFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; securementPhotoId?: string; reservations?: string; seals?: Array<{ sealId: string; number: string; photoRef: string }>; observedAt?: string }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'claimed') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected claimed`);
@@ -2893,8 +2894,13 @@ export class DispatchService {
     // Round 15 — each seal the shipper wrote, read off the door: a number that is not the one written and the load does
     // not leave. Asked before anything changes; kept once the goods are taken over.
     const keepSeals = this.seals?.checkAtPickup(f, driverDid ?? '', check?.seals);
+    // Round 22 — dated when the driver took the goods over, by the phone, within limits — never before the claim; when
+    // it reached us is kept beside it where the two differ (a pickup kept on the phone with no signal).
+    const taken = handedAt(check?.observedAt, now, [f.claimedAt]);
     f.status = 'in_transit';
-    f.pickedUpAt = new Date().toISOString();
+    f.pickedUpAt = taken.at;
+    if (taken.receivedAt) f.pickupReceivedAt = taken.receivedAt;
+    else delete f.pickupReceivedAt;
     keepSeals?.(f.pickedUpAt);
     f.loadSafety = { confirmed: [...new Set(check?.confirmed ?? [])], securementPhotoRef: securementPhotoId, at: f.pickedUpAt, by: driverDid };
     // FP3 — box 18: what the carrier saw when the goods were handed over. Optional, and only ever the driver's words.
@@ -2915,7 +2921,7 @@ export class DispatchService {
         } catch {
           managerDid = undefined;
         }
-        f.carriage = { vehicleId: session.vehicle.vehicleId, plate: session.vehicle.plate, vehicleClass: session.vehicle.vehicleClass, driverDid, ...(managerDid ? { managerDid } : {}), at: new Date(now).toISOString() };
+        f.carriage = { vehicleId: session.vehicle.vehicleId, plate: session.vehicle.plate, vehicleClass: session.vehicle.vehicleClass, driverDid, ...(managerDid ? { managerDid } : {}), at: f.pickedUpAt };
       }
     }
     this.freights.set(f.freightId, f);
@@ -2924,7 +2930,7 @@ export class DispatchService {
     void this.events.publish(GlosEvent.Pudo.FreightPickedUp, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy }, { source: 'pudo' }).catch(() => undefined);
     return f;
   }
-  deliverFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string; sealsAtDelivery?: SealsAtDelivery }, now: number = Date.now()): Freight {
+  deliverFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string; sealsAtDelivery?: SealsAtDelivery; observedAt?: string }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected in_transit`);
@@ -2940,11 +2946,16 @@ export class DispatchService {
     if (!podPhotoId) throw new GlosError('DELIVERY_PHOTO_REQUIRED', 'Attach a photo of the goods as delivered');
     // Round 15 — a load that has had a seal: the receiver looks at the door with the driver.
     const keepAtDoor = this.seals?.checkAtDelivery(f, driverDid ?? '', check?.sealsAtDelivery);
+    // Round 22 — dated when the goods were handed over, by the phone, within limits — never before the pickup, a step
+    // the driver said on the road, or an attempt at the door; when it reached us is kept beside it where the two differ.
+    const handed = handedAt(check?.observedAt, now, [f.pickedUpAt, ...(this.passages?.of(f.freightId).map((p) => p.at) ?? []), ...(f.deliveryAttempts ?? []).map((a) => a.at)]);
     f.status = 'delivered'; // no longer counts against the driver's remaining capacity
-    f.deliveredAt = new Date(now).toISOString();
+    f.deliveredAt = handed.at;
+    if (handed.receivedAt) f.deliveryReceivedAt = handed.receivedAt;
     keepAtDoor?.(f.deliveredAt);
-    // Read against the day and the window asked for NOW, on the carrier's clock, and kept with the delivery.
-    const timing = this.deliveryTimingOf(f, now);
+    // Read against the day and the window asked for, on the carrier's clock, at the moment it was HANDED OVER — not the
+    // moment a phone out of signal found one — and kept with the delivery.
+    const timing = this.deliveryTimingOf(f, Date.parse(f.deliveredAt));
     if (timing) f.deliveryTiming = timing;
     f.unloadReport = { confirmed: [...new Set(check?.confirmed ?? [])], at: f.deliveredAt, by: driverDid };
     const remarks = check?.remarks?.trim();
@@ -3843,4 +3854,16 @@ export function carrierNow(f: Freight, takenOverBy: string | undefined): { drive
   const r = [...(f.reloads ?? [])].reverse().find((x) => x.aboard);
   if (r) return { driverName: r.toDriverName, plate: r.toPlate, vehicleClass: r.toVehicleClass };
   return { driverName: takenOverBy, plate: f.carriage!.plate, vehicleClass: f.carriage!.vehicleClass };
+}
+
+/**
+ * Round 22 — WHEN A LOAD CHANGED HANDS, as its driver did it: the phone's time within limits (observed-at.ts), and never
+ * before the step before it — whose order is part of what the steps mean. With when it reached us, where that is later.
+ */
+function handedAt(observedAt: string | undefined, now: number, before: Array<string | undefined>): { at: string; receivedAt?: string } {
+  const seen = whenSeen(observedAt, now);
+  const floor = Math.max(0, ...before.map((x) => (x ? Date.parse(x) : 0)).filter((x) => Number.isFinite(x)));
+  // whenSeen never says later than now, and every step before it is a time already on record: no later than now either.
+  const at = Math.max(seen.at, floor);
+  return { at: new Date(at).toISOString(), ...(seen.receivedAt && at < now ? { receivedAt: seen.receivedAt } : {}) };
 }

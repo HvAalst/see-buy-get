@@ -462,6 +462,13 @@ export class Freight {
   claimedAt?: string;
   pickedUpAt?: string;
   deliveredAt?: string;
+  /**
+   * Round 22 — a pickup or a delivery done with no signal is dated by the driver's phone, within limits (observed-at.ts:
+   * never in the future, never more than a week back, never before the step before it); when it reached SeeBuyGet is
+   * kept here beside it, wherever the two differ — so a phone with a wrong clock can be seen.
+   */
+  pickupReceivedAt?: string;
+  deliveryReceivedAt?: string;
   // S34 — the price is LOCKED at claim (the claiming vehicle's profile × the market multiplier at that
   // moment), so a later surge or a driver profile edit never changes what was agreed. paidStatus tracks the
   // shipper charge at claim ('billed' paid | 'billing_failed' known shipper short of prepaid funds, a debt to

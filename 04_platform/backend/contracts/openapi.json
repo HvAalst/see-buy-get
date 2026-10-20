@@ -40371,6 +40371,13 @@
           "deliveredAt": {
             "type": "string"
           },
+          "pickupReceivedAt": {
+            "type": "string",
+            "description": "Round 22 — a pickup or a delivery done with no signal is dated by the driver's phone, within limits (observed-at.ts:\nnever in the future, never more than a week back, never before the step before it); when it reached SeeBuyGet is\nkept here beside it, wherever the two differ — so a phone with a wrong clock can be seen."
+          },
+          "deliveryReceivedAt": {
+            "type": "string"
+          },
           "lockedPrice": {
             "type": "number"
           },
@@ -44996,6 +45003,10 @@
               "as_on_the_note",
               "not_as_on_the_note"
             ]
+          },
+          "observedAt": {
+            "type": "string",
+            "description": "Round 22 — when the driver did it, by the phone's clock: a pickup or delivery kept on the phone with no signal."
           }
         }
       },

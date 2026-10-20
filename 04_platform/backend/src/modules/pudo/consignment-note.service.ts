@@ -198,9 +198,9 @@ export class ConsignmentNoteService implements OnModuleInit {
       confirmations: {
         // B2 — for a business, the person who posted it, for the business: its DID is everybody's in it.
         sender: { by: agentConfirmation(f.postedByName, agent, sender), at: f.createdAt, how: 'Confirmed electronically at posting' },
-        ...(f.pickedUpAt && carrier ? { carrier: { by: carrier.driverName ?? carrier.name, at: f.pickedUpAt, how: 'Confirmed electronically at taking over, after the load-safety check' } } : {}),
+        ...(f.pickedUpAt && carrier ? { carrier: { by: carrier.driverName ?? carrier.name, at: f.pickedUpAt, how: `Confirmed electronically at taking over, after the load-safety check${noSignal(f.pickupReceivedAt)}` } } : {}),
         ...(f.proofOfDelivery
-          ? { consignee: { by: f.proofOfDelivery.receiverName, at: f.proofOfDelivery.at, how: f.proofOfDelivery.photoRef ? 'Received in person; name recorded by the driver at delivery, with a photo of the goods as delivered' : 'Received in person; name recorded by the driver at delivery', ...(f.proofOfDelivery.remarks ? { remarks: `Receiver’s remarks: ${f.proofOfDelivery.remarks}` } : {}) } }
+          ? { consignee: { by: f.proofOfDelivery.receiverName, at: f.proofOfDelivery.at, how: `${f.proofOfDelivery.photoRef ? 'Received in person; name recorded by the driver at delivery, with a photo of the goods as delivered' : 'Received in person; name recorded by the driver at delivery'}${noSignal(f.deliveryReceivedAt)}`, ...(f.proofOfDelivery.remarks ? { remarks: `Receiver’s remarks: ${f.proofOfDelivery.remarks}` } : {}) } }
           : f.deliveredAt
             ? { consignee: { by: 'Receiver — confirmation not recorded', at: f.deliveredAt, how: 'Delivery recorded by the carrier with the unload report; the receiver’s own confirmation is not yet part of this note' } }
             : {}),
@@ -584,4 +584,9 @@ export function reloadLine(r: { at: string; fromPlate: string; toPlate: string; 
   const where = r.location ? ` at ${r.location.lat.toFixed(5)}, ${r.location.lng.toFixed(5)}` : '';
   const how = r.proof === 'pass' ? 'handed over at the vehicle, confirmed with the code of the driver handing over' : `moved on the carrier’s word (${r.by})`;
   return `Reloaded ${when(r.at)} onto ${r.toPlate} (${r.toDriverName}) after ${r.fromPlate} broke down${where}: ${how}`;
+}
+
+/** Round 22 — a step done with no signal: dated by the phone, and said when it reached SeeBuyGet. */
+function noSignal(receivedAt: string | undefined): string {
+  return receivedAt ? `; done with no signal on the driver's phone, which dated it, and received by SeeBuyGet on ${receivedAt.slice(0, 16).replace('T', ' at ')} UTC` : '';
 }
