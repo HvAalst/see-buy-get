@@ -150,3 +150,41 @@ describe('a seal on a load (round 15)', () => {
     expect(svc.noteLines(f.freightId)[0]).toMatch(/customs seal/);
   });
 });
+
+describe('a seal’s photographs, and a seal a test key writes (round 33)', () => {
+  const writer = { did: shipper, name: 'ERP (…ab12)' };
+  const seal = (photos: { loadedOpen: string; closedWithSeal: string; sealCloseUp: string }, number = 'KE 9001') => ({ number, sealClass: 'H' as const, appliedBy: 'sender' as const, photos });
+
+  it('takes three photographs, each its own, none already another seal’s on the load', () => {
+    const { media, photo } = mediaStub();
+    const svc = new LoadSealService(media);
+    const f = load();
+    const one = photo(shipper);
+    // One picture standing for two of the three.
+    expect(() => svc.write(f, writer, seal({ loadedOpen: one, closedWithSeal: one, sealCloseUp: photo(shipper) }), t0)).toThrow(/each its own/);
+    const first = three(photo);
+    svc.write(f, writer, seal(first), t0);
+    // The first seal's close-up offered as the second's.
+    expect(() => svc.write(f, writer, seal({ ...three(photo), sealCloseUp: first.sealCloseUp }, 'KE 9002'), t0)).toThrow(/another seal’s/);
+    expect(svc.of(f.freightId)).toHaveLength(1);
+    // Taken off (written wrong), its photographs may go with the seal written right.
+    svc.remove(f, svc.of(f.freightId)[0].sealId);
+    expect(svc.write(f, writer, seal(first, 'KE 9003'), t0).number).toBe('KE 9003');
+  });
+
+  it('a test key: every check runs, nothing is kept — no seal, no photograph attached — and a removal is checked, not done', () => {
+    const { media, photo, adopted } = mediaStub();
+    const svc = new LoadSealService(media);
+    const f = load();
+    expect(() => svc.write(f, writer, seal({ ...three(photo), loadedOpen: photo(driver) }), t0, false)).toThrow(/not one of yours/);
+    const tried = svc.write(f, writer, seal(three(photo)), t0, false);
+    expect(tried.sealId).toMatch(/^test_seal_/);
+    expect(svc.viewAmong(f, tried)).toMatchObject({ sealId: tried.sealId, number: 'KE 9001', state: 'on' });
+    expect(svc.of(f.freightId)).toHaveLength(0);
+    expect(adopted).toHaveLength(0);
+    const kept = svc.write(f, writer, seal(three(photo)), t0);
+    svc.remove(f, kept.sealId, false);
+    expect(svc.of(f.freightId)).toHaveLength(1);
+    expect(() => svc.remove(load({ status: 'in_transit' }), kept.sealId, false)).toThrow(/taken over/);
+  });
+});

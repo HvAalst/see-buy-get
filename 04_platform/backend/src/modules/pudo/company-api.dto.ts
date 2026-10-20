@@ -5,6 +5,14 @@ import { ArrayMaxSize, ArrayMinSize, IsArray, IsNumber, IsOptional, IsString, Ma
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 /** A business's system withdraws one of its loads nobody has taken yet, and says why. */
+/** Round 33 — a photograph a business's system sends before naming it (a seal's three photographs). */
+export class CompanyPhotoDto {
+  /** The photo as a data URL: data:image/jpeg;base64,… (JPEG, PNG or WebP, up to 500 KB). */
+  @IsString() dataUrl!: string;
+  /** A small thumbnail the same way, up to 64 KB. */
+  @IsOptional() @IsString() thumbDataUrl?: string;
+}
+
 export class WithdrawLoadDto {
   @IsString() @MinLength(3) @MaxLength(500) reason!: string;
 }

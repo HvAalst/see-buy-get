@@ -527,7 +527,7 @@ export const enBusiness = {
   'business.system.msg.gaveUp': 'Not arrived: given up after {count, plural, one {one try} other {# tries}}. Put your system right, then send it again.',
   'business.system.msg.why': 'Last time: {why}.',
   'business.keys.title': 'Keys for your own systems',
-  'business.keys.lede': 'With a key, your own system — your ERP, your warehouse system — can read your loads, post a load, and withdraw one nobody has taken yet, through the same checks as this app. A test key runs every check and posts nothing. Never what a person must decide: a price to agree, or anything about money.',
+  'business.keys.lede': 'With a key, your own system — your ERP, your warehouse system — can read your loads, post a load, write the seals on it before pickup, and withdraw one nobody has taken yet, through the same checks as this app. A test key runs every check and posts nothing. Never what a person must decide: a price to agree, or anything about money.',
   'business.keys.ownerOnly': 'An owner makes keys and takes them away; each is recorded under their name.',
   'business.keys.label': 'What it is for',
   'business.keys.labelHint': 'The system that will hold it, such as "ERP".',

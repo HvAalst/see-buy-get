@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Param, Post, Query, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Param, Post, Query, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ApiVersionInterceptor } from '../../foundation/http/api-versions';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Public } from '../../foundation/auth/public.decorator';
@@ -7,7 +7,10 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { IdempotencyService } from '../../foundation/http/idempotency.service';
 import { OwnIdempotency } from '../../foundation/http/idempotency.interceptor';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
-import { ApiBoardQueryDto, ApiOrdersQueryDto, ApiPlanQueryDto, SendOrdersDto, TakeLoadDto, WithdrawLoadDto } from './company-api.dto';
+import { ApiBoardQueryDto, ApiOrdersQueryDto, ApiPlanQueryDto, CompanyPhotoDto, SendOrdersDto, TakeLoadDto, WithdrawLoadDto } from './company-api.dto';
+import { LoadSealService } from './load-seal.service';
+import { LoadSealsView, LoadSealView, WriteSealDto } from './load-seal.types';
+import { MediaService } from './media.service';
 import { CompanyKey, CompanyKeyGuard } from './company-key.guard';
 import type { CompanyCaller } from './company-key.types';
 import { CarriageContractService } from './carriage-contract.service';
@@ -58,6 +61,9 @@ export class CompanyApiController {
     private readonly drivers: DriverService,
     private readonly vehicles: VehicleService,
     private readonly hooks: FleetHookService,
+    // Round 33 — the seals on a business's loads, and the photographs they name.
+    private readonly seals: LoadSealService,
+    private readonly media: MediaService,
   ) {}
 
   /* --------------------------------------------------------------- a business -- */
@@ -117,6 +123,73 @@ export class CompanyApiController {
       return { test: false, withdrawn: true, freightId, code: done.code, status: done.status };
     });
     return { ...result, replayed };
+  }
+
+  /*
+   * Round 33 — THE SEALS ON ITS LOADS (the user: "A business's key writes seals"). Its system writes a seal as a person in
+   * the Business app does, through the same door (LoadSealService.write): on its own load, before the goods are taken
+   * over, with the three photographs — each one the business sent, here first, and used for nothing else. A test key runs
+   * every check and keeps nothing.
+   */
+
+  /** The seals on one of its loads, as its Loads screen reads them, and whether they may still be written. */
+  @Public()
+  @RateLimit(120, 60)
+  @Get('business/loads/:freightId/seals')
+  sealsOn(@Param('freightId') freightId: string, @CompanyKey() caller: CompanyCaller): LoadSealsView {
+    const f = this.ownLoad(caller, freightId);
+    return { freightId: f.freightId, seals: this.seals.views(f.freightId), editable: this.seals.editable(f) };
+  }
+
+  /** A photograph for a seal, sent before the seal names it: its `photoId`. Unused, it is removed after two days. */
+  @Public()
+  @RateLimit(60, 60)
+  @Post('business/photos')
+  photo(@Body() dto: CompanyPhotoDto, @CompanyKey() caller: CompanyCaller): { photoId: string; keptUnusedUntil: string } {
+    const entity = this.business(caller);
+    const { mediaId } = this.media.upload({ ownerDid: entity.did, kind: 'seal', dataUrl: dto.dataUrl, thumbDataUrl: dto.thumbDataUrl });
+    return { photoId: mediaId, keptUnusedUntil: this.media.unusedUntil(mediaId)! };
+  }
+
+  /** Write a seal on one of its loads before pickup. With a test key every check runs and nothing is kept. */
+  @Public()
+  @OwnIdempotency()
+  @RateLimit(30, 60)
+  @Post('business/loads/:freightId/seals')
+  async writeSeal(@Param('freightId') freightId: string, @Body() dto: WriteSealDto, @CompanyKey() caller: CompanyCaller, @Headers('idempotency-key') idempotencyKey?: string) {
+    const entity = this.business(caller);
+    const f = this.ownLoad(caller, freightId);
+    const { result, replayed } = await this.idempotency.run(`api:business/seals:${caller.keyId}`, idempotencyKey, { freightId, ...dto }, () => {
+      const keep = caller.mode !== 'test';
+      const seal = this.seals.write(f, { did: entity.did, name: caller.name }, { number: dto.number, sealClass: dto.sealClass, maker: dto.maker, appliedBy: dto.appliedBy, photos: dto.photos }, Date.now(), keep);
+      const view: LoadSealView = keep ? this.seals.views(f.freightId).find((s) => s.sealId === seal.sealId)! : this.seals.viewAmong(f, seal);
+      return { test: !keep, seal: view };
+    });
+    return { ...result, replayed };
+  }
+
+  /** Take a seal off one of its loads again, before pickup: written wrong, or not used after all. A test key keeps it. */
+  @Public()
+  @RateLimit(30, 60)
+  @Delete('business/loads/:freightId/seals/:sealId')
+  removeSeal(@Param('freightId') freightId: string, @Param('sealId') sealId: string, @CompanyKey() caller: CompanyCaller): { test: boolean; removed: boolean } {
+    const f = this.ownLoad(caller, freightId);
+    const keep = caller.mode !== 'test';
+    this.seals.remove(f, sealId, keep);
+    return { test: !keep, removed: keep };
+  }
+
+  /** One of this business's own loads — or, for any other, the same answer as for no load at all. */
+  private ownLoad(caller: CompanyCaller, freightId: string): Freight {
+    const entity = this.business(caller);
+    let f: Freight | undefined;
+    try {
+      f = this.dispatch.requireFreightPublic(freightId);
+    } catch {
+      f = undefined;
+    }
+    if (!f || f.postedByDid !== entity.did) throw new GlosError('NOT_FOUND', 'No such load of yours');
+    return f;
   }
 
   /* ------------------------------------------------------------------- a fleet -- */

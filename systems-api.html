@@ -146,7 +146,7 @@
 
 <section id="business">
   <h2>For a business</h2>
-  <p>Read your loads, post a load, withdraw one nobody has taken yet.</p>
+  <p>Read your loads, post a load, write the seals on it, withdraw one nobody has taken yet.</p>
 
   <h3>Your loads</h3>
   <p><span class="endpoint"><span class="verb get">GET</span>/sbg/api/business/loads</span>
@@ -178,6 +178,42 @@
 <pre><code>{ "test": false, "replayed": false, "load": { "freightId": "frt_…", "code": "FRT-412", "status": "available", … } }</code></pre>
   <p>With a test key, <code>load</code> is what the load would be — its class, the body it needs, the equipment that
   must lift it — with the code <code>FRT-TEST</code>.</p>
+
+  <h3>Seals on a load</h3>
+  <p><span class="endpoint"><span class="verb get">GET</span>/sbg/api/business/loads/{freightId}/seals</span>
+  &nbsp;<span class="endpoint"><span class="verb">POST</span>/sbg/api/business/photos</span>
+  &nbsp;<span class="endpoint"><span class="verb">POST</span>/sbg/api/business/loads/{freightId}/seals</span>
+  &nbsp;<span class="endpoint"><span class="verb">DELETE</span>/sbg/api/business/loads/{freightId}/seals/{sealId}</span></p>
+  <p>The seals you put on a load, written as a person writes them in the Business app: on your own load, before the
+  goods are taken over, each with three photographs — the load open and braced, the doors closed with the seal and the
+  vehicle’s number in view, and the seal close up. The driver reads each one off the door at pickup.</p>
+  <ol>
+    <li>Send each photograph first: <code>POST /sbg/api/business/photos</code> with <code>{ "dataUrl": "data:image/jpeg;base64,…" }</code>
+      (JPEG, PNG or WebP, up to 500 KB) answers <code>{ "photoId", "keptUnusedUntil" }</code>. One a seal does not name
+      within two days is removed.</li>
+    <li>Write the seal with the three <code>photoId</code>s.</li>
+  </ol>
+<pre><code>{
+  "number": "KE 004471",
+  "sealClass": "H",
+  "maker": "TydenBrooks",
+  "appliedBy": "sender",
+  "photos": { "loadedOpen": "med_…", "closedWithSeal": "med_…", "sealCloseUp": "med_…" }
+}</code></pre>
+  <div class="scroll"><table>
+    <thead><tr><th>Field</th><th>What it is</th></tr></thead>
+    <tbody>
+      <tr><td>number <span class="req">required</span></td><td class="desc">As it is printed on the seal; kept as written. The same number twice on one load, however it is spaced, is refused.</td></tr>
+      <tr><td>sealClass <span class="req">required</span></td><td class="desc"><code>I</code>, <code>S</code> or <code>H</code>, as marked (ISO 17712).</td></tr>
+      <tr><td>maker</td><td class="desc">The maker as marked on it.</td></tr>
+      <tr><td>appliedBy <span class="req">required</span></td><td class="desc"><code>sender</code> for your own seal, <code>customs</code> for an official one.</td></tr>
+      <tr><td>photos <span class="req">required</span></td><td class="desc">Three photographs you sent, each its own, none already another seal’s.</td></tr>
+    </tbody>
+  </table></div>
+<pre><code>{ "test": false, "replayed": false, "seal": { "sealId": "seal_…", "number": "KE 004471", "state": "on", … } }</code></pre>
+  <p>With a test key every check runs and nothing is kept: <code>seal</code> is what it would be, its id starting
+  <code>test_seal_</code>, and a removal is checked and the seal stays. After pickup the seals they left with stay on the
+  record; a seal found broken on the road is the driver’s to report.</p>
 
   <h3>Withdraw a load</h3>
   <p><span class="endpoint"><span class="verb">POST</span>/sbg/api/business/loads/{freightId}/withdraw</span>
@@ -338,7 +374,7 @@ if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(received))) retur
 <section id="limits">
   <h2>Limits</h2>
   <p>Each key has its own limit, counted per minute and per call: <b>120</b> reads, <b>60</b> reads of the board,
-  <b>30</b> writes. Two systems with two keys never share one.</p>
+  <b>60</b> photographs, <b>30</b> writes. Two systems with two keys never share one.</p>
 </section>
 
 <section id="versions">

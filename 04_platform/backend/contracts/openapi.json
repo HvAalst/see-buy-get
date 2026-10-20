@@ -24220,6 +24220,124 @@
         }
       }
     },
+    "/v1/sbg/api/business/loads/{freightId}/seals": {
+      "get": {
+        "operationId": "CompanyApi.sealsOn",
+        "parameters": [
+          {
+            "name": "freightId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadSealsView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "CompanyApi.writeSeal",
+        "summary": "",
+        "description": "Write a seal on one of its loads before pickup. With a test key every check runs and nothing is kept.",
+        "parameters": [
+          {
+            "name": "freightId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WriteSealDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/api/business/photos": {
+      "post": {
+        "operationId": "CompanyApi.photo",
+        "summary": "",
+        "description": "A photograph for a seal, sent before the seal names it: its `photoId`. Unused, it is removed after two days.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanyPhotoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/api/business/loads/{freightId}/seals/{sealId}": {
+      "delete": {
+        "operationId": "CompanyApi.removeSeal",
+        "summary": "",
+        "description": "Take a seal off one of its loads again, before pickup: written wrong, or not used after all. A test key keeps it.",
+        "parameters": [
+          {
+            "name": "freightId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sealId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/api/fleet/orders": {
       "get": {
         "operationId": "CompanyApi.orders",
@@ -51655,6 +51773,100 @@
           "reason"
         ]
       },
+      "LoadSealsView": {
+        "type": "object",
+        "properties": {
+          "seals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoadSealView"
+            }
+          },
+          "freightId": {
+            "type": "string"
+          },
+          "editable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "seals",
+          "freightId",
+          "editable"
+        ]
+      },
+      "CompanyPhotoDto": {
+        "type": "object",
+        "properties": {
+          "dataUrl": {
+            "type": "string",
+            "description": "The photo as a data URL: data:image/jpeg;base64,… (JPEG, PNG or WebP, up to 500 KB)."
+          },
+          "thumbDataUrl": {
+            "type": "string",
+            "description": "A small thumbnail the same way, up to 64 KB."
+          }
+        },
+        "required": [
+          "dataUrl"
+        ]
+      },
+      "SealPhotosDto": {
+        "type": "object",
+        "properties": {
+          "loadedOpen": {
+            "type": "string"
+          },
+          "closedWithSeal": {
+            "type": "string"
+          },
+          "sealCloseUp": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "loadedOpen",
+          "closedWithSeal",
+          "sealCloseUp"
+        ]
+      },
+      "WriteSealDto": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "sealClass": {
+            "type": "string",
+            "enum": [
+              "I",
+              "S",
+              "H"
+            ]
+          },
+          "maker": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "appliedBy": {
+            "type": "string",
+            "enum": [
+              "sender",
+              "customs"
+            ]
+          },
+          "photos": {
+            "$ref": "#/components/schemas/SealPhotosDto"
+          }
+        },
+        "required": [
+          "number",
+          "sealClass",
+          "appliedBy",
+          "photos"
+        ]
+      },
       "PlanStopView": {
         "type": "object",
         "properties": {
@@ -52774,84 +52986,6 @@
           "measured",
           "longestHours",
           "lastClearedAt"
-        ]
-      },
-      "LoadSealsView": {
-        "type": "object",
-        "properties": {
-          "seals": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/LoadSealView"
-            }
-          },
-          "freightId": {
-            "type": "string"
-          },
-          "editable": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "seals",
-          "freightId",
-          "editable"
-        ]
-      },
-      "SealPhotosDto": {
-        "type": "object",
-        "properties": {
-          "loadedOpen": {
-            "type": "string"
-          },
-          "closedWithSeal": {
-            "type": "string"
-          },
-          "sealCloseUp": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "loadedOpen",
-          "closedWithSeal",
-          "sealCloseUp"
-        ]
-      },
-      "WriteSealDto": {
-        "type": "object",
-        "properties": {
-          "number": {
-            "type": "string",
-            "maxLength": 40
-          },
-          "sealClass": {
-            "type": "string",
-            "enum": [
-              "I",
-              "S",
-              "H"
-            ]
-          },
-          "maker": {
-            "type": "string",
-            "maxLength": 60
-          },
-          "appliedBy": {
-            "type": "string",
-            "enum": [
-              "sender",
-              "customs"
-            ]
-          },
-          "photos": {
-            "$ref": "#/components/schemas/SealPhotosDto"
-          }
-        },
-        "required": [
-          "number",
-          "sealClass",
-          "appliedBy",
-          "photos"
         ]
       },
       "BreakLocationDto": {

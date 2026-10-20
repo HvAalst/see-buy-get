@@ -77,8 +77,9 @@ export class LoadSealService {
   /**
    * THE SHIPPER WRITES A SEAL on its load, before the goods are taken over: the number as printed, its ISO 17712 class,
    * the maker as marked, who closed it — and the three photographs, each the shipper's own and not used elsewhere.
+   * Round 33 — `keep` false (a business's TEST key): every check runs, and nothing is kept — no seal, no photo adopted.
    */
-  write(f: Freight, writer: { did: string; name: string }, input: { number: string; sealClass: SealClass; maker?: string; appliedBy: SealAppliedBy; photos: Partial<Record<SealPhoto, string>> }, now: number = Date.now()): LoadSeal {
+  write(f: Freight, writer: { did: string; name: string }, input: { number: string; sealClass: SealClass; maker?: string; appliedBy: SealAppliedBy; photos: Partial<Record<SealPhoto, string>> }, now: number = Date.now(), keep = true): LoadSeal {
     if (!this.editable(f)) throw new GlosError('INVALID_STATE', 'The goods are taken over: a seal is written on the load before pickup');
     const number = sealNumber(input.number);
     if (!number) throw new GlosError('FIELD_REQUIRED', 'Write the seal’s number as it is printed on it', { field: 'number' });
@@ -92,10 +93,18 @@ export class LoadSealService {
       if (!ref) throw new GlosError('FIELD_REQUIRED', PHOTO_WORDS[photo], { field: `photos.${photo}` });
       this.mustBeOwn(ref, writer.did, PHOTO_WORDS[photo]);
     }
-    for (const photo of SEAL_PHOTOS) this.media.adopt(input.photos[photo], writer.did, { type: 'freight', id: f.freightId }, 'seal');
+    // Round 33 — each photograph is of this seal and nothing else. They are kept with the LOAD, so the media's own link
+    // cannot tell one seal's close-up from another's: asked here, before anything is written.
+    const refs = SEAL_PHOTOS.map((photo) => input.photos[photo]!);
+    if (new Set(refs).size !== refs.length) throw new GlosError('FIELD_REQUIRED', 'Three photographs, each its own: one picture cannot stand for two of them', { field: 'photos' });
+    const named = new Set(this.of(f.freightId).flatMap((s) => Object.values(s.photos)));
+    for (const photo of SEAL_PHOTOS) {
+      if (named.has(input.photos[photo]!)) throw new GlosError('FIELD_REQUIRED', `${PHOTO_WORDS[photo]}: that photograph is another seal’s`, { field: `photos.${photo}` });
+    }
+    if (keep) for (const photo of SEAL_PHOTOS) this.media.adopt(input.photos[photo], writer.did, { type: 'freight', id: f.freightId }, 'seal');
     const maker = input.maker?.trim().slice(0, 60);
     const seal: LoadSeal = {
-      sealId: `seal_${randomBytes(6).toString('hex')}`,
+      sealId: `${keep ? '' : 'test_'}seal_${randomBytes(6).toString('hex')}`,
       freightId: f.freightId,
       number,
       key: keyOf(number),
@@ -108,16 +117,22 @@ export class LoadSealService {
       writtenBy: writer.name,
       readings: [],
     };
-    this.seals.set(seal.sealId, seal);
+    if (keep) this.seals.set(seal.sealId, seal);
     return seal;
   }
 
+  /** Round 33 — a seal as it would read on the load: what a test key is answered with, for a seal it did not keep. */
+  viewAmong(f: Freight, seal: LoadSeal): LoadSealView {
+    const all = [...this.of(f.freightId).filter((s) => s.sealId !== seal.sealId), seal];
+    return viewOf(seal, all);
+  }
+
   /** The shipper takes a seal off its load again, before pickup: written wrong, or not used after all. */
-  remove(f: Freight, sealId: string): void {
+  remove(f: Freight, sealId: string, keep = true): void {
     if (!this.editable(f)) throw new GlosError('INVALID_STATE', 'The goods are taken over: the seals they left with stay on the record');
     const seal = this.seals.get(sealId);
     if (!seal || seal.freightId !== f.freightId) throw new GlosError('NOT_FOUND', 'No such seal on this load');
-    this.seals.delete(sealId);
+    if (keep) this.seals.delete(sealId); // round 33 — a test key's removal is checked, and the seal stays
   }
 
   /* ------------------------------------------------------------------- pickup -- */
