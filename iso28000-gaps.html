@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SBG · Against ISO 28000/28001</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #17181c; --muted: #6b6f76; --line: #e3e3df;
+    --accent: #4c46e0; --ship: #1c7c54; --now: #b4690e; --gap: #a33a3a; --ask: #8a5cc0;
+    --shadow: 0 1px 2px rgba(20,20,25,.06), 0 8px 24px rgba(20,20,25,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121317; --panel: #1a1c21; --ink: #eceef2; --muted: #9aa0aa; --line: #2a2d34;
+      --accent: #8f8bff; --ship: #5cc08c; --now: #e0a44a; --gap: #e07a7a; --ask: #c9a6f0;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121317; --panel: #1a1c21; --ink: #eceef2; --muted: #9aa0aa; --line: #2a2d34;
+    --accent: #8f8bff; --ship: #5cc08c; --now: #e0a44a; --gap: #e07a7a; --ask: #c9a6f0;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 24px 96px; }
+  @media (max-width: 600px) { .wrap { padding: 28px 16px 72px; } }
+  h1 { font-size: 28px; letter-spacing: -.01em; margin: 0; text-wrap: balance; }
+  .sub { color: var(--muted); font-size: 15.5px; max-width: 74ch; margin: 10px 0 0; }
+  .stamp { color: var(--muted); font-size: 13px; margin-top: 8px; }
+  h2 { font-size: 21px; margin: 52px 0 6px; letter-spacing: -.005em; text-wrap: balance; }
+  h3 { font-size: 17px; margin: 0 0 6px; text-wrap: balance; }
+  .lead { color: var(--muted); max-width: 74ch; margin: 6px 0 20px; }
+  p { max-width: 76ch; }
+  nav.toc { margin: 24px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  nav.toc a { font-size: 13.5px; color: var(--ink); text-decoration: none; padding: 6px 12px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); }
+  nav.toc a:hover { border-color: var(--accent); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 18px 20px; min-width: 0; }
+  .card p { margin: 6px 0 0; font-size: 15px; }
+  .card .rec { margin-top: 10px; border-left: 3px solid var(--accent); padding-left: 12px; font-size: 14.5px; }
+  .tag { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; }
+  .tag::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .card > .tag { margin-bottom: 10px; }
+  .t-strong { color: var(--ship); } .t-partial { color: var(--now); } .t-missing { color: var(--gap); } .t-ask { color: var(--ask); } .t-quiet { color: var(--muted); }
+  .tbl { overflow-x: auto; margin: 10px 0 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  tr:last-child td { border-bottom: 0; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; white-space: nowrap; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  td code { font-size: 12.5px; word-break: break-word; }
+  details.part { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); margin: 12px 0; }
+  details.part > summary { cursor: pointer; padding: 16px 20px; list-style: none; display: grid; gap: 2px; }
+  details.part > summary::-webkit-details-marker { display: none; }
+  .ptitle { font-weight: 650; font-size: 16.5px; }
+  .ptitle::before { content: "▸ "; color: var(--muted); }
+  details[open] .ptitle::before { content: "▾ "; }
+  .pnote { color: var(--muted); font-size: 14.5px; }
+  .pcounts { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .pbody { padding: 0 20px 16px; border-top: 1px solid var(--line); }
+  .pbody h2 { font-size: 18px; margin: 26px 0 6px; } .pbody h3 { font-size: 16px; margin: 22px 0 4px; } .pbody h4 { font-size: 14.5px; margin: 18px 0 4px; color: var(--muted); }
+  .pbody p, .pbody li { font-size: 14.5px; }
+  .note { font-size: 14px; color: var(--muted); }
+  code { font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: color-mix(in srgb, var(--line) 60%, transparent); padding: 1px 5px; border-radius: 5px; }
+  a { color: var(--accent); }
+  ol.order { padding-left: 22px; max-width: 78ch; }
+  ol.order li + li { margin-top: 12px; }
+  ol.order .rec { display: block; color: var(--muted); font-size: 14.5px; margin-top: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Against ISO 28000/28001</h1>
+  <p class="sub">The comment you received on supply-chain security, its five pillars and its advice on getting there, checked point by point against what is built: what the network does today, what it does only in part, and what is missing. Physical and organisational steps that no software can take are said separately.</p>
+  <p class="stamp">Checked 2026-10-20 against the code on <code>main</code> after round 33. Read with <a href="compendium-gaps.html">compendium-gaps.html</a>.</p>
+  <nav class="toc" aria-label="On this page">
+    <a href="#verdict">The short answer</a>
+    <a href="#defects">Wrong, not just missing</a>
+    <a href="#points">Point by point</a>
+    <a href="#order">What I would take first</a>
+    <a href="#outside">Not software</a>
+  </nav>
+</header>
+
+<h2 id="verdict">The short answer</h2>
+<p class="lead">The chain of custody on a load is strong; the risk model, the hubs' receipt of bags, and the depth of partner vetting are not. Certification is scoped and organisational as much as technical, and the comment's own advice — enforce the steps in the app, certify the core and the hubs first — fits how the product is already built.</p>
+<div class="grid">
+  <div class="card"><span class="tag t-strong">Strong</span><h3>Integrity of a load</h3><p>ISO 17712 seal classes, three photographs per seal, the number read blind off the door at pickup (a wrong one and the load does not leave), customs re-seals at a post, a broken seal reported with cause, photo, official paper and place; the securement photo and the load-safety checklist gate pickup; no papers, no loading across a border; since round 31 every evidence photo is the taker's own. Each step is dated by the phone, works without signal and is fingerprinted on the frozen consignment note.</p></div>
+  <div class="card"><span class="tag t-partial">Thin</span><h3>Parcels through hubs, and partners</h3><p>A bag is dropped at a hub or received at a shop by its code alone: no seal number, no condition, no photo. Hubs are not vetted at all, light-vehicle couriers start without KYC, and no partner signs a security declaration. Nothing caps what a new or informal partner may hold.</p></div>
+  <div class="card"><span class="tag t-missing">Missing</span><h3>A risk model</h3><p>No hub, shop, corridor or route carries a security risk level or category (pilferage, hijacking, unrest, roadblock extortion), and no countermeasure is tied to one. Incidents — a broken seal, a vehicle standing still too long, a closure — reach people, but change no risk anywhere.</p></div>
+</div>
+
+<h2 id="defects">Wrong, not just missing</h2>
+<p class="lead">Found while checking, and confirmed in the code. The first two are holes in controls that look shipped.</p>
+<div class="grid">
+  <div class="card"><span class="tag t-missing">Hole</span><h3>The driver can read the seal numbers before pickup</h3><p>The driver's app is never told a seal's number — the point of reading it off the door — but the driver who claimed the load is a party to it, and a party reads <code>GET dispatch/freight/:id/seals</code> and the consignment note, both carrying the numbers. The blind check is bypassed by anyone who looks.</p></div>
+  <div class="card"><span class="tag t-missing">Bug</span><h3>A closed road or border does not stop a load</h3><p><code>ROAD_CLOSED</code> and <code>BORDER_CLOSED</code> are declared as blocking, but the route check has no branch for them, so a load on a road reported closed is offered on the board as if nothing were there. Heights, weights, hazmat bans and washouts do block.</p></div>
+  <div class="card"><span class="tag t-partial">Need to know</span><h3>The commercial invoice is open to the carrier</h3><p>The invoice — line values, the total, exporter and importer — is read by every party to the load, the claiming driver and their fleet included; the consignment note gives the driver the goods' description and the carriage amount. The load card itself shows neither.</p></div>
+  <div class="card"><span class="tag t-partial">Need to know</span><h3>Any shop can read any parcel's history</h3><p><code>GET parcels/:id</code> answers any shop with the scans and photo ids. Parcel ids are random, so it takes knowing one; round 32 already kept the sequential SSCCs from becoming a way in.</p></div>
+  <div class="card"><span class="tag t-quiet">Limit</span><h3>The offline seal check can be worked backwards</h3><p>So the phone can check a reading without signal, it holds a fingerprint of load and number. A seal number is short, so a phone can try them all. It does not matter once the number is no longer readable elsewhere, but it is not a secret on its own.</p></div>
+</div>
+
+<h2 id="points">Point by point</h2>
+<div class="tbl"><table>
+  <thead><tr><th>Pillar · point</th><th>State</th><th>What is there</th><th>What is missing</th></tr></thead>
+  <tbody>
+    <tr><td>I · Route and node profiling</td><td><span class="tag t-missing">Missing</span></td><td>A crowd-sourced hazard map (heights, weights, washouts, checkpoints, closures); border posts and their waits.</td><td>A security risk level and categories for every hub, shop, corridor and route.</td></tr>
+    <tr><td>I · Countermeasure mapping</td><td><span class="tag t-missing">Missing</span></td><td>Detection only: the vehicle standing still too long (an early sign of hijacking), a shipper excluding open bodies for theft risk.</td><td>A documented mitigation per risk: approved routes, convoys, schedules that shift, geofences on our corridors.</td></tr>
+    <tr><td>I · Living assessment</td><td><span class="tag t-partial">Partly</span></td><td>Hazards confirmed and refuted by drivers; a call-off files a closure; a broken seal tells the shipper and both systems at once.</td><td>Incidents updating a route's or node's risk; a security kind among the staff's cases.</td></tr>
+    <tr><td>II · 7-point inspection</td><td><span class="tag t-missing">Missing</span></td><td>The daily roadworthiness check (tyres to body), the load-safety checklist and securement photo at pickup, a container's sound/damaged at a gate.</td><td>The seven points before loading — front wall, sides, floor, roof, doors, undercarriage — for hidden compartments.</td></tr>
+    <tr><td>II · ISO 17712 seals</td><td><span class="tag t-partial">Partly</span></td><td>Classes, photos, blind reading at pickup, re-seal at a post, broken seal, look at delivery; written by the shipper or its system (round 33).</td><td>Seals required where they should be (cross-border, containers); a seal bound to the container number and the SSCCs; an alert when it is not as on the note at delivery; real seal numbers on our own bags.</td></tr>
+    <tr><td>II · Access control at hubs</td><td><span class="tag t-partial">Partly</span></td><td>Shop staff each under their own name; a driver's badge and a per-shift code at every hand-over.</td><td>A hub's own people by name; who may enter a dock or sort area. Fences and waiting areas themselves are not software.</td></tr>
+    <tr><td>III · Security declarations</td><td><span class="tag t-missing">Missing</span></td><td>A shipper's "I declare" on the invoice; a shop's self-declared clean record.</td><td>A signed, versioned security declaration from shops, hubs, fleets and drivers.</td></tr>
+    <tr><td>III · Vetting</td><td><span class="tag t-partial">Partly</span></td><td>Fleets and businesses checked by two people from papers; shops and heavy-vehicle drivers by one; papers that lapse end a shift.</td><td>Hubs not vetted; light-vehicle couriers start at once; no real background or sanctions check; shop papers do not expire.</td></tr>
+    <tr><td>III · Compensatory controls</td><td><span class="tag t-partial">Partly</span></td><td>A scan and a code at every hand-over; photos at intake and at load pickup and delivery; a shop's trade credit caps money.</td><td>A custody cap by value or count for new partners; photos at bus, hub and bag hand-overs; community guarantees.</td></tr>
+    <tr><td>IV · Need-to-know manifesting</td><td><span class="tag t-partial">Partly</span></td><td>The load card and the counters' lists show no values, items or buyer; seals as "which to find".</td><td>See the defects: invoice values and seal numbers open to the carrier.</td></tr>
+    <tr><td>IV · Immutable audit trail</td><td><span class="tag t-partial">Partly</span></td><td>Every parcel scan anchored in a hash chain; the note frozen and fingerprinted at each signature; damage reports fingerprinted; evidence photos locked.</td><td>Custody legs, load pickup and delivery, seals and those fingerprints anchored too; an anchor outside our own database.</td></tr>
+    <tr><td>IV · Access to data</td><td><span class="tag t-partial">Partly</span></td><td>A role on every route, default deny; staff read companies and change nothing; two people for money and identity.</td><td>Staff roles narrower than "everything"; a log of what staff opened.</td></tr>
+    <tr><td>V · Tamper protocol</td><td><span class="tag t-partial">Partly</span></td><td>A wrong seal stops the pickup; a broken seal is told and frozen on the note.</td><td>Quarantine — a held state; the event logged against the unit and its SSCC; operations told before custody is taken; the refused mismatch itself recorded.</td></tr>
+    <tr><td>V · Detained truck</td><td><span class="tag t-partial">Partly</span></td><td>Standstill watch, border passages and waits, breakdowns and take-overs.</td><td>"Held by police or customs" as a state, with operations told.</td></tr>
+    <tr><td>V · Anti-coercion and escalation</td><td><span class="tag t-missing">Missing</span></td><td>Checkpoints on the hazard map; a broken seal with its cause and the official's paper.</td><td>A driver's line to a central desk at a checkpoint; the papers on the phone without signal.</td></tr>
+    <tr><td>V · Continuity</td><td><span class="tag t-partial">Partly</span></td><td>Custody writes queue without signal; lost parcels searched and declared; a broken-down truck's loads moved.</td><td>A hub down: parcels and bags sent through another.</td></tr>
+    <tr><td>Advice · Visual workflows</td><td><span class="tag t-partial">Partly</span></td><td>The app refuses a load pickup or delivery until checklist, photos and seals are done; intake needs its photo.</td><td>"Receive" at a hub or shop gated on the bag's seal, its photo and the scan.</td></tr>
+    <tr><td>Advice · Visual SOPs</td><td><span class="tag t-partial">Partly</span></td><td>Pictures for packaging, bodies, equipment and cargo; help in words.</td><td>The 7-point check and the tamper response as pictures.</td></tr>
+    <tr><td>Advice · Scope and AEO</td><td><span class="tag t-quiet">Not software</span></td><td>—</td><td>Choosing the scope; registering with customs. See below.</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="order">What I would take first</h2>
+<ol class="order">
+  <li><b>Close the two holes.</b> Seal numbers withheld from the carrier until the goods are taken over; a closed road or border blocks a load. <span class="rec">Small, and both are controls that look shipped.</span></li>
+  <li><b>The tamper protocol.</b> A seal not as written, a broken seal or a cut wrap holds the unit, logs the exception against it and its SSCC, and tells operations before custody is taken. <span class="rec">The pillar auditors test by trying it.</span></li>
+  <li><b>Receiving at hubs and shops.</b> Our own bags sealed with a real number; "Receive" asks for the number, a photo and the scan. <span class="rec">The comment's own example, and the hand-over with the least behind it today.</span></li>
+  <li><b>Need-to-know.</b> The carrier sees what to carry and where, not what it is worth. <span class="rec">A decision first: the invoice travels with the goods for customs.</span></li>
+  <li><b>A risk register.</b> Each hub, shop and corridor rated, with its countermeasures, fed by incidents. <span class="rec">The foundation pillar; larger, and some of it is yours to judge.</span></li>
+  <li><b>Partners.</b> A security declaration at sign-up, hubs vetted, a custody cap for the new and informal. <span class="rec">The cap was already noted as wanted and not built.</span></li>
+  <li><b>The trail.</b> Anchor custody, loads, seals and the documents' fingerprints; staff roles and a log of what staff open.</li>
+  <li><b>At the checkpoint.</b> Held by police or customs as a state; a driver's line to a central desk; the papers kept on the phone.</li>
+</ol>
+
+<h2 id="outside">Not software</h2>
+<div class="grid">
+  <div class="card"><span class="tag t-quiet">Organisational</span><h3>Scope of certification</h3><p>Certify the platform and the hubs first, with the shops as monitored providers under the app's hand-over controls — the comment's advice, and what the product's controls already lean towards.</p></div>
+  <div class="card"><span class="tag t-quiet">Organisational</span><h3>AEO and trusted-trader status</h3><p>Registering with customs once certified. The product can hold the status and its papers once you have them; it cannot apply.</p></div>
+  <div class="card"><span class="tag t-quiet">Physical</span><h3>Fences, zones and waiting areas</h3><p>Segregated docks and waiting areas are built, not coded. The product can name who may enter and keep who did.</p></div>
+</div>
+
+</div>
+</body>
+</html>
