@@ -551,6 +551,24 @@ export class ShippingApiService {
     return this.invoices.check(input, this.papersContext(vendor, quoted, dest, weightKg));
   }
 
+  /**
+   * ROUND 28 — A SHIPMENT'S LABEL, ASKED FOR AGAIN (the user: "ZPL through the shipping API"; "On each request"). The label
+   * the shipment issued once it was paid — as it came when it was made, or (`format=zpl`) in the language the store's
+   * warehouse label printers read, so they print with no app in between. A secret key, as creating it: a label is a claim
+   * on the network. Another store's shipment answers NOT FOUND, as every read here does.
+   */
+  label(shipmentId: string, caller: Caller): { parcelId: string; qrPayload: string; svg: string } {
+    if (!ApiKeyService.canMint(caller) || !caller.vendorId) throw new GlosError('FORBIDDEN', 'A label is a claim on the network: it is printed with a secret key (sk_…), as the shipment was made with one');
+    if (shipmentId.startsWith('test_')) throw new GlosError('NOT_FOUND', 'That is a simulated shipment from a test key — nothing was created, so it has no label');
+    const parcel = this.ownedParcel(shipmentId, caller.vendorId);
+    return this.parcels.orderLabel(caller.vendorId, parcel.parcelId);
+  }
+
+  /** The same label for a thermal label printer (ZPL, 203 dpi, 100 × 150 mm). */
+  labelZpl(shipmentId: string, caller: Caller): string {
+    return this.parcels.labelZplFor(this.label(shipmentId, caller).parcelId);
+  }
+
   private ownedParcel(shipmentId: string, vendorId: string) {
     let parcel;
     try {

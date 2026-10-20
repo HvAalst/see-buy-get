@@ -117,6 +117,48 @@ describe('every label for a thermal printer, over the wire', () => {
     expect(refused.body.detail).toMatch(/once the order is paid/);
   });
 
+  it('gives a store’s own system its label again through the shipping API — as it came, or as ZPL when it asks (round 28)', async () => {
+    const tag = digits();
+    const nairobi = await aShop(`Nairobi API ${tag}`, `ApiNairobi${tag}`);
+    const kisumu = await aShop(`Kisumu API ${tag}`, `ApiKisumu${tag}`);
+    await http().post('/v1/sbg/corridors').set(operator).send({ name: `ApiNairobi → ApiKisumu ${tag}`, originZone: `ApiNairobi${tag}`, destZone: `ApiKisumu${tag}` }).expect(201);
+    const keyOf = async (store: { id: string; token: { authorization: string } }, kind: 'secret' | 'publishable', mode: 'live' | 'test' = 'live') =>
+      (await http().post(`/v1/sbg/vendors/${store.id}/api-keys`).set(store.token).send({ kind, mode }).expect(201)).body.secret as string;
+    const shipment = { from: { pointId: nairobi.did }, to: { pointId: kisumu.did }, dimensionsCm: { l: 20, w: 15, h: 10 }, weightKg: 1, buyerMobile: '+254700000401', contentPhotoRef: 'content.jpg' };
+    const mint = async (key: string) => (await http().post('/v1/sbg/shipping/shipments').set('x-sbg-key', key).send(shipment).expect(201)).body;
+    const label = (key: string, id: string, format?: string) => http().get(`/v1/sbg/shipping/shipments/${id}/label${format ? `?format=${format}` : ''}`).set('x-sbg-key', key);
+
+    const store = await aStore();
+    const sk = await keyOf(store, 'secret');
+    const made = await mint(sk);
+    expect(made.paid).toBe(true);
+    // As it came when it was made…
+    expect((await label(sk, made.shipmentId).expect(200)).body.svg).toBe(made.label.svg);
+    expect((await label(sk, made.shipmentId, 'svg').expect(200)).body.svg).toBe(made.label.svg);
+    // …or for a thermal printer, asked for on this request.
+    const zpl = await label(sk, made.shipmentId, 'zpl').expect(200);
+    expect(zpl.headers['content-type']).toMatch(/^text\/plain/);
+    expect(zpl.text).toContain(`^FDQA,sbg:parcel:${made.shipmentId}^FS`);
+    expect(zpl.text).toContain(made.trackingKey);
+    expect((await label(sk, made.shipmentId, 'pdf').expect(400)).body).toMatchObject({ code: 'INVALID_INPUT', params: { field: 'format' } });
+
+    // A publishable key sits in a page: no label for it. Another store's key: no such shipment. A test key made nothing.
+    expect((await label(await keyOf(store, 'publishable'), made.shipmentId, 'zpl').expect(403)).body.detail).toMatch(/secret key/);
+    const other = await aStore();
+    await label(await keyOf(other, 'secret'), made.shipmentId, 'zpl').expect(404);
+    const simulated = await mint(await keyOf(store, 'secret', 'test'));
+    expect((await label(sk, simulated.shipmentId, 'zpl').expect(404)).body.detail).toMatch(/simulated shipment/);
+
+    // Not paid yet: no label, said in the usual way.
+    const broke = await aStore(false);
+    const bsk = await keyOf(broke, 'secret');
+    const unpaid = await mint(bsk);
+    expect(unpaid.paid).toBe(false);
+    const refused = await label(bsk, unpaid.shipmentId, 'zpl').expect(400);
+    expect(refused.headers['content-type']).toMatch(/json/);
+    expect(refused.body.detail).toMatch(/once the order is paid/);
+  });
+
   it('prints a business’s package labels as ZPL — one a package, each SSCC as the printer’s own GS1-128 — for whoever reads the load', async () => {
     const owner = async (name: string) => {
       const phone = `+2547${digits()}3`.slice(0, 13);

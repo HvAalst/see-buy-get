@@ -1,4 +1,8 @@
-import { Body, Controller, Get, Header, Headers, Param, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Headers, Param, Post, Put, Query, Res, UseGuards } from '@nestjs/common';
+import { ApiQuery } from '@nestjs/swagger';
+import type { Response } from 'express';
+import { GlosError } from '../../foundation/http/glos-error';
+import { zplOut } from '../../foundation/label/zpl';
 import { ParcelInvoice, ParcelInvoiceDto, ParcelInvoiceView } from './parcel-invoice.types';
 import { IdempotencyService } from '../../foundation/http/idempotency.service';
 import { OwnIdempotency } from '../../foundation/http/idempotency.interceptor';
@@ -117,6 +121,21 @@ export class ShippingApiController {
   @Post('shipments/:shipmentId/cancel')
   cancelShipment(@Param('shipmentId') shipmentId: string, @Body() dto: CancelShipmentDto, @CallerKey() caller: Caller) {
     return this.shipping.cancelShipment(shipmentId, caller, dto.reason);
+  }
+
+  /**
+   * Round 28 — the shipment's label, asked for again: as it came when the shipment was made (`svg`, the default), or
+   * `format=zpl` for a thermal label printer — 203 dpi, 100 × 150 mm — sent to the printer as it is. Asked for on each
+   * request, so a system printing on two kinds of printer asks for each. With a secret key, once the shipment is paid.
+   */
+  @Public()
+  @RateLimit(120, 60)
+  @Get('shipments/:shipmentId/label')
+  @ApiQuery({ name: 'format', required: false, enum: ['svg', 'zpl'] })
+  label(@Param('shipmentId') shipmentId: string, @CallerKey() caller: Caller, @Res({ passthrough: true }) res: Response, @Query('format') format?: string) {
+    if (format === undefined || format === 'svg') return this.shipping.label(shipmentId, caller);
+    if (format === 'zpl') return zplOut(res, this.shipping.labelZpl(shipmentId, caller));
+    throw new GlosError('INVALID_INPUT', 'format is svg (the default) or zpl', { field: 'format' });
   }
 
   /* -- round 13: a store parcel's papers abroad — its commercial invoice, read, printed and corrected with a secret key -- */

@@ -21080,6 +21080,47 @@
         }
       }
     },
+    "/v1/sbg/shipping/shipments/{shipmentId}/label": {
+      "get": {
+        "operationId": "ShippingApi.label",
+        "summary": "",
+        "description": "Round 28 — the shipment's label, asked for again: as it came when the shipment was made (`svg`, the default), or\n`format=zpl` for a thermal label printer — 203 dpi, 100 × 150 mm — sent to the printer as it is. Asked for on each\nrequest, so a system printing on two kinds of printer asks for each. With a secret key, once the shipment is paid.",
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "svg",
+                "zpl"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/shipping/shipments/{shipmentId}/invoice": {
       "get": {
         "operationId": "ShippingApi.invoice",

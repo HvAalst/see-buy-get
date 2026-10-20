@@ -469,6 +469,19 @@
   <p>A shipment belonging to another store answers <code>404</code>, not <code>403</code>. "You may not see
   this" would confirm the id is real to somebody working through a list of them.</p>
 
+  <h3>Its label, again — or for a thermal printer</h3>
+<pre><code>curl https://api.seebuyget.example/v1/sbg/shipping/shipments/PUD-A1B2C3D4E5/label?format=zpl \
+  -H "X-SBG-Key: sk_live_…"</code></pre>
+  <p>The label the shipment issued once it was paid, asked for again. Without <code>format</code>, or with
+  <code>format=svg</code>, it comes as it did when you created the shipment: <code>{ parcelId, qrPayload, svg }</code>.
+  With <code>format=zpl</code> it comes as ZPL, <code>text/plain</code>, for a thermal label printer at 203 dpi with
+  100 × 150 mm labels — send it to the printer as it is. Ask on each request, so a system printing on two kinds of
+  printer asks for each.</p>
+  <p>Needs a <b>secret</b> key, as creating the shipment did: a label is a claim on the network. Not paid yet, you get
+  <code>INVALID_STATE</code>; a shipment of another store, <code>404</code>; a test key made nothing, so there is no
+  label to print. A label never carries the collection code — only the shipment id in its QR and the
+  <code>trackingKey</code>.</p>
+
   <h3>Calling it off</h3>
 <pre><code>curl -X POST https://api.seebuyget.example/v1/sbg/shipping/shipments/PUD-A1B2C3D4E5/cancel \
   -H "X-SBG-Key: sk_live_…" \
