@@ -311,6 +311,8 @@ export const en = {
   'common.offline.sinceBanner': 'No signal — showing what we knew at {time}.',
   'common.offline.stale': 'Showing what we last knew — checking again.',
   'common.doc.print': 'Print or save',
+  'common.doc.keptTitle': 'No signal: the copy kept on this phone',
+  'common.doc.keptDetail': 'Kept {when}. It may have changed since; it is opened afresh once there is signal.',
   'common.cmr.open': 'Consignment note',
   'common.cmr.title': 'Consignment note (CMR)',
   // Round 14 — a load at a border or a hub, as its driver said it (shared/passages.ts).

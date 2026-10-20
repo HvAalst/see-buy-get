@@ -7,6 +7,7 @@ import type { CheckResultView, CheckSheetView } from './screens/VehicleCheck';
 import type { BreakdownView, TakeOverView, TakenOverView } from './screens/Breakdown';
 import type { IconName } from '../../shared/ui/Icon';
 import type { HeldByAuthorityView } from '../../shared/heldByAuthority';
+import { forgetPapers, keepPaper, keptPaper, needsKeeping } from '../../shared/keptPapers';
 import { choosePin, createDriverClient, driverConfig, driverSession, isMintSourced, isSignInRequired, narrow, purgeDriverTokens, requestPhoneCode, verifyPhoneCode } from './api';
 import { adoptDidFromUrl, clearDid, saveDid, saveRadius, saveRoute, savedRadius, savedRoute } from './storage';
 import type {
@@ -369,6 +370,27 @@ export function useDriverApp() {
   /** A shift end still in the outbox: the driver ended it with no signal, and the phone is the record until it sends. */
   const endQueued = useCallback(() => outboxItems().some((i) => i.path === `/v1/sbg/fleet/drivers/${encodeURIComponent(did ?? '')}/end-session` && i.state !== 'blocked'), [did]);
 
+  /**
+   * THE PAPERS KEPT ON THE PHONE (shared/keptPapers.ts): the consignment note of each load of theirs, claimed or on the
+   * road, fetched while there is signal and again once it changed; the notes of loads no longer theirs forgotten. Read
+   * only after the loads were: a refresh that failed, or a shift that ended, forgets nothing.
+   */
+  const keepNotes = useCallback(
+    async (claims: ClaimsView['claims']) => {
+      if (!client || !did) return;
+      const mine = claims.filter((c) => c.kind === 'freight' && (c.status === 'claimed' || c.status === 'in_transit'));
+      forgetPapers(did, mine.map((c) => c.ref));
+      for (const c of mine) {
+        if (!needsKeeping(keptPaper(did, c.ref), c.status)) continue;
+        const r = await client.api.freightNote(c.ref);
+        if (r.error) return; // no signal now: the copies there are stay as they are
+        const doc = (r as { data?: unknown }).data;
+        keepPaper(did, c.ref, typeof doc === 'string' ? doc : String(doc ?? ''), c.status);
+      }
+    },
+    [client, did],
+  );
+
   const refresh = useCallback(async () => {
     if (!client || !did) return;
     const epoch = ++refreshEpoch.current;
@@ -431,6 +453,8 @@ export function useDriverApp() {
         remaining = cv?.remainingCapacityKg ?? 0;
         remainingTotes = cv?.remainingTotes ?? null;
         claims = cv?.claims ?? [];
+        // The papers kept on the phone: each load of theirs, its note fetched while there is signal. Not awaited.
+        void keepNotes(claims);
 
         // Network per-km benchmark (vehicles roam, so no lat/lng). Soft-fail by design.
         const rtR = await client.api.vehicleRates();
@@ -514,7 +538,7 @@ export function useDriverApp() {
     } finally {
       refreshesRunning.current -= 1;
     }
-  }, [client, did, fail, endQueued]);
+  }, [client, did, fail, endQueued, keepNotes]);
 
   /**
    * Follow the phone while the shift lasts.
@@ -708,12 +732,14 @@ export function useDriverApp() {
   }, [signIn]);
 
   const signOut = useCallback(() => {
+    // The papers kept on this phone are the driver's: they go with them.
+    if (did) forgetPapers(did);
     client?.client.session.clear();
     purgeDriverTokens(null);
     clearDid();
     setDid(null);
     setState(() => ({ ...INITIAL, phase: 'signin' }));
-  }, [client]);
+  }, [client, did]);
 
   /* ------------------------------------------------------------ navigation */
 
