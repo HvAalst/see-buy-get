@@ -869,7 +869,7 @@ export const ARTICLES: GuideArticle[] = [
     ],
     notes: [
       "Do not clear the app’s data while something is still to send: the record of what you moved is on the phone until it has gone.",
-      "A parcel or bag moved, a load picked up or delivered, a border passed, a breakdown or a road hazard: sent later, each keeps the time you did it, by the phone’s clock — never a time still to come, never more than a week back, and never before the step before it. Where its time is written down, such as the damage claim report, it says when SeeBuyGet heard of it too. Ending a shift and a temperature reading are dated when they reach us."
+      "A parcel or bag moved, a load picked up or delivered, a border passed, a temperature read, a breakdown or a road hazard, a shift ended: sent later, each keeps the time you did it, by the phone’s clock — never a time still to come, never more than a week back, and never before the step before it. A shift’s end is never dated before your phone was last heard from on that shift. Where its time is written down, such as the damage claim report or the consignment note, it says when SeeBuyGet heard of it too."
     ]
   },
   {

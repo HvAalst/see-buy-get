@@ -829,7 +829,10 @@ describe('handing orders on', () => {
         const handOver = (id: string, at: number) => {
           dispatch.assign(id, own.did, { managerDid: a.did, name: 'Amina' });
           const f = dispatch.listFreight().find((x) => x.freightId === id)!;
-          dispatch.pickupFreight(id, own.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_test' });
+          // Taken over before it is handed over, at whatever hour the suite runs: a handover is never dated before its
+          // pickup (round 22), so a pickup at the real time and a handover at 10:30 today read 10:30 only before 10:30.
+          f.claimedAt = new Date(at - 2 * 3_600_000).toISOString();
+          dispatch.pickupFreight(id, own.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_test' }, at - 3_600_000);
           return dispatch.deliverFreight(id, own.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' }, at);
         };
         const row = (id: string, at?: number) => dispatch.postedBy(shipper, at).find((r) => r.freightId === id)!;

@@ -3264,8 +3264,12 @@ export class DispatchService {
    * a reading outside the cargo's safe band marks the freight breached (STICKY — the chain, once broken, stays
    * flagged even if it recovers) and emits an event for the operator watchtower. A freight whose cargo is not
    * temperature-controlled has no band, so logging is refused (there is nothing to monitor).
+   *
+   * Round 24 — READ WHEN IT WAS READ: a reading kept on the phone with no signal is dated by the phone (within limits,
+   * never before the taking over nor before the reading before it), and when it reached us is kept beside it — so a
+   * breach heard of late says when the load was too warm, and that we learned it later.
    */
-  recordTemp(freightId: string, celsius: number, driverDid?: string): Freight {
+  recordTemp(freightId: string, celsius: number, driverDid?: string, observedAt?: string): Freight {
     const f = this.requireFreight(freightId);
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected in_transit`);
@@ -3274,10 +3278,11 @@ export class DispatchService {
     if (!Number.isFinite(celsius)) throw new GlosError('INVALID_INPUT', 'A numeric temperature reading is required');
     const c = Math.round(celsius * 10) / 10;
     const breach = isTempBreach(c, band);
-    f.tempReadings = [...(f.tempReadings ?? []), { celsius: c, at: new Date().toISOString(), by: driverDid, breach }];
+    const read = handedAt(observedAt, Date.now(), [f.pickedUpAt, ...(f.tempReadings ?? []).map((r) => r.at)]);
+    f.tempReadings = [...(f.tempReadings ?? []), { celsius: c, at: read.at, by: driverDid, breach, ...(read.receivedAt ? { receivedAt: read.receivedAt } : {}) }];
     if (breach && !f.tempBreached) {
       f.tempBreached = true; // sticky
-      void this.events.publish(GlosEvent.Pudo.FreightTempBreach, { freightId: f.freightId, code: f.code, celsius: c, band, driverDid }, { source: 'pudo' }).catch(() => undefined);
+      void this.events.publish(GlosEvent.Pudo.FreightTempBreach, { freightId: f.freightId, code: f.code, celsius: c, band, driverDid, readAt: read.at, ...(read.receivedAt ? { receivedAt: read.receivedAt } : {}) }, { source: 'pudo' }).catch(() => undefined);
     }
     this.freights.set(f.freightId, f);
     return f;

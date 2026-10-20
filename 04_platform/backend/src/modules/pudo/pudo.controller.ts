@@ -6046,12 +6046,14 @@ export class SbgController {
   endSession(@Param('did') did: string, @Body() dto: EndSessionDto, @Actor() actor: IntrospectionResult) {
     this.assertDriverActs(did, actor);
     const vehicleId = this.fleet.activeForDriver(did)?.vehicleId;
-    const ended = this.fleet.endSession(did);
+    // Round 24 — ended when the driver ended it, by their phone. Staff standing in end it now: the end is what the rest owed
+    // is counted from, and only the driver's own phone says when they stopped.
+    const ended = this.fleet.endSession(did, actor?.role === 'operator' ? undefined : dto?.observedAt);
     // The odometer, read as the shift ends: kept if it can be, and the shift has ended either way.
     if (dto?.odometerKm === undefined || !vehicleId || !this.care) return ended;
     // Never in the way of ending — and staff standing in give no reading: it is not kept, and the answer says so.
     if (actor?.role === 'operator') return { ...ended, odometer: { kept: false, why: 'Staff standing in give no odometer reading: the driver does, from their own phone' } };
-    return { ...ended, odometer: this.care.recordEndReading(vehicleId, dto.odometerKm, { by: this.drivers.get(did).displayName, byDid: did }) };
+    return { ...ended, odometer: this.care.recordEndReading(vehicleId, dto.odometerKm, { by: this.drivers.get(did).displayName, byDid: did }, Date.parse(ended.endedAt!)) };
   }
 
   /**
@@ -6783,7 +6785,7 @@ export class SbgController {
   @Roles('driver', 'operator')
   @Post('dispatch/freight/:id/temperature')
   freightTemp(@Param('id') id: string, @Body() dto: RecordTempDto, @Actor() actor: IntrospectionResult) {
-    return this.dispatch.recordTemp(id, dto.celsius, actingDid(actor, dto.driverDid));
+    return this.dispatch.recordTemp(id, dto.celsius, actingDid(actor, dto.driverDid), dto.observedAt);
   }
 
   // --- F3: consolidation consignments (durable dry commodities) — the bulk analogue of totes ---

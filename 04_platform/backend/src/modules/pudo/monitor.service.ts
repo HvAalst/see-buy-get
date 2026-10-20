@@ -15,6 +15,18 @@ export interface PudoFlag {
 
 const hoursSince = (iso?: string): number => (iso ? (Date.now() - new Date(iso).getTime()) / 3_600_000 : 0);
 
+/** A moment as the flags say it: the day and the time, in UTC. */
+const utc = (iso: string): string => `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
+
+/**
+ * The reading that broke the band, said with its own time — and, where it was read with no signal (round 24), that we
+ * heard of it later: a breach learned of late is not a load too warm right now.
+ */
+function breachWords(r: { celsius: number; at: string; receivedAt?: string } | undefined): string {
+  if (!r) return '';
+  return `: ${r.celsius} °C at ${utc(r.at)}${r.receivedAt ? ` — read with no signal; reached us ${utc(r.receivedAt)}` : ''}`;
+}
+
 /**
  * MonitorService (P-006, ↔ M7/M4/SSE light). The exception-management half of the Control Tower done
  * with time windows instead of AI: Stagnant Inventory (> 48 h At_PUDO), Ghost Bus (> 6 h On_Bus),
@@ -116,7 +128,7 @@ export class MonitorService {
     // S33b: a cold-chain freight whose temperature left the safe band in transit — the chain is broken, the
     // cargo suspect. Surfaced while it is still moving so an operator can act (reroute, alert the shipper).
     for (const f of this.dispatch.listFreight({ status: 'in_transit' })) {
-      if (f.tempBreached) flags.push({ type: 'Temp_Breach', subject: f.code, detail: `cold-chain freight to ${f.destLabel} broke its temperature band` });
+      if (f.tempBreached) flags.push({ type: 'Temp_Breach', subject: f.code, detail: `cold-chain freight to ${f.destLabel} broke its temperature band${breachWords(f.tempReadings?.find((r) => r.breach))}` });
     }
     return flags;
   }

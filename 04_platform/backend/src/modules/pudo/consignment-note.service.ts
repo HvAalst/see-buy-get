@@ -141,7 +141,7 @@ export class ConsignmentNoteService implements OnModuleInit {
     for (const a of f.instructionAmendments ?? []) instructions.push(`Subsequent instruction, ${when(a.at)}: ${a.text}`);
     const reservations: string[] = [];
     if (f.reservations) reservations.push(`At taking over: ${f.reservations.note}`);
-    if (f.tempBreached) reservations.push('Cold chain breached in transit — see the temperature log');
+    if (f.tempBreached) reservations.push(breachLine(f.tempReadings?.find((r) => r.breach)));
     // A reload onto another of the carrier's vehicles after a breakdown is written here, and nowhere else.
     for (const r of (f.reloads ?? []).filter((x) => x.aboard)) reservations.push(reloadLine(r));
     // Round 15 — the seals: each with what became of it; a broken one, or one not as written at the door, observed in box 18.
@@ -587,6 +587,12 @@ export function reloadLine(r: { at: string; fromPlate: string; toPlate: string; 
 }
 
 /** Round 22 — a step done with no signal: dated by the phone, and said when it reached SeeBuyGet. */
+/** Round 24 — the breach as the note states it: the reading that broke the band, when it was read, and how. */
+function breachLine(r: { celsius: number; at: string; receivedAt?: string } | undefined): string {
+  if (!r) return 'Cold chain breached in transit — see the temperature log';
+  return `Cold chain breached in transit: ${r.celsius} °C read ${when(r.at)}${noSignal(r.receivedAt)} — see the temperature log`;
+}
+
 function noSignal(receivedAt: string | undefined): string {
   return receivedAt ? `; done with no signal on the driver's phone, which dated it, and received by SeeBuyGet on ${receivedAt.slice(0, 16).replace('T', ' at ')} UTC` : '';
 }

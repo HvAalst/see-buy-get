@@ -42798,6 +42798,10 @@
           "endedAt": {
             "type": "string"
           },
+          "endReceivedAt": {
+            "type": "string",
+            "description": "Round 24 — when SeeBuyGet heard the shift had ended, where later than `endedAt`: ended with no signal, dated by the phone."
+          },
           "location": {
             "$ref": "#/components/schemas/GeoPoint"
           },
@@ -42925,6 +42929,10 @@
             "type": "number",
             "minimum": 0,
             "maximum": 9999999
+          },
+          "observedAt": {
+            "type": "string",
+            "description": "Round 24 — when the driver ended it, by the phone's clock: a shift ended with no signal waits on the phone."
           }
         }
       },
@@ -45243,6 +45251,10 @@
           },
           "celsius": {
             "type": "number"
+          },
+          "observedAt": {
+            "type": "string",
+            "description": "Round 24 — when the driver read it, by the phone's clock: a reading taken with no signal waits on the phone."
           }
         },
         "required": [
@@ -57026,6 +57038,10 @@
           "note": {
             "type": "string"
           },
+          "receivedAt": {
+            "type": "string",
+            "description": "Round 23 — the hand-over was done with no signal and dated by the phone; when SeeBuyGet heard of it."
+          },
           "from": {
             "type": "string"
           }
@@ -57040,6 +57056,10 @@
         "properties": {
           "fingerprint": {
             "type": "string"
+          },
+          "receivedAt": {
+            "type": "string",
+            "description": "Round 23 — the step was done with no signal and dated by the phone; when SeeBuyGet heard of it."
           },
           "at": {
             "type": "string"

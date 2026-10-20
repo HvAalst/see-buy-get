@@ -53,6 +53,13 @@ describe('a custody step carries the moment it was done', () => {
     expect((await stampOf(() => agent.sealBag('did:a', 'BAG-1', { acknowledgeShortShip: true, shortShipReason: 'next bag' }))).body).toMatchObject({ acknowledgeShortShip: true, shortShipReason: 'next bag' });
   });
 
+  it('on a temperature read and a shift ended (round 24)', async () => {
+    const driver = createDriverApi(sbg);
+    expect((await stampOf(() => driver.recordTemp('F1', 'did:d', 4.5))).body).toEqual({ driverDid: 'did:d', celsius: 4.5, observedAt: at.toISOString() });
+    expect((await stampOf(() => driver.endSession('did:d', 15230))).body).toEqual({ odometerKm: 15230, observedAt: at.toISOString() });
+    expect((await stampOf(() => driver.endSession('did:d'))).body).toEqual({ observedAt: at.toISOString() });
+  });
+
   it('on a bag loaded onto a vehicle, by the driver or at a hub', async () => {
     for (const load of [() => createDriverApi(sbg).loadBag('BAG-1', 'DRV-1'), () => createMdpApi(sbg).loadBag('BAG-1', 'DRV-1')]) {
       const { body } = await stampOf(load);

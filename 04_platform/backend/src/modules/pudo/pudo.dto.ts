@@ -2387,6 +2387,8 @@ export class StartSessionDto {
 /** Ending a shift: what the odometer says now, if the driver read it. It never stops the shift ending. */
 export class EndSessionDto {
   @IsOptional() @IsInt() @Min(0) @Max(9_999_999) odometerKm?: number;
+  /** Round 24 — when the driver ended it, by the phone's clock: a shift ended with no signal waits on the phone. */
+  @IsOptional() @IsDateString() observedAt?: string;
 }
 
 export class LocateDto {
@@ -2702,6 +2704,8 @@ export class ConsignmentDepositDto {
 export class RecordTempDto {
   @IsOptional() @IsString() driverDid?: string;
   @IsNumber() celsius!: number;
+  /** Round 24 — when the driver read it, by the phone's clock: a reading taken with no signal waits on the phone. */
+  @IsOptional() @IsDateString() observedAt?: string;
 }
 
 /**

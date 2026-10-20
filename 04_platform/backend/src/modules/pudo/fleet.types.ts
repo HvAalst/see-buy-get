@@ -521,6 +521,8 @@ export class Assignment {
   status: AssignmentStatus;
   startedAt: string;
   endedAt?: string;
+  /** Round 24 — when SeeBuyGet heard the shift had ended, where later than `endedAt`: ended with no signal, dated by the phone. */
+  endReceivedAt?: string;
   location?: GeoPoint; // last reported GPS position (live fleet map)
   lastLocatedAt?: string;
 }

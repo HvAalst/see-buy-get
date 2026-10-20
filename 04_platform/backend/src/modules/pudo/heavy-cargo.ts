@@ -86,6 +86,8 @@ export interface TempReading {
   at: string;
   by?: string;
   breach: boolean;
+  /** Round 24 — when SeeBuyGet heard of it, where later than `at`: read with no signal, dated by the driver's phone. */
+  receivedAt?: string;
 }
 
 // The chilled cold-chain band (fresh produce, dairy, pharma). The codebase's FIRST numeric temperature concept

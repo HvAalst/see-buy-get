@@ -202,7 +202,8 @@ export function createDriverApi(sbg: SbgClient) {
     /** End the shift (decouple). */
     /** End the shift — with what the odometer says now, if the driver read it. It never stops the shift ending. */
     endSession: (did: string, odometerKm?: number) =>
-      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/end-session', { params: { path: { did } }, body: odometerKm !== undefined ? { odometerKm } : {} })),
+      // Round 24 — dated now, when the driver ends it: a shift ended with no signal is sent later with this body as it is.
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/end-session', { params: { path: { did } }, body: { ...(odometerKm !== undefined ? { odometerKm } : {}), observedAt: new Date().toISOString() } })),
 
     /** Declare a route A→B and get offered nearby totes/freight sized to the vehicle's remaining capacity. */
     suggestWork: (did: string, body: { from: { lat: number; lng: number }; to: { lat: number; lng: number }; departAt?: string; minEarn?: number }) =>
@@ -367,7 +368,7 @@ export function createDriverApi(sbg: SbgClient) {
 
     /** S33b — log a temperature reading for a cold-chain freight in transit (a breach flags it for the tower). */
     recordTemp: (freightId: string, driverDid: string, celsius: number) =>
-      sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/temperature', { params: { path: { id: freightId } }, body: { driverDid, celsius } })),
+      sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/temperature', { params: { path: { id: freightId } }, body: { driverDid, celsius, observedAt: new Date().toISOString() } })),
 
     /** Round 14 — the load is at a border post, has cleared it, or is at a hub. Who says it comes from the sign-in. */
     recordPassage: (

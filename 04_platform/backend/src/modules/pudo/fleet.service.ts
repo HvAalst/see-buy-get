@@ -11,6 +11,7 @@ import { MAX_SNOOZE_MIN, MAX_WORK_RADIUS_KM } from './pudo.config';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { Assignment, DeclaredLeg, DeclaredWork, ResolvedBadge } from './fleet.types';
 import { GeoPoint } from './pudo.types';
+import { handedAt } from './observed-at';
 
 /** What a caller declares: the two ends, each named and pinned. */
 export interface LegInput {
@@ -431,9 +432,9 @@ export class FleetService {
     this.legHistory.set(driverDid, [leg, ...rest].slice(0, LEG_HISTORY));
   }
 
-  /** End the work shift (close session) → decouple driver + vehicle. */
-  endSession(driverDid: string): Assignment {
-    return this.uncouple(driverDid);
+  /** End the work shift (close session) → decouple driver + vehicle. `observedAt`: when the driver ended it, by their phone. */
+  endSession(driverDid: string, observedAt?: string): Assignment {
+    return this.uncouple(driverDid, observedAt);
   }
 
   /* ------------------------------------------------------------ FP8: hours of service -- */
@@ -563,12 +564,21 @@ export class FleetService {
     return { active: true, assignment, vehicle: this.vehicles.get(assignment.vehicleId) };
   }
 
-  /** End the driver's active coupling (frees both the driver and the vehicle). */
-  uncouple(driverDid: string): Assignment {
+  /**
+   * End the driver's active coupling (frees both the driver and the vehicle).
+   *
+   * Round 24 — ENDED WHEN IT ENDED: a shift ended on a phone with no signal is dated by the phone (within limits), and when
+   * it reached us is kept beside it. Never before the shift began, and never before the last time the phone was heard
+   * from on it: the end is what the rest owed is counted from, and a shift cannot be said to have ended while its phone
+   * was still reporting from the road.
+   */
+  uncouple(driverDid: string, observedAt?: string): Assignment {
     const active = this.activeForDriver(driverDid);
     if (!active) throw new GlosError('NOT_COUPLED', 'Driver is not currently coupled to a vehicle');
+    const ended = handedAt(observedAt, Date.now(), [active.startedAt, active.lastLocatedAt]);
     active.status = 'ended';
-    active.endedAt = new Date().toISOString();
+    active.endedAt = ended.at;
+    if (ended.receivedAt) active.endReceivedAt = ended.receivedAt;
     this.drivers.setAssignedVehicle(driverDid, undefined);
     void this.events.publish(GlosEvent.Pudo.DriverUncoupled, { assignmentId: active.assignmentId, driverDid, vehicleId: active.vehicleId }, { source: 'pudo' }).catch(() => undefined);
     return active;
