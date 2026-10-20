@@ -28835,6 +28835,39 @@
         }
       }
     },
+    "/v1/sbg/staff-reads": {
+      "get": {
+        "operationId": "StaffRead.list",
+        "parameters": [
+          {
+            "name": "record",
+            "required": false,
+            "in": "query",
+            "description": "A record, by its number, code or id (part of it will do).",
+            "schema": {}
+          },
+          {
+            "name": "by",
+            "required": false,
+            "in": "query",
+            "description": "A member of staff, by name (part of it will do).",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffReadList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/settlement/module-info": {
       "get": {
         "operationId": "Sse.info",
@@ -59082,6 +59115,71 @@
         "required": [
           "state",
           "expiresAt"
+        ]
+      },
+      "StaffReadView": {
+        "type": "object",
+        "properties": {
+          "byKind": {
+            "type": "string",
+            "enum": [
+              "staff",
+              "key"
+            ]
+          },
+          "staffId": {
+            "type": "string"
+          },
+          "readId": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "lastAt": {
+            "type": "string"
+          },
+          "times": {
+            "type": "number"
+          },
+          "byName": {
+            "type": "string"
+          },
+          "route": {
+            "type": "string"
+          },
+          "record": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "byKind",
+          "readId",
+          "at",
+          "lastAt",
+          "times",
+          "byName",
+          "route",
+          "record"
+        ]
+      },
+      "StaffReadList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StaffReadView"
+            }
+          },
+          "total": {
+            "type": "number",
+            "description": "How many lines match, of which `items` is the newest page."
+          }
+        },
+        "required": [
+          "items",
+          "total"
         ]
       },
       "MilestoneTermDto": {

@@ -896,6 +896,22 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "staff-reads",
+    apps: [
+      "console"
+    ],
+    title: "What staff opened",
+    summary: "Every record a member of staff opens by its name or number is noted: who, which, when, and how many times in a row — and looking at the list is noted too.",
+    steps: [
+      "Operator console, Setup, “What staff opened”: newest first. Show the lines of one member of staff by their name, or of one record by its number, code or id.",
+      "Each line is one record opened by one person: its number or code, who — a member of staff by their own account, or “the shared key”, which is nobody — when, and, opened again within ten minutes, how many times.",
+      "Lists are not noted, only a record opened by its name or number. What staff change is on the record of the thing they changed."
+    ],
+    notes: [
+      "Sign in with your own staff account: what the shared key opens is noted as nobody’s."
+    ]
+  },
+  {
     id: "held-on-the-road",
     apps: [
       "driver",

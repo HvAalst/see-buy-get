@@ -2018,6 +2018,17 @@ export const enTowerQueues = {
   'tower.interest.promise': 'Everyone here was promised one thing and nothing else: that we write to them the day their country is switched on, and say which of the two it became. Approving a change below sends that, to everybody still waiting in it.',
 
   'tower.nav.connections': 'Connections',
+  'tower.nav.staffreads': 'What staff opened',
+  'tower.staffReads.title': 'What staff opened',
+  'tower.staffReads.lede': 'Every record a member of staff opened by its name or number — a shop, a person, a parcel, a hold — with who, when, and how many times in a row. Lists are not in it. Looking here is in it too.',
+  'tower.staffReads.by': 'Who',
+  'tower.staffReads.byPlaceholder': 'A name',
+  'tower.staffReads.record': 'Which record',
+  'tower.staffReads.recordPlaceholder': 'A number, a code, an id',
+  'tower.staffReads.find': 'Show',
+  'tower.staffReads.none': 'Nothing opened yet.',
+  'tower.staffReads.count': 'The newest {shown} of {total}.',
+  'tower.staffReads.times': '{first} to {last}, {n} times',
   'tower.conn.title': 'Connections',
   'tower.conn.lede':
     'What this server is connected to: a routing server and the adviser for the fleets\u2019 planning, and email, push and the text that carries a code for everybody. All are set where the server runs. This says whether each is set up, whether it is answering, and whether what is written here leaves at all.',
