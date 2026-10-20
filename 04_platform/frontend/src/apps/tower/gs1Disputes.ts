@@ -16,6 +16,8 @@ export interface Gs1PartyRow {
   digitNow?: number;
   /** Round 20 — a forwarder's client: the forwarder that answers for it. */
   forwarder?: string;
+  /** Round 29 — a store rather than a business: it answers in the Store app. */
+  store?: boolean;
 }
 
 export type Gs1Side = 'claimant' | 'holders';

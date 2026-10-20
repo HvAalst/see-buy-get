@@ -1,4 +1,4 @@
-import { gs1_128Width } from '../gs1/gs1';
+import { gs1_128Width, ssccHumanReadable, ssccOf, ssccSpaced } from '../gs1/gs1';
 import { DOTS_PER_MM, zplBox, zplField, zplGs1_128, zplLabel, zplQr, zplText } from './zpl';
 import { parcelLabelZpl } from '../../modules/pudo/parcel-label';
 
@@ -55,5 +55,18 @@ describe('a parcel’s label for a thermal printer', () => {
     const prepaid = parcelLabelZpl({ ...parcel, direction: 'inbound' }, '20 Oct 2026');
     expect(prepaid).toContain('^FDPre-paid^FS');
     expect(prepaid).toContain('^FDPre-paid - sbg:parcel:QR-7^FS');
+  });
+
+  it('prints a store parcel’s SSCC as GS1 asks — spaced at the prefix, as GS1-128 (00), and as a person reads it (round 29)', () => {
+    const sscc = ssccOf('6161234', 2, 0);
+    const zpl = parcelLabelZpl({ ...parcel, direction: 'inbound', sscc }, '20 Oct 2026', undefined, 7);
+    expect(zpl).toContain('^FDSSCC^FS');
+    expect(zpl).toContain(`^FD${ssccSpaced(sscc, 7)}^FS`);
+    expect(zpl).toContain(`^FD>;>800${sscc}^FS`);
+    expect(zpl).toContain(`^FD${ssccHumanReadable(sscc)}^FS`);
+    // The barcode takes the footer's place: the QR already carries what it said.
+    expect(zpl).not.toContain('sbg:parcel:QR-7^FS^FO');
+    expect(zpl).not.toContain('^FDPre-paid - sbg:parcel:QR-7^FS');
+    expect(parcelLabelZpl(parcel, '20 Oct 2026')).not.toContain('SSCC');
   });
 });

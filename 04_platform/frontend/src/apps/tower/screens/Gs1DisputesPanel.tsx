@@ -62,6 +62,7 @@ function Dispute({ row, state, actions, onChanged }: { row: Gs1DisputeRow; state
           {t(side === 'claimant' ? 'tower.gs1.claimant' : 'tower.gs1.holder')}
           {p.digitNow !== undefined ? ` · ${t('tower.gs1.digitNow', { digit: p.digitNow })}` : ''}
           {p.forwarder ? ` · ${t('tower.gs1.forwarder', { name: p.forwarder })}` : ''}
+          {p.store ? ` · ${t('tower.gs1.store')}` : ''}
         </span>
       </p>
       {p.note ? <p class="chint">“{p.note}”</p> : null}

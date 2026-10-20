@@ -906,6 +906,8 @@ export class Parcel {
   items?: LineItem[];
   contentPhotoRef?: string; // photo of the contents at mint — the baseline a dispute is judged against
   label?: PhygitalLabel; // the generated label, persisted so the order detail can reprint it
+  /** Round 29 — a store's parcel, paid, under the store's GS1 company prefix: its SSCC, printed on its label. */
+  sscc?: string;
   // --- pricing + prepaid settlement (open-data quote; GLOS holds no fiat, bills the vendor full) ---
   subtotal?: number; // order value (drives the buyer-charge under a capped policy)
   routeMode?: 'flexible' | 'locked'; // flexible = any carrier @ ceiling (rebated); locked = cheapest route

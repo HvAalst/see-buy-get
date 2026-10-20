@@ -1,5 +1,6 @@
 import type { SbgClient } from '../client';
 import { createFiscalApi } from './fiscal';
+import { createMediaApi } from './media';
 
 /**
  * A parcel actually measured — three sides in centimetres and a weight in kilos.
@@ -112,6 +113,24 @@ export function createVendorApi(sbg: SbgClient) {
     /** Full detail for one order (validates it belongs to this store). */
     order: (vendorId: string, parcelId: string) =>
       sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/orders/{parcelId}', { params: { path: { id: vendorId, parcelId } } })),
+
+    /* --- round 29: the store's GS1 company prefix, held to a business's rules, and the disputes it is in --- */
+
+    /** Give the prefix and the extension digit: each parcel paid from now on gets an SSCC under it. */
+    setGs1: (vendorId: string, companyPrefix: string, extensionDigit: number) =>
+      sbg.request((c) => c.PUT('/v1/sbg/vendors/{id}/gs1', { params: { path: { id: vendorId } }, body: { companyPrefix, extensionDigit } })),
+    /** Stop giving SSCCs: parcels already labelled keep theirs. */
+    clearGs1: (vendorId: string) => sbg.request((c) => c.DELETE('/v1/sbg/vendors/{id}/gs1', { params: { path: { id: vendorId } } })),
+    gs1Disputes: (vendorId: string) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/gs1/disputes', { params: { path: { id: vendorId } } })),
+    /** "This prefix is ours", refused a prefix another uses: with the store's GS1 licence. */
+    openGs1Dispute: (vendorId: string, body: { companyPrefix: string; extensionDigit: number; licenceRef: string; note?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/gs1/disputes', { params: { path: { id: vendorId } }, body })),
+    sendGs1Licence: (vendorId: string, disputeId: string, licenceRef: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/gs1/disputes/{disputeId}/licence', { params: { path: { id: vendorId, disputeId } }, body: { licenceRef } })),
+    withdrawGs1Dispute: (vendorId: string, disputeId: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/gs1/disputes/{disputeId}/withdraw', { params: { path: { id: vendorId, disputeId } } })),
+    /** The licence itself: a photograph or a screenshot, kept on our server as the store's own media. */
+    uploadGs1Licence: (dataUrl: string, thumbDataUrl?: string) => createMediaApi(sbg).uploadMedia('gs1_licence', dataUrl, thumbDataUrl),
 
     /** Round 27 — an order's label, to print again once it is paid; and the same for a thermal label printer (ZPL). */
     orderLabel: (vendorId: string, parcelId: string) =>

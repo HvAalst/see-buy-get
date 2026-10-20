@@ -7,14 +7,18 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { BusinessClientService } from './business-client.service';
 import { MediaService } from './media.service';
 import { NotificationService } from './notification.service';
-import { ShipperCodesService, clientCoder, clientOfCoder } from './shipper-codes.service';
+import { ShipperCodesService, clientCoder, clientOfCoder, vendorOfCoder, whereGs1IsSet } from './shipper-codes.service';
+import { VendorService } from './vendor.service';
 import { GS1_ANSWER_DAYS, type Gs1Dispute, type Gs1DisputeRow, type Gs1DisputeSide, type Gs1DisputeView, type Gs1Party, type Gs1PartyRow } from './gs1-dispute.types';
 
 const DAY_MS = 86_400_000;
 const iso = (ms: number) => new Date(ms).toISOString();
 const dayOf = (at: string) => new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 
-/** The business acting, as the routes hand it over: which business, and the person by name. */
+/**
+ * The business acting, as the routes hand it over: which business, and the person by name. Round 29 — or a store, keyed
+ * `vendor:<vendorId>` (shipper-codes vendorCoder), answering for itself in the Store app.
+ */
 export interface Gs1Business {
   entityId: string;
   did: string;
@@ -49,6 +53,7 @@ export class Gs1DisputeService {
     @Optional() private readonly media?: MediaService,
     @Optional() private readonly notifications?: NotificationService,
     @Optional() private readonly clients?: BusinessClientService,
+    @Optional() private readonly vendors?: VendorService,
   ) {}
 
   /* ------------------------------------------------------------------------- the businesses -- */
@@ -61,7 +66,7 @@ export class Gs1DisputeService {
     // For a client: the client's own record, which this forwarder keeps (404 for another's).
     const claimantKey = input.forClientId ? clientCoder(business.entityId, this.requireClient(business.entityId, input.forClientId).clientId) : business.entityId;
     const holderIds = this.codes.holdersOf(companyPrefix, claimantKey);
-    if (!holderIds.length) throw new GlosError('INVALID_STATE', 'No other business uses this prefix: set it in Business details.', { field: 'companyPrefix' });
+    if (!holderIds.length) throw new GlosError('INVALID_STATE', `Nobody else uses this prefix: set it in ${whereGs1IsSet(claimantKey)}.`, { field: 'companyPrefix' });
     if ([...this.disputes.values()].some((d) => d.companyPrefix === companyPrefix && alive(d))) {
       throw new GlosError('CONFLICT', 'A dispute about this prefix is already open: SeeBuyGet staff decide it first.', { field: 'companyPrefix' });
     }
@@ -87,7 +92,7 @@ export class Gs1DisputeService {
     const by = dayOf(iso(now + GS1_ANSWER_DAYS * DAY_MS));
     for (const h of holders) {
       const whose = h.actsFor ? ` — the one you entered for your client ${h.name}` : '';
-      this.tell(h.did, disputeId, `Another business says the GS1 prefix ${companyPrefix} is its own`, `${dispute.claimant.name} has sent SeeBuyGet staff a GS1 licence for prefix ${companyPrefix}${whose}. Send yours in Business details by ${by}: two members of staff decide whose it is. Until then nothing changes, and your labels carry on.`);
+      this.tell(h.did, disputeId, `${dispute.claimant.store ? 'A store' : 'Another business'} says the GS1 prefix ${companyPrefix} is its own`, `${dispute.claimant.name} has sent SeeBuyGet staff a GS1 licence for prefix ${companyPrefix}${whose}. Send yours in ${whereGs1IsSet(h.entityId)} by ${by}: two members of staff decide whose it is. Until then nothing changes, and your labels carry on.`);
     }
     return this.viewFor(dispute, business.entityId);
   }
@@ -188,7 +193,7 @@ export class Gs1DisputeService {
     if (proposal.to === 'claimant') {
       const c = dispute.claimant;
       this.tell(c.did, disputeId, `The GS1 prefix ${p} is ${yours(c)}`, `Two members of SeeBuyGet staff looked at the licences and decided prefix ${p} is ${yours(c)}. ${labelsOf(c)} carry it from now on, under extension digit ${dispute.extensionDigit}. Their reason: ${proposal.reason}`);
-      for (const h of dispute.holders) this.tell(h.did, disputeId, `The GS1 prefix ${p} is another business's`, `Two members of SeeBuyGet staff looked at the licences and decided prefix ${p} is ${c.name}'s. ${labelsOf(h)} no longer carry it; the loads you posted keep the codes they were given. Their reason: ${proposal.reason}`);
+      for (const h of dispute.holders) this.tell(h.did, disputeId, `The GS1 prefix ${p} is ${c.store ? 'a store' : 'another business'}'s`, `Two members of SeeBuyGet staff looked at the licences and decided prefix ${p} is ${c.name}'s. ${labelsOf(h)} no longer carry it; ${h.store ? 'the parcels you sent' : 'the loads you posted'} keep the codes they were given. Their reason: ${proposal.reason}`);
     } else {
       this.tell(dispute.claimant.did, disputeId, `The GS1 prefix ${p} stays with the business using it`, `Two members of SeeBuyGet staff looked at the licences and decided prefix ${p} is not ${yours(dispute.claimant)} to print under. Their reason: ${proposal.reason}`);
       for (const h of dispute.holders) this.tell(h.did, disputeId, `The GS1 prefix ${p} stays ${yours(h)}`, `Two members of SeeBuyGet staff looked at the licences and decided prefix ${p} stays ${yours(h)}. Nothing changes. Their reason: ${proposal.reason}`);
@@ -206,6 +211,12 @@ export class Gs1DisputeService {
 
   /** A business — or a forwarder's client, told and answered through its forwarder (round 20). */
   private partyOf(key: string): Gs1Party {
+    // Round 29 — a store: by its own name, told at its own sign-in.
+    const vendorId = vendorOfCoder(key);
+    if (vendorId) {
+      const v = this.storeOf(vendorId);
+      return { entityId: key, did: v?.did ?? '', name: v?.name ?? vendorId, store: true };
+    }
     const forClient = clientOfCoder(key);
     if (forClient) {
       const e = this.entities.find(forClient.entityId);
@@ -215,6 +226,15 @@ export class Gs1DisputeService {
     }
     const e = this.entities.find(key);
     return { entityId: key, did: e?.did ?? '', name: e?.name ?? key };
+  }
+
+  /** A store, if there is one by that id: a dispute outlives nothing it should not, but a name read is never a refusal. */
+  private storeOf(vendorId: string): { did?: string; name: string } | undefined {
+    try {
+      return this.vendors?.get(vendorId);
+    } catch {
+      return undefined;
+    }
   }
 
   private requireClient(entityId: string, clientId: string) {
@@ -255,6 +275,7 @@ export class Gs1DisputeService {
         ...(p.sentAt ? { sentAt: p.sentAt } : {}),
         ...(using?.companyPrefix === d.companyPrefix ? { digitNow: using.extensionDigit } : {}),
         ...(p.actsFor ? { forwarder: this.entities.find(p.actsFor)?.name ?? p.actsFor } : {}),
+        ...(p.store ? { store: true } : {}),
       };
     };
     const { byKey: _key, ...proposal } = d.proposal ?? ({} as NonNullable<Gs1Dispute['proposal']>);

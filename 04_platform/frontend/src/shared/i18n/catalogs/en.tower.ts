@@ -3045,6 +3045,7 @@ export const enTowerBusinesses = {
   'tower.gs1.holder': 'uses it',
   'tower.gs1.digitNow': 'prints under digit {digit}',
   'tower.gs1.forwarder': 'a client of {name}, who answers for it',
+  'tower.gs1.store': 'a store, answering in the Store app',
   'tower.gs1.licences': 'GS1 licence',
   'tower.gs1.noLicence': 'No licence sent.',
   'tower.gs1.whose': 'Whose is it?',

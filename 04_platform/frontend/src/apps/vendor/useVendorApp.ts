@@ -6,6 +6,9 @@ import { papersBody } from './papers';
 import { downloadZpl, triggerDownload } from '../../shared/download';
 import { openSvg } from '../../shared/openPage';
 import { topUpTermsOf, type TopUpTerms } from '../../shared/topup-fee';
+import { downscaleImage } from '../../shared/media';
+import type { Gs1DisputeView } from '../../shared/gs1';
+import type { StoreGs1Api } from './gs1';
 import type { IconName } from '../../shared/ui/Icon';
 import {
   clearCreds,
@@ -1218,6 +1221,41 @@ export function useVendorApp() {
     [client, creds, run, fail, pushToast, loadStore],
   );
 
+  /**
+   * Round 29 — the store's GS1 prefix and the disputes it is in, bound to the store signed in. The card keeps its own
+   * form; a prefix saved or given up reloads the store, whose record says it.
+   */
+  const gs1 = useMemo<StoreGs1Api | null>(() => {
+    if (!client || !creds) return null;
+    const id = creds.vendorId;
+    const api = client.api;
+    const settled = async (r: Promise<{ error: SbgError | null }>) => {
+      const { error } = await r;
+      if (!error) await refresh();
+      return { error };
+    };
+    return {
+      set: (companyPrefix, extensionDigit) => settled(api.setGs1(id, companyPrefix, extensionDigit)),
+      clear: () => settled(api.clearGs1(id)),
+      disputes: async () => {
+        const r = await api.gs1Disputes(id);
+        return r.error ? null : (narrow<{ items?: Gs1DisputeView[] }>(r.data)?.items ?? []);
+      },
+      open: (body) => api.openGs1Dispute(id, body),
+      sendLicence: (disputeId, licenceRef) => api.sendGs1Licence(id, disputeId, licenceRef),
+      withdraw: (disputeId) => api.withdrawGs1Dispute(id, disputeId),
+      licencePhoto: async (file) => {
+        try {
+          const { dataUrl, thumbDataUrl } = await downscaleImage(file);
+          const r = await api.uploadGs1Licence(dataUrl, thumbDataUrl);
+          return r.error ? null : (narrow<{ mediaId?: string }>(r.data)?.mediaId ?? null);
+        } catch {
+          return null;
+        }
+      },
+    };
+  }, [client, creds, refresh]);
+
   return {
     state,
     // The raw client, for the shared account menu — the account is the PERSON, so the surface behind it
@@ -1229,6 +1267,7 @@ export function useVendorApp() {
       chatApi: client?.conversations ?? null,
       /** The Web Push controls — a store is run by a person, and they wait on a payment like anybody else. */
       notifications: client?.notifications ?? null,
+      gs1,
       issueApiKey,
       dismissIssuedKey,
       rotateSecret,

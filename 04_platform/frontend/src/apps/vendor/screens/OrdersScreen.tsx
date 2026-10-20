@@ -12,6 +12,7 @@ import { ORDER_LIMIT, type OrderQuery, type VendorActions, type VendorState } fr
 import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
 import type { ChatThread } from '../../../shared/conversation/logic';
 import type { NetworkPoint, OrderRow } from '../types';
+import { ssccWords } from '../gs1';
 
 export interface OrdersScreenProps {
   state: VendorState;
@@ -569,6 +570,13 @@ function OrderSheet({ state, actions, client }: { state: VendorState; actions: V
             <div class="kv">
               <span>{t('vendor.trackingKey')}</span>
               <b class="mono-t">{d.trackingKey}</b>
+            </div>
+          ) : null}
+          {/* Round 29 — its SSCC under the store's GS1 prefix: on its label as a GS1-128 barcode, said here as GS1 prints it. */}
+          {d.sscc ? (
+            <div class="kv">
+              <span>{t('vendor.order.sscc')}</span>
+              <b class="mono-t">{ssccWords(d.sscc, state.vendor?.gs1)}</b>
             </div>
           ) : null}
           {d.paidStatus !== 'ParcelPaid' ? (

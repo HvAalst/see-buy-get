@@ -3,7 +3,7 @@ import { Entity } from '../../foundation/entity/entity.types';
 import { CommercialInvoiceService, InvoiceInput, cleanHsCode, crossesBorder, hsDisplay } from './commercial-invoice.service';
 import { Freight } from './dispatch.types';
 import { packageLabelsHtml } from './package-labels';
-import { ShipperCodesService } from './shipper-codes.service';
+import { ShipperCodesService, vendorCoder, vendorOfCoder, whereGs1IsSet } from './shipper-codes.service';
 
 const business = (over: Partial<Entity> = {}): Entity => ({ entityId: 'biz-jenga', did: 'did:glos:biz-jenga', kind: 'business', name: 'Jenga Bricks Ltd', jurisdiction: 'KE', business: { activities: ['shipper'], registrationNo: 'PVT-1', taxNo: 'P051234567X', createdBy: 'Achieng', createdByPersonDid: 'did:p', verification: { state: 'verified' } }, createdAt: '2026-10-01T00:00:00Z', ...over }) as unknown as Entity;
 
@@ -85,6 +85,30 @@ describe('a shipper’s own GS1 codes', () => {
     expect(codes.issue('frt_1', 'biz', 3)).toBeUndefined();
     codes.set('biz', { companyPrefix: '6161234', extensionDigit: 0 }, 'Achieng');
     expect(codes.issue('frt_1', 'biz', undefined)).toBeUndefined();
+  });
+
+  it('gives a store’s parcel its one SSCC under the store’s own key — once, never a business’s digit, never a load’s package (round 29)', () => {
+    const codes = new ShipperCodesService();
+    expect(vendorCoder('vnd_1')).toBe('vendor:vnd_1');
+    expect(vendorOfCoder('vendor:vnd_1')).toBe('vnd_1');
+    expect(vendorOfCoder('biz')).toBeUndefined();
+    expect(whereGs1IsSet('vendor:vnd_1')).toBe('the Store app, under My store');
+    expect(whereGs1IsSet('biz')).toBe('Business details');
+    expect(codes.issueForParcel('prc_0', 'vnd_1')).toBeUndefined();
+
+    codes.set('biz', { companyPrefix: '6161234', extensionDigit: 3 }, 'Achieng');
+    expect(() => codes.set(vendorCoder('vnd_1'), { companyPrefix: '6161234', extensionDigit: 3 }, 'Duka')).toThrow();
+    codes.set(vendorCoder('vnd_1'), { companyPrefix: '6161234', extensionDigit: 4 }, 'Duka');
+    const one = codes.issueForParcel('prc_1', 'vnd_1')!;
+    expect(one).toBe(ssccOf('6161234', 4, 0));
+    expect(codes.issueForParcel('prc_1', 'vnd_1')).toBe(one);
+    expect(codes.issueForParcel('prc_2', 'vnd_1')).toBe(ssccOf('6161234', 4, 1));
+    expect(codes.left(vendorCoder('vnd_1'))).toBe(1_000_000_000 - 2);
+    // A scan of a store parcel's code is never answered with a load.
+    expect(codes.freightOfSscc(one)).toBeUndefined();
+    expect(codes.packageOf(one)).toBeUndefined();
+    const load = codes.issue('frt_1', 'biz', 1)!;
+    expect(codes.packageOf(load.codes[0])).toEqual({ freightId: 'frt_1', no: 1, of: 1 });
   });
 });
 

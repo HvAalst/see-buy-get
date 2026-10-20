@@ -869,6 +869,25 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "gs1-codes",
+    apps: [
+      "vendor",
+      "business"
+    ],
+    title: "Your own GS1 barcodes on labels",
+    summary: "With the GS1 company prefix GS1 gave you, each of your parcels or packages gets its own SSCC, printed as a GS1-128 barcode beside our QR: what a receiving warehouse scans into its own system.",
+    steps: [
+      "Store app: My store, then “GS1 barcodes on your parcels”, then “Give your GS1 prefix”: the company prefix GS1 gave you, and an extension digit your own systems do not use.",
+      "Business app: Business details, the GS1 panel — the same, for the loads you post. A forwarder gives a client’s own prefix on the client’s record.",
+      "From then on each store parcel, once it is paid for, and each package of a load gets its SSCC: on the printed label, on the thermal label, on the order, and in the shipping API’s answer as “sscc”.",
+      "Refused because another business or store prints under that prefix with that digit? If the prefix is yours, tap “This prefix is ours” and send a photograph or a screenshot of your GS1 licence. Those using it are told at their bell and have a week to send theirs; two members of SeeBuyGet staff decide whose it is, and everybody reads why."
+    ],
+    notes: [
+      "We never make a prefix up: only GS1 gives one. No code is ever given twice, and a parcel or a load keeps the codes it was given if you change the prefix or stop.",
+      "Our shops and hubs scan our QR; the SSCC is for the warehouse that receives the goods."
+    ]
+  },
+  {
     id: "no-signal",
     apps: [
       "agent",

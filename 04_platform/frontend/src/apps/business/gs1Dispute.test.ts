@@ -15,7 +15,7 @@ describe('a GS1 prefix disputed, as a business reads it (round 18)', () => {
 
   it('tells the one who opened it who uses the prefix and when staff decide — and lets it take it back', () => {
     const mine = { ...base, side: 'claimant' as const, licenceSent: true };
-    expect(disputeLine(mine, t as never, day).text).toBe('business.gs1.d.claimantOpen {"prefix":"6161234","names":"Acme Traders, Acme Kisumu","by":"2026-10-26"}');
+    expect(disputeLine(mine, t as never, day).text).toBe('business.gs1.d.claimantOpen {"prefix":"6161234","names":"Acme Traders, Acme Kisumu","n":2,"by":"2026-10-26"}');
     expect(mayTakeBack(mine)).toBe(true);
     expect(maySendLicence(mine)).toBe(false);
   });
@@ -34,7 +34,7 @@ describe('a GS1 prefix disputed, as a business reads it (round 18)', () => {
 
   it('said for a client, every sentence is the client’s — never the forwarder’s (round 20)', () => {
     const forUnga = { ...base, forClient: 'Unga Millers' };
-    expect(disputeLine({ ...forUnga, side: 'claimant' }, t as never, day).text).toBe('business.gs1.d.claimantOpenClient {"prefix":"6161234","names":"Acme Traders, Acme Kisumu","by":"2026-10-26","client":"Unga Millers"}');
+    expect(disputeLine({ ...forUnga, side: 'claimant' }, t as never, day).text).toBe('business.gs1.d.claimantOpenClient {"prefix":"6161234","names":"Acme Traders, Acme Kisumu","n":2,"by":"2026-10-26","client":"Unga Millers"}');
     expect(disputeLine(forUnga, t as never, day).text).toContain('business.gs1.d.holderAskClient');
     expect(disputeLine({ ...forUnga, licenceSent: true }, t as never, day).text).toContain('business.gs1.d.holderSentClient');
     const decided = { ...forUnga, state: 'decided' as const, decided: { mine: true, reason: 'r', at: '2026-10-20T08:00:00.000Z' } };

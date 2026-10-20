@@ -9943,6 +9943,201 @@
         }
       }
     },
+    "/v1/sbg/vendors/{id}/gs1": {
+      "put": {
+        "operationId": "Sbg.setVendorGs1",
+        "summary": "",
+        "description": "Round 29 — THE STORE'S GS1 COMPANY PREFIX (the user: \"A store's labels carry a GS1 code\"; \"In the Store app, as a\nbusiness does\"). Set by the store at its own sign-in — staff change nothing in a store's name — and held to every rule a\nbusiness's is (shipper-codes.service): never a digit another uses, never a number twice, a decided prefix locked. From\nthen on each of its parcels, once paid, carries an SSCC under it.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BusinessGs1Dto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "operationId": "Sbg.clearVendorGs1",
+        "summary": "",
+        "description": "Round 29 — given up: parcels paid from now on carry no SSCC; those already labelled keep theirs.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/gs1/disputes": {
+      "get": {
+        "operationId": "Sbg.vendorGs1Disputes",
+        "summary": "",
+        "description": "Round 29 — the GS1 prefix disputes the store is in: as a claimant, or as a store using a prefix another claims.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "Sbg.openVendorGs1Dispute",
+        "summary": "",
+        "description": "Round 29 — \"this prefix is ours\", by a store refused a prefix another uses: opened with the store's GS1 licence.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenGs1DisputeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gs1DisputeView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/gs1/disputes/{disputeId}/licence": {
+      "post": {
+        "operationId": "Sbg.vendorGs1Licence",
+        "summary": "",
+        "description": "Round 29 — a store using a prefix another claims sends its own licence.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "disputeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendGs1LicenceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gs1DisputeView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/gs1/disputes/{disputeId}/withdraw": {
+      "post": {
+        "operationId": "Sbg.withdrawVendorGs1Dispute",
+        "summary": "",
+        "description": "Round 29 — the store that opened it takes it back.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "disputeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gs1DisputeView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/vendors/{id}/collection-point": {
       "post": {
         "operationId": "Sbg.setCollectionPoint",
@@ -36603,6 +36798,9 @@
           "label": {
             "$ref": "#/components/schemas/PhygitalLabel"
           },
+          "sscc": {
+            "type": "string"
+          },
           "subtotal": {
             "type": "number"
           },
@@ -37366,6 +37564,161 @@
             "maxLength": 200
           }
         }
+      },
+      "BusinessGs1Dto": {
+        "type": "object",
+        "properties": {
+          "companyPrefix": {
+            "type": "string",
+            "description": "As GS1 gave it: 6 to 12 digits; spaces and dashes are dropped.",
+            "maxLength": 24
+          },
+          "extensionDigit": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 9
+          }
+        },
+        "required": [
+          "companyPrefix",
+          "extensionDigit"
+        ]
+      },
+      "OpenGs1DisputeDto": {
+        "type": "object",
+        "properties": {
+          "companyPrefix": {
+            "type": "string",
+            "maxLength": 24
+          },
+          "extensionDigit": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 9
+          },
+          "licenceRef": {
+            "type": "string",
+            "description": "The photograph or screenshot of the business's GS1 licence, uploaded as media kind `gs1_licence`.",
+            "maxLength": 80
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "forClientId": {
+            "type": "string",
+            "description": "Round 20 — said for one of the forwarder's clients: the prefix is the CLIENT's.",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "companyPrefix",
+          "extensionDigit",
+          "licenceRef"
+        ]
+      },
+      "Gs1DisputeView": {
+        "type": "object",
+        "properties": {
+          "side": {
+            "type": "string",
+            "enum": [
+              "claimant",
+              "holder"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "proposed",
+              "decided",
+              "withdrawn"
+            ]
+          },
+          "forClient": {
+            "type": "string",
+            "description": "Round 20 — the client this business stands for in it, when it is a client's prefix."
+          },
+          "decided": {
+            "type": "object",
+            "properties": {
+              "mine": {
+                "required": true,
+                "type": "boolean"
+              },
+              "reason": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "withdrawnAt": {
+            "type": "string"
+          },
+          "disputeId": {
+            "type": "string"
+          },
+          "companyPrefix": {
+            "type": "string"
+          },
+          "extensionDigit": {
+            "type": "number"
+          },
+          "openedAt": {
+            "type": "string"
+          },
+          "answerBy": {
+            "type": "string",
+            "description": "Until when the businesses using the prefix may send their licence before staff decide without it."
+          },
+          "claimantName": {
+            "type": "string"
+          },
+          "holderNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "licenceSent": {
+            "type": "boolean",
+            "description": "Whether this business has sent its licence."
+          }
+        },
+        "required": [
+          "side",
+          "state",
+          "decided",
+          "disputeId",
+          "companyPrefix",
+          "extensionDigit",
+          "openedAt",
+          "answerBy",
+          "claimantName",
+          "holderNames",
+          "licenceSent"
+        ]
+      },
+      "SendGs1LicenceDto": {
+        "type": "object",
+        "properties": {
+          "licenceRef": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "licenceRef"
+        ]
       },
       "UpdateVendorDto": {
         "type": "object",
@@ -47491,142 +47844,6 @@
           "why"
         ]
       },
-      "OpenGs1DisputeDto": {
-        "type": "object",
-        "properties": {
-          "companyPrefix": {
-            "type": "string",
-            "maxLength": 24
-          },
-          "extensionDigit": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 9
-          },
-          "licenceRef": {
-            "type": "string",
-            "description": "The photograph or screenshot of the business's GS1 licence, uploaded as media kind `gs1_licence`.",
-            "maxLength": 80
-          },
-          "note": {
-            "type": "string",
-            "maxLength": 500
-          },
-          "forClientId": {
-            "type": "string",
-            "description": "Round 20 — said for one of the forwarder's clients: the prefix is the CLIENT's.",
-            "maxLength": 80
-          }
-        },
-        "required": [
-          "companyPrefix",
-          "extensionDigit",
-          "licenceRef"
-        ]
-      },
-      "Gs1DisputeView": {
-        "type": "object",
-        "properties": {
-          "side": {
-            "type": "string",
-            "enum": [
-              "claimant",
-              "holder"
-            ]
-          },
-          "state": {
-            "type": "string",
-            "enum": [
-              "open",
-              "proposed",
-              "decided",
-              "withdrawn"
-            ]
-          },
-          "forClient": {
-            "type": "string",
-            "description": "Round 20 — the client this business stands for in it, when it is a client's prefix."
-          },
-          "decided": {
-            "type": "object",
-            "properties": {
-              "mine": {
-                "required": true,
-                "type": "boolean"
-              },
-              "reason": {
-                "required": true,
-                "type": "string"
-              },
-              "at": {
-                "required": true,
-                "type": "string"
-              }
-            }
-          },
-          "withdrawnAt": {
-            "type": "string"
-          },
-          "disputeId": {
-            "type": "string"
-          },
-          "companyPrefix": {
-            "type": "string"
-          },
-          "extensionDigit": {
-            "type": "number"
-          },
-          "openedAt": {
-            "type": "string"
-          },
-          "answerBy": {
-            "type": "string",
-            "description": "Until when the businesses using the prefix may send their licence before staff decide without it."
-          },
-          "claimantName": {
-            "type": "string"
-          },
-          "holderNames": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "licenceSent": {
-            "type": "boolean",
-            "description": "Whether this business has sent its licence."
-          }
-        },
-        "required": [
-          "side",
-          "state",
-          "decided",
-          "disputeId",
-          "companyPrefix",
-          "extensionDigit",
-          "openedAt",
-          "answerBy",
-          "claimantName",
-          "holderNames",
-          "licenceSent"
-        ]
-      },
-      "SendGs1LicenceDto": {
-        "type": "object",
-        "properties": {
-          "licenceRef": {
-            "type": "string",
-            "maxLength": 80
-          },
-          "note": {
-            "type": "string",
-            "maxLength": 500
-          }
-        },
-        "required": [
-          "licenceRef"
-        ]
-      },
       "ProposeGs1Dto": {
         "type": "object",
         "properties": {
@@ -47683,6 +47900,10 @@
           "forwarder": {
             "type": "string",
             "description": "Round 20 — a forwarder's client: the forwarder that keeps its record and answers for it."
+          },
+          "store": {
+            "type": "boolean",
+            "description": "Round 29 — a store rather than a business: it answers in the Store app."
           },
           "entityId": {
             "type": "string"
@@ -49210,25 +49431,6 @@
         },
         "required": [
           "role"
-        ]
-      },
-      "BusinessGs1Dto": {
-        "type": "object",
-        "properties": {
-          "companyPrefix": {
-            "type": "string",
-            "description": "As GS1 gave it: 6 to 12 digits; spaces and dashes are dropped.",
-            "maxLength": 24
-          },
-          "extensionDigit": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 9
-          }
-        },
-        "required": [
-          "companyPrefix",
-          "extensionDigit"
         ]
       },
       "BusinessClientDto": {

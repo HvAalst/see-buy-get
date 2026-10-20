@@ -30,6 +30,8 @@ export interface Gs1Party {
   name: string;
   /** Round 20 — a client's party is answered by its forwarder: that business's entityId. */
   actsFor?: string;
+  /** Round 29 — a store, keyed `vendor:<vendorId>`: told and answering in the Store app. */
+  store?: true;
   licenceRef?: string;
   /** Licences it sent before the one it sent last: evidence is never deleted mid-case, so staff see them too. */
   earlier?: string[];
@@ -86,6 +88,8 @@ export class Gs1PartyRow {
   @ApiPropertyOptional() digitNow?: number;
   /** Round 20 — a forwarder's client: the forwarder that keeps its record and answers for it. */
   @ApiPropertyOptional() forwarder?: string;
+  /** Round 29 — a store rather than a business: it answers in the Store app. */
+  @ApiPropertyOptional() store?: boolean;
 }
 
 /** What staff read: both sides with their licences, the proposal waiting, the decision. */

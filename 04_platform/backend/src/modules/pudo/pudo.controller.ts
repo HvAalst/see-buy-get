@@ -28,7 +28,7 @@ import { ParcelInvoiceService } from './parcel-invoice.service';
 import { VehicleStandstillService } from './vehicle-standstill.service';
 import { boardDocId } from './note-archive.types';
 import { isSandbox } from '../../foundation/runtime/sandbox';
-import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Req, Res, StreamableFile, Optional, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, HttpCode, Inject, Param, Patch, Post, Put, Query, Req, Res, StreamableFile, Optional, UseGuards, UseInterceptors } from '@nestjs/common';
 import { staffNetworkAllows } from '../../foundation/auth/staff-network';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
@@ -93,7 +93,11 @@ import { CONTACT_BASIS, ContactCardService } from './contact-card.service';
 import { CountryNoticeService } from './country-notice.service';
 import { JourneyPlanService } from './journey-plan.service';
 import { VehicleCareService } from './vehicle-care.service';
-import { ShipperCodesService } from './shipper-codes.service';
+import { ShipperCodesService, vendorCoder } from './shipper-codes.service';
+import { Gs1DisputeService, type Gs1Business } from './gs1-dispute.service';
+import { OpenGs1DisputeDto, SendGs1LicenceDto, type Gs1DisputeView } from './gs1-dispute.types';
+import { BusinessGs1Dto } from './business.dto';
+import type { BusinessGs1View } from './business.types';
 import { ContactCardView, DepotListResponse, DepotRegisterView } from './depot.types';
 import { FleetManagerService } from './fleet-manager.service';
 import { AccountService } from './account.service';
@@ -307,6 +311,8 @@ export class SbgController {
     @Optional() private readonly parcelInvoices?: ParcelInvoiceService,
     // Round 16 — the watch on vehicles standing still: the driver's session says whether their fleet is told.
     @Optional() private readonly standstill?: VehicleStandstillService,
+    // Round 29 — a store's GS1 prefix disputed: the store is a party, as a business is.
+    @Optional() private readonly gs1Disputes?: Gs1DisputeService,
   ) {}
 
   /**
@@ -3170,7 +3176,88 @@ export class SbgController {
     // Whether it has an account of its own — never the address: a console signed in the old way is told to set one up.
     // And the money every figure of its own is in, named once for its screens.
     const currency = this.vendors.currencyOf(vendor);
-    return { ...VendorService.publicView(vendor), hasAccount: Boolean(this.accounts.emailForDid(vendor.did)), ...(currency ? { currency } : {}) };
+    return { ...VendorService.publicView(vendor), hasAccount: Boolean(this.accounts.emailForDid(vendor.did)), ...(currency ? { currency } : {}), ...this.storeGs1(id) };
+  }
+
+  /**
+   * Round 29 — THE STORE'S GS1 COMPANY PREFIX (the user: "A store's labels carry a GS1 code"; "In the Store app, as a
+   * business does"). Set by the store at its own sign-in — staff change nothing in a store's name — and held to every rule a
+   * business's is (shipper-codes.service): never a digit another uses, never a number twice, a decided prefix locked. From
+   * then on each of its parcels, once paid, carries an SSCC under it.
+   */
+  @Scopes('vendor:manage:self')
+  @Put('vendors/:id/gs1')
+  setVendorGs1(@Param('id') id: string, @Body() dto: BusinessGs1Dto, @Actor() actor: IntrospectionResult): { gs1?: BusinessGs1View } {
+    this.assertVendorSelf(id, actor);
+    this.requireShipperCodes().set(vendorCoder(id), { companyPrefix: dto.companyPrefix, extensionDigit: dto.extensionDigit }, this.vendors.get(id).name);
+    return this.storeGs1(id);
+  }
+
+  /** Round 29 — given up: parcels paid from now on carry no SSCC; those already labelled keep theirs. */
+  @Scopes('vendor:manage:self')
+  @Delete('vendors/:id/gs1')
+  clearVendorGs1(@Param('id') id: string, @Actor() actor: IntrospectionResult): { gs1?: BusinessGs1View } {
+    this.assertVendorSelf(id, actor);
+    this.requireShipperCodes().set(vendorCoder(id), null, this.vendors.get(id).name);
+    return this.storeGs1(id);
+  }
+
+  /** Round 29 — the GS1 prefix disputes the store is in: as a claimant, or as a store using a prefix another claims. */
+  @Scopes('vendor:read:self')
+  @Get('vendors/:id/gs1/disputes')
+  vendorGs1Disputes(@Param('id') id: string, @Actor() actor: IntrospectionResult): { items: Gs1DisputeView[] } {
+    this.assertVendorReads(id, actor);
+    return { items: this.requireGs1Disputes().forBusiness(vendorCoder(id)) };
+  }
+
+  /** Round 29 — "this prefix is ours", by a store refused a prefix another uses: opened with the store's GS1 licence. */
+  @Scopes('vendor:manage:self')
+  @Post('vendors/:id/gs1/disputes')
+  openVendorGs1Dispute(@Param('id') id: string, @Body() dto: OpenGs1DisputeDto, @Actor() actor: IntrospectionResult): Gs1DisputeView {
+    this.assertVendorSelf(id, actor);
+    if (dto.forClientId) throw new GlosError('INVALID_INPUT', 'A store claims a prefix for itself: it keeps no clients’ records', { field: 'forClientId' });
+    return this.requireGs1Disputes().open(this.storeParty(id), { companyPrefix: dto.companyPrefix, extensionDigit: dto.extensionDigit, licenceRef: dto.licenceRef, note: dto.note });
+  }
+
+  /** Round 29 — a store using a prefix another claims sends its own licence. */
+  @Scopes('vendor:manage:self')
+  @Post('vendors/:id/gs1/disputes/:disputeId/licence')
+  @HttpCode(200)
+  vendorGs1Licence(@Param('id') id: string, @Param('disputeId') disputeId: string, @Body() dto: SendGs1LicenceDto, @Actor() actor: IntrospectionResult): Gs1DisputeView {
+    this.assertVendorSelf(id, actor);
+    return this.requireGs1Disputes().sendLicence(this.storeParty(id), disputeId, { licenceRef: dto.licenceRef, note: dto.note });
+  }
+
+  /** Round 29 — the store that opened it takes it back. */
+  @Scopes('vendor:manage:self')
+  @Post('vendors/:id/gs1/disputes/:disputeId/withdraw')
+  @HttpCode(200)
+  withdrawVendorGs1Dispute(@Param('id') id: string, @Param('disputeId') disputeId: string, @Actor() actor: IntrospectionResult): Gs1DisputeView {
+    this.assertVendorSelf(id, actor);
+    return this.requireGs1Disputes().withdraw(this.storeParty(id), disputeId);
+  }
+
+  /** The store's prefix as its own screens read it: the digit, how many codes are left under it, who set it and when. */
+  private storeGs1(id: string): { gs1?: BusinessGs1View } {
+    const key = vendorCoder(id);
+    const s = this.shipperCodes?.of(key);
+    return s ? { gs1: { companyPrefix: s.companyPrefix, extensionDigit: s.extensionDigit, left: this.shipperCodes!.left(key) ?? 0, setAt: s.setAt, setBy: s.setBy } } : {};
+  }
+
+  /** The store as a party to a dispute: by its own key, told at its own sign-in. */
+  private storeParty(id: string): Gs1Business {
+    const vendor = this.vendors.get(id);
+    return { entityId: vendorCoder(id), did: vendor.did, name: vendor.name, by: vendor.name };
+  }
+
+  private requireShipperCodes(): ShipperCodesService {
+    if (!this.shipperCodes) throw new GlosError('INVALID_STATE', 'GS1 codes are not available here');
+    return this.shipperCodes;
+  }
+
+  private requireGs1Disputes(): Gs1DisputeService {
+    if (!this.gs1Disputes) throw new GlosError('INVALID_STATE', 'GS1 disputes are not available here');
+    return this.gs1Disputes;
   }
 
   /** Update the store profile: map pin (origin-PUDO ranking), address, callback URL, split policy.

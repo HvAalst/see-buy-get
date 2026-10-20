@@ -8,6 +8,7 @@ import type { GeoPoint } from '../../../shared/geo';
 import type { SbgError } from '../../../lib/sbg';
 import { callbackLine, insurerLine, ledgerTypeWord, money, policyLine } from '../logic';
 import type { VendorActions, VendorState } from '../useVendorApp';
+import { Gs1Card } from './Gs1Card';
 
 export interface StoreScreenProps {
   state: VendorState;
@@ -42,6 +43,8 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
       </Card>
 
       <PinCard state={state} actions={actions} />
+
+      <Gs1Card state={state} api={actions.gs1} />
 
       <Card title={t('vendor.store.callbacksTitle')}>
         <p class="card__note">{t('vendor.store.callbacksNote')}</p>

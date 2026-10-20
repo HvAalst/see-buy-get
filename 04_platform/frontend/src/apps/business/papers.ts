@@ -1,4 +1,5 @@
 import type { Translate } from '../../shared/i18n';
+import type { Gs1View } from '../../shared/gs1';
 
 /*
  * A LOAD'S PAPERS IN THE BUSINESS APP — the package labels (our code, and the shipper's GS1 code beside it) and the
@@ -6,14 +7,9 @@ import type { Translate } from '../../shared/i18n';
  * them before a form is sent, so the shipper is told what is missing while they can still see the field.
  */
 
-/** The business's GS1 company prefix, as its view carries it. */
-export interface Gs1View {
-  companyPrefix: string;
-  extensionDigit: number;
-  left: number;
-  setAt: string;
-  setBy: string;
-}
+/** The business's GS1 company prefix, as its view carries it: read the way a store's is (round 29). */
+export type { Gs1View } from '../../shared/gs1';
+export { cleanPrefix, ssccSpaced } from '../../shared/gs1';
 
 /** What a load's labels will carry. */
 export interface PackageLabels {
@@ -74,12 +70,6 @@ export interface CommercialInvoiceView {
 export const EXPORT_REASONS = ['sale', 'sample', 'gift', 'repair', 'return', 'other'] as const;
 export type ExportReason = (typeof EXPORT_REASONS)[number];
 
-/** A GS1 company prefix as typed, as its digits: 6 to 12 of them. Nothing when it is not one. */
-export function cleanPrefix(raw: string): string | undefined {
-  const digits = raw.replace(/[\s-]/g, '');
-  return /^\d{6,12}$/.test(digits) ? digits : undefined;
-}
-
 /** "Prefix 6161234, extension digit 3 · 999,999,997 codes left". */
 export function gs1Line(g: Gs1View, t: Translate): string {
   return t('business.gs1.line', { prefix: g.companyPrefix, digit: g.extensionDigit, left: g.left.toLocaleString() });
@@ -90,11 +80,6 @@ export function labelsLine(l: PackageLabels, hasPrefix: boolean, t: Translate): 
   if (l.codes.length) return t('business.papers.labelsCoded', { n: l.labels });
   if (!l.packages) return t(hasPrefix ? 'business.papers.labelsNoCount' : 'business.papers.labelsOneOurs');
   return t(hasPrefix ? 'business.papers.labelsBefore' : 'business.papers.labelsOurs', { n: l.labels });
-}
-
-/** An SSCC as people read it: extension digit, prefix, serial, check digit. */
-export function ssccSpaced(sscc: string, prefixLength: number): string {
-  return `${sscc[0]} ${sscc.slice(1, 1 + prefixLength)} ${sscc.slice(1 + prefixLength, 17)} ${sscc[17]}`;
 }
 
 /* ------------------------------------------------------------------ the invoice form -- */

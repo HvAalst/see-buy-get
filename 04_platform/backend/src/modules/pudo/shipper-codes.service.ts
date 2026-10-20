@@ -38,6 +38,8 @@ export interface PackageCodes {
   companyPrefix: string;
   codes: string[];
   issuedAt: string;
+  /** Round 29 — a store's parcel, keyed by its parcel id: one SSCC, the parcel's own. Not a load's package. */
+  parcel?: true;
 }
 
 /** Who may use a prefix since staff decided a dispute about it. */
@@ -64,6 +66,25 @@ export function clientCoder(entityId: string, clientId: string): string {
 export function clientOfCoder(key: string): { entityId: string; clientId: string } | undefined {
   const m = /^client:([^:]+):(.+)$/.exec(key);
   return m ? { entityId: m[1], clientId: m[2] } : undefined;
+}
+
+/**
+ * Round 29 — a STORE holds its own prefix ("In the Store app, as a business does"), under this key beside the businesses',
+ * so every rule holds for it too. Never the store's `entityId`: that is its country's settling company, every store's.
+ */
+export function vendorCoder(vendorId: string): string {
+  return `vendor:${vendorId}`;
+}
+
+/** The store a key names, or nothing. */
+export function vendorOfCoder(key: string): string | undefined {
+  const m = /^vendor:(.+)$/.exec(key);
+  return m ? m[1] : undefined;
+}
+
+/** Where the one who holds a prefix sets it: a store in its own app, a business (and a forwarder for its client) in Business details. */
+export function whereGs1IsSet(key: string): string {
+  return vendorOfCoder(key) ? 'the Store app, under My store' : 'Business details';
 }
 
 @Injectable()
@@ -99,13 +120,17 @@ export class ShipperCodesService {
   assertMayUse(entityId: string, companyPrefix: string, extensionDigit: number): void {
     const decided = this.owners.get(companyPrefix);
     if (decided && !decided.entityIds.includes(entityId)) {
-      throw new GlosError('GS1_PREFIX_TAKEN', 'SeeBuyGet staff decided who this GS1 company prefix belongs to, and it is another business. If it is yours, show us your GS1 licence.', { field: 'companyPrefix' });
+      // Round 29 — a store is named as a store: the one refused may be either, and so may the one it is given to.
+      const whose = decided.entityIds.some((k) => vendorOfCoder(k)) ? 'it is not yours' : 'it is another business';
+      throw new GlosError('GS1_PREFIX_TAKEN', `SeeBuyGet staff decided who this GS1 company prefix belongs to, and ${whose}. If it is yours, show us your GS1 licence.`, { field: 'companyPrefix' });
     }
     const other = [...this.settings.values()].find((s) => s.entityId !== entityId && s.companyPrefix === companyPrefix && s.extensionDigit === extensionDigit);
     if (other) {
       throw new GlosError(
         'GS1_PREFIX_TAKEN',
-        `Another business prints SSCCs under this prefix with extension digit ${extensionDigit}. A prefix is shared only under different extension digits: choose another. If the prefix is yours and the other business should not use it, show us your GS1 licence.`,
+        vendorOfCoder(other.entityId)
+          ? `A store prints SSCCs under this prefix with extension digit ${extensionDigit}. A prefix is shared only under different extension digits: choose another. If the prefix is yours and that store should not use it, show us your GS1 licence.`
+          : `Another business prints SSCCs under this prefix with extension digit ${extensionDigit}. A prefix is shared only under different extension digits: choose another. If the prefix is yours and the other business should not use it, show us your GS1 licence.`,
         { field: 'extensionDigit' },
       );
     }
@@ -155,7 +180,7 @@ export class ShipperCodesService {
     const left = this.left(entityId);
     if (left !== undefined && packages > left) {
       const s = this.settings.get(entityId)!;
-      throw new GlosError('INVALID_STATE', `Only ${left} GS1 codes are left under extension digit ${s.extensionDigit} of your prefix. Choose another extension digit in Business details.`, { field: 'packages' });
+      throw new GlosError('INVALID_STATE', `Only ${left} GS1 codes are left under extension digit ${s.extensionDigit} of your prefix. Choose another extension digit in ${whereGs1IsSet(entityId)}.`, { field: 'packages' });
     }
   }
 
@@ -177,6 +202,19 @@ export class ShipperCodesService {
     return kept;
   }
 
+  /**
+   * Round 29 — a store's parcel gets its one SSCC, once, under the store's prefix as it is when the parcel is paid for: the
+   * same code again on a second call; nothing for a store without a prefix. Kept apart from loads' packages (`parcel`).
+   */
+  issueForParcel(parcelId: string, vendorId: string, now: number = Date.now()): string | undefined {
+    const already = this.issued.get(parcelId);
+    if (already) return already.codes[0];
+    const kept = this.issue(parcelId, vendorCoder(vendorId), 1, now);
+    if (!kept) return undefined;
+    this.issued.set(parcelId, { ...kept, parcel: true });
+    return kept.codes[0];
+  }
+
   codesFor(freightId: string): PackageCodes | undefined {
     return this.issued.get(freightId);
   }
@@ -189,6 +227,8 @@ export class ShipperCodesService {
   /** Round 19 — which load, and which of its packages: the SSCC is package `no` of `of`. */
   packageOf(sscc: string): { freightId: string; no: number; of: number } | undefined {
     for (const p of this.issued.values()) {
+      // A store parcel's own code is not a package of any load: a scan of it never opens a load.
+      if (p.parcel) continue;
       const i = p.codes.indexOf(sscc);
       if (i >= 0) return { freightId: p.freightId, no: i + 1, of: p.codes.length };
     }

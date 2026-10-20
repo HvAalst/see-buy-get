@@ -3,6 +3,7 @@
  * view types declared once, `narrow()` in api.ts as the single cast site. Field names
  * mirror pudo.types.ts (Vendor, CheckoutHandoff, Parcel) and vendor.service.ts.
  */
+import type { Gs1View } from '../../shared/gs1';
 
 export type ParcelSize = 'S' | 'M' | 'L' | 'HEAVY';
 export type ParcelStatus =
@@ -69,6 +70,8 @@ export interface VendorView {
   secretRotatedAt?: string;
   /** The store has an account of its own (an email and a password). False: it still signs in with its secret, and is asked to set one up. */
   hasAccount?: boolean;
+  /** Round 29 — its GS1 company prefix: each parcel, once paid, gets an SSCC under it. Absent: our code alone. */
+  gs1?: Gs1View;
 }
 
 /** What the dock should be bagging right now: paid parcels grouped by where they are going, the bags
@@ -147,6 +150,8 @@ export interface OrderDetail extends OrderRow {
   declaredValue?: number;
   coverLimit?: number;
   shipmentPremium?: number;
+  /** Round 29 — its SSCC, under the store's GS1 prefix: given once it was paid, printed on its label. */
+  sscc?: string;
 }
 
 /**

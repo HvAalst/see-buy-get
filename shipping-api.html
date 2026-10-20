@@ -343,10 +343,17 @@
   "eta": { "readyAt": "2026-08-28T08:00:00.000Z" },
   "route": { "crossesBorder": false, "crossings": [] },
   "label": { … },
+  "sscc": "261612340000000001",
   "mode": "live",
   "simulated": false,
   "replayed": false
 }</code></pre>
+
+  <p><b><code>sscc</code></b> is there when your store has given its GS1 company prefix in the Store app (My store, then
+  “GS1 barcodes on your parcels”) and the shipment is paid for: its own Serial Shipping Container Code, under your
+  prefix, printed on the label as a GS1-128 barcode beside our QR. It is the shipment’s for good: it does not change
+  if you change your prefix, and no other shipment is ever given it. Without a prefix, or before it is paid, the field
+  is not sent.</p>
 
   <h3>Redeeming a held price</h3>
   <p>Between a product page and a checkout, everything a price rests on is free to move — a shop's own
@@ -458,7 +465,8 @@
   "paid": true,
   "price": { "currency": "KES", "amount": 240.00 },
   "cancellable": true,
-  "createdAt": "2026-09-06T08:12:04.000Z"
+  "createdAt": "2026-09-06T08:12:04.000Z",
+  "sscc": "261612340000000018"
 }</code></pre>
   <p><b>The price is the one it was SOLD at</b>, read off the shipment itself — not a fresh quote. Ask this
   a year later and it still answers what you were charged, which is what makes it safe to reconcile an

@@ -30,6 +30,7 @@ import { PersonService } from './person.service';
 import { isFor, readerOf, waitsAt, type Addressed, type Reader } from './addressed-to';
 import { handedAt, type Step } from './observed-at';
 import { parcelLabelZpl } from './parcel-label';
+import { ShipperCodesService, vendorCoder } from './shipper-codes.service';
 
 const LABEL_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -204,6 +205,8 @@ export function disputeOutcomeOf(p: Parcel): DisputeOutcomeView | undefined {
  * entitled to reconcile — and nothing about how the price was built.
  */
 export interface VendorOrderDetail extends VendorOrderRow {
+  /** Round 29 — its SSCC, under the store's GS1 prefix: given once it was paid, printed on its label. */
+  sscc?: string;
   /** The damage claim report made when a problem was reported on this order: the store reads it at `GET parcels/:id/damage-report`. */
   damageReport?: { number: string };
   originAgentDid?: string;
@@ -245,6 +248,7 @@ export function vendorOrderDetailOf(p: Parcel): VendorOrderDetail {
     subtotal: p.subtotal,
     contentPhotoRef: p.contentPhotoRef,
     items: p.items,
+    ...(p.sscc ? { sscc: p.sscc } : {}),
     scans: p.scans,
     // The one fee line, and the rate it was charged at — a business partner reconciling their books is
     // owed our take. Stripe and Shopify show theirs, and hiding it reads as evasive.
@@ -509,6 +513,7 @@ export function agentParcelsToCsv(rows: Parcel[], agentDid: string): string {
   );
 }
 import { qrSvgGroup } from '../../foundation/label/qr';
+import { gs1_128SvgGroup, gs1_128Width, ssccHumanReadable, ssccSpaced } from '../../foundation/gs1/gs1';
 
 /** PG2 — the OPERATIONAL projection of a parcel for the shared agent/hub list surface: everything the
  *  counter, handover and sort screens work with, NOTHING personal — no phones or hashes, no handover
@@ -688,6 +693,8 @@ export class ParcelService implements OnApplicationBootstrap {
     // The accounts, to know whose a number certainly is when a parcel is addressed to it. Optional so the specs that
     // build this by hand keep working: without it a parcel belongs to no account and is found by its number alone.
     @Optional() private readonly persons?: PersonService,
+    // Round 29 — a store's GS1 prefix, for the SSCC its paid parcels are given.
+    @Optional() private readonly codes?: ShipperCodesService,
   ) {
     // Registered here rather than called from the move: an account cannot leave a number without this being asked.
     this.persons?.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
@@ -1676,6 +1683,8 @@ export class ParcelService implements OnApplicationBootstrap {
     const dest = this.agents.get(input.destAgentDid);
     this.requireSellable(input.quote, [input.originAgentDid, input.destAgentDid]);
     const vendor = this.vendors.get(input.vendorId); // the store IS the birthplace — read it, don't infer it
+    // Round 29 — refused before anything is written where the store's prefix has no code left for it.
+    this.codes?.assertCanIssue(vendorCoder(input.vendorId), 1);
     // A parcel handed in at a shop names that shop; one collected from the store's own dock names none,
     // and takes its zone from the dock. It is not origin-LESS — it is born at the store either way — it
     // simply has no first PUDO, which is a different fact and now recorded as one.
@@ -1830,6 +1839,8 @@ export class ParcelService implements OnApplicationBootstrap {
     // Prepaid gate: bill the vendor's balance with the country daughter company → 'ParcelPaid' or 'unpaid'.
     const bill = this.vendors.billShipment(input.vendorId, parcelId, shipmentCost, quote.fx?.buffer, chosen.tax, Math.round((chosen.provision + cover.premium) * 100) / 100);
     parcel.paidStatus = bill.paid ? 'ParcelPaid' : 'unpaid';
+    // Round 29 — paid, it is given its SSCC under the store's GS1 prefix (a store that holds one), printed on the label now.
+    if (bill.paid) this.giveSscc(parcel);
     const label = this.label(parcel, dest.shopName);
     if (bill.paid) {
       parcel.label = label; // label issues only once paid (printing is no longer blocked)
@@ -1972,11 +1983,15 @@ export class ParcelService implements OnApplicationBootstrap {
     if (parcel.direction !== 'inbound' || !parcel.vendorId) throw new GlosError('NOT_INBOUND', 'Not a vendor shipment');
     if (parcel.paidStatus === 'ParcelPaid') return { parcel, label: parcel.label ?? null, paid: true };
     const dest = parcel.destAgentDid ? this.agents.get(parcel.destAgentDid) : undefined;
+    // Round 29 — its SSCC is given once it is paid: refused BEFORE the bill when the store's prefix has no code left for
+    // it (the digit used up since the order was made), never billed and then left unpaid by a code that could not be given.
+    this.codes?.assertCanIssue(vendorCoder(parcel.vendorId), 1);
     // The buffer travels on the parcel, so a shipment billed later — after a top-up — splits exactly as
     // one billed at mint would. The rate it was struck at is not re-derived; it is the one it was quoted at.
     const bill = this.vendors.billShipment(parcel.vendorId, parcelId, parcel.shipmentCost ?? 0, parcel.fx?.buffer, parcel.shipmentTax, parcel.shipmentProvision);
     if (!bill.paid) return { parcel, label: null, paid: false };
     parcel.paidStatus = 'ParcelPaid';
+    this.giveSscc(parcel);
     parcel.label = dest ? this.label(parcel, dest.shopName) : parcel.label;
     this.persist(parcel);
     void this.events.publish(GlosEvent.Pudo.ParcelPaid, { parcelId, vendorId: parcel.vendorId, originAgentDid: parcel.originAgentDid, amount: parcel.shipmentCost, externalOrderId: parcel.externalOrderId }, { source: 'pudo' }).catch(() => undefined);
@@ -2673,9 +2688,11 @@ export class ParcelService implements OnApplicationBootstrap {
   private label(parcel: Parcel, destShop?: string): PhygitalLabel {
     const qrPayload = `sbg:parcel:${parcel.parcelId}`;
     const esc = (s: string) => s.replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c] as string);
+    // Round 29 — a store's parcel with its SSCC: the label grows by the GS1 part, as a business's package label carries it.
+    const h = parcel.sscc ? 290 : 180;
     const svg = [
-      `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180">`,
-      `<rect width="320" height="180" fill="#fff" stroke="#0B1F5C"/>`,
+      `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="${h}" viewBox="0 0 320 ${h}">`,
+      `<rect width="320" height="${h}" fill="#fff" stroke="#0B1F5C"/>`,
       qrSvgGroup(qrPayload, 12, 12, 96),
       `<text x="120" y="32" font-family="Arial" font-size="15" font-weight="bold" fill="#0B1F5C">SeeBuyGet</text>`,
       `<text x="120" y="52" font-family="monospace" font-size="11">${esc(parcel.parcelId)}</text>`,
@@ -2689,9 +2706,31 @@ export class ParcelService implements OnApplicationBootstrap {
       `<text x="12" y="130" font-family="Arial" font-size="10" fill="#4A5261">Track this parcel:</text>`,
       `<text x="12" y="152" font-family="monospace" font-size="15" font-weight="bold" fill="#0B1F5C">${esc(parcel.trackingKey ?? '')}</text>`,
       `<text x="12" y="171" font-family="Arial" font-size="8" fill="#6E7684">${parcel.direction === 'inbound' ? 'Pre-paid · ' : ''}${esc(qrPayload)}</text>`,
+      ...(parcel.sscc ? this.ssccSvg(parcel.parcelId, parcel.sscc) : []),
       `</svg>`,
     ].join('');
     return { parcelId: parcel.parcelId, qrPayload, svg };
+  }
+
+  /** Round 29 — GS1's part of a store parcel's label: its SSCC as a person reads it and as a scanner does (package-labels.ts). */
+  private ssccSvg(parcelId: string, sscc: string): string[] {
+    const digits = `00${sscc}`;
+    const module = 1.4;
+    const left = (320 - gs1_128Width(digits, module)) / 2;
+    return [
+      `<line x1="0" y1="180" x2="320" y2="180" stroke="#0B1F5C"/>`,
+      `<text x="12" y="196" font-family="Arial" font-size="9" fill="#4A5261">SSCC</text>`,
+      `<text x="12" y="212" font-family="monospace" font-size="13" font-weight="bold" fill="#0B1F5C">${ssccSpaced(sscc, this.codes?.codesFor(parcelId)?.companyPrefix.length ?? 7)}</text>`,
+      gs1_128SvgGroup(digits, left, 218, module, 50),
+      `<text x="160" y="283" font-family="monospace" font-size="10" text-anchor="middle">${ssccHumanReadable(sscc)}</text>`,
+    ];
+  }
+
+  /** Round 29 — a store's paid parcel, given its SSCC once, where the store holds a GS1 prefix. */
+  private giveSscc(parcel: Parcel): void {
+    if (parcel.sscc || !parcel.vendorId || !this.codes) return;
+    const sscc = this.codes.issueForParcel(parcel.parcelId, parcel.vendorId);
+    if (sscc) parcel.sscc = sscc;
   }
 
   /** DT — the printable label for a parcel (reprint surface). Returns the persisted one, or generates it on
@@ -2710,7 +2749,7 @@ export class ParcelService implements OnApplicationBootstrap {
   labelZplFor(parcelId: string): string {
     const parcel = this.require(parcelId);
     const destShop = parcel.destAgentDid ? this.agents.get(parcel.destAgentDid).shopName : undefined;
-    return parcelLabelZpl(parcel, labelDate(parcel.acceptedAt), destShop);
+    return parcelLabelZpl(parcel, labelDate(parcel.acceptedAt), destShop, this.codes?.codesFor(parcel.parcelId)?.companyPrefix.length);
   }
 
   /** A parcel this shop took in at its counter — the only parcels whose label it prints. Another's reads as not there. */

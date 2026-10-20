@@ -61,7 +61,7 @@ describe('a GS1 prefix shared, refused and disputed (round 18)', () => {
 
     // Refused without its own licence, and while nobody else uses the prefix.
     expect(() => svc.open(biz('genuine'), { companyPrefix: P, extensionDigit: 4, licenceRef: licence('acme') }, t0)).toThrow(/photograph or a screenshot of your GS1 licence/);
-    expect(() => svc.open(biz('genuine'), { companyPrefix: '6169999', extensionDigit: 4, licenceRef: licence('genuine') }, t0)).toThrow(/No other business uses this prefix/);
+    expect(() => svc.open(biz('genuine'), { companyPrefix: '6169999', extensionDigit: 4, licenceRef: licence('genuine') }, t0)).toThrow(/Nobody else uses this prefix: set it in Business details/);
     const opened = svc.open(biz('genuine', 'Grace'), { companyPrefix: P, extensionDigit: 4, licenceRef: licence('genuine'), note: ' GS1 Kenya licence 2019 ' }, t0);
     expect(opened).toMatchObject({ side: 'claimant', state: 'open', holderNames: ['Acme Traders'], licenceSent: true, answerBy: new Date(t0 + 7 * DAY).toISOString() });
     expect(told).toEqual([expect.objectContaining({ did: 'did:acme', title: `Another business says the GS1 prefix ${P} is its own` })]);

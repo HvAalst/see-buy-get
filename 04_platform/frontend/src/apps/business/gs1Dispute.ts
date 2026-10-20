@@ -1,4 +1,5 @@
 import type { Translate } from '../../shared/i18n';
+import type { DisputeTone, Gs1DisputeView } from '../../shared/gs1';
 
 /**
  * ROUND 18 — A GS1 PREFIX TWO BUSINESSES SAY IS THEIRS ("Refuse the same digit"; "Only when disputed").
@@ -7,29 +8,8 @@ import type { Translate } from '../../shared/i18n';
  * prefix staff decided is another's — may say the prefix is its own, with its GS1 licence; the businesses using it are
  * told and send theirs; two members of SeeBuyGet staff decide, and both read the reason.
  */
-export interface Gs1DisputeView {
-  disputeId: string;
-  companyPrefix: string;
-  extensionDigit: number;
-  side: 'claimant' | 'holder';
-  state: 'open' | 'proposed' | 'decided' | 'withdrawn';
-  openedAt: string;
-  answerBy: string;
-  claimantName: string;
-  holderNames: string[];
-  licenceSent: boolean;
-  /** Round 20 — the client this business stands for in it. */
-  forClient?: string;
-  decided?: { mine: boolean; reason: string; at: string };
-  withdrawnAt?: string;
-}
-
-/** The refusal a business may answer with its licence. */
-export const PREFIX_TAKEN = 'GS1_PREFIX_TAKEN';
-
-export type DisputeTone = 'ok' | 'warn' | 'danger' | 'idle';
-
-const alive = (d: Gs1DisputeView) => d.state === 'open' || d.state === 'proposed';
+// Round 29 — what a store reads of a dispute too: kept in one place, re-exported for the business's screens.
+export { PREFIX_TAKEN, maySendLicence, mayTakeBack, stillWorthShowing, type DisputeTone, type Gs1DisputeView } from '../../shared/gs1';
 
 /** Where a dispute stands for this business, in a sentence — and how loudly to say it. */
 export function disputeLine(d: Gs1DisputeView, t: Translate, day: (iso: string) => string): { text: string; tone: DisputeTone } {
@@ -44,25 +24,9 @@ export function disputeLine(d: Gs1DisputeView, t: Translate, day: (iso: string) 
     return { text: client ? t('business.gs1.d.decidedNotHolderClient', { prefix, client, claimant: d.claimantName, reason }) : t('business.gs1.d.decidedNotHolder', { prefix, claimant: d.claimantName, reason }), tone: 'danger' };
   }
   if (d.side === 'claimant') {
-    const vars = { prefix, names: d.holderNames.join(', '), by: day(d.answerBy) };
+    const vars = { prefix, names: d.holderNames.join(', '), n: d.holderNames.length, by: day(d.answerBy) };
     return { text: client ? t('business.gs1.d.claimantOpenClient', { ...vars, client }) : t('business.gs1.d.claimantOpen', vars), tone: 'idle' };
   }
   if (d.licenceSent) return { text: client ? t('business.gs1.d.holderSentClient', { prefix, client, claimant: d.claimantName }) : t('business.gs1.d.holderSent', { prefix, claimant: d.claimantName }), tone: 'idle' };
   return { text: client ? t('business.gs1.d.holderAskClient', { prefix, client, claimant: d.claimantName, by: day(d.answerBy) }) : t('business.gs1.d.holderAsk', { prefix, claimant: d.claimantName, by: day(d.answerBy) }), tone: 'warn' };
-}
-
-/** The business using the prefix can still send its licence — or a clearer one. */
-export function maySendLicence(d: Gs1DisputeView): boolean {
-  return d.side === 'holder' && alive(d);
-}
-
-/** The business that opened it can take it back while nothing is decided. */
-export function mayTakeBack(d: Gs1DisputeView): boolean {
-  return d.side === 'claimant' && alive(d);
-}
-
-/** Over for a month: no longer worth a line on the panel. */
-export function stillWorthShowing(d: Gs1DisputeView, now: number): boolean {
-  const over = d.decided?.at ?? d.withdrawnAt;
-  return !over || now - Date.parse(over) < 30 * 86_400_000;
 }

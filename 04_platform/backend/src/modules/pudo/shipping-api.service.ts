@@ -163,6 +163,8 @@ export interface PublicShipment {
   /** Whether it can still be called off. Reported rather than left to be discovered by a failed attempt. */
   cancellable: boolean;
   createdAt: string;
+  /** Round 29 — its SSCC, where the store holds a GS1 company prefix: given once it is paid, printed on its label. */
+  sscc?: string;
 }
 
 export interface MintedShipment {
@@ -181,6 +183,8 @@ export interface MintedShipment {
   papers?: { number: string; copies: number; currency: string; totalValue: number };
   /** The printable label, once the shipment is paid for. Absent while it is not. */
   label?: unknown;
+  /** Round 29 — its SSCC, where the store holds a GS1 company prefix and the shipment is paid for. */
+  sscc?: string;
   mode: 'test' | 'live';
   /** True when nothing was created: a test key ran every check and then committed nothing. */
   simulated: boolean;
@@ -404,6 +408,7 @@ export class ShippingApiService {
         paid,
         // A label is a claim on the network, so it issues only once the shipment is paid for.
         label: paid ? (label ?? undefined) : undefined,
+        ...(parcel.sscc ? { sscc: parcel.sscc } : {}),
         amount: parcel.shipmentCost,
         ...(papers ? { papers: papersSummary(papers) } : {}),
       },
@@ -599,11 +604,12 @@ export class ShippingApiService {
       price: { currency: parcelCurrency(parcel), amount: parcel.shipmentCost ?? 0 },
       cancellable: ['Created', 'At_PUDO', 'At_MDP'].includes(parcel.status),
       createdAt: parcel.acceptedAt,
+      ...(parcel.sscc ? { sscc: parcel.sscc } : {}),
     };
   }
 
   private shipmentView(
-    made: { shipmentId: string; did?: string; trackingKey?: string; externalOrderId?: string; status: string; paid: boolean; label?: unknown; amount?: number; papers?: MintedShipment['papers'] },
+    made: { shipmentId: string; did?: string; trackingKey?: string; externalOrderId?: string; status: string; paid: boolean; label?: unknown; sscc?: string; amount?: number; papers?: MintedShipment['papers'] },
     quoted: PublicQuote,
     mode: 'test' | 'live',
     simulated: boolean,
@@ -621,6 +627,7 @@ export class ShippingApiService {
       eta: { readyAt: quoted.eta.readyAt },
       route: { crossesBorder: quoted.route.crossesBorder, crossings: quoted.route.crossings },
       ...(made.label ? { label: made.label } : {}),
+      ...(made.sscc ? { sscc: made.sscc } : {}),
       ...(made.papers ? { papers: made.papers } : {}),
       mode,
       simulated,
