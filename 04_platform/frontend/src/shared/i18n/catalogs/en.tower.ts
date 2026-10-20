@@ -2658,6 +2658,7 @@ export const enTowerSupport = {
   'tower.support.col.step': 'Step',
   'tower.support.col.note': 'Note',
   'tower.support.col.when': 'When',
+  'tower.support.heardLate': 'done with no signal, dated by the phone · reached us {at}',
   'tower.support.locked': 'Release code locked',
   'tower.support.live': 'Release code is live',
   'tower.support.promiseOurs': 'ours to answer for',

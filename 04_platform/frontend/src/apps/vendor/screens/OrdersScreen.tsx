@@ -584,7 +584,11 @@ function OrderSheet({ state, actions, client }: { state: VendorState; actions: V
               {d.scans.map((s) => (
                 <div key={`${s.at}:${s.status}`} class="kv">
                   <span>{s.status.replace(/_/g, ' ')}</span>
-                  <b>{new Date(s.at).toLocaleString()}</b>
+                  <b>
+                    {new Date(s.at).toLocaleString()}
+                    {/* Round 23 — a step done with no signal is dated by the phone that did it; when it reached us, beside it. */}
+                    {s.receivedAt ? <small> · {t('vendor.scanHeardLate', { at: new Date(s.receivedAt).toLocaleString() })}</small> : null}
+                  </b>
                 </div>
               ))}
             </div>

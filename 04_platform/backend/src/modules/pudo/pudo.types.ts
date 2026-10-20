@@ -386,6 +386,8 @@ export class CustodyLeg {
   from: string;
   to?: string;
   note?: string;
+  /** Round 23 — when SeeBuyGet heard of this hand-over, where later than `from`: it was done with no signal, dated by the phone. */
+  receivedAt?: string;
 }
 
 /**
@@ -437,6 +439,8 @@ export class Tote {
   unitsUsed: number; // fill against BAG_CAPACITY_UNITS
   weightKg: number; // accumulated parcel weight (for vehicle capacity / dispatch matching)
   filledAt?: string; // when the first parcel went in (drives the 24 h max-wait publish)
+  /** Round 23 — when SeeBuyGet heard of that first parcel going in, where later than `filledAt` (bagged with no signal). */
+  filledReceivedAt?: string;
   availableAt?: string; // when it was published to the claim marketplace
   claimedBy?: string; // driverDid that claimed it OFF THE MARKETPLACE
   /**
@@ -465,6 +469,8 @@ export class Tote {
   sealPromptedFor?: 'full' | 'max_wait';
   /** When the shop closed it. The record that the completeness gate ran, distinct from being published. */
   sealedAt?: string;
+  /** Round 23 — when SeeBuyGet heard of the seal, where later than `sealedAt`: closed with no signal, dated by the phone. */
+  sealedReceivedAt?: string;
   /**
    * What carrying this bag is worth, LOCKED AT CLAIM — the tote analogue of a freight's `lockedPrice`.
    *
@@ -714,6 +720,8 @@ export class ParcelScan {
   by: string; // agent or driver did/badge
   note?: string;
   anchorTxId?: string;
+  /** Round 23 — when SeeBuyGet heard of this step, where later than `at`: done with no signal, dated by the phone. */
+  receivedAt?: string;
 }
 
 /**

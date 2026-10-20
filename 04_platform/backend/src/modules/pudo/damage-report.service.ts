@@ -388,11 +388,11 @@ export class DamageReportService implements OnModuleInit {
     // Nothing later than the report goes in: the hands it was in then are still "open", whatever happened since.
     const custody = (p.custody ?? [])
       .filter((leg) => leg.from <= at)
-      .map((leg) => ({ holder: this.holder(leg.holderKind, leg.holderId, p), from: leg.from, ...(leg.to && leg.to <= at ? { to: leg.to } : {}), ...(leg.note ? { note: leg.note } : {}) }));
+      .map((leg) => ({ holder: this.holder(leg.holderKind, leg.holderId, p), from: leg.from, ...(leg.to && leg.to <= at ? { to: leg.to } : {}), ...(leg.note ? { note: leg.note } : {}), ...(leg.receivedAt ? { receivedAt: leg.receivedAt } : {}) }));
     // The steps up to and including the one that records the report itself.
     const events: DamageReportBody['events'] = [];
     for (const scan of p.scans) {
-      events.push({ at: scan.at, status: scan.status, note: scan.note ?? '', ...(scan.anchorTxId ? { fingerprint: scan.anchorTxId } : {}) });
+      events.push({ at: scan.at, status: scan.status, note: scan.note ?? '', ...(scan.anchorTxId ? { fingerprint: scan.anchorTxId } : {}), ...(scan.receivedAt ? { receivedAt: scan.receivedAt } : {}) });
       if ((scan.status === 'Disputed' || scan.status === 'Lost') && scan.at >= at) break;
     }
 
@@ -648,6 +648,11 @@ function when(iso: string | undefined): string {
   return Number.isNaN(d.getTime()) ? iso : `${d.toISOString().slice(0, 10)} ${d.toISOString().slice(11, 16)} UTC`;
 }
 
+/** Round 23 — a step done with no signal is dated by the phone that did it, and says when it reached SeeBuyGet. */
+function heardLate(receivedAt: string | undefined): string {
+  return receivedAt ? `<br>Done with no signal; the phone there dated it, and SeeBuyGet heard of it ${esc(when(receivedAt))}` : '';
+}
+
 /** What the company pays itself, in a sentence — the terms the parcel travelled under. */
 export function termsSentence(terms: DamageReportBody['terms']): string {
   if (terms.promise === 'theirs') return 'Carried under the carrier’s own promise. No company of the network answers for these goods.';
@@ -716,12 +721,12 @@ ${row('Value stated', b.parcel.declaredValue !== undefined ? `${b.parcel.declare
 <h2>Who held it, and when</h2>
 <table>
 <tr><th>In whose hands</th><td><b>From</b> — <b>until</b></td></tr>
-${b.custody.map((leg) => `<tr><th>${esc(HANDS_WORDS[leg.holder.kind])}: ${esc(leg.holder.name)}</th><td>${leg.holder.kind === 'receiver' ? `handed over to them ${esc(when(leg.from))}` : `${esc(when(leg.from))} — ${leg.to ? esc(when(leg.to)) : 'still, when the problem was reported'}`}${leg.note ? `<br>${esc(leg.note)}` : ''}</td></tr>`).join('\n')}
+${b.custody.map((leg) => `<tr><th>${esc(HANDS_WORDS[leg.holder.kind])}: ${esc(leg.holder.name)}</th><td>${leg.holder.kind === 'receiver' ? `handed over to them ${esc(when(leg.from))}` : `${esc(when(leg.from))} — ${leg.to ? esc(when(leg.to)) : 'still, when the problem was reported'}`}${leg.note ? `<br>${esc(leg.note)}` : ''}${heardLate(leg.receivedAt)}</td></tr>`).join('\n')}
 </table>
 
 <h2>Every recorded step, with its fingerprint</h2>
 <table>
-${b.events.map((e) => `<tr><th>${esc(when(e.at))}</th><td>${esc(e.status === 'Disputed' ? 'Problem reported' : e.status.replace(/_/g, ' '))}${e.note ? ` — ${esc(e.note)}` : ''}${e.fingerprint ? `<br><code>${esc(e.fingerprint)}</code>` : ''}</td></tr>`).join('\n')}
+${b.events.map((e) => `<tr><th>${esc(when(e.at))}</th><td>${esc(e.status === 'Disputed' ? 'Problem reported' : e.status.replace(/_/g, ' '))}${e.note ? ` — ${esc(e.note)}` : ''}${heardLate(e.receivedAt)}${e.fingerprint ? `<br><code>${esc(e.fingerprint)}</code>` : ''}</td></tr>`).join('\n')}
 </table>
 
 <h2>Photographs</h2>

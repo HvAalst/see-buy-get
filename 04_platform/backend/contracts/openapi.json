@@ -35576,6 +35576,10 @@
         "properties": {
           "parcelId": {
             "type": "string"
+          },
+          "observedAt": {
+            "type": "string",
+            "description": "Round 23 — when the shop or hub did it, by its phone's clock: a step kept on the phone with no signal."
           }
         },
         "required": [
@@ -35590,6 +35594,10 @@
           },
           "shortShipReason": {
             "type": "string"
+          },
+          "observedAt": {
+            "type": "string",
+            "description": "Round 23 — when the shop or hub did it, by its phone's clock: a step kept on the phone with no signal."
           }
         }
       },
@@ -35929,6 +35937,10 @@
               "ODR",
               "HUM"
             ]
+          },
+          "observedAt": {
+            "type": "string",
+            "description": "Round 23 — when the shop or hub did it, by its phone's clock: a step kept on the phone with no signal."
           }
         },
         "required": [
@@ -36234,6 +36246,10 @@
           },
           "note": {
             "type": "string"
+          },
+          "receivedAt": {
+            "type": "string",
+            "description": "Round 23 — when SeeBuyGet heard of this hand-over, where later than `from`: it was done with no signal, dated by the phone."
           }
         },
         "required": [
@@ -36259,6 +36275,10 @@
           },
           "anchorTxId": {
             "type": "string"
+          },
+          "receivedAt": {
+            "type": "string",
+            "description": "Round 23 — when SeeBuyGet heard of this step, where later than `at`: done with no signal, dated by the phone."
           }
         },
         "required": [
@@ -36945,6 +36965,10 @@
           },
           "shortShipReason": {
             "type": "string"
+          },
+          "observedAt": {
+            "type": "string",
+            "description": "Round 23 — when the shop or hub did it, by its phone's clock: a step kept on the phone with no signal."
           }
         },
         "required": [
@@ -36956,6 +36980,9 @@
         "type": "object",
         "properties": {
           "destAgentDid": {
+            "type": "string"
+          },
+          "observedAt": {
             "type": "string"
           }
         }
@@ -37346,6 +37373,9 @@
           "filledAt": {
             "type": "string"
           },
+          "filledReceivedAt": {
+            "type": "string"
+          },
           "availableAt": {
             "type": "string"
           },
@@ -37366,6 +37396,10 @@
           "sealedAt": {
             "type": "string",
             "description": "When the shop closed it. The record that the completeness gate ran, distinct from being published."
+          },
+          "sealedReceivedAt": {
+            "type": "string",
+            "description": "Round 23 — when SeeBuyGet heard of the seal, where later than `sealedAt`: closed with no signal, dated by the phone."
           },
           "haul": {
             "description": "What carrying this bag is worth, LOCKED AT CLAIM — the tote analogue of a freight's `lockedPrice`.\n\nLocked rather than computed at delivery for the same reason freight locks: the driver agreed to a job\nwhose distance and contents were what they were at that moment. A parcel added after they claimed, or a\ndestination re-pointed by a re-sort, must not silently rewrite what they are owed either way.\n\nAbsent on a bag nobody claimed through the marketplace (it can still be loaded), and on every record\nwritten before this existed — both settle on the handling fee alone, and `basis` says which.",
@@ -38135,6 +38169,10 @@
           "dropoffPhotoRef": {
             "type": "string",
             "description": "PG2 — required when the scanned parcel is a person's pre-minted peer send (walk-up parity: the\n drop-off photo is the fraud defence, taken at the counter). Ignored for a vendor inbound."
+          },
+          "observedAt": {
+            "type": "string",
+            "description": "Round 23 — when the shop or hub did it, by its phone's clock: a step kept on the phone with no signal."
           }
         }
       },
@@ -38729,6 +38767,10 @@
           "driverBadgeId": {
             "type": "string",
             "description": "What the shop or hub scanned on the driver's phone. A driver loading a bag themselves sends none: it goes onto their own badge."
+          },
+          "observedAt": {
+            "type": "string",
+            "description": "Round 23 — when the shop or hub did it, by its phone's clock: a step kept on the phone with no signal."
           }
         }
       },

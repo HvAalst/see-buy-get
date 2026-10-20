@@ -62,6 +62,7 @@ export const enVendor = {
   'vendor.trackingKey': 'Tracking key',
   'vendor.payNow': 'Pay now from the balance',
   'vendor.buyerCollectionCode': 'Buyer\'s collection code',
+  'vendor.scanHeardLate': 'done with no signal · reached us {at}',
   'vendor.parcel': 'Parcel',
   'vendor.continue': 'Continue',
   'vendor.close': 'Close',

@@ -450,8 +450,9 @@ export class RoutingService {
    * Routes through MDP hubs when they exist (origin PUDO → MDP[s] → destination PUDO); falls back to
    * a single direct corridor when neither end is served by a hub. The final arrival is corrected to
    * the destination's opening hours — a parcel is never "ready for pickup" while the shop is closed.
+   * `startAt`: when the journey began, where that was earlier than now (a take-in kept with no signal — round 23).
    */
-  planJourney(input: { originAgentDid?: string; destAgentDid: string; fromLocation?: { lat: number; lng: number }; weightKg?: number; from?: RouteEnd }) {
+  planJourney(input: { originAgentDid?: string; destAgentDid: string; fromLocation?: { lat: number; lng: number }; weightKg?: number; from?: RouteEnd; startAt?: number }) {
     const dest = this.agents.get(input.destAgentDid);
     // A journey may start at a place that is not a node (a store's dock). When one is given it is used as
     // it stands; otherwise the origin is a PUDO — named, or the nearest one with room.
@@ -476,7 +477,7 @@ export class RoutingService {
     const weightKg = input.weightKg ?? 1;
     const vehicle = this.corridors.chooseVehicle(weightKg);
 
-    let cursor = Date.now() + DISPATCH_BUFFER_H * 3_600_000;
+    let cursor = (input.startAt ?? Date.now()) + DISPATCH_BUFFER_H * 3_600_000;
     const legs = route.slice(0, -1).map((from, i) => {
       const to = route[i + 1];
       const distanceKm = Math.round(this.router.roadKm(from.location, to.location) * 10) / 10;

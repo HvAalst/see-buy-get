@@ -4,6 +4,10 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'crypto';
 import { BAG_CAPACITY_UNITS, SIZE_UNITS, SIZE_WEIGHT_KG, TOTE_CODE_PREFIX } from './pudo.config';
 import { ParcelSize, Tote, ToteHaul } from './pudo.types';
+import type { Step } from './observed-at';
+
+/** A bag step heard of as it happens: dated now. */
+const stepNow = (): Step => ({ at: new Date().toISOString() });
 
 /**
  * ToteService — the reusable tote-bag pool used at MDP hubs (and for the PUDO→MDP leg). A tote is a
@@ -68,7 +72,7 @@ export class ToteService {
   }
 
   /** Drop a parcel into the bag (capacity-checked) and connect bag ↔ parcel. */
-  add(code: string, parcelId: string, size: ParcelSize): Tote {
+  add(code: string, parcelId: string, size: ParcelSize, step: Step = stepNow()): Tote {
     const tote = this.requireByCode(code);
     if (tote.status !== 'filling') throw new GlosError('INVALID_STATE', `Bag ${code} is ${tote.status}, assign it to a destination first`);
     // A parcel goes in ONCE. Bagging is a scanning loop, so the same sticker WILL be waved twice, and a
@@ -76,7 +80,10 @@ export class ToteService {
     // half empty, and the manifest would name a parcel that is in there once.
     if (tote.parcels.includes(parcelId)) throw new GlosError('ALREADY_IN_BAG', `Parcel ${parcelId} is already in bag ${code}`, { parcelId, bagCode: code, sameBag: true });
     if (!this.fits(tote, size)) throw new GlosError('BAG_FULL', `Bag ${code} is full (${this.fillPct(tote)}%) — open a new bag for this destination`);
-    if (!tote.parcels.length) tote.filledAt = new Date().toISOString();
+    if (!tote.parcels.length) {
+      tote.filledAt = step.at;
+      tote.filledReceivedAt = step.receivedAt;
+    }
     tote.parcels.push(parcelId);
     tote.unitsUsed = Math.round((tote.unitsUsed + SIZE_UNITS[size]) * 1000) / 1000;
     tote.weightKg = Math.round((tote.weightKg + SIZE_WEIGHT_KG[size]) * 100) / 100;
@@ -89,12 +96,12 @@ export class ToteService {
   }
 
   /** Publish a filling bag to the dispatch marketplace (full or aged-out, or an early manual release). */
-  markAvailable(code: string): Tote {
+  markAvailable(code: string, at: string = new Date().toISOString()): Tote {
     const tote = this.requireByCode(code);
     if (tote.status !== 'filling') throw new GlosError('INVALID_STATE', `Bag ${code} is ${tote.status}, only a filling bag can be published`);
     if (!tote.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is empty`);
     tote.status = 'available';
-    tote.availableAt = new Date().toISOString();
+    tote.availableAt = at;
     return this.save(tote);
   }
 
@@ -106,9 +113,10 @@ export class ToteService {
   }
 
   /** Stamp the shop's seal — the record that the completeness gate ran, separate from being published. */
-  markSealed(code: string): Tote {
+  markSealed(code: string, step: Step = stepNow()): Tote {
     const tote = this.requireByCode(code);
-    tote.sealedAt = new Date().toISOString();
+    tote.sealedAt = step.at;
+    tote.sealedReceivedAt = step.receivedAt;
     return this.save(tote);
   }
 
@@ -167,6 +175,7 @@ export class ToteService {
     tote.destinationNodeId = undefined;
     tote.destinationLabel = undefined;
     tote.filledAt = undefined;
+    tote.filledReceivedAt = undefined;
     tote.availableAt = undefined;
     tote.claimedBy = undefined;
     tote.carriedBy = undefined; // it is off the vehicle — see Tote.carriedBy

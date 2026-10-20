@@ -173,6 +173,8 @@ export class AcceptParcelDto {
   @IsOptional() @IsString() destPudoDid?: string;
   /** S30 — the commodity's primary cargo nature (default GEN). Drives the compatibility matrix. */
   @IsOptional() @IsIn(CARGO_NATURES) natureCode?: CargoNature;
+  /** Round 23 — when the shop or hub did it, by its phone's clock: a step kept on the phone with no signal. */
+  @IsOptional() @IsDateString() observedAt?: string;
 }
 
 /** The driver's pass, shown: the bus's list is read with it (the handover itself checks it again). */
@@ -188,6 +190,8 @@ export class HandoverDto {
   // S25 completeness gate: a short load is refused unless the agent knowingly leaves parcels behind.
   @IsOptional() @IsBoolean() acknowledgeShortShip?: boolean;
   @IsOptional() @IsString() shortShipReason?: string;
+  /** Round 23 — when the shop or hub did it, by its phone's clock: a step kept on the phone with no signal. */
+  @IsOptional() @IsDateString() observedAt?: string;
 }
 
 /** S26 — upload one image as a base64 data URL (the client downscales + strips EXIF first). */
@@ -205,6 +209,8 @@ export class PutHelpImageDto {
 
 export class ArriveDto {
   @IsOptional() @IsString() destAgentDid?: string; // operator-override only; normal actors are pinned to their token
+  /** Round 23 — when the shop or hub did it, by its phone's clock: a step kept on the phone with no signal. */
+  @IsOptional() @IsDateString() observedAt?: string;
 }
 
 export class PickupDto {
@@ -1258,6 +1264,8 @@ export class IntakeDto {
   /** PG2 — required when the scanned parcel is a person's pre-minted peer send (walk-up parity: the
    *  drop-off photo is the fraud defence, taken at the counter). Ignored for a vendor inbound. */
   @IsOptional() @IsString() dropoffPhotoRef?: string;
+  /** Round 23 — when the shop or hub did it, by its phone's clock: a step kept on the phone with no signal. */
+  @IsOptional() @IsDateString() observedAt?: string;
 }
 
 export class ShelveDto {
@@ -1279,6 +1287,8 @@ export class OpenBagDto {
 export class SealBagDto {
   @IsOptional() @IsBoolean() acknowledgeShortShip?: boolean;
   @IsOptional() @IsString() shortShipReason?: string;
+  /** Round 23 — when the shop or hub did it, by its phone's clock: a step kept on the phone with no signal. */
+  @IsOptional() @IsDateString() observedAt?: string;
 }
 
 /** A sister's own margin, as a fraction (0.02 = 2%). Bounds are enforced in the service. */
@@ -1498,11 +1508,15 @@ export class AssignToteDto {
 
 export class FillToteDto {
   @IsString() parcelId!: string;
+  /** Round 23 — when the shop or hub did it, by its phone's clock: a step kept on the phone with no signal. */
+  @IsOptional() @IsDateString() observedAt?: string;
 }
 
 export class LoadBagDto {
   /** What the shop or hub scanned on the driver's phone. A driver loading a bag themselves sends none: it goes onto their own badge. */
   @IsOptional() @IsString() driverBadgeId?: string;
+  /** Round 23 — when the shop or hub did it, by its phone's clock: a step kept on the phone with no signal. */
+  @IsOptional() @IsDateString() observedAt?: string;
 }
 
 export class DropBagDto {

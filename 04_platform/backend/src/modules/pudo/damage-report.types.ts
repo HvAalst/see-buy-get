@@ -39,6 +39,8 @@ export class DamageReportLeg {
   from: string;
   @ApiPropertyOptional() to?: string;
   @ApiPropertyOptional() note?: string;
+  /** Round 23 — the hand-over was done with no signal and dated by the phone; when SeeBuyGet heard of it. */
+  @ApiPropertyOptional() receivedAt?: string;
 }
 
 /** One recorded step, with the fingerprint it was anchored under when it happened. */
@@ -47,6 +49,8 @@ export class DamageReportEvent {
   status: string;
   note: string;
   @ApiPropertyOptional() fingerprint?: string;
+  /** Round 23 — the step was done with no signal and dated by the phone; when SeeBuyGet heard of it. */
+  @ApiPropertyOptional() receivedAt?: string;
 }
 
 /** A photograph that belongs to the parcel. `mediaId` absent where only a reference was recorded and no picture is held. */

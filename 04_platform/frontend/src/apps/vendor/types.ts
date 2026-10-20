@@ -135,7 +135,7 @@ export interface OrderDetail extends OrderRow {
   buyerMobile?: string;
   contentPhotoRef?: string;
   items?: Array<{ name: string; qty: number }>;
-  scans?: Array<{ at: string; status: string; note?: string }>;
+  scans?: Array<{ at: string; status: string; note?: string; receivedAt?: string }>;
   subtotal?: number;
   /** The platform fee inside what was charged, and the rate it was charged at. Never the split inside it. */
   platformFee?: number;

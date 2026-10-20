@@ -24,3 +24,23 @@ export function whenSeen(observedAt: string | undefined, now: number = Date.now(
   const at = Math.min(now, Math.max(now - OBSERVED_WINDOW_MS, said));
   return now - at > CLOCK_SKEW_MS ? { at, receivedAt: new Date(now).toISOString() } : { at };
 }
+
+/**
+ * WHEN IT CHANGED HANDS, as the person did it (round 22: a driver's pickup and delivery; round 23: every custody step at a
+ * counter or a hub): the phone's time within limits (whenSeen), and never before the step before it — whose order is part
+ * of what the steps mean. With when it reached us, where that is later.
+ */
+export interface Step {
+  /** When it was done, as the record dates it. */
+  at: string;
+  /** When it reached SeeBuyGet, where that is later than it was done. */
+  receivedAt?: string;
+}
+
+export function handedAt(observedAt: string | undefined, now: number, before: Array<string | undefined>): Step {
+  const seen = whenSeen(observedAt, now);
+  const floor = Math.max(0, ...before.map((x) => (x ? Date.parse(x) : 0)).filter((x) => Number.isFinite(x)));
+  // whenSeen never says later than now, and every step before it is a time already on record: no later than now either.
+  const at = Math.max(seen.at, floor);
+  return { at: new Date(at).toISOString(), ...(seen.receivedAt && at < now ? { receivedAt: seen.receivedAt } : {}) };
+}

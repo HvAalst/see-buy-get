@@ -27,7 +27,7 @@ export function createMdpApi(sbg: SbgClient) {
 
     /** Scan a full bag onto the bus — every parcel inside goes On_Bus in one move. */
     loadBag: (code: string, driverBadgeId: string) =>
-      sbg.request((c) => c.POST('/v1/sbg/totes/{code}/load', { params: { path: { code } }, body: { driverBadgeId } })),
+      sbg.request((c) => c.POST('/v1/sbg/totes/{code}/load', { params: { path: { code } }, body: { driverBadgeId, observedAt: new Date().toISOString() } })),
 
     /** Register a fresh laminated tote into this hub's pool. */
     newTote: (mdpId: string) => sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/totes', { params: { path: { id: mdpId } } })),

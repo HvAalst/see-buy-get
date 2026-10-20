@@ -22,8 +22,9 @@ export interface DamageReportBody {
   parcel: { parcelId: string; shipmentId?: string; through: string; store?: string; orderNumber?: string; madeAt: string; from: string; to: string; size: string; fragile: boolean; contents?: string[]; declaredValue?: number; currency: string };
   terms: { promise: string; company?: string; coverLimit: number; currency: string };
   problem: { origin: 'counter' | 'buyer'; reportedAt: string; reason: string; parcelWas: string; heldBy?: ReportHolder; shop?: string };
-  custody: Array<{ holder: ReportHolder; from: string; to?: string; note?: string }>;
-  events: Array<{ at: string; status: string; note: string; fingerprint?: string }>;
+  /** `receivedAt` (round 23): done with no signal and dated by the phone there; when SeeBuyGet heard of it. */
+  custody: Array<{ holder: ReportHolder; from: string; to?: string; note?: string; receivedAt?: string }>;
+  events: Array<{ at: string; status: string; note: string; fingerprint?: string; receivedAt?: string }>;
   photographs: Array<{ what: string; reference: string; mediaId?: string; takenAt?: string; sha256?: string }>;
 }
 /** What the receiver added after the parcel was handed over: beside the report, dated, with a fingerprint of its own. */
@@ -161,11 +162,16 @@ export function reportSections(report: DamageReportView, t: Translate): ReportSe
       // The receiver's is not a stretch of time in the network's hands: it is the moment the parcel left them.
       rows: b.custody.map((leg) => ({
         label: holderWords(leg.holder, t),
-        value: leg.holder.kind === 'receiver' ? t('dreport.handedOverAt', { at: moment(leg.from) }) : leg.to ? t('dreport.fromTo', { from: moment(leg.from), to: moment(leg.to) }) : t('dreport.fromStill', { from: moment(leg.from) }),
+        value: [
+          leg.holder.kind === 'receiver' ? t('dreport.handedOverAt', { at: moment(leg.from) }) : leg.to ? t('dreport.fromTo', { from: moment(leg.from), to: moment(leg.to) }) : t('dreport.fromStill', { from: moment(leg.from) }),
+          leg.receivedAt ? t('dreport.heardLate', { at: moment(leg.receivedAt) }) : '',
+        ]
+          .filter(Boolean)
+          .join(' — '),
       })),
     },
     // The record's own word for the last step is "Disputed". Nobody disputes anything here: a problem was reported.
-    { title: t('dreport.section.steps'), rows: b.events.map((e) => ({ label: moment(e.at), value: [e.status === 'Disputed' ? t('dreport.step.reported') : e.status.replace(/_/g, ' '), e.note].filter(Boolean).join(' — ') })) },
+    { title: t('dreport.section.steps'), rows: b.events.map((e) => ({ label: moment(e.at), value: [e.status === 'Disputed' ? t('dreport.step.reported') : e.status.replace(/_/g, ' '), e.note, e.receivedAt ? t('dreport.heardLate', { at: moment(e.receivedAt) }) : ''].filter(Boolean).join(' — ') })) },
     {
       title: t('dreport.section.photos'),
       rows: b.photographs.length ? b.photographs.map((p) => ({ label: t(PHOTO[p.what] ?? 'dreport.photo.problem'), value: p.mediaId ? t('dreport.photo.inFile') : t('dreport.photo.referenceOnly', { reference: p.reference }) })) : [{ value: t('dreport.photo.noneAtAll') }],

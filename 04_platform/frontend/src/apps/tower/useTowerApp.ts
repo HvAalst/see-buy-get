@@ -223,7 +223,7 @@ export interface ParcelView {
   contentPhotoRef?: string;
   dropoffPhotoRef?: string;
   deliveredPhotoRef?: string;
-  scans?: Array<{ at: string; status: string; note?: string }>;
+  scans?: Array<{ at: string; status: string; note?: string; receivedAt?: string }>;
 }
 
 /** `GET /finance` is untyped in the contract; these are the fields the screen reads. */

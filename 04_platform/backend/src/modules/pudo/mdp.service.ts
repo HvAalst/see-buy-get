@@ -19,6 +19,7 @@ import { countryOfSite, requireCountryCode } from './country';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
 import { Mdp, NextHop, Tote } from './pudo.types';
+import { handedAt } from './observed-at';
 
 /**
  * MdpService — Main Distribution Point hubs + the tote-bag sort flow (Compendium Ch 17).
@@ -228,7 +229,7 @@ export class MdpService {
    * Without it a parcel for one city rides to another in a sealed bag, and nothing notices: the seal gate
    * only checks that everything EXPECTED is in the bag, never that everything in the bag BELONGS.
    */
-  fillShopBag(code: string, agentDid: string, parcelId: string): { tote: Tote; fillPct: number } {
+  fillShopBag(code: string, agentDid: string, parcelId: string, observedAt?: string): { tote: Tote; fillPct: number } {
     const bag = this.totes.requireByCode(code);
     if (bag.locationId !== agentDid) throw new GlosError('WRONG_PUDO', `Bag ${code} was not opened at this shop`);
     if (bag.status !== 'filling') throw new GlosError('INVALID_STATE', `Bag ${code} is ${bag.status}, it is closed`);
@@ -255,7 +256,7 @@ export class MdpService {
         sameBag: holder.code === code,
       });
     }
-    return this.fillTote(code, parcelId);
+    return this.fillTote(code, parcelId, observedAt);
   }
 
   /**
@@ -277,7 +278,7 @@ export class MdpService {
    * manual release, must not lock its shop out of the completeness gate — it is reconciled and stamped,
    * but not re-announced.
    */
-  sealShopBag(code: string, agentDid: string, input: { acknowledgeShortShip?: boolean; shortShipReason?: string } = {}): { tote: Tote; parcels: string[]; missed: string[]; shortShipped: boolean } {
+  sealShopBag(code: string, agentDid: string, input: { acknowledgeShortShip?: boolean; shortShipReason?: string; observedAt?: string } = {}): { tote: Tote; parcels: string[]; missed: string[]; shortShipped: boolean } {
     const bag = this.totes.requireByCode(code);
     if (bag.locationId !== agentDid) throw new GlosError('WRONG_PUDO', `Bag ${code} was not opened at this shop`);
     // Closed once. A second seal would re-run the gate against parcels dropped off AFTER the bag was shut
@@ -301,12 +302,15 @@ export class MdpService {
         { missed, expected, code },
       );
     }
-    if (missed.length) this.parcels.markShortShipped(missed, agentDid, `bag ${code}`, (input.shortShipReason ?? '').trim() || 'not bagged');
+    // Closed when the shop closed it (round 23): a seal kept on the phone with no signal is dated then, never before the
+    // bag was first filled; the parcels it left behind were left behind at that moment.
+    const sealed = handedAt(input.observedAt, Date.now(), [bag.filledAt, bag.availableAt]);
+    if (missed.length) this.parcels.markShortShipped(missed, agentDid, `bag ${code}`, (input.shortShipReason ?? '').trim() || 'not bagged', input.observedAt, [bag.filledAt, bag.availableAt]);
 
     // Sealed = published to the marketplace, so a driver can claim it and arrive knowing it is one scan.
     const announce = bag.status === 'filling'; // an already-published bag was announced when it was published
-    const tote = announce ? this.totes.markAvailable(code) : bag;
-    this.totes.markSealed(code);
+    const tote = announce ? this.totes.markAvailable(code, sealed.at) : bag;
+    this.totes.markSealed(code, sealed);
     if (announce) {
       // …and tell the drivers near the shop. Without this the shop's deliberate "it is ready NOW" was the
       // only publish in the network that pinged nobody, while the passive 24 h sweep did.
@@ -320,7 +324,7 @@ export class MdpService {
   // --- bag flow ---
 
   /** Pack a parcel into a bag bound for a destination (used at the origin PUDO and after sorting). */
-  fillTote(code: string, parcelId: string): { tote: Tote; fillPct: number } {
+  fillTote(code: string, parcelId: string, observedAt?: string): { tote: Tote; fillPct: number } {
     const parcel = this.parcels.get(parcelId);
     // S31: this worker chose a specific bag — refuse to drop in a parcel whose cargo is incompatible with the
     // bag's current contents (cement dust into a fresh-produce bag). The bag stays internally compatible, so
@@ -329,7 +333,8 @@ export class MdpService {
     if (!this.bagAccepts(parcel.natureCode ?? 'GEN', bag.parcels)) {
       throw new GlosError('CARGO_INCOMPATIBLE', `Parcel ${parcelId} cannot share bag ${code} — its cargo is incompatible with the bag's contents`);
     }
-    const tote = this.totes.add(code, parcelId, parcel.size);
+    // Bagged when it was bagged (round 23): never before the parcel's own last step — it was not here to bag before then.
+    const tote = this.totes.add(code, parcelId, parcel.size, this.parcels.stepOf(parcelId, observedAt));
     this.parcels.get(parcelId).toteId = tote.toteId; // connect parcel ↔ bag (still where it was)
     return { tote, fillPct: this.totes.fillPct(tote) };
   }
@@ -337,7 +342,7 @@ export class MdpService {
   /** Scan a bag onto a bus — one scan moves the whole tote and every parcel in it to On_Bus.
    * When the badge resolves to a registered fleet vehicle, the bag must fit that vehicle's limits
    * (a bike/motorcycle feeder takes ≤ its capacity and no fragile items). Unknown badges pass through. */
-  loadBag(code: string, driverBadgeId: string): { tote: Tote; moved: string[] } {
+  loadBag(code: string, driverBadgeId: string, observedAt?: string): { tote: Tote; moved: string[] } {
     const pending = this.totes.requireByCode(code);
     const fleet = this.fleet.resolveBadge(driverBadgeId);
     // A claimed bag may only be loaded by the driver who claimed it.
@@ -388,9 +393,11 @@ export class MdpService {
         throw new GlosError('CAPACITY_EXCEEDED', `This ${fleet.vehicle.vehicleClass} is carrying all ${capacity} bag(s) it holds — drop one before loading bag ${code}`);
       }
     }
+    // Loaded when it was loaded (round 23), never before the bag was filled, published or sealed.
+    const after = [pending.filledAt, pending.availableAt, pending.sealedAt];
     const tote = this.totes.load(code, driverBadgeId, fleet?.driverDid);
     for (const parcelId of tote.parcels) {
-      this.parcels.setTransit(parcelId, 'On_Bus', driverBadgeId, `bag ${tote.code} → ${tote.destinationLabel ?? tote.destinationNodeId}`, tote.toteId);
+      this.parcels.setTransit(parcelId, 'On_Bus', driverBadgeId, `bag ${tote.code} → ${tote.destinationLabel ?? tote.destinationNodeId}`, tote.toteId, { observedAt, after });
       // Graduation: the tote path must raise HANDOVER on the M4 timeline like the direct handover does.
       void this.events.publish(GlosEvent.Pudo.ParcelHandedToBus, { parcelId, driverBadgeId, toteCode: tote.code }, { source: 'pudo' }).catch(() => undefined);
     }

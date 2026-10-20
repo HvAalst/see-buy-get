@@ -159,7 +159,11 @@ export function SupportScreen({ state, actions }: { state: TowerState; actions: 
                     <tr key={`${s.at}-${i}`}>
                       <td class="ctbl__strong">{String(s.status).replace(/_/g, ' ')}</td>
                       <td class="ctbl__sub">{s.note || '—'}</td>
-                      <td class="ctbl__sub">{new Date(s.at).toLocaleString()}</td>
+                      <td class="ctbl__sub">
+                        {new Date(s.at).toLocaleString()}
+                        {/* Round 23 — done with no signal: dated by the phone that did it, and when it reached us beside it. */}
+                        {s.receivedAt ? <div>{t('tower.support.heardLate', { at: new Date(s.receivedAt).toLocaleString() })}</div> : null}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

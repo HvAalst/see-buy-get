@@ -2506,7 +2506,7 @@ export class SbgController {
   @Post('agents/:did/totes/:code/fill')
   @AtTheCounter()
   fillShopBag(@Param('did') did: string, @Param('code') code: string, @Body() dto: FillToteDto, @Actor() actor: IntrospectionResult) {
-    return this.mdps.fillShopBag(code, actingDid(actor, did), dto.parcelId);
+    return this.mdps.fillShopBag(code, actingDid(actor, did), dto.parcelId, dto.observedAt);
   }
 
   /** Seal the bag — where the completeness gate lives for a bagged hand-over (see sealShopBag). */
@@ -2762,7 +2762,8 @@ export class SbgController {
   accept(@Body() dto: AcceptParcelDto, @Actor() actor: IntrospectionResult) {
     const agentDid = actingDid(actor, dto.agentDid);
     const taken = this.parcels.accept({ ...dto, agentDid });
-    // How long it took at the counter, by the app's own clock: kept beside the parcel for the pilot, never on it.
+    // How long it took at the counter, by the app's own clock: kept beside the parcel for the pilot, never on it. Counted in
+    // the week it reached us, not the week it was done: a pilot week is frozen when it ends, and a late one must not vanish.
     this.pilot?.noteTakeIn((taken as { parcelId?: string }).parcelId ?? dto.parcelId, agentDid, dto.takeInSeconds);
     return taken;
   }
@@ -2878,7 +2879,7 @@ export class SbgController {
   @Post('parcels/:id/arrive')
   @AtTheCounter()
   arrive(@Param('id') id: string, @Body() dto: ArriveDto, @Actor() actor: IntrospectionResult) {
-    return this.parcels.arrive(id, actingDid(actor, dto.destAgentDid));
+    return this.parcels.arrive(id, actingDid(actor, dto.destAgentDid), dto.observedAt);
   }
 
   @Roles('agent', 'operator')
@@ -3970,7 +3971,7 @@ export class SbgController {
   @AtTheCounter()
   intake(@Param('id') id: string, @Body() dto: IntakeDto, @Actor() actor: IntrospectionResult) {
     const did = actingDid(actor, dto.agentDid);
-    const taken = this.parcels.get(id).direction === 'outbound' ? this.parcels.intakeConsumerSend(id, did, dto.dropoffPhotoRef) : this.parcels.intakeInbound(id, did, dto.papersInPouch === true);
+    const taken = this.parcels.get(id).direction === 'outbound' ? this.parcels.intakeConsumerSend(id, did, dto.dropoffPhotoRef, dto.observedAt) : this.parcels.intakeInbound(id, did, dto.papersInPouch === true, dto.observedAt);
     this.pilot?.noteTakeIn(id, did, dto.takeInSeconds);
     return taken;
   }
@@ -4581,7 +4582,7 @@ export class SbgController {
   @Post('totes/:code/fill')
   @AtTheCounter()
   fillTote(@Param('code') code: string, @Body() dto: FillToteDto) {
-    return this.mdps.fillTote(code, dto.parcelId);
+    return this.mdps.fillTote(code, dto.parcelId, dto.observedAt);
   }
 
   /**
@@ -4598,10 +4599,10 @@ export class SbgController {
       const own = actor.did ? this.drivers.get(actor.did).badgeId : undefined;
       if (!own) throw new GlosError('FORBIDDEN', 'Only a driver with a badge can take a bag');
       if (dto.driverBadgeId && dto.driverBadgeId.trim().toUpperCase() !== own) throw new GlosError('FORBIDDEN', 'A driver takes a bag onto their own badge');
-      return this.mdps.loadBag(code, own);
+      return this.mdps.loadBag(code, own, dto.observedAt);
     }
     if (!dto.driverBadgeId?.trim()) throw new GlosError('FIELD_REQUIRED', 'Scan the badge on the driver’s phone');
-    return this.mdps.loadBag(code, this.fleet.badgeShown(dto.driverBadgeId));
+    return this.mdps.loadBag(code, this.fleet.badgeShown(dto.driverBadgeId), dto.observedAt);
   }
 
   /** A bus drops a bag at an MDP → scan the bag code, empty it; parcels become unsorted (At_MDP). */

@@ -45,7 +45,7 @@ import { MarketPulseStore } from './market-pulse.store';
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, toteCapacityOf, VEHICLE_SPEC } from './fleet.config';
 import { Router, ROUTER } from './router';
 import { groupOf, laneDrive, lanesOf, tripKmh, type LaneDrive, type LaneTrip } from './lane-times';
-import { whenSeen } from './observed-at';
+import { handedAt } from './observed-at';
 import { coverFor, DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MARKET_MIN_DEMAND, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, taxOn, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
@@ -3854,16 +3854,4 @@ export function carrierNow(f: Freight, takenOverBy: string | undefined): { drive
   const r = [...(f.reloads ?? [])].reverse().find((x) => x.aboard);
   if (r) return { driverName: r.toDriverName, plate: r.toPlate, vehicleClass: r.toVehicleClass };
   return { driverName: takenOverBy, plate: f.carriage!.plate, vehicleClass: f.carriage!.vehicleClass };
-}
-
-/**
- * Round 22 — WHEN A LOAD CHANGED HANDS, as its driver did it: the phone's time within limits (observed-at.ts), and never
- * before the step before it — whose order is part of what the steps mean. With when it reached us, where that is later.
- */
-function handedAt(observedAt: string | undefined, now: number, before: Array<string | undefined>): { at: string; receivedAt?: string } {
-  const seen = whenSeen(observedAt, now);
-  const floor = Math.max(0, ...before.map((x) => (x ? Date.parse(x) : 0)).filter((x) => Number.isFinite(x)));
-  // whenSeen never says later than now, and every step before it is a time already on record: no later than now either.
-  const at = Math.max(seen.at, floor);
-  return { at: new Date(at).toISOString(), ...(seen.receivedAt && at < now ? { receivedAt: seen.receivedAt } : {}) };
 }

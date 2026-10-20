@@ -166,7 +166,9 @@ export function createAgentApi(sbg: SbgClient) {
       natureCode?: 'GEN' | 'FOD' | 'FOP' | 'HAZ-CHEM' | 'HAZ-DUST' | 'HAZ-BIO' | 'HAZ-FLAM' | 'FRG' | 'ODR' | 'HUM';
       /** How long it took at the counter, by this app's clock — for the pilot's numbers. */
       takeInSeconds?: number;
-    }) => sbg.request((c) => c.POST('/v1/sbg/parcels/accept', { body })),
+    }) =>
+      // Round 23 — dated now, when the counter takes it in: a take-in kept with no signal is sent later with this body as it is.
+      sbg.request((c) => c.POST('/v1/sbg/parcels/accept', { body: { ...body, observedAt: new Date().toISOString() } })),
 
     /** F2 — book a too-big (dedicated, P4+) walk-up as FREIGHT instead of refusing it. The agent is the
      *  on-platform originator; the customer pays a CASH `budgetCap` (→ the freight's maxSpend ceiling) at the
@@ -279,7 +281,7 @@ export function createAgentApi(sbg: SbgClient) {
     /** PG4 — take a PRE-MINTED parcel in: a peer send (collect the locked price in cash + proof photo)
      *  or a store order (prepaid, no photo). One scan surface; the parcel's record decides. */
     intake: (id: string, dropoffPhotoRef?: string, takeInSeconds?: number, papersInPouch?: boolean) =>
-      sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/intake', { params: { path: { id } }, body: { ...(dropoffPhotoRef ? { dropoffPhotoRef } : {}), ...(takeInSeconds ? { takeInSeconds } : {}), ...(papersInPouch ? { papersInPouch } : {}) } })),
+      sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/intake', { params: { path: { id } }, body: { ...(dropoffPhotoRef ? { dropoffPhotoRef } : {}), ...(takeInSeconds ? { takeInSeconds } : {}), ...(papersInPouch ? { papersInPouch } : {}), observedAt: new Date().toISOString() } })),
 
     /**
      * Hand selected parcels to the scanned driver badge (the bus moment). The server runs the S25
@@ -302,13 +304,14 @@ export function createAgentApi(sbg: SbgClient) {
             driverBadgeId,
             parcelIds,
             ...(opts?.acknowledgeShortShip ? { acknowledgeShortShip: true, shortShipReason: opts.shortShipReason } : {}),
+            observedAt: new Date().toISOString(),
           },
         }),
       ),
 
     /** Mark a bus parcel arrived at this destination shop → issues the customer OTP. */
     arrive: (parcelId: string, destAgentDid: string) =>
-      sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/arrive', { params: { path: { id: parcelId } }, body: { destAgentDid } })),
+      sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/arrive', { params: { path: { id: parcelId } }, body: { destAgentDid, observedAt: new Date().toISOString() } })),
 
     /** Verify the customer's 4-digit code and hand the parcel over (photo optional, kept as proof). */
     pickup: (parcelId: string, agentDid: string, otp: string, deliveredPhotoRef?: string) =>
@@ -349,13 +352,13 @@ export function createAgentApi(sbg: SbgClient) {
 
     /** Drop a waiting parcel into the open bag. The shop path, so a parcel going elsewhere is refused. */
     fillBag: (did: string, code: string, parcelId: string) =>
-      sbg.request((c) => c.POST('/v1/sbg/agents/{did}/totes/{code}/fill', { params: { path: { did, code } }, body: { parcelId } })),
+      sbg.request((c) => c.POST('/v1/sbg/agents/{did}/totes/{code}/fill', { params: { path: { did, code } }, body: { parcelId, observedAt: new Date().toISOString() } })),
 
     /** Seal it. The server refuses if a parcel for that destination is still on the shelf, unless the
      *  shop knowingly leaves it — the same gate the parcel-by-parcel handover has. */
     sealBag: (did: string, code: string, opts?: { acknowledgeShortShip?: boolean; shortShipReason?: string }) =>
       sbg.request((c) =>
-        c.POST('/v1/sbg/agents/{did}/totes/{code}/seal', { params: { path: { did, code } }, body: { ...opts } }),
+        c.POST('/v1/sbg/agents/{did}/totes/{code}/seal', { params: { path: { did, code } }, body: { ...opts, observedAt: new Date().toISOString() } }),
       ),
 
     receiveBag: (did: string, code: string) =>

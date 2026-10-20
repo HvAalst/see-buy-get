@@ -342,7 +342,7 @@ export function createDriverApi(sbg: SbgClient) {
 
     /** Scan a released bag onto the vehicle. */
     loadBag: (code: string, driverBadgeId: string) =>
-      sbg.request((c) => c.POST('/v1/sbg/totes/{code}/load', { params: { path: { code } }, body: { driverBadgeId } })),
+      sbg.request((c) => c.POST('/v1/sbg/totes/{code}/load', { params: { path: { code } }, body: { driverBadgeId, observedAt: new Date().toISOString() } })),
 
     /** S32b/S33 — pick up a claimed dedicated-freight job (claimed → in_transit). Sends the driver's own DID
      *  (only the claimer may advance a job) plus the S33 load-safety gate: the confirmed checklist keys + the

@@ -900,6 +900,49 @@ describe('PUDO Light', () => {
     expect(context.get(res.parcel.parcelId)?.legs[0].origin).toBe('DTI Origin'); // NOT re-registered to the zone
   });
 
+  it('round 23: an intake done with no signal is dated by the phone, never before the parcel was booked — and keeps when it reached us', () => {
+    const H = 3_600_000;
+    const iso = (ms: number) => new Date(ms).toISOString();
+    /** Booked five hours ago: everything on its record so far, moved back. */
+    const bookedLongAgo = (parcelId: string) => {
+      const p = parcels.get(parcelId);
+      p.scans = p.scans.map((s) => ({ ...s, at: iso(Date.now() - 5 * H) }));
+      p.custody = (p.custody ?? []).map((l) => ({ ...l, from: iso(Date.now() - 5 * H) }));
+    };
+    const last = (p: { scans: Array<{ at: string; status: string; receivedAt?: string }> }) => p.scans[p.scans.length - 1];
+    /** Through the counter's route, as the app sends it. */
+    const intake = (parcelId: string, agentDid: string, observedAt: number, dropoffPhotoRef?: string) =>
+      controller.intake(parcelId, { agentDid, observedAt: iso(observedAt), ...(dropoffPhotoRef ? { dropoffPhotoRef } : {}) } as never, { role: 'operator' } as never);
+
+    // A store's order, handed in two hours ago with no signal and sent now.
+    const store = mintInbound('R23S');
+    bookedLongAgo(store.res.parcel.parcelId);
+    const handedIn = Date.now() - 2 * H;
+    const inbound = intake(store.res.parcel.parcelId, store.origin.did, handedIn);
+    expect(inbound.acceptedAt).toBe(iso(handedIn));
+    expect(last(inbound)).toMatchObject({ status: 'At_PUDO', at: iso(handedIn) });
+    expect(Date.parse(last(inbound).receivedAt!)).toBeGreaterThan(Date.now() - 5_000);
+    expect(inbound.custody!.find((l) => l.holderKind === 'shop')).toMatchObject({ from: iso(handedIn) });
+
+    // A store's order whose phone says it was handed in before it was booked: never before the booking.
+    const early = mintInbound('R23E');
+    const bookedAt = last(parcels.get(early.res.parcel.parcelId)).at;
+    expect(intake(early.res.parcel.parcelId, early.origin.did, Date.now() - 3 * H).acceptedAt).toBe(bookedAt);
+
+    // A person's own send, booked in the app and dropped off at the counter an hour ago with no signal.
+    const from = onboardAgent('R23 From', 'NorthTown', 500);
+    const to = onboardAgent('R23 To', 'NorthTown', 50);
+    const quote = routing.quoteShipment(from.did, to.did, 'M');
+    const { parcel } = parcels.createConsumerSend({ senderPersonDid: 'did:person:r23', senderPhoneHash: 'h-r23', receiverMobile: '+254700523', originAgentDid: from.did, destAgentDid: to.did, dimensionsCm: { l: 10, w: 10, h: 10 }, weightKg: 1, quote } as never);
+    bookedLongAgo(parcel.parcelId);
+    const droppedOff = Date.now() - 1 * H;
+    const sent = intake(parcel.parcelId, from.did, droppedOff, 'dropoff.jpg');
+    expect(sent.acceptedAt).toBe(iso(droppedOff));
+    expect(last(sent)).toMatchObject({ status: 'At_PUDO', at: iso(droppedOff) });
+    expect(last(sent).receivedAt).toBeDefined();
+    expect(sent.custody!.find((l) => l.holderKind === 'shop')).toMatchObject({ from: iso(droppedOff) });
+  });
+
   it('DT: the public track surfaces the twin id + its planned route from creation', () => {
     const { res } = mintInbound('DTT');
     const tr = controller.track(res.parcel.trackingKey) as { did?: string; plannedRoute?: { hops: string[] } };

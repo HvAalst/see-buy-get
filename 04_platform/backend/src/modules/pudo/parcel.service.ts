@@ -28,6 +28,7 @@ import type { ShipmentQuote } from './routing.service';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 import { PersonService } from './person.service';
 import { isFor, readerOf, waitsAt, type Addressed, type Reader } from './addressed-to';
+import { handedAt, type Step } from './observed-at';
 
 const LABEL_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -587,7 +588,17 @@ interface AcceptInput {
   fragile?: boolean;
   natureCode?: CargoNature; // S30: primary cargo nature (default GEN)
   destPudoDid?: string; // optional: nominate the destination PUDO up front (enables MDP pre-sort routing)
+  observedAt?: string; // round 23: when the counter took it in, by its phone's clock (a take-in kept with no signal)
 }
+
+/**
+ * WHEN A STEP WAS DONE (round 23: "Counters' writes keep their time"). A shop's or a hub's custody step kept on the phone
+ * with no signal is dated when it was done — the phone's time within limits, never before the parcel's step before it
+ * (observed-at.ts `handedAt`) — and when it reached SeeBuyGet is kept beside it, where that is later.
+ *
+ * A step heard of as it happens: dated now.
+ */
+const stepNow = (): Step => ({ at: new Date().toISOString() });
 
 export interface HandoverResult {
   manifestId: string;
@@ -1226,8 +1237,11 @@ export class ParcelService implements OnApplicationBootstrap {
     if (this.cargo.dedicatedRequired(cargoClass)) {
       throw new GlosError('CARGO_REQUIRES_DEDICATED', `Cargo class ${cargoClass} is too large for the PUDO network — it needs dedicated freight transport`);
     }
-    const now = new Date().toISOString();
-    const anchorTxId = this.ledger.anchor({ p: input.parcelId, a: input.agentDid, s: size, dest: input.destZone, photo: input.dropoffPhotoRef, at: now }).txId;
+    // Taken in when the counter did it: a walk-up kept on the phone with no signal is not taken in when the signal came back.
+    const taken = handedAt(input.observedAt, Date.now(), []);
+    const now = taken.at;
+    const received = taken.receivedAt ? { receivedAt: taken.receivedAt } : {};
+    const anchorTxId = this.ledger.anchor({ p: input.parcelId, a: input.agentDid, s: size, dest: input.destZone, photo: input.dropoffPhotoRef, at: now, ...received }).txId;
     const parcel: Parcel = {
       parcelId: input.parcelId,
       did: this.mintShipmentDid(input.parcelId, 'outbound'), // DT — the twin's stable GLOS identity, minted at creation
@@ -1275,8 +1289,8 @@ export class ParcelService implements OnApplicationBootstrap {
       // Born at this counter — and held by it from the same moment, because a walk-up is created BY the
       // shop taking it. The sender's own leg happened off the network, on the way here.
       birthplace: { kind: 'counter', atId: input.agentDid, label: agent.shopName, location: agent.location, at: now },
-      custody: [{ holderId: input.agentDid, holderKind: 'shop', from: now, note: 'taken in at the counter' }],
-      scans: [{ at: now, status: 'CREATED', by: input.agentDid, note: agent.shopName, anchorTxId }],
+      custody: [{ holderId: input.agentDid, holderKind: 'shop', from: now, note: 'taken in at the counter', ...received }],
+      scans: [{ at: now, status: 'CREATED', by: input.agentDid, note: agent.shopName, anchorTxId, ...received }],
     };
     // DT — a printable label at creation for OUTBOUND too (the counter flow never issued one). Direction-aware:
     // shows the public tracking key, not a collection code. Persisted so it can be reprinted.
@@ -1335,6 +1349,7 @@ export class ParcelService implements OnApplicationBootstrap {
     parcelIds: string[];
     acknowledgeShortShip?: boolean;
     shortShipReason?: string;
+    observedAt?: string;
   }): HandoverResult {
     const { fleet, badgeId, corridorId, corridorDestZone, vehicleType } = this.busFor(input.driverBadgeId);
 
@@ -1401,10 +1416,11 @@ export class ParcelService implements OnApplicationBootstrap {
       parcel.shortShippedAt = undefined; // it made the bus after all — clear any earlier short-ship marker
       parcel.shortShipReason = undefined;
       if (fleet && parcel.actualPerKm == null) parcel.actualPerKm = fleet.vehicle.pricePerKm; // the real carrier rate → flexible rebate
-      parcel.handedToBusAt = new Date().toISOString();
+      const step = this.stepAt(parcel, input.observedAt);
+      parcel.handedToBusAt = step.at;
       loadKg += parcel.weightKg;
-      this.handTo(parcel, 'driver', this.driverIdOf(badgeId), `handed to the bus · manifest ${manifestId}`);
-      this.scan(parcel, 'On_Bus', badgeId, `manifest ${manifestId}`);
+      this.handTo(parcel, 'driver', this.driverIdOf(badgeId), `handed to the bus · manifest ${manifestId}`, step);
+      this.scan(parcel, 'On_Bus', badgeId, `manifest ${manifestId}`, step);
       handed.push(parcelId);
       void this.events.publish(GlosEvent.Pudo.ParcelHandedToBus, { parcelId, driverBadgeId: badgeId, corridorId, manifestId }, { source: 'pudo' }).catch(() => undefined);
     }
@@ -1418,17 +1434,18 @@ export class ParcelService implements OnApplicationBootstrap {
     const operatorReason = (input.shortShipReason ?? '').trim() || 'not loaded';
     const missed = expected.filter((id) => !handedSet.has(id) && this.parcels.get(id)?.status === 'At_PUDO');
     if (missed.length) {
-      const at = new Date().toISOString();
       // Written together: every parcel left behind in one write, not one rewrite of the whole store each (writeTogether).
       this.writeTogether(() => {
         for (const parcelId of missed) {
           const parcel = this.parcels.get(parcelId)!; // guaranteed At_PUDO by the filter above
-          parcel.shortShippedAt = at;
+          // Left behind when the bus left, which is when the handover was done.
+          const step = this.stepAt(parcel, input.observedAt);
+          parcel.shortShippedAt = step.at;
           // The vehicle's concrete rejection reason wins; otherwise the agent's acknowledged reason.
           parcel.shortShipReason = rejectionReason.get(parcelId) ?? operatorReason;
           // The scan note stays GENERIC: the reason lives on shortShipReason (control-tower only), never in the
           // timeline that BOTH the sender and receiver twins can read via toConsumerView (mirrors buyerDispute, S23).
-          this.scan(parcel, 'At_PUDO', badgeId, `short-ship · left behind at manifest ${manifestId}`);
+          this.scan(parcel, 'At_PUDO', badgeId, `short-ship · left behind at manifest ${manifestId}`, step);
           void this.events.publish(GlosEvent.Pudo.ParcelShortShipped, { parcelId, driverBadgeId: badgeId, corridorId, manifestId, reason: parcel.shortShipReason }, { source: 'pudo' }).catch(() => undefined);
         }
       });
@@ -1492,10 +1509,11 @@ export class ParcelService implements OnApplicationBootstrap {
    * A pre-slice parcel that arrives without one is given a code here as a fallback — that record's secret
    * genuinely does not exist yet, and refusing the arrival would strand real goods on a real shelf.
    */
-  arrive(parcelId: string, destAgentDid: string): { parcelId: string; status: string; binSlot: string } {
+  arrive(parcelId: string, destAgentDid: string, observedAt?: string): { parcelId: string; status: string; binSlot: string } {
     const parcel = this.require(parcelId);
     this.refuseIfLost(parcel);
     if (parcel.status !== 'On_Bus') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected On_Bus`);
+    const step = this.stepAt(parcel, observedAt);
     // A SLOT FIRST, and nothing else until there is one. The record was marked ready to collect and THEN asked for
     // a slot: on a full shelf the ask was refused, and the parcel stayed marked ready, in no slot, with nobody told
     // — and could not be scanned again, because it was no longer "on the bus". A six-slot shop is full by lunchtime.
@@ -1506,12 +1524,12 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.otpAttempts = 0;
     parcel.otpLockedAt = undefined;
     parcel.binSlot = slot;
-    this.handTo(parcel, 'shop', destAgentDid, 'arrived at the collection point');
-    parcel.readyAt = new Date().toISOString(); // when the wait began — see Parcel.readyAt
+    this.handTo(parcel, 'shop', destAgentDid, 'arrived at the collection point', step);
+    parcel.readyAt = step.at; // when the wait began — see Parcel.readyAt; on the shelf since it arrived, however late we heard
     // The shelving half, paid HERE rather than at release. Receiving, scanning and committing a shelf
     // slot is finished work at this moment, and it stays finished whether or not anybody ever comes.
     this.gate.payLabour(destAgentDid, this.amountsAt(destAgentDid, parcel.sellerEntityId).shelvingFee, parcelId, 'parcel', parcel.sellerEntityId);
-    this.scan(parcel, 'Ready_For_Pickup', destAgentDid, `arrived · shelf ${parcel.binSlot}`);
+    this.scan(parcel, 'Ready_For_Pickup', destAgentDid, `arrived · shelf ${parcel.binSlot}`, step);
     void this.events.publish(GlosEvent.Pudo.ParcelReadyForPickup, { parcelId, destAgentDid, binSlot: parcel.binSlot }, { source: 'pudo' }).catch(() => undefined);
     // No secret in this response: the customer brings the code, the shop checks it.
     return { parcelId, status: parcel.status, binSlot: parcel.binSlot };
@@ -2009,7 +2027,7 @@ export class ParcelService implements OnApplicationBootstrap {
    * photo is taken NOW (walk-up parity, fraud defence), and acceptedAt is re-stamped — the void window runs
    * from PHYSICAL drop-off, not from the at-home mint.
    */
-  intakeConsumerSend(parcelId: string, agentDid: string, dropoffPhotoRef?: string): Parcel {
+  intakeConsumerSend(parcelId: string, agentDid: string, dropoffPhotoRef?: string, observedAt?: string): Parcel {
     const parcel = this.require(parcelId);
     if (parcel.direction !== 'outbound' || !parcel.senderPhoneHash || parcel.vendorId) throw new GlosError('INVALID_STATE', 'Not a pre-minted peer send');
     if (parcel.status !== 'Created') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Created`);
@@ -2019,12 +2037,13 @@ export class ParcelService implements OnApplicationBootstrap {
     const due = parcel.shipmentCost ?? 0;
     const gate = this.gate.canTransact(agentDid);
     if (!gate.moneyOk || gate.balance < due) throw new GlosError('WALLET_INSUFFICIENT', 'Insufficient funds to remit this parcel — top up first.');
+    const step = this.stepAt(parcel, observedAt);
     parcel.status = 'At_PUDO';
-    parcel.acceptedAt = new Date().toISOString();
+    parcel.acceptedAt = step.at;
     parcel.dropoffPhotoRef = dropoffPhotoRef;
     parcel.paidStatus = 'ParcelPaid'; // the sender paid the shop in cash, against the price locked at mint
-    this.handTo(parcel, 'shop', agentDid, 'dropped off at the counter');
-    this.scan(parcel, 'At_PUDO', agentDid, 'peer-send drop-off · cash collected');
+    this.handTo(parcel, 'shop', agentDid, 'dropped off at the counter', step);
+    this.scan(parcel, 'At_PUDO', agentDid, 'peer-send drop-off · cash collected', step);
     // adopt(), not link(): the photo id came from the CLIENT — only a photo the acting shop owns and that
     // isn't attached elsewhere may bind here (S29/S33a media-laundering guard).
     this.media.adopt(dropoffPhotoRef, agentDid, { type: 'parcel', id: parcelId }, 'dropoff');
@@ -2037,7 +2056,7 @@ export class ParcelService implements OnApplicationBootstrap {
   }
 
   /** Origin PUDO scans the vendor's parcel in (Created → At_PUDO). Pre-paid: labour fee, no gate. */
-  intakeInbound(parcelId: string, agentDid: string, papersInPouch = false): Parcel {
+  intakeInbound(parcelId: string, agentDid: string, papersInPouch = false, observedAt?: string): Parcel {
     const parcel = this.require(parcelId);
     if (parcel.direction !== 'inbound') throw new GlosError('NOT_INBOUND', 'Not an inbound parcel');
     if (parcel.status !== 'Created') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Created`);
@@ -2048,12 +2067,13 @@ export class ParcelService implements OnApplicationBootstrap {
     if (parcel.customs && !papersInPouch) {
       throw new GlosError('FIELD_REQUIRED', 'This parcel crosses a border: look for its commercial invoice — three copies in the pouch on the outside — before you take it in. No papers, ask the store to print them.', { field: 'papersInPouch' });
     }
-    if (parcel.customs) parcel.papersSeen = { at: new Date().toISOString(), by: agentDid };
+    const step = this.stepAt(parcel, observedAt);
+    if (parcel.customs) parcel.papersSeen = { at: step.at, by: agentDid };
     this.admitBooked(parcel, agentDid);
     parcel.status = 'At_PUDO';
-    parcel.acceptedAt = new Date().toISOString();
-    this.handTo(parcel, 'shop', agentDid, 'handed in at the counter');
-    this.scan(parcel, 'At_PUDO', agentDid, 'inbound intake');
+    parcel.acceptedAt = step.at;
+    this.handTo(parcel, 'shop', agentDid, 'handed in at the counter', step);
+    this.scan(parcel, 'At_PUDO', agentDid, 'inbound intake', step);
     const pay = this.amountsAt(agentDid, parcel.sellerEntityId).labourFee;
     parcel.intakeLabour = pay;
     this.gate.payLabour(agentDid, pay, parcelId, 'parcel', parcel.sellerEntityId);
@@ -2296,15 +2316,15 @@ export class ParcelService implements OnApplicationBootstrap {
    * The scan note stays generic: the reason lives on shortShipReason (control-tower only) and never in
    * the timeline both consumer twins can read.
    */
-  markShortShipped(parcelIds: string[], by: string, manifestRef: string, reason: string): string[] {
-    const at = new Date().toISOString();
+  markShortShipped(parcelIds: string[], by: string, manifestRef: string, reason: string, observedAt?: string, after: Array<string | undefined> = []): string[] {
     const stamped: string[] = [];
     for (const parcelId of parcelIds) {
       const parcel = this.parcels.get(parcelId);
       if (!parcel || parcel.status !== 'At_PUDO') continue;
-      parcel.shortShippedAt = at;
+      const step = this.stepAt(parcel, observedAt, after);
+      parcel.shortShippedAt = step.at;
       parcel.shortShipReason = reason;
-      this.scan(parcel, 'At_PUDO', by, `short-ship · left behind at ${manifestRef}`);
+      this.scan(parcel, 'At_PUDO', by, `short-ship · left behind at ${manifestRef}`, step);
       void this.events.publish(GlosEvent.Pudo.ParcelShortShipped, { parcelId, manifestId: manifestRef, reason }, { source: 'pudo' }).catch(() => undefined);
       stamped.push(parcelId);
     }
@@ -2604,8 +2624,10 @@ export class ParcelService implements OnApplicationBootstrap {
    * MDP transit transition (At_MDP / On_Bus) driven by the tote-bag flow. Records the scan + the
    * current tote, but leaves wallet/shelf untouched — sorting is a hub operation, not a PUDO charge.
    */
-  setTransit(parcelId: string, status: Extract<Parcel['status'], 'At_MDP' | 'On_Bus'>, by: string, note: string, toteId?: string): Parcel {
+  setTransit(parcelId: string, status: Extract<Parcel['status'], 'At_MDP' | 'On_Bus'>, by: string, note: string, toteId?: string, act: { observedAt?: string; after?: Array<string | undefined> } = {}): Parcel {
     const parcel = this.require(parcelId);
+    // Before markFound writes its own line: the step is dated against the parcel's record as it was when it was done.
+    const step = this.stepAt(parcel, act.observedAt, act.after);
     // Not refused: the bag is in somebody's hands with the parcel in it, and refusing would stop the whole bag. Found.
     if (parcel.status === 'Lost' && parcel.lost) this.markFound(parcel, `scanned in a bag (${status === 'On_Bus' ? 'onto a bus' : 'at a hub'})`);
     parcel.status = status;
@@ -2616,14 +2638,14 @@ export class ParcelService implements OnApplicationBootstrap {
     // the interaction (the dest shop could never rate the driver that actually delivered its late bag).
     if (status === 'On_Bus') {
       parcel.driverBadgeId = by;
-      if (!parcel.handedToBusAt) parcel.handedToBusAt = new Date().toISOString();
+      if (!parcel.handedToBusAt) parcel.handedToBusAt = step.at;
     }
     // The bag path's hand-offs, which are the same transfers the direct path makes one parcel at a time:
     // onto a vehicle (a driver now answers for it), or into a hub (the hub does). `by` is a badge on the
     // bus leg and the hub's own name on the other — the chain records the party, not the token scanned.
-    if (status === 'On_Bus') this.handTo(parcel, 'driver', this.driverIdOf(by), note);
-    else this.handTo(parcel, 'hub', by, note);
-    this.scan(parcel, status, by, note);
+    if (status === 'On_Bus') this.handTo(parcel, 'driver', this.driverIdOf(by), note, step);
+    else this.handTo(parcel, 'hub', by, note, step);
+    this.scan(parcel, status, by, note, step);
     return parcel;
   }
 
@@ -2739,13 +2761,26 @@ export class ParcelService implements OnApplicationBootstrap {
    * precisely the thing that makes a damage claim unanswerable. Idempotent about the obvious: handing it to
    * the party already holding it does nothing rather than inventing a hand-off that did not happen.
    */
-  private handTo(parcel: Parcel, holderKind: CustodyKind, holderId: string, note?: string): void {
-    const at = new Date().toISOString();
+  private handTo(parcel: Parcel, holderKind: CustodyKind, holderId: string, note?: string, step: Step = stepNow()): void {
+    const { at } = step;
     parcel.custody = parcel.custody ?? [];
     const open = parcel.custody.find((l) => !l.to);
     if (open && open.holderKind === holderKind && open.holderId === holderId) return;
     if (open) open.to = at;
-    parcel.custody.push({ holderId, holderKind, from: at, note });
+    parcel.custody.push({ holderId, holderKind, from: at, note, ...(step.receivedAt ? { receivedAt: step.receivedAt } : {}) });
+  }
+
+  /**
+   * When this parcel's next step was done (round 23): the phone's time within limits, never before anything already on
+   * its record — a step on its timeline or a hand-over in its chain — nor before `after`, a step it follows elsewhere.
+   */
+  private stepAt(parcel: Parcel, observedAt: string | undefined, after: Array<string | undefined> = []): Step {
+    return handedAt(observedAt, Date.now(), [...parcel.scans.map((s) => s.at), ...(parcel.custody ?? []).map((l) => l.from), ...after]);
+  }
+
+  /** The same, for a step on this parcel that is written elsewhere (a bag filled). Nothing is written here. */
+  stepOf(parcelId: string, observedAt: string | undefined): Step {
+    return this.stepAt(this.require(parcelId), observedAt);
   }
 
   /** Close the chain: nobody holds it any more (it was delivered, or it never left). */
@@ -2767,10 +2802,11 @@ export class ParcelService implements OnApplicationBootstrap {
     }
   }
 
-  private scan(parcel: Parcel, status: Parcel['status'], by: string, note: string): void {
-    const at = new Date().toISOString();
-    const anchorTxId = this.ledger.anchor({ p: parcel.parcelId, st: status, by, at }).txId;
-    const scan: ParcelScan = { at, status, by, note, anchorTxId };
+  private scan(parcel: Parcel, status: Parcel['status'], by: string, note: string, step: Step = stepNow()): void {
+    const { at } = step;
+    const received = step.receivedAt ? { receivedAt: step.receivedAt } : {};
+    const anchorTxId = this.ledger.anchor({ p: parcel.parcelId, st: status, by, at, ...received }).txId;
+    const scan: ParcelScan = { at, status, by, note, anchorTxId, ...received };
     parcel.scans.push(scan);
     this.persist(parcel); // every state transition durably captures the parcel's current state
   }

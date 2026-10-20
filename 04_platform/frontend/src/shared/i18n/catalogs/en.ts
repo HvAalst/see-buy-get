@@ -1520,6 +1520,7 @@ export const en = {
   'dreport.fromTo': '{from} until {to}',
   'dreport.fromStill': 'From {from}, and still when the problem was reported',
   'dreport.handedOverAt': 'Handed over to them on {at}',
+  'dreport.heardLate': 'done with no signal; the phone there dated it, and SeeBuyGet heard of it on {at}',
   'dreport.step.reported': 'Problem reported',
   'dreport.link.title': 'Hand it on',
   'dreport.link.lede': 'A link opens this report for whoever holds it, with nobody signed in. Give it to who should read it and to nobody else: your insurer, the sender, the store.',
