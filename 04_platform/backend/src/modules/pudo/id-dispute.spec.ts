@@ -68,6 +68,7 @@ import { CompanyDocumentService } from '../../foundation/entity/company-document
 import { IdDisputeService, normalizeIdReference } from './id-dispute.service';
 import { APPOINTMENT_CHANGES, APPOINTMENT_REMINDER_HOURS, APPOINTMENT_WITHIN_DAYS, DISPUTE_ANSWER_DAYS, DISPUTE_CONTEST_DAYS, DISPUTE_OPENS_PER_DAY, type DisputePhoto, type IdRegister } from './id-dispute.types';
 import { IDENTITY_CHECK_DAYS } from './media.types';
+import { evidencePhotos } from '../../../test/content-photo';
 
 /**
  * TWO PEOPLE SAY ONE NATIONAL ID IS THEIRS — on the real driver, shop, person, code, photograph, notification and
@@ -97,6 +98,8 @@ describe('two people say one national ID is theirs', () => {
   let entities: EntityService;
   let contacts: ContactCardService;
 
+  /** Round 31 — an evidence photo we hold, uploaded by the party the act checks. */
+  let photoBy: (ownerDid: string) => string;
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -117,6 +120,7 @@ describe('two people say one national ID is theirs', () => {
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
       ],
     }).compile();
+    photoBy = evidencePhotos(moduleRef);
     moduleRef.get(EntityService).seed();
     moduleRef.get(FxService).seed();
     persons = moduleRef.get(PersonService);
@@ -642,7 +646,7 @@ describe('two people say one national ID is theirs', () => {
       expect(disputes.list(AMINA, late).items[0].holder.onRecord).toBeUndefined();
       expect(() => agents.assertMayTakeIn(s.did)).not.toThrow();
       // The counter's own doors, asked BEFORE and AFTER: a walk-up, and a parcel booked to be handed in here.
-      const walkUp = () => failure(() => parcels.accept({ parcelId: 'PUD-IDH-' + (seq += 1), agentDid: s.did, destZone: 'Kisumu', size: 'M', paymentMode: 'credit', senderMobile: '+254700111', receiverMobile: '+254700222', dropoffPhotoRef: 'p.jpg' } as never));
+      const walkUp = () => failure(() => parcels.accept({ parcelId: 'PUD-IDH-' + (seq += 1), agentDid: s.did, destZone: 'Kisumu', size: 'M', paymentMode: 'credit', senderMobile: '+254700111', receiverMobile: '+254700222', dropoffPhotoRef: photoBy(s.did) } as never));
       const mint = (dids: Array<string | undefined>) => failure(() => (parcels as unknown as { requireSellable(q: unknown, dids: Array<string | undefined>): void }).requireSellable({ nodes: [] }, dids));
       const refusal = /^FORBIDDEN: Duka \d+ is not taking new parcels for now\. Choose another shop\.$/;
       expect(mint([s.did, undefined])).not.toMatch(refusal);
@@ -663,7 +667,7 @@ describe('two people say one national ID is theirs', () => {
       agents.submitKyc(other.did, { idCopyRef: 'med_idcopy', tradingLicenceRef: 'med_licence', shopPhotoRefs: ['med_front'] });
       agents.decideKyc(other.did, true);
       // A walk-up at ANOTHER counter, to be collected at the held shop: made nowhere.
-      expect(failure(() => parcels.accept({ parcelId: 'PUD-IDH-' + (seq += 1), agentDid: other.did, destPudoDid: s.did, destZone: 'NorthTown', size: 'M', paymentMode: 'credit', senderMobile: '+254700111', receiverMobile: '+254700222', dropoffPhotoRef: 'p.jpg' } as never))).toMatch(refusal);
+      expect(failure(() => parcels.accept({ parcelId: 'PUD-IDH-' + (seq += 1), agentDid: other.did, destPudoDid: s.did, destZone: 'NorthTown', size: 'M', paymentMode: 'credit', senderMobile: '+254700111', receiverMobile: '+254700222', dropoffPhotoRef: photoBy(other.did) } as never))).toMatch(refusal);
       expect(agents.takesNew(agents.get(s.did))).toBe(false);
       // The money side is judged apart: a parcel booked before the hold is not refused for a float that is fine.
       expect(gate.canTransact(s.did).moneyOk).toBe(money);

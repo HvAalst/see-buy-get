@@ -114,7 +114,7 @@ import { FundingPayerRegistrar } from './funding-payers';
 import { SandboxFundingRail } from '../../foundation/funding/sandbox-funding-rail.adapter';
 import { FUNDING_RAIL } from '../../foundation/funding/funding.types';
 import { GlosEvent } from '../../foundation/events/glos-events';
-import { contentPhotos } from '../../../test/content-photo';
+import { contentPhotos, evidencePhotos } from '../../../test/content-photo';
 
 describe('PUDO Light', () => {
   let agents: AgentService;
@@ -163,6 +163,8 @@ describe('PUDO Light', () => {
 
   /** Round 30 — a store's real photo of the contents, as the order door requires: one we hold, its own. */
   let photoOf: (vendorId: string) => string;
+  /** Round 31 — an evidence photo we hold, uploaded by the party the act checks. */
+  let photoBy: (ownerDid: string) => string;
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -179,6 +181,7 @@ describe('PUDO Light', () => {
       ],
       controllers: [SbgController, IdentityController],
     }).compile();
+    photoBy = evidencePhotos(moduleRef);
     photoOf = contentPhotos(moduleRef);
     // compile() does not run lifecycle hooks, so the group + its sisters are seeded by hand — the same
     // registry the app seeds at boot, and everything that names an entity needs it present.
@@ -575,7 +578,7 @@ describe('PUDO Light', () => {
     expect(shelfSvc.available(dest.did)).toBe(9);
     const corridor = corridors.addCorridor({ name: 'g', originZone: 'NorthTown', destZone: 'SouthTown' });
     const driver = corridors.addDriver({ driverDid: 'did:glos:dgrid', name: 'D', corridorId: corridor.corridorId });
-    parcels.accept({ agentDid: origin.did, parcelId: 'QR-S1', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'QR-S1', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
     parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-S1'] });
     const arr = parcels.arrive('QR-S1', dest.did);
     expect(arr.binSlot).toMatch(/^(Red|Orange|Amber|Green|Teal|Blue|Indigo|Violet|Pink|Brown)-[1-3]$/); // colour-column + row-number
@@ -615,7 +618,7 @@ describe('PUDO Light', () => {
     const origin = onboardAgent('Busy PUDO', 'BusyTown', 50);
     const corridor = corridors.addCorridor({ name: 'Busy Line', originZone: 'BusyTown', destZone: 'FarTown' });
     const driver = corridors.addDriver({ driverDid: 'did:glos:busy-driver', name: 'Otieno', corridorId: corridor.corridorId });
-    for (let i = 0; i < 6; i++) parcels.accept({ agentDid: origin.did, parcelId: `QR-BUSY-${i}`, size: 'S', destZone: 'FarTown', senderMobile: '+254700', receiverMobile: '+254711', dropoffPhotoRef: 'p.jpg' });
+    for (let i = 0; i < 6; i++) parcels.accept({ agentDid: origin.did, parcelId: `QR-BUSY-${i}`, size: 'S', destZone: 'FarTown', senderMobile: '+254700', receiverMobile: '+254711', dropoffPhotoRef: photoBy(origin.did) });
     const store = (parcels as unknown as { parcels: { setMany: (e: Iterable<unknown>) => unknown } }).parcels;
     const real = store.setMany.bind(store);
     const batches: number[] = [];
@@ -634,7 +637,7 @@ describe('PUDO Light', () => {
     const corridor = corridors.addCorridor({ name: 'List Line', originZone: 'ListTown', destZone: 'NearTown' });
     const driver = corridors.addDriver({ driverDid: 'did:glos:list-driver', name: 'Wanjiku', corridorId: corridor.corridorId });
     for (const [id, zone] of [['QR-LIST-1', 'NearTown'], ['QR-LIST-2', 'NearTown'], ['QR-LIST-3', 'OtherTown']]) {
-      parcels.accept({ agentDid: origin.did, parcelId: id, size: 'S', destZone: zone, senderMobile: '+254700', receiverMobile: '+254711', dropoffPhotoRef: 'p.jpg' });
+      parcels.accept({ agentDid: origin.did, parcelId: id, size: 'S', destZone: zone, senderMobile: '+254700', receiverMobile: '+254711', dropoffPhotoRef: photoBy(origin.did) });
     }
     const list = parcels.handoverManifest(origin.did, driver.badgeId);
     expect(list).toMatchObject({ corridorId: corridor.corridorId, destZone: 'NearTown' });
@@ -655,7 +658,7 @@ describe('PUDO Light', () => {
     const corridor = corridors.addCorridor({ name: 'N-S Express', originZone: 'NorthTown', destZone: 'SouthTown' });
     const driver = corridors.addDriver({ driverDid: 'did:glos:driver1', name: 'John', corridorId: corridor.corridorId });
 
-    const p = parcels.accept({ agentDid: origin.did, parcelId: 'QR-0001', size: 'M', destZone: 'SouthTown', senderMobile: '+254700', receiverMobile: '+254711', dropoffPhotoRef: 'photo-1.jpg' });
+    const p = parcels.accept({ agentDid: origin.did, parcelId: 'QR-0001', size: 'M', destZone: 'SouthTown', senderMobile: '+254700', receiverMobile: '+254711', dropoffPhotoRef: photoBy(origin.did) });
     expect(p.status).toBe('At_PUDO');
 
     const h = parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-0001'] });
@@ -666,7 +669,7 @@ describe('PUDO Light', () => {
     expect(code).toMatch(/^\d{4}$/);
     const arrival = parcels.arrive('QR-0001', dest.did);
     expect(arrival).not.toHaveProperty('otp'); // the shop that hands it over is never told the secret
-    const delivered = parcels.pickup('QR-0001', dest.did, code, 'delivered.jpg');
+    const delivered = parcels.pickup('QR-0001', dest.did, code, photoBy(dest.did));
     expect(delivered.status).toBe('Delivered');
     expect(delivered.scans.every((s) => s.anchorTxId)).toBe(true);
     expect(events.getLog().some((e) => e.type === GlosEvent.Pudo.ParcelDelivered)).toBe(true);
@@ -676,7 +679,7 @@ describe('PUDO Light', () => {
     const origin = onboardAgent('A', 'NorthTown', 50);
     const corridor = corridors.addCorridor({ name: 'N-S', originZone: 'NorthTown', destZone: 'SouthTown' });
     const driver = corridors.addDriver({ driverDid: 'did:glos:d', name: 'D', corridorId: corridor.corridorId });
-    parcels.accept({ agentDid: origin.did, parcelId: 'QR-OTP', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'QR-OTP', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
     parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-OTP'] });
     parcels.arrive('QR-OTP', origin.did);
     expect(() => parcels.pickup('QR-OTP', origin.did, '0000')).toThrow();
@@ -688,7 +691,7 @@ describe('PUDO Light', () => {
     const origin = onboardAgent('A', 'NorthTown', 50);
     const corridor = corridors.addCorridor({ name: 'N-S', originZone: 'NorthTown', destZone: 'SouthTown' });
     const driver = corridors.addDriver({ driverDid: 'did:glos:d', name: 'D', corridorId: corridor.corridorId });
-    parcels.accept({ agentDid: origin.did, parcelId: 'QR-LOCK', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'QR-LOCK', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
     parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-LOCK'] });
     parcels.arrive('QR-LOCK', origin.did);
     const otp = releaseCodeOf('QR-LOCK');
@@ -703,7 +706,7 @@ describe('PUDO Light', () => {
 
   it("enforces 'no money, no scan' at the END of the credit line, not at an empty float (lite NFR-SSE-01)", () => {
     const a = onboardAgent('Broke Shop', 'NorthTown', 3.2); // exactly two cash parcels of its own money
-    const scan = (id: string) => parcels.accept({ agentDid: a.did, parcelId: id, size: 'S', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'a.jpg' });
+    const scan = (id: string) => parcels.accept({ agentDid: a.did, parcelId: id, size: 'S', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(a.did) });
 
     scan('QR-A');
     scan('QR-B');
@@ -735,9 +738,9 @@ describe('PUDO Light', () => {
   it('voids a parcel within the window and refunds the agent', () => {
     const a = onboardAgent('Void Shop', 'NorthTown', 10);
     const before = agents.balance(a.did)!;
-    parcels.accept({ agentDid: a.did, parcelId: 'QR-V', size: 'M', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'v.jpg' });
+    parcels.accept({ agentDid: a.did, parcelId: 'QR-V', size: 'M', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(a.did) });
     expect(agents.balance(a.did)!).toBeCloseTo(before - 1.6, 2);
-    const voided = parcels.void('QR-V', a.did, 'torn-label.jpg');
+    const voided = parcels.void('QR-V', a.did, photoBy(a.did));
     expect(voided.status).toBe('Voided');
     expect(agents.balance(a.did)!).toBeCloseTo(before, 2); // refunded
     expect(gate.entries({ did: a.did }).some((e) => e.type === 'REFUND')).toBe(true);
@@ -755,7 +758,7 @@ describe('PUDO Light', () => {
     const origin = onboardAgent('Rated Shop', 'NorthTown', 50);
     const corridor = corridors.addCorridor({ name: 'N-S', originZone: 'NorthTown', destZone: 'SouthTown' });
     const driver = corridors.addDriver({ driverDid: 'did:glos:d2', name: 'D', corridorId: corridor.corridorId });
-    parcels.accept({ agentDid: origin.did, parcelId: 'QR-R', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'r.jpg' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'QR-R', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
     parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-R'] });
     const arr = parcels.arrive('QR-R', origin.did);
     parcels.pickup('QR-R', origin.did, releaseCodeOf('QR-R'));
@@ -771,7 +774,7 @@ describe('PUDO Light', () => {
     const corridor = corridors.addCorridor({ name: 'NS-rep', originZone: 'NorthTown', destZone: 'SouthTown' });
     const driver = corridors.addDriver({ driverDid: 'did:glos:d-rep', name: 'D', corridorId: corridor.corridorId });
     const deliver = (parcelId: string) => {
-      parcels.accept({ agentDid: origin.did, parcelId, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'r.jpg' } as never);
+      parcels.accept({ agentDid: origin.did, parcelId, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) } as never);
       parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: [parcelId] } as never);
       const arr = parcels.arrive(parcelId, origin.did);
       parcels.pickup(parcelId, origin.did, releaseCodeOf(parcelId));
@@ -832,7 +835,7 @@ describe('PUDO Light', () => {
     const corridor = corridors.addCorridor({ name: 'N-S', originZone: 'NorthTown', destZone: 'SouthTown' });
     const driver = corridors.addDriver({ driverDid: 'did:glos:dg', name: 'D', corridorId: corridor.corridorId });
 
-    parcels.accept({ agentDid: origin.did, parcelId: 'QR-G', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'g.jpg' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'QR-G', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
     await flush();
     // M7 control tower (digital twin) now shows the PUDO parcel, located + tagged.
     expect(twin.shipment('QR-G')).toBeDefined();
@@ -940,7 +943,7 @@ describe('PUDO Light', () => {
     const { parcel } = parcels.createConsumerSend({ senderPersonDid: 'did:person:r23', senderPhoneHash: 'h-r23', receiverMobile: '+254700523', originAgentDid: from.did, destAgentDid: to.did, dimensionsCm: { l: 10, w: 10, h: 10 }, weightKg: 1, quote } as never);
     bookedLongAgo(parcel.parcelId);
     const droppedOff = Date.now() - 1 * H;
-    const sent = intake(parcel.parcelId, from.did, droppedOff, 'dropoff.jpg');
+    const sent = intake(parcel.parcelId, from.did, droppedOff, photoBy(from.did));
     expect(sent.acceptedAt).toBe(iso(droppedOff));
     expect(last(sent)).toMatchObject({ status: 'At_PUDO', at: iso(droppedOff) });
     expect(last(sent).receivedAt).toBeDefined();
@@ -962,7 +965,7 @@ describe('PUDO Light', () => {
 
   it('DT: an outbound (walk-up) parcel gets a shipment DID + a printable label (tracking key, no collection code)', () => {
     const origin = onboardAgent('OB', 'NorthTown', 50);
-    const p = parcels.accept({ agentDid: origin.did, parcelId: 'QR-OB', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'g.jpg' });
+    const p = parcels.accept({ agentDid: origin.did, parcelId: 'QR-OB', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
     expect(p.did).toMatch(/^did:glos:/);
     expect(p.label).toBeDefined();
     expect(p.label!.svg).toContain(p.trackingKey!); // the public key is printed on the label
@@ -1059,7 +1062,7 @@ describe('PUDO Light', () => {
     fleet.assignCorridor(driver.did, corridor.corridorId);
     const badge = drivers.get(driver.did).badgeId!;
 
-    parcels.accept({ agentDid: origin.did, parcelId: 'BIRTH-1', size: 'S', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'BIRTH-1', size: 'S', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
 
     // Born at the counter — a place, with a name and a point, not merely "an origin agent id".
     expect(birthplaceOf(parcels.get('BIRTH-1'))).toMatchObject({ kind: 'counter', atId: origin.did, label: 'Birth Shop', location: origin.location });
@@ -1298,7 +1301,7 @@ describe('PUDO Light', () => {
   it('PG0: a storeless walk-up parcel cannot be settled by a store token', () => {
     const origin = onboardAgent('PG0W', 'NorthTown', 50);
     const store = vendors.register({ name: 'StoreW' });
-    parcels.accept({ agentDid: origin.did, parcelId: 'QR-PG0', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'g.jpg' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'QR-PG0', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
     expect(() => controller.settleParcel('QR-PG0', { role: 'genesis', did: store.did } as never)).toThrow(/minting store/);
   });
 
@@ -1402,28 +1405,28 @@ describe('PUDO Light', () => {
 
   it('intake redesign: a walk-up accept DERIVES the tier from measured dims (no manual size picker)', () => {
     const origin = onboardAgent('AD1', 'NorthTown', 50);
-    const p = parcels.accept({ agentDid: origin.did, parcelId: 'QR-AD1', dimensionsCm: { l: 42, w: 30, h: 18 }, weightKg: 3.5, destZone: 'SouthTown', senderMobile: '+254700700001', receiverMobile: '+254700700002', dropoffPhotoRef: 'g.jpg' } as never);
+    const p = parcels.accept({ agentDid: origin.did, parcelId: 'QR-AD1', dimensionsCm: { l: 42, w: 30, h: 18 }, weightKg: 3.5, destZone: 'SouthTown', senderMobile: '+254700700001', receiverMobile: '+254700700002', dropoffPhotoRef: photoBy(origin.did) } as never);
     expect(p.size).toBe('M'); // 42×30×18 @ 3.5 kg → M per SIZE_LIMITS
     expect(p.dimensionsCm).toEqual({ l: 42, w: 30, h: 18 });
     // A thin letter derives to S (the 1 mm floor lets it through).
-    const p2 = parcels.accept({ agentDid: origin.did, parcelId: 'QR-AD1B', dimensionsCm: { l: 21, w: 10, h: 0.5 }, weightKg: 0.02, destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'g.jpg' } as never);
+    const p2 = parcels.accept({ agentDid: origin.did, parcelId: 'QR-AD1B', dimensionsCm: { l: 21, w: 10, h: 0.5 }, weightKg: 0.02, destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) } as never);
     expect(p2.size).toBe('S');
   });
 
   it('intake redesign: a genuinely heavy walk-up is refused (routes to dedicated freight, not the bus)', () => {
     const origin = onboardAgent('AD2', 'NorthTown', 50);
-    expect(() => parcels.accept({ agentDid: origin.did, parcelId: 'QR-AD2', dimensionsCm: { l: 120, w: 100, h: 100 }, weightKg: 300, destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'g.jpg' } as never)).toThrow(/dedicated freight/);
+    expect(() => parcels.accept({ agentDid: origin.did, parcelId: 'QR-AD2', dimensionsCm: { l: 120, w: 100, h: 100 }, weightKg: 300, destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) } as never)).toThrow(/dedicated freight/);
   });
 
   it('intake redesign: dims WITHOUT weight still derive the tier (parity with the vendor mint — not the M fallback)', () => {
     const origin = onboardAgent('AD3', 'NorthTown', 50);
-    const p = parcels.accept({ agentDid: origin.did, parcelId: 'QR-AD3', dimensionsCm: { l: 60, w: 50, h: 40 }, destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'g.jpg' } as never);
+    const p = parcels.accept({ agentDid: origin.did, parcelId: 'QR-AD3', dimensionsCm: { l: 60, w: 50, h: 40 }, destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) } as never);
     expect(p.size).toBe('L'); // 60×50×40 → L, derived from dims alone
   });
 
   it('intake redesign: a parcel cannot be sent to the shop taking it in (origin ≠ destination)', () => {
     const origin = onboardAgent('AD4', 'NorthTown', 50);
-    expect(() => parcels.accept({ agentDid: origin.did, parcelId: 'QR-AD4', dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 1.6, destZone: origin.zone, destPudoDid: origin.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'g.jpg' } as never)).toThrow(/shop taking it in/);
+    expect(() => parcels.accept({ agentDid: origin.did, parcelId: 'QR-AD4', dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 1.6, destZone: origin.zone, destPudoDid: origin.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) } as never)).toThrow(/shop taking it in/);
   });
 
   it('intake redesign: the public geocode resolves a known place (for the Address → nearest-PUDO mode)', () => {
@@ -1463,10 +1466,15 @@ describe('PUDO Light', () => {
     const { origin, parcelId, due } = mintPeerSend('PG2', '00');
     await flush();
     const before = gate.canTransact(origin.did).balance;
-    const p: any = controller.intake(parcelId, { dropoffPhotoRef: 'drop.jpg' } as never, { role: 'agent', did: origin.did } as never);
+    // Round 31 — a name is no photo: refused before the cash is counted, the parcel still waiting for its drop-off.
+    expect(() => controller.intake(parcelId, { dropoffPhotoRef: 'drop.jpg' } as never, { role: 'agent', did: origin.did } as never)).toThrow(/We do not hold that photo/);
+    expect(gate.canTransact(origin.did).balance).toBe(before);
+    expect(parcels.get(parcelId).status).toBe('Created');
+    const dropped = photoBy(origin.did);
+    const p: any = controller.intake(parcelId, { dropoffPhotoRef: dropped } as never, { role: 'agent', did: origin.did } as never);
     expect(p.status).toBe('At_PUDO');
     expect(p.paidStatus).toBe('ParcelPaid');
-    expect(p.dropoffPhotoRef).toBe('drop.jpg');
+    expect(p.dropoffPhotoRef).toBe(dropped);
     // The shop remits the LOCKED price it just collected in cash, and earns the same labour fee as any intake.
     expect(gate.canTransact(origin.did).balance).toBeCloseTo(before - due + 0.4, 2);
     await flush();
@@ -1478,17 +1486,17 @@ describe('PUDO Light', () => {
   it('PG2: intake is refused at the wrong shop, without a photo, twice, and on an unfunded shop wallet', () => {
     const { origin, parcelId } = mintPeerSend('PG2R', '10');
     const elsewhere = onboardAgent('PG2R X', 'NorthTown', 50);
-    expect(() => controller.intake(parcelId, { dropoffPhotoRef: 'd.jpg' } as never, { role: 'agent', did: elsewhere.did } as never)).toThrow(/shop the sender chose/);
+    expect(() => controller.intake(parcelId, { dropoffPhotoRef: photoBy(elsewhere.did) } as never, { role: 'agent', did: elsewhere.did } as never)).toThrow(/shop the sender chose/);
     expect(() => controller.intake(parcelId, {} as never, { role: 'agent', did: origin.did } as never)).toThrow(/photo/);
     // Double intake: the first succeeds, the second finds the parcel already At_PUDO.
-    controller.intake(parcelId, { dropoffPhotoRef: 'd.jpg' } as never, { role: 'agent', did: origin.did } as never);
-    expect(() => controller.intake(parcelId, { dropoffPhotoRef: 'd.jpg' } as never, { role: 'agent', did: origin.did } as never)).toThrow(/expected Created/);
+    controller.intake(parcelId, { dropoffPhotoRef: photoBy(origin.did) } as never, { role: 'agent', did: origin.did } as never);
+    expect(() => controller.intake(parcelId, { dropoffPhotoRef: photoBy(origin.did) } as never, { role: 'agent', did: origin.did } as never)).toThrow(/expected Created/);
     // A shop that never funded its wallet cannot remit — the no-money-no-scan gate holds for peer sends too.
     const brokeOrigin = onboardAgent('PG2B O', 'NorthTown', 0);
     const dest = onboardAgent('PG2B D', 'NorthTown', 50);
     const sender = enrollPerson('+254700620001');
     const res: any = identity.createParcel({ receiverMobile: '+254700620002', originPudoDid: brokeOrigin.did, destPudoDid: dest.did, dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 1.6 } as never, asConsumer(sender.personDid));
-    expect(() => controller.intake(res.parcel.parcelId, { dropoffPhotoRef: 'd.jpg' } as never, { role: 'agent', did: brokeOrigin.did } as never)).toThrow(/Insufficient funds/);
+    expect(() => controller.intake(res.parcel.parcelId, { dropoffPhotoRef: photoBy(brokeOrigin.did) } as never, { role: 'agent', did: brokeOrigin.did } as never)).toThrow(/Insufficient funds/);
   });
 
   it('keeps the plan made as a parcel is taken in — once: a promise is not rewritten afterwards', () => {
@@ -1511,13 +1519,13 @@ describe('PUDO Light', () => {
     const key = parcels.get(late.parcelId).trackingKey!;
     // Not handed in yet: its own sender's time, not the network's lateness.
     expect(controller.track(key)).not.toHaveProperty('runningLate');
-    controller.intake(late.parcelId, { dropoffPhotoRef: 'd.jpg' } as never, { role: 'agent', did: late.origin.did } as never);
+    controller.intake(late.parcelId, { dropoffPhotoRef: photoBy(late.origin.did) } as never, { role: 'agent', did: late.origin.did } as never);
     expect((controller.track(key) as { runningLate?: unknown }).runningLate).toMatchObject({ lateHours: 5, where: 'shop' });
     expect(parcels.consumerParcel(late.parcelId, late.sender as never).runningLate).toMatchObject({ where: 'shop' });
     // Within the grace: on its way, and not said to be late.
     const onTime = mintPeerSend('ONTIME', '41');
     parcels.keepPlan(onTime.parcelId, promise(ago(1)));
-    controller.intake(onTime.parcelId, { dropoffPhotoRef: 'd.jpg' } as never, { role: 'agent', did: onTime.origin.did } as never);
+    controller.intake(onTime.parcelId, { dropoffPhotoRef: photoBy(onTime.origin.did) } as never, { role: 'agent', did: onTime.origin.did } as never);
     expect(controller.track(parcels.get(onTime.parcelId).trackingKey!)).not.toHaveProperty('runningLate');
     expect(parcels.consumerParcel(onTime.parcelId, onTime.sender as never)).not.toHaveProperty('runningLate');
   });
@@ -1543,9 +1551,9 @@ describe('PUDO Light', () => {
     const { origin, parcelId, due } = mintPeerSend('PG2V', '40');
     expect(due).not.toBeCloseTo(2.0, 2); // the price is NOT the WHOLESALE+labour coincidence — the bug would hide there
     const before = gate.canTransact(origin.did).balance;
-    controller.intake(parcelId, { dropoffPhotoRef: 'd.jpg' } as never, { role: 'agent', did: origin.did } as never);
+    controller.intake(parcelId, { dropoffPhotoRef: photoBy(origin.did) } as never, { role: 'agent', did: origin.did } as never);
     expect(gate.canTransact(origin.did).balance).toBeCloseTo(before - due + 0.4, 2); // remitted the cash, earned labour
-    parcels.void(parcelId, origin.did, 'torn.jpg');
+    parcels.void(parcelId, origin.did, photoBy(origin.did));
     // A full reversal: the locked price back, the labour fee clawed back → exactly the pre-intake balance.
     expect(gate.canTransact(origin.did).balance).toBeCloseTo(before, 2);
   });
@@ -1553,7 +1561,7 @@ describe('PUDO Light', () => {
   it('PG2: operator-cancelling an At_PUDO peer-send reverses the intake the same way', () => {
     const { origin, parcelId, due } = mintPeerSend('PG2X', '50');
     const before = gate.canTransact(origin.did).balance;
-    controller.intake(parcelId, { dropoffPhotoRef: 'd.jpg' } as never, { role: 'agent', did: origin.did } as never);
+    controller.intake(parcelId, { dropoffPhotoRef: photoBy(origin.did) } as never, { role: 'agent', did: origin.did } as never);
     expect(gate.canTransact(origin.did).balance).toBeCloseTo(before - due + 0.4, 2);
     controller.cancelParcel(parcelId, { reason: 'test' } as never, { role: 'operator' } as never);
     expect(gate.canTransact(origin.did).balance).toBeCloseTo(before, 2);
@@ -1562,15 +1570,15 @@ describe('PUDO Light', () => {
   it('PG2: a legacy walk-up cash void still refunds WHOLESALE (the peer-send fix left it untouched)', () => {
     const origin = onboardAgent('PG2W2', 'NorthTown', 50);
     const before = gate.canTransact(origin.did).balance;
-    parcels.accept({ agentDid: origin.did, parcelId: 'QR-PG2W2', size: 'M', destZone: 'SouthTown', senderMobile: '+254700611200', receiverMobile: '+254700611201', dropoffPhotoRef: 'g.jpg' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'QR-PG2W2', size: 'M', destZone: 'SouthTown', senderMobile: '+254700611200', receiverMobile: '+254700611201', dropoffPhotoRef: photoBy(origin.did) });
     expect(gate.canTransact(origin.did).balance).toBeCloseTo(before - 1.6, 2); // walk-up cash charged WHOLESALE, no labour
-    parcels.void('QR-PG2W2', origin.did, 'torn.jpg');
+    parcels.void('QR-PG2W2', origin.did, photoBy(origin.did));
     expect(gate.canTransact(origin.did).balance).toBeCloseTo(before, 2);
   });
 
   it('PG2: the parcel list is PROJECTED — no phones, hashes or handover secrets for non-operators', () => {
     const origin = onboardAgent('PG2L', 'NorthTown', 50);
-    parcels.accept({ agentDid: origin.did, parcelId: 'QR-PG2L', size: 'M', destZone: 'SouthTown', senderMobile: '+254700611119', receiverMobile: '+254700611118', dropoffPhotoRef: 'g.jpg' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'QR-PG2L', size: 'M', destZone: 'SouthTown', senderMobile: '+254700611119', receiverMobile: '+254700611118', dropoffPhotoRef: photoBy(origin.did) });
     const rows: any[] = controller.listParcels('At_PUDO', origin.did, { role: 'agent', did: origin.did } as never) as never;
     const mine = rows.find((r) => r.parcelId === 'QR-PG2L');
     expect(mine).toBeDefined();
@@ -1680,7 +1688,7 @@ describe('PUDO Light', () => {
       const corridor = corridors.addCorridor({ name: 'N-S bag', originZone: 'NorthTown', destZone: 'SouthTown' });
       const driver = corridors.addDriver({ driverDid: 'did:glos:dbag', name: 'D', corridorId: corridor.corridorId });
       for (const id of ['QR-B1', 'QR-B2']) {
-        parcels.accept({ agentDid: origin.did, parcelId: id, size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+        parcels.accept({ agentDid: origin.did, parcelId: id, size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
       }
       return { origin, driver };
     }
@@ -1715,7 +1723,7 @@ describe('PUDO Light', () => {
       corridors.addCorridor({ name: 'Hawassa-ArbaMinch', originZone: 'Hawassa', destZone: 'ArbaMinch' });
 
       const drop = (id: string, zone: string, destPudoDid: string) =>
-        parcels.accept({ agentDid: shop.did, parcelId: id, size: 'S', destZone: zone, destPudoDid, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+        parcels.accept({ agentDid: shop.did, parcelId: id, size: 'S', destZone: zone, destPudoDid, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) });
       drop('QR-AA1', 'Addis', addis.did);
       drop('QR-AA2', 'Addis', addis.did);
       drop('QR-AM1', 'ArbaMinch', arba.did);
@@ -1746,7 +1754,7 @@ describe('PUDO Light', () => {
       const { origin } = shopWithTwoWaiting();
       onboardAgent('Far Dest', 'EastTown', 50);
       corridors.addCorridor({ name: 'N-E bag', originZone: 'NorthTown', destZone: 'EastTown' });
-      parcels.accept({ agentDid: origin.did, parcelId: 'QR-EAST', size: 'S', destZone: 'EastTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      parcels.accept({ agentDid: origin.did, parcelId: 'QR-EAST', size: 'S', destZone: 'EastTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
 
       const bag = mdps.openShopBag(origin.did, 'SouthTown');
       // The seal gate only checks that everything EXPECTED is IN the bag — it would never have noticed a
@@ -1982,7 +1990,7 @@ describe('PUDO Light', () => {
       const origin = onboardAgent('Books Origin', 'NorthTown', 50);
       onboardAgent('Books Dest', 'SouthTown', 50);
       const before = agents.balance(origin.did)!;
-      parcels.accept({ agentDid: origin.did, parcelId: 'QR-BOOK', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      parcels.accept({ agentDid: origin.did, parcelId: 'QR-BOOK', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
 
       // The shop's float drops by the wholesale unit; the RETAIL 2.0 the customer paid never appears in
       // the sister's books, because the sister never touched it. The shop is a reseller on this flow.
@@ -2005,7 +2013,7 @@ describe('PUDO Light', () => {
     it('keeps the shop’s REGISTER and the books in agreement — every row linked, and the net equal', () => {
       const shop = onboardAgent('Reg Shop', 'NorthTown', 50);
       onboardAgent('Reg Dest', 'SouthTown', 50);
-      parcels.accept({ agentDid: shop.did, parcelId: 'QR-REG', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      parcels.accept({ agentDid: shop.did, parcelId: 'QR-REG', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) });
       gate.payLabour(shop.did, 0.4, 'PUD-REG', 'parcel');
       gate.topUp(shop.did, 10);
 
@@ -2043,8 +2051,8 @@ describe('PUDO Light', () => {
       onboardAgent('Lent Dest', 'SouthTown', 50);
       // Drain the float, then scan two more parcels on the credit line.
       gate.chargeShipping(shop.did, 50, 'PUD-DRAIN');
-      parcels.accept({ agentDid: shop.did, parcelId: 'QR-L1', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
-      parcels.accept({ agentDid: shop.did, parcelId: 'QR-L2', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      parcels.accept({ agentDid: shop.did, parcelId: 'QR-L1', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) });
+      parcels.accept({ agentDid: shop.did, parcelId: 'QR-L2', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) });
 
       const c = books.coverage(KE());
       expect(c.lent).toBeCloseTo(2 * WHOLESALE, 2); // two parcels' worth is out with a shopkeeper
@@ -2089,10 +2097,10 @@ describe('PUDO Light', () => {
       const dest = onboardAgent('Life Dest', 'SouthTown', 50);
       const corridor = corridors.addCorridor({ name: 'N-S life', originZone: 'NorthTown', destZone: 'SouthTown' });
       const driver = corridors.addDriver({ driverDid: 'did:glos:dlife', name: 'D', corridorId: corridor.corridorId });
-      parcels.accept({ agentDid: origin.did, parcelId: 'QR-LIFE', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      parcels.accept({ agentDid: origin.did, parcelId: 'QR-LIFE', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
       parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-LIFE'] });
       parcels.arrive('QR-LIFE', dest.did);
-      parcels.pickup('QR-LIFE', dest.did, parcels.get('QR-LIFE').otp!, 'delivered.jpg');
+      parcels.pickup('QR-LIFE', dest.did, parcels.get('QR-LIFE').otp!, photoBy(dest.did));
 
       expect(parcels.get('QR-LIFE').status).toBe('Delivered');
       expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
@@ -2122,7 +2130,7 @@ describe('PUDO Light', () => {
       const ke = entities.requireForJurisdiction('KE');
       const origin = onboardAgent('Collect Origin', 'NorthTown', 50);
       onboardAgent('Collect Dest', 'SouthTown', 50);
-      const p = parcels.accept({ agentDid: origin.did, parcelId: 'QR-ENT', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      const p = parcels.accept({ agentDid: origin.did, parcelId: 'QR-ENT', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
       expect(p.collectingEntityId).toBe(ke.entityId);
     });
 
@@ -2238,7 +2246,7 @@ describe('PUDO Light', () => {
       const group = entities.group();
       const origin = onboardAgent('Mother Origin', 'NorthTown', 50);
       onboardAgent('Mother Dest', 'SouthTown', 50);
-      const p = parcels.accept({ agentDid: origin.did, parcelId: 'QR-MUM', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      const p = parcels.accept({ agentDid: origin.did, parcelId: 'QR-MUM', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
       expect(p.collectingEntityId).not.toBe(group.entityId);
       expect(() => entities.requireTransacting(group.entityId)).toThrow(/holding company/);
     });
@@ -2333,7 +2341,7 @@ describe('PUDO Light', () => {
       const driver = corridors.addDriver({ driverDid: 'did:glos:dgen', name: 'D', corridorId: corridor.corridorId });
       const senderPhone = '+254700900001';
       const receiverPhone = '+254700900002';
-      const accepted = parcels.accept({ agentDid: origin.did, parcelId: 'QR-GEN', size: 'S', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: senderPhone, receiverMobile: receiverPhone, dropoffPhotoRef: 'p.jpg' });
+      const accepted = parcels.accept({ agentDid: origin.did, parcelId: 'QR-GEN', size: 'S', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: senderPhone, receiverMobile: receiverPhone, dropoffPhotoRef: photoBy(origin.did) });
 
       // Born with the parcel, at the origin counter — not at the far end.
       expect(accepted.otp).toMatch(/^\d{4}$/);
@@ -2357,7 +2365,7 @@ describe('PUDO Light', () => {
       expect(releaseCodeOf('QR-GEN')).toBe(code); // arrival does NOT rotate what the parties already hold
 
       // The code the sender phoned through is the one that opens the parcel.
-      expect(parcels.pickup('QR-GEN', dest.did, code, 'delivered.jpg').status).toBe('Delivered');
+      expect(parcels.pickup('QR-GEN', dest.did, code, photoBy(dest.did)).status).toBe('Delivered');
       // Terminal: the twin stops handing the code out once there is nothing left to release.
       expect(parcels.consumerParcel('QR-GEN', rx).collectToken).toBeUndefined();
     });
@@ -2367,7 +2375,7 @@ describe('PUDO Light', () => {
       const dest = onboardAgent('OTP Dest', 'SouthTown', 50);
       const corridor = corridors.addCorridor({ name: 'N-S otp', originZone: 'NorthTown', destZone: 'SouthTown' });
       const driver = corridors.addDriver({ driverDid: 'did:glos:dotp', name: 'D', corridorId: corridor.corridorId });
-      parcels.accept({ agentDid: origin.did, parcelId: 'QR-REISS', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      parcels.accept({ agentDid: origin.did, parcelId: 'QR-REISS', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
       parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-REISS'] });
       const original = releaseCodeOf('QR-REISS');
       parcels.arrive('QR-REISS', dest.did);
@@ -2382,7 +2390,7 @@ describe('PUDO Light', () => {
       expect(out.otp).toMatch(/^\d{4}$/); // to the OPERATOR, who phones the sender — never to the shop
       expect(out.otp).not.toBe(original);
       expect(() => parcels.pickup('QR-REISS', dest.did, original)).toThrow(/Incorrect OTP/); // the old one is dead
-      expect(parcels.pickup('QR-REISS', dest.did, out.otp!, 'delivered.jpg').status).toBe('Delivered');
+      expect(parcels.pickup('QR-REISS', dest.did, out.otp!, photoBy(dest.did)).status).toBe('Delivered');
     });
 
     it('draws again rather than handing back the code it is replacing', () => {
@@ -2414,7 +2422,7 @@ describe('PUDO Light', () => {
       }) as never);
 
       try {
-        parcels.accept({ agentDid: origin.did, parcelId: 'QR-SAME', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+        parcels.accept({ agentDid: origin.did, parcelId: 'QR-SAME', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
         parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-SAME'] });
         parcels.arrive('QR-SAME', dest.did);
         expect(releaseCodeOf('QR-SAME')).toBe('1000');
@@ -2539,22 +2547,30 @@ describe('PUDO Light', () => {
     expect(parcels.get(parcel.parcelId).status).toBe('Delivered');
 
     // Proactive PoD: the receiver photographs what they got — kept alongside the agent's photos.
-    expect(parcels.attachPod(parcel.parcelId, rx, me, 'my-photo.jpg').podPhotoRef).toBe('my-photo.jpg');
+    // Round 31 — a name, or somebody else's photo, is not one of theirs.
+    expect(() => parcels.attachPod(parcel.parcelId, rx, me, 'my-photo.jpg')).toThrow(/We do not hold that photo/);
+    expect(() => parcels.attachPod(parcel.parcelId, rx, me, photoBy(origin.did))).toThrow(/We do not hold that photo/);
+    const mine = photoBy(me);
+    expect(parcels.attachPod(parcel.parcelId, rx, me, mine).podPhotoRef).toBe(mine);
 
     // Guards: a non-receiver gets a 404 (existence not confirmed); a reason + photo are mandatory.
-    expect(() => parcels.buyerDispute(parcel.parcelId, hashPhone('+254700999999'), 'x', 'r', 'p.jpg')).toThrow(/No such parcel/);
-    expect(() => parcels.buyerDispute(parcel.parcelId, rx, me, '', 'p.jpg')).toThrow(/reason and a photo/);
+    expect(() => parcels.buyerDispute(parcel.parcelId, hashPhone('+254700999999'), 'x', 'r', photoBy('x'))).toThrow(/No such parcel/);
+    expect(() => parcels.buyerDispute(parcel.parcelId, rx, me, '', photoBy(me))).toThrow(/reason and a photo/);
 
     // File it. No company here has stated cover, so nobody of ours has anything to decide: the problem is recorded,
     // a damage claim report is made, and the parcel is at once what it factually is again — delivered.
-    const disputed = parcels.buyerDispute(parcel.parcelId, rx, me, 'Wrong item inside', 'proof.jpg');
+    // Round 31 — the delivery photo again is not a photo of the problem; nor is a name we do not hold.
+    expect(() => parcels.buyerDispute(parcel.parcelId, rx, me, 'Wrong item inside', mine)).toThrow(/not the delivery photo/);
+    expect(() => parcels.buyerDispute(parcel.parcelId, rx, me, 'Wrong item inside', 'proof.jpg')).toThrow(/We do not hold that photo/);
+    const proof = photoBy(me);
+    const disputed = parcels.buyerDispute(parcel.parcelId, rx, me, 'Wrong item inside', proof);
     expect(disputed.status).toBe('Delivered');
     expect(disputed.disputeOutcome).toMatchObject({ origin: 'buyer', decision: 'report_only' });
     expect(disputed.damageReport).toEqual({ number: `DCR-${parcel.parcelId}` });
     expect(parcels.get(parcel.parcelId).dispute).toMatchObject({ state: 'resolved', decision: 'report_only', award: 0, fromStatus: 'Delivered', reason: 'Wrong item inside', decidedBy: 'the record' });
     // Both photos survive: the PoD (what arrived) AND the dispute evidence (the problem) — distinct homes.
-    expect(disputed.podPhotoRef).toBe('my-photo.jpg');
-    expect(disputed.disputePhotoRef).toBe('proof.jpg');
+    expect(disputed.podPhotoRef).toBe(mine);
+    expect(disputed.disputePhotoRef).toBe(proof);
     await flush();
 
     // O3 routing: the VENDOR got an HMAC 'disputed' callback...
@@ -2563,7 +2579,7 @@ describe('PUDO Light', () => {
     expect(monitor.flags().find((f) => f.type === 'Buyer_Dispute' && f.subject === parcel.parcelId)).toBeUndefined();
 
     // One report to a parcel: the second is refused, in words that say where the first is.
-    expect(() => parcels.buyerDispute(parcel.parcelId, rx, me, 'again', 'p.jpg')).toThrow(/already reported on this parcel/);
+    expect(() => parcels.buyerDispute(parcel.parcelId, rx, me, 'again', photoBy(me))).toThrow(/already reported on this parcel/);
   });
 
   it('S23 — a peer-send dispute never leaks the buyer reason or photos to the sender counterparty', () => {
@@ -2574,7 +2590,7 @@ describe('PUDO Light', () => {
     const sender = '+254700940001';
     const receiver = '+254700940002';
     // Walk-up peer send: sender drops it, it rides the bus, arrives, the receiver collects with the OTP.
-    parcels.accept({ agentDid: origin.did, parcelId: 'PEER-1', size: 'M', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: 'drop.jpg', paymentMode: 'cash' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'PEER-1', size: 'M', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: photoBy(origin.did), paymentMode: 'cash' });
     parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['PEER-1'] });
     parcels.arrive('PEER-1', dest.did);
     const otp = releaseCodeOf('PEER-1');
@@ -2583,12 +2599,13 @@ describe('PUDO Light', () => {
 
     const rxHash = hashPhone(receiver);
     const sndHash = hashPhone(sender);
-    parcels.buyerDispute('PEER-1', rxHash, 'did:glos:person:x', 'call me at 14 Acacia Rd 0712345678', 'damage.jpg');
+    const damage = photoBy('did:glos:person:x');
+    parcels.buyerDispute('PEER-1', rxHash, 'did:glos:person:x', 'call me at 14 Acacia Rd 0712345678', damage);
 
     // The RECEIVER (who wrote it) keeps their evidence, and holds the damage claim report that states what they wrote.
     const mine = parcels.consumerParcel('PEER-1', rxHash);
     expect(mine.relation).toBe('received');
-    expect(mine.disputePhotoRef).toBe('damage.jpg');
+    expect(mine.disputePhotoRef).toBe(damage);
     expect(mine.damageReport).toEqual({ number: 'DCR-PEER-1' });
 
     // The SENDER sees that a problem was reported and how it ended, and is offered the damage claim report — a copy is
@@ -2619,13 +2636,13 @@ describe('PUDO Light', () => {
     parcels.shelve(parcel.parcelId, dest.did);
 
     expect(() => parcels.dispute(parcel.parcelId, dest.did, 'damaged', '')).toThrow(); // photo proof mandatory
-    const disputed = parcels.dispute(parcel.parcelId, dest.did, 'box crushed', 'proof.jpg');
+    const disputed = parcels.dispute(parcel.parcelId, dest.did, 'box crushed', photoBy(dest.did));
     // No cover stated: the report is made and the parcel is collectable again at once — the customer is standing there.
     expect(disputed.status).toBe('Ready_For_Pickup');
     expect(disputed.dispute).toMatchObject({ state: 'resolved', decision: 'report_only', origin: 'counter', reason: 'box crushed', fromStatus: 'Ready_For_Pickup' });
     expect(disputed.scans[disputed.scans.length - 1]).toMatchObject({ status: 'Ready_For_Pickup', note: 'damage claim report made' });
     // One report to a parcel, however often the button is pressed.
-    expect(() => parcels.dispute(parcel.parcelId, dest.did, 'and again', 'proof2.jpg')).toThrow(/already reported on this parcel/);
+    expect(() => parcels.dispute(parcel.parcelId, dest.did, 'and again', photoBy(dest.did))).toThrow(/already reported on this parcel/);
     await flush();
     expect(vendors.outboxFor(vendor.vendorId).some((c) => c.event === 'disputed')).toBe(true);
   });
@@ -2661,7 +2678,7 @@ describe('PUDO Light', () => {
       parcels.collectConfirm(parcel.parcelId, dest.did, parcel.collectionCode!);
       await settle();
       const rx = hashPhone(buyer);
-      parcels.buyerDispute(parcel.parcelId, rx, persons.ensurePerson(buyer).personDid, 'Arrived smashed', 'problem.jpg');
+      parcels.buyerDispute(parcel.parcelId, rx, persons.ensurePerson(buyer).personDid, 'Arrived smashed', photoBy(persons.ensurePerson(buyer).personDid));
       return { parcel, vendor, dest };
     }
 
@@ -2727,11 +2744,11 @@ describe('PUDO Light', () => {
       const corridor = corridors.addCorridor({ name: 'W', originZone: 'NorthTown', destZone: 'SouthTown' });
       const driver = corridors.addDriver({ driverDid: 'did:glos:walkd', name: 'D', corridorId: corridor.corridorId });
       const [sender, receiver] = ['+254700931201', '+254700931202'];
-      const taken = parcels.accept({ agentDid: origin.did, parcelId: 'QR-WALK-DISPUTE', size: 'M', destZone: 'SouthTown', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: 'r.jpg' });
+      const taken = parcels.accept({ agentDid: origin.did, parcelId: 'QR-WALK-DISPUTE', size: 'M', destZone: 'SouthTown', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: photoBy(origin.did) });
       parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-WALK-DISPUTE'] });
       parcels.arrive('QR-WALK-DISPUTE', dest.did);
       // Reported at the counter, before it was taken away: the goods stay on the shelf.
-      parcels.dispute('QR-WALK-DISPUTE', dest.did, 'The lid is cracked', 'counter.jpg');
+      parcels.dispute('QR-WALK-DISPUTE', dest.did, 'The lid is cracked', photoBy(dest.did));
       const slot = parcels.get('QR-WALK-DISPUTE').binSlot;
       const said: Array<{ currency?: string }> = [];
       events.subscribe<{ currency?: string }>(GlosEvent.Pudo.ParcelDisputeDecided, (e) => {
@@ -2757,7 +2774,7 @@ describe('PUDO Light', () => {
       // Decided, it is what it factually is again: on the shelf, in the slot it never left, to be collected.
       expect(parcels.get('QR-WALK-DISPUTE')).toMatchObject({ status: 'Ready_For_Pickup', binSlot: slot });
       expect(taken.otp).toBeDefined();
-      expect(parcels.pickup('QR-WALK-DISPUTE', dest.did, taken.otp!, 'handed.jpg').status).toBe('Delivered');
+      expect(parcels.pickup('QR-WALK-DISPUTE', dest.did, taken.otp!, photoBy(dest.did)).status).toBe('Delivered');
     });
 
     it('names the money of the company whose books carry the award — a shop in Ethiopia is not answered in shillings', () => {
@@ -2773,10 +2790,10 @@ describe('PUDO Light', () => {
       const dest = shop('Piassa Counter', 'Piassa');
       const corridor = corridors.addCorridor({ name: 'Addis', originZone: 'Bole', destZone: 'Piassa' });
       const driver = corridors.addDriver({ driverDid: 'did:glos:addisd', name: 'D', corridorId: corridor.corridorId });
-      parcels.accept({ agentDid: origin.did, parcelId: 'QR-ADDIS-DISPUTE', size: 'M', destZone: 'Piassa', senderMobile: '+251911000001', receiverMobile: '+251911000002', dropoffPhotoRef: 'r.jpg' });
+      parcels.accept({ agentDid: origin.did, parcelId: 'QR-ADDIS-DISPUTE', size: 'M', destZone: 'Piassa', senderMobile: '+251911000001', receiverMobile: '+251911000002', dropoffPhotoRef: photoBy(origin.did) });
       parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-ADDIS-DISPUTE'] });
       parcels.arrive('QR-ADDIS-DISPUTE', dest.did);
-      parcels.dispute('QR-ADDIS-DISPUTE', dest.did, 'Wet through', 'counter.jpg');
+      parcels.dispute('QR-ADDIS-DISPUTE', dest.did, 'Wet through', photoBy(dest.did));
       const resolved = parcels.resolveDispute('QR-ADDIS-DISPUTE', { decision: 'upheld', award: 120, note: 'It stood under our leaking roof.', by: 'Brian Kamau' });
 
       expect(resolved.currency).toBeUndefined(); // a counter parcel names no money of its own
@@ -2877,7 +2894,7 @@ describe('PUDO Light', () => {
       parcels.intakeInbound(parcel.parcelId, origin.did);
       parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: [parcel.parcelId] });
       parcels.shelve(parcel.parcelId, dest.did);
-      parcels.dispute(parcel.parcelId, dest.did, 'box crushed', 'proof.jpg');
+      parcels.dispute(parcel.parcelId, dest.did, 'box crushed', photoBy(dest.did));
       expect(parcels.get(parcel.parcelId).dispute).toMatchObject({ origin: 'counter', fromStatus: 'Ready_For_Pickup' });
 
       parcels.resolveDispute(parcel.parcelId, { decision: 'rejected', note: 'packaging scuffed, contents fine' });
@@ -3049,7 +3066,7 @@ describe('PUDO Light', () => {
     const d = drivers.register({ displayName: 'Feeder', fullName: 'F F', nationalId: 'DRV-ID-BAG', mobile: '+254900077', licenceClasses: ['bike'] });
     const bike = vehicles.register({ plate: 'BG-1', vehicleClass: 'bike', ownerName: 'F F' }); // no reefer → coldChain false
     fleet.couple(d.did, bike.vehicleId, corridor.corridorId);
-    parcels.accept({ agentDid: origin.did, parcelId: 'FISH-BAG', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', natureCode: 'FOP' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'FISH-BAG', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), natureCode: 'FOP' });
     const bag = totes.register(origin.did);
     totes.assign(bag.code, 'dest-node', 'Dest');
     mdps.fillTote(bag.code, 'FISH-BAG');
@@ -3063,8 +3080,8 @@ describe('PUDO Light', () => {
     const bike = vehicles.register({ plate: 'DP-1', vehicleClass: 'bike', ownerName: 'D D' });
     fleet.couple(d.did, bike.vehicleId);
     // A GEN control tote + an FOP tote, both waiting at the origin on the bike's route.
-    parcels.accept({ agentDid: origin.did, parcelId: 'GEN-DISP', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', natureCode: 'GEN' });
-    parcels.accept({ agentDid: origin.did, parcelId: 'FOP-DISP', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', natureCode: 'FOP' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'GEN-DISP', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), natureCode: 'GEN' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'FOP-DISP', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), natureCode: 'FOP' });
     const genBag = totes.register(origin.did); totes.assign(genBag.code, 'dn', 'Dest'); mdps.fillTote(genBag.code, 'GEN-DISP'); dispatch.release(genBag.code);
     const fopBag = totes.register(origin.did); totes.assign(fopBag.code, 'dn', 'Dest'); mdps.fillTote(fopBag.code, 'FOP-DISP'); dispatch.release(fopBag.code);
 
@@ -3083,7 +3100,7 @@ describe('PUDO Light', () => {
     drivers.decideKyc(d.did, true, 'ops');
     const reefer = vehicles.register({ plate: 'RF-1', vehicleClass: 'truck', truckSubtype: 'refrigerated', ownerName: 'R R' }); // coldChain true
     const plain = vehicles.register({ plate: 'PL-1', vehicleClass: 'truck', truckSubtype: 'flatbed', ownerName: 'R R' }); // coldChain false
-    parcels.accept({ agentDid: origin.did, parcelId: 'FOP-CLAIM', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', natureCode: 'FOP' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'FOP-CLAIM', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), natureCode: 'FOP' });
     const bag = totes.register(origin.did); totes.assign(bag.code, 'dn', 'Dest'); mdps.fillTote(bag.code, 'FOP-CLAIM'); dispatch.release(bag.code);
 
     // Coupled to the reefer, the perishable tote IS offered.
@@ -3111,7 +3128,7 @@ describe('PUDO Light', () => {
       const corridor = corridors.addCorridor({ name: `NC ${tag}`, originZone: 'NorthTown', destZone: 'SouthTown' });
       const driver = corridors.addDriver({ driverDid: `did:glos:nc${tag}`, name: 'D', corridorId: corridor.corridorId });
       const parcelId = `QR-NOCOVER-${tag}`;
-      const taken = parcels.accept({ agentDid: origin.did, parcelId, size: 'M', destZone: 'SouthTown', senderMobile: '+254700951101', receiverMobile: '+254700951102', dropoffPhotoRef: 'r.jpg' });
+      const taken = parcels.accept({ agentDid: origin.did, parcelId, size: 'M', destZone: 'SouthTown', senderMobile: '+254700951101', receiverMobile: '+254700951102', dropoffPhotoRef: photoBy(origin.did) });
       parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: [parcelId] });
       parcels.arrive(parcelId, dest.did);
       return { parcelId, dest, code: taken.otp! };
@@ -3132,7 +3149,7 @@ describe('PUDO Light', () => {
         said.push(e.payload);
       });
       const slot = parcels.get(parcelId).binSlot;
-      const reported = parcels.dispute(parcelId, dest.did, 'The lid is cracked', 'counter.jpg');
+      const reported = parcels.dispute(parcelId, dest.did, 'The lid is cracked', photoBy(dest.did));
       await settle();
 
       expect(reported.status).toBe('Ready_For_Pickup');
@@ -3149,7 +3166,7 @@ describe('PUDO Light', () => {
       expect(theirs.disputeOutcome).not.toHaveProperty('award');
       expect(theirs.damageReport).toEqual({ number: `DCR-${parcelId}` });
       // And it is collected as any parcel.
-      expect(parcels.pickup(parcelId, dest.did, code, 'handed.jpg').status).toBe('Delivered');
+      expect(parcels.pickup(parcelId, dest.did, code, photoBy(dest.did)).status).toBe('Delivered');
     });
 
     it('no money moves: nothing is awarded, nothing is owed, and the books are as they were', async () => {
@@ -3157,7 +3174,7 @@ describe('PUDO Light', () => {
       const claims = () => books.balance(ke, ACCOUNT_CODES.EXPENSE_CLAIMS) || 0;
       const before = claims();
       const { parcelId, dest } = counterParcel('C');
-      parcels.dispute(parcelId, dest.did, 'Wet through', 'counter.jpg');
+      parcels.dispute(parcelId, dest.did, 'Wet through', photoBy(dest.did));
       await settle();
       expect(claims()).toBe(before);
       // Nobody can award on it afterwards either: there is no open case to decide.
@@ -3166,7 +3183,7 @@ describe('PUDO Light', () => {
 
     it('a case still open from before can be closed with a reason, and never with money', () => {
       const { parcelId, dest } = counterParcel('D');
-      parcels.dispute(parcelId, dest.did, 'Torn', 'counter.jpg');
+      parcels.dispute(parcelId, dest.did, 'Torn', photoBy(dest.did));
       // As a record written before the default was turned round would stand: in dispute, undecided, no cover.
       const old = parcels.get(parcelId);
       old.status = 'Disputed';
@@ -3185,7 +3202,7 @@ describe('PUDO Light', () => {
       try {
         const { parcelId, dest } = counterParcel('E');
         expect(parcels.get(parcelId).coverLimit).toBe(300);
-        const reported = parcels.dispute(parcelId, dest.did, 'Crushed', 'counter.jpg');
+        const reported = parcels.dispute(parcelId, dest.did, 'Crushed', photoBy(dest.did));
         expect(reported).toMatchObject({ status: 'Disputed', dispute: { state: 'open' } });
         expect(parcels.openDisputes().map((p) => p.parcelId)).toContain(parcelId);
         expect(() => parcels.resolveDispute(parcelId, { decision: 'upheld', award: 301, note: 'ours' })).toThrow(/covered to 300.00/);
@@ -3234,18 +3251,19 @@ describe('PUDO Light', () => {
       const corridor = corridors.addCorridor({ name: `R ${tag}`, originZone: 'NorthTown', destZone: 'SouthTown' });
       const driver = corridors.addDriver({ driverDid: `did:glos:rep${tag}`, name: 'D', corridorId: corridor.corridorId });
       const parcelId = `QR-REPORT-${tag}`;
-      const taken = parcels.accept({ agentDid: origin.did, parcelId, size: 'M', fragile: true, destZone: 'SouthTown', senderMobile: SENDER, receiverMobile: RECEIVER, dropoffPhotoRef: 'drop.jpg' });
+      const drop = photoBy(origin.did);
+      const taken = parcels.accept({ agentDid: origin.did, parcelId, size: 'M', fragile: true, destZone: 'SouthTown', senderMobile: SENDER, receiverMobile: RECEIVER, dropoffPhotoRef: drop });
       parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: [parcelId] });
       parcels.arrive(parcelId, dest.did);
       const proof = media.upload({ ownerDid: dest.did, kind: 'dispute', dataUrl: PNG }).mediaId;
       parcels.dispute(parcelId, dest.did, 'The lid is cracked right across', proof);
-      return { parcelId, origin, dest, proof, code: taken.otp! };
+      return { parcelId, origin, dest, proof, drop, code: taken.otp! };
     };
 
     it('says what the record held when the problem was reported: the parcel, the terms, every hand, every step, every photograph', async () => {
       const reports = reportsOf();
       const made = jest.spyOn(reports, 'ensure');
-      const { parcelId, origin, dest, proof } = reportedAtCounter('A');
+      const { parcelId, origin, dest, proof, drop } = reportedAtCounter('A');
       // Made IN the act of reporting — by the time reporting returns, and before anybody has asked to read it.
       expect(made).toHaveBeenCalledWith(parcelId);
       expect(made.mock.results[0].value).toMatchObject({ parcelId, sha256: expect.stringMatching(/^[0-9a-f]{64}$/) });
@@ -3276,9 +3294,9 @@ describe('PUDO Light', () => {
       expect(b.events.map((e) => e.status)).toEqual(parcels.get(parcelId).scans.slice(0, b.events.length).map((s) => s.status));
       expect(b.events[b.events.length - 1].status).toBe('Disputed');
       expect(b.events.every((e) => typeof e.fingerprint === 'string' && e.fingerprint.length > 0)).toBe(true);
-      // EVERY PHOTOGRAPH: one held as a picture, one that was only ever a reference.
+      // EVERY PHOTOGRAPH, each held as a picture: since round 31 no step takes a photo we do not hold.
       expect(b.photographs).toEqual([
-        { what: 'drop_off', reference: 'drop.jpg' },
+        { what: 'drop_off', reference: drop, mediaId: drop, takenAt: expect.any(String), sha256: expect.any(String) },
         { what: 'problem', reference: proof, mediaId: proof, takenAt: expect.any(String), sha256: expect.any(String) },
       ]);
       // No phone number, no account, no member of staff: nothing in it names a person.
@@ -3298,7 +3316,7 @@ describe('PUDO Light', () => {
 
       // The parcel is collected a moment later, and the shop is renamed.
       await new Promise((r) => setTimeout(r, 5));
-      parcels.pickup(parcelId, dest.did, code, 'handed.jpg');
+      parcels.pickup(parcelId, dest.did, code, photoBy(dest.did));
       agents.get(dest.did).shopName = 'A New Name Altogether';
       const later = reports.read(parcelId, staff);
       expect(later).toEqual(first);
@@ -3354,7 +3372,7 @@ describe('PUDO Light', () => {
       expect(() => reports.read(parcelId, undefined)).toThrow(/No damage claim report on such a parcel/);
       // A parcel nobody reported a problem on has no report, for anybody.
       const quiet = onboardAgent('Report Quiet', 'NorthTown', 50);
-      parcels.accept({ agentDid: quiet.did, parcelId: 'QR-REPORT-QUIET', size: 'M', destZone: 'SouthTown', senderMobile: SENDER, receiverMobile: RECEIVER, dropoffPhotoRef: 'drop.jpg' });
+      parcels.accept({ agentDid: quiet.did, parcelId: 'QR-REPORT-QUIET', size: 'M', destZone: 'SouthTown', senderMobile: SENDER, receiverMobile: RECEIVER, dropoffPhotoRef: photoBy(quiet.did) });
       expect(() => reports.read('QR-REPORT-QUIET', staff)).toThrow(/No damage claim report/);
       expect(() => reports.read('QR-REPORT-QUIET', asPerson(RECEIVER))).toThrow(/No damage claim report/);
       expect(reports.ensure('QR-NO-SUCH-PARCEL')).toBeUndefined();
@@ -3376,7 +3394,7 @@ describe('PUDO Light', () => {
       parcels.collectConfirm(parcel.parcelId, dest.did, parcel.collectionCode!);
       await settle();
       const person = persons.ensurePerson(RECEIVER);
-      parcels.buyerDispute(parcel.parcelId, person, person.personDid, 'One kettle is dented', 'problem.jpg');
+      parcels.buyerDispute(parcel.parcelId, person, person.personDid, 'One kettle is dented', photoBy(person.personDid));
       await settle();
 
       const mine = reports.read(parcel.parcelId, { active: true, role: 'vendor', did: store.did, sub: store.did, scopes: [] } as never);
@@ -3425,7 +3443,7 @@ describe('PUDO Light', () => {
 
       // Still on the shelf: the network holds it, and what is wrong with it is what the report is for.
       expect(() => reports.addNote(parcelId, receiver, { text: 'The bowl inside is broken too' })).toThrow(/after the parcel was handed over/);
-      expect(parcels.pickup(parcelId, dest.did, code, 'handed.jpg').status).toBe('Delivered');
+      expect(parcels.pickup(parcelId, dest.did, code, photoBy(dest.did)).status).toBe('Delivered');
 
       // Only the receiver adds one: not the sender, not the shop, not staff.
       for (const who of [asPerson(SENDER), asShop(dest.did), staff]) expect(() => reports.addNote(parcelId, who, { text: 'x' })).toThrow(/added by the receiver/);
@@ -3469,7 +3487,7 @@ describe('PUDO Light', () => {
 
     it('is handed on by a link its holder makes: unguessable, counted, limited, and theirs to cancel', async () => {
       const reports = reportsOf();
-      const { parcelId, dest, proof } = reportedAtCounter('E');
+      const { parcelId, dest, proof, drop } = reportedAtCounter('E');
       await settle();
       const receiver = asPerson(RECEIVER);
       const now = Date.parse('2026-10-12T10:00:00Z');
@@ -3500,10 +3518,10 @@ describe('PUDO Light', () => {
       expect(file.filename).toBe(`damage-claim-report-${parcelId}.zip`);
       expect(file.bytes.subarray(0, 2).toString()).toBe('PK');
       const inside = file.bytes.toString('latin1');
-      for (const name of ['damage-claim-report.html', 'report.json', 'README.txt', `photographs/problem-${proof}.png`]) expect(inside).toContain(name);
+      for (const name of ['damage-claim-report.html', 'report.json', 'README.txt', `photographs/problem-${proof}.png`, `photographs/drop_off-${drop}.png`]) expect(inside).toContain(name);
       expect(inside).toContain(report.sha256);
       expect(inside).toContain('The lid is cracked right across');
-      expect(inside).toContain('Recorded by reference only: drop.jpg');
+      expect(inside).not.toContain('Recorded by reference only'); // round 31 — every photograph in it is a picture
       // The bytes the fingerprint is taken over are in the file, exactly: anybody can work it out again from them.
       expect(file.bytes.includes(Buffer.from(canonicalJson(report.body), 'utf8'))).toBe(true);
       expect(reports.linksFor(parcelId, receiver, now)[0]).toMatchObject({ opened: 1, lastOpenedAt: new Date(now).toISOString() });
@@ -3573,7 +3591,7 @@ describe('PUDO Light', () => {
       parcels.collectConfirm(parcel.parcelId, dest.did, parcel.collectionCode!);
       await settle();
       const person = persons.ensurePerson(RECEIVER);
-      parcels.buyerDispute(parcel.parcelId, person, person.personDid, 'The handle came off in the box', 'problem.jpg');
+      parcels.buyerDispute(parcel.parcelId, person, person.personDid, 'The handle came off in the box', photoBy(person.personDid));
       await settle();
       return parcel;
     }
@@ -3680,7 +3698,7 @@ describe('PUDO Light', () => {
       const dest = smallShop('P', 6);
       const corridor = corridors.addCorridor({ name: 'Full P', originZone: 'NorthTown', destZone: 'SouthTown' });
       const driver = corridors.addDriver({ driverDid: 'did:glos:fullp', name: 'D', corridorId: corridor.corridorId });
-      parcels.accept({ agentDid: origin.did, parcelId: 'QR-FULL-P', size: 'M', destZone: 'SouthTown', senderMobile: '+254700941101', receiverMobile: '+254700941102', dropoffPhotoRef: 'r.jpg' });
+      parcels.accept({ agentDid: origin.did, parcelId: 'QR-FULL-P', size: 'M', destZone: 'SouthTown', senderMobile: '+254700941101', receiverMobile: '+254700941102', dropoffPhotoRef: photoBy(origin.did) });
       parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-FULL-P'] });
       const scans = parcels.get('QR-FULL-P').scans.length;
       const paid = agents.balance(dest.did);
@@ -3709,7 +3727,7 @@ describe('PUDO Light', () => {
       totes.assign(bag.code, dest.did, dest.shopName);
       const ids = ['FULL-B-0', 'FULL-B-1', 'FULL-B-2'];
       for (const pid of ids) {
-        parcels.accept({ agentDid: origin.did, parcelId: pid, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+        parcels.accept({ agentDid: origin.did, parcelId: pid, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
         mdps.fillTote(bag.code, pid);
       }
       dispatch.release(bag.code);
@@ -3753,7 +3771,7 @@ describe('PUDO Light', () => {
       totes.assign(bag.code, opts.destinationNodeId, 'Somewhere');
       for (let i = 0; i < (opts.parcels ?? 1); i += 1) {
         const pid = `HAUL-${tag}-${i}`;
-        parcels.accept({ agentDid: origin.did, parcelId: pid, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+        parcels.accept({ agentDid: origin.did, parcelId: pid, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
         mdps.fillTote(bag.code, pid);
       }
       dispatch.release(bag.code);
@@ -3954,7 +3972,7 @@ describe('PUDO Light', () => {
       const anotherBag = (tag: string, origin: { did: string; location: { lat: number; lng: number } }, dest: { did: string; shopName: string }, d: { did: string }) => {
         const bag = totes.register(origin.did);
         totes.assign(bag.code, dest.did, dest.shopName);
-        parcels.accept({ agentDid: origin.did, parcelId: `DERIVE-${tag}`, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+        parcels.accept({ agentDid: origin.did, parcelId: `DERIVE-${tag}`, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
         mdps.fillTote(bag.code, `DERIVE-${tag}`);
         dispatch.release(bag.code);
         return dispatch.suggest(d.did, { from: origin.location, to: { lat: -1.35, lng: 36.95 } }).find((o) => o.ref === bag.code)!;
@@ -4339,7 +4357,7 @@ describe('PUDO Light', () => {
 
     const bag = totes.register(origin.did);
     totes.assign(bag.code, mdp.mdpId, mdp.name);
-    parcels.accept({ agentDid: origin.did, parcelId: 'FD-P', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', paymentMode: 'prepaid' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'FD-P', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), paymentMode: 'prepaid' });
     mdps.fillTote(bag.code, 'FD-P');
     dispatch.release(bag.code);
     const [offer] = dispatch.suggest(d.did, { from: origin.location, to: { lat: -1.3, lng: 36.95 } });
@@ -4380,7 +4398,7 @@ describe('PUDO Light', () => {
 
     const bag = totes.register(origin.did);
     totes.assign(bag.code, mdp.mdpId, mdp.name);
-    parcels.accept({ agentDid: origin.did, parcelId: 'CT-P', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', paymentMode: 'prepaid' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'CT-P', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), paymentMode: 'prepaid' });
     mdps.fillTote(bag.code, 'CT-P');
 
     // The shop hands it over directly. No offer, no claim — the common case.
@@ -4461,9 +4479,9 @@ describe('PUDO Light', () => {
     const bike = vehicles.register({ plate: 'BD-1', vehicleClass: 'bike', ownerName: 'Boda B' });
     fleet.couple(d.did, bike.vehicleId, corridor.corridorId);
 
-    parcels.accept({ agentDid: origin.did, parcelId: 'F-LIGHT', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
-    parcels.accept({ agentDid: origin.did, parcelId: 'F-FRAGILE', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', fragile: true });
-    parcels.accept({ agentDid: origin.did, parcelId: 'F-HEAVY', size: 'HEAVY', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'F-LIGHT', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
+    parcels.accept({ agentDid: origin.did, parcelId: 'F-FRAGILE', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), fragile: true });
+    parcels.accept({ agentDid: origin.did, parcelId: 'F-HEAVY', size: 'HEAVY', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
 
     const r = parcels.handover({ agentDid: origin.did, driverBadgeId: d.badgeId!, parcelIds: ['F-LIGHT', 'F-FRAGILE', 'F-HEAVY'] });
     expect(r.handed).toEqual(['F-LIGHT']); // only the small, non-fragile parcel rides the bike
@@ -4523,7 +4541,7 @@ describe('PUDO Light', () => {
       const d = drivers.register({ displayName: `Pass ${seq}`, fullName: `Pass Rider ${seq}`, nationalId: `PASS-${seq}`, mobile: `+254771000${seq}`, licenceClasses: ['bike'] });
       const bike = vehicles.register({ plate: `PS-${seq}`, vehicleClass: 'bike', ownerName: 'P' });
       fleet.couple(d.did, bike.vehicleId, corridor.corridorId);
-      parcels.accept({ agentDid: origin.did, parcelId: `PASS-P-${seq}`, size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      parcels.accept({ agentDid: origin.did, parcelId: `PASS-P-${seq}`, size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
       const pass = (controller.driverSession(d.did, asDriver(d.did)) as { handoverPass?: string }).handoverPass!;
       return { origin, d, badge: drivers.get(d.did).badgeId!, pass, parcelId: `PASS-P-${seq}` };
     };
@@ -4576,7 +4594,7 @@ describe('PUDO Light', () => {
       // Four wrong, then the right one: the clerk got there.
       expect(handTo(origin, pass, parcelId).handed).toEqual([parcelId]);
       const another = (n: number) => {
-        parcels.accept({ agentDid: origin.did, parcelId: `${parcelId}-${n}`, size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+        parcels.accept({ agentDid: origin.did, parcelId: `${parcelId}-${n}`, size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
         return `${parcelId}-${n}`;
       };
       // The count started again after the right one: four more wrong ones, and the same code still hands over.
@@ -4596,10 +4614,10 @@ describe('PUDO Light', () => {
       const origin = onboardAgent('Pass Bus Counter', 'NorthTown', 50);
       const corridor = corridors.forZones('NorthTown', 'SouthTown') ?? corridors.addCorridor({ name: 'pass bus', originZone: 'NorthTown', destZone: 'SouthTown' });
       const bus = corridors.addDriver({ driverDid: 'did:glos:pass-bus', name: 'Bus', corridorId: corridor.corridorId });
-      parcels.accept({ agentDid: origin.did, parcelId: 'PASS-BUS', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      parcels.accept({ agentDid: origin.did, parcelId: 'PASS-BUS', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
       expect(handTo(origin, bus.badgeId, 'PASS-BUS').handed).toEqual(['PASS-BUS']);
       // Something that is no badge at all is refused where it is used, as before.
-      parcels.accept({ agentDid: origin.did, parcelId: 'PASS-NONE', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      parcels.accept({ agentDid: origin.did, parcelId: 'PASS-NONE', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
       expect(() => handTo(origin, 'NOBODY-123456', 'PASS-NONE')).toThrow(/Unknown driver badge/);
     });
 
@@ -4610,7 +4628,7 @@ describe('PUDO Light', () => {
       const bagWith = (id: string) => {
         const bag = totes.register(origin.did);
         totes.assign(bag.code, mdp.mdpId, mdp.name);
-        parcels.accept({ agentDid: origin.did, parcelId: id, size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+        parcels.accept({ agentDid: origin.did, parcelId: id, size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
         mdps.fillTote(bag.code, id);
         return bag.code;
       };
@@ -4643,8 +4661,8 @@ describe('PUDO Light', () => {
     onboardAgent('Cargo Dest', 'SouthTown', 50);
     const corridor = corridors.addCorridor({ name: 'cargo', originZone: 'NorthTown', destZone: 'SouthTown' });
     const driver = corridors.addDriver({ driverDid: 'did:glos:cargo', name: 'C', corridorId: corridor.corridorId });
-    parcels.accept({ agentDid: origin.did, parcelId: 'CEMENT', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', natureCode: 'HAZ-DUST' });
-    parcels.accept({ agentDid: origin.did, parcelId: 'TOMATO', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', natureCode: 'FOP' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'CEMENT', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), natureCode: 'HAZ-DUST' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'TOMATO', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), natureCode: 'FOP' });
 
     // Both are scanned (so the S25 completeness gate is satisfied), but they cannot ride together.
     const r = parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['CEMENT', 'TOMATO'] });
@@ -4663,7 +4681,7 @@ describe('PUDO Light', () => {
     const d = drivers.register({ displayName: 'Feeder', fullName: 'Feeder F', nationalId: 'DRV-ID-COLD', mobile: '+254900099', licenceClasses: ['bike'] });
     const bike = vehicles.register({ plate: 'CC-1', vehicleClass: 'bike', ownerName: 'Feeder F' }); // no reefer → coldChain false
     fleet.couple(d.did, bike.vehicleId, corridor.corridorId);
-    parcels.accept({ agentDid: origin.did, parcelId: 'FISH', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', natureCode: 'FOP' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'FISH', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), natureCode: 'FOP' });
 
     const r = parcels.handover({ agentDid: origin.did, driverBadgeId: d.badgeId!, parcelIds: ['FISH'] });
     expect(r.handed).toEqual([]);
@@ -4688,8 +4706,8 @@ describe('PUDO Light', () => {
     onboardAgent('Gate Dest', 'SouthTown', 50);
     const corridor = corridors.addCorridor({ name: 'gate', originZone: 'NorthTown', destZone: 'SouthTown' });
     const driver = corridors.addDriver({ driverDid: 'did:glos:gate', name: 'G', corridorId: corridor.corridorId });
-    parcels.accept({ agentDid: origin.did, parcelId: 'G-A', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
-    parcels.accept({ agentDid: origin.did, parcelId: 'G-B', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'G-A', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
+    parcels.accept({ agentDid: origin.did, parcelId: 'G-B', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
 
     // Scanning only one of the two waiting parcels is refused — nothing moves.
     try {
@@ -4716,8 +4734,8 @@ describe('PUDO Light', () => {
     onboardAgent('SS Dest', 'SouthTown', 50);
     const corridor = corridors.addCorridor({ name: 'ss', originZone: 'NorthTown', destZone: 'SouthTown' });
     const driver = corridors.addDriver({ driverDid: 'did:glos:ss', name: 'S', corridorId: corridor.corridorId });
-    parcels.accept({ agentDid: origin.did, parcelId: 'SS-A', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
-    parcels.accept({ agentDid: origin.did, parcelId: 'SS-B', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'SS-A', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
+    parcels.accept({ agentDid: origin.did, parcelId: 'SS-B', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
 
     const r = parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['SS-A'], acknowledgeShortShip: true, shortShipReason: 'no space left' });
     expect(r.handed).toEqual(['SS-A']);
@@ -4747,8 +4765,8 @@ describe('PUDO Light', () => {
     const south = corridors.addCorridor({ name: 'south', originZone: 'NorthTown', destZone: 'SouthTown' });
     corridors.addCorridor({ name: 'east', originZone: 'NorthTown', destZone: 'EastTown' });
     const southDriver = corridors.addDriver({ driverDid: 'did:glos:south', name: 'S', corridorId: south.corridorId });
-    parcels.accept({ agentDid: origin.did, parcelId: 'M-SOUTH', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
-    parcels.accept({ agentDid: origin.did, parcelId: 'M-EAST', size: 'S', destZone: 'EastTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'M-SOUTH', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
+    parcels.accept({ agentDid: origin.did, parcelId: 'M-EAST', size: 'S', destZone: 'EastTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
 
     // The south bus only demands the south parcel; the east-bound one waits for its own corridor.
     const r = parcels.handover({ agentDid: origin.did, driverBadgeId: southDriver.badgeId, parcelIds: ['M-SOUTH'] });
@@ -4766,8 +4784,8 @@ describe('PUDO Light', () => {
     const d = drivers.register({ displayName: 'Boda', fullName: 'Boda B', nationalId: 'DRV-ID-SS', mobile: '+254900055', licenceClasses: ['bike'] });
     const bike = vehicles.register({ plate: 'BD-SS', vehicleClass: 'bike', ownerName: 'Boda B' });
     fleet.couple(d.did, bike.vehicleId, corridor.corridorId);
-    parcels.accept({ agentDid: origin.did, parcelId: 'BK-LIGHT', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
-    parcels.accept({ agentDid: origin.did, parcelId: 'BK-FRAGILE', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', fragile: true });
+    parcels.accept({ agentDid: origin.did, parcelId: 'BK-LIGHT', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
+    parcels.accept({ agentDid: origin.did, parcelId: 'BK-FRAGILE', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), fragile: true });
 
     // The agent scans BOTH (no omission), so the gate does not block — but the bike cannot take the fragile one.
     const r = parcels.handover({ agentDid: origin.did, driverBadgeId: d.badgeId!, parcelIds: ['BK-LIGHT', 'BK-FRAGILE'] });
@@ -4792,8 +4810,8 @@ describe('PUDO Light', () => {
     const driver = corridors.addDriver({ driverDid: 'did:glos:leak', name: 'L', corridorId: corridor.corridorId });
     const sender = '+254700955001';
     const receiver = '+254700955002';
-    parcels.accept({ agentDid: origin.did, parcelId: 'LK-A', size: 'S', destZone: 'SouthTown', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: 'p.jpg' });
-    parcels.accept({ agentDid: origin.did, parcelId: 'LK-B', size: 'S', destZone: 'SouthTown', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: 'p.jpg' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'LK-A', size: 'S', destZone: 'SouthTown', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: photoBy(origin.did) });
+    parcels.accept({ agentDid: origin.did, parcelId: 'LK-B', size: 'S', destZone: 'SouthTown', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: photoBy(origin.did) });
 
     const secret = 'consignee refused, balance unpaid';
     parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['LK-A'], acknowledgeShortShip: true, shortShipReason: secret });
@@ -4925,7 +4943,7 @@ describe('PUDO Light', () => {
     const corridor = corridors.addCorridor({ name: 'd', originZone: 'NorthTown', destZone: 'SouthTown' });
     const driver = corridors.addDriver({ driverDid: 'did:glos:d', name: 'D', corridorId: corridor.corridorId });
     const receiver = '+254700980002';
-    parcels.accept({ agentDid: origin.did, parcelId: 'DSP-1', size: 'M', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: '+254700980001', receiverMobile: receiver, dropoffPhotoRef: 'drop.jpg' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'DSP-1', size: 'M', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: '+254700980001', receiverMobile: receiver, dropoffPhotoRef: photoBy(origin.did) });
     parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['DSP-1'] });
     parcels.arrive('DSP-1', dest.did);
     const otp = releaseCodeOf('DSP-1');
@@ -4997,7 +5015,7 @@ describe('PUDO Light', () => {
     const full = totes.register(origin.did);
     totes.assign(full.code, mdp.mdpId, mdp.name);
     for (let i = 0; i < 10; i += 1) {
-      parcels.accept({ agentDid: origin.did, parcelId: `D-${i}`, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', paymentMode: 'prepaid' });
+      parcels.accept({ agentDid: origin.did, parcelId: `D-${i}`, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), paymentMode: 'prepaid' });
       mdps.fillTote(full.code, `D-${i}`);
     }
     expect(dispatch.publishReady()).toContain(full.code);
@@ -5006,7 +5024,7 @@ describe('PUDO Light', () => {
     // (b) a partial bag waits — published only once it has aged past 24 h
     const partial = totes.register(origin.did);
     totes.assign(partial.code, mdp.mdpId, mdp.name);
-    parcels.accept({ agentDid: origin.did, parcelId: 'D-P', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', paymentMode: 'prepaid' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'D-P', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), paymentMode: 'prepaid' });
     mdps.fillTote(partial.code, 'D-P');
     expect(dispatch.publishReady()).not.toContain(partial.code);
     expect(dispatch.publishReady(Date.now() + 25 * 3_600_000)).toContain(partial.code);
@@ -5021,8 +5039,8 @@ describe('PUDO Light', () => {
 
     const bag = totes.register(origin.did);
     totes.assign(bag.code, mdp.mdpId, mdp.name);
-    parcels.accept({ agentDid: origin.did, parcelId: 'DS-1', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', paymentMode: 'prepaid' });
-    parcels.accept({ agentDid: origin.did, parcelId: 'DS-2', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', paymentMode: 'prepaid' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'DS-1', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), paymentMode: 'prepaid' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'DS-2', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), paymentMode: 'prepaid' });
     mdps.fillTote(bag.code, 'DS-1');
     mdps.fillTote(bag.code, 'DS-2');
     dispatch.release(bag.code);
@@ -5047,7 +5065,7 @@ describe('PUDO Light', () => {
     fleet.couple(d.did, moto.vehicleId);
     const bag = totes.register(origin.did);
     totes.assign(bag.code, mdp.mdpId, mdp.name);
-    parcels.accept({ agentDid: origin.did, parcelId: 'L-1', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', paymentMode: 'prepaid' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'L-1', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), paymentMode: 'prepaid' });
     mdps.fillTote(bag.code, 'L-1');
     dispatch.release(bag.code);
 
@@ -5066,7 +5084,7 @@ describe('PUDO Light', () => {
     fleet.couple(b.did, vehicles.register({ plate: 'MB-1', vehicleClass: 'motorcycle', ownerName: 'Ben' }).vehicleId);
     const bag = totes.register(origin.did);
     totes.assign(bag.code, mdp.mdpId, mdp.name);
-    parcels.accept({ agentDid: origin.did, parcelId: 'R-1', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', paymentMode: 'prepaid' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'R-1', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), paymentMode: 'prepaid' });
     mdps.fillTote(bag.code, 'R-1');
     dispatch.release(bag.code);
 
@@ -5354,7 +5372,7 @@ describe('PUDO Light', () => {
     const origin = onboardAgent('S21 Origin', 'NorthTown', 50);
     const sender = '+254700811';
     const receiver = '+254700822';
-    parcels.accept({ agentDid: origin.did, parcelId: 'S21-1', size: 'M', destZone: 'EastTown', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: 'p.jpg', paymentMode: 'prepaid' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'S21-1', size: 'M', destZone: 'EastTown', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: photoBy(origin.did), paymentMode: 'prepaid' });
 
     // The receiver sees it as 'received'; the sender as 'sent' — one parcel, two authenticated views.
     const recv = parcels.partyTo(hashPhone(receiver));
@@ -5386,7 +5404,7 @@ describe('PUDO Light', () => {
     const hub = mdps.register({ name: 'East Hub', zones: ['EastTown'], location: { lat: -1.25, lng: 36.9 } });
 
     // Outbound parcel that nominates its destination PUDO → has destAgentDid → MDP-sortable (P1 #2).
-    parcels.accept({ agentDid: origin.did, parcelId: 'TM-1', size: 'M', destZone: 'EastTown', destPudoDid: dest.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', paymentMode: 'prepaid' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'TM-1', size: 'M', destZone: 'EastTown', destPudoDid: dest.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), paymentMode: 'prepaid' });
     expect(parcels.get('TM-1').destAgentDid).toBe(dest.did);
 
     const bag = totes.register(origin.did);
@@ -5411,7 +5429,7 @@ describe('PUDO Light', () => {
   it('cancels a not-yet-delivered parcel and refunds a cash charge (reverse logistics)', () => {
     const origin = onboardAgent('Cx Shop', 'NorthTown', 50);
     const before = agents.balance(origin.did)!;
-    parcels.accept({ agentDid: origin.did, parcelId: 'CX-1', size: 'S', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'CX-1', size: 'S', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
     expect(parcels.cancel('CX-1', 'ops', 'customer changed mind').status).toBe('Voided');
     expect(agents.balance(origin.did)!).toBeCloseTo(before, 2); // cash charge refunded
   });
@@ -6906,7 +6924,7 @@ describe('PUDO Light', () => {
       expect(dispatch.remainingCapacity(d.did)).toBe(15_000);
 
       // The other driver NAMES the one who claimed it, as the request always let them. They are still who they signed in as.
-      const load = { driverDid: d.did, confirmed: requiredLoadKeys(f), securementPhotoId: 'med_test' };
+      const load = { driverDid: d.did, confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(d.did) };
       expect(() => controller.freightPickup(f.freightId, load as never, asDriver(other.did))).toThrow('This freight was claimed by another driver');
       expect(dispatch.requireFreightPublic(f.freightId).status).toBe('claimed');
       // The driver themselves — even with somebody else's name in the request: it is theirs, and they are themselves.
@@ -6915,7 +6933,7 @@ describe('PUDO Light', () => {
       const failed = { driverDid: d.did, outcome: 'absent', note: 'Gate locked' };
       expect(() => controller.freightDeliveryFailed(f.freightId, failed as never, asDriver(other.did))).toThrow('This freight was claimed by another driver');
       expect(() => controller.freightTemp(f.freightId, { celsius: 4, driverDid: d.did } as never, asDriver(other.did))).toThrow('This freight was claimed by another driver');
-      const unload = { driverDid: d.did, confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' };
+      const unload = { driverDid: d.did, confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: photoBy(d.did) };
       expect(() => controller.freightDeliver(f.freightId, unload as never, asDriver(other.did))).toThrow('This freight was claimed by another driver');
       expect(dispatch.requireFreightPublic(f.freightId)).toMatchObject({ status: 'in_transit' });
       expect(dispatch.requireFreightPublic(f.freightId).deliveryAttempts ?? []).toEqual([]);
@@ -6978,7 +6996,7 @@ describe('PUDO Light', () => {
       const elsewhere = onboardAgent('Who Other Shop', 'NorthTown', 50);
       const corridor = corridors.addCorridor({ name: 'Who N-S', originZone: 'NorthTown', destZone: 'SouthTown' });
       const bus = corridors.addDriver({ driverDid: 'did:glos:who-bus', name: 'D', corridorId: corridor.corridorId });
-      parcels.accept({ agentDid: shop.did, parcelId: 'QR-WHO', size: 'M', destZone: 'SouthTown', senderMobile: '+254700111001', receiverMobile: '+254700111002', dropoffPhotoRef: 'r.jpg' });
+      parcels.accept({ agentDid: shop.did, parcelId: 'QR-WHO', size: 'M', destZone: 'SouthTown', senderMobile: '+254700111001', receiverMobile: '+254700111002', dropoffPhotoRef: photoBy(shop.did) });
       parcels.handover({ agentDid: shop.did, driverBadgeId: bus.badgeId, parcelIds: ['QR-WHO'] });
       const stars = { stars: 1, raterMobile: '+254700111002' };
       // Still on its way, it has no second shop yet: a sign-in with no shop behind it is not "the shop it has not reached".
@@ -7009,7 +7027,7 @@ describe('PUDO Light', () => {
       const dest = onboardAgent(`${id} Dest`, 'SouthTown', 50);
       const corridor = corridors.addCorridor({ name: `${id} N-S`, originZone: 'NorthTown', destZone: 'SouthTown' });
       const bus = corridors.addDriver({ driverDid: `did:glos:${id}-bus`, name: 'D', corridorId: corridor.corridorId });
-      parcels.accept({ agentDid: origin.did, parcelId: id, size: 'M', destZone: 'SouthTown', senderMobile: '+254700111001', receiverMobile: '+254700111002', dropoffPhotoRef: 'r.jpg' });
+      parcels.accept({ agentDid: origin.did, parcelId: id, size: 'M', destZone: 'SouthTown', senderMobile: '+254700111001', receiverMobile: '+254700111002', dropoffPhotoRef: photoBy(origin.did) });
       parcels.handover({ agentDid: origin.did, driverBadgeId: bus.badgeId, parcelIds: [id] });
       return { origin, dest };
     };
@@ -7168,7 +7186,7 @@ describe('PUDO Light', () => {
       for (const who of [own, staff]) expect(controller.parcelRoute(parcel.parcelId, who)).toMatchObject({ planned: true });
       for (const who of others) expect(() => controller.parcelRoute(parcel.parcelId, who)).toThrow('This store is not yours to view');
       // A parcel handed in at a counter was shipped by no store: there is no store whose it could be.
-      parcels.accept({ agentDid: origin.did, parcelId: 'QR-READ', size: 'M', destZone: 'SouthTown', senderMobile: '+254700111001', receiverMobile: '+254700111002', dropoffPhotoRef: 'r.jpg' });
+      parcels.accept({ agentDid: origin.did, parcelId: 'QR-READ', size: 'M', destZone: 'SouthTown', senderMobile: '+254700111001', receiverMobile: '+254700111002', dropoffPhotoRef: photoBy(origin.did) });
       for (const who of [own, as('genesis')]) expect(() => controller.parcelRoute('QR-READ', who)).toThrow('This parcel was not shipped by your store');
       expect(controller.parcelRoute('QR-READ', staff)).toMatchObject({ planned: false });
     });
@@ -7356,10 +7374,10 @@ describe('PUDO Light', () => {
     it('the parcel list: a shop’s is its own whatever shop the request names, and a hub’s is what stands at it', () => {
       const shop = onboardAgent('List Shop', 'NorthTown', 50);
       const other = onboardAgent('List Other', 'NorthTown', 50);
-      const taken = { size: 'M' as const, destZone: 'SouthTown', senderMobile: '+254700111001', receiverMobile: '+254700111002', dropoffPhotoRef: 'r.jpg' };
+      const taken = { size: 'M' as const, destZone: 'SouthTown', senderMobile: '+254700111001', receiverMobile: '+254700111002' };
       corridors.addCorridor({ name: 'List N-S', originZone: 'NorthTown', destZone: 'SouthTown' });
-      parcels.accept({ ...taken, agentDid: shop.did, parcelId: 'QR-L1' });
-      parcels.accept({ ...taken, agentDid: other.did, parcelId: 'QR-L2' });
+      parcels.accept({ ...taken, agentDid: shop.did, parcelId: 'QR-L1', dropoffPhotoRef: photoBy(shop.did) });
+      parcels.accept({ ...taken, agentDid: other.did, parcelId: 'QR-L2', dropoffPhotoRef: photoBy(other.did) });
       const rows = (who: never, agent?: string, status = '') => controller.listParcels(status, agent, who) as Row[];
       const ids = (who: never, agent?: string, status = '') => rows(who, agent, status).map((p) => p.parcelId as string).sort();
       const own = as('agent', shop.did);
@@ -7501,12 +7519,12 @@ describe('PUDO Light', () => {
   // --- S34b: the dynamic market-pulse engine (per-zone supply/demand surge, admin rules, corridor clamp) ---
 
   // S33 — advance a freight through the safety gate: a complete load-safety checklist (derived from the freight)
-  // + a securement photo at pickup, a complete unload checklist at delivery. (A fake mediaId is fine — link()
-  // no-ops on an unknown id.)
-  const pickupOk = (freight: { freightId: string; bulk: boolean; fragile: boolean; requiredCapabilities: import('./cargo.types').VehicleCapability[] }, did?: string) =>
-    dispatch.pickupFreight(freight.freightId, did, { confirmed: requiredLoadKeys(freight), securementPhotoId: 'med_test' });
-  const deliverOk = (freight: { freightId: string }, did?: string) =>
-    dispatch.deliverFreight(freight.freightId, did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' });
+  // + a securement photo at pickup, a complete unload checklist at delivery — each photo the driver's own, as round 31
+  // requires: one we hold, uploaded by the driver taking the load.
+  const pickupOk = (freight: { freightId: string; bulk: boolean; fragile: boolean; requiredCapabilities: import('./cargo.types').VehicleCapability[] }, did: string) =>
+    dispatch.pickupFreight(freight.freightId, did, { confirmed: requiredLoadKeys(freight), securementPhotoId: photoBy(did) });
+  const deliverOk = (freight: { freightId: string }, did: string) =>
+    dispatch.deliverFreight(freight.freightId, did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: photoBy(did) });
 
   /** A driver's own sign-in — what the driver app calls their own routes with. */
   const asDriver = (did: string) => ({ active: true, role: 'driver', did }) as never;
@@ -7578,7 +7596,7 @@ describe('PUDO Light', () => {
     dispatch.claim(offer.offerId, noon);
     expect(dispatch.listFreight().find((x) => x.freightId === f.freightId)!.status).toBe('claimed');
     // But it can't be PICKED UP before its date (the cargo isn't ready) …
-    expect(() => dispatch.pickupFreight(f.freightId, driver.did, { securementPhotoId: 'x.jpg' }, noon)).toThrow(/before then/);
+    expect(() => dispatch.pickupFreight(f.freightId, driver.did, { securementPhotoId: photoBy(driver.did) }, noon)).toThrow(/before then/);
     // … and on/after the date the date-gate is open (it now fails on the safety checklist, not the date).
     expect(() => dispatch.pickupFreight(f.freightId, driver.did, {}, noon + 24 * 3_600_000 + 1)).toThrow(/checklist|secured load/i);
   });
@@ -7819,13 +7837,14 @@ describe('PUDO Light', () => {
     claimFreight(d.did, pickup, f.freightId);
 
     expect(() => dispatch.pickupFreight(f.freightId, d.did)).toThrow(/checklist/i); // nothing confirmed
-    expect(() => dispatch.pickupFreight(f.freightId, d.did, { confirmed: ['distributed'], securementPhotoId: 'm' })).toThrow(/checklist/i); // partial
+    expect(() => dispatch.pickupFreight(f.freightId, d.did, { confirmed: ['distributed'], securementPhotoId: photoBy(d.did) })).toThrow(/checklist/i); // partial
     expect(() => dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f) })).toThrow(/photo/i); // complete but no photo
     expect(dispatch.listFreight({ status: 'claimed' }).some((x) => x.freightId === f.freightId)).toBe(true); // a failed gate never advanced it
 
-    const moved = dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_secure' });
+    const secured = photoBy(d.did);
+    const moved = dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: secured });
     expect(moved.status).toBe('in_transit');
-    expect(moved.loadSafety?.securementPhotoRef).toBe('med_secure');
+    expect(moved.loadSafety?.securementPhotoRef).toBe(secured);
     expect(moved.loadSafety?.confirmed).toEqual(expect.arrayContaining(requiredLoadKeys(f)));
   });
 
@@ -7836,7 +7855,7 @@ describe('PUDO Light', () => {
     claimFreight(d.did, pickup, f.freightId);
     pickupOk(f, d.did);
     expect(() => dispatch.deliverFreight(f.freightId, d.did)).toThrow(/checklist/i);
-    const done = dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' });
+    const done = dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: photoBy(d.did) });
     expect(done.status).toBe('delivered');
     expect(done.unloadReport?.confirmed).toEqual(expect.arrayContaining(requiredUnloadKeys()));
     expect(done.driverPaid).toBe(true); // the S34 payout still fires after the gate
@@ -7860,9 +7879,10 @@ describe('PUDO Light', () => {
     claimFreight(d.did, pickup, f.freightId);
     const adoptSpy = jest.spyOn(media, 'adopt');
     const anchorSpy = jest.spyOn(media, 'anchorFreightTerminal');
-    dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_real' });
-    expect(adoptSpy).toHaveBeenCalledWith('med_real', d.did, { type: 'freight', id: f.freightId }, 'securement');
-    dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' });
+    const real = photoBy(d.did);
+    dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: real });
+    expect(adoptSpy).toHaveBeenCalledWith(real, d.did, { type: 'freight', id: f.freightId }, 'securement');
+    dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: photoBy(d.did) });
     expect(anchorSpy).toHaveBeenCalledWith(f.freightId);
     adoptSpy.mockRestore();
     anchorSpy.mockRestore();
@@ -7876,7 +7896,9 @@ describe('PUDO Light', () => {
     // Another actor's media (a 1×1 PNG in the dispute-evidence bin). The driver passes ITS id as the securement.
     const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
     const victim = media.upload({ ownerDid: 'did:glos:victim', kind: 'dispute', dataUrl: PNG });
-    dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: victim.mediaId });
+    // Round 31 — and the pickup is REFUSED, by name: it used to go ahead with the photo quietly left off the load.
+    expect(() => dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: victim.mediaId })).toThrow(/We do not hold that photo/);
+    expect(dispatch.listFreight({ status: 'claimed' }).some((x) => x.freightId === f.freightId)).toBe(true);
     const ref = media.get(victim.mediaId)!;
     expect(ref.kind).toBe('dispute'); // NOT re-kinded to securement
     expect(ref.link?.type).not.toBe('freight'); // NOT re-linked to the freight — the victim's evidence is untouched
@@ -7891,16 +7913,20 @@ describe('PUDO Light', () => {
     const d = coupleTipper('POD', { min: 0.8, max: 1.5 });
     const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, packaging: 'loose' });
     claimFreight(d.did, pickup, f.freightId);
-    dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_sec', reservations: '  Two sacks torn at the corner  ' });
+    dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(d.did), reservations: '  Two sacks torn at the corner  ' });
     expect(dispatch.listFreight().find((x) => x.freightId === f.freightId)?.reservations).toMatchObject({ note: 'Two sacks torn at the corner', by: d.did });
     expect(() => dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys() })).toThrow(/who received/i);
     expect(() => dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'J' })).toThrow(/who received/i);
     expect(() => dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'Joseph' })).toThrow(/photo/i);
     const adoptSpy = jest.spyOn(media, 'adopt');
-    const done = dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: ' Joseph Mwangi ', podPhotoId: 'med_pod_1', remarks: 'One sack short' });
+    // Round 31 — a name is not the driver's photo of the goods: refused, the load still on the road.
+    expect(() => dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'Joseph Mwangi', podPhotoId: 'med_pod_1' })).toThrow(/We do not hold that photo/);
+    expect(dispatch.listFreight({ status: 'in_transit' }).some((x) => x.freightId === f.freightId)).toBe(true);
+    const pod = photoBy(d.did);
+    const done = dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: ' Joseph Mwangi ', podPhotoId: pod, remarks: 'One sack short' });
     expect(done.status).toBe('delivered');
-    expect(done.proofOfDelivery).toMatchObject({ receiverName: 'Joseph Mwangi', photoRef: 'med_pod_1', remarks: 'One sack short', by: d.did });
-    expect(adoptSpy).toHaveBeenCalledWith('med_pod_1', d.did, { type: 'freight', id: f.freightId }, 'pod');
+    expect(done.proofOfDelivery).toMatchObject({ receiverName: 'Joseph Mwangi', photoRef: pod, remarks: 'One sack short', by: d.did });
+    expect(adoptSpy).toHaveBeenCalledWith(pod, d.did, { type: 'freight', id: f.freightId }, 'pod');
     adoptSpy.mockRestore();
     expect(dispatch.postedBy(d.did)).toEqual([]); // the driver posted nothing — the row below is the poster's
   });
@@ -8281,7 +8307,7 @@ describe('PUDO Light', () => {
     const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, packaging: 'loose', postedByDid: 'did:shop:p' });
     claimFreight(d.did, pickup, f.freightId);
     expect(() => dispatch.failDelivery(f.freightId, d.did, { outcome: 'absent' })).toThrow(/expected in_transit/);
-    dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_sec' });
+    dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(d.did) });
     const heard: unknown[] = [];
     events.subscribe(GlosEvent.Pudo.FreightDeliveryFailed, (e) => {
       heard.push(e.payload);
@@ -8295,7 +8321,7 @@ describe('PUDO Light', () => {
     expect(dispatch.postedBy('did:shop:p').find((r) => r.freightId === f.freightId)).toMatchObject({ attempts: [expect.objectContaining({ outcome: 'absent' })], canClaim: false });
     // A second attempt, then delivered after all.
     dispatch.failDelivery(f.freightId, d.did, { outcome: 'refused' });
-    const done = dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'Joseph', podPhotoId: 'med_pod' });
+    const done = dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'Joseph', podPhotoId: photoBy(d.did) });
     expect(done.deliveryAttempts).toHaveLength(2);
     expect(dispatch.postedBy('did:shop:p').find((r) => r.freightId === f.freightId)?.canClaim).toBe(true);
   });
@@ -8320,13 +8346,16 @@ describe('PUDO Light', () => {
     const d = coupleTipper('CL1', { min: 0.8, max: 1.5 });
     const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, packaging: 'loose', postedByDid: 'did:shop:q' });
     claimFreight(d.did, pickup, f.freightId);
-    dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_sec' });
-    dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'Joseph', podPhotoId: 'med_pod' });
+    dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(d.did) });
+    dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'Joseph', podPhotoId: photoBy(d.did) });
     expect(() => dispatch.openFreightClaim(f.freightId, 'did:shop:q', { kind: 'damaged', description: 'x' })).toThrow(/what you found/);
     const t0 = Date.now();
     expect(() => dispatch.openFreightClaim(f.freightId, 'did:shop:q', { kind: 'damaged', description: 'Three bags split open' }, t0 + 8 * 86_400_000)).toThrow(/within 7 days/);
+    // Round 31 — a photo the claimant did not send is refused, by name, and no claim is opened on it.
+    expect(() => dispatch.openFreightClaim(f.freightId, 'did:shop:q', { kind: 'damaged', description: 'Three bags split open', photoRef: photoBy(d.did) })).toThrow(/We do not hold that photo/);
+    expect(dispatch.requireFreightPublic(f.freightId).claim).toBeUndefined();
     const holdSpy = jest.spyOn(media, 'holdFreightForDispute');
-    const opened = dispatch.openFreightClaim(f.freightId, 'did:shop:q', { kind: 'damaged', description: 'Three bags split open', photoRef: 'med_claim' });
+    const opened = dispatch.openFreightClaim(f.freightId, 'did:shop:q', { kind: 'damaged', description: 'Three bags split open', photoRef: photoBy('did:shop:q') });
     expect(holdSpy).toHaveBeenCalledWith(f.freightId, expect.any(Date));
     holdSpy.mockRestore();
     // NOBODY OF OURS DECIDES IT: closed with the report the moment it was made, and told so on the wire — nothing waits.
@@ -8346,8 +8375,8 @@ describe('PUDO Light', () => {
     const billed = dispatch.listFreight().find((x) => x.freightId === g.freightId)!;
     expect(billed.paidStatus).toBe('billed');
     expect(billed.billed).toMatchObject({ coverLimit: 0 });
-    dispatch.pickupFreight(g.freightId, d2.did, { confirmed: requiredLoadKeys(g), securementPhotoId: 'med_sec' });
-    dispatch.deliverFreight(g.freightId, d2.did, { confirmed: requiredUnloadKeys(), receiverName: 'Anne', podPhotoId: 'med_pod' });
+    dispatch.pickupFreight(g.freightId, d2.did, { confirmed: requiredLoadKeys(g), securementPhotoId: photoBy(d2.did) });
+    dispatch.deliverFreight(g.freightId, d2.did, { confirmed: requiredUnloadKeys(), receiverName: 'Anne', podPhotoId: photoBy(d2.did) });
     const before = vendors.balanceOf(vendor.vendorId);
     const closed = dispatch.openFreightClaim(g.freightId, vendor.vendorId, { kind: 'short', description: 'Two boxes of tiles missing' });
     expect(closed.claim).toMatchObject({ state: 'resolved', decision: 'report_only', award: 0 });
@@ -8372,16 +8401,17 @@ describe('PUDO Light', () => {
       const d3 = coupleTipper('CL3', { min: 0.8, max: 1.5 });
       claimFreight(d3.did, pickup, h.freightId);
       expect(dispatch.listFreight().find((x) => x.freightId === h.freightId)!.billed).toMatchObject({ coverLimit: 5000 });
-      dispatch.pickupFreight(h.freightId, d3.did, { confirmed: requiredLoadKeys(h), securementPhotoId: 'med_sec' });
-      dispatch.deliverFreight(h.freightId, d3.did, { confirmed: requiredUnloadKeys(), receiverName: 'Anne', podPhotoId: 'med_pod' });
+      const [sec, pod, claimed] = [photoBy(d3.did), photoBy(d3.did), photoBy(vendor.vendorId)];
+      dispatch.pickupFreight(h.freightId, d3.did, { confirmed: requiredLoadKeys(h), securementPhotoId: sec });
+      dispatch.deliverFreight(h.freightId, d3.did, { confirmed: requiredUnloadKeys(), receiverName: 'Anne', podPhotoId: pod });
       // The cover a load was billed under is the cover on its claim: stating more afterwards changes nothing on it.
       entities.setInsurance(ke, { lane: 'dedicated', freeLimit: 9000 }, 'Amina Otieno');
       const beforeAward = vendors.balanceOf(vendor.vendorId);
-      const waiting = dispatch.openFreightClaim(h.freightId, vendor.vendorId, { kind: 'short', description: 'Two boxes of tiles missing', photoRef: 'med_claim' });
+      const waiting = dispatch.openFreightClaim(h.freightId, vendor.vendorId, { kind: 'short', description: 'Two boxes of tiles missing', photoRef: claimed });
       expect(waiting.claim).toMatchObject({ state: 'open', kind: 'short' });
       expect(dispatch.openFreightClaims().map((x) => x.freightId)).toEqual([h.freightId]);
       const row = dispatch.freightClaimRowOf(waiting, { sender: 'ClaimShipper', carrier: 'CL3' });
-      expect(row).toMatchObject({ code: h.code, coverable: true, awardCap: 5000, capBasis: 'free-limit', currency: 'KES', evidence: ['med_sec', 'med_pod', 'med_claim'], receiverName: 'Anne' });
+      expect(row).toMatchObject({ code: h.code, coverable: true, awardCap: 5000, capBasis: 'free-limit', currency: 'KES', evidence: [sec, pod, claimed], receiverName: 'Anne' });
       expect(row.carriage).toBeGreaterThan(0);
       expect(() => dispatch.resolveFreightClaim(h.freightId, { decision: 'upheld', note: 'yes' })).toThrow(/awarding something/);
       expect(() => dispatch.resolveFreightClaim(h.freightId, { decision: 'upheld', award: 5000.01, note: 'all of it' })).toThrow(/covered to 5000.00 by the company that billed it/);
@@ -8403,7 +8433,7 @@ describe('PUDO Light', () => {
     const d = coupleTipper('WD2', { min: 0.8, max: 1.5 });
     const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, packaging: 'loose' });
     claimFreight(d.did, pickup, f.freightId);
-    dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_sec' });
+    dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(d.did) });
     expect(() => dispatch.cancelFreight(f.freightId, { did: 'did:shop', role: 'shipper' }, 'too late')).toThrow(/on the road/);
     const g = dispatch.registerFreight({ description: 'Negotiated', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, packaging: 'loose', commitMode: 'negotiate', postedByDid: 'did:shop:p' });
     const p = dispatch.propose({ freightId: g.freightId, driverDid: d.did, from: pickup, price: 300 });
@@ -8803,7 +8833,7 @@ describe('PUDO Light', () => {
     corridors.addCorridor({ name: 'snooze', originZone: 'NorthTown', destZone: 'SouthTown' });
     const rider = coupleTipper('snooze', { min: 0.8, max: 1.5 });
     const bagAt = (parcelId: string) => {
-      parcels.accept({ agentDid: origin.did, parcelId, size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      parcels.accept({ agentDid: origin.did, parcelId, size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
       const bag = totes.register(origin.did);
       totes.assign(bag.code, 'SouthTown', 'SouthTown');
       mdps.fillTote(bag.code, parcelId);
@@ -8855,7 +8885,7 @@ describe('PUDO Light', () => {
     const rider = coupleTipper('find', { min: 0.8, max: 1.5 });
 
     const bagAt = (agentDid: string, parcelId: string) => {
-      parcels.accept({ agentDid, parcelId, size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      parcels.accept({ agentDid, parcelId, size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(agentDid) });
       const bag = totes.register(agentDid);
       totes.assign(bag.code, 'SouthTown', 'SouthTown');
       mdps.fillTote(bag.code, parcelId);
@@ -8884,7 +8914,7 @@ describe('PUDO Light', () => {
     const d = coupleTipper('nudge', { min: 0.8, max: 1.5 });
 
     const bagAt = (agentDid: string, parcelId: string, zone: string) => {
-      parcels.accept({ agentDid, parcelId, size: 'S', destZone: zone, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      parcels.accept({ agentDid, parcelId, size: 'S', destZone: zone, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(agentDid) });
       const bag = totes.register(agentDid);
       totes.assign(bag.code, zone, zone);
       mdps.fillTote(bag.code, parcelId);
@@ -8913,7 +8943,7 @@ describe('PUDO Light', () => {
     const origin = onboardAgent('Decline Origin', 'NorthTown', 50);
     corridors.addCorridor({ name: 'decline', originZone: 'NorthTown', destZone: 'SouthTown' });
     const d = coupleTipper('decl', { min: 0.8, max: 1.5 });
-    parcels.accept({ agentDid: origin.did, parcelId: 'DECL-1', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'DECL-1', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
     const bag = totes.register(origin.did);
     totes.assign(bag.code, 'SouthTown', 'SouthTown');
     mdps.fillTote(bag.code, 'DECL-1');
@@ -8943,7 +8973,7 @@ describe('PUDO Light', () => {
 
     // Three bags of letters. By WEIGHT all three fit many times over — that was the whole problem.
     const bags = ['A', 'B', 'C'].map((tag) => {
-      parcels.accept({ agentDid: origin.did, parcelId: `LET-${tag}`, size: 'S', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      parcels.accept({ agentDid: origin.did, parcelId: `LET-${tag}`, size: 'S', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
       const bag = mdps.openShopBag(origin.did, 'SouthTown');
       mdps.fillShopBag(bag.code, origin.did, `LET-${tag}`);
       mdps.sealShopBag(bag.code, origin.did, { acknowledgeShortShip: true, shortShipReason: 'one per bag for the test' });
@@ -9052,7 +9082,7 @@ describe('PUDO Light', () => {
     return { d, badge: drivers.get(d.did).badgeId! };
   };
   const handOff = (agent: { did: string }, badge: string, parcelId: string) => {
-    parcels.accept({ agentDid: agent.did, parcelId, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'r.jpg' } as never);
+    parcels.accept({ agentDid: agent.did, parcelId, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(agent.did) } as never);
     parcels.handover({ agentDid: agent.did, driverBadgeId: badge, parcelIds: [parcelId] } as never);
   };
 
@@ -9098,7 +9128,7 @@ describe('PUDO Light', () => {
     const origin = onboardAgent('Origin Shop', 'NorthTown', 50);
     const dest = onboardAgent('Dest Shop', 'SouthTown', 50);
     const { d, badge } = mkFleetDriver('RD3'); // corridor NorthTown → SouthTown
-    parcels.accept({ agentDid: origin.did, parcelId: 'QR-DEST', size: 'M', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'r.jpg' } as never);
+    parcels.accept({ agentDid: origin.did, parcelId: 'QR-DEST', size: 'M', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) } as never);
     parcels.handover({ agentDid: origin.did, driverBadgeId: badge, parcelIds: ['QR-DEST'] } as never);
     // The DEST shop (the one that receives the driver's late bag) can rate them — the interaction is proven by
     // the parcel it is the destination of, carried by this driver.
@@ -9108,7 +9138,7 @@ describe('PUDO Light', () => {
 
     // The fix that makes the bag path work: an On_Bus leg stamps the carrying driver's badge onto the parcel
     // (a bag-carried parcel used to keep it undefined, so the dest shop could never prove the interaction).
-    parcels.accept({ agentDid: origin.did, parcelId: 'QR-BAG', size: 'M', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'r.jpg' } as never);
+    parcels.accept({ agentDid: origin.did, parcelId: 'QR-BAG', size: 'M', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) } as never);
     parcels.setTransit('QR-BAG', 'On_Bus', badge, 'bag leg');
     expect(parcels.get('QR-BAG').driverBadgeId).toBe(badge);
   });
@@ -9270,7 +9300,7 @@ describe('PUDO Light', () => {
 
   it('serves the operator dashboard KPIs (M7 light)', () => {
     const a = onboardAgent('Dash Shop', 'NorthTown', 20);
-    parcels.accept({ agentDid: a.did, parcelId: 'QR-D', size: 'S', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'd.jpg' });
+    parcels.accept({ agentDid: a.did, parcelId: 'QR-D', size: 'S', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(a.did) });
     const d = monitor.dashboard();
     expect(d.agentsTotal).toBeGreaterThanOrEqual(1);
     expect(d.systemFloat).toBeGreaterThan(0);
@@ -9290,7 +9320,7 @@ describe('PUDO Light', () => {
     const KE = () => entities.requireForJurisdiction('KE').entityId;
     const set = (patch: Record<string, number | null>) => entities.setAmounts(KE(), patch, 'Amina Otieno');
     const row = (key: string) => entities.pricingFor(KE(), []).amounts.find((r) => r.key === key)!;
-    const cash = (a: { did: string }, id: string) => parcels.accept({ agentDid: a.did, parcelId: id, size: 'M', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'v.jpg' });
+    const cash = (a: { did: string }, id: string) => parcels.accept({ agentDid: a.did, parcelId: id, size: 'M', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(a.did) });
     const refused = (patch: Record<string, unknown>): string => {
       try {
         entities.setAmounts(KE(), patch as never, 'Amina Otieno');
@@ -9381,7 +9411,7 @@ describe('PUDO Light', () => {
       set({ wholesale: 200 });
       cash(a, 'QR-AM-2');
       expect(agents.balance(a.did)!).toBeCloseTo(before - 360, 2);
-      parcels.void('QR-AM-1', a.did, 'torn.jpg');
+      parcels.void('QR-AM-1', a.did, photoBy(a.did));
       expect(agents.balance(a.did)!).toBeCloseTo(before - 200, 2); // 160 came back; the 200 parcel stands
       expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
     });

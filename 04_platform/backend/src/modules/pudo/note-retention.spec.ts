@@ -44,7 +44,7 @@ describe('how long we keep a consignment note', () => {
   const managers = { get: () => ({ jurisdiction: 'KE' }), tradingBlocks: () => [], assertMayTakeWork: () => undefined } as unknown as FleetManagerService;
   const drivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
   const presence = { can: () => true } as unknown as PresenceService;
-  const media = { adopt: () => undefined, anchorFreightTerminal: () => undefined, holdFreightForDispute: () => undefined } as unknown as MediaService;
+  const media = { adopt: () => undefined, requireHeld: () => undefined, anchorFreightTerminal: () => undefined, holdFreightForDispute: () => undefined } as unknown as MediaService;
   const agents = { get: () => ({ shopName: 'Mama Sarah Shop', physicalAddress: '12 Ngong Road', country: 'KE', did: SHIPPER }) } as unknown as AgentService;
   const vendors = { has: () => false, get: () => ({}) } as unknown as VendorService;
   const proof = { receiverName: 'Joseph at the gate', photoRef: 'med_pod', confirmed: requiredUnloadKeys() };

@@ -78,8 +78,8 @@ async function uploadDoc(token, kind, sort, seed) {
  * Round 30 — the photo of a store order's contents, uploaded by the store as its own. The order door makes a store's
  * order only on a photo we hold, for that parcel alone, so each order uploads its own. Undefined when it cannot.
  */
-async function uploadContents(token, seed) {
-  const r = await req('POST', '/v1/sbg/media', { token, body: { kind: 'content', dataUrl: contentsDataUrl(seed) } });
+async function uploadContents(token, seed, kind = 'content') {
+  const r = await req('POST', '/v1/sbg/media', { token, body: { kind, dataUrl: contentsDataUrl(seed) } });
   if (!r.ok || !r.data?.mediaId) return undefined;
   return r.data.mediaId;
 }
@@ -487,6 +487,8 @@ const run = async () => {
   /* ------------------------------------------------------------ parcels --- */
   const accept = async (n, opts = {}) => {
     const id = `DEMO-${stamp}-${n}`;
+    // Round 31 — the shop's own photo of the parcel it takes in, uploaded first: a name is refused now.
+    const dropoffPhotoRef = await uploadContents(tokA1, 20 + n, 'dropoff');
     const p = need(
       await req('POST', '/v1/sbg/parcels/accept', {
         token: tokA1,
@@ -498,7 +500,7 @@ const run = async () => {
           destPudoDid: a2.did,
           senderMobile: '+254700100100',
           receiverMobile: '+254700200200',
-          dropoffPhotoRef: `${id}-dropoff.jpg`,
+          dropoffPhotoRef,
         },
       }),
       `accept ${id}`,
@@ -744,7 +746,7 @@ const run = async () => {
     if (voided < 4 && i % 10 === 6) {
       const v = await req('POST', `/v1/sbg/parcels/${encodeURIComponent(h.parcelId)}/void`, {
         token: tokA1,
-        body: { agentDid: a1.did, voidedPhotoRef: `${h.parcelId}-void.jpg` },
+        body: { agentDid: a1.did, voidedPhotoRef: await uploadDoc(tokA1, 'dropoff', 'pod', 40 + i) },
       });
       if (v.ok) {
         voided++;

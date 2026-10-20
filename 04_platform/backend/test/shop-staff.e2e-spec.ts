@@ -4,6 +4,7 @@ import { ModulesContainer } from '@nestjs/core';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { shopPhotoOver } from './content-photo';
 import { AT_THE_COUNTER_KEY } from '../src/foundation/auth/at-the-counter';
 import { COUNTER_ACTS } from '../src/modules/pudo/shop-staff.service';
 
@@ -64,9 +65,9 @@ describe('the people at a shop’s counter, over the wire', () => {
     return bearer(enrolled.body.token.access_token as string);
   }
 
-  const take = (shop: string, as: Record<string, string>) => {
+  const take = async (shop: string, as: Record<string, string>) => {
     const parcelId = `KAUNTA-${digits()}`;
-    return http().post('/v1/sbg/parcels/accept').set(as).send({ agentDid: shop, parcelId, size: 'S', destZone: 'FarTown', senderMobile: '+254700', receiverMobile: '+254711', dropoffPhotoRef: 'd.jpg' }).then((r) => ({ r, parcelId }));
+    return http().post('/v1/sbg/parcels/accept').set(as).send({ agentDid: shop, parcelId, size: 'S', destZone: 'FarTown', senderMobile: '+254700', receiverMobile: '+254711', dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), shop) }).then((r) => ({ r, parcelId }));
   };
 
   it('is added by the owner, says yes from its own sign-in, works the counter under its own name — and is out at once', async () => {

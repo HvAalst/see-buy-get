@@ -65,6 +65,7 @@ import { clockAt } from './fleet-clock';
 import { ROUTER as ROUTER_TOKEN, type Router } from './router';
 import { requiredLoadKeys, requiredUnloadKeys } from './heavy-cargo';
 import { GlosError } from '../../foundation/http/glos-error';
+import { evidencePhotos } from '../../../test/content-photo';
 
 const DAY = 86_400_000;
 
@@ -90,6 +91,8 @@ describe('a fleet’s plan for a day', () => {
     for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
   };
 
+  /** Round 31 — an evidence photo we hold, uploaded by the party the act checks. */
+  let photoBy: (ownerDid: string) => string;
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
         providers: [
@@ -107,6 +110,7 @@ describe('a fleet’s plan for a day', () => {
           HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
         ],
       }).compile();
+      photoBy = evidencePhotos(moduleRef);
     moduleRef.get(EntityService).seed();
     moduleRef.get(FxService).seed();
     dispatch = moduleRef.get(DispatchService);
@@ -860,8 +864,8 @@ describe('a fleet’s plan for a day', () => {
     }
     const carry = (freightId: string, driverDid: string) => {
       const f = dispatch.listFreight().find((x) => x.freightId === freightId)!;
-      dispatch.pickupFreight(freightId, driverDid, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_test' });
-      dispatch.deliverFreight(freightId, driverDid, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' });
+      dispatch.pickupFreight(freightId, driverDid, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(driverDid) });
+      dispatch.deliverFreight(freightId, driverDid, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: photoBy(driverDid) });
     };
 
     it('gives a truck its first trip when its driver starts a shift in it, and the next when that one is handed over', async () => {

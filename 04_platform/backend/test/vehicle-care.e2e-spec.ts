@@ -2,6 +2,8 @@ import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { MediaService } from '../src/modules/pudo/media.service';
+import { CONTENTS_PNG } from './content-photo';
 import { VehicleService } from '../src/modules/pudo/vehicle.service';
 import { FleetManagerService } from '../src/modules/pudo/fleet-manager.service';
 import { VehicleCareService } from '../src/modules/pudo/vehicle-care.service';
@@ -236,7 +238,7 @@ describe('a vehicle’s upkeep, over the wire', () => {
       contract: { contractId: 'ctr_brk', fleetDid: x.fleetDid, fleetName: 'Check Fleet', shipperName: 'Wanjiku Builders' }, deliverOn: new Date().toISOString().slice(0, 10), orderRef: `BRK-${digits()}`,
     } as never);
     dispatch.assign(load.freightId, x.did, { managerDid: x.fleetDid, name: 'Office' });
-    dispatch.pickupFreight(load.freightId, x.did, { confirmed: requiredLoadKeys(dispatch.requireFreightPublic(load.freightId)), securementPhotoId: 'med_test' });
+    dispatch.pickupFreight(load.freightId, x.did, { confirmed: requiredLoadKeys(dispatch.requireFreightPublic(load.freightId)), securementPhotoId: app.get(MediaService).upload({ ownerDid: x.did, kind: 'securement', dataUrl: CONTENTS_PNG }).mediaId });
     // Somebody else's driver may not report for this one; a position is both halves or neither.
     expect((await report(x.did, other.token, { cause: 'engine', note: 'Steam' })).status).toBe(403);
     expect((await report(x.did, x.token, { cause: 'engine', note: 'Steam', lat: 200, lng: 36.8 })).status).toBe(400);
@@ -285,7 +287,7 @@ describe('a vehicle’s upkeep, over the wire', () => {
       contract: { contractId: 'ctr_tko', fleetDid: x.fleetDid, fleetName: 'Check Fleet', shipperName: 'Wanjiku Builders' }, deliverOn: new Date().toISOString().slice(0, 10), orderRef: `TKO-${digits()}`,
     } as never);
     dispatch.assign(load.freightId, x.did, { managerDid: x.fleetDid, name: 'Office' });
-    dispatch.pickupFreight(load.freightId, x.did, { confirmed: requiredLoadKeys(dispatch.requireFreightPublic(load.freightId)), securementPhotoId: 'med_test' });
+    dispatch.pickupFreight(load.freightId, x.did, { confirmed: requiredLoadKeys(dispatch.requireFreightPublic(load.freightId)), securementPhotoId: app.get(MediaService).upload({ ownerDid: x.did, kind: 'securement', dataUrl: CONTENTS_PNG }).mediaId });
     // Made with no signal twenty minutes ago and sent now: dated when it happened, the arrival kept beside it.
     const seen = new Date(Date.now() - 20 * 60_000).toISOString();
     const broke = await http().post(`/v1/sbg/fleet/drivers/${x.did}/breakdown`).set(bearer(x.token)).send({ cause: 'engine', note: 'Head gasket', observedAt: seen }).expect(201);

@@ -65,6 +65,7 @@ import { FleetRosterService } from './fleet-roster.service';
 import { SiteService } from './site.service';
 import { CarriageContractService } from './carriage-contract.service';
 import { shipperWhy } from './dispatch.types';
+import { evidencePhotos } from '../../../test/content-photo';
 const DAY = 86_400_000;
 
 /**
@@ -87,6 +88,8 @@ describe('a fleet’s sites', () => {
   let entities: EntityService;
   let seq = 0;
 
+  /** Round 31 — an evidence photo we hold, uploaded by the party the act checks. */
+  let photoBy: (ownerDid: string) => string;
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
         providers: [
@@ -104,6 +107,7 @@ describe('a fleet’s sites', () => {
           HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
         ],
       }).compile();
+      photoBy = evidencePhotos(moduleRef);
     moduleRef.get(EntityService).seed();
     moduleRef.get(FxService).seed();
     vehicles = moduleRef.get(VehicleService);
@@ -509,8 +513,8 @@ describe('a fleet’s sites', () => {
       care.recordReading(out.vehicleId, 10_000, { by: 'Amos', source: 'shift_start' });
       const load = anOrder(f, dayPlus(0), NAIROBI);
       dispatch.assign(load.freightId, amos.did, { managerDid: f.did, name: 'Amina' });
-      dispatch.pickupFreight(load.freightId, amos.did, { confirmed: requiredLoadKeys(dispatch.requireFreightPublic(load.freightId)), securementPhotoId: 'med_test' });
-      dispatch.deliverFreight(load.freightId, amos.did, { confirmed: requiredUnloadKeys(), receiverName: 'Site foreman', podPhotoId: 'med_pod' });
+      dispatch.pickupFreight(load.freightId, amos.did, { confirmed: requiredLoadKeys(dispatch.requireFreightPublic(load.freightId)), securementPhotoId: photoBy(amos.did) });
+      dispatch.deliverFreight(load.freightId, amos.did, { confirmed: requiredUnloadKeys(), receiverName: 'Site foreman', podPhotoId: photoBy(amos.did) });
       care.recordReading(out.vehicleId, 10_180, { by: 'Amos', source: 'shift_end' }, Date.now() + 1000);
       fleet.endSession(amos.did);
       // One reading alone says nothing about km driven.

@@ -71,6 +71,7 @@ import type { ImportService } from './import.service';
 import type { FleetDriver } from './fleet.types';
 import { FleetRosterService } from './fleet-roster.service';
 import { clockAt } from './fleet-clock';
+import { evidencePhotos } from '../../../test/content-photo';
 
 const DAY = 86_400_000;
 
@@ -111,6 +112,8 @@ describe('a driver changing fleet', () => {
   let moduleOtp: () => OtpService;
   let accounts: () => AccountService;
 
+  /** Round 31 — an evidence photo we hold, uploaded by the party the act checks. */
+  let photoBy: (ownerDid: string) => string;
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -130,6 +133,7 @@ describe('a driver changing fleet', () => {
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
       ],
     }).compile();
+    photoBy = evidencePhotos(moduleRef);
     entities = moduleRef.get(EntityService);
     entities.seed();
     moduleRef.get(FxService).seed();
@@ -233,8 +237,8 @@ describe('a driver changing fleet', () => {
     const f = dispatch.registerFreight({ description: 'Machinery', pickupLocation: at, pickupLabel: 'Depot', destLabel: 'Site', destLocation: at, weightKg: 200, packaging: 'palletised', shipperDid: vendor.vendorId });
     fleet.couple(driverDid, truckId);
     dispatch.assign(f.freightId, driverDid, { managerDid });
-    dispatch.pickupFreight(f.freightId, driverDid, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_test' });
-    dispatch.deliverFreight(f.freightId, driverDid, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' });
+    dispatch.pickupFreight(f.freightId, driverDid, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(driverDid) });
+    dispatch.deliverFreight(f.freightId, driverDid, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: photoBy(driverDid) });
     fleet.uncouple(driverDid);
     return { freight: dispatch.listFreight().find((x) => x.freightId === f.freightId)!, vendor };
   }
@@ -862,7 +866,7 @@ describe('a driver changing fleet', () => {
       agents.decideKyc(shop.did, true);
       gate.topUp(shop.did, 50);
       const parcelId = `QR-LV-${seq}`;
-      parcels.accept({ agentDid: shop.did, parcelId, size: 'M', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'a.jpg' } as never);
+      parcels.accept({ agentDid: shop.did, parcelId, size: 'M', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) } as never);
       const p = parcels.get(parcelId);
       p.status = 'On_Bus';
       p.driverBadgeId = badgeId;
@@ -1141,8 +1145,8 @@ describe('a driver changing fleet', () => {
       expect(f.postedByName).toBe('Abebe Kebede');
       fleet.couple(d.driver.did, d.truck.vehicleId);
       dispatch.assign(f.freightId, d.driver.did, { managerDid: kilima.did });
-      dispatch.pickupFreight(f.freightId, d.driver.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_test' });
-      dispatch.deliverFreight(f.freightId, d.driver.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' });
+      dispatch.pickupFreight(f.freightId, d.driver.did, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(d.driver.did) });
+      dispatch.deliverFreight(f.freightId, d.driver.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: photoBy(d.driver.did) });
       fleet.uncouple(d.driver.did);
 
       const done = dispatch.listFreight().find((x) => x.freightId === f.freightId)!;

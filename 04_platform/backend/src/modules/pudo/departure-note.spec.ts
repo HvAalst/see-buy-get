@@ -40,6 +40,8 @@ describe('a run’s booking as a contract of carriage', () => {
   const adoptions: Array<{ mediaId: string; role: string }> = [];
   const media = {
     adopt: (mediaId: string, _by: string, _s: unknown, role: string) => void adoptions.push({ mediaId, role }),
+    // Round 31 — every photo is held here: the check itself is the media service's, tested there and over the wire.
+    requireHeld: () => undefined,
     anchorFreightTerminal: () => undefined,
     holdFreightForDispute: () => undefined,
   } as unknown as MediaService;

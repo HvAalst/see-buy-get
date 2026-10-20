@@ -61,6 +61,7 @@ import { ConsignmentNoteService } from './consignment-note.service';
 import { DepartureNoteService } from './departure-note.service';
 import { requiredLoadKeys, requiredUnloadKeys } from './heavy-cargo';
 import { GlosEvent } from '../../foundation/events/glos-events';
+import { evidencePhotos } from '../../../test/content-photo';
 
 const DAY = 86_400_000;
 
@@ -85,6 +86,8 @@ describe('a vehicle’s upkeep', () => {
   let media: MediaService;
   let seq = 0;
 
+  /** Round 31 — an evidence photo we hold, uploaded by the party the act checks. */
+  let photoBy: (ownerDid: string) => string;
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
         providers: [
@@ -102,6 +105,7 @@ describe('a vehicle’s upkeep', () => {
           HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
         ],
       }).compile();
+      photoBy = evidencePhotos(moduleRef);
     moduleRef.get(EntityService).seed();
     moduleRef.get(FxService).seed();
     vehicles = moduleRef.get(VehicleService);
@@ -499,7 +503,7 @@ describe('a vehicle’s upkeep', () => {
     }
     const onTruck = (f: { did: string }, freightId: string, driverDid: string, pickUp: boolean) => {
       dispatch.assign(freightId, driverDid, { managerDid: f.did, name: 'Amina' });
-      if (pickUp) dispatch.pickupFreight(freightId, driverDid, { confirmed: requiredLoadKeys(dispatch.requireFreightPublic(freightId)), securementPhotoId: 'med_test' });
+      if (pickUp) dispatch.pickupFreight(freightId, driverDid, { confirmed: requiredLoadKeys(dispatch.requireFreightPublic(freightId)), securementPhotoId: photoBy(driverDid) });
     };
 
     it('is dated when it happened when it was kept on a phone with no signal — and says when the office heard', () => {
@@ -599,7 +603,7 @@ describe('a vehicle’s upkeep', () => {
       expect(() => care.resolveBreakdown(truck.vehicleId, b.breakdownId, { outcome: 'back_on_road', note: 'Again' }, 'Amina')).toThrow('That breakdown has already been resolved');
       // A load delivered since is nobody's news any more.
       const again = breakdowns.report(truck.vehicleId, who, { cause: 'engine', note: 'Overheating again' });
-      dispatch.deliverFreight(load.freightId, amos.did, { confirmed: requiredUnloadKeys(), receiverName: 'Site foreman', podPhotoId: 'med_pod' });
+      dispatch.deliverFreight(load.freightId, amos.did, { confirmed: requiredUnloadKeys(), receiverName: 'Site foreman', podPhotoId: photoBy(amos.did) });
       care.resolveBreakdown(truck.vehicleId, again.breakdownId, { outcome: 'back_on_road', note: 'Radiator topped up' }, 'Amina');
       expect(ended[1].tell).toEqual([]);
     });

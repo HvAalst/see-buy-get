@@ -48,7 +48,7 @@ import { LedgerService } from '../../foundation/ledger/ledger.service';
 import { InMemoryLedgerAdapter } from '../../foundation/ledger/in-memory-ledger.adapter';
 import { LEDGER_ADAPTER } from '../../foundation/ledger/ledger.types';
 import { EventBus } from '../../foundation/events/event-bus.service';
-import { contentPhotos } from '../../../test/content-photo';
+import { contentPhotos, evidencePhotos } from '../../../test/content-photo';
 
 /**
  * Tax — the layer that was declared and never computed.
@@ -76,6 +76,8 @@ describe('tax', () => {
 
   /** Round 30 — a store's real photo of the contents, as the order door requires: one we hold, its own. */
   let photoOf: (vendorId: string) => string;
+  /** Round 31 — an evidence photo we hold, uploaded by the party the act checks. */
+  let photoBy: (ownerDid: string) => string;
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -92,6 +94,7 @@ describe('tax', () => {
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
       ],
     }).compile();
+    photoBy = evidencePhotos(moduleRef);
     photoOf = contentPhotos(moduleRef);
     entities = moduleRef.get(EntityService);
     entities.seed(); // compile() runs no lifecycle hooks — the sisters are seeded by hand, as at boot
@@ -244,7 +247,7 @@ describe('tax', () => {
       expect(parcel.shipmentTax).toBe(quote.locked.tax);
       expect(quote.locked.tax).toBeGreaterThan(0);
       const floatBefore = agents.balance(from.did) ?? 0;
-      parcels.intakeConsumerSend(parcel.parcelId, from.did, 'dropoff.jpg');
+      parcels.intakeConsumerSend(parcel.parcelId, from.did, photoBy(from.did));
       // The shop remitted the whole cash it took; the company owes the authority exactly the tax inside it.
       expect(Math.round((floatBefore - (agents.balance(from.did) ?? 0) + (parcel.intakeLabour ?? 0)) * 100) / 100).toBe(quote.locked.gross);
       expect(owedToTheAuthority()).toBe(quote.locked.tax);
@@ -526,7 +529,7 @@ describe('tax', () => {
         quote: routing.quoteShipment(from.did, to.did),
       });
       toShelf(parcel.parcelId, from, to);
-      parcels.dispute(parcel.parcelId, to.did, 'crushed', 'proof.jpg');
+      parcels.dispute(parcel.parcelId, to.did, 'crushed', photoBy(to.did));
 
       expect(() => parcels.resolveDispute(parcel.parcelId, { decision: 'upheld', award: 6001, note: 'over' })).toThrow(/covered to 6000.00 \(declared\)/);
       const ok = parcels.resolveDispute(parcel.parcelId, { decision: 'upheld', award: 6000, note: 'total loss, declared value paid' });
@@ -554,7 +557,7 @@ describe('tax', () => {
       });
       expect(parcel.coverLimit).toBe(0);
       toShelf(parcel.parcelId, from, to);
-      const reported = parcels.dispute(parcel.parcelId, to.did, 'crushed', 'proof.jpg');
+      const reported = parcels.dispute(parcel.parcelId, to.did, 'crushed', photoBy(to.did));
       expect(reported.status).toBe('Ready_For_Pickup');
       expect(reported.dispute).toMatchObject({ state: 'resolved', decision: 'report_only', award: 0 });
       expect(() => parcels.resolveDispute(parcel.parcelId, { decision: 'upheld', award: 40, note: 'goodwill' })).toThrow(/expected Disputed/);

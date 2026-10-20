@@ -1,3 +1,4 @@
+import { photoOver } from './content-photo';
 import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
@@ -484,7 +485,7 @@ describe('the first day of a new installation, as it would be live', () => {
     const sent = texts.length;
     const taken = await must(
       // Timed at the counter by the shop's app: the pilot's take-in time (step 12).
-      http().post('/v1/sbg/parcels/accept').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, parcelId: 'QR-FIRST-0001', size: 'M', destZone: 'Westlands', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: 'dropoff.jpg', takeInSeconds: 24 }),
+      http().post('/v1/sbg/parcels/accept').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, parcelId: 'QR-FIRST-0001', size: 'M', destZone: 'Westlands', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: await photoOver(app.getHttpServer(), bearer(mamaSarah.token)), takeInSeconds: 24 }),
     );
     expect(taken).toMatchObject({ parcelId: 'QR-FIRST-0001', originZone: 'Nairobi CBD', destZone: 'Westlands', collectingEntityId: kenya, takeInPromise: 'ours' });
     // The code that will release it is given to the SENDER, at the counter, and to nobody else.
@@ -508,13 +509,13 @@ describe('the first day of a new installation, as it would be live', () => {
     expect(JSON.stringify(held)).not.toContain(code);
     // A wrong code leaves it on the shelf; the right one hands it over.
     const wrong = code === '0000' ? '1111' : '0000';
-    const refused = await http().post('/v1/sbg/parcels/QR-FIRST-0001/pickup').set(bearer(riverside.token)).send({ agentDid: riverside.did, otp: wrong, deliveredPhotoRef: 'handed.jpg' });
+    const refused = await http().post('/v1/sbg/parcels/QR-FIRST-0001/pickup').set(bearer(riverside.token)).send({ agentDid: riverside.did, otp: wrong, deliveredPhotoRef: await photoOver(app.getHttpServer(), bearer(riverside.token)) });
     expect(refused.status).toBeGreaterThanOrEqual(400);
     expect((await must(http().get('/v1/sbg/parcels/QR-FIRST-0001').set(bearer(riverside.token)), 200)).status).toBe('Ready_For_Pickup');
     // Not by another shop, even with the right code in hand: it is on Riverside's shelf.
-    const elsewhere = await http().post('/v1/sbg/parcels/QR-FIRST-0001/pickup').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, otp: code, deliveredPhotoRef: 'handed.jpg' });
+    const elsewhere = await http().post('/v1/sbg/parcels/QR-FIRST-0001/pickup').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, otp: code, deliveredPhotoRef: await photoOver(app.getHttpServer(), bearer(mamaSarah.token)) });
     expect([elsewhere.status, elsewhere.body.code]).toEqual([403, 'WRONG_PUDO']);
-    await must(http().post('/v1/sbg/parcels/QR-FIRST-0001/pickup').set(bearer(riverside.token)).send({ agentDid: riverside.did, otp: code, deliveredPhotoRef: 'handed.jpg' }));
+    await must(http().post('/v1/sbg/parcels/QR-FIRST-0001/pickup').set(bearer(riverside.token)).send({ agentDid: riverside.did, otp: code, deliveredPhotoRef: await photoOver(app.getHttpServer(), bearer(riverside.token)) }));
     expect((await must(http().get('/v1/sbg/parcels/QR-FIRST-0001').set(bearer(riverside.token)), 200)).status).toBe('Delivered');
 
     // NOBODY WAS TEXTED about the parcel: on a live server a text carries a sign-in code and nothing else. A receiver
@@ -551,7 +552,7 @@ describe('the first day of a new installation, as it would be live', () => {
   /** A parcel from Mama Sarah's counter to Riverside's shelf, carried by Amos. Returns the code the SENDER was given. */
   const toRiverside = async (parcelId: string, sender: string, receiver: string): Promise<{ code: string; slot: string }> => {
     const taken = await must(
-      http().post('/v1/sbg/parcels/accept').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, parcelId, size: 'M', destZone: 'Westlands', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: 'dropoff.jpg' }),
+      http().post('/v1/sbg/parcels/accept').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, parcelId, size: 'M', destZone: 'Westlands', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: await photoOver(app.getHttpServer(), bearer(mamaSarah.token)) }),
     );
     await must(http().post('/v1/sbg/parcels/handover').set(bearer(mamaSarah.token)).send({ agentDid: mamaSarah.did, driverBadgeId: await passOf(amos), parcelIds: [parcelId] }));
     const arrived = await must(http().post(`/v1/sbg/parcels/${parcelId}/arrive`).set(bearer(riverside.token)).send({ destAgentDid: riverside.did }));
@@ -596,7 +597,7 @@ describe('the first day of a new installation, as it would be live', () => {
     expect(await shelfOf(riverside)).toMatchObject({ capacity: 25, available: 23 });
 
     // COLLECTED: its slot is free again, and the next parcel to arrive is put there — not on top of the one still waiting.
-    await must(http().post('/v1/sbg/parcels/QR-SHELF-0001/pickup').set(bearer(riverside.token)).send({ agentDid: riverside.did, otp: first.code, deliveredPhotoRef: 'handed.jpg' }));
+    await must(http().post('/v1/sbg/parcels/QR-SHELF-0001/pickup').set(bearer(riverside.token)).send({ agentDid: riverside.did, otp: first.code, deliveredPhotoRef: await photoOver(app.getHttpServer(), bearer(riverside.token)) }));
     expect(standing((await shelfOf(riverside)).grid)).toEqual({ [second.slot]: 'QR-SHELF-0002' });
     const third = await toRiverside('QR-SHELF-0003', '+254722000015', '+254722000016');
     expect(third.slot).toBe(first.slot);
@@ -638,7 +639,7 @@ describe('the first day of a new installation, as it would be live', () => {
     // THE SHOP IS TOLD, with the slot; and the parcel is handed over like any other.
     const told = (await inboxOf(riverside.token)).find((n) => n.kind === 'claim_decided');
     expect(told).toMatchObject({ title: 'The damage claim report for parcel QR-SHELF-0002 is made', body: `The receiver has it in their app. It is on your shelf at ${second.slot}, and can be handed over as any parcel.` });
-    await must(http().post('/v1/sbg/parcels/QR-SHELF-0002/pickup').set(bearer(riverside.token)).send({ agentDid: riverside.did, otp: second.code, deliveredPhotoRef: 'handed.jpg' }));
+    await must(http().post('/v1/sbg/parcels/QR-SHELF-0002/pickup').set(bearer(riverside.token)).send({ agentDid: riverside.did, otp: second.code, deliveredPhotoRef: await photoOver(app.getHttpServer(), bearer(riverside.token)) }));
     expect(standing((await shelfOf(riverside)).grid)).toEqual({ [first.slot]: 'QR-SHELF-0003' });
     // What happened afterwards is not in the report: it is as it was made.
     expect((await must(http().get('/v1/sbg/parcels/QR-SHELF-0002/damage-report').set(bearer(riverside.token)), 200)).sha256).toBe(report.sha256);
@@ -667,7 +668,7 @@ describe('the first day of a new installation, as it would be live', () => {
     await must(http().get(itsReport).set(bearer(receiver)), 404);
     await must(http().get(itsReport).set(bearer(amina)), 404);
 
-    await must(http().post('/v1/sbg/parcels/QR-BROKEN-0001/pickup').set(bearer(riverside.token)).send({ agentDid: riverside.did, otp: code, deliveredPhotoRef: 'handed.jpg' }));
+    await must(http().post('/v1/sbg/parcels/QR-BROKEN-0001/pickup').set(bearer(riverside.token)).send({ agentDid: riverside.did, otp: code, deliveredPhotoRef: await photoOver(app.getHttpServer(), bearer(riverside.token)) }));
     // REPORTED, from the receiver's own app, with a photograph. Not by the sender, whose parcel it also is.
     await must(http().post(`${mine}/dispute`).set(bearer(sender)).send({ reason: 'Broken', photoRef: photo }), 404);
     const reported = await must(http().post(`${mine}/dispute`).set(bearer(receiver)).send({ reason: 'The screen is cracked from corner to corner', photoRef: photo }));

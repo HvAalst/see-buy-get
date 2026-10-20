@@ -15,6 +15,7 @@ import { LEDGER_ADAPTER } from '../../foundation/ledger/ledger.types';
 import { InMemoryLedgerAdapter } from '../../foundation/ledger/in-memory-ledger.adapter';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { pdfDataUrl } from '../../foundation/entity/company.test-util';
+import { evidencePhotos } from '../../../test/content-photo';
 
 /**
  * CL2a — the importer's papers, and the agent who clears them.
@@ -64,6 +65,8 @@ describe('an import consignment, its papers, and the agent who clears them', () 
       'Hans',
     );
 
+  /** Round 31 — an evidence photo we hold, uploaded by the party the act checks. */
+  let photoBy: (ownerDid: string) => string;
   beforeEach(async () => {
     minted = [];
     pickups = {};
@@ -120,6 +123,7 @@ describe('an import consignment, its papers, and the agent who clears them', () 
         },
       ],
     }).compile();
+    photoBy = evidencePhotos(moduleRef);
     entities = moduleRef.get(EntityService);
     entities.seed();
     documents = moduleRef.get(CompanyDocumentService);
@@ -1149,13 +1153,17 @@ describe('an import consignment, its papers, and the agent who clears them', () 
         expect(out.accounts.find((a) => a.by === 'Hans')!.stance).toBe('damaged');
       });
 
-      it('only cites photographs it could adopt', () => {
+      it('refuses a photograph it does not hold, or not the party’s own — by name, recording nothing (round 31)', () => {
         const one = gatedOut();
-        const detail = imports.recordInterchange(one.importId, importerId, 'did:importer', { side: 'out', stance: 'damaged', photoIds: ['med_not_mine'] }, 'Hans');
-        const mine = detail.box!.interchange.find((g) => g.side === 'out')!.accounts.find((a) => a.by === 'Hans')!;
-        // `adopt` refuses a media the caller does not own, and a ref that cannot be adopted is DROPPED —
-        // a record that names evidence nobody can produce is the "2 photos, none shown" defect again.
-        expect(mine.photoRefs).toEqual([]);
+        // It used to be dropped quietly, the party believing it had sent it. A record that names evidence nobody can
+        // produce is the "2 photos, none shown" defect; one that leaves out what the party sent is the same one, unsaid.
+        const say = (photoIds: string[]) => imports.recordInterchange(one.importId, importerId, 'did:importer', { side: 'out', stance: 'damaged', photoIds }, 'Hans');
+        expect(() => say(['med_not_ours'])).toThrow(/We do not hold that photo/);
+        expect(() => say([photoBy('did:importer'), photoBy('did:somebody-else')])).toThrow(/We do not hold that photo/);
+        const accounts = (d: ReturnType<typeof say>) => d.box!.interchange.find((g) => g.side === 'out')?.accounts.filter((a) => a.by === 'Hans') ?? [];
+        const kept = say([photoBy('did:importer')]);
+        expect(accounts(kept)).toHaveLength(1); // the refused two wrote nothing
+        expect(accounts(kept)[0].photoRefs).toHaveLength(1);
       });
 
       /**

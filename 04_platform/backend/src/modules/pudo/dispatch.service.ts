@@ -2893,6 +2893,8 @@ export class DispatchService {
     if (missing.length) throw new GlosError('SAFETY_CHECK_INCOMPLETE', `Complete the load-safety checklist before pickup — ${missing.length} item(s) left`);
     const securementPhotoId = check?.securementPhotoId;
     if (!securementPhotoId) throw new GlosError('SECUREMENT_PHOTO_REQUIRED', 'Attach a photo of the secured load before pickup');
+    // Round 31 — the driver's own photo of this load: refused before the goods are taken over, not dropped after.
+    this.media.requireHeld(securementPhotoId, driverDid, { type: 'freight', id: f.freightId }, 'securementPhotoId');
     // Round 15 — each seal the shipper wrote, read off the door: a number that is not the one written and the load does
     // not leave. Asked before anything changes; kept once the goods are taken over.
     const keepSeals = this.seals?.checkAtPickup(f, driverDid ?? '', check?.seals);
@@ -2946,6 +2948,7 @@ export class DispatchService {
     if (receiverName.length < 2) throw new GlosError('RECEIVER_REQUIRED', 'Record who received the goods before marking the load delivered');
     const podPhotoId = check?.podPhotoId;
     if (!podPhotoId) throw new GlosError('DELIVERY_PHOTO_REQUIRED', 'Attach a photo of the goods as delivered');
+    this.media.requireHeld(podPhotoId, driverDid, { type: 'freight', id: f.freightId }, 'podPhotoId'); // round 31
     // Round 15 — a load that has had a seal: the receiver looks at the door with the driver.
     const keepAtDoor = this.seals?.checkAtDelivery(f, driverDid ?? '', check?.sealsAtDelivery);
     // Round 22 — dated when the goods were handed over, by the phone, within limits — never before the pickup, a step
@@ -3026,6 +3029,7 @@ export class DispatchService {
     if (description.length < 3) throw new GlosError('FIELD_REQUIRED', 'Say what you found — the operator deciding this has only your words and the photos');
     const deliveredAt = f.deliveredAt ? new Date(f.deliveredAt).getTime() : now;
     if (now - deliveredAt > FREIGHT_CLAIM_WINDOW_DAYS * 86_400_000) throw new GlosError('WINDOW_EXPIRED', `A claim is made within ${FREIGHT_CLAIM_WINDOW_DAYS} days of delivery`);
+    if (input.photoRef) this.media.requireHeld(input.photoRef, byDid, { type: 'freight', id: f.freightId }); // round 31
     const at = new Date(now).toISOString();
     f.claim = { state: 'open', kind: input.kind, description: description.slice(0, 1000), ...(input.photoRef ? { photoRef: input.photoRef } : {}), raisedBy: byDid, raisedAt: at };
     if (input.photoRef) this.media.adopt(input.photoRef, byDid, { type: 'freight', id: f.freightId }, 'dispute');

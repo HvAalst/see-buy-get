@@ -96,6 +96,8 @@ describe('delivering a consignment note to your own storage', () => {
     const presence = { can: () => true } as unknown as PresenceService;
     const media = {
       adopt: () => undefined,
+      // Round 31 — every photo is held here: the check itself is the media service's, tested there and over the wire.
+      requireHeld: () => undefined,
       anchorFreightTerminal: () => undefined,
       holdFreightForDispute: () => undefined,
       get: () => undefined,

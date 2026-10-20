@@ -14,6 +14,8 @@ const adopted = () =>
     adopt: (mediaId: string, by: string, _subject: unknown, role: string) => {
       adoptions.push({ mediaId, by, role });
     },
+    // Round 31 — every photo is held here: the check itself is the media service's, tested there and over the wire.
+    requireHeld: () => undefined,
     // Retention: a run now starts and holds its evidence clock the way the board has since S33.
     anchorFreightTerminal: (id: string) => void anchored.push(id),
     holdFreightForDispute: (id: string) => void held.push(id),

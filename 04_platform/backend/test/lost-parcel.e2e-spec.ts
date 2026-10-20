@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { shopPhotoOver } from './content-photo';
 import { FlagCaseService } from '../src/modules/pudo/flag-case.service';
 import { ParcelService } from '../src/modules/pudo/parcel.service';
 
@@ -65,7 +66,7 @@ describe('a lost parcel, over the wire', () => {
 
   async function aParcelTakenIn(shop: { did: string; owner: Record<string, string> }, senderMobile: string): Promise<string> {
     const parcelId = `DUKA-${digits()}`;
-    await http().post('/v1/sbg/parcels/accept').set(shop.owner).send({ agentDid: shop.did, parcelId, size: 'S', destZone: 'FarTown', senderMobile, receiverMobile: `+2547${digits()}9`, dropoffPhotoRef: 'd.jpg' }).expect(201);
+    await http().post('/v1/sbg/parcels/accept').set(shop.owner).send({ agentDid: shop.did, parcelId, size: 'S', destZone: 'FarTown', senderMobile, receiverMobile: `+2547${digits()}9`, dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), shop.did) }).expect(201);
     return parcelId;
   }
 

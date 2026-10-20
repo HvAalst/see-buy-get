@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { shopPhotoOver } from './content-photo';
 import { ParcelService } from '../src/modules/pudo/parcel.service';
 import { ToteService } from '../src/modules/pudo/tote.service';
 
@@ -53,7 +54,7 @@ describe('a counter’s step done with no signal keeps its time, over the wire',
   };
   /** A walk-up taken in at the north shop, for the south — done at `at` and sent now. */
   const takeIn = async (parcelId: string, at?: number) =>
-    (await http().post('/v1/sbg/parcels/accept').set(staff).send({ agentDid: origin, parcelId, size: 'S', destZone: south, destPudoDid: dest, senderMobile: '+254700000001', receiverMobile: '+254700000002', dropoffPhotoRef: 'drop.jpg', paymentMode: 'prepaid', ...(at ? { observedAt: iso(at) } : {}) }).expect(201)).body;
+    (await http().post('/v1/sbg/parcels/accept').set(staff).send({ agentDid: origin, parcelId, size: 'S', destZone: south, destPudoDid: dest, senderMobile: '+254700000001', receiverMobile: '+254700000002', dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), origin), paymentMode: 'prepaid', ...(at ? { observedAt: iso(at) } : {}) }).expect(201)).body;
   const near = (a: string | undefined, b: number) => expect(Math.abs(Date.parse(a!) - b)).toBeLessThan(5_000);
   const lastScan = (id: string) => parcels.get(id).scans[parcels.get(id).scans.length - 1];
   const leg = (id: string, kind: string) => (parcels.get(id).custody ?? []).find((l) => l.holderKind === kind)!;

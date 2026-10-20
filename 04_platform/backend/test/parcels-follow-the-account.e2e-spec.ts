@@ -2,7 +2,7 @@ import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
-import { contentPhotoOver } from './content-photo';
+import { contentPhotoOver, shopPhotoOver, photoOver } from './content-photo';
 import { AccountRecoveryService } from '../src/modules/pudo/account-recovery.service';
 import { OtpService } from '../src/modules/pudo/otp.service';
 import { ParcelService } from '../src/modules/pudo/parcel.service';
@@ -99,7 +99,7 @@ describe('a parcel is kept by the account, over the wire', () => {
 
     // A parcel taken in at a counter, for the number this person signs in with.
     const parcelId = `PFA-${digits()}`;
-    const taken = await http().post('/v1/sbg/parcels/accept').set(operator).send({ agentDid: origin, parcelId, size: 'M', destZone: 'SouthTown', destPudoDid: dest, senderMobile: `+2547${digits()}3`, receiverMobile: OLD, dropoffPhotoRef: 'drop.jpg' }).expect(201);
+    const taken = await http().post('/v1/sbg/parcels/accept').set(operator).send({ agentDid: origin, parcelId, size: 'M', destZone: 'SouthTown', destPudoDid: dest, senderMobile: `+2547${digits()}3`, receiverMobile: OLD, dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), origin) }).expect(201);
     expect((await myParcels(token)).received.map((p) => p.parcelId)).toEqual([parcelId]);
     // What the counter is handed back says nothing about whether the receiver's number has an account.
     const personId = await idOf(token);
@@ -160,14 +160,15 @@ describe('a parcel is kept by the account, over the wire', () => {
     // Delivered, and from a store: the two acts that come after the goods are in their hands.
     const store = (await http().post('/v1/sbg/vendors').set(operator).send({ name: `PFA Store ${digits()}` }).expect(201)).body.vendorId as string;
     Object.assign(stored, { status: 'Delivered', vendorId: store });
-    expect((await mine('pod').send({ photoRef: 'pod.jpg' }).expect(201)).body.podPhotoRef).toBe('pod.jpg');
+    const theirs = await photoOver(app.getHttpServer(), bearer(token), 'pod');
+    expect((await mine('pod').send({ photoRef: theirs }).expect(201)).body.podPhotoRef).toBe(theirs);
     expect((await mine('rate-store').send({ stars: 5 }).expect(201)).body.rating.stars).toBe(5);
     Object.assign(stored, was);
 
     // STILL IN ITS WEEK: a parcel sent to the old number reaches the account and says where it was sent; and nobody
     // else can open an account on that number.
     const late = `PFA-${digits()}`;
-    await http().post('/v1/sbg/parcels/accept').set(operator).send({ agentDid: origin, parcelId: late, size: 'M', destZone: 'SouthTown', destPudoDid: dest, senderMobile: `+2547${digits()}5`, receiverMobile: OLD, dropoffPhotoRef: 'drop.jpg' }).expect(201);
+    await http().post('/v1/sbg/parcels/accept').set(operator).send({ agentDid: origin, parcelId: late, size: 'M', destZone: 'SouthTown', destPudoDid: dest, senderMobile: `+2547${digits()}5`, receiverMobile: OLD, dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), origin) }).expect(201);
     expect((await myParcels(token)).received.map((p) => p.parcelId).sort()).toEqual([parcelId, late].sort());
     expect((await http().get(`/v1/sbg/identity/parcels/${late}`).set(bearer(token)).expect(200)).body.sentToOldNumber).toBe(true);
     await confirm(OLD);
@@ -190,7 +191,7 @@ describe('a parcel is kept by the account, over the wire', () => {
 
     // What is sent to that number from now on is the newcomer's, and not the account's that left it.
     const next = `PFA-${digits()}`;
-    await http().post('/v1/sbg/parcels/accept').set(operator).send({ agentDid: origin, parcelId: next, size: 'M', destZone: 'SouthTown', destPudoDid: dest, senderMobile: `+2547${digits()}4`, receiverMobile: OLD, dropoffPhotoRef: 'drop.jpg' }).expect(201);
+    await http().post('/v1/sbg/parcels/accept').set(operator).send({ agentDid: origin, parcelId: next, size: 'M', destZone: 'SouthTown', destPudoDid: dest, senderMobile: `+2547${digits()}4`, receiverMobile: OLD, dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), origin) }).expect(201);
     expect((await myParcels(newcomer)).received.map((p) => p.parcelId)).toEqual([next]);
     expect((await myParcels(token)).received.map((p) => p.parcelId).sort()).toEqual([parcelId, late].sort());
   });
@@ -202,7 +203,7 @@ describe('a parcel is kept by the account, over the wire', () => {
     const dest = await aShop('South PFB', 'SouthTown');
     let token = await signUp(OLD);
     const parcelId = `PFB-${digits()}`;
-    await http().post('/v1/sbg/parcels/accept').set(operator).send({ agentDid: origin, parcelId, size: 'M', destZone: 'SouthTown', destPudoDid: dest, senderMobile: `+2547${digits()}8`, receiverMobile: OLD, dropoffPhotoRef: 'drop.jpg' }).expect(201);
+    await http().post('/v1/sbg/parcels/accept').set(operator).send({ agentDid: origin, parcelId, size: 'M', destZone: 'SouthTown', destPudoDid: dest, senderMobile: `+2547${digits()}8`, receiverMobile: OLD, dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), origin) }).expect(201);
     const code = (await http().get(`/v1/sbg/identity/parcels/${parcelId}`).set(bearer(token)).expect(200)).body.collectToken.code as string;
 
     // Two members of staff move it (their checking is another suite's to prove; the move is the one they end in).

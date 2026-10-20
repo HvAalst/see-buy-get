@@ -699,9 +699,10 @@ export class ImportService {
     const consignment = this.requireImport(importId);
     this.requireBoxParty(consignment, actorEntityId);
     const containerNo = this.requireBox(consignment);
-    const photoRefs = (input.photoIds ?? [])
-      .slice(0, 6)
-      .filter((id) => this.media.adopt(id, byDid, { type: 'box', id: containerNo }, 'interchange'));
+    // Round 31 — every photo the party sends is one we hold, its own: refused by name, never quietly left out of the record.
+    const photoRefs = (input.photoIds ?? []).slice(0, 6);
+    for (const id of photoRefs) this.media.requireHeld(id, byDid, { type: 'box', id: containerNo }, 'photoIds');
+    for (const id of photoRefs) this.media.adopt(id, byDid, { type: 'box', id: containerNo }, 'interchange');
     this.boxes.recordInterchange(containerNo, input.side, { by, byEntityId: actorEntityId, stance: input.stance, note: input.note, photoRefs }, { importId }, now);
     return this.detail(consignment.importId, actorEntityId);
   }

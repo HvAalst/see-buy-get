@@ -71,6 +71,7 @@ import type { UnclaimedService } from './unclaimed.service';
 import type { OrderHandedOn } from './fleet-overflow.types';
 import { clockAt } from './fleet-clock';
 import { requiredLoadKeys, requiredUnloadKeys } from './heavy-cargo';
+import { evidencePhotos } from '../../../test/content-photo';
 
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
@@ -163,6 +164,8 @@ describe('handing orders on', () => {
       for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
     };
 
+    /** Round 31 — an evidence photo we hold, uploaded by the party the act checks. */
+    let photoBy: (ownerDid: string) => string;
     beforeEach(async () => {
       const moduleRef = await Test.createTestingModule({
         providers: [
@@ -180,6 +183,7 @@ describe('handing orders on', () => {
           HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
         ],
       }).compile();
+      photoBy = evidencePhotos(moduleRef);
       moduleRef.get(EntityService).seed();
       moduleRef.get(FxService).seed();
       dispatch = moduleRef.get(DispatchService);
@@ -699,9 +703,9 @@ describe('handing orders on', () => {
         dispatch.assign(theirs.freightId, own.did, { managerDid: a.did, name: 'Amina' });
         expect(mine().plannedAbout).toMatchObject({ arrive: '10:10' });
         const f = dispatch.listFreight().find((x) => x.freightId === theirs.freightId)!;
-        dispatch.pickupFreight(theirs.freightId, own.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_test' });
+        dispatch.pickupFreight(theirs.freightId, own.did, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(own.did) });
         expect(mine().plannedAbout).toMatchObject({ arrive: '10:10' });
-        dispatch.deliverFreight(theirs.freightId, own.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' });
+        dispatch.deliverFreight(theirs.freightId, own.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: photoBy(own.did) });
         expect(mine().plannedAbout).toBeUndefined();
       });
     });
@@ -718,8 +722,8 @@ describe('handing orders on', () => {
       const carry = (freightId: string) => {
         dispatch.assign(freightId, own.did, { managerDid: a.did, name: 'Amina' });
         const f = dispatch.listFreight().find((x) => x.freightId === freightId)!;
-        dispatch.pickupFreight(freightId, own.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_test' });
-        dispatch.deliverFreight(freightId, own.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' });
+        dispatch.pickupFreight(freightId, own.did, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(own.did) });
+        dispatch.deliverFreight(freightId, own.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: photoBy(own.did) });
       };
       const delivered = (did: string) => notifications.inboxFor(did).filter((n) => n.kind === 'freight_delivered');
       const theirs = placed(shipper, 'WS-DEL-1', 'Bricks, 4 pallets.');
@@ -728,8 +732,8 @@ describe('handing orders on', () => {
       await settle();
       expect(delivered(shipper)).toEqual([]);
       const f = dispatch.listFreight().find((x) => x.freightId === theirs.freightId)!;
-      dispatch.pickupFreight(theirs.freightId, own.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_test' });
-      dispatch.deliverFreight(theirs.freightId, own.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' }, Date.parse(tomorrow() + 'T10:30:00+03:00'));
+      dispatch.pickupFreight(theirs.freightId, own.did, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(own.did) });
+      dispatch.deliverFreight(theirs.freightId, own.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: photoBy(own.did) }, Date.parse(tomorrow() + 'T10:30:00+03:00'));
       await settle();
       // On its day, with no window asked for: when, to whom, where, what — and nothing held against it.
       expect(delivered(shipper).map((n) => [n.title, n.body])).toEqual([[theirs.code + ' was delivered', 'Handed over at 10:30 to Wanjiru at the gate at Machakos junction: Bricks, 4 pallets.']]);
@@ -759,9 +763,9 @@ describe('handing orders on', () => {
       const collect = (id: string) => {
         dispatch.assign(id, own.did, { managerDid: a.did, name: 'Amina' });
         const f = dispatch.listFreight().find((x) => x.freightId === id)!;
-        dispatch.pickupFreight(id, own.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_test' });
+        dispatch.pickupFreight(id, own.did, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(own.did) });
       };
-      const hand = (id: string) => dispatch.deliverFreight(id, own.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' });
+      const hand = (id: string) => dispatch.deliverFreight(id, own.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: photoBy(own.did) });
 
       const theirs = placed('WS-WHEN-1');
       // Ordered: the day, and no hour — planned or not. A plan can still be made again, and nobody would tell them.
@@ -773,7 +777,7 @@ describe('handing orders on', () => {
       expect(when(theirs.freightId)).toEqual([day, undefined]);
       // On the road: about when, from the plan it went out on.
       const f = dispatch.listFreight().find((x) => x.freightId === theirs.freightId)!;
-      dispatch.pickupFreight(theirs.freightId, own.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_test' });
+      dispatch.pickupFreight(theirs.freightId, own.did, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(own.did) });
       expect(when(theirs.freightId)).toEqual([day, '10:10']);
       // A door nobody answered: the plan's hour has passed, and is not shown as if it were still to come.
       dispatch.failDelivery(theirs.freightId, own.did, { outcome: 'absent' });
@@ -832,8 +836,8 @@ describe('handing orders on', () => {
           // Taken over before it is handed over, at whatever hour the suite runs: a handover is never dated before its
           // pickup (round 22), so a pickup at the real time and a handover at 10:30 today read 10:30 only before 10:30.
           f.claimedAt = new Date(at - 2 * 3_600_000).toISOString();
-          dispatch.pickupFreight(id, own.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_test' }, at - 3_600_000);
-          return dispatch.deliverFreight(id, own.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' }, at);
+          dispatch.pickupFreight(id, own.did, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(own.did) }, at - 3_600_000);
+          return dispatch.deliverFreight(id, own.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: photoBy(own.did) }, at);
         };
         const row = (id: string, at?: number) => dispatch.postedBy(shipper, at).find((r) => r.freightId === id)!;
         const told = (kind: string) => notifications.inboxFor(shipper).filter((n) => n.kind === kind);
@@ -932,9 +936,9 @@ describe('handing orders on', () => {
         // Delivered or withdrawn, it is not late.
         dispatch.assign(o.freightId, own.did, { managerDid: a.did, name: 'Amina' });
         expect(late('12:00')).toBe('hour');
-        dispatch.pickupFreight(o.freightId, own.did, { confirmed: requiredLoadKeys(f()), securementPhotoId: 'med_test' });
+        dispatch.pickupFreight(o.freightId, own.did, { confirmed: requiredLoadKeys(f()), securementPhotoId: photoBy(own.did) });
         expect(late('12:00')).toBe('hour');
-        dispatch.deliverFreight(o.freightId, own.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' }, nairobi(day, '12:30'));
+        dispatch.deliverFreight(o.freightId, own.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: photoBy(own.did) }, nairobi(day, '12:30'));
         expect([late('13:00'), late('06:00', dayAfter(day))]).toEqual([undefined, undefined]);
         const gone = placed(shipper, 'WS-CLK-15');
         dispatch.cancelFreight(gone.freightId, { did: shipper, role: 'shipper' }, 'Not needed any more');
@@ -1069,7 +1073,7 @@ describe('handing orders on', () => {
         const onDriver = placed(shipper, 'WS-CLK-21');
         dispatch.stampPlan(a.did, day, new Map([[onRoad.freightId, stamp('10:40')], [onDriver.freightId, stamp('10:50')]]));
         dispatch.assign(onRoad.freightId, own.did, { managerDid: a.did, name: 'Amina' });
-        dispatch.pickupFreight(onRoad.freightId, own.did, { confirmed: requiredLoadKeys(dispatch.listFreight().find((x) => x.freightId === onRoad.freightId)!), securementPhotoId: 'med_test' });
+        dispatch.pickupFreight(onRoad.freightId, own.did, { confirmed: requiredLoadKeys(dispatch.listFreight().find((x) => x.freightId === onRoad.freightId)!), securementPhotoId: photoBy(own.did) });
         dispatch.assign(onDriver.freightId, own.did, { managerDid: a.did, name: 'Amina' });
         expect(await dispatcher.sweepLate(nairobi(day, '12:00'))).toBe(2);
         const body = (code: string) => told('order_late').find((n) => n.title.startsWith(code))!.body;
@@ -1094,7 +1098,7 @@ describe('handing orders on', () => {
         expect(seen('12:00')).toEqual([day, undefined, undefined]);
         expect(seen('06:00', dayAfter(day))).toEqual([day, undefined, 'day']);
         dispatch.assign(o.freightId, own.did, { managerDid: a.did, name: 'Amina' });
-        dispatch.pickupFreight(o.freightId, own.did, { confirmed: requiredLoadKeys(dispatch.listFreight().find((x) => x.freightId === o.freightId)!), securementPhotoId: 'med_test' });
+        dispatch.pickupFreight(o.freightId, own.did, { confirmed: requiredLoadKeys(dispatch.listFreight().find((x) => x.freightId === o.freightId)!), securementPhotoId: photoBy(own.did) });
         expect(seen('10:50')).toEqual([day, '10:40', undefined]);
         expect(seen('11:30')).toEqual([day, '10:40', 'hour']);
         expect(seen('06:00', dayAfter(day))).toEqual([day, '10:40', 'day']);

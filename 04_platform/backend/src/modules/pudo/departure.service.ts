@@ -632,6 +632,7 @@ export class DepartureService {
     const receiverName = proof.receiverName?.trim() ?? '';
     if (receiverName.length < 2) throw new GlosError('RECEIVER_REQUIRED', 'Record who received the goods before marking the load handed over');
     if (!proof.photoRef) throw new GlosError('DELIVERY_PHOTO_REQUIRED', 'Attach a photo of the goods as delivered');
+    this.media.requireHeld(proof.photoRef, by, { type: 'freight', id: booking.bookingId }); // round 31
 
     booking.status = 'delivered';
     booking.deliveredAt = new Date().toISOString();
@@ -726,6 +727,7 @@ export class DepartureService {
     const description = input.description?.trim();
     if (!description) throw new GlosError('FIELD_REQUIRED', 'Say what went wrong, in your own words — the carrier is answering this');
 
+    if (input.photoRef) this.media.requireHeld(input.photoRef, by, { type: 'freight', id: booking.bookingId }); // round 31
     const claim: BookingClaim = {
       kind: kind as ClaimKind,
       description: description.slice(0, 1000),
@@ -985,6 +987,7 @@ export class DepartureService {
     const missing = missingKeys(required, input.confirmed);
     if (missing.length) throw new GlosError('SAFETY_CHECK_INCOMPLETE', `Complete the load-safety checklist before pulling away — ${missing.length} item(s) left`);
 
+    if (input.securementPhotoRef) this.media.requireHeld(input.securementPhotoRef, by, { type: 'freight', id: booking.bookingId }, 'securementPhotoRef'); // round 31
     booking.loadSafety = {
       confirmed: [...new Set(input.confirmed ?? [])],
       ...(input.securementPhotoRef ? { securementPhotoRef: input.securementPhotoRef } : {}),

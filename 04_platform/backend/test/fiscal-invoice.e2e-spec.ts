@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { shopPhotoOver } from './content-photo';
 import { BooksService } from '../src/foundation/books/books.service';
 import { FiscalInvoiceService } from '../src/modules/pudo/fiscal-invoice.service';
 
@@ -52,7 +53,7 @@ describe('Kenyan tax invoices, over the wire', () => {
 
   async function aParcelTakenIn(shop: { did: string; owner: Record<string, string> }, sender: string, receiver: string): Promise<string> {
     const parcelId = `FISC-${digits()}`;
-    await http().post('/v1/sbg/parcels/accept').set(shop.owner).send({ agentDid: shop.did, parcelId, size: 'S', destZone: 'FarTown', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: 'd.jpg' }).expect(201);
+    await http().post('/v1/sbg/parcels/accept').set(shop.owner).send({ agentDid: shop.did, parcelId, size: 'S', destZone: 'FarTown', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), shop.did) }).expect(201);
     return parcelId;
   }
 

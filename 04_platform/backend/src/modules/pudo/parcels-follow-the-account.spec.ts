@@ -71,6 +71,7 @@ import { PAYOUT_RAIL } from '../../foundation/payouts/payout.types';
 import { MailService } from '../../foundation/mail/mail.service';
 import { OutboxMailSender } from '../../foundation/mail/outbox-mail.sender';
 import { MAIL_SENDER } from '../../foundation/mail/mail.types';
+import { evidencePhotos } from '../../../test/content-photo';
 
 /**
  * A PARCEL IS KEPT BY THE ACCOUNT, NOT BY THE NUMBER — on the real person, parcel, order, business, chat, rating and
@@ -99,6 +100,8 @@ describe('a parcel is kept by the account, not by the number', () => {
   let unclaimed: UnclaimedService;
   let vendors: VendorService;
 
+  /** Round 31 — an evidence photo we hold, uploaded by the party the act checks. */
+  let photoBy: (ownerDid: string) => string;
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -121,6 +124,7 @@ describe('a parcel is kept by the account, not by the number', () => {
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
       ],
     }).compile();
+    photoBy = evidencePhotos(moduleRef);
     moduleRef.get(EntityService).seed();
     moduleRef.get(FxService).seed();
     persons = moduleRef.get(PersonService);
@@ -193,7 +197,7 @@ describe('a parcel is kept by the account, not by the number', () => {
     const origin = aShop('NorthTown');
     const dest = aShop('SouthTown');
     const parcelId = `QR-PF-${(seq += 1)}`;
-    const handedBack = parcels.accept({ agentDid: origin.did, parcelId, size: 'M', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: input.from ?? aNumber(), receiverMobile: input.to, dropoffPhotoRef: 'drop.jpg' } as never);
+    const handedBack = parcels.accept({ agentDid: origin.did, parcelId, size: 'M', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: input.from ?? aNumber(), receiverMobile: input.to, dropoffPhotoRef: photoBy(origin.did) } as never);
     return { parcelId, origin, dest, handedBack };
   }
   const ids = (list: Array<{ parcelId: string }>) => list.map((p) => p.parcelId);
@@ -311,8 +315,8 @@ describe('a parcel is kept by the account, not by the number', () => {
       const { p, incoming, newcomer } = moved();
       const stored = parcels.get(incoming.parcelId);
       stored.status = 'Delivered';
-      expect(() => parcels.attachPod(incoming.parcelId, newcomer, newcomer.personDid, 'pod.jpg')).toThrow(/No such parcel/);
-      expect(() => parcels.buyerDispute(incoming.parcelId, newcomer, newcomer.personDid, 'It is broken', 'broken.jpg')).toThrow(/No such parcel/);
+      expect(() => parcels.attachPod(incoming.parcelId, newcomer, newcomer.personDid, photoBy(newcomer.personDid))).toThrow(/No such parcel/);
+      expect(() => parcels.buyerDispute(incoming.parcelId, newcomer, newcomer.personDid, 'It is broken', photoBy(newcomer.personDid))).toThrow(/No such parcel/);
       stored.vendorId = 'ven_some_store';
       expect(() => merchants.rate({ parcelId: incoming.parcelId, phoneHash: newcomer.phoneHash, personDid: newcomer.personDid, stars: 1 })).toThrow(/No such parcel/);
       stored.status = 'Ready_For_Pickup';
@@ -321,7 +325,8 @@ describe('a parcel is kept by the account, not by the number', () => {
       // …while the account they belong to still can, on its new number.
       expect(conversations.openAboutParcel(incoming.parcelId, p.personDid).conversationId).toBeTruthy();
       stored.status = 'Delivered';
-      expect(parcels.attachPod(incoming.parcelId, me(p.personDid), p.personDid, 'pod.jpg').podPhotoRef).toBe('pod.jpg');
+      const theirs = photoBy(p.personDid);
+      expect(parcels.attachPod(incoming.parcelId, me(p.personDid), p.personDid, theirs).podPhotoRef).toBe(theirs);
     });
 
     it('the shop’s message about a waiting parcel reaches the account it belongs to, not the newcomer', () => {

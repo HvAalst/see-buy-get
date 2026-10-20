@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
-import { contentPhotoOver } from './content-photo';
+import { contentPhotoOver, shopPhotoOver } from './content-photo';
 import { OutboxMailSender } from '../src/foundation/mail/outbox-mail.sender';
 
 describe('GLOS backend (e2e)', () => {
@@ -706,11 +706,11 @@ describe('GLOS backend (e2e)', () => {
     // Screen 1 Accept → Screen 2 Handover → arrive → Screen 3 Pickup (OTP).
     // The release code is minted at intake and held by the sender from that moment — never handed back on
     // arrival, because the shop that releases a parcel must never learn its secret (see parcel-release-secret).
-    const accepted = await request(http).post('/v1/sbg/parcels/accept').set(auth).send({ agentDid: origin, parcelId: 'E2E-QR-1', size: 'M', destZone: 'SouthTown', senderMobile: '+254700', receiverMobile: '+254711', dropoffPhotoRef: 'drop.jpg' }).expect(201);
+    const accepted = await request(http).post('/v1/sbg/parcels/accept').set(auth).send({ agentDid: origin, parcelId: 'E2E-QR-1', size: 'M', destZone: 'SouthTown', senderMobile: '+254700', receiverMobile: '+254711', dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), origin) }).expect(201);
     await request(http).post('/v1/sbg/parcels/handover').set(auth).send({ agentDid: origin, driverBadgeId: driver.body.badgeId, parcelIds: ['E2E-QR-1'] }).expect(201);
     const arrival = await request(http).post('/v1/sbg/parcels/E2E-QR-1/arrive').set(auth).send({ destAgentDid: dest }).expect(201);
     expect(arrival.body.otp).toBeUndefined();
-    const delivered = await request(http).post('/v1/sbg/parcels/E2E-QR-1/pickup').set(auth).send({ agentDid: dest, otp: accepted.body.otp, deliveredPhotoRef: 'del.jpg' }).expect(201);
+    const delivered = await request(http).post('/v1/sbg/parcels/E2E-QR-1/pickup').set(auth).send({ agentDid: dest, otp: accepted.body.otp, deliveredPhotoRef: await shopPhotoOver(app.getHttpServer(), dest) }).expect(201);
     expect(delivered.body.status).toBe('Delivered');
 
     // Tier-1 customer rates → graduates into the shared reputation core.
@@ -798,7 +798,7 @@ describe('GLOS backend (e2e)', () => {
 
     // A PROBLEM REPORTED AT THE COUNTER. Nobody of ours decides it: the damage claim report is made on the spot, the
     // parcel stays collectable, and the report is emailed to the store's insurer as a link — the user, 2026-10-13.
-    const reported = await request(http).post(`/v1/sbg/parcels/${parcelId}/dispute`).set(auth).send({ agentDid: dest, reason: 'The box is torn at one corner', photoProofRef: 'proof.jpg' }).expect(201);
+    const reported = await request(http).post(`/v1/sbg/parcels/${parcelId}/dispute`).set(auth).send({ agentDid: dest, reason: 'The box is torn at one corner', photoProofRef: await shopPhotoOver(app.getHttpServer(), dest) }).expect(201);
     expect(reported.body).toMatchObject({ status: 'Ready_For_Pickup', dispute: { state: 'resolved', decision: 'report_only' } });
     const [mail] = app.get(OutboxMailSender).recent('claims@jubilee.example');
     expect(mail).toMatchObject({ template: 'damage-report', to: { address: 'claims@jubilee.example', name: 'Jubilee Allianz Claims' }, subject: `Damage claim report DCR-${parcelId} — ACME Store, order ORD-77` });
@@ -922,7 +922,7 @@ describe('GLOS backend (e2e)', () => {
 
     // Three parcels; only the small non-fragile one may ride the bike.
     for (const p of [{ id: `OK-${u}`, size: 'S' }, { id: `FR-${u}`, size: 'S', fragile: true }, { id: `HV-${u}`, size: 'HEAVY' }]) {
-      await request(http).post('/v1/sbg/parcels/accept').set(auth).send({ agentDid: origin, parcelId: p.id, size: p.size, destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'd.jpg', fragile: p.fragile }).expect(201);
+      await request(http).post('/v1/sbg/parcels/accept').set(auth).send({ agentDid: origin, parcelId: p.id, size: p.size, destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), origin), fragile: p.fragile }).expect(201);
     }
     // The badge NUMBER hands over nothing (user, 2026-10-15: only drivers can do what drivers can do)…
     const parcelIds = [`OK-${u}`, `FR-${u}`, `HV-${u}`];
@@ -963,7 +963,7 @@ describe('GLOS backend (e2e)', () => {
     const bag = await request(http).post(`/v1/sbg/agents/${origin}/totes`).set(auth).expect(201);
     await request(http).post(`/v1/sbg/totes/${bag.body.code}/assign`).set(auth).send({ destinationNodeId: hub.body.mdpId, destinationLabel: 'Hub' }).expect(201);
     for (const id of [`P1-${u}`, `P2-${u}`]) {
-      await request(http).post('/v1/sbg/parcels/accept').set(auth).send({ agentDid: origin, parcelId: id, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'd.jpg', paymentMode: 'prepaid' }).expect(201);
+      await request(http).post('/v1/sbg/parcels/accept').set(auth).send({ agentDid: origin, parcelId: id, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), origin), paymentMode: 'prepaid' }).expect(201);
       await request(http).post(`/v1/sbg/totes/${bag.body.code}/fill`).set(auth).send({ parcelId: id }).expect(201);
     }
     await request(http).post(`/v1/sbg/totes/${bag.body.code}/release`).set(auth).expect(201);

@@ -70,7 +70,7 @@ describe('a fleet hears about its own runs, and a shipper hears the carrier', ()
     const managers = { get: () => ({ jurisdiction: 'KE' }), tradingBlocks: () => [], assertMayTakeWork: () => undefined } as unknown as FleetManagerService;
     const truck = { get: () => ({ vehicleId: 'veh_1', plate: 'KDA 001A', vehicleClass: 'truck', capacityKg: 8000, managerDid: MANAGER, status: 'ACTIVE' }), isUsable: () => true, offRoadReasons: () => [] } as unknown as VehicleService;
     const drivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
-    const media = { adopt: () => true, anchorFreightTerminal: () => undefined, holdFreightForDispute: () => undefined } as unknown as MediaService;
+    const media = { adopt: () => true, requireHeld: () => undefined, anchorFreightTerminal: () => undefined, holdFreightForDispute: () => undefined } as unknown as MediaService;
     const departures = new DepartureService(corridors, managers, drivers, truck, new CargoService(), media, { can: () => true } as unknown as PresenceService, events);
 
     const proposed = corridors.proposeLine({ managerDid: MANAGER, company: 'Kilima Logistics', name: 'Nairobi – Mombasa', originZone: 'Nairobi', destZone: 'Mombasa', vehicleType: 'truck' });

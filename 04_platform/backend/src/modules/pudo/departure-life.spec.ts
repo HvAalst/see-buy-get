@@ -7,11 +7,16 @@ import type { MediaService } from './media.service';
 const adoptions: Array<{ mediaId: string; by: string; role: string }> = [];
 const anchored: string[] = [];
 const held: string[] = [];
+/** Round 31 — every photo a step asked to be checked: whose, and for what. */
+const checked: Array<{ mediaId: string; by: string; link: unknown }> = [];
 const adopted = () =>
   ({
     adopt: (mediaId: string, by: string, _subject: unknown, role: string) => {
       adoptions.push({ mediaId, by, role });
     },
+    // Round 31 — every photo is held here, and each is remembered: that a step ASKS is what this spec proves; the check
+    // itself is the media service's, tested there and over the wire.
+    requireHeld: (mediaId: string, by: string, link: unknown) => void checked.push({ mediaId, by, link }),
     // Retention: a run now starts and holds its evidence clock the way the board has since S33.
     anchorFreightTerminal: (id: string) => void anchored.push(id),
     holdFreightForDispute: (id: string) => void held.push(id),
@@ -210,6 +215,8 @@ describe('a booking’s life after it is sold', () => {
       // Adopt-not-link: only an unattached upload of THEIRS is taken, so a photo of somebody else’s load
       // cannot be pointed at.
       expect(adoptions).toContainEqual({ mediaId: 'med_pod1', by: DRIVER, role: 'pod' });
+      // …and before anything was written, asked whether it is one we hold, the driver's, for this load alone (round 31).
+      expect(checked).toContainEqual({ mediaId: 'med_pod1', by: DRIVER, link: { type: 'freight', id: booking.bookingId } });
     });
 
     it('is the carrier’s to record and not the shipper’s', () => {
@@ -300,6 +307,7 @@ describe('a booking’s life after it is sold', () => {
       const run = service.require(departureId);
       service.secured(departureId, booking.bookingId, DRIVER, { confirmed: service.loadChecklist(run, booking), securementPhotoRef: 'med_sec1' });
       expect(adoptions).toContainEqual({ mediaId: 'med_sec1', by: DRIVER, role: 'securement' });
+      expect(checked).toContainEqual({ mediaId: 'med_sec1', by: DRIVER, link: { type: 'freight', id: booking.bookingId } }); // round 31
       expect(service.require(departureId).bookings[0].loadSafety?.securementPhotoRef).toBe('med_sec1');
     });
   });
@@ -509,6 +517,7 @@ describe('a booking’s life after it is sold', () => {
       held.length = 0;
       service.openClaim(departureId, booking.bookingId, SHIPPER, { kind: 'damaged', description: 'Two panels cracked', photoRef: 'med_claim' });
       expect(held).toEqual([booking.bookingId]);
+      expect(checked).toContainEqual({ mediaId: 'med_claim', by: SHIPPER, link: { type: 'freight', id: booking.bookingId } }); // round 31
     });
   });
 

@@ -228,6 +228,18 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
     return true;
   }
 
+  /**
+   * Round 31 — EVERY PHOTO IS ONE WE HOLD (the user: "Every photo is one we hold"; "Every party's evidence"). What a
+   * claim or a dispute is read against is refused, by name and before anything is written, when it is a name, an id we
+   * do not hold, somebody else's, or already another thing's evidence — so the person takes it again while they still
+   * can, rather than the record citing a photograph nobody can produce. `adopt` then keeps it with that thing.
+   */
+  requireHeld(mediaId: string | undefined, ownerDid: string | undefined, link: MediaLink, field = 'photoRef'): void {
+    if (!this.mayAdopt(mediaId, ownerDid ?? '', link)) {
+      throw new GlosError('PHOTO_REQUIRED', 'We do not hold that photo. Take it again, so it is sent with this: a photo you took, of this and nothing else.', { field });
+    }
+  }
+
   /** Parcel reached a terminal state → start the 90-day clock on its shipment-proof media. Idempotent. */
   anchorParcelTerminal(parcelId: string, at: Date = new Date()): void {
     this.anchorLink('parcel', parcelId, 'shipment-proof', at);

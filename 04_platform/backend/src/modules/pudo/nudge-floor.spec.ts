@@ -47,6 +47,7 @@ import { LedgerService } from '../../foundation/ledger/ledger.service';
 import { InMemoryLedgerAdapter } from '../../foundation/ledger/in-memory-ledger.adapter';
 import { LEDGER_ADAPTER } from '../../foundation/ledger/ledger.types';
 import { EventBus } from '../../foundation/events/event-bus.service';
+import { evidencePhotos } from '../../../test/content-photo';
 
 /**
  * ITEM 10 — the driver's own floor, on the one surface that speaks first.
@@ -78,6 +79,8 @@ describe('the nudge floor', () => {
   let mdps: MdpService;
   let gate: WalletGateService;
 
+  /** Round 31 — an evidence photo we hold, uploaded by the party the act checks. */
+  let photoBy: (ownerDid: string) => string;
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -94,6 +97,7 @@ describe('the nudge floor', () => {
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
       ],
     }).compile();
+    photoBy = evidencePhotos(moduleRef);
     entities = moduleRef.get(EntityService);
     entities.seed();
     moduleRef.get(FxService).seed();
@@ -252,7 +256,7 @@ describe('the nudge floor', () => {
       const bag = totes.register(locationId);
       totes.assign(bag.code, destId, 'Somewhere');
       const pid = `NUDGE-${seq}`;
-      parcels.accept({ agentDid: locationId, parcelId: pid, size: 'M', destZone: 'Nairobi', senderMobile: '+254700001', receiverMobile: '+254700002', dropoffPhotoRef: 'p.jpg' } as never);
+      parcels.accept({ agentDid: locationId, parcelId: pid, size: 'M', destZone: 'Nairobi', senderMobile: '+254700001', receiverMobile: '+254700002', dropoffPhotoRef: photoBy(locationId) } as never);
       mdps.fillTote(bag.code, pid);
       dispatch.release(bag.code);
       return bag.code;
