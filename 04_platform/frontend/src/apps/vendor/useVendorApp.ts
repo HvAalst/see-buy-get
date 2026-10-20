@@ -1222,6 +1222,31 @@ export function useVendorApp() {
   );
 
   /**
+   * Round 30 — THE PHOTO OF WHAT IS IN THE BOX, kept for real (the user: "A store's content photo, really kept"). It
+   * used to be the file's name and nothing more, so a damage claim on a store's parcel had no "before" to show. Now it is
+   * downscaled, its location data stripped, and uploaded as the store's own: the order names the id we hold.
+   */
+  const uploadContentPhoto = useCallback(
+    async (file: File): Promise<string | null> => {
+      if (!client) return null;
+      try {
+        const { dataUrl, thumbDataUrl } = await downscaleImage(file);
+        const r = await client.api.uploadMedia('content', dataUrl, thumbDataUrl);
+        return r.error ? null : (narrow<{ mediaId?: string }>(r.data)?.mediaId ?? null);
+      } catch {
+        return null;
+      }
+    },
+    [client],
+  );
+
+  /** A photo the store holds, for the order that shows it: its bytes, fetched with the store's own sign-in. */
+  const loadMedia = useCallback(
+    async (mediaId: string) => (client ? client.api.mediaBlob(mediaId, 'thumb') : { data: null, error: 'offline' }) as Promise<{ data: Blob | null; error: unknown }>,
+    [client],
+  );
+
+  /**
    * Round 29 — the store's GS1 prefix and the disputes it is in, bound to the store signed in. The card keeps its own
    * form; a prefix saved or given up reloads the store, whose record says it.
    */
@@ -1247,7 +1272,7 @@ export function useVendorApp() {
       licencePhoto: async (file) => {
         try {
           const { dataUrl, thumbDataUrl } = await downscaleImage(file);
-          const r = await api.uploadGs1Licence(dataUrl, thumbDataUrl);
+          const r = await api.uploadMedia('gs1_licence', dataUrl, thumbDataUrl);
           return r.error ? null : (narrow<{ mediaId?: string }>(r.data)?.mediaId ?? null);
         } catch {
           return null;
@@ -1268,6 +1293,8 @@ export function useVendorApp() {
       /** The Web Push controls — a store is run by a person, and they wait on a payment like anybody else. */
       notifications: client?.notifications ?? null,
       gs1,
+      uploadContentPhoto,
+      loadMedia,
       issueApiKey,
       dismissIssuedKey,
       rotateSecret,

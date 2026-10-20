@@ -1,23 +1,51 @@
-import { useRef } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 
 export interface PhotoFieldProps {
+  /** The uploaded mediaId, '' while empty. */
   value: string;
-  onCapture: (ref: string) => void;
+  onCapture: (mediaId: string) => void;
+  /** Downscale + strip the location + upload the file → resolves the mediaId (or null when it did not go). */
+  upload: (file: File) => Promise<string | null>;
+  /** Big-target label while empty. */
   label: string;
   id: string;
+  disabled?: boolean;
 }
 
 /**
- * Photo-as-proof capture (same contract as the agent app's): `capture="environment"` goes
- * straight to the camera; the sandbox transports no bytes — the REFERENCE is the contract
- * field (contentPhotoRef), the dispute baseline.
+ * Photo-as-proof capture, the same contract as the shop's and the Send app's: `capture="environment"` goes
+ * straight to the camera, the file is uploaded, and the contract field (contentPhotoRef, the dispute baseline)
+ * holds the id of a photo we keep. Round 30 — it used to keep the file's NAME and send nothing, so a damage claim on
+ * a store's parcel had no "before" to be judged against. A local preview shows at once while the bytes go.
  */
-export function PhotoField({ value, onCapture, label, id }: PhotoFieldProps) {
+export function PhotoField({ value, onCapture, upload, label, id, disabled }: PhotoFieldProps) {
   const t = useT();
   const input = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
 
+  useEffect(() => () => {
+    if (preview) URL.revokeObjectURL(preview);
+  }, [preview]);
+
+  const pick = async (file: File) => {
+    setFailed(false);
+    setBusy(true);
+    setPreview(URL.createObjectURL(file));
+    const mediaId = await upload(file);
+    setBusy(false);
+    if (!mediaId) {
+      setFailed(true);
+      setPreview(null);
+      return;
+    }
+    onCapture(mediaId);
+  };
+
+  const done = Boolean(value) && !busy && !failed;
   return (
     <div class="photo">
       <input
@@ -27,14 +55,17 @@ export function PhotoField({ value, onCapture, label, id }: PhotoFieldProps) {
         type="file"
         accept="image/*"
         capture="environment"
+        disabled={disabled || busy}
         onChange={(e) => {
           const f = e.currentTarget.files?.[0];
-          if (f) onCapture(f.name || `photo-${Math.round(performance.now())}.jpg`);
+          e.currentTarget.value = ''; // the same file may be picked again
+          if (f) void pick(f);
         }}
       />
-      <button type="button" class={`photo__btn${value ? ' photo__btn--done' : ''}`} onClick={() => input.current?.click()}>
-        <Icon name={value ? 'check' : 'camera'} size={24} />
-        <span>{value ? t('vendor.photo.captured') : label}</span>
+      {preview ? <img class="photo__preview" src={preview} alt="" /> : null}
+      <button type="button" class={`photo__btn${done ? ' photo__btn--done' : ''}`} disabled={disabled || busy} onClick={() => input.current?.click()}>
+        <Icon name={busy ? 'clock' : done ? 'check' : 'camera'} size={24} />
+        <span>{busy ? t('vendor.photo.uploading') : done ? t('vendor.photo.captured') : failed ? t('vendor.photo.failed') : label}</span>
       </button>
     </div>
   );

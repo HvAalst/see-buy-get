@@ -193,6 +193,8 @@ export class ReturnService {
       weightKg: parcel.weightKg,
       declaredValue: parcel.declaredValue,
       contentPhotoRef: parcel.contentPhotoRef ?? 'return',
+      // The same box: its photo is the first leg's, already ours — not a new one the store must upload.
+      photoOfParcel: parcel.parcelId,
       fragile: parcel.fragile,
       natureCode: parcel.natureCode,
       items: parcel.items,

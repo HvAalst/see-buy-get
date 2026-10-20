@@ -21162,6 +21162,29 @@
         }
       }
     },
+    "/v1/sbg/shipping/photos": {
+      "post": {
+        "operationId": "ShippingApi.photo",
+        "summary": "",
+        "description": "Round 30 — the photo of what is in the box, sent before the shipment is made: the `photoId` it gives is what the\nshipment names as `contentPhotoRef`. A secret key, as making the shipment needs. JPEG, PNG or WebP as a data URL,\nup to 500 KB; one no shipment names is removed after two days (`keptUnusedUntil`).",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShippingPhotoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/shipping/shipments": {
       "post": {
         "operationId": "ShippingApi.mint",
@@ -48531,6 +48554,22 @@
         "required": [
           "from",
           "to"
+        ]
+      },
+      "ShippingPhotoDto": {
+        "type": "object",
+        "properties": {
+          "dataUrl": {
+            "type": "string",
+            "description": "The photo as a data URL: data:image/jpeg;base64,… (JPEG, PNG or WebP, up to 500 KB)."
+          },
+          "thumbDataUrl": {
+            "type": "string",
+            "description": "A small thumbnail the same way, up to 64 KB: what a list shows before the full photo is asked for."
+          }
+        },
+        "required": [
+          "dataUrl"
         ]
       },
       "LineItemDto": {

@@ -11,7 +11,7 @@ import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guar
 import { ShippingApiService } from './shipping-api.service';
 import { ApiKeyGuard, CallerKey } from './api-key.guard';
 import type { Caller } from './api-key.service';
-import { CancelShipmentDto, MintShipmentDto, PublicQuoteDto } from './pudo.dto';
+import { CancelShipmentDto, MintShipmentDto, PublicQuoteDto, ShippingPhotoDto } from './pudo.dto';
 
 /**
  * The public shipping API — SBG as a Shipment Service Provider.
@@ -50,6 +50,18 @@ export class ShippingApiController {
   @Post('quotes')
   quote(@Body() dto: PublicQuoteDto, @CallerKey() caller: Caller) {
     return this.shipping.quote(dto, caller);
+  }
+
+  /**
+   * Round 30 — the photo of what is in the box, sent before the shipment is made: the `photoId` it gives is what the
+   * shipment names as `contentPhotoRef`. A secret key, as making the shipment needs. JPEG, PNG or WebP as a data URL,
+   * up to 500 KB; one no shipment names is removed after two days (`keptUnusedUntil`).
+   */
+  @Public()
+  @RateLimit(30, 60)
+  @Post('photos')
+  photo(@Body() dto: ShippingPhotoDto, @CallerKey() caller: Caller): { photoId: string; keptUnusedUntil: string } {
+    return this.shipping.uploadPhoto(dto, caller);
   }
 
   /**

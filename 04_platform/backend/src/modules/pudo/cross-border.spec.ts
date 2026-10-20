@@ -50,6 +50,7 @@ import { InMemoryLedgerAdapter } from '../../foundation/ledger/in-memory-ledger.
 import { LEDGER_ADAPTER } from '../../foundation/ledger/ledger.types';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { PayeeStandingRegistrar } from './payee-standing';
+import { contentPhotos } from '../../../test/content-photo';
 
 /**
  * Crossing a border — the fact the network could not previously state.
@@ -75,6 +76,8 @@ describe('crossing a border', () => {
   let managers: FleetManagerService;
   let drivers: DriverService;
 
+  /** Round 30 — a store's real photo of the contents, as the order door requires: one we hold, its own. */
+  let photoOf: (vendorId: string) => string;
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -91,6 +94,7 @@ describe('crossing a border', () => {
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
       ],
     }).compile();
+    photoOf = contentPhotos(moduleRef);
     entities = moduleRef.get(EntityService);
     presence = moduleRef.get(PresenceService);
     entities.seed(); // compile() runs no lifecycle hooks — the sisters are seeded by hand, as at boot
@@ -651,7 +655,7 @@ describe('crossing a border', () => {
 
       const { parcel } = parcels.createInbound({
         vendorId: store.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: '+254700999',
-        contentPhotoRef: 'contents.jpg', size: 'M', shippingPolicy: store.shippingPolicy, quote,
+        contentPhotoRef: photoOf(store.vendorId), size: 'M', shippingPolicy: store.shippingPolicy, quote,
         items: [{ name: 'Ankara shirt', qty: 2 }], subtotal: 3400, // it crosses a border, so it must declare
       });
       // Same reason the margin rate is stamped: a price is a promise made at a moment, and both the rate
@@ -670,7 +674,7 @@ describe('crossing a border', () => {
       const store = vendors.register({ name: 'Nairobi Store', country: 'KE' });
       const { parcel } = parcels.createInbound({
         vendorId: store.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: '+254700998',
-        contentPhotoRef: 'contents.jpg', size: 'M', shippingPolicy: store.shippingPolicy, quote: routing.quoteShipment(from.did, to.did),
+        contentPhotoRef: photoOf(store.vendorId), size: 'M', shippingPolicy: store.shippingPolicy, quote: routing.quoteShipment(from.did, to.did),
       });
       expect(parcel.fx).toBeUndefined();
       expect(parcelCurrency({ ...parcel, currency: undefined })).toBe('KES'); // written before prices named a unit
@@ -737,7 +741,7 @@ describe('crossing a border', () => {
     const mint = (p: ReturnType<typeof crossBorderPair>, extra: Record<string, unknown> = {}) =>
       parcels.createInbound({
         vendorId: p.store.vendorId, originAgentDid: p.from.did, destAgentDid: p.to.did, buyerMobile: '+254700999',
-        contentPhotoRef: 'contents.jpg', size: 'M', shippingPolicy: p.store.shippingPolicy, quote: p.quote, ...extra,
+        contentPhotoRef: photoOf(p.store.vendorId), size: 'M', shippingPolicy: p.store.shippingPolicy, quote: p.quote, ...extra,
       } as never);
 
     it('will not sell a shipment that cannot legally travel, and says which part is missing', () => {
@@ -791,7 +795,7 @@ describe('crossing a border', () => {
       const store = vendors.register({ name: 'Nairobi Store', country: 'KE' });
       const { parcel } = parcels.createInbound({
         vendorId: store.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: '+254700998',
-        contentPhotoRef: 'contents.jpg', size: 'M', shippingPolicy: store.shippingPolicy, quote: routing.quoteShipment(from.did, to.did),
+        contentPhotoRef: photoOf(store.vendorId), size: 'M', shippingPolicy: store.shippingPolicy, quote: routing.quoteShipment(from.did, to.did),
       });
       expect(parcel.customs).toBeUndefined();
     });

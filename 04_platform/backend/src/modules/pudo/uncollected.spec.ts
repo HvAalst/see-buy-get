@@ -53,6 +53,7 @@ import { LedgerService } from '../../foundation/ledger/ledger.service';
 import { InMemoryLedgerAdapter } from '../../foundation/ledger/in-memory-ledger.adapter';
 import { LEDGER_ADAPTER } from '../../foundation/ledger/ledger.types';
 import { EventBus } from '../../foundation/events/event-bus.service';
+import { contentPhotos } from '../../../test/content-photo';
 
 /**
  * The two states nothing was watching.
@@ -82,6 +83,8 @@ describe('the states nothing watched', () => {
   let unclaimed: UnclaimedService;
   let entities: EntityService;
 
+  /** Round 30 — a store's real photo of the contents, as the order door requires: one we hold, its own. */
+  let photoOf: (vendorId: string) => string;
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -99,6 +102,7 @@ describe('the states nothing watched', () => {
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
       ],
     }).compile();
+    photoOf = contentPhotos(moduleRef);
     entities = moduleRef.get(EntityService);
     entities.seed();
     moduleRef.get(FxService).seed();
@@ -139,7 +143,7 @@ describe('the states nothing watched', () => {
     vendors.topUp(store.vendorId, 500);
     const { parcel } = parcels.createInbound({
       vendorId: store.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: `+25470099${seq}`,
-      contentPhotoRef: 'c.jpg', size: 'M', routeMode: 'locked', shippingPolicy: store.shippingPolicy,
+      contentPhotoRef: photoOf(store.vendorId), size: 'M', routeMode: 'locked', shippingPolicy: store.shippingPolicy,
       quote: routing.quoteShipment(from.did, to.did, 'M'),
     } as never);
     return { parcel, from, to, store };
@@ -346,6 +350,8 @@ describe('the journey home', () => {
       // two legs of one journey and nobody can then settle what was in it.
       expect(home.size).toBe(parcel.size);
       expect(home.dimensionsCm).toEqual(parcel.dimensionsCm);
+      // Round 30 — and the same photo of what is in it: the first leg's, already ours, not a new one asked of the store.
+      expect(home.contentPhotoRef).toBe(parcel.contentPhotoRef);
     });
 
     it('closes the stranded one as RETURNED — not delivered, not voided', () => {
@@ -466,7 +472,7 @@ describe('the journey home', () => {
     vendors.topUp(store.vendorId, funds === 0 ? outbound.locked.gross : 500);
     const { parcel } = parcels.createInbound({
       vendorId: store.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: `+25470088${seqR}`,
-      contentPhotoRef: 'c.jpg', size: 'M', dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 2,
+      contentPhotoRef: photoOf(store.vendorId), size: 'M', dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 2,
       declaredValue: value, routeMode: 'locked', shippingPolicy: store.shippingPolicy,
       quote: routing.quoteShipment(from.did, to.did, 'M'),
     } as never);

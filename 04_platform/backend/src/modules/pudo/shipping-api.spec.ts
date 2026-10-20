@@ -6,7 +6,7 @@ import { MdpService } from './mdp.service';
 import { RoutingService } from './routing.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
-import { ShippingApiService } from './shipping-api.service';
+import { ShippingApiService, type MintInput } from './shipping-api.service';
 import { ParcelInvoiceService } from './parcel-invoice.service';
 import { QuoteBookService } from './quote-book.service';
 import { TRADE_CREDIT_LIMIT } from './pudo.config';
@@ -56,6 +56,7 @@ import { LedgerService } from '../../foundation/ledger/ledger.service';
 import { InMemoryLedgerAdapter } from '../../foundation/ledger/in-memory-ledger.adapter';
 import { LEDGER_ADAPTER } from '../../foundation/ledger/ledger.types';
 import { EventBus } from '../../foundation/events/event-bus.service';
+import { contentPhotos } from '../../../test/content-photo';
 
 /**
  * The public quote — a price a BUYER can see before deciding to buy.
@@ -75,6 +76,11 @@ describe('the public shipping quote', () => {
   let parcels: ParcelService;
   let quoteBook: QuoteBookService;
 
+  /** Round 30 — a store's real photo of the contents, as the order door requires: one we hold, its own. */
+  let photoOf: (vendorId: string) => string;
+  let moduleRefMedia: () => MediaService;
+  /** …and every mint here sends one for the key's store in place of a made-up name. The refusals of a name we do not hold call the service itself. */
+  const mint = (body: MintInput, caller: Caller) => shipping.mint(/\.jpg$/.test(body.contentPhotoRef ?? '') && caller.vendorId ? { ...body, contentPhotoRef: photoOf(caller.vendorId) } : body, caller);
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [ShippingApiController],
@@ -92,6 +98,8 @@ describe('the public shipping quote', () => {
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
       ],
     }).compile();
+    photoOf = contentPhotos(moduleRef);
+    moduleRefMedia = () => moduleRef.get(MediaService);
     moduleRef.get(EntityService).seed();
     moduleRef.get(FxService).seed();
     agents = moduleRef.get(AgentService);
@@ -373,7 +381,7 @@ describe('the public shipping quote', () => {
     it('mints against whoever the KEY belongs to — there is no store field to change', () => {
       domesticPair();
       const { store, caller } = merchant();
-      const made = shipping.mint(order(), caller);
+      const made = mint(order(), caller);
       expect(made.simulated).toBe(false);
       expect(made.paid).toBe(true);
       expect(made.shipmentId).toMatch(/^PUD-/);
@@ -382,11 +390,40 @@ describe('the public shipping quote', () => {
       expect(parcels.get(made.shipmentId).vendorId).toBe(store.vendorId);
     });
 
+    it('takes the photo of the contents from the store’s own system, and mints only on one it sent and used for nothing else (round 30)', () => {
+      domesticPair();
+      const { store, caller } = merchant();
+      const media = moduleRefMedia();
+      // Sent with a secret key; a publishable one ships nothing, so it sends no photo either.
+      const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+      const publishable = apiKeys.resolve(apiKeys.issue(store.vendorId, 'publishable', 'live').secret);
+      expect(() => shipping.uploadPhoto({ dataUrl: PNG }, publishable)).toThrow(/secret key/);
+      const sent = shipping.uploadPhoto({ dataUrl: PNG }, caller);
+      expect(Date.parse(sent.keptUnusedUntil) - Date.parse(media.get(sent.photoId)!.createdAt)).toBe(48 * 3_600_000);
+      expect(media.get(sent.photoId)).toMatchObject({ ownerDid: store.did, kind: 'content' });
+
+      // A name, or an id we do not hold, is no photo — in test as in live, so a sandbox never mints what live refuses.
+      const test = apiKeys.resolve(apiKeys.issue(store.vendorId, 'secret', 'test').secret);
+      for (const who of [caller, test]) expect(() => shipping.mint(order({ contentPhotoRef: 'contents.jpg' }), who)).toThrow(/We do not hold that photo of the contents/);
+      // Another store's photo is not this one's to use.
+      const other = merchant();
+      const theirs = shipping.uploadPhoto({ dataUrl: PNG }, other.caller);
+      expect(() => shipping.mint(order({ contentPhotoRef: theirs.photoId }), caller)).toThrow(/We do not hold that photo/);
+
+      // A test mint checks it and keeps nothing; a live one makes it the parcel's evidence — and only that parcel's.
+      expect(shipping.mint(order({ contentPhotoRef: sent.photoId }), test).simulated).toBe(true);
+      expect(media.get(sent.photoId)!.link).toBeUndefined();
+      const made = shipping.mint(order({ contentPhotoRef: sent.photoId }), caller);
+      expect(media.get(sent.photoId)!.link).toEqual({ type: 'parcel', id: made.shipmentId });
+      expect(parcels.get(made.shipmentId).contentPhotoRef).toBe(sent.photoId);
+      expect(() => shipping.mint(order({ contentPhotoRef: sent.photoId, externalOrderId: 'SO-2' }), caller)).toThrow(/used for no other/);
+    });
+
     it('never hands the merchant the collection code', () => {
       // The handover secret is the only thing between a stranger and the parcel, and it belongs to the
       // person collecting, in their own app. A merchant does not need it.
       domesticPair();
-      const made = shipping.mint(order(), merchant().caller);
+      const made = mint(order(), merchant().caller);
       expect(JSON.stringify(made)).not.toContain(parcels.get(made.shipmentId).collectionCode);
       expect(JSON.stringify(made)).not.toContain('collectionCode');
     });
@@ -395,15 +432,15 @@ describe('the public shipping quote', () => {
       domesticPair();
       const store = vendors.register({ name: 'Page Key Store', country: 'KE' });
       const pk = apiKeys.resolve(apiKeys.issue(store.vendorId, 'publishable', 'live').secret);
-      expect(() => shipping.mint(order(), pk)).toThrow(/secret key/);
-      expect(() => shipping.mint(order(), ANONYMOUS)).toThrow(/secret key/);
+      expect(() => mint(order(), pk)).toThrow(/secret key/);
+      expect(() => mint(order(), ANONYMOUS)).toThrow(/secret key/);
     });
 
     it('asks for the two things a shipment cannot be sent without', () => {
       domesticPair();
       const { caller } = merchant();
-      expect(() => shipping.mint(order({ buyerMobile: '  ' }), caller)).toThrow(/somebody has to be told/i);
-      expect(() => shipping.mint(order({ contentPhotoRef: '' }), caller)).toThrow(/photo of the contents/i);
+      expect(() => mint(order({ buyerMobile: '  ' }), caller)).toThrow(/somebody has to be told/i);
+      expect(() => mint(order({ contentPhotoRef: '' }), caller)).toThrow(/photo of the contents/i);
     });
 
     it('runs a TEST key through every check and then commits nothing', () => {
@@ -411,7 +448,7 @@ describe('the public shipping quote', () => {
       // one that works in test would have worked. What it cannot give you is something to track.
       domesticPair();
       const before = parcels.list({}).length;
-      const made = shipping.mint(order(), merchant('test').caller);
+      const made = mint(order(), merchant('test').caller);
 
       expect(made.mode).toBe('test');
       expect(made.simulated).toBe(true);
@@ -431,9 +468,9 @@ describe('the public shipping quote', () => {
       const nowhere = order({ to: { country: 'KE', area: 'Nowhere' } });
 
       for (const caller of [live, test]) {
-        expect(() => shipping.mint(tooBig, caller)).toThrow(/dedicated freight/);
-        expect(() => shipping.mint(nowhere, caller)).toThrow(/no collection point in Nowhere/);
-        expect(() => shipping.mint(order({ contentPhotoRef: '' }), caller)).toThrow(/photo/i);
+        expect(() => mint(tooBig, caller)).toThrow(/dedicated freight/);
+        expect(() => mint(nowhere, caller)).toThrow(/no collection point in Nowhere/);
+        expect(() => mint(order({ contentPhotoRef: '' }), caller)).toThrow(/photo/i);
       }
     });
 
@@ -444,10 +481,10 @@ describe('the public shipping quote', () => {
       const abroad = order({ to: { country: 'ET', area: 'AddisAbaba' } });
 
       // Round 13 — a parcel crossing a border goes with its commercial invoice, in either mode.
-      expect(() => shipping.mint(abroad, merchant('test').caller)).toThrow(/needs its commercial invoice/);
-      expect(() => shipping.mint({ ...abroad, items: [{ name: 'Ankara shirt', qty: 2 }], subtotal: 3400 }, merchant('live').caller)).toThrow(/needs its commercial invoice/);
+      expect(() => mint(abroad, merchant('test').caller)).toThrow(/needs its commercial invoice/);
+      expect(() => mint({ ...abroad, items: [{ name: 'Ankara shirt', qty: 2 }], subtotal: 3400 }, merchant('live').caller)).toThrow(/needs its commercial invoice/);
       const invoice = { number: 'INV-77', currency: 'KES', importer: { name: 'Abebe Kebede' }, lines: [{ description: 'Ankara shirt', quantity: 2, netKg: 0.6, unitValue: 1700, originCountry: 'KE' }], declare: true };
-      const made = shipping.mint({ ...abroad, invoice } as never, merchant('live').caller);
+      const made = mint({ ...abroad, invoice } as never, merchant('live').caller);
       expect(made.route.crossesBorder).toBe(true);
       expect(made.papers).toEqual({ number: 'INV-77', copies: 3, currency: 'KES', totalValue: 3400 });
       // The declaration a border officer reads is the invoice's: its lines and its total.
@@ -455,7 +492,7 @@ describe('the public shipping quote', () => {
       // A shipment staying inside a country needs no invoice, and is told so rather than having one quietly dropped.
       shop('Kisumu Duka', 'Kisumu', KISUMU);
       corridors.addCorridor({ name: 'Nairobi–Kisumu', originZone: 'Nairobi', destZone: 'Kisumu' });
-      expect(() => shipping.mint(order({ invoice }) as never, merchant('live').caller)).toThrow(/does not cross a border/);
+      expect(() => mint(order({ invoice }) as never, merchant('live').caller)).toThrow(/does not cross a border/);
     });
 
     it('a parcel crossing a border goes with its papers: the buyer’s address as entered, read back, printed, corrected until it is handed in — and the shop looks for them first', () => {
@@ -473,15 +510,15 @@ describe('the public shipping quote', () => {
       const { store, caller } = merchant('live');
 
       // A test key: every check, and its papers as they would be — nothing kept.
-      expect(shipping.mint({ ...abroad, invoice: papersOf({ number: 'T-1' }) } as never, merchant('test').caller).papers).toEqual({ number: 'T-1', copies: 3, currency: 'KES', totalValue: 4300 });
+      expect(mint({ ...abroad, invoice: papersOf({ number: 'T-1' }) } as never, merchant('test').caller).papers).toEqual({ number: 'T-1', copies: 3, currency: 'KES', totalValue: 4300 });
       // Refused before anything exists, in words naming what is wrong.
-      expect(() => shipping.mint({ ...abroad, invoice: papersOf({ declare: false }) } as never, caller)).toThrow(/Confirm the declaration/);
-      expect(() => shipping.mint({ ...abroad, invoice: papersOf({ importer: { name: 'Abebe', address: 'x'.repeat(301) } }) } as never, caller)).toThrow(/whole or not at all/);
-      expect(() => shipping.mint({ ...abroad, invoice: papersOf({ lines: [{ ...lines[0], hsCode: '62' }] }) } as never, caller)).toThrow(/HS code is 6 to 10 digits/);
-      expect(() => shipping.mint({ ...abroad, invoice: papersOf({ lines: [{ ...lines[0], netKg: 5 }] }) } as never, caller)).toThrow(/more than the parcel's 2 kg/);
+      expect(() => mint({ ...abroad, invoice: papersOf({ declare: false }) } as never, caller)).toThrow(/Confirm the declaration/);
+      expect(() => mint({ ...abroad, invoice: papersOf({ importer: { name: 'Abebe', address: 'x'.repeat(301) } }) } as never, caller)).toThrow(/whole or not at all/);
+      expect(() => mint({ ...abroad, invoice: papersOf({ lines: [{ ...lines[0], hsCode: '62' }] }) } as never, caller)).toThrow(/HS code is 6 to 10 digits/);
+      expect(() => mint({ ...abroad, invoice: papersOf({ lines: [{ ...lines[0], netKg: 5 }] }) } as never, caller)).toThrow(/more than the parcel's 2 kg/);
       expect(parcels.list({}).filter((p) => p.vendorId === store.vendorId)).toHaveLength(0);
 
-      const made = shipping.mint({ ...abroad, invoice: papersOf() } as never, caller);
+      const made = mint({ ...abroad, invoice: papersOf() } as never, caller);
       const read = shipping.papers(made.shipmentId, caller);
       expect(read.current).toMatchObject({
         number: 'INV-1',
@@ -532,7 +569,7 @@ describe('the public shipping quote', () => {
       // that failed from one that succeeded silently, and both of their options are wrong without this.
       domesticPair();
       const { caller } = merchant();
-      const dto = order() as never;
+      const dto = order({ contentPhotoRef: photoOf(caller.vendorId!) }) as never;
 
       const first = (await controller.mint(dto, caller, 'order-88')) as { shipmentId: string; replayed: boolean };
       const again = (await controller.mint(dto, caller, 'order-88')) as { shipmentId: string; replayed: boolean };
@@ -560,7 +597,7 @@ describe('the public shipping quote', () => {
       const fresh = shipping.quote({ from: { pointId: from.did }, to: { pointId: to.did }, size: 'M' }, caller);
       expect(fresh.price.amount).toBeGreaterThan(quoted.price.amount); // the world really did move
 
-      const made = shipping.mint({ quoteId: quoted.quoteId, buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller);
+      const made = mint({ quoteId: quoted.quoteId, buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller);
       expect(made.price.amount).toBe(quoted.price.amount);
       expect(parcels.get(made.shipmentId).shipmentCost).toBe(quoted.price.amount);
     });
@@ -579,13 +616,13 @@ describe('the public shipping quote', () => {
 
       // A mint that THREW leaves the price held: the merchant fixes what was wrong and redeems the same
       // promise, rather than going back to the buyer with a different number.
-      expect(() => shipping.mint({ quoteId: quoted.quoteId, buyerMobile: '+254700999', contentPhotoRef: '' }, caller)).toThrow(/photo/i);
+      expect(() => mint({ quoteId: quoted.quoteId, buyerMobile: '+254700999', contentPhotoRef: '' }, caller)).toThrow(/photo/i);
       expect(quoteBook.get(quoted.quoteId!)?.redeemedAt).toBeUndefined();
 
-      const made = shipping.mint({ quoteId: quoted.quoteId, buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller);
+      const made = mint({ quoteId: quoted.quoteId, buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller);
       expect(quoteBook.get(quoted.quoteId!)?.redeemedAs).toBe(made.shipmentId);
       // One name, one shipment. A promise made for one parcel is not a licence to mint ten at a stale price.
-      expect(() => shipping.mint({ quoteId: quoted.quoteId, buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller)).toThrow(/already been used/);
+      expect(() => mint({ quoteId: quoted.quoteId, buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller)).toThrow(/already been used/);
     });
 
     it('refuses a quote that has expired, that belongs to somebody else, or that was made in the other world', () => {
@@ -597,14 +634,14 @@ describe('the public shipping quote', () => {
 
       // A stranger's quote reads as one that never existed: that an id they guessed belongs to a real
       // merchant is a fact they have not earned.
-      expect(() => shipping.mint(body, theirs.caller)).toThrow(/No such quote/);
+      expect(() => mint(body, theirs.caller)).toThrow(/No such quote/);
 
       const testKey = apiKeys.resolve(apiKeys.issue(mine.store.vendorId, 'secret', 'test').secret);
-      expect(() => shipping.mint(body, testKey)).toThrow(/cannot be used with a test one/);
+      expect(() => mint(body, testKey)).toThrow(/cannot be used with a test one/);
 
       const held = quoteBook.get(quoted.quoteId!)!;
       held.expiresAt = new Date(Date.now() - 1000).toISOString();
-      expect(() => shipping.mint(body, mine.caller)).toThrow(/expired/);
+      expect(() => mint(body, mine.caller)).toThrow(/expired/);
     });
 
     it('holds the price, not the world', () => {
@@ -616,13 +653,13 @@ describe('the public shipping quote', () => {
       const quoted = shipping.quote({ from: { country: 'KE', area: 'Nairobi' }, to: { country: 'KE', area: 'Kisumu' }, size: 'M' }, caller);
 
       agents.setAvailability(to.did, false); // merely closed for the day — still honoured
-      expect(shipping.mint({ quoteId: quoted.quoteId, buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller).price.amount).toBe(quoted.price.amount);
+      expect(mint({ quoteId: quoted.quoteId, buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller).price.amount).toBe(quoted.price.amount);
 
       const second = shipping.quote({ from: { country: 'KE', area: 'Nairobi' }, to: { pointId: to.did }, size: 'M' }, caller);
       gate.chargeShipping(to.did, 50 + TRADE_CREDIT_LIMIT, 'drain'); // float AND credit line spent → LOCKED
       agents.refreshLock(to.did);
       expect(agents.get(to.did).status).toBe('LOCKED');
-      expect(() => shipping.mint({ quoteId: second.quoteId, buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller)).toThrow(/no longer taking parcels/);
+      expect(() => mint({ quoteId: second.quoteId, buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller)).toThrow(/no longer taking parcels/);
     });
 
     it('will not mint a held price into a shop that has since been held over its ID', () => {
@@ -630,7 +667,7 @@ describe('the public shipping quote', () => {
       const { caller } = merchant();
       const quoted = shipping.quote({ from: { country: 'KE', area: 'Nairobi' }, to: { pointId: to.did }, size: 'M' }, caller);
       agents.holdForId(to.did, { reference: 'ID-TEST-HELD', at: new Date().toISOString() });
-      expect(() => shipping.mint({ quoteId: quoted.quoteId, buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller)).toThrow(/no longer taking parcels/);
+      expect(() => mint({ quoteId: quoted.quoteId, buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller)).toThrow(/no longer taking parcels/);
     });
 
     it('will not be told two different things about one shipment', () => {
@@ -638,9 +675,9 @@ describe('the public shipping quote', () => {
       const { caller } = merchant();
       const quoted = shipping.quote({ from: { country: 'KE', area: 'Nairobi' }, to: { country: 'KE', area: 'Kisumu' }, size: 'M' }, caller);
       expect(() =>
-        shipping.mint({ quoteId: quoted.quoteId, size: 'L', buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller),
+        mint({ quoteId: quoted.quoteId, size: 'L', buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller),
       ).toThrow(/not both/);
-      expect(() => shipping.mint({ buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller)).toThrow(/Send a quoteId, or say where/);
+      expect(() => mint({ buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller)).toThrow(/Send a quoteId, or say where/);
     });
 
     it('lets a developer rehearse the same checkout without minting a fresh quote each time', () => {
@@ -649,8 +686,8 @@ describe('the public shipping quote', () => {
       const { caller } = merchant('test');
       const quoted = shipping.quote({ from: { country: 'KE', area: 'Nairobi' }, to: { country: 'KE', area: 'Kisumu' }, size: 'M' }, caller);
       const body = { quoteId: quoted.quoteId, buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' };
-      expect(shipping.mint(body, caller).simulated).toBe(true);
-      expect(shipping.mint(body, caller).simulated).toBe(true);
+      expect(mint(body, caller).simulated).toBe(true);
+      expect(mint(body, caller).simulated).toBe(true);
       expect(quoteBook.get(quoted.quoteId!)?.redeemedAt).toBeUndefined();
     });
 
@@ -660,7 +697,7 @@ describe('the public shipping quote', () => {
       domesticPair();
       const store = vendors.register({ name: 'Broke Store', country: 'KE' }); // no top-up
       const caller = apiKeys.resolve(apiKeys.issue(store.vendorId, 'secret', 'live').secret);
-      const made = shipping.mint(order(), caller);
+      const made = mint(order(), caller);
       expect(made.paid).toBe(false);
       expect(made.label).toBeUndefined();
     });
@@ -704,7 +741,7 @@ describe('the public shipping quote', () => {
       // endpoint disagree with the merchant's own invoice for the same shipment.
       domesticPair();
       const { caller } = merchant();
-      const made = shipping.mint(order({ externalOrderId: 'SO-READ' }), caller);
+      const made = mint(order({ externalOrderId: 'SO-READ' }), caller);
 
       const read = shipping.shipment(made.shipmentId, caller);
       expect(read).toMatchObject({
@@ -722,7 +759,7 @@ describe('the public shipping quote', () => {
       // when it is useful; on a read it would sit in every log that ever recorded a response body.
       domesticPair();
       const { caller } = merchant();
-      const made = shipping.mint(order(), caller);
+      const made = mint(order(), caller);
       const read = shipping.shipment(made.shipmentId, caller);
       expect(JSON.stringify(read)).not.toContain(parcels.get(made.shipmentId).collectionCode);
     });
@@ -733,7 +770,7 @@ describe('the public shipping quote', () => {
       domesticPair();
       const mine = merchant();
       const theirs = merchant();
-      const made = shipping.mint(order(), mine.caller);
+      const made = mint(order(), mine.caller);
       expect(() => shipping.shipment(made.shipmentId, theirs.caller)).toThrow(/No shipment/);
     });
 
@@ -742,7 +779,7 @@ describe('the public shipping quote', () => {
       // merchant's own integration, which is exactly the wrong thing for a sandbox to teach.
       domesticPair();
       const { caller } = merchant('test');
-      const made = shipping.mint(order(), caller);
+      const made = mint(order(), caller);
       expect(made.simulated).toBe(true);
       expect(() => shipping.shipment(made.shipmentId, caller)).toThrow(/simulated shipment/);
     });
@@ -750,7 +787,7 @@ describe('the public shipping quote', () => {
     it('cancels a shipment nobody has picked up yet', () => {
       domesticPair();
       const { caller } = merchant();
-      const made = shipping.mint(order(), caller);
+      const made = mint(order(), caller);
 
       const cancelled = shipping.cancelShipment(made.shipmentId, caller, 'buyer changed their mind');
       expect(cancelled.status).toBe('Voided');
@@ -762,7 +799,7 @@ describe('the public shipping quote', () => {
       // A credential that can undo a shipment must never sit in a page. A publishable key asks prices.
       domesticPair();
       const { store, caller } = merchant();
-      const made = shipping.mint(order(), caller);
+      const made = mint(order(), caller);
       expect(() => shipping.cancelShipment(made.shipmentId, publishable(store.vendorId))).toThrow(/secret key/);
       expect(parcels.get(made.shipmentId).status).toBe('Created');
     });
@@ -772,7 +809,7 @@ describe('the public shipping quote', () => {
       // call. The window is the network's own rule, not a second one invented for the API.
       domesticPair();
       const { caller } = merchant();
-      const made = shipping.mint(order(), caller);
+      const made = mint(order(), caller);
       parcels.get(made.shipmentId).status = 'On_Bus';
       expect(() => shipping.cancelShipment(made.shipmentId, caller)).toThrow(/Cannot cancel/);
     });
@@ -781,7 +818,7 @@ describe('the public shipping quote', () => {
       domesticPair();
       const mine = merchant();
       const theirs = merchant();
-      const made = shipping.mint(order(), mine.caller);
+      const made = mint(order(), mine.caller);
       expect(() => shipping.cancelShipment(made.shipmentId, theirs.caller)).toThrow(/No shipment/);
       expect(parcels.get(made.shipmentId).status).toBe('Created');
     });

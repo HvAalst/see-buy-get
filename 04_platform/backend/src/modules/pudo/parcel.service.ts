@@ -1679,7 +1679,7 @@ export class ParcelService implements OnApplicationBootstrap {
    * Generates the handover collection code AND a public tracking key, persists the label, and books the
    * split/contribution settlement (buyer's capped share + the vendor's share).
    */
-  createInbound(input: { vendorId: string; externalOrderId?: string; originAgentDid?: string; originZone?: string; destAgentDid: string; buyerMobile: string; buyerEmail?: string; size?: ParcelSize; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; contentPhotoRef: string; fragile?: boolean; natureCode?: CargoNature; items?: Array<{ name: string; qty: number }>; subtotal?: number; declaredValue?: number; customsCurrency?: string; shippingPolicy: ShippingPolicy; routeMode?: 'flexible' | 'locked'; quote: ShipmentQuote }): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
+  createInbound(input: { vendorId: string; externalOrderId?: string; originAgentDid?: string; originZone?: string; destAgentDid: string; buyerMobile: string; buyerEmail?: string; size?: ParcelSize; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; contentPhotoRef: string; fragile?: boolean; natureCode?: CargoNature; items?: Array<{ name: string; qty: number }>; subtotal?: number; declaredValue?: number; customsCurrency?: string; shippingPolicy: ShippingPolicy; routeMode?: 'flexible' | 'locked'; quote: ShipmentQuote; photoOfParcel?: string }): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
     const dest = this.agents.get(input.destAgentDid);
     this.requireSellable(input.quote, [input.originAgentDid, input.destAgentDid]);
     const vendor = this.vendors.get(input.vendorId); // the store IS the birthplace — read it, don't infer it
@@ -1692,6 +1692,12 @@ export class ParcelService implements OnApplicationBootstrap {
     const originZone = origin?.zone ?? input.originZone;
     if (!originZone) throw new GlosError('FIELD_REQUIRED', 'A shipment needs an origin: a drop-off PUDO, or the store collection point it leaves from');
     if (!input.contentPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'A photo of the contents is required (the baseline for dispute resolution)');
+    // Round 30 — THE PHOTO IS WITH US (the user: "A store's content photo, really kept"). A name, or an id we do not hold,
+    // is no photo: a damage claim on this parcel would have no "before" to be judged against. It is the store's own and
+    // this parcel's alone — refused before anything is written. A return is the same box going back, with its photo.
+    if (!input.photoOfParcel && !this.media.mayAdopt(input.contentPhotoRef, vendor.did)) {
+      throw new GlosError('PHOTO_REQUIRED', 'We do not hold that photo of the contents. Upload it first, then send its id: a photo the store took of this parcel, used for no other.', { field: 'contentPhotoRef' });
+    }
     // Derive the tier from dimensions+weight when provided; otherwise trust the explicit size.
     const size: ParcelSize = input.dimensionsCm ? classifySize({ ...input.dimensionsCm, kg: input.weightKg ?? SIZE_WEIGHT_KG[input.size ?? 'M'] }) : (input.size ?? 'M');
     const weightKg = input.weightKg ?? SIZE_WEIGHT_KG[size];
@@ -1834,7 +1840,9 @@ export class ParcelService implements OnApplicationBootstrap {
     this.keep(parcelId, { receiver: this.accountAt(parcel.receiverPhoneHash) });
     // S26: attach the vendor's content photo (the baseline a dispute is judged against) to the parcel →
     // shipment-proof bin. Without this link the orphan-reaper would delete it before the parcel is delivered.
-    this.media.link(input.contentPhotoRef, { type: 'parcel', id: parcelId }, 'content');
+    // Round 30 — adopted as the store's own (checked above); a return carries the first leg's photo on with it.
+    if (input.photoOfParcel) this.media.link(input.contentPhotoRef, { type: 'parcel', id: parcelId }, 'content');
+    else this.media.adopt(input.contentPhotoRef, vendor.did, { type: 'parcel', id: parcelId }, 'content');
 
     // Prepaid gate: bill the vendor's balance with the country daughter company → 'ParcelPaid' or 'unpaid'.
     const bill = this.vendors.billShipment(input.vendorId, parcelId, shipmentCost, quote.fx?.buffer, chosen.tax, Math.round((chosen.provision + cover.premium) * 100) / 100);

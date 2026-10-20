@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Checkbox, Chip, CodeCard, ErrorNote, GlanceNumber, Icon, Note, Pager, Pill, ReadAloud, PushPrompt, SearchInput, ExplainerReset, SelectionBar, Sheet, TopUpCostNote } from '../../../shared/ui';
+import { AuthImage, Button, Card, Checkbox, Chip, CodeCard, ErrorNote, GlanceNumber, Icon, Note, Pager, Pill, ReadAloud, PushPrompt, SearchInput, ExplainerReset, SelectionBar, Sheet, TopUpCostNote } from '../../../shared/ui';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { triggerDownload } from '../../../shared/download';
 import { toggleAll, toggleId } from '../../../shared/register';
@@ -523,6 +523,18 @@ function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose:
   );
 }
 
+/** The order's photo of its contents — and, where we do not hold it, that said in words rather than an empty tile. */
+function ContentsPhoto({ mediaId, load }: { mediaId: string; load: VendorActions['loadMedia'] }) {
+  const t = useT();
+  const [gone, setGone] = useState(false);
+  return (
+    <div style="margin-top:10px">
+      <p class="field__label">{t('vendor.order.contentsPhoto')}</p>
+      {gone ? <p class="hint">{t('vendor.order.contentsPhotoGone')}</p> : <AuthImage mediaId={mediaId} load={load} alt={t('vendor.order.contentsPhoto')} onFailed={() => setGone(true)} />}
+    </div>
+  );
+}
+
 function OrderSheet({ state, actions, client }: { state: VendorState; actions: VendorActions; client: SbgClient | null }) {
   const t = useT();
   const d = state.detail;
@@ -579,6 +591,8 @@ function OrderSheet({ state, actions, client }: { state: VendorState; actions: V
               <b class="mono-t">{ssccWords(d.sscc, state.vendor?.gs1)}</b>
             </div>
           ) : null}
+          {/* Round 30 — the photo the store took of what is in it: the "before" a damage claim is judged against. */}
+          {d.contentPhotoRef ? <ContentsPhoto mediaId={d.contentPhotoRef} load={actions.loadMedia} /> : null}
           {d.paidStatus !== 'ParcelPaid' ? (
             <Button chevron={false} busy={state.busy === `settle:${d.parcelId}`} onClick={() => void actions.settleOrder(d.parcelId)}>
               {t('vendor.payNow')}

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { contentPhotoOver } from './content-photo';
 import { OutboxMailSender } from '../src/foundation/mail/outbox-mail.sender';
 
 describe('GLOS backend (e2e)', () => {
@@ -769,7 +770,7 @@ describe('GLOS backend (e2e)', () => {
     const { asked: topped } = await fund(`/v1/sbg/vendors/${vendor.body.vendorId}/top-up`, 50, acme, auth); // prepay the daughter co
     expect(topped.body.secret).toBeUndefined();
     await request(http).post('/v1/sbg/inbound/orders').set(auth).send({ vendorId: vendor.body.vendorId, originPudoDid: origin, destPudoDid: dest, buyerMobile: '+254700999', size: 'M', contentPhotoRef: 'content.jpg' }).expect(403);
-    const order = await request(http).post('/v1/sbg/inbound/orders').set(acme).send({ vendorId: vendor.body.vendorId, externalOrderId: 'ORD-77', originPudoDid: origin, destPudoDid: dest, buyerMobile: '+254700999', size: 'M', contentPhotoRef: 'content.jpg', items: [{ name: 'Books', qty: 3 }] }).expect(201);
+    const order = await request(http).post('/v1/sbg/inbound/orders').set(acme).send({ vendorId: vendor.body.vendorId, externalOrderId: 'ORD-77', originPudoDid: origin, destPudoDid: dest, buyerMobile: '+254700999', size: 'M', contentPhotoRef: await contentPhotoOver(http, acme), items: [{ name: 'Books', qty: 3 }] }).expect(201);
     const parcelId = order.body.parcel.parcelId as string;
     const collectionCode = order.body.parcel.collectionCode as string;
     expect(order.body.label.svg).toContain('<svg');
@@ -815,6 +816,8 @@ describe('GLOS backend (e2e)', () => {
     expect((await request(http).get(`/v1/sbg/vendors/${vendor.body.vendorId}/orders/${parcelId}`).set(acme).expect(200)).body.damageReport).toEqual({ number: `DCR-${parcelId}` });
     const theirs = await request(http).get(`/v1/sbg/parcels/${parcelId}/damage-report`).set(acme).expect(200);
     expect(theirs.body.insurer).toMatchObject({ insurer: 'Jubilee Allianz Claims' });
+    // Round 30 — the "before" the claim is judged against is in it: the store's own photo of the contents, fingerprinted.
+    expect(theirs.body.body.photographs).toEqual(expect.arrayContaining([expect.objectContaining({ what: 'contents', mediaId: order.body.parcel.contentPhotoRef, sha256: expect.stringMatching(/^[0-9a-f]{64}$/) })]));
     expect((await request(http).get(`/v1/sbg/parcels/${parcelId}/damage-report/links`).set(acme).expect(200)).body.items).toEqual([expect.objectContaining({ state: 'ready', opened: 0 })]);
 
     // Buyer collection.
@@ -856,7 +859,7 @@ describe('GLOS backend (e2e)', () => {
     // Two inbound parcels, intaken at the origin.
     const ids: string[] = [];
     for (let i = 0; i < 2; i += 1) {
-      const order = await request(http).post('/v1/sbg/inbound/orders').set(hubShop).send({ vendorId: vendor.body.vendorId, originPudoDid: origin, destPudoDid: dest, buyerMobile: `+25470${i}`, size: 'M', contentPhotoRef: 'content.jpg' }).expect(201);
+      const order = await request(http).post('/v1/sbg/inbound/orders').set(hubShop).send({ vendorId: vendor.body.vendorId, originPudoDid: origin, destPudoDid: dest, buyerMobile: `+25470${i}`, size: 'M', contentPhotoRef: await contentPhotoOver(http, hubShop) }).expect(201);
       const pid = order.body.parcel.parcelId as string;
       await request(http).post(`/v1/sbg/parcels/${pid}/intake`).set(auth).send({ agentDid: origin }).expect(201);
       ids.push(pid);

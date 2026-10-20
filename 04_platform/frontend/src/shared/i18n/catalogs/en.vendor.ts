@@ -571,6 +571,10 @@ export const enVendor = {
 
   // Photo-capture field.
   'vendor.photo.captured': 'Photo captured — tap to retake',
+  'vendor.photo.uploading': 'Sending the photo…',
+  'vendor.photo.failed': 'The photo did not go — tap to try again',
+  'vendor.order.contentsPhoto': 'What is in it, as you photographed it',
+  'vendor.order.contentsPhotoGone': 'We do not hold a photo of what is in this one.',
 
   // Toasts + notes (from the hook — plain t(), read at action time).
   'vendor.toast.freightTitle': 'Sent to dedicated freight',

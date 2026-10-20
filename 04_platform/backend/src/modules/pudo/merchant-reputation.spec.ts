@@ -52,6 +52,7 @@ import { LedgerService } from '../../foundation/ledger/ledger.service';
 import { InMemoryLedgerAdapter } from '../../foundation/ledger/in-memory-ledger.adapter';
 import { LEDGER_ADAPTER } from '../../foundation/ledger/ledger.types';
 import { EventBus } from '../../foundation/events/event-bus.service';
+import { contentPhotos } from '../../../test/content-photo';
 
 /**
  * A merchant's reputation, out of things we watched.
@@ -73,6 +74,8 @@ describe('what a store earns by shipping', () => {
   let merchants: MerchantRatingService;
   let entities: EntityService;
 
+  /** Round 30 — a store's real photo of the contents, as the order door requires: one we hold, its own. */
+  let photoOf: (vendorId: string) => string;
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -91,6 +94,7 @@ describe('what a store earns by shipping', () => {
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
       ],
     }).compile();
+    photoOf = contentPhotos(moduleRef);
     entities = moduleRef.get(EntityService);
     entities.seed();
     moduleRef.get(FxService).seed();
@@ -141,7 +145,7 @@ describe('what a store earns by shipping', () => {
     seq += 1;
     const { parcel } = parcels.createInbound({
       vendorId: ctx.vendor.vendorId, originAgentDid: ctx.from.did, destAgentDid: ctx.to.did,
-      buyerMobile: `+25470066${seq}`, contentPhotoRef: 'c.jpg', size: 'M',
+      buyerMobile: `+25470066${seq}`, contentPhotoRef: photoOf(ctx.vendor.vendorId), size: 'M',
       dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 2, declaredValue: 100,
       routeMode: 'locked', shippingPolicy: ctx.vendor.shippingPolicy,
       quote: routing.quoteShipment(ctx.from.did, ctx.to.did, 'M'),

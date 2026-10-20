@@ -8,6 +8,7 @@ import { RoutingService, type ShipmentQuote } from './routing.service';
 import { QuoteBookService, type HeldQuote } from './quote-book.service';
 import { ParcelService } from './parcel.service';
 import { VendorService } from './vendor.service';
+import { MediaService } from './media.service';
 import { requireCountryCode } from './country';
 import { declareFor } from './customs';
 import { BorderCrossing } from './country';
@@ -199,11 +200,28 @@ export class ShippingApiService {
     private readonly parcels: ParcelService,
     private readonly vendors: VendorService,
     private readonly quotes: QuoteBookService,
+    // Round 30 — the photo of the contents a shipment names: uploaded by the store's own system, checked before minting.
+    private readonly media: MediaService,
     @Inject(GEOCODER) private readonly geocoder: Geocoder,
     @Inject(ROUTER) private readonly router: Router,
     // A store parcel's papers abroad (round 13): its commercial invoice, checked with the declaration and kept with the parcel.
     @Optional() private readonly invoices?: ParcelInvoiceService,
   ) {}
+
+  /**
+   * Round 30 — A PHOTO OF WHAT IS IN THE BOX, from a store's own system (the user: "It sends the photo too"). Kept as
+   * the store's own; the shipment that names it as contentPhotoRef makes it that shipment's evidence, kept with it.
+   * A secret key, as making a shipment needs — a test one too, so an integration is tried end to end; a photo no
+   * shipment names is removed when it is two days old, the way an abandoned capture in the app is.
+   */
+  uploadPhoto(input: { dataUrl: string; thumbDataUrl?: string }, caller: Caller): { photoId: string; keptUnusedUntil: string } {
+    if (!ApiKeyService.canMint(caller) || !caller.vendorId) {
+      throw new GlosError('FORBIDDEN', 'A photo for a shipment needs a secret key (sk_…), as making the shipment does');
+    }
+    const vendor = this.vendors.get(caller.vendorId);
+    const { mediaId } = this.media.upload({ ownerDid: vendor.did, kind: 'content', dataUrl: input.dataUrl, thumbDataUrl: input.thumbDataUrl });
+    return { photoId: mediaId, keptUnusedUntil: this.media.unusedUntil(mediaId)! };
+  }
 
   quote(input: { from: QuoteEndpoint; to: QuoteEndpoint; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; size?: ParcelSize }, caller: Caller = ANONYMOUS): PublicQuote {
     const from = this.resolve(input.from, 'from');
@@ -304,6 +322,11 @@ export class ShippingApiService {
     const vendor = this.vendors.get(caller.vendorId);
     if (!input.buyerMobile?.trim()) throw new GlosError('PHONE_REQUIRED', 'Give the buyer’s mobile — somebody has to be told where to collect it');
     if (!input.contentPhotoRef?.trim()) throw new GlosError('PHOTO_REQUIRED', 'A photo of the contents is required — it is the baseline a damage claim is judged against');
+    // Round 30 — one this store sent us and has used for no other shipment. Checked in BOTH modes, before the test
+    // branch: a name or an id we do not hold would mint in test and be refused live, which is what a sandbox must never do.
+    if (!this.media.mayAdopt(input.contentPhotoRef.trim(), vendor.did)) {
+      throw new GlosError('PHOTO_REQUIRED', 'We do not hold that photo of the contents. Send it with POST /v1/sbg/shipping/photos and name the photoId it gives as contentPhotoRef: a photo of this shipment, used for no other.', { field: 'contentPhotoRef' });
+    }
 
     // REDEEM, or re-price. A held quote is honoured at the figure the buyer was shown; without one the
     // price is whatever the world says now, which is the older behaviour and still the right default for a

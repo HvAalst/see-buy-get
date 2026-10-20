@@ -96,6 +96,7 @@ import { FundingService } from '../../foundation/funding/funding.service';
 import { FundingPayerRegistrar } from './funding-payers';
 import { SandboxFundingRail } from '../../foundation/funding/sandbox-funding-rail.adapter';
 import { FUNDING_RAIL } from '../../foundation/funding/funding.types';
+import { contentPhotos } from '../../../test/content-photo';
 
 /**
  * ITEM 9 — dimensional weight where the dimensions are actually known.
@@ -123,6 +124,8 @@ describe('dimensional weight', () => {
   let identity: IdentityController;
   let persons: PersonService;
 
+  /** Round 30 — a store's real photo of the contents, as the order door requires: one we hold, its own. */
+  let photoOf: (vendorId: string) => string;
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -144,6 +147,7 @@ describe('dimensional weight', () => {
       ],
       controllers: [SbgController, IdentityController],
     }).compile();
+    photoOf = contentPhotos(moduleRef);
     entities = moduleRef.get(EntityService);
     entities.seed(); // compile() runs no lifecycle hooks — the sisters are seeded by hand, as at boot
     moduleRef.get(FxService).seed();
@@ -325,7 +329,7 @@ describe('dimensional weight', () => {
       const onTheMap = controller.quote(from.did, to.did, undefined, '30', '20', '10', '1.6') as unknown as { transportFactor: number };
       const minted = controller.createInbound({
         vendorId: store.vendorId, originPudoDid: from.did, destPudoDid: to.did, buyerMobile: '+254700900001',
-        dimensionsCm: { l: box.l, w: box.w, h: box.h }, weightKg: box.kg, routeMode: 'locked', contentPhotoRef: 'c.jpg',
+        dimensionsCm: { l: box.l, w: box.w, h: box.h }, weightKg: box.kg, routeMode: 'locked', contentPhotoRef: photoOf(store.vendorId),
       } as never, { role: 'genesis', did: store.did } as never) as unknown as { parcel: { parcelId: string } };
       const parcel = parcels.get(minted.parcel.parcelId);
       expect(parcel.transportFactor).toBe(measuredFactor(box));
@@ -392,7 +396,7 @@ describe('dimensional weight', () => {
       const box = { l: 52, w: 38, h: 28, kg: 6 };
       const minted = controller.createInbound({
         vendorId: store.vendorId, originPudoDid: from.did, destPudoDid: to.did, buyerMobile: '+254700900002',
-        dimensionsCm: { l: box.l, w: box.w, h: box.h }, weightKg: box.kg, routeMode: 'flexible', contentPhotoRef: 'c.jpg',
+        dimensionsCm: { l: box.l, w: box.w, h: box.h }, weightKg: box.kg, routeMode: 'flexible', contentPhotoRef: photoOf(store.vendorId),
       } as never, { role: 'genesis', did: store.did } as never) as unknown as { parcel: { parcelId: string } };
       const stored = parcels.get(minted.parcel.parcelId);
       expect(stored.size).toBe('L'); // the tier is still derived, and this is still a large
@@ -407,7 +411,7 @@ describe('dimensional weight', () => {
       const { from, to, store } = route();
       const minted = controller.createInbound({
         vendorId: store.vendorId, originPudoDid: from.did, destPudoDid: to.did, buyerMobile: '+254700900003',
-        size: 'M', routeMode: 'locked', contentPhotoRef: 'c.jpg',
+        size: 'M', routeMode: 'locked', contentPhotoRef: photoOf(store.vendorId),
       } as never, { role: 'genesis', did: store.did } as never) as unknown as { parcel: { parcelId: string } };
       const stored = parcels.get(minted.parcel.parcelId);
       expect(ParcelService.transportFactorOf(stored)).toBe(SIZE_TRANSPORT_FACTOR.M);

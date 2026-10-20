@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { contentPhotoOver, shipmentPhotoOver } from './content-photo';
 
 /**
  * EVERY LABEL FOR A THERMAL PRINTER, over the wire (round 27, the user: "Thermal labels (ZPL)"; "Every label we print").
@@ -96,7 +97,7 @@ describe('every label for a thermal printer, over the wire', () => {
     // A STORE: its paid order's label prints again, and as ZPL; another store's does not.
     const store = await aStore();
     const order = { vendorId: store.id, originPudoDid: nairobi.did, destPudoDid: kisumu.did, buyerMobile: `+2547${digits()}1`, size: 'M', weightKg: 2, contentPhotoRef: 'content.jpg' };
-    const made = (await http().post('/v1/sbg/inbound/orders').set(store.token).send(order).expect(201)).body;
+    const made = (await http().post('/v1/sbg/inbound/orders').set(store.token).send({ ...order, contentPhotoRef: await contentPhotoOver(app.getHttpServer(), store.token) }).expect(201)).body;
     const parcelId = made.parcel.parcelId as string;
     const own = `/v1/sbg/vendors/${store.id}/orders/${parcelId}`;
     expect((await http().get(`${own}/label`).set(store.token).expect(200)).body.svg).toBe(made.label.svg);
@@ -110,7 +111,7 @@ describe('every label for a thermal printer, over the wire', () => {
 
     // An order not yet paid has no label to print — said so.
     const broke = await aStore(false);
-    const unpaid = (await http().post('/v1/sbg/inbound/orders').set(broke.token).send({ ...order, vendorId: broke.id }).expect(201)).body;
+    const unpaid = (await http().post('/v1/sbg/inbound/orders').set(broke.token).send({ ...order, vendorId: broke.id, contentPhotoRef: await contentPhotoOver(app.getHttpServer(), broke.token) }).expect(201)).body;
     expect(unpaid.paid).toBe(false);
     const refused = await http().get(`/v1/sbg/vendors/${broke.id}/orders/${unpaid.parcel.parcelId}/label.zpl`).set(broke.token).expect(400);
     expect(refused.headers['content-type']).toMatch(/json/);
@@ -125,7 +126,7 @@ describe('every label for a thermal printer, over the wire', () => {
     const keyOf = async (store: { id: string; token: { authorization: string } }, kind: 'secret' | 'publishable', mode: 'live' | 'test' = 'live') =>
       (await http().post(`/v1/sbg/vendors/${store.id}/api-keys`).set(store.token).send({ kind, mode }).expect(201)).body.secret as string;
     const shipment = { from: { pointId: nairobi.did }, to: { pointId: kisumu.did }, dimensionsCm: { l: 20, w: 15, h: 10 }, weightKg: 1, buyerMobile: '+254700000401', contentPhotoRef: 'content.jpg' };
-    const mint = async (key: string) => (await http().post('/v1/sbg/shipping/shipments').set('x-sbg-key', key).send(shipment).expect(201)).body;
+    const mint = async (key: string) => (await http().post('/v1/sbg/shipping/shipments').set('x-sbg-key', key).send({ ...shipment, contentPhotoRef: await shipmentPhotoOver(app.getHttpServer(), key) }).expect(201)).body;
     const label = (key: string, id: string, format?: string) => http().get(`/v1/sbg/shipping/shipments/${id}/label${format ? `?format=${format}` : ''}`).set('x-sbg-key', key);
 
     const store = await aStore();

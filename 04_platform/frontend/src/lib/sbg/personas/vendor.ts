@@ -45,6 +45,8 @@ export function createVendorApi(sbg: SbgClient) {
   return {
     // Its tax invoices (KRA eTIMS, Kenya only).
     ...createFiscalApi(sbg),
+    // Round 30 — its photos for real: the contents of each order (the "before" a claim is judged against), its GS1 licence.
+    ...createMediaApi(sbg),
     /** The store's public record (never re-exposes the secret). */
     me: (vendorId: string) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}', { params: { path: { id: vendorId } } })),
 
@@ -129,8 +131,6 @@ export function createVendorApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/gs1/disputes/{disputeId}/licence', { params: { path: { id: vendorId, disputeId } }, body: { licenceRef } })),
     withdrawGs1Dispute: (vendorId: string, disputeId: string) =>
       sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/gs1/disputes/{disputeId}/withdraw', { params: { path: { id: vendorId, disputeId } } })),
-    /** The licence itself: a photograph or a screenshot, kept on our server as the store's own media. */
-    uploadGs1Licence: (dataUrl: string, thumbDataUrl?: string) => createMediaApi(sbg).uploadMedia('gs1_licence', dataUrl, thumbDataUrl),
 
     /** Round 27 — an order's label, to print again once it is paid; and the same for a thermal label printer (ZPL). */
     orderLabel: (vendorId: string, parcelId: string) =>

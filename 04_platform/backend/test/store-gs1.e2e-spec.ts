@@ -4,6 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { ssccOf } from '../src/foundation/gs1/gs1';
 import { ShipperCodesService, vendorCoder } from '../src/modules/pudo/shipper-codes.service';
+import { contentPhotoOver, shipmentPhotoOver } from './content-photo';
 
 /**
  * A STORE'S LABELS CARRY A GS1 CODE, over the wire (round 29, the user: "A store's labels carry a GS1 code"; "In the Store
@@ -103,7 +104,7 @@ describe('a store’s labels carry a GS1 code, over the wire', () => {
     expect((await http().get(`/v1/sbg/vendors/${store.id}`).set(store.token).expect(200)).body.gs1).toMatchObject({ companyPrefix: P, extensionDigit: 2, left: expect.any(Number) });
 
     // Paid at once: its SSCC, on the label as a person reads it and as a scanner does, on the thermal label, on the order.
-    const made = (await http().post('/v1/sbg/inbound/orders').set(store.token).send(order).expect(201)).body;
+    const made = (await http().post('/v1/sbg/inbound/orders').set(store.token).send({ ...order, contentPhotoRef: await contentPhotoOver(app.getHttpServer(), store.token) }).expect(201)).body;
     const first = ssccOf(P, 2, 0);
     expect(made.parcel.sscc).toBe(first);
     expect(made.label.svg).toContain(`(00) ${first}`);
@@ -112,13 +113,13 @@ describe('a store’s labels carry a GS1 code, over the wire', () => {
 
     // Through the shipping API: the next number, said on the shipment and when it is read back.
     const sk = (await http().post(`/v1/sbg/vendors/${store.id}/api-keys`).set(store.token).send({ kind: 'secret', mode: 'live' }).expect(201)).body.secret as string;
-    const minted = (await http().post('/v1/sbg/shipping/shipments').set('x-sbg-key', sk).send({ from: { pointId: nairobi }, to: { pointId: kisumu }, dimensionsCm: { l: 20, w: 15, h: 10 }, weightKg: 1, buyerMobile: '+254700000501', contentPhotoRef: 'content.jpg' }).expect(201)).body;
+    const minted = (await http().post('/v1/sbg/shipping/shipments').set('x-sbg-key', sk).send({ from: { pointId: nairobi }, to: { pointId: kisumu }, dimensionsCm: { l: 20, w: 15, h: 10 }, weightKg: 1, buyerMobile: '+254700000501', contentPhotoRef: await shipmentPhotoOver(app.getHttpServer(), sk) }).expect(201)).body;
     expect(minted.sscc).toBe(ssccOf(P, 2, 1));
     expect((await http().get(`/v1/sbg/shipping/shipments/${minted.shipmentId}`).set('x-sbg-key', sk).expect(200)).body.sscc).toBe(ssccOf(P, 2, 1));
 
     // Given up: the next carries none; what was labelled keeps its code.
     await http().delete(`/v1/sbg/vendors/${store.id}/gs1`).set(store.token).expect(200);
-    const after = (await http().post('/v1/sbg/inbound/orders').set(store.token).send(order).expect(201)).body;
+    const after = (await http().post('/v1/sbg/inbound/orders').set(store.token).send({ ...order, contentPhotoRef: await contentPhotoOver(app.getHttpServer(), store.token) }).expect(201)).body;
     expect(after.parcel.sscc).toBeUndefined();
     expect((await http().get(`/v1/sbg/vendors/${store.id}/orders/${made.parcel.parcelId}`).set(store.token).expect(200)).body.sscc).toBe(first);
 
@@ -126,7 +127,7 @@ describe('a store’s labels carry a GS1 code, over the wire', () => {
     const later = await aStore(false);
     const L = prefix();
     await http().put(`/v1/sbg/vendors/${later.id}/gs1`).set(later.token).send({ companyPrefix: L, extensionDigit: 0 }).expect(200);
-    const waiting = (await http().post('/v1/sbg/inbound/orders').set(later.token).send({ ...order, vendorId: later.id }).expect(201)).body;
+    const waiting = (await http().post('/v1/sbg/inbound/orders').set(later.token).send({ ...order, vendorId: later.id, contentPhotoRef: await contentPhotoOver(app.getHttpServer(), later.token) }).expect(201)).body;
     expect(waiting.paid).toBe(false);
     expect(waiting.parcel.sscc).toBeUndefined();
     await fund(`/v1/sbg/vendors/${later.id}/top-up`, later.token, 5000);
@@ -142,7 +143,7 @@ describe('a store’s labels carry a GS1 code, over the wire', () => {
     const store = await aStore(false);
     const P = `62${String(Math.floor(Math.random() * 9_000_000_000) + 1_000_000_000)}`; // 12 digits: 10,000 codes a digit
     await http().put(`/v1/sbg/vendors/${store.id}/gs1`).set(store.token).send({ companyPrefix: P, extensionDigit: 7 }).expect(200);
-    const waiting = (await http().post('/v1/sbg/inbound/orders').set(store.token).send({ vendorId: store.id, originPudoDid: nairobi, destPudoDid: kisumu, buyerMobile: `+2547${digits()}2`, size: 'M', weightKg: 2, contentPhotoRef: 'content.jpg' }).expect(201)).body;
+    const waiting = (await http().post('/v1/sbg/inbound/orders').set(store.token).send({ vendorId: store.id, originPudoDid: nairobi, destPudoDid: kisumu, buyerMobile: `+2547${digits()}2`, size: 'M', weightKg: 2, contentPhotoRef: await contentPhotoOver(app.getHttpServer(), store.token) }).expect(201)).body;
     expect(waiting.paid).toBe(false);
 
     // Every code under digit 7 given out since the order was made.

@@ -130,6 +130,34 @@ export function roadPng(sort = 'washout', width = 320, height = 200) {
   });
 }
 
+/**
+ * Round 30 — WHAT IS IN THE BOX, seen from above: an open carton, its flaps, and the goods in it. The photo a store
+ * takes before it ships, which a damage claim is judged against — so a seeded one should look like a parcel's
+ * contents and not like a document. `seed` moves the goods, so no two orders show the same picture.
+ */
+export function contentsPng(seed = 1, width = 320, height = 200) {
+  const items = [0, 1, 2].map((i) => {
+    const w = 46 + ((seed * (i + 5) * 29) % 40);
+    const h = 30 + ((seed * (i + 2) * 17) % 34);
+    const x0 = 92 + i * 52 + ((seed * (i + 1) * 11) % 14);
+    const y0 = 58 + ((seed * (i + 3) * 13) % 54);
+    const tone = [[176, 62, 58], [52, 98, 160], [222, 178, 64]][(seed + i) % 3];
+    return { x0, y0, x1: Math.min(x0 + w, 232), y1: Math.min(y0 + h, 152), tone }; // inside the carton, never over its edge
+  });
+  return png(width, height, (x, y) => {
+    // The table it stands on, then the carton's flaps opened out, then its inside.
+    if (x < 60 || x >= 260 || y < 20 || y >= 180) return [214, 210, 202];
+    if (x < 80 || x >= 240 || y < 40 || y >= 160) return [190, 150, 98];
+    for (const it of items) if (x >= it.x0 && x < it.x1 && y >= it.y0 && y < it.y1) return it.tone;
+    return [150, 112, 70];
+  });
+}
+
+/** …as the data URL the media route takes. */
+export function contentsDataUrl(seed) {
+  return `data:image/png;base64,${contentsPng(seed).toString('base64')}`;
+}
+
 export function roadDataUrl(sort) {
   return `data:image/png;base64,${roadPng(sort).toString('base64')}`;
 }

@@ -11,7 +11,7 @@
  * Sandbox-only by construction: it uses the public phone-OTP echo and the ungated
  * operator mint, both of which die the moment GLOS_CLIENT_SECRET is configured.
  */
-import { documentDataUrl, roadDataUrl } from './seed-image.mjs';
+import { contentsDataUrl, documentDataUrl, roadDataUrl } from './seed-image.mjs';
 
 const API = process.env.SBG_API ?? 'http://localhost:3000';
 // The demo password. It was 'seebuyget' — the first thing anybody guessing would try, and refused now wherever a
@@ -70,6 +70,16 @@ async function fundVia(path, amount, tok, op) {
  */
 async function uploadDoc(token, kind, sort, seed) {
   const r = await req('POST', '/v1/sbg/media', { token, body: { kind, dataUrl: documentDataUrl(sort, seed) } });
+  if (!r.ok || !r.data?.mediaId) return undefined;
+  return r.data.mediaId;
+}
+
+/**
+ * Round 30 — the photo of a store order's contents, uploaded by the store as its own. The order door makes a store's
+ * order only on a photo we hold, for that parcel alone, so each order uploads its own. Undefined when it cannot.
+ */
+async function uploadContents(token, seed) {
+  const r = await req('POST', '/v1/sbg/media', { token, body: { kind: 'content', dataUrl: contentsDataUrl(seed) } });
   if (!r.ok || !r.data?.mediaId) return undefined;
   return r.data.mediaId;
 }
@@ -649,7 +659,7 @@ const run = async () => {
         externalOrderId: `SO-${stamp}-C`,
         dimensionsCm: { l: 30, w: 20, h: 10 },
         weightKg: 1.6,
-        contentPhotoRef: `SO-${stamp}-C-contents.jpg`,
+        contentPhotoRef: await uploadContents(tokV, 3),
         routeMode: 'locked',
         items: [{ name: 'Denim jacket', qty: 1 }],
         subtotal: 55,
@@ -703,7 +713,7 @@ const run = async () => {
         externalOrderId: ref,
         dimensionsCm: dims,
         weightKg: kg,
-        contentPhotoRef: `${ref}-contents.jpg`,
+        contentPhotoRef: await uploadContents(tokV, i + 10),
         routeMode: i % 3 === 0 ? 'flexible' : 'locked',
         items: PRODUCTS[i % PRODUCTS.length],
         subtotal: 20 + (i % 7) * 8,

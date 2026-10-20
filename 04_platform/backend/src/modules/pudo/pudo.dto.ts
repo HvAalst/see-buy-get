@@ -195,6 +195,14 @@ export class HandoverDto {
 }
 
 /** S26 — upload one image as a base64 data URL (the client downscales + strips EXIF first). */
+/** Round 30 — a store's own system sends the photo of a shipment's contents (POST shipping/photos). */
+export class ShippingPhotoDto {
+  /** The photo as a data URL: data:image/jpeg;base64,… (JPEG, PNG or WebP, up to 500 KB). */
+  @IsString() dataUrl!: string;
+  /** A small thumbnail the same way, up to 64 KB: what a list shows before the full photo is asked for. */
+  @IsOptional() @IsString() thumbDataUrl?: string;
+}
+
 export class UploadMediaDto {
   @IsIn(MEDIA_KINDS) kind!: MediaKind;
   @IsString() dataUrl!: string; // data:image/jpeg;base64,…

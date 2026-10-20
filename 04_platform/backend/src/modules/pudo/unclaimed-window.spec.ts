@@ -61,6 +61,7 @@ import { LedgerService } from '../../foundation/ledger/ledger.service';
 import { InMemoryLedgerAdapter } from '../../foundation/ledger/in-memory-ledger.adapter';
 import { LEDGER_ADAPTER } from '../../foundation/ledger/ledger.types';
 import { EventBus } from '../../foundation/events/event-bus.service';
+import { contentPhotos } from '../../../test/content-photo';
 
 /**
  * When nobody comes: the terms change, and the parcel does not move.
@@ -87,6 +88,8 @@ describe('the collection window closing', () => {
   let gate: WalletGateService;
   let entities: EntityService;
 
+  /** Round 30 — a store's real photo of the contents, as the order door requires: one we hold, its own. */
+  let photoOf: (vendorId: string) => string;
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -104,6 +107,7 @@ describe('the collection window closing', () => {
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
       ],
     }).compile();
+    photoOf = contentPhotos(moduleRef);
     entities = moduleRef.get(EntityService);
     entities.seed();
     moduleRef.get(FxService).seed();
@@ -158,7 +162,7 @@ describe('the collection window closing', () => {
     vendors.topUp(store.vendorId, opts.funds ?? 500);
     const { parcel } = parcels.createInbound({
       vendorId: store.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: `+25470077${seq}`,
-      contentPhotoRef: 'c.jpg', size: 'M', dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 2,
+      contentPhotoRef: photoOf(store.vendorId), size: 'M', dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 2,
       declaredValue: opts.value ?? 500, routeMode: 'locked', shippingPolicy: store.shippingPolicy,
       quote: routing.quoteShipment(from.did, to.did, 'M'),
     } as never);

@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { contentPhotoOver } from './content-photo';
 
 /**
  * A STORE PARCEL'S PAPERS ABROAD, over the wire (the user, round 13: per item "As shippers do"; the buyer "Address entered
@@ -79,15 +80,15 @@ describe('a store parcel’s papers abroad, over the wire', () => {
     const order = { vendorId: store.id, originPudoDid: nairobi.did, destPudoDid: addis.did, buyerMobile: `+2547${digits()}1`, size: 'M', weightKg: 2, contentPhotoRef: 'content.jpg' };
 
     // Without its papers, a crossing is refused — the same words the shipping API uses; with them, it is made.
-    const refused = await http().post('/v1/sbg/inbound/orders').set(store.token).send(order).expect(400);
+    const refused = await http().post('/v1/sbg/inbound/orders').set(store.token).send({ ...order, contentPhotoRef: await contentPhotoOver(app.getHttpServer(), store.token) }).expect(400);
     expect(refused.body.code).toBe('CUSTOMS_INCOMPLETE');
     expect(refused.body.detail).toMatch(/needs its commercial invoice/);
-    const made = (await http().post('/v1/sbg/inbound/orders').set(store.token).send({ ...order, invoice }).expect(201)).body;
+    const made = (await http().post('/v1/sbg/inbound/orders').set(store.token).send({ ...order, invoice, contentPhotoRef: await contentPhotoOver(app.getHttpServer(), store.token) }).expect(201)).body;
     const parcelId = made.parcel.parcelId as string;
     expect(made.parcel.customs).toMatchObject({ declaredValue: 3400, currency: 'KES' });
     expect(made.label.svg).toContain('Customs papers in the pouch');
     // A shipment staying in the country needs none, and is told so.
-    expect((await http().post('/v1/sbg/inbound/orders').set(store.token).send({ ...order, destPudoDid: kisumu.did, invoice }).expect(400)).body.detail).toMatch(/does not cross a border/);
+    expect((await http().post('/v1/sbg/inbound/orders').set(store.token).send({ ...order, destPudoDid: kisumu.did, invoice, contentPhotoRef: await contentPhotoOver(app.getHttpServer(), store.token) }).expect(400)).body.detail).toMatch(/does not cross a border/);
 
     // The store reads and prints them; the address exactly as entered.
     const own = `/v1/sbg/vendors/${store.id}/parcels/${parcelId}/invoice`;

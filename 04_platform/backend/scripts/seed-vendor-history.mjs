@@ -13,6 +13,8 @@
  * store and settles half the unpaid ones (so the Paid filter shows both sides); and intakes a chunk
  * best-effort (so a few sit "At the drop-off shop"). Every step is resilient — a failure is skipped.
  */
+import { contentsDataUrl } from './seed-image.mjs';
+
 const API = process.env.SBG_API ?? 'http://localhost:3000';
 const VENDOR_SECRET = process.env.VENDOR_SECRET ?? 'whsec_demo_nairobi_threads';
 const HISTORY_N = Number(process.env.HISTORY_N ?? 44);
@@ -183,6 +185,8 @@ const run = async () => {
     const [dims, kg] = SIZES[i % SIZES.length];
     const [origin, dest] = i % 2 === 0 ? [A, B] : [B, A]; // alternate → the per-PUDO filter takes BOTH shops
     const ref = `SO-${stamp}-${String(i + 1).padStart(3, '0')}`;
+    // Round 30 — an order is made only on a photo of its contents we hold, the store's own: one uploaded for each.
+    const photo = await req('POST', '/v1/sbg/media', { token: tokV, body: { kind: 'content', dataUrl: contentsDataUrl(i + 1) } });
     const r = await req('POST', '/v1/sbg/inbound/orders', {
       token: tokV,
       body: {
@@ -194,7 +198,7 @@ const run = async () => {
         externalOrderId: ref,
         dimensionsCm: dims,
         weightKg: kg,
-        contentPhotoRef: `${ref}-contents.jpg`,
+        contentPhotoRef: photo.data?.mediaId,
         routeMode: i % 3 === 0 ? 'flexible' : 'locked',
         items: PRODUCTS[i % PRODUCTS.length],
         subtotal: 20 + (i % 7) * 8,

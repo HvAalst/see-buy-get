@@ -114,6 +114,7 @@ import { FundingPayerRegistrar } from './funding-payers';
 import { SandboxFundingRail } from '../../foundation/funding/sandbox-funding-rail.adapter';
 import { FUNDING_RAIL } from '../../foundation/funding/funding.types';
 import { GlosEvent } from '../../foundation/events/glos-events';
+import { contentPhotos } from '../../../test/content-photo';
 
 describe('PUDO Light', () => {
   let agents: AgentService;
@@ -160,6 +161,8 @@ describe('PUDO Light', () => {
   let presence: PresenceService;
   let borders: BorderRuleService;
 
+  /** Round 30 — a store's real photo of the contents, as the order door requires: one we hold, its own. */
+  let photoOf: (vendorId: string) => string;
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -176,6 +179,7 @@ describe('PUDO Light', () => {
       ],
       controllers: [SbgController, IdentityController],
     }).compile();
+    photoOf = contentPhotos(moduleRef);
     // compile() does not run lifecycle hooks, so the group + its sisters are seeded by hand — the same
     // registry the app seeds at boot, and everything that names an entity needs it present.
     entities = moduleRef.get(EntityService);
@@ -857,7 +861,7 @@ describe('PUDO Light', () => {
     const dest = onboardAgent(`${tag} Dest`, 'NorthTown', 50);
     const vendor = vendors.register({ name: `${tag}Vendor` });
     vendors.topUp(vendor.vendorId, 50);
-    const res = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700111', size: 'M', contentPhotoRef: 'c.jpg' } as never, { role: 'genesis', did: vendor.did } as never) as { parcel: any; paid: boolean };
+    const res = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700111', size: 'M', contentPhotoRef: photoOf(vendor.vendorId) } as never, { role: 'genesis', did: vendor.did } as never) as { parcel: any; paid: boolean };
     return { origin, dest, vendor, res };
   };
 
@@ -975,7 +979,7 @@ describe('PUDO Light', () => {
     const mine = vendors.register({ name: 'Mine' });
     const other = vendors.register({ name: 'Other' });
     vendors.topUp(mine.vendorId, 100);
-    const dto = { vendorId: mine.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'c.jpg' } as never;
+    const dto = { vendorId: mine.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: photoOf(mine.vendorId) } as never;
     expect(() => controller.createInbound(dto, { role: 'genesis', did: other.did } as never)).toThrow(/not yours/);
     expect(() => controller.createInbound(dto, undefined as never)).toThrow(/not yours/);
     const own: any = controller.createInbound(dto, { role: 'genesis', did: mine.did } as never);
@@ -1003,7 +1007,7 @@ describe('PUDO Light', () => {
     vendors.topUp(store.vendorId, 100);
     // What the store has, made by the store: a key, an order not yet paid for would need no float — so one paid order.
     const key = controller.issueApiKey(store.vendorId, { kind: 'secret', mode: 'live' } as never, asStore) as { keyId: string };
-    const order = { vendorId: store.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'c.jpg' } as never;
+    const order = { vendorId: store.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: photoOf(store.vendorId) } as never;
     const { parcel } = controller.createInbound(order, asStore) as { parcel: { parcelId: string } };
     const asItIs = () => ({
       record: JSON.stringify(vendors.get(store.vendorId)),
@@ -1094,7 +1098,7 @@ describe('PUDO Light', () => {
     vendors.topUp(store.vendorId, 200);
     const asStore = { role: 'genesis', did: store.did } as never;
     controller.setCollectionPoint(store.vendorId, { label: 'Chain dock', zone: 'NorthTown', location: { lat: -1.21, lng: 36.81 } } as never, asStore);
-    const parcelId = (controller.createInbound({ vendorId: store.vendorId, destPudoDid: dest.did, buyerMobile: '+254700999', size: 'M', contentPhotoRef: 'c.jpg' } as never, asStore) as any).parcel.parcelId;
+    const parcelId = (controller.createInbound({ vendorId: store.vendorId, destPudoDid: dest.did, buyerMobile: '+254700999', size: 'M', contentPhotoRef: photoOf(store.vendorId) } as never, asStore) as any).parcel.parcelId;
     expect(parcels.get(parcelId).originAgentDid).toBeUndefined(); // no first PUDO: a fact, not missing data
     expect(parcels.get(parcelId).originZone).toBe('NorthTown'); // the dock's zone — corridors are zone-keyed
 
@@ -1132,7 +1136,7 @@ describe('PUDO Light', () => {
     // making the mint origin-less is routing surgery (planJourney/quoteShipment start at a NODE, not a
     // point). What is proven here is everything after the mint.
     const mint = (mobile: string) =>
-      (controller.createInbound({ vendorId: store.vendorId, destPudoDid: dest.did, buyerMobile: mobile, size: 'M', contentPhotoRef: 'c.jpg' } as never, asStore) as any).parcel.parcelId;
+      (controller.createInbound({ vendorId: store.vendorId, destPudoDid: dest.did, buyerMobile: mobile, size: 'M', contentPhotoRef: photoOf(store.vendorId) } as never, asStore) as any).parcel.parcelId;
     const p1 = mint('+254700111');
     const p2 = mint('+254700222');
 
@@ -1143,7 +1147,7 @@ describe('PUDO Light', () => {
     // …and the same parcel handed in at a shop instead pays for that shop too, which is the difference the
     // store is saving by being collected from.
     const viaShop = onboardAgent('Via Shop', 'NorthTown', 50);
-    const dropped = (controller.createInbound({ vendorId: store.vendorId, originPudoDid: viaShop.did, destPudoDid: dest.did, buyerMobile: '+254700444', size: 'M', contentPhotoRef: 'c.jpg' } as never, asStore) as any).parcel;
+    const dropped = (controller.createInbound({ vendorId: store.vendorId, originPudoDid: viaShop.did, destPudoDid: dest.did, buyerMobile: '+254700444', size: 'M', contentPhotoRef: photoOf(store.vendorId) } as never, asStore) as any).parcel;
     expect(dropped.nodeFees).toBe(Math.round((viaShop.pricePerParcel + dest.pricePerParcel) * 100) / 100);
 
     expect(plan.groups[0]).toMatchObject({ label: 'SouthTown', parcelIds: [p1, p2] });
@@ -1242,7 +1246,7 @@ describe('PUDO Light', () => {
     expect(() => controller.openDockBag(store.vendorId, { destZone: 'SouthTown' } as never, asStore)).toThrow(/no collection point/);
 
     controller.setCollectionPoint(store.vendorId, { label: 'Yard', zone: 'NorthTown', location: { lat: -1.2, lng: 36.8 }, bays: 1 } as never, asStore);
-    controller.createInbound({ vendorId: store.vendorId, destPudoDid: dest.did, buyerMobile: '+254700333', size: 'M', contentPhotoRef: 'c.jpg' } as never, asStore);
+    controller.createInbound({ vendorId: store.vendorId, destPudoDid: dest.did, buyerMobile: '+254700333', size: 'M', contentPhotoRef: photoOf(store.vendorId) } as never, asStore);
     controller.openDockBag(store.vendorId, { destZone: 'SouthTown' } as never, asStore);
     // One bay, one bag: a dock runs out of floor exactly as a shop counter does.
     expect(() => controller.openDockBag(store.vendorId, { destZone: 'EastTown' } as never, asStore)).toThrow(/room for 1 bag/);
@@ -1258,7 +1262,7 @@ describe('PUDO Light', () => {
     const mine = vendors.register({ name: 'MineS' });
     const other = vendors.register({ name: 'OtherS' });
     // Mint with an empty balance so the order lands unpaid and there is something to settle.
-    const minted: any = controller.createInbound({ vendorId: mine.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'c.jpg' } as never, { role: 'genesis', did: mine.did } as never);
+    const minted: any = controller.createInbound({ vendorId: mine.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: photoOf(mine.vendorId) } as never, { role: 'genesis', did: mine.did } as never);
     expect(minted.paid).toBe(false);
     expect(() => controller.settleParcel(minted.parcel.parcelId, { role: 'genesis', did: other.did } as never)).toThrow(/not yours/);
     expect(() => controller.topUpVendor(mine.vendorId, { amount: 100 } as never, { role: 'genesis', did: other.did } as never)).toThrow(/not yours/);
@@ -1279,7 +1283,7 @@ describe('PUDO Light', () => {
     const other = vendors.register({ name: 'OtherC' });
     vendors.topUp(mine.vendorId, 100);
     const chk = vendors.captureCheckout({ vendorId: other.vendorId, destAgentDid: dest.did, buyerEmail: 'b@example.com', buyerMobile: '+254700999', externalOrderId: 'EXT-1' });
-    expect(() => controller.createInbound({ vendorId: mine.vendorId, checkoutId: chk.id, originPudoDid: origin.did, destPudoDid: dest.did, size: 'M', contentPhotoRef: 'c.jpg' } as never, { role: 'genesis', did: mine.did } as never)).toThrow(/different store/);
+    expect(() => controller.createInbound({ vendorId: mine.vendorId, checkoutId: chk.id, originPudoDid: origin.did, destPudoDid: dest.did, size: 'M', contentPhotoRef: photoOf(mine.vendorId) } as never, { role: 'genesis', did: mine.did } as never)).toThrow(/different store/);
     // The victim's handoff is untouched — still open in THEIR inbox.
     expect(vendors.checkout(chk.id).consumed).toBe(false);
   });
@@ -1309,7 +1313,7 @@ describe('PUDO Light', () => {
     const dest = onboardAgent('OWN D', 'NorthTown', 50);
     const vendor = vendors.register({ name: 'OwnVendor' });
     vendors.topUp(vendor.vendorId, 50);
-    const order = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700500077', size: 'M', contentPhotoRef: 'c.jpg' } as never, { role: 'genesis', did: vendor.did } as never) as { parcel: any };
+    const order = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700500077', size: 'M', contentPhotoRef: photoOf(vendor.vendorId) } as never, { role: 'genesis', did: vendor.did } as never) as { parcel: any };
     expect(parcels.receiverOf(parcels.get(order.parcel.parcelId)).owner).toBe(buyer.personDid);
     // The store is handed its order back, and learns nothing about whether its buyer has an account with us.
     expect(JSON.stringify(order)).not.toContain(buyer.personDid);
@@ -1371,7 +1375,7 @@ describe('PUDO Light', () => {
     const dest = onboardAgent('PGP D', 'NorthTown', 50);
     const vendor = vendors.register({ name: 'PGPV' });
     vendors.topUp(vendor.vendorId, 200);
-    const vendorRes: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700500004', dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 1.6, routeMode: 'locked', contentPhotoRef: 'c.jpg' } as never, { role: 'genesis', did: vendor.did } as never);
+    const vendorRes: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700500004', dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 1.6, routeMode: 'locked', contentPhotoRef: photoOf(vendor.vendorId) } as never, { role: 'genesis', did: vendor.did } as never);
     const sender = enrollPerson('+254700500003');
     const mine: any = identity.createParcel({ receiverMobile: '+254700500004', originPudoDid: origin.did, destPudoDid: dest.did, dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 1.6 } as never, asConsumer(sender.personDid));
     const a: any = parcels.get(mine.parcel.parcelId);
@@ -1605,7 +1609,7 @@ describe('PUDO Light', () => {
     const origin = onboardAgent('PG2U O', 'NorthTown', 50);
     const dest = onboardAgent('PG2U D', 'NorthTown', 50);
     const vendor = vendors.register({ name: 'PG2U' }); // no top-up → the mint lands unpaid
-    const minted: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'c.jpg' } as never, { role: 'genesis', did: vendor.did } as never);
+    const minted: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: photoOf(vendor.vendorId) } as never, { role: 'genesis', did: vendor.did } as never);
     expect(minted.paid).toBe(false);
     const preview: any = controller.intakePreview(minted.parcel.parcelId, { role: 'agent', did: origin.did } as never);
     expect(preview.kind).toBe('vendor_order');
@@ -1641,7 +1645,7 @@ describe('PUDO Light', () => {
     // Vendor prepays the daughter company, then mints → ParcelPaid + phygital label + collection code.
     vendors.topUp(vendor.vendorId, 50);
     const quote = routing.quoteShipment(origin.did, dest.did, 'M');
-    const { parcel, label, paid } = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: 'ORD-1', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'content.jpg', items: [{ name: 'Rice 5kg', qty: 2 }], shippingPolicy: vendor.shippingPolicy, quote });
+    const { parcel, label, paid } = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: 'ORD-1', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: photoOf(vendor.vendorId), items: [{ name: 'Rice 5kg', qty: 2 }], shippingPolicy: vendor.shippingPolicy, quote });
     expect(paid).toBe(true);
     expect(parcel.direction).toBe('inbound');
     expect(parcel.status).toBe('Created');
@@ -2062,7 +2066,7 @@ describe('PUDO Light', () => {
       const revenueBefore = bal(ACCOUNT_CODES.REVENUE);
 
       const quote = routing.quoteShipment(origin.did, dest.did, 'M');
-      const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: 'ORD-BK', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'c.jpg', shippingPolicy: vendor.shippingPolicy, quote });
+      const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: 'ORD-BK', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: photoOf(vendor.vendorId), shippingPolicy: vendor.shippingPolicy, quote });
 
       // Billed at the mint → the deposit is drawn down and the sister has finally earned something.
       expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(50 - (parcel.shipmentCost ?? 0), 2);
@@ -2131,7 +2135,7 @@ describe('PUDO Light', () => {
       expect(vendor.entityId).toBe(ke.entityId);
       vendors.topUp(vendor.vendorId, 50);
       const quote = routing.quoteShipment(origin.did, dest.did, 'M');
-      const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: 'ORD-ENT', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'c.jpg', shippingPolicy: vendor.shippingPolicy, quote });
+      const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: 'ORD-ENT', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: photoOf(vendor.vendorId), shippingPolicy: vendor.shippingPolicy, quote });
       expect(parcel.collectingEntityId).toBe(ke.entityId);
 
       // The network does not operate in the Netherlands → registering a Dutch store is refused outright, rather
@@ -2221,7 +2225,7 @@ describe('PUDO Light', () => {
 
       const vendor = vendors.register({ name: 'Fee Store' });
       vendors.topUp(vendor.vendorId, 200);
-      const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: 'ORD-FEE', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'c.jpg', shippingPolicy: vendor.shippingPolicy, quote });
+      const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: 'ORD-FEE', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: photoOf(vendor.vendorId), shippingPolicy: vendor.shippingPolicy, quote });
       expect(parcel.platformFeePct).toBe(0.10);
 
       // The knob turns again mid-flight; the parcel keeps the rate it was quoted at.
@@ -2250,7 +2254,7 @@ describe('PUDO Light', () => {
       const vendor = vendors.register({ name: `Store ${tag}`, callbackUrl: `https://store-${tag}.example/hook`, secret: 'whsec' });
       vendors.topUp(vendor.vendorId, 50);
       const quote = routing.quoteShipment(origin.did, dest.did, 'M');
-      const { parcel, label } = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: `ORD-${tag}`, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'content.jpg', shippingPolicy: vendor.shippingPolicy, quote });
+      const { parcel, label } = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: `ORD-${tag}`, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: photoOf(vendor.vendorId), shippingPolicy: vendor.shippingPolicy, quote });
       parcels.intakeInbound(parcel.parcelId, origin.did);
       parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: [parcel.parcelId] });
       parcels.shelve(parcel.parcelId, dest.did);
@@ -2446,7 +2450,7 @@ describe('PUDO Light', () => {
     expect(quote.flexible.total).toBeCloseTo(Math.round(quote.flexible.base * 1.02 * 100) / 100);
 
     // Unpaid vendor (balance 0) → mint yields an UNPAID parcel, label withheld, intake refused.
-    const unpaid = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: handoff.externalOrderId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700', buyerEmail: handoff.buyerEmail, dimensionsCm: { l: 40, w: 30, h: 20 }, weightKg: 4, contentPhotoRef: 'content.jpg', subtotal: handoff.subtotal, shippingPolicy: vendor.shippingPolicy, routeMode: 'flexible', quote });
+    const unpaid = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: handoff.externalOrderId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700', buyerEmail: handoff.buyerEmail, dimensionsCm: { l: 40, w: 30, h: 20 }, weightKg: 4, contentPhotoRef: photoOf(vendor.vendorId), subtotal: handoff.subtotal, shippingPolicy: vendor.shippingPolicy, routeMode: 'flexible', quote });
     expect(unpaid.paid).toBe(false);
     expect(unpaid.label).toBeNull();
     expect(unpaid.parcel.size).toBe('M');
@@ -2496,7 +2500,7 @@ describe('PUDO Light', () => {
     const vendor = vendors.register({ name: 'S22 Co' });
     vendors.topUp(vendor.vendorId, 50);
     const buyer = '+254700900500';
-    const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: 'ORD-S22', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: buyer, size: 'M', contentPhotoRef: 'content.jpg', shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });
+    const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: 'ORD-S22', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: buyer, size: 'M', contentPhotoRef: photoOf(vendor.vendorId), shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });
     const rx = hashPhone(buyer);
 
     // Before it is collectable there is no token, even for the receiver.
@@ -2524,7 +2528,7 @@ describe('PUDO Light', () => {
     const vendor = vendors.register({ name: 'S23 Store', callbackUrl: 'https://s23.example/hook', secret: 'whsec23' });
     vendors.topUp(vendor.vendorId, 50);
     const buyer = '+254700930500';
-    const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: 'ORD-S23', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: buyer, size: 'M', contentPhotoRef: 'content.jpg', shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });
+    const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: 'ORD-S23', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: buyer, size: 'M', contentPhotoRef: photoOf(vendor.vendorId), shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });
     parcels.intakeInbound(parcel.parcelId, origin.did);
     parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: [parcel.parcelId] });
     parcels.shelve(parcel.parcelId, dest.did);
@@ -2609,7 +2613,7 @@ describe('PUDO Light', () => {
     const driver = corridors.addDriver({ driverDid: 'did:glos:dx', name: 'D', corridorId: corridor.corridorId });
     const vendor = vendors.register({ name: 'V', callbackUrl: 'https://v.example/hook' });
     vendors.topUp(vendor.vendorId, 50);
-    const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+1', size: 'S', contentPhotoRef: 'content.jpg', shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'S') });
+    const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+1', size: 'S', contentPhotoRef: photoOf(vendor.vendorId), shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'S') });
     parcels.intakeInbound(parcel.parcelId, origin.did);
     parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: [parcel.parcelId] });
     parcels.shelve(parcel.parcelId, dest.did);
@@ -2648,7 +2652,7 @@ describe('PUDO Light', () => {
       const buyer = '+254700931100';
       const { parcel } = parcels.createInbound({
         vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: buyer,
-        size: 'M', contentPhotoRef: 'content.jpg', shippingPolicy: vendor.shippingPolicy,
+        size: 'M', contentPhotoRef: photoOf(vendor.vendorId), shippingPolicy: vendor.shippingPolicy,
         quote: routing.quoteShipment(origin.did, dest.did, 'M'),
       });
       parcels.intakeInbound(parcel.parcelId, origin.did);
@@ -2867,7 +2871,7 @@ describe('PUDO Light', () => {
       vendors.topUp(vendor.vendorId, 200);
       const { parcel } = parcels.createInbound({
         vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700111222',
-        size: 'S', contentPhotoRef: 'content.jpg', shippingPolicy: vendor.shippingPolicy,
+        size: 'S', contentPhotoRef: photoOf(vendor.vendorId), shippingPolicy: vendor.shippingPolicy,
         quote: routing.quoteShipment(origin.did, dest.did, 'S'),
       });
       parcels.intakeInbound(parcel.parcelId, origin.did);
@@ -2952,7 +2956,7 @@ describe('PUDO Light', () => {
     const packQuote = routing.quoteShipment(origin.did, dest.did, 'M');
     const ids: string[] = [];
     for (let i = 0; i < 3; i += 1) {
-      const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: `+2547${i}`, size: 'M', contentPhotoRef: 'content.jpg', shippingPolicy: vendor.shippingPolicy, quote: packQuote });
+      const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: `+2547${i}`, size: 'M', contentPhotoRef: photoOf(vendor.vendorId), shippingPolicy: vendor.shippingPolicy, quote: packQuote });
       parcels.intakeInbound(parcel.parcelId, origin.did);
       ids.push(parcel.parcelId);
     }
@@ -2997,7 +3001,7 @@ describe('PUDO Light', () => {
     vendors.topUp(vendor.vendorId, 50);
     const quote = routing.quoteShipment(origin.did, dest.did, 'M');
     const mk = (nature: 'HAZ-DUST' | 'FOP', mob: string) => {
-      const p = parcels.createInbound({ vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: mob, size: 'M', contentPhotoRef: 'c.jpg', natureCode: nature, shippingPolicy: vendor.shippingPolicy, quote }).parcel;
+      const p = parcels.createInbound({ vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: mob, size: 'M', contentPhotoRef: photoOf(vendor.vendorId), natureCode: nature, shippingPolicy: vendor.shippingPolicy, quote }).parcel;
       parcels.intakeInbound(p.parcelId, origin.did);
       return p.parcelId;
     };
@@ -3018,7 +3022,7 @@ describe('PUDO Light', () => {
     vendors.topUp(vendor.vendorId, 50);
     const quote = routing.quoteShipment(origin.did, dest.did, 'M');
     const toMdp = (nature: 'HAZ-DUST' | 'FOP', mob: string) => {
-      const p = parcels.createInbound({ vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: mob, size: 'M', contentPhotoRef: 'c.jpg', natureCode: nature, shippingPolicy: vendor.shippingPolicy, quote }).parcel;
+      const p = parcels.createInbound({ vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: mob, size: 'M', contentPhotoRef: photoOf(vendor.vendorId), natureCode: nature, shippingPolicy: vendor.shippingPolicy, quote }).parcel;
       parcels.intakeInbound(p.parcelId, origin.did);
       // each rides its OWN first-leg bag to the hub (they can't share), then lands At_MDP
       const b = totes.register(origin.did);
@@ -3365,7 +3369,7 @@ describe('PUDO Light', () => {
       const store = vendors.register({ name: 'Report Store' });
       const other = vendors.register({ name: 'Another Store' });
       vendors.topUp(store.vendorId, 200);
-      const { parcel } = parcels.createInbound({ vendorId: store.vendorId, externalOrderId: 'ORD-REP-1', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: RECEIVER, size: 'M', contentPhotoRef: 'content.jpg', subtotal: 4200, items: [{ name: 'Kettle', qty: 2 }, { name: 'Lid', qty: 1 }], shippingPolicy: store.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });
+      const { parcel } = parcels.createInbound({ vendorId: store.vendorId, externalOrderId: 'ORD-REP-1', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: RECEIVER, size: 'M', contentPhotoRef: photoOf(store.vendorId), subtotal: 4200, items: [{ name: 'Kettle', qty: 2 }, { name: 'Lid', qty: 1 }], shippingPolicy: store.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });
       parcels.intakeInbound(parcel.parcelId, origin.did);
       parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: [parcel.parcelId] });
       parcels.shelve(parcel.parcelId, dest.did);
@@ -3562,7 +3566,7 @@ describe('PUDO Light', () => {
       const dest = onboardAgent(`Insurer Dest ${tag}`, 'SouthTown');
       const corridor = corridors.addCorridor({ name: `I ${tag}`, originZone: 'NorthTown', destZone: 'SouthTown' });
       const driver = corridors.addDriver({ driverDid: `did:glos:ins${tag}`, name: 'D', corridorId: corridor.corridorId });
-      const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, ...(externalOrderId ? { externalOrderId } : {}), originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: RECEIVER, size: 'M', contentPhotoRef: 'content.jpg', shippingPolicy: vendors.get(vendor.vendorId).shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });
+      const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, ...(externalOrderId ? { externalOrderId } : {}), originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: RECEIVER, size: 'M', contentPhotoRef: photoOf(vendor.vendorId), shippingPolicy: vendors.get(vendor.vendorId).shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });
       parcels.intakeInbound(parcel.parcelId, origin.did);
       parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: [parcel.parcelId] });
       parcels.shelve(parcel.parcelId, dest.did);
@@ -4674,7 +4678,7 @@ describe('PUDO Light', () => {
     expect(() =>
       parcels.createInbound({
         vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700',
-        weightKg: 300, contentPhotoRef: 'content.jpg', shippingPolicy: vendor.shippingPolicy, quote,
+        weightKg: 300, contentPhotoRef: photoOf(vendor.vendorId), shippingPolicy: vendor.shippingPolicy, quote,
       }),
     ).toThrow(/dedicated/i);
   });
@@ -4812,7 +4816,7 @@ describe('PUDO Light', () => {
     const driver = corridors.addDriver({ driverDid: 'did:glos:vo', name: 'V', corridorId: corridor.corridorId });
     const vendor = vendors.register({ name: 'V', callbackUrl: 'https://v.example/hook' });
     vendors.topUp(vendor.vendorId, 50);
-    const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700966001', size: 'S', contentPhotoRef: 'content.jpg', shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'S') });
+    const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700966001', size: 'S', contentPhotoRef: photoOf(vendor.vendorId), shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'S') });
     parcels.intakeInbound(parcel.parcelId, origin.did);
 
     // Short-ship the vendor's parcel with a private operator reason (nothing else scanned).
@@ -4950,7 +4954,7 @@ describe('PUDO Light', () => {
     corridors.addCorridor({ name: 'ct', originZone: 'NorthTown', destZone: 'SouthTown' });
     const vendor = vendors.register({ name: 'V', callbackUrl: 'https://v.example/hook' });
     vendors.topUp(vendor.vendorId, 50);
-    const content = media.upload({ ownerDid: vendor.vendorId, kind: 'content', dataUrl: PNG });
+    const content = media.upload({ ownerDid: vendor.did, kind: 'content', dataUrl: PNG });
     const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700985001', size: 'S', contentPhotoRef: content.mediaId, shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'S') });
 
     // Linked to the parcel in the shipment-proof bin — NOT an orphan the reaper may reclaim.
@@ -4959,6 +4963,30 @@ describe('PUDO Light', () => {
     // Even long after upload it is kept (linked, awaiting its terminal-state clock), never hard-deleted.
     media.sweep(new Date(Date.now() + 72 * 60 * 60 * 1000));
     expect(media.get(content.mediaId)).toBeDefined();
+  });
+
+  it('refuses a store order whose photo we do not hold, another store’s, or one already a parcel’s — before anything is written (round 30)', () => {
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const origin = onboardAgent('Ph Origin', 'NorthTown', 50);
+    const dest = onboardAgent('Ph Dest', 'SouthTown', 50);
+    corridors.addCorridor({ name: 'ph', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const store = vendors.register({ name: 'Photo Store', callbackUrl: 'https://p.example/hook' });
+    const other = vendors.register({ name: 'Other Store', callbackUrl: 'https://o.example/hook' });
+    vendors.topUp(store.vendorId, 50);
+    const order = (contentPhotoRef: string) =>
+      parcels.createInbound({ vendorId: store.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700985101', size: 'S', contentPhotoRef, shippingPolicy: store.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'S') });
+    const made = () => parcels.list({}).filter((p) => p.vendorId === store.vendorId).length;
+
+    // A file name, another store's photo: no photo of this parcel. Nothing made, nothing billed.
+    expect(() => order('contents.jpg')).toThrow(/We do not hold that photo of the contents/);
+    expect(() => order(media.upload({ ownerDid: other.did, kind: 'content', dataUrl: PNG }).mediaId)).toThrow(/We do not hold that photo/);
+    expect(made()).toBe(0);
+    // Its own: made, and the photo is that parcel's — not the next one's too.
+    const mine = media.upload({ ownerDid: store.did, kind: 'avatar', dataUrl: PNG }).mediaId;
+    const { parcel } = order(mine);
+    expect(media.get(mine)).toMatchObject({ link: { type: 'parcel', id: parcel.parcelId }, kind: 'content', retentionClass: 'shipment-proof' });
+    expect(() => order(mine)).toThrow(/used for no other/);
+    expect(made()).toBe(1);
   });
 
   it('publishes a PUDO tote for claim when full, and otherwise after the 24 h max wait (Ch 19)', () => {
@@ -7111,7 +7139,7 @@ describe('PUDO Light', () => {
       const store = vendors.register({ name: 'Read Store' });
       const stranger = vendors.register({ name: 'Another Read Store' });
       vendors.topUp(store.vendorId, 50);
-      const { parcel } = parcels.createInbound({ vendorId: store.vendorId, externalOrderId: 'ORD-READ', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'c.jpg', shippingPolicy: store.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });
+      const { parcel } = parcels.createInbound({ vendorId: store.vendorId, externalOrderId: 'ORD-READ', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: photoOf(store.vendorId), shippingPolicy: store.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });
       const own = as('genesis', store.did);
       const others = [as('genesis', stranger.did), as('genesis'), as('agent', origin.did)];
 
@@ -7154,7 +7182,7 @@ describe('PUDO Light', () => {
       const store = vendors.register({ name: 'Desk Store', callbackUrl: 'https://desk.example/hook', ownerPhone: OWNER, address: 'Biashara St 12' });
       const other = vendors.register({ name: 'Another Desk Store' });
       vendors.topUp(store.vendorId, 50);
-      const { parcel } = parcels.createInbound({ vendorId: store.vendorId, externalOrderId: 'ORD-DESK', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: BUYER, size: 'M', contentPhotoRef: 'c.jpg', shippingPolicy: store.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });
+      const { parcel } = parcels.createInbound({ vendorId: store.vendorId, externalOrderId: 'ORD-DESK', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: BUYER, size: 'M', contentPhotoRef: photoOf(store.vendorId), shippingPolicy: store.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });
       // Made by the store itself: staff make nothing in a store's name.
       const key = controller.issueApiKey(store.vendorId, { kind: 'secret', mode: 'live', label: 'Shop backend' } as never, as('genesis', store.did)) as { secret: string; hint: string; keyId: string };
       const settles = vendors.settledBy(store)!;
@@ -7763,7 +7791,7 @@ describe('PUDO Light', () => {
     const dest = onboardAgent('Budget Dest', 'NorthTown', 50);
     const vendor = vendors.register({ name: 'CapVendor', shippingPolicy: { maxTransportSpend: 25 } });
     vendors.topUp(vendor.vendorId, 500);
-    const res = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', weightKg: 300, contentPhotoRef: 'c.jpg' } as never, { role: 'genesis', did: vendor.did } as never) as { diverted?: boolean; freight?: { maxSpend?: number } };
+    const res = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', weightKg: 300, contentPhotoRef: photoOf(vendor.vendorId) } as never, { role: 'genesis', did: vendor.did } as never) as { diverted?: boolean; freight?: { maxSpend?: number } };
     expect(res.diverted).toBe(true);
     expect(res.freight?.maxSpend).toBe(25);
   });
@@ -8479,14 +8507,14 @@ describe('PUDO Light', () => {
     const vendor = vendors.register({ name: 'PalletVendor' });
     vendors.topUp(vendor.vendorId, 50);
 
-    const diverted: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', weightKg: 300, contentPhotoRef: 'c.jpg', natureCode: 'GEN' } as never, { role: 'genesis', did: vendor.did } as never);
+    const diverted: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', weightKg: 300, contentPhotoRef: photoOf(vendor.vendorId), natureCode: 'GEN' } as never, { role: 'genesis', did: vendor.did } as never);
     expect(diverted.diverted).toBe(true);
     expect(diverted.cargoClass).toBe('P5'); // 300 kg
     expect(diverted.freight.freightId).toBeDefined();
     expect(diverted.freight.requiredEquipment.length).toBeGreaterThan(0); // discrete → real handling gear
     expect(diverted.freight.shipperDid).toBe(vendor.vendorId); // the vendor is the shipper
 
-    const normal: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'c.jpg' } as never, { role: 'genesis', did: vendor.did } as never);
+    const normal: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: photoOf(vendor.vendorId) } as never, { role: 'genesis', did: vendor.did } as never);
     expect(normal.diverted).toBeUndefined(); // a normal order still mints a parcel
     expect(normal.parcel).toBeDefined();
   });
@@ -9194,7 +9222,7 @@ describe('PUDO Light', () => {
     const dest = onboardAgent('Gap Dest', 'NorthTown', 50);
     const vendor = vendors.register({ name: 'GapVendor' });
     vendors.topUp(vendor.vendorId, 50);
-    const res: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', weightKg: 300, contentPhotoRef: 'c.jpg' } as never, { role: 'genesis', did: vendor.did } as never);
+    const res: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', weightKg: 300, contentPhotoRef: photoOf(vendor.vendorId) } as never, { role: 'genesis', did: vendor.did } as never);
     expect(res.diverted).toBe(true);
     expect(res.freight.equipmentGaps.slice().sort()).toEqual(['dest', 'origin']); // neither shop can lift a pallet
   });
@@ -9213,7 +9241,7 @@ describe('PUDO Light', () => {
     const vendor = vendors.register({ name: 'ShipVendor' });
     vendors.topUp(vendor.vendorId, 50);
     const buyer = '+254700123456';
-    const res: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: buyer, externalOrderId: 'ORD-99', weightKg: 300, contentPhotoRef: 'c.jpg' } as never, { role: 'genesis', did: vendor.did } as never);
+    const res: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: buyer, externalOrderId: 'ORD-99', weightKg: 300, contentPhotoRef: photoOf(vendor.vendorId) } as never, { role: 'genesis', did: vendor.did } as never);
     expect(res.diverted).toBe(true);
     expect(res.freight.trackingKey).toMatch(/^T-/);
 
@@ -9438,7 +9466,7 @@ describe('PUDO Light', () => {
       const hub = mdps.register({ name: 'Sort Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } });
       const vendor = vendors.register({ name: 'SortStore' });
       vendors.topUp(vendor.vendorId, 50);
-      const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700222', size: 'M', contentPhotoRef: 'content.jpg', shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });
+      const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700222', size: 'M', contentPhotoRef: photoOf(vendor.vendorId), shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });
       parcels.intakeInbound(parcel.parcelId, origin.did);
       const bag = totes.register(origin.did);
       totes.assign(bag.code, hub.mdpId, hub.name);

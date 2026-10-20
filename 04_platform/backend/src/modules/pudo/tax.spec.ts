@@ -48,6 +48,7 @@ import { LedgerService } from '../../foundation/ledger/ledger.service';
 import { InMemoryLedgerAdapter } from '../../foundation/ledger/in-memory-ledger.adapter';
 import { LEDGER_ADAPTER } from '../../foundation/ledger/ledger.types';
 import { EventBus } from '../../foundation/events/event-bus.service';
+import { contentPhotos } from '../../../test/content-photo';
 
 /**
  * Tax — the layer that was declared and never computed.
@@ -73,6 +74,8 @@ describe('tax', () => {
   let gate: WalletGateService;
   let books: BooksService;
 
+  /** Round 30 — a store's real photo of the contents, as the order door requires: one we hold, its own. */
+  let photoOf: (vendorId: string) => string;
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -89,6 +92,7 @@ describe('tax', () => {
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
       ],
     }).compile();
+    photoOf = contentPhotos(moduleRef);
     entities = moduleRef.get(EntityService);
     entities.seed(); // compile() runs no lifecycle hooks — the sisters are seeded by hand, as at boot
     moduleRef.get(FxService).seed();
@@ -133,7 +137,7 @@ describe('tax', () => {
   function mint(store: { vendorId: string; shippingPolicy: unknown }, from: { did: string }, to: { did: string }, routeMode: 'locked' | 'flexible' = 'locked') {
     return parcels.createInbound({
       vendorId: store.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: `+25470012${seq}`,
-      contentPhotoRef: 'contents.jpg', size: 'M', shippingPolicy: store.shippingPolicy as never, routeMode,
+      contentPhotoRef: photoOf(store.vendorId), size: 'M', shippingPolicy: store.shippingPolicy as never, routeMode,
       quote: routing.quoteShipment(from.did, to.did),
     });
   }
@@ -303,7 +307,7 @@ describe('tax', () => {
       const poor = vendors.register({ name: 'Broke Store', country: 'KE' });
       const { parcel, paid } = parcels.createInbound({
         vendorId: poor.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: '+254700555',
-        contentPhotoRef: 'contents.jpg', size: 'M', shippingPolicy: poor.shippingPolicy, quote: routing.quoteShipment(from.did, to.did),
+        contentPhotoRef: photoOf(poor.vendorId), size: 'M', shippingPolicy: poor.shippingPolicy, quote: routing.quoteShipment(from.did, to.did),
       });
       expect(paid).toBe(false); // no float — it sits unpaid, carrying its stamped price
       const stampedTax = parcel.shipmentTax!;
@@ -397,7 +401,7 @@ describe('tax', () => {
       const poor = vendors.register({ name: 'Broke Store', country: 'KE' });
       const { parcel, paid } = parcels.createInbound({
         vendorId: poor.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: '+254700556',
-        contentPhotoRef: 'contents.jpg', size: 'M', shippingPolicy: poor.shippingPolicy, quote: routing.quoteShipment(from.did, to.did),
+        contentPhotoRef: photoOf(poor.vendorId), size: 'M', shippingPolicy: poor.shippingPolicy, quote: routing.quoteShipment(from.did, to.did),
       });
       expect(paid).toBe(false);
       const stamped = parcel.shipmentProvision!;
@@ -486,7 +490,7 @@ describe('tax', () => {
       coverPolicy();
       const { parcel } = parcels.createInbound({
         vendorId: store.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: '+254700771',
-        contentPhotoRef: 'contents.jpg', size: 'M', shippingPolicy: store.shippingPolicy, subtotal: 9000,
+        contentPhotoRef: photoOf(store.vendorId), size: 'M', shippingPolicy: store.shippingPolicy, subtotal: 9000,
         quote: routing.quoteShipment(from.did, to.did),
       });
       expect(parcel.declaredValue).toBe(9000);
@@ -501,7 +505,7 @@ describe('tax', () => {
       const before = vendors.balanceOf(store.vendorId);
       const { parcel } = parcels.createInbound({
         vendorId: store.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: '+254700772',
-        contentPhotoRef: 'contents.jpg', size: 'M', shippingPolicy: store.shippingPolicy, subtotal: 6000,
+        contentPhotoRef: photoOf(store.vendorId), size: 'M', shippingPolicy: store.shippingPolicy, subtotal: 6000,
         quote: routing.quoteShipment(from.did, to.did),
       });
       expect(parcel.shipmentPremium).toBe(20); // 2% of 1,000
@@ -518,7 +522,7 @@ describe('tax', () => {
       coverPolicy();
       const { parcel } = parcels.createInbound({
         vendorId: store.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: '+254700773',
-        contentPhotoRef: 'contents.jpg', size: 'M', shippingPolicy: store.shippingPolicy, subtotal: 6000,
+        contentPhotoRef: photoOf(store.vendorId), size: 'M', shippingPolicy: store.shippingPolicy, subtotal: 6000,
         quote: routing.quoteShipment(from.did, to.did),
       });
       toShelf(parcel.parcelId, from, to);
@@ -545,7 +549,7 @@ describe('tax', () => {
       const { from, to, store } = route();
       const { parcel } = parcels.createInbound({
         vendorId: store.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: '+254700774',
-        contentPhotoRef: 'contents.jpg', size: 'M', shippingPolicy: store.shippingPolicy,
+        contentPhotoRef: photoOf(store.vendorId), size: 'M', shippingPolicy: store.shippingPolicy,
         quote: routing.quoteShipment(from.did, to.did),
       });
       expect(parcel.coverLimit).toBe(0);
@@ -561,7 +565,7 @@ describe('tax', () => {
       coverPolicy();
       const { parcel } = parcels.createInbound({
         vendorId: store.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: '+254700775',
-        contentPhotoRef: 'contents.jpg', size: 'M', shippingPolicy: store.shippingPolicy, subtotal: 6000,
+        contentPhotoRef: photoOf(store.vendorId), size: 'M', shippingPolicy: store.shippingPolicy, subtotal: 6000,
         quote: routing.quoteShipment(from.did, to.did),
       });
       entities.setInsurance(ke(), { freeLimit: 0, premiumPct: null }); // the sister withdraws cover entirely

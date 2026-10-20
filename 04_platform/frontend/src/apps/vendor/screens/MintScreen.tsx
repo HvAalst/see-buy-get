@@ -158,7 +158,7 @@ function ParcelStep({ state, actions }: MintScreenProps) {
       </Card>
 
       <Card label={t('vendor.mint.contentsPhoto')}>
-        <PhotoField id="mint-photo" value={f.photoRef} label={t('vendor.mint.photographContents')} onCapture={(ref) => actions.setForm({ photoRef: ref })} />
+        <PhotoField id="mint-photo" value={f.photoRef} label={t('vendor.mint.photographContents')} upload={actions.uploadContentPhoto} onCapture={(ref) => actions.setForm({ photoRef: ref })} />
         <p class="card__note">{t('vendor.mint.photoNote')}</p>
       </Card>
 

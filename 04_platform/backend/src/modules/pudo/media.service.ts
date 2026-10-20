@@ -93,6 +93,12 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
     return { mediaId };
   }
 
+  /** Round 30 — until when an upload nobody has used yet is kept: the orphan sweep reclaims it after that. */
+  unusedUntil(mediaId: string): string | undefined {
+    const ref = this.refs.get(mediaId);
+    return ref ? new Date(Date.parse(ref.createdAt) + ORPHAN_GRACE_MS).toISOString() : undefined;
+  }
+
   /** The raw record (or undefined). Internal — never returned to a client as-is (use toView). */
   get(mediaId: string): MediaRef | undefined {
     return this.refs.get(mediaId);
@@ -196,11 +202,8 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
    * caller's, or one linked elsewhere — so a fresh own upload links and anything dubious is simply left alone.
    */
   adopt(mediaId: string | undefined, ownerDid: string, link: MediaLink, kind: MediaKind): boolean {
-    if (!mediaId || !ownerDid) return false;
-    const ref = this.refs.get(mediaId);
-    if (!ref || ref.status !== 'active') return false;
-    if (ref.ownerDid !== ownerDid) return false; // not the caller's — never launder another actor's media
-    if (ref.link && (ref.link.type !== link.type || ref.link.id !== link.id)) return false; // attached elsewhere
+    if (!mediaId || !this.mayAdopt(mediaId, ownerDid, link)) return false;
+    const ref = this.refs.get(mediaId)!;
     ref.link = link;
     ref.kind = kind;
     ref.retentionClass = KIND_RETENTION[kind];
@@ -208,6 +211,20 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
     // TRUE means this media is now ours to serve. A caller that RECORDS a photo reference — a hazard
     // account, say — needs to know, or it writes down a citation to a photograph nobody can produce,
     // which is the same defect as a screen that says "2 photos" and shows none.
+    return true;
+  }
+
+  /**
+   * Round 30 — whether `adopt` would take this photo, asked BEFORE anything is written: one we hold, still kept, the
+   * caller's own, and not already another object's evidence. With no `link` named, attached to anything is attached
+   * elsewhere — what a new object, which has no id yet, must ask.
+   */
+  mayAdopt(mediaId: string | undefined, ownerDid: string, link?: MediaLink): boolean {
+    if (!mediaId || !ownerDid) return false;
+    const ref = this.refs.get(mediaId);
+    if (!ref || ref.status !== 'active') return false;
+    if (ref.ownerDid !== ownerDid) return false; // not the caller's — never launder another actor's media
+    if (ref.link && (!link || ref.link.type !== link.type || ref.link.id !== link.id)) return false; // attached elsewhere
     return true;
   }
 

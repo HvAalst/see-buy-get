@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { contentPhotoOver } from './content-photo';
 import { AccountRecoveryService } from '../src/modules/pudo/account-recovery.service';
 import { OtpService } from '../src/modules/pudo/otp.service';
 import { ParcelService } from '../src/modules/pudo/parcel.service';
@@ -243,7 +244,7 @@ describe('a parcel is kept by the account, over the wire', () => {
     const asked = await http().post(`/v1/sbg/vendors/${store}/top-up`).set(asStore).send({ amount: 50 }).expect(201);
     await http().post(`/v1/rails/funding/${asked.body.fundingId}/simulate`).set(operator).send({ providerRef: `MPX${digits()}`, amount: 50 }).expect(201);
     const orderFor = async (buyerMobile: string) =>
-      (await http().post('/v1/sbg/inbound/orders').set(asStore).send({ vendorId: store, originPudoDid: origin, destPudoDid: dest, buyerMobile, size: 'M', contentPhotoRef: 'content.jpg' }).expect(201)).body.parcel.parcelId as string;
+      (await http().post('/v1/sbg/inbound/orders').set(asStore).send({ vendorId: store, originPudoDid: origin, destPudoDid: dest, buyerMobile, size: 'M', contentPhotoRef: await contentPhotoOver(app.getHttpServer(), asStore) }).expect(201)).body.parcel.parcelId as string;
 
     // THE ACCOUNT FIRST: the buyer follows the invitation while they are still at the checkout. Nothing is theirs yet.
     const EARLY = `+2547${digits()}4`;
