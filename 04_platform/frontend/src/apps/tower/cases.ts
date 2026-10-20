@@ -59,7 +59,10 @@ export function severityTone(s: CaseSeverity): 'danger' | 'warn' | 'info' | 'qui
   return s === 'critical' ? 'danger' : s === 'high' ? 'warn' : s === 'medium' ? 'info' : 'quiet';
 }
 
-const KINDS = ['Stagnant_Inventory', 'Ghost_Bus', 'Stuck_At_MDP', 'Uncollected', 'Never_Dropped_Off', 'Connectivity_Loss', 'Blocked_Corridor', 'Buyer_Dispute', 'Short_Shipped', 'Temp_Breach', 'Not_Seen', 'Pilot_Off_Target'];
+const KINDS = ['Stagnant_Inventory', 'Ghost_Bus', 'Stuck_At_MDP', 'Uncollected', 'Never_Dropped_Off', 'Connectivity_Loss', 'Blocked_Corridor', 'Buyer_Dispute', 'Short_Shipped', 'Temp_Breach', 'Not_Seen', 'Pilot_Off_Target', 'Tamper_Hold'];
+
+/** Round 35 — the kind whose case closes only by releasing the unit it holds (the tamper protocol). */
+export const HOLD_KIND = 'Tamper_Hold';
 
 /** The kind in words; a kind this build has never heard of is shown as it came. */
 export function kindWords(kind: string, t: Translate): string {

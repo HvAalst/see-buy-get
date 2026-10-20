@@ -23,6 +23,8 @@ const JOBS: Array<{ screen: Screen; icon: IconName; titleKey: MessageKey; subKey
   { screen: 'bag', icon: 'bag', titleKey: 'agent.bag.title', subKey: 'agent.home.jobBagSub' },
   { screen: 'receivebag', icon: 'bag', titleKey: 'agent.receivebag.title', subKey: 'agent.home.jobReceiveBagSub' },
   { screen: 'void', icon: 'refresh', titleKey: 'agent.void.title', subKey: 'agent.home.jobVoidSub' },
+  // Round 35 — the tamper protocol: a parcel found cut or opened is held here and operations told.
+  { screen: 'tamper', icon: 'warning', titleKey: 'agent.tamper.title', subKey: 'agent.home.jobTamperSub' },
   { screen: 'rates', icon: 'scale', titleKey: 'agent.rates.title', subKey: 'agent.home.jobRatesSub', owner: true },
   { screen: 'consignments', icon: 'bag', titleKey: 'agent.consignments.title', subKey: 'agent.home.jobConsignmentsSub' },
   // FB2b — answering a driver's price is occasional, not part of the daily counter loop, so it lives here

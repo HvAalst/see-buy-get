@@ -89,6 +89,7 @@ describe('the tamper protocol, over the wire', () => {
     expect((await report(driver.token, { finding: 'seal_not_as_written', sealId: seal.sealId, numberRead: 'KE 5555-009' }).expect(400)).body.detail).toMatch(/Photograph what you found/);
     expect((await report(operator, { finding: 'wrap_cut', photoRefs: [] }).expect(403)).body.detail).toMatch(/whoever has the goods in front of them/);
     await report(other.token, { finding: 'wrap_cut', photoRefs: [await photo(other.token, 'tamper')] }).expect(404);
+    expect((await report(driver.token, { finding: 'wrap_cut', photoRefs: [await photo(biz, 'tamper')] }).expect(400)).body.code).toBe('PHOTO_REQUIRED');
     const asFound = [await photo(driver.token, 'tamper')];
     const held = (await report(driver.token, { finding: 'seal_not_as_written', sealId: seal.sealId, numberRead: 'KE 5555-009', photoRefs: asFound, note: 'Bolt looks re-crimped' }).expect(201)).body;
     expect(held).toMatchObject({ unitType: 'load', unitId: freightId, ref: code, held: { finding: 'seal_not_as_written', stage: 'pickup', where: 'at pickup' } });
@@ -142,6 +143,8 @@ describe('the tamper protocol, over the wire', () => {
     expect((await http().post(`/v1/sbg/dispatch/freight/${freightId}/deliver`).set(driver.token).send(await deliver({ sealsAtDelivery: 'not_as_on_the_note' })).expect(409)).body.code).toBe('TAMPER_REPORT_FIRST');
     expect((await report(driver.token, { finding: 'seal_not_as_on_the_note', photoRefs: [await photo(driver.token, 'tamper')] }).expect(201)).body.held).toMatchObject({ stage: 'delivery', where: 'at delivery' });
     await http().post(`/v1/sbg/dispatch/freight/${freightId}/deliver`).set(driver.token).send(await deliver({ sealsAtDelivery: 'not_as_on_the_note' })).expect(409);
+    // The driver's app is told it was reported at the door, so it asks no second report once released.
+    expect((await http().get(`/v1/sbg/fleet/drivers/${driver.did}/claims`).set(driver.token).expect(200)).body.claims.find((c: { ref: string }) => c.ref === freightId)).toMatchObject({ doorReported: true, held: { stage: 'delivery' } });
     await release(code, 'Receiver counted with our agent on the phone: complete').expect(201);
     await http().post(`/v1/sbg/dispatch/freight/${freightId}/deliver`).set(driver.token).send(await deliver({ sealsAtDelivery: 'not_as_on_the_note' })).expect(201);
 
@@ -208,6 +211,12 @@ describe('the tamper protocol, over the wire', () => {
     const held = (await atCounter(north.token, one.parcelId, { photoRefs: [await photo(north.token, 'tamper')], note: 'Tape slit along the side' }).expect(201)).body;
     expect(held).toMatchObject({ unitType: 'parcel', ref: one.parcelId, held: { finding: 'wrap_cut', stage: 'counter', where: `at North TMP ${tag}` } });
     expect(held.exceptions[0]).toMatchObject({ ssccs: [one.sscc], byAs: 'shop', note: 'Tape slit along the side' });
+    // The shop sees it set apart in its own list; the store sees it on its order.
+    const atShop = (await http().get('/v1/sbg/parcels').query({ status: 'At_PUDO,Ready_For_Pickup,Unclaimed', agent: north.did }).set(north.token).expect(200)).body as Array<{ parcelId: string; held?: unknown }>;
+    expect(atShop.find((p) => p.parcelId === one.parcelId)?.held).toMatchObject({ finding: 'wrap_cut', stage: 'counter' });
+    expect(atShop.find((p) => p.parcelId === two.parcelId)?.held).toBeUndefined();
+    const orders = (await http().get(`/v1/sbg/vendors/${made.vendorId}/orders`).set(storeToken).expect(200)).body.items as Array<{ parcelId: string; held?: unknown }>;
+    expect(orders.find((o) => o.parcelId === one.parcelId)?.held).toMatchObject({ where: `at North TMP ${tag}` });
 
     // SET APART: into no bag; the store's own system is told it is held.
     const bag = (await http().post(`/v1/sbg/mdps/${hub.mdpId}/totes`).set(operator).expect(201)).body.code as string;
@@ -240,27 +249,45 @@ describe('the tamper protocol, over the wire', () => {
       () => parcelsSvc.closeAsReturned(one.parcelId, 'prc_return'),
       () => parcelsSvc.setTransit(one.parcelId, 'On_Bus', bus.badgeId, 'bag'),
     ]) expect(act).toThrow(/is held/);
+    const shopBag = (await http().post(`/v1/sbg/agents/${north.did}/totes`).set(north.token).send({ destZone: `TmpSouth${tag}` }).expect(201)).body.code as string;
+    expect((await http().post(`/v1/sbg/agents/${north.did}/totes/${shopBag}/fill`).set(north.token).send({ parcelId: one.parcelId }).expect(409)).body.code).toBe('UNIT_HELD');
+    await http().post(`/v1/sbg/agents/${north.did}/totes/${shopBag}/fill`).set(north.token).send({ parcelId: two.parcelId }).expect(201);
+    await http().post(`/v1/sbg/agents/${north.did}/totes/${shopBag}/seal`).set(north.token).send({}).expect(201);
 
     // Released: it goes into the bag with the other, onto the bus, to the hub.
     await release(one.parcelId, 'Store confirmed the box was taped twice at packing; contents photo matches').expect(201);
     expect(((await http().get(`/v1/sbg/vendors/${made.vendorId}/callbacks`).set(storeToken).expect(200)).body as Array<{ event: string }>).some((c) => c.event === 'released')).toBe(true);
-    for (const p of parcels) await http().post(`/v1/sbg/totes/${bag}/fill`).set(operator).send({ parcelId: p.parcelId }).expect(201);
-    await http().post(`/v1/sbg/totes/${bag}/load`).set(operator).send({ driverBadgeId: 'BUS-9' }).expect(201);
-    await http().post(`/v1/sbg/mdps/${hub.mdpId}/drop-bag`).set(operator).send({ code: bag }).expect(201);
+    await http().post(`/v1/sbg/totes/${bag}/fill`).set(operator).send({ parcelId: one.parcelId }).expect(201);
+    for (const code of [bag, shopBag]) {
+      await http().post(`/v1/sbg/totes/${code}/load`).set(operator).send({ driverBadgeId: 'BUS-9' }).expect(201);
+      await http().post(`/v1/sbg/mdps/${hub.mdpId}/drop-bag`).set(operator).send({ code }).expect(201);
+    }
 
     // AT THE HUB: one sorted into the bag onward, then found cut — taken back out of that bag; the other found cut before
     // sorting. Neither sorted, bagged or moved on until released; the shop it was handed in at no longer holds it.
     const sorted = (await http().post(`/v1/sbg/mdps/${hub.mdpId}/sort`).set(operator).send({ parcelId: one.parcelId }).expect(201)).body;
     const atHub = (id: string) => http().post(`/v1/sbg/mdps/${hub.mdpId}/parcels/${id}/tamper`);
     await atHub(two.parcelId).set(north.token).send({ photoRefs: [await photo(north.token, 'tamper')] }).expect(403);
+    const otherHub = (await http().post('/v1/sbg/mdps').set(operator).send({ name: `Other Hub ${tag}`, zones: [`TmpElsewhere${tag}`], location: { lat: -0.5, lng: 35.3 } }).expect(201)).body;
+    const otherHubToken = bearer((await http().post('/v1/auth/token').send({ role: 'mdp', did: otherHub.did }).expect(201)).body.access_token);
+    expect((await atHub(two.parcelId).set(otherHubToken).send({ photoRefs: [await photo(otherHubToken, 'tamper')] }).expect(403)).body.detail).toMatch(/Only the hub can do this/);
+    // …and at its own door, a parcel that stands at another hub is one it does not hold.
+    expect((await http().post(`/v1/sbg/mdps/${otherHub.mdpId}/parcels/${two.parcelId}/tamper`).set(otherHubToken).send({ photoRefs: [await photo(otherHubToken, 'tamper')] }).expect(404)).body.detail).toBe('No parcel you hold has that number');
     await atCounter(north.token, two.parcelId, { photoRefs: [await photo(north.token, 'tamper')] }).expect(404);
     expect((await atHub(one.parcelId).set(hubToken).send({ photoRefs: [await photo(hubToken, 'tamper')] }).expect(201)).body.held).toMatchObject({ stage: 'hub', where: `at Tamper Hub ${tag}` });
     expect((await http().get(`/v1/sbg/totes/${sorted.toteCode}`).set(operator).expect(200)).body.parcels).not.toContain(one.parcelId);
     await atHub(two.parcelId).set(hubToken).send({ photoRefs: [await photo(hubToken, 'tamper')] }).expect(201);
+    const atTheHub = (await http().get('/v1/sbg/parcels').query({ status: 'At_MDP', agent: '' }).set(hubToken).expect(200)).body as Array<{ parcelId: string; held?: unknown }>;
+    expect(atTheHub.find((p) => p.parcelId === two.parcelId)?.held).toMatchObject({ stage: 'hub' });
     expect((await http().post(`/v1/sbg/mdps/${hub.mdpId}/sort`).set(operator).send({ parcelId: two.parcelId }).expect(409)).body.code).toBe('UNIT_HELD');
     const staffView = (await http().get(`/v1/sbg/ops/tamper/${one.parcelId}`).set(operator).expect(200)).body;
     expect(staffView.exceptions.map((e: { stage: string }) => e.stage)).toEqual(['hub', 'counter']);
     await release(two.parcelId, 'Hub supervisor resealed with our tape; weight matches the label').expect(201);
-    await http().post(`/v1/sbg/mdps/${hub.mdpId}/sort`).set(operator).send({ parcelId: two.parcelId }).expect(201);
+    const sortedTwo = (await http().post(`/v1/sbg/mdps/${hub.mdpId}/sort`).set(operator).send({ parcelId: two.parcelId }).expect(201)).body;
+    // A bag moves whole: a held parcel inside it — held here without the take-out a report makes — and it does not move.
+    app.get(ParcelService).hold(two.parcelId, { since: new Date().toISOString(), finding: 'wrap_cut', stage: 'hub', exceptionId: 'tmp_direct', where: 'at the hub' }, 'test');
+    expect((await http().post(`/v1/sbg/totes/${sortedTwo.toteCode}/load`).set(operator).send({ driverBadgeId: 'BUS-9' }).expect(409)).body.code).toBe('UNIT_HELD');
+    // Refused before anything is written: the bag is where it was, still filling, with the parcel in it.
+    expect((await http().get(`/v1/sbg/totes/${sortedTwo.toteCode}`).set(operator).expect(200)).body).toMatchObject({ status: 'filling', parcels: expect.arrayContaining([two.parcelId]) });
   });
 });

@@ -423,6 +423,10 @@ export function createAgentApi(sbg: SbgClient) {
     /** Reverse logistics: undo a drop-off within the 5-minute window with a torn-label photo → refund. */
     voidParcel: (parcelId: string, agentDid: string, voidedPhotoRef: string) =>
       sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/void', { params: { path: { id: parcelId } }, body: { agentDid, voidedPhotoRef } })),
+
+    /** Round 35 — a parcel in the shop's hands found cut or opened (the tamper protocol): held here, operations told. */
+    reportTamper: (parcelId: string, body: { photoRefs: string[]; note?: string; observedAt?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/tamper', { params: { path: { id: parcelId } }, body })),
   };
 }
 

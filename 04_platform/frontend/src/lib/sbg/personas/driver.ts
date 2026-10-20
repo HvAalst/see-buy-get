@@ -386,6 +386,12 @@ export function createDriverApi(sbg: SbgClient) {
     /** Round 15 — a seal on the load found broken on the road. Who says it comes from the sign-in. */
     reportBrokenSeal: (freightId: string, sealId: string, body: { cause: string; note?: string; photoRefs: string[]; paperRef?: string; location?: { lat: number; lng: number }; observedAt?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/seals/{sealId}/broken', { params: { path: { id: freightId, sealId } }, body: body as never })),
+
+    /** Round 35 — tampering found on the load in the driver's hands (the tamper protocol): it is held, operations is told. */
+    reportTamper: (
+      freightId: string,
+      body: { finding: 'seal_not_as_written' | 'seal_not_as_on_the_note' | 'wrap_cut'; sealId?: string; numberRead?: string; photoRefs: string[]; note?: string; atDelivery?: boolean; location?: { lat: number; lng: number }; observedAt?: string },
+    ) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/tamper', { params: { path: { id: freightId } }, body })),
   };
 }
 

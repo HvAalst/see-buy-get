@@ -76,6 +76,8 @@ export interface VendorOrdersQuery {
 /** One row of the vendor shipment register — the list projection, now carrying the DID, buyer + products. */
 export interface VendorOrderRow {
   parcelId: string;
+  /** Round 35 — held under the tamper protocol. */
+  held?: UnitHold;
   did?: string;
   externalOrderId?: string;
   status: ParcelStatus;
@@ -288,6 +290,8 @@ export function vendorOrderRowOf(p: Parcel): VendorOrderRow {
     trackingKey: p.trackingKey,
     binSlot: p.binSlot,
     createdAt: p.acceptedAt,
+    // Round 35 — held under the tamper protocol: the store whose goods they are sees what was found, where, since when.
+    ...(p.held ? { held: p.held } : {}),
   };
 }
 
@@ -567,6 +571,8 @@ export function operationalParcelView(p: Parcel) {
     ...(isCollectable(p.status) && p.readyAt && Date.now() - new Date(p.readyAt).getTime() > UNCOLLECTED_H * 3_600_000
       ? { overdue: true as const }
       : {}),
+    // Round 35 — held under the tamper protocol: the shop and the hub holding it see that it is set apart, and why.
+    ...(p.held ? { held: p.held } : {}),
     unclaimedAt: p.unclaimedAt,
     /**
      * What is owed for the shelf slot, right now.

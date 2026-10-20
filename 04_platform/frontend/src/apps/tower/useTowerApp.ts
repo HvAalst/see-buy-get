@@ -1,6 +1,7 @@
 import { FLEET_PAPERS, fleetBody, type FleetForm, type FleetPaperKey, type FleetSetupRow } from './fleets';
 import type { CaseBoard, CaseKindCount, CaseListName, FlagCaseRow } from './cases';
 import type { LostParcelRow } from './lost';
+import type { TamperUnit } from '../../shared/tamper';
 import type { MoveRow } from './accountMoves';
 import type { PaperCase } from './paperReports';
 import type { DisputeRow } from './idDisputes';
@@ -288,6 +289,10 @@ export interface TowerActions {
   caseFilter(which: CaseListName, kind: string | null): void;
   /** Declare a parcel lost after a search, or mark a lost one found. True when the server took it. */
   lostAct(parcelId: string, act: 'lost' | 'found', words: string): Promise<boolean>;
+  /** Round 35 — a held unit's exceptions, for its case: null when they could not be read. */
+  tamperUnit(ref: string): Promise<TamperUnit | null>;
+  /** Round 35 — release a held unit, with what was found and done. True when the server took it. */
+  releaseHold(ref: string, reason: string): Promise<boolean>;
   setPresenceForm(patch: Partial<{ level: PresenceLevel; note: string; incoterms: { origin: string[]; destination: string[] } }>): void;
   setCountryForm(patch: Partial<NewCountryForm>): void;
   recordCountry(): Promise<void>;
@@ -1169,6 +1174,22 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         setState((s) => ({ ...s, caseBusy: parcelId, caseError: null }));
         const by = stateRef.current.who?.name;
         const { error } = act === 'lost' ? await client.api.declareLost(parcelId, { reason: words, ...(by ? { by } : {}) }) : await client.api.foundAgain(parcelId, { note: words, ...(by ? { by } : {}) });
+        setState((s) => ({ ...s, caseBusy: null, ...(error ? { caseError: error.detail || error.title } : {}) }));
+        await loadCases(client);
+        return !error;
+      },
+      tamperUnit: async (ref) => {
+        const client = clientRef.current;
+        if (!client) return null;
+        const { data, error } = await client.api.tamperUnit(ref);
+        return error ? null : (narrow<TamperUnit>(data) ?? null);
+      },
+      releaseHold: async (ref, reason) => {
+        const client = clientRef.current;
+        if (!client) return false;
+        setState((s) => ({ ...s, caseBusy: ref, caseError: null }));
+        const by = stateRef.current.who?.name;
+        const { error } = await client.api.releaseHold(ref, { reason, ...(by ? { by } : {}) });
         setState((s) => ({ ...s, caseBusy: null, ...(error ? { caseError: error.detail || error.title } : {}) }));
         await loadCases(client);
         return !error;

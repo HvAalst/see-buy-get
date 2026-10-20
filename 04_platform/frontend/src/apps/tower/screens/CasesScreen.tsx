@@ -3,7 +3,8 @@ import { Icon } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { ConsoleDetail } from '../ConsoleDetail';
 import { ConsolePick } from '../ConsolePick';
-import { closedLine, doneBlocker, eventLine, kindCountLine, kindWords, openFor, ownerLine, RECHECK_CHOICES, severityTone, type CaseListName, type FlagCaseRow } from '../cases';
+import { closedLine, doneBlocker, eventLine, HOLD_KIND, kindCountLine, kindWords, openFor, ownerLine, RECHECK_CHOICES, severityTone, type CaseListName, type FlagCaseRow } from '../cases';
+import { TamperPanel } from './TamperPanel';
 import { lostLine, lostReasonBlocker, SEARCH_KIND, type LostParcelRow } from '../lost';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
@@ -212,6 +213,8 @@ function CaseDetail({ row, state, actions, onActed, onClose }: { row: FlagCaseRo
   const [declaring, setDeclaring] = useState(false);
   const [looked, setLooked] = useState('');
   const search = row.kind === SEARCH_KIND;
+  // Round 35 — a held unit: its case closes only by the release, from the panel below.
+  const hold = row.kind === HOLD_KIND;
   const busy = state.caseBusy === row.caseId || state.caseBusy === row.subject;
   const blocker = doneBlocker(reason, recheck, t);
   const live = row.state === 'open' || row.state === 'taken';
@@ -249,9 +252,11 @@ function CaseDetail({ row, state, actions, onActed, onClose }: { row: FlagCaseRo
                 {t('tower.cases.take')}
               </button>
             )}
-            <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => setClosing((x) => !x)}>
-              {t('tower.cases.closeCta')}
-            </button>
+            {!hold ? (
+              <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => setClosing((x) => !x)}>
+                {t('tower.cases.closeCta')}
+              </button>
+            ) : null}
             {search ? (
               <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => setDeclaring((x) => !x)}>
                 {t('tower.lost.declareCta')}
@@ -260,6 +265,8 @@ function CaseDetail({ row, state, actions, onActed, onClose }: { row: FlagCaseRo
           </div>
         ) : null}
       </section>
+
+      {hold ? <TamperPanel subject={row.subject} live={live} state={state} actions={actions} onReleased={onClose} /> : null}
 
       {live && search && declaring ? (
         <section class="cons__panel">

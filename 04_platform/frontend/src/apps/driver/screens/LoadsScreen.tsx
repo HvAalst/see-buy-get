@@ -8,7 +8,8 @@ import { canLoadBag, capacitySubLine, cash, claimControl, isFull, loadsSummary, 
 import { vehicleWord } from '../vehicle-words';
 import { RunSection } from './RunSection';
 import { PassageSheet, PassageStrip } from './PassageStrip';
-import { BrokenSealSheet, DeliverySeals, PickupSeals, pickupSealsReady, type SealRead } from './SealSteps';
+import { BrokenSealSheet, DeliverySeals, PickupSeals, pickupSealsReady, TamperSheet, type SealRead, type TamperTarget } from './SealSteps';
+import { heldLine } from '../../../shared/tamper';
 import type { PassageKind } from '../../../shared/passages';
 import type { SealsAtDelivery } from '../../../shared/seals';
 import type { Claimable } from '../types';
@@ -26,6 +27,7 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
   const [tempFor, setTempFor] = useState<Claimable | null>(null); // S33b — the freight whose temperature we're logging
   const [passage, setPassage] = useState<{ claim: Claimable; kind: PassageKind } | null>(null); // round 14 — a border or a hub being said
   const [brokenFor, setBrokenFor] = useState<Claimable | null>(null); // round 15 — a seal found broken on the road
+  const [tamper, setTamper] = useState<TamperTarget | null>(null); // round 35 — tampering found: the load held, operations told
   const v = state.vehicle;
   const hasBadge = canLoadBag(state.driver?.badgeId);
 
@@ -88,6 +90,8 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   {hasInstructions(c.instructions) ? <InstructionsBlock view={c.instructions} compact /> : null}
                   {/* No papers, no loading: said on the card, before the drive to the gate. */}
                   {c.invoiceMissing ? <span class="load__warn">{t('driver.loads.invoiceMissingShort')}</span> : null}
+                  {/* Round 35 — held under the tamper protocol: said on the card, before the walk to the gate. */}
+                  {c.held ? <span class="load__warn">{t('driver.loads.heldShort')}</span> : null}
                 </span>
               </>
             );
@@ -151,6 +155,12 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   <div class="load__nav">
                     <DocumentButton label={t('common.cmr.open')} title={t('common.cmr.title')} fetch={() => actions.freightNote(c.ref)} />
                   </div>
+                  {/* Round 35 — the wrap cut, the load opened: held where it is, operations told. */}
+                  {!c.held ? (
+                    <Button variant="link" onClick={() => setTamper({ claim: c, finding: 'wrap_cut' })}>
+                      {t('driver.tamper.open')}
+                    </Button>
+                  ) : null}
                 </li>
               );
             }
@@ -206,10 +216,20 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
         ) : null}
       </Sheet>
 
-      <FreightGate claim={gate} state={state} actions={actions} onClose={() => setGate(null)} />
+      <FreightGate
+        claim={gate}
+        state={state}
+        actions={actions}
+        onClose={() => setGate(null)}
+        onTamper={(target) => {
+          setGate(null);
+          setTamper(target);
+        }}
+      />
       <TempSheet claim={tempFor} state={state} actions={actions} onClose={() => setTempFor(null)} />
       <PassageSheet claim={passage?.claim ?? null} kind={passage?.kind ?? null} state={state} actions={actions} onClose={() => setPassage(null)} />
       <BrokenSealSheet claim={brokenFor} state={state} actions={actions} onClose={() => setBrokenFor(null)} />
+      <TamperSheet target={tamper} state={state} actions={actions} onClose={() => setTamper(null)} />
     </div>
   );
 }
@@ -284,7 +304,7 @@ function TempSheet({ claim, state, actions, onClose }: { claim: Claimable | null
  * checklist is complete. The items come from the backend (the SAME list it enforces), so the checklist a
  * driver clears is exactly the checklist the server requires.
  */
-function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | null; state: DriverState; actions: DriverActions; onClose: () => void }) {
+function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Claimable | null; state: DriverState; actions: DriverActions; onClose: () => void; onTamper: (target: TamperTarget) => void }) {
   const t = useT();
   const [checked, setChecked] = useState<string[]>([]);
   const [photoId, setPhotoId] = useState('');
@@ -325,7 +345,10 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
   const photoOk = !isPickup || photoId.length > 0;
   const receiverOk = isPickup || receiver.trim().length >= 2;
   const podOk = isPickup || podId.length > 0;
-  const sealsOk = !claim ? true : isPickup ? pickupSealsReady(claim, sealReads) : !claim.seals?.length || sealsAtDoor !== null;
+  // Round 35 — not as the note says: reported first (operations told before the receiver takes the goods).
+  const doorOk = sealsAtDoor !== 'not_as_on_the_note' || Boolean(claim?.doorReported);
+  const sealsOk = !claim ? true : isPickup ? pickupSealsReady(claim, sealReads) : !claim.seals?.length || (sealsAtDoor !== null && doorOk);
+  const held = claim?.held;
   const busy = claim ? state.busy === `freight:${claim.ref}` : false;
 
   return (
@@ -338,6 +361,8 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
               : t('driver.loads.gateBodyDeliver', { ref: claim.code ?? claim.ref, kg: claim.weightKg, dest: claim.destLabel })}
           </p>
           {isPickup && claim.invoiceMissing ? <Note tone="warn" icon="warning" title={t('driver.loads.invoiceMissingTitle')} detail={t('driver.loads.invoiceMissingDetail')} /> : null}
+          {/* Round 35 — held under the tamper protocol: it changes hands with nobody until operations releases it. */}
+          {held ? <Note tone="warn" icon="warning" title={t('common.tamper.heldTitle')} detail={`${heldLine(held, t)} ${t('common.tamper.heldWait')}`} /> : null}
           {/* FP7 — the sender's instructions, at the gate where they are acted on. */}
           {hasInstructions(claim.instructions) ? (
             <Card title={t('common.instructions.title')} tone="soft">
@@ -358,7 +383,7 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
                   disabled={busy}
                 />
               </div>
-              <PickupSeals claim={claim} actions={actions} busy={busy} reads={sealReads} setReads={setSealReads} />
+              <PickupSeals claim={claim} actions={actions} busy={busy} reads={sealReads} setReads={setSealReads} onReport={(s, numberRead) => onTamper({ claim, finding: 'seal_not_as_written', seal: { sealId: s.sealId, no: s.no, numberRead } })} />
               {/* FP3 — the carrier's reservations (CMR box 18). Optional, and the driver's protection: a sack torn
                   BEFORE taking over is on the note as such, not as damage in transit. */}
               <div class="field" style="margin-top:14px">
@@ -391,7 +416,7 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
                   disabled={busy}
                 />
               </div>
-              <DeliverySeals claim={claim} value={sealsAtDoor} onChange={setSealsAtDoor} busy={busy} />
+              <DeliverySeals claim={claim} value={sealsAtDoor} onChange={setSealsAtDoor} busy={busy} onReport={() => onTamper({ claim, finding: 'seal_not_as_on_the_note' })} />
               <div class="field" style="margin-top:14px">
                 <label class="field__label" for={`rem-${claim.ref}`}>
                   {t('driver.loads.remarksLabel')}
@@ -405,7 +430,7 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
             <Button
               chevron={false}
               busy={busy}
-              disabled={!allChecked || !photoOk || !receiverOk || !podOk || !sealsOk}
+              disabled={Boolean(held) || !allChecked || !photoOk || !receiverOk || !podOk || !sealsOk}
               onClick={() => {
                 const ref = claim.ref;
                 if (isPickup) {
@@ -419,7 +444,9 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
             >
               {isPickup ? t('driver.loads.confirmPickup') : t('driver.loads.confirmDelivery')}
             </Button>
-            {!allChecked ? (
+            {held ? (
+              <p class="hint" style="margin-top:8px">{t('driver.tamper.heldHint')}</p>
+            ) : !allChecked ? (
               <p class="hint" style="margin-top:8px">{t('driver.loads.tickAll')}</p>
             ) : !photoOk ? (
               <p class="hint" style="margin-top:8px">{t('driver.loads.addPhoto')}</p>
@@ -428,9 +455,15 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
             ) : !podOk ? (
               <p class="hint" style="margin-top:8px">{t('driver.loads.addPodPhoto')}</p>
             ) : !sealsOk ? (
-              <p class="hint" style="margin-top:8px">{t(isPickup ? 'driver.seal.readAll' : 'driver.seal.doorAsk')}</p>
+              <p class="hint" style="margin-top:8px">{t(isPickup ? 'driver.seal.readAll' : doorOk ? 'driver.seal.doorAsk' : 'driver.tamper.doorFirst')}</p>
             ) : null}
           </div>
+          {/* Round 35 — the wrap cut, the load opened, at the gate or at the door: held where it is, operations told. */}
+          {!held ? (
+            <Button variant="link" onClick={() => onTamper({ claim, finding: 'wrap_cut' })}>
+              {t('driver.tamper.open')}
+            </Button>
+          ) : null}
           {/* FP8 — the other half of dispatch: a load can be put on a driver, so a driver can say no — and a driver
               who claimed it can change their mind. Only before the goods are on the vehicle; from pickup on, the
               way out is delivery or the sender's withdrawal. The reason travels to the sender and the office. */}

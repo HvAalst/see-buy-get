@@ -581,6 +581,11 @@ content-type: application/json
     <li><code>collected</code> — the buyer has it. The order is closed.</li>
     <li><code>disputed</code> — something is wrong with it; <code>data.disputeReason</code> says what was
       claimed.</li>
+    <li><code>held</code> — a shop or a hub found its wrap or packaging cut or opened, photographed it and set it
+      apart. <code>data.held</code> says what was found (<code>finding</code>), where (<code>where</code>) and since
+      when (<code>since</code>). It goes into no bag and to nobody until SeeBuyGet operations has looked and released
+      it; your buyer cannot collect it meanwhile.</li>
+    <li><code>released</code> — operations released it: it goes on as usual. What was found stays on its record.</li>
   </ul>
 
   <h3>Checking it really came from us</h3>

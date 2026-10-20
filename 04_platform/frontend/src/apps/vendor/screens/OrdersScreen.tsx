@@ -5,6 +5,7 @@ import { triggerDownload } from '../../../shared/download';
 import { toggleAll, toggleId } from '../../../shared/register';
 import { useDebounced } from '../../../shared/useDebounced';
 import { formatDate } from '../../../shared/i18n';
+import { heldLine } from '../../../shared/tamper';
 import { handoffLine, money, orderRowsToCsv, orderStatus, ordersSummary, paidWord, reportRowLine } from '../logic';
 import { DamageReportCard } from '../../../shared/damage/DamageReportCard';
 import type { SbgClient } from '../../../lib/sbg';
@@ -344,6 +345,8 @@ function OrderRowItem({ o, selected, onToggle, onOpen }: { o: OrderRow; selected
           <span class="row__t mono-t">{label}</span>
           {who ? <span class="row__s">{who}</span> : null}
           <span class="row__meta">{`${st.word} · ${o.size} → ${o.destZone}${o.shipmentCost != null ? ` · ${money(o.shipmentCost, o.currency)}` : ''}`}</span>
+          {/* Round 35 — held under the tamper protocol: what was found and where, until SeeBuyGet operations releases it. */}
+          {o.held ? <span class="row__s row__s--warn">{heldLine(o.held, t)}</span> : null}
         </span>
         <span class="row__end">
           <Pill tone={paid.tone === 'ok' ? 'ok' : 'warn'} dot>

@@ -24,6 +24,7 @@ import { ReleaseScreen } from './screens/ReleaseScreen';
 import { ShelfScreen } from './screens/ShelfScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { VoidScreen } from './screens/VoidScreen';
+import { TamperScreen } from './screens/TamperScreen';
 import { useAgentApp, type AgentActions, type AgentState, type Screen } from './useAgentApp';
 import '../../shared/screens.css';
 import './agent.css';
@@ -170,6 +171,8 @@ function ScreenRouter({ screen, state, actions, archive, destination, fiscal }: 
       return <ReceiveBagScreen state={state} actions={actions} />;
     case 'void':
       return <VoidScreen state={state} actions={actions} />;
+    case 'tamper':
+      return <TamperScreen state={state} actions={actions} />;
     case 'rates':
       return <RatesScreen state={state} actions={actions} />;
     case 'consignments':

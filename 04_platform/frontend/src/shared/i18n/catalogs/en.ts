@@ -347,6 +347,16 @@ export const en = {
   'common.seal.classH': 'H — high security (ISO 17712)',
   'common.seal.classS': 'S — security',
   'common.seal.classI': 'I — indicative',
+  // Round 35 — the tamper protocol (shared/tamper.ts).
+  'common.tamper.finding.seal_not_as_written': 'a seal on the door is not the one written',
+  'common.tamper.finding.seal_not_as_on_the_note': 'the seals are not as the note says',
+  'common.tamper.finding.seal_broken': 'a seal was found broken',
+  'common.tamper.finding.wrap_cut': 'the wrap or packaging is cut or opened',
+  'common.tamper.heldTitle': 'Held: SeeBuyGet operations has been told',
+  'common.tamper.heldShort': 'Held',
+  'common.tamper.heldLine': 'Held {where}, {when}: {what}.',
+  'common.tamper.heldWait': 'Keep it closed and where it is. It changes hands with nobody until operations releases it.',
+  'common.tamper.releaseTooShort': 'Say what was found and what was done: at least {n} characters.',
   'common.outbox.retry': 'Try again',
   'common.outbox.discard': 'Let it go',
 

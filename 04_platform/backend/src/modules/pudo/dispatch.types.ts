@@ -1316,6 +1316,8 @@ export class Claimable {
   @ApiPropertyOptional({ type: [SealToFind] }) seals?: SealToFind[];
   /** Round 35 — held under the tamper protocol: it does not change hands until operations releases it. */
   @ApiPropertyOptional({ type: UnitHold }) held?: UnitHold;
+  /** Round 35 — tampering was reported at the receiver's door: the seals may be said not as the note says once released. */
+  @ApiPropertyOptional() doorReported?: boolean;
   ref: string; // toteCode | freightId — the API identifier the pickup/load/deliver calls use
   /** S32b — the human-readable reference to SHOW a driver (TOTE-042 / FRT-007). For a tote this equals ref;
    *  for freight ref is the opaque frt_… id, so the readable FRT-NNN code must ride separately. */

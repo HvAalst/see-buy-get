@@ -871,6 +871,28 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "tampering",
+    apps: [
+      "driver",
+      "agent",
+      "mdp",
+      "console"
+    ],
+    title: "A seal not as written, a cut wrap: hold it, report it",
+    summary: "Whatever looks opened is held where it is: photographed, reported, and changing hands with nobody until SeeBuyGet operations has looked and released it.",
+    steps: [
+      "Driver app, at pickup: a seal read off the door that is not the number written — read it again; still not the same, tap “Still not the same? Report it”, photograph the seal as it is, and send.",
+      "Driver app, on the road or at the door: “Something is not right with this load” for a cut wrap; at the receiver’s, say the seals are not as the note says and report them first. A seal found broken on the road is reported as before, and holds the load too.",
+      "Shop app: the job “Packaging cut or opened” — scan the parcel, photograph it as it is, report it. Hub app: on the sort screen, “Packaging cut or opened? Report it”.",
+      "While it is held: keep it closed, set it apart, do not open it further. It goes into no bag, onto no bus and to nobody; the app refuses each of these and says why.",
+      "Console: the case “Held: tampering found” shows what was found, by whom, the photographs and the SSCC. Release it once you know what happened, with what was found and done: the case closes with those words."
+    ],
+    notes: [
+      "Operations is told at once, and the shipper or the store whose goods they are; the receiver is never texted. With no signal the report waits on the phone with its photograph and goes when it can.",
+      "A release judges nothing: it lets the goods move again. What was found stays on the record and on the consignment note, never with the name of who found it."
+    ]
+  },
+  {
     id: "scan-a-parcel",
     apps: [
       "agent",

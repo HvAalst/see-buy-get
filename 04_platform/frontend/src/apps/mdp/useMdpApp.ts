@@ -5,6 +5,9 @@ import { signal } from '../../shared/feedback';
 import { t } from '../../shared/i18n';
 import { clearDid, createMdpClient, mdpConfig, purgeMdpTokens, readDid, readEmail, saveDid, saveEmail } from './api';
 import { addToQueue, dropFromQueue, findMyHub, money, unsortedAt } from './logic';
+import { downscaleImage } from '../../shared/media';
+import { holdPhoto } from '../../shared/heldPhotos';
+import { errorSentence } from '../../shared/ui';
 import type { DropView, LoadView, MdpView, NewToteView, ParcelRow, RatesView, SortView, ToteView } from './types';
 
 export type Screen = 'home' | 'drop' | 'sort' | 'load' | 'newtote' | 'rates';
@@ -38,6 +41,8 @@ export interface MdpState {
   refreshing: boolean;
   stale: boolean;
   form: { dropCode: string; sortId: string; loadCode: string; badge: string };
+  /** Round 35 — a parcel found cut or opened, being reported: which, its photograph, what is seen. `null` when closed. */
+  tamper: { parcelId: string; photoRef: string; note: string } | null;
 }
 
 const EMPTY_FORM = { dropCode: '', sortId: '', loadCode: '', badge: '' };
@@ -59,6 +64,7 @@ const INITIAL: MdpState = {
   refreshing: false,
   stale: false,
   form: { ...EMPTY_FORM },
+  tamper: null,
 };
 
 const isOffline = (e: SbgError) => e.code === 'NETWORK' || e.code === 'OFFLINE' || e.code === 'TIMEOUT';
@@ -404,6 +410,61 @@ export function useMdpApp() {
     });
   }, [client, run, fail, refresh]);
 
+  const openTamper = useCallback((parcelId: string | null) => {
+    setState((s) => ({ ...s, tamper: parcelId === null ? null : { parcelId, photoRef: '', note: '' }, error: null }));
+  }, []);
+  const setTamper = useCallback((patch: Partial<NonNullable<MdpState['tamper']>>) => {
+    setState((s) => (s.tamper ? { ...s, tamper: { ...s.tamper, ...patch } } : s));
+  }, []);
+
+  /** Round 35 — a photograph for the tamper report: prepared on the phone; with no signal it waits here and goes with the report. */
+  const uploadPhoto = useCallback(
+    async (file: File): Promise<string | null> => {
+      if (!client) return null;
+      try {
+        const { dataUrl, thumbDataUrl } = await downscaleImage(file);
+        const r = await client.api.uploadMedia('tamper', dataUrl, thumbDataUrl);
+        if (r.error) {
+          const held = isOffline(r.error) ? holdPhoto('tamper', dataUrl, thumbDataUrl) : null;
+          if (held) return held;
+          pushToast({ tone: 'danger', icon: 'camera', title: t('mdp.tamper.photoFail'), detail: errorSentence(r.error) });
+          return null;
+        }
+        return narrow<{ mediaId: string }>(r.data)?.mediaId ?? null;
+      } catch {
+        pushToast({ tone: 'danger', icon: 'camera', title: t('mdp.tamper.photoFail') });
+        return null;
+      }
+    },
+    [client, pushToast],
+  );
+
+  /**
+   * Round 35 — A PARCEL FOUND CUT OR OPENED at this hub (the tamper protocol): held here — sorted into no bag, loaded
+   * onto no bus — and SeeBuyGet operations told at once. With no signal it waits on this phone and goes when it can.
+   */
+  const submitTamper = useCallback(async () => {
+    if (!client) return;
+    const hub = stateRef.current.hub;
+    const f = stateRef.current.tamper;
+    const id = f?.parcelId.trim().toUpperCase() ?? '';
+    if (!hub || !f || !id || !f.photoRef) return;
+    await run('tamper', async () => {
+      const r = await client.api.reportTamper(hub.mdpId, id, { photoRefs: [f.photoRef], ...(f.note.trim() ? { note: f.note.trim() } : {}), observedAt: new Date().toISOString() });
+      if (r.error) {
+        signal('error');
+        return fail(r.error);
+      }
+      signal('ok');
+      setState((s) => ({ ...s, tamper: null, form: s.form.sortId.trim().toUpperCase() === id ? { ...s.form, sortId: '' } : s.form }));
+      if (r.status === 202) {
+        return pushToast({ tone: 'warn', icon: 'offline', title: t('mdp.tamper.queued'), detail: t('mdp.tamper.queuedDetail') });
+      }
+      pushToast({ tone: 'warn', icon: 'warning', title: t('mdp.tamper.reported', { id }), detail: t('mdp.tamper.reportedDetail') });
+      await refresh();
+    });
+  }, [client, run, fail, pushToast, refresh]);
+
   const pickSortId = useCallback((id: string) => {
     setState((s) => ({ ...s, form: { ...s.form, sortId: id } }));
   }, []);
@@ -481,6 +542,10 @@ export function useMdpApp() {
       go,
       setForm,
       pickSortId,
+      openTamper,
+      setTamper,
+      uploadPhoto,
+      submitTamper,
       pickLoadCode,
       submitDrop,
       submitSort,

@@ -88,6 +88,21 @@ export const enMdp = {
   'mdp.sort.scanSticker': 'Scan the sticker',
   'mdp.sort.cta': 'Sort — where does it go?',
   'mdp.sort.queueEmpty': 'Queue empty — scan any parcel that is physically here.',
+  // Round 35 — a parcel found cut or opened (the tamper protocol).
+  'mdp.tamper.open': 'Packaging cut or opened? Report it',
+  'mdp.tamper.title': 'Packaging cut or opened',
+  'mdp.tamper.body': 'Before it goes into a bag: photograph it as it is and report it. It is held here — sorted into no bag, loaded onto no bus — and SeeBuyGet operations is told at once.',
+  'mdp.tamper.parcel': 'The parcel',
+  'mdp.tamper.photo': 'Photograph it as it is, before anything is touched',
+  'mdp.tamper.note': 'What you see (optional)',
+  'mdp.tamper.send': 'Report it — hold the parcel',
+  'mdp.tamper.cancel': 'Not now',
+  'mdp.tamper.photoFail': 'The photograph did not go',
+  'mdp.tamper.reported': 'Parcel {id} is held',
+  'mdp.tamper.reportedDetail': 'SeeBuyGet operations is told. Set it apart; it is sorted once they release it.',
+  'mdp.tamper.queued': 'No signal — kept on this phone',
+  'mdp.tamper.queuedDetail': 'It goes with its photograph the moment there is a signal. Set the parcel apart meanwhile.',
+  'mdp.tamper.heldHere': 'Held here, not to be sorted ({count})',
   'mdp.sort.openBags': 'Open destination bags',
 
   // ---- Drop screen ----------------------------------------------------------

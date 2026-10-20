@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, PhotoField, Sheet } from '../../../shared/ui';
+import { Button, Note, PhotoField, Sheet } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { readingMatches, SEAL_BREAK_CAUSES, sealWhat, type SealBreakCause, type SealsAtDelivery, type SealToFind } from '../../../shared/seals';
 import type { Claimable } from '../types';
@@ -21,12 +21,15 @@ export function PickupSeals({
   busy,
   reads,
   setReads,
+  onReport,
 }: {
   claim: Claimable;
   actions: DriverActions;
   busy: boolean;
   reads: Record<string, SealRead>;
   setReads: (update: (prev: Record<string, SealRead>) => Record<string, SealRead>) => void;
+  /** Round 35 — read again and still not the number written: reported under the tamper protocol. */
+  onReport?: (seal: SealToFind, numberRead: string) => void;
 }) {
   const t = useT();
   const on = sealsOn(claim);
@@ -53,7 +56,18 @@ export function PickupSeals({
                 {t('driver.seal.readLabel')}
               </label>
               <input id={`seal-read-${s.no}`} class="input seal-steps__num" autocomplete="off" autocapitalize="characters" maxLength={40} value={r?.number ?? ''} disabled={busy} onInput={(e) => void read(s, e.currentTarget.value)} />
-              {r?.ok === true ? <p class="seal-steps__ok">{t('driver.seal.matches')}</p> : r?.ok === false ? <p class="seal-steps__no">{t('driver.seal.mismatch')}</p> : null}
+              {r?.ok === true ? (
+                <p class="seal-steps__ok">{t('driver.seal.matches')}</p>
+              ) : r?.ok === false ? (
+                <>
+                  <p class="seal-steps__no">{t('driver.seal.mismatch')}</p>
+                  {onReport ? (
+                    <Button variant="link" disabled={busy} onClick={() => onReport(s, r.number.trim())}>
+                      {t('driver.tamper.notAsWritten')}
+                    </Button>
+                  ) : null}
+                </>
+              ) : null}
             </div>
             <div class="field">
               <span class="field__label">{t('driver.seal.closeUp', { no: s.no })}</span>
@@ -67,7 +81,20 @@ export function PickupSeals({
 }
 
 /** At the door: the receiver looks at the seals with the driver. Asked of every load that has had a seal. */
-export function DeliverySeals({ claim, value, onChange, busy }: { claim: Claimable; value: SealsAtDelivery | null; onChange: (v: SealsAtDelivery) => void; busy: boolean }) {
+export function DeliverySeals({
+  claim,
+  value,
+  onChange,
+  busy,
+  onReport,
+}: {
+  claim: Claimable;
+  value: SealsAtDelivery | null;
+  onChange: (v: SealsAtDelivery) => void;
+  busy: boolean;
+  /** Round 35 — not as the note says: reported first, so operations is told before the receiver takes the goods. */
+  onReport?: () => void;
+}) {
   const t = useT();
   if (!claim.seals?.length) return null;
   return (
@@ -80,6 +107,18 @@ export function DeliverySeals({ claim, value, onChange, busy }: { claim: Claimab
           </button>
         ))}
       </div>
+      {value === 'not_as_on_the_note' && onReport ? (
+        claim.doorReported ? (
+          <p class="hint">{t('driver.tamper.doorReported')}</p>
+        ) : (
+          <>
+            <Note tone="warn" icon="warning" title={t('driver.tamper.doorTitle')} detail={t('driver.tamper.doorFirst')} />
+            <Button variant="link" disabled={busy} onClick={onReport}>
+              {t('driver.tamper.doorReport')}
+            </Button>
+          </>
+        )
+      ) : null}
     </div>
   );
 }
@@ -142,6 +181,101 @@ export function ClearedSeals({ claim, actions, value, onChange, busy }: { claim:
         </>
       ) : null}
     </div>
+  );
+}
+
+/** Round 35 — what the driver reports under the tamper protocol, from where it was found. */
+export type TamperByDriver = 'seal_not_as_written' | 'seal_not_as_on_the_note' | 'wrap_cut';
+export interface TamperTarget {
+  claim: Claimable;
+  finding: TamperByDriver;
+  /** The seal read again and still not the number written, with the number as read. */
+  seal?: { sealId: string; no: number; numberRead: string };
+}
+
+/**
+ * ROUND 35 — TAMPERING FOUND (the tamper protocol). What it is, its photograph before anything is touched, and what the
+ * driver sees. Sent, the load is held where it is: nobody takes it over or receives it until SeeBuyGet operations
+ * releases it. With no signal it waits on this phone, photograph and all.
+ */
+export function TamperSheet({ target, state, actions, onClose }: { target: TamperTarget | null; state: DriverState; actions: DriverActions; onClose: () => void }) {
+  const t = useT();
+  const [photo, setPhoto] = useState('');
+  const [note, setNote] = useState('');
+  const [numberRead, setNumberRead] = useState('');
+  const [atDoor, setAtDoor] = useState(false);
+  const key = target ? `${target.claim.ref}:${target.finding}:${target.seal?.sealId ?? ''}` : '';
+  useEffect(() => {
+    setPhoto('');
+    setNote('');
+    setNumberRead(target?.seal?.numberRead ?? '');
+    setAtDoor(false);
+  }, [key]);
+  const claim = target?.claim;
+  const busy = claim ? state.busy === `tamper:${claim.ref}` : false;
+  const title = !target
+    ? ''
+    : target.finding === 'seal_not_as_written'
+      ? t('driver.tamper.notAsWrittenTitle', { no: target.seal?.no ?? 1 })
+      : target.finding === 'seal_not_as_on_the_note'
+        ? t('driver.tamper.doorTitle')
+        : t('driver.tamper.title');
+  const numberOk = target?.finding !== 'seal_not_as_written' || numberRead.trim().length > 0;
+  return (
+    <Sheet open={!!target} onClose={onClose} title={title}>
+      {target && claim ? (
+        <>
+          <p class="t-body">{t('driver.tamper.body', { ref: claim.code ?? claim.ref })}</p>
+          {target.finding === 'wrap_cut' ? <p class="field__label">{t('driver.tamper.wrapCut')}</p> : null}
+          {target.finding === 'seal_not_as_written' ? (
+            <div class="field">
+              <label class="field__label" for="tamper-number">
+                {t('driver.tamper.numberRead')}
+              </label>
+              <input id="tamper-number" class="input seal-steps__num" autocomplete="off" autocapitalize="characters" maxLength={40} value={numberRead} disabled={busy} onInput={(e) => setNumberRead(e.currentTarget.value)} />
+            </div>
+          ) : null}
+          {target.finding === 'wrap_cut' && claim.status === 'in_transit' ? (
+            <div class="chips">
+              <button type="button" class={'chip chip--tap' + (atDoor ? ' chip--on' : '')} aria-pressed={atDoor} onClick={() => setAtDoor((x) => !x)}>
+                {t('driver.tamper.atDoor')}
+              </button>
+            </div>
+          ) : null}
+          <div class="field" style="margin-top:12px">
+            <span class="field__label">{t('driver.tamper.photo')}</span>
+            <PhotoField id="tamper-photo" value={photo} upload={(f) => actions.uploadPhoto('tamper', f)} onCapture={setPhoto} label={t('driver.tamper.photo')} disabled={busy} />
+          </div>
+          <div class="field">
+            <label class="field__label" for="tamper-note">
+              {t('driver.tamper.note')}
+            </label>
+            <textarea id="tamper-note" class="input" rows={2} maxLength={500} value={note} onInput={(e) => setNote(e.currentTarget.value)} disabled={busy} />
+          </div>
+          <p class="hint">{t('driver.tamper.who')}</p>
+          <Button
+            chevron={false}
+            busy={busy}
+            disabled={!photo || !numberOk}
+            onClick={() => {
+              void actions.reportTamper(claim.ref, {
+                finding: target.finding,
+                photoRefs: [photo],
+                ...(target.seal ? { sealId: target.seal.sealId, numberRead: numberRead.trim() } : {}),
+                ...(note.trim() ? { note: note.trim() } : {}),
+                ...(target.finding === 'wrap_cut' && atDoor ? { atDelivery: true } : {}),
+              });
+              onClose();
+            }}
+          >
+            {t('driver.tamper.send')}
+          </Button>
+          <Button variant="link" onClick={onClose}>
+            {t('driver.cancel')}
+          </Button>
+        </>
+      ) : null}
+    </Sheet>
   );
 }
 

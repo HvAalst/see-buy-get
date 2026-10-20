@@ -1,6 +1,7 @@
 import type { BorderAdviceView } from './border';
 import type { PassageForDriver } from './passage';
 import type { SealToFind } from '../../shared/seals';
+import type { UnitHold } from '../../shared/tamper';
 /**
  * Local view types for the driver app.
  *
@@ -240,6 +241,10 @@ export interface Claimable {
   passage?: PassageForDriver;
   /** Round 15 — the seals to read off the door: what each is, never its number; a fingerprint to check a reading on the phone. */
   seals?: SealToFind[];
+  /** Round 35 — held under the tamper protocol: not taken over or handed over until operations releases it. */
+  held?: UnitHold;
+  /** Round 35 — tampering reported at the receiver's door: once released, the seals may be said not as the note says. */
+  doorReported?: boolean;
   ref: string; // the API id used for pickup/load/deliver
   code?: string; // S32b — the human reference to show (TOTE-042 / FRT-007); ref for freight is an opaque id
   pickupLocation?: { lat: number; lng: number };

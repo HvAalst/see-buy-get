@@ -1,3 +1,5 @@
+import type { UnitHold } from '../../shared/tamper';
+
 /**
  * Local view types for the hub app. Same contract stance as the driver/agent apps: the
  * generated schema leaves these responses untyped, so the boundary is declared here once
@@ -40,6 +42,8 @@ export interface ParcelRow {
   destZone: string;
   toteId?: string;
   atMdpId?: string;
+  /** Round 35 — held under the tamper protocol: set apart here, sorted once operations releases it. */
+  held?: UnitHold;
 }
 
 export interface NextHop {

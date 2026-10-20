@@ -8,6 +8,7 @@
  */
 
 import type { GiveBackReason } from '../../shared/giveBack';
+import type { UnitHold } from '../../shared/tamper';
 import type { RunCancelReason } from '../../shared/runCancel';
 
 export type AgentStatus = 'DRAFT' | 'KYC_PENDING' | 'APPROVED_UNFUNDED' | 'ACTIVE' | 'LOCKED';
@@ -187,6 +188,8 @@ export interface ParcelView {
    * arguing across a counter about whose number is right. Absent unless it is true.
    */
   overdue?: boolean;
+  /** Round 35 — held under the tamper protocol: set apart here until SeeBuyGet operations releases it. */
+  held?: UnitHold;
 }
 
 /** A destination PUDO the counter can pick from the public directory (Map/Address intake picker). */

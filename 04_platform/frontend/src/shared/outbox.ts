@@ -136,6 +136,13 @@ const QUEUEABLE: Array<{ method: string; test: RegExp; label: string }> = [
   // Round 15 — a seal found broken on the road: what the driver sees, dated when seen; a second report of the same seal is
   // refused by the server, so a replay costs nothing.
   { method: 'POST', test: /^\/v1\/sbg\/dispatch\/freight\/[^/]+\/seals\/[^/]+\/broken$/, label: 'Broken seal reported' },
+  // Round 35 — tampering found (the tamper protocol): a seal not as written, the seals not as the note says, a cut wrap —
+  // what is in front of the person, dated when seen, with its photograph held on the phone. The same thing reported again
+  // while it is held is the report already made, so a replay costs nothing; the hold is the server's, and stops the next
+  // hand-over as soon as the server hears.
+  { method: 'POST', test: /^\/v1\/sbg\/dispatch\/freight\/[^/]+\/tamper$/, label: 'Tampering reported' },
+  { method: 'POST', test: /^\/v1\/sbg\/parcels\/[^/]+\/tamper$/, label: 'Tampering reported' },
+  { method: 'POST', test: /^\/v1\/sbg\/mdps\/[^/]+\/parcels\/[^/]+\/tamper$/, label: 'Tampering reported' },
   // The vehicle is parked and the driver can see it. Ending twice is a no-op, so a replay costs nothing.
   { method: 'POST', test: /^\/v1\/sbg\/fleet\/drivers\/[^/]+\/end-session$/, label: 'Shift ended' },
   // WHAT THE DRIVER SEES ON THE ROAD (the user, 2026-10-18: "queue reports, rest online"). A breakdown and a road hazard

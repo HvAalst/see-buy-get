@@ -40,6 +40,7 @@ export type TipId =
      about how that counter job goes. Learned in a week; paid for in screen space for years. */
   | 'agent.accept.how'
   | 'agent.bag.how'
+  | 'agent.tamper.how'
   | 'agent.freight.how'
   | 'agent.lots.how'
   /* THE HUB. Five screens, and every one of them is a scan-and-be-told loop that never changes. */

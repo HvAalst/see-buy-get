@@ -1,4 +1,5 @@
 import type { SbgClient } from '../client';
+import { createMediaApi } from './media';
 
 /**
  * MDP persona facade — the ONLY operations the sort-hub app can name. The floor loop from
@@ -8,6 +9,13 @@ import type { SbgClient } from '../client';
  */
 export function createMdpApi(sbg: SbgClient) {
   return {
+    // Round 35 — a photograph of a parcel found cut or opened (the tamper protocol), and nothing else at a hub yet.
+    ...createMediaApi(sbg),
+
+    /** Round 35 — a parcel standing at this hub found cut or opened: held here, SeeBuyGet operations told. */
+    reportTamper: (mdpId: string, parcelId: string, body: { photoRefs: string[]; note?: string; observedAt?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/parcels/{parcelId}/tamper', { params: { path: { id: mdpId, parcelId } }, body })),
+
     /** All hubs — the app resolves its own by the signed-in DID. */
     mdps: () => sbg.request((c) => c.GET('/v1/sbg/mdps', {})),
 

@@ -20,6 +20,7 @@ export type MediaKind =
   | 'defect' // a defect on a vehicle, found at the daily check or later — the vehicle's record
   | 'job_card' // a workshop's job card for a service or repair — the vehicle's record
   | 'interchange' // Y3 — a party's photo of a CONTAINER's condition at a gate, beside the driver's own
+  | 'tamper' // round 35 — what was found under the tamper protocol: the seal as it is, the cut wrap
   | 'gs1_licence' // round 18 — the GS1 licence a business, a forwarder's client or (round 29) a store sends in a prefix dispute
   // CL5 — a photograph of an OFFICIAL DOCUMENT, behind two gates: the country's and the person's.
   | 'field_evidence';

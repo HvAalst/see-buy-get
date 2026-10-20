@@ -238,7 +238,6 @@ export class MdpService {
     if (parcel.originAgentDid !== agentDid || parcel.status !== 'At_PUDO') {
       throw new GlosError('INVALID_STATE', `Parcel ${parcelId} is not waiting at this shop`);
     }
-    this.parcels.refuseIfHeld(parcel); // round 35 — set apart: into no bag
     if (parcel.destZone !== bag.destinationNodeId) {
       throw new GlosError(
         'WRONG_DESTINATION',

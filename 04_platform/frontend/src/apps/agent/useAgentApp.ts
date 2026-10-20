@@ -14,6 +14,7 @@ import type { MediaKind } from '../../lib/sbg/personas/media';
 import { downscaleImage } from '../../shared/media';
 import { holdPhoto, mayHold } from '../../shared/heldPhotos';
 import { onOutboxSent } from '../../shared/outbox';
+import type { TamperUnit } from '../../shared/tamper';
 import { t } from '../../shared/i18n'; // plain t(): toasts/notes are built at action time in the shop's active locale
 import { errorSentence } from '../../shared/ui';
 import type { IconName } from '../../shared/ui/Icon';
@@ -55,7 +56,7 @@ import type {
   OfferRow,
 } from './types';
 
-export type Screen = 'home' | 'accept' | 'handover' | 'bag' | 'release' | 'collect' | 'receivebag' | 'rates' | 'void' | 'records' | 'consignments' | 'shelf' | 'freight';
+export type Screen = 'home' | 'accept' | 'handover' | 'bag' | 'release' | 'collect' | 'receivebag' | 'rates' | 'void' | 'records' | 'consignments' | 'shelf' | 'freight' | 'tamper';
 
 /** FB2b — one of the shop's posted loads, plus the prices waiting on it. */
 export interface PostedFreight {
@@ -307,6 +308,8 @@ export interface AgentState {
   receivebag: { code: string; putAway?: Array<{ slot: string; parcelIds: string[] }>; driverDid?: string };
   /** The reverse-logistics window: which recent drop-off is being undone, + its torn-label photo. */
   void: { parcelId: string | null; photoRef: string };
+  /** Round 35 — a parcel found cut or opened: which, its photograph, what is seen; the hold as the server answered. */
+  tamper: { parcelId: string; photoRef: string; note: string; done: TamperUnit | null };
   /** REP2 — the "rate the driver" prompt, opened after a handover/bag-receipt. `profile` fills in once fetched. */
   driverRating: { driverDid: string; profile: ReputationProfileView | null } | null;
 }
@@ -386,6 +389,7 @@ const INITIAL: AgentState = {
   collect: { ...EMPTY_COLLECT },
   receivebag: { code: '' },
   void: { parcelId: null, photoRef: '' },
+  tamper: { parcelId: '', photoRef: '', note: '', done: null },
   driverRating: null,
 };
 
@@ -985,9 +989,10 @@ export function useAgentApp() {
         // A fresh visit to the handover screen starts with no stale "still waiting" highlight.
         handover: screen === 'handover' ? { ...s.handover, missed: [] } : s.handover,
         void: screen === 'void' ? { parcelId: null, photoRef: '' } : s.void,
+        tamper: screen === 'tamper' ? { parcelId: '', photoRef: '', note: '', done: null } : s.tamper,
       }));
-      // The counter lists what is waiting to be collected (CV5), so it needs the shelf too.
-      if (screen === 'handover' || screen === 'void' || screen === 'bag' || screen === 'release') void loadShopParcels();
+      // The counter lists what is waiting to be collected (CV5), so it needs the shelf too; the tamper job lists what is held here.
+      if (screen === 'handover' || screen === 'void' || screen === 'bag' || screen === 'release' || screen === 'tamper') void loadShopParcels();
       if (screen === 'bag') void loadBagPlan();
       if (screen === 'rates') void loadRates();
       if (screen === 'accept') {
@@ -1119,6 +1124,9 @@ export function useAgentApp() {
   }, []);
   const setVoidPhoto = useCallback((photoRef: string) => {
     setState((s) => ({ ...s, void: { ...s.void, photoRef } }));
+  }, []);
+  const setTamper = useCallback((patch: Partial<AgentState['tamper']>) => {
+    setState((s) => ({ ...s, tamper: { ...s.tamper, ...patch }, error: null }));
   }, []);
 
   /* ------------------------------------------------------------ mutations */
@@ -2301,6 +2309,32 @@ export function useAgentApp() {
     });
   }, [client, did, run, fail, pushToast, refresh, loadShopParcels]);
 
+  /**
+   * Round 35 — A PARCEL FOUND CUT OR OPENED (the tamper protocol): held here, SeeBuyGet operations told, the store told.
+   * With no signal it waits on this phone with its photograph, dated now (outbox.ts), and is sent when the signal comes.
+   */
+  const submitTamper = useCallback(async () => {
+    if (!client) return;
+    const { parcelId, photoRef, note } = stateRef.current.tamper;
+    if (!parcelId.trim() || !photoRef) return;
+    await run('tamper', async () => {
+      const r = await client.api.reportTamper(parcelId.trim(), { photoRefs: [photoRef], ...(note.trim() ? { note: note.trim() } : {}), observedAt: new Date().toISOString() });
+      if (r.error) {
+        signal('error');
+        return fail(r.error);
+      }
+      signal('ok');
+      if (r.status === 202) {
+        setState((s) => ({ ...s, tamper: { parcelId: '', photoRef: '', note: '', done: null } }));
+        return pushToast({ tone: 'warn', icon: 'offline', title: t('agent.toast.tamperQueued'), detail: t('agent.toast.tamperQueuedDetail') });
+      }
+      const done = (r.data as unknown as TamperUnit) ?? null;
+      setState((s) => ({ ...s, tamper: { ...s.tamper, done } }));
+      pushToast({ tone: 'warn', icon: 'warning', title: t('agent.toast.tamperReported'), detail: t('agent.toast.tamperReportedDetail') });
+      await loadShopParcels();
+    });
+  }, [client, run, fail, pushToast, loadShopParcels]);
+
   return {
     state,
     // The raw client, for the shared account menu — the account is the PERSON, so the surface behind it
@@ -2413,6 +2447,8 @@ export function useAgentApp() {
       openVoid,
       setVoidPhoto,
       submitVoid,
+      setTamper,
+      submitTamper,
       openRateDriver,
       submitDriverRating,
       dismissRateDriver,

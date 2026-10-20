@@ -4,6 +4,7 @@
  * mirror pudo.types.ts (Vendor, CheckoutHandoff, Parcel) and vendor.service.ts.
  */
 import type { Gs1View } from '../../shared/gs1';
+import type { UnitHold } from '../../shared/tamper';
 
 export type ParcelSize = 'S' | 'M' | 'L' | 'HEAVY';
 export type ParcelStatus =
@@ -119,6 +120,8 @@ export interface OrderRow {
   currency?: string;
   routeMode?: 'flexible' | 'locked';
   createdAt?: string;
+  /** Round 35 — held under the tamper protocol: what was found, where, since when. */
+  held?: UnitHold;
 }
 
 /** Store-wide shipment counts for the console header + spoken summary — over the WHOLE store, never a page. */

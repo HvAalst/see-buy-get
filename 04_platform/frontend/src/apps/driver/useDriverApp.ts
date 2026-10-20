@@ -1841,6 +1841,30 @@ export function useDriverApp() {
   );
 
   /**
+   * Round 35 — TAMPERING FOUND (the tamper protocol): a seal not the one written, the seals not as the note says, the wrap
+   * cut. The load is held where it is and SeeBuyGet operations is told; it changes hands once operations releases it.
+   * With no signal it waits on this phone, photograph and all, dated now.
+   */
+  const reportTamper = useCallback(
+    async (ref: string, input: { finding: 'seal_not_as_written' | 'seal_not_as_on_the_note' | 'wrap_cut'; sealId?: string; numberRead?: string; photoRefs: string[]; note?: string; atDelivery?: boolean }) => {
+      if (!client) return;
+      await run(`tamper:${ref}`, async () => {
+        const location = await currentPosition(5_000);
+        const r = await client.api.reportTamper(ref, { ...input, ...(location ? { location } : {}), observedAt: new Date().toISOString() });
+        if (r.error) {
+          if (!isOffline(r.error)) await refresh();
+          return fail(r.error);
+        }
+        buzz();
+        if (r.status === 202) return pushToast({ tone: 'warn', icon: 'offline', title: t('driver.toast.tamperQueued'), detail: t('driver.toast.tamperQueuedDetail') });
+        pushToast({ tone: 'warn', icon: 'warning', title: t('driver.toast.tamperReported'), detail: t('driver.toast.tamperReportedDetail') });
+        await refresh();
+      });
+    },
+    [client, run, fail, pushToast, refresh],
+  );
+
+  /**
    * One tap from the cab.
    *
    * The position comes from the phone, never from a form — the whole premise is that nobody fills in a
@@ -1986,6 +2010,7 @@ export function useDriverApp() {
       logTemp,
       sayPassage,
       reportBrokenSeal,
+      reportTamper,
       pushToast,
       dismissToast,
     },
