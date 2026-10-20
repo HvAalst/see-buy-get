@@ -901,10 +901,10 @@ export const ARTICLES: GuideArticle[] = [
       "console"
     ],
     title: "The trail: each step anchored, and whether it still matches",
-    summary: "A load taken over and delivered, every copy of its consignment note, tampering reported, a bag closed, taken and received: each is anchored in the network’s chain as it is kept, and staff can check that the record still says what was anchored.",
+    summary: "A load taken over and delivered, its seals written, read, broken or replaced, every copy of its consignment note, tampering reported, a bag closed, taken and received, a parcel’s scans and its damage claim report: each is anchored in the network’s chain as it is kept, and staff can check that the record still says what was anchored.",
     steps: [
-      "Operator console, Find a parcel: type a load’s code. Under its consignment note, “The trail” lists each step with when it was kept.",
-      "The case of a held load or bag shows its trail too.",
+      "Operator console, Find a parcel: type a load’s code or a parcel’s number. Under the load’s consignment note, or the parcel’s scans, “The trail” lists each step with when it was kept. A parcel’s trail starts after it was made: its making is its creation receipt.",
+      "The case of a held load, bag or parcel shows its trail too.",
       "“Intact”: the record as it stands is what was anchored. “Changed since it was anchored”: somebody changed it afterwards — say so to the person responsible for the systems at once. “Made before the trail”: kept before steps were anchored, so there is nothing to check it against.",
       "Beside the title, the chain as a whole: how many anchors it holds and whether it is whole, or the block where it breaks."
     ],

@@ -92,7 +92,7 @@ export function TamperPanel({ subject, live, state, actions, onReleased }: { sub
         ) : null}
       </section>
       {/* The trail: a load's or a bag's steps, anchored as they were kept, checked now. */}
-      {unit.unitType !== 'parcel' ? <TrailPanel unitRef={unit.ref} actions={actions} /> : null}
+      <TrailPanel unitRef={unit.unitType === 'parcel' ? unit.unitId : unit.ref} actions={actions} />
 
       {live && unit.held && releasing ? (
         <section class="cons__panel">

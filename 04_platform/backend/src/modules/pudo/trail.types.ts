@@ -14,7 +14,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 export const TRAIL_STATES = ['intact', 'altered', 'not_anchored'] as const;
 export type TrailState = (typeof TRAIL_STATES)[number];
 
-export const TRAIL_STEPS = ['picked_up', 'delivered', 'note', 'exception', 'bag_closed', 'bag_taken', 'bag_received'] as const;
+export const TRAIL_STEPS = ['picked_up', 'delivered', 'note', 'exception', 'seal_written', 'seal_read', 'seal_broken', 'seal_replaced', 'bag_closed', 'bag_taken', 'bag_received', 'scan', 'damage_report', 'damage_note'] as const;
 export type TrailStepKind = (typeof TRAIL_STEPS)[number];
 
 export class TrailStep {
@@ -36,7 +36,7 @@ export class TrailChain {
 
 export class TrailView {
   ref!: string;
-  @ApiProperty({ enum: ['load', 'bag'] }) kind!: 'load' | 'bag';
+  @ApiProperty({ enum: ['load', 'bag', 'parcel'] }) kind!: 'load' | 'bag' | 'parcel';
   @ApiProperty({ type: [TrailStep] }) steps!: TrailStep[];
   @ApiPropertyOptional({ type: TrailChain }) chain?: TrailChain;
 }

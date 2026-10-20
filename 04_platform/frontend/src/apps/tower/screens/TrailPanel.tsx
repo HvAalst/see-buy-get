@@ -5,12 +5,12 @@ import type { TowerActions } from '../useTowerApp';
 
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
-type StepKind = 'picked_up' | 'delivered' | 'note' | 'exception' | 'bag_closed' | 'bag_taken' | 'bag_received';
+type StepKind = 'picked_up' | 'delivered' | 'note' | 'exception' | 'seal_written' | 'seal_read' | 'seal_broken' | 'seal_replaced' | 'bag_closed' | 'bag_taken' | 'bag_received' | 'scan' | 'damage_report' | 'damage_note';
 type StepState = 'intact' | 'altered' | 'not_anchored';
 
 interface TrailView {
   ref: string;
-  kind: 'load' | 'bag';
+  kind: 'load' | 'bag' | 'parcel';
   steps: Array<{ kind: StepKind; at: string; state: StepState; detail?: string; txId?: string }>;
   chain?: { anchors: number; whole: boolean; brokenAt?: number; reason?: string };
 }
@@ -20,6 +20,13 @@ const KIND: Record<StepKind, MessageKey> = {
   delivered: 'tower.trail.kind.delivered',
   note: 'tower.trail.kind.note',
   exception: 'tower.trail.kind.exception',
+  seal_written: 'tower.trail.kind.seal_written',
+  seal_read: 'tower.trail.kind.seal_read',
+  seal_broken: 'tower.trail.kind.seal_broken',
+  seal_replaced: 'tower.trail.kind.seal_replaced',
+  scan: 'tower.trail.kind.scan',
+  damage_report: 'tower.trail.kind.damage_report',
+  damage_note: 'tower.trail.kind.damage_note',
   bag_closed: 'tower.trail.kind.bag_closed',
   bag_taken: 'tower.trail.kind.bag_taken',
   bag_received: 'tower.trail.kind.bag_received',

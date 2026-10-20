@@ -177,6 +177,7 @@ export function SupportScreen({ state, actions }: { state: TowerState; actions: 
               </table>
             )}
           </section>
+          <TrailPanel unitRef={p.parcelId} actions={actions} />
 
           {p.dropoffPhotoRef || p.deliveredPhotoRef || p.contentPhotoRef ? (
             <section class="cons__panel" style="margin-top:18px">

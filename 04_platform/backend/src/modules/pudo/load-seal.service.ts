@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { AnchorBook } from './anchor-book.service';
 import { createHash, randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
@@ -39,7 +40,24 @@ const BEFORE_PICKUP: ReadonlyArray<Freight['status']> = ['scheduled', 'available
 export class LoadSealService {
   private readonly seals = new PersistentMap<string, LoadSeal>('load-seals');
 
-  constructor(private readonly media: MediaService) {}
+  constructor(
+    private readonly media: MediaService,
+    // The trail: each seal written, read, broken or replaced anchored as it is kept. Optional for the specs.
+    @Optional() private readonly anchors?: AnchorBook,
+  ) {}
+
+  /** Keep a seal as it now stands, and anchor whatever happened to it since it was last kept. */
+  private put(seal: LoadSeal): void {
+    const before = this.seals.get(seal.sealId);
+    this.seals.set(seal.sealId, seal);
+    if (!this.anchors) return;
+    if (!before) this.anchors.anchor(`seal:${seal.sealId}:written`, sealWrittenOf(seal));
+    seal.readings.forEach((r, n) => {
+      if (n >= (before?.readings.length ?? 0)) this.anchors!.anchor(`seal:${seal.sealId}:reading:${n}`, { s: seal.sealId, n, reading: r });
+    });
+    if (seal.broken && !before?.broken) this.anchors.anchor(`seal:${seal.sealId}:broken`, { s: seal.sealId, broken: seal.broken });
+    if (seal.replaced && !before?.replaced) this.anchors.anchor(`seal:${seal.sealId}:replaced`, { s: seal.sealId, replaced: seal.replaced });
+  }
 
   /** Every seal a load has had, in the order written. */
   of(freightId: string): LoadSeal[] {
@@ -117,7 +135,7 @@ export class LoadSealService {
       writtenBy: writer.name,
       readings: [],
     };
-    if (keep) this.seals.set(seal.sealId, seal);
+    if (keep) this.put(seal);
     return seal;
   }
 
@@ -159,7 +177,7 @@ export class LoadSealService {
       for (const seal of on) {
         const entry = read!.find((r) => r.sealId === seal.sealId)!;
         this.media.adopt(entry.photoRef, driverDid, { type: 'freight', id: f.freightId }, 'seal');
-        this.seals.set(seal.sealId, { ...seal, readings: [...seal.readings, { at, stage: 'pickup', result: 'matched', photoRef: entry.photoRef, by: driverDid }] });
+        this.put({ ...seal, readings: [...seal.readings, { at, stage: 'pickup', result: 'matched', photoRef: entry.photoRef, by: driverDid }] });
       }
     };
   }
@@ -230,8 +248,8 @@ export class LoadSealService {
           readings: [],
         };
         this.media.adopt(r.photoRef, driverDid, { type: 'freight', id: f.freightId }, 'seal');
-        this.seals.set(next.sealId, next);
-        this.seals.set(seal.sealId, { ...seal, state: 'replaced', replaced: { at, ...(post ? { post } : {}), ...(officer ? { officer } : {}), by: driverDid, newSealId: next.sealId } });
+        this.put(next);
+        this.put({ ...seal, state: 'replaced', replaced: { at, ...(post ? { post } : {}), ...(officer ? { officer } : {}), by: driverDid, newSealId: next.sealId } });
       }
     };
     return { says, keep };
@@ -263,7 +281,7 @@ export class LoadSealService {
       state: 'broken',
       broken: { at: new Date(Math.max(seen.at, Date.parse(f.pickedUpAt ?? '') || 0)).toISOString(), ...(seen.receivedAt ? { receivedAt: seen.receivedAt } : {}), cause: input.cause, ...(note ? { note } : {}), photoRefs: photos, ...(input.paperRef ? { paperRef: input.paperRef } : {}), ...(location ? { location } : {}), by: driverDid },
     };
-    this.seals.set(seal.sealId, broken);
+    this.put(broken);
     return broken;
   }
 
@@ -276,7 +294,7 @@ export class LoadSealService {
     if (!answer || !SEALS_AT_DELIVERY.includes(answer)) throw new GlosError('FIELD_REQUIRED', 'Look at the seals with the receiver: are they as the note says?', { field: 'sealsAtDelivery' });
     return (at) => {
       for (const seal of this.of(f.freightId).filter((s) => s.state !== 'replaced')) {
-        this.seals.set(seal.sealId, { ...seal, readings: [...seal.readings, { at, stage: 'delivery', result: answer, by: driverDid }] });
+        this.put({ ...seal, readings: [...seal.readings, { at, stage: 'delivery', result: answer, by: driverDid }] });
       }
     };
   }
@@ -366,6 +384,11 @@ function viewOf(s: LoadSeal, all: LoadSeal[]): LoadSealView {
 function sealNumber(raw: string | undefined): string | undefined {
   const s = typeof raw === 'string' ? raw.trim().replace(/\s+/g, ' ') : '';
   return s ? s.slice(0, MAX_SEAL_NUMBER) : undefined;
+}
+
+/** What is anchored of a seal as it was written: what it is, on which load, its photographs, when and by whom. */
+export function sealWrittenOf(s: LoadSeal): Record<string, unknown> {
+  return { s: s.sealId, f: s.freightId, k: s.key, c: s.sealClass, m: s.maker, a: s.appliedBy, p: s.photos, at: s.writtenAt, by: s.writtenBy, r: s.replaces };
 }
 
 /** A seal number folded for matching: what a person reads off a bolt, without the spaces, dashes and dots between. */

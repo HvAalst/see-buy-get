@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { DispatchService } from '../src/modules/pudo/dispatch.service';
 import { NoteArchiveService } from '../src/modules/pudo/note-archive.service';
 import { TamperService } from '../src/modules/pudo/tamper.service';
+import { LoadSealService } from '../src/modules/pudo/load-seal.service';
 
 /**
  * THE TRAIL, over the wire (the ISO 28000 check: "anchor custody, loads, seals and the documents' fingerprints"). A load
@@ -60,6 +61,9 @@ describe('the trail, over the wire', () => {
       .send({ description: 'Cement, 40 bags', pickupLocation: { lat: -1.33, lng: 36.87 }, pickupLabel: 'Athi River works', destLabel: 'Machakos store', destLocation: { lat: -1.52, lng: 37.26 }, weightKg: 2000, packaging: 'bagged', packages: 40, pickupCountry: 'KE', destCountry: 'KE' })
       .expect(201);
     const freightId = posted.body.freightId as string;
+    // Its seal, written by the shipper with its three photographs.
+    const shot = async () => ({ loadedOpen: await photo(biz, 'seal'), closedWithSeal: await photo(biz, 'seal'), sealCloseUp: await photo(biz, 'seal') });
+    const seal = (await http().post(`/v1/sbg/dispatch/freight/${freightId}/seals`).set(biz).send({ number: 'KE 7777-001', sealClass: 'H', appliedBy: 'sender', photos: await shot() }).expect(201)).body;
     const d = await http().post('/v1/sbg/drivers/onboard').set(operator).send({ displayName: 'Mutua', fullName: 'Mutua Truck', nationalId: `DRV-TR-${tag}`, mobile: `+2547${digits().slice(-6)}9`, licenceClasses: ['truck'], licenceNumber: `DL-TR-${tag}`, licenceExpiresAt: '2030-01-01' }).expect(201);
     const driver = bearer((await http().post('/v1/auth/token').send({ role: 'driver', did: d.body.did, type: 'client_credentials' }).expect(201)).body.access_token);
     const dispatch = app.get(DispatchService);
@@ -68,10 +72,10 @@ describe('the trail, over the wire', () => {
     const code = store.get(freightId).code as string;
     const claim = (await http().get(`/v1/sbg/fleet/drivers/${d.body.did}/claims`).set(driver).expect(200)).body.claims.find((c: { ref: string }) => c.ref === freightId);
 
-    await http().post(`/v1/sbg/dispatch/freight/${freightId}/pickup`).set(driver).send({ confirmed: claim.loadChecklist.map((x: { key: string }) => x.key), securementPhotoId: await photo(driver, 'securement') }).expect(201);
+    await http().post(`/v1/sbg/dispatch/freight/${freightId}/pickup`).set(driver).send({ confirmed: claim.loadChecklist.map((x: { key: string }) => x.key), securementPhotoId: await photo(driver, 'securement'), seals: [{ sealId: seal.sealId, number: 'KE 7777-001', photoRef: await photo(driver, 'seal') }] }).expect(201);
     await http().post(`/v1/sbg/dispatch/freight/${freightId}/tamper`).set(driver).send({ finding: 'wrap_cut', photoRefs: [await photo(driver, 'tamper')], note: 'Two bags slit' }).expect(201);
     await http().post(`/v1/sbg/ops/tamper/${code}/release`).set(operator).send({ reason: 'Shipper counted the bags by phone with the driver', by: 'Halima at operations' }).expect(201);
-    await http().post(`/v1/sbg/dispatch/freight/${freightId}/deliver`).set(driver).send({ confirmed: claim.unloadChecklist.map((x: { key: string }) => x.key), receiverName: 'Wambui at the store', podPhotoId: await photo(driver, 'pod') }).expect(201);
+    await http().post(`/v1/sbg/dispatch/freight/${freightId}/deliver`).set(driver).send({ confirmed: claim.unloadChecklist.map((x: { key: string }) => x.key), receiverName: 'Wambui at the store', podPhotoId: await photo(driver, 'pod'), sealsAtDelivery: 'as_on_the_note' }).expect(201);
 
     // Staff read the trail by the load's code: taken over, the exception (released since — the release is not part of
     // what was found), the note's copies, delivered — each intact, and the chain whole.
@@ -79,7 +83,8 @@ describe('the trail, over the wire', () => {
     const first = await trail();
     expect(first.kind).toBe('load');
     expect(first.chain.whole).toBe(true);
-    expect(first.steps.map((s) => s.kind)).toEqual(expect.arrayContaining(['picked_up', 'exception', 'note', 'delivered']));
+    expect(first.steps.map((s) => s.kind)).toEqual(expect.arrayContaining(['seal_written', 'picked_up', 'seal_read', 'exception', 'note', 'delivered']));
+    expect(first.steps.filter((s) => s.kind === 'seal_read').map((s) => s.detail)).toEqual(['pickup · matched', 'delivery · as_on_the_note']);
     expect(first.steps.filter((s) => s.kind === 'note').length).toBeGreaterThanOrEqual(2);
     expect(first.steps.every((s) => s.state === 'intact' && /^[0-9a-f]{64}$/.test(s.txId ?? ''))).toBe(true);
     // Only staff.
@@ -104,5 +109,12 @@ describe('the trail, over the wire', () => {
     expect(state('exception')).toBe('altered');
     expect(state('picked_up')).toBe('intact');
     expect(state('note', 1)).toBe('intact');
+    expect(state('seal_written')).toBe('intact');
+    // A seal's reading at the door changed in the store: altered.
+    const seals = (app.get(LoadSealService) as unknown as { seals: { get(id: string): { readings: Array<{ result: string }> }; set(id: string, s: unknown): void } }).seals;
+    const kept = seals.get(seal.sealId);
+    kept.readings[1].result = 'not_as_on_the_note';
+    seals.set(seal.sealId, kept);
+    expect((await trail()).steps.filter((s) => s.kind === 'seal_read').map((s) => s.state)).toEqual(['intact', 'altered']);
   });
 });

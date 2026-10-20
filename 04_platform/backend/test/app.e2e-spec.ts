@@ -819,6 +819,11 @@ describe('GLOS backend (e2e)', () => {
     // Round 30 — the "before" the claim is judged against is in it: the store's own photo of the contents, fingerprinted.
     expect(theirs.body.body.photographs).toEqual(expect.arrayContaining([expect.objectContaining({ what: 'contents', mediaId: order.body.parcel.contentPhotoRef, sha256: expect.stringMatching(/^[0-9a-f]{64}$/) })]));
     expect((await request(http).get(`/v1/sbg/parcels/${parcelId}/damage-report/links`).set(acme).expect(200)).body.items).toEqual([expect.objectContaining({ state: 'ready', opened: 0 })]);
+    // The trail: each of its scans and its damage claim report anchored as kept, and intact.
+    const parcelTrail = (await request(http).get(`/v1/sbg/ops/trail/${parcelId}`).set(auth).expect(200)).body as { kind: string; steps: Array<{ kind: string; state: string }> };
+    expect(parcelTrail.kind).toBe('parcel');
+    expect(parcelTrail.steps.map((s) => s.kind)).toEqual(expect.arrayContaining(['scan', 'damage_report']));
+    expect(parcelTrail.steps.filter((s) => s.state !== 'intact')).toEqual([]);
 
     // Buyer collection.
     const found = await request(http).post('/v1/sbg/parcels/collect').set(auth).send({ agentDid: dest, collectionCode }).expect(201);

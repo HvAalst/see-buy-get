@@ -1,4 +1,5 @@
 import { Injectable, OnModuleInit, Optional } from '@nestjs/common';
+import { AnchorBook } from './anchor-book.service';
 import { createHash, randomBytes } from 'crypto';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { EventBus } from '../../foundation/events/event-bus.service';
@@ -94,6 +95,8 @@ export class DamageReportService implements OnModuleInit {
     @Optional() private readonly mdps?: MdpService,
     @Optional() private readonly mail?: MailService,
     @Optional() private readonly events?: EventBus,
+    // The trail: the report and each note anchored as they are made, beside them (their own bytes are fingerprinted).
+    @Optional() private readonly anchors?: AnchorBook,
   ) {}
 
   onModuleInit(): void {
@@ -102,6 +105,11 @@ export class DamageReportService implements OnModuleInit {
   }
 
   /* ------------------------------------------------------------------ the report -- */
+
+  /** The report as kept, if one was made: read only, for the trail. */
+  keptFor(parcelId: string): DamageReportView | undefined {
+    return this.reports.get(parcelId);
+  }
 
   /** The report on this parcel's reported problem — or nothing, where no problem was ever reported on it. */
   ensure(parcelId: string): DamageReportView | undefined {
@@ -119,6 +127,7 @@ export class DamageReportService implements OnModuleInit {
     const body = this.bodyOf(parcel);
     const report: DamageReportView = { parcelId, madeAt, sha256: fingerprintOf(body), body };
     this.reports.set(parcelId, report);
+    this.anchors?.anchor(`damage:${parcelId}`, { p: parcelId, sha256: report.sha256 });
     void this.handToInsurer(report, parcel);
     return report;
   }
@@ -236,6 +245,7 @@ export class DamageReportService implements OnModuleInit {
     const unsigned = { noteId: `drn_${randomBytes(6).toString('hex')}`, at: new Date(now).toISOString(), by: 'receiver' as const, text: text.slice(0, 2000), photographs: refs.map((r) => this.photo('note', r)), statement: NOTE_STATEMENT };
     const note: DamageReportNote = { ...unsigned, sha256: createHash('sha256').update(canonicalJson(unsigned)).digest('hex') };
     this.reports.set(parcelId, { ...reading.report, notes: [...notes, note] });
+    this.anchors?.anchor(`damage-note:${parcelId}:${note.noteId}`, { p: parcelId, n: note.noteId, sha256: note.sha256 });
     void this.events
       ?.publish(GlosEvent.Pudo.DamageReportNoted, { parcelId, number: reading.report.body.number, at: note.at }, { source: 'pudo' })
       .catch(() => undefined);

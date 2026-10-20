@@ -59245,9 +59245,16 @@
               "delivered",
               "note",
               "exception",
+              "seal_written",
+              "seal_read",
+              "seal_broken",
+              "seal_replaced",
               "bag_closed",
               "bag_taken",
-              "bag_received"
+              "bag_received",
+              "scan",
+              "damage_report",
+              "damage_note"
             ]
           },
           "state": {
@@ -59303,7 +59310,8 @@
             "type": "string",
             "enum": [
               "load",
-              "bag"
+              "bag",
+              "parcel"
             ]
           },
           "steps": {
