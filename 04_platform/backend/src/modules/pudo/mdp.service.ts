@@ -20,6 +20,9 @@ import { EntityService } from '../../foundation/entity/entity.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
 import { Mdp, NextHop, Tote } from './pudo.types';
 import { handedAt } from './observed-at';
+import { BagClosureService } from './bag-closure.service';
+import type { BagClosureKind } from './bag-closure.types';
+import { FINDING_WORDS } from './tamper.types';
 
 /**
  * MdpService — Main Distribution Point hubs + the tote-bag sort flow (Compendium Ch 17).
@@ -53,6 +56,7 @@ export class MdpService {
     private readonly cargo: CargoService,
     private readonly entities: EntityService,
     private readonly presence: PresenceService,
+    private readonly closures: BagClosureService,
   ) {}
 
   /** The country this hub stands in — declared at registration, this deployment's home for older records. */
@@ -278,7 +282,7 @@ export class MdpService {
    * manual release, must not lock its shop out of the completeness gate — it is reconciled and stamped,
    * but not re-announced.
    */
-  sealShopBag(code: string, agentDid: string, input: { acknowledgeShortShip?: boolean; shortShipReason?: string; observedAt?: string } = {}): { tote: Tote; parcels: string[]; missed: string[]; shortShipped: boolean } {
+  sealShopBag(code: string, agentDid: string, input: { acknowledgeShortShip?: boolean; shortShipReason?: string; observedAt?: string; closure?: { seal?: string; photoRef?: string }; by?: string } = {}): { tote: Tote; parcels: string[]; missed: string[]; shortShipped: boolean } {
     const bag = this.totes.requireByCode(code);
     if (bag.locationId !== agentDid) throw new GlosError('WRONG_PUDO', `Bag ${code} was not opened at this shop`);
     // Closed once. A second seal would re-run the gate against parcels dropped off AFTER the bag was shut
@@ -302,6 +306,10 @@ export class MdpService {
         { missed, expected, code },
       );
     }
+    // Round 36 — closed for the road: its coded seal's number and a photograph, or a photograph alone. Checked with the
+    // rest, before anything is written.
+    const shopName = this.agents.get(agentDid).shopName;
+    const keepClosure = this.closures.checkClose(bag, { did: agentDid, name: input.by?.trim() || shopName, place: shopName }, agentDid, input.closure);
     // Closed when the shop closed it (round 23): a seal kept on the phone with no signal is dated then, never before the
     // bag was first filled; the parcels it left behind were left behind at that moment.
     const sealed = handedAt(input.observedAt, Date.now(), [bag.filledAt, bag.availableAt]);
@@ -311,6 +319,7 @@ export class MdpService {
     const announce = bag.status === 'filling'; // an already-published bag was announced when it was published
     const tote = announce ? this.totes.markAvailable(code, sealed.at) : bag;
     this.totes.markSealed(code, sealed);
+    keepClosure(sealed);
     if (announce) {
       // …and tell the drivers near the shop. Without this the shop's deliberate "it is ready NOW" was the
       // only publish in the network that pinged nobody, while the passive 24 h sweep did.
@@ -319,6 +328,35 @@ export class MdpService {
         .catch(() => undefined);
     }
     return { tote, parcels: [...bag.parcels], missed, shortShipped: missed.length > 0 };
+  }
+
+  /**
+   * Round 36 — CLOSING A BAG FOR THE ROAD where it stands: a hub's bag, or a bag at a shop that is not the shop's own
+   * bag (that one is closed with "Close the bag", where the shop's completeness check runs). Its coded seal and a
+   * photograph, or a photograph alone; then nothing more goes in, and a bag still filling is offered to drivers.
+   */
+  closeBag(code: string, place: { shopDid?: string; mdpId?: string }, byName: string | undefined, closure: { seal?: string; photoRef?: string } | undefined, observedAt?: string): { tote: Tote; closedWith: BagClosureKind } {
+    const bag = this.totes.requireByCode(code);
+    const hub = place.mdpId ? this.require(place.mdpId) : undefined;
+    const placeId = hub ? hub.mdpId : place.shopDid;
+    if (!placeId || bag.locationId !== placeId) throw new GlosError('WRONG_PUDO', `Bag ${code} is not here`);
+    if (bag.sealRequired) throw new GlosError('INVALID_STATE', `Bag ${code} is the shop's own bag: close it with “Close the bag”, where the shop's check runs`);
+    if (bag.status !== 'filling' && bag.status !== 'available' && bag.status !== 'claimed') throw new GlosError('INVALID_STATE', `Bag ${code} is ${bag.status}: there is nothing here to close`);
+    const HELD = bag.held;
+    if (HELD) throw new GlosError('UNIT_HELD', `Bag ${code} is held: ${FINDING_WORDS[HELD.finding]} (${HELD.where}). Keep it closed: operations has been told and releases it.`, { exceptionId: HELD.exceptionId });
+    const placeName = hub ? hub.name : this.agents.get(placeId).shopName;
+    const ownerDid = hub ? hub.did : placeId;
+    const keep = this.closures.checkClose(bag, { did: ownerDid, name: byName?.trim() || placeName, place: placeName }, ownerDid, closure);
+    const step = handedAt(observedAt, Date.now(), [bag.filledAt, bag.availableAt]);
+    const announce = bag.status === 'filling';
+    if (announce) this.totes.markAvailable(code, step.at);
+    const closed = keep(step);
+    if (announce) {
+      void this.events
+        .publish(GlosEvent.Pudo.ToteAvailable, { code, reason: 'sealed', weightKg: bag.weightKg, destination: bag.destinationLabel }, { source: 'pudo' })
+        .catch(() => undefined);
+    }
+    return { tote: this.totes.requireByCode(code), closedWith: closed.kind };
   }
 
   // --- bag flow ---
@@ -347,6 +385,10 @@ export class MdpService {
     const pending = this.totes.requireByCode(code);
     // Round 35 — a bag moves whole: one held parcel in it and it does not move, refused before anything is written.
     for (const id of pending.parcels) this.parcels.refuseIfHeld(this.parcels.get(id));
+    // Round 36 — a bag leaves closed (its coded seal on, or photographed closed), and never while it is held.
+    const HELD = pending.held;
+    if (HELD) throw new GlosError('UNIT_HELD', `Bag ${code} is held: ${FINDING_WORDS[HELD.finding]} (${HELD.where}). Keep it closed: operations has been told and releases it.`, { exceptionId: HELD.exceptionId });
+    if (!pending.closureId) throw new GlosError('BAG_NOT_CLOSED', `Close bag ${code} first: put a coded seal on it and photograph it, or photograph it closed`);
     const fleet = this.fleet.resolveBadge(driverBadgeId);
     // A claimed bag may only be loaded by the driver who claimed it.
     if (pending.claimedBy && (!fleet || fleet.driverDid !== pending.claimedBy)) throw new GlosError('BAG_RESERVED', `Bag ${code} is reserved for another driver`);
@@ -410,12 +452,17 @@ export class MdpService {
   }
 
   /** A bus drops a bag at this MDP → scan the bag code, empty it; parcels become unsorted (At_MDP). */
-  dropBag(mdpId: string, code: string): { mdpId: string; emptied: string[] } {
+  dropBag(mdpId: string, code: string, receipt: { sealNumber?: string; photoRef?: string; asClosed?: boolean } | undefined, byName?: string): { mdpId: string; emptied: string[] } {
     const mdp = this.require(mdpId);
     const before = this.totes.requireByCode(code);
     if (!before.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is already empty`);
     for (const id of before.parcels) this.parcels.refuseIfHeld(this.parcels.get(id)); // round 35 — the bag moves whole
+    // Round 36 — received on its seal: a photograph as it arrived, the number read off it, as it was closed. Before it opens.
+    const HELD = before.held;
+    if (HELD) throw new GlosError('UNIT_HELD', `Bag ${code} is held: ${FINDING_WORDS[HELD.finding]} (${HELD.where}). Keep it closed: operations has been told and releases it.`, { exceptionId: HELD.exceptionId });
+    const keepReceipt = this.closures.checkReceipt(before, { did: mdp.did, name: byName?.trim() || mdp.name, place: mdp.name }, mdp.did, receipt);
     const carrier = before.claimedBy; // captured before empty() clears it, as deliverBag does
+    keepReceipt({ at: new Date().toISOString() });
     const { parcels } = this.totes.empty(code, mdpId);
     this.payHaul(before, carrier);
     for (const parcelId of parcels) {
@@ -440,7 +487,7 @@ export class MdpService {
    * shelved" and nothing else — at the one moment it has five parcels in its hands and has to put each in the
    * slot its customer will be sent to.
    */
-  deliverBag(agentDid: string, code: string): { code: string; agentDid: string; delivered: string[]; shelved: Array<{ parcelId: string; slot: string }>; driverDid?: string } {
+  deliverBag(agentDid: string, code: string, receipt: { sealNumber?: string; photoRef?: string; asClosed?: boolean } | undefined, byName?: string): { code: string; agentDid: string; delivered: string[]; shelved: Array<{ parcelId: string; slot: string }>; driverDid?: string } {
     const agent = this.agents.get(agentDid);
     const tote = this.totes.requireByCode(code);
     if (!tote.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is empty`);
@@ -451,6 +498,11 @@ export class MdpService {
       const holds = tote.parcels.length === 1 ? '1 parcel' : `${tote.parcels.length} parcels`;
       throw new GlosError('SHELF_FULL', `Bag ${code} holds ${holds} and your shelf has no room for all of them. Hand over parcels that are waiting, or add a row under “Set up shelves”, then scan the bag again`, { parcels: tote.parcels.length });
     }
+    // Round 36 — received on its seal: a photograph as it arrived, the number read off it, as it was closed. Before it opens.
+    const HELD = tote.held;
+    if (HELD) throw new GlosError('UNIT_HELD', `Bag ${code} is held: ${FINDING_WORDS[HELD.finding]} (${HELD.where}). Keep it closed: operations has been told and releases it.`, { exceptionId: HELD.exceptionId });
+    const keepReceipt = this.closures.checkReceipt(tote, { did: agentDid, name: byName?.trim() || agent.shopName, place: agent.shopName }, agentDid, receipt);
+    keepReceipt({ at: new Date().toISOString() });
     const delivered: string[] = [];
     const shelved: Array<{ parcelId: string; slot: string }> = [];
     for (const parcelId of [...tote.parcels]) {

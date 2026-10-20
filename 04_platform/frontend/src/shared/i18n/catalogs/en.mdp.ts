@@ -103,6 +103,18 @@ export const enMdp = {
   'mdp.tamper.queued': 'No signal — kept on this phone',
   'mdp.tamper.queuedDetail': 'It goes with its photograph the moment there is a signal. Set the parcel apart meanwhile.',
   'mdp.tamper.heldHere': 'Held here, not to be sorted ({count})',
+  // Round 36 — a bag closed on our own seal, and received by it.
+  'mdp.bag.held': 'Reported — bag {code} is held',
+  'mdp.bag.heldDetail': 'SeeBuyGet operations is told. Keep it closed: it is emptied once they release it.',
+  'mdp.bag.heldTitle': 'This bag is held',
+  'mdp.bag.closed': 'Bag {code} closed for the road',
+  'mdp.bag.closedSeal': 'Coded seal {seal}: the shop or hub it reaches reads it off the bag.',
+  'mdp.bag.closedPhoto': 'Photographed closed: whoever receives it compares it with your photograph.',
+  'mdp.bag.closeFirst': 'Close it before it leaves',
+  'mdp.bag.closeCta': 'Close the bag',
+  'mdp.bag.closedLine': 'Closed with a coded seal',
+  'mdp.bag.closedPhotoLine': 'Closed: photographed',
+  'mdp.drop.look': 'Look at this bag',
   'mdp.sort.openBags': 'Open destination bags',
 
   // ---- Drop screen ----------------------------------------------------------

@@ -143,6 +143,10 @@ const QUEUEABLE: Array<{ method: string; test: RegExp; label: string }> = [
   { method: 'POST', test: /^\/v1\/sbg\/dispatch\/freight\/[^/]+\/tamper$/, label: 'Tampering reported' },
   { method: 'POST', test: /^\/v1\/sbg\/parcels\/[^/]+\/tamper$/, label: 'Tampering reported' },
   { method: 'POST', test: /^\/v1\/sbg\/mdps\/[^/]+\/parcels\/[^/]+\/tamper$/, label: 'Tampering reported' },
+  // Round 36 — a bag closed for the road where it stands (its seal's photograph held on the phone), and a bag reported:
+  // what the person did and sees, dated by the phone. A second closing of the same bag is refused, so a replay costs nothing.
+  { method: 'POST', test: /^\/v1\/sbg\/totes\/[^/]+\/close$/, label: 'Bag closed' },
+  { method: 'POST', test: /^\/v1\/sbg\/totes\/[^/]+\/tamper$/, label: 'Tampering reported' },
   // The vehicle is parked and the driver can see it. Ending twice is a no-op, so a replay costs nothing.
   { method: 'POST', test: /^\/v1\/sbg\/fleet\/drivers\/[^/]+\/end-session$/, label: 'Shift ended' },
   // WHAT THE DRIVER SEES ON THE ROAD (the user, 2026-10-18: "queue reports, rest online"). A breakdown and a road hazard

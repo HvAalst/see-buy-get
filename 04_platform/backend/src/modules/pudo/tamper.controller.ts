@@ -8,7 +8,7 @@ import { ConsignmentNoteService } from './consignment-note.service';
 import { MdpService } from './mdp.service';
 import { staffOf } from './staff-of';
 import { TamperService } from './tamper.service';
-import { ReleaseHoldDto, ReportLoadTamperDto, ReportParcelTamperDto, TamperUnitView } from './tamper.types';
+import { ReleaseHoldDto, ReportBagTamperDto, ReportLoadTamperDto, ReportParcelTamperDto, TamperUnitView } from './tamper.types';
 
 /** Staff pass every role check: a report is made by whoever holds the goods, so a staff sign-in is refused by name. */
 const HOLDER_ONLY = 'Tampering is reported by whoever has the goods in front of them: staff read it and release it';
@@ -61,6 +61,24 @@ export class TamperController {
     const mdp = this.mdps.require(id);
     if (!actor?.did || actor.did !== mdp.did) throw new GlosError('FORBIDDEN', 'Only the hub can do this, from its own sign-in');
     return this.tamper.reportOnParcel(parcelId, { as: 'hub', mdpId: mdp.mdpId, mdpDid: mdp.did, mdpName: mdp.name, name: actor.actorName }, dto);
+  }
+
+  /**
+   * Round 36 — the shop or the hub, about a bag it holds or is receiving: its seal not the one it was closed with, broken,
+   * or the bag cut or opened. The bag is held; nobody opens it until operations releases it.
+   */
+  @Roles('agent', 'mdp')
+  @Post('totes/:code/tamper')
+  @AtTheCounter()
+  reportOnBag(@Param('code') code: string, @Body() dto: ReportBagTamperDto, @Actor() actor: IntrospectionResult): TamperUnitView {
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', HOLDER_ONLY);
+    if (!actor?.did) throw new GlosError('UNAUTHORIZED', 'Sign in at the shop or the hub');
+    if (actor.role === 'mdp') {
+      const hub = this.mdps.list().find((m) => m.did === actor.did);
+      if (!hub) throw new GlosError('FORBIDDEN', 'Only the hub can do this, from its own sign-in');
+      return this.tamper.reportOnBag(code, { as: 'hub', mdpId: hub.mdpId, mdpDid: hub.did, mdpName: hub.name, name: actor.actorName }, dto);
+    }
+    return this.tamper.reportOnBag(code, { as: 'shop', agentDid: actor.did, name: actor.actorName }, dto);
   }
 
   /** Staff: a held unit by its code or number — every exception on it, who found it, the photographs. */

@@ -6,6 +6,7 @@ import { MdpService } from './mdp.service';
 import { ParcelService } from './parcel.service';
 import { ToteService } from './tote.service';
 import { VendorService } from './vendor.service';
+import { BagClosureService } from './bag-closure.service';
 import { Tote } from './pudo.types';
 
 /**
@@ -31,6 +32,7 @@ export class DockService {
     private readonly totes: ToteService,
     private readonly mdps: MdpService,
     private readonly events: EventBus,
+    private readonly closures: BagClosureService,
   ) {}
 
   /** Open a bag on the vendor's dock for one destination. Refused once the dock's floor is full. */
@@ -94,7 +96,7 @@ export class DockService {
    * Close the bag and offer it. The completeness gate applies here too — a paid parcel left on a dock is as
    * stranded as one left on a shelf, and the person who can fix it is standing next to it.
    */
-  sealBag(code: string, vendorId: string, input: { acknowledgeShortShip?: boolean; shortShipReason?: string } = {}): { tote: Tote; parcels: string[]; missed: string[]; shortShipped: boolean } {
+  sealBag(code: string, vendorId: string, input: { acknowledgeShortShip?: boolean; shortShipReason?: string; closure?: { seal?: string; photoRef?: string }; by?: string } = {}): { tote: Tote; parcels: string[]; missed: string[]; shortShipped: boolean } {
     const vendor = this.vendors.get(vendorId);
     const bag = this.totes.requireByCode(code);
     if (bag.locationId !== vendor.did) throw new GlosError('WRONG_PUDO', `Bag ${code} is not on this dock`);
@@ -111,12 +113,15 @@ export class DockService {
         code,
       });
     }
+    // Round 36 — closed for the road as at a counter: its coded seal's number and a photograph, or a photograph alone.
+    const keepClosure = this.closures.checkClose(bag, { did: vendor.did, name: input.by?.trim() || vendor.name, place: vendor.name }, vendor.did, input.closure);
     // A knowing omission is stamped exactly as a shop's is, so the control tower reads one story either way.
     if (missed.length) this.parcels.markShortShipped(missed, vendor.did, `bag ${code}`, (input.shortShipReason ?? '').trim() || 'not bagged');
 
     const announce = bag.status === 'filling';
     const tote = announce ? this.totes.markAvailable(code) : bag;
     this.totes.markSealed(code);
+    keepClosure({ at: new Date().toISOString() });
     if (announce) {
       void this.events
         .publish(GlosEvent.Pudo.ToteAvailable, { code: tote.code, reason: 'sealed', weightKg: tote.weightKg, destination: tote.destinationLabel }, { source: 'pudo' })

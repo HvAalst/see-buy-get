@@ -256,6 +256,11 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
     this.anchorLink('freight', freightId, 'shipment-proof', at);
   }
 
+  /** Round 36 — a bag received and opened: the photographs of its closing and receipt start the shipment-proof clock. */
+  anchorBagTerminal(closureId: string, at: Date = new Date()): void {
+    this.anchorLink('bag', closureId, 'shipment-proof', at);
+  }
+
   /** Round 18 — a dispute over a GS1 prefix was decided or withdrawn: its licences start the dispute clock. Idempotent. */
   anchorGs1Dispute(disputeId: string, at: Date = new Date()): void {
     this.anchorLink('gs1-dispute', disputeId, 'dispute-evidence', at);

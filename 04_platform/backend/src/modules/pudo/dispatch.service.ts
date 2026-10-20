@@ -3609,6 +3609,7 @@ export class DispatchService {
       kind: 'tote',
       ref: t.code,
       code: t.code,
+      ...(t.held ? { held: t.held } : {}),
       pickupLocation: place.loc,
       pickupLabel: place.label,
       destLabel: t.destinationLabel || 'destination',

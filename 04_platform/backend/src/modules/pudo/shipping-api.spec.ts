@@ -3,6 +3,7 @@ import { Reflector } from '@nestjs/core';
 import type { ExecutionContext } from '@nestjs/common';
 import { AgentService } from './agent.service';
 import { MdpService } from './mdp.service';
+import { BagClosureService } from './bag-closure.service';
 import { RoutingService } from './routing.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
@@ -86,7 +87,7 @@ describe('the public shipping quote', () => {
       controllers: [ShippingApiController],
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
-        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService,
+        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagClosureService,
         BagPlanService, ForthcomingService, DockService, ShippingApiService, ParcelInvoiceService, ToteService, ConsignmentService,
         VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService,
         FleetManagerService, MediaService, CargoService, DigitalTwinService, TrackingService,

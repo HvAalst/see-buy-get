@@ -45,6 +45,12 @@ export async function shopPhotoOver(server: Parameters<typeof request>[0], agent
   return photoOver(server, { authorization: `Bearer ${token}` });
 }
 
+/** Round 36 — …by a hub, from its own sign-in: a bag it closes or receives. */
+export async function hubPhotoOver(server: Parameters<typeof request>[0], mdpDid: string): Promise<string> {
+  const token = (await request(server).post('/v1/auth/token').send({ role: 'mdp', did: mdpDid }).expect(201)).body.access_token as string;
+  return photoOver(server, { authorization: `Bearer ${token}` }, 'seal');
+}
+
 /** …and as a store's own system sends it, with its secret key. */
 export async function shipmentPhotoOver(server: Parameters<typeof request>[0], key: string): Promise<string> {
   return (await request(server).post('/v1/sbg/shipping/photos').set('x-sbg-key', key).send({ dataUrl: CONTENTS_PNG }).expect(201)).body.photoId as string;

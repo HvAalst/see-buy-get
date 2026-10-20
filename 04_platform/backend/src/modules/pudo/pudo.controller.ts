@@ -2521,7 +2521,7 @@ export class SbgController {
   @Post('agents/:did/totes/:code/seal')
   @AtTheCounter()
   sealShopBag(@Param('did') did: string, @Param('code') code: string, @Body() dto: SealBagDto, @Actor() actor: IntrospectionResult) {
-    return this.mdps.sealShopBag(code, actingDid(actor, did), dto);
+    return this.mdps.sealShopBag(code, actingDid(actor, did), { ...dto, by: actor?.actorName });
   }
 
   /** The shelf grid + free-slot availability for a PUDO. */
@@ -3000,7 +3000,7 @@ export class SbgController {
   @AtTheCounter()
   receiveBag(@Param('did') did: string, @Body() dto: ReceiveBagDto, @Actor() actor: IntrospectionResult) {
     this.assertAgentActs(did, actor);
-    return this.mdps.deliverBag(did, dto.code);
+    return this.mdps.deliverBag(did, dto.code, dto.receipt, actor?.actorName);
   }
 
   // --- e-commerce vendors + inbound pickup-at-PUDO ---
@@ -3436,7 +3436,7 @@ export class SbgController {
   @Post('vendors/:id/dock/bags/:code/seal')
   sealDockBag(@Param('id') id: string, @Param('code') code: string, @Body() dto: SealBagDto, @Actor() actor: IntrospectionResult) {
     this.assertVendorSelf(id, actor);
-    return this.dock.sealBag(code, id, dto ?? {});
+    return this.dock.sealBag(code, id, { ...(dto ?? {}), by: actor?.actorName });
   }
 
   /** A vendor's shipment register (R0): their OWN inbound parcels, server-side searched / filtered /
@@ -4730,7 +4730,7 @@ export class SbgController {
   @Post('mdps/:id/drop-bag')
   dropBag(@Param('id') id: string, @Body() dto: DropBagDto, @Actor() actor: IntrospectionResult) {
     this.assertMdpActs(id, actor);
-    return this.mdps.dropBag(id, dto.code);
+    return this.mdps.dropBag(id, dto.code, dto.receipt, actor?.actorName);
   }
 
   /** Sort a parcel at an MDP → returns its next destination + the bag code to drop it in. */

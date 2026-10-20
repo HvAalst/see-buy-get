@@ -252,15 +252,16 @@ describe('the tamper protocol, over the wire', () => {
     const shopBag = (await http().post(`/v1/sbg/agents/${north.did}/totes`).set(north.token).send({ destZone: `TmpSouth${tag}` }).expect(201)).body.code as string;
     expect((await http().post(`/v1/sbg/agents/${north.did}/totes/${shopBag}/fill`).set(north.token).send({ parcelId: one.parcelId }).expect(409)).body.code).toBe('UNIT_HELD');
     await http().post(`/v1/sbg/agents/${north.did}/totes/${shopBag}/fill`).set(north.token).send({ parcelId: two.parcelId }).expect(201);
-    await http().post(`/v1/sbg/agents/${north.did}/totes/${shopBag}/seal`).set(north.token).send({}).expect(201);
+    await http().post(`/v1/sbg/agents/${north.did}/totes/${shopBag}/seal`).set(north.token).send({ closure: { photoRef: await photo(north.token, 'seal') } }).expect(201);
 
     // Released: it goes into the bag with the other, onto the bus, to the hub.
     await release(one.parcelId, 'Store confirmed the box was taped twice at packing; contents photo matches').expect(201);
     expect(((await http().get(`/v1/sbg/vendors/${made.vendorId}/callbacks`).set(storeToken).expect(200)).body as Array<{ event: string }>).some((c) => c.event === 'released')).toBe(true);
     await http().post(`/v1/sbg/totes/${bag}/fill`).set(operator).send({ parcelId: one.parcelId }).expect(201);
+    await http().post(`/v1/sbg/totes/${bag}/close`).set(hubToken).send({ photoRef: await photo(hubToken, 'seal') }).expect(201);
     for (const code of [bag, shopBag]) {
       await http().post(`/v1/sbg/totes/${code}/load`).set(operator).send({ driverBadgeId: 'BUS-9' }).expect(201);
-      await http().post(`/v1/sbg/mdps/${hub.mdpId}/drop-bag`).set(operator).send({ code }).expect(201);
+      await http().post(`/v1/sbg/mdps/${hub.mdpId}/drop-bag`).set(operator).send({ code, receipt: { photoRef: await photo(hubToken, 'seal'), asClosed: true } }).expect(201);
     }
 
     // AT THE HUB: one sorted into the bag onward, then found cut — taken back out of that bag; the other found cut before

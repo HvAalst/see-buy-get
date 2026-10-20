@@ -43,9 +43,17 @@ export function TamperPanel({ subject, live, state, actions, onReleased }: { sub
     <>
       <section class="cons__panel">
         <div class="cons__panelhead">
-          <span class="cons__panelt">{t(unit.unitType === 'load' ? 'tower.tamper.load' : 'tower.tamper.parcel', { ref: unit.ref })}</span>
+          <span class="cons__panelt">{t(unit.unitType === 'load' ? 'tower.tamper.load' : unit.unitType === 'bag' ? 'tower.tamper.bag' : 'tower.tamper.parcel', { ref: unit.ref })}</span>
         </div>
         <p>{unit.held ? heldLine(unit.held, t) : t('tower.tamper.notHeld')}</p>
+        {/* Round 36 — a bag: how it was closed, the number to read beside the number reported. */}
+        {unit.closedWith ? (
+          <p class="chint">
+            {unit.closedWith.number
+              ? t('tower.tamper.closedSeal', { number: unit.closedWith.number, place: unit.closedWith.place, when: heldWhen(unit.closedWith.closedAt) })
+              : t('tower.tamper.closedPhoto', { place: unit.closedWith.place, when: heldWhen(unit.closedWith.closedAt) })}
+          </p>
+        ) : null}
         {unit.exceptions.map((e) => (
           <div key={e.exceptionId} class="cons__panel" style="margin-top:10px">
             <p>

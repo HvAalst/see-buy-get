@@ -1,4 +1,5 @@
 import { ParcelInvoiceDto } from './parcel-invoice.types';
+import { BagClosureDto, BagReceiptDto } from './bag-closure.types';
 import { MAX_SEALS, SEALS_AT_DELIVERY, SealReadDto, type SealsAtDelivery } from './load-seal.types';
 import { DESTINATION_KINDS } from './destination.types';
 import { PaperCaseView } from '../../foundation/entity/company-paper-reports.service';
@@ -1297,6 +1298,8 @@ export class SealBagDto {
   @IsOptional() @IsString() shortShipReason?: string;
   /** Round 23 — when the shop or hub did it, by its phone's clock: a step kept on the phone with no signal. */
   @IsOptional() @IsDateString() observedAt?: string;
+  /** Round 36 — how it is closed: its coded seal's number and a photograph, or a photograph alone. Asked for by name. */
+  @IsOptional() @ValidateNested() @Type(() => BagClosureDto) closure?: BagClosureDto;
 }
 
 /** A sister's own margin, as a fraction (0.02 = 2%). Bounds are enforced in the service. */
@@ -1529,10 +1532,14 @@ export class LoadBagDto {
 
 export class DropBagDto {
   @IsString() code!: string;
+  /** Round 36 — the bag as it arrived: its photograph, the number read off its seal, whether it is as it was closed. */
+  @IsOptional() @ValidateNested() @Type(() => BagReceiptDto) receipt?: BagReceiptDto;
 }
 
 export class ReceiveBagDto {
   @IsString() code!: string;
+  /** Round 36 — the bag as it arrived: its photograph, the number read off its seal, whether it is as it was closed. */
+  @IsOptional() @ValidateNested() @Type(() => BagReceiptDto) receipt?: BagReceiptDto;
 }
 
 export class CancelParcelDto {

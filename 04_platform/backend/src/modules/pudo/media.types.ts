@@ -76,7 +76,7 @@ export type MediaStatus = 'active' | 'expired';
 /** What a media item is attached to — drives who may see it and when its retention clock starts. */
 export interface MediaLink {
   /** `fleet` — a fleet OPERATOR's own papers (its transport licence, its cover), sent from the fleet app. */
-  type: 'parcel' | 'vehicle' | 'agent' | 'driver' | 'person' | 'freight' | 'constraint' | 'box' | 'fleet' | 'id-dispute' | 'gs1-dispute';
+  type: 'parcel' | 'vehicle' | 'agent' | 'driver' | 'person' | 'freight' | 'constraint' | 'box' | 'fleet' | 'id-dispute' | 'gs1-dispute' | 'bag';
   id: string;
 }
 

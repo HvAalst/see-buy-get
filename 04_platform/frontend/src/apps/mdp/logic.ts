@@ -67,9 +67,12 @@ export function freeBags(totes: ToteView[] | null): ToteView[] {
   return (totes ?? []).filter((t) => t.status === 'free');
 }
 
-/** Only a bag with something in it can go on a bus. */
+/**
+ * Only a bag with something in it can go on a bus — still filling, or (round 36) closed for the road and so offered to
+ * drivers: a bag the hub has just closed is the one it is about to load.
+ */
 export function loadableBags(totes: ToteView[] | null): ToteView[] {
-  return fillingBags(totes).filter((t) => t.parcels.length > 0);
+  return (totes ?? []).filter((t) => (t.status === 'filling' || t.status === 'available' || t.status === 'claimed') && t.parcels.length > 0);
 }
 
 export function bagLine(tote: ToteView, t: Translate): string {

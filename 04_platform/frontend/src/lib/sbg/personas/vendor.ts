@@ -245,7 +245,7 @@ export function createVendorApi(sbg: SbgClient) {
 
     /** Close it. The store's seal is what PUBLISHES the bag — it is the moment drivers near the dock are
      *  told there is something to collect, so it is never done on the store's behalf. */
-    sealDockBag: (vendorId: string, code: string, body: { acknowledgeShortShip?: boolean; shortShipReason?: string } = {}) =>
+    sealDockBag: (vendorId: string, code: string, body: { acknowledgeShortShip?: boolean; shortShipReason?: string; closure?: { seal?: string; photoRef: string } } = {}) =>
       sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/dock/bags/{code}/seal', { params: { path: { id: vendorId, code } }, body })),
 
     /**

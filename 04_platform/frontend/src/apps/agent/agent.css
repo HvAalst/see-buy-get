@@ -624,3 +624,21 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* Round 36 — tappable choices (the bag's closing: a coded seal, or a photograph), as the driver and hub apps style them. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip--tap {
+  min-height: 40px;
+  padding: 6px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tx2);
+  cursor: pointer;
+}
+.chip--tap.chip--on {
+  color: var(--blue);
+}

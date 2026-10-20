@@ -360,13 +360,21 @@ export function createAgentApi(sbg: SbgClient) {
 
     /** Seal it. The server refuses if a parcel for that destination is still on the shelf, unless the
      *  shop knowingly leaves it — the same gate the parcel-by-parcel handover has. */
-    sealBag: (did: string, code: string, opts?: { acknowledgeShortShip?: boolean; shortShipReason?: string }) =>
+    sealBag: (did: string, code: string, opts?: { acknowledgeShortShip?: boolean; shortShipReason?: string; closure?: { seal?: string; photoRef: string } }) =>
       sbg.request((c) =>
         c.POST('/v1/sbg/agents/{did}/totes/{code}/seal', { params: { path: { did, code } }, body: { ...opts, observedAt: new Date().toISOString() } }),
       ),
 
-    receiveBag: (did: string, code: string) =>
-      sbg.request((c) => c.POST('/v1/sbg/agents/{did}/receive-bag', { params: { path: { did } }, body: { code } })),
+    /** Round 36 — received on its seal: the number read off it, a photograph as it arrived, whether it is as it was closed. */
+    receiveBag: (did: string, code: string, receipt?: { sealNumber?: string; photoRef: string; asClosed: boolean }) =>
+      sbg.request((c) => c.POST('/v1/sbg/agents/{did}/receive-bag', { params: { path: { did } }, body: { code, ...(receipt ? { receipt } : {}) } })),
+
+    /** Round 36 — a bag as the counter may read it before receiving it: how it was closed — never its seal's number. */
+    bag: (code: string) => sbg.request((c) => c.GET('/v1/sbg/totes/{code}', { params: { path: { code } } })),
+
+    /** Round 36 — a bag not as it was closed (the tamper protocol): held, operations told. */
+    reportBagTamper: (code: string, body: { finding: 'seal_not_as_written' | 'seal_broken' | 'wrap_cut'; numberRead?: string; photoRefs: string[]; note?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/totes/{code}/tamper', { params: { path: { code } }, body: { ...body, observedAt: new Date().toISOString() } })),
 
     /* --------------------------------- F3: taking space on a run that is already going -------- */
 

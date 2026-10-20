@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
-import { contentPhotoOver, shopPhotoOver } from './content-photo';
+import { contentPhotoOver, hubPhotoOver, shopPhotoOver } from './content-photo';
 import { OutboxMailSender } from '../src/foundation/mail/outbox-mail.sender';
 
 describe('GLOS backend (e2e)', () => {
@@ -875,11 +875,16 @@ describe('GLOS backend (e2e)', () => {
     const code = bag.body.code as string;
     await request(http).post(`/v1/sbg/totes/${code}/assign`).set(auth).send({ destinationNodeId: hubId, destinationLabel: 'East Sort Hub' }).expect(201);
     for (const id of ids) await request(http).post(`/v1/sbg/totes/${code}/fill`).set(auth).send({ parcelId: id }).expect(201);
+    // Round 36 — closed for the road where it stands (the hub's pool bag): a coded seal, photographed on the bag.
+    const asHub = { Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ role: 'mdp', did: hub.body.did }).expect(201)).body.access_token}` };
+    const sealNo = `GL ${String(Date.now()).slice(-7)}`;
+    await request(http).post(`/v1/sbg/totes/${code}/close`).set(asHub).send({ seal: sealNo, photoRef: await hubPhotoOver(http, hub.body.did) }).expect(201);
     const loaded = await request(http).post(`/v1/sbg/totes/${code}/load`).set(auth).send({ driverBadgeId: 'BUS-9' }).expect(201);
     expect(loaded.body.moved).toHaveLength(2);
 
     // Bus drops the bag at the hub → empty it.
-    const dropped = await request(http).post(`/v1/sbg/mdps/${hubId}/drop-bag`).set(auth).send({ code }).expect(201);
+    // Received on its seal: the number read off it, a photograph as it arrived.
+    const dropped = await request(http).post(`/v1/sbg/mdps/${hubId}/drop-bag`).set(auth).send({ code, receipt: { sealNumber: sealNo, photoRef: await hubPhotoOver(http, hub.body.did), asClosed: true } }).expect(201);
     expect(dropped.body.emptied).toHaveLength(2);
 
     // Worker sorts each parcel → next destination + a destination bag code.
@@ -984,6 +989,9 @@ describe('GLOS backend (e2e)', () => {
     expect(claims.body.remainingCapacityKg).toBe(40);
     // Loaded by the driver, onto their own badge: nothing to show anybody.
     const asMoto = { Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ role: 'driver', did: driver.body.did, type: 'client_credentials' }).expect(201)).body.access_token}` };
+    // Round 36 — the shop closes it for the road before the driver takes it: photographed closed.
+    const asOrigin = { Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ role: 'agent', did: origin }).expect(201)).body.access_token}` };
+    await request(http).post(`/v1/sbg/totes/${bag.body.code}/close`).set(asOrigin).send({ photoRef: await shopPhotoOver(app.getHttpServer(), origin) }).expect(201);
     const loaded = await request(http).post(`/v1/sbg/totes/${bag.body.code}/load`).set(asMoto).send({}).expect(201);
     expect(loaded.body.moved).toHaveLength(2);
 

@@ -188,6 +188,8 @@ describe('the people at a shop’s counter, over the wire', () => {
         'GET sbg/scan/parcel',
         // round 35 — a parcel in the shop's hands found with its wrap cut: held, and operations told (the tamper protocol)
         'POST sbg/parcels/:id/tamper',
+        // round 36 — a bag closed for the road on its coded seal, and one found tampered with: held
+        'POST sbg/totes/:code/close', 'POST sbg/totes/:code/tamper',
         // photographs, a parcel's damage report, a word with the receiver, the shop's inbox
         'POST sbg/media//', 'GET sbg/media/:id',
         'GET sbg/parcels/:id/damage-report', 'GET sbg/parcels/:id/damage-report/file', 'GET sbg/parcels/:id/damage-report/links', 'POST sbg/parcels/:id/damage-report/links',

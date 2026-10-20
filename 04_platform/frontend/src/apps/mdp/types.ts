@@ -33,6 +33,10 @@ export interface ToteView {
   parcels: string[];
   unitsUsed: number;
   weightKg: number;
+  /** Round 36 — how it is closed for the road; absent while it is open. */
+  closedWith?: 'seal' | 'photo';
+  /** Round 36 — held under the tamper protocol. */
+  held?: UnitHold;
 }
 
 export interface ParcelRow {

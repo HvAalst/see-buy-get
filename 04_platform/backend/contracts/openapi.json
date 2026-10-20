@@ -24925,6 +24925,45 @@
         }
       }
     },
+    "/v1/sbg/totes/{code}/tamper": {
+      "post": {
+        "operationId": "Tamper.reportOnBag",
+        "summary": "",
+        "description": "Round 36 — the shop or the hub, about a bag it holds or is receiving: its seal not the one it was closed with, broken,\nor the bag cut or opened. The bag is held; nobody opens it until operations releases it.",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportBagTamperDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TamperUnitView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/ops/tamper/{ref}": {
       "get": {
         "operationId": "Tamper.forStaff",
@@ -24989,6 +25028,36 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/v1/sbg/totes/{code}/close": {
+      "post": {
+        "operationId": "BagClosure.close",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloseBagDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
           }
         }
       }
@@ -36355,6 +36424,20 @@
           "parcelId"
         ]
       },
+      "BagClosureDto": {
+        "type": "object",
+        "properties": {
+          "seal": {
+            "type": "string",
+            "description": "The number printed on the coded security seal put on the bag. Absent or empty: closed without a seal.",
+            "maxLength": 40
+          },
+          "photoRef": {
+            "type": "string",
+            "description": "The bag closed, its seal in view. Asked for by name when it is missing."
+          }
+        }
+      },
       "SealBagDto": {
         "type": "object",
         "properties": {
@@ -36367,6 +36450,14 @@
           "observedAt": {
             "type": "string",
             "description": "Round 23 — when the shop or hub did it, by its phone's clock: a step kept on the phone with no signal."
+          },
+          "closure": {
+            "description": "Round 36 — how it is closed: its coded seal's number and a photograph, or a photograph alone. Asked for by name.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BagClosureDto"
+              }
+            ]
           }
         }
       },
@@ -37850,11 +37941,34 @@
           }
         }
       },
+      "BagReceiptDto": {
+        "type": "object",
+        "properties": {
+          "sealNumber": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "photoRef": {
+            "type": "string"
+          },
+          "asClosed": {
+            "type": "boolean"
+          }
+        }
+      },
       "ReceiveBagDto": {
         "type": "object",
         "properties": {
           "code": {
             "type": "string"
+          },
+          "receipt": {
+            "description": "Round 36 — the bag as it arrived: its photograph, the number read off its seal, whether it is as it was closed.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BagReceiptDto"
+              }
+            ]
           }
         },
         "required": [
@@ -38372,6 +38486,21 @@
           "sealedAt": {
             "type": "string",
             "description": "When the shop closed it. The record that the completeness gate ran, distinct from being published."
+          },
+          "closedWith": {
+            "type": "object",
+            "description": "Round 36 — how it is closed for the road: a coded seal ('seal') or photographed closed ('photo'). The seal's number\nis never on the bag: it is in its closing (BagClosureService), read off the seal by whoever receives it."
+          },
+          "closureId": {
+            "type": "string"
+          },
+          "held": {
+            "description": "Round 36 — held under the tamper protocol: not loaded, dropped or received until operations releases it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UnitHold"
+              }
+            ]
           },
           "sealedReceivedAt": {
             "type": "string",
@@ -39755,6 +39884,14 @@
         "properties": {
           "code": {
             "type": "string"
+          },
+          "receipt": {
+            "description": "Round 36 — the bag as it arrived: its photograph, the number read off its seal, whether it is as it was closed.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BagReceiptDto"
+              }
+            ]
           }
         },
         "required": [
@@ -53502,6 +53639,32 @@
           "fingerprint"
         ]
       },
+      "BagClosedView": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "seal",
+              "photo"
+            ]
+          },
+          "number": {
+            "type": "string"
+          },
+          "closedAt": {
+            "type": "string"
+          },
+          "place": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "closedAt",
+          "place"
+        ]
+      },
       "TamperUnitView": {
         "type": "object",
         "properties": {
@@ -53509,7 +53672,8 @@
             "type": "string",
             "enum": [
               "load",
-              "parcel"
+              "parcel",
+              "bag"
             ]
           },
           "unitId": {
@@ -53526,6 +53690,14 @@
             "items": {
               "$ref": "#/components/schemas/TamperExceptionView"
             }
+          },
+          "closedWith": {
+            "description": "Round 36 — a bag, for staff: how it was closed.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BagClosedView"
+              }
+            ]
           }
         },
         "required": [
@@ -53553,6 +53725,40 @@
           }
         }
       },
+      "ReportBagTamperDto": {
+        "type": "object",
+        "properties": {
+          "finding": {
+            "type": "string",
+            "enum": [
+              "seal_not_as_written",
+              "seal_broken",
+              "wrap_cut"
+            ]
+          },
+          "numberRead": {
+            "type": "string",
+            "description": "The number on the seal, as read, where it is not the one the bag was closed with.",
+            "maxLength": 64
+          },
+          "photoRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "observedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "finding"
+        ]
+      },
       "ReleaseHoldDto": {
         "type": "object",
         "properties": {
@@ -53569,6 +53775,24 @@
         "required": [
           "reason"
         ]
+      },
+      "CloseBagDto": {
+        "type": "object",
+        "properties": {
+          "seal": {
+            "type": "string",
+            "description": "The number printed on the coded security seal put on the bag. Absent or empty: closed without a seal.",
+            "maxLength": 40
+          },
+          "photoRef": {
+            "type": "string",
+            "description": "The bag closed, its seal in view. Asked for by name when it is missing."
+          },
+          "observedAt": {
+            "type": "string",
+            "description": "When it was closed, by the phone's clock: a step kept on the phone with no signal."
+          }
+        }
       },
       "SilenceSettingsView": {
         "type": "object",

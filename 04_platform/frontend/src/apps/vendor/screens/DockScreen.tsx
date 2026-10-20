@@ -1,4 +1,6 @@
 import { useState } from 'preact/hooks';
+import { BagCloseFields } from '../../../shared/BagSealFields';
+import { closeReady, closureBody, EMPTY_BAG_CLOSE, type BagCloseForm } from '../../../shared/bagSeal';
 import { Button, Card, ErrorNote, Explainer, GlanceNumber, Note, PlaceMap, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { dockBlockers, stagingTone } from '../logic';
@@ -128,6 +130,9 @@ function DockWork({ state, actions }: { state: VendorState; actions: VendorActio
   const t = useT();
   const dock = state.vendor!.collection!;
   const plan = state.dock;
+  // Round 36 — the bag being closed for the road, and how.
+  const [closingBag, setClosingBag] = useState<string | null>(null);
+  const [closing, setClosing] = useState<BagCloseForm>(EMPTY_BAG_CLOSE);
   // 'idle' counts as loading: this loads after mount, and flashing "nothing to bag" at a store with a full
   // floor would be worse than a moment of nothing (the register epic's lesson).
   const loading = state.dockState === 'idle' || state.dockState === 'loading';
@@ -202,7 +207,7 @@ function DockWork({ state, actions }: { state: VendorState; actions: VendorActio
                 <span class="dockrow__label">{b.destinationLabel || b.code}</span>
                 <span class="dockrow__sub">{t('vendor.dock.bagSub', { code: b.code, n: String(b.parcels), pct: String(b.fillPct) })}</span>
               </div>
-              <Button variant="outline" disabled={b.parcels === 0} busy={state.busy === `dock-seal-${b.code}`} onClick={() => void actions.sealDockBag(b.code)}>
+              <Button variant="outline" disabled={b.parcels === 0} busy={state.busy === `dock-seal-${b.code}`} onClick={() => setClosingBag(b.code)}>
                 {t('vendor.dock.seal')}
               </Button>
             </div>
@@ -212,6 +217,31 @@ function DockWork({ state, actions }: { state: VendorState; actions: VendorActio
             store waiting on a driver who was never told is the failure this sentence prevents. */}
         <p class="card__note">{t('vendor.dock.sealNote')}</p>
       </Card>
+
+      {/* Round 36 — closed for the road: a coded seal (suggested) with its number and a photograph, or a photograph alone. */}
+      <Sheet open={closingBag !== null} onClose={() => setClosingBag(null)} title={t('vendor.dock.closeTitle', { code: closingBag ?? '' })}>
+        {closingBag ? (
+          <>
+            <BagCloseFields id="dock-close" value={closing} onChange={setClosing} upload={(f) => actions.uploadSealPhoto(f)} disabled={state.busy === `dock-seal-${closingBag}`} />
+            <Button
+              chevron={false}
+              busy={state.busy === `dock-seal-${closingBag}`}
+              disabled={!closeReady(closing)}
+              onClick={async () => {
+                if (await actions.sealDockBag(closingBag, { closure: closureBody(closing) })) {
+                  setClosingBag(null);
+                  setClosing(EMPTY_BAG_CLOSE);
+                }
+              }}
+            >
+              {t('vendor.dock.seal')}
+            </Button>
+            <Button variant="link" onClick={() => setClosingBag(null)}>
+              {t('vendor.dock.closeCancel')}
+            </Button>
+          </>
+        ) : null}
+      </Sheet>
 
       <div class="scr__foot">
         <Button variant="link" busy={state.busy === 'dock-disable'} onClick={() => void actions.disableDock()}>

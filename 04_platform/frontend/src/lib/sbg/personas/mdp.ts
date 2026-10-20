@@ -26,8 +26,19 @@ export function createMdpApi(sbg: SbgClient) {
     parcelsAtMdp: () => sbg.request((c) => c.GET('/v1/sbg/parcels', { params: { query: { status: 'At_MDP', agent: '' } } })),
 
     /** A bus dropped a bag: empty it — its parcels join the sort queue, the tote frees up. */
-    dropBag: (mdpId: string, code: string) =>
-      sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/drop-bag', { params: { path: { id: mdpId } }, body: { code } })),
+    dropBag: (mdpId: string, code: string, receipt?: { sealNumber?: string; photoRef: string; asClosed: boolean }) =>
+      sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/drop-bag', { params: { path: { id: mdpId } }, body: { code, ...(receipt ? { receipt } : {}) } })),
+
+    /** Round 36 — a bag as the hub may read it before receiving it: how it was closed, never its seal's number. */
+    bag: (code: string) => sbg.request((c) => c.GET('/v1/sbg/totes/{code}', { params: { path: { code } } })),
+
+    /** Round 36 — a bag closed for the road where it stands: its coded seal's number and a photograph, or a photograph. */
+    closeBag: (code: string, body: { seal?: string; photoRef: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/totes/{code}/close', { params: { path: { code } }, body: { ...body, observedAt: new Date().toISOString() } })),
+
+    /** Round 36 — a bag not as it was closed (the tamper protocol): held, operations told. */
+    reportBagTamper: (code: string, body: { finding: 'seal_not_as_written' | 'seal_broken' | 'wrap_cut'; numberRead?: string; photoRefs: string[]; note?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/totes/{code}/tamper', { params: { path: { code } }, body: { ...body, observedAt: new Date().toISOString() } })),
 
     /** Sort one parcel: the system answers the next destination + the bag to place it in. */
     sort: (mdpId: string, parcelId: string) =>

@@ -632,6 +632,8 @@ export const enVendor = {
   'vendor.dock.noBags': 'No bags open yet.',
   'vendor.dock.bagSub': '{code} · {n} inside · {pct}% full',
   'vendor.dock.seal': 'Close the bag',
+  'vendor.dock.closeTitle': 'Close bag {code} for the road',
+  'vendor.dock.closeCancel': 'Not yet',
   'vendor.dock.sealNote': 'Closing the bag is what tells drivers near you there is something to collect. Until you close it, nobody is coming.',
   'vendor.dock.stop': 'Stop collecting from here',
   'vendor.dock.stopNote': 'Bags a driver has already accepted stay with that driver — stopping does not recall them.',

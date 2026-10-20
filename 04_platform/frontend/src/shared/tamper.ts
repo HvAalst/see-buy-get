@@ -41,11 +41,13 @@ export interface TamperExceptionRow {
 }
 
 export interface TamperUnit {
-  unitType: 'load' | 'parcel';
+  unitType: 'load' | 'parcel' | 'bag';
   unitId: string;
   ref: string;
   held?: UnitHold;
   exceptions: TamperExceptionRow[];
+  /** Round 36 — a bag, for staff: how it was closed. */
+  closedWith?: { kind: 'seal' | 'photo'; number?: string; closedAt: string; place: string };
 }
 
 /** A release says what was found and what was done: no shorter than this (the server's MIN_RELEASE_REASON). */

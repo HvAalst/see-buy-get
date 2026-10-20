@@ -13,11 +13,14 @@ import { FlagCaseService } from './flag-case.service';
 import type { LoadSeal } from './load-seal.types';
 import { LoadSealService } from './load-seal.service';
 import { MediaService } from './media.service';
+import type { MediaLink } from './media.types';
 import { canonicalJson } from './note-archive.types';
 import { whenSeen } from './observed-at';
 import { ParcelService } from './parcel.service';
 import type { Parcel } from './pudo.types';
 import { ShipperCodesService } from './shipper-codes.service';
+import { BagClosureService } from './bag-closure.service';
+import type { Tote } from './pudo.types';
 import { ToteService } from './tote.service';
 import {
   FINDING_WORDS,
@@ -85,6 +88,7 @@ export class TamperService implements OnModuleInit {
     private readonly codes: ShipperCodesService,
     private readonly media: MediaService,
     private readonly events: EventBus,
+    private readonly closures: BagClosureService,
     @Optional() private readonly cases?: FlagCaseService,
   ) {}
 
@@ -95,6 +99,8 @@ export class TamperService implements OnModuleInit {
       reportedAt: (freightId, stage) => this.forUnit('load', freightId).some((e) => e.stage === stage),
       noteLines: (freightId) => this.noteLines(freightId),
     });
+    // Round 36 — a bag reported since it was closed is received as found, once operations has released it.
+    this.closures.registerTamper({ reportedSince: (toteId, since) => this.forUnit('bag', toteId).some((e) => e.at >= since) });
   }
 
   /* ------------------------------------------------------------------ a load -- */
@@ -216,6 +222,61 @@ export class TamperService implements OnModuleInit {
     return this.unitView('parcel', p.parcelId, 'party');
   }
 
+  /* ------------------------------------------------------------------- a bag -- */
+
+  /**
+   * Round 36 — A BAG, at the shop or hub that holds it or is receiving it off a bus: its coded seal not the one it was
+   * closed with, the seal broken, or the bag cut or opened. The bag is held — not opened, received, loaded — and
+   * operations told; anybody else is told what they would be told of a code nobody was given.
+   */
+  reportOnBag(code: string, reporter: ParcelReporter, input: BagTamperInput, now: number = Date.now()): TamperUnitView {
+    const tote = this.totes.byCodeMaybe(String(code ?? '').trim());
+    const place = tote ? bagPlaceOf(tote, reporter) : undefined;
+    if (!tote || !place) throw new GlosError('NOT_FOUND', 'No bag you hold or are receiving has that code');
+    const finding = input.finding;
+    if (!BAG_FINDINGS.includes(finding)) throw new GlosError('FIELD_REQUIRED', 'Say what you found: a seal that is not the one it was closed with, a broken seal, or the bag cut or opened', { field: 'finding' });
+    if (finding === 'seal_broken' && tote.closedWith !== 'seal') throw new GlosError('INVALID_STATE', `Bag ${tote.code} was not closed with a coded seal: report it cut or opened`, { field: 'finding' });
+    const seal = finding === 'seal_not_as_written' ? { sealId: tote.closureId ?? tote.toteId, no: 1, ...this.closures.notAsClosed(tote, input.numberRead) } : undefined;
+    const ownerDid = reporter.as === 'shop' ? reporter.agentDid : reporter.mdpDid;
+    const link = { type: 'bag' as const, id: tote.closureId ?? tote.toteId };
+    const photos = this.photosOf(input.photoRefs, ownerDid, link);
+    if (this.sameHeld('bag', tote.toteId, finding, ownerDid, seal?.sealId)) return this.unitView('bag', tote.toteId, 'party');
+    const where = reporter.as === 'shop' ? `at ${this.agents.find(reporter.agentDid)?.shopName ?? 'the shop'}` : `at ${reporter.mdpName}`;
+    const e = this.keep(
+      {
+        unit: { type: 'bag', id: tote.toteId, ref: tote.code },
+        ssccs: this.ssccsOf(tote.parcels),
+        finding,
+        stage: place,
+        by: { did: ownerDid, name: reporter.name?.trim() || where.slice(3), as: reporter.as },
+        where,
+        photoRefs: photos,
+        note: noteOf(input.note),
+        seal,
+      },
+      input.observedAt,
+      now,
+    );
+    for (const ref of photos) this.media.adopt(ref, ownerDid, link, 'tamper');
+    this.totes.hold(tote.toteId, holdOf(e));
+    this.told(e, undefined, now);
+    return this.unitView('bag', tote.toteId, 'party');
+  }
+
+  /** The SSCCs of what is in a bag: the store parcels' own codes. */
+  private ssccsOf(parcelIds: string[]): string[] {
+    const out: string[] = [];
+    for (const id of parcelIds) {
+      try {
+        const sscc = this.parcels.get(id).sscc;
+        if (sscc) out.push(sscc);
+      } catch {
+        /* a parcel the bag names and the network no longer knows: logged against the bag alone */
+      }
+    }
+    return out;
+  }
+
   /* ------------------------------------------------------------------ staff -- */
 
   /** A unit by how people say it (a load's code, a parcel's number), for staff: every exception, with who found it. */
@@ -238,6 +299,7 @@ export class TamperService implements OnModuleInit {
     this.cases?.closeFor('Tamper_Hold', ref, staff, `Released: ${words}`, now);
     for (const e of open) this.log.set(e.exceptionId, { ...e, release: { at, by: staff.name, reason: words } });
     if (unit.type === 'load') this.dispatch.unholdFreight(unit.id);
+    else if (unit.type === 'bag') this.totes.unhold(unit.id);
     else this.parcels.unhold(unit.id, staff.name, words);
     const f = unit.type === 'load' ? (this.dispatch.requireFreightPublic(unit.id) as Freight) : undefined;
     void this.events
@@ -275,13 +337,17 @@ export class TamperService implements OnModuleInit {
 
   private unitView(type: TamperUnitType, id: string, reader: TamperReader): TamperUnitView {
     const list = this.forUnit(type, id);
-    const held = type === 'load' ? (this.dispatch.requireFreightPublic(id) as Freight).held : this.parcels.get(id).held;
-    const ref = list[0]?.unit.ref ?? (type === 'load' ? (this.dispatch.requireFreightPublic(id) as Freight).code : id);
-    return { unitType: type, unitId: id, ref, ...(held ? { held } : {}), exceptions: list.map((e) => viewOf(e, reader)) };
+    const tote = type === 'bag' ? this.totes.requireById(id) : undefined;
+    const held = type === 'load' ? (this.dispatch.requireFreightPublic(id) as Freight).held : tote ? tote.held : this.parcels.get(id).held;
+    const ref = list[0]?.unit.ref ?? (type === 'load' ? (this.dispatch.requireFreightPublic(id) as Freight).code : tote ? tote.code : id);
+    // A bag, for staff: how it was closed — the number to read beside the number reported.
+    const closure = tote && reader === 'staff' ? this.closures.current(tote) : undefined;
+    const closedWith = closure ? { kind: closure.kind, ...(closure.number ? { number: closure.number } : {}), closedAt: closure.closedAt, place: closure.closedBy.place } : undefined;
+    return { unitType: type, unitId: id, ref, ...(held ? { held } : {}), exceptions: list.map((e) => viewOf(e, reader)), ...(closedWith ? { closedWith } : {}) };
   }
 
   /** At least one photograph, each the reporter's own and not attached elsewhere — refused before anything is kept. */
-  private photosOf(refs: string[] | undefined, ownerDid: string, link: { type: 'freight' | 'parcel'; id: string }): string[] {
+  private photosOf(refs: string[] | undefined, ownerDid: string, link: MediaLink): string[] {
     const photos = [...new Set((refs ?? []).filter((r) => typeof r === 'string' && r))].slice(0, MAX_TAMPER_PHOTOS);
     if (!photos.length) throw new GlosError('FIELD_REQUIRED', 'Photograph what you found, before anything else is touched', { field: 'photoRefs' });
     for (const ref of photos) this.media.requireHeld(ref, ownerDid, link, 'photoRefs');
@@ -340,6 +406,27 @@ export class TamperService implements OnModuleInit {
       return 'the driver';
     }
   }
+}
+
+/** Round 36 — what is reported of a bag. */
+const BAG_FINDINGS: ReadonlyArray<TamperFinding> = ['seal_not_as_written', 'seal_broken', 'wrap_cut'];
+
+export interface BagTamperInput {
+  finding: TamperFinding;
+  numberRead?: string;
+  photoRefs?: string[];
+  note?: string;
+  observedAt?: string;
+}
+
+/**
+ * Round 36 — where the reporter holds the bag or is receiving it: a shop, a bag standing at it or on a bus addressed to it;
+ * a hub, a bag standing at it or on a bus (a hub's dock takes any bag a bus drops, as dropBag does).
+ */
+function bagPlaceOf(t: Tote, r: ParcelReporter): TamperStage | undefined {
+  if (t.status === 'free') return undefined;
+  if (r.as === 'hub') return t.locationId === r.mdpId || t.status === 'in_transit' ? 'hub' : undefined;
+  return t.locationId === r.agentDid || (t.status === 'in_transit' && t.destinationNodeId === r.agentDid) ? 'counter' : undefined;
 }
 
 /** Where the reporter holds the parcel, as a stage — or nowhere it does. */

@@ -170,7 +170,7 @@ describe('a counter’s step done with no signal keeps its time, over the wire',
 
     // Sealed ninety minutes ago, F knowingly left out: closed then, and F left behind then.
     const tSeal = Date.now() - 90 * 60_000;
-    await http().post(`/v1/sbg/agents/${origin}/totes/${code}/seal`).set(shop).send({ acknowledgeShortShip: true, shortShipReason: 'next bag', observedAt: iso(tSeal) }).expect(201);
+    await http().post(`/v1/sbg/agents/${origin}/totes/${code}/seal`).set(shop).send({ acknowledgeShortShip: true, shortShipReason: 'next bag', observedAt: iso(tSeal), closure: { photoRef: await photo(shop, 'seal') } }).expect(201);
     const sealed = totes.requireByCode(code);
     expect(sealed.sealedAt).toBe(iso(tSeal));
     expect(sealed.availableAt).toBe(iso(tSeal));

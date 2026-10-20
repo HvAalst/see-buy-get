@@ -24,7 +24,7 @@ export type TamperFinding = (typeof TAMPER_FINDINGS)[number];
 export const TAMPER_STAGES = ['pickup', 'road', 'delivery', 'counter', 'hub'] as const;
 export type TamperStage = (typeof TAMPER_STAGES)[number];
 
-export const TAMPER_UNIT_TYPES = ['load', 'parcel'] as const;
+export const TAMPER_UNIT_TYPES = ['load', 'parcel', 'bag'] as const;
 export type TamperUnitType = (typeof TAMPER_UNIT_TYPES)[number];
 
 export const TAMPER_REPORTERS = ['driver', 'shop', 'hub'] as const;
@@ -100,6 +100,14 @@ export class TamperExceptionView {
   @ApiPropertyOptional({ type: TamperRelease }) release?: TamperRelease;
 }
 
+/** Round 36 — staff only: how a bag was closed — its coded seal's number — to read beside the number reported. */
+export class BagClosedView {
+  @ApiProperty({ enum: ['seal', 'photo'] }) kind!: 'seal' | 'photo';
+  @ApiPropertyOptional() number?: string;
+  @ApiProperty() closedAt!: string;
+  @ApiProperty() place!: string;
+}
+
 /** A unit's exceptions, newest first, and its hold while it is held. */
 export class TamperUnitView {
   @ApiProperty({ enum: TAMPER_UNIT_TYPES }) unitType!: TamperUnitType;
@@ -107,6 +115,8 @@ export class TamperUnitView {
   @ApiProperty() ref!: string;
   @ApiPropertyOptional({ type: UnitHold }) held?: UnitHold;
   @ApiProperty({ type: [TamperExceptionView] }) exceptions!: TamperExceptionView[];
+  /** Round 36 — a bag, for staff: how it was closed. */
+  @ApiPropertyOptional({ type: BagClosedView }) closedWith?: BagClosedView;
 }
 
 /** What each finding is, in a line — for a refusal, a case, the note. */
@@ -140,6 +150,18 @@ export class ReportLoadTamperDto {
   @IsOptional() @IsBoolean() atDelivery?: boolean;
   @IsOptional() @IsDateString() observedAt?: string;
   @IsOptional() @ValidateNested() @Type(() => TamperPointDto) location?: TamperPointDto;
+}
+
+/** Round 36 — a shop or a hub, about a bag it holds or is receiving: its seal not the one it was closed with, broken, or the bag cut. */
+export class ReportBagTamperDto {
+  @ApiProperty({ enum: ['seal_not_as_written', 'seal_broken', 'wrap_cut'] })
+  @IsIn(['seal_not_as_written', 'seal_broken', 'wrap_cut'])
+  finding!: TamperFinding;
+  /** The number on the seal, as read, where it is not the one the bag was closed with. */
+  @IsOptional() @IsString() @MaxLength(64) numberRead?: string;
+  @IsOptional() @IsArray() @ArrayMaxSize(MAX_TAMPER_PHOTOS) @IsString({ each: true }) photoRefs?: string[];
+  @IsOptional() @IsString() @MaxLength(MAX_TAMPER_NOTE) note?: string;
+  @IsOptional() @IsDateString() observedAt?: string;
 }
 
 /** A shop or a hub, about a parcel in its hands: its wrap or packaging cut or opened. */

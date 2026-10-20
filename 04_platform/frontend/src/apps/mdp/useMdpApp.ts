@@ -8,6 +8,7 @@ import { addToQueue, dropFromQueue, findMyHub, money, unsortedAt } from './logic
 import { downscaleImage } from '../../shared/media';
 import { holdPhoto } from '../../shared/heldPhotos';
 import { errorSentence } from '../../shared/ui';
+import type { UnitHold } from '../../shared/tamper';
 import type { DropView, LoadView, MdpView, NewToteView, ParcelRow, RatesView, SortView, ToteView } from './types';
 
 export type Screen = 'home' | 'drop' | 'sort' | 'load' | 'newtote' | 'rates';
@@ -43,6 +44,8 @@ export interface MdpState {
   form: { dropCode: string; sortId: string; loadCode: string; badge: string };
   /** Round 35 — a parcel found cut or opened, being reported: which, its photograph, what is seen. `null` when closed. */
   tamper: { parcelId: string; photoRef: string; note: string } | null;
+  /** Round 36 — the bag scanned to drop, looked at before it is opened: how it was closed, held; a seal read that did not match. */
+  drop: { bag?: { closedWith?: 'seal' | 'photo'; held?: UnitHold } | null; mismatch?: string };
 }
 
 const EMPTY_FORM = { dropCode: '', sortId: '', loadCode: '', badge: '' };
@@ -65,6 +68,7 @@ const INITIAL: MdpState = {
   stale: false,
   form: { ...EMPTY_FORM },
   tamper: null,
+  drop: {},
 };
 
 const isOffline = (e: SbgError) => e.code === 'NETWORK' || e.code === 'OFFLINE' || e.code === 'TIMEOUT';
@@ -354,15 +358,36 @@ export function useMdpApp() {
 
   // `override` carries a freshly scanned value: a camera read sets state AND calls here in
   // the same tick, before stateRef catches up, so the scan passes its value straight in.
-  const submitDrop = useCallback(async (override?: string) => {
+  /** Round 36 — the bag scanned to drop: how it was closed (never its seal's number), and whether it is held. */
+  const lookDropBag = useCallback(async (override?: string) => {
     if (!client) return;
-    const hub = stateRef.current.hub;
     const code = (override ?? stateRef.current.form.dropCode).trim().toUpperCase();
-    if (!hub || !code) return;
+    if (!code) return;
+    setState((s) => ({ ...s, error: null, form: { ...s.form, dropCode: code }, drop: {} }));
+    const r = await client.api.bag(code);
+    if (r.error) {
+      signal('error');
+      setState((s) => ({ ...s, drop: { bag: null } }));
+      return fail(r.error);
+    }
+    const v = narrow<{ closedWith?: 'seal' | 'photo'; held?: UnitHold }>(r.data);
+    setState((s) => (s.form.dropCode === code ? { ...s, drop: { bag: { ...(v?.closedWith ? { closedWith: v.closedWith } : {}), ...(v?.held ? { held: v.held } : {}) } } } : s));
+  }, [client, fail]);
+
+  /** Round 36 — received on its seal, before it is opened. Answers with the refusal the screen acts on. */
+  const submitDrop = useCallback(async (receipt: { sealNumber?: string; photoRef: string; asClosed: boolean }): Promise<string | null> => {
+    if (!client) return null;
+    const hub = stateRef.current.hub;
+    const code = stateRef.current.form.dropCode.trim().toUpperCase();
+    if (!hub || !code) return null;
+    let refused: string | null = null;
     await run('drop', async () => {
-      const r = await client.api.dropBag(hub.mdpId, code);
+      const r = await client.api.dropBag(hub.mdpId, code, receipt);
       if (r.error) {
         signal('error');
+        refused = r.error.code;
+        if (r.error.code === 'SEAL_MISMATCH') return setState((s) => ({ ...s, drop: { ...s.drop, mismatch: receipt.sealNumber ?? '' } }));
+        if (r.error.code === 'TAMPER_REPORT_FIRST') return;
         return fail(r.error);
       }
       signal('ok');
@@ -371,6 +396,7 @@ export function useMdpApp() {
         ...s,
         queue: addToQueue(s.queue, emptied),
         form: { ...s.form, dropCode: '' },
+        drop: {},
       }));
       pushToast({
         tone: 'ok',
@@ -380,6 +406,46 @@ export function useMdpApp() {
       });
       await refresh();
     });
+    return refused;
+  }, [client, run, fail, pushToast, refresh]);
+
+  /** Round 36 — a bag not as it was closed: held, operations told. True when the server took it (or keeps it for a signal). */
+  const reportBag = useCallback(async (code: string, body: { finding: 'seal_not_as_written' | 'seal_broken' | 'wrap_cut'; numberRead?: string; photoRefs: string[]; note?: string }): Promise<boolean> => {
+    if (!client || !code) return false;
+    let ok = false;
+    await run('bag-report', async () => {
+      const r = await client.api.reportBagTamper(code, body);
+      if (r.error) {
+        signal('error');
+        return fail(r.error);
+      }
+      signal('ok');
+      ok = true;
+      if (r.status === 202) return pushToast({ tone: 'warn', icon: 'offline', title: t('mdp.tamper.queued'), detail: t('mdp.tamper.queuedDetail') });
+      pushToast({ tone: 'warn', icon: 'warning', title: t('mdp.bag.held', { code }), detail: t('mdp.bag.heldDetail') });
+      const v = narrow<{ held?: UnitHold }>(r.data);
+      setState((s) => (s.form.dropCode === code ? { ...s, drop: { bag: { ...(s.drop.bag ?? {}), ...(v?.held ? { held: v.held } : {}) } } } : s));
+      await refresh();
+    });
+    return ok;
+  }, [client, run, fail, pushToast, refresh]);
+
+  /** Round 36 — a bag closed for the road at this hub: its coded seal and a photograph, or a photograph alone. */
+  const closeBag = useCallback(async (code: string, closure: { seal?: string; photoRef: string }): Promise<boolean> => {
+    if (!client || !code) return false;
+    let ok = false;
+    await run('close', async () => {
+      const r = await client.api.closeBag(code, closure);
+      if (r.error) {
+        signal('error');
+        return fail(r.error);
+      }
+      signal('ok');
+      ok = true;
+      pushToast({ tone: 'ok', icon: 'bag', title: t('mdp.bag.closed', { code }), detail: t(closure.seal ? 'mdp.bag.closedSeal' : 'mdp.bag.closedPhoto', { seal: closure.seal ?? '' }) });
+      await refresh();
+    });
+    return ok;
   }, [client, run, fail, pushToast, refresh]);
 
   const submitSort = useCallback(async (override?: string) => {
@@ -419,13 +485,13 @@ export function useMdpApp() {
 
   /** Round 35 — a photograph for the tamper report: prepared on the phone; with no signal it waits here and goes with the report. */
   const uploadPhoto = useCallback(
-    async (file: File): Promise<string | null> => {
+    async (file: File, kind: 'tamper' | 'seal' = 'tamper'): Promise<string | null> => {
       if (!client) return null;
       try {
         const { dataUrl, thumbDataUrl } = await downscaleImage(file);
-        const r = await client.api.uploadMedia('tamper', dataUrl, thumbDataUrl);
+        const r = await client.api.uploadMedia(kind, dataUrl, thumbDataUrl);
         if (r.error) {
-          const held = isOffline(r.error) ? holdPhoto('tamper', dataUrl, thumbDataUrl) : null;
+          const held = isOffline(r.error) ? holdPhoto(kind, dataUrl, thumbDataUrl) : null;
           if (held) return held;
           pushToast({ tone: 'danger', icon: 'camera', title: t('mdp.tamper.photoFail'), detail: errorSentence(r.error) });
           return null;
@@ -548,6 +614,9 @@ export function useMdpApp() {
       submitTamper,
       pickLoadCode,
       submitDrop,
+      lookDropBag,
+      reportBag,
+      closeBag,
       submitSort,
       submitLoad,
       submitNewTote,

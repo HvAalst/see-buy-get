@@ -98,16 +98,18 @@ describe('bags', () => {
     expect(fillPercent(14)).toBe(100);
   });
 
-  it('status filters: filling / free / loadable (filling AND non-empty)', () => {
+  it('status filters: filling / free / loadable (at the hub, not gone, and non-empty — a closed bag too)', () => {
     const totes = [
       tote({ code: 'BAG-1' }),
       tote({ code: 'BAG-2', status: 'free', parcels: [] }),
       tote({ code: 'BAG-3', parcels: [] }),
       tote({ code: 'BAG-4', status: 'in_transit' }),
+      tote({ code: 'BAG-5', status: 'available', closedWith: 'seal' }),
+      tote({ code: 'BAG-6', status: 'claimed', closedWith: 'photo' }),
     ];
     expect(fillingBags(totes).map((t) => t.code)).toEqual(['BAG-1', 'BAG-3']);
     expect(freeBags(totes).map((t) => t.code)).toEqual(['BAG-2']);
-    expect(loadableBags(totes).map((t) => t.code)).toEqual(['BAG-1']);
+    expect(loadableBags(totes).map((t) => t.code)).toEqual(['BAG-1', 'BAG-5', 'BAG-6']);
   });
 
   it('bagLine says destination and count in plain words', () => {

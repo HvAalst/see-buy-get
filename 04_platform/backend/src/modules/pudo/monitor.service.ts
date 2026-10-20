@@ -4,6 +4,7 @@ import { ParcelService } from './parcel.service';
 import { CorridorService } from './corridor.service';
 import { WalletGateService } from './wallet-gate.service';
 import { DispatchService } from './dispatch.service';
+import { ToteService } from './tote.service';
 import { FINDING_WORDS } from './tamper.types';
 import { AGENT_ONLINE_H, CONNECTIVITY_LOSS_H, GHOST_BUS_H, MDP_DWELL_H, NETWORK_CURRENCY, NOT_SEEN_H, STAGNANT_INVENTORY_H , NEVER_DROPPED_H, UNCOLLECTED_H} from './pudo.config';
 
@@ -42,6 +43,7 @@ export class MonitorService {
     private readonly corridors: CorridorService,
     private readonly gate: WalletGateService,
     private readonly dispatch: DispatchService,
+    private readonly totes: ToteService,
   ) {}
 
   /** Time-window auto-flags — 'what's on fire' (Ch 14). */
@@ -135,6 +137,9 @@ export class MonitorService {
     // case stays until operations releases it (TamperService.release closes it with the reason).
     for (const f of this.dispatch.listFreight()) {
       if (f.held) flags.push({ type: 'Tamper_Hold', subject: f.code, detail: `load to ${f.destLabel} · ${FINDING_WORDS[f.held.finding]} · ${f.held.where}`, ageHours: Math.round(hoursSince(f.held.since)) });
+    }
+    for (const t of this.totes.list()) {
+      if (t.held) flags.push({ type: 'Tamper_Hold', subject: t.code, detail: `bag of ${t.parcels.length} · ${FINDING_WORDS[t.held.finding]} · ${t.held.where}`, ageHours: Math.round(hoursSince(t.held.since)) });
     }
     for (const p of this.parcels.list()) {
       if (p.held) flags.push({ type: 'Tamper_Hold', subject: p.parcelId, detail: `parcel${p.sscc ? ` ${p.sscc}` : ''} · ${FINDING_WORDS[p.held.finding]} · ${p.held.where}`, ageHours: Math.round(hoursSince(p.held.since)) });

@@ -847,16 +847,34 @@ export function useVendorApp() {
   /** Sealing is the store's own act and nothing else does it: closing the bag is what tells drivers near
    *  the dock there is something to collect. */
   const sealDockBag = useCallback(
-    async (code: string, opts: { acknowledgeShortShip?: boolean; shortShipReason?: string } = {}) => {
-      if (!client || !creds) return;
+    async (code: string, opts: { acknowledgeShortShip?: boolean; shortShipReason?: string; closure?: { seal?: string; photoRef: string } } = {}): Promise<boolean> => {
+      if (!client || !creds) return false;
+      let ok = false;
       await run(`dock-seal-${code}`, async () => {
         const r = await client.api.sealDockBag(creds.vendorId, code, opts);
         if (r.error) return fail(r.error);
+        ok = true;
         await loadDock();
         pushToast({ tone: 'ok', icon: 'truck', title: t('vendor.dock.sealed'), detail: code });
       });
+      return ok;
     },
     [client, creds, run, fail, loadDock, pushToast, t],
+  );
+
+  /** Round 36 — the photograph of a bag closed for the road, its coded seal in view: the store's own. */
+  const uploadSealPhoto = useCallback(
+    async (file: File): Promise<string | null> => {
+      if (!client) return null;
+      try {
+        const { dataUrl, thumbDataUrl } = await downscaleImage(file);
+        const r = await client.api.uploadMedia('seal', dataUrl, thumbDataUrl);
+        return r.error ? null : (narrow<{ mediaId?: string }>(r.data)?.mediaId ?? null);
+      } catch {
+        return null;
+      }
+    },
+    [client],
   );
 
   const submitMint = useCallback(async () => {
@@ -1341,6 +1359,7 @@ export function useVendorApp() {
       openDockBag,
       fillDockBag,
       sealDockBag,
+      uploadSealPhoto,
       pushToast,
       dismissToast,
     },

@@ -14,7 +14,8 @@ import type { MediaKind } from '../../lib/sbg/personas/media';
 import { downscaleImage } from '../../shared/media';
 import { holdPhoto, mayHold } from '../../shared/heldPhotos';
 import { onOutboxSent } from '../../shared/outbox';
-import type { TamperUnit } from '../../shared/tamper';
+import type { TamperUnit, UnitHold } from '../../shared/tamper';
+import type { BagClosedWith } from '../../shared/bagSeal';
 import { t } from '../../shared/i18n'; // plain t(): toasts/notes are built at action time in the shop's active locale
 import { errorSentence } from '../../shared/ui';
 import type { IconName } from '../../shared/ui/Icon';
@@ -305,7 +306,7 @@ export interface AgentState {
   release: { stickerId: string; parcel: ParcelView | null; otp: string; stars: number; photoRef: string };
   collect: { code: string; found: CollectView | null; disputing: boolean; reason: string; photoRef: string };
   /** `putAway`: a bag was just received, and these are the slots its parcels go in — shown until the shop says they are in. */
-  receivebag: { code: string; putAway?: Array<{ slot: string; parcelIds: string[] }>; driverDid?: string };
+  receivebag: { code: string; putAway?: Array<{ slot: string; parcelIds: string[] }>; driverDid?: string; bag?: { closedWith?: BagClosedWith; held?: UnitHold } | null; mismatch?: string };
   /** The reverse-logistics window: which recent drop-off is being undone, + its torn-label photo. */
   void: { parcelId: string | null; photoRef: string };
   /** Round 35 — a parcel found cut or opened: which, its photograph, what is seen; the hold as the server answered. */
@@ -1979,7 +1980,7 @@ export function useAgentApp() {
    * ones, and they light up on the list exactly as the handover screen's "waiting" rows do.
    */
   const sealBag = useCallback(
-    async (opts?: { acknowledgeShortShip?: boolean; shortShipReason?: string }) => {
+    async (opts?: { acknowledgeShortShip?: boolean; shortShipReason?: string; closure?: { seal?: string; photoRef: string } }) => {
       if (!client || !did) return;
       const bag = stateRef.current.bag;
       if (!bag || bag.sealed) return;
@@ -2251,14 +2252,38 @@ export function useAgentApp() {
     });
   }, [client, did, run, fail, pushToast]);
 
-  const submitReceiveBag = useCallback(async (override?: string) => {
-    if (!client || !did) return;
+  /** Round 36 — the bag scanned: how it was closed (never its seal's number), and whether it is held. */
+  const lookBag = useCallback(async (override?: string) => {
+    if (!client) return;
     const code = (override ?? stateRef.current.receivebag.code).trim().toUpperCase();
     if (!code) return;
+    setState((s) => ({ ...s, error: null, receivebag: { code, bag: undefined } }));
+    const r = await client.api.bag(code);
+    if (r.error) {
+      signal('error');
+      setState((s) => ({ ...s, receivebag: { ...s.receivebag, bag: null } }));
+      return fail(r.error);
+    }
+    const v = narrow<{ closedWith?: BagClosedWith; held?: UnitHold }>(r.data);
+    setState((s) => (s.receivebag.code === code ? { ...s, receivebag: { ...s.receivebag, bag: { ...(v?.closedWith ? { closedWith: v.closedWith } : {}), ...(v?.held ? { held: v.held } : {}) } } } : s));
+  }, [client, fail]);
+
+  /**
+   * Round 36 — RECEIVED ON ITS SEAL, before it is opened. Answers with the refusal's code where the screen acts on it:
+   * a seal not the one it was closed with (read again, or report it), not as closed (report it first).
+   */
+  const submitReceiveBag = useCallback(async (receipt: { sealNumber?: string; photoRef: string; asClosed: boolean }): Promise<string | null> => {
+    if (!client || !did) return null;
+    const code = stateRef.current.receivebag.code.trim().toUpperCase();
+    if (!code) return null;
+    let refused: string | null = null;
     await run('receivebag', async () => {
-      const r = await client.api.receiveBag(did, code);
+      const r = await client.api.receiveBag(did, code, receipt);
       if (r.error) {
         signal('error');
+        refused = r.error.code;
+        if (r.error.code === 'SEAL_MISMATCH') return setState((s) => ({ ...s, receivebag: { ...s.receivebag, mismatch: receipt.sealNumber ?? '' } }));
+        if (r.error.code === 'TAMPER_REPORT_FIRST') return;
         return fail(r.error);
       }
       signal('ok');
@@ -2276,7 +2301,30 @@ export function useAgentApp() {
       await refresh();
       if (!putAway.length && v?.driverDid) void openRateDriver(v.driverDid); // REP2 — offer to rate the driver for this arrival
     });
+    return refused;
   }, [client, did, run, fail, pushToast, refresh, openRateDriver]);
+
+  /** Round 36 — a bag not as it was closed: held, operations told. True when the server took it (or keeps it for a signal). */
+  const reportBag = useCallback(async (body: { finding: 'seal_not_as_written' | 'seal_broken' | 'wrap_cut'; numberRead?: string; photoRefs: string[]; note?: string }): Promise<boolean> => {
+    if (!client) return false;
+    const code = stateRef.current.receivebag.code.trim().toUpperCase();
+    if (!code) return false;
+    let ok = false;
+    await run('bag-report', async () => {
+      const r = await client.api.reportBagTamper(code, body);
+      if (r.error) {
+        signal('error');
+        return fail(r.error);
+      }
+      signal('ok');
+      ok = true;
+      if (r.status === 202) return pushToast({ tone: 'warn', icon: 'offline', title: t('agent.toast.tamperQueued'), detail: t('agent.toast.tamperQueuedDetail') });
+      pushToast({ tone: 'warn', icon: 'warning', title: t('agent.toast.bagHeld', { code }), detail: t('agent.toast.bagHeldDetail') });
+      const v = narrow<{ held?: UnitHold }>(r.data);
+      setState((s) => ({ ...s, receivebag: { ...s.receivebag, mismatch: undefined, bag: { ...(s.receivebag.bag ?? {}), ...(v?.held ? { held: v.held } : {}) } } }));
+    });
+    return ok;
+  }, [client, run, fail, pushToast]);
 
   /** The parcels out of the bag are in their slots: back to the shop's home, and only now the question about the driver. */
   const donePutAway = useCallback(() => {
@@ -2380,6 +2428,8 @@ export function useAgentApp() {
       setRelease,
       setCollect,
       setReceiveBag,
+      lookBag,
+      reportBag,
       topUp,
       setOpen,
       setPrice,

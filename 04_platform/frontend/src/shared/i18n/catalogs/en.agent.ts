@@ -876,7 +876,9 @@ export const enAgent = {
 
   // Receive a bag.
   'agent.receivebag.title': 'Receive a bag',
-  'agent.receivebag.lede': 'Scan the code on the bag the driver handed you.',
+  'agent.receivebag.lede': 'Scan the code on the bag the driver handed you. Before it is opened: read its seal, photograph it, and say whether it is as it was closed.',
+  'agent.receivebag.look': 'Look at this bag',
+  'agent.receivebag.heldTitle': 'This bag is held',
   'agent.receivebag.codeLabel': 'Bag code',
   'agent.receivebag.receiveShelve': 'Receive and shelve',
   'agent.receivebag.whatHappens': 'What happens',
@@ -886,7 +888,7 @@ export const enAgent = {
   'agent.receivebag.putAwayTitle': 'Put each parcel in its slot',
   'agent.receivebag.putAwayLede': 'Each customer is sent to the slot named here. You can find a slot again under Hand out.',
   'agent.receivebag.putAwayDone': 'All on the shelf',
-  'agent.receivebag.aloud': 'Scan the bag code. Every parcel inside is shelved and the customers get their pickup codes.',
+  'agent.receivebag.aloud': 'Scan the bag code. Read the number on its seal, photograph it, and say whether it is as it was closed. Then every parcel inside is shelved and the customers get their pickup codes.',
 
   // Round 35 — a parcel found cut or opened (the tamper protocol).
   'agent.tamper.title': 'Packaging cut or opened',
@@ -904,6 +906,8 @@ export const enAgent = {
   'agent.tamper.heldHere': 'Held here ({count})',
   'agent.tamper.aloud': 'A parcel cut or opened: scan it, photograph it as it is, and report it. It is held here until operations releases it.',
   'agent.toast.tamperReported': 'Reported — the parcel is held',
+  'agent.toast.bagHeld': 'Reported — bag {code} is held',
+  'agent.toast.bagHeldDetail': 'SeeBuyGet operations is told. Keep it closed: it is received once they release it.',
   'agent.toast.tamperReportedDetail': 'SeeBuyGet operations is told. Keep it apart until they release it.',
   'agent.toast.tamperQueued': 'No signal — kept on this phone',
   'agent.toast.tamperQueuedDetail': 'It goes with its photograph the moment there is a signal. Keep the parcel apart meanwhile.',

@@ -470,6 +470,14 @@ export class Tote {
   sealPromptedFor?: 'full' | 'max_wait';
   /** When the shop closed it. The record that the completeness gate ran, distinct from being published. */
   sealedAt?: string;
+  /**
+   * Round 36 — how it is closed for the road: a coded seal ('seal') or photographed closed ('photo'). The seal's number
+   * is never on the bag: it is in its closing (BagClosureService), read off the seal by whoever receives it.
+   */
+  closedWith?: 'seal' | 'photo';
+  closureId?: string;
+  /** Round 36 — held under the tamper protocol: not loaded, dropped or received until operations releases it. */
+  held?: UnitHold;
   /** Round 23 — when SeeBuyGet heard of the seal, where later than `sealedAt`: closed with no signal, dated by the phone. */
   sealedReceivedAt?: string;
   /**

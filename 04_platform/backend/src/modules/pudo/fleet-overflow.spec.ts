@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { AgentService } from './agent.service';
 import { MdpService } from './mdp.service';
+import { BagClosureService } from './bag-closure.service';
 import { RoutingService } from './routing.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
@@ -170,7 +171,7 @@ describe('handing orders on', () => {
       const moduleRef = await Test.createTestingModule({
         providers: [
           AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
-          GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService,
+          GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagClosureService,
           BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, VehicleService,
           DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService,
           DepartureService, PersonService, OtpService, AuthService, NotificationService, OutboxPushSender, { provide: PUSH_SENDER, useExisting: OutboxPushSender }, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,

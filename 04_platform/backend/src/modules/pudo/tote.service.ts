@@ -5,6 +5,7 @@ import { randomBytes } from 'crypto';
 import { BAG_CAPACITY_UNITS, SIZE_UNITS, SIZE_WEIGHT_KG, TOTE_CODE_PREFIX } from './pudo.config';
 import { ParcelSize, Tote, ToteHaul } from './pudo.types';
 import type { Step } from './observed-at';
+import type { UnitHold } from './tamper.types';
 
 /** A bag step heard of as it happens: dated now. */
 const stepNow = (): Step => ({ at: new Date().toISOString() });
@@ -29,6 +30,33 @@ export class ToteService {
   /** Re-store an in-place-mutated tote so the snapshot store flushes it. */
   private save(tote: Tote): Tote {
     this.totes.set(tote.toteId, tote);
+    return tote;
+  }
+
+  /** Round 36 — closed for the road (BagClosureService): how, and which closing. Nothing more goes in. */
+  markClosed(code: string, kind: 'seal' | 'photo', closureId: string): Tote {
+    const tote = this.requireByCode(code);
+    tote.closedWith = kind;
+    tote.closureId = closureId;
+    return this.save(tote);
+  }
+
+  /** Round 36 — held under the tamper protocol, and released. */
+  hold(toteId: string, hold: UnitHold): Tote {
+    const tote = this.requireById(toteId);
+    tote.held = hold;
+    return this.save(tote);
+  }
+
+  unhold(toteId: string): Tote {
+    const tote = this.requireById(toteId);
+    delete tote.held;
+    return this.save(tote);
+  }
+
+  requireById(toteId: string): Tote {
+    const tote = this.totes.get(toteId);
+    if (!tote) throw new GlosError('NOT_FOUND', 'No such bag');
     return tote;
   }
 
@@ -74,6 +102,9 @@ export class ToteService {
   /** Drop a parcel into the bag (capacity-checked) and connect bag ↔ parcel. */
   add(code: string, parcelId: string, size: ParcelSize, step: Step = stepNow()): Tote {
     const tote = this.requireByCode(code);
+    // Round 36 — closed for the road: its seal is on, and nothing more goes in (said before its status, which only says it
+    // is no longer filling).
+    if (tote.closureId) throw new GlosError('INVALID_STATE', `Bag ${code} is closed: open another bag for this destination`);
     if (tote.status !== 'filling') throw new GlosError('INVALID_STATE', `Bag ${code} is ${tote.status}, assign it to a destination first`);
     // A parcel goes in ONCE. Bagging is a scanning loop, so the same sticker WILL be waved twice, and a
     // silent second push would double-count its units and weight — the bag would report itself full while
@@ -197,6 +228,9 @@ export class ToteService {
     tote.availableAt = undefined;
     tote.claimedBy = undefined;
     tote.carriedBy = undefined; // it is off the vehicle — see Tote.carriedBy
+    // Round 36 — received and opened: its closing is over (kept by BagClosureService); the bag is used again.
+    tote.closedWith = undefined;
+    tote.closureId = undefined;
     tote.locationId = atLocationId;
     return { tote: this.save(tote), parcels };
   }

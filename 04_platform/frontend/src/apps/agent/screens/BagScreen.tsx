@@ -1,7 +1,9 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, CodeCard, ErrorNote, Explainer, Icon, Note, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import type { AgentActions, AgentState } from '../useAgentApp';
+import { BagCloseFields } from '../../../shared/BagSealFields';
+import { closeReady, closureBody, EMPTY_BAG_CLOSE, type BagCloseForm } from '../../../shared/bagSeal';
 
 export interface BagScreenProps {
   state: AgentState;
@@ -31,6 +33,9 @@ export function BagScreen({ state, actions }: BagScreenProps) {
   const t = useT();
   const bag = state.bag;
   const [leaveOpen, setLeaveOpen] = useState(false);
+  // Round 36 — how it is closed for the road: a coded seal and its number, or a photograph alone.
+  const [closing, setClosing] = useState<BagCloseForm>(EMPTY_BAG_CLOSE);
+  useEffect(() => setClosing(EMPTY_BAG_CLOSE), [bag?.code]);
 
   // What to bag is the SERVER's answer, grouped by next hop — several bags at once is the normal case,
   // and a shopkeeper never has to work out whether a parcel goes direct or via the hub.
@@ -181,12 +186,18 @@ export function BagScreen({ state, actions }: BagScreenProps) {
                 <Note tone="warn" icon="warning" title={t('agent.bag.leftTitle', { count: bag.missed.length })} detail={t('agent.bag.leftBody')} />
               ) : null}
 
+              {bag.parcels.length ? (
+                <Card>
+                  <BagCloseFields id="bag-close" value={closing} onChange={setClosing} upload={(f) => actions.uploadPhoto('seal', f)} disabled={state.busy === 'bag-seal'} />
+                </Card>
+              ) : null}
+
               <div class="scr__cta">
-                <Button chevron={false} busy={state.busy === 'bag-seal'} disabled={bag.parcels.length === 0} onClick={() => void actions.sealBag()}>
+                <Button chevron={false} busy={state.busy === 'bag-seal'} disabled={bag.parcels.length === 0 || !closeReady(closing)} onClick={() => void actions.sealBag({ closure: closureBody(closing) })}>
                   {t('agent.bag.seal')}
                 </Button>
                 {bag.missed.length ? (
-                  <Button variant="link" full={false} onClick={() => setLeaveOpen(true)}>
+                  <Button variant="link" full={false} disabled={!closeReady(closing)} onClick={() => setLeaveOpen(true)}>
                     {t('agent.bag.leaveBehind')}
                   </Button>
                 ) : null}
@@ -210,7 +221,7 @@ export function BagScreen({ state, actions }: BagScreenProps) {
               class="row"
               onClick={() => {
                 setLeaveOpen(false);
-                void actions.sealBag({ acknowledgeShortShip: true, shortShipReason: r.value });
+                void actions.sealBag({ acknowledgeShortShip: true, shortShipReason: r.value, closure: closureBody(closing) });
               }}
             >
               <span class="row__body"><span class="row__t">{t(r.labelKey)}</span></span>

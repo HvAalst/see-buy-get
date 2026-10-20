@@ -45,6 +45,7 @@ import { VendorCallbackService } from './vendor-callback.service';
 import { ShelfService } from './shelf.service';
 import { RoutingService } from './routing.service';
 import { MdpService } from './mdp.service';
+import { BagClosureService } from './bag-closure.service';
 import { ToteService } from './tote.service';
 import { ConsignmentService } from './consignment.service';
 import { ImportService } from './import.service';
@@ -165,11 +166,30 @@ describe('PUDO Light', () => {
   let photoOf: (vendorId: string) => string;
   /** Round 31 — an evidence photo we hold, uploaded by the party the act checks. */
   let photoBy: (ownerDid: string) => string;
+  /**
+   * Round 36 — a bag closed for the road where it stands, photographed, as a shop or a hub closes it (a shop's own bag is
+   * closed with sealShopBag). A bag a test means to see refused is left as it is: loadBag says why.
+   */
+  const closeForTest = (code: string): void => {
+    try {
+      const t = totes.requireByCode(code);
+      if (t.closureId || t.sealRequired) return;
+      const hub = mdps.list().find((m) => m.mdpId === t.locationId);
+      mdps.closeBag(code, hub ? { mdpId: hub.mdpId } : { shopDid: t.locationId }, 'Test', { photoRef: photoBy(hub ? hub.did : t.locationId) });
+    } catch {
+      /* refused for a reason of its own: the load that follows says so */
+    }
+  };
+  /** Round 36 — a bag received on its closing: photographed as it arrived, as it was closed. */
+  const receivedAt = (did: string) => ({ photoRef: photoBy(did), asClosed: true });
+  const receivedAtHub = (mdpId: string) => receivedAt(mdps.require(mdpId).did);
+  /** Round 36 — a shop's own bag closed with "Close the bag": photographed closed. */
+  const closedBy = (did: string) => ({ photoRef: photoBy(did) });
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
-        GraduationService, VendorService, VendorCallbackService, ShelfService, DamageReportService, RoutingService, MdpService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, ImportService, SiteService, TransitAuthorityService, FieldObservationService, ContainerBoxService, EmptyDepotService, ContactCardService, VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService, FleetMoveService, FleetOfferService, EmailCodeService, AccountRecoveryService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
+        GraduationService, VendorService, VendorCallbackService, ShelfService, DamageReportService, RoutingService, MdpService, BagClosureService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, ImportService, SiteService, TransitAuthorityService, FieldObservationService, ContainerBoxService, EmptyDepotService, ContactCardService, VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService, FleetMoveService, FleetOfferService, EmailCodeService, AccountRecoveryService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, EntityAdminService, OperatorAccountService, ConsignmentNoteService, DepartureNoteService, NoteArchiveService, NoteBundleService, DestinationService, MailService, OutboxMailSender, { provide: MAIL_SENDER, useExisting: OutboxMailSender }, PresenceService, InterestService, DepartureService, CompanyDocumentService, HandleService, HandleDirectory, BusinessService, BusinessMemberGuard, BusinessClientService, CompanyReadinessService, BorderRuleService, BooksService, FxService, ApiKeyService,
         ShopStaffService, // the shop controller keeps its counter's record of who did what (CounterLogInterceptor)
@@ -1112,11 +1132,12 @@ describe('PUDO Light', () => {
 
     const bag: any = controller.openDockBag(store.vendorId, { destZone: 'SouthTown' } as never, asStore);
     controller.fillDockBag(store.vendorId, bag.code, { parcelId } as never, asStore);
-    controller.sealDockBag(store.vendorId, bag.code, {} as never, asStore);
+    controller.sealDockBag(store.vendorId, bag.code, { closure: closedBy(store.did) } as never, asStore);
     // Bagging is not a hand-off: the goods are still the store's while the bag stands on its own dock.
     expect(custodianOf(parcels.get(parcelId))).toMatchObject({ holderKind: 'sender' });
 
     const d = coupleTipper('chain', { min: 0.8, max: 1.5 });
+    closeForTest(bag.code);
     mdps.loadBag(bag.code, drivers.get(d.did).badgeId!);
     expect(custodianOf(parcels.get(parcelId))).toMatchObject({ holderKind: 'driver', holderId: d.did });
     // The whole point: store → driver, with no shop in between, because no shop ever touched it.
@@ -1163,7 +1184,8 @@ describe('PUDO Light', () => {
     // a shelf, and the person who can fix it is standing next to it.
     expect(() => controller.sealDockBag(store.vendorId, bag.code, {} as never, asStore)).toThrow(/still on the dock/);
     controller.fillDockBag(store.vendorId, bag.code, { parcelId: p2 } as never, asStore);
-    const sealed: any = controller.sealDockBag(store.vendorId, bag.code, {} as never, asStore);
+    expect(() => controller.sealDockBag(store.vendorId, bag.code, {} as never, asStore)).toThrow(/photograph the bag closed/); // round 36 — closed for the road
+    const sealed: any = controller.sealDockBag(store.vendorId, bag.code, { closure: closedBy(store.did) } as never, asStore);
     expect(sealed.tote.status).toBe('available'); // sealing is what publishes it, exactly as at a counter
 
     // A driver is told where to come — the dock resolves as a pickup place like a shop or a hub does.
@@ -1175,6 +1197,7 @@ describe('PUDO Light', () => {
     // Custody moves when the BAG does, not before: until the driver scans it, the goods are the store's.
     expect(parcels.get(p1).status).toBe('Created');
     dispatch.claim(offer.offerId);
+    closeForTest(bag.code);
     mdps.loadBag(bag.code, drivers.get(d.did).badgeId!);
     expect(parcels.get(p1).status).toBe('On_Bus');
 
@@ -1702,12 +1725,13 @@ describe('PUDO Light', () => {
 
       mdps.fillTote(bag.code, 'QR-B1');
       mdps.fillTote(bag.code, 'QR-B2');
-      const sealed = mdps.sealShopBag(bag.code, origin.did);
+      const sealed = mdps.sealShopBag(bag.code, origin.did, { closure: closedBy(origin.did) });
       expect(sealed.missed).toEqual([]);
       expect(sealed.parcels).toEqual(['QR-B1', 'QR-B2']);
       expect(sealed.tote.status).toBe('available'); // published, so a driver can claim it
 
       // The whole point: the driver scans the BAG once and both parcels are on the bus.
+      closeForTest(bag.code);
       const moved = mdps.loadBag(bag.code, driver.badgeId);
       expect(moved.moved.sort()).toEqual(['QR-B1', 'QR-B2']);
       expect(parcels.get('QR-B1').status).toBe('On_Bus');
@@ -1782,7 +1806,7 @@ describe('PUDO Light', () => {
       // it stays At_PUDO until the driver takes it, so nothing else would have stopped two manifests
       // claiming the same parcel.
       mdps.fillShopBag(bag.code, origin.did, 'QR-B2');
-      mdps.sealShopBag(bag.code, origin.did);
+      mdps.sealShopBag(bag.code, origin.did, { closure: closedBy(origin.did) });
       const next = mdps.openShopBag(origin.did, 'SouthTown');
       expect(() => mdps.fillShopBag(next.code, origin.did, 'QR-B1')).toThrow(new RegExp(`already in bag ${bag.code}`));
       expect(totes.requireByCode(next.code).parcels).toEqual([]);
@@ -1797,7 +1821,7 @@ describe('PUDO Light', () => {
 
       mdps.fillShopBag(bag.code, origin.did, 'QR-B1');
       mdps.fillShopBag(bag.code, origin.did, 'QR-B2');
-      mdps.sealShopBag(bag.code, origin.did);
+      mdps.sealShopBag(bag.code, origin.did, { closure: closedBy(origin.did) });
       expect(() => mdps.fillShopBag(bag.code, origin.did, 'QR-B1')).toThrow(/it is closed/);
     });
 
@@ -1808,11 +1832,11 @@ describe('PUDO Light', () => {
 
       // The S25 gate has to live HERE for a bagged hand-over: loadBag is atomic and driver-initiated, so
       // a half-filled bag would otherwise sail past with no refusal and no record.
-      expect(() => mdps.sealShopBag(bag.code, origin.did)).toThrow(/still on the shelf/);
+      expect(() => mdps.sealShopBag(bag.code, origin.did, { closure: closedBy(origin.did) })).toThrow(/still on the shelf/);
       expect(totes.requireByCode(bag.code).status).toBe('filling'); // nothing mutated on the refusal
       expect(parcels.get('QR-B2').shortShippedAt).toBeUndefined();
 
-      const sealed = mdps.sealShopBag(bag.code, origin.did, { acknowledgeShortShip: true, shortShipReason: 'no room' });
+      const sealed = mdps.sealShopBag(bag.code, origin.did, { closure: closedBy(origin.did), acknowledgeShortShip: true, shortShipReason: 'no room' });
       expect(sealed.missed).toEqual(['QR-B2']);
       expect(sealed.shortShipped).toBe(true);
       // Stamped exactly as a handover short-ship is — same marker, same reason field, same event.
@@ -1827,17 +1851,17 @@ describe('PUDO Light', () => {
       const { origin } = shopWithTwoWaiting();
       const other = onboardAgent('Other Shop', 'NorthTown', 50);
       const bag = mdps.openShopBag(origin.did, 'SouthTown');
-      expect(() => mdps.sealShopBag(bag.code, other.did)).toThrow(/not opened at this shop/);
+      expect(() => mdps.sealShopBag(bag.code, other.did, { closure: closedBy(other.did) })).toThrow(/not opened at this shop/);
 
       const empty = mdps.openShopBag(origin.did, 'EastTown'); // nothing waiting for EastTown
-      expect(() => mdps.sealShopBag(empty.code, origin.did)).toThrow(/empty/);
+      expect(() => mdps.sealShopBag(empty.code, origin.did, { closure: closedBy(origin.did) })).toThrow(/empty/);
 
       mdps.fillTote(bag.code, 'QR-B1');
       mdps.fillTote(bag.code, 'QR-B2');
-      mdps.sealShopBag(bag.code, origin.did);
+      mdps.sealShopBag(bag.code, origin.did, { closure: closedBy(origin.did) });
       // Closed once: a second seal would re-run the gate over parcels dropped off after the bag was shut
       // and short-ship them for missing a bus they were never on.
-      expect(() => mdps.sealShopBag(bag.code, origin.did)).toThrow(/already closed/);
+      expect(() => mdps.sealShopBag(bag.code, origin.did, { closure: closedBy(origin.did) })).toThrow(/already closed/);
     });
 
     it('sealing PUBLISHES and tells the drivers — the shop saying "ready now" must reach someone', async () => {
@@ -1846,7 +1870,7 @@ describe('PUDO Light', () => {
       mdps.fillShopBag(bag.code, origin.did, 'QR-B1');
       mdps.fillShopBag(bag.code, origin.did, 'QR-B2');
 
-      const sealed = mdps.sealShopBag(bag.code, origin.did);
+      const sealed = mdps.sealShopBag(bag.code, origin.did, { closure: closedBy(origin.did) });
       expect(sealed.tote.status).toBe('available');
       expect(sealed.tote.sealedAt).toBeTruthy(); // the gate ran — a record distinct from being published
       await Promise.resolve();
@@ -1882,14 +1906,14 @@ describe('PUDO Light', () => {
       expect(events.getLog().filter((e) => e.type === GlosEvent.Pudo.ToteNeedsSeal)).toHaveLength(1);
 
       // The shop closes it, and only then does it reach the marketplace.
-      expect(mdps.sealShopBag(bag.code, origin.did).tote.status).toBe('available');
+      expect(mdps.sealShopBag(bag.code, origin.did, { closure: closedBy(origin.did) }).tote.status).toBe('available');
     });
 
     it('after a seal the plan points at a NEW bag, not back into the closed one', () => {
       const { origin } = shopWithTwoWaiting();
       const bag = mdps.openShopBag(origin.did, 'SouthTown');
       mdps.fillShopBag(bag.code, origin.did, 'QR-B1');
-      mdps.sealShopBag(bag.code, origin.did, { acknowledgeShortShip: true, shortShipReason: 'later bus' });
+      mdps.sealShopBag(bag.code, origin.did, { closure: closedBy(origin.did), acknowledgeShortShip: true, shortShipReason: 'later bus' });
 
       // The sealed bag is still on the floor waiting for its driver, so it stays on the bag list — but the
       // group must not point the shop back into it, or the next parcel has nowhere to go.
@@ -1913,12 +1937,13 @@ describe('PUDO Light', () => {
 
       // A SEALED bag still takes up the same square metre — it is standing there waiting for its driver.
       mdps.fillShopBag(one.code, origin.did, 'QR-B1');
-      mdps.sealShopBag(one.code, origin.did, { acknowledgeShortShip: true, shortShipReason: 'later bus' });
+      mdps.sealShopBag(one.code, origin.did, { closure: closedBy(origin.did), acknowledgeShortShip: true, shortShipReason: 'later bus' });
       expect(bagPlans.forShop(origin.did).staging.used).toBe(2);
       expect(() => mdps.openShopBag(origin.did, 'WestTown')).toThrow(/room for 2 bag/);
 
       // Room comes back when a bag actually LEAVES.
       const driver = coupleTipper('bays', { min: 0.8, max: 1.5 });
+      closeForTest(one.code);
       mdps.loadBag(one.code, drivers.get(driver.did).badgeId!);
       expect(bagPlans.forShop(origin.did).staging).toEqual({ capacity: 2, used: 1, free: 1 });
       expect(mdps.openShopBag(origin.did, 'WestTown').code).toBeTruthy();
@@ -1955,7 +1980,7 @@ describe('PUDO Light', () => {
       dispatch.release(bag.code);
       expect(totes.requireByCode(bag.code).status).toBe('available');
 
-      const sealed = mdps.sealShopBag(bag.code, origin.did, { acknowledgeShortShip: true, shortShipReason: 'went on an earlier bus' });
+      const sealed = mdps.sealShopBag(bag.code, origin.did, { closure: closedBy(origin.did), acknowledgeShortShip: true, shortShipReason: 'went on an earlier bus' });
       expect(sealed.missed).toEqual(['QR-B2']); // the gate ran: the one left behind is recorded
       expect(sealed.tote.sealedAt).toBeTruthy();
       expect(sealed.tote.status).toBe('available'); // unchanged — it was already published
@@ -2982,12 +3007,13 @@ describe('PUDO Light', () => {
     const bag = totes.register(origin.did);
     totes.assign(bag.code, hub.mdpId, hub.name);
     ids.forEach((id) => mdps.fillTote(bag.code, id));
+    closeForTest(bag.code);
     const loaded = mdps.loadBag(bag.code, 'BUS-1');
     expect(loaded.moved).toHaveLength(3);
     ids.forEach((id) => expect(parcels.get(id).status).toBe('On_Bus'));
 
     // Bus drops the bag at the MDP → scan the code, empty it; parcels become unsorted (At_MDP), tote freed.
-    const dropped = mdps.dropBag(hub.mdpId, bag.code);
+    const dropped = mdps.dropBag(hub.mdpId, bag.code, receivedAtHub(hub.mdpId));
     expect(dropped.emptied).toHaveLength(3);
     ids.forEach((id) => expect(parcels.get(id).status).toBe('At_MDP'));
     expect(totes.requireByCode(bag.code).status).toBe('free');
@@ -3004,6 +3030,7 @@ describe('PUDO Light', () => {
     expect(twin.shipment(ids[0])?.props.hub).toBe('Central MDP'); // multi-hop visible on the twin
 
     // Onward bus scans the destination bag away — one scan, all three parcels move.
+    closeForTest(sort0.toteCode);
     const onward = mdps.loadBag(sort0.toteCode, 'BUS-2');
     expect(onward.moved).toHaveLength(3);
     ids.forEach((id) => expect(parcels.get(id).status).toBe('On_Bus'));
@@ -3045,8 +3072,9 @@ describe('PUDO Light', () => {
       const b = totes.register(origin.did);
       totes.assign(b.code, hub.mdpId, hub.name);
       mdps.fillTote(b.code, p.parcelId);
+      closeForTest(b.code);
       mdps.loadBag(b.code, 'BUS-1');
-      mdps.dropBag(hub.mdpId, b.code);
+      mdps.dropBag(hub.mdpId, b.code, receivedAtHub(hub.mdpId));
       return p.parcelId;
     };
     const dust = toMdp('HAZ-DUST', '+254700003');
@@ -3070,6 +3098,7 @@ describe('PUDO Light', () => {
     const bag = totes.register(origin.did);
     totes.assign(bag.code, 'dest-node', 'Dest');
     mdps.fillTote(bag.code, 'FISH-BAG');
+    closeForTest(bag.code);
     expect(() => mdps.loadBag(bag.code, d.badgeId!)).toThrow(/coldChain/); // the whole bag is refused
     expect(parcels.get('FISH-BAG').status).not.toBe('On_Bus'); // nothing moved
   });
@@ -3733,13 +3762,14 @@ describe('PUDO Light', () => {
       dispatch.release(bag.code);
       const [offer] = dispatch.suggest(d.did, { from: origin.location, to: dest.location }).filter((o) => o.ref === bag.code);
       dispatch.claim(offer.offerId);
+      closeForTest(bag.code);
       mdps.loadBag(bag.code, drivers.get(d.did).badgeId!);
       const statuses = () => ids.map((id) => parcels.get(id).status);
       const aboard = statuses();
       const paid = agents.balance(dest.did);
 
       // Three parcels, two slots. The first two used to be shelved and paid for before the third was refused.
-      expect(() => mdps.deliverBag(dest.did, bag.code)).toThrow(`Bag ${bag.code} holds 3 parcels and your shelf has no room for all of them. Hand over parcels that are waiting, or add a row under “Set up shelves”, then scan the bag again`);
+      expect(() => mdps.deliverBag(dest.did, bag.code, receivedAt(dest.did))).toThrow(`Bag ${bag.code} holds 3 parcels and your shelf has no room for all of them. Hand over parcels that are waiting, or add a row under “Set up shelves”, then scan the bag again`);
       expect(statuses()).toEqual(aboard);
       expect(ids.map((id) => parcels.get(id).binSlot)).toEqual([undefined, undefined, undefined]);
       expect(shelfSvc.available(dest.did)).toBe(2);
@@ -3748,7 +3778,7 @@ describe('PUDO Light', () => {
 
       // A waiting parcel is handed over; the same bag, scanned again, goes on whole.
       shelfSvc.release(dest.did, 'WAITING-B-0');
-      const received = mdps.deliverBag(dest.did, bag.code);
+      const received = mdps.deliverBag(dest.did, bag.code, receivedAt(dest.did));
       expect(received.delivered).toEqual(ids);
       // WHERE EACH ONE GOES: every parcel with the slot it was given, and no two in one.
       expect(received.shelved).toEqual(ids.map((id) => ({ parcelId: id, slot: parcels.get(id).binSlot })));
@@ -3801,12 +3831,13 @@ describe('PUDO Light', () => {
       dispatch.claim(offer.offerId);
       const road = totes.requireByCode(bag.code).haul!.road;
 
+      closeForTest(bag.code);
       mdps.loadBag(bag.code, drivers.get(d.did).badgeId!);
       const afterLoad = gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did);
       expect(afterLoad).toHaveLength(1);
       expect(afterLoad[0].amount).toBe(TOTE_LOAD_FEE); // the scan is real work and is earned on the spot
 
-      mdps.deliverBag(dest.did, bag.code);
+      mdps.deliverBag(dest.did, bag.code, receivedAt(dest.did));
       const afterArrival = gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did);
       expect(afterArrival).toHaveLength(2);
       // Asserted as a SET — the ledger reads newest-first, and which end of it the road lands on is not
@@ -3836,8 +3867,9 @@ describe('PUDO Light', () => {
 
       expect(offer.earn).toBeGreaterThan(TOTE_LOAD_FEE); // not the flat fee any more
       dispatch.claim(offer.offerId);
+      closeForTest(bag.code);
       mdps.loadBag(bag.code, drivers.get(d.did).badgeId!);
-      mdps.deliverBag(dest.did, bag.code);
+      mdps.deliverBag(dest.did, bag.code, receivedAt(dest.did));
 
       // What was promised is what arrives: the offer's figure equals the sum of the two ledger lines.
       const paid = gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did).reduce((s, e) => s + e.amount, 0);
@@ -3856,6 +3888,7 @@ describe('PUDO Light', () => {
       const road = totes.requireByCode(bag.code).haul!.road;
       expect(offer.earn).toBe(Math.round((35 + road) * 100) / 100);
 
+      closeForTest(bag.code);
       mdps.loadBag(bag.code, drivers.get(d.did).badgeId!);
       expect(gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did).map((e) => e.amount)).toEqual([35]);
     });
@@ -4402,6 +4435,7 @@ describe('PUDO Light', () => {
     mdps.fillTote(bag.code, 'CT-P');
 
     // The shop hands it over directly. No offer, no claim — the common case.
+    closeForTest(bag.code);
     mdps.loadBag(bag.code, badge);
 
     const carried = totes.byCodeMaybe(bag.code)!;
@@ -4633,14 +4667,18 @@ describe('PUDO Light', () => {
         return bag.code;
       };
       const one = bagWith(`PASS-BAG-${seq}-1`);
+      closeForTest(one);
       expect(() => controller.loadBag(one, { driverBadgeId: badge } as never, asShop(origin.did))).toThrow(/badge number on its own/);
+      closeForTest(one);
       controller.loadBag(one, { driverBadgeId: pass } as never, asShop(origin.did));
       expect(totes.byCodeMaybe(one)!.carriedBy).toBe(d.did);
       // A driver loading a bag themselves: onto their own badge, never somebody else's. (A bike holds one bag, so
       // this is the other rider's.)
       const two = bagWith(`PASS-BAG-${seq}-2`);
+      closeForTest(two);
       expect(() => controller.loadBag(two, { driverBadgeId: badge } as never, asDriver(other.d.did))).toThrow(/their own badge/);
       expect(totes.byCodeMaybe(two)!.status).not.toBe('in_transit');
+      closeForTest(two);
       controller.loadBag(two, {} as never, asDriver(other.d.did));
       expect(totes.byCodeMaybe(two)!.carriedBy).toBe(other.d.did);
     });
@@ -5090,7 +5128,9 @@ describe('PUDO Light', () => {
 
     const [offer] = dispatch.suggest(a.did, { from: origin.location, to: { lat: -1.3, lng: 36.95 } });
     dispatch.claim(offer.offerId);
+    closeForTest(bag.code);
     expect(() => mdps.loadBag(bag.code, b.badgeId!)).toThrow(/reserved for another driver/);
+    closeForTest(bag.code);
     const loaded = mdps.loadBag(bag.code, a.badgeId!);
     expect(loaded.moved).toContain('R-1');
     expect(totes.requireByCode(bag.code).status).toBe('in_transit');
@@ -5410,15 +5450,17 @@ describe('PUDO Light', () => {
     const bag = totes.register(origin.did);
     totes.assign(bag.code, hub.mdpId, hub.name);
     mdps.fillTote(bag.code, 'TM-1');
+    closeForTest(bag.code);
     mdps.loadBag(bag.code, 'BUS-1');
-    mdps.dropBag(hub.mdpId, bag.code);
+    mdps.dropBag(hub.mdpId, bag.code, receivedAtHub(hub.mdpId));
     const sort = mdps.sortParcel(hub.mdpId, 'TM-1'); // works for outbound now
     expect(sort.nextDestination.id).toBe(dest.did);
+    closeForTest(sort.toteCode);
     mdps.loadBag(sort.toteCode, 'BUS-2'); // onward to the dest PUDO
     expect(parcels.get('TM-1').status).toBe('On_Bus');
 
     // Dest PUDO receives the whole bag → parcel shelved for pickup + tote freed (P1 #1: no leak).
-    const r = mdps.deliverBag(dest.did, sort.toteCode);
+    const r = mdps.deliverBag(dest.did, sort.toteCode, receivedAt(dest.did));
     expect(r.delivered).toContain('TM-1');
     expect(parcels.get('TM-1').status).toBe('Ready_For_Pickup');
     expect(totes.requireByCode(sort.toteCode).status).toBe('free');
@@ -8856,6 +8898,7 @@ describe('PUDO Light', () => {
 
     // …but the bag they are already carrying is still theirs. Snoozing offers is not going off shift.
     expect(dispatch.claimsFor(rider.did).map((c) => c.ref)).toContain(mine.code);
+    closeForTest(mine.code);
     expect(mdps.loadBag(mine.code, drivers.get(rider.did).badgeId!).moved).toEqual(['SNZ-1']);
 
     // It ends when they say…
@@ -8976,7 +9019,7 @@ describe('PUDO Light', () => {
       parcels.accept({ agentDid: origin.did, parcelId: `LET-${tag}`, size: 'S', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
       const bag = mdps.openShopBag(origin.did, 'SouthTown');
       mdps.fillShopBag(bag.code, origin.did, `LET-${tag}`);
-      mdps.sealShopBag(bag.code, origin.did, { acknowledgeShortShip: true, shortShipReason: 'one per bag for the test' });
+      mdps.sealShopBag(bag.code, origin.did, { closure: closedBy(origin.did), acknowledgeShortShip: true, shortShipReason: 'one per bag for the test' });
       agents.setBagBays(origin.did, 9); // the shop's floor is not what this test is about
       return bag;
     });
@@ -8996,8 +9039,10 @@ describe('PUDO Light', () => {
 
     // And the physical scan refuses it too: a full boot is full whatever the scales say.
     const badge = drivers.get(d.did).badgeId!;
+    closeForTest(bags[2].code);
     expect(() => mdps.loadBag(bags[2].code, badge)).toThrow(/all 2 bag\(s\) it holds/);
     // A bag this driver already RESERVED is not charged for the space twice.
+    closeForTest(bags[0].code);
     expect(mdps.loadBag(bags[0].code, badge).moved).toEqual(['LET-A']);
   });
 
@@ -9501,8 +9546,9 @@ describe('PUDO Light', () => {
       const bag = totes.register(origin.did);
       totes.assign(bag.code, hub.mdpId, hub.name);
       mdps.fillTote(bag.code, parcel.parcelId);
+      closeForTest(bag.code);
       mdps.loadBag(bag.code, 'BUS-AM');
-      mdps.dropBag(hub.mdpId, bag.code);
+      mdps.dropBag(hub.mdpId, bag.code, receivedAtHub(hub.mdpId));
       mdps.sortParcel(hub.mdpId, parcel.parcelId);
       const sorted = gate.entries({ type: 'LABOR_PAYOUT' }).filter((e) => e.refType === 'mdp');
       expect(sorted.map((e) => e.amount)).toEqual([25]);
